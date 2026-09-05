@@ -1,0 +1,193 @@
+:root {
+  color-scheme: dark;
+  --hud-bg: rgb(16 22 30 / 82%);
+  --hud-border: rgb(255 255 255 / 12%);
+  --hud-text: #e9edf2;
+  --hud-muted: #93a1b0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #11161d;
+  color: var(--hud-text);
+  font:
+    13px/1.45 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+  overflow: hidden;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.app-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+  touch-action: none;
+}
+
+/* The HUD is a plain DOM overlay; nothing here touches the render context. */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  min-width: 250px;
+  /* The panel carries the only interactive controls on the overlay. */
+  pointer-events: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--hud-border);
+  border-radius: 10px;
+  background: var(--hud-bg);
+  backdrop-filter: blur(6px);
+}
+
+.hud-fps {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.hud-fps-value {
+  font-size: 30px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.hud-fps-unit {
+  color: var(--hud-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+}
+
+.hud-stats {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.hud-stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.hud-stats dt {
+  color: var(--hud-muted);
+}
+
+.hud-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-stat-note {
+  color: var(--hud-muted);
+}
+
+.hud-lights-active {
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-time {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--hud-border);
+}
+
+.hud-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--hud-muted);
+}
+
+.hud-time-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #f2c33c;
+}
+
+.hud-time-cycle {
+  justify-content: flex-start;
+}
+
+.hud-loading {
+  margin: 0;
+  color: var(--hud-muted);
+}
+
+.hud-labels {
+  position: absolute;
+  inset: 0;
+}
+
+.hud-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  visibility: hidden;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  background: rgb(12 16 22 / 78%);
+  font-size: 12px;
+  font-weight: 550;
+  will-change: transform;
+}
+
+.hud-label-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.hud-error {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid rgb(224 85 78 / 60%);
+  border-radius: 10px;
+  background: rgb(48 18 18 / 90%);
+  pointer-events: auto;
+}
+
+.hud-error p {
+  margin: 6px 0 0;
+  color: #f2c7c4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}

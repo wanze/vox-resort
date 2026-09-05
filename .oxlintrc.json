@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "oxc", "import"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "settings": {
+    "react": {
+      "version": "19.0"
+    }
+  },
+  "rules": {
+    "eqeqeq": "error",
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error", "info"]
+      }
+    ],
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-explicit-any": "warn",
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "warn",
+    "unicorn/prefer-node-protocol": "error",
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": [
+      "error",
+      {
+        "allow": ["**/*.css"]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["src/features/voxel-world/dveEngine.ts"],
+      "rules": {
+        "no-underscore-dangle": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist", "node_modules", ".smoke", "voxel-gen/out"]
+}

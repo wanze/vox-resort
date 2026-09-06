@@ -19,24 +19,32 @@ import {
   objectTypeTop,
   TILE_VOXELS,
 } from "../features/catalog/domain/objectTypes";
+import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
 import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
 import { RESORT_PLAN } from "../features/layout/domain/resortPlan";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
 import type { LightAnchor } from "../features/lighting/domain/lightAnchors";
+import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
 import {
   bakeLightGrid,
   cellCount,
   gridByteSize,
   lightGridSpecFor,
 } from "../features/lighting/domain/lightGrid";
-import { createBakedLightVolume } from "../features/lighting/bakedLightVolume";
+import type { BakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
+import { createBakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
+import type { ScratchLayout } from "../features/voxel-world/domain/modelScratch";
 import { scratchLayoutFor } from "../features/voxel-world/domain/modelScratch";
-import { DEFAULT_WORLD_SCALE, sectionSizeOf } from "../features/voxel-world/dveEngine";
-import { meshCatalogue } from "../features/voxel-world/meshCatalogue";
-import { buildInstancedWorld } from "../features/rendering/instancedWorld";
-import { buildModelGeometries } from "../features/rendering/voxelMeshBuilder";
-import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/threeScene";
+import { DEFAULT_WORLD_SCALE, sectionSizeOf } from "../features/voxel-world/adapters/dveEngine";
+import { meshCatalogue } from "../features/voxel-world/adapters/meshCatalogue";
+import type { InstancedWorld } from "../features/rendering/adapters/instancedWorld";
+import { buildInstancedWorld } from "../features/rendering/adapters/instancedWorld";
+import type { ModelGeometry } from "../features/rendering/adapters/voxelMeshBuilder";
+import { buildModelGeometries } from "../features/rendering/adapters/voxelMeshBuilder";
+import type { CameraFraming } from "../features/layout/domain/worldBounds";
+import type { SceneHandle } from "../features/rendering/adapters/threeScene";
+import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/adapters/threeScene";
 import { Matrix4 } from "three/webgpu";
 import { createFpsState, sampleFrame } from "../features/hud/domain/fps";
 import { projectToScreen, type ScreenPosition } from "../features/hud/domain/labelProjection";
@@ -164,22 +172,40 @@ export interface Showcase {
   dispose(): void;
 }
 
-export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
-  const { canvas, onFrame } = options;
-  const mountStarted = performance.now();
-
-  // A main thread that is meshing paints nothing; one that is waiting on a
-  // worker keeps servicing this. The difference is the whole point of the
-  // worker, and it is not visible in a wall-clock startup number.
-  let startupFrames = 0;
-  let countingStartup = true;
-  const countStartupFrame = (): void => {
-    if (!countingStartup) return;
-    startupFrames++;
-    globalThis.requestAnimationFrame(countStartupFrame);
+/**
+ * Counts the frames the browser paints between mount and the scene being ready.
+ * A main thread that is meshing paints none of them however long the wait lasts,
+ * so this — not a wall-clock startup number — is what says the page stayed alive.
+ */
+function trackStartupFrames(): { readonly frames: () => number; readonly stop: () => void } {
+  let frames = 0;
+  let counting = true;
+  const tick = (): void => {
+    if (!counting) return;
+    frames++;
+    globalThis.requestAnimationFrame(tick);
   };
-  globalThis.requestAnimationFrame(countStartupFrame);
+  globalThis.requestAnimationFrame(tick);
+  return {
+    frames: () => frames,
+    stop: () => {
+      counting = false;
+    },
+  };
+}
 
+interface Plot {
+  readonly layout: ResortLayout;
+  /** Authored objects, the only placements that can carry a label. */
+  readonly placements: readonly Placement[];
+  /** Objects, scattered props and path tiles together: everything drawn. */
+  readonly everything: readonly Placement[];
+}
+
+/**
+ * Lays the resort out, and tiles it when the benchmark asks for a bigger one.
+ */
+function planResort(bench: BenchConfig | null): Plot {
   const layout = layoutResort(
     OBJECT_TYPES.map((type) => ({
       id: type.id,
@@ -190,19 +216,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     })),
     RESORT_PLAN,
   );
-
-  // `?bench=1` pins the camera and the clock so two builds are compared on the
-  // same pixels. Absent the flag this is null and nothing that reads it runs.
-  const bench = parseBenchConfig(globalThis.location?.search ?? "");
-
-  // The benchmark can tile the plot, to measure a resort several times this size.
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   const placements = tile(layout.placements);
   // Paths and scattered props are placements too; they just never get a label.
   const everything = [...placements, ...tile(layout.props), ...tile(layout.paths)];
+  return { layout, placements, everything };
+}
 
-  // One scratch region per model, so the mesher runs over each model exactly once.
+/** One scratch region per model, so the mesher runs over each model exactly once. */
+function scratchForCatalogue(): ScratchLayout {
   const scratch = scratchLayoutFor(
     OBJECT_TYPES.map((type) => ({
       id: type.id,
@@ -217,8 +240,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       `The catalogue needs ${scratch.extentX} voxels of scratch space, the world allows ${DEFAULT_WORLD_SCALE.horizontalExtent}`,
     );
   }
+  return scratch;
+}
 
-  const meshStarted = performance.now();
+interface MeshedCatalogue {
+  readonly geometries: readonly ModelGeometry[];
+  readonly dveMs: number;
+  readonly meshMs: number;
+  readonly threaded: boolean;
+}
+
+/** Meshes every model once and wraps the result in buffer geometries. */
+async function meshModels(
+  scratch: ScratchLayout,
+  bench: BenchConfig | null,
+): Promise<MeshedCatalogue> {
+  const started = performance.now();
   const meshed = await meshCatalogue(
     {
       materials: allMaterials(),
@@ -229,18 +266,33 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     { forceMainThread: bench?.forceMainThreadMeshing ?? false },
   );
-  const geometries = buildModelGeometries(meshed.models);
-  const dveMs = meshed.dveMs;
-  const meshMs = Math.round(performance.now() - meshStarted);
+  return {
+    geometries: buildModelGeometries(meshed.models),
+    dveMs: meshed.dveMs,
+    meshMs: Math.round(performance.now() - started),
+    threaded: meshed.threaded,
+  };
+}
 
-  // Every model that declares a light contributes one anchor per placement.
-  // These are derived before anything is built, because the bake they feed is
-  // what the materials below are wired to.
-  const lightAnchors: LightAnchor[] = [];
+interface Lighting {
+  readonly anchors: readonly LightAnchor[];
+  readonly spec: LightGridSpec | null;
+  readonly volume: BakedLightVolume | null;
+  readonly bakeMs: number;
+}
+
+/**
+ * Collects every lamp the plot stands and bakes them into one irradiance volume.
+ *
+ * This happens before anything is built, because the volume is what the scene's
+ * materials are wired to.
+ */
+function bakeLighting(everything: readonly Placement[]): Lighting {
+  const anchors: LightAnchor[] = [];
   for (const placement of everything) {
     for (const light of objectTypeById(placement.id).model.lights) {
-      lightAnchors.push({
-        key: `${placement.key}:${lightAnchors.length}`,
+      anchors.push({
+        key: `${placement.key}:${anchors.length}`,
         x: placement.x + light.x,
         y: light.y,
         z: placement.z + light.z,
@@ -251,43 +303,39 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     }
   }
 
-  const gridSpec = lightGridSpecFor(lightAnchors);
-  const bakeStarted = performance.now();
-  const bakedGrid = gridSpec ? bakeLightGrid(lightAnchors, gridSpec) : null;
-  const lightBakeMs = Math.round(performance.now() - bakeStarted);
-  const lightVolume = bakedGrid ? createBakedLightVolume(bakedGrid) : null;
+  const spec = lightGridSpecFor(anchors);
+  const started = performance.now();
+  const grid = spec ? bakeLightGrid(anchors, spec) : null;
+  return {
+    anchors,
+    spec,
+    bakeMs: Math.round(performance.now() - started),
+    volume: grid ? createBakedLightVolume(grid) : null,
+  };
+}
 
-  const world = buildInstancedWorld(geometries, everything, { lightVolume });
-
+/** Frames the camera on what is actually on the plot, or on the bench's fixed view. */
+function frameCamera(
+  everything: readonly Placement[],
+  bench: BenchConfig | null,
+): { readonly framing: CameraFraming; readonly worldExtent: number } {
   const topById = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.height]));
   const bounds = worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
-  const framing = bench
-    ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
-    : cameraFramingFor(bounds, CAMERA_FOV_DEGREES);
-  const worldExtent = Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1);
+  return {
+    framing: bench
+      ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
+      : cameraFramingFor(bounds, CAMERA_FOV_DEGREES),
+    worldExtent: Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1),
+  };
+}
 
-  const width = canvas.clientWidth || globalThis.innerWidth;
-  const height = canvas.clientHeight || globalThis.innerHeight;
-  const handle = await createScene({
-    canvas,
-    width,
-    height,
-    framing,
-    worldExtent,
-    lightVolume,
-    // Wall-clock frame times stop discriminating as soon as a frame fits inside
-    // the refresh interval: everything faster reads as exactly 120 fps. The
-    // GPU's own timers keep measuring past that point.
-    trackTimestamp: bench !== null,
-    forceWebGL: bench?.forceWebGL ?? false,
-  });
-  handle.scene.add(world.group);
-
-  // One label per object *type*, not per placement: fifteen cottages do not
-  // need fifteen captions, and the HUD stays the size it was. Which cottage
-  // carries it is chosen to spread the captions over the plot — see
-  // `hud/domain/labelPlacement.ts`.
-  const anchors: LabelAnchor[] = spreadLabelAnchors(placements).map((placement) => {
+/**
+ * One label per object *type*, not per placement: fifteen cottages do not need
+ * fifteen captions, and the HUD stays the size it was. Which cottage carries it
+ * is chosen to spread the captions over the plot — see `labelPlacement.ts`.
+ */
+function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
+  return spreadLabelAnchors(placements).map((placement) => {
     const type = objectTypeById(placement.id);
     const center = placementCenter(placement);
     return {
@@ -297,12 +345,185 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       world: { x: center.x, y: objectTypeTop(placement.id) + LABEL_LIFT, z: center.z },
     };
   });
+}
+
+/** Everything the HUD and a bench report say about the scene that was built. */
+function sceneStats(parts: {
+  readonly handle: SceneHandle;
+  readonly plot: Plot;
+  readonly world: InstancedWorld;
+  readonly scratch: ScratchLayout;
+  readonly catalogue: MeshedCatalogue;
+  readonly lighting: Lighting;
+  readonly bench: BenchConfig | null;
+  readonly startupFrames: number;
+  readonly mountStarted: number;
+}): ShowcaseStats {
+  const { handle, plot, world, scratch, catalogue, lighting, bench } = parts;
+  const repeats = (bench?.repeat ?? 1) ** 2;
+  return {
+    backend: handle.backend,
+    typeCount: new Set(plot.everything.map((placement) => placement.id)).size,
+    objectCount: plot.placements.length,
+    propCount: plot.layout.props.length * repeats,
+    pathCount: plot.layout.paths.length * repeats,
+    instanceCount: world.instanceCount,
+    drawCalls: world.drawCalls,
+    chunkCount: world.chunkCount,
+    uniqueTriangleCount: world.uniqueTriangleCount,
+    unmergedTriangleCount: world.unmergedTriangleCount,
+    drawnTriangleCount: world.drawnTriangleCount,
+    sceneVoxelCount: plot.everything.reduce(
+      (total, placement) => total + objectTypeById(placement.id).model.voxels.length,
+      0,
+    ),
+    meshedVoxelCount: scratch.writes.length,
+    lightCount: lighting.anchors.length,
+    lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,
+    lightGridBytes: lighting.spec ? gridByteSize(lighting.spec) : 0,
+    lightBakeMs: lighting.bakeMs,
+    dveMs: catalogue.dveMs,
+    meshMs: catalogue.meshMs,
+    // Everything is built by this point; the next thing that happens is a frame.
+    startupMs: Math.round(performance.now() - parts.mountStarted),
+    meshedInWorker: catalogue.threaded,
+    startupFrames: parts.startupFrames,
+  };
+}
+
+/**
+ * Projects the label anchors to screen space, reusing its scratch matrices
+ * across frames: the render loop must not hand the garbage collector work to do
+ * sixty times a second.
+ */
+function createLabelProjector(
+  handle: SceneHandle,
+  canvas: HTMLCanvasElement,
+  anchors: readonly LabelAnchor[],
+): (into: Map<string, ScreenPosition>) => void {
+  const viewProjection: number[] = Array.from({ length: 16 }, () => 0);
+  const viewProjectionMatrix = new Matrix4();
+  return (into) => {
+    handle.camera.updateMatrixWorld();
+    viewProjectionMatrix
+      .copy(handle.camera.projectionMatrix)
+      .multiply(handle.camera.matrixWorldInverse);
+    for (let i = 0; i < 16; i++) viewProjection[i] = viewProjectionMatrix.elements[i]!;
+
+    const viewport = {
+      width: canvas.clientWidth || globalThis.innerWidth,
+      height: canvas.clientHeight || globalThis.innerHeight,
+    };
+    into.clear();
+    for (const anchor of anchors) {
+      const screen = projectToScreen(anchor.world, viewProjection, viewport);
+      if (screen) into.set(anchor.id, screen);
+    }
+  };
+}
+
+interface BenchRecorder {
+  /** Records one frame's wall-clock duration; a no-op once the run has finished. */
+  readonly record: (frameMs: number) => void;
+  /**
+   * Reads back one frame's GPU duration. Resolving drains the query pool, so
+   * calling this once per frame gives one reading per frame.
+   */
+  readonly sampleGpu: () => Promise<void>;
+  /** Populated once enough frames have been measured. */
+  readonly result: () => BenchResult | null;
+}
+
+/**
+ * Collects the frames a `?bench=1` run measures, and publishes the summary as
+ * `window.__voxBench` — which is how `scripts/bench.ts` reads it out of the page.
+ */
+function createBenchRecorder(parts: {
+  readonly bench: BenchConfig;
+  readonly handle: SceneHandle;
+  readonly stats: ShowcaseStats;
+  readonly litLampCount: () => number;
+}): BenchRecorder {
+  const { bench, handle, stats, litLampCount } = parts;
+  const frames: number[] = [];
+  const gpuFrames: number[] = [];
+  let seen = 0;
+  let result: BenchResult | null = null;
+
+  return {
+    record(frameMs) {
+      if (result) return;
+      seen++;
+      if (seen <= bench.warmupFrames) return;
+      frames.push(frameMs);
+      if (frames.length < bench.measureFrames) return;
+      result = {
+        config: bench,
+        backend: handle.backend,
+        pixelRatio: handle.renderer.getPixelRatio(),
+        drawingBufferSize: handle.drawingBufferSize(),
+        activeLights: litLampCount(),
+        scene: stats,
+        drawn: {
+          drawCalls: handle.renderer.info.render.drawCalls,
+          triangles: handle.renderer.info.render.triangles,
+        },
+        stats: roundStats(summarizeFrames(frames)),
+        gpu: gpuFrames.length > 0 ? roundStats(summarizeFrames(gpuFrames)) : null,
+      };
+      (globalThis as Record<string, unknown>).__voxBench = result;
+    },
+    async sampleGpu() {
+      if (result) return;
+      const duration = await handle.renderer.resolveTimestampsAsync();
+      if (typeof duration === "number" && duration > 0) gpuFrames.push(duration);
+    },
+    result: () => result,
+  };
+}
+
+export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
+  const { canvas, onFrame } = options;
+  const mountStarted = performance.now();
+  const startup = trackStartupFrames();
+
+  // `?bench=1` pins the camera and the clock so two builds are compared on the
+  // same pixels. Absent the flag this is null and nothing that reads it runs.
+  const bench = parseBenchConfig(globalThis.location?.search ?? "");
+
+  const plot = planResort(bench);
+  const scratch = scratchForCatalogue();
+  const catalogue = await meshModels(scratch, bench);
+  const lighting = bakeLighting(plot.everything);
+  const world = buildInstancedWorld(catalogue.geometries, plot.everything, {
+    lightVolume: lighting.volume,
+  });
+
+  const { framing, worldExtent } = frameCamera(plot.everything, bench);
+  const handle = await createScene({
+    canvas,
+    width: canvas.clientWidth || globalThis.innerWidth,
+    height: canvas.clientHeight || globalThis.innerHeight,
+    framing,
+    worldExtent,
+    lightVolume: lighting.volume,
+    // Wall-clock frame times stop discriminating as soon as a frame fits inside
+    // the refresh interval: everything faster reads as exactly 120 fps. The
+    // GPU's own timers keep measuring past that point.
+    trackTimestamp: bench !== null,
+    forceWebGL: bench?.forceWebGL ?? false,
+  });
+  handle.scene.add(world.group);
+
+  const anchors = labelAnchorsFor(plot.placements);
 
   let fpsState = createFpsState();
   let running = true;
   let time = bench ? bench.time : INITIAL_TIME;
   let cycling = false;
   let lastTimeMs: number | null = null;
+  let sky = skyStateFor(time);
+  let appliedTime: number | null = null;
 
   if (bench) {
     // Damping would keep nudging the camera for the first second of the run.
@@ -310,14 +531,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     handle.controls.enableDamping = false;
   }
   /** Lamps contributing right now: the bake lights all of them, or none. */
-  const litLampCount = (lampFactor: number): number => (lampFactor > 0 ? lightAnchors.length : 0);
+  const litLampCount = (): number => (sky.lampFactor > 0 ? lighting.anchors.length : 0);
 
-  const benchFrames: number[] = [];
-  const benchGpuFrames: number[] = [];
-  let benchFrame = 0;
-  let benchResult: BenchResult | null = null;
-
-  handle.applySky(skyStateFor(time));
+  handle.applySky(sky);
 
   const resize = (): void => {
     handle.resize(
@@ -327,45 +543,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   };
   globalThis.addEventListener("resize", resize);
 
-  const repeats = (bench?.repeat ?? 1) ** 2;
-  const sceneVoxelCount = everything.reduce(
-    (total, placement) => total + objectTypeById(placement.id).model.voxels.length,
-    0,
-  );
-  const stats: ShowcaseStats = {
-    backend: handle.backend,
-    typeCount: new Set(everything.map((placement) => placement.id)).size,
-    objectCount: placements.length,
-    propCount: layout.props.length * repeats,
-    pathCount: layout.paths.length * repeats,
-    instanceCount: world.instanceCount,
-    drawCalls: world.drawCalls,
-    chunkCount: world.chunkCount,
-    uniqueTriangleCount: world.uniqueTriangleCount,
-    unmergedTriangleCount: world.unmergedTriangleCount,
-    drawnTriangleCount: world.drawnTriangleCount,
-    sceneVoxelCount,
-    meshedVoxelCount: scratch.writes.length,
-    lightCount: lightAnchors.length,
-    lightGridCells: gridSpec ? cellCount(gridSpec) : 0,
-    lightGridBytes: gridSpec ? gridByteSize(gridSpec) : 0,
-    lightBakeMs,
-    dveMs,
-    meshMs,
-    // Everything is built by this point; the next thing that happens is a frame.
-    startupMs: Math.round(performance.now() - mountStarted),
-    meshedInWorker: meshed.threaded,
-    startupFrames,
-  };
-  countingStartup = false;
+  const stats = sceneStats({
+    handle,
+    plot,
+    world,
+    scratch,
+    catalogue,
+    lighting,
+    bench,
+    startupFrames: startup.frames(),
+    mountStarted,
+  });
+  startup.stop();
 
-  const viewProjection: number[] = Array.from({ length: 16 }, () => 0);
-  // Reused across frames: the render loop must not hand the garbage collector
-  // work to do sixty times a second.
-  const viewProjectionMatrix = new Matrix4();
+  const recorder = bench ? createBenchRecorder({ bench, handle, stats, litLampCount }) : null;
+  const projectLabels = createLabelProjector(handle, canvas, anchors);
   const labels = new Map<string, ScreenPosition>();
-  let sky = skyStateFor(time);
-  let appliedTime: number | null = null;
 
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
@@ -380,7 +573,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (time !== appliedTime) {
       sky = skyStateFor(time);
       handle.applySky(sky);
-      lightVolume?.setLampFactor(sky.lampFactor);
+      lighting.volume?.setLampFactor(sky.lampFactor);
       appliedTime = time;
     }
     if (!bench) handle.controls.update();
@@ -389,66 +582,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;
 
-    handle.camera.updateMatrixWorld();
-    viewProjectionMatrix
-      .copy(handle.camera.projectionMatrix)
-      .multiply(handle.camera.matrixWorldInverse);
-    for (let i = 0; i < 16; i++) viewProjection[i] = viewProjectionMatrix.elements[i]!;
+    projectLabels(labels);
+    onFrame({ fps: fpsState.fps, time, activeLights: litLampCount(), labels });
 
-    const viewport = {
-      width: canvas.clientWidth || globalThis.innerWidth,
-      height: canvas.clientHeight || globalThis.innerHeight,
-    };
-    labels.clear();
-    for (const anchor of anchors) {
-      const screen = projectToScreen(anchor.world, viewProjection, viewport);
-      if (screen) labels.set(anchor.id, screen);
-    }
-    onFrame({ fps: fpsState.fps, time, activeLights: litLampCount(sky.lampFactor), labels });
-
-    if (bench) {
-      recordBenchFrame(elapsed * 1000);
-      void sampleGpuTime();
+    if (recorder) {
+      recorder.record(elapsed * 1000);
+      void recorder.sampleGpu();
     }
   });
 
-  /**
-   * Reads back one frame's GPU duration. Resolving drains the query pool, so
-   * calling this once per frame gives one reading per frame.
-   */
-  async function sampleGpuTime(): Promise<void> {
-    if (benchResult) return;
-    const duration = await handle.renderer.resolveTimestampsAsync();
-    if (typeof duration === "number" && duration > 0) benchGpuFrames.push(duration);
-  }
-
-  function recordBenchFrame(frameMs: number): void {
-    if (!bench) return;
-    benchFrame++;
-    if (benchFrame <= bench.warmupFrames) return;
-    if (benchFrames.length < bench.measureFrames) benchFrames.push(frameMs);
-    if (benchFrames.length < bench.measureFrames) return;
-    if (benchResult) return;
-    benchResult = {
-      config: bench,
-      backend: handle.backend,
-      pixelRatio: handle.renderer.getPixelRatio(),
-      drawingBufferSize: handle.drawingBufferSize(),
-      activeLights: litLampCount(sky.lampFactor),
-      scene: stats,
-      drawn: {
-        drawCalls: handle.renderer.info.render.drawCalls,
-        triangles: handle.renderer.info.render.triangles,
-      },
-      stats: roundStats(summarizeFrames(benchFrames)),
-      gpu: benchGpuFrames.length > 0 ? roundStats(summarizeFrames(benchGpuFrames)) : null,
-    };
-    (globalThis as Record<string, unknown>).__voxBench = benchResult;
-  }
-
   return {
     get benchResult() {
-      return benchResult;
+      return recorder?.result() ?? null;
     },
     stats,
     anchors,
@@ -463,7 +608,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       running = false;
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener("resize", resize);
-      lightVolume?.dispose();
+      lighting.volume?.dispose();
       world.dispose();
       handle.dispose();
     },

@@ -20,7 +20,7 @@ export interface FpsSample {
   readonly updated: boolean;
 }
 
-export const DEFAULT_REPORT_INTERVAL_MS = 500;
+const DEFAULT_REPORT_INTERVAL_MS = 500;
 
 export function createFpsState(): FpsState {
   return { lastFrameMs: null, windowMs: 0, windowFrames: 0, fps: 0 };

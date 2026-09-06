@@ -25,7 +25,7 @@ import { cameraFramingFor } from "../../layout/domain/worldBounds";
  */
 export type BenchView = "overview" | "street";
 
-export const BENCH_VIEWS: readonly BenchView[] = ["overview", "street"];
+const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(["overview", "street"]);
 
 export interface BenchConfig {
   readonly view: BenchView;
@@ -76,9 +76,8 @@ export function parseBenchConfig(search: string): BenchConfig | null {
   if (flag === null || flag === "0" || flag === "false") return null;
 
   const rawView = params.get("view");
-  const view = BENCH_VIEWS.includes(rawView as BenchView)
-    ? (rawView as BenchView)
-    : DEFAULT_BENCH.view;
+  const view =
+    rawView !== null && BENCH_VIEWS.has(rawView) ? (rawView as BenchView) : DEFAULT_BENCH.view;
 
   const rawTime = params.get("time");
   const parsedTime = rawTime === null ? Number.NaN : Number.parseFloat(rawTime);

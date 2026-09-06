@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Placement } from "../layout/domain/resortLayout";
+import type { Placement } from "../../layout/domain/resortLayout";
 import { instancesByType } from "./instancedWorld";
 
 const at = (key: string, id: string, x: number): Placement => ({

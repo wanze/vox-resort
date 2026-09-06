@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { materialKeyFor, voxelIdFor } from "../catalog/domain/materials";
-import { allMaterials, materialColorsById, OBJECT_TYPES } from "../catalog/domain/objectTypes";
-import { deinterleaveVertices, flipWinding } from "../rendering/domain/vertexBuffer";
-import { scratchLayoutFor } from "./domain/modelScratch";
+import { materialKeyFor, voxelIdFor } from "../../catalog/domain/materials";
+import { allMaterials, materialColorsById, OBJECT_TYPES } from "../../catalog/domain/objectTypes";
+import { deinterleaveVertices, flipWinding } from "../../rendering/domain/vertexBuffer";
+import { scratchLayoutFor } from "../domain/modelScratch";
 import { buildSectionMeshes, DEFAULT_WORLD_SCALE, sectionSizeOf } from "./dveEngine";
 
 /**

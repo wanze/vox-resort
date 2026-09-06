@@ -32,7 +32,7 @@ import {
 } from "./resortPlan";
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
-export const LAMP_SPACING = 5;
+const LAMP_SPACING = 5;
 
 export interface LayoutItem {
   readonly id: string;

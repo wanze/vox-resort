@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { sortByDepth } from "../features/hud/domain/labelProjection";
-import { Hud } from "../features/hud/Hud";
+import { Hud } from "../features/hud/components/Hud";
 import {
   mountShowcase,
   type FrameUpdate,

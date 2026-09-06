@@ -24,9 +24,9 @@ import {
   type Material,
 } from "three/webgpu";
 import { vertexColor } from "three/tsl";
-import type { BakedLightVolume } from "../lighting/bakedLightVolume";
-import type { Placement } from "../layout/domain/resortLayout";
-import { bucketByChunk, CHUNK_VOXELS, chunkKey } from "./domain/spatialChunks";
+import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
+import type { Placement } from "../../layout/domain/resortLayout";
+import { bucketByChunk, CHUNK_VOXELS, chunkKey } from "../domain/spatialChunks";
 import type { ModelGeometry } from "./voxelMeshBuilder";
 
 export interface InstancedWorld {

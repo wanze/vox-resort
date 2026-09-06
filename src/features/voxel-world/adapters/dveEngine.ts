@@ -10,10 +10,10 @@
  * every import below is deliberately dynamic and ordered after `syncSettings`.
  */
 
-import type { MaterialDefinition } from "../catalog/domain/materials";
-import { materialIdFor, voxelIdFor } from "../catalog/domain/materials";
-import { groupBySection, originsFor, type VolumeSize } from "./domain/sectionGrid";
-import type { VoxelWrite } from "./domain/voxelWrites";
+import type { MaterialDefinition } from "../../catalog/domain/materials";
+import { materialIdFor, voxelIdFor } from "../../catalog/domain/materials";
+import { groupBySection, originsFor, type VolumeSize } from "../domain/sectionGrid";
+import type { VoxelWrite } from "../domain/voxelWrites";
 
 /** Power-of-two exponents DVE uses to size sectors and sections. */
 export interface WorldScale {
@@ -54,7 +54,7 @@ export const DEFAULT_WORLD_SCALE: WorldScale = {
   horizontalExtent: 8192,
 };
 
-export function sectorSizeOf(scale: WorldScale): VolumeSize {
+function sectorSizeOf(scale: WorldScale): VolumeSize {
   return sizeFromPower2(scale.sectorPower2);
 }
 

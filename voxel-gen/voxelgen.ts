@@ -30,10 +30,6 @@ export class VoxelBuilder {
     this.voxels.delete(`${x},${y},${z}`);
   }
 
-  has(x: number, y: number, z: number): boolean {
-    return this.voxels.has(`${x},${y},${z}`);
-  }
-
   /** Fill an inclusive integer box. */
   box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, c: Color): void {
     for (let x = x0; x <= x1; x++) {

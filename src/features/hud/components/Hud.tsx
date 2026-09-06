@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { FpsCounter } from "./FpsCounter";
 import { ObjectLabels } from "./ObjectLabels";
-import type { LabelAnchor, ShowcaseStats } from "../../app/showcase";
+import type { LabelAnchor, ShowcaseStats } from "../../../app/showcase";
 
 export interface HudProps {
   readonly fps: number;

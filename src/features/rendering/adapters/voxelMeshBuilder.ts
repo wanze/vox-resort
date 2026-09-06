@@ -21,7 +21,7 @@
  */
 
 import { BufferAttribute, BufferGeometry } from "three/webgpu";
-import type { MeshAttributes, ModelAttributes } from "./domain/modelAttributes";
+import type { MeshAttributes, ModelAttributes } from "../domain/modelAttributes";
 
 export interface ModelGeometry {
   readonly id: string;

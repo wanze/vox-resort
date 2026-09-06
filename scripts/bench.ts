@@ -228,13 +228,18 @@ async function launch(cli: Cli): Promise<Browser> {
     else entry.resolve(message.result);
   });
 
-  const send = <T>(method: string, params: Record<string, unknown> = {}): Promise<T> => {
-    const id = nextId++;
-    return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      socket.send(JSON.stringify({ id, method, params }));
-    });
-  };
+  // Browser-level and page-level commands are the same frame; only the page's
+  // carries a sessionId, and JSON.stringify drops it when there is none.
+  const senderFor =
+    (sessionId?: string) =>
+    <T>(method: string, params: Record<string, unknown> = {}): Promise<T> => {
+      const id = nextId++;
+      return new Promise<T>((resolve, reject) => {
+        pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+        socket.send(JSON.stringify({ id, sessionId, method, params }));
+      });
+    };
+  const send = senderFor();
 
   // Attach to the one tab Chrome opened, and drive it through its own session.
   const { targetInfos } = await send<{ targetInfos: { targetId: string; type: string }[] }>(
@@ -247,13 +252,7 @@ async function launch(cli: Cli): Promise<Browser> {
     flatten: true,
   });
 
-  const sendToPage = <T>(method: string, params: Record<string, unknown> = {}): Promise<T> => {
-    const id = nextId++;
-    return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      socket.send(JSON.stringify({ id, sessionId, method, params }));
-    });
-  };
+  const sendToPage = senderFor(sessionId);
 
   await sendToPage("Page.enable");
   await sendToPage("Runtime.enable");

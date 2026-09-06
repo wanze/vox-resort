@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import type { ShowcaseStats } from "../../app/showcase";
+import type { ShowcaseStats } from "../../../app/showcase";
 
 export interface FpsCounterProps {
   readonly fps: number;

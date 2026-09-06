@@ -32,7 +32,7 @@ import type { Node } from "three/webgpu";
 
 /** A TSL node carrying an RGB albedo. */
 export type ColorNode = Node<"vec3">;
-import type { BakedLightGrid } from "./domain/lightGrid";
+import type { BakedLightGrid } from "../domain/lightGrid";
 
 /**
  * What a surface receives when the lamps around it agree on no direction at all.

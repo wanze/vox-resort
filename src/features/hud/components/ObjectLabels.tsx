@@ -1,5 +1,5 @@
 import { useCallback, type RefObject } from "react";
-import type { LabelAnchor } from "../../app/showcase";
+import type { LabelAnchor } from "../../../app/showcase";
 
 export interface ObjectLabelsProps {
   readonly anchors: readonly LabelAnchor[];

@@ -25,10 +25,10 @@ import {
 } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { vec3 } from "three/tsl";
-import type { BakedLightVolume } from "../lighting/bakedLightVolume";
-import { linearRgbOf } from "../lighting/domain/lightGrid";
-import type { SkyState } from "../lighting/domain/dayNight";
-import type { CameraFraming } from "../layout/domain/worldBounds";
+import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
+import { linearRgbOf } from "../../lighting/domain/lightGrid";
+import type { SkyState } from "../../lighting/domain/dayNight";
+import type { CameraFraming } from "../../layout/domain/worldBounds";
 
 export const CAMERA_FOV_DEGREES = 55;
 

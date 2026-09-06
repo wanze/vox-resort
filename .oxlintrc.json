@@ -44,15 +44,15 @@
       }
     },
     {
-      "files": ["src/features/voxel-world/dveEngine.ts", "src/app/showcase.ts"],
+      "files": ["src/features/voxel-world/adapters/dveEngine.ts", "src/app/showcase.ts"],
       "rules": {
         "no-underscore-dangle": "off"
       }
     },
     {
       "files": [
-        "src/features/voxel-world/meshCatalogue.ts",
-        "src/features/voxel-world/meshWorker.ts"
+        "src/features/voxel-world/adapters/meshCatalogue.ts",
+        "src/features/voxel-world/adapters/meshWorker.ts"
       ],
       "rules": {
         "unicorn/require-post-message-target-origin": "off"

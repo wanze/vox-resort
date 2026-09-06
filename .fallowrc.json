@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": ["src/main.tsx", "src/features/voxel-world/adapters/meshWorker.ts"],
+  "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
+  "health": {
+    "ignore": ["voxel-gen/models/**", "**/*.test.ts", "**/*.test.tsx"]
+  },
+  "duplicates": {
+    "ignore": ["voxel-gen/models/**"]
+  },
+  "boundaries": {
+    "zones": [
+      { "name": "domain", "patterns": ["src/features/*/domain/**"] },
+      { "name": "adapters", "patterns": ["src/features/*/adapters/**"] },
+      { "name": "components", "patterns": ["src/features/*/components/**"] },
+      { "name": "app", "patterns": ["src/app/**", "src/main.tsx"] },
+      { "name": "models", "patterns": ["voxel-gen/**"] }
+    ],
+    "rules": [
+      { "from": "domain", "allow": ["domain", "models"] },
+      { "from": "adapters", "allow": ["domain", "adapters", "models"] },
+      { "from": "components", "allow": ["domain", "components"], "allowTypeOnly": ["app"] },
+      { "from": "app", "allow": ["domain", "adapters", "components", "app", "models"] },
+      { "from": "models", "allow": ["models"] }
+    ],
+    "coverage": {
+      "requireAllFiles": true,
+      "allowUnmatched": ["scripts/**", "vite.config.ts", "index.html"]
+    }
+  }
+}

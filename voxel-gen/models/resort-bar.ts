@@ -2,13 +2,25 @@
  * Stylish standalone resort bar: a wooden deck with a long counter and stools,
  * bottle shelves and string lights, on a low platform. 48x32x21 (12x8 m deck,
  * 5.25 m to the light rail), a 3x2 tile. The open bar side faces +z.
+ *
+ * The string lights are emissive and the deck is lit after dark by a pair of
+ * lamps hung under the rail — the same treatment the poolside bar gets, spread
+ * over a counter half again as long.
  */
 import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+
+const BULB = 0xf4d57c;
 
 export default defineModel({
   id: "resort-bar",
   label: "Resort Bar",
   tiles: { x: 3, z: 2 },
+  emissive: [BULB],
+  // Two lamps under the light rail, a third of the way in from each end.
+  lights: [
+    { x: 15, y: 18, z: 20, color: 0xffd489, intensity: 90, distance: 54 },
+    { x: 32, y: 18, z: 20, color: 0xffd489, intensity: 90, distance: 54 },
+  ],
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -25,7 +37,7 @@ export default defineModel({
       stool: 0x2f2a26,
       stoolSeat: 0xc24d5a,
       post: 0x4a3320,
-      bulb: 0xf4d57c,
+      bulb: BULB,
       wire: 0x3a2f22,
       bottleA: 0x4bbcd6,
       bottleB: 0x6fbf59,

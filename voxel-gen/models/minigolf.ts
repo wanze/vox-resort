@@ -1,13 +1,38 @@
 /**
  * Mini-golf course: small greens with a windmill, obstacle props, winding paths
  * and flags, on a low platform. 80x64 (20x16 m, a compact course), a 5x4 tile.
+ *
+ * Six knee-high bollards line the spine path so the course can be played after
+ * dark. They are deliberately small — a short reach each, rather than one lamp
+ * flooding the whole course — so the holes read as a lit trail.
  */
 import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+
+const GLOW = 0xffe3a3;
+
+/** Bollards down both sides of the spine path, staggered so the trail reads. */
+const BOLLARDS: ReadonlyArray<readonly [number, number]> = [
+  [14, 29],
+  [38, 29],
+  [66, 29],
+  [22, 34],
+  [50, 34],
+  [74, 34],
+];
 
 export default defineModel({
   id: "minigolf",
   label: "Minigolf",
   tiles: { x: 5, z: 4 },
+  emissive: [GLOW],
+  lights: BOLLARDS.map(([x, z]) => ({
+    x,
+    z,
+    y: 7,
+    color: GLOW,
+    intensity: 34,
+    distance: 28,
+  })),
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -28,6 +53,8 @@ export default defineModel({
       blade: 0xdf8a3c,
       obstacle: 0x3f6fb0,
       water: 0x37abd2,
+      bollard: 0x3a4048,
+      glow: GLOW,
     };
 
     const NX = 79;
@@ -100,6 +127,13 @@ export default defineModel({
     for (let z = 10; z <= 22; z++) {
       set(30, 4, z, C.curb);
       set(42, 4, z, C.curb);
+    }
+
+    // path bollards: a stubby post, a glowing head and a dark cap
+    for (const [x, z] of BOLLARDS) {
+      box(x, x, 4, 6, z, z, C.bollard);
+      set(x, 7, z, C.glow);
+      set(x, 8, z, C.bollard);
     }
   },
 });

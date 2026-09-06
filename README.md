@@ -1,8 +1,8 @@
 # Vox Resort
 
-A voxel resort-builder prototype: a few hundred hand-authored voxel buildings
-laid out on streets across a 336 × 296 m plot, lit by a day/night cycle, drawn
-with instancing over a Three.js WebGPU renderer.
+A voxel resort-builder prototype: five hundred hand-authored voxel buildings
+laid out on streets across a 448 × 400 m plot, lit after dark by 425 baked lamps,
+drawn with instancing over a Three.js WebGPU renderer.
 
 ## Stack
 

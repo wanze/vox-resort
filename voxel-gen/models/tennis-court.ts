@@ -2,13 +2,36 @@
  * Tennis court: a green-and-terracotta playing surface with white line markings,
  * a central net and a surrounding fence, on a low platform. 144x80 (36x20 m:
  * a 23.75x11.25 m court with full run-off), a 9x5 tile.
+ *
+ * Four floodlight masts stand over the fence, one off each service line, so the
+ * court can be played in the evening. They are the tallest lamps on the plot —
+ * 6.75 m — and the only ones that light a surface rather than a walkway.
  */
 import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+
+const FLOOD = 0xfff0d8;
+
+/** Mast feet, off each service line and clear of the fence line. */
+const MASTS: ReadonlyArray<readonly [number, number]> = [
+  [45, 5],
+  [97, 5],
+  [45, 74],
+  [97, 74],
+];
 
 export default defineModel({
   id: "tennis-court",
   label: "Tennis Court",
   tiles: { x: 9, z: 5 },
+  emissive: [FLOOD],
+  lights: MASTS.map(([x, z]) => ({
+    x,
+    z,
+    y: 23, // just under the lamp face, so the light falls on the court
+    color: FLOOD,
+    intensity: 140,
+    distance: 70,
+  })),
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -23,6 +46,9 @@ export default defineModel({
       netPost: 0xd8d8d0,
       net: 0x3a3a3a,
       fence: 0x8f9aa2,
+      mast: 0x5a626b,
+      housing: 0x3a4048,
+      flood: FLOOD,
     };
 
     const NX = 143;
@@ -88,5 +114,12 @@ export default defineModel({
     box(2, 141, 15, 15, 77, 77, C.fence);
     box(2, 2, 15, 15, 2, 77, C.fence);
     box(141, 141, 15, 15, 2, 77, C.fence);
+
+    // floodlight masts: a slim pole, a glowing lamp band and a housing over it
+    for (const [mx, mz] of MASTS) {
+      box(mx, mx + 1, 4, 23, mz, mz + 1, C.mast);
+      box(mx - 1, mx + 2, 24, 24, mz - 1, mz + 2, C.flood);
+      box(mx - 1, mx + 2, 25, 26, mz - 1, mz + 2, C.housing);
+    }
   },
 });

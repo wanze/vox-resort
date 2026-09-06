@@ -11,26 +11,28 @@ and a storey is 12 voxels. Every model is authored at that scale and fills the
 footprint it declares, which is what keeps a palm, a bungalow and a hotel in
 proportion once they stand on the same plot.
 
-The plot is 84 × 74 tiles — **336 × 296 m**.
+The plot is 112 × 100 tiles — **448 × 400 m**.
 
 ## What is on the plot
 
 |                                             |                                      |
 | ------------------------------------------- | ------------------------------------ |
-| Authored objects                            | 236, of 28 types                     |
-| Lamps and hedges the layout scatters itself | 556                                  |
-| Paved tiles                                 | 1 278 (21% of the plot)              |
-| Instances drawn                             | 2 070                                |
-| Draw calls                                  | 271, over 30 chunks                  |
-| Triangles submitted per frame               | 1.14 M (677 k at eye level, culled)  |
-| Triangles uploaded to the GPU               | 83 k, merged down from 524 k         |
-| Voxels the resort is made of                | 7.2 M                                |
+| Authored objects                            | 515, of 28 types                     |
+| Lamps and hedges the layout scatters itself | 920                                  |
+| Paved tiles                                 | 2 529 (23% of the plot)              |
+| Instances drawn                             | 3 964                                |
+| Draw calls                                  | 528, over 43 chunks                  |
+| Triangles submitted per frame               | 2.18 M (1.25 M at eye level, culled) |
+| Triangles uploaded to the GPU               | 84 k, merged down from 526 k         |
+| Voxels the resort is made of                | 15.1 M                               |
 | Voxels actually meshed                      | 769 k (one copy of each model)       |
-| Lamps                                       | 167, all of them baked into a volume |
+| Lamps                                       | 425, all of them baked into a volume |
 
-Note the two numbers that did _not_ move when the resort grew: 769 k voxels
-meshed and 83 k triangles uploaded. The catalogue is meshed once whatever the
-plan does with it, so doubling the resort costs matrices, not geometry.
+Note the two numbers that did _not_ move when the plot last doubled: 769 k
+voxels meshed and 84 k triangles uploaded. The catalogue is meshed once whatever
+the plan does with it, so growing the resort costs matrices, not geometry — the
+east wing and the two southern bands added 279 objects, 1 894 instances and
+7.9 M voxels for exactly zero extra meshing.
 
 Measured in Chrome on the WebGPU backend, at 2880 × 1626 device pixels on an
 M2 Pro: **120 fps (vsync) in daylight and after dark alike**. `pnpm bench`
@@ -95,10 +97,13 @@ plaza or two. Everything else is derived, in three stages:
 Because the plan stands two dozen cottages on the plot, a placement carries both
 its type (`id`) and a unique `key`.
 
-The plot is a grid: six districts across, four bands down, with the promenade,
-two ring lanes, four service lanes and three cross streets in the gaps between
+The plot is a grid: eight districts across, six bands down, with the promenade,
+two ring lanes, six service lanes and five cross streets in the gaps between
 them. Every object sits inside a district, so growing the resort is a matter of
-adding districts and lanes rather than re-threading the whole network.
+adding districts and lanes rather than re-threading the whole network — which is
+literally all the east wing (columns G and H) and the two southern bands were:
+new plots, two more service lanes, two more cross streets, and the south gate
+moved to the new edge. Nothing outside `resortPlan.ts` changed.
 
 ## Rendering: what is optimised, and what is not
 
@@ -168,13 +173,14 @@ inside the refresh interval.
 
 | case                     | fps     | GPU    | draw calls | triangles |
 | ------------------------ | ------- | ------ | ---------- | --------- |
-| daylight, whole plot     | 120 fps | 5.4 ms | 273        | 1.14 M    |
-| daylight, at eye level   | 120 fps | 3.5 ms | 157        | 677 k     |
-| after dark, whole plot   | 120 fps | 5.4 ms | 273        | 1.14 M    |
-| after dark, at eye level | 120 fps | 3.5 ms | 157        | 677 k     |
+| daylight, whole plot     | 120 fps | 6.8 ms | 528        | 2.18 M    |
+| daylight, at eye level   | 120 fps | 5.1 ms | 273        | 1.25 M    |
+| after dark, whole plot   | 120 fps | 6.8 ms | 528        | 2.18 M    |
+| after dark, at eye level | 120 fps | 5.1 ms | 273        | 1.25 M    |
 
 Night costs what day costs, which was not true before this milestone's lighting
-work. On the 60 × 52 plot this started from, the same four cases measured:
+work — and it still holds at 425 lamps, having been established at 167. On the
+60 × 52 plot this started from, the same four cases measured:
 
 | case                      | before       | after       | before GPU | after GPU |
 | ------------------------- | ------------ | ----------- | ---------- | --------- |
@@ -191,16 +197,17 @@ after dark:
 
 | resort | instances | lamps | triangles | whole plot | at eye level |
 | ------ | --------- | ----- | --------- | ---------- | ------------ |
-| 1×     | 2 070     | 167   | 1.14 M    | 120 fps    | 120 fps      |
-| 4×     | 8 280     | 668   | 4.6 M     | 97 fps     | 120 fps      |
-| 9×     | 18 630    | 1 503 | 10.3 M    | 54 fps     | 97 fps       |
+| 1×     | 3 964     | 425   | 2.18 M    | 120 fps    | 120 fps      |
+| 4×     | 15 856    | 1 700 | 8.7 M     | 43 fps     | 86 fps       |
+| 9×     | 35 676    | 3 825 | 19.6 M    | 21 fps     | 44 fps       |
 
-Nine times this resort — 18 630 instances and 1 503 lamps on a 1 km² plot — still
-renders, and after dark still costs what daylight does at every size. Past about
-four, the overview is **CPU**-bound rather than GPU-bound: 10.8 ms of GPU inside a
-16.7 ms frame, spent submitting 2 265 draw calls. So the next thing to do is
-fewer, bigger draws (indirect draws, or merging chunk geometry) and LOD for
-buildings far enough away to be a box — not more culling.
+Nine times this resort — 35 676 instances and 3 825 lamps on a 1.9 km² plot —
+still renders, and after dark still costs what daylight does at every size. The
+overview is **CPU**-bound well before it is GPU-bound: at 9× it spends 21.7 ms of
+GPU inside a 49.9 ms frame, submitting 4 734 draw calls, and the eye-level view —
+which is what a player actually looks at — is still at 44 fps there. So the next
+thing to do is fewer, bigger draws (indirect draws, or merging chunk geometry)
+and LOD for buildings far enough away to be a box — not more culling.
 
 **Still not done.** LOD; occlusion culling; GPU-driven or indirect draws; and any
 texturing at all.
@@ -243,6 +250,12 @@ export default defineModel({
 });
 ```
 
+Ten of the thirty-one models cast light: the street lamp and the tiki torch, the
+fountain and the swimming pool, the entrance gate, both bars, the hotel's
+entrance lanterns, the mini-golf bollards and the tennis court's four floodlight
+masts. Between them they put 425 lamps on the plot, so the resort is lit by what
+stands on it rather than by lamp posts alone.
+
 `skyStateFor(time)` turns a normalised time of day into the sun's direction,
 colour and intensity, the ambient fill, the sky and fog colour, and a lamp factor
 that is 0 in daylight and 1 after dark. All of it is pure, so the curve is tuned
@@ -250,9 +263,9 @@ against a test rather than against a frame.
 
 ### The lamps are baked
 
-The plot carries 85 lamps. They used to be a pool of 16 real `PointLight`s aimed
-each frame at the anchors nearest the camera, and that pool was what made night
-expensive: Three.js compiles the light count into the shader and every lit
+The 60 × 52 plot this work was done on carried 85 lamps. They used to be a pool
+of 16 real `PointLight`s aimed each frame at the anchors nearest the camera, and
+that pool was what made night expensive: Three.js compiles the light count into the shader and every lit
 fragment walks the whole list, so the cost is lights × lit pixels. Measured on
 the 60 × 52 plot at 2880 × 1626 by sweeping the pool size, everything else held
 fixed:
@@ -294,10 +307,13 @@ and the pool no longer pops as the camera moves. The approximation is a soft one
 wall facing a lamp is bright and the wall behind it is not, but there are no cast
 shadows, which there were not before either.
 
-The cost is memory and load time: 1.4 M cells, 10.7 MB, 115 ms for this plot.
+The cost is memory and load time: 5.4 M cells, 42.9 MB, 482 ms for this plot.
 Cell count goes with the plot's _volume_, so `lightGridSpecFor` takes the finest
-cell size that fits a 48 MB budget rather than refusing to grow — sixteen times
-the resort bakes to 31 MB in 357 ms, on 8-voxel cells instead of 4.
+cell size that fits a 48 MB budget rather than refusing to grow. This plot has
+already outgrown the finest size and bakes on 5-voxel cells rather than 4; nine
+times it bakes to 47.9 MB in 605 ms, coarser again. Lamp light is smooth and the
+sampler interpolates, so what that costs is a little definition at the edge of a
+pool of light, and nothing else.
 
 The alternative, clustered forward or deferred shading in TSL, is the right
 answer for lights that move. None of these do.

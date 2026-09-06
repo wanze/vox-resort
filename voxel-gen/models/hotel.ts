@@ -2,13 +2,25 @@
  * Multi-storey resort hotel block: floors of balconied rooms, a grand ground
  * entrance and a rooftop terrace, on a low platform. 96x64x55 (24x16 m, four
  * 3 m storeys and a 13.5 m parapet), a 6x4 tile. Balconied facades face +z and -x.
+ *
+ * A pair of lanterns flanks the entrance under the canopy, so after dark the
+ * forecourt in front of the entry is lit rather than the block being a dark
+ * cliff above a lit street.
  */
 import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+
+const LANTERN = 0xffdca8;
 
 export default defineModel({
   id: "hotel",
   label: "Hotel",
   tiles: { x: 6, z: 4 },
+  emissive: [LANTERN],
+  // One lamp per lantern, a voxel clear of the wall it hangs on.
+  lights: [
+    { x: 40, y: 12, z: 59, color: LANTERN, intensity: 100, distance: 58 },
+    { x: 56, y: 12, z: 59, color: LANTERN, intensity: 100, distance: 58 },
+  ],
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -25,6 +37,8 @@ export default defineModel({
       roofFloor: 0xc9b7d0,
       door: 0x7a5330,
       canopy: 0xc24d5a,
+      lantern: LANTERN,
+      lanternTrim: 0x4a4440,
       pot: 0x4a6f74,
       leaf: 0x3f7d45,
       water: 0x37abd2,
@@ -81,6 +95,11 @@ export default defineModel({
     box(42, 53, 3, 14, 57, 57, C.door);
     box(38, 57, 15, 16, 57, 62, C.canopy);
     for (const cx of [38, 56]) box(cx, cx + 1, 3, 14, 61, 62, C.rail);
+    // lanterns on the wall either side of the doors, under the canopy
+    for (const lx of [39, 55]) {
+      box(lx, lx + 1, 10, 13, 58, 58, C.lanternTrim);
+      box(lx, lx + 1, 11, 12, 58, 58, C.lantern);
+    }
     for (const [px, pz] of [
       [34, 60],
       [60, 60],

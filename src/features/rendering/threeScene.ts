@@ -16,13 +16,17 @@ import {
   DirectionalLight,
   Fog,
   Mesh,
-  MeshStandardMaterial,
+  MeshStandardNodeMaterial,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  Vector2,
   WebGPURenderer,
 } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { vec3 } from "three/tsl";
+import type { BakedLightVolume } from "../lighting/bakedLightVolume";
+import { linearRgbOf } from "../lighting/domain/lightGrid";
 import type { SkyState } from "../lighting/domain/dayNight";
 import type { CameraFraming } from "../layout/domain/worldBounds";
 
@@ -40,6 +44,8 @@ export interface SceneHandle {
   readonly backend: "webgpu" | "webgl2";
   /** Moves the whole scene to a moment of the day. */
   applySky(state: SkyState): void;
+  /** Pixels actually rasterised per frame, device pixel ratio included. */
+  drawingBufferSize(): { width: number; height: number };
   resize(width: number, height: number): void;
   dispose(): void;
 }
@@ -51,12 +57,27 @@ export interface SceneOptions {
   readonly framing: CameraFraming;
   /** Longest world dimension, used to size the ground and the far plane. */
   readonly worldExtent: number;
+  /** Baked lamp light, so the ground catches the pools of light the lamps cast. */
+  readonly lightVolume?: BakedLightVolume | null;
+  /**
+   * Asks the backend for GPU timestamp queries. Only the benchmark harness wants
+   * them; they have to be requested when the renderer is built, not later.
+   */
+  readonly trackTimestamp?: boolean;
+  /** Skips WebGPU and renders on the WebGL2 backend, which must also work. */
+  readonly forceWebGL?: boolean;
 }
 
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
-  const { canvas, width, height, framing, worldExtent } = options;
+  const { canvas, width, height, framing, worldExtent, lightVolume } = options;
+  const trackTimestamp = options.trackTimestamp ?? false;
 
-  const renderer = new WebGPURenderer({ canvas, antialias: true });
+  const renderer = new WebGPURenderer({
+    canvas,
+    antialias: true,
+    trackTimestamp,
+    forceWebGL: options.forceWebGL ?? false,
+  });
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
   renderer.setSize(width, height, false);
   await renderer.init();
@@ -90,11 +111,15 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
 
   // The ground sits a hair below y = 0 so it never z-fights a path slab.
   const groundGeometry = new PlaneGeometry(worldExtent * 6, worldExtent * 6);
-  const groundMaterial = new MeshStandardMaterial({
+  const groundMaterial = new MeshStandardNodeMaterial({
     color: GROUND_COLOR,
     roughness: 1,
     metalness: 0,
   });
+  // Without this the lamps would light every building and leave the ground they
+  // stand on black, which is the one place a street lamp is meant to be seen.
+  if (lightVolume)
+    groundMaterial.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
   const ground = new Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(framing.target.x, -0.05, framing.target.z);
@@ -109,6 +134,10 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true
         ? "webgpu"
         : "webgl2",
+    drawingBufferSize() {
+      const size = renderer.getDrawingBufferSize(new Vector2());
+      return { width: size.x, height: size.y };
+    },
     applySky(state) {
       sun.color.setHex(state.sunColor);
       sun.intensity = state.sunIntensity;
@@ -120,8 +149,6 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       ambient.intensity = state.ambientIntensity;
       sky.setHex(state.skyColor);
       if (scene.fog) scene.fog.color.setHex(state.skyColor);
-      // The ground is lit by the same sky, so it darkens with everything else.
-      groundMaterial.color.setHex(GROUND_COLOR);
     },
     resize(nextWidth, nextHeight) {
       camera.aspect = nextWidth / nextHeight;

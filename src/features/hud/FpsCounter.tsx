@@ -14,6 +14,8 @@ export interface FpsCounterProps {
 
 const formatNumber = (value: number): string => value.toLocaleString("en-US");
 
+const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
 export function FpsCounter(props: FpsCounterProps) {
   const { fps, stats, activeLightsElement, timeElement, cycling, onTimeChange, onCyclingChange } =
     props;
@@ -49,14 +51,18 @@ export function FpsCounter(props: FpsCounterProps) {
             </div>
             <div>
               <dt>Draw calls</dt>
-              <dd>{formatNumber(stats.drawCalls)}</dd>
+              <dd>
+                {formatNumber(stats.drawCalls)}{" "}
+                <span className="hud-stat-note">(over {stats.chunkCount} chunks)</span>
+              </dd>
             </div>
             <div>
               <dt>Triangles</dt>
               <dd>
                 {formatNumber(stats.drawnTriangleCount)}{" "}
                 <span className="hud-stat-note">
-                  ({formatNumber(stats.uniqueTriangleCount)} uploaded)
+                  ({formatNumber(stats.uniqueTriangleCount)} uploaded, merged from{" "}
+                  {formatNumber(stats.unmergedTriangleCount)})
                 </span>
               </dd>
             </div>
@@ -70,12 +76,31 @@ export function FpsCounter(props: FpsCounterProps) {
               </dd>
             </div>
             <div>
-              <dt>Lights</dt>
+              <dt>Lamps</dt>
               <dd>
                 <span ref={activeLightsElement} className="hud-lights-active">
                   0
                 </span>
-                {` of ${formatNumber(stats.lightCount)} (max ${stats.maxActiveLights})`}
+                {` of ${formatNumber(stats.lightCount)}`}
+              </dd>
+            </div>
+            <div>
+              <dt>Light bake</dt>
+              <dd>
+                {formatNumber(stats.lightGridCells)} cells{" "}
+                <span className="hud-stat-note">
+                  ({formatMegabytes(stats.lightGridBytes)}, {stats.lightBakeMs} ms)
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Startup</dt>
+              <dd>
+                {formatNumber(stats.startupMs)} ms{stats.meshedInWorker ? " in a worker" : ""}{" "}
+                <span className="hud-stat-note">
+                  ({formatNumber(stats.dveMs)} ms voxel mesher,{" "}
+                  {formatNumber(stats.meshMs - stats.dveMs)} ms merge)
+                </span>
               </dd>
             </div>
           </dl>

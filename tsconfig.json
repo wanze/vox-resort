@@ -22,5 +22,5 @@
       "three": ["./node_modules/@types/three/build/three.webgpu.d.ts"]
     }
   },
-  "include": ["src", "voxel-gen", "vite.config.ts"]
+  "include": ["src", "voxel-gen", "scripts", "vite.config.ts"]
 }

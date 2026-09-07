@@ -117,11 +117,41 @@ export interface BakedLightGrid {
   readonly irradiance: Uint8Array;
   /** RGB per cell: the mean direction light arrives from, mapped onto 0..1. */
   readonly direction: Uint8Array;
-  /** Brightest baked channel; the shader multiplies the decoded value back up. */
+  /**
+   * What a fully encoded channel decodes back to; the shader multiplies by this.
+   *
+   * Carried between bakes rather than measured afresh by each one, so that
+   * adding a lamp re-encodes only the cells it reaches. See
+   * {@link SCALE_HEADROOM}.
+   */
   readonly scale: number;
   /** Cells the bake actually wrote to, for reporting. */
   readonly litCells: number;
+  /**
+   * Cells brighter than `scale`, which encoded as clamped.
+   *
+   * Always zero on a bake that measured its own scale. A caller reusing an
+   * earlier one watches this to learn that the resort has outgrown it and a full
+   * re-encode is owed.
+   */
+  readonly clampedCells: number;
 }
+
+/**
+ * How far above the brightest cell it finds a measuring bake sets its scale.
+ *
+ * The bake used to normalise against that brightest cell exactly, which made
+ * every cell's byte depend on every lamp on the plot: one lamp brighter than
+ * anything already standing re-scaled all 5.4 M of them. Leaving room above the
+ * peak decouples the two, so a lamp placed later can be splatted into the cells
+ * it reaches and no others.
+ *
+ * The cost is a little precision: at 1.5x, the brightest cell encodes to 208
+ * rather than 255. Because the encoding is square-root, that loss lands at the
+ * bright end, where a night scene has least of its detail. What it buys is a
+ * number that stays put.
+ */
+export const SCALE_HEADROOM = 1.5;
 
 /** Square-root encodes a 0..1 value into one byte. See {@link BakedLightGrid}. */
 const encodeChannel = (value: number): number =>
@@ -223,106 +253,195 @@ export function gridByteSize(spec: LightGridSpec): number {
  * work is set by the lamps' falloff radii, not by the size of the plot, so a
  * resort four times the area bakes in the same time per lamp.
  */
-export function bakeLightGrid(
-  anchors: readonly LightAnchor[],
-  spec: LightGridSpec,
-): BakedLightGrid {
+export interface BakeOptions {
+  /**
+   * The scale to encode against, instead of measuring one from these anchors.
+   *
+   * Pass an earlier bake's `scale` and the bytes this one writes are directly
+   * comparable with that one's, which is the whole point: a cell no new lamp
+   * reaches encodes to exactly the byte it held before. A non-positive value is
+   * ignored and the scale measured as usual.
+   */
+  readonly scale?: number;
+}
+
+/**
+ * The light arriving at every cell, and the direction it came from, unencoded.
+ *
+ * Kept apart from the encoding below because the two phases have different
+ * reasons to run: splatting is per lamp and touches only the cells that lamp
+ * reaches, while encoding is per cell and depends on the scale. A lamp added
+ * later needs the first and only a region of the second.
+ */
+interface LightAccumulator {
+  /** Linear RGB per cell, summed over every lamp reaching it. */
+  readonly sum: Float32Array;
+  /** Luminance-weighted direction per cell: x, y, z, then the total weight. */
+  readonly flow: Float32Array;
+}
+
+/** The block of cells a lamp can reach, clamped to the grid. */
+interface CellRange {
+  readonly lowX: number;
+  readonly highX: number;
+  readonly lowY: number;
+  readonly highY: number;
+  readonly lowZ: number;
+  readonly highZ: number;
+}
+
+/**
+ * Which cells an anchor's falloff radius covers.
+ *
+ * This is what keeps the bake proportional to the lamps rather than to the plot,
+ * and it is also the region an incremental bake would have to re-encode after
+ * adding or removing this lamp.
+ */
+function reachOf(anchor: LightAnchor, spec: LightGridSpec): CellRange {
   const { origin, cellSize, dims } = spec;
-  const count = cellCount(spec);
-  const sum = new Float32Array(count * 3);
-  // x, y, z of the luminance-weighted direction, then the total weight.
-  const flow = new Float32Array(count * 4);
+  const cutoff = anchor.distance;
+  const low = (world: number, base: number): number =>
+    Math.max(0, Math.floor((world - cutoff - base) / cellSize));
+  const high = (world: number, base: number, size: number): number =>
+    Math.min(size - 1, Math.ceil((world + cutoff - base) / cellSize));
+  return {
+    lowX: low(anchor.x, origin.x),
+    highX: high(anchor.x, origin.x, dims.x),
+    lowY: low(anchor.y, origin.y),
+    highY: high(anchor.y, origin.y, dims.y),
+    lowZ: low(anchor.z, origin.z),
+    highZ: high(anchor.z, origin.z, dims.z),
+  };
+}
 
-  for (const anchor of anchors) {
-    const cutoff = anchor.distance;
-    if (cutoff <= 0 || anchor.intensity <= 0) continue;
-    const [lightR, lightG, lightB] = linearRgbOf(anchor.color);
+/** Adds one lamp's light to a single cell, if it reaches that far. */
+function splatCell(
+  anchor: LightAnchor,
+  light: readonly [number, number, number],
+  delta: readonly [number, number, number],
+  cell: number,
+  into: LightAccumulator,
+): void {
+  const distance = Math.hypot(delta[0], delta[1], delta[2]);
+  if (distance >= anchor.distance) return;
+  const strength = anchor.intensity * pointLightAttenuation(distance, anchor.distance);
+  if (strength <= 0) return;
 
-    const lowX = Math.max(0, Math.floor((anchor.x - cutoff - origin.x) / cellSize));
-    const highX = Math.min(dims.x - 1, Math.ceil((anchor.x + cutoff - origin.x) / cellSize));
-    const lowY = Math.max(0, Math.floor((anchor.y - cutoff - origin.y) / cellSize));
-    const highY = Math.min(dims.y - 1, Math.ceil((anchor.y + cutoff - origin.y) / cellSize));
-    const lowZ = Math.max(0, Math.floor((anchor.z - cutoff - origin.z) / cellSize));
-    const highZ = Math.min(dims.z - 1, Math.ceil((anchor.z + cutoff - origin.z) / cellSize));
+  const { sum, flow } = into;
+  const r = light[0] * strength;
+  const g = light[1] * strength;
+  const b = light[2] * strength;
+  const rgb = cell * 3;
+  sum[rgb] = sum[rgb]! + r;
+  sum[rgb + 1] = sum[rgb + 1]! + g;
+  sum[rgb + 2] = sum[rgb + 2]! + b;
 
-    for (let iz = lowZ; iz <= highZ; iz++) {
-      const worldZ = origin.z + (iz + 0.5) * cellSize;
-      const deltaZ = anchor.z - worldZ;
-      for (let iy = lowY; iy <= highY; iy++) {
-        const worldY = origin.y + (iy + 0.5) * cellSize;
-        const deltaY = anchor.y - worldY;
-        for (let ix = lowX; ix <= highX; ix++) {
-          const worldX = origin.x + (ix + 0.5) * cellSize;
-          const deltaX = anchor.x - worldX;
+  // A cell sitting exactly on a lamp has no direction to record; its irradiance
+  // still counts, and the agreement term will read it as flat.
+  const weight = luminance(r, g, b);
+  const xyzw = cell * 4;
+  if (distance > 1e-6) {
+    const share = weight / distance;
+    flow[xyzw] = flow[xyzw]! + delta[0] * share;
+    flow[xyzw + 1] = flow[xyzw + 1]! + delta[1] * share;
+    flow[xyzw + 2] = flow[xyzw + 2]! + delta[2] * share;
+  }
+  flow[xyzw + 3] = flow[xyzw + 3]! + weight;
+}
 
-          const distance = Math.hypot(deltaX, deltaY, deltaZ);
-          if (distance >= cutoff) continue;
-          const strength = anchor.intensity * pointLightAttenuation(distance, cutoff);
-          if (strength <= 0) continue;
+/** Adds one anchor's contribution to every cell within its reach. */
+function splatAnchor(anchor: LightAnchor, spec: LightGridSpec, into: LightAccumulator): void {
+  if (anchor.distance <= 0 || anchor.intensity <= 0) return;
+  const { origin, cellSize, dims } = spec;
+  const light = linearRgbOf(anchor.color);
+  const reach = reachOf(anchor, spec);
 
-          const r = lightR * strength;
-          const g = lightG * strength;
-          const b = lightB * strength;
-          const cell = ix + dims.x * (iy + dims.y * iz);
-          const rgb = cell * 3;
-          sum[rgb] = sum[rgb]! + r;
-          sum[rgb + 1] = sum[rgb + 1]! + g;
-          sum[rgb + 2] = sum[rgb + 2]! + b;
-
-          // A cell sitting exactly on a lamp has no direction to record; its
-          // irradiance still counts, and the agreement term will read it as flat.
-          const weight = luminance(r, g, b);
-          const xyzw = cell * 4;
-          if (distance > 1e-6) {
-            const share = weight / distance;
-            flow[xyzw] = flow[xyzw]! + deltaX * share;
-            flow[xyzw + 1] = flow[xyzw + 1]! + deltaY * share;
-            flow[xyzw + 2] = flow[xyzw + 2]! + deltaZ * share;
-          }
-          flow[xyzw + 3] = flow[xyzw + 3]! + weight;
-        }
+  for (let iz = reach.lowZ; iz <= reach.highZ; iz++) {
+    const deltaZ = anchor.z - (origin.z + (iz + 0.5) * cellSize);
+    for (let iy = reach.lowY; iy <= reach.highY; iy++) {
+      const deltaY = anchor.y - (origin.y + (iy + 0.5) * cellSize);
+      for (let ix = reach.lowX; ix <= reach.highX; ix++) {
+        const deltaX = anchor.x - (origin.x + (ix + 0.5) * cellSize);
+        const cell = ix + dims.x * (iy + dims.y * iz);
+        splatCell(anchor, light, [deltaX, deltaY, deltaZ], cell, into);
       }
     }
   }
+}
 
-  let scale = 0;
-  for (const value of sum) if (value > scale) scale = value;
+/** Adds every anchor's contribution to the cells within its reach. */
+function splatAnchors(anchors: readonly LightAnchor[], spec: LightGridSpec): LightAccumulator {
+  const count = cellCount(spec);
+  const into: LightAccumulator = {
+    sum: new Float32Array(count * 3),
+    flow: new Float32Array(count * 4),
+  };
+  for (const anchor of anchors) splatAnchor(anchor, spec, into);
+  return into;
+}
+
+/** The scale a measuring bake settles on: the brightest cell, plus headroom. */
+function measureScale(sum: Float32Array): number {
+  let peak = 0;
+  for (const value of sum) if (value > peak) peak = value;
+  return peak * SCALE_HEADROOM;
+}
+
+/** Writes one cell's direction and agreement into the two byte arrays. */
+function encodeDirection(
+  flow: Float32Array,
+  cell: number,
+  irradiance: Uint8Array,
+  direction: Uint8Array,
+): void {
+  const at = cell * 4;
+  const flowX = flow[at]!;
+  const flowY = flow[at + 1]!;
+  const flowZ = flow[at + 2]!;
+  const weight = flow[at + 3]!;
+  const length = Math.hypot(flowX, flowY, flowZ);
+
+  // How much the lamps reaching this cell agree: one lamp gives 1, lamps
+  // pulling in opposite directions cancel towards 0.
+  const agreement = weight > 0 ? Math.min(1, length / weight) : 0;
+  irradiance[at + 3] = Math.round(agreement * 255);
+
+  const axis = (value: number): number => Math.round((value / length) * 0.5 * 255 + 127.5);
+  direction[at] = length > 0 ? axis(flowX) : 128;
+  direction[at + 1] = length > 0 ? axis(flowY) : 128;
+  direction[at + 2] = length > 0 ? axis(flowZ) : 128;
+  direction[at + 3] = 255;
+}
+
+export function bakeLightGrid(
+  anchors: readonly LightAnchor[],
+  spec: LightGridSpec,
+  options: BakeOptions = {},
+): BakedLightGrid {
+  const count = cellCount(spec);
+  const { sum, flow } = splatAnchors(anchors, spec);
+  const given = options.scale ?? 0;
+  const scale = given > 0 ? given : measureScale(sum);
 
   const irradiance = new Uint8Array(count * 4);
   const direction = new Uint8Array(count * 4);
   let litCells = 0;
+  let clampedCells = 0;
 
   for (let cell = 0; cell < count; cell++) {
     const r = sum[cell * 3]!;
     const g = sum[cell * 3 + 1]!;
     const b = sum[cell * 3 + 2]!;
-    if (r > 0 || g > 0 || b > 0) litCells++;
+    const brightest = Math.max(r, g, b);
+    if (brightest > 0) litCells++;
+    if (brightest > scale) clampedCells++;
     if (scale > 0) {
       irradiance[cell * 4] = encodeChannel(r / scale);
       irradiance[cell * 4 + 1] = encodeChannel(g / scale);
       irradiance[cell * 4 + 2] = encodeChannel(b / scale);
     }
-
-    const flowX = flow[cell * 4]!;
-    const flowY = flow[cell * 4 + 1]!;
-    const flowZ = flow[cell * 4 + 2]!;
-    const weight = flow[cell * 4 + 3]!;
-    const length = Math.hypot(flowX, flowY, flowZ);
-    // How much the lamps reaching this cell agree: one lamp gives 1, lamps
-    // pulling in opposite directions cancel towards 0.
-    const agreement = weight > 0 ? Math.min(1, length / weight) : 0;
-    irradiance[cell * 4 + 3] = Math.round(agreement * 255);
-    if (length > 0) {
-      direction[cell * 4] = Math.round((flowX / length) * 0.5 * 255 + 127.5);
-      direction[cell * 4 + 1] = Math.round((flowY / length) * 0.5 * 255 + 127.5);
-      direction[cell * 4 + 2] = Math.round((flowZ / length) * 0.5 * 255 + 127.5);
-    } else {
-      direction[cell * 4] = 128;
-      direction[cell * 4 + 1] = 128;
-      direction[cell * 4 + 2] = 128;
-    }
-    direction[cell * 4 + 3] = 255;
+    encodeDirection(flow, cell, irradiance, direction);
   }
 
-  return { spec, irradiance, direction, scale, litCells };
+  return { spec, irradiance, direction, scale, litCells, clampedCells };
 }

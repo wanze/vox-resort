@@ -11,6 +11,7 @@ import {
   linearRgbOf,
   luminance,
   pointLightAttenuation,
+  SCALE_HEADROOM,
   srgbToLinear,
   type LightGridSpec,
 } from "./lightGrid";
@@ -46,6 +47,16 @@ function irradianceAt(
     decodeChannel(grid.irradiance[cell + 1]!, grid.scale),
     decodeChannel(grid.irradiance[cell + 2]!, grid.scale),
   ];
+}
+
+/** One cell's four raw irradiance bytes, before any decoding. */
+function bytesAt(
+  grid: ReturnType<typeof bakeLightGrid>,
+  [ix, iy, iz]: readonly [number, number, number],
+): Uint8Array {
+  const { dims } = grid.spec;
+  const cell = (ix + dims.x * (iy + dims.y * iz)) * 4;
+  return grid.irradiance.slice(cell, cell + 4);
 }
 
 function cellFor(spec: LightGridSpec, x: number, y: number, z: number): [number, number, number] {
@@ -292,6 +303,66 @@ describe("bakeLightGrid", () => {
       const opposed = readDirection(bakeLightGrid([west, east], spec), cell).agreement;
       expect(alone).toBeGreaterThan(0.95);
       expect(opposed).toBeLessThan(0.35);
+    });
+  });
+
+  describe("the encoding scale", () => {
+    /** A dim lamp and, far enough away not to reach it, a much brighter one. */
+    const west = anchor({ key: "west", x: -100, y: 20, z: 0, distance: 40, intensity: 100 });
+    const east = anchor({ key: "east", x: 100, y: 20, z: 0, distance: 40, intensity: 400 });
+    const spec = gridSpecAt([west, east], 4)!;
+    const westCell = cellFor(spec, -100, 20, 0);
+
+    it("leaves room above the brightest cell", () => {
+      const grid = bakeLightGrid([west], spec);
+      // Colour only: the fourth byte is the agreement term, not irradiance.
+      let brightest = 0;
+      for (let cell = 0; cell < cellCount(spec); cell++) {
+        for (let channel = 0; channel < 3; channel++) {
+          brightest = Math.max(brightest, grid.irradiance[cell * 4 + channel]!);
+        }
+      }
+      expect(brightest).toBe(Math.round(Math.sqrt(1 / SCALE_HEADROOM) * 255));
+    });
+
+    it("re-encodes the whole grid when each bake measures its own scale", () => {
+      // The behaviour that made incremental baking impossible: the west lamp has
+      // not changed, and its bytes move anyway, because a brighter lamp arrived
+      // somewhere else entirely.
+      const alone = bakeLightGrid([west], spec);
+      const measured = bakeLightGrid([west, east], spec);
+      expect(measured.scale).toBeGreaterThan(alone.scale);
+      expect(bytesAt(measured, westCell)).not.toEqual(bytesAt(alone, westCell));
+    });
+
+    it("holds every byte a new lamp does not reach, given a scale to keep to", () => {
+      const alone = bakeLightGrid([west], spec);
+      const fixed = bakeLightGrid([west, east], spec, { scale: alone.scale });
+
+      expect(fixed.scale).toBe(alone.scale);
+      expect(bytesAt(fixed, westCell)).toEqual(bytesAt(alone, westCell));
+      // Not just the one cell: everything the west lamp lit encodes as before.
+      for (let cell = 0; cell < cellCount(spec); cell++) {
+        const at = cell * 4;
+        if (alone.irradiance[at] === 0 && alone.irradiance[at + 1] === 0) continue;
+        expect(alone.irradiance.slice(at, at + 4)).toEqual(fixed.irradiance.slice(at, at + 4));
+      }
+      // And the east lamp did light its own cells.
+      expect(fixed.litCells).toBeGreaterThan(alone.litCells);
+    });
+
+    it("clamps what a kept scale cannot hold, and says how much", () => {
+      const alone = bakeLightGrid([west], spec);
+      expect(alone.clampedCells).toBe(0);
+      expect(bakeLightGrid([west, east], spec).clampedCells).toBe(0);
+      expect(
+        bakeLightGrid([west, east], spec, { scale: alone.scale }).clampedCells,
+      ).toBeGreaterThan(0);
+    });
+
+    it("measures as usual when handed a scale of nothing", () => {
+      const measured = bakeLightGrid([west], spec);
+      expect(bakeLightGrid([west], spec, { scale: 0 }).scale).toBe(measured.scale);
     });
   });
 

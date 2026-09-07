@@ -20,5 +20,4 @@ Engine, React 19 for the HUD, TypeScript, Vite, pnpm.
 `pnpm dev`, `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm format`,
 `pnpm build`, `pnpm bench`, `pnpm fallow`, `pnpm fallow:audit`.
 
-Run `typecheck`, `lint`, `test` and `format` before considering a change done,
-and `fallow:audit` to check what the change itself introduced.
+Run `typecheck`, `lint`, `test`, `format` and `fallow:audit` before considering a change done.

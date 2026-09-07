@@ -3,10 +3,12 @@ import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
 import { OBJECT_TYPES } from "../../catalog/domain/objectTypes";
 import {
   decorationsFor,
+  derivedKey,
   isPathNetworkConnected,
   layoutResort,
   occupiedTiles,
   pathTilesFor,
+  place,
   placementCenter,
   plotKeys,
   plotsWithoutPathAccess,
@@ -14,6 +16,7 @@ import {
   streetTiles,
   widthOffsets,
   type LayoutItem,
+  type ResortLayout,
 } from "./resortLayout";
 import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN, type ResortPlan } from "./resortPlan";
 
@@ -145,6 +148,35 @@ describe("plotKeys", () => {
   });
 });
 
+describe("derivedKey", () => {
+  it("names a derived placement after the tile it stands on", () => {
+    expect(derivedKey(PATH_ID, 12, 7)).toBe(`${PATH_ID}@12,7`);
+  });
+
+  it("separates tiles that differ on either axis", () => {
+    expect(derivedKey(PATH_ID, 1, 2)).not.toBe(derivedKey(PATH_ID, 2, 1));
+  });
+
+  it("gives two types on the same tile different keys", () => {
+    expect(derivedKey(LAMP_ID, 3, 3)).not.toBe(derivedKey(HEDGE_ID, 3, 3));
+  });
+});
+
+describe("place", () => {
+  it("anchors a full-footprint model on its tile", () => {
+    const placement = place(item("hut", 2, 2), "hut", 3, 4);
+    expect(placement).toMatchObject({ key: "hut", id: "hut", tileX: 3, tileZ: 4 });
+    expect([placement.x, placement.z]).toEqual([3 * TILE_VOXELS, 4 * TILE_VOXELS]);
+  });
+
+  it("centres a model smaller than the footprint it claims", () => {
+    const narrow: LayoutItem = { id: "post", tilesX: 2, tilesZ: 2, width: 4, depth: 4 };
+    const placement = place(narrow, "post", 1, 1);
+    expect(placement.x).toBe(TILE_VOXELS + Math.floor((2 * TILE_VOXELS - 4) / 2));
+    expect(placement.z).toBe(placement.x);
+  });
+});
+
 describe("layoutResort", () => {
   it("places each plot on its tile boundary", () => {
     const { placements } = layoutResort(tinyItems, tinyPlan);
@@ -234,6 +266,49 @@ describe("layoutResort", () => {
 
   it("rejects a catalogue with nothing to pave with", () => {
     expect(() => layoutResort([item("hut", 2, 2)], tinyPlan)).toThrow(/pave with/);
+  });
+});
+
+/** Every key the layout gave itself rather than taking from the plan. */
+const derived = (layout: ResortLayout): Set<string> =>
+  new Set([...layout.paths, ...layout.props].map((placement) => placement.key));
+
+describe("derived keys under an edit", () => {
+  const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+    id: type.id,
+    tilesX: type.model.tiles.x,
+    tilesZ: type.model.tiles.z,
+    width: type.model.width,
+    depth: type.model.depth,
+  }));
+  /** The real plan, plus one more cottage on a free tile in the north-west. */
+  const edited: ResortPlan = {
+    ...RESORT_PLAN,
+    plots: [...RESORT_PLAN.plots, { id: "cottage", tileX: 5, tileZ: 5 }],
+  };
+
+  it("keys every derived placement on the tile it stands on", () => {
+    const layout = layoutResort(items, RESORT_PLAN);
+    for (const placement of [...layout.paths, ...layout.props]) {
+      expect(placement.key).toBe(derivedKey(placement.id, placement.tileX, placement.tileZ));
+    }
+  });
+
+  it("renames only what an edit actually moved", () => {
+    const before = layoutResort(items, RESORT_PLAN);
+    const after = layoutResort(items, edited);
+    const was = derived(before);
+    const now = derived(after);
+    const added = [...now].filter((key) => !was.has(key));
+    const removed = [...was].filter((key) => !now.has(key));
+
+    // One cottage costs one spur tile out of three and a half thousand derived
+    // placements. Numbered by array index, the same edit renamed every path
+    // tile after the insertion and no diff against the live scene meant
+    // anything.
+    expect(was.size).toBeGreaterThan(3000);
+    expect(added).toHaveLength(1);
+    expect(removed).toEqual([]);
   });
 });
 

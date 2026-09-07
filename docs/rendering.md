@@ -65,7 +65,8 @@ reproduces it — see _Measuring_ below.
 7. **Instances** — `buildInstancedWorld` creates one `InstancedMesh` per model,
    material kind and **chunk of the plot**, and fills it with one translation
    matrix per placement. The chunking is what gives the renderer something it can
-   cull.
+   cull. Each of those meshes is allocated with room above what it draws, so the
+   scene can be changed afterwards a matrix at a time — see _Placing at runtime_.
 8. **Lighting** — every lamp on the plot is baked into an irradiance volume once
    (`lightGrid.ts`) and read back with two texture fetches
    (`bakedLightVolume.ts`), instead of being evaluated as point lights per
@@ -163,6 +164,29 @@ managed to paint during startup: **9 on the main thread, 159 in the worker**, fo
 the same wall-clock 1.5 s. The 769 k voxel writes are packed into typed arrays
 before being sent, because structured-cloning that many small objects cost more
 than the meshing it was meant to move.
+
+**Placing at runtime.** The scene used to be built once and frozen: every
+`InstancedMesh` was allocated at exactly the count the plan needed, so standing
+one more cottage meant reallocating and re-uploading. Each bucket now carries
+capacity above what it draws, `mesh.count` says how much of that is live, and a
+placement writes one matrix and one update range. A bucket that overflows
+doubles — that bucket, not the other 527 — and a chunk gets a mesh the moment
+something first lands in it. Removal fills the hole with the last instance rather
+than compacting, since instance order carries no meaning; what does is the slot
+table, which is keyed on the placement. Every mutation recomputes that bucket's
+bounding sphere, without which the frustum test reads a stale one and culls what
+is plainly in view.
+
+The other half of it is keys. Derived placements — paths, lamps, hedges — were
+numbered by where they landed in the array the layout returned, so paving one
+more tile renamed every tile after it and no diff against the live scene meant
+anything. They are keyed on the tile they stand on now (`path@12,7`), which is
+what makes a diff worth computing at all: adding one cottage to the plan changes
+exactly one of the 3 449 derived placements.
+
+The policy — which chunk a placement falls in, how much room a bucket should
+hold, what differs between two sets of placements — is pure and lives in
+`rendering/domain/spatialChunks.ts`. Only the buffer writes are in the adapter.
 
 ## What it costs now
 
@@ -383,4 +407,10 @@ having to author it.
 ## Out of scope for this milestone
 
 Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, shadows,
-player placement/editing, procedural terrain, physics and multiplayer.
+procedural terrain, physics and multiplayer.
+
+The scene itself can now be changed at runtime, but nothing drives it yet: there
+is no build UI, and the lamps are still baked once up front, so an object placed
+after startup is drawn and not lit. `decorationsFor` also still re-derives the
+dressing over the whole plot, which is what the coordinate keys make visible —
+one edit should not be able to move a lamp on the far side of the resort.

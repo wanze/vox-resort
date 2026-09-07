@@ -16,6 +16,12 @@
  * the count then grows with the resort's area while each one stays small enough
  * to be worth testing, instead of the chunks growing with the plot and culling
  * nothing.
+ *
+ * The scene is mutable, so this module also owns the policy that keeps it cheap
+ * to change: which chunk a placement falls in, how much room a bucket should
+ * hold beyond what it draws today, and what actually differs between two sets of
+ * placements. All of it is arithmetic over plain objects; the buffer writes it
+ * implies live in `adapters/instancedWorld.ts`.
  */
 
 import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
@@ -82,4 +88,84 @@ export function bucketByChunk<T extends ChunkedItem>(
     bucket.items.push(item);
   }
   return [...buckets.values()];
+}
+
+/**
+ * Slots a bucket is never smaller than.
+ *
+ * A chunk that holds one lamp today is the chunk the next four things get
+ * dropped into, so the smallest bucket still starts with room to grow.
+ */
+export const MIN_BUCKET_CAPACITY = 4;
+
+/**
+ * How much room above the live count a bucket keeps.
+ *
+ * Without it a bucket that doubled to exactly the count it needed would
+ * reallocate again on the very next placement.
+ */
+const CAPACITY_HEADROOM = 1.25;
+
+/**
+ * Slots a bucket should hold for `needed` instances, given the `current` count
+ * it already has.
+ *
+ * Capacity doubles rather than following the count, so filling a bucket costs a
+ * logarithmic number of reallocations instead of one per placement — and it
+ * grows one bucket at a time, which is the point: the plot is 528 meshes, and
+ * giving every one of them slack up front would cost far more than growing the
+ * handful that an edit actually lands in.
+ */
+export function capacityFor(needed: number, current = 0): number {
+  if (needed <= current) return current;
+  let capacity = Math.max(current, MIN_BUCKET_CAPACITY);
+  while (capacity < needed) capacity *= 2;
+  return Math.max(capacity, Math.ceil(needed * CAPACITY_HEADROOM));
+}
+
+/** An item the scene draws: what it is, where it stands, and what to call it. */
+export interface PlacedItem extends ChunkedItem {
+  /** Unique across the scene, and stable as long as the item does not move. */
+  readonly key: string;
+  /** Object type standing here. */
+  readonly id: string;
+}
+
+export interface PlacementDiff<T> {
+  readonly added: readonly T[];
+  /** Keys to take out. Apply these *before* `added`; see below. */
+  readonly removed: readonly string[];
+}
+
+/**
+ * What changed between two sets of placements.
+ *
+ * An item that kept its key but changed type or moved comes back in both lists,
+ * so a caller that removes before it adds needs no third case for it — which is
+ * why the removals have to be applied first.
+ *
+ * This is only worth anything because keys are stable: while derived placements
+ * were numbered by array index, inserting one path tile renumbered every tile
+ * after it and the diff was the whole resort.
+ */
+export function diffPlacements<T extends PlacedItem>(
+  previous: readonly T[],
+  next: readonly T[],
+): PlacementDiff<T> {
+  const before = new Map(previous.map((item) => [item.key, item]));
+  const added: T[] = [];
+  const removed: string[] = [];
+  for (const item of next) {
+    const was = before.get(item.key);
+    if (!was) {
+      added.push(item);
+      continue;
+    }
+    before.delete(item.key);
+    if (was.id === item.id && was.x === item.x && was.z === item.z) continue;
+    removed.push(item.key);
+    added.push(item);
+  }
+  for (const key of before.keys()) removed.push(key);
+  return { added, removed };
 }

@@ -14,7 +14,10 @@
  *    spacing, and hedges fill the straight runs between them.
  *
  * Because the plan may stand several cottages on the plot, a placement carries
- * both its object type (`id`) and a unique `key`.
+ * both its object type (`id`) and a unique `key`. Authored plots are keyed by
+ * type and ordinal (`cottage#3`); everything derived is keyed by the tile it
+ * stands on (`path@12,7`), because those keys have to survive an edit — see
+ * {@link derivedKey}.
  *
  * Tile-to-voxel conversion happens here, so everything downstream works in
  * voxels: a model smaller than its declared footprint is centred in it.
@@ -45,7 +48,7 @@ export interface LayoutItem {
 }
 
 export interface Placement {
-  /** Unique per placement, e.g. `"cottage#3"`. */
+  /** Unique per placement, e.g. `"cottage#3"` or `"path@12,7"`. */
   readonly key: string;
   /** Object type standing here; the plan may place one type many times. */
   readonly id: string;
@@ -87,7 +90,7 @@ const NEIGHBOURS = [
 ] as const;
 
 /** Places one item's footprint at a tile position, centring a model that is smaller. */
-function place(item: LayoutItem, key: string, tileX: number, tileZ: number): Placement {
+export function place(item: LayoutItem, key: string, tileX: number, tileZ: number): Placement {
   return {
     key,
     id: item.id,
@@ -100,6 +103,20 @@ function place(item: LayoutItem, key: string, tileX: number, tileZ: number): Pla
     width: item.width,
     depth: item.depth,
   };
+}
+
+/**
+ * Key for a placement the layout derived rather than the plan authored: its type
+ * and the tile it stands on.
+ *
+ * Derived placements used to be numbered in the order they came out of the
+ * layout — `path#1`, `path#2` — which made every key downstream of an edit a
+ * different key: paving one more tile renumbered every tile after it, and a diff
+ * against the live scene was the whole resort. A tile is unique and does not
+ * move, so keying on it means an edit renames only what it actually changed.
+ */
+export function derivedKey(id: string, tileX: number, tileZ: number): string {
+  return `${id}@${tileX},${tileZ}`;
 }
 
 /** Unique key per plot: the type id, suffixed once a type appears more than once. */
@@ -441,8 +458,8 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   }
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
-  const paths = pathTilesFor(items, plan).map((tile, index) =>
-    place(path, `${PATH_ID}#${index + 1}`, tile.x, tile.z),
+  const paths = pathTilesFor(items, plan).map((tile) =>
+    place(path, derivedKey(PATH_ID, tile.x, tile.z), tile.x, tile.z),
   );
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>
@@ -453,15 +470,14 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const { lamps, hedges } = decorationsFor(items, plan);
   const lamp = byId.get(LAMP_ID);
   if (lamp) {
-    lamps.forEach((tile, index) =>
-      props.push(place(lamp, `${LAMP_ID}#${index + 1}`, tile.x, tile.z)),
-    );
+    for (const tile of lamps)
+      props.push(place(lamp, derivedKey(LAMP_ID, tile.x, tile.z), tile.x, tile.z));
   }
   const hedge = byId.get(HEDGE_ID);
   if (hedge) {
-    hedges.forEach((tile, index) =>
-      props.push(place(hedge, `${HEDGE_ID}#${index + 1}`, tile.x, tile.z)),
-    );
+    for (const tile of hedges) {
+      props.push(place(hedge, derivedKey(HEDGE_ID, tile.x, tile.z), tile.x, tile.z));
+    }
   }
 
   return { placements, props, paths, tilesX: plan.tilesX, tilesZ: plan.tilesZ };

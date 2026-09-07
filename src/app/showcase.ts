@@ -20,7 +20,7 @@ import {
   TILE_VOXELS,
 } from "../features/catalog/domain/objectTypes";
 import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
-import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
+import { layoutResort, place, placementCenter } from "../features/layout/domain/resortLayout";
 import { RESORT_PLAN } from "../features/layout/domain/resortPlan";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
@@ -158,6 +158,11 @@ export interface FrameUpdate {
 export interface ShowcaseOptions {
   readonly canvas: HTMLCanvasElement;
   readonly onFrame: (update: FrameUpdate) => void;
+  /**
+   * Called when something is placed or taken off the plot, with what the HUD
+   * should now show. Not called per frame: `onFrame` is the hot path.
+   */
+  readonly onSceneChange?: (stats: ShowcaseStats) => void;
 }
 
 export interface Showcase {
@@ -177,7 +182,12 @@ export interface Showcase {
  * A main thread that is meshing paints none of them however long the wait lasts,
  * so this — not a wall-clock startup number — is what says the page stayed alive.
  */
-function trackStartupFrames(): { readonly frames: () => number; readonly stop: () => void } {
+interface StartupTracker {
+  readonly frames: () => number;
+  readonly stop: () => void;
+}
+
+function trackStartupFrames(): StartupTracker {
   let frames = 0;
   let counting = true;
   const tick = (): void => {
@@ -197,9 +207,16 @@ function trackStartupFrames(): { readonly frames: () => number; readonly stop: (
 interface Plot {
   readonly layout: ResortLayout;
   /** Authored objects, the only placements that can carry a label. */
-  readonly placements: readonly Placement[];
-  /** Objects, scattered props and path tiles together: everything drawn. */
-  readonly everything: readonly Placement[];
+  readonly placements: Placement[];
+  /** Lamps and hedges the layout scattered along the paths. */
+  readonly props: Placement[];
+  /** One placement per paved tile. */
+  readonly paths: Placement[];
+}
+
+/** Objects, scattered props and path tiles together: everything the scene draws. */
+function everythingOn(plot: Plot): Placement[] {
+  return [...plot.placements, ...plot.props, ...plot.paths];
 }
 
 /**
@@ -218,10 +235,13 @@ function planResort(bench: BenchConfig | null): Plot {
   );
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
-  const placements = tile(layout.placements);
   // Paths and scattered props are placements too; they just never get a label.
-  const everything = [...placements, ...tile(layout.props), ...tile(layout.paths)];
-  return { layout, placements, everything };
+  return {
+    layout,
+    placements: tile(layout.placements),
+    props: tile(layout.props),
+    paths: tile(layout.paths),
+  };
 }
 
 /** One scratch region per model, so the mesher runs over each model exactly once. */
@@ -290,9 +310,11 @@ interface Lighting {
 function bakeLighting(everything: readonly Placement[]): Lighting {
   const anchors: LightAnchor[] = [];
   for (const placement of everything) {
-    for (const light of objectTypeById(placement.id).model.lights) {
+    // Numbered within the placement that owns them, not across the whole plot:
+    // a running count would rename every lamp behind the one that was added.
+    objectTypeById(placement.id).model.lights.forEach((light, index) => {
       anchors.push({
-        key: `${placement.key}:${anchors.length}`,
+        key: `${placement.key}:${index}`,
         x: placement.x + light.x,
         y: light.y,
         z: placement.z + light.z,
@@ -300,7 +322,7 @@ function bakeLighting(everything: readonly Placement[]): Lighting {
         intensity: light.intensity,
         distance: light.distance,
       });
-    }
+    });
   }
 
   const spec = lightGridSpecFor(anchors);
@@ -347,7 +369,19 @@ function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
   });
 }
 
-/** Everything the HUD and a bench report say about the scene that was built. */
+/** What startup cost, which is a fact about the run rather than about the scene. */
+interface StartupCost {
+  readonly startupMs: number;
+  readonly startupFrames: number;
+}
+
+/**
+ * Everything the HUD and a bench report say about the scene as it stands.
+ *
+ * Read on demand rather than captured once, because the scene is mutable: a
+ * building placed at runtime moves the instance, draw-call and triangle counts,
+ * and the HUD is where that shows.
+ */
 function sceneStats(parts: {
   readonly handle: SceneHandle;
   readonly plot: Plot;
@@ -355,25 +389,23 @@ function sceneStats(parts: {
   readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
   readonly lighting: Lighting;
-  readonly bench: BenchConfig | null;
-  readonly startupFrames: number;
-  readonly mountStarted: number;
+  readonly startup: StartupCost;
 }): ShowcaseStats {
-  const { handle, plot, world, scratch, catalogue, lighting, bench } = parts;
-  const repeats = (bench?.repeat ?? 1) ** 2;
+  const { handle, plot, world, scratch, catalogue, lighting } = parts;
+  const everything = everythingOn(plot);
   return {
     backend: handle.backend,
-    typeCount: new Set(plot.everything.map((placement) => placement.id)).size,
+    typeCount: new Set(everything.map((placement) => placement.id)).size,
     objectCount: plot.placements.length,
-    propCount: plot.layout.props.length * repeats,
-    pathCount: plot.layout.paths.length * repeats,
+    propCount: plot.props.length,
+    pathCount: plot.paths.length,
     instanceCount: world.instanceCount,
     drawCalls: world.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
     drawnTriangleCount: world.drawnTriangleCount,
-    sceneVoxelCount: plot.everything.reduce(
+    sceneVoxelCount: everything.reduce(
       (total, placement) => total + objectTypeById(placement.id).model.voxels.length,
       0,
     ),
@@ -384,11 +416,90 @@ function sceneStats(parts: {
     lightBakeMs: lighting.bakeMs,
     dveMs: catalogue.dveMs,
     meshMs: catalogue.meshMs,
-    // Everything is built by this point; the next thing that happens is a frame.
-    startupMs: Math.round(performance.now() - parts.mountStarted),
     meshedInWorker: catalogue.threaded,
-    startupFrames: parts.startupFrames,
+    ...parts.startup,
   };
+}
+
+/**
+ * The scene's clock: the time of day, whether it is running, and the sky and
+ * lamp strength that follow from it.
+ *
+ * The sky is recomputed only when the clock actually moves — which is most of
+ * the time it does not, since the cycle starts stopped — and that is a whole
+ * scene's worth of colour and light updates nothing would have looked at.
+ */
+interface Clock {
+  /** Normalised time of day, 0..1. */
+  readonly time: number;
+  /** Lamps contributing right now: the bake lights all of them, or none. */
+  readonly litLamps: number;
+  /** Moves the clock on by a frame's worth of seconds, if it is running. */
+  advance(elapsedSeconds: number): void;
+  /** Jumps to a moment of the day and stops the cycle. */
+  setTime(time: number): void;
+  setCycling(cycling: boolean): void;
+}
+
+function createClock(handle: SceneHandle, lighting: Lighting, startTime: number): Clock {
+  let time = startTime;
+  let cycling = false;
+  let sky = skyStateFor(time);
+  let applied: number | null = null;
+
+  const apply = (): void => {
+    if (time === applied) return;
+    sky = skyStateFor(time);
+    handle.applySky(sky);
+    lighting.volume?.setLampFactor(sky.lampFactor);
+    applied = time;
+  };
+  apply();
+
+  return {
+    get time() {
+      return time;
+    },
+    get litLamps() {
+      return sky.lampFactor > 0 ? lighting.anchors.length : 0;
+    },
+    advance(elapsedSeconds) {
+      if (cycling) time = (time + elapsedSeconds / DAY_SECONDS) % 1;
+      apply();
+    },
+    setTime(next) {
+      cycling = false;
+      time = next;
+    },
+    setCycling(next) {
+      cycling = next;
+    },
+  };
+}
+
+/**
+ * Freezes what startup cost and hands back a reader for everything else.
+ *
+ * Startup is a fact about the run, so it is measured once, here. The rest
+ * describes a scene that changes under the HUD, so it is read afresh every time.
+ */
+function createStatsReader(parts: {
+  readonly handle: SceneHandle;
+  readonly plot: Plot;
+  readonly world: InstancedWorld;
+  readonly scratch: ScratchLayout;
+  readonly catalogue: MeshedCatalogue;
+  readonly lighting: Lighting;
+  readonly startup: StartupTracker;
+  readonly mountStarted: number;
+}): () => ShowcaseStats {
+  // Everything is built by this point; the next thing that happens is a frame.
+  const startup: StartupCost = {
+    startupMs: Math.round(performance.now() - parts.mountStarted),
+    startupFrames: parts.startup.frames(),
+  };
+  parts.startup.stop();
+  return () => sceneStats({ ...parts, startup });
 }
 
 /**
@@ -441,10 +552,10 @@ interface BenchRecorder {
 function createBenchRecorder(parts: {
   readonly bench: BenchConfig;
   readonly handle: SceneHandle;
-  readonly stats: ShowcaseStats;
-  readonly litLampCount: () => number;
+  readonly stats: () => ShowcaseStats;
+  readonly litLamps: () => number;
 }): BenchRecorder {
-  const { bench, handle, stats, litLampCount } = parts;
+  const { bench, handle, stats, litLamps } = parts;
   const frames: number[] = [];
   const gpuFrames: number[] = [];
   let seen = 0;
@@ -462,8 +573,8 @@ function createBenchRecorder(parts: {
         backend: handle.backend,
         pixelRatio: handle.renderer.getPixelRatio(),
         drawingBufferSize: handle.drawingBufferSize(),
-        activeLights: litLampCount(),
-        scene: stats,
+        activeLights: litLamps(),
+        scene: stats(),
         drawn: {
           drawCalls: handle.renderer.info.render.drawCalls,
           triangles: handle.renderer.info.render.triangles,
@@ -482,8 +593,54 @@ function createBenchRecorder(parts: {
   };
 }
 
+/**
+ * TEMPORARY scaffold for the mutable scene: pressing this stands one more
+ * cottage just south of the plot, so the instance, draw-call and triangle counts
+ * in the HUD can be watched moving. Goes away once the HUD grows a real build
+ * mode; nothing else reads it.
+ *
+ * The cottage is drawn but not lit — the light volume is still baked once, up
+ * front. Baking a lamp incrementally is the next step.
+ */
+const DEBUG_PLACE_KEY = "p";
+
+/** Object type the debug key places, and how far apart it spaces them, in tiles. */
+const DEBUG_PLACE_ID = "cottage";
+const DEBUG_PLACE_STEP = 3;
+
+function listenForDebugPlacements(
+  plot: Plot,
+  world: InstancedWorld,
+  onPlaced: () => void,
+): () => void {
+  const type = objectTypeById(DEBUG_PLACE_ID);
+  const item = {
+    id: type.id,
+    tilesX: type.model.tiles.x,
+    tilesZ: type.model.tiles.z,
+    width: type.model.width,
+    depth: type.model.depth,
+  };
+  const isPlaceKey = (event: KeyboardEvent): boolean =>
+    event.key === DEBUG_PLACE_KEY && !(event.metaKey || event.ctrlKey || event.altKey);
+
+  let placed = 0;
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (!isPlaceKey(event)) return;
+    placed++;
+    const key = `debug-${DEBUG_PLACE_ID}#${placed}`;
+    // South of the plot, marching east: far enough along, this crosses into a
+    // chunk of its own and the draw calls step up with it.
+    plot.placements.push(place(item, key, 4 + placed * DEBUG_PLACE_STEP, plot.layout.tilesZ + 1));
+    world.setPlacements(everythingOn(plot));
+    onPlaced();
+  };
+  globalThis.addEventListener("keydown", onKeyDown);
+  return () => globalThis.removeEventListener("keydown", onKeyDown);
+}
+
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
-  const { canvas, onFrame } = options;
+  const { canvas, onFrame, onSceneChange } = options;
   const mountStarted = performance.now();
   const startup = trackStartupFrames();
 
@@ -494,12 +651,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const plot = planResort(bench);
   const scratch = scratchForCatalogue();
   const catalogue = await meshModels(scratch, bench);
-  const lighting = bakeLighting(plot.everything);
-  const world = buildInstancedWorld(catalogue.geometries, plot.everything, {
+  const everything = everythingOn(plot);
+  const lighting = bakeLighting(everything);
+  const world = buildInstancedWorld(catalogue.geometries, everything, {
     lightVolume: lighting.volume,
   });
 
-  const { framing, worldExtent } = frameCamera(plot.everything, bench);
+  const { framing, worldExtent } = frameCamera(everything, bench);
   const handle = await createScene({
     canvas,
     width: canvas.clientWidth || globalThis.innerWidth,
@@ -519,21 +677,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   let fpsState = createFpsState();
   let running = true;
-  let time = bench ? bench.time : INITIAL_TIME;
-  let cycling = false;
   let lastTimeMs: number | null = null;
-  let sky = skyStateFor(time);
-  let appliedTime: number | null = null;
+  const clock = createClock(handle, lighting, bench ? bench.time : INITIAL_TIME);
 
   if (bench) {
     // Damping would keep nudging the camera for the first second of the run.
     handle.controls.enabled = false;
     handle.controls.enableDamping = false;
   }
-  /** Lamps contributing right now: the bake lights all of them, or none. */
-  const litLampCount = (): number => (sky.lampFactor > 0 ? lighting.anchors.length : 0);
-
-  handle.applySky(sky);
 
   const resize = (): void => {
     handle.resize(
@@ -543,20 +694,24 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   };
   globalThis.addEventListener("resize", resize);
 
-  const stats = sceneStats({
+  const statsNow = createStatsReader({
     handle,
     plot,
     world,
     scratch,
     catalogue,
     lighting,
-    bench,
-    startupFrames: startup.frames(),
+    startup,
     mountStarted,
   });
-  startup.stop();
 
-  const recorder = bench ? createBenchRecorder({ bench, handle, stats, litLampCount }) : null;
+  const stopDebugPlacements = listenForDebugPlacements(plot, world, () =>
+    onSceneChange?.(statsNow()),
+  );
+
+  const recorder = bench
+    ? createBenchRecorder({ bench, handle, stats: statsNow, litLamps: () => clock.litLamps })
+    : null;
   const projectLabels = createLabelProjector(handle, canvas, anchors);
   const labels = new Map<string, ScreenPosition>();
 
@@ -565,17 +720,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
-    if (cycling) time = (time + elapsed / DAY_SECONDS) % 1;
-
-    // The sky only moves when the clock does; with it frozen — which is most of
-    // the time, since the cycle starts stopped — this is a whole scene's worth
-    // of colour and light updates that nothing would have looked at.
-    if (time !== appliedTime) {
-      sky = skyStateFor(time);
-      handle.applySky(sky);
-      lighting.volume?.setLampFactor(sky.lampFactor);
-      appliedTime = time;
-    }
+    clock.advance(elapsed);
     if (!bench) handle.controls.update();
     handle.renderer.render(handle.scene, handle.camera);
 
@@ -583,7 +728,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     fpsState = sample.state;
 
     projectLabels(labels);
-    onFrame({ fps: fpsState.fps, time, activeLights: litLampCount(), labels });
+    onFrame({ fps: fpsState.fps, time: clock.time, activeLights: clock.litLamps, labels });
 
     if (recorder) {
       recorder.record(elapsed * 1000);
@@ -595,19 +740,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get benchResult() {
       return recorder?.result() ?? null;
     },
-    stats,
+    get stats() {
+      return statsNow();
+    },
     anchors,
-    setTime(next) {
-      cycling = false;
-      time = next;
-    },
-    setCycling(next) {
-      cycling = next;
-    },
+    setTime: clock.setTime,
+    setCycling: clock.setCycling,
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener("resize", resize);
+      stopDebugPlacements();
       lighting.volume?.dispose();
       world.dispose();
       handle.dispose();

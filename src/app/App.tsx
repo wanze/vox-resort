@@ -38,6 +38,9 @@ export function App() {
 
     const options = {
       canvas,
+      // The scene is mutable, so the panel is re-rendered when something is
+      // placed. This runs on an edit, not on a frame.
+      onSceneChange: (next: ShowcaseStats) => setStats(next),
       onFrame: ({ fps: nextFps, time, activeLights, labels }: FrameUpdate) => {
         // Positioning happens straight on the DOM nodes: re-rendering the HUD
         // every frame would distort the very frame rate being measured.

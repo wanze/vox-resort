@@ -14,6 +14,7 @@ const LANTERN = 0xffdca8;
 export default defineModel({
   id: "hotel",
   label: "Hotel",
+  category: "lodging",
   tiles: { x: 6, z: 4 },
   emissive: [LANTERN],
   // One lamp per lantern, a voxel clear of the wall it hangs on.

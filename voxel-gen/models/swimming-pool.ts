@@ -8,6 +8,7 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "swimming-pool",
   label: "Swimming Pool",
+  category: "leisure",
   tiles: { x: 4, z: 3 },
   // Submerged pool lights: no voxel emits them, the water is simply lit at night.
   lights: [

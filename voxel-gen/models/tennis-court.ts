@@ -22,6 +22,7 @@ const MASTS: ReadonlyArray<readonly [number, number]> = [
 export default defineModel({
   id: "tennis-court",
   label: "Tennis Court",
+  category: "leisure",
   tiles: { x: 9, z: 5 },
   emissive: [FLOOD],
   lights: MASTS.map(([x, z]) => ({

@@ -11,6 +11,7 @@ const hem = (i: number): number => 6 + (i % 3 === 0 ? 0 : i % 3 === 1 ? 2 : 1);
 export default defineModel({
   id: "spa-pavilion",
   label: "Spa Pavilion",
+  category: "leisure",
   tiles: { x: 3, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

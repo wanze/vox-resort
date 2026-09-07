@@ -20,8 +20,13 @@ import {
   TILE_VOXELS,
 } from "../features/catalog/domain/objectTypes";
 import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
-import { layoutResort, place, placementCenter } from "../features/layout/domain/resortLayout";
-import { RESORT_PLAN } from "../features/layout/domain/resortPlan";
+import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
+import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from "../features/layout/domain/resortPlan";
+import { layoutItemFor } from "../features/build/domain/buildPlan";
+import type { TileOccupancy } from "../features/build/domain/tileOccupancy";
+import { createTileOccupancy } from "../features/build/domain/tileOccupancy";
+import { createBuildPointer } from "../features/build/adapters/buildPointer";
+import { createPlacementGhost } from "../features/build/adapters/placementGhost";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
 import type { LightAnchor } from "../features/lighting/domain/lightAnchors";
@@ -48,6 +53,7 @@ import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/adapters/
 import { Matrix4 } from "three/webgpu";
 import { createFpsState, sampleFrame } from "../features/hud/domain/fps";
 import { projectToScreen, type ScreenPosition } from "../features/hud/domain/labelProjection";
+import type { FrameUpdate } from "../features/hud/adapters/hudOverlay";
 import { spreadLabelAnchors } from "../features/hud/domain/labelPlacement";
 import {
   benchFraming,
@@ -56,6 +62,15 @@ import {
 } from "../features/bench/domain/benchConfig";
 import { repeatPlot } from "../features/bench/domain/plotRepeat";
 import { roundStats, summarizeFrames, type FrameStats } from "../features/bench/domain/frameStats";
+
+/**
+ * Voxels one instance of each type is made of.
+ *
+ * Read once per stats refresh, which is once per object placed — a drag places
+ * one per pointer move, so this is not the place for a linear search through the
+ * catalogue.
+ */
+const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxels.length]));
 
 /** How far above an object its label floats, in voxels. */
 const LABEL_LIFT = 2;
@@ -145,15 +160,7 @@ export interface BenchResult {
   readonly gpu: FrameStats | null;
 }
 
-export interface FrameUpdate {
-  readonly fps: number;
-  /** Normalised time of day, 0..1. */
-  readonly time: number;
-  /** Lamps contributing to this frame; all of them after dark, none by day. */
-  readonly activeLights: number;
-  /** Screen position per anchor id; missing ids are off-screen this frame. */
-  readonly labels: ReadonlyMap<string, ScreenPosition>;
-}
+export type { FrameUpdate };
 
 export interface ShowcaseOptions {
   readonly canvas: HTMLCanvasElement;
@@ -163,6 +170,12 @@ export interface ShowcaseOptions {
    * should now show. Not called per frame: `onFrame` is the hot path.
    */
   readonly onSceneChange?: (stats: ShowcaseStats) => void;
+  /**
+   * Called when the scene itself leaves build mode — pressing Escape — so the
+   * palette can drop its highlight. Selecting from the HUD does not come back
+   * through here; the HUD already knows.
+   */
+  readonly onBuildSelectionChange?: (typeId: string | null) => void;
 }
 
 export interface Showcase {
@@ -170,6 +183,8 @@ export interface Showcase {
   readonly anchors: readonly LabelAnchor[];
   /** Populated once a `?bench=1` run has collected its frames. */
   readonly benchResult: BenchResult | null;
+  /** Arms the pointer to place this object type, or null to leave build mode. */
+  selectBuildType(typeId: string | null): void;
   /** Jumps the clock to a moment of the day and stops the cycle. */
   setTime(time: number): void;
   /** Starts or stops the automatic day/night cycle. */
@@ -223,16 +238,7 @@ function everythingOn(plot: Plot): Placement[] {
  * Lays the resort out, and tiles it when the benchmark asks for a bigger one.
  */
 function planResort(bench: BenchConfig | null): Plot {
-  const layout = layoutResort(
-    OBJECT_TYPES.map((type) => ({
-      id: type.id,
-      tilesX: type.model.tiles.x,
-      tilesZ: type.model.tiles.z,
-      width: type.model.width,
-      depth: type.model.depth,
-    })),
-    RESORT_PLAN,
-  );
+  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), RESORT_PLAN);
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   // Paths and scattered props are placements too; they just never get a label.
@@ -369,6 +375,25 @@ function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
   });
 }
 
+/**
+ * How many distinct types stand on the plot, and how many voxels it would be
+ * made of if it were painted out in full.
+ *
+ * One pass over the three lists rather than a concatenated copy of them: this is
+ * read again on every object placed, and a drag places one per pointer move.
+ */
+function plotTotals(plot: Plot): { readonly types: number; readonly voxels: number } {
+  const types = new Set<string>();
+  let voxels = 0;
+  for (const list of [plot.placements, plot.props, plot.paths]) {
+    for (const placement of list) {
+      types.add(placement.id);
+      voxels += VOXELS_PER_TYPE.get(placement.id) ?? 0;
+    }
+  }
+  return { types: types.size, voxels };
+}
+
 /** What startup cost, which is a fact about the run rather than about the scene. */
 interface StartupCost {
   readonly startupMs: number;
@@ -392,10 +417,10 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, plot, world, scratch, catalogue, lighting } = parts;
-  const everything = everythingOn(plot);
+  const totals = plotTotals(plot);
   return {
     backend: handle.backend,
-    typeCount: new Set(everything.map((placement) => placement.id)).size,
+    typeCount: totals.types,
     objectCount: plot.placements.length,
     propCount: plot.props.length,
     pathCount: plot.paths.length,
@@ -405,10 +430,7 @@ function sceneStats(parts: {
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
     drawnTriangleCount: world.drawnTriangleCount,
-    sceneVoxelCount: everything.reduce(
-      (total, placement) => total + objectTypeById(placement.id).model.voxels.length,
-      0,
-    ),
+    sceneVoxelCount: totals.voxels,
     meshedVoxelCount: scratch.writes.length,
     lightCount: lighting.anchors.length,
     lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,
@@ -594,49 +616,76 @@ function createBenchRecorder(parts: {
 }
 
 /**
- * TEMPORARY scaffold for the mutable scene: pressing this stands one more
- * cottage just south of the plot, so the instance, draw-call and triangle counts
- * in the HUD can be watched moving. Goes away once the HUD grows a real build
- * mode; nothing else reads it.
+ * Where a newly placed object is counted.
  *
- * The cottage is drawn but not lit — the light volume is still baked once, up
- * front. Baking a lamp incrementally is the next step.
+ * The HUD reports objects, dressing and paving separately, and an object placed
+ * by hand belongs in the same column the layout would have put it in — so the
+ * three ids the layout derives for itself go to their own lists and everything
+ * else counts as an object.
  */
-const DEBUG_PLACE_KEY = "p";
+function listFor(plot: Plot, id: string): Placement[] {
+  if (id === PATH_ID) return plot.paths;
+  if (id === LAMP_ID || id === HEDGE_ID) return plot.props;
+  return plot.placements;
+}
 
-/** Object type the debug key places, and how far apart it spaces them, in tiles. */
-const DEBUG_PLACE_ID = "cottage";
-const DEBUG_PLACE_STEP = 3;
+/** Build mode: what the pointer is placing, and how it reaches the scene. */
+interface BuildMode {
+  /** Picks the type to place, or null to leave build mode. */
+  select(typeId: string | null): void;
+  dispose(): void;
+}
 
-function listenForDebugPlacements(
-  plot: Plot,
-  world: InstancedWorld,
-  onPlaced: () => void,
-): () => void {
-  const type = objectTypeById(DEBUG_PLACE_ID);
-  const item = {
-    id: type.id,
-    tilesX: type.model.tiles.x,
-    tilesZ: type.model.tiles.z,
-    width: type.model.width,
-    depth: type.model.depth,
+/**
+ * Wires the pointer to the mutable scene.
+ *
+ * The occupancy index is the piece worth naming: the layout checks its own plan
+ * for overlaps once, up front, and throws when it finds one, which is right for
+ * a plan and useless for a pointer that spends most of its time over an occupied
+ * tile. This keeps the same answer live, one placement at a time, so a hover
+ * costs a map lookup per tile of the footprint.
+ */
+function createBuildMode(parts: {
+  readonly canvas: HTMLCanvasElement;
+  readonly handle: SceneHandle;
+  readonly plot: Plot;
+  readonly world: InstancedWorld;
+  readonly occupancy: TileOccupancy;
+  readonly geometries: readonly ModelGeometry[];
+  readonly onChange: () => void;
+  readonly onCancel: () => void;
+}): BuildMode {
+  const { canvas, handle, plot, world, occupancy, onChange, onCancel } = parts;
+  const ghost = createPlacementGhost(parts.geometries);
+  handle.scene.add(ghost.group);
+
+  const pointer = createBuildPointer({
+    canvas,
+    camera: handle.camera,
+    controls: handle.controls,
+    ghost,
+    occupancy,
+    onPlace(placement) {
+      // Claimed first: if the tiles are gone the scene must not gain an object
+      // the index does not know about.
+      occupancy.claim(placement, placement.key);
+      world.add(placement);
+      listFor(plot, placement.id).push(placement);
+      onChange();
+    },
+    onCancel,
+  });
+
+  return {
+    select(typeId) {
+      pointer.select(typeId === null ? null : layoutItemFor(objectTypeById(typeId)));
+    },
+    dispose() {
+      pointer.dispose();
+      handle.scene.remove(ghost.group);
+      ghost.dispose();
+    },
   };
-  const isPlaceKey = (event: KeyboardEvent): boolean =>
-    event.key === DEBUG_PLACE_KEY && !(event.metaKey || event.ctrlKey || event.altKey);
-
-  let placed = 0;
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (!isPlaceKey(event)) return;
-    placed++;
-    const key = `debug-${DEBUG_PLACE_ID}#${placed}`;
-    // South of the plot, marching east: far enough along, this crosses into a
-    // chunk of its own and the draw calls step up with it.
-    plot.placements.push(place(item, key, 4 + placed * DEBUG_PLACE_STEP, plot.layout.tilesZ + 1));
-    world.setPlacements(everythingOn(plot));
-    onPlaced();
-  };
-  globalThis.addEventListener("keydown", onKeyDown);
-  return () => globalThis.removeEventListener("keydown", onKeyDown);
 }
 
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
@@ -656,6 +705,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const world = buildInstancedWorld(catalogue.geometries, everything, {
     lightVolume: lighting.volume,
   });
+  // Seeded from the resort as planned, then kept up to date one placement at a
+  // time; it is what tells the pointer whether a tile is free.
+  const occupancy = createTileOccupancy(everything);
 
   const { framing, worldExtent } = frameCamera(everything, bench);
   const handle = await createScene({
@@ -705,9 +757,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     mountStarted,
   });
 
-  const stopDebugPlacements = listenForDebugPlacements(plot, world, () =>
-    onSceneChange?.(statsNow()),
-  );
+  const build = createBuildMode({
+    canvas,
+    handle,
+    plot,
+    world,
+    occupancy,
+    geometries: catalogue.geometries,
+    onChange: () => onSceneChange?.(statsNow()),
+    onCancel: () => {
+      build.select(null);
+      options.onBuildSelectionChange?.(null);
+    },
+  });
 
   const recorder = bench
     ? createBenchRecorder({ bench, handle, stats: statsNow, litLamps: () => clock.litLamps })
@@ -744,13 +806,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return statsNow();
     },
     anchors,
+    selectBuildType: (typeId) => build.select(typeId),
     setTime: clock.setTime,
     setCycling: clock.setCycling,
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener("resize", resize);
-      stopDebugPlacements();
+      build.dispose();
       lighting.volume?.dispose();
       world.dispose();
       handle.dispose();

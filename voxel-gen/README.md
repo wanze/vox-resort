@@ -36,6 +36,8 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "my-asset",
   label: "My Asset",
+  // Shelf of the build palette it is offered on: see MODEL_CATEGORIES.
+  category: "amenities",
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b); // set(x, y, z, 0xRRGGBB)
@@ -46,6 +48,11 @@ export default defineModel({
   },
 });
 ```
+
+`category` is what groups the object in the app's build palette — `grounds`,
+`lodging`, `amenities` or `leisure`, declared in `MODEL_CATEGORIES` in
+`voxelgen.ts`. It is a fact about the art, which is why it is declared with the
+art: a new model shows up on the right shelf without the app being touched.
 
 ## Glowing and lighting
 
@@ -59,6 +66,7 @@ const GLOW = 0xffe3a3;
 export default defineModel({
   id: "my-lamp",
   label: "My Lamp",
+  category: "grounds",
   tiles: { x: 1, z: 1 },
   // Colours drawn unlit at full brightness, so they still read after dark.
   emissive: [GLOW],

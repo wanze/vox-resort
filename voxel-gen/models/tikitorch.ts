@@ -8,6 +8,7 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "tikitorch",
   label: "Tiki Torch",
+  category: "grounds",
   tiles: { x: 1, z: 1 },
   // The flame is drawn unlit so it still burns after dark, and throws a light.
   emissive: [0xf2c33c, 0xef7a2f, 0xe0473f],

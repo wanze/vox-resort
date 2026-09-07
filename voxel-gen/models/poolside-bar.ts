@@ -8,6 +8,7 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "poolside-bar",
   label: "Poolside Bar",
+  category: "amenities",
   tiles: { x: 2, z: 2 },
   emissive: [0xf4d57c],
   lights: [{ x: 15, y: 22, z: 16, color: 0xffd489, intensity: 110, distance: 60 }],

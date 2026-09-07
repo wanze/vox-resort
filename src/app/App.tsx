@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { sortByDepth } from "../features/hud/domain/labelProjection";
+import { createHudOverlay } from "../features/hud/adapters/hudOverlay";
 import { Hud } from "../features/hud/components/Hud";
-import {
-  mountShowcase,
-  type FrameUpdate,
-  type LabelAnchor,
-  type Showcase,
-  type ShowcaseStats,
-} from "./showcase";
+import { useHudNodes } from "./useHudNodes";
+import { mountShowcase, type LabelAnchor, type Showcase, type ShowcaseStats } from "./showcase";
 
 /**
  * Mount and dispose are serialised through this chain so React 19's StrictMode
@@ -17,18 +12,24 @@ let lifecycle: Promise<void> = Promise.resolve();
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const labelElements = useRef<Map<string, HTMLDivElement>>(new Map());
-  const activeLightsElement = useRef<HTMLSpanElement | null>(null);
-  const timeElement = useRef<HTMLInputElement | null>(null);
+  const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  const fpsRef = useRef(0);
-  const activeLightsRef = useRef(-1);
-
+  /** Mirrors the palette selection, so a type picked while the catalogue is
+   * still being meshed is armed as soon as the scene exists. */
+  const buildTypeRef = useRef<string | null>(null);
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
   const [anchors, setAnchors] = useState<readonly LabelAnchor[]>([]);
   const [cycling, setCycling] = useState(false);
+  const [buildType, setBuildType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /** Arms the pointer with a type, and keeps the palette showing which. */
+  const selectBuildType = useCallback((typeId: string | null) => {
+    buildTypeRef.current = typeId;
+    setBuildType(typeId);
+    showcaseRef.current?.selectBuildType(typeId);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -36,39 +37,19 @@ export function App() {
 
     let disposed = false;
 
+    // Everything the render loop writes to the DOM directly goes through the
+    // overlay; React is left with the state that actually changes rarely.
+    const overlay = createHudOverlay({ ...hudNodes, onFpsChange: setFps });
+
     const options = {
       canvas,
       // The scene is mutable, so the panel is re-rendered when something is
       // placed. This runs on an edit, not on a frame.
-      onSceneChange: (next: ShowcaseStats) => setStats(next),
-      onFrame: ({ fps: nextFps, time, activeLights, labels }: FrameUpdate) => {
-        // Positioning happens straight on the DOM nodes: re-rendering the HUD
-        // every frame would distort the very frame rate being measured.
-        for (const [id, element] of labelElements.current) {
-          if (!labels.has(id)) element.style.visibility = "hidden";
-        }
-        const visible = sortByDepth([...labels].map(([id, screen]) => ({ id, screen })));
-        visible.forEach(({ id, screen }, index) => {
-          const element = labelElements.current.get(id);
-          if (!element) return;
-          element.style.visibility = "visible";
-          // Far to near, so a nearby label always covers one behind it.
-          element.style.zIndex = String(index);
-          element.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0) translate(-50%, -100%)`;
-        });
-        if (nextFps !== fpsRef.current) {
-          fpsRef.current = nextFps;
-          setFps(nextFps);
-        }
-        if (activeLights !== activeLightsRef.current && activeLightsElement.current) {
-          activeLightsRef.current = activeLights;
-          activeLightsElement.current.textContent = String(activeLights);
-        }
-        // The slider follows the clock while the cycle runs, without React.
-        if (timeElement.current && document.activeElement !== timeElement.current) {
-          timeElement.current.value = time.toFixed(3);
-        }
-      },
+      onSceneChange: setStats,
+      // Escape leaves build mode from the canvas; the palette follows. Arming
+      // the pointer again with what it just put down costs nothing.
+      onBuildSelectionChange: selectBuildType,
+      onFrame: overlay.update,
     };
 
     lifecycle = lifecycle.then(async () => {
@@ -80,6 +61,7 @@ export function App() {
           return;
         }
         showcaseRef.current = mounted;
+        mounted.selectBuildType(buildTypeRef.current);
         setStats(mounted.stats);
         setAnchors(mounted.anchors);
       } catch (cause: unknown) {
@@ -95,7 +77,8 @@ export function App() {
         showcaseRef.current = null;
       });
     };
-  }, []);
+    // Both are stable, so the renderer is mounted exactly once.
+  }, [hudNodes, selectBuildType]);
 
   const handleTimeChange = useCallback((time: number) => {
     setCycling(false);
@@ -114,12 +97,14 @@ export function App() {
         fps={fps}
         stats={stats}
         anchors={anchors}
-        labelElements={labelElements}
-        activeLightsElement={activeLightsElement}
-        timeElement={timeElement}
+        labelElements={hudNodes.labels}
+        activeLightsElement={hudNodes.activeLights}
+        timeElement={hudNodes.time}
         cycling={cycling}
         onTimeChange={handleTimeChange}
         onCyclingChange={handleCyclingChange}
+        buildType={buildType}
+        onBuildTypeChange={selectBuildType}
         error={error}
       />
     </div>

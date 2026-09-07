@@ -8,6 +8,7 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "icecream",
   label: "Ice Cream Cart",
+  category: "amenities",
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { BuildPalette } from "./BuildPalette";
 import { FpsCounter } from "./FpsCounter";
 import { ObjectLabels } from "./ObjectLabels";
 import type { LabelAnchor, ShowcaseStats } from "../../../app/showcase";
@@ -13,6 +14,9 @@ export interface HudProps {
   readonly cycling: boolean;
   readonly onTimeChange: (time: number) => void;
   readonly onCyclingChange: (cycling: boolean) => void;
+  /** Object type the pointer is armed with, or null when nothing is. */
+  readonly buildType: string | null;
+  readonly onBuildTypeChange: (typeId: string | null) => void;
   readonly error: string | null;
 }
 
@@ -29,6 +33,7 @@ export function Hud(props: HudProps) {
         onTimeChange={props.onTimeChange}
         onCyclingChange={props.onCyclingChange}
       />
+      <BuildPalette selected={props.buildType} onSelect={props.onBuildTypeChange} />
       <ObjectLabels anchors={anchors} elements={labelElements} />
       {error ? (
         <div className="hud-error" role="alert">

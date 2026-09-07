@@ -34,6 +34,12 @@ Orbit with the left mouse button, pan with the right, zoom with the wheel. The
 HUD shows the frame rate, the backend in use, the scene counts, and a
 time-of-day slider.
 
+Pick an object from the build palette on the right and click the ground to place
+it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is
+laid. The pointer previews where it would land, green where it fits and red where
+something is already standing. While building, the right button orbits and Escape
+puts the object down.
+
 ## Structure
 
 Code under `src/features/` is grouped by feature, each split into `domain/`

@@ -80,7 +80,8 @@ export interface ResortLayout {
   readonly tilesZ: number;
 }
 
-const tileKey = (x: number, z: number): string => `${x},${z}`;
+/** Key for one tile of the plot; unique, and stable as long as the tile is. */
+export const tileKey = (x: number, z: number): string => `${x},${z}`;
 
 const NEIGHBOURS = [
   [1, 0],

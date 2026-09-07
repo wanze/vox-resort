@@ -40,6 +40,26 @@ export class VoxelBuilder {
   }
 }
 
+/**
+ * The shelf of the build palette a model sits on.
+ *
+ * Which shelf an object belongs to is a fact about the art, not about the app,
+ * so it is declared here with the rest of the model: a new model file lands in
+ * the right group of the HUD without anything in `src/` being touched.
+ */
+export type ModelCategory = "grounds" | "lodging" | "amenities" | "leisure";
+
+/** Every category, with its heading, in the order the palette shows them. */
+export const MODEL_CATEGORIES: readonly {
+  readonly id: ModelCategory;
+  readonly label: string;
+}[] = [
+  { id: "grounds", label: "Grounds" },
+  { id: "lodging", label: "Lodging" },
+  { id: "amenities", label: "Amenities" },
+  { id: "leisure", label: "Leisure" },
+];
+
 /** Footprint in resort tiles; see `TILE_VOXELS` for the tile edge in voxels. */
 export interface TileFootprint {
   readonly x: number;
@@ -71,6 +91,8 @@ export interface VoxelModelSource {
   readonly id: string;
   /** Human readable name shown in the HUD. */
   readonly label: string;
+  /** Which shelf of the build palette the object is offered on. */
+  readonly category: ModelCategory;
   /** Tiles the object claims on the resort grid. */
   readonly tiles: TileFootprint;
   /**
@@ -94,6 +116,7 @@ export interface PaintedVoxel {
 export interface VoxelModel {
   readonly id: string;
   readonly label: string;
+  readonly category: ModelCategory;
   readonly tiles: TileFootprint;
   /** Bounding box of the painted voxels, in voxels. */
   readonly width: number;
@@ -153,6 +176,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
   return {
     id: source.id,
     label: source.label,
+    category: source.category,
     tiles: source.tiles,
     width: maxX - minX + 1,
     height: maxY - minY + 1,

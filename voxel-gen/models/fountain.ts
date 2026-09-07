@@ -8,6 +8,7 @@ import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
 export default defineModel({
   id: "fountain",
   label: "Fountain",
+  category: "amenities",
   tiles: { x: 2, z: 2 },
   lights: [{ x: 16, y: 8, z: 16, color: 0x9fd8f2, intensity: 120, distance: 64 }],
   build: (b: VoxelBuilder) => {

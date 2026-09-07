@@ -188,6 +188,56 @@ The policy — which chunk a placement falls in, how much room a bucket should
 hold, what differs between two sets of placements — is pure and lives in
 `rendering/domain/spatialChunks.ts`. Only the buffer writes are in the adapter.
 
+## Building on the plot
+
+Placing is the other half of the mutable scene: the renderer could already take
+one more object, and this is what points a mouse at it.
+
+**Picking.** The resort stands on one flat plane at `y = 0`, so the tile under
+the pointer is solved rather than searched for: `groundPick.ts` unprojects the
+pointer through the camera's inverse view-projection and meets the ground plane
+at a single point. No raycaster, no scene traversal, nothing allocated per
+pointer move — and unlike a raycast against the ground mesh, the answer does not
+depend on how large that mesh happens to be drawn. Tiles run negative off the
+plot's corner, so the resort can grow west and north of the plan it started with.
+
+**What may stand where.** `layoutResort` checks its own plan for overlaps once
+and throws when it finds one, which is right for a plan and useless for a pointer
+that spends most of its time over an occupied tile. `tileOccupancy.ts` keeps the
+same question live: tile -> the key of whatever covers it, updated one placement
+at a time, seeded from the resort as planned. A hover costs one map lookup per
+tile of the footprint. One tile holds one thing, which is the invariant the
+layout already keeps — paving never runs under a building, and the dressing is
+scattered on tiles that are neither.
+
+**The gesture.** A click places. Holding the button down keeps placing, which is
+how a path gets drawn — but only for a one-tile object: dragging a hotel across
+the plot would stamp a row of hotels nobody asked for. A drag is filled in with
+Bresenham between pointer samples rather than being the samples themselves, since
+a quick drag reports every fourth tile and would otherwise come out dotted. A
+stroke skips tiles it cannot have instead of stopping at them, so a path paves
+around a bench rather than ending at it.
+
+`OrbitControls` owns the left button, and a build mode needs it, so while a type
+is selected the left button is taken off the controls and the right button orbits
+in its place (shift-right still pans). Deselecting hands back exactly the buttons
+the camera had, not the defaults.
+
+**The preview.** The ghost borrows the model's own geometry from the meshed
+catalogue, so it costs one draw call and no upload, and it is drawn unlit and
+translucent — a shaded ghost goes black after dark. Green where it may stand, red
+where it may not, over a patch showing the footprint it would claim.
+
+**The palette.** Every model declares its `category`, so the HUD groups derive
+from the registry like everything else: a new model file appears on the right
+shelf without a line of `src/` changing.
+
+What is placed is drawn but **not lit**. The light volume is still baked once at
+startup, so a street lamp placed by hand casts nothing. The bake's scale is
+already frozen for exactly this — see _The lamps are baked_ — so splatting one
+lamp into the cells it reaches and re-uploading that corner of the texture is the
+next step, not a rebake.
+
 ## What it costs now
 
 Same camera, same time of day, 2880 × 1626 device pixels, WebGPU on an M2 Pro.
@@ -347,8 +397,9 @@ answer for lights that move. None of these do.
 Objects are hand-authored voxel models under `voxel-gen/models/`; adding one is a
 new file plus a line in `models/index.ts`, and `voxel-gen/README.md` documents the
 authoring API and the conventions. Nothing in `src/` needs to change: the
-catalogue, materials, layout, meshing, instancing and HUD labels all derive from
-the registry.
+catalogue, materials, layout, meshing, instancing, HUD labels and the shelf of the
+build palette it appears on all derive from the registry — the last of those from
+the `category` the model declares.
 
 The resort is laid out on a fixed grid of `TILE_VOXELS` (16) voxel tiles. Every
 model declares the footprint it claims in tiles and must fit inside it;
@@ -409,8 +460,10 @@ having to author it.
 Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, shadows,
 procedural terrain, physics and multiplayer.
 
-The scene itself can now be changed at runtime, but nothing drives it yet: there
-is no build UI, and the lamps are still baked once up front, so an object placed
-after startup is drawn and not lit. `decorationsFor` also still re-derives the
-dressing over the whole plot, which is what the coordinate keys make visible —
-one edit should not be able to move a lamp on the far side of the resort.
+Objects can be placed by hand, but not taken away again: there is no bulldozer,
+no undo and nothing persists a plot across a reload. The lamps are still baked
+once up front, so an object placed after startup is drawn and not lit, and a type
+that first appears at runtime gets no HUD caption — the label anchors are chosen
+at startup. `decorationsFor` also still re-derives the dressing over the whole
+plot, which is what the coordinate keys make visible — one edit should not be
+able to move a lamp on the far side of the resort.

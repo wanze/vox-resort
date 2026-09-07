@@ -23,6 +23,7 @@ const BOLLARDS: ReadonlyArray<readonly [number, number]> = [
 export default defineModel({
   id: "minigolf",
   label: "Minigolf",
+  category: "leisure",
   tiles: { x: 5, z: 4 },
   emissive: [GLOW],
   lights: BOLLARDS.map(([x, z]) => ({

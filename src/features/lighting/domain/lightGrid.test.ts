@@ -3,16 +3,23 @@ import type { LightAnchor } from "./lightAnchors";
 import {
   bakeLightGrid,
   cellCount,
+  countRegion,
   DEFAULT_GRID_BUDGET_BYTES,
   FINEST_CELL_SIZE,
   gridByteSize,
+  gridInterior,
   gridSpecAt,
   lightGridSpecFor,
   linearRgbOf,
   luminance,
   pointLightAttenuation,
+  rangeCells,
+  rangeDims,
+  reachOf,
+  rebakeRegion,
   SCALE_HEADROOM,
   srgbToLinear,
+  wholeGrid,
   type LightGridSpec,
 } from "./lightGrid";
 
@@ -383,5 +390,181 @@ describe("bakeLightGrid", () => {
     const grid = bakeLightGrid(anchors, spec);
     expect(performance.now() - started).toBeLessThan(1000);
     expect(grid.litCells).toBeGreaterThan(0);
+  });
+});
+
+describe("cell ranges", () => {
+  const spec = gridSpecAt([anchor()], 4)!;
+
+  it("counts the whole grid", () => {
+    expect(rangeCells(wholeGrid(spec))).toBe(cellCount(spec));
+    expect(rangeDims(wholeGrid(spec))).toEqual(spec.dims);
+  });
+
+  it("counts an empty range as holding nothing", () => {
+    expect(rangeCells({ lowX: 4, highX: 3, lowY: 0, highY: 0, lowZ: 0, highZ: 0 })).toBe(0);
+  });
+
+  it("holds the interior back from every wall the sampler clamps against", () => {
+    const interior = gridInterior(spec);
+    expect(interior.lowX).toBe(1);
+    expect(interior.lowZ).toBe(1);
+    expect(interior.highX).toBe(spec.dims.x - 2);
+    expect(interior.highZ).toBe(spec.dims.z - 2);
+    expect(interior.highY).toBe(spec.dims.y - 2);
+    // Except the floor: nothing samples below the ground, and the lamps
+    // standing at load light that layer too.
+    expect(interior.lowY).toBe(0);
+  });
+});
+
+describe("reachOf", () => {
+  const spec = gridSpecAt([anchor({ x: 0, y: 20, z: 0, distance: 40 })], 4)!;
+
+  it("spans the lamp's falloff and no more", () => {
+    const range = reachOf(anchor({ x: 0, y: 20, z: 0, distance: 40 }), spec, wholeGrid(spec));
+    const dims = rangeDims(range);
+    // Eighty voxels across at four to the cell, plus a cell of rounding at each end.
+    expect(dims.x).toBeLessThanOrEqual(80 / 4 + 2);
+    expect(dims.z).toBeLessThanOrEqual(80 / 4 + 2);
+  });
+
+  it("grows with the falloff distance", () => {
+    const near = reachOf(anchor({ distance: 20 }), spec, wholeGrid(spec));
+    const far = reachOf(anchor({ distance: 40 }), spec, wholeGrid(spec));
+    expect(rangeCells(far)).toBeGreaterThan(rangeCells(near));
+  });
+
+  it("clips to the window it is given", () => {
+    const window = { lowX: 5, highX: 6, lowY: 0, highY: 1, lowZ: 5, highZ: 6 };
+    const range = reachOf(anchor({ distance: 400 }), spec, window);
+    expect(range).toEqual(window);
+  });
+
+  it("is empty for a lamp that reaches nothing in the window", () => {
+    const far = anchor({ x: 10_000, z: 10_000, distance: 10 });
+    expect(rangeCells(reachOf(far, spec, wholeGrid(spec)))).toBe(0);
+  });
+});
+
+describe("countRegion", () => {
+  const anchors = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
+  const spec = gridSpecAt(anchors, 4)!;
+
+  it("agrees with what the bake reported for the whole grid", () => {
+    const grid = bakeLightGrid(anchors, spec);
+    expect(countRegion(grid.irradiance, spec, wholeGrid(spec))).toEqual({
+      litCells: grid.litCells,
+      clampedCells: grid.clampedCells,
+    });
+  });
+
+  it("counts nothing in a corner no lamp reaches", () => {
+    const grid = bakeLightGrid(anchors, spec);
+    const corner = { lowX: 0, highX: 0, lowY: 0, highY: 0, lowZ: 0, highZ: 0 };
+    expect(countRegion(grid.irradiance, spec, corner).litCells).toBe(0);
+  });
+});
+
+describe("rebakeRegion", () => {
+  const west = anchor({ key: "west", x: -60, y: 20, z: 0, distance: 40 });
+  const east = anchor({ key: "east", x: 60, y: 20, z: 0, distance: 40 });
+  const spec = gridSpecAt([west, east], 4)!;
+
+  /** A grid holding only the west lamp, with the east lamp's block re-baked in. */
+  const rebakeInto = (grid: ReturnType<typeof bakeLightGrid>, anchors: readonly LightAnchor[]) =>
+    rebakeRegion({
+      anchors,
+      spec,
+      range: reachOf(east, spec, wholeGrid(spec)),
+      scale: grid.scale,
+      irradiance: grid.irradiance,
+      direction: grid.direction,
+    });
+
+  it("writes what a whole-grid bake at the same scale would have written", () => {
+    const partial = bakeLightGrid([west], spec);
+    rebakeInto(partial, [west, east]);
+    const whole = bakeLightGrid([west, east], spec, { scale: partial.scale });
+    expect(partial.irradiance).toEqual(whole.irradiance);
+    expect(partial.direction).toEqual(whole.direction);
+  });
+
+  it("leaves every cell outside the range alone", () => {
+    const partial = bakeLightGrid([west], spec);
+    const before = partial.irradiance.slice();
+    const range = reachOf(east, spec, wholeGrid(spec));
+    rebakeInto(partial, [west, east]);
+
+    const westCell = (ix: number, iy: number, iz: number) =>
+      (ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4;
+    for (let iz = 0; iz < spec.dims.z; iz++) {
+      for (let iy = 0; iy < spec.dims.y; iy++) {
+        for (let ix = 0; ix < range.lowX; ix++) {
+          const at = westCell(ix, iy, iz);
+          expect(partial.irradiance.slice(at, at + 4)).toEqual(before.slice(at, at + 4));
+        }
+      }
+    }
+  });
+
+  it("takes a lamp away as exactly as it put one there", () => {
+    const both = bakeLightGrid([west, east], spec);
+    const expected = bakeLightGrid([west], spec, { scale: both.scale });
+    rebakeInto(both, [west]);
+    expect(both.irradiance).toEqual(expected.irradiance);
+    expect(both.direction).toEqual(expected.direction);
+  });
+
+  it("does nothing at all for an empty range", () => {
+    const grid = bakeLightGrid([west], spec);
+    const before = grid.irradiance.slice();
+    rebakeRegion({
+      anchors: [west, east],
+      spec,
+      range: { lowX: 4, highX: 3, lowY: 0, highY: 0, lowZ: 0, highZ: 0 },
+      scale: grid.scale,
+      irradiance: grid.irradiance,
+      direction: grid.direction,
+    });
+    expect(grid.irradiance).toEqual(before);
+  });
+
+  it("measures a scale when it is given none", () => {
+    const grid = bakeLightGrid([], spec);
+    expect(grid.scale).toBe(0);
+    const baked = rebakeInto(grid, [east]);
+    expect(baked.scale).toBeGreaterThan(0);
+  });
+});
+
+describe("a reserved box", () => {
+  const lamps = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
+
+  it("stretches the grid to cover ground no lamp reaches", () => {
+    const reserve = { minX: -400, maxX: 400, minY: 0, maxY: 60, minZ: -400, maxZ: 400 };
+    const spec = gridSpecAt(lamps, 4, reserve)!;
+    expect(spec.origin.x).toBeLessThanOrEqual(-400);
+    expect(spec.origin.z).toBeLessThanOrEqual(-400);
+    expect(spec.origin.x + spec.dims.x * spec.cellSize).toBeGreaterThanOrEqual(400);
+    expect(spec.origin.z + spec.dims.z * spec.cellSize).toBeGreaterThanOrEqual(400);
+  });
+
+  it("never shrinks the grid below the lamps standing on it", () => {
+    const tight = { minX: 0, maxX: 1, minY: 0, maxY: 1, minZ: 0, maxZ: 1 };
+    expect(gridSpecAt(lamps, 4, tight)).toEqual(gridSpecAt(lamps, 4));
+  });
+
+  it("is enough on its own to make a grid for a plot with no lamps yet", () => {
+    const reserve = { minX: -100, maxX: 100, minY: 0, maxY: 60, minZ: -100, maxZ: 100 };
+    expect(gridSpecAt([], 4, reserve)).not.toBeNull();
+    expect(gridSpecAt([], 4)).toBeNull();
+  });
+
+  it("coarsens with the budget like everything else the grid has to cover", () => {
+    const reserve = { minX: -4000, maxX: 4000, minY: 0, maxY: 200, minZ: -4000, maxZ: 4000 };
+    const spec = lightGridSpecFor(lamps, DEFAULT_GRID_BUDGET_BYTES, reserve)!;
+    expect(gridByteSize(spec)).toBeLessThanOrEqual(DEFAULT_GRID_BUDGET_BYTES);
+    expect(spec.cellSize).toBeGreaterThan(FINEST_CELL_SIZE);
   });
 });

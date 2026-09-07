@@ -16,6 +16,19 @@ const formatNumber = (value: number): string => value.toLocaleString("en-US");
 
 const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
+/**
+ * The lamp row's tail: how many lamps could burn, and how many cannot.
+ *
+ * A lamp built beyond the ground the light grid was sized to cover has nowhere
+ * in the volume to go, so it stays dark. It is worth saying out loud rather than
+ * leaving the reader to wonder why the total stopped moving.
+ */
+function lampTotals(stats: ShowcaseStats): string {
+  const outside = stats.lightCount - stats.litLightCount;
+  const note = outside > 0 ? ` (${formatNumber(outside)} outside the grid)` : "";
+  return ` of ${formatNumber(stats.litLightCount)}${note}`;
+}
+
 export function FpsCounter(props: FpsCounterProps) {
   const { fps, stats, activeLightsElement, timeElement, cycling, onTimeChange, onCyclingChange } =
     props;
@@ -81,7 +94,7 @@ export function FpsCounter(props: FpsCounterProps) {
                 <span ref={activeLightsElement} className="hud-lights-active">
                   0
                 </span>
-                {` of ${formatNumber(stats.lightCount)}`}
+                {lampTotals(stats)}
               </dd>
             </div>
             <div>

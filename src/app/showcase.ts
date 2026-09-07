@@ -27,16 +27,21 @@ import type { TileOccupancy } from "../features/build/domain/tileOccupancy";
 import { createTileOccupancy } from "../features/build/domain/tileOccupancy";
 import { createBuildPointer } from "../features/build/adapters/buildPointer";
 import { createPlacementGhost } from "../features/build/adapters/placementGhost";
+import type { WorldBounds } from "../features/layout/domain/worldBounds";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
 import type { LightAnchor } from "../features/lighting/domain/lightAnchors";
+import { anchorsFor, lampReservationFor } from "../features/lighting/domain/lightAnchors";
 import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
 import {
   bakeLightGrid,
   cellCount,
+  DEFAULT_GRID_BUDGET_BYTES,
   gridByteSize,
   lightGridSpecFor,
 } from "../features/lighting/domain/lightGrid";
+import type { LiveLightGrid } from "../features/lighting/domain/liveLightGrid";
+import { createLiveLightGrid } from "../features/lighting/domain/liveLightGrid";
 import type { BakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
 import { createBakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
 import type { ScratchLayout } from "../features/voxel-world/domain/modelScratch";
@@ -112,8 +117,15 @@ export interface ShowcaseStats {
   readonly sceneVoxelCount: number;
   /** Voxels actually meshed: one copy of each model. */
   readonly meshedVoxelCount: number;
-  /** Lamps on the plot. Every one of them is baked, so every one of them burns. */
+  /** Lamps the objects on the plot declare between them. */
   readonly lightCount: number;
+  /**
+   * Lamps the baked volume actually holds.
+   *
+   * The same number, until something is built beyond the ground the grid was
+   * sized to cover; a lamp out there has nowhere in the volume to burn.
+   */
+  readonly litLightCount: number;
   /** Cells in the baked irradiance volume, and what it costs on the GPU. */
   readonly lightGridCells: number;
   readonly lightGridBytes: number;
@@ -300,46 +312,103 @@ async function meshModels(
   };
 }
 
-interface Lighting {
-  readonly anchors: readonly LightAnchor[];
-  readonly spec: LightGridSpec | null;
-  readonly volume: BakedLightVolume | null;
-  readonly bakeMs: number;
+/** Every light the catalogue declares, whether or not one is standing yet. */
+const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
+
+/** The lights an object of this kind carries, in its own coordinates. */
+const lightsOf = (placement: Placement) => objectTypeById(placement.id).model.lights;
+
+/**
+ * The two halves of a finished bake: the grid holds the bytes, the volume holds
+ * the textures over them. They are made and lost together, so they travel
+ * together.
+ */
+interface BakedLighting {
+  readonly live: LiveLightGrid;
+  readonly volume: BakedLightVolume;
 }
 
 /**
- * Collects every lamp the plot stands and bakes them into one irradiance volume.
+ * Lights whatever lamps an object just placed declares, re-baking only the cells
+ * they reach and re-uploading only the slices those cells lie in.
  *
- * This happens before anything is built, because the volume is what the scene's
- * materials are wired to.
+ * A lamp that lands outside the grid re-bakes nothing and is left out of
+ * `litCount` rather than quietly counted; the HUD reads that number.
  */
-function bakeLighting(everything: readonly Placement[]): Lighting {
-  const anchors: LightAnchor[] = [];
-  for (const placement of everything) {
-    // Numbered within the placement that owns them, not across the whole plot:
-    // a running count would rename every lamp behind the one that was added.
-    objectTypeById(placement.id).model.lights.forEach((light, index) => {
-      anchors.push({
-        key: `${placement.key}:${index}`,
-        x: placement.x + light.x,
-        y: light.y,
-        z: placement.z + light.z,
-        color: light.color,
-        intensity: light.intensity,
-        distance: light.distance,
-      });
-    });
+function splatLights(baked: BakedLighting, placement: Placement): void {
+  for (const anchor of anchorsFor(placement, lightsOf(placement))) {
+    const edit = baked.live.add(anchor);
+    if (edit.region) baked.volume.update(edit.region, edit.scale);
   }
+}
 
-  const spec = lightGridSpecFor(anchors);
-  const started = performance.now();
-  const grid = spec ? bakeLightGrid(anchors, spec) : null;
-  return {
+interface Lighting {
+  /** Lamps the objects on the plot declare between them. */
+  readonly anchorCount: number;
+  /** Lamps burning in the volume, which is fewer if something was built off it. */
+  readonly litCount: number;
+  readonly spec: LightGridSpec | null;
+  readonly volume: BakedLightVolume | null;
+  readonly bakeMs: number;
+  /** Lights whatever lamps an object just placed declares, without a re-bake. */
+  add(placement: Placement): void;
+}
+
+/**
+ * Bakes the plot's lamps into a grid and the two textures the shader reads it
+ * from, or nothing at all when there is no grid to bake into.
+ */
+function bakeVolume(
+  anchors: readonly LightAnchor[],
+  spec: LightGridSpec | null,
+): BakedLighting | null {
+  if (!spec) return null;
+  const grid = bakeLightGrid(anchors, spec);
+  return { live: createLiveLightGrid(grid, anchors), volume: createBakedLightVolume(grid) };
+}
+
+/**
+ * Collects every lamp the plot stands, bakes them into one irradiance volume,
+ * and keeps that volume current as more are built.
+ *
+ * The bake happens before anything is built, because the volume is what the
+ * scene's materials are wired to. The grid is sized once and never resized, so
+ * it is sized here to cover the whole plot rather than only the lamps standing
+ * on it — see `lampReservationFor`.
+ */
+function createLighting(everything: readonly Placement[]): Lighting {
+  const anchors = everything.flatMap((placement) => anchorsFor(placement, lightsOf(placement)));
+  const spec = lightGridSpecFor(
     anchors,
+    DEFAULT_GRID_BUDGET_BYTES,
+    lampReservationFor(plotBounds(everything), CATALOGUE_LIGHTS),
+  );
+  const started = performance.now();
+  const baked = bakeVolume(anchors, spec);
+  const bakeMs = Math.round(performance.now() - started);
+
+  let anchorCount = anchors.length;
+  return {
     spec,
-    bakeMs: Math.round(performance.now() - started),
-    volume: grid ? createBakedLightVolume(grid) : null,
+    bakeMs,
+    volume: baked ? baked.volume : null,
+    get anchorCount() {
+      return anchorCount;
+    },
+    get litCount() {
+      return baked ? baked.live.lampCount : 0;
+    },
+    add(placement) {
+      anchorCount += lightsOf(placement).length;
+      if (baked) splatLights(baked, placement);
+    },
   };
+}
+
+/** How much ground the resort covers, and how tall it stands. */
+function plotBounds(everything: readonly Placement[]): WorldBounds {
+  const topById = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.height]));
+  return worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
 }
 
 /** Frames the camera on what is actually on the plot, or on the bench's fixed view. */
@@ -347,8 +416,7 @@ function frameCamera(
   everything: readonly Placement[],
   bench: BenchConfig | null,
 ): { readonly framing: CameraFraming; readonly worldExtent: number } {
-  const topById = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.height]));
-  const bounds = worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
+  const bounds = plotBounds(everything);
   return {
     framing: bench
       ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
@@ -432,7 +500,8 @@ function sceneStats(parts: {
     drawnTriangleCount: world.drawnTriangleCount,
     sceneVoxelCount: totals.voxels,
     meshedVoxelCount: scratch.writes.length,
-    lightCount: lighting.anchors.length,
+    lightCount: lighting.anchorCount,
+    litLightCount: lighting.litCount,
     lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,
     lightGridBytes: lighting.spec ? gridByteSize(lighting.spec) : 0,
     lightBakeMs: lighting.bakeMs,
@@ -483,7 +552,7 @@ function createClock(handle: SceneHandle, lighting: Lighting, startTime: number)
       return time;
     },
     get litLamps() {
-      return sky.lampFactor > 0 ? lighting.anchors.length : 0;
+      return sky.lampFactor > 0 ? lighting.litCount : 0;
     },
     advance(elapsedSeconds) {
       if (cycling) time = (time + elapsedSeconds / DAY_SECONDS) % 1;
@@ -629,6 +698,16 @@ function listFor(plot: Plot, id: string): Placement[] {
   return plot.placements;
 }
 
+/**
+ * Holds the camera still for a benchmark run. Damping would otherwise keep
+ * nudging it for the first second, and two builds would not be compared on the
+ * same pixels.
+ */
+function pinCamera(handle: SceneHandle): void {
+  handle.controls.enabled = false;
+  handle.controls.enableDamping = false;
+}
+
 /** Build mode: what the pointer is placing, and how it reaches the scene. */
 interface BuildMode {
   /** Picks the type to place, or null to leave build mode. */
@@ -651,11 +730,12 @@ function createBuildMode(parts: {
   readonly plot: Plot;
   readonly world: InstancedWorld;
   readonly occupancy: TileOccupancy;
+  readonly lighting: Lighting;
   readonly geometries: readonly ModelGeometry[];
   readonly onChange: () => void;
   readonly onCancel: () => void;
 }): BuildMode {
-  const { canvas, handle, plot, world, occupancy, onChange, onCancel } = parts;
+  const { canvas, handle, plot, world, occupancy, lighting, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
   handle.scene.add(ghost.group);
 
@@ -670,6 +750,10 @@ function createBuildMode(parts: {
       // the index does not know about.
       occupancy.claim(placement, placement.key);
       world.add(placement);
+      // Any model may declare lights — a tiki torch and a swimming pool both do
+      // — so this is not a check for one object type but a splat of whatever
+      // the model brought with it.
+      lighting.add(placement);
       listFor(plot, placement.id).push(placement);
       onChange();
     },
@@ -701,7 +785,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const scratch = scratchForCatalogue();
   const catalogue = await meshModels(scratch, bench);
   const everything = everythingOn(plot);
-  const lighting = bakeLighting(everything);
+  const lighting = createLighting(everything);
   const world = buildInstancedWorld(catalogue.geometries, everything, {
     lightVolume: lighting.volume,
   });
@@ -732,11 +816,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let lastTimeMs: number | null = null;
   const clock = createClock(handle, lighting, bench ? bench.time : INITIAL_TIME);
 
-  if (bench) {
-    // Damping would keep nudging the camera for the first second of the run.
-    handle.controls.enabled = false;
-    handle.controls.enableDamping = false;
-  }
+  if (bench) pinCamera(handle);
 
   const resize = (): void => {
     handle.resize(
@@ -763,6 +843,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     plot,
     world,
     occupancy,
+    lighting,
     geometries: catalogue.geometries,
     onChange: () => onSceneChange?.(statsNow()),
     onCancel: () => {

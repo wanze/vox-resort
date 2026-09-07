@@ -29,6 +29,12 @@
  * approximation of the sixteen point lights it replaces, and a
  * better-behaved one: it accounts for all of them rather than the nearest few.
  *
+ * The resort is no longer fixed, either: objects are placed at runtime and any
+ * of them may declare lights. Nothing here re-bakes a plot for that — a bake is
+ * expressed over a {@link CellRange}, so {@link rebakeRegion} can be handed the
+ * block one lamp reaches instead of the whole grid. `liveLightGrid.ts` is what
+ * uses that.
+ *
  * Nothing here touches Three.js: the bake is arithmetic over plain arrays, and
  * is unit-tested as such.
  */
@@ -48,8 +54,8 @@ export const FINEST_CELL_SIZE = 4;
  * How much GPU memory the two volumes may take between them.
  *
  * Cell count goes with the plot's *volume*, so a resort three times as wide
- * bakes nine times the cells: this plot is 11 MB at the finest cell size, and
- * nine of it would be 87 MB and most of a second of bake time. Rather than
+ * bakes nine times the cells: this plot is 43 MB at the finest cell size, and
+ * nine of it would be 390 MB and several seconds of bake time. Rather than
  * refuse to grow, the grid coarsens — {@link lightGridSpecFor} takes the finest
  * cell size that fits this budget. Lamp light is smooth and the sampler
  * interpolates, so the coarser grid costs a little definition at the edge of a
@@ -125,10 +131,10 @@ export interface BakedLightGrid {
    * {@link SCALE_HEADROOM}.
    */
   readonly scale: number;
-  /** Cells the bake actually wrote to, for reporting. */
+  /** Cells that encoded to a colour, for reporting. */
   readonly litCells: number;
   /**
-   * Cells brighter than `scale`, which encoded as clamped.
+   * Cells too bright for `scale` to hold, which encoded as clamped.
    *
    * Always zero on a bake that measured its own scale. A caller reusing an
    * earlier one watches this to learn that the resort has outgrown it and a full
@@ -162,12 +168,31 @@ const cellsFor = (voxels: number, cellSize: number): number =>
   Math.max(1, Math.ceil(voxels / cellSize));
 
 /**
- * The smallest grid covering every lamp's reach, at a given cell size.
+ * A box the grid must cover whether or not a lamp lights it today.
+ *
+ * The grid is baked once and never resized — see {@link lightGridSpecFor} — so
+ * the room a lamp placed later will need has to be asked for before the bake.
+ * {@link lampReservationFor} works out what to ask for.
+ */
+export interface GridReservation {
+  readonly minX: number;
+  readonly minY: number;
+  readonly minZ: number;
+  readonly maxX: number;
+  readonly maxY: number;
+  readonly maxZ: number;
+}
+
+/**
+ * The smallest grid covering every lamp's reach and the reserved box, at a given
+ * cell size.
  *
  * Sizing to the lamps rather than to the plot means the outermost cells are
  * always dark, which is what lets the sampler clamp at the edges: ground beyond
  * the resort reads the dark edge cell and stays dark, instead of having the last
- * lit value smeared across it to the horizon.
+ * lit value smeared across it to the horizon. A reservation is measured the same
+ * way and gets the same dark border, so ground inside it that nothing lights
+ * yet behaves exactly like ground outside the grid altogether.
  *
  * The floor is held just under y = 0 rather than following a lamp's reach
  * downwards; there is nothing below the ground to light.
@@ -175,8 +200,9 @@ const cellsFor = (voxels: number, cellSize: number): number =>
 export function gridSpecAt(
   anchors: readonly LightAnchor[],
   cellSize: number,
+  reserve: GridReservation | null = null,
 ): LightGridSpec | null {
-  if (anchors.length === 0 || cellSize <= 0) return null;
+  if ((anchors.length === 0 && !reserve) || cellSize <= 0) return null;
 
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
@@ -192,6 +218,14 @@ export function gridSpecAt(
     maxX = Math.max(maxX, anchor.x + reach);
     maxY = Math.max(maxY, anchor.y + reach);
     maxZ = Math.max(maxZ, anchor.z + reach);
+  }
+  if (reserve) {
+    minX = Math.min(minX, reserve.minX);
+    minY = Math.min(minY, reserve.minY);
+    minZ = Math.min(minZ, reserve.minZ);
+    maxX = Math.max(maxX, reserve.maxX);
+    maxY = Math.max(maxY, reserve.maxY);
+    maxZ = Math.max(maxZ, reserve.maxZ);
   }
   minY = Math.max(minY, -cellSize);
 
@@ -213,20 +247,28 @@ export function gridSpecAt(
 }
 
 /**
- * The finest grid covering every lamp that still fits the memory budget.
+ * The finest grid covering every lamp and every reservation that still fits the
+ * memory budget.
  *
  * Coarsening is a cube root away — halving the cell size is eight times the
  * cells — so this walks up from the finest size a voxel or two at a time rather
  * than doubling, which would throw away far more definition than the budget
  * actually asks for.
+ *
+ * This is the one and only time the grid is sized. Growing it later would mean
+ * re-baking every cell — half a second on this plot — reallocating both volumes
+ * and, since the budget is already most spent, coarsening the cells under a
+ * scene that is being looked at. Reserving the room up front costs a fraction of
+ * a megabyte and no bake at all; see {@link lampReservationFor}.
  */
 export function lightGridSpecFor(
   anchors: readonly LightAnchor[],
   budgetBytes: number = DEFAULT_GRID_BUDGET_BYTES,
+  reserve: GridReservation | null = null,
 ): LightGridSpec | null {
   let cellSize = FINEST_CELL_SIZE;
   for (;;) {
-    const spec = gridSpecAt(anchors, cellSize);
+    const spec = gridSpecAt(anchors, cellSize, reserve);
     if (!spec) return null;
     if (gridByteSize(spec) <= budgetBytes) return spec;
     // Each step is a linear increase in cell size and a cubic drop in cells, so
@@ -246,42 +288,14 @@ export function gridByteSize(spec: LightGridSpec): number {
 }
 
 /**
- * Splats every anchor into the grid.
+ * A block of cells, inclusive at both ends.
  *
- * Iterating lamps and touching only the cells each one reaches — rather than
- * iterating cells and asking every lamp — is what keeps this affordable: the
- * work is set by the lamps' falloff radii, not by the size of the plot, so a
- * resort four times the area bakes in the same time per lamp.
+ * Everything the bake does is done over one of these: the initial bake takes the
+ * whole grid, and adding or removing a lamp takes the block that lamp reaches.
+ * Having one shape for both is what lets the two share their arithmetic, so an
+ * incremental bake cannot drift away from what a full one would have written.
  */
-export interface BakeOptions {
-  /**
-   * The scale to encode against, instead of measuring one from these anchors.
-   *
-   * Pass an earlier bake's `scale` and the bytes this one writes are directly
-   * comparable with that one's, which is the whole point: a cell no new lamp
-   * reaches encodes to exactly the byte it held before. A non-positive value is
-   * ignored and the scale measured as usual.
-   */
-  readonly scale?: number;
-}
-
-/**
- * The light arriving at every cell, and the direction it came from, unencoded.
- *
- * Kept apart from the encoding below because the two phases have different
- * reasons to run: splatting is per lamp and touches only the cells that lamp
- * reaches, while encoding is per cell and depends on the scale. A lamp added
- * later needs the first and only a region of the second.
- */
-interface LightAccumulator {
-  /** Linear RGB per cell, summed over every lamp reaching it. */
-  readonly sum: Float32Array;
-  /** Luminance-weighted direction per cell: x, y, z, then the total weight. */
-  readonly flow: Float32Array;
-}
-
-/** The block of cells a lamp can reach, clamped to the grid. */
-interface CellRange {
+export interface CellRange {
   readonly lowX: number;
   readonly highX: number;
   readonly lowY: number;
@@ -290,27 +304,113 @@ interface CellRange {
   readonly highZ: number;
 }
 
-/**
- * Which cells an anchor's falloff radius covers.
- *
- * This is what keeps the bake proportional to the lamps rather than to the plot,
- * and it is also the region an incremental bake would have to re-encode after
- * adding or removing this lamp.
- */
-function reachOf(anchor: LightAnchor, spec: LightGridSpec): CellRange {
-  const { origin, cellSize, dims } = spec;
-  const cutoff = anchor.distance;
-  const low = (world: number, base: number): number =>
-    Math.max(0, Math.floor((world - cutoff - base) / cellSize));
-  const high = (world: number, base: number, size: number): number =>
-    Math.min(size - 1, Math.ceil((world + cutoff - base) / cellSize));
+/** Cells the range spans along each axis. */
+export function rangeDims(range: CellRange): GridVector {
   return {
-    lowX: low(anchor.x, origin.x),
-    highX: high(anchor.x, origin.x, dims.x),
-    lowY: low(anchor.y, origin.y),
-    highY: high(anchor.y, origin.y, dims.y),
-    lowZ: low(anchor.z, origin.z),
-    highZ: high(anchor.z, origin.z, dims.z),
+    x: range.highX - range.lowX + 1,
+    y: range.highY - range.lowY + 1,
+    z: range.highZ - range.lowZ + 1,
+  };
+}
+
+/** Cells the range holds; zero when it holds none. */
+export function rangeCells(range: CellRange): number {
+  const dims = rangeDims(range);
+  if (dims.x <= 0 || dims.y <= 0 || dims.z <= 0) return 0;
+  return dims.x * dims.y * dims.z;
+}
+
+/** Every cell of the grid. */
+export function wholeGrid(spec: LightGridSpec): CellRange {
+  return {
+    lowX: 0,
+    highX: spec.dims.x - 1,
+    lowY: 0,
+    highY: spec.dims.y - 1,
+    lowZ: 0,
+    highZ: spec.dims.z - 1,
+  };
+}
+
+/**
+ * Every cell a lamp placed later is allowed to write to.
+ *
+ * The shell is what the sampler clamps against: ground beyond the resort reads
+ * the nearest edge cell, so an edge cell that is lit smears its light across
+ * every metre out to the horizon. {@link gridSpecAt} keeps that shell dark by
+ * construction — it sizes the grid to the lamps' full reach and then adds a cell
+ * of margin — and a lamp placed later has to be held to the same rule.
+ *
+ * The floor is the exception, and it is the same exception {@link gridSpecAt}
+ * makes: the bottom layer sits just under y = 0, the lamps standing at load
+ * light it, and nothing samples below it, because below it is ground.
+ */
+export function gridInterior(spec: LightGridSpec): CellRange {
+  return {
+    lowX: 1,
+    highX: spec.dims.x - 2,
+    lowY: 0,
+    highY: spec.dims.y - 2,
+    lowZ: 1,
+    highZ: spec.dims.z - 2,
+  };
+}
+
+/**
+ * The block of cells an anchor can reach, clipped to `within`.
+ *
+ * This is what keeps a bake proportional to the lamps rather than to the plot,
+ * and it is also exactly the region that has to be re-encoded and re-uploaded
+ * when that lamp is added or taken away. Empty — {@link rangeCells} of zero —
+ * when the anchor reaches nothing inside `within`.
+ */
+export function reachOf(anchor: LightAnchor, spec: LightGridSpec, within: CellRange): CellRange {
+  const { origin, cellSize } = spec;
+  const cutoff = Math.max(anchor.distance, 0);
+  const low = (world: number, base: number, edge: number): number =>
+    Math.max(edge, Math.floor((world - cutoff - base) / cellSize));
+  const high = (world: number, base: number, edge: number): number =>
+    Math.min(edge, Math.ceil((world + cutoff - base) / cellSize));
+  return {
+    lowX: low(anchor.x, origin.x, within.lowX),
+    highX: high(anchor.x, origin.x, within.highX),
+    lowY: low(anchor.y, origin.y, within.lowY),
+    highY: high(anchor.y, origin.y, within.highY),
+    lowZ: low(anchor.z, origin.z, within.lowZ),
+    highZ: high(anchor.z, origin.z, within.highZ),
+  };
+}
+
+/**
+ * The light arriving at every cell of one range, and the direction it came from,
+ * unencoded.
+ *
+ * Kept apart from the encoding below because the two phases have different
+ * reasons to run: splatting is per lamp and touches only the cells that lamp
+ * reaches, while encoding is per cell and depends on the scale.
+ *
+ * The arrays cover `range` and nothing else, which is what makes an incremental
+ * bake affordable in memory as well as in time: re-baking the block one street
+ * lamp reaches allocates about 400 kB, where keeping a whole-grid accumulator
+ * alive between edits would hold on to 150 MB of this plot for good.
+ */
+interface LightAccumulator {
+  readonly range: CellRange;
+  readonly dims: GridVector;
+  /** Linear RGB per cell, summed over every lamp reaching it. */
+  readonly sum: Float32Array;
+  /** Luminance-weighted direction per cell: x, y, z, then the total weight. */
+  readonly flow: Float32Array;
+}
+
+function createAccumulator(range: CellRange): LightAccumulator {
+  const dims = rangeDims(range);
+  const count = rangeCells(range);
+  return {
+    range,
+    dims,
+    sum: new Float32Array(count * 3),
+    flow: new Float32Array(count * 4),
   };
 }
 
@@ -349,12 +449,20 @@ function splatCell(
   flow[xyzw + 3] = flow[xyzw + 3]! + weight;
 }
 
-/** Adds one anchor's contribution to every cell within its reach. */
+/**
+ * Adds one anchor's contribution to the cells of the accumulator it reaches.
+ *
+ * An anchor that reaches none of them — most of them, on a plot of 425 lamps
+ * being re-baked one street lamp at a time — costs six comparisons and no loop
+ * iterations at all, which is why a region bake can be handed every anchor on
+ * the plot rather than having to index them first.
+ */
 function splatAnchor(anchor: LightAnchor, spec: LightGridSpec, into: LightAccumulator): void {
   if (anchor.distance <= 0 || anchor.intensity <= 0) return;
-  const { origin, cellSize, dims } = spec;
+  const { origin, cellSize } = spec;
   const light = linearRgbOf(anchor.color);
-  const reach = reachOf(anchor, spec);
+  const reach = reachOf(anchor, spec, into.range);
+  const { range, dims } = into;
 
   for (let iz = reach.lowZ; iz <= reach.highZ; iz++) {
     const deltaZ = anchor.z - (origin.z + (iz + 0.5) * cellSize);
@@ -362,22 +470,11 @@ function splatAnchor(anchor: LightAnchor, spec: LightGridSpec, into: LightAccumu
       const deltaY = anchor.y - (origin.y + (iy + 0.5) * cellSize);
       for (let ix = reach.lowX; ix <= reach.highX; ix++) {
         const deltaX = anchor.x - (origin.x + (ix + 0.5) * cellSize);
-        const cell = ix + dims.x * (iy + dims.y * iz);
+        const cell = ix - range.lowX + dims.x * (iy - range.lowY + dims.y * (iz - range.lowZ));
         splatCell(anchor, light, [deltaX, deltaY, deltaZ], cell, into);
       }
     }
   }
-}
-
-/** Adds every anchor's contribution to the cells within its reach. */
-function splatAnchors(anchors: readonly LightAnchor[], spec: LightGridSpec): LightAccumulator {
-  const count = cellCount(spec);
-  const into: LightAccumulator = {
-    sum: new Float32Array(count * 3),
-    flow: new Float32Array(count * 4),
-  };
-  for (const anchor of anchors) splatAnchor(anchor, spec, into);
-  return into;
 }
 
 /** The scale a measuring bake settles on: the brightest cell, plus headroom. */
@@ -390,11 +487,11 @@ function measureScale(sum: Float32Array): number {
 /** Writes one cell's direction and agreement into the two byte arrays. */
 function encodeDirection(
   flow: Float32Array,
-  cell: number,
+  at: number,
+  target: number,
   irradiance: Uint8Array,
   direction: Uint8Array,
 ): void {
-  const at = cell * 4;
   const flowX = flow[at]!;
   const flowY = flow[at + 1]!;
   const flowZ = flow[at + 2]!;
@@ -404,44 +501,157 @@ function encodeDirection(
   // How much the lamps reaching this cell agree: one lamp gives 1, lamps
   // pulling in opposite directions cancel towards 0.
   const agreement = weight > 0 ? Math.min(1, length / weight) : 0;
-  irradiance[at + 3] = Math.round(agreement * 255);
+  irradiance[target + 3] = Math.round(agreement * 255);
 
   const axis = (value: number): number => Math.round((value / length) * 0.5 * 255 + 127.5);
-  direction[at] = length > 0 ? axis(flowX) : 128;
-  direction[at + 1] = length > 0 ? axis(flowY) : 128;
-  direction[at + 2] = length > 0 ? axis(flowZ) : 128;
-  direction[at + 3] = 255;
+  direction[target] = length > 0 ? axis(flowX) : 128;
+  direction[target + 1] = length > 0 ? axis(flowY) : 128;
+  direction[target + 2] = length > 0 ? axis(flowZ) : 128;
+  direction[target + 3] = 255;
 }
 
+/** Writes one cell's colour, direction and agreement into the two byte arrays. */
+function encodeCell(
+  field: LightAccumulator,
+  cell: number,
+  scale: number,
+  target: number,
+  irradiance: Uint8Array,
+  direction: Uint8Array,
+): void {
+  const at = cell * 3;
+  const factor = scale > 0 ? 1 / scale : 0;
+  irradiance[target] = encodeChannel(field.sum[at]! * factor);
+  irradiance[target + 1] = encodeChannel(field.sum[at + 1]! * factor);
+  irradiance[target + 2] = encodeChannel(field.sum[at + 2]! * factor);
+  encodeDirection(field.flow, cell * 4, target, irradiance, direction);
+}
+
+export interface RegionBake {
+  /**
+   * The scale the region was encoded against: the one asked for, or the one
+   * measured here when none was.
+   */
+  readonly scale: number;
+}
+
+export interface RebakeRegionOptions {
+  /** Every lamp that burns; the ones outside `range` cost a comparison each. */
+  readonly anchors: readonly LightAnchor[];
+  readonly spec: LightGridSpec;
+  /** The block to re-bake. Everything outside it is left exactly as it was. */
+  readonly range: CellRange;
+  /**
+   * What a fully encoded channel should decode back to. Non-positive means
+   * "measure one from this region", which is only sound while the rest of the
+   * grid is dark — a zero cell encodes to a zero byte against any scale.
+   */
+  readonly scale: number;
+  readonly irradiance: Uint8Array;
+  readonly direction: Uint8Array;
+}
+
+/**
+ * Bakes one block of cells from the lamps that reach it, and writes the bytes.
+ *
+ * The block is re-derived from scratch rather than adjusted, which is what makes
+ * taking a lamp away as exact as putting one there: removal is not a subtraction
+ * that has to undo a float sum in a different order from the one that built it,
+ * it is the same bake over the same block with one fewer lamp in the list.
+ */
+export function rebakeRegion(options: RebakeRegionOptions): RegionBake {
+  const { anchors, spec, range, irradiance, direction } = options;
+  if (rangeCells(range) === 0) return { scale: options.scale };
+
+  const field = createAccumulator(range);
+  for (const anchor of anchors) splatAnchor(anchor, spec, field);
+  const scale = options.scale > 0 ? options.scale : measureScale(field.sum);
+
+  // Walked in the order the accumulator was filled, so `cell` and the three
+  // indices stay in step without either having to be derived from the other.
+  let cell = 0;
+  for (let iz = range.lowZ; iz <= range.highZ; iz++) {
+    for (let iy = range.lowY; iy <= range.highY; iy++) {
+      for (let ix = range.lowX; ix <= range.highX; ix++, cell++) {
+        const target = (ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4;
+        encodeCell(field, cell, scale, target, irradiance, direction);
+      }
+    }
+  }
+  return { scale };
+}
+
+export interface RegionCounts {
+  /** Cells the bake wrote a colour to. */
+  readonly litCells: number;
+  /** Cells too bright for the scale to hold, which encoded as clamped. */
+  readonly clampedCells: number;
+}
+
+/**
+ * Reads the two counts back out of the encoded bytes.
+ *
+ * Counted from the output rather than from the light that produced it, so the
+ * same reckoning works over a block that was baked long ago as over one baked a
+ * moment ago: adding a lamp can correct the totals by counting its block before
+ * and after, without keeping anything else around.
+ */
+export function countRegion(
+  irradiance: Uint8Array,
+  spec: LightGridSpec,
+  range: CellRange,
+): RegionCounts {
+  let litCells = 0;
+  let clampedCells = 0;
+  for (let iz = range.lowZ; iz <= range.highZ; iz++) {
+    for (let iy = range.lowY; iy <= range.highY; iy++) {
+      for (let ix = range.lowX; ix <= range.highX; ix++) {
+        const at = (ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4;
+        const brightest = Math.max(irradiance[at]!, irradiance[at + 1]!, irradiance[at + 2]!);
+        if (brightest > 0) litCells++;
+        if (brightest === 255) clampedCells++;
+      }
+    }
+  }
+  return { litCells, clampedCells };
+}
+
+export interface BakeOptions {
+  /**
+   * The scale to encode against, instead of measuring one from these anchors.
+   *
+   * Pass an earlier bake's `scale` and the bytes this one writes are directly
+   * comparable with that one's, which is the whole point: a cell no new lamp
+   * reaches encodes to exactly the byte it held before. A non-positive value is
+   * ignored and the scale measured as usual.
+   */
+  readonly scale?: number;
+}
+
+/**
+ * Bakes every lamp on the plot into a fresh grid.
+ *
+ * Iterating lamps and touching only the cells each one reaches — rather than
+ * iterating cells and asking every lamp — is what keeps this affordable: the
+ * work is set by the lamps' falloff radii, not by the size of the plot, so a
+ * resort four times the area bakes in the same time per lamp.
+ */
 export function bakeLightGrid(
   anchors: readonly LightAnchor[],
   spec: LightGridSpec,
   options: BakeOptions = {},
 ): BakedLightGrid {
   const count = cellCount(spec);
-  const { sum, flow } = splatAnchors(anchors, spec);
-  const given = options.scale ?? 0;
-  const scale = given > 0 ? given : measureScale(sum);
-
   const irradiance = new Uint8Array(count * 4);
   const direction = new Uint8Array(count * 4);
-  let litCells = 0;
-  let clampedCells = 0;
-
-  for (let cell = 0; cell < count; cell++) {
-    const r = sum[cell * 3]!;
-    const g = sum[cell * 3 + 1]!;
-    const b = sum[cell * 3 + 2]!;
-    const brightest = Math.max(r, g, b);
-    if (brightest > 0) litCells++;
-    if (brightest > scale) clampedCells++;
-    if (scale > 0) {
-      irradiance[cell * 4] = encodeChannel(r / scale);
-      irradiance[cell * 4 + 1] = encodeChannel(g / scale);
-      irradiance[cell * 4 + 2] = encodeChannel(b / scale);
-    }
-    encodeDirection(flow, cell, irradiance, direction);
-  }
-
-  return { spec, irradiance, direction, scale, litCells, clampedCells };
+  const range = wholeGrid(spec);
+  const { scale } = rebakeRegion({
+    anchors,
+    spec,
+    range,
+    scale: options.scale ?? 0,
+    irradiance,
+    direction,
+  });
+  return { spec, irradiance, direction, scale, ...countRegion(irradiance, spec, range) };
 }

@@ -21,7 +21,14 @@ import {
 } from "../features/catalog/domain/objectTypes";
 import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
 import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
+import type { ResortPlan } from "../features/layout/domain/resortPlan";
 import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from "../features/layout/domain/resortPlan";
+import type { GeneratorType, ResortParams } from "../features/layout/domain/resortGenerator";
+import {
+  clampParams,
+  emptyResortPlan,
+  generateResort,
+} from "../features/layout/domain/resortGenerator";
 import { layoutItemFor } from "../features/build/domain/buildPlan";
 import type { TileOccupancy } from "../features/build/domain/tileOccupancy";
 import { createTileOccupancy } from "../features/build/domain/tileOccupancy";
@@ -30,7 +37,7 @@ import { createPlacementGhost } from "../features/build/adapters/placementGhost"
 import type { WorldBounds } from "../features/layout/domain/worldBounds";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
-import type { LightAnchor } from "../features/lighting/domain/lightAnchors";
+import type { Ground, LightAnchor } from "../features/lighting/domain/lightAnchors";
 import { anchorsFor, lampReservationFor } from "../features/lighting/domain/lightAnchors";
 import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
 import {
@@ -188,6 +195,8 @@ export interface ShowcaseOptions {
    * through here; the HUD already knows.
    */
   readonly onBuildSelectionChange?: (typeId: string | null) => void;
+  /** Called when a new resort replaces the old one, with the labels it needs. */
+  readonly onAnchorsChange?: (anchors: readonly LabelAnchor[]) => void;
 }
 
 export interface Showcase {
@@ -195,6 +204,12 @@ export interface Showcase {
   readonly anchors: readonly LabelAnchor[];
   /** Populated once a `?bench=1` run has collected its frames. */
   readonly benchResult: BenchResult | null;
+  /** The parameters the resort on screen was grown from. */
+  readonly params: ResortParams;
+  /** Grows a new resort from these parameters and puts it on screen. */
+  generate(params: ResortParams): void;
+  /** Clears the plot to bare ground of this size, to build on by hand. */
+  clear(params: ResortParams): void;
   /** Arms the pointer to place this object type, or null to leave build mode. */
   selectBuildType(typeId: string | null): void;
   /** Jumps the clock to a moment of the day and stops the cycle. */
@@ -247,10 +262,10 @@ function everythingOn(plot: Plot): Placement[] {
 }
 
 /**
- * Lays the resort out, and tiles it when the benchmark asks for a bigger one.
+ * Lays a plan out, and tiles it when the benchmark asks for a bigger one.
  */
-function planResort(bench: BenchConfig | null): Plot {
-  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), RESORT_PLAN);
+function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
+  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan);
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   // Paths and scattered props are placements too; they just never get a label.
@@ -310,6 +325,37 @@ async function meshModels(
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
   };
+}
+
+/** The catalogue as the generator needs to see it: footprints and shelves. */
+const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
+  id: type.id,
+  category: type.category,
+  tilesX: type.model.tiles.x,
+  tilesZ: type.model.tiles.z,
+}));
+
+/** Plot the generator starts from: the size of the resort that was authored. */
+const STARTING_PARAMS: ResortParams = { tilesX: 112, tilesZ: 100, density: 0.7, seed: 1 };
+
+/**
+ * The parameters the page opens on: a fresh resort every load, unless a
+ * benchmark is running.
+ */
+function startingParams(bench: BenchConfig | null): ResortParams {
+  if (bench) return STARTING_PARAMS;
+  return { ...STARTING_PARAMS, seed: Math.floor(Math.random() * 0xffffffff) };
+}
+
+/**
+ * The plan the page opens on.
+ *
+ * A benchmark gets the hand-authored resort rather than a generated one: a run
+ * is only comparable with the run before it if the scene is the same scene, and
+ * `RESORT_PLAN` is the one plot that does not move between builds.
+ */
+function startingPlan(bench: BenchConfig | null, params: ResortParams): ResortPlan {
+  return bench ? RESORT_PLAN : generateResort(GENERATOR_TYPES, params);
 }
 
 /** Every light the catalogue declares, whether or not one is standing yet. */
@@ -376,12 +422,12 @@ function bakeVolume(
  * it is sized here to cover the whole plot rather than only the lamps standing
  * on it — see `lampReservationFor`.
  */
-function createLighting(everything: readonly Placement[]): Lighting {
+function createLighting(everything: readonly Placement[], ground: Ground): Lighting {
   const anchors = everything.flatMap((placement) => anchorsFor(placement, lightsOf(placement)));
   const spec = lightGridSpecFor(
     anchors,
     DEFAULT_GRID_BUDGET_BYTES,
-    lampReservationFor(plotBounds(everything), CATALOGUE_LIGHTS),
+    lampReservationFor(ground, CATALOGUE_LIGHTS),
   );
   const started = performance.now();
   const baked = bakeVolume(anchors, spec);
@@ -405,23 +451,142 @@ function createLighting(everything: readonly Placement[]): Lighting {
   };
 }
 
-/** How much ground the resort covers, and how tall it stands. */
-function plotBounds(everything: readonly Placement[]): WorldBounds {
+/**
+ * The ground a lamp could be stood on: the plan's own extent, in voxels.
+ *
+ * The plan rather than the objects, because a bare plot has no objects and is
+ * still somewhere to build — and because the light grid is sized from this and
+ * has to cover the tiles nothing stands on yet.
+ */
+function groundOf(plan: ResortPlan): Ground {
+  return { minX: 0, maxX: plan.tilesX * TILE_VOXELS, minZ: 0, maxZ: plan.tilesZ * TILE_VOXELS };
+}
+
+/**
+ * How much ground the resort covers, and how tall it stands.
+ *
+ * Measured from what is actually standing, so the camera frames the resort
+ * rather than the empty acres around it — except on a bare plot, where there is
+ * nothing to measure and the plan's own extent is the only answer.
+ */
+function plotBounds(plan: ResortPlan, everything: readonly Placement[]): WorldBounds {
+  if (everything.length === 0) return { ...groundOf(plan), height: 0 };
   const topById = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.height]));
   return worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
 }
 
 /** Frames the camera on what is actually on the plot, or on the bench's fixed view. */
 function frameCamera(
-  everything: readonly Placement[],
+  bounds: WorldBounds,
   bench: BenchConfig | null,
 ): { readonly framing: CameraFraming; readonly worldExtent: number } {
-  const bounds = plotBounds(everything);
   return {
     framing: bench
       ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
       : cameraFramingFor(bounds, CAMERA_FOV_DEGREES),
     worldExtent: Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1),
+  };
+}
+
+/**
+ * Everything that belongs to one resort, and nothing that outlives it.
+ *
+ * Generating a new plot replaces all of it at once — the plot, its lamps, the
+ * meshes drawn for it and the index of what stands where are answers to the same
+ * question, and half a resort is not a state worth being able to represent. What
+ * stays is everything above: the renderer, the camera, the meshed catalogue and
+ * the HUD.
+ */
+interface Resort {
+  readonly plot: Plot;
+  readonly lighting: Lighting;
+  readonly world: InstancedWorld;
+  readonly occupancy: TileOccupancy;
+  readonly anchors: readonly LabelAnchor[];
+  readonly framing: CameraFraming;
+  readonly worldExtent: number;
+  dispose(): void;
+}
+
+/**
+ * Lays a plan out and builds everything that hangs off it.
+ *
+ * The bake happens before the world, because the volume is what the world's
+ * materials are wired to.
+ */
+function buildResort(parts: {
+  readonly plan: ResortPlan;
+  readonly geometries: readonly ModelGeometry[];
+  readonly bench: BenchConfig | null;
+}): Resort {
+  const plot = layOut(parts.plan, parts.bench);
+  const everything = everythingOn(plot);
+  const lighting = createLighting(everything, groundOf(parts.plan));
+  const world = buildInstancedWorld(parts.geometries, everything, {
+    lightVolume: lighting.volume,
+  });
+  const camera = frameCamera(plotBounds(parts.plan, everything), parts.bench);
+
+  return {
+    plot,
+    lighting,
+    world,
+    // Seeded from the resort as planned, then kept up to date one placement at a
+    // time; it is what tells the pointer whether a tile is free.
+    occupancy: createTileOccupancy(everything),
+    anchors: labelAnchorsFor(plot.placements),
+    framing: camera.framing,
+    worldExtent: camera.worldExtent,
+    dispose() {
+      world.dispose();
+      lighting.volume?.dispose();
+    },
+  };
+}
+
+/**
+ * Which resort is standing, and how to put a different one there.
+ *
+ * Swapping one for another throws away everything below the renderer and builds
+ * it again: the plot, its lamps, the meshes drawn for it and the index of what
+ * stands where. That is most of a second on the largest plot the controls offer,
+ * which is what a button press can spend and a frame cannot.
+ */
+interface ResortSlot {
+  readonly current: () => Resort;
+  /** Attaches the scene the resort is drawn into, once the renderer exists. */
+  attach(handle: SceneHandle): void;
+  /** Builds a new resort, puts it on screen, and hands it back. */
+  replace(plan: ResortPlan): Resort;
+}
+
+function createResortSlot(parts: {
+  readonly plan: ResortPlan;
+  readonly geometries: readonly ModelGeometry[];
+  readonly bench: BenchConfig | null;
+}): ResortSlot {
+  let resort = buildResort(parts);
+  // The first resort is built before the renderer is, because the scene is
+  // created around the light volume it bakes.
+  let scene: SceneHandle | null = null;
+
+  return {
+    current: () => resort,
+    attach(handle) {
+      scene = handle;
+    },
+    replace(plan) {
+      // The old resort is let go last, and only once nothing in the scene points
+      // at it any more: the ground is bound to the light volume, so disposing
+      // the volume first would leave a material holding freed textures.
+      const previous = resort;
+      resort = buildResort({ ...parts, plan });
+      scene?.scene.remove(previous.world.group);
+      scene?.scene.add(resort.world.group);
+      scene?.reframe(resort.framing, resort.worldExtent, resort.lighting.volume);
+      previous.dispose();
+      return resort;
+    },
   };
 }
 
@@ -477,14 +642,13 @@ interface StartupCost {
  */
 function sceneStats(parts: {
   readonly handle: SceneHandle;
-  readonly plot: Plot;
-  readonly world: InstancedWorld;
+  readonly resort: Resort;
   readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
-  readonly lighting: Lighting;
   readonly startup: StartupCost;
 }): ShowcaseStats {
-  const { handle, plot, world, scratch, catalogue, lighting } = parts;
+  const { handle, scratch, catalogue } = parts;
+  const { plot, world, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -527,12 +691,14 @@ interface Clock {
   readonly litLamps: number;
   /** Moves the clock on by a frame's worth of seconds, if it is running. */
   advance(elapsedSeconds: number): void;
+  /** Re-applies the time of day to a scene that has just been rebuilt. */
+  relight(): void;
   /** Jumps to a moment of the day and stops the cycle. */
   setTime(time: number): void;
   setCycling(cycling: boolean): void;
 }
 
-function createClock(handle: SceneHandle, lighting: Lighting, startTime: number): Clock {
+function createClock(handle: SceneHandle, lighting: () => Lighting, startTime: number): Clock {
   let time = startTime;
   let cycling = false;
   let sky = skyStateFor(time);
@@ -542,7 +708,7 @@ function createClock(handle: SceneHandle, lighting: Lighting, startTime: number)
     if (time === applied) return;
     sky = skyStateFor(time);
     handle.applySky(sky);
-    lighting.volume?.setLampFactor(sky.lampFactor);
+    lighting().volume?.setLampFactor(sky.lampFactor);
     applied = time;
   };
   apply();
@@ -552,7 +718,13 @@ function createClock(handle: SceneHandle, lighting: Lighting, startTime: number)
       return time;
     },
     get litLamps() {
-      return sky.lampFactor > 0 ? lighting.litCount : 0;
+      return sky.lampFactor > 0 ? lighting().litCount : 0;
+    },
+    relight() {
+      // A new resort is a new volume, and it starts at a lamp factor of zero
+      // however far through the night the clock happens to be.
+      applied = null;
+      apply();
     },
     advance(elapsedSeconds) {
       if (cycling) time = (time + elapsedSeconds / DAY_SECONDS) % 1;
@@ -576,11 +748,9 @@ function createClock(handle: SceneHandle, lighting: Lighting, startTime: number)
  */
 function createStatsReader(parts: {
   readonly handle: SceneHandle;
-  readonly plot: Plot;
-  readonly world: InstancedWorld;
+  readonly resort: () => Resort;
   readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
-  readonly lighting: Lighting;
   readonly startup: StartupTracker;
   readonly mountStarted: number;
 }): () => ShowcaseStats {
@@ -590,7 +760,7 @@ function createStatsReader(parts: {
     startupFrames: parts.startup.frames(),
   };
   parts.startup.stop();
-  return () => sceneStats({ ...parts, startup });
+  return () => sceneStats({ ...parts, resort: parts.resort(), startup });
 }
 
 /**
@@ -601,7 +771,7 @@ function createStatsReader(parts: {
 function createLabelProjector(
   handle: SceneHandle,
   canvas: HTMLCanvasElement,
-  anchors: readonly LabelAnchor[],
+  anchors: () => readonly LabelAnchor[],
 ): (into: Map<string, ScreenPosition>) => void {
   const viewProjection: number[] = Array.from({ length: 16 }, () => 0);
   const viewProjectionMatrix = new Matrix4();
@@ -617,7 +787,7 @@ function createLabelProjector(
       height: canvas.clientHeight || globalThis.innerHeight,
     };
     into.clear();
-    for (const anchor of anchors) {
+    for (const anchor of anchors()) {
       const screen = projectToScreen(anchor.world, viewProjection, viewport);
       if (screen) into.set(anchor.id, screen);
     }
@@ -727,17 +897,27 @@ interface BuildMode {
 function createBuildMode(parts: {
   readonly canvas: HTMLCanvasElement;
   readonly handle: SceneHandle;
-  readonly plot: Plot;
-  readonly world: InstancedWorld;
-  readonly occupancy: TileOccupancy;
-  readonly lighting: Lighting;
+  readonly resort: () => Resort;
   readonly geometries: readonly ModelGeometry[];
   readonly onChange: () => void;
   readonly onCancel: () => void;
 }): BuildMode {
-  const { canvas, handle, plot, world, occupancy, lighting, onChange, onCancel } = parts;
+  const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
   handle.scene.add(ghost.group);
+
+  // The pointer is built once and outlives every resort under it, so it is given
+  // an index that forwards to whichever one is standing rather than one it would
+  // still be holding after the plot was replaced.
+  const occupancy: TileOccupancy = {
+    isFree: (footprint) => resort().occupancy.isFree(footprint),
+    keyAt: (tile) => resort().occupancy.keyAt(tile),
+    claim: (footprint, key) => resort().occupancy.claim(footprint, key),
+    release: (footprint, key) => resort().occupancy.release(footprint, key),
+    get size() {
+      return resort().occupancy.size;
+    },
+  };
 
   const pointer = createBuildPointer({
     canvas,
@@ -746,6 +926,7 @@ function createBuildMode(parts: {
     ghost,
     occupancy,
     onPlace(placement) {
+      const { plot, world, lighting } = resort();
       // Claimed first: if the tiles are gone the scene must not gain an object
       // the index does not know about.
       occupancy.claim(placement, placement.key);
@@ -781,40 +962,37 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // same pixels. Absent the flag this is null and nothing that reads it runs.
   const bench = parseBenchConfig(globalThis.location?.search ?? "");
 
-  const plot = planResort(bench);
   const scratch = scratchForCatalogue();
   const catalogue = await meshModels(scratch, bench);
-  const everything = everythingOn(plot);
-  const lighting = createLighting(everything);
-  const world = buildInstancedWorld(catalogue.geometries, everything, {
-    lightVolume: lighting.volume,
-  });
-  // Seeded from the resort as planned, then kept up to date one placement at a
-  // time; it is what tells the pointer whether a tile is free.
-  const occupancy = createTileOccupancy(everything);
 
-  const { framing, worldExtent } = frameCamera(everything, bench);
+  let params = startingParams(bench);
+  const slot = createResortSlot({
+    plan: startingPlan(bench, params),
+    geometries: catalogue.geometries,
+    bench,
+  });
+  const current = slot.current;
+
   const handle = await createScene({
     canvas,
     width: canvas.clientWidth || globalThis.innerWidth,
     height: canvas.clientHeight || globalThis.innerHeight,
-    framing,
-    worldExtent,
-    lightVolume: lighting.volume,
+    framing: current().framing,
+    worldExtent: current().worldExtent,
+    lightVolume: current().lighting.volume,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
     // GPU's own timers keep measuring past that point.
     trackTimestamp: bench !== null,
     forceWebGL: bench?.forceWebGL ?? false,
   });
-  handle.scene.add(world.group);
-
-  const anchors = labelAnchorsFor(plot.placements);
+  handle.scene.add(current().world.group);
+  slot.attach(handle);
 
   let fpsState = createFpsState();
   let running = true;
   let lastTimeMs: number | null = null;
-  const clock = createClock(handle, lighting, bench ? bench.time : INITIAL_TIME);
+  const clock = createClock(handle, () => current().lighting, bench ? bench.time : INITIAL_TIME);
 
   if (bench) pinCamera(handle);
 
@@ -828,11 +1006,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const statsNow = createStatsReader({
     handle,
-    plot,
-    world,
+    resort: current,
     scratch,
     catalogue,
-    lighting,
     startup,
     mountStarted,
   });
@@ -840,10 +1016,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const build = createBuildMode({
     canvas,
     handle,
-    plot,
-    world,
-    occupancy,
-    lighting,
+    resort: current,
     geometries: catalogue.geometries,
     onChange: () => onSceneChange?.(statsNow()),
     onCancel: () => {
@@ -852,10 +1025,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
   });
 
+  /** Tells everything above the renderer that the resort underneath it changed. */
+  const rebuilt = (resort: Resort): void => {
+    clock.relight();
+    options.onAnchorsChange?.(resort.anchors);
+    onSceneChange?.(statsNow());
+  };
+
   const recorder = bench
     ? createBenchRecorder({ bench, handle, stats: statsNow, litLamps: () => clock.litLamps })
     : null;
-  const projectLabels = createLabelProjector(handle, canvas, anchors);
+  const projectLabels = createLabelProjector(handle, canvas, () => current().anchors);
   const labels = new Map<string, ScreenPosition>();
 
   handle.renderer.setAnimationLoop((timeMs: number) => {
@@ -886,7 +1066,20 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get stats() {
       return statsNow();
     },
-    anchors,
+    get anchors() {
+      return current().anchors;
+    },
+    get params() {
+      return params;
+    },
+    generate(next) {
+      params = clampParams(next);
+      rebuilt(slot.replace(generateResort(GENERATOR_TYPES, params)));
+    },
+    clear(next) {
+      params = clampParams(next);
+      rebuilt(slot.replace(emptyResortPlan(params.tilesX, params.tilesZ)));
+    },
     selectBuildType: (typeId) => build.select(typeId),
     setTime: clock.setTime,
     setCycling: clock.setCycling,
@@ -895,8 +1088,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener("resize", resize);
       build.dispose();
-      lighting.volume?.dispose();
-      world.dispose();
+      current().dispose();
       handle.dispose();
     },
   };

@@ -44,6 +44,16 @@ export interface SceneHandle {
   readonly backend: "webgpu" | "webgl2";
   /** Moves the whole scene to a moment of the day. */
   applySky(state: SkyState): void;
+  /**
+   * Re-grounds and re-frames the scene on a resort of a different size.
+   *
+   * The ground is rebuilt rather than resized because it is bound to the light
+   * volume, and a new resort is a new bake in new textures. That is one material
+   * to compile, which is what a button press can afford and a frame cannot —
+   * every other material in the scene belongs to the instanced world, which is
+   * rebuilt alongside it.
+   */
+  reframe(framing: CameraFraming, worldExtent: number, lightVolume: BakedLightVolume | null): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
   resize(width: number, height: number): void;
@@ -66,6 +76,47 @@ export interface SceneOptions {
   readonly trackTimestamp?: boolean;
   /** Skips WebGPU and renders on the WebGL2 backend, which must also work. */
   readonly forceWebGL?: boolean;
+}
+
+/** The ground plane, which is rebuilt whenever the resort under it is. */
+interface Ground {
+  readonly mesh: Mesh;
+  dispose(): void;
+}
+
+/**
+ * Lays a ground plane large enough to run past the horizon, lit by the lamps.
+ *
+ * Without the emissive term the lamps would light every building and leave the
+ * ground they stand on black, which is the one place a street lamp is meant to
+ * be seen.
+ */
+function layGround(
+  scene: Scene,
+  framing: CameraFraming,
+  worldExtent: number,
+  lightVolume: BakedLightVolume | null,
+): Ground {
+  const geometry = new PlaneGeometry(worldExtent * 6, worldExtent * 6);
+  const material = new MeshStandardNodeMaterial({
+    color: GROUND_COLOR,
+    roughness: 1,
+    metalness: 0,
+  });
+  if (lightVolume)
+    material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
+  const mesh = new Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;
+  // A hair below y = 0, so it never z-fights a path slab.
+  mesh.position.set(framing.target.x, -0.05, framing.target.z);
+  scene.add(mesh);
+  return {
+    mesh,
+    dispose() {
+      geometry.dispose();
+      material.dispose();
+    },
+  };
 }
 
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
@@ -109,21 +160,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
 
-  // The ground sits a hair below y = 0 so it never z-fights a path slab.
-  const groundGeometry = new PlaneGeometry(worldExtent * 6, worldExtent * 6);
-  const groundMaterial = new MeshStandardNodeMaterial({
-    color: GROUND_COLOR,
-    roughness: 1,
-    metalness: 0,
-  });
-  // Without this the lamps would light every building and leave the ground they
-  // stand on black, which is the one place a street lamp is meant to be seen.
-  if (lightVolume)
-    groundMaterial.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
-  const ground = new Mesh(groundGeometry, groundMaterial);
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.set(framing.target.x, -0.05, framing.target.z);
-  scene.add(ground);
+  let extent = worldExtent;
+  let ground = layGround(scene, framing, extent, lightVolume ?? null);
 
   return {
     renderer,
@@ -138,12 +176,28 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       const size = renderer.getDrawingBufferSize(new Vector2());
       return { width: size.x, height: size.y };
     },
+    reframe(nextFraming, nextExtent, nextVolume) {
+      extent = nextExtent;
+      ground.dispose();
+      scene.remove(ground.mesh);
+      ground = layGround(scene, nextFraming, extent, nextVolume);
+
+      camera.position.set(nextFraming.position.x, nextFraming.position.y, nextFraming.position.z);
+      camera.far = Math.max(extent * 8, 1000);
+      camera.updateProjectionMatrix();
+      controls.target.set(nextFraming.target.x, nextFraming.target.y, nextFraming.target.z);
+      controls.update();
+      if (scene.fog instanceof Fog) {
+        scene.fog.near = extent * 1.4;
+        scene.fog.far = extent * 3.2;
+      }
+    },
     applySky(state) {
       sun.color.setHex(state.sunColor);
       sun.intensity = state.sunIntensity;
       sun.position
         .set(state.sunDirection.x, state.sunDirection.y, state.sunDirection.z)
-        .multiplyScalar(worldExtent)
+        .multiplyScalar(extent)
         .add(controls.target);
       ambient.color.setHex(state.ambientColor);
       ambient.intensity = state.ambientIntensity;
@@ -157,8 +211,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     },
     dispose() {
       controls.dispose();
-      groundGeometry.dispose();
-      groundMaterial.dispose();
+      ground.dispose();
       renderer.dispose();
     },
   };

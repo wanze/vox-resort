@@ -49,18 +49,24 @@ body {
   pointer-events: none;
 }
 
-.hud-panel {
+/* Every floating panel is the same smoked card; only its corner differs. */
+.hud-panel,
+.hud-palette,
+.hud-resort {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  min-width: 250px;
-  /* The panel carries the only interactive controls on the overlay. */
+  /* The panels carry the only interactive controls on the overlay. */
   pointer-events: auto;
-  padding: 12px 14px;
   border: 1px solid var(--hud-border);
   border-radius: 10px;
   background: var(--hud-bg);
   backdrop-filter: blur(6px);
+}
+
+.hud-panel {
+  top: 16px;
+  left: 16px;
+  min-width: 250px;
+  padding: 12px 14px;
 }
 
 .hud-fps {
@@ -195,19 +201,13 @@ body {
 /* The build palette: the one panel on the right, and the only other thing on
    the overlay that takes the pointer. */
 .hud-palette {
-  position: absolute;
   top: 16px;
   right: 16px;
   bottom: 16px;
   width: 232px;
   display: flex;
   flex-direction: column;
-  pointer-events: auto;
   padding: 12px 6px 10px 14px;
-  border: 1px solid var(--hud-border);
-  border-radius: 10px;
-  background: var(--hud-bg);
-  backdrop-filter: blur(6px);
 }
 
 .hud-palette-head {
@@ -218,28 +218,29 @@ body {
   padding-right: 8px;
 }
 
-.hud-palette-head h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--hud-muted);
+/* Both overlay panels title themselves the same way. */
+.hud-palette-head h2,
+/* Every button on the overlay is the same outlined control; only shape varies. */
+.hud-palette-clear,
+.hud-resort-roll,
+.hud-resort-actions button {
+  border: 1px solid var(--hud-border);
+  background: transparent;
+  color: var(--hud-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud-palette-clear:hover,
+.hud-resort-roll:hover,
+.hud-resort-actions button:hover {
+  border-color: rgb(255 255 255 / 30%);
 }
 
 .hud-palette-clear {
   padding: 2px 8px;
-  border: 1px solid var(--hud-border);
   border-radius: 999px;
-  background: transparent;
-  color: var(--hud-text);
-  font: inherit;
   font-size: 11px;
-  cursor: pointer;
-}
-
-.hud-palette-clear:hover {
-  border-color: rgb(255 255 255 / 30%);
 }
 
 /* Only the shelves scroll, so the heading and the hint stay put. */
@@ -323,4 +324,91 @@ body {
   color: var(--hud-muted);
   font-size: 11px;
   line-height: 1.35;
+}
+
+/* The generator sits under the statistics, on the same left rail. */
+.hud-resort {
+  bottom: 16px;
+  left: 16px;
+  width: 250px;
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+}
+
+.hud-resort-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.hud-resort-plot {
+  color: var(--hud-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-resort-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--hud-muted);
+}
+
+.hud-resort-row > span:first-child {
+  width: 54px;
+  flex: none;
+}
+
+.hud-resort-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #6fb1e0;
+}
+
+.hud-resort-value {
+  width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-resort-seed input[type="number"] {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 4%);
+  color: var(--hud-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-resort-roll {
+  flex: none;
+  width: 26px;
+  padding: 3px 0;
+  border-radius: 6px;
+}
+
+.hud-resort-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.hud-resort-actions button {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+}
+
+.hud-resort-actions .hud-resort-go {
+  border-color: rgb(111 177 224 / 55%);
+  background: rgb(111 177 224 / 14%);
+}
+
+.hud-resort-actions button:disabled {
+  opacity: 0.5;
+  cursor: progress;
 }

@@ -439,17 +439,15 @@ export function decorationsFor(
 }
 
 /**
- * Lays the plan out: one placement per plot, a paved tile wherever a street or
- * a spur runs clear of an object, and lamps and hedges along the path edges.
- * Every object type except the ones the layout places itself must appear on the
- * plan at least once.
+ * Checks that the plan stands every object the catalogue offers.
+ *
+ * A type in the catalogue that the plan forgot is a mistake worth hearing about
+ * rather than an object quietly missing from the showcase — unless the plan says
+ * it never meant to stand them all, which is what a generated plot too small for
+ * the catalogue, and a bare plot, both say.
  */
-export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): ResortLayout {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const path = byId.get(PATH_ID);
-  if (!path) throw new Error(`The catalogue has no "${PATH_ID}" object to pave with`);
-  if (path.tilesX !== 1 || path.tilesZ !== 1) throw new Error(`"${PATH_ID}" must be a 1x1 tile`);
-
+function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan): void {
+  if (plan.standsWholeCatalogue === false) return;
   const derived = new Set([PATH_ID, LAMP_ID, HEDGE_ID]);
   const planted = new Set(plan.plots.map((plot) => plot.id));
   for (const item of items) {
@@ -457,6 +455,22 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
       throw new Error(`"${item.id}" has no plot on the resort plan`);
     }
   }
+}
+
+/**
+ * Lays the plan out: one placement per plot, a paved tile wherever a street or
+ * a spur runs clear of an object, and lamps and hedges along the path edges.
+ * Every object type except the ones the layout places itself must appear on the
+ * plan at least once, unless the plan says otherwise — see
+ * {@link ResortPlan.standsWholeCatalogue}.
+ */
+export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): ResortLayout {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const path = byId.get(PATH_ID);
+  if (!path) throw new Error(`The catalogue has no "${PATH_ID}" object to pave with`);
+  if (path.tilesX !== 1 || path.tilesZ !== 1) throw new Error(`"${PATH_ID}" must be a 1x1 tile`);
+
+  requireEveryTypePlanted(items, plan);
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
   const paths = pathTilesFor(items, plan).map((tile) =>

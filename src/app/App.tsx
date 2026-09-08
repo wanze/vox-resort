@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createHudOverlay } from "../features/hud/adapters/hudOverlay";
 import { Hud } from "../features/hud/components/Hud";
 import { useHudNodes } from "./useHudNodes";
+import { useResortControls } from "./useResortControls";
 import { mountShowcase, type LabelAnchor, type Showcase, type ShowcaseStats } from "./showcase";
 
 /**
@@ -23,6 +24,11 @@ export function App() {
   const [cycling, setCycling] = useState(false);
   const [buildType, setBuildType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const resort = useResortControls(showcaseRef);
+  // Pulled out because the mount effect depends on it: the setter React hands
+  // back is stable, the object holding it is not, and depending on the object
+  // would tear the renderer down on every render.
+  const { adopt: adoptParams } = resort;
 
   /** Arms the pointer with a type, and keeps the palette showing which. */
   const selectBuildType = useCallback((typeId: string | null) => {
@@ -49,6 +55,9 @@ export function App() {
       // Escape leaves build mode from the canvas; the palette follows. Arming
       // the pointer again with what it just put down costs nothing.
       onBuildSelectionChange: selectBuildType,
+      // A new resort brings its own labels; the old ones name objects that are
+      // no longer standing.
+      onAnchorsChange: setAnchors,
       onFrame: overlay.update,
     };
 
@@ -64,6 +73,7 @@ export function App() {
         mounted.selectBuildType(buildTypeRef.current);
         setStats(mounted.stats);
         setAnchors(mounted.anchors);
+        adoptParams(mounted.params);
       } catch (cause: unknown) {
         console.error(cause);
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -77,8 +87,8 @@ export function App() {
         showcaseRef.current = null;
       });
     };
-    // Both are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectBuildType]);
+    // All three are stable, so the renderer is mounted exactly once.
+  }, [hudNodes, selectBuildType, adoptParams]);
 
   const handleTimeChange = useCallback((time: number) => {
     setCycling(false);
@@ -105,6 +115,10 @@ export function App() {
         onCyclingChange={handleCyclingChange}
         buildType={buildType}
         onBuildTypeChange={selectBuildType}
+        params={resort.params}
+        onGenerate={resort.generate}
+        onClear={resort.clear}
+        building={resort.building}
         error={error}
       />
     </div>

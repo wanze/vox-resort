@@ -1,7 +1,9 @@
 import type { RefObject } from "react";
 import { BuildPalette } from "./BuildPalette";
+import { ResortPanel } from "./ResortPanel";
 import { FpsCounter } from "./FpsCounter";
 import { ObjectLabels } from "./ObjectLabels";
+import type { ResortParams } from "../../layout/domain/resortGenerator";
 import type { LabelAnchor, ShowcaseStats } from "../../../app/showcase";
 
 export interface HudProps {
@@ -17,6 +19,11 @@ export interface HudProps {
   /** Object type the pointer is armed with, or null when nothing is. */
   readonly buildType: string | null;
   readonly onBuildTypeChange: (typeId: string | null) => void;
+  /** What the resort on screen was grown from, and how to grow another. */
+  readonly params: ResortParams | null;
+  readonly onGenerate: (params: ResortParams) => void;
+  readonly onClear: (params: ResortParams) => void;
+  readonly building: boolean;
   readonly error: string | null;
 }
 
@@ -34,6 +41,14 @@ export function Hud(props: HudProps) {
         onCyclingChange={props.onCyclingChange}
       />
       <BuildPalette selected={props.buildType} onSelect={props.onBuildTypeChange} />
+      {props.params ? (
+        <ResortPanel
+          params={props.params}
+          onGenerate={props.onGenerate}
+          onClear={props.onClear}
+          busy={props.building}
+        />
+      ) : null}
       <ObjectLabels anchors={anchors} elements={labelElements} />
       {error ? (
         <div className="hud-error" role="alert">

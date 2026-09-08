@@ -96,6 +96,16 @@ export interface ResortPlan {
    * how the fountain sits in the middle of its plaza without severing it.
    */
   readonly plazas: readonly Plaza[];
+  /**
+   * Whether every catalogue type is meant to stand somewhere on this plan.
+   *
+   * True by default, and true of the authored plan: a type in the catalogue that
+   * the plan forgot is a mistake, and `layoutResort` says so rather than letting
+   * the object quietly go missing from the showcase. A generated plot too small
+   * to hold one of everything, and an empty plot, are not mistakes — they set
+   * this false and are laid out as they are.
+   */
+  readonly standsWholeCatalogue?: boolean;
 }
 
 /** The object type the path network is built from; it needs no plot of its own. */
@@ -131,6 +141,7 @@ function block(
 export const RESORT_PLAN: ResortPlan = {
   tilesX: 112,
   tilesZ: 100,
+  standsWholeCatalogue: true,
 
   plots: [
     // ── the two gates, on the ends of the promenade ──────────────────────────

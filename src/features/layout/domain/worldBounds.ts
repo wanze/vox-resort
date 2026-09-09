@@ -19,7 +19,14 @@ export interface HeightProvider {
   (id: string): number;
 }
 
-/** Bounds covering every placement plus the tallest object's height. */
+/**
+ * Bounds covering every placement plus the tallest object's height.
+ *
+ * Height is measured off the ground each object stands on, so a bungalow on the
+ * top terrace counts for the terrace as well as for itself: it is what the
+ * cameras are framed on, and a framing that ignored the terraces would crop the
+ * resort at the height of the plot's lowest bench.
+ */
 export function worldBoundsFor(
   placements: readonly Placement[],
   heightOf: HeightProvider,
@@ -37,7 +44,7 @@ export function worldBoundsFor(
     minZ = Math.min(minZ, placement.z);
     maxX = Math.max(maxX, placement.x + placement.width);
     maxZ = Math.max(maxZ, placement.z + placement.depth);
-    height = Math.max(height, heightOf(placement.id));
+    height = Math.max(height, placement.y + heightOf(placement.id));
   }
   return { minX, minZ, maxX, maxZ, height };
 }

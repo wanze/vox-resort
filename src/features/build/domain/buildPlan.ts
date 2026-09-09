@@ -20,6 +20,9 @@
  * A turn is carried through rather than owned here: `place` takes it, and what
  * comes back is a placement whose footprint is already turned, so a quarter-
  * turned cottage is blocked by exactly the three-by-two tiles it would claim.
+ * The level of the ground being dropped on rides through the same way, so the
+ * ghost is drawn standing on the terrace under the pointer rather than at sea
+ * level.
  */
 
 import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
@@ -62,8 +65,9 @@ export function planAt(
   tile: Tile,
   occupancy: TileOccupancy,
   rotation: Rotation = 0,
+  level = 0,
 ): PlacementPlan {
-  const placement = place(item, buildKey(item, tile), tile.x, tile.z, rotation);
+  const placement = place(item, buildKey(item, tile), tile.x, tile.z, rotation, level);
   return { placement, blocked: !occupancy.isFree(placement) };
 }
 
@@ -108,9 +112,10 @@ export function planStroke(
   tiles: readonly Tile[],
   occupancy: TileOccupancy,
   rotation: Rotation = 0,
+  levelOf: (tile: Tile) => number = () => 0,
 ): Placement[] {
   return tiles
-    .map((tile) => planAt(item, tile, occupancy, rotation))
+    .map((tile) => planAt(item, tile, occupancy, rotation, levelOf(tile)))
     .filter((plan) => !plan.blocked)
     .map((plan) => plan.placement);
 }

@@ -29,6 +29,8 @@ export interface LightSite {
   readonly key: string;
   readonly x: number;
   readonly z: number;
+  /** Height the object stands at: the surface of the terrace it is on. */
+  readonly y: number;
 }
 
 /**
@@ -38,15 +40,15 @@ export interface LightSite {
  * running count would rename every lamp behind the one that was just added, and
  * the keys are what a later removal has to match on.
  *
- * The y coordinate is the model's own — objects sit on the ground, so a light
- * declared eighteen voxels up a lamp post is eighteen voxels up wherever that
- * post is planted.
+ * The y coordinate is the model's own, measured off the ground the post is
+ * planted in: a light declared eighteen voxels up a lamp post is eighteen voxels
+ * above whichever terrace that post stands on.
  */
 export function anchorsFor(site: LightSite, lights: readonly ModelLight[]): LightAnchor[] {
   return lights.map((light, index) => ({
     key: `${site.key}:${index}`,
     x: site.x + light.x,
-    y: light.y,
+    y: site.y + light.y,
     z: site.z + light.z,
     color: light.color,
     intensity: light.intensity,

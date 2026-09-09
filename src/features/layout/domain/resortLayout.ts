@@ -42,6 +42,7 @@ import {
   type ResortPlot,
 } from './resortPlan';
 import { isBeach, isWater, shoreFor, terrainAt, type Shore } from './shoreline';
+import { elevationFor, levelAt, levelHeight, type Elevation } from './elevation';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -80,6 +81,19 @@ export interface Placement {
   /** World-space corner of the model itself, in voxels. */
   readonly x: number;
   readonly z: number;
+  /**
+   * Height the object stands at, in voxels: the surface of the terrace its
+   * tiles are on. Zero on a flat plot, which is every plot with no elevation
+   * spec on it.
+   *
+   * Unlike `x` and `z` this is not a corner that a smaller model is centred in —
+   * a model sits *on* the ground, so its own `y = 0` plate lies on the terrace
+   * exactly as it lies on the grass at sea level. It is here for the same reason
+   * the turn is: everything that draws, lights or shades an object needs it, and
+   * nothing that does should have to ask which level the object is on. See
+   * `elevation.ts`.
+   */
+  readonly y: number;
   readonly width: number;
   readonly depth: number;
 }
@@ -111,14 +125,19 @@ const NEIGHBOURS = [
 ] as const;
 
 /**
- * Places one item's footprint at a tile position, centring a model that is
- * smaller than the footprint it claims.
+ * Places one item's footprint at a tile position and on a terrace, centring a
+ * model that is smaller than the footprint it claims.
  *
- * The turn is taken here rather than downstream, so the placement that comes
- * out describes the object as it stands: a 2x3 cottage given a quarter turn
- * claims 3x2 tiles and is 44 voxels wide. Everything that reads a placement —
+ * The turn and the level are both taken here rather than downstream, so the
+ * placement that comes out describes the object as it stands: a 2x3 cottage
+ * given a quarter turn claims 3x2 tiles and is 44 voxels wide, and one on the
+ * first terrace stands `LEVEL_VOXELS` up. Everything that reads a placement —
  * the occupancy index, the camera's bounds, the chunk it is culled in, the
- * footprint the preview paints — then needs no notion of rotation at all.
+ * footprint the preview paints, the shadow it throws — then needs no notion of
+ * either.
+ *
+ * One level for the whole footprint, taken from the tile it is anchored on,
+ * because an object may only stand where all its tiles are on the same terrace.
  */
 export function place(
   item: LayoutItem,
@@ -126,6 +145,7 @@ export function place(
   tileX: number,
   tileZ: number,
   rotation: Rotation = 0,
+  level = 0,
 ): Placement {
   const tiles = rotateExtent(item.tilesX, item.tilesZ, rotation);
   const model = rotateExtent(item.width, item.depth, rotation);
@@ -139,6 +159,7 @@ export function place(
     rotation,
     x: tileX * TILE_VOXELS + Math.floor((tiles.x * TILE_VOXELS - model.x) / 2),
     z: tileZ * TILE_VOXELS + Math.floor((tiles.z * TILE_VOXELS - model.z) / 2),
+    y: levelHeight(level),
     width: model.x,
     depth: model.z,
   };
@@ -593,27 +614,42 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const boardwalk = byId.get(BOARDWALK_ID) ?? path;
   const pavingFor = (tile: Tile): LayoutItem => (isBeach(shore, tile.x, tile.z) ? boardwalk : path);
 
+  // How high the ground is under a tile is a fact about the plot, exactly as
+  // what the ground is made of is: a flat plan reports level 0 everywhere, so
+  // nothing below here has to know whether the plot has terraces on it.
+  const elevation: Elevation | null = elevationFor(plan);
+  const levelOf = (tileX: number, tileZ: number): number => levelAt(elevation, tileX, tileZ);
+
   // occupiedTiles does the overlap, bounds and footprint checks for us.
   const paths = pathTilesFor(items, plan).map((tile) => {
     const paving = pavingFor(tile);
-    return place(paving, derivedKey(paving.id, tile.x, tile.z), tile.x, tile.z);
+    const key = derivedKey(paving.id, tile.x, tile.z);
+    return place(paving, key, tile.x, tile.z, 0, levelOf(tile.x, tile.z));
   });
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>
-    place(byId.get(plot.id)!, keys[index]!, plot.tileX, plot.tileZ, plot.rotation ?? 0),
+    place(
+      byId.get(plot.id)!,
+      keys[index]!,
+      plot.tileX,
+      plot.tileZ,
+      plot.rotation ?? 0,
+      levelOf(plot.tileX, plot.tileZ),
+    ),
   );
 
   const props: Placement[] = [];
   const { lamps, hedges } = decorationsFor(items, plan);
-  const lamp = byId.get(LAMP_ID);
-  if (lamp) {
-    for (const tile of lamps)
-      props.push(place(lamp, derivedKey(LAMP_ID, tile.x, tile.z), tile.x, tile.z));
-  }
-  const hedge = byId.get(HEDGE_ID);
-  if (hedge) {
-    for (const tile of hedges) {
-      props.push(place(hedge, derivedKey(HEDGE_ID, tile.x, tile.z), tile.x, tile.z));
+  for (const [id, tiles] of [
+    [LAMP_ID, lamps],
+    [HEDGE_ID, hedges],
+  ] as const) {
+    const item = byId.get(id);
+    if (!item) continue;
+    for (const tile of tiles) {
+      props.push(
+        place(item, derivedKey(id, tile.x, tile.z), tile.x, tile.z, 0, levelOf(tile.x, tile.z)),
+      );
     }
   }
 

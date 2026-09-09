@@ -43,10 +43,11 @@ import { castsDiffer, shadowCastFor, shadowQuadFor } from '../domain/blobShadows
 import { capacityFor } from '../domain/spatialChunks';
 
 /**
- * How high above the ground plane a shadow is drawn, in voxels.
+ * How high above the ground a shadow is drawn, in voxels.
  *
  * Just clear of a path slab's two voxels — see the note above on why they lie at
- * paving level rather than at ground level.
+ * paving level rather than at ground level. Added to the height its caster
+ * stands at, so a shadow on a terrace lies on that terrace.
  */
 const BLOB_LIFT = 2.05;
 
@@ -153,7 +154,9 @@ export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowFi
     const quad = shadowQuadFor(blob, sun);
     mesh.setMatrixAt(
       slot,
-      scratch.makeScale(quad.halfWidth, 1, quad.halfDepth).setPosition(quad.x, BLOB_LIFT, quad.z),
+      scratch
+        .makeScale(quad.halfWidth, 1, quad.halfDepth)
+        .setPosition(quad.x, blob.y + BLOB_LIFT, quad.z),
     );
   }
 

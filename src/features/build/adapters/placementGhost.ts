@@ -39,7 +39,8 @@ const TINT_STRENGTH = 0.45;
  * How high above the ground the footprint patch floats.
  *
  * Half a voxel clears the paving slabs, which are a voxel thick, so the patch
- * still reads over a path instead of z-fighting inside it.
+ * still reads over a path instead of z-fighting inside it. Measured off the
+ * placement's own height, so the patch lies on the terrace it is drawn over.
  */
 const PAD_LIFT = 0.5;
 
@@ -111,7 +112,7 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
     pad.scale.set(placement.tilesX, 1, placement.tilesZ);
     pad.position.set(
       (placement.tileX + placement.tilesX / 2) * TILE_VOXELS,
-      PAD_LIFT,
+      placement.y + PAD_LIFT,
       (placement.tileZ + placement.tilesZ / 2) * TILE_VOXELS,
     );
     group.visible = true;
@@ -135,7 +136,7 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       // turned, because the placement's own footprint is.
       ghost.rotation.set(0, rotationRadians(placement.rotation), 0);
       const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
-      ghost.position.set(placement.x + origin.x, 0, placement.z + origin.z);
+      ghost.position.set(placement.x + origin.x, placement.y, placement.z + origin.z);
       ghost.visible = true;
     },
     hide() {

@@ -214,9 +214,10 @@ function growBucket(bucket: Bucket, group: Group, capacity: number): void {
  *
  * A turn about Y, then the placement's corner — plus the offset that brings the
  * turned model back into its own footprint, since a rotation matrix turns about
- * the origin and would otherwise leave the model behind it. `setPosition` writes
- * the translation column over the turn rather than multiplying, which is the
- * same matrix for none of the work.
+ * the origin and would otherwise leave the model behind it. The height is the
+ * placement's own, so an object on a terrace stands on it rather than sinking
+ * to sea level. `setPosition` writes the translation column over the turn rather
+ * than multiplying, which is the same matrix for none of the work.
  */
 function writeSlot(bucket: Bucket, slot: number, placement: Placement): void {
   const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
@@ -224,7 +225,7 @@ function writeSlot(bucket: Bucket, slot: number, placement: Placement): void {
     slot,
     scratch
       .makeRotationY(rotationRadians(placement.rotation))
-      .setPosition(placement.x + origin.x, 0, placement.z + origin.z),
+      .setPosition(placement.x + origin.x, placement.y, placement.z + origin.z),
   );
 }
 

@@ -10,7 +10,7 @@ import {
   worldBoundsFor,
 } from './worldBounds';
 
-const at = (id: string, x: number, z: number, width: number, depth: number): Placement => ({
+const at = (id: string, x: number, z: number, width: number, depth: number, y = 0): Placement => ({
   key: id,
   id,
   tileX: Math.floor(x / 16),
@@ -20,6 +20,7 @@ const at = (id: string, x: number, z: number, width: number, depth: number): Pla
   rotation: 0,
   x,
   z,
+  y,
   width,
   depth,
 });
@@ -41,6 +42,13 @@ describe('worldBoundsFor', () => {
 
   it('takes the tallest object as the world height', () => {
     expect(worldBoundsFor(placements, (id) => heights[id] ?? 0).height).toBe(12);
+  });
+
+  it('counts the terrace an object stands on towards the height', () => {
+    // A short object on a high bench reaches further up than a tall one at sea
+    // level, and it is the cameras that have to be framed on the taller of them.
+    const raised = [at('hut', 0, 0, 16, 16, 40)];
+    expect(worldBoundsFor(raised, () => 12).height).toBe(52);
   });
 
   it('collapses to zero for an empty layout', () => {

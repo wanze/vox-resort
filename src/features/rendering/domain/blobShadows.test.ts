@@ -16,6 +16,7 @@ const caster = (overrides: Partial<ShadowCaster> = {}): ShadowCaster => ({
   key: 'palm#1',
   x: 32,
   z: 64,
+  y: 0,
   width: 16,
   depth: 16,
   height: 45,
@@ -47,6 +48,10 @@ describe('blobShadowFor', () => {
 
   it('carries the height, which is what the sun stretches', () => {
     expect(blobShadowFor(caster({ height: 55 }))!.height).toBe(55);
+  });
+
+  it('lies on the ground its caster stands on, not on sea level', () => {
+    expect(blobShadowFor(caster({ y: 24 }))!.y).toBe(24);
   });
 });
 

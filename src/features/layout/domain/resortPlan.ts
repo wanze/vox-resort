@@ -49,6 +49,7 @@
  */
 
 import type { ShoreSpec } from './shoreline';
+import type { ElevationSpec } from './elevation';
 import type { Rotation } from './rotation';
 
 /** One object standing on the plot, anchored at its north-west tile. */
@@ -119,6 +120,15 @@ export interface ResortPlan {
    * plots carry a shore — see `resortGenerator.ts`.
    */
   readonly shore?: ShoreSpec;
+  /**
+   * How the land rises behind the beach, if it rises at all.
+   *
+   * Absent means the plot is flat, which is what the authored plan below is, for
+   * the same reason it has no shore: it is the plot a `?bench=1` run measures.
+   * See `elevation.ts` for what a terrace is and what a plan carrying them has
+   * to satisfy.
+   */
+  readonly elevation?: ElevationSpec;
   /**
    * Whether every catalogue type is meant to stand somewhere on this plan.
    *

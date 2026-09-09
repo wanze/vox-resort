@@ -443,16 +443,16 @@ function lightsOf(placement: Placement): readonly ModelLight[] {
 /**
  * The box an object stands in, as far as the sky behind it is concerned.
  *
- * The placement's own extents, which are already turned, and the model's height.
- * A path slab comes out two voxels tall and is dropped by the bake itself; see
- * `MIN_OCCLUDER_HEIGHT`.
+ * The placement's own extents, which are already turned, and the model's height
+ * standing on its own terrace. A path slab comes out two voxels tall and is
+ * dropped by the bake itself; see `MIN_OCCLUDER_HEIGHT`.
  */
 function occluderOf(placement: Placement): Occluder {
   return {
     minX: placement.x,
     maxX: placement.x + placement.width,
-    minY: 0,
-    maxY: objectTypeTop(placement.id),
+    minY: placement.y,
+    maxY: placement.y + objectTypeTop(placement.id),
     minZ: placement.z,
     maxZ: placement.z + placement.depth,
     density: DENSITY_PER_TYPE.get(placement.id) ?? 1,
@@ -775,7 +775,11 @@ function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
       id: placement.id,
       label: type.label,
       color: type.color,
-      world: { x: center.x, y: objectTypeTop(placement.id) + LABEL_LIFT, z: center.z },
+      world: {
+        x: center.x,
+        y: placement.y + objectTypeTop(placement.id) + LABEL_LIFT,
+        z: center.z,
+      },
     };
   });
 }

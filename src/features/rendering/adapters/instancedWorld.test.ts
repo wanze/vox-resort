@@ -10,7 +10,7 @@ import type { Placement } from '../../layout/domain/resortLayout';
 import { buildInstancedWorld, instancesByType } from './instancedWorld';
 import type { ModelGeometry } from './voxelMeshBuilder';
 
-const at = (key: string, id: string, x: number, z = 0): Placement => ({
+const at = (key: string, id: string, x: number, z = 0, y = 0): Placement => ({
   key,
   id,
   tileX: 0,
@@ -20,6 +20,7 @@ const at = (key: string, id: string, x: number, z = 0): Placement => ({
   rotation: 0,
   x,
   z,
+  y,
   width: 16,
   depth: 16,
 });

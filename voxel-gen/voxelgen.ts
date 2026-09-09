@@ -132,6 +132,20 @@ export interface VoxelModel {
 /** Voxels along one tile edge — the scale every model is authored against. */
 export const TILE_VOXELS = 16;
 
+/**
+ * Voxels one terrace of the resort stands above the one below it.
+ *
+ * Eight voxels is two metres: enough that a terrace reads as a terrace from the
+ * height the plot is ever seen at, and shallow enough that one tile of stairs
+ * climbs it in eight treads of one voxel rise by two of going.
+ *
+ * It lives here rather than in `src/` because it is a fact the art has to agree
+ * with: the stair model is authored to climb exactly this far across one tile,
+ * so a model and the ground it joins cannot drift apart. See `TILE_VOXELS`,
+ * which is here for the same reason.
+ */
+export const LEVEL_VOXELS = 8;
+
 /** Declares a model. Pure data: nothing is built until {@link buildModel}. */
 export function defineModel(source: VoxelModelSource): VoxelModelSource {
   return source;

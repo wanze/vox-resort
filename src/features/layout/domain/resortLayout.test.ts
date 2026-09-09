@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import {
   decorationsFor,
@@ -27,6 +27,7 @@ import {
   type ResortPlan,
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
+import { elevationFor, levelAt, levelHeight } from './elevation';
 
 /** An item that exactly fills the tiles it claims. */
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
@@ -221,6 +222,60 @@ describe('place', () => {
     expect(placement).toMatchObject({ tilesX: 2, tilesZ: 1, width: 20, depth: 4 });
     expect(placement.x).toBe(Math.floor((2 * TILE_VOXELS - 20) / 2));
     expect(placement.z).toBe(Math.floor((TILE_VOXELS - 4) / 2));
+  });
+
+  it('stands an object at sea level when nobody said otherwise', () => {
+    expect(place(item('hut', 2, 2), 'hut', 3, 4).y).toBe(0);
+  });
+
+  it('stands an object on the terrace it was given', () => {
+    expect(place(item('hut'), 'hut', 0, 0, 0, 1).y).toBe(LEVEL_VOXELS);
+    expect(place(item('hut'), 'hut', 0, 0, 0, 3).y).toBe(3 * LEVEL_VOXELS);
+  });
+
+  it('does not centre the height the way it centres the corner', () => {
+    // A model narrower than its footprint is centred in it; a model shorter than
+    // a storey still sits on the ground rather than floating in the middle of it.
+    const narrow: LayoutItem = { id: 'post', tilesX: 2, tilesZ: 2, width: 4, depth: 4 };
+    expect(place(narrow, 'post', 0, 0, 0, 2).y).toBe(2 * LEVEL_VOXELS);
+  });
+});
+
+describe('a terraced plot', () => {
+  /**
+   * The tiny plan cut into two benches: everything north of row 2 stands one
+   * level up, which puts the hut on the terrace and the southern street below it.
+   */
+  const terraced: ResortPlan = {
+    ...tinyPlan,
+    elevation: { terraces: [{ level: 1, fromWater: 1, wave: 0 }], seed: 1 },
+  };
+
+  it('stands each object on the terrace its own tile is on', () => {
+    const { placements } = layoutResort(tinyItems, terraced);
+    expect(placements[0]).toMatchObject({ id: 'hut', tileZ: 1, y: LEVEL_VOXELS });
+  });
+
+  it('lays every paved tile at the height of the ground under it', () => {
+    const elevation = elevationFor(terraced)!;
+    const { paths } = layoutResort(tinyItems, terraced);
+    expect(paths.length).toBeGreaterThan(0);
+    for (const tile of paths) {
+      expect({ z: tile.tileZ, y: tile.y }).toEqual({
+        z: tile.tileZ,
+        y: levelHeight(levelAt(elevation, tile.tileX, tile.tileZ)),
+      });
+    }
+  });
+
+  it('leaves a flat plot at sea level throughout', () => {
+    const { placements, paths } = layoutResort(tinyItems, tinyPlan);
+    for (const placement of [...placements, ...paths]) expect(placement.y).toBe(0);
+  });
+
+  it('draws both benches, so a terrace is something you can see', () => {
+    const { paths } = layoutResort(tinyItems, terraced);
+    expect(new Set(paths.map((tile) => tile.y))).toEqual(new Set([0, LEVEL_VOXELS]));
   });
 });
 

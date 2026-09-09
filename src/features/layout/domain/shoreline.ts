@@ -24,6 +24,8 @@
  * horizon; only the callers that place things clamp to the plot.
  */
 
+import { meanderAt } from './wander';
+
 /** How the water cuts into the plot. Optional on a plan: no spec, no sea. */
 export interface ShoreSpec {
   /** How far the water reaches in from the plot's south edge, in tiles. */
@@ -61,31 +63,17 @@ export function shoreFor(plan: ShorePlan): Shore | null {
 }
 
 /**
- * How much the shoreline wanders at column `x`.
+ * The salt the coast's own meander is drawn with.
  *
- * Two sines rather than one, at wavelengths that do not divide each other, so
- * the coast does not repeat within a plot; the phases come off the seed, so a
- * resort's coastline is as reproducible as the rest of it. Deliberately not a
- * random walk: a coast has to be a function of `x` alone, because the renderer
- * asks about columns the layout never sees.
+ * Every line strung across the plot takes a salt of its own, so the terraces
+ * behind the beach do not wander in step with the water in front of it. See
+ * `wander.ts`, and `elevation.ts` for the salts the steps take.
  */
-function waveAt(spec: ShoreSpec, tileX: number): number {
-  if (spec.wave <= 0) return 0;
-  const slow = Math.sin(tileX * 0.041 + phaseOf(spec.seed, 1));
-  const quick = Math.sin(tileX * 0.17 + phaseOf(spec.seed, 2));
-  return (slow * 0.62 + quick * 0.38) * spec.wave;
-}
+const SHORE_SALT = 1;
 
-/**
- * One of the wave's phases, scattered rather than scaled off the seed.
- *
- * Seed 7 and seed 8 are neighbours as numbers and must not be neighbours as
- * coastlines: a phase taken as a fraction of the seed put the two within a
- * hundredth of a radian of each other, and both rounded to the same tiles.
- */
-function phaseOf(seed: number, salt: number): number {
-  const mixed = Math.sin(Math.trunc(seed) * 127.1 + salt * 311.7) * 43758.5453;
-  return (mixed - Math.floor(mixed)) * Math.PI * 2;
+/** How much the shoreline wanders at column `x`. */
+function waveAt(spec: ShoreSpec, tileX: number): number {
+  return meanderAt(spec.seed, SHORE_SALT, tileX, spec.wave);
 }
 
 /**

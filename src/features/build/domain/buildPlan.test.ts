@@ -45,6 +45,15 @@ describe('planAt', () => {
     expect(plan.placement).toEqual(place(COTTAGE, 'cottage@3,5', 3, 5));
   });
 
+  it('drops the object at sea level when nobody said which terrace', () => {
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy()).placement.y).toBe(0);
+  });
+
+  it('drops the object on the terrace under the pointer', () => {
+    const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, 2);
+    expect(plan.placement).toEqual(place(COTTAGE, 'cottage@3,5', 3, 5, 0, 2));
+  });
+
   it('still plans a blocked placement, so the preview can show it refused', () => {
     const occupancy = createTileOccupancy([place(PATH, 'path@3,5', 3, 5)]);
     const plan = planAt(COTTAGE, { x: 3, z: 5 }, occupancy);

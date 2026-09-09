@@ -68,6 +68,8 @@ export interface ShadowCaster {
   /** World-space corner of the model itself, in voxels. */
   readonly x: number;
   readonly z: number;
+  /** Height it stands at: the surface of the terrace it is on. */
+  readonly y: number;
   /** The model's extents as it stands, turn included. */
   readonly width: number;
   readonly depth: number;
@@ -86,6 +88,15 @@ export interface BlobShadow {
   /** Centre of the footprint, in voxels. */
   readonly x: number;
   readonly z: number;
+  /**
+   * Ground the shadow lies on: the surface of the caster's own terrace.
+   *
+   * Its own rather than the ground it runs out over, which is a simplification a
+   * blob can afford and a real shadow could not — a shape with no silhouette in
+   * it that runs off the edge of a terrace hangs a little above the level below,
+   * and at the height the plot is seen from that is not a thing you can see.
+   */
+  readonly y: number;
   readonly halfWidth: number;
   readonly halfDepth: number;
   readonly height: number;
@@ -98,6 +109,7 @@ export function blobShadowFor(caster: ShadowCaster): BlobShadow | null {
     key: caster.key,
     x: caster.x + caster.width / 2,
     z: caster.z + caster.depth / 2,
+    y: caster.y,
     halfWidth: (caster.width / 2) * BLOB_SPREAD,
     halfDepth: (caster.depth / 2) * BLOB_SPREAD,
     height: caster.height,

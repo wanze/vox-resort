@@ -150,6 +150,16 @@ export const BOARDWALK_ID = 'boardwalk';
 /** The paving a path is laid with where it climbs a terrace step. */
 export const STAIRS_ID = 'stairs';
 
+/**
+ * Every kind of paving a path network is laid with, flights included.
+ *
+ * The three are interchangeable per tile — which one a tile gets is a fact about
+ * the ground under it — so everything that treats "a tile of paving" as one
+ * thing reads this: the plot's own list of paved tiles, and the paving tool that
+ * swaps one for another as a path crosses a step.
+ */
+export const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, STAIRS_ID]);
+
 /** The object types the layout scatters along the paths on its own. */
 export const LAMP_ID = 'street-lamp';
 export const HEDGE_ID = 'hedge';

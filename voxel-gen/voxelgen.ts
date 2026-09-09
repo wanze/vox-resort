@@ -96,6 +96,19 @@ export interface VoxelModelSource {
   /** Tiles the object claims on the resort grid. */
   readonly tiles: TileFootprint;
   /**
+   * Whether the ground under a tile decides where this object goes, so nobody
+   * ever picks it: the build palette does not offer it, and the only things that
+   * lay it are the layout and the paving tool.
+   *
+   * A flight of stairs is the case it exists for. Stairs are not a thing you
+   * choose, they are what a path *becomes* where it climbs a terrace step —
+   * chosen by hand they are a staircase up the middle of a lawn, and there is no
+   * gesture that would have wanted one. Declaring it on the model rather than
+   * listing the ids in the app keeps the rule with the art it is a fact about,
+   * exactly as `LEVEL_VOXELS` is, so a second such paving needs no app change.
+   */
+  readonly groundDecides?: boolean;
+  /**
    * Colours that glow: they are drawn unlit at full brightness instead of being
    * shaded, so a flame or a lamp head still reads as lit after dark.
    */
@@ -118,6 +131,8 @@ export interface VoxelModel {
   readonly label: string;
   readonly category: ModelCategory;
   readonly tiles: TileFootprint;
+  /** Whether the ground decides where this goes; see {@link VoxelModelSource}. */
+  readonly groundDecides: boolean;
   /** Bounding box of the painted voxels, in voxels. */
   readonly width: number;
   readonly height: number;
@@ -192,6 +207,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     label: source.label,
     category: source.category,
     tiles: source.tiles,
+    groundDecides: source.groundDecides ?? false,
     width: maxX - minX + 1,
     height: maxY - minY + 1,
     depth: maxZ - minZ + 1,

@@ -14,6 +14,11 @@
  * pans — and the mode can change while a type is armed, so the scene owns that
  * swap and this only says when it applies. See `SceneHandle.takeLeftButton`.
  *
+ * What is going down is not always what was picked, either: a path drawn over a
+ * terrace step comes out as the flight up it, and the slab it was drawn from may
+ * be lifted and laid again as one. `paving.ts` owns that rule; this only asks it,
+ * once per tile, so the ghost previews the flight and the click stands it.
+ *
  * The other thing this owns is which way round the object is going down. `R`
  * turns it a quarter, shift-`R` the other way, and the turn is kept across
  * placements rather than reset per click — a row of cottages all facing the
@@ -27,6 +32,7 @@ import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayo
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt, tilesBetween } from '../domain/buildPlan';
 import { pickTile, type PickGround } from '../domain/groundPick';
+import { pavingAt, relaidBy, type PavingRules } from '../domain/paving';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 
@@ -44,8 +50,17 @@ export interface BuildPointerOptions {
    * placed stands on once it lands.
    */
   readonly ground: PickGround;
-  /** Stands one object. The caller owns the world and the occupancy index. */
-  readonly onPlace: (placement: Placement) => void;
+  /** What the ground makes of a tile of paving laid on it; see `paving.ts`. */
+  readonly paving: PavingRules;
+  /**
+   * Stands one object, taking up the placement it replaces first if there is
+   * one. The caller owns the world and the occupancy index.
+   *
+   * Only paving ever replaces anything, and only with a flight of stairs: see
+   * `paving.ts` for why drawing a path uphill has to lift the slab it laid a
+   * moment ago.
+   */
+  readonly onPlace: (placement: Placement, lifted?: Placement) => void;
   /** Called when the gesture itself ends build mode, so the HUD can follow. */
   readonly onCancel: () => void;
 }
@@ -74,7 +89,8 @@ function turnAsked(event: KeyboardEvent): number {
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { canvas, camera, ghost, occupancy, ground, onPlace, onCancel, takeLeftButton } = options;
+  const { canvas, camera, ghost, occupancy, ground, paving, onPlace, onCancel, takeLeftButton } =
+    options;
 
   // Reused across pointer moves: picking must not hand the collector work while
   // the mouse is being dragged across the plot.
@@ -110,6 +126,17 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     );
   };
 
+  /**
+   * What would actually go down on a tile: a path over a terrace step is a
+   * flight of stairs, and everything else is what was picked. Asked by the
+   * preview as well as by the placement, so the ghost shows the stairs before
+   * the click rather than surprising you after it.
+   */
+  const planOn = (picked: LayoutItem, tile: Tile) => {
+    const laid = pavingAt(picked, tile, rotation, paving);
+    return planAt(laid.item, tile, occupancy, laid.rotation, ground.levelOf);
+  };
+
   /** Redraws the preview for the tile under the pointer. */
   const preview = (tile: Tile | null): void => {
     hovered = tile;
@@ -117,15 +144,18 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       ghost.hide();
       return;
     }
-    const plan = planAt(item, tile, occupancy, rotation, ground.levelOf);
+    const plan = planOn(item, tile);
     ghost.show(plan.placement, plan.blocked);
   };
 
   const placeOn = (tile: Tile): void => {
     if (!item) return;
-    const plan = planAt(item, tile, occupancy, rotation, ground.levelOf);
+    const plan = planOn(item, tile);
     if (plan.blocked) return;
     onPlace(plan.placement);
+    // Asked after the tile is standing, because that is what turns the slab
+    // below a step into the flight up it — see `paving.ts`.
+    for (const relaid of relaidBy(tile, paving)) onPlace(relaid.placement, relaid.lifted);
   };
 
   /**

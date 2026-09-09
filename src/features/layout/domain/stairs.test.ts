@@ -4,7 +4,7 @@ import { objectTypeById } from '../../catalog/domain/objectTypes';
 import { BOARDWALK_ID, PATH_ID, STAIRS_ID } from './resortPlan';
 import type { Tile } from './resortLayout';
 import type { LevelProvider } from './elevation';
-import { stairTilesFor } from './stairs';
+import { climbAt, stairTilesFor } from './stairs';
 
 const tiles = (...pairs: readonly [number, number][]): Tile[] => pairs.map(([x, z]) => ({ x, z }));
 
@@ -19,6 +19,29 @@ const benchAt =
   (z: number): LevelProvider =>
   (_x, tileZ) =>
     tileZ < z ? 1 : 0;
+
+/** Paving on the listed tiles and nowhere else. */
+const pavedOn =
+  (...on: readonly [number, number][]) =>
+  (x: number, z: number) =>
+    on.some(([px, pz]) => px === x && pz === z);
+
+describe('climbAt', () => {
+  it('faces the paved neighbour one level up', () => {
+    expect(climbAt({ x: 0, z: 1 }, pavedOn([0, 0]), benchAt(1))).toBe(0);
+  });
+
+  it('is not a step where the ground does not rise', () => {
+    expect(climbAt({ x: 0, z: 1 }, pavedOn([0, 0]), () => 0)).toBeNull();
+  });
+
+  it('does not ask whether the tile itself is paved', () => {
+    // Both callers only ever ask about a tile they are paving: the layout about
+    // one of its own paved tiles, the paving tool about the tile going down.
+    expect(climbAt({ x: 0, z: 1 }, pavedOn([0, 0]), benchAt(1))).toBe(0);
+    expect(climbAt({ x: 0, z: 1 }, pavedOn([0, 0], [0, 1]), benchAt(1))).toBe(0);
+  });
+});
 
 describe('stairTilesFor', () => {
   it('lays no stairs on a flat plot', () => {

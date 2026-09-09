@@ -255,6 +255,29 @@ so the first by compass order wins. That is a deliberate fudge rather than a
 refusal: the routing picks those corners without knowing where the steps are, and
 a corner is not a reason to refuse a whole resort.
 
+**Paving is never picked, only drawn.** The same rule holds for a path drawn by
+hand, and it is what makes the paving tool a single tool: a staircase chosen by
+hand can only be wrong — up the middle of a lawn, facing a wall, or buried on the
+upper tile of a step — and decking chosen by hand is a jetty over grass. So both
+models declare `groundDecides`, the palette offers neither, and `path` is the one
+thing you draw with. `paving.ts` is the pointer's half of the rule `stairs.ts`
+holds, so a hand-drawn path comes out exactly as a generated one does.
+
+Sand is the easy half of that: what a tile is made of is a fact about that tile
+alone, so decking is decided as the tile goes down and never revisited. A step is
+a fact about _two_ tiles, and a stroke can cross one either way — so it takes two
+halves. Drawing _downhill_, the tile going down is the lower one and comes out as
+the flight. Drawing _uphill_, the slab laid a moment ago is lifted and laid again
+as one, once there is paving above it to climb to. Between them a step comes out
+the same whichever direction it was drawn in, and whether it was one stroke or two
+sessions apart.
+
+Only ever more stairs, never fewer: paving a tile can turn a slab into a flight,
+and nothing that is already a flight stops being one — so a re-laid tile is
+always a slab, and nothing has to work out what a flight would have been if it
+were flat. Taking paving back up is the case that would need that, and it belongs
+with the bulldozer that introduces it.
+
 ### An object stands on one level
 
 A voxel model is a box with a flat underside. Across a step, half of it hangs in

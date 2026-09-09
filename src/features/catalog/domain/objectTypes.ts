@@ -70,14 +70,20 @@ export interface ObjectTypeGroup {
  * The catalogue as the build palette shows it: one group per category, in the
  * order the art declares them, each holding its types in registry order.
  *
+ * Objects whose model says the ground decides where they go are left out — a
+ * flight of stairs is not something to pick, it is what a path becomes where it
+ * climbs, so offering one would only ever produce a staircase nothing walks up.
+ * The model carries that flag, so this needs no list of ids.
+ *
  * Empty categories are dropped rather than printed as an empty shelf, so a
  * category declared ahead of the models that will fill it costs nothing.
  */
 export function objectTypeGroups(): readonly ObjectTypeGroup[] {
+  const offered = OBJECT_TYPES.filter((type) => !type.model.groundDecides);
   return MODEL_CATEGORIES.map((category) => ({
     category: category.id,
     label: category.label,
-    types: OBJECT_TYPES.filter((type) => type.category === category.id),
+    types: offered.filter((type) => type.category === category.id),
   })).filter((group) => group.types.length > 0);
 }
 

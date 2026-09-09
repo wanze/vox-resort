@@ -27,6 +27,12 @@
  * directions, so the first by compass order wins. That is a deliberate fudge
  * rather than a refusal: the routing picks those corners without knowing where
  * the steps are, and a corner is not a reason to refuse a whole resort.
+ *
+ * The rule itself is {@link climbAt}, which asks about one tile, and there are
+ * two callers of it. {@link stairTilesFor} classifies a whole authored plan at
+ * once; the paving tool in `build/domain/paving.ts` asks the same question of
+ * one tile as it is being paved, so a path drawn by hand climbs a step exactly
+ * where a generated one does. One rule, or the two would drift.
  */
 
 import type { LevelProvider } from './elevation';
@@ -41,19 +47,49 @@ import type { Rotation } from './rotation';
  * ambiguous corner is resolved in, north first, so which way such a flight faces
  * is a fact about this list rather than about the order tiles were paved in.
  */
-const CLIMBS: readonly { readonly dx: number; readonly dz: number; readonly rotation: Rotation }[] =
-  [
-    { dx: 0, dz: -1, rotation: 0 },
-    { dx: -1, dz: 0, rotation: 1 },
-    { dx: 0, dz: 1, rotation: 2 },
-    { dx: 1, dz: 0, rotation: 3 },
-  ];
+export const CLIMBS: readonly {
+  readonly dx: number;
+  readonly dz: number;
+  readonly rotation: Rotation;
+}[] = [
+  { dx: 0, dz: -1, rotation: 0 },
+  { dx: -1, dz: 0, rotation: 1 },
+  { dx: 0, dz: 1, rotation: 2 },
+  { dx: 1, dz: 0, rotation: 3 },
+];
 
 /** A paved tile that turned out to be a flight of stairs, and the way it faces. */
 export interface StairTile {
   readonly tile: Tile;
   /** Quarter turns that point the climb at the higher ground. */
   readonly rotation: Rotation;
+}
+
+/** Whether a tile is paved, asked of the ground around the tile being judged. */
+export interface PavedProvider {
+  (tileX: number, tileZ: number): boolean;
+}
+
+/**
+ * The way a flight on this tile would face, or null when the tile is not a step
+ * at all.
+ *
+ * The whole rule, and the only place it lives: a paved tile is a flight exactly
+ * when a paved neighbour stands one level higher, and it faces that neighbour.
+ * The tile itself is not asked whether it is paved — both callers only ever ask
+ * about a tile they are paving.
+ */
+export function climbAt(
+  tile: Tile,
+  isPaved: PavedProvider,
+  levelOf: LevelProvider,
+): Rotation | null {
+  const level = levelOf(tile.x, tile.z);
+  const climb = CLIMBS.find(
+    ({ dx, dz }) =>
+      isPaved(tile.x + dx, tile.z + dz) && levelOf(tile.x + dx, tile.z + dz) === level + 1,
+  );
+  return climb ? climb.rotation : null;
 }
 
 /**
@@ -65,15 +101,11 @@ export interface StairTile {
  */
 export function stairTilesFor(paved: readonly Tile[], levelOf: LevelProvider): StairTile[] {
   const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
+  const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
   const stairs: StairTile[] = [];
   for (const tile of paved) {
-    const level = levelOf(tile.x, tile.z);
-    const climb = CLIMBS.find(
-      ({ dx, dz }) =>
-        pavedKeys.has(`${tile.x + dx},${tile.z + dz}`) &&
-        levelOf(tile.x + dx, tile.z + dz) === level + 1,
-    );
-    if (climb) stairs.push({ tile, rotation: climb.rotation });
+    const rotation = climbAt(tile, isPaved, levelOf);
+    if (rotation !== null) stairs.push({ tile, rotation });
   }
   return stairs;
 }

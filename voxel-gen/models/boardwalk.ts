@@ -6,6 +6,10 @@
  * Exactly as tall as `path.ts`, so the two butt together without a step where a
  * street runs off the grass and onto the beach.
  *
+ * Nobody picks it: the palette offers `path`, and a path laid on sand comes out
+ * as this — decking on a lawn would be a jetty over grass. See `groundDecides`
+ * below, and `stairs.ts`, which is the other paving the ground chooses.
+ *
  * The board pitch is chosen the same way the flagstones were, and for the same
  * reason: this is a tile the layout repeats a few hundred times along a shore,
  * and a plank every two voxels is the pattern the greedy mesher cannot merge.
@@ -22,6 +26,9 @@ export default defineModel({
   label: 'Boardwalk',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  // Never picked: decking is what a path becomes on sand, so the palette leaves
+  // it out and the paving lays it. See `groundDecides`.
+  groundDecides: true,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
 

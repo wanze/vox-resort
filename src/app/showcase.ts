@@ -19,7 +19,7 @@ import {
   objectTypeTop,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
-import type { Placement, ResortLayout } from '../features/layout/domain/resortLayout';
+import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
 import { layoutResort, placementCenter } from '../features/layout/domain/resortLayout';
 import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
@@ -27,12 +27,12 @@ import {
   BOARDWALK_ID,
   HEDGE_ID,
   LAMP_ID,
-  PATH_ID,
+  PAVING_IDS,
   RESORT_PLAN,
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
+import { isBeach, shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
 import type { Elevation } from '../features/layout/domain/elevation';
 import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
 import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
@@ -42,6 +42,7 @@ import {
   generateResort,
 } from '../features/layout/domain/resortGenerator';
 import { layoutItemFor } from '../features/build/domain/buildPlan';
+import { isPaving, pavedGroundOf, type PavingRules } from '../features/build/domain/paving';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
@@ -1069,8 +1070,7 @@ function listFor(plot: Plot, id: string): Placement[] {
   return plot.placements;
 }
 
-/** The two kinds of thing the layout derives rather than the plan authoring them. */
-const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, STAIRS_ID]);
+/** The props the layout scatters itself, kept apart from the plan's own plots. */
 const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
 
 /**
@@ -1139,6 +1139,23 @@ function createBuildMode(parts: {
     },
   };
 
+  // What a tile of paving becomes once the ground has had its say: decking on
+  // sand, and the flight up a terrace step where a path climbs one. The items
+  // come from the catalogue rather than from a list here, so paving the plot
+  // with something new is a model file and nothing else.
+  const pavingItems = OBJECT_TYPES.map(layoutItemFor).filter((item) => isPaving(item));
+  const pavingItem = (id: string): LayoutItem | null =>
+    pavingItems.find((item) => item.id === id) ?? null;
+  const paving: PavingRules = {
+    pavedWith: pavedGroundOf(occupancy, pavingItems),
+    levelOf: ground.levelOf,
+    // Forwarded to whichever resort is standing, exactly as the levels are: the
+    // coast moves when the plot is regenerated and the pointer does not.
+    isSand: (tileX, tileZ) => isBeach(resort().shore, tileX, tileZ),
+    decking: pavingItem(BOARDWALK_ID),
+    stairs: pavingItem(STAIRS_ID),
+  };
+
   const pointer = createBuildPointer({
     canvas,
     // Read per pick rather than captured: switching to the isometric view puts a
@@ -1148,8 +1165,20 @@ function createBuildMode(parts: {
     ghost,
     occupancy,
     ground,
-    onPlace(placement) {
+    paving,
+    onPlace(placement, lifted) {
       const { plot, world, lighting, shadows } = resort();
+      // A flight of stairs replaces the slab a path had already laid on the
+      // tile, so that one comes up first — off the index, out of the world and
+      // out of the plot's own list — or the tile would be double-booked and the
+      // slab would go on being drawn inside the flight. See `paving.ts`.
+      if (lifted) {
+        occupancy.release(lifted, lifted.key);
+        world.remove(lifted.key);
+        const laid = listFor(plot, lifted.id);
+        const at = laid.findIndex((standing) => standing.key === lifted.key);
+        if (at !== -1) laid.splice(at, 1);
+      }
       // Claimed first: if the tiles are gone the scene must not gain an object
       // the index does not know about.
       occupancy.claim(placement, placement.key);

@@ -7,6 +7,7 @@ import {
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
+  objectTypeGroups,
   objectTypeTop,
 } from './objectTypes';
 
@@ -119,6 +120,39 @@ describe('OBJECT_TYPES', () => {
 
   it('rejects unknown ids', () => {
     expect(() => objectTypeById('casino')).toThrow(/casino/);
+  });
+});
+
+/** Every type the palette puts on a shelf, in the order it shows them. */
+const offered = (): string[] =>
+  objectTypeGroups().flatMap((group) => group.types.map((type) => type.id));
+
+describe('objectTypeGroups', () => {
+  it('offers every model the ground does not decide for you', () => {
+    const picked = new Set(offered());
+    const decided = OBJECT_TYPES.filter((type) => type.model.groundDecides).map((type) => type.id);
+    expect(picked.size + decided.length).toBe(OBJECT_TYPES.length);
+    for (const id of decided) expect(picked.has(id)).toBe(false);
+  });
+
+  it('offers one paving tool, not the three kinds of paving it lays', () => {
+    // Picked by hand, a flight is a staircase up the middle of a lawn and
+    // decking is a jetty over grass. A path is what you draw; the ground decides
+    // which of the three it comes out as. See `paving.ts`.
+    expect(offered()).toContain('path');
+    expect(offered()).not.toContain('stairs');
+    expect(offered()).not.toContain('boardwalk');
+  });
+
+  it('groups the rest under the shelf its model declares, in registry order', () => {
+    for (const group of objectTypeGroups()) {
+      expect(group.types.length).toBeGreaterThan(0);
+      expect(group.types.map((type) => type.id)).toEqual(
+        OBJECT_TYPES.filter(
+          (type) => type.category === group.category && !type.model.groundDecides,
+        ).map((type) => type.id),
+      );
+    }
   });
 });
 

@@ -47,8 +47,15 @@ boardwalks, and nothing can be built on the water.
 
 Behind the beach the land is terraced: a raised bench carrying its own
 neighbourhood, with the rest of the resort behind it back at sea level. Paths
-that cross a step come out as flights of stairs, laid and turned by the layout
-rather than placed by hand.
+that cross a step come out as flights of stairs, turned to face the climb.
+
+The palette offers no stairs and no boardwalk, because neither is something you
+pick: **there is one paving tool, and the ground decides what a tile of it comes
+out as** — flagstones on grass, decking on sand, a flight where it climbs a step.
+Draw over a step in either direction and the tile below it turns into the flight
+up it, whether that tile was laid a moment or a session ago. So a path drawn by
+hand comes out exactly as a generated one does, and there is no way to lay
+decking on a lawn or a staircase up the middle of one.
 
 Pick an object from the build palette on the right and click the ground to place
 it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is

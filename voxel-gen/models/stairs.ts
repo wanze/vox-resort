@@ -10,6 +10,9 @@
  * directions a path can climb in, exactly as one cottage covers all four ways a
  * cottage can face: no second geometry, no second bucket.
  *
+ * Nobody picks it, either: the palette offers `path`, and a path laid across a
+ * step comes out as this. See `groundDecides` below.
+ *
  * **Why it lines up.** Two heights have to agree with things authored elsewhere,
  * and both are derived rather than typed in:
  *
@@ -52,6 +55,9 @@ export default defineModel({
   label: 'Stairs',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  // Never picked: a flight is what a path turns into where it climbs a step, so
+  // the palette leaves it out and the paving lays it. See `groundDecides`.
+  groundDecides: true,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
 

@@ -32,7 +32,8 @@ import {
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { isBeach, shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
+import { shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
+import { isSandGround } from '../features/layout/domain/ground';
 import type { Elevation } from '../features/layout/domain/elevation';
 import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
 import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
@@ -1150,8 +1151,10 @@ function createBuildMode(parts: {
     pavedWith: pavedGroundOf(occupancy, pavingItems),
     levelOf: ground.levelOf,
     // Forwarded to whichever resort is standing, exactly as the levels are: the
-    // coast moves when the plot is regenerated and the pointer does not.
-    isSand: (tileX, tileZ) => isBeach(resort().shore, tileX, tileZ),
+    // coast moves when the plot is regenerated and the pointer does not. Sand is
+    // asked of the ground rather than of the shore, so a path drawn by hand
+    // along the dune comes out as decking exactly as a generated one does.
+    isSand: (tileX, tileZ) => isSandGround(resort().shore, resort().elevation, tileX, tileZ),
     decking: pavingItem(BOARDWALK_ID),
     stairs: pavingItem(STAIRS_ID),
   };

@@ -39,15 +39,21 @@ any of the plot's four corners — `Q` and `E` turn it a quarter, the wheel zoom
 it freely, and the left button pans, since the four corners are the rotation. The
 mode survives generating a new resort.
 
-A generated plot's southern end is sea, with a beach the full width of the plot
-in front of it — the isometric camera opens over the south-east corner, so the
-shore lies across the front of the frame with the resort behind it. Bungalows,
-loungers and parasols stand on the sand, paths laid over it come out as
-boardwalks, and nothing can be built on the water.
+A generated plot's southern end is sea, with a wide beach the full width of the
+plot in front of it — the isometric camera opens over the south-east corner, so
+the shore lies across the front of the frame with the resort behind it. Loungers
+and parasols fill the sand in runs, divided into bands by boardwalks that follow
+the water, with beach clubs and bars along the back of it. Paths laid over sand
+come out as boardwalks, and nothing can be built on the water.
 
-Behind the beach the land is terraced: a raised bench carrying its own
-neighbourhood, with the rest of the resort behind it back at sea level. Paths
-that cross a step come out as flights of stairs, turned to face the climb.
+Behind the beach the land climbs a **hill**. Three steps of sand rise straight
+off the back of the sand onto a flat shelf, still sand, where bungalows stand
+along a sidewalk looking down over the beach; grass benches carry on up to a crest with
+houses on them, and the far side comes back down to sea level in benches with
+more houses on each. Every step follows the coast, so the hill curves with the
+beach and the flights up it land on a different row in every lane. The rest of
+the resort is the level ground behind. Paths that cross a step come out as
+flights of stairs, turned to face the climb.
 
 The palette offers no stairs and no boardwalk, because neither is something you
 pick: **there is one paving tool, and the ground decides what a tile of it comes

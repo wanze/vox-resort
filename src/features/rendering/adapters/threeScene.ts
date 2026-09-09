@@ -69,14 +69,21 @@ const SAND_COLOR = 0xd8c69c;
 /**
  * The terraces, and the cut faces between them.
  *
- * A bench is the same grass the plot is, because it *is* the plot — a terrace is
- * lawn that happens to be two metres up, and giving it a tone of its own would
- * read as a different material rather than as higher ground. The riser is what
- * carries the step: bare earth, darker than the grass above and below it, so the
- * edge reads even where the sun is square on it.
+ * A bench is the same ground the plot is, because it *is* the plot — a grass
+ * terrace is lawn that happens to be two metres up, and a sand one is the beach
+ * carrying on up the dune behind it. Giving either a tone of its own would read
+ * as a different material rather than as higher ground.
+ *
+ * The risers are what carry the step, and they are the one place the two part
+ * company. A cut through turf is bare earth, darker than the grass above and
+ * below it, so the edge reads even where the sun is square on it. A cut through
+ * a dune is sand, and shading it earth turned the beach into a quarry — so it
+ * takes the sand's own tone, a shade down so the step is still a step.
  */
 const TERRACE_COLOR = GROUND_COLOR;
 const RISER_COLOR = 0x6b5a3e;
+const SAND_TERRACE_COLOR = SAND_COLOR;
+const SAND_RISER_COLOR = 0xc0ab7f;
 
 /** How far past the framed plot the ground, the sea and the beach run. */
 const GROUND_SPREAD = 3;
@@ -405,8 +412,10 @@ function layTerrain(
 
   for (const [surface, color] of [
     [surfaces.sand, SAND_COLOR],
-    [surfaces.terraces, TERRACE_COLOR],
-    [surfaces.risers, RISER_COLOR],
+    [surfaces.terraces.grass, TERRACE_COLOR],
+    [surfaces.terraces.sand, SAND_TERRACE_COLOR],
+    [surfaces.risers.grass, RISER_COLOR],
+    [surfaces.risers.sand, SAND_RISER_COLOR],
   ] as const) {
     if (!surface) continue;
     const geometry = toSurfaceGeometry(surface);

@@ -96,13 +96,16 @@ function windingAgreesWithNormal(surface: SurfaceGeometry, quad: number): boolea
   return cross[0]! * normal.x + cross[1]! * normal.y + cross[2]! * normal.z > 0;
 }
 
+/** What a plot with no terraces contributes on either material. */
+const NO_TERRACES = { grass: null, sand: null };
+
 describe('terrainSurfacesFor', () => {
   it('draws nothing at all on flat land with no shore', () => {
     expect(terrainSurfacesFor(request(null))).toEqual({
       sand: null,
       sea: null,
-      terraces: null,
-      risers: null,
+      terraces: NO_TERRACES,
+      risers: NO_TERRACES,
     });
   });
 
@@ -256,35 +259,35 @@ describe('terrainSurfacesFor', () => {
 describe('the terraces', () => {
   it('draws nothing on flat land, however much sea there is', () => {
     const { terraces, risers } = terrainSurfacesFor(request(shore()));
-    expect({ terraces, risers }).toEqual({ terraces: null, risers: null });
+    expect({ terraces, risers }).toEqual({ terraces: NO_TERRACES, risers: NO_TERRACES });
   });
 
   it('draws a bench and a riser for a terraced plot with no sea at all', () => {
     // The terraces are independent of the coast: a plot can be terraced without
     // a shore, and the surfaces have to come out either way.
     const { terraces, risers } = terrainSurfacesFor(request(null, 640, terraced()));
-    expect(terraces).not.toBeNull();
-    expect(risers).not.toBeNull();
+    expect(terraces.grass).not.toBeNull();
+    expect(risers.grass).not.toBeNull();
   });
 
   it('lays each bench at its own level and none at sea level', () => {
     // Sea level is the infinite grass plane's job; a quad laid over it would be
     // a second surface at the same height, fighting for the same fragments.
     const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
-    const heights = new Set(quadsOf(terraces!).map((quad) => quad.y));
+    const heights = new Set(quadsOf(terraces.grass!).map((quad) => quad.y));
     expect([...heights].toSorted((a, b) => a - b)).toEqual([levelHeight(1), levelHeight(2)]);
   });
 
   it('faces every bench straight up', () => {
     const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
-    for (const normal of normalsOf(terraces!)) expect(normal).toEqual({ x: 0, y: 1, z: 0 });
+    for (const normal of normalsOf(terraces.grass!)) expect(normal).toEqual({ x: 0, y: 1, z: 0 });
   });
 
   it('stands every riser upright, never flat', () => {
     // A riser lit as a floor is a riser the sun cannot pick out, which is the
     // whole reason this surface carries normals of its own.
     const { risers } = terrainSurfacesFor(request(null, 640, terraced()));
-    for (const normal of normalsOf(risers!)) {
+    for (const normal of normalsOf(risers.grass!)) {
       expect({ y: normal.y, upright: Math.abs(normal.x) + Math.abs(normal.z) }).toEqual({
         y: 0,
         upright: 1,
@@ -296,7 +299,7 @@ describe('the terraces', () => {
     const { terraces, risers } = terrainSurfacesFor(
       request(null, 640, terraced([{ level: 1, inset: 8, wave: 2 }])),
     );
-    for (const surface of [terraces!, risers!]) {
+    for (const surface of [terraces.grass!, risers.grass!]) {
       for (let quad = 0; quad < surface.quadCount; quad++) {
         expect({ quad, agrees: windingAgreesWithNormal(surface, quad) }).toEqual({
           quad,
@@ -309,7 +312,7 @@ describe('the terraces', () => {
   it('turns a riser to face the lower ground beside it', () => {
     // The land climbs inland, so every step's face looks out to sea: +z.
     const { risers } = terrainSurfacesFor(request(null, 640, terraced()));
-    const acrossX = normalsOf(risers!).filter((normal) => normal.z !== 0);
+    const acrossX = normalsOf(risers.grass!).filter((normal) => normal.z !== 0);
     expect(acrossX.length).toBeGreaterThan(0);
     for (const normal of acrossX) expect(normal.z).toBe(1);
   });
@@ -321,7 +324,7 @@ describe('the terraces', () => {
     ]);
     const { risers } = terrainSurfacesFor(request(null, 640, knoll));
     const facings = new Set(
-      normalsOf(risers!)
+      normalsOf(risers.grass!)
         .filter((normal) => normal.z !== 0)
         .map((normal) => normal.z),
     );
@@ -331,7 +334,7 @@ describe('the terraces', () => {
 
   it('spans each bench from one step to the next, with no gap between them', () => {
     const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
-    const column = quadsOf(terraces!)
+    const column = quadsOf(terraces.grass!)
       .filter((quad) => quad.x0 === 320)
       .toSorted((a, b) => a.z0 - b.z0);
     expect(column.length).toBe(2);
@@ -353,8 +356,8 @@ describe('the terraces', () => {
     );
     const alongZ = (surface: SurfaceGeometry): number =>
       normalsOf(surface).filter((normal) => normal.x !== 0).length;
-    expect(alongZ(straight.risers!)).toBe(0);
-    expect(alongZ(wandering.risers!)).toBeGreaterThan(0);
+    expect(alongZ(straight.risers.grass!)).toBe(0);
+    expect(alongZ(wandering.risers.grass!)).toBeGreaterThan(0);
   });
 
   it('never lets a riser span more than one level, whichever axis it closes', () => {
@@ -363,14 +366,14 @@ describe('the terraces', () => {
     );
     // Every closure spans whole tiles and rises exactly one level: a slot deeper
     // than a level would mean two steps had been allowed to meet.
-    for (const quad of quadsOf(wandering.risers!)) {
+    for (const quad of quadsOf(wandering.risers.grass!)) {
       expect(Number.isInteger((quad.z1 - quad.z0) / TILE)).toBe(true);
     }
     const ys: number[] = [];
-    const { risers } = wandering;
-    for (let quad = 0; quad < risers!.quadCount; quad++) {
+    const risers = wandering.risers.grass!;
+    for (let quad = 0; quad < risers.quadCount; quad++) {
       for (let corner = 0; corner < 4; corner++) {
-        ys.push(risers!.positions[(quad * 4 + corner) * 3 + 1]!);
+        ys.push(risers.positions[(quad * 4 + corner) * 3 + 1]!);
       }
     }
     expect(new Set(ys)).toEqual(new Set([0, levelHeight(1)]));
@@ -390,7 +393,7 @@ describe('the terraces', () => {
       coast,
     );
     const { terraces } = terrainSurfacesFor(request(wandering, 640, withCoast));
-    const quads = quadsOf(terraces!).filter((quad) => quad.x0 >= 0 && quad.x1 <= 40 * TILE);
+    const quads = quadsOf(terraces.grass!).filter((quad) => quad.x0 >= 0 && quad.x1 <= 40 * TILE);
     expect(quads.length).toBeGreaterThan(0);
     for (const quad of quads) {
       const tileX = quad.x0 / TILE;
@@ -399,9 +402,30 @@ describe('the terraces', () => {
     }
   });
 
+  it('draws a bench of sand on the sand mesh and a bench of grass on the grass one', () => {
+    // A dune is sand four metres up. Drawn on the grass mesh it is a lawn where
+    // the beach should have carried on, which is the whole reason the two are
+    // separate surfaces.
+    const dune = terraced([
+      { level: 1, inset: 8, wave: 0, surface: 'sand' },
+      { level: 2, inset: 16, wave: 0 },
+    ]);
+    const { terraces, risers } = terrainSurfacesFor(request(null, 640, dune));
+    expect(new Set(quadsOf(terraces.sand!).map((quad) => quad.y))).toEqual(
+      new Set([levelHeight(1)]),
+    );
+    expect(new Set(quadsOf(terraces.grass!).map((quad) => quad.y))).toEqual(
+      new Set([levelHeight(2)]),
+    );
+    // A riser is made of the bench above it: the dune's own face is sand, the
+    // cut up to the lawn behind it is not.
+    expect(risers.sand).not.toBeNull();
+    expect(risers.grass).not.toBeNull();
+  });
+
   it('runs the terraces past the plot, the way the beach runs past it', () => {
     const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
-    const quads = quadsOf(terraces!);
+    const quads = quadsOf(terraces.grass!);
     expect(Math.min(...quads.map((quad) => quad.x0))).toBeLessThan(0);
     expect(Math.max(...quads.map((quad) => quad.x1))).toBeGreaterThan(40 * TILE);
   });

@@ -7,7 +7,9 @@ import {
   maxLevelOf,
   stepEdgeZ,
   stepStartZ,
+  raisedTilesOf,
   straddledTile,
+  terraceAt,
   type LevelProvider,
   type Elevation,
   type ElevationPlan,
@@ -343,5 +345,61 @@ describe('straddledTile', () => {
 
   it('is flat everywhere on a plot with no terraces', () => {
     expect(straddledTile(flat, { tileX: 0, tileZ: 0, tilesX: 9, tilesZ: 9 })).toBeNull();
+  });
+});
+
+describe('terraceAt', () => {
+  it('names the bench a tile stands on, and nothing in front of the first step', () => {
+    const slope = built();
+    const first = stepStartZ(slope, 0, 0);
+    expect(terraceAt(slope, 0, first)).toBeNull();
+    expect(terraceAt(slope, 0, first - 1)).toMatchObject({ level: 1 });
+    expect(terraceAt(slope, 0, stepStartZ(slope, 1, 0) - 1)).toMatchObject({ level: 2 });
+  });
+
+  it('carries the surface the bench is made of, so the ground can be asked', () => {
+    const dune = built({
+      elevation: {
+        terraces: [
+          terrace({ level: 1, inset: 20, surface: 'sand' }),
+          terrace({ level: 2, inset: 32 }),
+        ],
+        seed: 1,
+      },
+    });
+    expect(terraceAt(dune, 0, stepStartZ(dune, 0, 0) - 1)?.surface).toBe('sand');
+    expect(terraceAt(dune, 0, stepStartZ(dune, 1, 0) - 1)?.surface).toBeUndefined();
+  });
+
+  it('is null everywhere on a plot with no terraces', () => {
+    expect(terraceAt(null, 3, 4)).toBeNull();
+  });
+});
+
+describe('raisedTilesOf', () => {
+  it('gives every tile above sea level, and only those', () => {
+    const slope = built();
+    const tiles = raisedTilesOf(slope);
+    expect(tiles.length).toBeGreaterThan(0);
+    for (const tile of tiles) expect(levelAt(slope, tile.x, tile.z)).toBeGreaterThan(0);
+    const raised = new Set(tiles.map((tile) => `${tile.x},${tile.z}`));
+    for (let z = 0; z < 80; z++) {
+      for (let x = 0; x < 60; x++) {
+        expect({ x, z, up: levelAt(slope, x, z) > 0 }).toEqual({
+          x,
+          z,
+          up: raised.has(`${x},${z}`),
+        });
+      }
+    }
+  });
+
+  it('walks landward first, the way the beach is walked', () => {
+    const rows = raisedTilesOf(built()).map((tile) => tile.z);
+    expect(rows).toEqual(rows.toSorted((a, b) => a - b));
+  });
+
+  it('is empty on a plot with no terraces', () => {
+    expect(raisedTilesOf(null)).toEqual([]);
   });
 });

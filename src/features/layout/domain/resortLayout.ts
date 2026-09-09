@@ -24,7 +24,9 @@
  * routes through it — a street simply stops where the beach ends. The sand in
  * between is ordinary buildable ground with one difference, which is that a path
  * laid on it comes out as a boardwalk rather than as flagstones. See
- * `shoreline.ts`.
+ * `shoreline.ts`, and `ground.ts` for why sand is not only the flat band in
+ * front of the water: a terrace can be made of it too, and the dune behind a
+ * beach is.
  *
  * A plan may also give the land terraces, in which case the plot is no longer
  * flat and every placement carries the height of the ground it stands on. Paving
@@ -49,8 +51,9 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
-import { isBeach, isWater, shoreFor, terrainAt, type Shore } from './shoreline';
+import { isWater, shoreFor, type Shore } from './shoreline';
 import { elevationFor, levelAt, levelHeight, straddledTile, type Elevation } from './elevation';
+import { groundAt } from './ground';
 import { stairTilesFor } from './stairs';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
@@ -538,17 +541,18 @@ export interface Decorations {
 function edgeRing(parts: {
   readonly plan: ResortPlan;
   readonly shore: Shore | null;
+  readonly elevation: Elevation | null;
   readonly occupied: ReadonlyMap<string, string>;
   readonly paved: ReadonlySet<string>;
   readonly pathNeighbours: (x: number, z: number) => number;
 }): Tile[] {
-  const { plan, shore, occupied, paved, pathNeighbours } = parts;
+  const { plan, shore, elevation, occupied, paved, pathNeighbours } = parts;
   const ring: Tile[] = [];
   for (let z = 0; z < plan.tilesZ; z++) {
     for (let x = 0; x < plan.tilesX; x++) {
       const key = tileKey(x, z);
       if (occupied.has(key) || paved.has(key)) continue;
-      if (terrainAt(shore, x, z) !== 'land') continue;
+      if (groundAt(shore, elevation, x, z) !== 'grass') continue;
       if (pathNeighbours(x, z) > 0) ring.push({ x, z });
     }
   }
@@ -568,12 +572,13 @@ export function decorationsFor(
 ): Decorations {
   const occupied = occupiedTiles(items, plan);
   const shore = shoreFor(plan);
+  const elevation = elevationFor(plan);
   const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
 
   const pathNeighbours = (x: number, z: number): number =>
     NEIGHBOURS.filter(([dx, dz]) => paved.has(tileKey(x + dx, z + dz))).length;
 
-  const ring = edgeRing({ plan, shore, occupied, paved, pathNeighbours });
+  const ring = edgeRing({ plan, shore, elevation, occupied, paved, pathNeighbours });
 
   const lamps: Tile[] = [];
   const taken = new Set<string>();
@@ -653,14 +658,18 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   // a flight of stairs where it climbs a terrace. A catalogue missing one of
   // those simply paves that ground in stone.
   const shore = shoreFor(plan);
-  const boardwalk = byId.get(BOARDWALK_ID) ?? path;
-  const pavingFor = (tile: Tile): LayoutItem => (isBeach(shore, tile.x, tile.z) ? boardwalk : path);
-
   // How high the ground is under a tile is a fact about the plot, exactly as
   // what the ground is made of is: a flat plan reports level 0 everywhere, so
   // nothing below here has to know whether the plot has terraces on it.
   const elevation: Elevation | null = elevationFor(plan);
   const levelOf = (tileX: number, tileZ: number): number => levelAt(elevation, tileX, tileZ);
+
+  const boardwalk = byId.get(BOARDWALK_ID) ?? path;
+  // Sand rather than beach: the sidewalk along the top of a dune is decking for
+  // the same reason the pier out to the water is, and both are sand. See
+  // `ground.ts`.
+  const pavingFor = (tile: Tile): LayoutItem =>
+    groundAt(shore, elevation, tile.x, tile.z) === 'sand' ? boardwalk : path;
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
   const paved = pathTilesFor(items, plan);

@@ -3,8 +3,9 @@ import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
 import { BOARDWALK_ID, DERIVED_IDS, HEDGE_ID, LAMP_ID, PATH_ID, STAIRS_ID } from './resortPlan';
-import { elevationFor, levelAt, maxLevelOf, stepStartZ } from './elevation';
+import { elevationFor, levelAt, maxLevelOf, raisedTilesOf } from './elevation';
 import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
+import { groundAt } from './ground';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
   clampParams,
@@ -115,7 +116,10 @@ describe('generateResort', () => {
   it('builds more on a denser plot', () => {
     const sparse = generateResort(TYPES, params({ density: PLOT_DENSITY.min }));
     const packed = generateResort(TYPES, params({ density: PLOT_DENSITY.max }));
-    expect(packed.plots.length).toBeGreaterThan(sparse.plots.length * 1.5);
+    // A quarter more rather than half as much again: the beach and the hill are
+    // filled on their own terms and the density slider does not reach them, so
+    // what it moves is the districts behind them.
+    expect(packed.plots.length).toBeGreaterThan(sparse.plots.length * 1.25);
   });
 
   it('builds more on a bigger plot', () => {
@@ -249,15 +253,31 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('stands loungers and lodging on the sand', () => {
+  it('fills the sand with loungers, parasols and a club to walk to', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const onSand = plan.plots.filter(
       (plot) => terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
     );
-    expect(onSand.length).toBeGreaterThan(10);
-    expect(onSand.some((plot) => plot.id === 'sun-lounger')).toBe(true);
-    expect(onSand.some((plot) => plot.id === 'bungalow')).toBe(true);
+    expect(onSand.length).toBeGreaterThan(100);
+    for (const id of ['sun-lounger', 'beach-umbrella', 'beach-club', 'poolside-bar']) {
+      expect({ id, stood: onSand.some((plot) => plot.id === id) }).toEqual({ id, stood: true });
+    }
+  });
+
+  it('stands nothing anybody sleeps in on the beach itself', () => {
+    // The lodgings moved up onto the shelf on top of the dune. A bungalow in the
+    // middle of the sand read as a building somebody had left there.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const lodging = plan.plots.filter(
+        (plot) =>
+          terrainAt(shore, plot.tileX, plot.tileZ) === 'beach' &&
+          BY_ID.get(plot.id)!.category === 'lodging',
+      );
+      expect({ set, lodging }).toEqual({ set, lodging: [] });
+    }
   });
 
   it('leaves the tideline and the lane behind the beach clear', () => {
@@ -306,7 +326,9 @@ describe('the shore a generated plot gets', () => {
           paved.has(`${tile.tileX + dx!},${tile.tileZ + dz!}`) &&
           levelAt(elevation, tile.tileX + dx!, tile.tileZ + dz!) === level + 1,
       );
-      const sand = terrainAt(shore, tile.tileX, tile.tileZ) === 'beach';
+      // Sand rather than beach: the sidewalk along the shelf on top of the dune
+      // is decking for the same reason the pier out to the water is.
+      const sand = groundAt(shore, elevation, tile.tileX, tile.tileZ) === 'sand';
       expect({ key: tile.key, id: tile.id }).toEqual({
         key: tile.key,
         id: climbs ? STAIRS_ID : sand ? BOARDWALK_ID : PATH_ID,
@@ -314,13 +336,21 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('lays no stairs on the sand, because the beach is all one level', () => {
-    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
-    const shore = shoreFor(plan)!;
-    const { paths } = layoutResort(ITEMS, plan);
-    for (const tile of paths) {
-      if (tile.id !== STAIRS_ID) continue;
-      expect(terrainAt(shore, tile.tileX, tile.tileZ)).not.toBe('beach');
+  it('lays no flight anywhere on the beach but the row it climbs off', () => {
+    // The beach is all one level, so the only step it can host is the one at the
+    // very back of it — the first of the dune's, whose lower tile is the last row
+    // of sand. You climb off the beach; you never climb on it.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const wrong = paths.filter(
+        (tile) =>
+          tile.id === STAIRS_ID &&
+          terrainAt(shore, tile.tileX, tile.tileZ) === 'beach' &&
+          beachDepthAt(shore, tile.tileX, tile.tileZ) !== shore.spec.beach - 1,
+      );
+      expect({ set, wrong }).toEqual({ set, wrong: [] });
     }
   });
 });
@@ -348,28 +378,78 @@ describe('emptyResortPlan', () => {
   });
 });
 
-describe('the terraces a generated plot gets', () => {
-  it('cuts one raised bench along the shore, at every size it offers', () => {
-    // Beach at sea level, a bench above it, and the resort behind back down
-    // again: one level up and one level down, so the plot never climbs past 1.
+describe('the hill a generated plot gets', () => {
+  it('raises a hill behind the beach and comes back down to sea level behind it', () => {
+    // Sand at sea level, a dune off the back of it, a crest, and the resort
+    // behind that back at zero: the levels climb and fall by one at a time and
+    // end where they started, which is what makes it a hill rather than a cliff.
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
-      const elevation = elevationFor(plan)!;
-      expect({ set, levels: maxLevelOf(elevation) }).toEqual({ set, levels: 1 });
-      expect({ set, benches: elevation.spec.terraces.map((terrace) => terrace.level) }).toEqual({
+      const elevation = elevationFor(plan);
+      if (!elevation) continue;
+      const levels = elevation.spec.terraces.map((terrace) => terrace.level);
+      expect({ set, first: levels[0], last: levels[levels.length - 1] }).toEqual({
         set,
-        benches: [1, 0],
+        first: 1,
+        last: 0,
       });
+      expect({ set, peak: maxLevelOf(elevation) >= 3 }).toEqual({ set, peak: true });
+      const steps = levels.map((level, index) => Math.abs(level - (levels[index - 1] ?? 0)));
+      expect({ set, steps: steps.every((step) => step === 1) }).toEqual({ set, steps: true });
     }
   });
 
-  it('stands a neighbourhood on the bench rather than a token building', () => {
+  it('carries the beach up the dune and turns to grass above it', () => {
+    // The first three benches are the dune, which is sand — the beach going on
+    // up behind itself — and everything above them is lawn.
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const elevation = elevationFor(plan)!;
+    const surfaces = elevation.spec.terraces.map((terrace) => terrace.surface);
+    expect(surfaces.slice(0, 3)).toEqual(['sand', 'sand', 'sand']);
+    expect(surfaces.slice(3).every((surface) => surface === 'grass')).toBe(true);
+    // And the ground agrees: the shelf on top of the dune is sand you can build
+    // on, well above sea level.
+    const shore = shoreFor(plan);
+    const shelf = raisedTilesOf(elevation).filter(
+      (tile) => groundAt(shore, elevation, tile.x, tile.z) === 'sand',
+    );
+    expect(shelf.length).toBeGreaterThan(500);
+  });
+
+  it('leaves the plot too shallow for a hill flat rather than half-terraced', () => {
+    // The hill loses a level at a time until it fits behind the beach with room
+    // for a resort; a plot that cannot hold even the shortest one is left flat.
+    const plan = generateResort(TYPES, params({ tilesX: 40, tilesZ: 40 }));
+    expect(plan.elevation).toBeUndefined();
+    expect(layoutResort(ITEMS, plan).paths.some((tile) => tile.id === STAIRS_ID)).toBe(false);
+  });
+
+  it('stands a neighbourhood on the hill rather than a token building', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const { placements } = layoutResort(ITEMS, plan);
     const raised = placements.filter((placement) => placement.y > 0);
     expect(raised.length).toBeGreaterThan(20);
     // And it is a mixed neighbourhood, not one repeated type.
     expect(new Set(raised.map((placement) => placement.id)).size).toBeGreaterThan(3);
+  });
+
+  it('puts the bungalows on the shelf and the houses on the benches above it', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const elevation = elevationFor(plan)!;
+    const shore = shoreFor(plan);
+    const on = (id: string, surface: string): number =>
+      plan.plots.filter(
+        (plot) => plot.id === id && groundAt(shore, elevation, plot.tileX, plot.tileZ) === surface,
+      ).length;
+    expect(on('bungalow', 'sand')).toBeGreaterThan(10);
+    expect(on('house', 'grass')).toBeGreaterThan(10);
+    // Houses at four heights or more: a hillside, not a terrace.
+    const heights = new Set(
+      plan.plots
+        .filter((plot) => plot.id === 'house')
+        .map((plot) => levelAt(elevation, plot.tileX, plot.tileZ)),
+    );
+    expect(heights.size).toBeGreaterThanOrEqual(4);
   });
 
   it('never turns a whole cross street into one long staircase', () => {
@@ -393,25 +473,31 @@ describe('the terraces a generated plot gets', () => {
     }
   });
 
-  it('keeps every east-west street on one level where the step is straight', () => {
-    // The landward step has no wobble, so it lands on one row everywhere and can
-    // be checked exactly: the row it steps down at is not a street row, and the
-    // row behind it is.
-    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
-    const elevation = elevationFor(plan)!;
-    const step = stepStartZ(elevation, 1, 0);
-    // Straight, so every column agrees.
-    for (let tileX = 0; tileX < plan.tilesX; tileX++) {
-      expect(stepStartZ(elevation, 1, tileX)).toBe(step);
+  it('keeps every east-west street off the hill entirely', () => {
+    // The other half of the same answer. A cross street is straight and the
+    // hill's benches are not — they follow the coast — so a street laid across
+    // one would drift on and off a step for its whole length. They are held
+    // north of the hill instead, which is why every tile of every one of them is
+    // at sea level.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const elevation = elevationFor(plan);
+      if (!elevation) continue;
+      const across = plan.edges.filter((edge) => edge.from.startsWith('band'));
+      const nodes = new Map(plan.nodes.map((node) => [node.id, node]));
+      const raised = across.flatMap((edge) => {
+        const row = nodes.get(edge.from)!.tileZ;
+        return Array.from({ length: plan.tilesX }, (_, tileX) => tileX)
+          .filter((tileX) => levelAt(elevation, tileX, row) > 0)
+          .map((tileX) => `${tileX},${row}`);
+      });
+      expect({ set, raised }).toEqual({ set, raised: [] });
     }
-    // The two rows either side of it are the bench and the resort behind it.
-    expect(levelAt(elevation, 0, step)).toBe(1);
-    expect(levelAt(elevation, 0, step - 1)).toBe(0);
   });
 
-  it('climbs onto the bench from both sides', () => {
-    // One flight up off the beach lane and one down off the resort: the two
-    // steps face opposite ways, which is what a bench between them means.
+  it('climbs the hill from both sides', () => {
+    // Flights up the seaward face and flights down the landward one: the two
+    // face opposite ways, which is what a hill between them means.
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const { paths } = layoutResort(ITEMS, plan);
     const turns = new Set(
@@ -428,6 +514,6 @@ describe('the terraces a generated plot gets', () => {
     const { paths } = layoutResort(ITEMS, plan);
     const stairs = paths.filter((tile) => tile.id === STAIRS_ID).length;
     expect(stairs).toBeGreaterThan(5);
-    expect(stairs).toBeLessThan(paths.length / 20);
+    expect(stairs).toBeLessThan(paths.length / 8);
   });
 });

@@ -50,10 +50,11 @@ M2 Pro: **120 fps (vsync) in daylight and after dark alike**. `pnpm bench`
 reproduces it — see _Measuring_ below.
 
 > The draw-call, triangle and frame-cost rows above were measured before the
-> terraces landed and have not been re-run since. The terrain grew two static
-> surfaces (about 2 100 quads and two draw calls on a plot with a coast, and
-> nothing at all on the flat authored plan the bench measures), which should not
-> move them — but that is a claim, not a measurement, until `pnpm bench` says so.
+> terraces landed and have not been re-run since. The terrain grew four static
+> surfaces (about 20 k quads and four draw calls on a plot with a coast and a
+> hill, and nothing at all on the flat authored plan the bench measures), which
+> should not move them — but that is a claim, not a measurement, until
+> `pnpm bench` says so.
 
 ## How the pipeline fits together
 
@@ -152,8 +153,9 @@ both.
 The water only reaches a tenth of the plot's depth inside it, because those
 tiles buy nothing: the sea carries on to the horizon whatever the plot says, so
 all an inset costs is ground. The sand is the number that matters, and it is
-capped as well as floored — a beach that grew with a 160-tile plot would be
-forty tiles of sand, which is a desert.
+capped as well as floored — a beach that grew with a 160-tile plot would be forty
+tiles of sand, which is a desert. On the reference plot it is 22 rows deep, about
+90 m of sand.
 
 Three things follow from a tile being water, sand or land:
 
@@ -166,26 +168,67 @@ Three things follow from a tile being water, sand or land:
   comes out as a `boardwalk` rather than as flagstones. The paving is a fact
   about the ground under a tile, not about the route over it, so the same street
   is stone on grass and decking on sand.
-- **The generator keeps its districts off the sand entirely** and fills it
-  afterwards on its own terms — loungers and parasols in runs along the water,
-  bungalows and beach clubs behind them. A run is skirted once rather than per
-  object, which is the difference between a beach and a car park; the skirt is
-  what guarantees the free tiles between them stay one connected piece, so
-  `layoutResort` can always walk a boardwalk out to everything standing there.
-  The default plot ends up with about 130 things on its beach, half of them
-  loungers.
+- **The generator keeps its districts off the sand entirely** and fills it on its
+  own terms — loungers and parasols in runs along the water, and a band of beach
+  clubs, bars, palms and torches against the dune at the back. A run is skirted
+  once rather than per object, which is the difference between a beach and a car
+  park; the skirt is what guarantees the free tiles between them stay one
+  connected piece, so `layoutResort` can always walk a boardwalk out to
+  everything standing there. Nobody sleeps on the sand: the lodgings are on the
+  shelf on top of the dune behind it — see _Elevation_.
 
-The southern gate moves with the coast: it straddles the promenade where it runs
-out onto the sand rather than at the plot's own edge, which is under water. The
-service lanes keep running south and are cut off at the shore, so each arrives at
-the beach as a boardwalk pier.
+Two **walks** run across the sand parallel to the water, dividing the loungers
+into three bands. They are not decoration. `layoutResort` grows a spur from every
+cluster to the nearest paving and refuses a plan where one is walled in, so a
+beach with nothing crossing it pays for access in long snaking spurs that end up
+covering more sand than the walks would have; given a walk to reach, a run of
+loungers spurs one tile and stops. Each walk is a **chain of nodes** rather than
+one straight edge, one every five columns at a fixed distance in from the water,
+so it comes out as the same staircase of the wandering coast that the sand under
+it is drawn as.
+
+The southern gate moves with the coast, and now with the hill as well: it stands
+at the hill's landward foot, facing back up the promenade, because that is where
+the resort proper ends. It cannot go on the sand any more — the sand has a dune
+rising straight off the back of it, and a gate three tiles wide would stand
+across the first step. The service lanes keep running south, climb the hill as
+flights of stairs, cross the beach as boardwalk and are cut off at the shore.
 
 ## Elevation
 
-The land is not one plane. A **raised bench** runs along the shore behind the
-beach, carrying its own neighbourhood of bungalows, and the rest of the resort
-sits behind it back at sea level. A tile's **level** is an integer, 0 at sea
-level, and one level is 8 voxels up.
+The land is not one plane. Behind the beach it rises into a **hill** and comes
+back down again, and the resort's streets and districts are the level ground
+behind it. A tile's **level** is an integer, 0 at sea level, and one level is
+8 voxels up.
+
+From the water inland, the reference plot reads:
+
+| Level | What it is                 | Made of | Depth   |
+| ----- | -------------------------- | ------- | ------- |
+| 0     | the beach                  | sand    | 22 rows |
+| 1, 2  | the dune, a row per step   | sand    | 2 rows  |
+| 3     | the shelf, on top of it    | sand    | 9 rows  |
+| 4, 5  | the climb to the crest     | grass   | 12 rows |
+| 4 → 1 | the far side, four benches | grass   | 12 rows |
+| 0     | the resort behind it       | grass   | 32 rows |
+
+Three things follow from that shape, and each is a decision rather than a
+consequence:
+
+- **The dune is sand.** A terrace carries the material it is made of, so the
+  beach goes on up behind itself: three steps of sand onto a flat shelf of it.
+  `ground.ts` is the one place the question is answered — the coast knows where
+  the sand is and the elevation knows how high the ground stands, and a dune is
+  the tile both have an opinion about. A path on the shelf is decking for the
+  same reason the pier out to the water is.
+- **The shelf is where the lodgings are.** A row of bungalows along a sidewalk on
+  top of the dune reads as the lodgings _of_ the beach; the same bungalows
+  standing in the middle of the sand read as buildings somebody had left there.
+  Houses go on the grass benches above and behind, at four different heights.
+- **The hill is not a district.** Its benches are three to nine rows deep and
+  they curve, and a row grid is the wrong shape for that. So the hill and the
+  beach are filled first, on their own terms, and whatever they leave bare is
+  reserved against the districts wholesale.
 
 `elevation.ts` describes the terraces the way `shoreline.ts` describes the coast,
 and for the same reasons: **per tile column**, as a function rather than a stored
@@ -216,23 +259,45 @@ visible:
 
 - **`water`** follows the coast. The sand is a fixed depth, so a step a fixed
   distance in from the water keeps a fixed distance behind the sand however the
-  coastline wanders — which is what the shore bench wants, because it should read
+  coastline wanders — which is what the whole hill wants, because it should read
   as parallel to the beach.
 - **`plot`** measures from the plot's southern edge and ignores the coast. With
   no wobble the step falls on one row in every column, which is the only way a
   step can sit on a **street**.
 
-That second one is what makes a terraced plot buildable. Districts are the gaps
-between streets, so a step on a street crosses nothing but paving and cuts no
-district at all. The generator uses one of each: the seaward step follows the
-water, and the landward step is pinned to the row just past a cross street.
+The generator anchors **every** step of the hill to the water and gives none of
+them a wobble of its own, and that single decision is what makes the hill work:
 
-Just _past_ it, not on it. A step laid on a two-wide cross street splits the
-street lengthwise, leaving half of it on the bench and half below with a stair
-wall the full width of the plot between them — 110 flights in one row on the
-reference plot. One row further and the whole street stays on the bench, the
-district below starts at sea level, and the only flights are where north-south
-paths come down off the bench: about 20 on that same plot, in ones and twos.
+- The steps stay exactly as many rows apart as the bench between them is deep, in
+  every column, so they can never cross. Two steps crossing is the one thing
+  `elevationFor` refuses a plan for, and here it holds by construction rather
+  than by a margin — two lines four tiles apart with three tiles of wobble each
+  are a spec that looks fine and crosses itself in one column out of thirty.
+- The hill still curves, because the coast does. A line a fixed distance in from
+  a wandering shore wanders with it, so the dune, the shelf and every bench above
+  them run parallel to the beach, and the flights that climb them land on a
+  different row in every lane. A hill measured off the plot's own straight edge
+  would be a stadium.
+- The first step sits exactly on the back of the sand. The beach keeps its whole
+  depth at level 0, and the flight up the dune stands on the last row of sand:
+  you climb _off_ the beach rather than walking up decking laid against it.
+
+The cost of anchoring everything to the water is that no step lands on a street,
+and a straight cross street laid across a curved bench would spend its length
+drifting on and off a step — a staircase a hundred tiles long rather than a
+street. So the cross streets, and with them every district they bound, are held
+**north of the hill**; the hill is reached by the north-south lanes that climb
+it, by the sidewalk along its shelf, and by a **switchback** that climbs it in
+legs rather than head on. That last one falls out of the routing for free: each
+edge is an L, so the leg along x runs along a bench and the leg along z is the
+bit that climbs.
+
+`plot` anchoring is still what a step on a **street** needs — with no wobble it
+falls on one row in every column — and it is what the elevation spec exists to
+express, whether or not this generator reaches for it. A step laid _on_ a
+two-wide cross street rather than just past it splits the street lengthwise,
+leaving half of it up and half down with a stair wall the full width of the plot
+between them: 110 flights in one row.
 
 ### Paths become stairs
 
@@ -310,8 +375,15 @@ What it adds is the **risers**, the vertical faces between one bench and the
 next, and they are the only geometry in the terrain that does not lie flat — so
 they are the only geometry that carries its own normals. A riser lit as though it
 were a floor is a riser the sun cannot pick out, and a step you cannot see is not
-a step. A bench is the same green as the plot, because a terrace _is_ the plot,
-just two metres up; the riser is bare earth.
+a step.
+
+A bench is drawn in **whatever it is made of**, because a terrace _is_ the plot,
+just two metres up: a grass bench is the plot's own green and a dune is the
+beach's own sand. Each goes into the mesh for its own material, and a riser takes
+the material of the bench _above_ it — a cut through turf is bare earth, and a
+cut through a dune is sand a shade down. Drawing the dune green put a lawn where
+the beach should have carried on, which is the whole reason the two are separate
+surfaces.
 
 The awkward part is closing the risers along **x** as well as **z**. A step line
 wanders, so two neighbouring columns round it to different tiles, and between
@@ -320,9 +392,11 @@ boundary they share, the staircase the tile grid makes of the step seen end-on.
 Each pair of neighbouring columns is walked and exactly the z ranges where their
 heights disagree are closed, adjacent spans merged so a long slot is one quad.
 
-On the reference generated plot that is 673 bench quads — one per column, since
-the profile has a single bench above sea level — and about 1 450 risers, on top
-of the 673 sea and 673 sand. Four static meshes, built once per resort.
+On the reference generated plot that is about nine bench quads and eleven risers
+per column — the hill has nine benches above sea level and a step between each —
+on top of one sea quad and one sand quad each. Six static meshes now rather than
+four, since the benches and the risers are each split by material; call it 20 k
+quads over the whole framed box, built once per resort and drawn in six calls.
 
 ### Drawing the water
 

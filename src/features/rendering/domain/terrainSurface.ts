@@ -64,6 +64,13 @@
  * benches above it are emitted: every terrace stands over that plane rather than
  * replacing it, exactly as the sand does.
  *
+ * **A terrace is made of something.** The dune behind the beach is sand four
+ * metres up, and drawing it green put a lawn where the beach should have carried
+ * on. So each bench and each riser goes into the mesh for the material it is
+ * made of — see `layout/domain/ground.ts`, which is where the question of what a
+ * tile is made of is actually answered — and a plot whose terraces are all grass
+ * emits an empty sand mesh, which is to say none at all.
+ *
  * **Why the risers need closing along x too.** A step line wanders, so two
  * neighbouring columns round it to different tiles, and between those two rows
  * one column stands a level above the other. That leaves a vertical slot at the
@@ -75,7 +82,13 @@
  */
 
 import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
-import { levelHeight, maxLevelOf, stepStartZ, type Elevation } from '../../layout/domain/elevation';
+import {
+  levelHeight,
+  maxLevelOf,
+  stepStartZ,
+  type Elevation,
+  type TerraceSurface,
+} from '../../layout/domain/elevation';
 
 /**
  * Where each surface lies, in voxels.
@@ -122,15 +135,25 @@ export interface SurfaceGeometry {
   readonly quadCount: number;
 }
 
+/**
+ * One geometry per material a terrace can be made of.
+ *
+ * Split rather than merged because the two are drawn in different colours and a
+ * colour is a material, not a vertex attribute here: everything else in this
+ * file is one flat tone over one mesh. A plot whose terraces are all grass emits
+ * nothing under `sand`, which costs it nothing.
+ */
+export type SurfacesBySurface = Readonly<Record<TerraceSurface, SurfaceGeometry | null>>;
+
 export interface TerrainSurfaces {
   /** The beach. Null when the plot has no shore. */
   readonly sand: SurfaceGeometry | null;
   /** The water, out to the horizon. Null when the plot has no shore. */
   readonly sea: SurfaceGeometry | null;
-  /** The flat top of every bench above sea level. Null on a flat plot. */
-  readonly terraces: SurfaceGeometry | null;
-  /** The vertical faces between one bench and the next. Null on a flat plot. */
-  readonly risers: SurfaceGeometry | null;
+  /** The flat top of every bench above sea level, by what the bench is made of. */
+  readonly terraces: SurfacesBySurface;
+  /** The vertical faces between one bench and the next, by the bench they rise to. */
+  readonly risers: SurfacesBySurface;
 }
 
 export interface TerrainRequest {
@@ -302,25 +325,48 @@ class TerraceBuilder {
 interface ColumnProfile {
   readonly edges: readonly number[];
   readonly heights: readonly number[];
+  /**
+   * What each band is made of, parallel to `heights`.
+   *
+   * The band in front of the first step is the plot's own ground, which is grass
+   * where it is not the sand band — and the sand band is drawn by the surface
+   * that draws the beach, not by this one, so grass is the right answer for it
+   * here.
+   */
+  readonly surfaces: readonly TerraceSurface[];
 }
 
 /** The height profile of one tile column, walked from the back of the plot forward. */
 function profileOf(elevation: Elevation, tileX: number, tileVoxels: number): ColumnProfile {
   const { terraces } = elevation.spec;
+  const last = terraces[terraces.length - 1]!;
   const edges: number[] = [];
-  const heights: number[] = [levelHeight(terraces[terraces.length - 1]!.level)];
+  const heights: number[] = [levelHeight(last.level)];
+  const surfaces: TerraceSurface[] = [last.surface ?? 'grass'];
   for (let index = terraces.length - 1; index >= 0; index--) {
+    const below = index > 0 ? terraces[index - 1] : undefined;
     edges.push(stepStartZ(elevation, index, tileX) * tileVoxels);
-    heights.push(levelHeight(index > 0 ? terraces[index - 1]!.level : 0));
+    heights.push(levelHeight(below?.level ?? 0));
+    surfaces.push(below?.surface ?? 'grass');
   }
-  return { edges, heights };
+  return { edges, heights, surfaces };
+}
+
+/** Which band of a column a z falls in. */
+function bandAt(profile: ColumnProfile, z: number): number {
+  let band = 0;
+  while (band < profile.edges.length && z >= profile.edges[band]!) band++;
+  return band;
 }
 
 /** How high one column stands at a given z. */
 function heightAt(profile: ColumnProfile, z: number): number {
-  let band = 0;
-  while (band < profile.edges.length && z >= profile.edges[band]!) band++;
-  return profile.heights[band]!;
+  return profile.heights[bandAt(profile, z)]!;
+}
+
+/** What one column is made of at a given z. */
+function surfaceAt(profile: ColumnProfile, z: number): TerraceSurface {
+  return profile.surfaces[bandAt(profile, z)]!;
 }
 
 /** The z range the box covers, so a bench running past it is cropped to it. */
@@ -337,7 +383,7 @@ interface ZBounds {
  * surface at the same height, fighting for the same fragments.
  */
 function layBenches(
-  tops: TerraceBuilder,
+  tops: TerraceBuilders,
   profile: ColumnProfile,
   x0: number,
   x1: number,
@@ -348,13 +394,21 @@ function layBenches(
     if (height <= 0) continue;
     const from = band === 0 ? minZ : profile.edges[band - 1]!;
     const to = band === profile.edges.length ? maxZ : profile.edges[band]!;
-    tops.top(x0, x1, clamp(from), clamp(to), height);
+    tops[profile.surfaces[band]!].top(x0, x1, clamp(from), clamp(to), height);
   }
 }
 
-/** One column's own steps, each drawn as an upright face across the column. */
+/**
+ * One column's own steps, each drawn as an upright face across the column.
+ *
+ * A riser is made of whatever the bench *above* it is: the face of a dune is
+ * sand because the dune is, and the face of the lawn above the dune is earth
+ * because a cut through turf is. Which of the two bands is the higher one
+ * depends on which way the hill is going at that step, so it is asked rather
+ * than assumed.
+ */
 function layStepRisers(
-  risers: TerraceBuilder,
+  risers: TerraceBuilders,
   profile: ColumnProfile,
   x0: number,
   x1: number,
@@ -362,7 +416,10 @@ function layStepRisers(
 ): void {
   for (const [band, edge] of profile.edges.entries()) {
     if (edge <= minZ || edge >= maxZ) continue;
-    risers.riserAlongX(x0, x1, edge, profile.heights[band]!, profile.heights[band + 1]!);
+    const landward = profile.heights[band]!;
+    const seaward = profile.heights[band + 1]!;
+    const upper = landward >= seaward ? band : band + 1;
+    risers[profile.surfaces[upper]!].riserAlongX(x0, x1, edge, landward, seaward);
   }
 }
 
@@ -375,7 +432,7 @@ function layStepRisers(
  * seen end-on.
  */
 function laySeam(
-  risers: TerraceBuilder,
+  risers: TerraceBuilders,
   west: ColumnProfile,
   east: ColumnProfile,
   x: number,
@@ -383,7 +440,12 @@ function laySeam(
 ): void {
   for (const [from, to] of spansBetween(west, east, bounds.minZ, bounds.maxZ)) {
     const middle = (from + to) / 2;
-    risers.riserAlongZ(x, from, to, heightAt(west, middle), heightAt(east, middle));
+    const westHeight = heightAt(west, middle);
+    const eastHeight = heightAt(east, middle);
+    // Made of whatever the higher of the two columns is, exactly as a step's own
+    // riser is: this face is that step, seen end-on.
+    const upper = westHeight >= eastHeight ? west : east;
+    risers[surfaceAt(upper, middle)].riserAlongZ(x, from, to, westHeight, eastHeight);
   }
 }
 
@@ -399,9 +461,9 @@ function terraceGeometry(
   elevation: Elevation,
   bounds: ZBounds & { firstColumn: number; lastColumn: number },
   tileVoxels: number,
-): { tops: SurfaceGeometry | null; risers: SurfaceGeometry | null } {
-  const tops = new TerraceBuilder();
-  const risers = new TerraceBuilder();
+): { tops: SurfacesBySurface; risers: SurfacesBySurface } {
+  const tops = newBuilders();
+  const risers = newBuilders();
 
   let profile = profileOf(elevation, bounds.firstColumn, tileVoxels);
   for (let tileX = bounds.firstColumn; tileX <= bounds.lastColumn; tileX++) {
@@ -416,8 +478,24 @@ function terraceGeometry(
     profile = next;
   }
 
-  return { tops: tops.build(), risers: risers.build() };
+  return { tops: builtBy(tops), risers: builtBy(risers) };
 }
+
+/** One builder per material, so a bench lands in the mesh its colour is drawn on. */
+type TerraceBuilders = Record<TerraceSurface, TerraceBuilder>;
+
+const newBuilders = (): TerraceBuilders => ({
+  grass: new TerraceBuilder(),
+  sand: new TerraceBuilder(),
+});
+
+const builtBy = (builders: TerraceBuilders): SurfacesBySurface => ({
+  grass: builders.grass.build(),
+  sand: builders.sand.build(),
+});
+
+/** What a plot with no terraces on it contributes: nothing, on either material. */
+const NO_TERRACES: SurfacesBySurface = { grass: null, sand: null };
 
 /**
  * The z ranges over which two neighbouring columns stand at different heights.
@@ -473,7 +551,7 @@ export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
   const terraced =
     elevation && maxLevelOf(elevation) > 0
       ? terraceGeometry(elevation, { minZ, maxZ, firstColumn, lastColumn }, tileVoxels)
-      : { tops: null, risers: null };
+      : { tops: NO_TERRACES, risers: NO_TERRACES };
 
   if (!shore) {
     return { sand: null, sea: null, terraces: terraced.tops, risers: terraced.risers };

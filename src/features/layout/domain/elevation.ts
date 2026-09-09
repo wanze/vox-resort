@@ -44,8 +44,8 @@ import { meanderAt } from './wander';
  *
  * - `"water"` follows the coast. The sand band is a fixed depth, so a step a
  *   fixed distance in from the water keeps a fixed distance behind the sand
- *   however the coastline wanders — which is what a bench along the shore wants,
- *   because it should read as parallel to the beach.
+ *   however the coastline wanders — which is what the hill behind the beach
+ *   wants, because it should read as parallel to it.
  * - `"plot"` measures from the plot's southern edge and so ignores the coast
  *   entirely. With no wave on it the step falls on one row in every column, which
  *   is the only way a step can sit exactly on a street: and a step on a street is
@@ -55,6 +55,18 @@ import { meanderAt } from './wander';
  * plot's edge there — the two anchors coincide.
  */
 export type StepAnchor = 'water' | 'plot';
+
+/**
+ * What a bench is made of.
+ *
+ * A terrace is ground like any other ground, so it is made of one of the two
+ * things the plot's ground is made of. The distinction is not decoration: it
+ * decides the colour the bench is drawn in, the paving a path laid on it comes
+ * out as, and whether the dressing will plant a hedge there. A dune behind a
+ * beach is sand that happens to be four metres up, and a resort that drew it
+ * green had a lawn where its beach should have carried on.
+ */
+export type TerraceSurface = 'grass' | 'sand';
 
 /** One bench of the terraced land, and the step up onto it. */
 export interface TerraceSpec {
@@ -73,6 +85,11 @@ export interface TerraceSpec {
   readonly anchor?: StepAnchor;
   /** How far this step strays off a straight line, in tiles. */
   readonly wave: number;
+  /**
+   * What the bench behind this step is made of. Grass when the spec says
+   * nothing, which is what land is.
+   */
+  readonly surface?: TerraceSurface;
 }
 
 /** How the land rises behind the beach. Optional on a plan: no spec, no terraces. */
@@ -194,21 +211,57 @@ export function stepStartZ(elevation: Elevation, index: number, tileX: number): 
 }
 
 /**
- * How many levels above sea level a tile stands. Everything is 0 on a plan with
- * no terraces.
+ * The terrace a tile stands on, or null for a tile still at sea level in front
+ * of the first step.
  *
  * The terraces run seaward to landward and their steps never cross, so the walk
  * can stop at the first step the tile is *not* behind: it cannot be behind any
  * of the ones after it either.
+ *
+ * The whole terrace comes back rather than only its level because two questions
+ * are asked of it and they are not the same question — how high the tile stands,
+ * and what it is made of. A bench of sand and a bench of grass at the same
+ * height are one answer to the first and two to the second.
  */
-export function levelAt(elevation: Elevation | null, tileX: number, tileZ: number): number {
-  if (!elevation) return 0;
-  let level = 0;
+export function terraceAt(
+  elevation: Elevation | null,
+  tileX: number,
+  tileZ: number,
+): TerraceSpec | null {
+  if (!elevation) return null;
+  let standing: TerraceSpec | null = null;
   for (const [index, terrace] of elevation.spec.terraces.entries()) {
     if (tileZ >= stepStartZ(elevation, index, tileX)) break;
-    level = terrace.level;
+    standing = terrace;
   }
-  return level;
+  return standing;
+}
+
+/**
+ * How many levels above sea level a tile stands. Everything is 0 on a plan with
+ * no terraces.
+ */
+export function levelAt(elevation: Elevation | null, tileX: number, tileZ: number): number {
+  return terraceAt(elevation, tileX, tileZ)?.level ?? 0;
+}
+
+/**
+ * Every tile of the plot that stands above sea level, walked landward first.
+ *
+ * The counterpart of `beachTilesOf`, and it exists for the counterpart reason:
+ * the generator hands the raised ground to a filler of its own rather than to
+ * the districts, exactly as it hands the sand to one. A hill is not a thing you
+ * lay out in rows — its benches are a few tiles deep and they follow the coast.
+ */
+export function raisedTilesOf(elevation: Elevation | null): { x: number; z: number }[] {
+  if (!elevation) return [];
+  const tiles: { x: number; z: number }[] = [];
+  for (let z = 0; z < elevation.tilesZ; z++) {
+    for (let x = 0; x < elevation.tilesX; x++) {
+      if (levelAt(elevation, x, z) > 0) tiles.push({ x, z });
+    }
+  }
+  return tiles;
 }
 
 /**

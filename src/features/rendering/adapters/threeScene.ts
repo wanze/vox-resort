@@ -38,7 +38,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { vec3, vertexColor } from 'three/tsl';
+import { vec3 } from 'three/tsl';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { SkyState } from '../../lighting/domain/dayNight';
@@ -53,12 +53,17 @@ import { isometricFramingFor } from '../../layout/domain/worldBounds';
 import type { Shore } from '../../layout/domain/shoreline';
 import type { SurfaceGeometry } from '../domain/terrainSurface';
 import { terrainSurfacesFor } from '../domain/terrainSurface';
+import type { SeaMaterial } from './seaMaterial';
+import { createSeaMaterial } from './seaMaterial';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 
 export const CAMERA_FOV_DEGREES = 55;
 
 /** Ground colour under and around the resort. */
 const GROUND_COLOR = 0x5d7a45;
+
+/** Beach colour. One flat tone, exactly as the grass is. */
+const SAND_COLOR = 0xd8c69c;
 
 /** How far past the framed plot the ground, the sea and the beach run. */
 const GROUND_SPREAD = 3;
@@ -289,22 +294,36 @@ function layGround(
  *
  * Two static meshes over the ground plane, sharing its lighting so the shore
  * shades and catches the lamps like everything else. `domain/terrainSurface.ts`
- * decides what shape they are; this only uploads them.
+ * decides what shape they are; this only uploads them and picks their materials.
+ *
+ * The two materials could hardly be less alike. The sand is the same flat lit
+ * colour the grass is, because sand seen from the resort's distance *is* flat —
+ * every earlier attempt to give it wet bands and a per-column wobble read as
+ * dirt rather than as a beach. The sea is the opposite: flat geometry doing
+ * everything in the shader, in `seaMaterial.ts`.
  */
 interface Terrain {
   readonly group: Group;
+  /** Repaints the sky the water reflects, in packed sRGB. */
+  setSky(color: number): void;
   dispose(): void;
 }
 
-/** Wraps one surface's buffers in a geometry. Normals are all straight up. */
+/**
+ * Wraps one surface's buffers in a geometry. Normals are all straight up — the
+ * sea bends its own in the fragment shader, and the sand has nothing to bend.
+ */
 function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
   const geometry = new BufferGeometry();
   const normals = new Float32Array(surface.positions.length);
   for (let index = 1; index < normals.length; index += 3) normals[index] = 1;
   geometry.setAttribute('position', new BufferAttribute(surface.positions, 3));
   geometry.setAttribute('normal', new BufferAttribute(normals, 3));
-  // Already in the linear working space, exactly as the model attributes are.
-  geometry.setAttribute('color', new BufferAttribute(surface.colors, 3));
+  if (surface.shoreDistances) {
+    const { edge, coast } = surface.shoreDistances;
+    geometry.setAttribute('shoreEdgeDistance', new BufferAttribute(edge, 1));
+    geometry.setAttribute('shoreCoastDistance', new BufferAttribute(coast, 1));
+  }
   geometry.setIndex(new BufferAttribute(surface.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
@@ -328,16 +347,23 @@ function layTerrain(
     tileVoxels: TILE_VOXELS,
   });
 
-  for (const surface of [surfaces.sea, surfaces.sand]) {
-    if (!surface) continue;
-    const geometry = toSurfaceGeometry(surface);
+  let sea: SeaMaterial | null = null;
+  if (surfaces.sea) {
+    sea = createSeaMaterial(lightVolume);
+    const geometry = toSurfaceGeometry(surfaces.sea);
+    group.add(new Mesh(geometry, sea.material));
+    disposables.push(geometry, sea);
+  }
+
+  if (surfaces.sand) {
+    const geometry = toSurfaceGeometry(surfaces.sand);
     const material = new MeshStandardNodeMaterial({
-      vertexColors: true,
+      color: SAND_COLOR,
       roughness: 1,
       metalness: 0,
     });
     if (lightVolume) {
-      material.emissiveNode = lightVolume.lampLight(vertexColor().rgb);
+      material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(SAND_COLOR)));
       material.aoNode = lightVolume.skyVisibility();
     }
     group.add(new Mesh(geometry, material));
@@ -346,6 +372,9 @@ function layTerrain(
 
   return {
     group,
+    setSky(color) {
+      sea?.setSky(color);
+    },
     dispose() {
       for (const disposable of disposables) disposable.dispose();
     },
@@ -589,6 +618,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // Written whether or not the fog is in the scene, so switching back to the
       // perspective view does not bring yesterday's sky with it.
       fog.color.setHex(state.skyColor);
+      // The sea reflects the sky, so a sunset has to reach the water too.
+      terrain.setSky(state.skyColor);
     },
     resize(nextWidth, nextHeight) {
       aspect = nextWidth / nextHeight;

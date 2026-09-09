@@ -6,6 +6,7 @@ import {
   isWater,
   shoreFor,
   terrainAt,
+  waterEdgeZ,
   waterStartZ,
   waterTilesOf,
   type Shore,
@@ -36,6 +37,32 @@ describe('shoreFor', () => {
   it('anchors the spec on the plot it was given', () => {
     expect(shore().tilesX).toBe(40);
     expect(shore(undefined, 60, 20).tilesZ).toBe(20);
+  });
+});
+
+describe('waterEdgeZ', () => {
+  it('is the curve waterStartZ rounds', () => {
+    const coast = shore({ wave: 3 });
+    for (let tileX = 0; tileX < 40; tileX++) {
+      expect(waterStartZ(coast, tileX)).toBe(Math.round(waterEdgeZ(coast, tileX)));
+    }
+  });
+
+  it('crosses every column boundary without a step in it', () => {
+    const coast = shore({ wave: 3 });
+    // The rounded edge jumps a whole tile between columns; the curve may not,
+    // which is what the sea's colour gradient is drawn against.
+    let biggest = 0;
+    for (let tileX = 0; tileX < 40; tileX += 0.05) {
+      const step = Math.abs(waterEdgeZ(coast, tileX + 0.05) - waterEdgeZ(coast, tileX));
+      biggest = Math.max(biggest, step);
+    }
+    expect(biggest).toBeLessThan(0.05);
+  });
+
+  it('is flat all the way out for a coast with no wander in it', () => {
+    const straight = shore({ wave: 0 });
+    expect(waterEdgeZ(straight, 3.7)).toBe(waterEdgeZ(straight, 91.2));
   });
 });
 

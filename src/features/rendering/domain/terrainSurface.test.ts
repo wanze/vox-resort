@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shoreFor, waterStartZ, type Shore } from '../../layout/domain/shoreline';
+import { shoreFor, waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL, SEA_LEVEL, terrainSurfacesFor, type SurfaceGeometry } from './terrainSurface';
 
 const TILE = 16;
@@ -64,10 +64,11 @@ describe('terrainSurfacesFor', () => {
   });
 
   it('emits three numbers per vertex and six indices per quad', () => {
-    const { sea } = terrainSurfacesFor(request(shore()));
-    expect(sea!.positions).toHaveLength(sea!.quadCount * 4 * 3);
-    expect(sea!.colors).toHaveLength(sea!.quadCount * 4 * 3);
-    expect(sea!.indices).toHaveLength(sea!.quadCount * 6);
+    const { sand, sea } = terrainSurfacesFor(request(shore()));
+    for (const surface of [sand!, sea!]) {
+      expect(surface.positions).toHaveLength(surface.quadCount * 4 * 3);
+      expect(surface.indices).toHaveLength(surface.quadCount * 6);
+    }
   });
 
   it('winds every quad so it faces up', () => {
@@ -134,10 +135,60 @@ describe('terrainSurfacesFor', () => {
     expect(Math.max(...columns)).toBeGreaterThan(40 * TILE);
   });
 
-  it('gives no two columns quite the same colour', () => {
+  it('measures the foam distance off its own column, staircase and all', () => {
+    const coast = shore({ wave: 3 });
+    const sea = terrainSurfacesFor(request(coast)).sea!;
+    expect(sea.shoreDistances!.edge).toHaveLength(sea.quadCount * 4);
+    for (const [index, quad] of quadsOf(sea).entries()) {
+      const water = waterStartZ(coast, quad.x0 / TILE) * TILE;
+      for (let corner = 0; corner < 4; corner++) {
+        const vertex = index * 4 + corner;
+        const z = sea.positions[vertex * 3 + 2]!;
+        expect(sea.shoreDistances!.edge[vertex]).toBeCloseTo(z - water, 3);
+      }
+    }
+  });
+
+  it('measures the colour distance off the coast curve, at each vertex own x', () => {
+    const coast = shore({ wave: 3 });
+    const sea = terrainSurfacesFor(request(coast)).sea!;
+    expect(sea.shoreDistances!.coast).toHaveLength(sea.quadCount * 4);
+    for (let vertex = 0; vertex < sea.quadCount * 4; vertex++) {
+      const x = sea.positions[vertex * 3]!;
+      const z = sea.positions[vertex * 3 + 2]!;
+      expect(sea.shoreDistances!.coast[vertex]).toBeCloseTo(
+        z - waterEdgeZ(coast, x / TILE) * TILE,
+        3,
+      );
+    }
+  });
+
+  /**
+   * The seam this whole pair exists to remove: two columns sharing a boundary
+   * have to agree on the colour distance there, or the eye sees the step.
+   */
+  it('hands neighbouring columns the same colour distance at the x they share', () => {
+    const sea = terrainSurfacesFor(request(shore({ wave: 3 }))).sea!;
+    /** Every colour distance recorded at one (x, z), keyed by the pair. */
+    const seen = new Map<string, number[]>();
+    for (let vertex = 0; vertex < sea.quadCount * 4; vertex++) {
+      const key = `${sea.positions[vertex * 3]},${sea.positions[vertex * 3 + 2]}`;
+      seen.set(key, [...(seen.get(key) ?? []), sea.shoreDistances!.coast[vertex]!]);
+    }
+    const shared = [...seen.values()].filter((distances) => distances.length > 1);
+    expect(shared.length).toBeGreaterThan(10);
+    for (const distances of shared) {
+      expect(Math.max(...distances) - Math.min(...distances)).toBeCloseTo(0, 3);
+    }
+  });
+
+  it('leaves the sand without shore distances, having no use for them', () => {
+    expect(terrainSurfacesFor(request(shore())).sand!.shoreDistances).toBeNull();
+  });
+
+  it('runs the water in under the sand, so the seam is an overlap', () => {
     const sea = terrainSurfacesFor(request(shore())).sea!;
-    const reds = new Set<number>();
-    for (let quad = 0; quad < sea.quadCount; quad++) reds.add(sea.colors[quad * 12]!);
-    expect(reds.size).toBeGreaterThan(10);
+    // A tile of underlap, and no more: the sand hides exactly that much water.
+    expect(Math.min(...sea.shoreDistances!.edge)).toBeCloseTo(-TILE, 3);
   });
 });

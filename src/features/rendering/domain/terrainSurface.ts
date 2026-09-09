@@ -16,7 +16,7 @@
  * The sand could be, and is not, for a different reason: a tile the sand
  * occupied would be a tile nothing could be built on, and the whole point of
  * putting a beach on the plot is to stand bungalows on it. Terrain is not an
- * object. So both are one static mesh apiece, of a few thousand quads between
+ * object. So both are one static mesh apiece, of a few hundred quads between
  * them, built once per resort.
  *
  * **Why it still lines up with the tile grid.** The layout classifies *tiles* —
@@ -27,6 +27,24 @@
  * coast is the same staircase in the geometry. The sand and the water meet
  * exactly, and both meet the boardwalk laid on them.
  *
+ * **Why there is so little geometry.** Neither surface carries its own colour
+ * any more. The sand is one flat colour, like the grass, and the sea is shaded
+ * entirely in `adapters/seaMaterial.ts` — its depth, its swell, its foam and its
+ * glint are all fragment work. What the geometry owes the shader is how far out
+ * to sea each corner lies, and that is linear in z, so a single quad reaching
+ * from the shore to the far edge of the box carries a correct distance at every
+ * fragment across it. A column of sea is one quad; a column of sand is one quad.
+ *
+ * **Why the sea measures itself twice.** Off the tile staircase *and* off the
+ * curve it was rounded from, because two different things read the distance and
+ * they want different answers. The foam has to hug the drawn edge of the sand,
+ * staircase and all, or it detaches from the beach it is breaking on. The depth
+ * gradient must not: it fades over tens of voxels, so a distance that jumped a
+ * whole tile from one column to the next laid broad diagonal bands across the
+ * whole bay — the seams this pair exists to remove. Off the curve the same
+ * gradient is continuous, because neighbouring columns evaluate the coast at the
+ * one x they share.
+ *
  * The heights are the last piece. The sea sits a hair above the grass rather
  * than below it, which is upside down as hydrology and invisible as rendering:
  * the grass plane is infinite and would otherwise poke through the water. The
@@ -35,8 +53,7 @@
  * between two that abut.
  */
 
-import { linearRgbOf } from '../../lighting/domain/lightGrid';
-import { waterStartZ, type Shore } from '../../layout/domain/shoreline';
+import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 
 /**
  * Where each surface lies, in voxels.
@@ -52,27 +69,24 @@ export const SAND_LEVEL = 0.3;
 /** How far the water runs in under the sand, in tiles, so the seam never gaps. */
 const SEA_UNDERLAP = 1;
 
-/** Tiles of water drawn in the shallow colour before the sea goes deep. */
-const SHALLOW_TILES = 3;
-
-/** Tiles of sand drawn wet, where the water has just been. */
-const WET_TILES = 2;
-
-/** The palette, as packed sRGB — the same form the models paint in. */
-const COLORS = {
-  shallow: 0x3fa9b8,
-  deep: 0x1c5f7d,
-  wet: 0xb9a582,
-  dry: 0xdcc9a0,
-} as const;
-
-/** How far a column's sand and water drift off the palette, 0..1 of the channel. */
-const STRIPE_JITTER = 0.05;
+/**
+ * How far out to sea each vertex lies, in voxels, measured two ways.
+ *
+ * Both are distances along z and neither is a distance to the nearest water,
+ * which is all a coast made of column spans can mean. Both go negative landward
+ * of the edge they are measured off.
+ */
+export interface ShoreDistances {
+  /** Off the drawn edge of the sand: the coast rounded to whole tiles. */
+  readonly edge: Float32Array;
+  /** Off the coastline as a curve, and so continuous from column to column. */
+  readonly coast: Float32Array;
+}
 
 export interface SurfaceGeometry {
   readonly positions: Float32Array;
-  /** Linear RGB per vertex, the space the model geometry's colours are in. */
-  readonly colors: Float32Array;
+  /** Null for a surface whose shader has no use for the numbers — the sand. */
+  readonly shoreDistances: ShoreDistances | null;
   readonly indices: Uint32Array;
   readonly quadCount: number;
 }
@@ -93,41 +107,52 @@ export interface TerrainRequest {
   readonly tileVoxels: number;
 }
 
-/** A stable 0..1 wobble per tile column, so no two are exactly one colour. */
-function stripeNoise(tileX: number, salt: number): number {
-  const mixed = Math.sin(tileX * 12.9898 + salt * 78.233) * 43758.5453;
-  return mixed - Math.floor(mixed);
-}
-
-/** One colour, nudged by a column's own wobble and taken into linear space. */
-function stripeColor(color: number, tileX: number, salt: number): [number, number, number] {
-  const [r, g, b] = linearRgbOf(color);
-  const shift = (stripeNoise(tileX, salt) - 0.5) * 2 * STRIPE_JITTER;
-  return [r + shift, g + shift, b + shift];
-}
+/** Where the coastline runs at one x, unrounded, in voxels. */
+type CoastAt = (x: number) => number;
 
 /** Collects quads lying flat at one height, and hands back typed arrays. */
 class SurfaceBuilder {
   private readonly positions: number[] = [];
-  private readonly colors: number[] = [];
+  private readonly edges: number[] = [];
+  private readonly coasts: number[] = [];
   private readonly indices: number[] = [];
   private quads = 0;
 
-  constructor(private readonly y: number) {}
+  /**
+   * `coastAt` is what makes a surface measure itself; the sand passes null and
+   * carries nothing but its corners.
+   */
+  constructor(
+    private readonly y: number,
+    private readonly coastAt: CoastAt | null,
+  ) {}
 
   /**
-   * Adds one quad spanning `[x0, x1]` by `[z0, z1]`, wound so it faces up.
+   * Adds one quad spanning `[x0, x1]` by `[z0, z1]`, wound so it faces up, with
+   * the water's edge for this column at `edgeZ` — read only by a surface that
+   * was given a coast to measure against.
+   *
+   * The two distances are taken differently on purpose. `edgeZ` is one number
+   * for the whole quad, because a staircase step *is* constant across its
+   * column. The coast is asked at each corner's own x, which is the trick that
+   * removes the seam: the quads either side of a column boundary both ask about
+   * the x they share, and so agree on the answer there.
    *
    * Nothing is added for a span that has been clipped away to nothing, which is
-   * what every row off the end of the coast reduces to.
+   * what every column off the end of the coast reduces to.
    */
-  add(x0: number, x1: number, z0: number, z1: number, color: readonly [number, number, number]) {
+  add(x0: number, x1: number, z0: number, z1: number, edgeZ = 0) {
     if (x1 <= x0 || z1 <= z0) return;
     // Anticlockwise seen from above, which is what puts the normal at +y.
     const corners = [x0, z0, x0, z1, x1, z1, x1, z0];
     for (let corner = 0; corner < corners.length; corner += 2) {
-      this.positions.push(corners[corner]!, this.y, corners[corner + 1]!);
-      this.colors.push(...color);
+      const x = corners[corner]!;
+      const z = corners[corner + 1]!;
+      this.positions.push(x, this.y, z);
+      if (this.coastAt) {
+        this.edges.push(z - edgeZ);
+        this.coasts.push(z - this.coastAt(x));
+      }
     }
     const base = this.quads * 4;
     this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -138,7 +163,9 @@ class SurfaceBuilder {
     if (this.quads === 0) return null;
     return {
       positions: new Float32Array(this.positions),
-      colors: new Float32Array(this.colors),
+      shoreDistances: this.coastAt
+        ? { edge: new Float32Array(this.edges), coast: new Float32Array(this.coasts) }
+        : null,
       indices: new Uint32Array(this.indices),
       quadCount: this.quads,
     };
@@ -161,8 +188,9 @@ export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
   const firstColumn = Math.floor((center.x - reach) / tileVoxels);
   const lastColumn = Math.ceil((center.x + reach) / tileVoxels);
 
-  const sand = new SurfaceBuilder(SAND_LEVEL);
-  const sea = new SurfaceBuilder(SEA_LEVEL);
+  const coastAt: CoastAt = (x) => waterEdgeZ(shore, x / tileVoxels) * tileVoxels;
+  const sand = new SurfaceBuilder(SAND_LEVEL, null);
+  const sea = new SurfaceBuilder(SEA_LEVEL, coastAt);
   const clamp = (value: number): number => Math.min(maxZ, Math.max(minZ, value));
 
   for (let tileX = firstColumn; tileX <= lastColumn; tileX++) {
@@ -171,16 +199,10 @@ export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
     const water = waterStartZ(shore, tileX) * tileVoxels;
 
     // The sea, from a tile inside the sand out to the far edge of the box.
-    const seaFrom = clamp(water - SEA_UNDERLAP * tileVoxels);
-    const shallowTo = clamp(water + SHALLOW_TILES * tileVoxels);
-    sea.add(x0, x1, seaFrom, shallowTo, stripeColor(COLORS.shallow, tileX, 1));
-    sea.add(x0, x1, shallowTo, maxZ, stripeColor(COLORS.deep, tileX, 2));
+    sea.add(x0, x1, clamp(water - SEA_UNDERLAP * tileVoxels), maxZ, water);
 
     // The sand, from the grass behind it up to the water's edge.
-    const sandFrom = clamp(water - shore.spec.beach * tileVoxels);
-    const wetFrom = clamp(water - WET_TILES * tileVoxels);
-    sand.add(x0, x1, sandFrom, wetFrom, stripeColor(COLORS.dry, tileX, 3));
-    sand.add(x0, x1, wetFrom, clamp(water), stripeColor(COLORS.wet, tileX, 4));
+    sand.add(x0, x1, clamp(water - shore.spec.beach * tileVoxels), clamp(water));
   }
 
   return { sand: sand.build(), sea: sea.build() };

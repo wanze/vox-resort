@@ -89,6 +89,21 @@ function phaseOf(seed: number, salt: number): number {
 }
 
 /**
+ * The coastline as a curve: where the water begins at any `x`, unrounded.
+ *
+ * Everything that *places* something works in whole tiles and wants
+ * `waterStartZ`. This is for the one caller that does not: the sea's shader
+ * shades the water by how far out it is, and a distance taken off the rounded
+ * edge jumps a whole tile at every column boundary — which the eye reads as
+ * broad diagonal bands lying across the bay. Taken off the curve instead, it is
+ * continuous, and the bands go away. `tileX` may therefore be fractional here,
+ * which it may not be anywhere else in this module.
+ */
+export function waterEdgeZ(shore: Shore, tileX: number): number {
+  return shore.tilesZ - 1 - shore.spec.inset + waveAt(shore.spec, tileX);
+}
+
+/**
  * The first water tile in a column, measured in from the plot's south edge.
  *
  * May fall outside the plot in either direction — a column the coast bulges
@@ -97,7 +112,7 @@ function phaseOf(seed: number, salt: number): number {
  * long since ended.
  */
 export function waterStartZ(shore: Shore, tileX: number): number {
-  return Math.round(shore.tilesZ - 1 - shore.spec.inset + waveAt(shore.spec, tileX));
+  return Math.round(waterEdgeZ(shore, tileX));
 }
 
 /** What a tile is made of. Everything is land when the plan has no shore. */

@@ -9,6 +9,7 @@ const at = (id: string, x: number, z: number, width: number, depth: number): Pla
   tileZ: Math.floor(z / 16),
   tilesX: 1,
   tilesZ: 1,
+  rotation: 0,
   x,
   z,
   width,

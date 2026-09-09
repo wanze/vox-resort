@@ -35,6 +35,41 @@ export const CAMERA_FOV_DEGREES = 55;
 /** Ground colour under and around the resort. */
 const GROUND_COLOR = 0x5d7a45;
 
+/**
+ * Steps an integer depth buffer has to spread the whole scene over, and the
+ * depth difference it has to keep apart: a path slab stands two voxels above the
+ * ground plane, and that gap is the tightest thing in the scene.
+ */
+const DEPTH_STEPS = 2 ** 24;
+const RESOLVED_VOXELS = 0.5;
+
+/** How far past the camera's target the far side of the plot sits, in extents. */
+const FRAMED_REACH = 1.6;
+
+/** Near plane the camera will not go past, so close-up views stay usable. */
+const MAX_NEAR = 4;
+
+/**
+ * The near plane a resort of this size needs.
+ *
+ * An integer depth buffer resolves no better than `z^2 / (near * 2^24)` at
+ * distance `z`, so a near plane of 0.1 gives five voxels of slop at the far side
+ * of a 160-tile plot — more than the two voxels between the paving and the
+ * ground under it. The ground then won fragments at random and the paths
+ * flickered away as the camera moved, which is why this grows with the plot
+ * instead of being a constant: it is the smallest near plane that still tells
+ * half a voxel apart out where the resort ends.
+ *
+ * `reversedDepthBuffer` below makes this moot on any backend that has it. It is
+ * still derived, because the WebGL2 fallback quietly goes back to an integer
+ * buffer when `EXT_clip_control` is missing, and the cap is there because a near
+ * plane the camera can bump into is worse than the artefact it prevents.
+ */
+function nearPlaneFor(extent: number): number {
+  const reach = extent * FRAMED_REACH;
+  return Math.min(MAX_NEAR, Math.max(0.1, (reach * reach) / (RESOLVED_VOXELS * DEPTH_STEPS)));
+}
+
 export interface SceneHandle {
   readonly renderer: WebGPURenderer;
   readonly scene: Scene;
@@ -107,7 +142,7 @@ function layGround(
     material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
   const mesh = new Mesh(geometry, material);
   mesh.rotation.x = -Math.PI / 2;
-  // A hair below y = 0, so it never z-fights a path slab.
+  // A hair below y = 0: a path slab's underside sits exactly on it.
   mesh.position.set(framing.target.x, -0.05, framing.target.z);
   scene.add(mesh);
   return {
@@ -128,6 +163,10 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     antialias: true,
     trackTimestamp,
     forceWebGL: options.forceWebGL ?? false,
+    // A reversed float depth buffer spends its precision evenly over the whole
+    // range instead of piling it up against the near plane, which is what a
+    // resort seen from far enough back to frame it needs; see `nearPlaneFor`.
+    reversedDepthBuffer: true,
   });
   renderer.setPixelRatio(Math.min(globalThis.devicePixelRatio ?? 1, 2));
   renderer.setSize(width, height, false);
@@ -141,7 +180,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const camera = new PerspectiveCamera(
     CAMERA_FOV_DEGREES,
     width / height,
-    0.1,
+    nearPlaneFor(worldExtent),
     Math.max(worldExtent * 8, 1000),
   );
   camera.position.set(framing.position.x, framing.position.y, framing.position.z);
@@ -183,6 +222,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       ground = layGround(scene, nextFraming, extent, nextVolume);
 
       camera.position.set(nextFraming.position.x, nextFraming.position.y, nextFraming.position.z);
+      camera.near = nearPlaneFor(extent);
       camera.far = Math.max(extent * 8, 1000);
       camera.updateProjectionMatrix();
       controls.target.set(nextFraming.target.x, nextFraming.target.y, nextFraming.target.z);

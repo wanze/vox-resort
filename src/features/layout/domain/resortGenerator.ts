@@ -22,6 +22,12 @@
  *    free tile row. That is not decoration: `layoutResort` grows a spur from
  *    every object to the nearest street and throws if an object is walled in, so
  *    the free row is what guarantees a generated plan is one it will accept.
+ *    Successive rows are turned to face opposite ways, so the two rows either
+ *    side of a lane stand back to back the way a street of houses does, and a
+ *    few objects in each row take a quarter turn out of that — see
+ *    {@link turnFor}. A resort in which every building faced the same way read
+ *    as a housing estate, and the fix costs nothing but a different instance
+ *    matrix, because a quarter turn keeps a voxel model square to the grid.
  * 4. **The catalogue first, the filling after.** Every type that has not been
  *    placed yet is placed before anything is repeated, so the showcase shows the
  *    whole catalogue whatever the density asks for.
@@ -41,6 +47,7 @@ import {
   type ResortPlot,
 } from "./resortPlan";
 import { streetTiles, tileKey, widthOffsets } from "./resortLayout";
+import { normalizeRotation, rotateExtent, type Extent, type Rotation } from "./rotation";
 
 /** The gate object, stood at both ends of the promenade. */
 const GATE_ID = "entrance";
@@ -232,22 +239,33 @@ interface Site {
   readonly tilesZ: number;
 }
 
-function fits(site: Site, type: GeneratorType, tileX: number, tileZ: number): boolean {
+/**
+ * Whether a footprint can stand here.
+ *
+ * A footprint rather than a type, because a turned object claims different
+ * tiles: a 2x6 villa turned a quarter is 6x2, and the question of whether it
+ * fits is about the tiles it would cover, not about what it is.
+ */
+function fits(site: Site, footprint: Extent, tileX: number, tileZ: number): boolean {
   if (tileX < 0 || tileZ < 0) return false;
-  if (tileX + type.tilesX > site.tilesX || tileZ + type.tilesZ > site.tilesZ) return false;
-  for (let z = tileZ; z < tileZ + type.tilesZ; z++) {
-    for (let x = tileX; x < tileX + type.tilesX; x++) {
+  if (tileX + footprint.x > site.tilesX || tileZ + footprint.z > site.tilesZ) return false;
+  for (let z = tileZ; z < tileZ + footprint.z; z++) {
+    for (let x = tileX; x < tileX + footprint.x; x++) {
       if (site.taken.has(tileKey(x, z))) return false;
     }
   }
   return true;
 }
 
-function claim(site: Site, type: GeneratorType, tileX: number, tileZ: number): void {
-  for (let z = tileZ; z < tileZ + type.tilesZ; z++) {
-    for (let x = tileX; x < tileX + type.tilesX; x++) site.taken.add(tileKey(x, z));
+function claim(site: Site, footprint: Extent, tileX: number, tileZ: number): void {
+  for (let z = tileZ; z < tileZ + footprint.z; z++) {
+    for (let x = tileX; x < tileX + footprint.x; x++) site.taken.add(tileKey(x, z));
   }
 }
+
+/** The tiles a type claims standing a given way round. */
+const footprintOf = (type: GeneratorType, rotation: Rotation): Extent =>
+  rotateExtent(type.tilesX, type.tilesZ, rotation);
 
 /** How much room is left in this district from a cursor position. */
 interface Space {
@@ -289,18 +307,60 @@ function pickType(parts: {
 }
 
 /**
+ * The turns successive rows of a district stand at.
+ *
+ * Half turns, so a row's footprints are the ones the district was measured for,
+ * and alternating, so the two rows either side of the lane between them stand
+ * back to back rather than nose to tail — which is how a street of houses is
+ * actually laid out, and the difference between a district that reads as a
+ * terrace and one that reads as a barracks.
+ */
+const ROW_TURNS: readonly Rotation[] = [0, 2];
+
+/**
  * Lays one district out in rows, leaving a free tile row between them.
  *
  * The free row is load-bearing. `layoutResort` grows a spur from every object to
  * the nearest street and throws if it cannot reach one, so a district packed
  * solid would be a plan it refuses. A row of objects with a clear row above and
- * below always has a way out to the street the district borders.
+ * below always has a way out to the street the district borders — and it still
+ * does once the row is turned, because a row is as deep as its deepest object
+ * however that object came to be that deep.
  */
 function fillDistrict(parts: FillParts): void {
   const { district } = parts;
-  for (let z = district.z0; z <= district.z1;) {
-    z += fillRow(parts, z) + 1;
+  let row = 0;
+  for (let z = district.z0; z <= district.z1; row++) {
+    z += fillRow(parts, z, ROW_TURNS[row % ROW_TURNS.length]!) + 1;
   }
+}
+
+/** How often an object turns out of the way its row faces. */
+const QUARTER_TURN_CHANCE = 0.3;
+
+/**
+ * The turn one object stands at: its row's, mostly.
+ *
+ * A quarter out of that swaps the object's footprint, and the type was chosen
+ * against its *unturned* one — so the swap is offered only when the tiles it
+ * would want are actually free, and the row's own turn, which is a half turn
+ * away and therefore the same footprint, is always there to fall back on. That
+ * is what keeps a turn from ever being the reason a district comes out emptier.
+ */
+function turnFor(parts: {
+  readonly rowTurn: Rotation;
+  readonly type: GeneratorType;
+  readonly site: Site;
+  readonly tileX: number;
+  readonly tileZ: number;
+  readonly random: () => number;
+}): Rotation {
+  const { rowTurn, random } = parts;
+  if (random() >= QUARTER_TURN_CHANCE) return rowTurn;
+  const turned = normalizeRotation(rowTurn + (random() < 0.5 ? 1 : 3));
+  return fits(parts.site, footprintOf(parts.type, turned), parts.tileX, parts.tileZ)
+    ? turned
+    : rowTurn;
 }
 
 interface FillParts {
@@ -314,7 +374,7 @@ interface FillParts {
 }
 
 /** Lays one row across a district, and reports how deep it turned out. */
-function fillRow(parts: FillParts, z: number): number {
+function fillRow(parts: FillParts, z: number, rowTurn: Rotation): number {
   const { district, site, random, plots, missing } = parts;
   let depth = 1;
 
@@ -329,16 +389,20 @@ function fillRow(parts: FillParts, z: number): number {
       x += 1 + Math.floor(random() * 3);
       continue;
     }
-    if (!fits(site, type, x, z)) {
+    if (!fits(site, footprintOf(type, 0), x, z)) {
       x += 1;
       continue;
     }
 
-    claim(site, type, x, z);
-    plots.push({ id: type.id, tileX: x, tileZ: z });
+    const rotation = turnFor({ rowTurn, type, site, tileX: x, tileZ: z, random });
+    const footprint = footprintOf(type, rotation);
+    claim(site, footprint, x, z);
+    plots.push({ id: type.id, tileX: x, tileZ: z, rotation });
     missing.delete(type.id);
-    depth = Math.max(depth, type.tilesZ);
-    x += type.tilesX + (random() < 0.4 ? 1 : 0);
+    // Measured off the footprint rather than the type, so a quarter-turned villa
+    // pushes the row's own depth out and the free row below it moves with it.
+    depth = Math.max(depth, footprint.z);
+    x += footprint.x + (random() < 0.4 ? 1 : 0);
   }
   return depth;
 }
@@ -353,20 +417,29 @@ function landmarks(parts: {
 }): ResortPlot[] {
   const { types, site, missing } = parts;
   const plots: ResortPlot[] = [];
-  const stand = (type: GeneratorType | undefined, tileX: number, tileZ: number): void => {
-    if (!type || !fits(site, type, tileX, tileZ)) return;
-    claim(site, type, tileX, tileZ);
-    plots.push({ id: type.id, tileX, tileZ });
+  const stand = (
+    type: GeneratorType | undefined,
+    tileX: number,
+    tileZ: number,
+    rotation: Rotation = 0,
+  ): void => {
+    // A landmark's turn is always a half one, so the footprint it is checked and
+    // claimed against is the one it was positioned for.
+    if (!type || !fits(site, footprintOf(type, rotation), tileX, tileZ)) return;
+    claim(site, footprintOf(type, rotation), tileX, tileZ);
+    plots.push({ id: type.id, tileX, tileZ, rotation });
     missing.delete(type.id);
   };
 
   // Both gates straddle the promenade's ends, which is what makes them read as
-  // the way in rather than as two more buildings.
+  // the way in rather than as two more buildings — and the southern one is turned
+  // to face back up the promenade, so the pair reads as two ends of one street
+  // rather than as the same gate stamped twice.
   const gate = types.get(GATE_ID);
   if (gate) {
     const tileX = parts.promenade.at - Math.floor(gate.tilesX / 2);
     stand(gate, tileX, 0);
-    stand(gate, tileX, site.tilesZ - gate.tilesZ);
+    stand(gate, tileX, site.tilesZ - gate.tilesZ, 2);
   }
 
   const fountain = types.get(PLAZA_ID);

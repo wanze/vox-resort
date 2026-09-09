@@ -21,6 +21,7 @@ import {
 } from "../features/catalog/domain/objectTypes";
 import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
 import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
+import { rotateLights } from "../features/layout/domain/rotation";
 import type { ResortPlan } from "../features/layout/domain/resortPlan";
 import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from "../features/layout/domain/resortPlan";
 import type { GeneratorType, ResortParams } from "../features/layout/domain/resortGenerator";
@@ -37,6 +38,7 @@ import { createPlacementGhost } from "../features/build/adapters/placementGhost"
 import type { WorldBounds } from "../features/layout/domain/worldBounds";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
+import type { ModelLight } from "../../voxel-gen/voxelgen.ts";
 import type { Ground, LightAnchor } from "../features/lighting/domain/lightAnchors";
 import { anchorsFor, lampReservationFor } from "../features/lighting/domain/lightAnchors";
 import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
@@ -361,8 +363,18 @@ function startingPlan(bench: BenchConfig | null, params: ResortParams): ResortPl
 /** Every light the catalogue declares, whether or not one is standing yet. */
 const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
 
-/** The lights an object of this kind carries, in its own coordinates. */
-const lightsOf = (placement: Placement) => objectTypeById(placement.id).model.lights;
+/**
+ * The lights an object carries, moved to where the way it stands puts them.
+ *
+ * The model's own size is what the turn is measured against, so this reads the
+ * catalogue rather than the placement: a placement's extent is already turned,
+ * and turning a light against it would send it out of the lantern it was
+ * declared in.
+ */
+function lightsOf(placement: Placement): readonly ModelLight[] {
+  const { model } = objectTypeById(placement.id);
+  return rotateLights(model.lights, model.width, model.depth, placement.rotation);
+}
 
 /**
  * The two halves of a finished bake: the grid holds the bytes, the volume holds

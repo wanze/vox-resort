@@ -16,6 +16,10 @@
  * - **A stroke skips what it cannot have.** The pointer crosses a building on
  *   its way somewhere, and stopping the stroke dead there — or refusing the
  *   whole drag — would both be worse than paving around it.
+ *
+ * A turn is carried through rather than owned here: `place` takes it, and what
+ * comes back is a placement whose footprint is already turned, so a quarter-
+ * turned cottage is blocked by exactly the three-by-two tiles it would claim.
  */
 
 import type { ObjectTypeDefinition } from "../../catalog/domain/objectTypes";
@@ -26,6 +30,7 @@ import {
   type Placement,
   type Tile,
 } from "../../layout/domain/resortLayout";
+import type { Rotation } from "../../layout/domain/rotation";
 import type { TileOccupancy } from "./tileOccupancy";
 
 /** Key a placed object gets: its type and the tile it stands on. */
@@ -52,8 +57,13 @@ export interface PlacementPlan {
  * a rejected placement too — a red footprint where the object would have gone is
  * how the pointer says why nothing happened.
  */
-export function planAt(item: LayoutItem, tile: Tile, occupancy: TileOccupancy): PlacementPlan {
-  const placement = place(item, buildKey(item, tile), tile.x, tile.z);
+export function planAt(
+  item: LayoutItem,
+  tile: Tile,
+  occupancy: TileOccupancy,
+  rotation: Rotation = 0,
+): PlacementPlan {
+  const placement = place(item, buildKey(item, tile), tile.x, tile.z, rotation);
   return { placement, blocked: !occupancy.isFree(placement) };
 }
 
@@ -97,9 +107,10 @@ export function planStroke(
   item: LayoutItem,
   tiles: readonly Tile[],
   occupancy: TileOccupancy,
+  rotation: Rotation = 0,
 ): Placement[] {
   return tiles
-    .map((tile) => planAt(item, tile, occupancy))
+    .map((tile) => planAt(item, tile, occupancy, rotation))
     .filter((plan) => !plan.blocked)
     .map((plan) => plan.placement);
 }

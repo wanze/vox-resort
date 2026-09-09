@@ -11,11 +11,19 @@
  * (shift-right still pans, which `OrbitControls` gives us for free). Deselecting
  * hands the camera back exactly the buttons it started with, rather than the
  * defaults, so nothing else that configures the controls is quietly overwritten.
+ *
+ * The other thing this owns is which way round the object is going down. `R`
+ * turns it a quarter, shift-`R` the other way, and the turn is kept across
+ * placements rather than reset per click — a row of cottages all facing the
+ * street is a thing someone builds on purpose, and re-pressing `R` for each one
+ * would be the tax on it. Picking a different type does reset it, because the
+ * turn was chosen for the object that is no longer being placed.
  */
 
 import { MOUSE, Matrix4, TOUCH, type PerspectiveCamera } from "three/webgpu";
 import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { LayoutItem, Placement, Tile } from "../../layout/domain/resortLayout";
+import { normalizeRotation, type Rotation } from "../../layout/domain/rotation";
 import { isPaintable, planAt, tilesBetween } from "../domain/buildPlan";
 import { pickTile } from "../domain/groundPick";
 import type { TileOccupancy } from "../domain/tileOccupancy";
@@ -40,6 +48,23 @@ export interface BuildPointer {
   dispose(): void;
 }
 
+/**
+ * Whether a key press was typed into a field rather than aimed at the scene.
+ *
+ * Fields, and only fields: clicking a palette button leaves the focus on it, so
+ * a rule that ignored every focusable thing would ignore the very key the
+ * palette had just told the user about.
+ */
+function inAField(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.matches("input, textarea, select");
+}
+
+/** The turn a key press asks for, in quarters, or none at all. */
+function turnAsked(event: KeyboardEvent): number {
+  if (event.key.toLowerCase() !== "r" || inAField(event.target)) return 0;
+  return event.shiftKey ? -1 : 1;
+}
+
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   const { canvas, camera, controls, ghost, occupancy, onPlace, onCancel } = options;
 
@@ -53,6 +78,13 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   let item: LayoutItem | null = null;
   /** The tile the last paint step reached, or null when nothing is being drawn. */
   let painting: Tile | null = null;
+  /** Quarter turns the next object goes down at. */
+  let rotation: Rotation = 0;
+  /**
+   * The tile the preview is currently drawn on, so a turn can redraw it where
+   * it stands rather than waiting for the pointer to move again.
+   */
+  let hovered: Tile | null = null;
 
   const viewport = () => ({
     width: canvas.clientWidth || globalThis.innerWidth,
@@ -74,17 +106,18 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
 
   /** Redraws the preview for the tile under the pointer. */
   const preview = (tile: Tile | null): void => {
+    hovered = tile;
     if (!item || !tile) {
       ghost.hide();
       return;
     }
-    const plan = planAt(item, tile, occupancy);
+    const plan = planAt(item, tile, occupancy, rotation);
     ghost.show(plan.placement, plan.blocked);
   };
 
   const placeOn = (tile: Tile): void => {
     if (!item) return;
-    const plan = planAt(item, tile, occupancy);
+    const plan = planAt(item, tile, occupancy, rotation);
     if (plan.blocked) return;
     onPlace(plan.placement);
   };
@@ -128,12 +161,29 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
 
   const onPointerLeave = (): void => {
     painting = null;
-    ghost.hide();
+    // Through `preview` rather than straight to `hide`, so a turn pressed with
+    // the pointer off the canvas has nothing stale to redraw.
+    preview(null);
+  };
+
+  /**
+   * Turns what is about to be placed, and redraws the preview where the pointer
+   * already is — so the turn is visible without having to nudge the mouse to
+   * find out what was asked for.
+   */
+  const turnBy = (quarters: number): void => {
+    rotation = normalizeRotation(rotation + quarters);
+    preview(hovered);
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape" || !item) return;
-    onCancel();
+    if (!item) return;
+    if (event.key === "Escape") {
+      onCancel();
+      return;
+    }
+    const quarters = turnAsked(event);
+    if (quarters !== 0) turnBy(quarters);
   };
 
   canvas.addEventListener("pointermove", onPointerMove);
@@ -147,6 +197,8 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     select(next) {
       item = next;
       painting = null;
+      rotation = 0;
+      hovered = null;
       ghost.hide();
       canvas.style.cursor = next ? "crosshair" : "";
       controls.mouseButtons = next

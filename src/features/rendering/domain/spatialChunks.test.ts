@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Rotation } from "../../layout/domain/rotation";
 import {
   bucketByChunk,
   capacityFor,
@@ -11,7 +12,13 @@ import {
 
 const at = (x: number, z: number, id = "") => ({ x, z, id });
 
-const placed = (key: string, id: string, x: number, z: number) => ({ key, id, x, z });
+const placed = (key: string, id: string, x: number, z: number, rotation: Rotation = 0) => ({
+  key,
+  id,
+  x,
+  z,
+  rotation,
+});
 
 describe("chunkOf", () => {
   it("puts the origin in chunk 0,0", () => {
@@ -146,6 +153,12 @@ describe("diffPlacements", () => {
     const diff = diffPlacements([placed("a", "hut", 0, 0)], [placed("a", "hut", 64, 0)]);
     expect(diff.removed).toEqual(["a"]);
     expect(diff.added.map((added) => added.x)).toEqual([64]);
+  });
+
+  it("reports a key that turned on the spot, since the scene draws it differently", () => {
+    const diff = diffPlacements([placed("a", "hut", 0, 0, 0)], [placed("a", "hut", 0, 0, 1)]);
+    expect(diff.removed).toEqual(["a"]);
+    expect(diff.added.map((added) => added.rotation)).toEqual([1]);
   });
 
   it("reports a key that changed type the same way", () => {

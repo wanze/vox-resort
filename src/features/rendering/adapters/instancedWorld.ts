@@ -6,8 +6,9 @@
  * nothing is lost by meshing a model on its own and repeating it — and the win
  * is large. A resort of 1 100 objects uploads roughly 30 geometries instead of
  * one world-sized blob per colour, and submits on the order of 40 draw calls
- * rather than 217. Placements only ever translate, so the per-instance matrix
- * is a pure translation.
+ * rather than 217. A placement translates and takes a quarter turn, so the
+ * per-instance matrix is a turn and an offset — which is the whole cost of a
+ * building facing a different way: no second geometry, no second bucket.
  *
  * Instances are then split by chunk of the plot, so those meshes are small
  * enough for the renderer to cull — see `domain/spatialChunks.ts` for why one
@@ -38,6 +39,7 @@ import {
 import { vertexColor } from "three/tsl";
 import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
 import type { Placement } from "../../layout/domain/resortLayout";
+import { rotationRadians, turnedOrigin } from "../../layout/domain/rotation";
 import {
   bucketByChunk,
   capacityFor,
@@ -199,9 +201,24 @@ function growBucket(bucket: Bucket, group: Group, capacity: number): void {
   bucket.dirtyHigh = Number.NEGATIVE_INFINITY;
 }
 
-/** Writes a placement's translation into one slot, without touching the slot table. */
+/**
+ * Writes a placement's instance matrix into one slot, without touching the slot
+ * table.
+ *
+ * A turn about Y, then the placement's corner — plus the offset that brings the
+ * turned model back into its own footprint, since a rotation matrix turns about
+ * the origin and would otherwise leave the model behind it. `setPosition` writes
+ * the translation column over the turn rather than multiplying, which is the
+ * same matrix for none of the work.
+ */
 function writeSlot(bucket: Bucket, slot: number, placement: Placement): void {
-  bucket.mesh.setMatrixAt(slot, scratch.makeTranslation(placement.x, 0, placement.z));
+  const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
+  bucket.mesh.setMatrixAt(
+    slot,
+    scratch
+      .makeRotationY(rotationRadians(placement.rotation))
+      .setPosition(placement.x + origin.x, 0, placement.z + origin.z),
+  );
 }
 
 /**

@@ -56,6 +56,24 @@ describe("planAt", () => {
     const occupancy = createTileOccupancy([place(PATH, "path@4,7", 4, 7)]);
     expect(planAt(COTTAGE, { x: 3, z: 5 }, occupancy).blocked).toBe(true);
   });
+
+  it("stands the object the way round it was asked for", () => {
+    const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 1);
+    expect(plan.placement).toEqual(place(COTTAGE, "cottage@3,5", 3, 5, 1));
+    expect(plan.placement).toMatchObject({ rotation: 1, tilesX: 3, tilesZ: 2 });
+  });
+
+  it("asks about the tiles the turned object would claim, not the ones it would not", () => {
+    // A 2x3 cottage turned a quarter is 3x2, so a tile two rows down is suddenly
+    // free and one two columns across is suddenly not.
+    const belowIt = createTileOccupancy([place(PATH, "path@3,7", 3, 7)]);
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, belowIt).blocked).toBe(true);
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, belowIt, 1).blocked).toBe(false);
+
+    const besideIt = createTileOccupancy([place(PATH, "path@5,5", 5, 5)]);
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, besideIt).blocked).toBe(false);
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, besideIt, 1).blocked).toBe(true);
+  });
 });
 
 describe("tilesBetween", () => {

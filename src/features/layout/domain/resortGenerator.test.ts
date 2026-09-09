@@ -3,6 +3,7 @@ import { OBJECT_TYPES } from "../../catalog/domain/objectTypes";
 import { layoutItemFor } from "../../build/domain/buildPlan";
 import { layoutResort, streetTiles, tileKey } from "./resortLayout";
 import { HEDGE_ID, LAMP_ID, PATH_ID } from "./resortPlan";
+import { rotateExtent, ROTATIONS } from "./rotation";
 import {
   clampParams,
   createRandom,
@@ -22,6 +23,14 @@ const TYPES: GeneratorType[] = OBJECT_TYPES.map((type) => ({
 }));
 
 const ITEMS = OBJECT_TYPES.map(layoutItemFor);
+
+const BY_ID = new Map(TYPES.map((type) => [type.id, type]));
+
+/** The tiles a plot claims, which is not its type's footprint once it is turned. */
+const footprintOf = (plot: { id: string; rotation?: 0 | 1 | 2 | 3 }) => {
+  const type = BY_ID.get(plot.id)!;
+  return rotateExtent(type.tilesX, type.tilesZ, plot.rotation ?? 0);
+};
 
 const params = (overrides: Partial<ResortParams> = {}): ResortParams => ({
   tilesX: 112,
@@ -134,35 +143,63 @@ describe("generateResort", () => {
     }
   });
 
-  it("keeps every object inside the plot", () => {
+  it("keeps every object inside the plot, turned as it stands", () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
-      const byId = new Map(TYPES.map((type) => [type.id, type]));
       for (const plot of plan.plots) {
-        const type = byId.get(plot.id)!;
+        const footprint = footprintOf(plot);
         expect(plot.tileX).toBeGreaterThanOrEqual(0);
         expect(plot.tileZ).toBeGreaterThanOrEqual(0);
-        expect(plot.tileX + type.tilesX).toBeLessThanOrEqual(plan.tilesX);
-        expect(plot.tileZ + type.tilesZ).toBeLessThanOrEqual(plan.tilesZ);
+        expect(plot.tileX + footprint.x).toBeLessThanOrEqual(plan.tilesX);
+        expect(plot.tileZ + footprint.z).toBeLessThanOrEqual(plan.tilesZ);
       }
     }
   });
 
-  it("never overlaps two objects", () => {
+  it("never overlaps two objects, turned as they stand", () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
-      const byId = new Map(TYPES.map((type) => [type.id, type]));
       const taken = new Set<string>();
       for (const plot of plan.plots) {
-        const type = byId.get(plot.id)!;
-        for (let z = plot.tileZ; z < plot.tileZ + type.tilesZ; z++) {
-          for (let x = plot.tileX; x < plot.tileX + type.tilesX; x++) {
+        const footprint = footprintOf(plot);
+        for (let z = plot.tileZ; z < plot.tileZ + footprint.z; z++) {
+          for (let x = plot.tileX; x < plot.tileX + footprint.x; x++) {
             expect(taken.has(tileKey(x, z))).toBe(false);
             taken.add(tileKey(x, z));
           }
         }
       }
     }
+  });
+
+  it("does not stand the whole resort facing one way", () => {
+    // The point of the feature: a plot on which every turn is the same one is a
+    // housing estate, whatever else it gets right.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const turns = new Set(plan.plots.map((plot) => plot.rotation ?? 0));
+      expect({ set, turns: turns.size }).toEqual({ set, turns: ROTATIONS.length });
+    }
+  });
+
+  it("keeps most objects square to the row they stand in", () => {
+    // A quarter turn is the exception: it is what stops a row reading as a line
+    // of clones, and a plot where it were the rule would read as a scrapyard.
+    for (const set of SWEEP) {
+      const plots = generateResort(TYPES, set).plots;
+      const square = plots.filter((plot) => (plot.rotation ?? 0) % 2 === 0).length;
+      expect({ set, most: square > plots.length * 0.6 }).toEqual({ set, most: true });
+    }
+  });
+
+  it("turns the far gate to face back up the promenade", () => {
+    // Landmarks are stood before anything else, so the gates are the first two
+    // plots on the plan; the pair is the one place a turn is authored outright.
+    const plan = generateResort(TYPES, params());
+    expect(plan.plots.slice(0, 2)).toMatchObject([
+      { id: "entrance", tileZ: 0, rotation: 0 },
+      { id: "entrance", rotation: 2 },
+    ]);
   });
 
   it("routes streets that stay on the plot", () => {

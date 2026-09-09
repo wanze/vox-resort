@@ -33,6 +33,7 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from "./resortPlan";
+import { rotateExtent, type Extent, type Rotation } from "./rotation";
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
 const LAMP_SPACING = 5;
@@ -57,6 +58,16 @@ export interface Placement {
   readonly tileZ: number;
   readonly tilesX: number;
   readonly tilesZ: number;
+  /**
+   * Quarter turns the object stands at.
+   *
+   * Every other measurement on a placement is already turned — the footprint
+   * below and the extent below that are what the object claims *as it stands* —
+   * so nothing that only asks where something is has to know about this. It is
+   * here for the two things that draw the object rather than place it: the
+   * instance matrix, and where the model's own lamps ended up.
+   */
+  readonly rotation: Rotation;
   /** World-space corner of the model itself, in voxels. */
   readonly x: number;
   readonly z: number;
@@ -90,20 +101,49 @@ const NEIGHBOURS = [
   [0, -1],
 ] as const;
 
-/** Places one item's footprint at a tile position, centring a model that is smaller. */
-export function place(item: LayoutItem, key: string, tileX: number, tileZ: number): Placement {
+/**
+ * Places one item's footprint at a tile position, centring a model that is
+ * smaller than the footprint it claims.
+ *
+ * The turn is taken here rather than downstream, so the placement that comes
+ * out describes the object as it stands: a 2x3 cottage given a quarter turn
+ * claims 3x2 tiles and is 44 voxels wide. Everything that reads a placement —
+ * the occupancy index, the camera's bounds, the chunk it is culled in, the
+ * footprint the preview paints — then needs no notion of rotation at all.
+ */
+export function place(
+  item: LayoutItem,
+  key: string,
+  tileX: number,
+  tileZ: number,
+  rotation: Rotation = 0,
+): Placement {
+  const tiles = rotateExtent(item.tilesX, item.tilesZ, rotation);
+  const model = rotateExtent(item.width, item.depth, rotation);
   return {
     key,
     id: item.id,
     tileX,
     tileZ,
-    tilesX: item.tilesX,
-    tilesZ: item.tilesZ,
-    x: tileX * TILE_VOXELS + Math.floor((item.tilesX * TILE_VOXELS - item.width) / 2),
-    z: tileZ * TILE_VOXELS + Math.floor((item.tilesZ * TILE_VOXELS - item.depth) / 2),
-    width: item.width,
-    depth: item.depth,
+    tilesX: tiles.x,
+    tilesZ: tiles.z,
+    rotation,
+    x: tileX * TILE_VOXELS + Math.floor((tiles.x * TILE_VOXELS - model.x) / 2),
+    z: tileZ * TILE_VOXELS + Math.floor((tiles.z * TILE_VOXELS - model.z) / 2),
+    width: model.x,
+    depth: model.z,
   };
+}
+
+/**
+ * The tiles a plot claims, once the way it stands is taken into account.
+ *
+ * A model is checked against its *unturned* size wherever a check is about the
+ * model rather than the ground — a 2x3 cottage is too big for a 1x1 footprint
+ * whichever way round it is — so only this, the ground claim, turns.
+ */
+function footprintOf(item: LayoutItem, plot: ResortPlot): Extent {
+  return rotateExtent(item.tilesX, item.tilesZ, plot.rotation ?? 0);
 }
 
 /**
@@ -142,22 +182,10 @@ export function occupiedTiles(
   const keys = plotKeys(plan.plots);
   const occupied = new Map<string, string>();
   plan.plots.forEach((plot, index) => {
-    const item = byId.get(plot.id);
-    if (!item) throw new Error(`The plot places unknown object "${plot.id}"`);
     const key = keys[index]!;
-    if (item.width > item.tilesX * TILE_VOXELS || item.depth > item.tilesZ * TILE_VOXELS) {
-      throw new Error(`"${item.id}" is larger than the ${item.tilesX}x${item.tilesZ} it claims`);
-    }
-    if (
-      plot.tileX < 0 ||
-      plot.tileZ < 0 ||
-      plot.tileX + item.tilesX > plan.tilesX ||
-      plot.tileZ + item.tilesZ > plan.tilesZ
-    ) {
-      throw new Error(`"${key}" does not fit inside the ${plan.tilesX}x${plan.tilesZ} plot`);
-    }
-    for (let x = plot.tileX; x < plot.tileX + item.tilesX; x++) {
-      for (let z = plot.tileZ; z < plot.tileZ + item.tilesZ; z++) {
+    const tiles = claimableTiles(byId, plot, key, plan);
+    for (let x = plot.tileX; x < plot.tileX + tiles.x; x++) {
+      for (let z = plot.tileZ; z < plot.tileZ + tiles.z; z++) {
         const cell = tileKey(x, z);
         const already = occupied.get(cell);
         if (already) throw new Error(`"${key}" overlaps "${already}" at tile ${x},${z}`);
@@ -166,6 +194,37 @@ export function occupiedTiles(
     }
   });
   return occupied;
+}
+
+/**
+ * The tiles one plot may claim, or the reason it may not stand at all.
+ *
+ * The model is checked against the footprint it declares, which no turn
+ * changes — a 2x3 cottage is too big for a 1x1 whichever way round it is — and
+ * the plot is checked against the footprint it actually covers, which a quarter
+ * turn does change.
+ */
+function claimableTiles(
+  byId: ReadonlyMap<string, LayoutItem>,
+  plot: ResortPlot,
+  key: string,
+  plan: ResortPlan,
+): Extent {
+  const item = byId.get(plot.id);
+  if (!item) throw new Error(`The plot places unknown object "${plot.id}"`);
+  if (item.width > item.tilesX * TILE_VOXELS || item.depth > item.tilesZ * TILE_VOXELS) {
+    throw new Error(`"${item.id}" is larger than the ${item.tilesX}x${item.tilesZ} it claims`);
+  }
+  const tiles = footprintOf(item, plot);
+  if (
+    plot.tileX < 0 ||
+    plot.tileZ < 0 ||
+    plot.tileX + tiles.x > plan.tilesX ||
+    plot.tileZ + tiles.z > plan.tilesZ
+  ) {
+    throw new Error(`"${key}" does not fit inside the ${plan.tilesX}x${plan.tilesZ} plot`);
+  }
+  return tiles;
 }
 
 /** Offsets that grow a one-tile run to `width`, biased west/north. */
@@ -245,8 +304,9 @@ export function streetTiles(plan: ResortPlan): Tile[] {
 
 /** The tiles orthogonally touching a footprint — where a spur can attach. */
 function borderTiles(plot: ResortPlot, item: LayoutItem, plan: ResortPlan): Tile[] {
-  const x1 = plot.tileX + item.tilesX - 1;
-  const z1 = plot.tileZ + item.tilesZ - 1;
+  const footprint = footprintOf(item, plot);
+  const x1 = plot.tileX + footprint.x - 1;
+  const z1 = plot.tileZ + footprint.z - 1;
   const tiles: Tile[] = [];
   for (let x = plot.tileX; x <= x1; x++) {
     tiles.push({ x, z: plot.tileZ - 1 }, { x, z: z1 + 1 });
@@ -478,7 +538,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   );
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>
-    place(byId.get(plot.id)!, keys[index]!, plot.tileX, plot.tileZ),
+    place(byId.get(plot.id)!, keys[index]!, plot.tileX, plot.tileZ, plot.rotation ?? 0),
   );
 
   const props: Placement[] = [];

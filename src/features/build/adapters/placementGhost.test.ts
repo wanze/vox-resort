@@ -43,6 +43,22 @@ describe("createPlacementGhost", () => {
     ghost.dispose();
   });
 
+  it("turns the preview the way the object would go down", () => {
+    const ghost = createPlacementGhost([model("cottage", geometry())]);
+    const placement = place(COTTAGE, "cottage@4,5", 4, 5, 1);
+    ghost.show(placement, false);
+
+    const [pad, object] = meshes(ghost);
+    expect(object.rotation.y).toBeCloseTo(Math.PI / 2);
+    // The turned model is brought back onto the footprint it claims, rather than
+    // hanging off the corner a rotation about the origin would leave it behind.
+    expect(object.position.x).toBe(placement.x);
+    expect(object.position.z).toBe(placement.z + placement.depth);
+    // And the patch under it is the swapped footprint: 2x3 stood on end is 3x2.
+    expect([pad.scale.x, pad.scale.z]).toEqual([3, 2]);
+    ghost.dispose();
+  });
+
   it("draws a refused placement in its own colours", () => {
     const ghost = createPlacementGhost([model("cottage", geometry())]);
     const placement = place(COTTAGE, "cottage@0,0", 0, 0);

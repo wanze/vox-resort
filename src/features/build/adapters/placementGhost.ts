@@ -25,6 +25,7 @@ import {
 import { color, mix, vertexColor } from "three/tsl";
 import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
 import type { Placement } from "../../layout/domain/resortLayout";
+import { rotationRadians, turnedOrigin } from "../../layout/domain/rotation";
 import type { ModelGeometry } from "../../rendering/adapters/voxelMeshBuilder";
 
 /** Colour a valid placement is washed with, and the colour of a refused one. */
@@ -129,7 +130,12 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       }
       ghost.geometry = geometry;
       ghost.material = blocked ? materials.blocked : materials.valid;
-      ghost.position.set(placement.x, 0, placement.z);
+      // The same turn and offset the instance gets, so what the ghost shows is
+      // what the placement will draw — the footprint patch under it is already
+      // turned, because the placement's own footprint is.
+      ghost.rotation.set(0, rotationRadians(placement.rotation), 0);
+      const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
+      ghost.position.set(placement.x + origin.x, 0, placement.z + origin.z);
       ghost.visible = true;
     },
     hide() {

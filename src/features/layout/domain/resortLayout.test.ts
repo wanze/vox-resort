@@ -175,6 +175,45 @@ describe("place", () => {
     expect(placement.x).toBe(TILE_VOXELS + Math.floor((2 * TILE_VOXELS - 4) / 2));
     expect(placement.z).toBe(placement.x);
   });
+
+  it("stands an object unturned when nobody said otherwise", () => {
+    expect(place(item("hut", 2, 3), "hut", 0, 0).rotation).toBe(0);
+  });
+
+  it("swaps the footprint and the extent a quarter turn swaps", () => {
+    const cottage: LayoutItem = { id: "cottage", tilesX: 2, tilesZ: 3, width: 30, depth: 44 };
+    expect(place(cottage, "cottage", 4, 5, 1)).toMatchObject({
+      tileX: 4,
+      tileZ: 5,
+      tilesX: 3,
+      tilesZ: 2,
+      rotation: 1,
+      width: 44,
+      depth: 30,
+    });
+  });
+
+  it("still anchors a turned object on the tile it was placed on", () => {
+    // The turn is about the object, not about the plot: whichever way it faces,
+    // its footprint starts on the same north-west tile.
+    const cottage: LayoutItem = { id: "cottage", tilesX: 2, tilesZ: 3, width: 32, depth: 48 };
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const placement = place(cottage, "cottage", 4, 5, rotation);
+      expect({ rotation, x: placement.x, z: placement.z }).toEqual({
+        rotation,
+        x: 4 * TILE_VOXELS,
+        z: 5 * TILE_VOXELS,
+      });
+    }
+  });
+
+  it("centres a turned model in the footprint it now claims", () => {
+    const narrow: LayoutItem = { id: "post", tilesX: 1, tilesZ: 2, width: 4, depth: 20 };
+    const placement = place(narrow, "post", 0, 0, 1);
+    expect(placement).toMatchObject({ tilesX: 2, tilesZ: 1, width: 20, depth: 4 });
+    expect(placement.x).toBe(Math.floor((2 * TILE_VOXELS - 20) / 2));
+    expect(placement.z).toBe(Math.floor((TILE_VOXELS - 4) / 2));
+  });
 });
 
 describe("layoutResort", () => {

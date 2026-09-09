@@ -25,6 +25,7 @@
  */
 
 import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
+import type { Rotation } from "../../layout/domain/rotation";
 
 /**
  * Chunk edge, in voxels. Sixteen tiles is 64 m — big enough that the current
@@ -129,6 +130,8 @@ export interface PlacedItem extends ChunkedItem {
   readonly key: string;
   /** Object type standing here. */
   readonly id: string;
+  /** Which way round it stands; part of where it stands, as far as a diff cares. */
+  readonly rotation: Rotation;
 }
 
 export interface PlacementDiff<T> {
@@ -140,7 +143,7 @@ export interface PlacementDiff<T> {
 /**
  * What changed between two sets of placements.
  *
- * An item that kept its key but changed type or moved comes back in both lists,
+ * An item that kept its key but changed type, moved or turned comes back in both lists,
  * so a caller that removes before it adds needs no third case for it — which is
  * why the removals have to be applied first.
  *
@@ -162,7 +165,14 @@ export function diffPlacements<T extends PlacedItem>(
       continue;
     }
     before.delete(item.key);
-    if (was.id === item.id && was.x === item.x && was.z === item.z) continue;
+    if (
+      was.id === item.id &&
+      was.x === item.x &&
+      was.z === item.z &&
+      was.rotation === item.rotation
+    ) {
+      continue;
+    }
     removed.push(item.key);
     added.push(item);
   }

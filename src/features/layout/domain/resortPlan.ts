@@ -48,11 +48,24 @@
  * resort on the same pipeline: nothing outside this file changed to grow it.
  */
 
+import type { Rotation } from "./rotation";
+
 /** One object standing on the plot, anchored at its north-west tile. */
 export interface ResortPlot {
   readonly id: string;
   readonly tileX: number;
   readonly tileZ: number;
+  /**
+   * Quarter turns the object stands at; unturned when the plan says nothing.
+   *
+   * An odd turn swaps the object's footprint, so the tile coordinates above
+   * still anchor it at its north-west corner but a 2x3 cottage turned once
+   * covers 3x2 tiles from there. This plan leaves every object unturned, which
+   * is deliberate: it is the plot a `?bench=1` run measures, and a run is only
+   * comparable with the one before it if the scene has not moved. The generated
+   * plots are where the resort stops facing one way — see `resortGenerator.ts`.
+   */
+  readonly rotation?: Rotation;
 }
 
 /** A junction the streets are strung between. */

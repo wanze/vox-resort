@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { BufferAttribute, BufferGeometry, Matrix4, type InstancedMesh } from "three/webgpu";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Matrix4,
+  Vector3,
+  type InstancedMesh,
+} from "three/webgpu";
 import type { Placement } from "../../layout/domain/resortLayout";
 import { buildInstancedWorld, instancesByType } from "./instancedWorld";
 import type { ModelGeometry } from "./voxelMeshBuilder";
@@ -11,6 +17,7 @@ const at = (key: string, id: string, x: number, z = 0): Placement => ({
   tileZ: 0,
   tilesX: 1,
   tilesZ: 1,
+  rotation: 0,
   x,
   z,
   width: 16,
@@ -80,6 +87,29 @@ function positionsOf(mesh: InstancedMesh): { x: number; z: number }[] {
 }
 
 describe("buildInstancedWorld", () => {
+  it("draws a turned placement with the turn folded into its instance matrix", () => {
+    // A quarter turn about the origin would leave the model behind the corner it
+    // was placed on, so the matrix carries the offset that brings it back — and
+    // it is still one geometry in one bucket, which is the whole point of
+    // turning an instance rather than meshing a second model.
+    const turned: Placement = { ...at("a", "hut", 64, 32), rotation: 1, width: 44, depth: 30 };
+    const world = build([model("hut", 2)], [turned]);
+    const mesh = meshNamed(world, "hut@0,0")!;
+    const matrix = new Matrix4();
+    mesh.getMatrixAt(0, matrix);
+
+    const corners = [new Vector3(0, 0, 0), new Vector3(30, 0, 44)].map((corner) =>
+      corner.applyMatrix4(matrix),
+    );
+    // The model's own box, turned, lands exactly on the placement's footprint.
+    expect(corners.map((corner) => [Math.round(corner.x), Math.round(corner.z)])).toEqual([
+      [64, 32 + 30],
+      [64 + 44, 32],
+    ]);
+    expect(world.drawCalls).toBe(1);
+    world.dispose();
+  });
+
   it("draws nothing, over no chunks, for an empty plot", () => {
     const world = build([model("hut", 2)], []);
     expect(world.drawCalls).toBe(0);

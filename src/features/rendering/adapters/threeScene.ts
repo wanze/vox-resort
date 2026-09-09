@@ -124,7 +124,8 @@ interface Ground {
  *
  * Without the emissive term the lamps would light every building and leave the
  * ground they stand on black, which is the one place a street lamp is meant to
- * be seen.
+ * be seen. The same volume says how much sky each patch of ground can see, which
+ * is what puts the resort's own shading on the grass between its buildings.
  */
 function layGround(
   scene: Scene,
@@ -138,8 +139,10 @@ function layGround(
     roughness: 1,
     metalness: 0,
   });
-  if (lightVolume)
+  if (lightVolume) {
     material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
+    material.aoNode = lightVolume.skyVisibility();
+  }
   const mesh = new Mesh(geometry, material);
   mesh.rotation.x = -Math.PI / 2;
   // A hair below y = 0: a path slab's underside sits exactly on it.

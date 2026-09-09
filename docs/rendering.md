@@ -70,7 +70,9 @@ reproduces it — see _Measuring_ below.
 8. **Lighting** — every lamp on the plot is baked into an irradiance volume once
    (`lightGrid.ts`) and read back with two texture fetches
    (`bakedLightVolume.ts`), instead of being evaluated as point lights per
-   fragment.
+   fragment. How much sky each cell can still see is baked into the spare
+   channel of the same volume (`skyVisibility.ts`), and the shadows objects throw
+   across the ground are one quad each (`blobShadows.ts`). See _Shading_ below.
 9. **HUD** — labels are projected with `projectToScreen` and positioned directly
    on the DOM nodes each frame, so React never re-renders inside the render loop.
 
@@ -283,8 +285,9 @@ which is what a player actually looks at — is still at 44 fps there. So the ne
 thing to do is fewer, bigger draws (indirect draws, or merging chunk geometry)
 and LOD for buildings far enough away to be a box — not more culling.
 
-**Still not done.** LOD; occlusion culling; GPU-driven or indirect draws; and any
-texturing at all.
+**Still not done.** LOD; occlusion culling; GPU-driven or indirect draws; any
+texturing at all; and real sun shadows — see _Shading_ for what stands in for
+them and what that does not do.
 
 ## Measuring
 
@@ -378,8 +381,9 @@ whatever the resort's size and however many lamps it has.
 What that bought: **55.3 ms of GPU time became 2.49 ms** on the whole-plot night
 view, night now costs what day costs, every lamp burns instead of the nearest 16,
 and the pool no longer pops as the camera moves. The approximation is a soft one — a
-wall facing a lamp is bright and the wall behind it is not, but there are no cast
-shadows, which there were not before either.
+wall facing a lamp is bright and the wall behind it is not, but a lamp casts no
+shadow, and nothing under _Shading_ below changes that: what is baked there is
+the sun's business, and the lamps are still soft light with no occlusion in it.
 
 The cost is memory and load time: 5.4 M cells, 42.9 MB, 482 ms for this plot.
 Cell count goes with the plot's _volume_, so `lightGridSpecFor` takes the finest
@@ -391,6 +395,106 @@ pool of light, and nothing else.
 
 The alternative, clustered forward or deferred shading in TSL, is the right
 answer for lights that move. None of these do.
+
+## Shading
+
+Neither of these is a shadow map. There is still no sun-shadow pass, no
+silhouette and nothing per-fragment about either of them — that is the point.
+Both are baked or amortised so that turning them on costs the frame nothing it
+was not already paying.
+
+### Sky visibility, baked into the volume that was already there
+
+The lamps are baked because they do not move; so is everything that blocks the
+sky, and for the same reason. `skyVisibility.ts` records, per cell of the light
+grid, how much of the sky hemisphere the resort has taken away — which is what
+darkens a courtyard, the gap between two cottages, the ground under a palm's
+canopy and the corner where a wall meets the ground.
+
+It is **independent of the sun's direction**, which is the whole reason to bake
+it: it survives the day/night cycle with no re-bake at all. And it is free twice
+over. The direction volume is `RGBA8` and only ever used three of its channels,
+so this rides in the fourth — no extra memory, no extra fetch, no second
+sampler. The two bakes share the volume and share nothing else: the lamps own
+RGB and the visibility owns A, and neither writes the other's, which is what lets
+a lamp go up without re-shading the resort and an object be built without
+re-lighting it.
+
+Every object is treated as one box, and the sky it takes is that box's solid
+angle from the cell — the projected area of a box along a direction is four terms
+of its half-extents, so this is arithmetic rather than ray marching. Two
+corrections keep it honest:
+
+- **Density.** A street lamp's bounding box is a whole tile and twenty voxels
+  tall, and the lamp is a pole. Each box's contribution is scaled by the fraction
+  of it the model's voxels actually fill, derived from the registry, so a pole
+  does not shade like a pillar and a new model needs no rule written for it.
+- **Only what stands above.** Sky is up, so a box contributes in proportion to
+  how far its _top_ rises above the cell. Without this every rooftop on the plot
+  bakes dark.
+
+It reaches the shader as `aoNode`, which is the one place Three.js applies a term
+to the ambient light and nothing else. That is deliberate and it is the honest
+limit of the feature: **sky visibility dims sky light**. The sun is direct light,
+and dimming that without a real shadow map would darken the lit side of every
+building as much as the shaded one.
+
+Cost, on this plot: **149 ms** of bake, against the 639 ms the lamps take, and
+nothing at all per frame. It is proportional to what is standing rather than to
+the plot: boxes are splatted over the cells each one reaches, the reach is solved
+from the distance at which the box's own contribution falls under a threshold —
+about 19 voxels for a lamp post, the 48-voxel cap for a hotel — and anything
+under four voxels tall is dropped before the loop, which is what excludes 2 529
+path slabs that would otherwise be most of the work and none of the effect.
+
+Like the lamps, it is live: `createLiveSkyVisibility` re-bakes the block one
+object shades and re-uploads only the slices that block lies in, so an object
+placed by hand shades the ground beside it immediately.
+
+### The shadows objects throw
+
+`blobShadows.ts` gives every object tall enough one soft quad on the ground.
+
+The usual reason to draw a blob is a contact patch — a dark ellipse _under_ an
+object, to plant a thing that would otherwise read as a sticker on the grass.
+This catalogue does not need one, and finding that out changed the feature:
+**every one of the 31 models paints its own ground plate over the whole footprint
+it claims**, so the ground an object stands on is already the object, and a patch
+drawn under it would be inside opaque geometry. What is missing is the ground
+_around_ it.
+
+So these are cast, not contact. The shadow of a box `w x d x h` under a sun at
+elevation `e` is that footprint swept `h / tan(e)` away from the sun, so the quad
+is the footprint grown by half the sweep and shifted by the other half: it starts
+under the object and runs out onto the grass, and the half still underneath is
+hidden by the object, which is where a real shadow is hidden too. A palm's
+shadow reaches further than a hedge's because it is taller, not because its tile
+is bigger.
+
+Three things about the way it is drawn:
+
+- **One mesh, not one per chunk.** A shadow is two triangles, so the plot's 1 435
+  of them are 2 870 against the 2.18 M the resort already submits — less than
+  chunking them would cost in draw calls. What it costs instead is fill.
+- **Moving the sun rewrites every quad.** A shadow's shape depends on the height
+  casting it, so it cannot be a uniform the way the lamp factor is. That is one
+  matrix write per shadow on a sky change — 1 435 of them, well under a
+  millisecond — and none at all on a frame where the clock did not move, which is
+  every frame while the cycle is stopped.
+- **They lie at paving level, not ground level.** Paths stand two voxels proud,
+  and a shadow at ground level would be cut off at every kerb it crossed on a plot
+  that is 23% paved. The price is that a shadow floats half a metre over bare
+  grass: nothing from above, slight at eye level.
+
+The sweep is capped at three times the caster's height rather than running to the
+horizon at sunrise, and the whole thing fades out as the sun sets — so no sun
+shadow is ever drawn while the lamps are fully lit.
+
+**Not measured yet.** Both features are unmeasured in a frame: `pnpm bench` has
+not been run against them, so the table above still describes the build before
+this. The sky visibility should cost nothing — it is one channel of a fetch that
+was already happening — and the shadows should cost one draw call and whatever
+1 435 blended quads cost in fill, which is the number worth actually looking at.
 
 ## Adding or changing an object
 
@@ -457,8 +561,13 @@ having to author it.
 
 ## Out of scope for this milestone
 
-Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, shadows,
-procedural terrain, physics and multiplayer.
+Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, procedural
+terrain, physics and multiplayer.
+
+Shadows are half in scope now: the resort shades itself against the sky and
+objects throw a shadow across the ground, but neither is a shadow map. There is
+no silhouette in either, the sun's own light is not occluded, and the lamps cast
+nothing at all after dark. See _Shading_.
 
 Objects can be placed by hand, but not taken away again: there is no bulldozer,
 no undo and nothing persists a plot across a reload. The lamps are still baked

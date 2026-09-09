@@ -39,7 +39,7 @@ import type { WorldBounds } from "../features/layout/domain/worldBounds";
 import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
 import { skyStateFor } from "../features/lighting/domain/dayNight";
 import type { ModelLight } from "../../voxel-gen/voxelgen.ts";
-import type { Ground, LightAnchor } from "../features/lighting/domain/lightAnchors";
+import type { Ground } from "../features/lighting/domain/lightAnchors";
 import { anchorsFor, lampReservationFor } from "../features/lighting/domain/lightAnchors";
 import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
 import {
@@ -51,6 +51,8 @@ import {
 } from "../features/lighting/domain/lightGrid";
 import type { LiveLightGrid } from "../features/lighting/domain/liveLightGrid";
 import { createLiveLightGrid } from "../features/lighting/domain/liveLightGrid";
+import type { LiveSkyVisibility, Occluder } from "../features/lighting/domain/skyVisibility";
+import { createLiveSkyVisibility } from "../features/lighting/domain/skyVisibility";
 import type { BakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
 import { createBakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
 import type { ScratchLayout } from "../features/voxel-world/domain/modelScratch";
@@ -61,6 +63,10 @@ import type { InstancedWorld } from "../features/rendering/adapters/instancedWor
 import { buildInstancedWorld } from "../features/rendering/adapters/instancedWorld";
 import type { ModelGeometry } from "../features/rendering/adapters/voxelMeshBuilder";
 import { buildModelGeometries } from "../features/rendering/adapters/voxelMeshBuilder";
+import type { BlobShadow, ShadowCaster } from "../features/rendering/domain/blobShadows";
+import { blobShadowFor, blobShadowsFor } from "../features/rendering/domain/blobShadows";
+import type { BlobShadowField } from "../features/rendering/adapters/blobShadowField";
+import { buildBlobShadowField } from "../features/rendering/adapters/blobShadowField";
 import type { CameraFraming } from "../features/layout/domain/worldBounds";
 import type { SceneHandle } from "../features/rendering/adapters/threeScene";
 import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/adapters/threeScene";
@@ -85,6 +91,21 @@ import { roundStats, summarizeFrames, type FrameStats } from "../features/bench/
  * catalogue.
  */
 const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxels.length]));
+
+/**
+ * How solidly each model fills its own bounding box, 0..1.
+ *
+ * The sky-visibility bake shades from boxes, and a box is a poor stand-in for a
+ * street lamp: scaling its contribution by what the model actually fills is what
+ * keeps a pole from shading like a pillar. Derived from the catalogue, so an
+ * object added to the art needs no rule written for it here.
+ */
+const DENSITY_PER_TYPE = new Map(
+  OBJECT_TYPES.map((type) => [
+    type.id,
+    type.model.voxels.length / Math.max(1, type.model.width * type.model.height * type.model.depth),
+  ]),
+);
 
 /** How far above an object its label floats, in voxels. */
 const LABEL_LIFT = 2;
@@ -116,7 +137,12 @@ export interface ShowcaseStats {
   readonly drawCalls: number;
   /** Chunks of the plot, which are what the renderer culls. */
   readonly chunkCount: number;
-  /** Triangles uploaded once, shared by every instance of a model. */
+  /**
+   * Triangles uploaded once, shared by every instance of a model.
+   *
+   * The catalogue's own geometry. The cast shadows add one quad to that and are
+   * left out, so this stays comparable with what the mesher produced.
+   */
   readonly uniqueTriangleCount: number;
   /** What the mesher emitted before the greedy pass merged coplanar faces. */
   readonly unmergedTriangleCount: number;
@@ -126,6 +152,10 @@ export interface ShowcaseStats {
   readonly sceneVoxelCount: number;
   /** Voxels actually meshed: one copy of each model. */
   readonly meshedVoxelCount: number;
+  /** Shadows drawn on the ground, one per object tall enough to throw one. */
+  readonly shadowCount: number;
+  /** Objects tall enough to take sky away from what stands beside them. */
+  readonly occluderCount: number;
   /** Lamps the objects on the plot declare between them. */
   readonly lightCount: number;
   /**
@@ -140,6 +170,8 @@ export interface ShowcaseStats {
   readonly lightGridBytes: number;
   /** How long the bake took, in milliseconds. */
   readonly lightBakeMs: number;
+  /** How much of that was the sky-visibility pass. */
+  readonly skyBakeMs: number;
   /** Milliseconds the voxel mesher spent producing per-face quads. */
   readonly dveMs: number;
   /** Milliseconds spent meshing the catalogue and merging its faces. */
@@ -377,12 +409,46 @@ function lightsOf(placement: Placement): readonly ModelLight[] {
 }
 
 /**
+ * The box an object stands in, as far as the sky behind it is concerned.
+ *
+ * The placement's own extents, which are already turned, and the model's height.
+ * A path slab comes out two voxels tall and is dropped by the bake itself; see
+ * `MIN_OCCLUDER_HEIGHT`.
+ */
+function occluderOf(placement: Placement): Occluder {
+  return {
+    minX: placement.x,
+    maxX: placement.x + placement.width,
+    minY: 0,
+    maxY: objectTypeTop(placement.id),
+    minZ: placement.z,
+    maxZ: placement.z + placement.depth,
+    density: DENSITY_PER_TYPE.get(placement.id) ?? 1,
+  };
+}
+
+/**
+ * An object as its shadow sees it: where it stands, how much ground it claims
+ * and how tall it is. The first three are already on the placement, turn
+ * included; the height is the model's.
+ */
+function casterOf(placement: Placement): ShadowCaster {
+  return { ...placement, height: objectTypeTop(placement.id) };
+}
+
+/** The shadow an object throws, or null if it is too flat to throw one. */
+function blobOf(placement: Placement): BlobShadow | null {
+  return blobShadowFor(casterOf(placement));
+}
+
+/**
  * The two halves of a finished bake: the grid holds the bytes, the volume holds
  * the textures over them. They are made and lost together, so they travel
  * together.
  */
 interface BakedLighting {
   readonly live: LiveLightGrid;
+  readonly sky: LiveSkyVisibility;
   readonly volume: BakedLightVolume;
 }
 
@@ -400,6 +466,19 @@ function splatLights(baked: BakedLighting, placement: Placement): void {
   }
 }
 
+/**
+ * Shades the ground and the walls an object just placed now stands against,
+ * re-baking only the cells it reaches.
+ *
+ * The other half of `splatLights`, and the reason it is a separate call: a lamp
+ * adds light where an object takes sky away, most objects do the second without
+ * doing the first, and the two write different channels of the same volume.
+ */
+function splatSkyVisibility(baked: BakedLighting, placement: Placement): void {
+  const region = baked.sky.add(occluderOf(placement));
+  if (region) baked.volume.updateSkyVisibility(region);
+}
+
 interface Lighting {
   /** Lamps the objects on the plot declare between them. */
   readonly anchorCount: number;
@@ -408,31 +487,47 @@ interface Lighting {
   readonly spec: LightGridSpec | null;
   readonly volume: BakedLightVolume | null;
   readonly bakeMs: number;
-  /** Lights whatever lamps an object just placed declares, without a re-bake. */
+  /** Milliseconds the sky-visibility pass took, of `bakeMs`. */
+  readonly skyBakeMs: number;
+  /** Objects tall enough to shade anything. */
+  readonly occluderCount: number;
+  /**
+   * Lights whatever lamps an object just placed declares and shades what it now
+   * stands in front of, without a re-bake of either.
+   */
   add(placement: Placement): void;
 }
 
 /**
- * Bakes the plot's lamps into a grid and the two textures the shader reads it
- * from, or nothing at all when there is no grid to bake into.
+ * A plot with nowhere to bake: nothing in the catalogue casts light, so there is
+ * no grid, no volume and no channel for sky visibility to ride in either.
  */
-function bakeVolume(
-  anchors: readonly LightAnchor[],
-  spec: LightGridSpec | null,
-): BakedLighting | null {
-  if (!spec) return null;
-  const grid = bakeLightGrid(anchors, spec);
-  return { live: createLiveLightGrid(grid, anchors), volume: createBakedLightVolume(grid) };
+function unlitLighting(anchorCount: number): Lighting {
+  return {
+    anchorCount,
+    litCount: 0,
+    occluderCount: 0,
+    spec: null,
+    volume: null,
+    bakeMs: 0,
+    skyBakeMs: 0,
+    add() {},
+  };
 }
 
 /**
- * Collects every lamp the plot stands, bakes them into one irradiance volume,
- * and keeps that volume current as more are built.
+ * Collects every lamp the plot stands and every box that takes sky away, bakes
+ * both into one volume, and keeps it current as more are built.
  *
  * The bake happens before anything is built, because the volume is what the
  * scene's materials are wired to. The grid is sized once and never resized, so
  * it is sized here to cover the whole plot rather than only the lamps standing
  * on it — see `lampReservationFor`.
+ *
+ * The two bakes share the volume and share nothing else: the lamps own three
+ * channels of it and the sky visibility owns the fourth, and neither writes the
+ * other's. That is what lets a lamp go up without re-shading the resort, and an
+ * object be built without re-lighting it.
  */
 function createLighting(everything: readonly Placement[], ground: Ground): Lighting {
   const anchors = everything.flatMap((placement) => anchorsFor(placement, lightsOf(placement)));
@@ -441,24 +536,40 @@ function createLighting(everything: readonly Placement[], ground: Ground): Light
     DEFAULT_GRID_BUDGET_BYTES,
     lampReservationFor(ground, CATALOGUE_LIGHTS),
   );
+  if (!spec) return unlitLighting(anchors.length);
+
   const started = performance.now();
-  const baked = bakeVolume(anchors, spec);
+  const grid = bakeLightGrid(anchors, spec);
+  const skyStarted = performance.now();
+  const sky = createLiveSkyVisibility(spec, grid.direction, everything.map(occluderOf));
+  const skyBakeMs = Math.round(performance.now() - skyStarted);
+  // Built last, so both bakes are in the bytes before a texture is uploaded.
+  const baked: BakedLighting = {
+    live: createLiveLightGrid(grid, anchors),
+    sky,
+    volume: createBakedLightVolume(grid),
+  };
   const bakeMs = Math.round(performance.now() - started);
 
   let anchorCount = anchors.length;
   return {
     spec,
     bakeMs,
-    volume: baked ? baked.volume : null,
+    skyBakeMs,
+    volume: baked.volume,
     get anchorCount() {
       return anchorCount;
     },
     get litCount() {
-      return baked ? baked.live.lampCount : 0;
+      return baked.live.lampCount;
+    },
+    get occluderCount() {
+      return baked.sky.occluderCount;
     },
     add(placement) {
       anchorCount += lightsOf(placement).length;
-      if (baked) splatLights(baked, placement);
+      splatLights(baked, placement);
+      splatSkyVisibility(baked, placement);
     },
   };
 }
@@ -513,6 +624,8 @@ interface Resort {
   readonly plot: Plot;
   readonly lighting: Lighting;
   readonly world: InstancedWorld;
+  /** The shadows thrown by whatever is tall enough; see `blobShadows.ts`. */
+  readonly shadows: BlobShadowField;
   readonly occupancy: TileOccupancy;
   readonly anchors: readonly LabelAnchor[];
   readonly framing: CameraFraming;
@@ -537,12 +650,14 @@ function buildResort(parts: {
   const world = buildInstancedWorld(parts.geometries, everything, {
     lightVolume: lighting.volume,
   });
+  const shadows = buildBlobShadowField(blobShadowsFor(everything.map(casterOf)));
   const camera = frameCamera(plotBounds(parts.plan, everything), parts.bench);
 
   return {
     plot,
     lighting,
     world,
+    shadows,
     // Seeded from the resort as planned, then kept up to date one placement at a
     // time; it is what tells the pointer whether a tile is free.
     occupancy: createTileOccupancy(everything),
@@ -551,6 +666,7 @@ function buildResort(parts: {
     worldExtent: camera.worldExtent,
     dispose() {
       world.dispose();
+      shadows.dispose();
       lighting.volume?.dispose();
     },
   };
@@ -594,7 +710,9 @@ function createResortSlot(parts: {
       const previous = resort;
       resort = buildResort({ ...parts, plan });
       scene?.scene.remove(previous.world.group);
+      scene?.scene.remove(previous.shadows.group);
       scene?.scene.add(resort.world.group);
+      scene?.scene.add(resort.shadows.group);
       scene?.reframe(resort.framing, resort.worldExtent, resort.lighting.volume);
       previous.dispose();
       return resort;
@@ -660,7 +778,7 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, lighting } = parts.resort;
+  const { plot, world, shadows, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -669,11 +787,16 @@ function sceneStats(parts: {
     propCount: plot.props.length,
     pathCount: plot.paths.length,
     instanceCount: world.instanceCount,
-    drawCalls: world.drawCalls,
+    // What the renderer is actually handed, cast shadows included: they are
+    // one more draw and two more triangles per blob, and a count that hid them
+    // would stop matching what a bench reads back off the renderer.
+    drawCalls: world.drawCalls + shadows.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
-    drawnTriangleCount: world.drawnTriangleCount,
+    drawnTriangleCount: world.drawnTriangleCount + shadows.triangleCount,
+    shadowCount: shadows.count,
+    occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
     meshedVoxelCount: scratch.writes.length,
     lightCount: lighting.anchorCount,
@@ -681,6 +804,7 @@ function sceneStats(parts: {
     lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,
     lightGridBytes: lighting.spec ? gridByteSize(lighting.spec) : 0,
     lightBakeMs: lighting.bakeMs,
+    skyBakeMs: lighting.skyBakeMs,
     dveMs: catalogue.dveMs,
     meshMs: catalogue.meshMs,
     meshedInWorker: catalogue.threaded,
@@ -710,7 +834,7 @@ interface Clock {
   setCycling(cycling: boolean): void;
 }
 
-function createClock(handle: SceneHandle, lighting: () => Lighting, startTime: number): Clock {
+function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
   let time = startTime;
   let cycling = false;
   let sky = skyStateFor(time);
@@ -720,7 +844,9 @@ function createClock(handle: SceneHandle, lighting: () => Lighting, startTime: n
     if (time === applied) return;
     sky = skyStateFor(time);
     handle.applySky(sky);
-    lighting().volume?.setLampFactor(sky.lampFactor);
+    resort().lighting.volume?.setLampFactor(sky.lampFactor);
+    // A quad per shadow, rewritten only when the sun has actually moved.
+    resort().shadows.applySky(sky);
     applied = time;
   };
   apply();
@@ -730,11 +856,11 @@ function createClock(handle: SceneHandle, lighting: () => Lighting, startTime: n
       return time;
     },
     get litLamps() {
-      return sky.lampFactor > 0 ? lighting().litCount : 0;
+      return sky.lampFactor > 0 ? resort().lighting.litCount : 0;
     },
     relight() {
-      // A new resort is a new volume, and it starts at a lamp factor of zero
-      // however far through the night the clock happens to be.
+      // A new resort is a new volume and a new set of blobs, and both start at
+      // zero however far through the day the clock happens to be.
       applied = null;
       apply();
     },
@@ -938,11 +1064,14 @@ function createBuildMode(parts: {
     ghost,
     occupancy,
     onPlace(placement) {
-      const { plot, world, lighting } = resort();
+      const { plot, world, lighting, shadows } = resort();
       // Claimed first: if the tiles are gone the scene must not gain an object
       // the index does not know about.
       occupancy.claim(placement, placement.key);
       world.add(placement);
+      // Anything but a paving slab throws one; the model's height says which.
+      const blob = blobOf(placement);
+      if (blob) shadows.add(blob);
       // Any model may declare lights — a tiki torch and a swimming pool both do
       // — so this is not a check for one object type but a splat of whatever
       // the model brought with it.
@@ -999,12 +1128,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     forceWebGL: bench?.forceWebGL ?? false,
   });
   handle.scene.add(current().world.group);
+  handle.scene.add(current().shadows.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
   let running = true;
   let lastTimeMs: number | null = null;
-  const clock = createClock(handle, () => current().lighting, bench ? bench.time : INITIAL_TIME);
+  const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
 
   if (bench) pinCamera(handle);
 

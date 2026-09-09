@@ -121,7 +121,16 @@ export interface BakedLightGrid {
    * A is how strongly the lamps reaching this cell agree on a direction.
    */
   readonly irradiance: Uint8Array;
-  /** RGB per cell: the mean direction light arrives from, mapped onto 0..1. */
+  /**
+   * RGB per cell: the mean direction light arrives from, mapped onto 0..1.
+   *
+   * A is how much of the sky the cell can still see, which has nothing to do
+   * with the lamps and is not written here: `skyVisibility.ts` owns that channel
+   * and bakes it from what stands on the plot. It rides in this texture because
+   * the shader already fetches it and the channel was otherwise spare. Every
+   * cell starts fully open, so a grid nothing ever bakes visibility into shades
+   * exactly as it did before there was any.
+   */
   readonly direction: Uint8Array;
   /**
    * What a fully encoded channel decodes back to; the shader multiplies by this.
@@ -320,6 +329,30 @@ export function rangeCells(range: CellRange): number {
   return dims.x * dims.y * dims.z;
 }
 
+/**
+ * Walks a block of cells, handing each one its offset in the volume's bytes and
+ * its index within an accumulator sized to the block.
+ *
+ * Both bakes over this volume need exactly this walk and need the two numbers to
+ * stay in step — the lamps encode from an accumulator filled in this order, and
+ * so does the sky visibility in `skyVisibility.ts`. Deriving either index from
+ * the other per cell is arithmetic neither of them has to do.
+ */
+export function forEachCell(
+  spec: LightGridSpec,
+  range: CellRange,
+  visit: (target: number, cell: number) => void,
+): void {
+  let cell = 0;
+  for (let iz = range.lowZ; iz <= range.highZ; iz++) {
+    for (let iy = range.lowY; iy <= range.highY; iy++) {
+      for (let ix = range.lowX; ix <= range.highX; ix++, cell++) {
+        visit((ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4, cell);
+      }
+    }
+  }
+}
+
 /** Every cell of the grid. */
 export function wholeGrid(spec: LightGridSpec): CellRange {
   return {
@@ -507,7 +540,8 @@ function encodeDirection(
   direction[target] = length > 0 ? axis(flowX) : 128;
   direction[target + 1] = length > 0 ? axis(flowY) : 128;
   direction[target + 2] = length > 0 ? axis(flowZ) : 128;
-  direction[target + 3] = 255;
+  // Alpha is left exactly as it was: it carries sky visibility, which no lamp
+  // changes. Writing it here would wipe that bake every time a lamp went up.
 }
 
 /** Writes one cell's colour, direction and agreement into the two byte arrays. */
@@ -567,17 +601,9 @@ export function rebakeRegion(options: RebakeRegionOptions): RegionBake {
   for (const anchor of anchors) splatAnchor(anchor, spec, field);
   const scale = options.scale > 0 ? options.scale : measureScale(field.sum);
 
-  // Walked in the order the accumulator was filled, so `cell` and the three
-  // indices stay in step without either having to be derived from the other.
-  let cell = 0;
-  for (let iz = range.lowZ; iz <= range.highZ; iz++) {
-    for (let iy = range.lowY; iy <= range.highY; iy++) {
-      for (let ix = range.lowX; ix <= range.highX; ix++, cell++) {
-        const target = (ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4;
-        encodeCell(field, cell, scale, target, irradiance, direction);
-      }
-    }
-  }
+  forEachCell(spec, range, (target, cell) => {
+    encodeCell(field, cell, scale, target, irradiance, direction);
+  });
   return { scale };
 }
 
@@ -644,6 +670,12 @@ export function bakeLightGrid(
   const count = cellCount(spec);
   const irradiance = new Uint8Array(count * 4);
   const direction = new Uint8Array(count * 4);
+  // Sky fully open everywhere, before anything bakes an opinion into the alpha
+  // channel: a zeroed byte there would read as a cell that can see no sky at
+  // all, and the whole plot would come out shaded flat. The bake below
+  // overwrites the other three channels of every cell, so filling all four is
+  // one pass rather than a strided one.
+  direction.fill(255);
   const range = wholeGrid(spec);
   const { scale } = rebakeRegion({
     anchors,

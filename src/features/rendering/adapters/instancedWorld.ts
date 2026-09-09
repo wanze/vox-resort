@@ -80,6 +80,10 @@ export interface InstancedWorld {
  *
  * The resort's own lamps arrive through `emissiveNode`, read out of the baked
  * volume rather than evaluated per fragment — see `lighting/bakedLightVolume.ts`.
+ * Out of the same volume comes how much sky the surface can see, which goes to
+ * `aoNode` and so lands on the ambient term: it is what darkens a courtyard, an
+ * alley and the ground under a canopy, and it costs nothing per frame because
+ * the fetch was already happening.
  */
 function litMaterial(volume: BakedLightVolume | null): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({
@@ -88,7 +92,10 @@ function litMaterial(volume: BakedLightVolume | null): MeshStandardNodeMaterial 
     metalness: 0,
     flatShading: true,
   });
-  if (volume) material.emissiveNode = volume.lampLight(vertexColor().rgb);
+  if (volume) {
+    material.emissiveNode = volume.lampLight(vertexColor().rgb);
+    material.aoNode = volume.skyVisibility();
+  }
   return material;
 }
 

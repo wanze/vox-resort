@@ -32,6 +32,8 @@ import type { Node } from "three/webgpu";
 
 /** A TSL node carrying an RGB albedo. */
 export type ColorNode = Node<"vec3">;
+/** A TSL node carrying a single scalar. */
+export type FloatNode = Node<"float">;
 import type { BakedLightGrid, CellRange } from "../domain/lightGrid";
 
 /**
@@ -49,6 +51,15 @@ export interface BakedLightVolume {
    * Zero in daylight, because the day/night factor scales it.
    */
   lampLight(albedo: ColorNode): Node<"vec3">;
+  /**
+   * How much of the sky a surface here can see, 0..1, as a `float` node.
+   *
+   * Meant for a material's `aoNode`, which is the one place Three.js applies it
+   * to the ambient term and nothing else — the sun is direct light, and dimming
+   * that without a real shadow map would darken the lit side of every building
+   * as well as the shaded one. See `domain/skyVisibility.ts` for what is in it.
+   */
+  skyVisibility(): FloatNode;
   /** The day/night lamp factor, 0 by day and 1 after dark. */
   setLampFactor(factor: number): void;
   /**
@@ -61,6 +72,15 @@ export interface BakedLightVolume {
    * pointer move pays for a frame's worth of them, not for each.
    */
   update(region: CellRange, scale: number): void;
+  /**
+   * Sends a re-baked block of sky visibility to the GPU.
+   *
+   * Only the direction volume carries it, so only that one is marked: an object
+   * built on the plot changes what can see the sky and changes no lamp, and
+   * re-sending the irradiance slices alongside would double the upload for
+   * bytes that did not move.
+   */
+  updateSkyVisibility(region: CellRange): void;
   dispose(): void;
 }
 
@@ -147,7 +167,12 @@ export function createBakedLightVolume(grid: BakedLightGrid): BakedLightVolume {
 
   const coordinate = positionWorld.sub(originNode).div(spanNode);
   const irradiance = texture3D(irradianceTexture, coordinate);
-  const direction = texture3D(directionTexture, coordinate).xyz.mul(2).sub(1);
+  // One fetch, two answers: RGB is where the lamp light came from, A is how much
+  // sky the cell can still see. They are baked by different modules for
+  // different reasons and share a texture because the channel was going spare.
+  const directionSample = texture3D(directionTexture, coordinate);
+  const direction = directionSample.xyz.mul(2).sub(1);
+  const visibility = directionSample.a;
 
   // The bake square-root encodes the colour to keep the dim majority of the
   // scene out of the banding; squaring it undoes that.
@@ -181,12 +206,18 @@ export function createBakedLightVolume(grid: BakedLightGrid): BakedLightVolume {
         .mul(lampFactor)
         .mul(1 / Math.PI);
     },
+    skyVisibility() {
+      return visibility;
+    },
     setLampFactor(factor) {
       lampFactor.value = factor;
     },
     update(region, scale) {
       scaleNode.value = scale;
       markSlices(irradianceTexture, region);
+      markSlices(directionTexture, region);
+    },
+    updateSkyVisibility(region) {
       markSlices(directionTexture, region);
     },
     dispose() {

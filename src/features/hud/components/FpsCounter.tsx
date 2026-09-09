@@ -107,6 +107,15 @@ export function FpsCounter(props: FpsCounterProps) {
               </dd>
             </div>
             <div>
+              <dt>Shading</dt>
+              <dd>
+                {formatNumber(stats.shadowCount)} blobs{" "}
+                <span className="hud-stat-note">
+                  ({formatNumber(stats.occluderCount)} shade the sky, {stats.skyBakeMs} ms baked)
+                </span>
+              </dd>
+            </div>
+            <div>
               <dt>Startup</dt>
               <dd>
                 {formatNumber(stats.startupMs)} ms{stats.meshedInWorker ? " in a worker" : ""}{" "}

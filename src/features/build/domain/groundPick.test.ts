@@ -1,4 +1,15 @@
 import { describe, expect, it } from "vitest";
+import {
+  Matrix4,
+  OrthographicCamera,
+  Vector3,
+  WebGLCoordinateSystem,
+  WebGPUCoordinateSystem,
+  type CoordinateSystem,
+} from "three/webgpu";
+import type { CompassDirection } from "../../layout/domain/worldBounds";
+import { isometricFramingFor } from "../../layout/domain/worldBounds";
+import type { GroundPoint, PointerPosition } from "./groundPick";
 import { groundPointAt, pickTile, tileOf } from "./groundPick";
 
 /**
@@ -89,5 +100,156 @@ describe("pickTile", () => {
 
   it("gives nothing when the pointer is off the ground", () => {
     expect(pickTile({ x: 400, y: 200 }, VIEWPORT, climbing(100, 64), 16)).toBeNull();
+  });
+});
+
+/**
+ * The isometric camera, built exactly as `threeScene.ts` builds it, so this
+ * exercises the real projection rather than a hand-written stand-in.
+ *
+ * Picking is projection-agnostic — it unprojects two points and meets the ground
+ * between them — but the clip planes are not: `groundPointAt` throws away a hit
+ * behind the near plane, so a near plane that cuts into the plot would silently
+ * stop placement working over part of the map. That is what these check.
+ */
+const ISO_BOUNDS = { minX: 0, minZ: 0, maxX: 1792, maxZ: 1600, height: 96 };
+const ISO_VIEWPORT = { width: 1600, height: 900 };
+
+/**
+ * How the renderer maps clip space onto the depth buffer.
+ *
+ * `groundPointAt` unprojects the two ends of the NDC depth range and meets the
+ * ground between them, so it does not care which end is the near plane — but
+ * `along < 0` does, and the renderer picks the convention: WebGPU's range is
+ * 0..1 where WebGL's is -1..1, and `reversedDepthBuffer` turns either around.
+ * All three are configurations this app actually renders in.
+ */
+interface DepthConvention {
+  readonly label: string;
+  readonly coordinateSystem: CoordinateSystem;
+  readonly reversed: boolean;
+}
+
+const DEPTH_CONVENTIONS: DepthConvention[] = [
+  { label: "WebGPU, reversed depth", coordinateSystem: WebGPUCoordinateSystem, reversed: true },
+  { label: "WebGPU", coordinateSystem: WebGPUCoordinateSystem, reversed: false },
+  { label: "WebGL2 fallback", coordinateSystem: WebGLCoordinateSystem, reversed: false },
+];
+
+function isoCamera(
+  direction: CompassDirection,
+  zoom: number,
+  depth: DepthConvention,
+): OrthographicCamera {
+  const framing = isometricFramingFor(ISO_BOUNDS, direction);
+  const aspect = ISO_VIEWPORT.width / ISO_VIEWPORT.height;
+  const halfHeight = Math.max(framing.viewHeight / 2, framing.viewWidth / (2 * aspect)) / zoom;
+  const camera = new OrthographicCamera();
+  camera.position.set(framing.position.x, framing.position.y, framing.position.z);
+  camera.lookAt(framing.target.x, framing.target.y, framing.target.z);
+  camera.updateMatrixWorld();
+  // Built here rather than through `updateProjectionMatrix` because the
+  // convention is the renderer's to choose and the camera has no public way to
+  // be told which one it is being rendered under.
+  camera.projectionMatrix.makeOrthographic(
+    -halfHeight * aspect,
+    halfHeight * aspect,
+    halfHeight,
+    -halfHeight,
+    framing.near,
+    framing.far,
+    depth.coordinateSystem,
+    depth.reversed,
+  );
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  return camera;
+}
+
+/** Where a ground point lands on screen, so a pick can be checked by round trip. */
+function screenOf(camera: OrthographicCamera, point: GroundPoint): PointerPosition {
+  const projected = new Vector3(point.x, 0, point.z).project(camera);
+  return {
+    x: (projected.x * 0.5 + 0.5) * ISO_VIEWPORT.width,
+    y: (0.5 - projected.y * 0.5) * ISO_VIEWPORT.height,
+  };
+}
+
+const inverseOf = (camera: OrthographicCamera): number[] =>
+  new Matrix4()
+    .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
+    .invert()
+    .elements.slice();
+
+/** Nine points spread over the canvas, corners and edges included. */
+const POINTERS: PointerPosition[] = [0.02, 0.5, 0.98].flatMap((fx) =>
+  [0.02, 0.5, 0.98].map((fy) => ({
+    x: fx * ISO_VIEWPORT.width,
+    y: fy * ISO_VIEWPORT.height,
+  })),
+);
+
+const DIRECTIONS: CompassDirection[] = ["northeast", "southeast", "southwest", "northwest"];
+const ZOOMS = [0.25, 1, 4];
+
+describe.each(DEPTH_CONVENTIONS)("groundPointAt under an orthographic camera ($label)", (depth) => {
+  it("hits the ground everywhere on the canvas, at every direction and zoom", () => {
+    for (const direction of DIRECTIONS) {
+      for (const zoom of ZOOMS) {
+        const camera = isoCamera(direction, zoom, depth);
+        const inverse = inverseOf(camera);
+        for (const pointer of POINTERS) {
+          const point = groundPointAt(pointer, ISO_VIEWPORT, inverse);
+          expect(
+            point,
+            `${direction} at zoom ${zoom}, pointer ${pointer.x},${pointer.y}`,
+          ).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it("lands the hit back under the pointer that asked for it", () => {
+    for (const direction of DIRECTIONS) {
+      for (const zoom of ZOOMS) {
+        const camera = isoCamera(direction, zoom, depth);
+        const inverse = inverseOf(camera);
+        for (const pointer of POINTERS) {
+          const point = groundPointAt(pointer, ISO_VIEWPORT, inverse)!;
+          const back = screenOf(camera, point);
+          expect(back.x).toBeCloseTo(pointer.x, 3);
+          expect(back.y).toBeCloseTo(pointer.y, 3);
+        }
+      }
+    }
+  });
+
+  it("puts the middle of the screen on the middle of the plot", () => {
+    const middle = { x: ISO_VIEWPORT.width / 2, y: ISO_VIEWPORT.height / 2 };
+    for (const direction of DIRECTIONS) {
+      const point = groundPointAt(middle, ISO_VIEWPORT, inverseOf(isoCamera(direction, 1, depth)))!;
+      // The camera aims half the plot's height up, so the ground under the
+      // centre pixel is a little short of the middle along the view axis.
+      expect(point.x).toBeGreaterThan(ISO_BOUNDS.minX);
+      expect(point.x).toBeLessThan(ISO_BOUNDS.maxX);
+      expect(point.z).toBeGreaterThan(ISO_BOUNDS.minZ);
+      expect(point.z).toBeLessThan(ISO_BOUNDS.maxZ);
+    }
+  });
+
+  it("picks every tile of the plot, whichever way the camera faces", () => {
+    for (const direction of DIRECTIONS) {
+      const camera = isoCamera(direction, 1, depth);
+      const inverse = inverseOf(camera);
+      for (const corner of [
+        { x: ISO_BOUNDS.minX + 8, z: ISO_BOUNDS.minZ + 8 },
+        { x: ISO_BOUNDS.maxX - 8, z: ISO_BOUNDS.minZ + 8 },
+        { x: ISO_BOUNDS.minX + 8, z: ISO_BOUNDS.maxZ - 8 },
+        { x: ISO_BOUNDS.maxX - 8, z: ISO_BOUNDS.maxZ - 8 },
+      ]) {
+        const picked = groundPointAt(screenOf(camera, corner), ISO_VIEWPORT, inverse);
+        expect(picked?.x).toBeCloseTo(corner.x, 3);
+        expect(picked?.z).toBeCloseTo(corner.z, 3);
+      }
+    }
   });
 });

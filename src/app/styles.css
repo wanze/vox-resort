@@ -52,6 +52,7 @@ body {
 /* Every floating panel is the same smoked card; only its corner differs. */
 .hud-panel,
 .hud-palette,
+.hud-camera,
 .hud-resort {
   position: absolute;
   /* The panels carry the only interactive controls on the overlay. */
@@ -222,6 +223,8 @@ body {
 .hud-palette-head h2,
 /* Every button on the overlay is the same outlined control; only shape varies. */
 .hud-palette-clear,
+.hud-camera-mode,
+.hud-camera-point,
 .hud-resort-roll,
 .hud-resort-actions button {
   border: 1px solid var(--hud-border);
@@ -232,6 +235,8 @@ body {
 }
 
 .hud-palette-clear:hover,
+.hud-camera-mode:hover,
+.hud-camera-point:not(:disabled):hover,
 .hud-resort-roll:hover,
 .hud-resort-actions button:hover {
   border-color: rgb(255 255 255 / 30%);
@@ -411,4 +416,80 @@ body {
 .hud-resort-actions button:disabled {
   opacity: 0.5;
   cursor: progress;
+}
+
+/* The camera panel: centred at the bottom, clear of both side rails. */
+.hud-camera {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  padding: 10px 14px 9px;
+}
+
+.hud-camera-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hud-camera-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hud-muted);
+}
+
+/* The key that does the same thing, so the shortcut is discoverable. */
+.hud-camera-key {
+  padding: 0 5px;
+  border: 1px solid var(--hud-border);
+  border-radius: 4px;
+  color: var(--hud-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.hud-camera-modes,
+.hud-camera-compass {
+  display: flex;
+  gap: 6px;
+}
+
+.hud-camera-mode {
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+
+.hud-camera-point {
+  width: 34px;
+  padding: 4px 0;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The mode and the direction on show are the same pressed state as the palette. */
+.hud-camera-mode[aria-pressed="true"],
+.hud-camera-point[aria-pressed="true"] {
+  border-color: rgb(111 177 224 / 55%);
+  background: rgb(111 177 224 / 14%);
+}
+
+/* The compass belongs to the isometric view; in perspective it is simply off. */
+.hud-camera-point:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.hud-camera-hint {
+  margin: 1px 0 0;
+  max-width: 340px;
+  text-align: center;
+  color: var(--hud-muted);
+  font-size: 11px;
+  line-height: 1.35;
 }

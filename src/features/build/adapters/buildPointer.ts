@@ -4,13 +4,15 @@
  * Only the events and the camera live here — where a pointer lands, what may
  * stand there and which tiles a drag crossed are all decided in `domain/`.
  *
- * The one thing worth explaining is the mouse buttons. `OrbitControls` owns the
- * left button, and a build mode needs it: a left-drag that both orbits the
- * camera and paves a path is unusable. So while a type is selected the left
- * button is taken off the controls and the right button orbits in its place
- * (shift-right still pans, which `OrbitControls` gives us for free). Deselecting
- * hands the camera back exactly the buttons it started with, rather than the
- * defaults, so nothing else that configures the controls is quietly overwritten.
+ * The one thing worth explaining is the mouse buttons. The camera owns the left
+ * button, and a build mode needs it: a left-drag that both moves the camera and
+ * paves a path is unusable. So while a type is selected the left button is taken
+ * off the camera and whatever it was doing moves to the right button in its
+ * place (shift-right still does the other thing, which `OrbitControls` gives us
+ * for free). What "whatever it was doing" means depends on which camera is on
+ * screen — the perspective view orbits with the left button, the isometric one
+ * pans — and the mode can change while a type is armed, so the scene owns that
+ * swap and this only says when it applies. See `SceneHandle.takeLeftButton`.
  *
  * The other thing this owns is which way round the object is going down. `R`
  * turns it a quarter, shift-`R` the other way, and the turn is kept across
@@ -20,8 +22,7 @@
  * turn was chosen for the object that is no longer being placed.
  */
 
-import { MOUSE, Matrix4, TOUCH, type PerspectiveCamera } from "three/webgpu";
-import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Matrix4, type Camera } from "three/webgpu";
 import type { LayoutItem, Placement, Tile } from "../../layout/domain/resortLayout";
 import { normalizeRotation, type Rotation } from "../../layout/domain/rotation";
 import { isPaintable, planAt, tilesBetween } from "../domain/buildPlan";
@@ -31,8 +32,10 @@ import type { PlacementGhost } from "./placementGhost";
 
 export interface BuildPointerOptions {
   readonly canvas: HTMLCanvasElement;
-  readonly camera: PerspectiveCamera;
-  readonly controls: OrbitControls;
+  /** Read afresh per pick: which camera is on screen changes with the mode. */
+  readonly camera: () => Camera;
+  /** Borrows the left mouse button off the camera, or hands it back. */
+  readonly takeLeftButton: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   /** What already stands on the plot; the pointer only reads it. */
   readonly occupancy: TileOccupancy;
@@ -66,14 +69,11 @@ function turnAsked(event: KeyboardEvent): number {
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { canvas, camera, controls, ghost, occupancy, onPlace, onCancel } = options;
+  const { canvas, camera, ghost, occupancy, onPlace, onCancel, takeLeftButton } = options;
 
   // Reused across pointer moves: picking must not hand the collector work while
   // the mouse is being dragged across the plot.
   const inverseViewProjection = new Matrix4();
-
-  const cameraButtons = { ...controls.mouseButtons };
-  const cameraTouches = { ...controls.touches };
 
   let item: LayoutItem | null = null;
   /** The tile the last paint step reached, or null when nothing is being drawn. */
@@ -92,10 +92,9 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   });
 
   const tileUnder = (event: PointerEvent): Tile | null => {
-    camera.updateMatrixWorld();
-    inverseViewProjection
-      .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-      .invert();
+    const eye = camera();
+    eye.updateMatrixWorld();
+    inverseViewProjection.multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse).invert();
     const bounds = canvas.getBoundingClientRect();
     return pickTile(
       { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
@@ -201,10 +200,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       hovered = null;
       ghost.hide();
       canvas.style.cursor = next ? "crosshair" : "";
-      controls.mouseButtons = next
-        ? { LEFT: null, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE }
-        : { ...cameraButtons };
-      controls.touches = next ? { ONE: null, TWO: TOUCH.DOLLY_PAN } : { ...cameraTouches };
+      takeLeftButton(next !== null);
     },
     dispose() {
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -214,8 +210,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       canvas.removeEventListener("pointerleave", onPointerLeave);
       globalThis.removeEventListener("keydown", onKeyDown);
       canvas.style.cursor = "";
-      controls.mouseButtons = { ...cameraButtons };
-      controls.touches = { ...cameraTouches };
+      takeLeftButton(false);
     },
   };
 }

@@ -1,9 +1,11 @@
 import type { RefObject } from "react";
 import { BuildPalette } from "./BuildPalette";
+import { CameraPanel } from "./CameraPanel";
 import { ResortPanel } from "./ResortPanel";
 import { FpsCounter } from "./FpsCounter";
 import { ObjectLabels } from "./ObjectLabels";
 import type { ResortParams } from "../../layout/domain/resortGenerator";
+import type { CameraMode, CompassDirection } from "../../layout/domain/worldBounds";
 import type { LabelAnchor, ShowcaseStats } from "../../../app/showcase";
 
 export interface HudProps {
@@ -24,6 +26,11 @@ export interface HudProps {
   readonly onGenerate: (params: ResortParams) => void;
   readonly onClear: (params: ResortParams) => void;
   readonly building: boolean;
+  /** Which camera is on screen, and which way the isometric one faces. */
+  readonly cameraMode: CameraMode;
+  readonly cameraDirection: CompassDirection;
+  readonly onCameraModeChange: (mode: CameraMode) => void;
+  readonly onCameraDirectionChange: (direction: CompassDirection) => void;
   readonly error: string | null;
 }
 
@@ -39,6 +46,12 @@ export function Hud(props: HudProps) {
         cycling={props.cycling}
         onTimeChange={props.onTimeChange}
         onCyclingChange={props.onCyclingChange}
+      />
+      <CameraPanel
+        mode={props.cameraMode}
+        direction={props.cameraDirection}
+        onModeChange={props.onCameraModeChange}
+        onDirectionChange={props.onCameraDirectionChange}
       />
       <BuildPalette selected={props.buildType} onSelect={props.onBuildTypeChange} />
       {props.params ? (

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createHudOverlay } from "../features/hud/adapters/hudOverlay";
 import { Hud } from "../features/hud/components/Hud";
 import { useHudNodes } from "./useHudNodes";
+import { useCameraControls } from "./useCameraControls";
+import { useClockControls } from "./useClockControls";
 import { useResortControls } from "./useResortControls";
 import { mountShowcase, type LabelAnchor, type Showcase, type ShowcaseStats } from "./showcase";
 
@@ -21,14 +23,16 @@ export function App() {
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
   const [anchors, setAnchors] = useState<readonly LabelAnchor[]>([]);
-  const [cycling, setCycling] = useState(false);
   const [buildType, setBuildType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resort = useResortControls(showcaseRef);
-  // Pulled out because the mount effect depends on it: the setter React hands
-  // back is stable, the object holding it is not, and depending on the object
+  const camera = useCameraControls(showcaseRef);
+  const clock = useClockControls(showcaseRef);
+  // Pulled out because the mount effect depends on them: the setters React hands
+  // back are stable, the objects holding them are not, and depending on those
   // would tear the renderer down on every render.
   const { adopt: adoptParams } = resort;
+  const { adopt: adoptCamera } = camera;
 
   /** Arms the pointer with a type, and keeps the palette showing which. */
   const selectBuildType = useCallback((typeId: string | null) => {
@@ -58,6 +62,8 @@ export function App() {
       // A new resort brings its own labels; the old ones name objects that are
       // no longer standing.
       onAnchorsChange: setAnchors,
+      // C, Q and E move the camera from the canvas; the panel follows.
+      onCameraChange: adoptCamera,
       onFrame: overlay.update,
     };
 
@@ -73,6 +79,7 @@ export function App() {
         mounted.selectBuildType(buildTypeRef.current);
         setStats(mounted.stats);
         setAnchors(mounted.anchors);
+        adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
       } catch (cause: unknown) {
         console.error(cause);
@@ -87,18 +94,8 @@ export function App() {
         showcaseRef.current = null;
       });
     };
-    // All three are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectBuildType, adoptParams]);
-
-  const handleTimeChange = useCallback((time: number) => {
-    setCycling(false);
-    showcaseRef.current?.setTime(time);
-  }, []);
-
-  const handleCyclingChange = useCallback((next: boolean) => {
-    setCycling(next);
-    showcaseRef.current?.setCycling(next);
-  }, []);
+    // All of them are stable, so the renderer is mounted exactly once.
+  }, [hudNodes, selectBuildType, adoptParams, adoptCamera]);
 
   return (
     <div className="app">
@@ -110,15 +107,19 @@ export function App() {
         labelElements={hudNodes.labels}
         activeLightsElement={hudNodes.activeLights}
         timeElement={hudNodes.time}
-        cycling={cycling}
-        onTimeChange={handleTimeChange}
-        onCyclingChange={handleCyclingChange}
+        cycling={clock.cycling}
+        onTimeChange={clock.setTime}
+        onCyclingChange={clock.setCycling}
         buildType={buildType}
         onBuildTypeChange={selectBuildType}
         params={resort.params}
         onGenerate={resort.generate}
         onClear={resort.clear}
         building={resort.building}
+        cameraMode={camera.view.mode}
+        cameraDirection={camera.view.direction}
+        onCameraModeChange={camera.setMode}
+        onCameraDirectionChange={camera.setDirection}
         error={error}
       />
     </div>

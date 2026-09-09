@@ -8,6 +8,14 @@
  *
  * The camera presets are derived from the plot's bounds, so they survive the
  * resort growing — which it is meant to.
+ *
+ * **Both presets are perspective framings, and a run stays in that mode.** The
+ * numbers in `docs/rendering.md` were all measured through that lens, and an
+ * orthographic camera does not draw the same pixels — it culls differently and
+ * has no horizon for the fog to run out to — so a mixed set of runs would not be
+ * comparable with each other or with what is written down. The showcase refuses
+ * a mode change while a bench is on for the same reason; pricing the isometric
+ * view means a preset of its own, not a flag on these.
  */
 
 import { normalizeTime } from "../../lighting/domain/dayNight";

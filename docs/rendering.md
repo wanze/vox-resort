@@ -190,6 +190,77 @@ The policy — which chunk a placement falls in, how much room a bucket should
 hold, what differs between two sets of placements — is pure and lives in
 `rendering/domain/spatialChunks.ts`. Only the buffer writes are in the adapter.
 
+## Looking at it: two cameras
+
+The resort is drawn through one of two cameras, switched at runtime from the
+**View** panel or with `C`, and the mode survives a resort being regenerated —
+that changes what you are looking at, not how.
+
+**Perspective** is the camera the app opens on, unchanged: `OrbitControls` on a
+55° vertical field of view, framed by standing back far enough that the plot's
+diagonal fits the view. `cameraFramingFor` solves that distance.
+
+**Isometric** is orthographic and stands over a _corner_ of the plot: azimuth 45°
+and an elevation of `atan(1/√2)`, 35.26°, which together are the condition under
+which all three world axes foreshorten equally — the definition of an isometric
+drawing, and what puts two faces of every building on screen rather than one flat
+elevation. The four corners (NE, SE, SW, NW) are turned between with the panel or
+with `Q` and `E`, and because the azimuth is 45° in all four, turning the plot
+does not resize it. Zoom is free and continuous between a fifth of the plot and
+thirty times into it. Free rotation is off: the four corners _are_ the rotation.
+
+An orthographic camera is not framed by standing back — distance changes nothing
+about what it draws — so `isometricFramingFor` solves the two things that do
+matter instead, and four things follow that a perspective camera never has to
+think about:
+
+- **The view box, not the distance.** The framing returns how much world has to
+  fit across the screen and up it; the canvas's aspect ratio decides which of the
+  two binds, and `camera.zoom` scales the box rather than replacing it — so a
+  window resize leaves a zoom exactly where the user put it.
+- **Both clip planes go behind the resort.** `nearPlaneFor` exists because an
+  integer depth buffer spends its precision non-uniformly under perspective;
+  orthographic depth is linear, so there is nothing to buy by cropping the range
+  and a great deal to lose. A near plane in front of the camera cuts into the
+  plot as soon as the view is zoomed out far enough for the plane's own lower
+  edge to drop below the ground — and `groundPointAt` throws away a hit behind
+  the near plane, so _placement would silently stop working over part of the
+  map_. Both planes are put a plot's diameter clear of anything, in front of the
+  camera and behind it. `groundPick.test.ts` picks the ground at every corner and
+  zoom, under all three depth conventions this app renders in — WebGPU,
+  WebGPU with the reversed depth buffer, and the WebGL2 fallback.
+- **No fog.** Fog is measured in view-space distance, and under an orthographic
+  camera that distance is a number we picked: the camera stands wherever the
+  framing parked it, and moving it would change nothing about the image except
+  how foggy the resort came out. There is no horizon in an orthographic view for
+  the haze to run out to either — the ground fills the frame edge to edge. So the
+  isometric view is drawn clear, by pushing the fog out past the far plane rather
+  than by clearing `scene.fog` — that is compiled into every material's shader,
+  and toggling it would rebuild the whole resort's materials in the middle of a
+  mode switch.
+- **Label depth had to be re-derived.** `projectToScreen` sorted labels on the
+  homogeneous `w`, which under perspective is the distance along the view
+  direction and under orthographic projection is 1 for every point in the scene —
+  a sort that silently stops sorting. The camera's view and projection matrices
+  are now handed over separately rather than multiplied into one, because view
+  space is where the two projections still agree, and the depth is read there.
+
+Two cameras, one set of `OrbitControls`: everything that makes a camera usable —
+damping, where it is pointed, which mouse buttons do what, whether the build
+pointer has taken the left button off it — is state that would otherwise have to
+be kept in sync between two of them. Switching swaps the controls' camera and
+restores the target that mode was left pointed at. What the left button does
+differs by mode (the perspective view orbits with it, the isometric one pans),
+which is why _the scene_ rather than the build pointer owns lending it out: the
+mode can change while a type is armed.
+
+**Benchmarks stay perspective.** Both `?view=` presets are perspective framings,
+the table above was measured through that lens, and an orthographic camera does
+not draw the same pixels — so the showcase refuses a mode change while a bench is
+running. Pricing the isometric view means a preset of its own.
+
+**Still not done here:** no LOD, and no fixed zoom steps — zoom is continuous.
+
 ## Building on the plot
 
 Placing is the other half of the mutable scene: the renderer could already take

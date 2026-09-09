@@ -8,6 +8,13 @@
  * the fog all take their colour from a `SkyState`, so moving the time of day is
  * a single call. The lamps placed around the resort are a separate concern; see
  * `features/lighting/nightLights.ts`.
+ *
+ * It also owns both ways of looking at the plot — the perspective camera you
+ * fly around and the orthographic one you read the plan on. They are two cameras
+ * and one set of controls, because everything that makes a camera usable
+ * (damping, the mouse buttons, where it is pointed, whether the build pointer
+ * has taken the left button off it) is state that would otherwise have to be
+ * kept in sync between two of them. See `setCameraMode`.
  */
 
 import {
@@ -17,10 +24,14 @@ import {
   Fog,
   Mesh,
   MeshStandardNodeMaterial,
+  MOUSE,
+  OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  TOUCH,
   Vector2,
+  Vector3,
   WebGPURenderer,
 } from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -28,7 +39,14 @@ import { vec3 } from "three/tsl";
 import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
 import { linearRgbOf } from "../../lighting/domain/lightGrid";
 import type { SkyState } from "../../lighting/domain/dayNight";
-import type { CameraFraming } from "../../layout/domain/worldBounds";
+import type {
+  CameraFraming,
+  CameraMode,
+  CompassDirection,
+  OrthographicFraming,
+  WorldBounds,
+} from "../../layout/domain/worldBounds";
+import { isometricFramingFor } from "../../layout/domain/worldBounds";
 
 export const CAMERA_FOV_DEGREES = 55;
 
@@ -50,7 +68,14 @@ const FRAMED_REACH = 1.6;
 const MAX_NEAR = 4;
 
 /**
- * The near plane a resort of this size needs.
+ * How far the isometric view may be zoomed, as a multiple of the framing that
+ * fits the whole plot. Continuous between the two — there are no steps.
+ */
+const ISO_MIN_ZOOM = 0.2;
+const ISO_MAX_ZOOM = 60;
+
+/**
+ * The near plane a *perspective* resort of this size needs.
  *
  * An integer depth buffer resolves no better than `z^2 / (near * 2^24)` at
  * distance `z`, so a near plane of 0.1 gives five voxels of slop at the far side
@@ -64,19 +89,89 @@ const MAX_NEAR = 4;
  * still derived, because the WebGL2 fallback quietly goes back to an integer
  * buffer when `EXT_clip_control` is missing, and the cap is there because a near
  * plane the camera can bump into is worse than the artefact it prevents.
+ *
+ * None of this applies to the orthographic camera: its depth is linear, so the
+ * precision is the same everywhere and there is nothing to buy by cropping the
+ * range. Its planes come from `isometricFramingFor` instead, which puts both of
+ * them a plot's diameter clear of anything.
  */
 function nearPlaneFor(extent: number): number {
   const reach = extent * FRAMED_REACH;
   return Math.min(MAX_NEAR, Math.max(0.1, (reach * reach) / (RESOLVED_VOXELS * DEPTH_STEPS)));
 }
 
+/** Longest world dimension: what sizes the ground, the fog and the far plane. */
+function extentOf(bounds: WorldBounds): number {
+  return Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1);
+}
+
+/** Which backend the renderer settled on, which the HUD and a bench report. */
+function backendOf(renderer: WebGPURenderer): "webgpu" | "webgl2" {
+  return (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true
+    ? "webgpu"
+    : "webgl2";
+}
+
+/** What the mouse and the touchscreen do, which follows the mode. */
+interface ControlProfile {
+  readonly mouseButtons: OrbitControls["mouseButtons"];
+  readonly touches: OrbitControls["touches"];
+}
+
+/**
+ * The buttons for a mode, with the left one lent to the build pointer or not.
+ *
+ * The four compass points *are* the isometric rotation, so orbiting is off there
+ * and the left button pans instead of turning the camera. Whatever the left
+ * button does, the build pointer can borrow — and then it moves to the right,
+ * which is the one rule this has.
+ */
+function controlProfileFor(mode: CameraMode, leftLent: boolean): ControlProfile {
+  const left = mode === "isometric" ? MOUSE.PAN : MOUSE.ROTATE;
+  if (leftLent) {
+    return {
+      mouseButtons: { LEFT: null, MIDDLE: MOUSE.DOLLY, RIGHT: left },
+      touches: { ONE: null, TWO: TOUCH.DOLLY_PAN },
+    };
+  }
+  return {
+    mouseButtons: { LEFT: left, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN },
+    touches: { ONE: mode === "isometric" ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN },
+  };
+}
+
 export interface SceneHandle {
   readonly renderer: WebGPURenderer;
   readonly scene: Scene;
-  readonly camera: PerspectiveCamera;
-  readonly controls: OrbitControls;
+  /** Whichever camera the current mode renders through. */
+  readonly camera: PerspectiveCamera | OrthographicCamera;
+  readonly controls: OrbitControls<PerspectiveCamera | OrthographicCamera>;
   /** Which backend the renderer actually chose. */
   readonly backend: "webgpu" | "webgl2";
+  readonly cameraMode: CameraMode;
+  /** Which compass point the isometric camera stands over. */
+  readonly isoDirection: CompassDirection;
+  /**
+   * Switches between the perspective and isometric views.
+   *
+   * Each mode keeps where it was pointed, so coming back to one finds it as it
+   * was left rather than snapped back to the framing it started at.
+   */
+  setCameraMode(mode: CameraMode): void;
+  /** Turns the isometric camera to another compass point, around what it is on. */
+  setIsoDirection(direction: CompassDirection): void;
+  /**
+   * Takes the left mouse button off the camera, or hands it back exactly as it
+   * was.
+   *
+   * The build pointer needs the left button while a type is armed, and what the
+   * camera does with that button depends on the mode: the perspective view
+   * orbits with it, the isometric view pans. Whichever it is moves to the right
+   * button for as long as the pointer has the left one. It is the scene's job
+   * rather than the pointer's precisely because the answer changes with the
+   * mode, and the mode can change while a type is armed.
+   */
+  takeLeftButton(taken: boolean): void;
   /** Moves the whole scene to a moment of the day. */
   applySky(state: SkyState): void;
   /**
@@ -87,8 +182,11 @@ export interface SceneHandle {
    * to compile, which is what a button press can afford and a frame cannot —
    * every other material in the scene belongs to the instanced world, which is
    * rebuilt alongside it.
+   *
+   * Both cameras are re-framed and the current mode is kept: generating a resort
+   * changes what you are looking at, not how.
    */
-  reframe(framing: CameraFraming, worldExtent: number, lightVolume: BakedLightVolume | null): void;
+  reframe(bounds: WorldBounds, framing: CameraFraming, lightVolume: BakedLightVolume | null): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
   resize(width: number, height: number): void;
@@ -99,9 +197,14 @@ export interface SceneOptions {
   readonly canvas: HTMLCanvasElement;
   readonly width: number;
   readonly height: number;
+  /** How much ground the resort covers: what both cameras are framed on. */
+  readonly bounds: WorldBounds;
+  /**
+   * Where the perspective camera stands. Passed in rather than derived because
+   * the benchmark harness overrides it with a fixed view; the isometric framing
+   * is derived here, since turning the camera has to re-derive it anyway.
+   */
   readonly framing: CameraFraming;
-  /** Longest world dimension, used to size the ground and the far plane. */
-  readonly worldExtent: number;
   /** Baked lamp light, so the ground catches the pools of light the lamps cast. */
   readonly lightVolume?: BakedLightVolume | null;
   /**
@@ -158,7 +261,7 @@ function layGround(
 }
 
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
-  const { canvas, width, height, framing, worldExtent, lightVolume } = options;
+  const { canvas, width, height, framing, bounds, lightVolume } = options;
   const trackTimestamp = options.trackTimestamp ?? false;
 
   const renderer = new WebGPURenderer({
@@ -178,21 +281,107 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const scene = new Scene();
   const sky = new Color(0x11161d);
   scene.background = sky;
-  scene.fog = new Fog(sky.getHex(), worldExtent * 1.4, worldExtent * 3.2);
 
-  const camera = new PerspectiveCamera(
+  let plot = bounds;
+  let extent = extentOf(plot);
+  let aspect = width / height;
+  let mode: CameraMode = "perspective";
+  // The perspective camera already stands over the plot's south-east corner, so
+  // the isometric view opens on the same one rather than behind the viewer.
+  let direction: CompassDirection = "southeast";
+  let isoFraming: OrthographicFraming = isometricFramingFor(plot, direction);
+  let leftButtonTaken = false;
+
+  /**
+   * Distance haze, and why only the perspective camera gets it.
+   *
+   * Fog is measured in view-space distance, and under an orthographic camera
+   * that distance is a number we picked: the camera stands wherever the framing
+   * parked it, and moving it changes nothing about the image except how foggy
+   * the resort comes out. There is no horizon in an orthographic view for the
+   * haze to run out to either — the ground fills the frame edge to edge whatever
+   * the elevation. So the isometric view is drawn clear.
+   *
+   * Drawn clear by pushing the fog out past the far plane rather than by taking
+   * it out of the scene: `scene.fog` is compiled into every material's shader,
+   * so clearing it would rebuild the whole resort's materials in the middle of a
+   * mode switch. Pushed out it contributes nothing and costs nothing.
+   */
+  const fog = new Fog(sky.getHex(), extent * 1.4, extent * 3.2);
+  scene.fog = fog;
+
+  const perspectiveCamera = new PerspectiveCamera(
     CAMERA_FOV_DEGREES,
-    width / height,
-    nearPlaneFor(worldExtent),
-    Math.max(worldExtent * 8, 1000),
+    aspect,
+    nearPlaneFor(extent),
+    Math.max(extent * 8, 1000),
   );
-  camera.position.set(framing.position.x, framing.position.y, framing.position.z);
+  perspectiveCamera.position.set(framing.position.x, framing.position.y, framing.position.z);
 
-  const controls = new OrbitControls(camera, canvas);
-  controls.target.set(framing.target.x, framing.target.y, framing.target.z);
+  const isoCamera = new OrthographicCamera(-1, 1, 1, -1, isoFraming.near, isoFraming.far);
+
+  /**
+   * Cuts the orthographic view box to the canvas.
+   *
+   * The framing says how much world has to fit across the screen and up it; the
+   * shape of the window decides which of the two is the binding constraint.
+   * `camera.zoom` scales the box rather than replacing it, so a resize leaves a
+   * zoom exactly where the user put it.
+   */
+  const cutIsoBox = (): void => {
+    const halfHeight = Math.max(isoFraming.viewHeight / 2, isoFraming.viewWidth / (2 * aspect));
+    isoCamera.left = -halfHeight * aspect;
+    isoCamera.right = halfHeight * aspect;
+    isoCamera.top = halfHeight;
+    isoCamera.bottom = -halfHeight;
+    isoCamera.near = isoFraming.near;
+    isoCamera.far = isoFraming.far;
+    isoCamera.updateProjectionMatrix();
+  };
+  cutIsoBox();
+  isoCamera.position.set(isoFraming.position.x, isoFraming.position.y, isoFraming.position.z);
+
+  const controls = new OrbitControls<PerspectiveCamera | OrthographicCamera>(
+    perspectiveCamera,
+    canvas,
+  );
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.maxPolarAngle = Math.PI * 0.495;
+  // Only the orthographic camera reads these; a perspective dolly is a distance.
+  controls.minZoom = ISO_MIN_ZOOM;
+  controls.maxZoom = ISO_MAX_ZOOM;
+
+  /** Where each mode is pointed, so switching away and back finds it as it was. */
+  const targets: Record<CameraMode, Vector3> = {
+    perspective: new Vector3(framing.target.x, framing.target.y, framing.target.z),
+    isometric: new Vector3(isoFraming.target.x, isoFraming.target.y, isoFraming.target.z),
+  };
+  controls.target.copy(targets.perspective);
+
+  const cameraFor = (of: CameraMode): PerspectiveCamera | OrthographicCamera =>
+    of === "perspective" ? perspectiveCamera : isoCamera;
+
+  /** Where the haze starts and ends, or nowhere at all in the isometric view. */
+  const applyFog = (): void => {
+    if (mode === "isometric") {
+      fog.near = isoFraming.far * 2;
+      fog.far = isoFraming.far * 4;
+      return;
+    }
+    fog.near = extent * 1.4;
+    fog.far = extent * 3.2;
+  };
+
+  /** The buttons, the fog and the free rotation, all of which follow the mode. */
+  const applyMode = (): void => {
+    controls.enableRotate = mode !== "isometric";
+    applyFog();
+    const profile = controlProfileFor(mode, leftButtonTaken);
+    controls.mouseButtons = profile.mouseButtons;
+    controls.touches = profile.touches;
+  };
+  applyMode();
   controls.update();
 
   // Ambient fill keeps shaded sides readable; the sun gives every voxel face a
@@ -202,38 +391,91 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
 
-  let extent = worldExtent;
   let ground = layGround(scene, framing, extent, lightVolume ?? null);
+
+  /**
+   * Stands the isometric camera on its compass point, around whatever it is
+   * looking at — which is `controls.target` while it is the camera on screen,
+   * and the target it was left pointed at while it is not.
+   */
+  const standIsoCamera = (): void => {
+    const anchor = mode === "isometric" ? controls.target : targets.isometric;
+    isoCamera.position.set(
+      anchor.x + (isoFraming.position.x - isoFraming.target.x),
+      anchor.y + (isoFraming.position.y - isoFraming.target.y),
+      anchor.z + (isoFraming.position.z - isoFraming.target.z),
+    );
+  };
 
   return {
     renderer,
     scene,
-    camera,
     controls,
-    backend:
-      (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true
-        ? "webgpu"
-        : "webgl2",
+    get camera() {
+      return cameraFor(mode);
+    },
+    get cameraMode() {
+      return mode;
+    },
+    get isoDirection() {
+      return direction;
+    },
+    backend: backendOf(renderer),
     drawingBufferSize() {
       const size = renderer.getDrawingBufferSize(new Vector2());
       return { width: size.x, height: size.y };
     },
-    reframe(nextFraming, nextExtent, nextVolume) {
-      extent = nextExtent;
+    setCameraMode(next) {
+      if (next === mode) return;
+      targets[mode].copy(controls.target);
+      mode = next;
+      controls.object = cameraFor(mode);
+      controls.target.copy(targets[mode]);
+      if (mode === "isometric") standIsoCamera();
+      applyMode();
+      controls.update();
+    },
+    setIsoDirection(next) {
+      if (next === direction) return;
+      direction = next;
+      isoFraming = isometricFramingFor(plot, direction);
+      cutIsoBox();
+      // Around what the camera is looking at rather than around the plot, so a
+      // turn does not undo a pan.
+      standIsoCamera();
+      if (mode === "isometric") controls.update();
+    },
+    takeLeftButton(taken) {
+      leftButtonTaken = taken;
+      applyMode();
+    },
+    reframe(nextBounds, nextFraming, nextVolume) {
+      plot = nextBounds;
+      extent = extentOf(plot);
       ground.dispose();
       scene.remove(ground.mesh);
       ground = layGround(scene, nextFraming, extent, nextVolume);
 
-      camera.position.set(nextFraming.position.x, nextFraming.position.y, nextFraming.position.z);
-      camera.near = nearPlaneFor(extent);
-      camera.far = Math.max(extent * 8, 1000);
-      camera.updateProjectionMatrix();
-      controls.target.set(nextFraming.target.x, nextFraming.target.y, nextFraming.target.z);
+      perspectiveCamera.position.set(
+        nextFraming.position.x,
+        nextFraming.position.y,
+        nextFraming.position.z,
+      );
+      perspectiveCamera.near = nearPlaneFor(extent);
+      perspectiveCamera.far = Math.max(extent * 8, 1000);
+      perspectiveCamera.updateProjectionMatrix();
+      targets.perspective.set(nextFraming.target.x, nextFraming.target.y, nextFraming.target.z);
+
+      isoFraming = isometricFramingFor(plot, direction);
+      targets.isometric.set(isoFraming.target.x, isoFraming.target.y, isoFraming.target.z);
+      isoCamera.zoom = 1;
+      cutIsoBox();
+      isoCamera.position.set(isoFraming.position.x, isoFraming.position.y, isoFraming.position.z);
+
+      // The mode survives the new resort; only what it is pointed at changes.
+      controls.target.copy(targets[mode]);
       controls.update();
-      if (scene.fog instanceof Fog) {
-        scene.fog.near = extent * 1.4;
-        scene.fog.far = extent * 3.2;
-      }
+      applyFog();
     },
     applySky(state) {
       sun.color.setHex(state.sunColor);
@@ -245,11 +487,15 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       ambient.color.setHex(state.ambientColor);
       ambient.intensity = state.ambientIntensity;
       sky.setHex(state.skyColor);
-      if (scene.fog) scene.fog.color.setHex(state.skyColor);
+      // Written whether or not the fog is in the scene, so switching back to the
+      // perspective view does not bring yesterday's sky with it.
+      fog.color.setHex(state.skyColor);
     },
     resize(nextWidth, nextHeight) {
-      camera.aspect = nextWidth / nextHeight;
-      camera.updateProjectionMatrix();
+      aspect = nextWidth / nextHeight;
+      perspectiveCamera.aspect = aspect;
+      perspectiveCamera.updateProjectionMatrix();
+      cutIsoBox();
       renderer.setSize(nextWidth, nextHeight, false);
     },
     dispose() {

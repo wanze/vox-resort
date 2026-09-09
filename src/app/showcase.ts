@@ -67,10 +67,15 @@ import type { BlobShadow, ShadowCaster } from "../features/rendering/domain/blob
 import { blobShadowFor, blobShadowsFor } from "../features/rendering/domain/blobShadows";
 import type { BlobShadowField } from "../features/rendering/adapters/blobShadowField";
 import { buildBlobShadowField } from "../features/rendering/adapters/blobShadowField";
-import type { CameraFraming } from "../features/layout/domain/worldBounds";
+import type {
+  CameraFraming,
+  CameraMode,
+  CompassDirection,
+} from "../features/layout/domain/worldBounds";
+import { turnDirection } from "../features/layout/domain/worldBounds";
 import type { SceneHandle } from "../features/rendering/adapters/threeScene";
 import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/adapters/threeScene";
-import { Matrix4 } from "three/webgpu";
+import { createCameraKeys } from "../features/rendering/adapters/cameraKeys";
 import { createFpsState, sampleFrame } from "../features/hud/domain/fps";
 import { projectToScreen, type ScreenPosition } from "../features/hud/domain/labelProjection";
 import type { FrameUpdate } from "../features/hud/adapters/hudOverlay";
@@ -231,6 +236,19 @@ export interface ShowcaseOptions {
   readonly onBuildSelectionChange?: (typeId: string | null) => void;
   /** Called when a new resort replaces the old one, with the labels it needs. */
   readonly onAnchorsChange?: (anchors: readonly LabelAnchor[]) => void;
+  /**
+   * Called when the camera changes mode or turns, so the HUD follows the
+   * keyboard. Changing it *from* the HUD does not come back through here; the
+   * HUD already knows.
+   */
+  readonly onCameraChange?: (view: CameraView) => void;
+}
+
+/** Which camera the resort is being drawn through, and which way it faces. */
+export interface CameraView {
+  readonly mode: CameraMode;
+  /** The compass point the isometric camera stands over; unused in perspective. */
+  readonly direction: CompassDirection;
 }
 
 export interface Showcase {
@@ -240,6 +258,12 @@ export interface Showcase {
   readonly benchResult: BenchResult | null;
   /** The parameters the resort on screen was grown from. */
   readonly params: ResortParams;
+  /** Which camera is on screen, and which way the isometric one faces. */
+  readonly cameraView: CameraView;
+  setCameraMode(mode: CameraMode): void;
+  setIsoDirection(direction: CompassDirection): void;
+  /** Turns the isometric view a quarter; negative turns anticlockwise. */
+  turnCamera(quarters: number): void;
   /** Grows a new resort from these parameters and puts it on screen. */
   generate(params: ResortParams): void;
   /** Clears the plot to bare ground of this size, to build on by hand. */
@@ -598,17 +622,19 @@ function plotBounds(plan: ResortPlan, everything: readonly Placement[]): WorldBo
   return worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
 }
 
-/** Frames the camera on what is actually on the plot, or on the bench's fixed view. */
-function frameCamera(
-  bounds: WorldBounds,
-  bench: BenchConfig | null,
-): { readonly framing: CameraFraming; readonly worldExtent: number } {
-  return {
-    framing: bench
-      ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
-      : cameraFramingFor(bounds, CAMERA_FOV_DEGREES),
-    worldExtent: Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1),
-  };
+/**
+ * Frames the perspective camera on what is actually on the plot, or on the
+ * bench's fixed view.
+ *
+ * Only the perspective one: the isometric camera is framed inside the scene,
+ * because turning it to another compass point has to re-frame it and nothing
+ * above the scene should have to know that. The bench presets are perspective
+ * framings — see `benchConfig.ts` for why a run stays in that mode.
+ */
+function frameCamera(bounds: WorldBounds, bench: BenchConfig | null): CameraFraming {
+  return bench
+    ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
+    : cameraFramingFor(bounds, CAMERA_FOV_DEGREES);
 }
 
 /**
@@ -628,8 +654,10 @@ interface Resort {
   readonly shadows: BlobShadowField;
   readonly occupancy: TileOccupancy;
   readonly anchors: readonly LabelAnchor[];
+  /** How much ground the resort covers: what both cameras are framed on. */
+  readonly bounds: WorldBounds;
+  /** Where the perspective camera stands; the isometric one is framed in the scene. */
   readonly framing: CameraFraming;
-  readonly worldExtent: number;
   dispose(): void;
 }
 
@@ -651,7 +679,7 @@ function buildResort(parts: {
     lightVolume: lighting.volume,
   });
   const shadows = buildBlobShadowField(blobShadowsFor(everything.map(casterOf)));
-  const camera = frameCamera(plotBounds(parts.plan, everything), parts.bench);
+  const bounds = plotBounds(parts.plan, everything);
 
   return {
     plot,
@@ -662,8 +690,8 @@ function buildResort(parts: {
     // time; it is what tells the pointer whether a tile is free.
     occupancy: createTileOccupancy(everything),
     anchors: labelAnchorsFor(plot.placements),
-    framing: camera.framing,
-    worldExtent: camera.worldExtent,
+    bounds,
+    framing: frameCamera(bounds, parts.bench),
     dispose() {
       world.dispose();
       shadows.dispose();
@@ -713,7 +741,7 @@ function createResortSlot(parts: {
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
-      scene?.reframe(resort.framing, resort.worldExtent, resort.lighting.volume);
+      scene?.reframe(resort.bounds, resort.framing, resort.lighting.volume);
       previous.dispose();
       return resort;
     },
@@ -902,31 +930,34 @@ function createStatsReader(parts: {
 }
 
 /**
- * Projects the label anchors to screen space, reusing its scratch matrices
- * across frames: the render loop must not hand the garbage collector work to do
- * sixty times a second.
+ * Projects the label anchors to screen space, allocating nothing: the render
+ * loop must not hand the garbage collector work to do sixty times a second.
+ *
+ * The camera's own two matrices are handed over as they are rather than
+ * multiplied into one, because the step between them is where the depth a label
+ * sorts on lives — under an orthographic projection the combined matrix has
+ * thrown it away. See `labelProjection.ts`.
  */
 function createLabelProjector(
   handle: SceneHandle,
   canvas: HTMLCanvasElement,
   anchors: () => readonly LabelAnchor[],
 ): (into: Map<string, ScreenPosition>) => void {
-  const viewProjection: number[] = Array.from({ length: 16 }, () => 0);
-  const viewProjectionMatrix = new Matrix4();
   return (into) => {
-    handle.camera.updateMatrixWorld();
-    viewProjectionMatrix
-      .copy(handle.camera.projectionMatrix)
-      .multiply(handle.camera.matrixWorldInverse);
-    for (let i = 0; i < 16; i++) viewProjection[i] = viewProjectionMatrix.elements[i]!;
-
+    const camera = handle.camera;
+    camera.updateMatrixWorld();
     const viewport = {
       width: canvas.clientWidth || globalThis.innerWidth,
       height: canvas.clientHeight || globalThis.innerHeight,
     };
     into.clear();
     for (const anchor of anchors()) {
-      const screen = projectToScreen(anchor.world, viewProjection, viewport);
+      const screen = projectToScreen(
+        anchor.world,
+        camera.matrixWorldInverse.elements,
+        camera.projectionMatrix.elements,
+        viewport,
+      );
       if (screen) into.set(anchor.id, screen);
     }
   };
@@ -1010,6 +1041,12 @@ function listFor(plot: Plot, id: string): Placement[] {
  * Holds the camera still for a benchmark run. Damping would otherwise keep
  * nudging it for the first second, and two builds would not be compared on the
  * same pixels.
+ *
+ * A pinned run stays in the perspective view: every `?view=` preset is a
+ * perspective framing, and the numbers in `docs/rendering.md` were all measured
+ * through that lens. Switching mid-run would change what is drawn and quietly
+ * make two runs incomparable, which is exactly what this exists to prevent — so
+ * the showcase refuses a mode change while a bench is on.
  */
 function pinCamera(handle: SceneHandle): void {
   handle.controls.enabled = false;
@@ -1059,8 +1096,10 @@ function createBuildMode(parts: {
 
   const pointer = createBuildPointer({
     canvas,
-    camera: handle.camera,
-    controls: handle.controls,
+    // Read per pick rather than captured: switching to the isometric view puts a
+    // different camera on screen, and the pointer must aim through that one.
+    camera: () => handle.camera,
+    takeLeftButton: (taken) => handle.takeLeftButton(taken),
     ghost,
     occupancy,
     onPlace(placement) {
@@ -1118,8 +1157,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     canvas,
     width: canvas.clientWidth || globalThis.innerWidth,
     height: canvas.clientHeight || globalThis.innerHeight,
+    bounds: current().bounds,
     framing: current().framing,
-    worldExtent: current().worldExtent,
     lightVolume: current().lighting.volume,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
@@ -1137,6 +1176,33 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
 
   if (bench) pinCamera(handle);
+
+  const cameraView = (): CameraView => ({
+    mode: handle.cameraMode,
+    direction: handle.isoDirection,
+  });
+
+  const setCameraMode = (mode: CameraMode): void => {
+    // A bench run is measured through one lens; see `pinCamera`.
+    if (bench) return;
+    handle.setCameraMode(mode);
+  };
+
+  const setIsoDirection = (direction: CompassDirection): void => {
+    handle.setIsoDirection(direction);
+  };
+
+  const cameraKeys = createCameraKeys({
+    mode: () => handle.cameraMode,
+    onModeChange: (mode) => {
+      setCameraMode(mode);
+      options.onCameraChange?.(cameraView());
+    },
+    onTurn: (quarters) => {
+      setIsoDirection(turnDirection(handle.isoDirection, quarters));
+      options.onCameraChange?.(cameraView());
+    },
+  });
 
   const resize = (): void => {
     handle.resize(
@@ -1214,6 +1280,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get params() {
       return params;
     },
+    get cameraView() {
+      return cameraView();
+    },
+    setCameraMode,
+    setIsoDirection,
+    turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
     generate(next) {
       params = clampParams(next);
       rebuilt(slot.replace(generateResort(GENERATOR_TYPES, params)));
@@ -1229,6 +1301,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       running = false;
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener("resize", resize);
+      cameraKeys.dispose();
       build.dispose();
       current().dispose();
       handle.dispose();

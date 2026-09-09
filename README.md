@@ -34,11 +34,16 @@ Orbit with the left mouse button, pan with the right, zoom with the wheel. The
 HUD shows the frame rate, the backend in use, the scene counts, and a
 time-of-day slider.
 
+`C`, or the View panel, swaps to an orthographic isometric camera standing over
+any of the plot's four corners — `Q` and `E` turn it a quarter, the wheel zooms
+it freely, and the left button pans, since the four corners are the rotation. The
+mode survives generating a new resort.
+
 Pick an object from the build palette on the right and click the ground to place
 it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is
 laid. The pointer previews where it would land, green where it fits and red where
-something is already standing. While building, the right button orbits and Escape
-puts the object down.
+something is already standing. While building, the right button takes over moving
+the camera and Escape puts the object down.
 
 ## Structure
 

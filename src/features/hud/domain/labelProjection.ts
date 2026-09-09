@@ -2,8 +2,15 @@
  * Pure camera projection for the HTML label overlay.
  *
  * The scene renders to a canvas; labels are plain DOM nodes on top of it. Given
- * a world position and the camera's view-projection matrix, this works out
- * where the label belongs in CSS pixels — no Three.js types involved.
+ * a world position and the camera's matrices, this works out where the label
+ * belongs in CSS pixels — no Three.js types involved.
+ *
+ * The view and the projection arrive separately rather than multiplied together
+ * because depth sorting needs the step between them. Under perspective the
+ * homogeneous `w` is the distance along the view direction and would do; under
+ * orthographic projection it is 1 for every point in the scene, so a sort keyed
+ * on it silently becomes a no-op and the labels stack in whatever order the map
+ * happened to iterate. View space is where the two projections still agree.
  */
 
 export interface Point3 {
@@ -22,32 +29,53 @@ export interface ScreenPosition {
   readonly x: number;
   /** CSS pixels from the top edge of the canvas. */
   readonly y: number;
-  /** Distance along the camera's view direction, for depth sorting. */
+  /**
+   * Distance along the camera's view direction, whatever the projection.
+   *
+   * Negative behind the camera, which perspective never shows and an
+   * orthographic view legitimately can: its near plane sits behind the eye, so
+   * that nothing clips as the view is zoomed out. Sorting still works there —
+   * further away is still a larger number.
+   */
   readonly depth: number;
 }
 
 /**
- * Projects a world point with a column-major 4x4 view-projection matrix, the
- * layout Three.js uses in `Matrix4.elements`.
+ * Projects a world point through the camera's view and projection matrices,
+ * both column-major, the layout Three.js uses in `Matrix4.elements`.
  *
- * Returns null when the point sits behind the camera or outside the frustum.
+ * Returns null when the point falls outside the frustum — behind the camera
+ * under perspective, or off any side of the view volume under either.
+ *
+ * Written out rather than run through a matrix helper because this is the
+ * render loop: one call per label per frame, and nothing here may allocate.
  */
 export function projectToScreen(
   point: Point3,
-  viewProjection: ArrayLike<number>,
+  view: ArrayLike<number>,
+  projection: ArrayLike<number>,
   viewport: Viewport,
 ): ScreenPosition | null {
-  if (viewProjection.length < 16) throw new Error("Expected a 4x4 matrix of 16 elements");
+  if (view.length < 16 || projection.length < 16) {
+    throw new Error("Expected a 4x4 matrix of 16 elements");
+  }
   const { x, y, z } = point;
-  const clipX =
-    viewProjection[0]! * x + viewProjection[4]! * y + viewProjection[8]! * z + viewProjection[12]!;
-  const clipY =
-    viewProjection[1]! * x + viewProjection[5]! * y + viewProjection[9]! * z + viewProjection[13]!;
-  const clipZ =
-    viewProjection[2]! * x + viewProjection[6]! * y + viewProjection[10]! * z + viewProjection[14]!;
-  const clipW =
-    viewProjection[3]! * x + viewProjection[7]! * y + viewProjection[11]! * z + viewProjection[15]!;
+  const viewX = view[0]! * x + view[4]! * y + view[8]! * z + view[12]!;
+  const viewY = view[1]! * x + view[5]! * y + view[9]! * z + view[13]!;
+  const viewZ = view[2]! * x + view[6]! * y + view[10]! * z + view[14]!;
 
+  const clipX =
+    projection[0]! * viewX + projection[4]! * viewY + projection[8]! * viewZ + projection[12]!;
+  const clipY =
+    projection[1]! * viewX + projection[5]! * viewY + projection[9]! * viewZ + projection[13]!;
+  const clipZ =
+    projection[2]! * viewX + projection[6]! * viewY + projection[10]! * viewZ + projection[14]!;
+  const clipW =
+    projection[3]! * viewX + projection[7]! * viewY + projection[11]! * viewZ + projection[15]!;
+
+  // Perspective puts everything behind the eye at a non-positive w, where the
+  // divide below is meaningless. Orthographic w is 1 for every point, so this
+  // never fires there and the clip-volume test below is what rejects a label.
   if (clipW <= 0) return null;
 
   const ndcX = clipX / clipW;
@@ -58,7 +86,8 @@ export function projectToScreen(
   return {
     x: (ndcX * 0.5 + 0.5) * viewport.width,
     y: (0.5 - ndcY * 0.5) * viewport.height,
-    depth: clipW,
+    // The camera looks down its own -z, so this is the distance in front of it.
+    depth: -viewZ,
   };
 }
 

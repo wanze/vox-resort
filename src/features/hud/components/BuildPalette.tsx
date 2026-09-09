@@ -66,7 +66,7 @@ export function BuildPalette({ selected, onSelect }: BuildPaletteProps) {
       </div>
       <p className="hud-palette-hint">
         {selected
-          ? "Click to place, drag to draw ✎ objects. R turns the object a quarter, shift-R the other way. Right-drag orbits, shift-right pans, Esc cancels."
+          ? "Click to place, drag to draw ✎ objects. R turns the object a quarter, shift-R the other way. The right button moves the camera while a type is armed; Esc cancels."
           : "Pick an object, then click the ground to place it. R turns it before it goes down; ✎ objects can be drawn by dragging."}
       </p>
     </section>

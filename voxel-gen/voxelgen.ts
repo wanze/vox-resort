@@ -169,6 +169,21 @@ export const TILE_VOXELS = 16;
  */
 export const LEVEL_VOXELS = 8;
 
+/**
+ * Voxels a paved tile's walking surface stands above the ground under it.
+ *
+ * `path.ts` and `boardwalk.ts` both fill their lowest two layers and nothing
+ * above, so two is the top of a slab — and `stairs.ts` starts one tread above
+ * that and ends one level higher, which is what makes a flight meet the paving
+ * at both ends.
+ *
+ * Here for the same reason `TILE_VOXELS` and `LEVEL_VOXELS` are: it is a fact
+ * the art has to agree with, and two separate things need it — the flight that
+ * starts one tread above it, and, in `src/`, the crowd that walks on it.
+ * Written down twice it is exactly the kind of number that drifts.
+ */
+export const PAVING_VOXELS = 2;
+
 /** Declares a model. Pure data: nothing is built until {@link buildModel}. */
 export function defineModel(source: VoxelModelSource): VoxelModelSource {
   return source;

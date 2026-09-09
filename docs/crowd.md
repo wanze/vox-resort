@@ -92,6 +92,25 @@ invariants the layout already holds rather than needing new ones.
 **Nodes** — one per paved tile, at the tile's centre, carrying that tile's own
 `y`. `layout.paths` is exactly that list already.
 
+**Except on a flight, which holds two** — one at the foot of the climb and one at
+its head, on the tile's own two edges. This is the one place the tile centre is
+the wrong place to stand, and it was found by looking at the resort rather than
+by thinking about it: a flight's ramp runs from the paving it continues to the
+paving above across the width of its own tile, so a node in the middle of it,
+carrying the height of the ground _under_ the flight, sits half a level below the
+treads — and the crowd waded up every staircase buried to the shoulders. With a
+node at each end the polyline is the true surface: flat to the foot, the climb
+across the tile, flat on from the head. Where two flights meet they share the
+landing between them, so the graph never holds two nodes at one point.
+
+A flight is entered at its foot and left at its head. A path that runs into the
+_side_ of one reaches its foot as well, and that is necessity rather than
+neatness: `stairs.ts` makes a flight of any paved tile with paved ground a level
+above it, corridor tiles included, so a path sometimes crosses a flight at right
+angles to the climb. Refusing that pair stranded 46 nodes of the reference plot
+behind it. Going round the foot is what a person would do with the same obstacle,
+and it happens at the height they were already walking at.
+
 **Edges** — between two 4-neighbour paved tiles where the levels differ by at
 most one, and where a difference of one is only walkable if the lower tile is a
 **stairs** tile. Nothing has to be checked beyond that: `stairs.ts` guarantees a
@@ -304,5 +323,46 @@ thing that makes the second one a port of the first.
     the same per-arrival chance was suddenly rolled eight times as often. It now
     holds ~150 of 600 across a simulated hour.
 
-- **Steps 4–7.** Not started. Nothing is drawn yet: the crowd walks in tests and
-  nowhere else.
+- **Steps 4, 5 and 6 — the crowd on screen. Landed.** Treated as one thing,
+  because none of the three shows anything on its own. The people are meshed
+  through the same pipeline the catalogue is, drawn as one `InstancedMesh` per
+  person model in `crowd/adapters/crowdField.ts`, and built, stepped and thrown
+  away with the resort they walk.
+
+  Three things came out of building it rather than out of the design:
+
+  - **The union of the registries is named once.** `PAINTED_MODELS` in
+    `objectTypes.ts` is the catalogue plus the crowd, and the three places that
+    had assumed `OBJECT_TYPES` was the whole world — the material set, the
+    emissive lookup and the scratch layout — read it instead. `dveEngine.test.ts`
+    meshes it, so the `skin` family being registered is now something a test
+    fails about rather than something a person comes out miscoloured about.
+  - **A material's `positionNode` is applied _after_ instancing, and assigns.**
+    Written against the raw geometry attribute — which is what the plan above
+    implies — the walk cycle would have discarded the instance transform and
+    stood six hundred people on the origin. It builds on `positionLocal`, which
+    is the instanced position; and because past that point the figure's local +z
+    is gone, the direction a person is walking is handed over as an instanced
+    `facing` vector beside the matrix. It costs the `(sin, cos)` the matrix write
+    had already worked out.
+  - **The leg weight is baked per vertex, not computed per model.** How far a
+    vertex swings — signed by which leg it is on, tapering to nothing at the hip
+    — is a static attribute written when the figure's geometry is cloned. That is
+    what lets one material draw an adult and a child, whose hips are at different
+    heights, and it leaves the shader one `sin` and two multiplies. `hipHeight`
+    moved into `people/figure.ts` beside the layer arithmetic it comes from,
+    since the walk and the art have to agree about where the legs start.
+
+  The people are drawn with the ordinary lit material, so they walk through the
+  lamps' pools of light for nothing; and they are in none of `tileOccupancy`,
+  `diffPlacements`, the label anchors, the blob shadows or either bake.
+
+- **The staircase fix.** Looking at the crowd found what no test had: people
+  walking up a flight sank into it until only their hair showed. The cause was a
+  node at the centre of a tile whose surface climbs across that tile — see _The
+  walk network_ above, which now describes the two-node flight and the sideways
+  crossing that came with it.
+
+- **Step 7.** Not started. The crowd is on the plot; `?people=n`, a count in the
+  HUD, a bench case and the real numbers for the table above are still to come.
+  Every row of _What it should cost_ except the step loop is still arithmetic.

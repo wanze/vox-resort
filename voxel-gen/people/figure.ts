@@ -57,6 +57,24 @@ export const ADULT_VOXELS = 7;
  */
 export const CHILD_VOXELS = 6;
 
+/**
+ * Layers a figure spends above the waist: two of shirt, one of head, one of hair.
+ *
+ * Whatever is left under them is legs, which is what makes a child the same
+ * figure shortened rather than a second builder to keep in step with this one.
+ */
+const BODY_LAYERS = 4;
+
+/**
+ * The layer the legs stop at on a figure this tall, in voxels.
+ *
+ * Exported because it is the line a walk swings the legs about, and the thing
+ * that draws the crowd needs to know where that is — see `crowdField.ts`. Left
+ * as arithmetic in two places it is exactly the kind of number that drifts, and
+ * a leg pivoting at the wrong height reads as a figure bending in the middle.
+ */
+export const hipHeight = (height: number): number => height - BODY_LAYERS;
+
 export interface FigureOptions {
   /** Complexion. Any of the four steps of {@link PALETTE.skin}. */
   readonly skin: Color;
@@ -88,7 +106,7 @@ export function figure(b: VoxelBuilder, o: FigureOptions): void {
   // short legs, which is a child.
   const hairY = height - 1;
   const headY = height - 2;
-  const shirtY = height - 4;
+  const shirtY = hipHeight(height);
 
   // Legs, with the gap between them that is the only thing telling the eye there
   // are two. One voxel of gap out of three is as narrow as this grid goes.

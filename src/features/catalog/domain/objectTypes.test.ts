@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
@@ -9,6 +10,8 @@ import {
   objectTypeById,
   objectTypeGroups,
   objectTypeTop,
+  PAINTED_MODELS,
+  PEOPLE_MODELS,
 } from './objectTypes';
 
 describe('model lights', () => {
@@ -42,6 +45,22 @@ describe('model lights', () => {
   });
 });
 
+describe('PAINTED_MODELS', () => {
+  it('is the catalogue and the crowd, and nothing twice', () => {
+    expect(PAINTED_MODELS).toHaveLength(OBJECT_TYPES.length + PEOPLE_MODELS.length);
+    expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
+  });
+
+  it('keeps the people out of the catalogue, which is what they are apart from', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(PEOPLE_MODELS.length).toBeGreaterThan(0);
+    for (const person of PEOPLE_MODELS) {
+      expect(catalogue.has(person.id), `${person.id} is in the catalogue too`).toBe(false);
+      expect(person.category).toBe('people');
+    }
+  });
+});
+
 describe('emissiveByModelId', () => {
   it('lists only the models that declare a glowing colour', () => {
     const emissive = emissiveByModelId();
@@ -50,8 +69,12 @@ describe('emissiveByModelId', () => {
   });
 
   it('only names colours the model actually paints with', () => {
+    // Looked up in `PAINTED_MODELS` rather than in the catalogue, because that
+    // is what the lookup is now derived from: a glowing person would otherwise
+    // throw here rather than fail.
     for (const [id, colors] of emissiveByModelId()) {
-      const painted = new Set(objectTypeById(id).model.voxels.map((voxel) => voxel.color));
+      const model = PAINTED_MODELS.find((candidate) => candidate.id === id);
+      const painted = new Set(model!.voxels.map((voxel) => voxel.color));
       for (const color of colors) expect(painted.has(color)).toBe(true);
     }
   });
@@ -161,12 +184,27 @@ describe('objectTypeGroups', () => {
 });
 
 describe('materials', () => {
-  it('registers one material per distinct colour in the catalogue', () => {
+  it('registers one material per distinct colour the app paints with', () => {
     const colors = new Set(
-      OBJECT_TYPES.flatMap((type) => type.model.voxels.map((voxel) => voxel.color)),
+      PAINTED_MODELS.flatMap((model) => model.voxels.map((voxel) => voxel.color)),
     );
     expect(allMaterials()).toHaveLength(colors.size);
     expect(new Set(allMaterials().map((material) => material.key)).size).toBe(colors.size);
+  });
+
+  it('registers the skin the crowd is painted in, which nothing else paints', () => {
+    // The one family no building uses, and the reason the material set is
+    // derived from both registries rather than from the catalogue: without it
+    // the scratch writes ask the mesher for a voxel that was never registered,
+    // and a person comes out miscoloured or not at all. See `docs/crowd.md`.
+    const registered = new Set(allMaterials().map((material) => material.key));
+    for (const tone of Object.values(PALETTE.skin)) {
+      expect(registered.has(materialKeyFor(tone)), `skin #${tone.toString(16)}`).toBe(true);
+    }
+    const catalogue = new Set(
+      OBJECT_TYPES.flatMap((type) => type.model.voxels.map((voxel) => voxel.color)),
+    );
+    expect(Object.values(PALETTE.skin).some((tone) => catalogue.has(tone))).toBe(false);
   });
 
   it('stays under the material ceiling the mesher encodes in a byte', () => {

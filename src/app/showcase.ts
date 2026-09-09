@@ -17,6 +17,8 @@ import {
   OBJECT_TYPES,
   objectTypeById,
   objectTypeTop,
+  PAINTED_MODELS,
+  PEOPLE_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
@@ -88,6 +90,10 @@ import type { BlobShadow, ShadowCaster } from '../features/rendering/domain/blob
 import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blobShadows';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
+import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
+import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
+import type { CrowdField } from '../features/crowd/adapters/crowdField';
+import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import type {
   CameraFraming,
   CameraMode,
@@ -135,6 +141,25 @@ const DENSITY_PER_TYPE = new Map(
 
 /** How far above an object its label floats, in voxels. */
 const LABEL_LIFT = 2;
+
+/**
+ * People walking the resort.
+ *
+ * The number `docs/crowd.md` costs the design out at, and the one the step loop
+ * was measured against. It is a constant here rather than a parameter because
+ * nothing offers it yet; `?people=n` is the next step of that document.
+ */
+const CROWD_SIZE = 600;
+
+/**
+ * The seed every crowd is spawned from.
+ *
+ * Fixed, and it has to be: a benchmark run "only compares with the one before it
+ * if the scene has not moved", and a crowd drawn from `Math.random` would put
+ * six hundred people somewhere else on every load. Regenerating the plot changes
+ * the network under them, which is what makes two resorts differ.
+ */
+const CROWD_SEED = 1;
 
 /** Where the clock starts: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
@@ -373,31 +398,45 @@ function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
   };
 }
 
-/** One scratch region per model, so the mesher runs over each model exactly once. */
-function scratchForCatalogue(): ScratchLayout {
+/**
+ * One scratch region per model, so the mesher runs over each model exactly once.
+ *
+ * Over {@link PAINTED_MODELS}, which is the catalogue *and* the crowd: a person
+ * is meshed exactly the way a cottage is, and four figures of 3 x 7 x 2 are
+ * nothing against the extent the check below guards.
+ */
+function scratchForModels(): ScratchLayout {
   const scratch = scratchLayoutFor(
-    OBJECT_TYPES.map((type) => ({
-      id: type.id,
-      width: type.model.width,
-      voxels: type.model.voxels,
-    })),
+    PAINTED_MODELS,
     (color) => voxelIdFor(materialKeyFor(color)),
     sectionSizeOf(DEFAULT_WORLD_SCALE),
   );
   if (scratch.extentX > DEFAULT_WORLD_SCALE.horizontalExtent) {
     throw new Error(
-      `The catalogue needs ${scratch.extentX} voxels of scratch space, the world allows ${DEFAULT_WORLD_SCALE.horizontalExtent}`,
+      `The models need ${scratch.extentX} voxels of scratch space, the world allows ${DEFAULT_WORLD_SCALE.horizontalExtent}`,
     );
   }
   return scratch;
 }
 
 interface MeshedCatalogue {
+  /** The catalogue's own geometries: everything that stands on a tile. */
   readonly geometries: readonly ModelGeometry[];
+  /**
+   * The crowd's, kept apart from the moment they come back from the mesher.
+   *
+   * The instanced world never sees them: a person is not a placement, so a
+   * geometry the world held would be one it could be asked to stand on the plot.
+   * They belong to the crowd field instead — see `crowd/adapters/crowdField.ts`.
+   */
+  readonly people: readonly ModelGeometry[];
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
 }
+
+/** Ids the crowd is drawn from, which is what tells the two halves apart. */
+const PEOPLE_IDS: ReadonlySet<string> = new Set(PEOPLE_MODELS.map((model) => model.id));
 
 /** Meshes every model once and wraps the result in buffer geometries. */
 async function meshModels(
@@ -415,8 +454,11 @@ async function meshModels(
     },
     { forceMainThread: bench?.forceMainThreadMeshing ?? false },
   );
+  const geometries = buildModelGeometries(meshed.models);
   return {
-    geometries: buildModelGeometries(meshed.models),
+    geometries: geometries.filter((model) => !PEOPLE_IDS.has(model.id)),
+    // In registry order, because a person's `variant` indexes into it.
+    people: geometries.filter((model) => PEOPLE_IDS.has(model.id)),
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
@@ -690,6 +732,21 @@ interface Resort {
   readonly world: InstancedWorld;
   /** The shadows thrown by whatever is tall enough; see `blobShadows.ts`. */
   readonly shadows: BlobShadowField;
+  /**
+   * The people walking this plot's paving.
+   *
+   * Part of the resort rather than of the renderer above it, because the graph
+   * they walk is derived from this plot's paving and nothing else: regenerate
+   * and the network, and so the crowd on it, is a different one. See
+   * `crowd/domain/walkNetwork.ts`.
+   *
+   * Which is also the limit of it: a path laid by hand is not walked until the
+   * plot is grown again, because the network is built with the resort and not
+   * kept live the way the occupancy index is. Nobody walks into a building that
+   * was not there either — a person is on an edge, and an edge is between two
+   * tiles that were paved when the plot was laid.
+   */
+  readonly crowd: CrowdField;
   readonly occupancy: TileOccupancy;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
@@ -704,6 +761,45 @@ interface Resort {
 }
 
 /**
+ * The crowd this plot can hold, from the paving it was laid with.
+ *
+ * Every question about the ground is asked here, once — which tiles are paved,
+ * how high each one stands, where the sand is — and answered into a graph the
+ * per-frame step never has to leave. See `crowd/domain/walkNetwork.ts`.
+ *
+ * The network is built from the *layout's* paving rather than from the plot's,
+ * which is the same list on every plot but one: the benchmark tiles the plan out
+ * to nine times the size, and the copies stand on ground the elevation and the
+ * shore know nothing about. The crowd walks the plot that is actually there.
+ */
+function crowdFor(parts: {
+  readonly plot: Plot;
+  readonly plan: ResortPlan;
+  readonly shore: Shore | null;
+  readonly elevation: Elevation | null;
+  readonly people: readonly ModelGeometry[];
+  /** The lamps the crowd walks under, so a person catches the light a wall does. */
+  readonly lightVolume: BakedLightVolume | null;
+}): CrowdField {
+  const network = walkNetworkFor({
+    paved: parts.plot.layout.paths,
+    levelOf: (tileX, tileZ) => levelAt(parts.elevation, tileX, tileZ),
+    shore: parts.shore,
+    tilesX: parts.plan.tilesX,
+  });
+  return buildCrowdField({
+    crowd: createCrowd({
+      network,
+      count: CROWD_SIZE,
+      variants: parts.people.length,
+      seed: CROWD_SEED,
+    }),
+    models: parts.people,
+    lightVolume: parts.lightVolume,
+  });
+}
+
+/**
  * Lays a plan out and builds everything that hangs off it.
  *
  * The bake happens before the world, because the volume is what the world's
@@ -712,6 +808,7 @@ interface Resort {
 function buildResort(parts: {
   readonly plan: ResortPlan;
   readonly geometries: readonly ModelGeometry[];
+  readonly people: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): Resort {
   const plot = layOut(parts.plan, parts.bench);
@@ -725,12 +822,21 @@ function buildResort(parts: {
   const bounds = plotBounds(parts.plan, everything);
   const shore = shoreFor(parts.plan);
   const elevation = elevationFor(parts.plan);
+  const crowd = crowdFor({
+    plot,
+    plan: parts.plan,
+    shore,
+    elevation,
+    people: parts.people,
+    lightVolume: lighting.volume,
+  });
 
   return {
     plot,
     lighting,
     world,
     shadows,
+    crowd,
     shore,
     elevation,
     // Seeded from the resort as planned, then kept up to date one placement at a
@@ -744,6 +850,7 @@ function buildResort(parts: {
     dispose() {
       world.dispose();
       shadows.dispose();
+      crowd.dispose();
       lighting.volume?.dispose();
     },
   };
@@ -768,6 +875,7 @@ interface ResortSlot {
 function createResortSlot(parts: {
   readonly plan: ResortPlan;
   readonly geometries: readonly ModelGeometry[];
+  readonly people: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): ResortSlot {
   let resort = buildResort(parts);
@@ -788,8 +896,10 @@ function createResortSlot(parts: {
       resort = buildResort({ ...parts, plan });
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
+      scene?.scene.remove(previous.crowd.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
+      scene?.scene.add(resort.crowd.group);
       scene?.reframe(
         resort.bounds,
         resort.framing,
@@ -865,7 +975,7 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, shadows, lighting } = parts.resort;
+  const { plot, world, shadows, crowd, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -874,14 +984,15 @@ function sceneStats(parts: {
     propCount: plot.props.length + plot.rails.length,
     pathCount: plot.paths.length,
     instanceCount: world.instanceCount,
-    // What the renderer is actually handed, cast shadows included: they are
-    // one more draw and two more triangles per blob, and a count that hid them
-    // would stop matching what a bench reads back off the renderer.
-    drawCalls: world.drawCalls + shadows.drawCalls,
+    // What the renderer is actually handed, cast shadows and the crowd included:
+    // a blob is one more draw and two more triangles, a person model is one more
+    // draw and fifty per person, and a count that hid either would stop matching
+    // what a bench reads back off the renderer.
+    drawCalls: world.drawCalls + shadows.drawCalls + crowd.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
-    drawnTriangleCount: world.drawnTriangleCount + shadows.triangleCount,
+    drawnTriangleCount: world.drawnTriangleCount + shadows.triangleCount + crowd.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -1290,13 +1401,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // same pixels. Absent the flag this is null and nothing that reads it runs.
   const bench = parseBenchConfig(globalThis.location?.search ?? '');
 
-  const scratch = scratchForCatalogue();
+  const scratch = scratchForModels();
   const catalogue = await meshModels(scratch, bench);
 
   let params = startingParams(bench);
   const slot = createResortSlot({
     plan: startingPlan(bench, params),
     geometries: catalogue.geometries,
+    people: catalogue.people,
     bench,
   });
   const current = slot.current;
@@ -1318,6 +1430,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
   handle.scene.add(current().world.group);
   handle.scene.add(current().shadows.group);
+  handle.scene.add(current().crowd.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -1402,6 +1515,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
     clock.advance(elapsed);
+    // A benchmark walks the crowd by a fixed step rather than by the frame's
+    // own: two runs are only comparable if the scene is in the same place on
+    // the same frame of each, and the frame's `dt` is exactly what differs
+    // between a fast machine and a slow one. See `crowd.ts`.
+    current().crowd.advance(bench ? MAX_STEP : elapsed);
     if (!bench) handle.controls.update();
     handle.renderer.render(handle.scene, handle.camera);
 

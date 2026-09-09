@@ -8,14 +8,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { elevationFor, levelAt } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
+import { stairTilesFor } from '../../layout/domain/stairs';
 import { createCrowd, stepCrowd } from './crowd';
-import { walkNetworkFor, type WalkNetwork } from './walkNetwork';
+import { walkingSurface, walkNetworkFor, type WalkNetwork } from './walkNetwork';
 
 const TYPES = OBJECT_TYPES.map((type) => ({
   id: type.id,
@@ -47,10 +48,40 @@ const network: WalkNetwork = walkNetworkFor({
   tilesX: plan.tilesX,
 });
 
+const stairs = stairTilesFor(
+  layout.paths.map((path) => ({ x: path.tileX, z: path.tileZ })),
+  (x, z) => levelAt(elevation, x, z),
+);
+
 describe('the network of a generated resort', () => {
-  it('has a node for every paved tile', () => {
-    expect(network.nodes).toHaveLength(layout.paths.length);
+  it('has a node for every paved tile, and a second at the top of every flight', () => {
+    // A flight is the one tile that holds two, at the foot and the head of the
+    // climb — except where two flights meet and share the landing between them.
+    expect(stairs.length).toBeGreaterThan(0);
+    expect(network.nodes.length).toBeGreaterThan(layout.paths.length);
+    expect(network.nodes.length).toBeLessThanOrEqual(layout.paths.length + stairs.length);
     expect(network.nodes.length).toBeGreaterThan(1000);
+  });
+
+  it('never stands a node under the treads of the flight it is on', () => {
+    // The bug this is here for: a flight's ramp climbs the width of its own
+    // tile, so a node at the tile centre carrying the ground's own height sits
+    // half a level below the staircase, and the crowd wades through it.
+    const paved = new Map(layout.paths.map((path) => [`${path.tileX},${path.tileZ}`, path]));
+    for (const stair of stairs) {
+      const tile = paved.get(`${stair.tile.x},${stair.tile.z}`)!;
+      const on = network.nodes.filter(
+        (node) => node.tileX === stair.tile.x && node.tileZ === stair.tile.z,
+      );
+      for (const node of on) {
+        const acrossX = Math.abs(node.x - (stair.tile.x + 0.5) * TILE_VOXELS);
+        const acrossZ = Math.abs(node.z - (stair.tile.z + 0.5) * TILE_VOXELS);
+        // Every one of them is on an edge of the tile, never in the middle of
+        // the ramp, and at whichever paving that edge meets.
+        expect(Math.max(acrossX, acrossZ), `${stair.tile.x},${stair.tile.z}`).toBe(TILE_VOXELS / 2);
+        expect([walkingSurface(tile.y), walkingSurface(tile.y) + LEVEL_VOXELS]).toContain(node.y);
+      }
+    }
   });
 
   it('is one piece, so nobody is stranded on a spur of their own', () => {

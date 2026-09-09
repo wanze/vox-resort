@@ -6,17 +6,26 @@
  * `terraceAt` once per person per frame, and every one of those walks a list of
  * terraces and evaluates a meander — for a plot that is not changing. So the
  * questions are all asked here, at build time, and what comes out is a graph:
- * nodes at the centre of every paved tile, and edges between the pairs a person
- * can actually get between.
+ * nodes on every paved tile, and edges between the pairs a person can actually
+ * get between.
  *
  * A person is then never "somewhere on the plot". A person is **on an edge, at a
  * parameter between 0 and 1**, and a frame is one multiply-add and one lerp. See
  * `crowd.ts`, and `docs/crowd.md` for why that is the shape of the whole feature.
  *
  * Height comes along for free, which is the part worth pointing at: each node
- * carries the height of its own paving, so lerping across the edge between a
- * flight of stairs and the paving above it *is* the climb. Nothing walks up a
- * step by knowing that it is a step.
+ * carries the height of the paving it stands on, so lerping along the edge that
+ * *is* a flight of stairs is the climb up it. Nothing walks up a step by knowing
+ * that it is a step.
+ *
+ * Which is why a flight is the one tile that holds **two** nodes, at its foot and
+ * at its head, rather than one at its centre. A flight's ramp runs from the
+ * paving it continues to the paving above across the width of its own tile, so a
+ * node in the middle of it is half a level under the treads — and a crowd walked
+ * to it wades through the staircase up to the shoulders. See {@link standFor},
+ * which is where that is put right and where the two rules it drags along —
+ * nothing steps onto a flight sideways, and a flight is never a beach gate — are
+ * written down.
  *
  * ## What makes an edge
  *
@@ -67,13 +76,20 @@ export interface PavedTile {
   readonly y: number;
 }
 
-/** One walkable spot: the centre of a paved tile, on its walking surface. */
+/**
+ * One walkable spot: the centre of a paved tile, or one end of a flight.
+ *
+ * Nodes are **not** one per paved tile. Most tiles have exactly one, at their
+ * centre; a flight has one at each end of its climb, and where two flights meet
+ * they share the landing between them. See {@link standFor}.
+ */
 export interface WalkNode {
-  /** World position of the tile's centre, in voxels. */
+  /** Where a person stands, in world voxels. */
   readonly x: number;
   readonly z: number;
-  /** Top of the paving, which is what a person's feet are on. */
+  /** Top of the paving here, which is what a person's feet are on. */
   readonly y: number;
+  /** The tile this spot belongs to; a shared landing names one of the two. */
   readonly tileX: number;
   readonly tileZ: number;
   /** Indices into {@link WalkNetwork.edges} of every edge leaving here. */
@@ -144,36 +160,149 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   for (const [index, tile] of paved.entries()) indexOf.set(tileKey(tile.tileX, tile.tileZ), index);
 
   const climbs = climbsAmong(paved, levelOf);
-  const exits: number[][] = paved.map(() => []);
-  const edges: WalkEdge[] = [];
 
-  for (const [from, tile] of paved.entries()) {
+  const nodes: WalkNode[] = [];
+  const exits: number[][] = [];
+  const edges: WalkEdge[] = [];
+  const gates: number[] = [];
+  /** Nodes by the point they stand on, which is what lets two flights share one. */
+  const standing = new Map<string, number>();
+
+  /**
+   * The node standing at a point, made on first use.
+   *
+   * Shared by position rather than owned by a tile, because two flights that
+   * meet meet *at a point*: the top of one and the foot of the next are the same
+   * landing, and two nodes there would be a zero-length edge between two places
+   * that are one place.
+   */
+  const standAt = (x: number, y: number, z: number, tile: PavedTile, gate = false): number => {
+    const key = `${x},${y},${z}`;
+    const existing = standing.get(key);
+    if (existing !== undefined) return existing;
+    const index = nodes.length;
+    // The node's own list, held on to here so a link can push to it: what a node
+    // can be walked to is only known once every node exists.
+    const own: number[] = [];
+    nodes.push({ x, y, z, tileX: tile.tileX, tileZ: tile.tileZ, exits: own, gate });
+    exits.push(own);
+    standing.set(key, index);
+    if (gate) gates.push(index);
+    return index;
+  };
+
+  /** Joins two nodes, one way. Their own positions are what say how far it is. */
+  const link = (from: number, to: number): void => {
+    if (from === to) return;
+    const a = nodes[from]!;
+    const b = nodes[to]!;
+    exits[from]!.push(edges.length);
+    edges.push({ from, to, length: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) });
+  };
+
+  const stands = paved.map((tile) => standFor(tile, climbs, shore, indexOf, standAt));
+  // The climb itself, walked in both directions like every other adjacency.
+  for (const stand of stands) {
+    if (stand.kind !== 'flight') continue;
+    link(stand.low, stand.high);
+    link(stand.high, stand.low);
+  }
+
+  for (const [index, tile] of paved.entries()) {
     for (const [dx, dz] of NEIGHBOURS) {
-      const to = indexOf.get(tileKey(tile.tileX + dx, tile.tileZ + dz));
-      if (to === undefined) continue;
-      const rise = paved[to]!.y - tile.y;
+      const other = indexOf.get(tileKey(tile.tileX + dx, tile.tileZ + dz));
+      if (other === undefined) continue;
+      const rise = paved[other]!.y - tile.y;
       if (!walkable(tile, { dx, dz }, rise, climbs)) continue;
-      exits[from]!.push(edges.length);
-      edges.push({ from, to, length: Math.hypot(TILE_VOXELS, rise) });
+      link(facing(stands[index]!, dx, dz), facing(stands[other]!, -dx, -dz));
     }
   }
 
-  const gates: number[] = [];
-  const nodes = paved.map((tile, index) => {
-    const gate = adjoinsOpenSand(tile, shore, indexOf);
-    if (gate) gates.push(index);
-    return {
-      x: (tile.tileX + 0.5) * TILE_VOXELS,
-      z: (tile.tileZ + 0.5) * TILE_VOXELS,
-      y: walkingSurface(tile.y),
-      tileX: tile.tileX,
-      tileZ: tile.tileZ,
-      exits: exits[index]!,
-      gate,
-    };
-  });
-
   return { nodes, edges, gates, beach: shore ? { shore, tilesX } : null };
+}
+
+/**
+ * Where a person may stand on one paved tile.
+ *
+ * An ordinary tile is one place — its centre. A flight is **two**: the foot and
+ * the head of the climb, at the tile's own two edges. See {@link standFor}.
+ */
+type TileStand =
+  | { readonly kind: 'centre'; readonly node: number }
+  | {
+      readonly kind: 'flight';
+      readonly climb: { readonly dx: number; readonly dz: number };
+      readonly low: number;
+      readonly high: number;
+    };
+
+/** How far a tile's edge is from its centre. */
+const HALF_TILE = TILE_VOXELS / 2;
+
+/**
+ * The places one paved tile offers to stand on.
+ *
+ * A flight gets one at each end of the climb rather than one in the middle, and
+ * that is the whole of why this function exists. A flight's ramp runs from the
+ * paving it continues at one tile edge to the paving above at the other, so a
+ * node at the tile *centre* — carrying, as every node does, the height of the
+ * ground under its own tile — sits half a level under the treads. Walking to it
+ * buried a person to the shoulders for the length of the flight, which is what
+ * looking at the resort said before anything here changed.
+ *
+ * Two nodes at the tile's edges make the polyline the true surface: flat from
+ * the neighbour's centre to the foot of the flight, the climb across the tile,
+ * flat on to the next centre. Nothing is approximated and nothing per frame
+ * changes — a person still lerps between two node heights.
+ *
+ * A flight is entered at its foot and left at its head, and {@link facing} is
+ * where that is decided. A neighbour *beside* a flight reaches its foot too, and
+ * that one is not tidiness but necessity: `stairs.ts` turns a tile into a flight
+ * wherever paved ground stands a level above it, corridor tiles included, so on
+ * a real plot a path sometimes runs straight through a flight at right angles to
+ * the climb. Refusing that pair strands the whole corridor behind it — 46 nodes
+ * of one generated plot. Sending it through the foot instead is a dogleg round
+ * the bottom of the staircase, at the height the path is already at, which is
+ * what a person would do with the same obstacle.
+ *
+ * A flight is never a beach gate: you step onto the sand off the paving, not off
+ * a staircase.
+ */
+function standFor(
+  tile: PavedTile,
+  climbs: ReadonlyMap<string, { dx: number; dz: number }>,
+  shore: Shore | null,
+  paved: ReadonlyMap<string, number>,
+  standAt: (x: number, y: number, z: number, tile: PavedTile, gate?: boolean) => number,
+): TileStand {
+  const x = (tile.tileX + 0.5) * TILE_VOXELS;
+  const z = (tile.tileZ + 0.5) * TILE_VOXELS;
+  const foot = walkingSurface(tile.y);
+  const climb = climbs.get(tileKey(tile.tileX, tile.tileZ));
+  if (!climb) {
+    const gate = adjoinsOpenSand(tile, shore, paved);
+    return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
+  }
+  return {
+    kind: 'flight',
+    climb,
+    low: standAt(x - climb.dx * HALF_TILE, foot, z - climb.dz * HALF_TILE, tile),
+    // The head of the flight is flush with the paving on the terrace above,
+    // which is what `stairs.ts` authors the topmost tread to be.
+    high: standAt(x + climb.dx * HALF_TILE, foot + LEVEL_VOXELS, z + climb.dz * HALF_TILE, tile),
+  };
+}
+
+/**
+ * The node a tile offers to a neighbour that way.
+ *
+ * The head of a flight faces the ground it climbs to and nothing else; every
+ * other way in — from below, and from either side — arrives at its foot. See
+ * {@link standFor} for why the sideways case has to be allowed at all.
+ */
+function facing(stand: TileStand, dx: number, dz: number): number {
+  if (stand.kind === 'centre') return stand.node;
+  return stand.climb.dx === dx && stand.climb.dz === dz ? stand.high : stand.low;
 }
 
 /**

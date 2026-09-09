@@ -1,32 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import { materialKeyFor, voxelIdFor } from '../../catalog/domain/materials';
-import { allMaterials, materialColorsById, OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import {
+  allMaterials,
+  materialColorsById,
+  OBJECT_TYPES,
+  PAINTED_MODELS,
+  PEOPLE_MODELS,
+} from '../../catalog/domain/objectTypes';
 import { deinterleaveVertices, flipWinding } from '../../rendering/domain/vertexBuffer';
 import { scratchLayoutFor } from '../domain/modelScratch';
 import { buildSectionMeshes, DEFAULT_WORLD_SCALE, sectionSizeOf } from './dveEngine';
 
-/**
- * The one test that touches the engine: it catches registration drift, where a
- * model paints a material the DVE registry never heard of and the mesher
- * silently drops or mis-colours those faces.
- */
+/** One vertex of a triangle, read out of a de-interleaved attribute array. */
 const corner = (index: number, source: Float32Array): readonly number[] => [
   source[index * 3]!,
   source[index * 3 + 1]!,
   source[index * 3 + 2]!,
 ];
 
+/**
+ * The one test that touches the engine: it catches registration drift, where a
+ * model paints a material the DVE registry never heard of and the mesher
+ * silently drops or mis-colours those faces.
+ *
+ * It meshes {@link PAINTED_MODELS} rather than the catalogue, which is the whole
+ * point: the crowd is a second registry, and the `skin` family is painted by
+ * nothing else on the plot. Derived from `OBJECT_TYPES` alone the material would
+ * never be registered, and this is where that has to be loud.
+ */
 describe('buildSectionMeshes', () => {
-  it('meshes the whole catalogue into submeshes of known materials', async () => {
+  it('meshes the catalogue and the crowd into submeshes of known materials', async () => {
     const scratch = scratchLayoutFor(
-      OBJECT_TYPES.map((type) => ({
-        id: type.id,
-        width: type.model.width,
-        voxels: type.model.voxels,
-      })),
+      PAINTED_MODELS,
       (color) => voxelIdFor(materialKeyFor(color)),
       sectionSizeOf(DEFAULT_WORLD_SCALE),
     );
+    // Every person has a region of their own, exactly as every object does.
+    const meshed = new Set(scratch.regions.map((region) => region.id));
+    for (const person of PEOPLE_MODELS) expect(meshed.has(person.id), person.id).toBe(true);
     expect(scratch.extentX).toBeLessThanOrEqual(DEFAULT_WORLD_SCALE.horizontalExtent);
     const writes = scratch.writes;
 

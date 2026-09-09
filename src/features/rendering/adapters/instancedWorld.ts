@@ -84,8 +84,14 @@ export interface InstancedWorld {
  * `aoNode` and so lands on the ambient term: it is what darkens a courtyard, an
  * alley and the ground under a canopy, and it costs nothing per frame because
  * the fetch was already happening.
+ *
+ * Exported because the crowd is drawn with it too — a person walks through the
+ * pools of light the lamps cast for exactly the reason a wall stands in them,
+ * and shading them from a second material would be two shaders that had to be
+ * kept looking the same. The crowd builds its own instance of it and hangs a
+ * `positionNode` off it for the walk cycle; see `crowd/adapters/crowdField.ts`.
  */
-function litMaterial(volume: BakedLightVolume | null): MeshStandardNodeMaterial {
+export function litMaterial(volume: BakedLightVolume | null): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({
     vertexColors: true,
     roughness: 0.85,

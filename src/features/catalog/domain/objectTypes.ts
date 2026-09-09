@@ -6,9 +6,16 @@
  * exactly the same source. This module only adapts them for the app: it builds
  * each model, derives the material set from the colours they paint with, and
  * picks the HUD swatch colour.
+ *
+ * There are two registries of art, and the difference between them is the whole
+ * reason {@link PAINTED_MODELS} exists: `OBJECT_TYPES` is the things that stand
+ * on tiles, and the people are a registry of their own because a person stands
+ * on none. Anything that asks *what the app paints with* has to read both — see
+ * the note on `PAINTED_MODELS`.
  */
 
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
+import { PEOPLE_SOURCES } from '../../../../voxel-gen/people/index.ts';
 import {
   buildModel,
   MODEL_CATEGORIES,
@@ -59,6 +66,34 @@ export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = MODEL_SOURCES.map((
   };
 });
 
+/**
+ * The crowd's art: one built model per person the resort can draw.
+ *
+ * Not `ObjectTypeDefinition`s, and deliberately so — a person has no HUD swatch,
+ * no build-palette shelf and no tile footprint to claim, so the three fields
+ * that would carry those would all be lies. What a person is, to everything in
+ * `src/`, is a model to mesh and a geometry to instance. See `docs/crowd.md`.
+ */
+export const PEOPLE_MODELS: readonly VoxelModel[] = PEOPLE_SOURCES.map(buildModel);
+
+/**
+ * Every model the app paints, catalogue and crowd alike.
+ *
+ * The one place the two registries are joined, and the reason it is one place:
+ * the material set, the emissive lookup and the scratch layout are all questions
+ * about *colours the app will paint*, and a person is painted exactly as a
+ * cottage is. Derived from `OBJECT_TYPES` alone, the `skin` family — which
+ * nothing but a person paints with — would never be registered as a DVE voxel,
+ * and the scratch writes would ask the mesher for a voxel that does not exist.
+ *
+ * A third registry is then one line here rather than an edit in each of the four
+ * places that used to assume the catalogue was the whole world.
+ */
+export const PAINTED_MODELS: readonly VoxelModel[] = [
+  ...OBJECT_TYPES.map((type) => type.model),
+  ...PEOPLE_MODELS,
+];
+
 export interface ObjectTypeGroup {
   readonly category: ModelCategory;
   /** Heading the palette prints above the group. */
@@ -99,23 +134,28 @@ export function objectTypeTop(id: string): number {
 }
 
 /**
- * Every material the scene can paint with: one per distinct colour across the
- * whole catalogue. Each becomes one DVE voxel and one DVE rendered material.
+ * Every material the scene can paint with: one per distinct colour across
+ * everything the app draws. Each becomes one DVE voxel and one DVE rendered
+ * material.
+ *
+ * Read off {@link PAINTED_MODELS} rather than off the catalogue, so the crowd's
+ * own colours are registered too; see the note there.
  */
 export function allMaterials(): readonly MaterialDefinition[] {
   return materialsForColors(
-    OBJECT_TYPES.flatMap((type) => type.model.voxels.map((voxel) => voxel.color)),
+    PAINTED_MODELS.flatMap((model) => model.voxels.map((voxel) => voxel.color)),
   );
 }
 
 /**
  * The colours each model draws unlit, by model id. Only models that declare an
- * emissive colour appear, so the lookup is empty for most of the catalogue.
+ * emissive colour appear, so the lookup is empty for most of the catalogue —
+ * and for the whole crowd, since nothing about a person glows.
  */
 export function emissiveByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
   const byId = new Map<string, ReadonlySet<number>>();
-  for (const type of OBJECT_TYPES) {
-    if (type.model.emissive.length > 0) byId.set(type.id, new Set(type.model.emissive));
+  for (const model of PAINTED_MODELS) {
+    if (model.emissive.length > 0) byId.set(model.id, new Set(model.emissive));
   }
   return byId;
 }

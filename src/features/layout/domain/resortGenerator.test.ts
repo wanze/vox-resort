@@ -18,7 +18,6 @@ import { groundAt } from './ground';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
   clampParams,
-  createRandom,
   emptyResortPlan,
   generateResort,
   PLOT_DENSITY,
@@ -61,29 +60,6 @@ const SWEEP: ResortParams[] = [
   ]),
   ...[0.2, 0.4, 1].map((density) => params({ density, seed: 99 })),
 ];
-
-/** The first eight numbers a seed produces. */
-const draw = (seed: number): number[] => Array.from({ length: 8 }, createRandom(seed));
-
-describe('createRandom', () => {
-  it('gives the same run twice for the same seed', () => {
-    expect(draw(7)).toEqual(draw(7));
-    expect(draw(7)).not.toEqual(draw(8));
-  });
-
-  it('stays inside the unit interval', () => {
-    const drawn = Array.from({ length: 500 }, createRandom(3));
-    expect(Math.min(...drawn)).toBeGreaterThanOrEqual(0);
-    expect(Math.max(...drawn)).toBeLessThan(1);
-  });
-
-  it('spreads over the interval rather than sticking near one end', () => {
-    const drawn = Array.from({ length: 2000 }, createRandom(11));
-    const mean = drawn.reduce((sum, value) => sum + value, 0) / drawn.length;
-    expect(mean).toBeGreaterThan(0.45);
-    expect(mean).toBeLessThan(0.55);
-  });
-});
 
 describe('clampParams', () => {
   it('pulls a plot too small up to the smallest one that works', () => {

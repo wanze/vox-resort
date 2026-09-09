@@ -72,6 +72,7 @@
  */
 
 import type { ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
+import { createRandom } from './random';
 import {
   DERIVED_IDS,
   type PathEdge,
@@ -149,23 +150,6 @@ export function clampParams(params: ResortParams): ResortParams {
     tilesZ: Math.round(clamp(params.tilesZ, PLOT_TILES.min, PLOT_TILES.max)),
     density: clamp(params.density, PLOT_DENSITY.min, PLOT_DENSITY.max),
     seed: Math.abs(Math.trunc(params.seed)) % 0xffffffff,
-  };
-}
-
-/**
- * Mulberry32: a small, fast, well-distributed 32-bit generator.
- *
- * Seeded rather than `Math.random` because a generated resort has to be
- * reproducible — a seed is the whole plot, small enough to put in the HUD and
- * to paste into a bug report.
- */
-export function createRandom(seed: number): () => number {
-  let state = (seed + 0x6d2b79f5) | 0;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let drawn = Math.imul(state ^ (state >>> 15), 1 | state);
-    drawn = (drawn + Math.imul(drawn ^ (drawn >>> 7), 61 | drawn)) ^ drawn;
-    return ((drawn ^ (drawn >>> 14)) >>> 0) / 4294967296;
   };
 }
 

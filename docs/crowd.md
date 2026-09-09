@@ -109,6 +109,16 @@ probability per arrival. The target needs no query either — `shoreFor` gives
 
 Two states, one step loop, one branch.
 
+Two rules keep a roamer out of the sea, and the first of them was a bug before it
+was a rule. A roamer walks a **straight line** to whatever they pick — so two
+points that are both on sand can have water between them, because the coast
+wanders, and picking a target anywhere on the beach sent people wading across a
+bay. Targets are therefore drawn from within a few columns of where the person
+already stands, which keeps the chord shorter than the coast's own meander moves;
+and they stop a tile short of the water, which is where the sea washes over the
+sand anyway. Both are cheap because they are arithmetic on a number
+`waterStartZ` already returns.
+
 ## How the crowd is stored
 
 Structure of arrays, fixed capacity, no allocation per frame. This is the same
@@ -117,9 +127,16 @@ nothing for the collector to walk sixty times a second, and a layout that a
 compute shader could take over later as a port rather than as a rewrite.
 
 ```
-Float32Array  t, speed, phase, roamX, roamZ
-Int32Array    edge, variant, state        // state: onPath | onBeach
+Float32Array  x, y, z, heading, phase        // where a person is, and facing
+Float32Array  fromX/Y/Z, toX/Y/Z, t, rate    // the segment they are walking
+Float32Array  speed
+Int32Array    node, cameFrom, gate, variant
 ```
+
+`node` is the node being walked to, or `-1` while out on the sand, and that one
+integer is the whole of the path/beach distinction. `cameFrom` is what stops
+somebody turning straight back round at every tile, and `gate` is the way back in
+off the beach.
 
 No `Person` objects and no array of records. The attributes the crowd will grow
 later — sex, name, age, hunger, thirst, energy, a bed — are **more columns**, and
@@ -169,19 +186,22 @@ from a palette built for buildings, so it is the one family the crowd adds.
 
 Six hundred people, by arithmetic rather than by measurement:
 
-|                         |                                           |
-| ----------------------- | ----------------------------------------- |
-| Draw calls              | 4, one per person model, never culled     |
-| Triangles per frame     | ~30 k, against 2.18 M already submitted   |
-| Matrix upload per frame | ~38 KB                                    |
-| Step loop               | a few hundred µs — a few dozen flops each |
+|                         |                                         |
+| ----------------------- | --------------------------------------- |
+| Draw calls              | 4, one per person model, never culled   |
+| Triangles per frame     | ~30 k, against 2.18 M already submitted |
+| Matrix upload per frame | ~38 KB                                  |
+| Step loop               | **11 µs**, measured                     |
 
-For scale on the last row: the blob shadows write 1 435 matrices on a sky change
-and that is reported as "well under a millisecond". Six hundred a frame is
-smaller than that.
+The last row is the only one that has actually been run: 600 people on the
+reference generated plot — 1 870 paved tiles, 4 328 edges, 28 gates onto the
+beach — stepped at 11 µs a frame in Node. That is 0.07% of a 16 ms frame, and
+two orders of magnitude under the "few hundred µs" this table first estimated,
+because the loop turned out to be smaller than the guess: a multiply-add, a
+compare and three lerps.
 
-None of this is measured. `?people=n` and a bench case are part of the build
-order below precisely so that it can be.
+The other three rows are still arithmetic. Nothing is drawn yet, so `?people=n`
+and a bench case remain part of the build order below.
 
 ## Build order
 
@@ -198,6 +218,36 @@ order below precisely so that it can be.
 Steps 2 and 3 hold all the logic and both are pure `domain/`, which is what keeps
 the simulation testable without a browser — the convention the repo already
 holds.
+
+## Notes for step 4
+
+The meshing pipeline is keyed to `OBJECT_TYPES` in more places than the obvious
+one, and every one of them has to learn about the second registry. Checked
+against the code as it stands:
+
+- **`scratchForCatalogue()`** in `showcase.ts` builds one scratch region per
+  model from `OBJECT_TYPES`. People need regions of their own, and the scratch
+  extent is already checked against the world's horizontal extent — four figures
+  of 3 x 7 x 2 will not trouble it, but the check is there.
+- **`allMaterials()`** in `objectTypes.ts` derives one DVE voxel and one rendered
+  material per distinct colour **across `OBJECT_TYPES` only**. The `skin` family
+  is painted by nothing else, so without this it is never registered — and the
+  scratch writes go through `voxelIdFor(materialKeyFor(color))`, which would then
+  be asking for a voxel that does not exist. This is the one that bites.
+- **`materialColorsById()`** is derived from `allMaterials()`, so it follows.
+- **`emissiveByModelId()`** is keyed by model id and no person declares an
+  emissive colour, so it needs nothing today — but it is the fourth place the
+  registry is assumed to be the whole world.
+
+`dveEngine.test.ts` exists to catch exactly this drift — it meshes the whole
+catalogue and would fail on a material the DVE registry never heard of — so the
+failure should be loud rather than a person coming out miscoloured. Extending
+that test to the people is part of the step.
+
+The shape of the fix is a decision rather than a detail: either these functions
+take the union of both registries, or the union is named once (a
+`PAINTED_MODELS`, say) and they all read that. The second is the one that stops
+a third registry needing four edits.
 
 ## What this makes cheap later
 
@@ -228,4 +278,31 @@ thing that makes the second one a port of the first.
   person — and it is the closer of the two to life size, since a head is about
   15 cm across and one voxel is 25.
 
-- **Steps 2–7.** Not started.
+- **Steps 2 and 3 — the network and the crowd. Landed.**
+  `crowd/domain/walkNetwork.ts` and `crowd/domain/crowd.ts`, both pure, with
+  unit tests on fixtures and a third file that runs the whole thing against a
+  resort the generator actually produced. `createRandom` moved out of
+  `resortGenerator.ts` into `layout/domain/random.ts`, and `PAVING_VOXELS` — the
+  top of a path slab, which the crowd walks on and the stair model starts a
+  tread above — moved out of `models/stairs.ts` into `voxelgen.ts`, beside
+  `TILE_VOXELS` and `LEVEL_VOXELS`, for the reason those two are there.
+
+  Three things came out of testing rather than out of the design:
+
+  - **The turn-back rule was inert.** `cameFrom` was being set to the node just
+    arrived at rather than the one left, so it never matched an exit and every
+    junction was a uniform draw. People covered a quarter of the ground they
+    should have.
+  - **A straight line across a wandering coast crosses water.** See the note
+    under _The walk network_. Only the generated plot found this; a fixture with
+    a straight shore never could.
+  - **The beach filled far too slowly.** Left to random walk it held one person
+    after ten seconds and forty after twenty minutes, because the gates are 28
+    nodes among 1 870. A quarter of the crowd now starts on the sand, and the
+    leave rate is tuned against the hop length rather than against a feeling —
+    shortening the hops for the fix above drained the beach until it was, since
+    the same per-arrival chance was suddenly rolled eight times as often. It now
+    holds ~150 of 600 across a simulated hour.
+
+- **Steps 4–7.** Not started. Nothing is drawn yet: the crowd walks in tests and
+  nowhere else.

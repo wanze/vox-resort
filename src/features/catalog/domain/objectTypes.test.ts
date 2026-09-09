@@ -96,12 +96,16 @@ describe('OBJECT_TYPES', () => {
   });
 
   it('paints only 24-bit colours', () => {
+    // Collected rather than asserted per voxel: the catalogue is three quarters
+    // of a million of them, and an expectation each took this test to the far
+    // side of the runner's timeout on its own.
+    const outside = new Set<number>();
     for (const type of OBJECT_TYPES) {
       for (const voxel of type.model.voxels) {
-        expect(voxel.color).toBeGreaterThanOrEqual(0);
-        expect(voxel.color).toBeLessThanOrEqual(0xffffff);
+        if (voxel.color < 0 || voxel.color > 0xffffff) outside.add(voxel.color);
       }
     }
+    expect([...outside]).toEqual([]);
   });
 
   it('takes the HUD swatch from the colour a model uses most', () => {

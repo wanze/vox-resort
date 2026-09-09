@@ -164,6 +164,12 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, S
 export const LAMP_ID = 'street-lamp';
 export const HEDGE_ID = 'hedge';
 
+/** The rail stood along a path's edge where the ground beside it drops away. */
+export const RAILING_ID = 'railing';
+
+/** The balustrade stood up both flanks of a flight of stairs. */
+export const STAIR_RAILING_ID = 'stair-railing';
+
 /**
  * Every type the layout lays for itself, and so every type a plan must not.
  *
@@ -178,6 +184,8 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   STAIRS_ID,
   LAMP_ID,
   HEDGE_ID,
+  RAILING_ID,
+  STAIR_RAILING_ID,
 ]);
 
 const at = (id: string, tileX: number, tileZ: number): ResortPlot => ({ id, tileX, tileZ });

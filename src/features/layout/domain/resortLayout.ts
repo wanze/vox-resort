@@ -10,8 +10,15 @@
  * 2. **Spurs** — every object that no street already touches grows the shortest
  *    one-tile path to the network. That is what keeps the paving sparse: a
  *    cottage village needs one lane and eight short spurs, not a paved block.
+ *    Dressing grows none, and neither does anything standing on sand; see
+ *    {@link growSpurs} for why a palm and a sun lounger are not places you walk
+ *    to.
  * 3. **Dressing** — street lamps are scattered along the path edges at an even
  *    spacing, and hedges fill the straight runs between them.
+ * 4. **Rails** — a handrail is stood along every paved edge the ground drops
+ *    away beyond, and a balustrade up both flanks of every flight of stairs. Like
+ *    the paving a tile gets, it is a fact about the ground rather than about the
+ *    route. See `railings.ts`.
  *
  * Because the plan may stand several cottages on the plot, a placement carries
  * both its object type (`id`) and a unique `key`. Authored plots are keyed by
@@ -32,19 +39,23 @@
  * flat and every placement carries the height of the ground it stands on. Paving
  * follows from that the same way it follows from the ground being sand: a paved
  * tile with paved ground one level above it comes out as a flight of stairs
- * rather than as a slab. See `elevation.ts` and `stairs.ts`.
+ * rather than as a slab, and one with a drop beside it gets a rail along that
+ * edge. See `elevation.ts`, `stairs.ts` and `railings.ts`.
  *
  * Tile-to-voxel conversion happens here, so everything downstream works in
- * voxels: a model smaller than its declared footprint is centred in it.
+ * voxels: a model smaller than its declared footprint is centred in it — except
+ * a handrail, which is stood against the edge it guards. See {@link placeOnEdge}.
  */
 
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { TILE_VOXELS, type ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import {
   BOARDWALK_ID,
   DERIVED_IDS,
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
+  RAILING_ID,
+  STAIR_RAILING_ID,
   STAIRS_ID,
   type Bend,
   type PathNode,
@@ -52,9 +63,17 @@ import {
   type ResortPlot,
 } from './resortPlan';
 import { isWater, shoreFor, type Shore } from './shoreline';
-import { elevationFor, levelAt, levelHeight, straddledTile, type Elevation } from './elevation';
-import { groundAt } from './ground';
+import {
+  elevationFor,
+  levelAt,
+  levelHeight,
+  straddledTile,
+  type Elevation,
+  type LevelProvider,
+} from './elevation';
+import { groundAt, isSandGround } from './ground';
 import { stairTilesFor } from './stairs';
+import { railTilesFor } from './railings';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -68,6 +87,18 @@ export interface LayoutItem {
   /** Actual model size in voxels; may be smaller than the footprint. */
   readonly width: number;
   readonly depth: number;
+  /**
+   * Shelf of the build palette the object is offered on, when the caller has one
+   * to hand.
+   *
+   * The layout asks one question of it: whether the object is *dressing* — the
+   * grounds shelf, which is the palms, the flowerbeds and the sun loungers — and
+   * dressing grows no spur. See {@link growSpurs}. Optional because most of what
+   * builds a `LayoutItem` is describing a footprint rather than a catalogue
+   * entry, and an item that does not say is treated as something worth walking
+   * to.
+   */
+  readonly category?: ModelCategory;
 }
 
 export interface Placement {
@@ -122,6 +153,17 @@ export interface ResortLayout {
   readonly props: readonly Placement[];
   /** One placement per paved tile, kept apart so the HUD does not label them. */
   readonly paths: readonly Placement[];
+  /**
+   * Handrails, one per guarded edge and one per flight of stairs.
+   *
+   * A list of their own because a rail is the one thing on the plot that claims
+   * no ground: it stands *on* the paving it guards, at that tile's own height,
+   * and the tile is already spoken for by the slab under it. Everything that
+   * draws the resort draws these with the rest of it; everything that asks what
+   * is standing on a tile — the occupancy index, the shadows, the sky-visibility
+   * bake — leaves them out, because the answer for their tile is the paving.
+   */
+  readonly rails: readonly Placement[];
   readonly tilesX: number;
   readonly tilesZ: number;
 }
@@ -174,6 +216,47 @@ export function place(
     y: levelHeight(level),
     width: model.x,
     depth: model.z,
+  };
+}
+
+/**
+ * Stands a model flush against one edge of its tile instead of centred in it,
+ * with the edge it hugs being the one its turn points at.
+ *
+ * Everything else on the plot is centred in the footprint it claims, which is
+ * right for everything that *stands* somewhere: a lounger narrower than its tile
+ * belongs in the middle of it. A handrail is the one thing that does not — it
+ * belongs against the edge it guards, and which edge that is, is the whole
+ * content of the placement. So the offset across the tile is flush rather than
+ * halved, while the one along it stays centred: a rail shorter than the tile
+ * runs down the middle of the edge it is on rather than off one end of it.
+ *
+ * The turn is otherwise the ordinary one — the model is drawn with the same
+ * instance matrix everything else is — so a rail authored along its own north
+ * edge lands on the west edge at a turn of one, exactly as a stair authored
+ * climbing north climbs west. See `railing.ts`.
+ */
+function placeOnEdge(
+  item: LayoutItem,
+  key: string,
+  tileX: number,
+  tileZ: number,
+  rotation: Rotation,
+  level = 0,
+): Placement {
+  const flat = place(item, key, tileX, tileZ, rotation, level);
+  const along = Math.floor((TILE_VOXELS - item.width) / 2);
+  const across = TILE_VOXELS - item.depth;
+  const offset = {
+    0: { x: along, z: 0 },
+    1: { x: 0, z: along },
+    2: { x: along, z: across },
+    3: { x: across, z: along },
+  }[rotation];
+  return {
+    ...flat,
+    x: tileX * TILE_VOXELS + offset.x,
+    z: tileZ * TILE_VOXELS + offset.z,
   };
 }
 
@@ -420,6 +503,25 @@ function borderTiles(plot: ResortPlot, item: LayoutItem, plan: ResortPlan): Tile
  * Grows the shortest one-tile spur from each object to the network, in plan
  * order, so a later object may attach to an earlier object's spur. Mutates
  * `paved`. Throws if an object is walled in with no way out.
+ *
+ * **Nothing on the grounds shelf grows one.** A palm, a flowerbed, a hedge and a
+ * sun lounger are dressing rather than destinations: nobody walks *to* a palm,
+ * and a plot that paved a way to every one of them spent more of the hill on
+ * paving than on grass. Which shelf a model is on is a fact the art declares, so
+ * this needs no list of ids — see `objectTypes.ts`.
+ *
+ * **Nothing standing on sand grows one either.** Sand is walked on: a lounger is
+ * reached across the beach, and a boardwalk to every parasol is a car park with
+ * sand in it. This is the one rule that keeps a beach a beach, and it is worth
+ * being precise about what it buys — a spur is grown *per object*, so three
+ * lines of loungers used to pave the whole row of sand in front of them, one
+ * tile at a time, and the walks that used to cross the beach existed mostly to
+ * keep those spurs one tile long. Neither is needed once the sand is the path.
+ *
+ * It is asked of the ground rather than of the beach, so the shelf on top of the
+ * dune is covered by it too: the bungalows up there have a sidewalk because the
+ * generator laid one down the middle of their bench, not because each of them
+ * grew a spur to it. See `ground.ts`.
  */
 function growSpurs(
   items: readonly LayoutItem[],
@@ -427,15 +529,18 @@ function growSpurs(
   occupied: ReadonlyMap<string, string>,
   paved: Map<string, Tile>,
 ): void {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const keys = plotKeys(plan.plots);
-  const shore = shoreFor(plan);
+  const { byId, keys, shore, elevation } = spurContext(items, plan);
+  // Sand is not routed *through* either, for the same reason nothing standing on
+  // it grows a spur: a walk laid across the beach to reach a building on the
+  // grass behind it is a boardwalk nobody asked for, and the BFS will happily
+  // find one along a free row of it.
   const isFree = (x: number, z: number): boolean =>
     x >= 0 &&
     z >= 0 &&
     x < plan.tilesX &&
     z < plan.tilesZ &&
     !isWater(shore, x, z) &&
+    !isSandGround(shore, elevation, x, z) &&
     !occupied.has(tileKey(x, z)) &&
     !paved.has(tileKey(x, z));
   const touchesPath = (x: number, z: number): boolean =>
@@ -443,42 +548,100 @@ function growSpurs(
 
   plan.plots.forEach((plot, index) => {
     const item = byId.get(plot.id)!;
+    if (!needsPaving(item, plot, shore, elevation)) return;
     const border = borderTiles(plot, item, plan);
     if (border.some((tile) => paved.has(tileKey(tile.x, tile.z)))) return;
 
-    // Breadth-first over free tiles: the first one touching the network wins.
-    const parents = new Map<string, Tile | null>();
-    const queue: Tile[] = [];
-    for (const tile of border) {
-      if (!isFree(tile.x, tile.z)) continue;
-      const key = tileKey(tile.x, tile.z);
-      if (parents.has(key)) continue;
-      parents.set(key, null);
-      queue.push(tile);
-    }
-
-    let found: Tile | null = null;
-    for (let head = 0; head < queue.length && !found; head++) {
-      const tile = queue[head]!;
-      if (touchesPath(tile.x, tile.z)) {
-        found = tile;
-        break;
-      }
-      for (const [dx, dz] of NEIGHBOURS) {
-        const nx = tile.x + dx;
-        const nz = tile.z + dz;
-        const key = tileKey(nx, nz);
-        if (parents.has(key) || !isFree(nx, nz)) continue;
-        parents.set(key, tile);
-        queue.push({ x: nx, z: nz });
-      }
-    }
-
-    if (!found) throw new Error(`"${keys[index]}" cannot be reached from the path network`);
-    for (let step: Tile | null = found; step; step = parents.get(tileKey(step.x, step.z)) ?? null) {
-      paved.set(tileKey(step.x, step.z), step);
-    }
+    const route = spurRoute(border, isFree, touchesPath);
+    if (!route) throw new Error(`"${keys[index]}" cannot be reached from the path network`);
+    for (const tile of route) paved.set(tileKey(tile.x, tile.z), tile);
   });
+}
+
+/**
+ * What both questions about spurs need to know: the catalogue by id, the plots'
+ * keys, and the ground the plan describes.
+ *
+ * One helper because the two are the same question asked twice — one grows the
+ * paving and the other checks that it reached everything — and a preamble that
+ * drifted between them would be a spur grown against one rule and audited
+ * against another.
+ */
+function spurContext(items: readonly LayoutItem[], plan: ResortPlan) {
+  return {
+    byId: new Map(items.map((item) => [item.id, item])),
+    keys: plotKeys(plan.plots),
+    shore: shoreFor(plan),
+    elevation: elevationFor(plan),
+  };
+}
+
+/**
+ * Whether something standing here has to have paving walked to it.
+ *
+ * The one place the two exemptions live, because two callers ask the same
+ * question and an answer that differed between them would be a spur grown to
+ * something the reachability check then called unreachable. Dressing — the
+ * grounds shelf — is not a destination, and sand is walked on. See
+ * {@link growSpurs}.
+ */
+function needsPaving(
+  item: LayoutItem,
+  plot: ResortPlot,
+  shore: Shore | null,
+  elevation: Elevation | null,
+): boolean {
+  return item.category !== 'grounds' && !isSandGround(shore, elevation, plot.tileX, plot.tileZ);
+}
+
+/**
+ * The shortest run of free tiles from a footprint's border to the network, or
+ * null when it is walled in.
+ *
+ * Breadth-first from every free border tile at once, so the first tile found
+ * touching the network is the shortest way out of *any* side of the object
+ * rather than the shortest way out of the side that happened to be looked at
+ * first. The route comes back seaward-first — the tile touching the network,
+ * then the way back to the object — which is immaterial, because the caller
+ * paves all of it.
+ */
+function spurRoute(
+  border: readonly Tile[],
+  isFree: (x: number, z: number) => boolean,
+  touchesPath: (x: number, z: number) => boolean,
+): Tile[] | null {
+  const parents = new Map<string, Tile | null>();
+  const queue: Tile[] = [];
+  for (const tile of border) {
+    if (!isFree(tile.x, tile.z)) continue;
+    const key = tileKey(tile.x, tile.z);
+    if (parents.has(key)) continue;
+    parents.set(key, null);
+    queue.push(tile);
+  }
+
+  for (let head = 0; head < queue.length; head++) {
+    const tile = queue[head]!;
+    if (touchesPath(tile.x, tile.z)) return walkBack(tile, parents);
+    for (const [dx, dz] of NEIGHBOURS) {
+      const nx = tile.x + dx;
+      const nz = tile.z + dz;
+      const key = tileKey(nx, nz);
+      if (parents.has(key) || !isFree(nx, nz)) continue;
+      parents.set(key, tile);
+      queue.push({ x: nx, z: nz });
+    }
+  }
+  return null;
+}
+
+/** The tiles from the one the search reached back to the border it started at. */
+function walkBack(from: Tile, parents: ReadonlyMap<string, Tile | null>): Tile[] {
+  const route: Tile[] = [];
+  for (let step: Tile | null = from; step; step = parents.get(tileKey(step.x, step.z)) ?? null) {
+    route.push(step);
+  }
+  return route;
 }
 
 /** The streets and spurs minus whatever stands on them: the tiles that get paved. */
@@ -511,16 +674,23 @@ export function isPathNetworkConnected(tiles: readonly Tile[]): boolean {
   return remaining.size === 0;
 }
 
-/** Keys of objects with no paved tile touching their footprint — nobody can reach them. */
+/**
+ * Keys of objects with no paved tile touching their footprint — nobody can reach
+ * them.
+ *
+ * Dressing and anything standing on sand are reachable by definition and never
+ * appear here: nobody walks to a palm, and a lounger is reached across the sand.
+ * Both are the rules `growSpurs` lays no paving by.
+ */
 export function plotsWithoutPathAccess(items: readonly LayoutItem[], plan: ResortPlan): string[] {
-  const byId = new Map(items.map((item) => [item.id, item]));
-  const keys = plotKeys(plan.plots);
+  const { byId, keys, shore, elevation } = spurContext(items, plan);
   const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
   return plan.plots
     .map((plot, index) => ({ plot, key: keys[index]! }))
     .filter(({ plot }) => {
       const item = byId.get(plot.id);
       if (!item) return true;
+      if (!needsPaving(item, plot, shore, elevation)) return false;
       return !borderTiles(plot, item, plan).some((tile) => paved.has(tileKey(tile.x, tile.z)));
     })
     .map(({ key }) => key);
@@ -639,6 +809,41 @@ function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan)
 }
 
 /**
+ * The handrails, which the ground asks for exactly as it asks for the flights: a
+ * drop beside a paved tile, or the flanks of a flight.
+ *
+ * They stand on the tile they guard rather than claiming one of their own, and a
+ * catalogue with neither model in it simply comes out with no rails. See
+ * `railings.ts` for the rule and `placeOnEdge` for why one of the two is not
+ * centred in its tile.
+ */
+function railPlacements(
+  byId: ReadonlyMap<string, LayoutItem>,
+  paved: readonly Tile[],
+  levelOf: LevelProvider,
+): Placement[] {
+  const models = { flight: byId.get(STAIR_RAILING_ID), edge: byId.get(RAILING_ID) };
+  const rails: Placement[] = [];
+  for (const rail of railTilesFor(paved, levelOf)) {
+    const item = models[rail.kind];
+    if (!item) continue;
+    const { x, z } = rail.tile;
+    // Keyed by the edge as well as the tile, because a corner of a terrace is
+    // one tile with two rails on it, and a derived key has to be unique.
+    const key = `${derivedKey(item.id, x, z)}:${rail.rotation}`;
+    const level = levelOf(x, z);
+    // A flight's balustrade covers the whole tile and is placed like anything
+    // else; an edge rail is stood flush against the edge it guards.
+    rails.push(
+      rail.kind === 'flight'
+        ? place(item, key, x, z, rail.rotation, level)
+        : placeOnEdge(item, key, x, z, rail.rotation, level),
+    );
+  }
+  return rails;
+}
+
+/**
  * Lays the plan out: one placement per plot, a paved tile wherever a street or
  * a spur runs clear of an object, and lamps and hedges along the path edges.
  * Every object type except the ones the layout places itself must appear on the
@@ -700,6 +905,8 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     ),
   );
 
+  const rails = railPlacements(byId, paved, levelOf);
+
   const props: Placement[] = [];
   const { lamps, hedges } = decorationsFor(items, plan);
   for (const [id, tiles] of [
@@ -715,7 +922,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     }
   }
 
-  return { placements, props, paths, tilesX: plan.tilesX, tilesZ: plan.tilesZ };
+  return { placements, props, paths, rails, tilesX: plan.tilesX, tilesZ: plan.tilesZ };
 }
 
 /** Centre of a placement's model, useful for anchoring HUD labels. */

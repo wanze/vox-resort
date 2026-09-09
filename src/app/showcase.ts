@@ -326,10 +326,26 @@ interface Plot {
   readonly props: Placement[];
   /** One placement per paved tile. */
   readonly paths: Placement[];
+  /** Handrails, standing on the paving they guard rather than on ground of their own. */
+  readonly rails: Placement[];
 }
 
-/** Objects, scattered props and path tiles together: everything the scene draws. */
+/** Objects, scattered props, path tiles and rails: everything the scene draws. */
 function everythingOn(plot: Plot): Placement[] {
+  return [...plot.placements, ...plot.props, ...plot.paths, ...plot.rails];
+}
+
+/**
+ * Everything that claims a tile of the plot.
+ *
+ * Everything the scene draws, less the handrails: a rail stands on the paving it
+ * guards, so the tile under it is the slab's, and the three things that ask what
+ * is standing on a tile — the occupancy index, the shadows and the sky-visibility
+ * bake — would all get the wrong answer from it. A blob shadow the size of the
+ * tile is the visible half of that; a pointer that refused to pave next to a
+ * step would be the other.
+ */
+function claimingOn(plot: Plot): Placement[] {
   return [...plot.placements, ...plot.props, ...plot.paths];
 }
 
@@ -346,6 +362,7 @@ function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
     placements: tile(layout.placements),
     props: tile(layout.props),
     paths: tile(layout.paths),
+    rails: tile(layout.rails),
   };
 }
 
@@ -692,11 +709,12 @@ function buildResort(parts: {
 }): Resort {
   const plot = layOut(parts.plan, parts.bench);
   const everything = everythingOn(plot);
-  const lighting = createLighting(everything, groundOf(parts.plan));
+  const claiming = claimingOn(plot);
+  const lighting = createLighting(claiming, groundOf(parts.plan));
   const world = buildInstancedWorld(parts.geometries, everything, {
     lightVolume: lighting.volume,
   });
-  const shadows = buildBlobShadowField(blobShadowsFor(everything.map(casterOf)));
+  const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const bounds = plotBounds(parts.plan, everything);
   const shore = shoreFor(parts.plan);
   const elevation = elevationFor(parts.plan);
@@ -712,7 +730,7 @@ function buildResort(parts: {
     // time; it is what tells the pointer whether a tile is free. The sea goes in
     // with it, so the pointer turns red over water for the same reason it turns
     // red over a cottage.
-    occupancy: createTileOccupancy(everything, waterTilesOf(shore)),
+    occupancy: createTileOccupancy(claiming, waterTilesOf(shore)),
     anchors: labelAnchorsFor(plot.placements),
     bounds,
     framing: frameCamera(bounds, parts.bench),
@@ -810,7 +828,7 @@ function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
 function plotTotals(plot: Plot): { readonly types: number; readonly voxels: number } {
   const types = new Set<string>();
   let voxels = 0;
-  for (const list of [plot.placements, plot.props, plot.paths]) {
+  for (const list of [plot.placements, plot.props, plot.paths, plot.rails]) {
     for (const placement of list) {
       types.add(placement.id);
       voxels += VOXELS_PER_TYPE.get(placement.id) ?? 0;
@@ -846,7 +864,7 @@ function sceneStats(parts: {
     backend: handle.backend,
     typeCount: totals.types,
     objectCount: plot.placements.length,
-    propCount: plot.props.length,
+    propCount: plot.props.length + plot.rails.length,
     pathCount: plot.paths.length,
     instanceCount: world.instanceCount,
     // What the renderer is actually handed, cast shadows included: they are

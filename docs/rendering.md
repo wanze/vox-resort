@@ -29,15 +29,15 @@ moved. A generated plot is the one with a beach and terraces on it.
 |                                             |                                      |
 | ------------------------------------------- | ------------------------------------ |
 | Authored objects                            | 517, of 29 types                     |
-| Lamps and hedges the layout scatters itself | 920                                  |
-| Paved tiles                                 | 2 530 (23% of the plot)              |
-| Instances drawn                             | 3 967                                |
+| Lamps and hedges the layout scatters itself | 897                                  |
+| Paved tiles                                 | 2 427 (22% of the plot)              |
+| Instances drawn                             | 3 841                                |
 | Draw calls                                  | 528, over 43 chunks                  |
 | Triangles submitted per frame               | 2.18 M (1.25 M at eye level, culled) |
 | Triangles uploaded to the GPU               | 84 k, merged down from 526 k         |
-| Voxels the resort is made of                | 15.1 M                               |
-| Voxels actually meshed                      | 769 k (one copy of each model)       |
-| Lamps                                       | 425, all of them baked into a volume |
+| Voxels the resort is made of                | 15.0 M                               |
+| Voxels actually meshed                      | 773 k (one copy of each model)       |
+| Lamps                                       | 422, all of them baked into a volume |
 
 Note the two numbers that did _not_ move when the plot last doubled: 769 k
 voxels meshed and 84 k triangles uploaded. The catalogue is meshed once whatever
@@ -55,6 +55,11 @@ reproduces it — see _Measuring_ below.
 > hill, and nothing at all on the flat authored plan the bench measures), which
 > should not move them — but that is a claim, not a measurement, until
 > `pnpm bench` says so.
+>
+> The counted rows moved a little when dressing stopped growing spurs: 103 fewer
+> paved tiles on the authored plan, and the 23 lamps and hedges that used to line
+> them. The triangle rows have not been re-run since either, and they can only
+> have come down.
 
 ## How the pipeline fits together
 
@@ -97,7 +102,7 @@ reproduces it — see _Measuring_ below.
 ## Laying the resort out
 
 `RESORT_PLAN` is data: a list of plots, a graph of street nodes and edges, and a
-plaza or two. Everything else is derived, in three stages:
+plaza or two. Everything else is derived, in four stages:
 
 1. **Streets** — each edge is routed as an orthogonal L between its two nodes and
    thickened to its width, with the corner squared off so a wide street does not
@@ -109,11 +114,16 @@ plaza or two. Everything else is derived, in three stages:
    keeps the paving sparse and the resort legible: a cottage village is reached
    by one lane and eight short spurs, not by paving the whole block. It also
    means reachability holds by construction — an object that cannot be reached
-   is a build error, not a silent gap.
+   is a build error, not a silent gap. Two things grow none: **dressing**, the
+   grounds shelf of the catalogue, because nobody walks to a palm; and anything
+   standing on **sand**, because sand is walked on — see _The coast_.
 3. **Dressing** — street lamps are taken from the ring of free tiles touching a
    path, at an even minimum spacing; hedges then fill the straight runs left
    over, skipping anything pressed against a building so the planting reads as a
    border rather than as undergrowth.
+4. **Rails** — a handrail along every paved edge with a drop beyond it, and a
+   balustrade up both flanks of every flight of stairs. See _Stairs and paths get
+   handrails_.
 
 Each paved tile is then given its paving from the ground under it rather than
 from the route over it: flagstones on grass, a `boardwalk` on sand, and `stairs`
@@ -150,12 +160,13 @@ layout classifies tiles and the renderer emits one span per column, so the
 staircase the tile grid makes of a wandering coast is the _same_ staircase in
 both.
 
-The water only reaches a tenth of the plot's depth inside it, because those
+The water only reaches a fifteenth of the plot's depth inside it, because those
 tiles buy nothing: the sea carries on to the horizon whatever the plot says, so
 all an inset costs is ground. The sand is the number that matters, and it is
 capped as well as floored — a beach that grew with a 160-tile plot would be forty
-tiles of sand, which is a desert. On the reference plot it is 22 rows deep, about
-90 m of sand.
+tiles of sand, which is a desert. On the reference plot it is 14 rows deep, about
+56 m of sand: three lines of loungers, a band of palms and clubs behind them, and
+the two rows nothing stands on. The rows it used to have went to the hill.
 
 Three things follow from a tile being water, sand or land:
 
@@ -168,31 +179,34 @@ Three things follow from a tile being water, sand or land:
   comes out as a `boardwalk` rather than as flagstones. The paving is a fact
   about the ground under a tile, not about the route over it, so the same street
   is stone on grass and decking on sand.
+- **Nothing on sand is paved to, and nothing is routed across it.** Sand is
+  walked on: `layoutResort` grows no spur to anything standing on it and its
+  breadth-first search will not step onto it either. That one rule is what a
+  beach is. Before it, a spur per object paved a row of sand in front of every
+  run of loungers, and the two walks that used to cross the beach existed mostly
+  to keep those spurs one tile long; now the beach carries the two lanes that
+  come down to the water and nothing else.
 - **The generator keeps its districts off the sand entirely** and fills it on its
-  own terms — loungers and parasols in runs along the water, and a band of beach
-  clubs, bars, palms and torches against the dune at the back. A run is skirted
-  once rather than per object, which is the difference between a beach and a car
-  park; the skirt is what guarantees the free tiles between them stay one
-  connected piece, so `layoutResort` can always walk a boardwalk out to
-  everything standing there. Nobody sleeps on the sand: the lodgings are on the
-  shelf on top of the dune behind it — see _Elevation_.
-
-Two **walks** run across the sand parallel to the water, dividing the loungers
-into three bands. They are not decoration. `layoutResort` grows a spur from every
-cluster to the nearest paving and refuses a plan where one is walled in, so a
-beach with nothing crossing it pays for access in long snaking spurs that end up
-covering more sand than the walks would have; given a walk to reach, a run of
-loungers spurs one tile and stops. Each walk is a **chain of nodes** rather than
-one straight edge, one every five columns at a fixed distance in from the water,
-so it comes out as the same staircase of the wandering coast that the sand under
-it is drawn as.
+  own terms — three **lines** of loungers and parasols at fixed depths into the
+  sand, and a band of beach clubs, bars, palms and torches against the dune
+  behind them. A depth follows the water, so each line curves with the bay the
+  way the dune behind it does, and the density slider breaks a line into runs
+  rather than thinning it tile by tile: a line with every third lounger missing
+  reads as a scatter that happens to be in a row. The band at the back is skirted
+  per cluster, which is what keeps the clubs and the palms clear of each other
+  and of the last line. Nobody sleeps on the sand: the lodgings are on the shelf
+  on top of the dune behind it — see _Elevation_.
 
 The southern gate moves with the coast, and now with the hill as well: it stands
 at the hill's landward foot, facing back up the promenade, because that is where
 the resort proper ends. It cannot go on the sand any more — the sand has a dune
 rising straight off the back of it, and a gate three tiles wide would stand
-across the first step. The service lanes keep running south, climb the hill as
-flights of stairs, cross the beach as boardwalk and are cut off at the shore.
+across the first step. Every street stops there with it, except the two **sea
+lanes** — the service lanes nearest three tenths and seven tenths of the width,
+which carry on over the hill as flights of stairs, cross the sand as boardwalk
+and are cut off at the shore. Eight lanes used to do that, which paved the beach
+in stripes and made the dune a wall of staircases; two is enough to reach the sea
+with, and the hill is climbed by walks of its own instead.
 
 ## Elevation
 
@@ -203,14 +217,14 @@ behind it. A tile's **level** is an integer, 0 at sea level, and one level is
 
 From the water inland, the reference plot reads:
 
-| Level | What it is                 | Made of | Depth   |
-| ----- | -------------------------- | ------- | ------- |
-| 0     | the beach                  | sand    | 22 rows |
-| 1, 2  | the dune, a row per step   | sand    | 2 rows  |
-| 3     | the shelf, on top of it    | sand    | 9 rows  |
-| 4, 5  | the climb to the crest     | grass   | 12 rows |
-| 4 → 1 | the far side, four benches | grass   | 12 rows |
-| 0     | the resort behind it       | grass   | 32 rows |
+| Level   | What it is                 | Made of | Depth   |
+| ------- | -------------------------- | ------- | ------- |
+| 0       | the beach                  | sand    | 14 rows |
+| 1, 2    | the dune, a row per step   | sand    | 2 rows  |
+| 3       | the shelf, on top of it    | sand    | 9 rows  |
+| 4, 5, 6 | the climb to the crest     | grass   | 21 rows |
+| 5 → 1   | the far side, five benches | grass   | 17 rows |
+| 0       | the resort behind it       | grass   | 28 rows |
 
 Three things follow from that shape, and each is a decision rather than a
 consequence:
@@ -224,8 +238,11 @@ consequence:
 - **The shelf is where the lodgings are.** A row of bungalows along a sidewalk on
   top of the dune reads as the lodgings _of_ the beach; the same bungalows
   standing in the middle of the sand read as buildings somebody had left there.
-  Houses go on the grass benches above and behind, at four different heights.
-- **The hill is not a district.** Its benches are three to nine rows deep and
+  Houses go on the grass benches above and behind, at five different heights —
+  two palms to every house, because a hill this size filled with houses came out
+  as a housing estate on a slope rather than as a wooded headland with a few
+  houses in it.
+- **The hill is not a district.** Its benches are four to eleven rows deep and
   they curve, and a row grid is the wrong shape for that. So the hill and the
   beach are filled first, on their own terms, and whatever they leave bare is
   reserved against the districts wholesale.
@@ -286,11 +303,25 @@ The cost of anchoring everything to the water is that no step lands on a street,
 and a straight cross street laid across a curved bench would spend its length
 drifting on and off a step — a staircase a hundred tiles long rather than a
 street. So the cross streets, and with them every district they bound, are held
-**north of the hill**; the hill is reached by the north-south lanes that climb
-it, by the sidewalk along its shelf, and by a **switchback** that climbs it in
-legs rather than head on. That last one falls out of the routing for free: each
-edge is an L, so the leg along x runs along a bench and the leg along z is the
-bit that climbs.
+**north of the hill**, and the hill gets a network of its own that follows the
+coast rather than the grid:
+
+- a **bench walk** down the middle of every bench wide enough to hold one — the
+  sidewalk along the shelf the bungalows are laid out on, and one along each
+  grass bench above it, over the crest and down the far side. Each is a chain of
+  nodes a fixed distance in from the water, one every five columns, so it curves
+  with the bay; and each is laid down the _middle_ of its bench, because a walk
+  holds one row's z between nodes and the coast drifts a row or two under it —
+  on a bench narrower than five rows that is a staircase running the width of the
+  plot rather than a path.
+- two **switchbacks**, which climb the whole hill in legs rather than head on,
+  one either side of the promenade. That falls out of the routing for free: each
+  edge is an L, so the leg along x runs along a bench and the leg along z is the
+  bit that climbs. They start on the sidewalk along the shelf, which is what
+  joins them to everything below, and end on the level ground behind the hill.
+
+Between them the two make one network — every switchback crosses every bench
+walk — and the sea lanes tie it back into the street grid.
 
 `plot` anchoring is still what a step on a **street** needs — with no wobble it
 falls on one row in every column — and it is what the elevation spec exists to
@@ -342,6 +373,44 @@ and nothing that is already a flight stops being one — so a re-laid tile is
 always a slab, and nothing has to work out what a flight would have been if it
 were flat. Taking paving back up is the case that would need that, and it belongs
 with the bulldozer that introduces it.
+
+### Stairs and paths get handrails
+
+The last of the rules that read the ground rather than the plan, and the same
+shape as the two before it: `ground.ts` decides what a tile is paved _with_,
+`stairs.ts` decides where that paving climbs, and `railings.ts` decides where it
+needs holding on to. Two cases, and they are the two the eye expects:
+
+- **A drop beside a path.** A paved tile whose neighbour stands lower and is not
+  paved is a tile you could walk off the side of, so a rail is stood along that
+  edge — the balustrade along the top of a terrace, and along the walks that
+  follow the hill's benches. One rail per edge, so the corner of a bench comes
+  out with two.
+- **The flanks of a flight.** A staircase is guarded up both sides whether or not
+  the ground beside it drops, which is what a staircase looks like everywhere it
+  has ever been built.
+
+**Paving is always the way through**: a neighbour that is paved never gets a rail
+between it and here. That is what keeps a flight open at the top and the bottom,
+and what lets a walk turn a corner without being fenced off from itself. A
+staircase wider than one tile is left open altogether — one model carries both
+flanks, because they are mirrors of each other and no quarter turn maps one onto
+the other, so a rail on a flight with paving up one side of it would fall down
+the middle of the treads.
+
+Two models, both `groundDecides`, so neither is ever picked: `railing`, a run of
+posts and a rail along one edge, and `stair-railing`, a stepped parapet up both
+flanks of a flight, whose treads are derived from the same two constants
+`stairs.ts` is built from so the two cannot drift apart.
+
+A rail is the one thing on the plot that **claims no ground**. It stands on the
+paving it guards, at that tile's own height, and the tile is already spoken for
+by the slab under it — so the layout keeps rails in a list of their own. The
+scene draws them with everything else; the occupancy index, the blob shadows and
+the sky-visibility bake all leave them out, because the answer for their tile is
+the paving. It is also the one thing not centred in its footprint: `placeOnEdge`
+stands it flush against the edge its turn points at, while everything else on the
+plot is centred in the tiles it claims.
 
 ### An object stands on one level
 
@@ -904,7 +973,9 @@ The resort is laid out on a fixed grid of `TILE_VOXELS` (16) voxel tiles. Every
 model declares the footprint it claims in tiles and must fit inside it;
 `pnpm preview --audit` reports how much of that footprint each model actually
 fills, which is the number to watch when objects are meant to look right next to
-each other. All 33 models currently fill 100% of their footprint.
+each other. All but two of the 36 models fill 100% of theirs: a parasol's canopy
+is round, and a handrail is an edge rather than a tile — 16 by 2 of a 16 by 16
+footprint, stood flush against the edge it guards rather than centred in it.
 
 `spreadLabelAnchors` picks which placement of each type carries the HUD caption.
 It takes the one furthest from the labels already placed, so a plan that

@@ -142,7 +142,7 @@ export function planStroke(
     .map((plan) => plan.placement);
 }
 
-/** The layout item for an object type: the footprint, without the voxels. */
+/** The layout item for an object type: the footprint and its shelf, without the voxels. */
 export function layoutItemFor(type: ObjectTypeDefinition): LayoutItem {
   return {
     id: type.id,
@@ -150,5 +150,6 @@ export function layoutItemFor(type: ObjectTypeDefinition): LayoutItem {
     tilesZ: type.model.tiles.z,
     width: type.model.width,
     depth: type.model.depth,
+    category: type.category,
   };
 }

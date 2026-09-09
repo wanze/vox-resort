@@ -171,7 +171,7 @@ describe('planStroke', () => {
 });
 
 describe('layoutItemFor', () => {
-  it('takes the footprint of a catalogue type, without its voxels', () => {
+  it('takes the footprint and the shelf of a catalogue type, without its voxels', () => {
     const cottage = objectTypeById('cottage');
     expect(layoutItemFor(cottage)).toEqual({
       id: 'cottage',
@@ -179,6 +179,9 @@ describe('layoutItemFor', () => {
       tilesZ: cottage.model.tiles.z,
       width: cottage.model.width,
       depth: cottage.model.depth,
+      // The shelf rides along because the layout asks one question of it:
+      // whether the object is dressing, which grows no spur to it.
+      category: cottage.category,
     });
   });
 });

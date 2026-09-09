@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
-import { BOARDWALK_ID, DERIVED_IDS, HEDGE_ID, LAMP_ID, PATH_ID, STAIRS_ID } from './resortPlan';
+import {
+  BOARDWALK_ID,
+  DERIVED_IDS,
+  HEDGE_ID,
+  LAMP_ID,
+  PATH_ID,
+  RAILING_ID,
+  STAIR_RAILING_ID,
+  STAIRS_ID,
+} from './resortPlan';
 import { elevationFor, levelAt, maxLevelOf, raisedTilesOf } from './elevation';
 import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
 import { groundAt } from './ground';
@@ -265,6 +274,52 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
+  it('lays the loungers and the parasols out in three lines along the water', () => {
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const depths = new Set(
+        plan.plots
+          .filter(
+            (plot) =>
+              (plot.id === 'sun-lounger' || plot.id === 'beach-umbrella') &&
+              terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
+          )
+          .map((plot) => beachDepthAt(shore, plot.tileX, plot.tileZ)),
+      );
+      // Three depths into the sand and no others: a line is a line however the
+      // coast in front of it wanders, because a depth follows the water.
+      expect({ set, lines: depths.size }).toEqual({ set, lines: 3 });
+      // With clear sand between them, which is what makes them read as three.
+      const sorted = [...depths].toSorted((a, b) => a - b);
+      for (const [index, depth] of sorted.slice(1).entries()) {
+        expect({ set, apart: depth - sorted[index]! >= 2 }).toEqual({ set, apart: true });
+      }
+    }
+  });
+
+  it('paves nothing across the beach but the lanes that run down to the water', () => {
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const onSand = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'beach');
+      const perRow = new Map<number, number>();
+      for (const tile of onSand) perRow.set(tile.tileZ, (perRow.get(tile.tileZ) ?? 0) + 1);
+      // A walk along the beach would pave a whole row of it. What crosses the
+      // sand now is a couple of lanes, so no row of sand carries more than a
+      // handful of tiles — and no lounger grows a spur, because sand is walked
+      // on. See `growSpurs`.
+      const widest = Math.max(0, ...perRow.values());
+      expect({ set, sparse: widest <= 4 }).toEqual({ set, sparse: true });
+      // And they do reach the water, rather than stopping at the dune.
+      expect({
+        set,
+        reaches: onSand.some((tile) => beachDepthAt(shore, tile.tileX, tile.tileZ) === 0),
+      }).toEqual({ set, reaches: true });
+    }
+  });
+
   it('stands nothing anybody sleeps in on the beach itself', () => {
     // The lodgings moved up onto the shelf on top of the dune. A bungalow in the
     // middle of the sand read as a building somebody had left there.
@@ -505,6 +560,46 @@ describe('the hill a generated plot gets', () => {
     );
     expect(turns.has(0)).toBe(true);
     expect(turns.has(2)).toBe(true);
+  });
+
+  it('runs a walk along the benches, at several heights up the hill', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const elevation = elevationFor(plan)!;
+    const { paths } = layoutResort(ITEMS, plan);
+    // Paving per height it stands at. A walk down the middle of a bench is about
+    // as many tiles as the plot is wide — spread over a few rows, because it
+    // follows the coast rather than a line — where a lane climbing the hill head
+    // on leaves a handful at each height it passes through.
+    const perLevel = new Map<number, number>();
+    for (const tile of paths) {
+      const level = levelAt(elevation, tile.tileX, tile.tileZ);
+      perLevel.set(level, (perLevel.get(level) ?? 0) + 1);
+    }
+    const walked = [...perLevel.entries()].filter(
+      ([level, tiles]) => level > 0 && tiles > plan.tilesX * 0.6,
+    );
+    // The shelf on top of the dune and the grass benches above it: a hill you
+    // can walk along at four heights rather than only climb.
+    expect(walked.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('rails the walks along the top of a step and the flights between them', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const { rails, paths } = layoutResort(ITEMS, plan);
+    const paved = new Set(paths.map((tile) => tileKey(tile.tileX, tile.tileZ)));
+
+    expect(rails.some((rail) => rail.id === RAILING_ID)).toBe(true);
+    expect(rails.some((rail) => rail.id === STAIR_RAILING_ID)).toBe(true);
+    // A rail stands on the paving it guards rather than on ground of its own.
+    for (const rail of rails) {
+      expect({ key: rail.key, on: paved.has(tileKey(rail.tileX, rail.tileZ)) }).toEqual({
+        key: rail.key,
+        on: true,
+      });
+    }
+    // And they are the exception, like the flights: a hill with a handrail down
+    // every path on it would be a fire escape.
+    expect(rails.length).toBeLessThan(paths.length / 8);
   });
 
   it('lays a flight where a path crosses a step and nowhere else', () => {

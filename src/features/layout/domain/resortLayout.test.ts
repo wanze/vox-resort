@@ -14,6 +14,7 @@ import {
   plotsWithoutPathAccess,
   routeEdgeTiles,
   streetTiles,
+  tileKey,
   widthOffsets,
   type LayoutItem,
   type ResortLayout,
@@ -24,7 +25,9 @@ import {
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
+  RAILING_ID,
   RESORT_PLAN,
+  STAIR_RAILING_ID,
   type ResortPlan,
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
@@ -299,6 +302,91 @@ describe('a terraced plot', () => {
     const { paths } = layoutResort(tinyItems, terraced);
     expect(paths.filter((tile) => tile.y === 0).length).toBeGreaterThan(0);
     expect(paths.filter((tile) => tile.y === LEVEL_VOXELS).length).toBeGreaterThan(0);
+  });
+});
+
+describe('handrails', () => {
+  /** A rail is as long as its tile and two voxels deep: it lines an edge. */
+  const railItem: LayoutItem = {
+    id: RAILING_ID,
+    tilesX: 1,
+    tilesZ: 1,
+    width: TILE_VOXELS,
+    depth: 2,
+  };
+  const railItems: LayoutItem[] = [item(PATH_ID), railItem, item(STAIR_RAILING_ID)];
+
+  /**
+   * A bench across the northern half of a 5x5 plot, with a walk along the top of
+   * its step and a lane down off it at the western end.
+   */
+  const bench: ResortPlan = {
+    tilesX: 5,
+    tilesZ: 5,
+    plots: [],
+    nodes: [
+      { id: 'w', tileX: 0, tileZ: 1 },
+      { id: 'e', tileX: 4, tileZ: 1 },
+      { id: 's', tileX: 0, tileZ: 4 },
+    ],
+    edges: [
+      { from: 'w', to: 'e' },
+      { from: 'w', to: 's', bend: 'z-first' },
+    ],
+    plazas: [],
+    elevation: { terraces: [{ level: 1, inset: 2, anchor: 'plot', wave: 0 }], seed: 1 },
+    standsWholeCatalogue: false,
+  };
+
+  it('rails the walk along the top of the step, and nothing else', () => {
+    const { rails } = layoutResort(railItems, bench);
+    const edges = rails.filter((rail) => rail.id === RAILING_ID);
+    // Every tile of the walk but the one the lane comes down off, which is the
+    // way through rather than a fall.
+    expect(edges.map((rail) => rail.tileX).toSorted()).toEqual([1, 2, 3, 4]);
+    expect(edges.every((rail) => rail.tileZ === 1 && rail.rotation === 2)).toBe(true);
+  });
+
+  it('stands an edge rail flush against the edge it guards', () => {
+    const { rails } = layoutResort(railItems, bench);
+    const rail = rails.find((standing) => standing.id === RAILING_ID)!;
+    // Turned to face south, so it hugs the southern edge of its own tile rather
+    // than being centred in it — the whole point of the placement.
+    expect({ x: rail.x, z: rail.z, y: rail.y }).toEqual({
+      x: rail.tileX * TILE_VOXELS,
+      z: rail.tileZ * TILE_VOXELS + TILE_VOXELS - 2,
+      y: LEVEL_VOXELS,
+    });
+  });
+
+  it('guards the flight where the lane comes down off the bench', () => {
+    const { rails } = layoutResort(railItems, bench);
+    const flight = rails.filter((rail) => rail.id === STAIR_RAILING_ID);
+    expect(flight).toHaveLength(1);
+    // On the lower tile of the step, turned the way the flight climbs.
+    expect(flight[0]).toMatchObject({ tileX: 0, tileZ: 2, rotation: 0, y: 0 });
+  });
+
+  it('stands every rail on a tile that is paved', () => {
+    const { rails, paths } = layoutResort(railItems, bench);
+    const paved = new Set(paths.map((tile) => tileKey(tile.tileX, tile.tileZ)));
+    expect(rails.length).toBeGreaterThan(0);
+    for (const rail of rails) {
+      expect({ rail: rail.key, paved: paved.has(tileKey(rail.tileX, rail.tileZ)) }).toEqual({
+        rail: rail.key,
+        paved: true,
+      });
+    }
+  });
+
+  it('rails nothing on a plot with no steps in it', () => {
+    expect(layoutResort([...tinyItems, railItem, item(STAIR_RAILING_ID)], tinyPlan).rails).toEqual(
+      [],
+    );
+  });
+
+  it('lays no rails at all when the catalogue has none', () => {
+    expect(layoutResort([item(PATH_ID)], bench).rails).toEqual([]);
   });
 });
 
@@ -721,7 +809,10 @@ describe('a plot with a shore', () => {
     }
   });
 
-  it('leaves everything on the beach reachable', () => {
+  it('grows no spur to anything standing on the sand', () => {
+    // Sand is walked on: a hut on the beach is reached across it, and paving a
+    // way to everything standing there is what turns a beach into a car park.
+    const shore = shoreFor(coastal())!;
     const withHut = coastal({
       plots: [
         { id: 'hut', tileX: 0, tileZ: 4 },
@@ -729,7 +820,14 @@ describe('a plot with a shore', () => {
         { id: 'hut', tileX: 2, tileZ: 6 },
       ],
     });
+    const bare = pathTilesFor(items, coastal());
+    const withOne = pathTilesFor(items, withHut);
+    expect(withOne.length).toBe(bare.length);
+    // Reachable all the same, so nothing counts it as walled in.
     expect(plotsWithoutPathAccess(items, withHut)).toEqual([]);
+    expect(
+      withOne.filter((tile) => terrainAt(shore, tile.x, tile.z) === 'beach' && tile.x === 2),
+    ).toEqual([]);
   });
 });
 

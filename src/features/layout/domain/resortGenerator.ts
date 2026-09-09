@@ -9,11 +9,13 @@
  *
  * The plot is grown in the order a town is:
  *
- * 1. **Streets first.** A promenade the full depth of the plot with a gate at
- *    each end, cross streets at intervals, and service lanes down the flanks and
- *    between the columns. The network is laid out before anything is built on
- *    it, which is what makes every district border a street by construction
- *    rather than by luck.
+ * 1. **Streets first.** A promenade with a gate at each end, cross streets at
+ *    intervals, and service lanes down the flanks and between the columns. The
+ *    network is laid out before anything is built on it, which is what makes
+ *    every district border a street by construction rather than by luck. All of
+ *    it stops at the foot of the hill, because that is where the level ground
+ *    stops; two lanes carry on over the hill and across the sand to the water,
+ *    and they are the only paving the beach ever sees — see {@link SEA_LANES}.
  * 2. **Districts are the gaps.** Whatever rectangle is left between two streets
  *    is a district, and each is given a theme — a category of the catalogue that
  *    will dominate it — so the resort reads as a lodging quarter and a leisure
@@ -35,22 +37,34 @@
  *    plot's southern end is sea, with a band of sand across its full width, and
  *    behind the sand the land rises into a hill and comes back down again. A row
  *    grid is precisely the wrong shape for either — a hotel laid out in rows is
- *    what a beach is not, and a hillside bench is three tiles deep and curved —
+ *    what a beach is not, and a hillside bench is a few tiles deep and curved —
  *    so both are filled on their own terms *before* the districts, and whatever
  *    they leave bare is then reserved against the districts wholesale. That
  *    order is also what puts a lounger on the sand and a bungalow on the shelf
  *    rather than in whichever district the walk reached first. See
  *    {@link fillBeach} and {@link fillHill}.
  *
- * 6. **The hill is the whole shape of the plot.** Three levels of sand climb
+ * 6. **The beach is three lines and a band.** Loungers and parasols lie in three
+ *    lines at fixed depths into the sand, following the water the way the dune
+ *    behind them does, with the clubs and the palms in the band behind. Nothing
+ *    on it is paved to: sand is walked on, so `layoutResort` grows no spur to
+ *    anything standing there and routes none across it, and the beach keeps the
+ *    two lanes that cross it to the sea and nothing else. See
+ *    {@link beachLineDepths}.
+ *
+ * 7. **The hill is the whole shape of the plot.** Three levels of sand climb
  *    straight off the back of the beach onto a shelf wide enough for a row of
  *    bungalows and a sidewalk; grass benches carry on up to a crest with houses
- *    on them; and the far side comes back down to sea level, where the streets
- *    and the districts are. Every step is anchored to the water and given no
- *    wobble of its own, which is what keeps the steps from ever crossing and
- *    what makes the whole hill curve with the coast — see {@link hillFor}. The
- *    cross streets are held north of it and the fills refuse anything that would
- *    stand across a step, so a plot is buildable everywhere it is flat.
+ *    and palms on them; and the far side comes back down to sea level, where the
+ *    streets and the districts are. Every step is anchored to the water and
+ *    given no wobble of its own, which is what keeps the steps from ever
+ *    crossing and what makes the whole hill curve with the coast — see
+ *    {@link hillFor}. The cross streets are held north of it and the fills
+ *    refuse anything that would stand across a step, so a plot is buildable
+ *    everywhere it is flat. It is walked by paths of its own: one along the
+ *    middle of every bench wide enough to hold one, and two switchbacks climbing
+ *    across them from the dune to the crest and down the other side — see
+ *    {@link walksFor}.
  *
  * Everything here is a pure function of the parameters, and the seed makes it
  * reproducible: the same four numbers give the same resort, which is what lets
@@ -475,9 +489,15 @@ function fillRow(parts: FillParts, z: number, rowTurn: Rotation): number {
  * tiles buy is a strip of water with the plot's own edge behind it. The beach is
  * the number that matters, and it is capped as well as floored — a beach that
  * grew with a 160-tile plot would be forty tiles of sand, which is a desert.
+ *
+ * Both are narrower than they were, and the rows they give back go to the hill.
+ * A beach is three lines of loungers, a band of palms and clubs behind them, and
+ * the two rows nothing stands on — see {@link beachLineDepths}. Twenty-two rows
+ * of sand was twice what that needs, and the sand it added was the part of the
+ * plot with the least on it.
  */
-const SHORE_INSET = { of: 0.1, min: 6 } as const;
-const SHORE_BEACH = { of: 0.22, min: 12, max: 24, wander: 3 } as const;
+const SHORE_INSET = { of: 0.07, min: 5 } as const;
+const SHORE_BEACH = { of: 0.14, min: 10, max: 16, wander: 3 } as const;
 
 /**
  * How the hill behind the beach is shaped.
@@ -498,19 +518,28 @@ const HILL = {
   /** Levels of sand the dune climbs off the beach. */
   dune: 3,
   /** The tallest crest worth building, and the shortest thing still a hill. */
-  peak: { max: 5, min: 3 },
+  peak: { max: 6, min: 3 },
   /** Rows of flat sand on top of the dune: where the bungalows stand. */
   shelf: { of: 0.09, min: 4, max: 11 },
   /** Rows of each grass bench on the way up to the crest. */
-  bench: { of: 0.06, min: 3, max: 9 },
+  bench: { of: 0.07, min: 4, max: 9 },
   /** Rows of the wide benches on the way back down. */
-  step: { of: 0.05, min: 2, max: 6 },
+  step: { of: 0.05, min: 3, max: 7 },
   /** Rows of level ground the resort proper keeps behind the hill. */
-  resort: 12,
+  resort: 24,
 } as const;
 
-/** The shortest shelf a sidewalk can be run down without drifting off it. */
-const WALKABLE_SHELF = 5;
+/**
+ * The shortest bench a walk can be run down the middle of without drifting off
+ * it.
+ *
+ * A walk holds one row's z between its nodes and the coast drifts under it, so a
+ * bench narrower than this is one the walk would spend its length stepping on
+ * and off — which is a staircase running the width of the plot rather than a
+ * path. The benches that fail it are the one-row flights on the way down, and a
+ * flight is not somewhere a path runs *along* anyway.
+ */
+const WALKABLE_BENCH = 5;
 
 /** One step of the hill: what it climbs to, and the bench behind it. */
 interface HillStep {
@@ -671,24 +700,18 @@ function isBuildableSand(shore: Shore, tileX: number, tileZ: number): boolean {
   return depth >= 1 && depth <= shore.spec.beach - 2;
 }
 
+/** What the lines at the water's edge are laid with. */
+const LOUNGER_ID = 'sun-lounger';
+const UMBRELLA_ID = 'beach-umbrella';
+
 /**
- * What stands at the water's edge, and what stands behind it.
+ * What stands on the sand behind the lines.
  *
- * Weighted by repetition rather than by a table of numbers: a beach is mostly
- * loungers and parasols with a bungalow here and there, and the shortest way to
- * say that is to write the loungers down more often. The two lists are also the
- * whole of the rule that a beach club does not end up on the tideline.
- *
- * The front list is one-tile objects only, because the front is laid in runs —
- * see {@link standRun}.
+ * Weighted by repetition rather than by a table of numbers: the back of a beach
+ * is mostly palms and torches with a club here and there, and the shortest way
+ * to say that is to write the palms down more often. The list is also the whole
+ * of the rule that a beach club does not end up on the tideline.
  */
-const BEACH_FRONT: readonly string[] = [
-  'sun-lounger',
-  'sun-lounger',
-  'sun-lounger',
-  'beach-umbrella',
-  'beach-umbrella',
-];
 const BEACH_BACK: readonly string[] = [
   'beach-club',
   'poolside-bar',
@@ -705,33 +728,44 @@ const BEACH_BACK: readonly string[] = [
 ];
 
 /**
- * How many of the buildable rows against the back of the beach go to the
- * buildings, out of the depth of the sand.
+ * Where the lines of loungers run, as depths into the sand.
  *
- * Capped as well as scaled, and the cap is what matters: a beach club is four
- * tiles deep and is skirted, so eight rows are about what one needs to be able
- * to stand anywhere in the band. Past that, a wider beach should be a beach with
- * more loungers on it rather than one with a wider row of palm trees along the
- * back of it.
+ * Three of them, a clear row of sand between each, starting one row up from the
+ * tideline — the way a beach club actually sets its furniture out, and the thing
+ * a scatter of runs never quite read as however well it was skirted. The depths
+ * are fixed rather than scaled: a line is a line whatever the sand behind it is
+ * doing, and the beach's own size decides how much room the palms and the clubs
+ * get behind them, not how far apart the sunbathers lie.
  *
- * Nobody sleeps on this beach any more: the bungalows moved up onto the shelf on
- * top of the dune behind it, where a row of them along a sidewalk reads as the
- * lodgings *of* the beach rather than as buildings standing in the middle of it.
- * See {@link SHELF_POOL}.
+ * They are *depths*, so each line follows the coast: a fixed distance in from a
+ * wandering shore wanders with it, exactly as the dune behind does. See
+ * {@link layBeachLines}.
+ *
+ * Nobody sleeps on this beach either: the bungalows are up on the shelf on top
+ * of the dune, where a row of them along a sidewalk reads as the lodgings *of*
+ * the beach rather than as buildings standing in the middle of it. See
+ * {@link SHELF_POOL}.
  */
-const BEACH_BACK_ROWS = { of: 0.36, min: 3, max: 8 } as const;
+const BEACH_LINES = { count: 3, first: 1, spacing: 2 } as const;
 
-/**
- * The last depth into the sand that the loungers have, measured off the
- * buildable band rather than off the whole beach: the tideline and the lane at
- * the back are neither front nor back, because nothing stands on either.
- */
-const beachFrontDepth = (shore: Shore): number => {
-  const back = Math.round(
-    clamp(shore.spec.beach * BEACH_BACK_ROWS.of, BEACH_BACK_ROWS.min, BEACH_BACK_ROWS.max),
-  );
-  return Math.max(1, shore.spec.beach - 2 - back);
-};
+/** How many loungers stand between one parasol and the next. */
+const UMBRELLA_EVERY = 4;
+
+/** How long a gap in a line is, once the density has decided to leave one. */
+const BEACH_GAP = { min: 2, max: 5 } as const;
+
+/** The depth into the sand each line of loungers runs at, seaward first. */
+function beachLineDepths(shore: Shore): number[] {
+  const deepest = shore.spec.beach - 2;
+  return Array.from(
+    { length: BEACH_LINES.count },
+    (_, index) => BEACH_LINES.first + index * BEACH_LINES.spacing,
+  ).filter((depth) => depth <= deepest);
+}
+
+/** The first depth into the sand behind the lines: where the back of the beach starts. */
+const beachBackDepth = (shore: Shore): number =>
+  (beachLineDepths(shore).at(-1) ?? 0) + BEACH_LINES.spacing;
 
 /**
  * How much of the buildable sand is attempted, per tile visited, at full
@@ -744,9 +778,6 @@ const beachFrontDepth = (shore: Shore): number => {
  */
 const BEACH_DENSITY = 1;
 
-/** How many one-tile objects stand shoulder to shoulder in one run. */
-const BEACH_RUN = { min: 4, max: 9 } as const;
-
 /**
  * Draws from a pool before giving a tile up.
  *
@@ -757,29 +788,114 @@ const BEACH_RUN = { min: 4, max: 9 } as const;
 const BEACH_DRAWS = 3;
 
 /**
- * Fills the sand.
+ * Fills the sand: the lines first, then whatever the back of the beach takes.
  *
- * The one rule that matters is the skirt: a cluster is placed only when the ring
- * of tiles *around* it is free too, and that ring is claimed with it. Without it
- * a run of loungers packs solid, and `layoutResort` throws — it grows a spur from
- * every object to the path network and refuses a plan where something is walled
- * in. With it, the free tiles between the clusters are one connected piece
- * running the length of the beach and out onto the grass, so a boardwalk can
- * always be walked to anything standing here.
+ * The order is the point. The lines are laid on their own depths whatever else
+ * wants the sand, and the back fill is then held behind them — so a beach club
+ * can never land in the middle of a line of sunbathers, and the three lines read
+ * as three lines all the way along the bay.
  *
- * That is the same guarantee the districts get from their free row, arrived at
- * differently because a beach is not laid out in rows. It is also why the small
- * things go down as *runs* rather than one at a time: a skirt around every
- * single lounger would stand them three tiles apart, which is a car park, not a
- * beach. A run is skirted once, so the loungers inside it sit shoulder to
- * shoulder — and the run is walked east, along the water rather than across it.
+ * Nothing on the sand is skirted against the *path* network any more, because
+ * nothing on the sand needs one: sand is walked on, and `layoutResort` grows no
+ * spur to anything standing on it. That is what lets a line of loungers lie
+ * shoulder to shoulder without a boardwalk down either side of it, and it is
+ * what took the two walks that used to cross the beach off it — see
+ * `resortLayout.ts`.
  */
 function fillBeach(parts: BeachParts): void {
+  layBeachLines(parts);
+  fillBeachBack(parts);
+}
+
+/**
+ * Lays the three lines of loungers, each at its own depth into the sand.
+ *
+ * A line is walked east, along the water rather than across it, and it stops for
+ * nothing but a tile that is already spoken for — the lane where a street comes
+ * down to the sea, which cuts the line in two and carries on. Every fourth place
+ * gets a parasol instead of a lounger, counted along the line rather than off
+ * the column, so a lane crossing the sand does not put all three lines' parasols
+ * in step.
+ *
+ * The density slider breaks a line into runs rather than thinning it tile by
+ * tile. A line with every third lounger missing reads as a scatter that happens
+ * to be in a row; a line of eight with a gap of three and then another eight
+ * reads as what it is, which is a beach filling up from one end.
+ */
+function layBeachLines(parts: BeachParts): void {
+  const lounger = parts.types.get(LOUNGER_ID);
+  const umbrella = parts.types.get(UMBRELLA_ID);
+  if (!lounger || !umbrella) return;
+  for (const [line, depth] of beachLineDepths(parts.shore).entries()) {
+    layBeachLine({ ...parts, line, depth, lounger, umbrella });
+  }
+}
+
+/** One line of loungers, walked east along the water at its own depth. */
+function layBeachLine(
+  parts: BeachParts & {
+    readonly line: number;
+    readonly depth: number;
+    readonly lounger: GeneratorType;
+    readonly umbrella: GeneratorType;
+  },
+): void {
+  const { shore, line, depth, lounger, umbrella, missing, site, random, plots } = parts;
+  let along = 0;
+  let gap = 0;
+
+  for (let tileX = 0; tileX < site.tilesX; tileX++) {
+    const tileZ = waterStartZ(shore, tileX) - 1 - depth;
+    if (!isBuildableSand(shore, tileX, tileZ)) continue;
+    // A lane crossing the sand cuts the line in two and it carries on.
+    if (site.taken.has(tileKey(tileX, tileZ))) continue;
+    if (gap > 0) {
+      gap--;
+      continue;
+    }
+    if (random() > BEACH_DENSITY * parts.density) {
+      gap = BEACH_GAP.min + Math.floor(random() * (BEACH_GAP.max - BEACH_GAP.min + 1));
+      continue;
+    }
+
+    along++;
+    const type = along % UMBRELLA_EVERY === line % UMBRELLA_EVERY ? umbrella : lounger;
+    // A lounger faces the water, which is what it is unturned — the backrest is
+    // at its northern end. A parasol has no front at all, six stripes round a
+    // pole, so it is stood at a random quarter and a line of them stops reading
+    // as one model stamped down the beach.
+    const rotation: Rotation = type === umbrella ? normalizeRotation(Math.floor(random() * 4)) : 0;
+    site.taken.add(tileKey(tileX, tileZ));
+    plots.push({ id: type.id, tileX, tileZ, rotation });
+    missing.delete(type.id);
+  }
+}
+
+/**
+ * Fills the sand behind the lines with what a beach carries: palms, torches, a
+ * bar, and the odd club.
+ *
+ * The skirt is what matters here. A cluster is placed only when the ring of
+ * tiles *around* it is free too, and that ring is claimed with it, so the clubs
+ * and the palms stand clear of each other rather than packing into one block —
+ * and clear of the last line of loungers, whose tiles the ring also has to find
+ * free.
+ */
+function fillBeachBack(parts: BeachParts): void {
   const { shore, random } = parts;
+  const behind = beachBackDepth(shore);
+  const back: BeachParts = {
+    ...parts,
+    // Held behind the lines by the same check that keeps a four-tile club off
+    // the tideline: what a cluster may cover, asked of every tile it covers.
+    standable: (tile) =>
+      isBuildableSand(shore, tile.x, tile.z) && beachDepthAt(shore, tile.x, tile.z) >= behind,
+  };
   for (const tile of beachTilesOf(shore)) {
+    if (beachDepthAt(shore, tile.x, tile.z) < behind) continue;
     if (!isBuildableSand(shore, tile.x, tile.z)) continue;
     if (random() > BEACH_DENSITY * parts.density) continue;
-    standOnSand(parts, tile);
+    standOnSand(back, tile);
   }
 }
 
@@ -792,39 +908,26 @@ interface BeachParts extends Stand {
 }
 
 /**
- * Stands whatever the sand at one tile calls for, or leaves it bare.
+ * Stands whatever the back of the beach at one tile calls for, or leaves it
+ * bare.
  *
- * The walk crosses each row from the grass to the water, so the buildings at the
- * back get their pick of the sand before the loungers start filling it in.
- *
- * And when nothing the back wanted will go — which is most tiles, because a
- * beach club is four tiles square and skirted — the loungers carry on into it
- * rather than a bare strip being left along the foot of the dune. That is what
- * makes the back of the beach read as the back of a beach rather than as a
- * hedge: a few buildings with sunbathers between them.
+ * The walk crosses each row from the grass to the water, so the buildings get
+ * their pick of the deepest sand before the palms start filling it in. Most
+ * tiles come out bare, because a beach club is four tiles square and skirted,
+ * and a band of palms with a bare stretch between them is what the back of a
+ * beach looks like.
  */
 function standOnSand(parts: BeachParts, tile: Tile): void {
-  const { shore, types, missing, random } = parts;
-  const front = beachDepthAt(shore, tile.x, tile.z) <= beachFrontDepth(shore);
-
-  if (!front) {
-    for (let draw = 0; draw < BEACH_DRAWS; draw++) {
-      const wanted =
-        BEACH_BACK.find((id) => missing.has(id)) ??
-        BEACH_BACK[Math.floor(random() * BEACH_BACK.length)]!;
-      const type = types.get(wanted);
-      if (!type || !standOne(parts, type, tile)) continue;
-      missing.delete(type.id);
-      return;
-    }
+  const { types, missing, random } = parts;
+  for (let draw = 0; draw < BEACH_DRAWS; draw++) {
+    const wanted =
+      BEACH_BACK.find((id) => missing.has(id)) ??
+      BEACH_BACK[Math.floor(random() * BEACH_BACK.length)]!;
+    const type = types.get(wanted);
+    if (!type || !standOne(parts, type, tile)) continue;
+    missing.delete(type.id);
+    return;
   }
-
-  const wanted =
-    BEACH_FRONT.find((id) => missing.has(id)) ??
-    BEACH_FRONT[Math.floor(random() * BEACH_FRONT.length)]!;
-  const type = types.get(wanted);
-  if (!type || !standRun(parts, type, tile)) return;
-  missing.delete(type.id);
 }
 
 /** What standing one object anywhere on the loose ground needs. */
@@ -883,33 +986,6 @@ function standOne(parts: Stand, type: GeneratorType, tile: Tile): boolean {
 }
 
 /**
- * Stands a run of one-tile objects along the water, skirted once as a whole.
- *
- * The run steps east, along the shore rather than into it, so a row of loungers
- * faces the sea down its whole length instead of walking out through the
- * tideline. It grows a tile at a time and stops at the first one that will not
- * go, so a run at the end of the beach comes out short rather than not at all.
- */
-function standRun(parts: BeachParts, type: GeneratorType, tile: Tile): boolean {
-  const { shore, site, random, plots } = parts;
-  const wanted = BEACH_RUN.min + Math.floor(random() * (BEACH_RUN.max - BEACH_RUN.min + 1));
-
-  const run: Tile[] = [];
-  for (let step = 0; step < wanted; step++) {
-    const next = { x: tile.x + step, z: tile.z };
-    if (!isBuildableSand(shore, next.x, next.z)) break;
-    const grown = [...run, next];
-    if (!tilesFree(site, withSkirt(grown))) break;
-    run.push(next);
-  }
-  if (run.length === 0) return false;
-
-  claimTiles(site, withSkirt(run));
-  for (const stand of run) plots.push({ id: type.id, tileX: stand.x, tileZ: stand.z, rotation: 0 });
-  return true;
-}
-
-/**
  * What stands on the shelf of sand on top of the dune.
  *
  * Bungalows, four times out of eight, because that is what the shelf is for: a
@@ -934,6 +1010,12 @@ const SHELF_POOL: readonly string[] = [
  * other one by construction, see {@link hillStepsFor} — with the narrow steps
  * between them taking the one-tile things that will fit anywhere. A hillside of
  * houses at four different heights is the whole point of the hill.
+ *
+ * Two palms to every house, though, which is the other half of it: the hill is
+ * bigger than it was, and a bigger hill filled at the old weighting came out as
+ * a housing estate on a slope. Planted rather than built, it reads as a wooded
+ * headland with a few houses in it — and a palm is one tile, so it goes in the
+ * gaps between the houses that nothing else fits.
  */
 const HILLSIDE_POOL: readonly string[] = [
   'house',
@@ -941,13 +1023,24 @@ const HILLSIDE_POOL: readonly string[] = [
   'house',
   'house',
   'house',
-  'house',
+  'palm',
+  'palm',
+  'palm',
   'palm',
   'flowerbed',
 ];
 
-/** How much of the hill is attempted, per tile visited, at full density. */
-const HILL_DENSITY = 0.9;
+/**
+ * How much of the hill is attempted, per tile visited, at full density.
+ *
+ * Lower than it was, because the hill is half again as deep as it was: a
+ * hillside attempted at nine tiles in ten came out as a housing estate with a
+ * path to every house in it, and the paving that took was more of the hill than
+ * the grass was. Six in ten leaves the benches reading as benches — a few houses
+ * and a stand of palms on each, with the walk down the middle of it doing the
+ * getting about.
+ */
+const HILL_DENSITY = 0.6;
 
 /** Everything filling the hill needs. */
 interface HillParts extends Stand {
@@ -1133,28 +1226,22 @@ function chain(nodes: readonly PathNode[]): {
   };
 }
 
-/**
- * How far into the sand each walk across the beach runs, as a part of its depth.
- *
- * Two of them, which is what turns a dozen rows of loungers into three bands
- * with a boardwalk between each — and the *reason* for them is not that a beach
- * wants stripes. `layoutResort` grows a spur from every cluster to the nearest
- * paving and refuses a plan where one is walled in, so a beach with a single
- * walk down it pays for access in long snaking spurs that cover more sand than
- * the walks would have. Given a walk to reach, a run of loungers spurs one tile
- * and stops.
- *
- * Both are kept in the lounger band, clear of the buildings at the back: a walk
- * through there would cut the only stretch of sand deep enough to stand a beach
- * club on into two that are not.
- */
-const BEACH_WALKS: readonly number[] = [0.25, 0.5];
-
 /** How far either side of its line a switchback swings, in tiles. */
-const SWITCHBACK_REACH = 4;
+const SWITCHBACK_REACH = 6;
 
 /** Rows of hill one leg of a switchback climbs before it turns back. */
-const SWITCHBACK_RISE = 3;
+const SWITCHBACK_RISE = 4;
+
+/**
+ * Where the switchbacks stand, as parts of the plot's width.
+ *
+ * Two of them, one either side of the promenade — which runs between 0.42 and
+ * 0.58 of the width, so neither can ever be read as its continuation. A hill
+ * with one way up it is a hill with a queue on it; with two, the walks along the
+ * benches become a route rather than a dead end, because you can come down the
+ * other side of the crest from wherever you went up.
+ */
+const SWITCHBACK_COLUMNS: readonly number[] = [0.25, 0.75];
 
 /**
  * A path that climbs the whole hill in switchbacks rather than straight up it.
@@ -1166,25 +1253,37 @@ const SWITCHBACK_RISE = 3;
  * along z is the bit that climbs — and every one of those climbs lands on a
  * different row, because the benches it crosses follow the coast.
  *
- * It starts on the sand in front of the dune and ends on the level ground behind
- * the hill, so it is joined to the network at both ends without asking.
+ * It starts on the sidewalk along the shelf of the dune and ends on the level
+ * ground behind the hill, so it is joined to the rest of the network at the
+ * bottom without asking. It starts *there* rather than out on the sand because a
+ * leg is a dozen tiles of one row: on a bench a row deep, or on the beach, that
+ * row drifts out from under it as the coast wanders, and what should have been
+ * one turn of a path came out as a boardwalk lying across the sand. On the shelf
+ * there are rows to spare either side of it. The beach below needs none of it
+ * anyway — sand is walked on, and you step off the dune wherever you like.
  */
 function switchback(parts: {
   readonly shore: Shore;
   readonly hill: Hill;
   readonly at: number;
+  readonly from: number;
+  readonly prefix: string;
   readonly tilesX: number;
   readonly tilesZ: number;
 }): { readonly nodes: readonly PathNode[]; readonly edges: readonly PathEdge[] } {
-  const { shore, hill, at, tilesX, tilesZ } = parts;
+  const { shore, hill, at, from, prefix, tilesX, tilesZ } = parts;
   const nodes: PathNode[] = [];
   const rowAt = (inset: number, tileX: number): number =>
     Math.round(clamp(waterStartZ(shore, tileX) - inset, 1, tilesZ - 2));
 
-  for (let inset = shore.spec.beach - 2, leg = 0; ; inset += SWITCHBACK_RISE, leg++) {
+  for (let inset = from, leg = 0; ; inset += SWITCHBACK_RISE, leg++) {
     const reach = leg % 2 === 0 ? -SWITCHBACK_REACH : SWITCHBACK_REACH;
     const tileX = Math.round(clamp(at + reach, 1, tilesX - 2));
-    nodes.push({ id: `climb${leg}`, tileX, tileZ: rowAt(Math.min(inset, hill.inset + 2), tileX) });
+    nodes.push({
+      id: `${prefix}${leg}`,
+      tileX,
+      tileZ: rowAt(Math.min(inset, hill.inset + 2), tileX),
+    });
     if (inset >= hill.inset + 2) break;
   }
   return chain(nodes);
@@ -1263,6 +1362,48 @@ function plazaAt(promenade: Street, band: Street, tilesX: number, tilesZ: number
   };
 }
 
+/**
+ * Which of the north-south streets carry on past the dune and across the sand to
+ * the water, as parts of the plot's width.
+ *
+ * Two, and every other street stops at the hill's landward foot with the cross
+ * streets and the districts. That is the whole of what is paved on the beach.
+ *
+ * Before this, every lane on the plot ran the full depth: eight of them climbed
+ * the dune head on and carried on across the sand, which paved the beach in
+ * stripes and made the dune a wall of staircases. Two is enough to reach the sea
+ * with, and it leaves the hill to be climbed the way a hill is walked up — by
+ * the switchbacks and the walks along its benches, which is what {@link walksFor}
+ * lays. A lane that does come down is the whole route: off the crest, down the
+ * flights of the dune and straight out to the tideline.
+ */
+const SEA_LANES: readonly number[] = [0.3, 0.7];
+
+/**
+ * The streets that run all the way to the water, by the tile they stand on.
+ *
+ * The promenade is never one of them. It ends at the southern gate, at the foot
+ * of the hill, which is where the resort proper ends — a promenade that carried
+ * on over a dune and onto a beach would not be a promenade.
+ */
+function seaLanesOf(
+  columns: readonly Street[],
+  promenade: Street,
+  tilesX: number,
+): ReadonlySet<number> {
+  const candidates = columns.filter((street) => street !== promenade);
+  const lanes = new Set<number>();
+  if (candidates.length === 0) return lanes;
+  for (const part of SEA_LANES) {
+    const wanted = tilesX * part;
+    const nearest = candidates.reduce((best, street) =>
+      Math.abs(street.at - wanted) < Math.abs(best.at - wanted) ? street : best,
+    );
+    lanes.add(nearest.at);
+  }
+  return lanes;
+}
+
 /** Nodes and edges for one run of parallel streets, strung between two bounds. */
 function streetGraph(
   streets: readonly Street[],
@@ -1281,84 +1422,88 @@ function streetGraph(
 }
 
 /**
- * Every path that follows the coast rather than the street grid.
+ * Every path that follows the coast rather than the street grid: the whole path
+ * network of the hill, and the only paving the sand ever sees that is not a
+ * street coming down to the water.
  *
- * Three of them, and each answers something the grid cannot:
+ * Two kinds, and between them they are what a hill is walked with:
  *
- * - the **beach walk**, across the middle of the sand, which is what separates
- *   the runs of loungers on the seaward side from the clubs and the palms on the
- *   landward one — a beach twenty rows deep with nothing crossing it is a car
- *   park with sand on it;
- * - the **sidewalk**, down the middle of the shelf on top of the dune, which is
- *   what the row of bungalows up there is laid out along;
- * - the **switchback**, which climbs the whole hill in legs rather than head on.
+ * - a **bench walk** down the middle of every bench deep enough to hold one —
+ *   the sidewalk along the shelf of the dune that the bungalows are laid out on,
+ *   and one along each grass bench above it, up over the crest and down the far
+ *   side. Each is a level walk with the houses of its own bench either side of
+ *   it, and each is strung as a chain that follows the coast, so it curves with
+ *   the bay rather than cutting across it;
+ * - two **switchbacks**, which climb the whole hill in legs rather than head on,
+ *   and which cross every bench walk on the way — so the walks are one network
+ *   rather than a stack of parallel dead ends.
  *
- * The sidewalk is only laid on a shelf wide enough to hold it: a walk drifts a
- * row or two off its own line between nodes, and on a four-row shelf that is the
- * difference between a sidewalk and a staircase running the width of the plot.
+ * The beach gets nothing of its own at all. Sand is walked on, so nothing
+ * standing on it needs a path to reach it, and the two walks that used to cross
+ * it are gone: what crosses the sand now is the handful of streets that carry on
+ * past the dune to the water, and nothing else. See {@link seaLaneOf}.
  */
 function walksFor(parts: {
   readonly shore: Shore;
   readonly hill: Hill | null;
-  readonly promenade: Street;
   readonly tilesX: number;
   readonly tilesZ: number;
 }): { readonly nodes: readonly PathNode[]; readonly edges: readonly PathEdge[] } {
-  const { shore, hill, promenade, tilesX, tilesZ } = parts;
+  const { shore, hill, tilesX, tilesZ } = parts;
   const nodes: PathNode[] = [];
   const edges: PathEdge[] = [];
   const lay = (walk: { nodes: readonly PathNode[]; edges: readonly PathEdge[] }): void => {
     nodes.push(...walk.nodes);
     edges.push(...walk.edges);
   };
-
-  for (const [index, part] of BEACH_WALKS.entries()) {
-    lay(
-      coastWalk({
-        shore,
-        inset: Math.max(2, Math.round(shore.spec.beach * part)),
-        prefix: `beachwalk${index}-`,
-        tilesX,
-        tilesZ,
-      }),
-    );
-  }
   if (!hill) return { nodes, edges };
 
-  const shelf = shelfOf(hill);
-  if (shelf && shelf.depth >= WALKABLE_SHELF) {
+  // Down the middle of each bench, so a walk has rows of its own either side and
+  // stays on the bench it was strung along as the coast drifts under it.
+  const walkable = benchesOf(hill)
+    .filter((bench) => bench.depth >= WALKABLE_BENCH)
+    .map((bench) => bench.inset + Math.floor(bench.depth / 2));
+  for (const [index, inset] of walkable.entries()) {
+    lay(coastWalk({ shore, inset, prefix: `benchwalk${index}-`, tilesX, tilesZ }));
+  }
+
+  // The switchbacks start on the lowest of those walks — the sidewalk along the
+  // shelf of the dune — which is what joins them to everything below. A hill
+  // with no bench wide enough to walk along is a hill the lanes climb head on,
+  // and it gets none.
+  const foot = walkable[0];
+  if (foot === undefined) return { nodes, edges };
+  for (const [index, part] of SWITCHBACK_COLUMNS.entries()) {
     lay(
-      coastWalk({
+      switchback({
         shore,
-        inset: shelf.inset + Math.floor(shelf.depth / 2),
-        prefix: 'sidewalk',
+        hill,
+        at: Math.round(tilesX * part),
+        from: foot,
+        prefix: `climb${index}-`,
         tilesX,
         tilesZ,
       }),
     );
   }
-  // Far enough off the promenade that the two do not read as one way up.
-  const at = promenade.at < tilesX / 2 ? Math.round(tilesX * 0.75) : Math.round(tilesX * 0.25);
-  lay(switchback({ shore, hill, at, tilesX, tilesZ }));
   return { nodes, edges };
 }
 
 /**
- * Where the shelf on top of the dune runs, and how deep it is.
+ * The flat ground behind each of the hill's steps: where it starts, and how many
+ * rows of it there are.
  *
- * The shelf is the last of the sand terraces — the one the dune flattens out
- * onto — so it is found by walking the terraces rather than by remembering a
- * number: the hill knows its own shape, and asking it is what keeps the sidewalk
- * on it when that shape changes.
+ * Walked off the terraces rather than remembered from the sizes they were built
+ * with, because the hill knows its own shape and asking it is what keeps a walk
+ * on its bench when that shape changes. The last terrace is the one that comes
+ * back to sea level and has no bench of its own, which falls out as a depth of
+ * zero rather than needing a case.
  */
-function shelfOf(hill: Hill): { readonly inset: number; readonly depth: number } | null {
-  const terraces = hill.terraces;
-  const index = terraces.findLastIndex((terrace) => terrace.surface === 'sand');
-  if (index < 0) return null;
-  const shelf = terraces[index]!;
-  const behind = terraces[index + 1];
-  const depth = (behind ? behind.inset : hill.inset) - shelf.inset;
-  return { inset: shelf.inset, depth };
+function benchesOf(hill: Hill): { readonly inset: number; readonly depth: number }[] {
+  return hill.terraces.map((terrace, index) => {
+    const behind = hill.terraces[index + 1];
+    return { inset: terrace.inset, depth: (behind ? behind.inset : hill.inset) - terrace.inset };
+  });
 }
 
 /**
@@ -1398,11 +1543,19 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
   const promenade = columns.find((street) => street.width === PROMENADE_WIDTH) ?? columns[0]!;
   const plaza = plazaAt(promenade, bands[Math.floor(bands.length / 2)]!, tilesX, tilesZ);
 
+  // Only the sea lanes cross the hill and the beach; every other street stops
+  // where the level ground does, with the cross streets it bounds districts
+  // with. See `seaLanesOf` and `walksFor`.
+  const seaLanes = seaLanesOf(columns, promenade, tilesX);
   const down = streetGraph(
     columns,
     'col',
     (street) => ({ id: '', tileX: street.at, tileZ: 1 }),
-    (street) => ({ id: '', tileX: street.at, tileZ: tilesZ - 2 }),
+    (street) => ({
+      id: '',
+      tileX: street.at,
+      tileZ: seaLanes.has(street.at) ? tilesZ - 2 : hillFoot,
+    }),
   );
   const across = streetGraph(
     bands,
@@ -1410,12 +1563,10 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
     (street) => ({ id: '', tileX: columns[0]!.at, tileZ: street.at }),
     (street) => ({ id: '', tileX: columns[columns.length - 1]!.at, tileZ: street.at }),
   );
-  // The walks: one across the beach and one along the shelf, plus a switchback
-  // up the hill between them. All three follow the coast rather than the grid,
-  // which is what the grid cannot do — see `coastWalk`.
-  const walks = shore
-    ? walksFor({ shore, hill, promenade, tilesX, tilesZ })
-    : { nodes: [], edges: [] };
+  // The walks: one down the middle of every bench of the hill, and two
+  // switchbacks climbing across them. All of them follow the coast rather than
+  // the grid, which is what the grid cannot do — see `coastWalk`.
+  const walks = shore ? walksFor({ shore, hill, tilesX, tilesZ }) : { nodes: [], edges: [] };
 
   const skeleton: ResortPlan = {
     tilesX,
@@ -1456,16 +1607,7 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
   // whichever district the walk reached first, and no district ever spills onto
   // ground that a row grid is the wrong shape for.
   if (shore) {
-    fillBeach({
-      shore,
-      types: byId,
-      site,
-      missing,
-      density,
-      random,
-      plots,
-      standable: (tile) => isBuildableSand(shore, tile.x, tile.z),
-    });
+    fillBeach({ shore, types: byId, site, missing, density, random, plots });
   }
   if (terraced) {
     fillHill({ elevation: terraced, types: byId, site, missing, density, random, plots });

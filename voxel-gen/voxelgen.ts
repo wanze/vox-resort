@@ -47,9 +47,16 @@ export class VoxelBuilder {
  * so it is declared here with the rest of the model: a new model file lands in
  * the right group of the HUD without anything in `src/` being touched.
  */
-export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure';
+export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure' | 'people';
 
-/** Every category, with its heading, in the order the palette shows them. */
+/**
+ * Every category, with its heading, in the order the palette shows them.
+ *
+ * `people` is here for completeness and will never be shown: the people live in
+ * their own registry rather than in `models/index.ts`, so no `OBJECT_TYPES`
+ * entry ever carries it and the palette drops the empty shelf. A person is not
+ * something to place — they walk in on their own. See `docs/crowd.md`.
+ */
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
   readonly label: string;
@@ -58,6 +65,7 @@ export const MODEL_CATEGORIES: readonly {
   { id: 'lodging', label: 'Lodging' },
   { id: 'amenities', label: 'Amenities' },
   { id: 'leisure', label: 'Leisure' },
+  { id: 'people', label: 'People' },
 ];
 
 /** Footprint in resort tiles; see `TILE_VOXELS` for the tile edge in voxels. */

@@ -25,13 +25,13 @@ is **work per person per frame on the CPU**, and the triangles are close to free
 
 Four rules follow, and they are the whole design.
 
-### A person is forty voxels, not a building
+### A person is thirty voxels, not a building
 
-At four voxels to the metre a person is seven voxels tall and three wide: about
-38 painted voxels, and on the order of 60 triangles once the greedy merge has
-had them. Six hundred people is 36 k triangles against the 2.18 M the resort
-already submits — a rounding error, and the same order as the 2 870 the blob
-shadows cost.
+At four voxels to the metre a person is seven voxels tall and three wide: **28
+painted voxels** as authored, 24 for a child, and on the order of 50 triangles
+once the greedy merge has had them. Six hundred people is around 30 k triangles
+against the 2.18 M the resort already submits — a rounding error, and the same
+order as the 2 870 the blob shadows cost.
 
 That single fact is what licenses the next rule.
 
@@ -44,7 +44,7 @@ A person crosses a 64 m chunk every forty seconds or so, and keeping the crowd
 bucketed would mean a remove, an add and a bounding-sphere recompute per
 crossing — which is exactly the per-frame churn the mutable scene was designed to
 pay only when something is actually built. Six hundred people wandering would
-pay it continuously, to save 36 k triangles.
+pay it continuously, to save 30 k triangles.
 
 `blobShadowField.ts` already settled the same trade from the other side: one
 mesh, no culling, because two triangles per object is cheaper than a draw call
@@ -169,12 +169,12 @@ from a palette built for buildings, so it is the one family the crowd adds.
 
 Six hundred people, by arithmetic rather than by measurement:
 
-| | |
-| --------------------------- | ------------------------------------------ |
-| Draw calls | 4, one per person model, never culled |
-| Triangles per frame | ~36 k, against 2.18 M already submitted |
-| Matrix upload per frame | ~38 KB |
-| Step loop | a few hundred µs — a few dozen flops each |
+|                         |                                           |
+| ----------------------- | ----------------------------------------- |
+| Draw calls              | 4, one per person model, never culled     |
+| Triangles per frame     | ~30 k, against 2.18 M already submitted   |
+| Matrix upload per frame | ~38 KB                                    |
+| Step loop               | a few hundred µs — a few dozen flops each |
 
 For scale on the last row: the blob shadows write 1 435 matrices on a sky change
 and that is reported as "well under a millisecond". Six hundred a frame is
@@ -185,15 +185,15 @@ order below precisely so that it can be.
 
 ## Build order
 
-| # | Step | Where |
-| - | ---- | ----- |
-| 1 | The art: a skin family in the palette, a shared figure builder, four person models, and the preview able to render them | `voxel-gen/palette.ts`, `voxel-gen/people/` |
-| 2 | The walk network from a layout, shore and elevation, with tests for stair edges, water, and connectivity | `crowd/domain/walkNetwork.ts` |
-| 3 | The crowd: SoA state, seeded spawn, `stepCrowd(state, dt)`, path ↔ beach transitions. Pure, and unit-tested without a browser | `crowd/domain/crowd.ts` |
-| 4 | Meshing: feed the people registry through the existing scratch and worker path | `voxel-world/adapters/`, `showcase.ts` |
-| 5 | The field: a mesh per model, per-frame matrix writes, the instanced phase attribute and the TSL leg swing | `crowd/adapters/crowdField.ts` |
-| 6 | Wire in: build the network when the resort is built or regenerated, step it in the animation loop, dispose it | `showcase.ts` |
-| 7 | Measure: `?people=n`, a count in the HUD stats, a bench case, and then this file's cost table replaced with real numbers | `benchConfig.ts`, `scripts/bench.ts`, `docs/crowd.md` |
+| #   | Step                                                                                                                          | Where                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 1   | The art: a skin family in the palette, a shared figure builder, four person models, and the preview able to render them       | `voxel-gen/palette.ts`, `voxel-gen/people/`           |
+| 2   | The walk network from a layout, shore and elevation, with tests for stair edges, water, and connectivity                      | `crowd/domain/walkNetwork.ts`                         |
+| 3   | The crowd: SoA state, seeded spawn, `stepCrowd(state, dt)`, path ↔ beach transitions. Pure, and unit-tested without a browser | `crowd/domain/crowd.ts`                               |
+| 4   | Meshing: feed the people registry through the existing scratch and worker path                                                | `voxel-world/adapters/`, `showcase.ts`                |
+| 5   | The field: a mesh per model, per-frame matrix writes, the instanced phase attribute and the TSL leg swing                     | `crowd/adapters/crowdField.ts`                        |
+| 6   | Wire in: build the network when the resort is built or regenerated, step it in the animation loop, dispose it                 | `showcase.ts`                                         |
+| 7   | Measure: `?people=n`, a count in the HUD stats, a bench case, and then this file's cost table replaced with real numbers      | `benchConfig.ts`, `scripts/bench.ts`, `docs/crowd.md` |
 
 Steps 2 and 3 hold all the logic and both are pure `domain/`, which is what keeps
 the simulation testable without a browser — the convention the repo already
@@ -214,4 +214,18 @@ thing that makes the second one a port of the first.
 
 ## Milestones
 
-- **Step 1 — the art.** In progress.
+- **Step 1 — the art. Landed.** One `skin` family in the palette, whose four
+  tones are four complexions rather than four tones of one; a shared `figure`
+  builder in `voxel-gen/people/`; three adults and a child; and
+  `pnpm preview --people` to look at them. Nothing in `src/` changed, and the
+  people are in a registry of their own, so `OBJECT_TYPES` is untouched.
+
+  The figure was drawn twice. The first pass gave the head the full three-voxel
+  width of the shoulders and hung a hand at either side of the waist, and it
+  came out as a chest of drawers with legs: with nothing narrower than anything
+  else there is no silhouette, and at seven voxels the silhouette is all there
+  is. Narrowing the head to one voxel and dropping the hands is what made it a
+  person — and it is the closer of the two to life size, since a head is about
+  15 cm across and one voxel is 25.
+
+- **Steps 2–7.** Not started.

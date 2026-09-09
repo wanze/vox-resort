@@ -11,6 +11,7 @@
  *   node voxel-gen/preview.ts voxel-gen/models/oak.ts   # a file, registered or not
  *   node voxel-gen/preview.ts --sheet              # one contact sheet
  *   node voxel-gen/preview.ts --audit              # size table, no rendering
+ *   node voxel-gen/preview.ts --people             # the crowd, not the catalogue
  *
  * A path renders a model that is not in the registry yet, which is how a
  * candidate is looked at before anyone decides to keep it: registering it would
@@ -22,6 +23,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { MODEL_SOURCES } from './models/index.ts';
+import { PEOPLE_SOURCES } from './people/index.ts';
 import {
   buildModel,
   TILE_VOXELS,
@@ -376,12 +378,18 @@ function audit(models: readonly VoxelModel[]): void {
  * A path is how a model that is not registered yet gets looked at; see the
  * note at the top of the file.
  */
-async function chooseSources(positional: readonly string[]): Promise<VoxelModelSource[]> {
+async function chooseSources(
+  positional: readonly string[],
+  registry: readonly VoxelModelSource[],
+): Promise<VoxelModelSource[]> {
   const files = positional.filter((arg) => arg.endsWith('.ts'));
   const ids = positional.filter((arg) => !arg.endsWith('.ts'));
-  if (!ids.length && !files.length) return [...MODEL_SOURCES];
+  if (!ids.length && !files.length) return [...registry];
 
-  const missing = ids.filter((id) => !MODEL_SOURCES.some((source) => source.id === id));
+  // Ids are looked up across both registries whichever one is the default, so
+  // `preview child` works without anyone having to remember the flag.
+  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES];
+  const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
 
   const loaded = await Promise.all(
@@ -393,7 +401,7 @@ async function chooseSources(positional: readonly string[]): Promise<VoxelModelS
       return module.default;
     }),
   );
-  return [...MODEL_SOURCES.filter((source) => ids.includes(source.id)), ...loaded];
+  return [...known.filter((source) => ids.includes(source.id)), ...loaded];
 }
 
 async function main(): Promise<void> {
@@ -402,14 +410,20 @@ async function main(): Promise<void> {
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  const sources = await chooseSources(args.filter((arg) => !arg.startsWith('--')));
+  // The crowd is a registry of its own — it is not part of the catalogue and
+  // does not fill a tile, so it is never in the default set. See `people/`.
+  const registry = args.includes('--people') ? PEOPLE_SOURCES : MODEL_SOURCES;
+  const sources = await chooseSources(
+    args.filter((arg) => !arg.startsWith('--')),
+    registry,
+  );
   const models = sources.map((source) => buildModel(source));
   if (args.includes('--audit')) {
     audit(models);
     return;
   }
   if (args.includes('--sheet')) {
-    const file = path.join(outDir, 'contact-sheet.png');
+    const file = path.join(outDir, registry === PEOPLE_SOURCES ? 'crowd.png' : 'contact-sheet.png');
     writeFileSync(file, renderSheet(models, 320, 6));
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;

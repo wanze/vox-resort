@@ -165,6 +165,19 @@ describe('materials', () => {
     expect(new Set(allMaterials().map((material) => material.key)).size).toBe(colors.size);
   });
 
+  it('stays under the material ceiling the mesher encodes in a byte', () => {
+    // DVE writes a submesh's material as a Uint8 and registers six materials of
+    // its own ahead of ours, so the 251st colour in the catalogue wraps back
+    // onto `dve_solid` and the mesher hands its faces back under a material
+    // nothing here has ever heard of. Probed by registering colours until that
+    // happened: 250 is ours, 251 came back as `dve_solid`.
+    //
+    // The palette is what keeps this in hand — see `voxel-gen/palette.ts`. It
+    // was 234 before the palette existed, and every model that has its style
+    // pass gives colours back.
+    expect(allMaterials().length).toBeLessThanOrEqual(250);
+  });
+
   it('maps every material id to its colour', () => {
     const colors = materialColorsById();
     expect(colors.size).toBe(allMaterials().length);

@@ -225,7 +225,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // A — the hotel blocks
     ...row('hotel', 3, 1, 2, 6),
-    ...row('palm', 4, 6, 3, 4),
+    ...row('cypress', 4, 6, 3, 4),
     at('flowerbed', 6, 8),
 
     // B — villas and a townhouse
@@ -234,7 +234,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('house', 26, 1),
     at('statue', 18, 6),
     at('flowerbed', 22, 6),
-    at('palm', 26, 6),
+    at('olive', 26, 6),
 
     // C — the west shops
     at('supermarket', 30, 1),
@@ -266,8 +266,8 @@ export const RESORT_PLAN: ResortPlan = {
     // F — the second hotel
     at('hotel', 72, 1),
     at('villa', 78, 1),
-    at('palm', 74, 6),
-    at('palm', 78, 6),
+    at('blossom', 74, 6),
+    at('blossom', 78, 6),
     at('flowerbed', 76, 8),
 
     // G — the east-wing shops
@@ -284,8 +284,8 @@ export const RESORT_PLAN: ResortPlan = {
     // H — the third hotel
     at('hotel', 97, 1),
     at('villa', 104, 1),
-    at('palm', 99, 6),
-    at('palm', 103, 6),
+    at('olive', 99, 6),
+    at('olive', 103, 6),
     at('statue', 105, 6),
     at('flowerbed', 101, 7),
 
@@ -310,7 +310,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('beach-umbrella', 34, 15, 2, 2),
     at('beach-club', 30, 17),
     at('resort-bar', 35, 17),
-    at('palm', 39, 17),
+    at('willow', 39, 17),
     ...row('cottage', 30, 22, 4, 3),
 
     // D — the water park and the second pool
@@ -334,7 +334,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // F — courts and the east lodging
     at('tennis-court', 72, 11),
-    at('palm', 72, 17),
+    at('pine', 72, 17),
     ...row('bungalow', 72, 19, 3, 3),
     ...row('cottage', 72, 23, 3, 3),
     ...row('house', 72, 27, 3, 3),
@@ -362,7 +362,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('house', 97, 21, 4, 3),
     ...row('bungalow', 97, 25, 4, 3),
     ...row('cottage', 97, 29, 4, 3),
-    at('palm', 109, 21),
+    at('cypress', 109, 21),
 
     // ═══ lower band (z 37-58): courts, spa, the second water park ════════════
 
@@ -372,7 +372,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('playground', 9, 43),
     ...row('cottage', 3, 48, 4, 3),
     ...row('bungalow', 3, 52, 4, 3),
-    at('palm', 13, 37),
+    at('pine', 13, 37),
 
     // B — lodging above the spa quarter
     ...row('house', 16, 37, 4, 3),
@@ -413,7 +413,7 @@ export const RESORT_PLAN: ResortPlan = {
     // F — the far-east villas
     at('villa', 72, 37),
     at('villa', 77, 37),
-    at('palm', 72, 42),
+    at('olive', 72, 42),
     ...row('house', 72, 44, 3, 3),
     ...row('cottage', 72, 48, 3, 3),
     ...row('bungalow', 72, 52, 3, 3),
@@ -426,12 +426,12 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('bungalow', 83, 47, 4, 3),
     at('beach-club', 83, 51),
     at('resort-bar', 88, 51),
-    at('palm', 92, 51),
+    at('blossom', 92, 51),
     at('playground', 83, 56),
 
     // H — the east courts and lodging
     at('tennis-court', 97, 37),
-    at('palm', 107, 37),
+    at('oak', 107, 37),
     at('minigolf', 97, 43),
     at('playground', 103, 43),
     ...row('house', 97, 48, 4, 3),
@@ -445,7 +445,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('tennis-court', 3, 61),
     at('minigolf', 3, 67),
     at('playground', 9, 67),
-    at('palm', 13, 61),
+    at('pine', 13, 61),
     at('palm', 13, 66),
     at('flowerbed', 13, 69),
 
@@ -490,8 +490,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('villa', 72, 61),
     at('villa', 77, 61),
     at('tennis-court', 72, 66),
-    at('palm', 81, 61),
-    at('palm', 81, 66),
+    at('oak', 81, 61),
+    at('cypress', 81, 66),
 
     // G — the east-wing shops and course
     at('supermarket', 83, 61),
@@ -508,9 +508,9 @@ export const RESORT_PLAN: ResortPlan = {
     // H — villas and the far-east court
     at('villa', 97, 61),
     at('villa', 102, 61),
-    at('palm', 107, 61),
+    at('cypress', 107, 61),
     at('tennis-court', 97, 66),
-    at('palm', 107, 66),
+    at('olive', 107, 66),
     at('flowerbed', 107, 69),
 
     // ═══ south band (z 75-88): lodging, the last pools and parks ═════════════
@@ -538,7 +538,7 @@ export const RESORT_PLAN: ResortPlan = {
     // C — villas over a row of services
     at('villa', 30, 75),
     at('villa', 35, 75),
-    at('palm', 40, 75),
+    at('cypress', 40, 75),
     ...row('cottage', 30, 80, 4, 3),
     ...row('bungalow', 30, 84, 4, 3),
     at('first-aid', 30, 87),
@@ -554,7 +554,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('house', 44, 81, 4, 3),
     ...row('bungalow', 44, 85, 4, 3),
     at('statue', 56, 81),
-    at('palm', 56, 85),
+    at('olive', 56, 85),
     at('spa-pavilion', 44, 87),
     at('first-aid', 48, 87),
     at('restrooms', 51, 87),
@@ -563,7 +563,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // E — the south courts
     at('tennis-court', 58, 75),
-    at('palm', 68, 75),
+    at('oak', 68, 75),
     at('minigolf', 58, 81),
     at('playground', 64, 81),
     at('statue', 69, 81),
@@ -572,9 +572,9 @@ export const RESORT_PLAN: ResortPlan = {
     // F — villas and lodging
     at('villa', 72, 75),
     at('villa', 77, 75),
-    at('palm', 81, 75),
+    at('pine', 81, 75),
     ...row('house', 72, 80, 3, 3),
-    at('palm', 81, 80),
+    at('olive', 81, 80),
     ...row('bungalow', 72, 84, 3, 3),
     at('flowerbed', 81, 84),
     ...row('cottage', 72, 86, 3, 3),
@@ -593,7 +593,7 @@ export const RESORT_PLAN: ResortPlan = {
     // H — the south-east beach club and its lodging
     at('beach-club', 97, 75),
     at('resort-bar', 102, 75),
-    at('palm', 106, 75),
+    at('cypress', 106, 75),
     at('statue', 109, 80),
     ...row('house', 97, 80, 4, 3),
     ...row('cottage', 97, 84, 4, 3),
@@ -608,7 +608,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // A — the southern hotel blocks
     at('flowerbed', 6, 91),
-    ...row('palm', 4, 92, 3, 4),
+    ...row('cypress', 4, 92, 3, 4),
     ...row('hotel', 3, 95, 2, 6),
 
     // B — villas and a townhouse
@@ -651,8 +651,8 @@ export const RESORT_PLAN: ResortPlan = {
 
     // F — the fourth hotel
     at('flowerbed', 76, 91),
-    at('palm', 74, 92),
-    at('palm', 78, 92),
+    at('cypress', 74, 92),
+    at('cypress', 78, 92),
     at('hotel', 72, 95),
     at('villa', 78, 95),
 
@@ -668,8 +668,8 @@ export const RESORT_PLAN: ResortPlan = {
 
     // H — the last hotel
     at('flowerbed', 101, 91),
-    at('palm', 99, 92),
-    at('palm', 103, 92),
+    at('blossom', 99, 92),
+    at('blossom', 103, 92),
     at('statue', 107, 92),
     at('hotel', 97, 95),
     at('villa', 104, 95),

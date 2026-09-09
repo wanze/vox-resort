@@ -988,9 +988,11 @@ function standOne(parts: Stand, type: GeneratorType, tile: Tile): boolean {
 /**
  * What stands on the shelf of sand on top of the dune.
  *
- * Bungalows, four times out of eight, because that is what the shelf is for: a
+ * Bungalows, five times out of nine, because that is what the shelf is for: a
  * row of them along the sidewalk, looking down over the beach they used to stand
- * on. The rest is what a dune carries — palms, torches, and a bar to walk to.
+ * on. The rest is what a dune carries: palms and olives, torches, and a bar to
+ * walk to. The olive is the one tree of the six that belongs this close to the
+ * sand, which is why it is the only one up here with the palms.
  */
 const SHELF_POOL: readonly string[] = [
   'bungalow',
@@ -999,6 +1001,7 @@ const SHELF_POOL: readonly string[] = [
   'bungalow',
   'bungalow',
   'palm',
+  'olive',
   'tikitorch',
   'poolside-bar',
 ];
@@ -1011,11 +1014,18 @@ const SHELF_POOL: readonly string[] = [
  * between them taking the one-tile things that will fit anywhere. A hillside of
  * houses at four different heights is the whole point of the hill.
  *
- * Two palms to every house, though, which is the other half of it: the hill is
- * bigger than it was, and a bigger hill filled at the old weighting came out as
+ * Four trees to every five houses, though, which is the other half of it: the
+ * hill is bigger than it was, and a bigger hill at the old weighting came out as
  * a housing estate on a slope. Planted rather than built, it reads as a wooded
- * headland with a few houses in it — and a palm is one tile, so it goes in the
- * gaps between the houses that nothing else fits.
+ * headland with a few houses in it, and a one-tile tree goes in the gaps between
+ * the houses that nothing else fits.
+ *
+ * Four species rather than four palms. A headland of nothing but palms reads as
+ * one repeated object however many of them there are, and the hill is the one
+ * place on the plot with room to show that a resort is planted with more than
+ * the tree on its postcard. The two-tile trees, the pine and the oak, are left
+ * out: the gaps between the houses are mostly one tile wide, so a pool full of
+ * them would come out as a pool that mostly fails to place anything.
  */
 const HILLSIDE_POOL: readonly string[] = [
   'house',
@@ -1024,9 +1034,9 @@ const HILLSIDE_POOL: readonly string[] = [
   'house',
   'house',
   'palm',
-  'palm',
-  'palm',
-  'palm',
+  'cypress',
+  'olive',
+  'blossom',
   'flowerbed',
 ];
 

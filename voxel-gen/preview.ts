@@ -6,18 +6,29 @@
  * here is for legibility only — the app lights the same voxels itself.
  *
  * Run on Node 22.18+ (native TypeScript type stripping):
- *   node voxel-gen/preview.ts              # every model
- *   node voxel-gen/preview.ts bungalow     # one or more by id
- *   node voxel-gen/preview.ts --sheet      # one contact sheet of all models
- *   node voxel-gen/preview.ts --audit      # size table, no rendering
+ *   node voxel-gen/preview.ts                      # every model
+ *   node voxel-gen/preview.ts bungalow             # one or more by id
+ *   node voxel-gen/preview.ts voxel-gen/models/oak.ts   # a file, registered or not
+ *   node voxel-gen/preview.ts --sheet              # one contact sheet
+ *   node voxel-gen/preview.ts --audit              # size table, no rendering
+ *
+ * A path renders a model that is not in the registry yet, which is how a
+ * candidate is looked at before anyone decides to keep it: registering it would
+ * put it in the build palette and oblige the resort plan to stand one somewhere.
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { MODEL_SOURCES } from './models/index.ts';
-import { buildModel, TILE_VOXELS, type Color, type VoxelModel } from './voxelgen.ts';
+import {
+  buildModel,
+  TILE_VOXELS,
+  type Color,
+  type VoxelModel,
+  type VoxelModelSource,
+} from './voxelgen.ts';
 
 type Vec3 = [number, number, number];
 
@@ -358,26 +369,46 @@ function audit(models: readonly VoxelModel[]): void {
   console.info(`\ntile edge: ${TILE_VOXELS} voxels`);
 }
 
-function main(): void {
+/**
+ * The models the arguments name: ids out of the registry, paths off disk, and
+ * the whole registry when nothing is named.
+ *
+ * A path is how a model that is not registered yet gets looked at; see the
+ * note at the top of the file.
+ */
+async function chooseSources(positional: readonly string[]): Promise<VoxelModelSource[]> {
+  const files = positional.filter((arg) => arg.endsWith('.ts'));
+  const ids = positional.filter((arg) => !arg.endsWith('.ts'));
+  if (!ids.length && !files.length) return [...MODEL_SOURCES];
+
+  const missing = ids.filter((id) => !MODEL_SOURCES.some((source) => source.id === id));
+  if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
+
+  const loaded = await Promise.all(
+    files.map(async (file): Promise<VoxelModelSource> => {
+      const module: { default?: VoxelModelSource } = await import(
+        pathToFileURL(path.resolve(process.cwd(), file)).href
+      );
+      if (!module.default) throw new Error(`${file} has no default-exported model`);
+      return module.default;
+    }),
+  );
+  return [...MODEL_SOURCES.filter((source) => ids.includes(source.id)), ...loaded];
+}
+
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const sheet = args.includes('--sheet');
-  const ids = args.filter((arg) => !arg.startsWith('--'));
   const here = path.dirname(fileURLToPath(import.meta.url));
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  const sources = ids.length
-    ? MODEL_SOURCES.filter((source) => ids.includes(source.id))
-    : MODEL_SOURCES;
-  const missing = ids.filter((id) => !MODEL_SOURCES.some((source) => source.id === id));
-  if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
-
+  const sources = await chooseSources(args.filter((arg) => !arg.startsWith('--')));
   const models = sources.map((source) => buildModel(source));
   if (args.includes('--audit')) {
     audit(models);
     return;
   }
-  if (sheet) {
+  if (args.includes('--sheet')) {
     const file = path.join(outDir, 'contact-sheet.png');
     writeFileSync(file, renderSheet(models, 320, 6));
     console.info(`sheet -> ${file} (${models.length} models)`);
@@ -392,4 +423,4 @@ function main(): void {
   }
 }
 
-main();
+await main();

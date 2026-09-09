@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { place, type LayoutItem } from '../../layout/domain/resortLayout';
-import { createTileOccupancy, footprintTiles } from './tileOccupancy';
+import { RESERVED_KEY, createTileOccupancy, footprintTiles } from './tileOccupancy';
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -79,5 +79,27 @@ describe('createTileOccupancy', () => {
     expect(() =>
       createTileOccupancy([place(PATH, 'path@0,0', 0, 0), place(PATH, 'hedge@0,0', 0, 0)]),
     ).toThrow(/0,0/);
+  });
+});
+
+describe('reserved ground', () => {
+  it('is never free, and never something the pointer can take', () => {
+    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
+    expect(occupancy.isFree({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(false);
+    expect(occupancy.isFree({ tileX: 2, tileZ: 4, tilesX: 2, tilesZ: 1 })).toBe(false);
+    expect(occupancy.isFree({ tileX: 2, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(true);
+  });
+
+  it('says what is holding it', () => {
+    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
+    expect(occupancy.keyAt({ x: 3, z: 4 })).toBe(RESERVED_KEY);
+    expect(occupancy.size).toBe(1);
+  });
+
+  it('refuses a placement that would stand on it', () => {
+    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
+    expect(() => occupancy.claim({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 }, 'hut')).toThrow(
+      /has it/,
+    );
   });
 });

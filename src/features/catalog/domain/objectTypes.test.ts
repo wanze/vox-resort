@@ -58,7 +58,7 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(31);
+    expect(OBJECT_TYPES.length).toBe(33);
   });
 
   it('uses unique ids and labels', () => {

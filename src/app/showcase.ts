@@ -23,7 +23,15 @@ import type { Placement, ResortLayout } from '../features/layout/domain/resortLa
 import { layoutResort, placementCenter } from '../features/layout/domain/resortLayout';
 import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
-import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from '../features/layout/domain/resortPlan';
+import {
+  BOARDWALK_ID,
+  HEDGE_ID,
+  LAMP_ID,
+  PATH_ID,
+  RESORT_PLAN,
+} from '../features/layout/domain/resortPlan';
+import type { Shore } from '../features/layout/domain/shoreline';
+import { shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
 import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
 import {
   clampParams,
@@ -653,6 +661,8 @@ interface Resort {
   /** The shadows thrown by whatever is tall enough; see `blobShadows.ts`. */
   readonly shadows: BlobShadowField;
   readonly occupancy: TileOccupancy;
+  /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
+  readonly shore: Shore | null;
   readonly anchors: readonly LabelAnchor[];
   /** How much ground the resort covers: what both cameras are framed on. */
   readonly bounds: WorldBounds;
@@ -680,15 +690,19 @@ function buildResort(parts: {
   });
   const shadows = buildBlobShadowField(blobShadowsFor(everything.map(casterOf)));
   const bounds = plotBounds(parts.plan, everything);
+  const shore = shoreFor(parts.plan);
 
   return {
     plot,
     lighting,
     world,
     shadows,
+    shore,
     // Seeded from the resort as planned, then kept up to date one placement at a
-    // time; it is what tells the pointer whether a tile is free.
-    occupancy: createTileOccupancy(everything),
+    // time; it is what tells the pointer whether a tile is free. The sea goes in
+    // with it, so the pointer turns red over water for the same reason it turns
+    // red over a cottage.
+    occupancy: createTileOccupancy(everything, waterTilesOf(shore)),
     anchors: labelAnchorsFor(plot.placements),
     bounds,
     framing: frameCamera(bounds, parts.bench),
@@ -741,7 +755,7 @@ function createResortSlot(parts: {
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
-      scene?.reframe(resort.bounds, resort.framing, resort.lighting.volume);
+      scene?.reframe(resort.bounds, resort.framing, resort.lighting.volume, resort.shore);
       previous.dispose();
       return resort;
     },
@@ -1032,10 +1046,14 @@ function createBenchRecorder(parts: {
  * else counts as an object.
  */
 function listFor(plot: Plot, id: string): Placement[] {
-  if (id === PATH_ID) return plot.paths;
-  if (id === LAMP_ID || id === HEDGE_ID) return plot.props;
+  if (PAVING_IDS.has(id)) return plot.paths;
+  if (PROP_IDS.has(id)) return plot.props;
   return plot.placements;
 }
+
+/** The two kinds of thing the layout derives rather than the plan authoring them. */
+const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID]);
+const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
 
 /**
  * Holds the camera still for a benchmark run. Damping would otherwise keep
@@ -1160,6 +1178,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     bounds: current().bounds,
     framing: current().framing,
     lightVolume: current().lighting.volume,
+    shore: current().shore,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
     // GPU's own timers keep measuring past that point.

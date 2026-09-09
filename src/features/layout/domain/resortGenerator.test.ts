@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
-import { HEDGE_ID, LAMP_ID, PATH_ID } from './resortPlan';
+import { BOARDWALK_ID, HEDGE_ID, LAMP_ID, PATH_ID } from './resortPlan';
+import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
   clampParams,
@@ -126,7 +127,7 @@ describe('generateResort', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       for (const plot of plan.plots) {
-        expect([PATH_ID, LAMP_ID, HEDGE_ID]).not.toContain(plot.id);
+        expect([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]).not.toContain(plot.id);
       }
     }
   });
@@ -136,7 +137,8 @@ describe('generateResort', () => {
       const plan = generateResort(TYPES, set);
       const planted = new Set(plan.plots.map((plot) => plot.id));
       const owed = TYPES.filter(
-        (type) => ![PATH_ID, LAMP_ID, HEDGE_ID].includes(type.id) && !planted.has(type.id),
+        (type) =>
+          ![PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID].includes(type.id) && !planted.has(type.id),
       );
       expect({ set, missing: owed.map((type) => type.id) }).toEqual({ set, missing: [] });
       expect(plan.standsWholeCatalogue).toBe(true);
@@ -226,6 +228,73 @@ describe('generateResort', () => {
     expect(layout.paths.length).toBeGreaterThan(0);
     expect(layout.props.some((prop) => prop.id === LAMP_ID)).toBe(true);
     expect(layout.props.some((prop) => prop.id === HEDGE_ID)).toBe(true);
+  });
+});
+
+describe('the shore a generated plot gets', () => {
+  it('cuts the sea into every plot, whatever its size', () => {
+    for (const set of SWEEP) {
+      const shore = shoreFor(generateResort(TYPES, set));
+      expect({ set, sea: (shore ? waterTilesOf(shore) : []).length > 0 }).toEqual({
+        set,
+        sea: true,
+      });
+    }
+  });
+
+  it('stands nothing in the water', () => {
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const wet = plan.plots.filter((plot) => terrainAt(shore, plot.tileX, plot.tileZ) === 'water');
+      expect({ set, wet }).toEqual({ set, wet: [] });
+    }
+  });
+
+  it('stands loungers and lodging on the sand', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const onSand = plan.plots.filter(
+      (plot) => terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
+    );
+    expect(onSand.length).toBeGreaterThan(10);
+    expect(onSand.some((plot) => plot.id === 'sun-lounger')).toBe(true);
+    expect(onSand.some((plot) => plot.id === 'bungalow')).toBe(true);
+  });
+
+  it('leaves the tideline and the lane behind the beach clear', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const byId = new Map(TYPES.map((type) => [type.id, type]));
+    const covered = new Set<string>();
+    for (const plot of plan.plots) {
+      const type = byId.get(plot.id)!;
+      const footprint = rotateExtent(type.tilesX, type.tilesZ, plot.rotation ?? 0);
+      for (let x = plot.tileX; x < plot.tileX + footprint.x; x++) {
+        for (let z = plot.tileZ; z < plot.tileZ + footprint.z; z++) covered.add(`${x},${z}`);
+      }
+    }
+    // The wet strip at the water and the lane against the grass: the two depths
+    // `fillBeach` never builds on, so a boardwalk can always be walked in.
+    const reserved = beachTilesOf(shore).filter((tile) => {
+      const depth = beachDepthAt(shore, tile.x, tile.z);
+      return depth === 0 || depth === shore.spec.beach - 1;
+    });
+    expect(reserved.length).toBeGreaterThan(0);
+    expect(reserved.filter((tile) => covered.has(`${tile.x},${tile.z}`))).toEqual([]);
+  });
+
+  it('paves the beach with boardwalks and the rest with flagstones', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const { paths } = layoutResort(ITEMS, plan);
+    expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
+    for (const tile of paths) {
+      expect({ key: tile.key, id: tile.id }).toEqual({
+        key: tile.key,
+        id: terrainAt(shore, tile.tileX, tile.tileZ) === 'beach' ? BOARDWALK_ID : PATH_ID,
+      });
+    }
   });
 });
 

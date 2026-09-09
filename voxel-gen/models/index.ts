@@ -5,6 +5,8 @@
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import beach_club from './beach-club.ts';
+import beach_umbrella from './beach-umbrella.ts';
+import boardwalk from './boardwalk.ts';
 import bungalow from './bungalow.ts';
 import cottage from './cottage.ts';
 import entrance from './entrance.ts';
@@ -38,12 +40,14 @@ import waterpark from './waterpark.ts';
 
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,
+  boardwalk,
   hedge,
   street_lamp,
   flowerbed,
   palm,
   statue,
   sun_lounger,
+  beach_umbrella,
   tikitorch,
   icecream,
   entrance,

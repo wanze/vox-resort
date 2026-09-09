@@ -19,9 +19,12 @@
 
 import {
   AmbientLight,
+  BufferAttribute,
+  BufferGeometry,
   Color,
   DirectionalLight,
   Fog,
+  Group,
   Mesh,
   MeshStandardNodeMaterial,
   MOUSE,
@@ -35,7 +38,7 @@ import {
   WebGPURenderer,
 } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { vec3 } from 'three/tsl';
+import { vec3, vertexColor } from 'three/tsl';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { SkyState } from '../../lighting/domain/dayNight';
@@ -47,11 +50,18 @@ import type {
   WorldBounds,
 } from '../../layout/domain/worldBounds';
 import { isometricFramingFor } from '../../layout/domain/worldBounds';
+import type { Shore } from '../../layout/domain/shoreline';
+import type { SurfaceGeometry } from '../domain/terrainSurface';
+import { terrainSurfacesFor } from '../domain/terrainSurface';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 
 export const CAMERA_FOV_DEGREES = 55;
 
 /** Ground colour under and around the resort. */
 const GROUND_COLOR = 0x5d7a45;
+
+/** How far past the framed plot the ground, the sea and the beach run. */
+const GROUND_SPREAD = 3;
 
 /**
  * Steps an integer depth buffer has to spread the whole scene over, and the
@@ -186,7 +196,12 @@ export interface SceneHandle {
    * Both cameras are re-framed and the current mode is kept: generating a resort
    * changes what you are looking at, not how.
    */
-  reframe(bounds: WorldBounds, framing: CameraFraming, lightVolume: BakedLightVolume | null): void;
+  reframe(
+    bounds: WorldBounds,
+    framing: CameraFraming,
+    lightVolume: BakedLightVolume | null,
+    shore: Shore | null,
+  ): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
   resize(width: number, height: number): void;
@@ -207,6 +222,12 @@ export interface SceneOptions {
   readonly framing: CameraFraming;
   /** Baked lamp light, so the ground catches the pools of light the lamps cast. */
   readonly lightVolume?: BakedLightVolume | null;
+  /**
+   * Where the plot meets the sea. Null lays plain grass to the horizon, and is
+   * required rather than defaulted: a scene with no coast is a decision the
+   * caller makes, not one this falls back on.
+   */
+  readonly shore: Shore | null;
   /**
    * Asks the backend for GPU timestamp queries. Only the benchmark harness wants
    * them; they have to be requested when the renderer is built, not later.
@@ -236,7 +257,10 @@ function layGround(
   worldExtent: number,
   lightVolume: BakedLightVolume | null,
 ): Ground {
-  const geometry = new PlaneGeometry(worldExtent * 6, worldExtent * 6);
+  const geometry = new PlaneGeometry(
+    worldExtent * GROUND_SPREAD * 2,
+    worldExtent * GROUND_SPREAD * 2,
+  );
   const material = new MeshStandardNodeMaterial({
     color: GROUND_COLOR,
     roughness: 1,
@@ -260,8 +284,77 @@ function layGround(
   };
 }
 
+/**
+ * The sea and the beach, when the plot has a coast.
+ *
+ * Two static meshes over the ground plane, sharing its lighting so the shore
+ * shades and catches the lamps like everything else. `domain/terrainSurface.ts`
+ * decides what shape they are; this only uploads them.
+ */
+interface Terrain {
+  readonly group: Group;
+  dispose(): void;
+}
+
+/** Wraps one surface's buffers in a geometry. Normals are all straight up. */
+function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
+  const geometry = new BufferGeometry();
+  const normals = new Float32Array(surface.positions.length);
+  for (let index = 1; index < normals.length; index += 3) normals[index] = 1;
+  geometry.setAttribute('position', new BufferAttribute(surface.positions, 3));
+  geometry.setAttribute('normal', new BufferAttribute(normals, 3));
+  // Already in the linear working space, exactly as the model attributes are.
+  geometry.setAttribute('color', new BufferAttribute(surface.colors, 3));
+  geometry.setIndex(new BufferAttribute(surface.indices, 1));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function layTerrain(
+  scene: Scene,
+  shore: Shore | null,
+  framing: CameraFraming,
+  worldExtent: number,
+  lightVolume: BakedLightVolume | null,
+): Terrain {
+  const group = new Group();
+  scene.add(group);
+  const disposables: { dispose(): void }[] = [];
+
+  const surfaces = terrainSurfacesFor({
+    shore,
+    center: { x: framing.target.x, z: framing.target.z },
+    reach: worldExtent * GROUND_SPREAD,
+    tileVoxels: TILE_VOXELS,
+  });
+
+  for (const surface of [surfaces.sea, surfaces.sand]) {
+    if (!surface) continue;
+    const geometry = toSurfaceGeometry(surface);
+    const material = new MeshStandardNodeMaterial({
+      vertexColors: true,
+      roughness: 1,
+      metalness: 0,
+    });
+    if (lightVolume) {
+      material.emissiveNode = lightVolume.lampLight(vertexColor().rgb);
+      material.aoNode = lightVolume.skyVisibility();
+    }
+    group.add(new Mesh(geometry, material));
+    disposables.push(geometry, material);
+  }
+
+  return {
+    group,
+    dispose() {
+      for (const disposable of disposables) disposable.dispose();
+    },
+  };
+}
+
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
-  const { canvas, width, height, framing, bounds, lightVolume } = options;
+  const { canvas, width, height, framing, bounds, shore } = options;
+  const lightVolume = options.lightVolume ?? null;
   const trackTimestamp = options.trackTimestamp ?? false;
 
   const renderer = new WebGPURenderer({
@@ -391,7 +484,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
 
-  let ground = layGround(scene, framing, extent, lightVolume ?? null);
+  let ground = layGround(scene, framing, extent, lightVolume);
+  let terrain = layTerrain(scene, shore, framing, extent, lightVolume);
 
   /**
    * Stands the isometric camera on its compass point, around whatever it is
@@ -449,12 +543,17 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       leftButtonTaken = taken;
       applyMode();
     },
-    reframe(nextBounds, nextFraming, nextVolume) {
+    reframe(nextBounds, nextFraming, nextVolume, nextShore) {
       plot = nextBounds;
       extent = extentOf(plot);
       ground.dispose();
       scene.remove(ground.mesh);
       ground = layGround(scene, nextFraming, extent, nextVolume);
+      // The coast is rebuilt for the same reason the ground is: both are bound
+      // to the light volume, and a new resort is a new bake in new textures.
+      terrain.dispose();
+      scene.remove(terrain.group);
+      terrain = layTerrain(scene, nextShore, nextFraming, extent, nextVolume);
 
       perspectiveCamera.position.set(
         nextFraming.position.x,
@@ -501,6 +600,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     dispose() {
       controls.dispose();
       ground.dispose();
+      terrain.dispose();
       renderer.dispose();
     },
   };

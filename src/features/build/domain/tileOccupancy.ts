@@ -13,9 +13,22 @@
  * path is never paved under a building, and the dressing is scattered on tiles
  * that are neither. Footprints are what is indexed, so a 2x3 cottage blocks all
  * six of its tiles and not just its corner.
+ *
+ * Ground that can never hold anything — the sea — is seeded as reserved rather
+ * than left out, so the pointer refuses it by the ordinary rule instead of by a
+ * second one written next to the first.
  */
 
 import { tileKey, type Placement, type Tile } from '../../layout/domain/resortLayout';
+
+/**
+ * The key tiles nothing can ever be built on are held under.
+ *
+ * A tile of sea is not free and is not something standing there either, so it
+ * needs a holder of its own: the pointer asks the same question of it that it
+ * asks of a cottage's tile, and gets the same answer.
+ */
+export const RESERVED_KEY = 'reserved';
 
 /** A footprint on the tile grid: where it starts and how many tiles it claims. */
 export interface Footprint {
@@ -56,7 +69,10 @@ export interface TileOccupancy {
   readonly size: number;
 }
 
-export function createTileOccupancy(placements: readonly Placement[] = []): TileOccupancy {
+export function createTileOccupancy(
+  placements: readonly Placement[] = [],
+  reserved: readonly Tile[] = [],
+): TileOccupancy {
   const byTile = new Map<string, string>();
 
   const occupancy: TileOccupancy = {
@@ -85,6 +101,10 @@ export function createTileOccupancy(placements: readonly Placement[] = []): Tile
     },
   };
 
+  // Reserved ground goes in first and is not checked: it is not a placement, and
+  // a plan that stands something on the water has already been refused by
+  // `layoutResort` long before an index is built over it.
+  for (const tile of reserved) byTile.set(tileKey(tile.x, tile.z), RESERVED_KEY);
   // Seeding through `claim` means the resort's own placements are checked by the
   // same rule an edit is: a plan that overlaps fails here rather than quietly
   // making a tile un-buildable later.

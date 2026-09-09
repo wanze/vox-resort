@@ -18,7 +18,15 @@ import {
   type LayoutItem,
   type ResortLayout,
 } from './resortLayout';
-import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN, type ResortPlan } from './resortPlan';
+import {
+  BOARDWALK_ID,
+  HEDGE_ID,
+  LAMP_ID,
+  PATH_ID,
+  RESORT_PLAN,
+  type ResortPlan,
+} from './resortPlan';
+import { shoreFor, terrainAt, waterStartZ } from './shoreline';
 
 /** An item that exactly fills the tiles it claims. */
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
@@ -478,7 +486,13 @@ describe('the resort plan', () => {
     );
     const placed = new Set(layout.placements.map((placement) => placement.id));
     for (const type of OBJECT_TYPES) {
-      if (type.id === PATH_ID || type.id === LAMP_ID || type.id === HEDGE_ID) continue;
+      if (
+        type.id === PATH_ID ||
+        type.id === BOARDWALK_ID ||
+        type.id === LAMP_ID ||
+        type.id === HEDGE_ID
+      )
+        continue;
       expect(placed).toContain(type.id);
     }
   });
@@ -541,6 +555,109 @@ describe('the resort plan', () => {
     }
     expect(counts.get('cottage')).toBeGreaterThan(5);
     expect(counts.get('bungalow')).toBeGreaterThan(5);
+  });
+});
+
+describe('a plot with a shore', () => {
+  /** A 12x12 plot whose southern end is sea, with one street across the top. */
+  const items = [
+    item(PATH_ID),
+    item(BOARDWALK_ID),
+    item('hut', 2, 2),
+    item(LAMP_ID),
+    item(HEDGE_ID),
+  ];
+  const coastal = (over: Partial<ResortPlan> = {}): ResortPlan => ({
+    tilesX: 12,
+    tilesZ: 12,
+    plots: [{ id: 'hut', tileX: 0, tileZ: 4 }],
+    nodes: [node('nw', 0, 2), node('ne', 11, 2), node('s', 5, 11)],
+    edges: [
+      { from: 'nw', to: 'ne' },
+      { from: 'ne', to: 's', bend: 'z-first' },
+    ],
+    plazas: [],
+    // Water from row 9 down, with four rows of sand in front of it.
+    shore: { inset: 2, beach: 4, wave: 0, seed: 1 },
+    standsWholeCatalogue: false,
+    ...over,
+  });
+
+  it('lays the water and the sand across the whole width', () => {
+    const shore = shoreFor(coastal())!;
+    expect(waterStartZ(shore, 0)).toBe(9);
+    for (let x = 0; x < 12; x++) {
+      expect({ x, at: terrainAt(shore, x, 9) }).toEqual({ x, at: 'water' });
+      expect({ x, at: terrainAt(shore, x, 8) }).toEqual({ x, at: 'beach' });
+      expect({ x, at: terrainAt(shore, x, 4) }).toEqual({ x, at: 'land' });
+    }
+  });
+
+  it('paves the sand with a boardwalk and the grass with flagstones', () => {
+    const shore = shoreFor(coastal())!;
+    const { paths } = layoutResort(items, coastal());
+    expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
+    for (const tile of paths) {
+      expect({ tile: tile.key, id: tile.id }).toEqual({
+        tile: tile.key,
+        id: terrainAt(shore, tile.tileX, tile.tileZ) === 'beach' ? BOARDWALK_ID : PATH_ID,
+      });
+    }
+  });
+
+  it('falls back to flagstones when the catalogue has no boardwalk', () => {
+    const bare = [item(PATH_ID), item('hut', 2, 2)];
+    const paths = layoutResort(bare, coastal()).paths;
+    expect(paths.every((tile) => tile.id === PATH_ID)).toBe(true);
+  });
+
+  it('never paves the sea', () => {
+    const shore = shoreFor(coastal())!;
+    for (const tile of pathTilesFor(items, coastal())) {
+      expect(terrainAt(shore, tile.x, tile.z)).not.toBe('water');
+    }
+  });
+
+  it('stops a street at the water rather than refusing the plan', () => {
+    const shore = shoreFor(coastal())!;
+    const tiles = streetTiles(coastal());
+    // The second edge runs down column 11 to row 11, and the sea takes its end.
+    expect(tiles.some((tile) => tile.x === 11 && tile.z === 2)).toBe(true);
+    expect(tiles.every((tile) => terrainAt(shore, tile.x, tile.z) !== 'water')).toBe(true);
+    expect(Math.max(...tiles.filter((tile) => tile.x === 11).map((tile) => tile.z))).toBe(
+      waterStartZ(shore, 11) - 1,
+    );
+  });
+
+  it('still refuses a street that leaves the plot', () => {
+    expect(() =>
+      streetTiles(coastal({ nodes: [node('nw', 0, 2), node('ne', 12, 2), node('s', 5, 11)] })),
+    ).toThrow(/leaves the plot/);
+  });
+
+  it('refuses an object standing in the sea', () => {
+    expect(() =>
+      layoutResort(items, coastal({ plots: [{ id: 'hut', tileX: 2, tileZ: 10 }] })),
+    ).toThrow(/stands in the sea/);
+  });
+
+  it('plants no lamp or hedge on the sand', () => {
+    const shore = shoreFor(coastal())!;
+    const { lamps, hedges } = decorationsFor(items, coastal());
+    for (const tile of [...lamps, ...hedges]) {
+      expect(terrainAt(shore, tile.x, tile.z)).toBe('land');
+    }
+  });
+
+  it('leaves everything on the beach reachable', () => {
+    const withHut = coastal({
+      plots: [
+        { id: 'hut', tileX: 0, tileZ: 4 },
+        // On the sand, two rows back from the water.
+        { id: 'hut', tileX: 2, tileZ: 6 },
+      ],
+    });
+    expect(plotsWithoutPathAccess(items, withHut)).toEqual([]);
   });
 });
 

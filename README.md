@@ -39,6 +39,12 @@ any of the plot's four corners — `Q` and `E` turn it a quarter, the wheel zoom
 it freely, and the left button pans, since the four corners are the rotation. The
 mode survives generating a new resort.
 
+A generated plot's southern end is sea, with a beach the full width of the plot
+in front of it — the isometric camera opens over the south-east corner, so the
+shore lies across the front of the frame with the resort behind it. Bungalows,
+loungers and parasols stand on the sand, paths laid over it come out as
+boardwalks, and nothing can be built on the water.
+
 Pick an object from the build palette on the right and click the ground to place
 it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is
 laid. The pointer previews where it would land, green where it fits and red where

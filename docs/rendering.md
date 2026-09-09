@@ -108,6 +108,79 @@ literally all the east wing (columns G and H) and the two southern bands were:
 new plots, two more service lanes, two more cross streets, and the south gate
 moved to the new edge. Nothing outside `resortPlan.ts` changed.
 
+## The coast
+
+A generated plot's southern end is sea, with a band of sand across the full
+width of the plot in front of it. The south edge rather than a corner, so the
+beach is a strip every district can reach instead of a wedge only the two
+districts nearest one corner ever see; the isometric camera opens standing over
+the south-east corner, which puts that strip across the front of the frame with
+the resort behind it.
+
+`shoreline.ts` describes the coast **per tile column**, not as a line:
+`waterStartZ(x)` is the first water tile in column `x`, a straight edge with a
+seeded two-sine wobble on it. Everything else is derived from that one number,
+and describing it in columns is what makes the whole feature line up — the
+layout classifies tiles and the renderer emits one span per column, so the
+staircase the tile grid makes of a wandering coast is the _same_ staircase in
+both.
+
+The water only reaches a tenth of the plot's depth inside it, because those
+tiles buy nothing: the sea carries on to the horizon whatever the plot says, so
+all an inset costs is ground. The sand is the number that matters, and it is
+capped as well as floored — a beach that grew with a 160-tile plot would be
+forty tiles of sand, which is a desert.
+
+Three things follow from a tile being water, sand or land:
+
+- **Water is not ground.** No object stands on it, no street crosses it — a
+  street runs into the shore and stops there rather than the plan being refused —
+  and no spur routes through it. In the app the tiles are seeded into the live
+  occupancy index as reserved, so the build pointer turns red over the sea by the
+  ordinary rule rather than by a second one written beside it.
+- **Sand is ordinary buildable ground with one difference**: a path laid on it
+  comes out as a `boardwalk` rather than as flagstones. The paving is a fact
+  about the ground under a tile, not about the route over it, so the same street
+  is stone on grass and decking on sand.
+- **The generator keeps its districts off the sand entirely** and fills it
+  afterwards on its own terms — loungers and parasols in runs along the water,
+  bungalows and beach clubs behind them. A run is skirted once rather than per
+  object, which is the difference between a beach and a car park; the skirt is
+  what guarantees the free tiles between them stay one connected piece, so
+  `layoutResort` can always walk a boardwalk out to everything standing there.
+  The default plot ends up with about 130 things on its beach, half of them
+  loungers.
+
+The southern gate moves with the coast: it straddles the promenade where it runs
+out onto the sand rather than at the plot's own edge, which is under water. The
+service lanes keep running south and are cut off at the shore, so each arrives at
+the beach as a boardwalk pier.
+
+### Drawing the water
+
+The sea and the sand are **not** tiles, which is the one place the resort's
+"ground is an object" rule is broken, twice for different reasons. The sea cannot
+be a tile object because it does not end at the plot — it has to reach the
+horizon, which is fifty times the plot's area. The sand could be and is not,
+because a tile the sand occupied would be a tile nothing could be built on, and
+standing bungalows on the beach is the point.
+
+So `terrainSurface.ts` builds each as one static mesh of a few thousand quads,
+two per tile column apiece: a shallow band and a deep one for the water, a wet
+strip and a dry one for the sand, each with a small per-column colour wobble.
+Both run the full width of the ground plane, so the coast carries on past the
+resort instead of stopping at the plot's edge.
+
+They are stacked between the grass and the paving — grass at -0.05, sea at 0.1,
+sand at 0.3, path and boardwalk slabs from 0 to 2 — and the sea runs a tile in
+_under_ the sand, so the shoreline is a seam between two surfaces that overlap
+rather than a gap between two that abut. The sea sitting above the grass is
+upside down as hydrology and invisible as rendering: the ground plane is infinite
+and would otherwise poke through the water.
+
+Both surfaces are bound to the same baked light volume the ground is, so the
+beach shades with the resort and catches the lamps standing on it.
+
 ## Rendering: what is optimised, and what is not
 
 **Face culling, twice.** DVE's mesher drops the faces between two solid voxels,
@@ -398,7 +471,7 @@ export default defineModel({
 });
 ```
 
-Ten of the thirty-one models cast light: the street lamp and the tiki torch, the
+Ten of the thirty-three models cast light: the street lamp and the tiki torch, the
 fountain and the swimming pool, the entrance gate, both bars, the hotel's
 entrance lanterns, the mini-golf bollards and the tennis court's four floodlight
 masts. Between them they put 425 lamps on the plot, so the resort is lit by what
@@ -529,7 +602,7 @@ placed by hand shades the ground beside it immediately.
 The usual reason to draw a blob is a contact patch — a dark ellipse _under_ an
 object, to plant a thing that would otherwise read as a sticker on the grass.
 This catalogue does not need one, and finding that out changed the feature:
-**every one of the 31 models paints its own ground plate over the whole footprint
+**every one of the 33 models paints its own ground plate over the whole footprint
 it claims**, so the ground an object stands on is already the object, and a patch
 drawn under it would be inside opaque geometry. What is missing is the ground
 _around_ it.
@@ -580,7 +653,7 @@ The resort is laid out on a fixed grid of `TILE_VOXELS` (16) voxel tiles. Every
 model declares the footprint it claims in tiles and must fit inside it;
 `pnpm preview --audit` reports how much of that footprint each model actually
 fills, which is the number to watch when objects are meant to look right next to
-each other. All 31 models currently fill 100% of their footprint.
+each other. All 33 models currently fill 100% of their footprint.
 
 `spreadLabelAnchors` picks which placement of each type carries the HUD caption.
 It takes the one furthest from the labels already placed, so a plan that

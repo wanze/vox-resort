@@ -19,12 +19,20 @@
  * stands on (`path@12,7`), because those keys have to survive an edit — see
  * {@link derivedKey}.
  *
+ * A plan may also give the plot a shore, in which case its southern end is sea.
+ * Water is not ground: nothing stands on it, no street crosses it and no spur
+ * routes through it — a street simply stops where the beach ends. The sand in
+ * between is ordinary buildable ground with one difference, which is that a path
+ * laid on it comes out as a boardwalk rather than as flagstones. See
+ * `shoreline.ts`.
+ *
  * Tile-to-voxel conversion happens here, so everything downstream works in
  * voxels: a model smaller than its declared footprint is centred in it.
  */
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
+  BOARDWALK_ID,
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
@@ -33,6 +41,7 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
+import { isBeach, isWater, shoreFor, terrainAt, type Shore } from './shoreline';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -224,7 +233,19 @@ function claimableTiles(
   ) {
     throw new Error(`"${key}" does not fit inside the ${plan.tilesX}x${plan.tilesZ} plot`);
   }
+  requireDryGround(plan, plot, tiles, key);
   return tiles;
+}
+
+/** Throws if any tile a plot would claim is sea rather than ground. */
+function requireDryGround(plan: ResortPlan, plot: ResortPlot, tiles: Extent, key: string): void {
+  const shore = shoreFor(plan);
+  if (!shore) return;
+  for (let x = plot.tileX; x < plot.tileX + tiles.x; x++) {
+    for (let z = plot.tileZ; z < plot.tileZ + tiles.z; z++) {
+      if (isWater(shore, x, z)) throw new Error(`"${key}" stands in the sea at tile ${x},${z}`);
+    }
+  }
 }
 
 /** Offsets that grow a one-tile run to `width`, biased west/north. */
@@ -274,14 +295,24 @@ export function routeEdgeTiles(
   return [...tiles.values()];
 }
 
-/** Every tile the plan's streets and plazas cover, before objects are subtracted. */
+/**
+ * Every tile the plan's streets and plazas cover, before objects are subtracted.
+ *
+ * A street that runs into the sea is cut off at the water rather than refused.
+ * Leaving the plot is still an error, because that is a plan that does not fit;
+ * reaching the shore is not, because a street graph strung corner to corner over
+ * a plot with a beach in one corner is the normal case, and the answer a
+ * promenade wants there is to stop at the sand.
+ */
 export function streetTiles(plan: ResortPlan): Tile[] {
   const nodes = new Map(plan.nodes.map((node) => [node.id, node]));
+  const shore = shoreFor(plan);
   const tiles = new Map<string, Tile>();
   const add = (tile: Tile): void => {
     if (tile.x < 0 || tile.z < 0 || tile.x >= plan.tilesX || tile.z >= plan.tilesZ) {
       throw new Error(`A street leaves the plot at tile ${tile.x},${tile.z}`);
     }
+    if (isWater(shore, tile.x, tile.z)) return;
     tiles.set(tileKey(tile.x, tile.z), tile);
   };
 
@@ -332,11 +363,13 @@ function growSpurs(
 ): void {
   const byId = new Map(items.map((item) => [item.id, item]));
   const keys = plotKeys(plan.plots);
+  const shore = shoreFor(plan);
   const isFree = (x: number, z: number): boolean =>
     x >= 0 &&
     z >= 0 &&
     x < plan.tilesX &&
     z < plan.tilesZ &&
+    !isWater(shore, x, z) &&
     !occupied.has(tileKey(x, z)) &&
     !paved.has(tileKey(x, z));
   const touchesPath = (x: number, z: number): boolean =>
@@ -433,6 +466,33 @@ export interface Decorations {
 }
 
 /**
+ * The free grass tiles that touch a path: everything the dressing is chosen
+ * from, in row order.
+ *
+ * Grass only. A lamp post is a street fitting and a hedge is a garden one, so
+ * neither belongs on a beach, and nothing at all stands in the sea.
+ */
+function edgeRing(parts: {
+  readonly plan: ResortPlan;
+  readonly shore: Shore | null;
+  readonly occupied: ReadonlyMap<string, string>;
+  readonly paved: ReadonlySet<string>;
+  readonly pathNeighbours: (x: number, z: number) => number;
+}): Tile[] {
+  const { plan, shore, occupied, paved, pathNeighbours } = parts;
+  const ring: Tile[] = [];
+  for (let z = 0; z < plan.tilesZ; z++) {
+    for (let x = 0; x < plan.tilesX; x++) {
+      const key = tileKey(x, z);
+      if (occupied.has(key) || paved.has(key)) continue;
+      if (terrainAt(shore, x, z) !== 'land') continue;
+      if (pathNeighbours(x, z) > 0) ring.push({ x, z });
+    }
+  }
+  return ring;
+}
+
+/**
  * Dresses the path edges. Both lists come from the same ring of free tiles that
  * touch a path: lamps are taken first at an even spacing, then hedges fill the
  * straight runs left over, skipping anything pressed against a building so the
@@ -444,19 +504,13 @@ export function decorationsFor(
   spacing = LAMP_SPACING,
 ): Decorations {
   const occupied = occupiedTiles(items, plan);
+  const shore = shoreFor(plan);
   const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
 
   const pathNeighbours = (x: number, z: number): number =>
     NEIGHBOURS.filter(([dx, dz]) => paved.has(tileKey(x + dx, z + dz))).length;
 
-  const ring: Tile[] = [];
-  for (let z = 0; z < plan.tilesZ; z++) {
-    for (let x = 0; x < plan.tilesX; x++) {
-      const key = tileKey(x, z);
-      if (occupied.has(key) || paved.has(key)) continue;
-      if (pathNeighbours(x, z) > 0) ring.push({ x, z });
-    }
-  }
+  const ring = edgeRing({ plan, shore, occupied, paved, pathNeighbours });
 
   const lamps: Tile[] = [];
   const taken = new Set<string>();
@@ -508,7 +562,7 @@ export function decorationsFor(
  */
 function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan): void {
   if (plan.standsWholeCatalogue === false) return;
-  const derived = new Set([PATH_ID, LAMP_ID, HEDGE_ID]);
+  const derived = new Set([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]);
   const planted = new Set(plan.plots.map((plot) => plot.id));
   for (const item of items) {
     if (!derived.has(item.id) && !planted.has(item.id)) {
@@ -532,10 +586,18 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
 
   requireEveryTypePlanted(items, plan);
 
+  // The paving a tile gets is a fact about the ground under it, not about the
+  // route: the same street comes out as flagstones on grass and as decking on
+  // sand. A catalogue without a boardwalk simply paves the beach in stone.
+  const shore = shoreFor(plan);
+  const boardwalk = byId.get(BOARDWALK_ID) ?? path;
+  const pavingFor = (tile: Tile): LayoutItem => (isBeach(shore, tile.x, tile.z) ? boardwalk : path);
+
   // occupiedTiles does the overlap, bounds and footprint checks for us.
-  const paths = pathTilesFor(items, plan).map((tile) =>
-    place(path, derivedKey(PATH_ID, tile.x, tile.z), tile.x, tile.z),
-  );
+  const paths = pathTilesFor(items, plan).map((tile) => {
+    const paving = pavingFor(tile);
+    return place(paving, derivedKey(paving.id, tile.x, tile.z), tile.x, tile.z);
+  });
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>
     place(byId.get(plot.id)!, keys[index]!, plot.tileX, plot.tileZ, plot.rotation ?? 0),

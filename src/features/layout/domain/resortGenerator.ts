@@ -31,6 +31,12 @@
  * 4. **The catalogue first, the filling after.** Every type that has not been
  *    placed yet is placed before anything is repeated, so the showcase shows the
  *    whole catalogue whatever the density asks for.
+ * 5. **The beach last.** The plot's southern end is sea, with a band of sand
+ *    across the full width of the plot that the districts are kept off entirely
+ *    — a hotel laid out on a row grid is precisely what a beach is not. The sand
+ *    is filled afterwards on its own terms: loungers and parasols in runs along
+ *    the water, bungalows and palms behind them, and lanes left clear so the
+ *    layout can walk a boardwalk out to every one of them. See {@link fillBeach}.
  *
  * Everything here is a pure function of the parameters, and the seed makes it
  * reproducible: the same four numbers give the same resort, which is what lets
@@ -39,6 +45,7 @@
 
 import type { ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import {
+  BOARDWALK_ID,
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
@@ -46,7 +53,16 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
-import { streetTiles, tileKey, widthOffsets } from './resortLayout';
+import { streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
+import {
+  beachDepthAt,
+  beachTilesOf,
+  shoreFor,
+  waterStartZ,
+  waterTilesOf,
+  type Shore,
+  type ShoreSpec,
+} from './shoreline';
 import { normalizeRotation, rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** The gate object, stood at both ends of the promenade. */
@@ -56,7 +72,7 @@ const GATE_ID = 'entrance';
 const PLAZA_ID = 'fountain';
 
 /** Object types the layout scatters itself, which no plan should place. */
-const DERIVED = new Set([PATH_ID, LAMP_ID, HEDGE_ID]);
+const DERIVED = new Set([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]);
 
 /** Plot sizes the generator will work at, in tiles. */
 export const PLOT_TILES = { min: 40, max: 160 } as const;
@@ -407,12 +423,269 @@ function fillRow(parts: FillParts, z: number, rowTurn: Rotation): number {
   return depth;
 }
 
+/**
+ * How far the sea reaches in from the plot's south edge, and how deep the sand
+ * in front of it is — both as a fraction of the plot's depth, with floors and a
+ * ceiling.
+ *
+ * The water inset is small because it costs the resort ground for nothing: the
+ * sea carries on past the plot to the horizon whatever this says, so all these
+ * tiles buy is a strip of water with the plot's own edge behind it. The beach is
+ * the number that matters, and it is capped as well as floored — a beach that
+ * grew with a 160-tile plot would be forty tiles of sand, which is a desert.
+ */
+const SHORE_INSET = { of: 0.1, min: 6 } as const;
+const SHORE_BEACH = { of: 0.16, min: 8, max: 18, wander: 3 } as const;
+
+/** The coastline a generated plot of this size and seed gets. */
+function shoreSpecFor(params: ResortParams): ShoreSpec {
+  return {
+    inset: Math.max(SHORE_INSET.min, Math.round(params.tilesZ * SHORE_INSET.of)),
+    beach: Math.round(clamp(params.tilesZ * SHORE_BEACH.of, SHORE_BEACH.min, SHORE_BEACH.max)),
+    wave: SHORE_BEACH.wander,
+    seed: params.seed,
+  };
+}
+
+/**
+ * The sand a beach object may stand on: everything but the wet strip at the
+ * water's edge and the last row against the grass.
+ *
+ * Both are left bare on purpose. The seaward one is the tideline, which is what
+ * makes the beach read as a beach rather than as a car park with sand in it; the
+ * landward one is the lane the boardwalks come in along, and reserving it is
+ * what stops the sand from being paved edge to edge by spurs later.
+ */
+function isBuildableSand(shore: Shore, tileX: number, tileZ: number): boolean {
+  const depth = beachDepthAt(shore, tileX, tileZ);
+  return depth >= 1 && depth <= shore.spec.beach - 2;
+}
+
+/**
+ * What stands at the water's edge, and what stands behind it.
+ *
+ * Weighted by repetition rather than by a table of numbers: a beach is mostly
+ * loungers and parasols with a bungalow here and there, and the shortest way to
+ * say that is to write the loungers down more often. The two lists are also the
+ * whole of the rule that a beach club does not end up on the tideline.
+ *
+ * The front list is one-tile objects only, because the front is laid in runs —
+ * see {@link standRun}.
+ */
+const BEACH_FRONT: readonly string[] = [
+  'sun-lounger',
+  'sun-lounger',
+  'sun-lounger',
+  'beach-umbrella',
+  'beach-umbrella',
+];
+const BEACH_BACK: readonly string[] = [
+  'bungalow',
+  'bungalow',
+  'bungalow',
+  'bungalow',
+  'poolside-bar',
+  'poolside-bar',
+  'beach-club',
+  'palm',
+  'palm',
+  'tikitorch',
+];
+
+/**
+ * How deep into the sand the loungers give way to the buildings: the seaward
+ * half of it, so both bands scale with a wider or narrower beach.
+ */
+const beachFrontDepth = (shore: Shore): number => Math.floor(shore.spec.beach / 2);
+
+/** How much of the buildable sand is attempted, per tile visited. */
+const BEACH_DENSITY = 0.85;
+
+/** How many one-tile objects stand shoulder to shoulder in one run. */
+const BEACH_RUN = { min: 3, max: 7 } as const;
+
+/**
+ * Draws from a pool before giving a tile up.
+ *
+ * A beach club is six tiles across with its skirt and will not fit in most of
+ * the gaps a beach leaves; taking the first draw as final would mean every one
+ * of those gaps stayed empty because a beach club happened to be named for it.
+ */
+const BEACH_DRAWS = 3;
+
+/**
+ * Fills the sand.
+ *
+ * The one rule that matters is the skirt: a cluster is placed only when the ring
+ * of tiles *around* it is free too, and that ring is claimed with it. Without it
+ * a run of loungers packs solid, and `layoutResort` throws — it grows a spur from
+ * every object to the path network and refuses a plan where something is walled
+ * in. With it, the free tiles between the clusters are one connected piece
+ * running the length of the beach and out onto the grass, so a boardwalk can
+ * always be walked to anything standing here.
+ *
+ * That is the same guarantee the districts get from their free row, arrived at
+ * differently because a beach is not laid out in rows. It is also why the small
+ * things go down as *runs* rather than one at a time: a skirt around every
+ * single lounger would stand them three tiles apart, which is a car park, not a
+ * beach. A run is skirted once, so the loungers inside it sit shoulder to
+ * shoulder — and the run is walked east, along the water rather than across it.
+ */
+function fillBeach(parts: BeachParts): void {
+  const { shore, random } = parts;
+  for (const tile of beachTilesOf(shore)) {
+    if (!isBuildableSand(shore, tile.x, tile.z)) continue;
+    if (random() > BEACH_DENSITY) continue;
+    standOnSand(parts, tile);
+  }
+}
+
+/** Everything filling the sand needs; the same shape each stander is handed. */
+interface BeachParts {
+  readonly shore: Shore;
+  readonly types: ReadonlyMap<string, GeneratorType>;
+  readonly site: Site;
+  readonly missing: Set<string>;
+  readonly random: () => number;
+  readonly plots: ResortPlot[];
+}
+
+/**
+ * Stands whatever the sand at one tile calls for, or leaves it bare.
+ *
+ * The walk crosses each row from the grass to the water, so the buildings get
+ * their pick of the sand before the loungers start filling it in.
+ */
+function standOnSand(parts: BeachParts, tile: Tile): void {
+  const { shore, types, missing, random } = parts;
+  const front = beachDepthAt(shore, tile.x, tile.z) <= beachFrontDepth(shore);
+  const pool = front ? BEACH_FRONT : BEACH_BACK;
+
+  for (let draw = 0; draw < BEACH_DRAWS; draw++) {
+    const wanted = pool.find((id) => missing.has(id)) ?? pool[Math.floor(random() * pool.length)]!;
+    const type = types.get(wanted);
+    if (!type) continue;
+    if (!(front ? standRun(parts, type, tile) : standOne(parts, type, tile))) continue;
+    missing.delete(type.id);
+    return;
+  }
+}
+
+/** Stands one object on the sand, skirt and all. False if it will not go. */
+function standOne(parts: BeachParts, type: GeneratorType, tile: Tile): boolean {
+  const { site, random, plots } = parts;
+  // Mostly unturned, occasionally not, with the unturned footprint always there
+  // as the fallback: the same bargain `turnFor` strikes, so a turn is never the
+  // reason the sand comes out bare.
+  const turned: Rotation =
+    random() < QUARTER_TURN_CHANCE ? normalizeRotation(Math.floor(random() * 4)) : 0;
+  for (const rotation of [turned, 0] as const) {
+    const covered = footprintTilesAt(footprintOf(type, rotation), tile);
+    const region = withSkirt(covered);
+    if (!tilesFree(site, region)) continue;
+    claimTiles(site, region);
+    plots.push({ id: type.id, tileX: tile.x, tileZ: tile.z, rotation });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Stands a run of one-tile objects along the water, skirted once as a whole.
+ *
+ * The run steps east, along the shore rather than into it, so a row of loungers
+ * faces the sea down its whole length instead of walking out through the
+ * tideline. It grows a tile at a time and stops at the first one that will not
+ * go, so a run at the end of the beach comes out short rather than not at all.
+ */
+function standRun(parts: BeachParts, type: GeneratorType, tile: Tile): boolean {
+  const { shore, site, random, plots } = parts;
+  const wanted = BEACH_RUN.min + Math.floor(random() * (BEACH_RUN.max - BEACH_RUN.min + 1));
+
+  const run: Tile[] = [];
+  for (let step = 0; step < wanted; step++) {
+    const next = { x: tile.x + step, z: tile.z };
+    if (!isBuildableSand(shore, next.x, next.z)) break;
+    const grown = [...run, next];
+    if (!tilesFree(site, withSkirt(grown))) break;
+    run.push(next);
+  }
+  if (run.length === 0) return false;
+
+  claimTiles(site, withSkirt(run));
+  for (const stand of run) plots.push({ id: type.id, tileX: stand.x, tileZ: stand.z, rotation: 0 });
+  return true;
+}
+
+/** The tiles a footprint covers, anchored at its north-west corner. */
+function footprintTilesAt(footprint: Extent, tile: Tile): Tile[] {
+  const tiles: Tile[] = [];
+  for (let x = tile.x; x < tile.x + footprint.x; x++) {
+    for (let z = tile.z; z < tile.z + footprint.z; z++) tiles.push({ x, z });
+  }
+  return tiles;
+}
+
+/** A set of tiles and the ring around it: what a beach cluster has to have free. */
+function withSkirt(tiles: readonly Tile[]): Tile[] {
+  const region = new Map<string, Tile>();
+  for (const tile of tiles) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const x = tile.x + dx;
+        const z = tile.z + dz;
+        region.set(tileKey(x, z), { x, z });
+      }
+    }
+  }
+  return [...region.values()];
+}
+
+function tilesFree(site: Site, tiles: readonly Tile[]): boolean {
+  return tiles.every(
+    (tile) =>
+      tile.x >= 0 &&
+      tile.z >= 0 &&
+      tile.x < site.tilesX &&
+      tile.z < site.tilesZ &&
+      !site.taken.has(tileKey(tile.x, tile.z)),
+  );
+}
+
+function claimTiles(site: Site, tiles: readonly Tile[]): void {
+  for (const tile of tiles) site.taken.add(tileKey(tile.x, tile.z));
+}
+
+/**
+ * The last row a gate this wide can stand on with dry land under all of it.
+ *
+ * On a plot with no shore that is the plot's own south edge. On one with a beach
+ * it is the row the sand starts on, so the southern gate ends up straddling the
+ * promenade exactly where it runs out onto the beach — which is a better place
+ * for a gate than the old one was, and is the only place left for it.
+ */
+function southGateRow(
+  shore: Shore | null,
+  tilesZ: number,
+  fromX: number,
+  gateTilesX: number,
+  gateTilesZ: number,
+): number {
+  if (!shore) return tilesZ - gateTilesZ;
+  let sandStarts = tilesZ;
+  for (let x = fromX; x < fromX + gateTilesX; x++) {
+    sandStarts = Math.min(sandStarts, waterStartZ(shore, x) - shore.spec.beach);
+  }
+  return sandStarts - gateTilesZ;
+}
+
 /** The gate at each end of the promenade, and the fountain in its plaza. */
 function landmarks(parts: {
   readonly types: ReadonlyMap<string, GeneratorType>;
   readonly promenade: Street;
   readonly plaza: { x0: number; x1: number; z0: number; z1: number };
   readonly site: Site;
+  readonly shore: Shore | null;
   readonly missing: Set<string>;
 }): ResortPlot[] {
   const { types, site, missing } = parts;
@@ -434,12 +707,13 @@ function landmarks(parts: {
   // Both gates straddle the promenade's ends, which is what makes them read as
   // the way in rather than as two more buildings — and the southern one is turned
   // to face back up the promenade, so the pair reads as two ends of one street
-  // rather than as the same gate stamped twice.
+  // rather than as the same gate stamped twice. On a plot with a beach the
+  // southern end is where the promenade meets the sand; see `southGateRow`.
   const gate = types.get(GATE_ID);
   if (gate) {
     const tileX = parts.promenade.at - Math.floor(gate.tilesX / 2);
     stand(gate, tileX, 0);
-    stand(gate, tileX, site.tilesZ - gate.tilesZ, 2);
+    stand(gate, tileX, southGateRow(parts.shore, site.tilesZ, tileX, gate.tilesX, gate.tilesZ), 2);
   }
 
   const fountain = types.get(PLAZA_ID);
@@ -523,15 +797,36 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
     nodes: [...down.nodes, ...across.nodes],
     edges: [...down.edges, ...across.edges],
     plazas: [plaza],
+    shore: shoreSpecFor({ tilesX, tilesZ, density, seed }),
   };
+  const shore = shoreFor(skeleton);
 
   const site: Site = { taken: new Set(), tilesX, tilesZ };
   const missing = new Set(buildable.map((type) => type.id));
+  // The sea is spoken for before anything is stood, so nothing below has to
+  // check for it: a district, a landmark and a lane all just find the tiles
+  // taken. The streets are worked out here too, because the sand is reserved
+  // against them in a moment and a street that crosses it keeps its tiles.
+  for (const tile of waterTilesOf(shore)) site.taken.add(tileKey(tile.x, tile.z));
+  const streets = streetTiles(skeleton);
+  const paved = new Set(streets.map((tile) => tileKey(tile.x, tile.z)));
+
   // Landmarks are stood before the streets are marked, because both of them are
   // meant to sit on the paving: the gates straddle the promenade's ends and the
   // fountain stands in the middle of its plaza.
-  const plots = landmarks({ types: byId, promenade, plaza, site, missing });
-  for (const tile of streetTiles(skeleton)) site.taken.add(tileKey(tile.x, tile.z));
+  const plots = landmarks({ types: byId, promenade, plaza, site, shore, missing });
+
+  // The sand is held back from the districts and handed to `fillBeach` after
+  // them; only the tiles this reservation actually took are given back, so a
+  // gate or a street already standing on the beach keeps what it claimed.
+  const reservedSand = shore
+    ? beachTilesOf(shore).filter(
+        (tile) => !paved.has(tileKey(tile.x, tile.z)) && !site.taken.has(tileKey(tile.x, tile.z)),
+      )
+    : [];
+  for (const tile of reservedSand) site.taken.add(tileKey(tile.x, tile.z));
+
+  for (const tile of streets) site.taken.add(tileKey(tile.x, tile.z));
 
   const columnGaps = gapsBetween(columns, 0, tilesX - 1, false);
   const bandGaps = gapsBetween(bands, 0, tilesZ - 1, true);
@@ -556,6 +851,13 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
     });
   });
 
+  if (shore) {
+    for (const tile of reservedSand) {
+      if (isBuildableSand(shore, tile.x, tile.z)) site.taken.delete(tileKey(tile.x, tile.z));
+    }
+    fillBeach({ shore, types: byId, site, missing, random, plots });
+  }
+
   return { ...skeleton, plots, standsWholeCatalogue: missing.size === 0 };
 }
 
@@ -567,14 +869,18 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
  * why `standsWholeCatalogue` exists at all.
  */
 export function emptyResortPlan(tilesX: number, tilesZ: number): ResortPlan {
-  const { tilesX: x, tilesZ: z } = clampParams({ tilesX, tilesZ, density: 1, seed: 0 });
+  const params = clampParams({ tilesX, tilesZ, density: 1, seed: 0 });
   return {
-    tilesX: x,
-    tilesZ: z,
+    tilesX: params.tilesX,
+    tilesZ: params.tilesZ,
     plots: [],
     nodes: [],
     edges: [],
     plazas: [],
+    // Bare ground, but not bare land: the coast is a fact about the plot rather
+    // than about what has been built on it, so a cleared plot still has its
+    // beach to build on.
+    shore: shoreSpecFor(params),
     standsWholeCatalogue: false,
   };
 }

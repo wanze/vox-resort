@@ -48,6 +48,7 @@
  * resort on the same pipeline: nothing outside this file changed to grow it.
  */
 
+import type { ShoreSpec } from './shoreline';
 import type { Rotation } from './rotation';
 
 /** One object standing on the plot, anchored at its north-west tile. */
@@ -110,6 +111,15 @@ export interface ResortPlan {
    */
   readonly plazas: readonly Plaza[];
   /**
+   * Where the plot meets the sea, if it does at all: its southern end.
+   *
+   * Absent means the plot is land to its edges, which is what the authored plan
+   * below is: it is the plot a `?bench=1` run measures, and a run is only
+   * comparable with the one before it if the scene has not moved. Generated
+   * plots carry a shore — see `resortGenerator.ts`.
+   */
+  readonly shore?: ShoreSpec;
+  /**
    * Whether every catalogue type is meant to stand somewhere on this plan.
    *
    * True by default, and true of the authored plan: a type in the catalogue that
@@ -123,6 +133,9 @@ export interface ResortPlan {
 
 /** The object type the path network is built from; it needs no plot of its own. */
 export const PATH_ID = 'path';
+
+/** The paving a path is laid with where it crosses sand. */
+export const BOARDWALK_ID = 'boardwalk';
 
 /** The object types the layout scatters along the paths on its own. */
 export const LAMP_ID = 'street-lamp';
@@ -247,6 +260,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('poolside-bar', 35, 11),
     at('tikitorch', 38, 11),
     ...row('sun-lounger', 30, 15, 4, 1),
+    ...row('beach-umbrella', 34, 15, 2, 2),
     at('beach-club', 30, 17),
     at('resort-bar', 35, 17),
     at('palm', 39, 17),

@@ -24,7 +24,7 @@ body {
     13px/1.45 ui-sans-serif,
     system-ui,
     -apple-system,
-    "Segoe UI",
+    'Segoe UI',
     sans-serif;
   overflow: hidden;
 }
@@ -136,7 +136,7 @@ body {
   color: var(--hud-muted);
 }
 
-.hud-time-row input[type="range"] {
+.hud-time-row input[type='range'] {
   flex: 1;
   min-width: 0;
   accent-color: #f2c33c;
@@ -294,7 +294,7 @@ body {
   background: rgb(255 255 255 / 6%);
 }
 
-.hud-palette-item[aria-pressed="true"] {
+.hud-palette-item[aria-pressed='true'] {
   border-color: rgb(125 216 127 / 70%);
   background: rgb(125 216 127 / 14%);
 }
@@ -365,7 +365,7 @@ body {
   flex: none;
 }
 
-.hud-resort-row input[type="range"] {
+.hud-resort-row input[type='range'] {
   flex: 1;
   min-width: 0;
   accent-color: #6fb1e0;
@@ -377,7 +377,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.hud-resort-seed input[type="number"] {
+.hud-resort-seed input[type='number'] {
   flex: 1;
   min-width: 0;
   padding: 3px 6px;
@@ -473,8 +473,8 @@ body {
 }
 
 /* The mode and the direction on show are the same pressed state as the palette. */
-.hud-camera-mode[aria-pressed="true"],
-.hud-camera-point[aria-pressed="true"] {
+.hud-camera-mode[aria-pressed='true'],
+.hud-camera-point[aria-pressed='true'] {
   border-color: rgb(111 177 224 / 55%);
   background: rgb(111 177 224 / 14%);
 }

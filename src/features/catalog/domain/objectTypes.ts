@@ -8,15 +8,15 @@
  * picks the HUD swatch colour.
  */
 
-import { MODEL_SOURCES } from "../../../../voxel-gen/models/index.ts";
+import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import {
   buildModel,
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
   type VoxelModel,
-} from "../../../../voxel-gen/voxelgen.ts";
-import { materialIdFor, materialsForColors, type MaterialDefinition } from "./materials";
+} from '../../../../voxel-gen/voxelgen.ts';
+import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
 export { TILE_VOXELS };
 

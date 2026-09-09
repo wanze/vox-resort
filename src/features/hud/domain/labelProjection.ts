@@ -57,7 +57,7 @@ export function projectToScreen(
   viewport: Viewport,
 ): ScreenPosition | null {
   if (view.length < 16 || projection.length < 16) {
-    throw new Error("Expected a 4x4 matrix of 16 elements");
+    throw new Error('Expected a 4x4 matrix of 16 elements');
   }
   const { x, y, z } = point;
   const viewX = view[0]! * x + view[4]! * y + view[8]! * z + view[12]!;

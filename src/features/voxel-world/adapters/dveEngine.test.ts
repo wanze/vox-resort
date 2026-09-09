@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { materialKeyFor, voxelIdFor } from "../../catalog/domain/materials";
-import { allMaterials, materialColorsById, OBJECT_TYPES } from "../../catalog/domain/objectTypes";
-import { deinterleaveVertices, flipWinding } from "../../rendering/domain/vertexBuffer";
-import { scratchLayoutFor } from "../domain/modelScratch";
-import { buildSectionMeshes, DEFAULT_WORLD_SCALE, sectionSizeOf } from "./dveEngine";
+import { describe, expect, it } from 'vitest';
+import { materialKeyFor, voxelIdFor } from '../../catalog/domain/materials';
+import { allMaterials, materialColorsById, OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { deinterleaveVertices, flipWinding } from '../../rendering/domain/vertexBuffer';
+import { scratchLayoutFor } from '../domain/modelScratch';
+import { buildSectionMeshes, DEFAULT_WORLD_SCALE, sectionSizeOf } from './dveEngine';
 
 /**
  * The one test that touches the engine: it catches registration drift, where a
@@ -16,8 +16,8 @@ const corner = (index: number, source: Float32Array): readonly number[] => [
   source[index * 3 + 2]!,
 ];
 
-describe("buildSectionMeshes", () => {
-  it("meshes the whole catalogue into submeshes of known materials", async () => {
+describe('buildSectionMeshes', () => {
+  it('meshes the whole catalogue into submeshes of known materials', async () => {
     const scratch = scratchLayoutFor(
       OBJECT_TYPES.map((type) => ({
         id: type.id,
@@ -45,7 +45,7 @@ describe("buildSectionMeshes", () => {
     expect(triangles).toBeLessThan(writes.length * 4);
   }, 30_000);
 
-  it("emits faces that point outwards once their winding is flipped", async () => {
+  it('emits faces that point outwards once their winding is flipped', async () => {
     // DVE keeps its world in module-level statics, so park this voxel well past
     // the scratch regions the test above painted into the same world.
     const writes = [

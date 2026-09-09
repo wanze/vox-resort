@@ -5,12 +5,12 @@
  * 9.5x10 m villa with two 3 m storeys, 10 m to the ridge), a 4x4 tile.
  * Veranda faces +z; the plunge pool sits on the -x terrace.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "villa",
-  label: "Villa",
-  category: "lodging",
+  id: 'villa',
+  label: 'Villa',
+  category: 'lodging',
   tiles: { x: 4, z: 4 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -22,16 +22,16 @@
  * turned cottage is blocked by exactly the three-by-two tiles it would claim.
  */
 
-import type { ObjectTypeDefinition } from "../../catalog/domain/objectTypes";
+import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import {
   derivedKey,
   place,
   type LayoutItem,
   type Placement,
   type Tile,
-} from "../../layout/domain/resortLayout";
-import type { Rotation } from "../../layout/domain/rotation";
-import type { TileOccupancy } from "./tileOccupancy";
+} from '../../layout/domain/resortLayout';
+import type { Rotation } from '../../layout/domain/rotation';
+import type { TileOccupancy } from './tileOccupancy';
 
 /** Key a placed object gets: its type and the tile it stands on. */
 export function buildKey(item: LayoutItem, tile: Tile): string {

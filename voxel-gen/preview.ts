@@ -12,12 +12,12 @@
  *   node voxel-gen/preview.ts --audit      # size table, no rendering
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import zlib from "node:zlib";
-import { MODEL_SOURCES } from "./models/index.ts";
-import { buildModel, TILE_VOXELS, type Color, type VoxelModel } from "./voxelgen.ts";
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
+import { MODEL_SOURCES } from './models/index.ts';
+import { buildModel, TILE_VOXELS, type Color, type VoxelModel } from './voxelgen.ts';
 
 type Vec3 = [number, number, number];
 
@@ -269,7 +269,7 @@ function encodePng(rgb: Uint8Array, width: number, height: number): Buffer {
   const chunk = (type: string, data: Buffer): Buffer => {
     const length = Buffer.alloc(4);
     length.writeUInt32BE(data.length, 0);
-    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
     const crc = Buffer.alloc(4);
     crc.writeUInt32BE(crc32(body), 0);
     return Buffer.concat([length, body, crc]);
@@ -287,9 +287,9 @@ function encodePng(rgb: Uint8Array, width: number, height: number): Buffer {
   }
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", zlib.deflateSync(raw, { level: 9 })),
-    chunk("IEND", Buffer.alloc(0)),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
+    chunk('IEND', Buffer.alloc(0)),
   ]);
 }
 
@@ -348,9 +348,9 @@ function audit(models: readonly VoxelModel[]): void {
   });
   const width = (key: keyof (typeof rows)[number]): number =>
     Math.max(key.length, ...rows.map((row) => String(row[key]).length));
-  const columns = ["id", "tiles", "size", "claimed", "fill", "voxels"] as const;
+  const columns = ['id', 'tiles', 'size', 'claimed', 'fill', 'voxels'] as const;
   const line = (cells: readonly string[]): string =>
-    cells.map((cell, index) => cell.padEnd(width(columns[index]!))).join("  ");
+    cells.map((cell, index) => cell.padEnd(width(columns[index]!))).join('  ');
   console.info(line(columns));
   for (const row of rows.toSorted((a, b) => Number.parseInt(a.fill) - Number.parseInt(b.fill))) {
     console.info(line(columns.map((column) => String(row[column]))));
@@ -360,25 +360,25 @@ function audit(models: readonly VoxelModel[]): void {
 
 function main(): void {
   const args = process.argv.slice(2);
-  const sheet = args.includes("--sheet");
-  const ids = args.filter((arg) => !arg.startsWith("--"));
+  const sheet = args.includes('--sheet');
+  const ids = args.filter((arg) => !arg.startsWith('--'));
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const outDir = process.env.VOXELGEN_OUT ?? path.join(here, "out");
+  const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
   const sources = ids.length
     ? MODEL_SOURCES.filter((source) => ids.includes(source.id))
     : MODEL_SOURCES;
   const missing = ids.filter((id) => !MODEL_SOURCES.some((source) => source.id === id));
-  if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(", ")}`);
+  if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
 
   const models = sources.map((source) => buildModel(source));
-  if (args.includes("--audit")) {
+  if (args.includes('--audit')) {
     audit(models);
     return;
   }
   if (sheet) {
-    const file = path.join(outDir, "contact-sheet.png");
+    const file = path.join(outDir, 'contact-sheet.png');
     writeFileSync(file, renderSheet(models, 320, 6));
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;

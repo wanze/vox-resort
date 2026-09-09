@@ -12,7 +12,7 @@
  * nothing. The HUD panel is where the mode is changed by pointing at it.
  */
 
-import type { CameraMode } from "../../layout/domain/worldBounds";
+import type { CameraMode } from '../../layout/domain/worldBounds';
 
 export interface CameraKeysOptions {
   /** The mode right now, so `C` can toggle whatever is on screen. */
@@ -35,7 +35,7 @@ export interface CameraKeys {
  * rule.
  */
 function inAField(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.matches("input, textarea, select");
+  return target instanceof HTMLElement && target.matches('input, textarea, select');
 }
 
 /** What a key press asks the camera for. */
@@ -54,7 +54,7 @@ const GESTURES: Readonly<Record<string, CameraGesture>> = {
 
 /** The mode `C` swaps to. */
 function otherMode(mode: CameraMode): CameraMode {
-  return mode === "perspective" ? "isometric" : "perspective";
+  return mode === 'perspective' ? 'isometric' : 'perspective';
 }
 
 /** A press aimed at the scene rather than at a field or a browser shortcut. */
@@ -78,13 +78,13 @@ export function createCameraKeys(options: CameraKeysOptions): CameraKeys {
       return;
     }
     // Turning belongs to the isometric view and does not switch into it.
-    if (options.mode() === "isometric") options.onTurn(gesture.quarters);
+    if (options.mode() === 'isometric') options.onTurn(gesture.quarters);
   };
 
-  globalThis.addEventListener("keydown", onKeyDown);
+  globalThis.addEventListener('keydown', onKeyDown);
   return {
     dispose() {
-      globalThis.removeEventListener("keydown", onKeyDown);
+      globalThis.removeEventListener('keydown', onKeyDown);
     },
   };
 }

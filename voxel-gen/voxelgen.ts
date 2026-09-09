@@ -47,17 +47,17 @@ export class VoxelBuilder {
  * so it is declared here with the rest of the model: a new model file lands in
  * the right group of the HUD without anything in `src/` being touched.
  */
-export type ModelCategory = "grounds" | "lodging" | "amenities" | "leisure";
+export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure';
 
 /** Every category, with its heading, in the order the palette shows them. */
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
   readonly label: string;
 }[] = [
-  { id: "grounds", label: "Grounds" },
-  { id: "lodging", label: "Lodging" },
-  { id: "amenities", label: "Amenities" },
-  { id: "leisure", label: "Leisure" },
+  { id: 'grounds', label: 'Grounds' },
+  { id: 'lodging', label: 'Lodging' },
+  { id: 'amenities', label: 'Amenities' },
+  { id: 'leisure', label: 'Leisure' },
 ];
 
 /** Footprint in resort tiles; see `TILE_VOXELS` for the tile edge in voxels. */
@@ -154,7 +154,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
   let maxY = -Infinity;
   let maxZ = -Infinity;
   for (const [key, color] of builder.voxels) {
-    const [x, y, z] = key.split(",").map(Number) as [number, number, number];
+    const [x, y, z] = key.split(',').map(Number) as [number, number, number];
     painted.push({ x, y, z, color });
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);

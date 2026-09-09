@@ -7,14 +7,14 @@
  * forecourt in front of the entry is lit rather than the block being a dark
  * cliff above a lit street.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const LANTERN = 0xffdca8;
 
 export default defineModel({
-  id: "hotel",
-  label: "Hotel",
-  category: "lodging",
+  id: 'hotel',
+  label: 'Hotel',
+  category: 'lodging',
   tiles: { x: 6, z: 4 },
   emissive: [LANTERN],
   // One lamp per lantern, a voxel clear of the wall it hangs on.

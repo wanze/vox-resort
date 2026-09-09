@@ -15,7 +15,7 @@
  * six of its tiles and not just its corner.
  */
 
-import { tileKey, type Placement, type Tile } from "../../layout/domain/resortLayout";
+import { tileKey, type Placement, type Tile } from '../../layout/domain/resortLayout';
 
 /** A footprint on the tile grid: where it starts and how many tiles it claims. */
 export interface Footprint {

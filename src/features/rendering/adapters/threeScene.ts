@@ -33,20 +33,20 @@ import {
   Vector2,
   Vector3,
   WebGPURenderer,
-} from "three/webgpu";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { vec3 } from "three/tsl";
-import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
-import { linearRgbOf } from "../../lighting/domain/lightGrid";
-import type { SkyState } from "../../lighting/domain/dayNight";
+} from 'three/webgpu';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { vec3 } from 'three/tsl';
+import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
+import { linearRgbOf } from '../../lighting/domain/lightGrid';
+import type { SkyState } from '../../lighting/domain/dayNight';
 import type {
   CameraFraming,
   CameraMode,
   CompassDirection,
   OrthographicFraming,
   WorldBounds,
-} from "../../layout/domain/worldBounds";
-import { isometricFramingFor } from "../../layout/domain/worldBounds";
+} from '../../layout/domain/worldBounds';
+import { isometricFramingFor } from '../../layout/domain/worldBounds';
 
 export const CAMERA_FOV_DEGREES = 55;
 
@@ -106,16 +106,16 @@ function extentOf(bounds: WorldBounds): number {
 }
 
 /** Which backend the renderer settled on, which the HUD and a bench report. */
-function backendOf(renderer: WebGPURenderer): "webgpu" | "webgl2" {
+function backendOf(renderer: WebGPURenderer): 'webgpu' | 'webgl2' {
   return (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend === true
-    ? "webgpu"
-    : "webgl2";
+    ? 'webgpu'
+    : 'webgl2';
 }
 
 /** What the mouse and the touchscreen do, which follows the mode. */
 interface ControlProfile {
-  readonly mouseButtons: OrbitControls["mouseButtons"];
-  readonly touches: OrbitControls["touches"];
+  readonly mouseButtons: OrbitControls['mouseButtons'];
+  readonly touches: OrbitControls['touches'];
 }
 
 /**
@@ -127,7 +127,7 @@ interface ControlProfile {
  * which is the one rule this has.
  */
 function controlProfileFor(mode: CameraMode, leftLent: boolean): ControlProfile {
-  const left = mode === "isometric" ? MOUSE.PAN : MOUSE.ROTATE;
+  const left = mode === 'isometric' ? MOUSE.PAN : MOUSE.ROTATE;
   if (leftLent) {
     return {
       mouseButtons: { LEFT: null, MIDDLE: MOUSE.DOLLY, RIGHT: left },
@@ -136,7 +136,7 @@ function controlProfileFor(mode: CameraMode, leftLent: boolean): ControlProfile 
   }
   return {
     mouseButtons: { LEFT: left, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN },
-    touches: { ONE: mode === "isometric" ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN },
+    touches: { ONE: mode === 'isometric' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN },
   };
 }
 
@@ -147,7 +147,7 @@ export interface SceneHandle {
   readonly camera: PerspectiveCamera | OrthographicCamera;
   readonly controls: OrbitControls<PerspectiveCamera | OrthographicCamera>;
   /** Which backend the renderer actually chose. */
-  readonly backend: "webgpu" | "webgl2";
+  readonly backend: 'webgpu' | 'webgl2';
   readonly cameraMode: CameraMode;
   /** Which compass point the isometric camera stands over. */
   readonly isoDirection: CompassDirection;
@@ -285,10 +285,10 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let plot = bounds;
   let extent = extentOf(plot);
   let aspect = width / height;
-  let mode: CameraMode = "perspective";
+  let mode: CameraMode = 'perspective';
   // The perspective camera already stands over the plot's south-east corner, so
   // the isometric view opens on the same one rather than behind the viewer.
-  let direction: CompassDirection = "southeast";
+  let direction: CompassDirection = 'southeast';
   let isoFraming: OrthographicFraming = isometricFramingFor(plot, direction);
   let leftButtonTaken = false;
 
@@ -360,11 +360,11 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   controls.target.copy(targets.perspective);
 
   const cameraFor = (of: CameraMode): PerspectiveCamera | OrthographicCamera =>
-    of === "perspective" ? perspectiveCamera : isoCamera;
+    of === 'perspective' ? perspectiveCamera : isoCamera;
 
   /** Where the haze starts and ends, or nowhere at all in the isometric view. */
   const applyFog = (): void => {
-    if (mode === "isometric") {
+    if (mode === 'isometric') {
       fog.near = isoFraming.far * 2;
       fog.far = isoFraming.far * 4;
       return;
@@ -375,7 +375,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
 
   /** The buttons, the fog and the free rotation, all of which follow the mode. */
   const applyMode = (): void => {
-    controls.enableRotate = mode !== "isometric";
+    controls.enableRotate = mode !== 'isometric';
     applyFog();
     const profile = controlProfileFor(mode, leftButtonTaken);
     controls.mouseButtons = profile.mouseButtons;
@@ -399,7 +399,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
    * and the target it was left pointed at while it is not.
    */
   const standIsoCamera = (): void => {
-    const anchor = mode === "isometric" ? controls.target : targets.isometric;
+    const anchor = mode === 'isometric' ? controls.target : targets.isometric;
     isoCamera.position.set(
       anchor.x + (isoFraming.position.x - isoFraming.target.x),
       anchor.y + (isoFraming.position.y - isoFraming.target.y),
@@ -431,7 +431,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       mode = next;
       controls.object = cameraFor(mode);
       controls.target.copy(targets[mode]);
-      if (mode === "isometric") standIsoCamera();
+      if (mode === 'isometric') standIsoCamera();
       applyMode();
       controls.update();
     },
@@ -443,7 +443,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // Around what the camera is looking at rather than around the plot, so a
       // turn does not undo a pan.
       standIsoCamera();
-      if (mode === "isometric") controls.update();
+      if (mode === 'isometric') controls.update();
     },
     takeLeftButton(taken) {
       leftButtonTaken = taken;

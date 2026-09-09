@@ -4,12 +4,12 @@
  * low platform. 32x32x32 (8x8 m plot, a 6x6 m hut standing 8 m), a 2x2 tile.
  * Porch faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "bungalow",
-  label: "Bungalow",
-  category: "lodging",
+  id: 'bungalow',
+  label: 'Bungalow',
+  category: 'lodging',
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

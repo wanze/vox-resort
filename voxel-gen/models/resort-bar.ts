@@ -7,14 +7,14 @@
  * lamps hung under the rail — the same treatment the poolside bar gets, spread
  * over a counter half again as long.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const BULB = 0xf4d57c;
 
 export default defineModel({
-  id: "resort-bar",
-  label: "Resort Bar",
-  category: "amenities",
+  id: 'resort-bar',
+  label: 'Resort Bar',
+  category: 'amenities',
   tiles: { x: 3, z: 2 },
   emissive: [BULB],
   // Two lamps under the light rail, a third of the way in from each end.

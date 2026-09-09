@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { Matrix4, Vector3 } from "three/webgpu";
-import type { ModelLight } from "../../../../voxel-gen/voxelgen.ts";
+import { describe, expect, it } from 'vitest';
+import { Matrix4, Vector3 } from 'three/webgpu';
+import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import {
   normalizeRotation,
   rotateExtent,
@@ -11,18 +11,18 @@ import {
   swapsAxes,
   turnedOrigin,
   type Rotation,
-} from "./rotation";
+} from './rotation';
 
 /** A model two tiles wide and three deep, so a swapped axis is visible. */
 const WIDTH = 32;
 const DEPTH = 44;
 
-describe("normalizeRotation", () => {
-  it("leaves a turn that is already one of the four alone", () => {
+describe('normalizeRotation', () => {
+  it('leaves a turn that is already one of the four alone', () => {
     expect(ROTATIONS.map(normalizeRotation)).toEqual([0, 1, 2, 3]);
   });
 
-  it("wraps past a full turn, in either direction", () => {
+  it('wraps past a full turn, in either direction', () => {
     expect(normalizeRotation(4)).toBe(0);
     expect(normalizeRotation(5)).toBe(1);
     expect(normalizeRotation(-1)).toBe(3);
@@ -30,13 +30,13 @@ describe("normalizeRotation", () => {
   });
 });
 
-describe("swapsAxes", () => {
-  it("swaps on a quarter turn and not on a half one", () => {
+describe('swapsAxes', () => {
+  it('swaps on a quarter turn and not on a half one', () => {
     expect(ROTATIONS.map(swapsAxes)).toEqual([false, true, false, true]);
   });
 });
 
-describe("rotateExtent", () => {
+describe('rotateExtent', () => {
   it("leaves an even turn's footprint as it was", () => {
     expect(rotateExtent(2, 3, 0)).toEqual({ x: 2, z: 3 });
     expect(rotateExtent(2, 3, 2)).toEqual({ x: 2, z: 3 });
@@ -47,7 +47,7 @@ describe("rotateExtent", () => {
     expect(rotateExtent(2, 3, 3)).toEqual({ x: 3, z: 2 });
   });
 
-  it("is its own inverse for the axes it swaps", () => {
+  it('is its own inverse for the axes it swaps', () => {
     for (const rotation of ROTATIONS) {
       const once = rotateExtent(2, 3, rotation);
       expect(rotateExtent(once.x, once.z, rotation)).toEqual({ x: 2, z: 3 });
@@ -76,12 +76,12 @@ const send = (matrix: Matrix4, x: number, z: number): { x: number; z: number } =
   return { x: Math.round(point.x) + 0, z: Math.round(point.z) + 0 };
 };
 
-describe("turnedOrigin", () => {
-  it("leaves an unturned model where it was", () => {
+describe('turnedOrigin', () => {
+  it('leaves an unturned model where it was', () => {
     expect(turnedOrigin(WIDTH, DEPTH, 0)).toEqual({ x: 0, z: 0 });
   });
 
-  it("keeps the turned model inside its own footprint, whichever way it turns", () => {
+  it('keeps the turned model inside its own footprint, whichever way it turns', () => {
     // The property that matters: after the turn plus the offset, the model's
     // box is exactly [0, turned width] x [0, turned depth] — never behind the
     // corner it was placed on, and never past the footprint it claimed.
@@ -105,8 +105,8 @@ describe("turnedOrigin", () => {
   });
 });
 
-describe("rotatePoint", () => {
-  it("leaves an unturned point alone", () => {
+describe('rotatePoint', () => {
+  it('leaves an unturned point alone', () => {
     expect(rotatePoint({ x: 7, z: 18 }, WIDTH, DEPTH, 0)).toEqual({ x: 7, z: 18 });
   });
 
@@ -117,7 +117,7 @@ describe("rotatePoint", () => {
     expect(rotatePoint({ x: WIDTH, z: 0 }, WIDTH, DEPTH, 1)).toEqual({ x: 0, z: 0 });
   });
 
-  it("agrees with the matrix the instance is drawn with", () => {
+  it('agrees with the matrix the instance is drawn with', () => {
     // The one thing that must not drift: a lamp is turned by this and the
     // lantern around it by the matrix, so the two have to be the same mapping.
     for (const rotation of ROTATIONS) {
@@ -137,7 +137,7 @@ describe("rotatePoint", () => {
     }
   });
 
-  it("brings a point back where it started after four turns", () => {
+  it('brings a point back where it started after four turns', () => {
     let point = { x: 7, z: 18 };
     let width = WIDTH;
     let depth = DEPTH;
@@ -159,23 +159,23 @@ const lamp = (overrides: Partial<ModelLight> = {}): ModelLight => ({
   ...overrides,
 });
 
-describe("rotateLights", () => {
-  it("hands an unturned model its own list back, rather than a copy of it", () => {
+describe('rotateLights', () => {
+  it('hands an unturned model its own list back, rather than a copy of it', () => {
     const lights = [lamp()];
     expect(rotateLights(lights, WIDTH, DEPTH, 0)).toBe(lights);
   });
 
-  it("moves a light to where the turned model puts it", () => {
+  it('moves a light to where the turned model puts it', () => {
     const [turned] = rotateLights([lamp()], WIDTH, DEPTH, 2);
     expect(turned).toMatchObject({ x: WIDTH - 7, z: DEPTH - 7 });
   });
 
-  it("leaves the height, colour and reach of a light alone", () => {
+  it('leaves the height, colour and reach of a light alone', () => {
     const [turned] = rotateLights([lamp()], WIDTH, DEPTH, 1);
     expect(turned).toMatchObject({ y: 18, color: 0xffe3a3, intensity: 90, distance: 46 });
   });
 
-  it("has nothing to turn on a model that declares no light", () => {
+  it('has nothing to turn on a model that declares no light', () => {
     expect(rotateLights([], WIDTH, DEPTH, 3)).toEqual([]);
   });
 });

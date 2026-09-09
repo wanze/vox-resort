@@ -18,9 +18,9 @@
  * view means a preset of its own, not a flag on these.
  */
 
-import { normalizeTime } from "../../lighting/domain/dayNight";
-import type { CameraFraming, WorldBounds } from "../../layout/domain/worldBounds";
-import { cameraFramingFor } from "../../layout/domain/worldBounds";
+import { normalizeTime } from '../../lighting/domain/dayNight';
+import type { CameraFraming, WorldBounds } from '../../layout/domain/worldBounds';
+import { cameraFramingFor } from '../../layout/domain/worldBounds';
 
 /**
  * `overview` is the framing the app opens on: the whole plot at a slant, so the
@@ -31,9 +31,9 @@ import { cameraFramingFor } from "../../layout/domain/worldBounds";
  * far more of the screen from down there than it does from the overview, and
  * point-light cost is paid per lit fragment.
  */
-export type BenchView = "overview" | "street";
+export type BenchView = 'overview' | 'street';
 
-const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(["overview", "street"]);
+const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(['overview', 'street']);
 
 export interface BenchConfig {
   readonly view: BenchView;
@@ -62,7 +62,7 @@ export interface BenchConfig {
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
-  view: "overview",
+  view: 'overview',
   time: 0.62,
   warmupFrames: 120,
   measureFrames: 600,
@@ -80,25 +80,25 @@ const integerParam = (raw: string | null, fallback: number, min: number): number
 /** Reads a bench config out of a query string; `null` when `bench` is absent. */
 export function parseBenchConfig(search: string): BenchConfig | null {
   const params = new URLSearchParams(search);
-  const flag = params.get("bench");
-  if (flag === null || flag === "0" || flag === "false") return null;
+  const flag = params.get('bench');
+  if (flag === null || flag === '0' || flag === 'false') return null;
 
-  const rawView = params.get("view");
+  const rawView = params.get('view');
   const view =
     rawView !== null && BENCH_VIEWS.has(rawView) ? (rawView as BenchView) : DEFAULT_BENCH.view;
 
-  const rawTime = params.get("time");
+  const rawTime = params.get('time');
   const parsedTime = rawTime === null ? Number.NaN : Number.parseFloat(rawTime);
   const time = Number.isFinite(parsedTime) ? normalizeTime(parsedTime) : DEFAULT_BENCH.time;
 
   return {
     view,
     time,
-    warmupFrames: integerParam(params.get("warmup"), DEFAULT_BENCH.warmupFrames, 0),
-    measureFrames: integerParam(params.get("frames"), DEFAULT_BENCH.measureFrames, 1),
-    repeat: integerParam(params.get("repeat"), DEFAULT_BENCH.repeat, 1),
-    forceWebGL: params.get("webgl") === "1",
-    forceMainThreadMeshing: params.get("worker") === "0",
+    warmupFrames: integerParam(params.get('warmup'), DEFAULT_BENCH.warmupFrames, 0),
+    measureFrames: integerParam(params.get('frames'), DEFAULT_BENCH.measureFrames, 1),
+    repeat: integerParam(params.get('repeat'), DEFAULT_BENCH.repeat, 1),
+    forceWebGL: params.get('webgl') === '1',
+    forceMainThreadMeshing: params.get('worker') === '0',
   };
 }
 
@@ -114,7 +114,7 @@ export function benchFraming(
   bounds: WorldBounds,
   verticalFovDegrees: number,
 ): CameraFraming {
-  if (view === "overview") return cameraFramingFor(bounds, verticalFovDegrees);
+  if (view === 'overview') return cameraFramingFor(bounds, verticalFovDegrees);
 
   const centerX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
   const centerZ = bounds.minZ + (bounds.maxZ - bounds.minZ) / 2;

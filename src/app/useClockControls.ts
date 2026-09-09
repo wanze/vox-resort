@@ -1,5 +1,5 @@
-import { useCallback, useState, type RefObject } from "react";
-import type { Showcase } from "./showcase";
+import { useCallback, useState, type RefObject } from 'react';
+import type { Showcase } from './showcase';
 
 /**
  * The time-of-day controls, as React state.

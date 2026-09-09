@@ -21,12 +21,12 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   PlaneGeometry,
-} from "three/webgpu";
-import { color, mix, vertexColor } from "three/tsl";
-import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
-import type { Placement } from "../../layout/domain/resortLayout";
-import { rotationRadians, turnedOrigin } from "../../layout/domain/rotation";
-import type { ModelGeometry } from "../../rendering/adapters/voxelMeshBuilder";
+} from 'three/webgpu';
+import { color, mix, vertexColor } from 'three/tsl';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { Placement } from '../../layout/domain/resortLayout';
+import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
+import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 
 /** Colour a valid placement is washed with, and the colour of a refused one. */
 const VALID_TINT = 0x7dd87f;
@@ -77,7 +77,7 @@ function padMaterial(tint: number): MeshBasicNodeMaterial {
  */
 export function createPlacementGhost(geometries: readonly ModelGeometry[]): PlacementGhost {
   const group = new Group();
-  group.name = "placement-ghost";
+  group.name = 'placement-ghost';
   // Drawn after the world so the translucent ghost blends over what it covers.
   group.renderOrder = 2;
 

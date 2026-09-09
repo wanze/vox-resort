@@ -389,7 +389,7 @@ lamp knows where its own bulb sits:
 
 ```ts
 export default defineModel({
-  id: "street-lamp",
+  id: 'street-lamp',
   emissive: [GLOW], // colours drawn unlit, so they glow after dark
   lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],
   build: (b) => {

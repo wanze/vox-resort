@@ -39,7 +39,7 @@
  * is unit-tested as such.
  */
 
-import type { LightAnchor } from "./lightAnchors";
+import type { LightAnchor } from './lightAnchors';
 
 /**
  * Voxels per cell edge, at the finest the grid is ever baked.

@@ -3,12 +3,12 @@
  * canopy over the door and a bench, on a low platform. 32x32x17 (8x8 m plot,
  * 6x5 m hut, 4 m tall), a 2x2 tile. Front (cross + door) faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "first-aid",
-  label: "First Aid",
-  category: "amenities",
+  id: 'first-aid',
+  label: 'First Aid',
+  category: 'amenities',
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -10,12 +10,12 @@
  * raised leaf clumps to 156 for a shape that read as studs. A bare block is 44,
  * and looks like what it is until something better is drawn.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "hedge",
-  label: "Hedge",
-  category: "grounds",
+  id: 'hedge',
+  label: 'Hedge',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -19,7 +19,7 @@ export function materialKeyFor(color: number): string {
   if (!Number.isInteger(color) || color < 0 || color > 0xffffff) {
     throw new Error(`Colour ${color} is not a 24-bit RGB integer`);
   }
-  return color.toString(16).padStart(6, "0");
+  return color.toString(16).padStart(6, '0');
 }
 
 /** DVE voxel id registered for a material. */

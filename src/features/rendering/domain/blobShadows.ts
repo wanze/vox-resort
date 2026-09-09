@@ -28,7 +28,7 @@
  * being drawn after dark while the lamps are lit.
  */
 
-import type { Vector3 } from "../../lighting/domain/dayNight";
+import type { Vector3 } from '../../lighting/domain/dayNight';
 
 /**
  * How tall a thing has to stand before it is given a shadow, in voxels.

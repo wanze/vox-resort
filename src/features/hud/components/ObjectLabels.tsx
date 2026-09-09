@@ -1,5 +1,5 @@
-import { useCallback, type RefObject } from "react";
-import type { LabelAnchor } from "../../../app/showcase";
+import { useCallback, type RefObject } from 'react';
+import type { LabelAnchor } from '../../../app/showcase';
 
 export interface ObjectLabelsProps {
   readonly anchors: readonly LabelAnchor[];
@@ -10,7 +10,7 @@ export interface ObjectLabelsProps {
   readonly elements: RefObject<Map<string, HTMLDivElement>>;
 }
 
-const toCssColor = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
+const toCssColor = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 
 export function ObjectLabels({ anchors, elements }: ObjectLabelsProps) {
   const register = useCallback(

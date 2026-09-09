@@ -6,7 +6,7 @@
  * and which sections have to be meshed, without touching the engine.
  */
 
-import type { VoxelWrite } from "./voxelWrites";
+import type { VoxelWrite } from './voxelWrites';
 
 export interface VolumeSize {
   readonly x: number;
@@ -31,7 +31,7 @@ const originKey = (origin: VoxelOrigin): string => `${origin.x}|${origin.y}|${or
 
 function assertPositive(size: VolumeSize): void {
   if (size.x < 1 || size.y < 1 || size.z < 1) {
-    throw new Error("Volume size must be positive on every axis");
+    throw new Error('Volume size must be positive on every axis');
   }
 }
 

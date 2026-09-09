@@ -1,5 +1,5 @@
-import type { CameraMode, CompassDirection } from "../../layout/domain/worldBounds";
-import { COMPASS_DIRECTIONS } from "../../layout/domain/worldBounds";
+import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
+import { COMPASS_DIRECTIONS } from '../../layout/domain/worldBounds';
 
 export interface CameraPanelProps {
   readonly mode: CameraMode;
@@ -9,16 +9,16 @@ export interface CameraPanelProps {
 }
 
 const MODES: readonly { readonly mode: CameraMode; readonly label: string }[] = [
-  { mode: "perspective", label: "Perspective" },
-  { mode: "isometric", label: "Isometric" },
+  { mode: 'perspective', label: 'Perspective' },
+  { mode: 'isometric', label: 'Isometric' },
 ];
 
 /** How each corner reads on a button and in a sentence. */
 const CORNERS: Readonly<Record<CompassDirection, { initials: string; label: string }>> = {
-  northeast: { initials: "NE", label: "north-east" },
-  southeast: { initials: "SE", label: "south-east" },
-  southwest: { initials: "SW", label: "south-west" },
-  northwest: { initials: "NW", label: "north-west" },
+  northeast: { initials: 'NE', label: 'north-east' },
+  southeast: { initials: 'SE', label: 'south-east' },
+  southwest: { initials: 'SW', label: 'south-west' },
+  northwest: { initials: 'NW', label: 'north-west' },
 };
 
 /**
@@ -36,7 +36,7 @@ export function CameraPanel({
   onModeChange,
   onDirectionChange,
 }: CameraPanelProps) {
-  const isometric = mode === "isometric";
+  const isometric = mode === 'isometric';
 
   return (
     <section className="hud-camera" aria-label="Camera">
@@ -79,7 +79,7 @@ export function CameraPanel({
       <p className="hud-camera-hint">
         {isometric
           ? `Orthographic, from the ${CORNERS[direction].label}. Q and E turn it a quarter; drag to pan, wheel to zoom.`
-          : "Free camera. Drag to orbit, right-drag to pan, wheel to dolly."}
+          : 'Free camera. Drag to orbit, right-drag to pan, wheel to dolly.'}
       </p>
     </section>
   );

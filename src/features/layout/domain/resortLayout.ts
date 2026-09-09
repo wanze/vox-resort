@@ -23,7 +23,7 @@
  * voxels: a model smaller than its declared footprint is centred in it.
  */
 
-import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   HEDGE_ID,
   LAMP_ID,
@@ -32,8 +32,8 @@ import {
   type PathNode,
   type ResortPlan,
   type ResortPlot,
-} from "./resortPlan";
-import { rotateExtent, type Extent, type Rotation } from "./rotation";
+} from './resortPlan';
+import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
 const LAMP_SPACING = 5;
@@ -242,7 +242,7 @@ export function routeEdgeTiles(
   a: PathNode,
   b: PathNode,
   width = 1,
-  bend: Bend = "x-first",
+  bend: Bend = 'x-first',
 ): Tile[] {
   const offsets = widthOffsets(width);
   const tiles = new Map<string, Tile>();
@@ -260,8 +260,8 @@ export function routeEdgeTiles(
     }
   };
 
-  const corner = bend === "x-first" ? { x: b.tileX, z: a.tileZ } : { x: a.tileX, z: b.tileZ };
-  if (bend === "x-first") {
+  const corner = bend === 'x-first' ? { x: b.tileX, z: a.tileZ } : { x: a.tileX, z: b.tileZ };
+  if (bend === 'x-first') {
     alongX(a.tileZ, a.tileX, b.tileX);
     alongZ(b.tileX, a.tileZ, b.tileZ);
   } else {
@@ -290,7 +290,7 @@ export function streetTiles(plan: ResortPlan): Tile[] {
     const to = nodes.get(edge.to);
     if (!from) throw new Error(`Street edge references unknown node "${edge.from}"`);
     if (!to) throw new Error(`Street edge references unknown node "${edge.to}"`);
-    for (const tile of routeEdgeTiles(from, to, edge.width ?? 1, edge.bend ?? "x-first")) {
+    for (const tile of routeEdgeTiles(from, to, edge.width ?? 1, edge.bend ?? 'x-first')) {
       add(tile);
     }
   }

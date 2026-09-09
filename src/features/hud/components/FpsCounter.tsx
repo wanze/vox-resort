@@ -1,5 +1,5 @@
-import type { RefObject } from "react";
-import type { ShowcaseStats } from "../../../app/showcase";
+import type { RefObject } from 'react';
+import type { ShowcaseStats } from '../../../app/showcase';
 
 export interface FpsCounterProps {
   readonly fps: number;
@@ -12,7 +12,7 @@ export interface FpsCounterProps {
   readonly onCyclingChange: (cycling: boolean) => void;
 }
 
-const formatNumber = (value: number): string => value.toLocaleString("en-US");
+const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
 const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
@@ -25,7 +25,7 @@ const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFi
  */
 function lampTotals(stats: ShowcaseStats): string {
   const outside = stats.lightCount - stats.litLightCount;
-  const note = outside > 0 ? ` (${formatNumber(outside)} outside the grid)` : "";
+  const note = outside > 0 ? ` (${formatNumber(outside)} outside the grid)` : '';
   return ` of ${formatNumber(stats.litLightCount)}${note}`;
 }
 
@@ -44,7 +44,7 @@ export function FpsCounter(props: FpsCounterProps) {
           <dl className="hud-stats">
             <div>
               <dt>Backend</dt>
-              <dd>{stats.backend === "webgpu" ? "WebGPU" : "WebGL2 (fallback)"}</dd>
+              <dd>{stats.backend === 'webgpu' ? 'WebGPU' : 'WebGL2 (fallback)'}</dd>
             </div>
             <div>
               <dt>Objects</dt>
@@ -65,16 +65,16 @@ export function FpsCounter(props: FpsCounterProps) {
             <div>
               <dt>Draw calls</dt>
               <dd>
-                {formatNumber(stats.drawCalls)}{" "}
+                {formatNumber(stats.drawCalls)}{' '}
                 <span className="hud-stat-note">(over {stats.chunkCount} chunks)</span>
               </dd>
             </div>
             <div>
               <dt>Triangles</dt>
               <dd>
-                {formatNumber(stats.drawnTriangleCount)}{" "}
+                {formatNumber(stats.drawnTriangleCount)}{' '}
                 <span className="hud-stat-note">
-                  ({formatNumber(stats.uniqueTriangleCount)} uploaded, merged from{" "}
+                  ({formatNumber(stats.uniqueTriangleCount)} uploaded, merged from{' '}
                   {formatNumber(stats.unmergedTriangleCount)})
                 </span>
               </dd>
@@ -82,7 +82,7 @@ export function FpsCounter(props: FpsCounterProps) {
             <div>
               <dt>Voxels</dt>
               <dd>
-                {formatNumber(stats.sceneVoxelCount)}{" "}
+                {formatNumber(stats.sceneVoxelCount)}{' '}
                 <span className="hud-stat-note">
                   ({formatNumber(stats.meshedVoxelCount)} meshed)
                 </span>
@@ -100,7 +100,7 @@ export function FpsCounter(props: FpsCounterProps) {
             <div>
               <dt>Light bake</dt>
               <dd>
-                {formatNumber(stats.lightGridCells)} cells{" "}
+                {formatNumber(stats.lightGridCells)} cells{' '}
                 <span className="hud-stat-note">
                   ({formatMegabytes(stats.lightGridBytes)}, {stats.lightBakeMs} ms)
                 </span>
@@ -109,7 +109,7 @@ export function FpsCounter(props: FpsCounterProps) {
             <div>
               <dt>Shading</dt>
               <dd>
-                {formatNumber(stats.shadowCount)} blobs{" "}
+                {formatNumber(stats.shadowCount)} blobs{' '}
                 <span className="hud-stat-note">
                   ({formatNumber(stats.occluderCount)} shade the sky, {stats.skyBakeMs} ms baked)
                 </span>
@@ -118,9 +118,9 @@ export function FpsCounter(props: FpsCounterProps) {
             <div>
               <dt>Startup</dt>
               <dd>
-                {formatNumber(stats.startupMs)} ms{stats.meshedInWorker ? " in a worker" : ""}{" "}
+                {formatNumber(stats.startupMs)} ms{stats.meshedInWorker ? ' in a worker' : ''}{' '}
                 <span className="hud-stat-note">
-                  ({formatNumber(stats.dveMs)} ms voxel mesher,{" "}
+                  ({formatNumber(stats.dveMs)} ms voxel mesher,{' '}
                   {formatNumber(stats.meshMs - stats.dveMs)} ms merge)
                 </span>
               </dd>

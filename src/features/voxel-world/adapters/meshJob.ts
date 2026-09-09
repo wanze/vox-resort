@@ -8,13 +8,13 @@
  * what stops the two halves importing each other in a circle.
  */
 
-import type { MaterialDefinition } from "../../catalog/domain/materials";
-import type { ModelAttributes } from "../../rendering/domain/modelAttributes";
-import { buildModelAttributes } from "../../rendering/domain/modelAttributes";
-import type { ScratchRegion } from "../domain/modelScratch";
-import type { PackedVoxelWrites, VoxelWrite } from "../domain/voxelWrites";
-import { packVoxelWrites, unpackVoxelWrites } from "../domain/voxelWrites";
-import { buildSectionMeshes } from "./dveEngine";
+import type { MaterialDefinition } from '../../catalog/domain/materials';
+import type { ModelAttributes } from '../../rendering/domain/modelAttributes';
+import { buildModelAttributes } from '../../rendering/domain/modelAttributes';
+import type { ScratchRegion } from '../domain/modelScratch';
+import type { PackedVoxelWrites, VoxelWrite } from '../domain/voxelWrites';
+import { packVoxelWrites, unpackVoxelWrites } from '../domain/voxelWrites';
+import { buildSectionMeshes } from './dveEngine';
 
 export interface MeshCatalogueRequest {
   readonly materials: readonly MaterialDefinition[];

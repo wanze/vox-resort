@@ -35,12 +35,12 @@ import {
   Matrix4,
   MeshBasicNodeMaterial,
   PlaneGeometry,
-} from "three/webgpu";
-import { smoothstep, uniform, uv, vec3 } from "three/tsl";
-import type { SkyState } from "../../lighting/domain/dayNight";
-import type { BlobShadow, ShadowCast } from "../domain/blobShadows";
-import { castsDiffer, shadowCastFor, shadowQuadFor } from "../domain/blobShadows";
-import { capacityFor } from "../domain/spatialChunks";
+} from 'three/webgpu';
+import { smoothstep, uniform, uv, vec3 } from 'three/tsl';
+import type { SkyState } from '../../lighting/domain/dayNight';
+import type { BlobShadow, ShadowCast } from '../domain/blobShadows';
+import { castsDiffer, shadowCastFor, shadowQuadFor } from '../domain/blobShadows';
+import { capacityFor } from '../domain/spatialChunks';
 
 /**
  * How high above the ground plane a shadow is drawn, in voxels.
@@ -128,7 +128,7 @@ function createMesh(
   count: number,
 ): InstancedMesh {
   const mesh = new InstancedMesh(geometry, material, capacity);
-  mesh.name = "blob-shadows";
+  mesh.name = 'blob-shadows';
   mesh.instanceMatrix.setUsage(DynamicDrawUsage);
   mesh.count = count;
   // Flat on the ground, and the camera is never under it, so nothing is gained
@@ -139,7 +139,7 @@ function createMesh(
 
 export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowField {
   const group = new Group();
-  group.name = "blob-shadows";
+  group.name = 'blob-shadows';
 
   const geometry = blobGeometry();
   const { material, setStrength } = blobMaterial();

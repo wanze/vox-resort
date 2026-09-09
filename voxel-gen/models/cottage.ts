@@ -4,12 +4,12 @@
  * (8x12 m plot, a 7x11 m cottage 6.5 m to the ridge), a 2x3 tile.
  * Front (porch) faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "cottage",
-  label: "Cottage",
-  category: "lodging",
+  id: 'cottage',
+  label: 'Cottage',
+  category: 'lodging',
   tiles: { x: 2, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
@@ -67,8 +67,8 @@ export default defineModel({
     for (const x of [10, 21]) box(x, x, 3, 12, 46, 46, C.porch); // porch posts
 
     // shuttered windows: two on the front, three down the -x side
-    const window = (wx: number, wy: number, wz: number, side: "z" | "x") => {
-      if (side === "z") {
+    const window = (wx: number, wy: number, wz: number, side: 'z' | 'x') => {
+      if (side === 'z') {
         box(wx, wx + 2, wy, wy + 4, wz, wz, C.window);
         box(wx - 1, wx - 1, wy, wy + 4, wz, wz, C.shutter);
         box(wx + 3, wx + 3, wy, wy + 4, wz, wz, C.shutter);
@@ -78,11 +78,11 @@ export default defineModel({
         box(2, 2, wy, wy + 4, wz + 3, wz + 3, C.shutter);
       }
     };
-    window(5, 7, 45, "z");
-    window(24, 7, 45, "z");
-    window(0, 7, 11, "x");
-    window(0, 7, 22, "x");
-    window(0, 7, 33, "x");
+    window(5, 7, 45, 'z');
+    window(24, 7, 45, 'z');
+    window(0, 7, 11, 'x');
+    window(0, 7, 22, 'x');
+    window(0, 7, 33, 'x');
 
     // flower box under a front window
     box(4, 10, 5, 6, 46, 46, C.planter);

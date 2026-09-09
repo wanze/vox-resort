@@ -3,12 +3,12 @@
  * walls, light-stone coping, a flat stone-paved deck, a side ladder, and two rows
  * of loungers. Flat slab, 64x48 (16x12 m deck around a 12x6 m pool), a 4x3 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "swimming-pool",
-  label: "Swimming Pool",
-  category: "leisure",
+  id: 'swimming-pool',
+  label: 'Swimming Pool',
+  category: 'leisure',
   tiles: { x: 4, z: 3 },
   // Submerged pool lights: no voxel emits them, the water is simply lit at night.
   lights: [

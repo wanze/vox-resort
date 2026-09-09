@@ -23,7 +23,7 @@
  * that translation on its own, and {@link rotatePoint} is it applied.
  */
 
-import type { ModelLight } from "../../../../voxel-gen/voxelgen.ts";
+import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 
 /** Quarter turns an object stands at. */
 export type Rotation = 0 | 1 | 2 | 3;

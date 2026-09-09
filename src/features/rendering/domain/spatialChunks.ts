@@ -24,8 +24,8 @@
  * implies live in `adapters/instancedWorld.ts`.
  */
 
-import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
-import type { Rotation } from "../../layout/domain/rotation";
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { Rotation } from '../../layout/domain/rotation';
 
 /**
  * Chunk edge, in voxels. Sixteen tiles is 64 m — big enough that the current

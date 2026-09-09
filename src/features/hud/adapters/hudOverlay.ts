@@ -11,7 +11,7 @@
  * is all a component should have to explain.
  */
 
-import { sortByDepth, type ScreenPosition } from "../domain/labelProjection";
+import { sortByDepth, type ScreenPosition } from '../domain/labelProjection';
 
 /** What the render loop reports at the end of every frame. */
 export interface FrameUpdate {
@@ -52,13 +52,13 @@ function positionLabels(
   labels: ReadonlyMap<string, ScreenPosition>,
 ): void {
   for (const [id, element] of elements) {
-    if (!labels.has(id)) element.style.visibility = "hidden";
+    if (!labels.has(id)) element.style.visibility = 'hidden';
   }
   const visible = sortByDepth([...labels].map(([id, screen]) => ({ id, screen })));
   visible.forEach(({ id, screen }, index) => {
     const element = elements.get(id);
     if (!element) return;
-    element.style.visibility = "visible";
+    element.style.visibility = 'visible';
     // Far to near, so a nearby label always covers one behind it.
     element.style.zIndex = String(index);
     element.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0) translate(-50%, -100%)`;

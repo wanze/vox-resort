@@ -3,7 +3,7 @@
  * where the camera should start so the whole plot is in frame.
  */
 
-import type { Placement } from "./resortLayout";
+import type { Placement } from './resortLayout';
 
 export interface WorldBounds {
   readonly minX: number;
@@ -82,7 +82,7 @@ export function cameraFramingFor(bounds: WorldBounds, verticalFovDegrees: number
 }
 
 /** The two ways the resort can be looked at. */
-export type CameraMode = "perspective" | "isometric";
+export type CameraMode = 'perspective' | 'isometric';
 
 /**
  * Which corner of the plot the isometric camera stands over, looking across it
@@ -94,14 +94,14 @@ export type CameraMode = "perspective" | "isometric";
  * axes on screen at the same angle, and a building shows two of its faces
  * instead of one flat elevation.
  */
-export type CompassDirection = "northeast" | "southeast" | "southwest" | "northwest";
+export type CompassDirection = 'northeast' | 'southeast' | 'southwest' | 'northwest';
 
 /** Clockwise from the north-east, so the index is also the quarter turn. */
 export const COMPASS_DIRECTIONS: readonly CompassDirection[] = [
-  "northeast",
-  "southeast",
-  "southwest",
-  "northwest",
+  'northeast',
+  'southeast',
+  'southwest',
+  'northwest',
 ];
 
 /** The direction a quarter turn (or several) away; negative turns anticlockwise. */

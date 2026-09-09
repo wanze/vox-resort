@@ -3,38 +3,38 @@
  * lays them out — props first, then the small structures, then the buildings.
  */
 
-import type { VoxelModelSource } from "../voxelgen.ts";
-import beach_club from "./beach-club.ts";
-import bungalow from "./bungalow.ts";
-import cottage from "./cottage.ts";
-import entrance from "./entrance.ts";
-import first_aid from "./first-aid.ts";
-import flowerbed from "./flowerbed.ts";
-import fountain from "./fountain.ts";
-import game_hall from "./game-hall.ts";
-import hedge from "./hedge.ts";
-import hotel from "./hotel.ts";
-import house from "./house.ts";
-import icecream from "./icecream.ts";
-import minigolf from "./minigolf.ts";
-import palm from "./palm.ts";
-import path from "./path.ts";
-import playground from "./playground.ts";
-import poolside_bar from "./poolside-bar.ts";
-import resort_bar from "./resort-bar.ts";
-import restaurant from "./restaurant.ts";
-import restrooms from "./restrooms.ts";
-import snack_bar from "./snack-bar.ts";
-import spa_pavilion from "./spa-pavilion.ts";
-import statue from "./statue.ts";
-import street_lamp from "./street-lamp.ts";
-import sun_lounger from "./sun-lounger.ts";
-import supermarket from "./supermarket.ts";
-import swimming_pool from "./swimming-pool.ts";
-import tennis_court from "./tennis-court.ts";
-import tikitorch from "./tikitorch.ts";
-import villa from "./villa.ts";
-import waterpark from "./waterpark.ts";
+import type { VoxelModelSource } from '../voxelgen.ts';
+import beach_club from './beach-club.ts';
+import bungalow from './bungalow.ts';
+import cottage from './cottage.ts';
+import entrance from './entrance.ts';
+import first_aid from './first-aid.ts';
+import flowerbed from './flowerbed.ts';
+import fountain from './fountain.ts';
+import game_hall from './game-hall.ts';
+import hedge from './hedge.ts';
+import hotel from './hotel.ts';
+import house from './house.ts';
+import icecream from './icecream.ts';
+import minigolf from './minigolf.ts';
+import palm from './palm.ts';
+import path from './path.ts';
+import playground from './playground.ts';
+import poolside_bar from './poolside-bar.ts';
+import resort_bar from './resort-bar.ts';
+import restaurant from './restaurant.ts';
+import restrooms from './restrooms.ts';
+import snack_bar from './snack-bar.ts';
+import spa_pavilion from './spa-pavilion.ts';
+import statue from './statue.ts';
+import street_lamp from './street-lamp.ts';
+import sun_lounger from './sun-lounger.ts';
+import supermarket from './supermarket.ts';
+import swimming_pool from './swimming-pool.ts';
+import tennis_court from './tennis-court.ts';
+import tikitorch from './tikitorch.ts';
+import villa from './villa.ts';
+import waterpark from './waterpark.ts';
 
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,

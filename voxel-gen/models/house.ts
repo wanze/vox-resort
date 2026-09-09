@@ -4,12 +4,12 @@
  * low platform. 48x48x39 (12x12 m plot, a 10x10 m house with two 3 m storeys
  * and a 9.75 m ridge), a 3x3 tile. Front faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "house",
-  label: "House",
-  category: "lodging",
+  id: 'house',
+  label: 'House',
+  category: 'lodging',
   tiles: { x: 3, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

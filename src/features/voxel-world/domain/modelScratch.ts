@@ -12,9 +12,9 @@
  * to the model it came from.
  */
 
-import type { PaintedVoxel } from "../../../../voxel-gen/voxelgen.ts";
-import type { VolumeSize } from "./sectionGrid";
-import type { VoxelWrite } from "./voxelWrites";
+import type { PaintedVoxel } from '../../../../voxel-gen/voxelgen.ts';
+import type { VolumeSize } from './sectionGrid';
+import type { VoxelWrite } from './voxelWrites';
 
 export interface ScratchModel {
   readonly id: string;
@@ -46,7 +46,7 @@ export function scratchLayoutFor(
   voxelIdOf: (color: number) => string,
   sectionSize: VolumeSize,
 ): ScratchLayout {
-  if (sectionSize.x < 1) throw new Error("Section size must be positive");
+  if (sectionSize.x < 1) throw new Error('Section size must be positive');
 
   const writes: VoxelWrite[] = [];
   const regions: ScratchRegion[] = [];

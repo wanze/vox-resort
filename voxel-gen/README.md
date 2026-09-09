@@ -31,13 +31,13 @@ Copy a file in `models/` and edit the geometry, then add it to
 `models/index.ts`. The shape of a model:
 
 ```ts
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "my-asset",
-  label: "My Asset",
+  id: 'my-asset',
+  label: 'My Asset',
   // Shelf of the build palette it is offered on: see MODEL_CATEGORIES.
-  category: "amenities",
+  category: 'amenities',
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b); // set(x, y, z, 0xRRGGBB)
@@ -64,9 +64,9 @@ right spot.
 const GLOW = 0xffe3a3;
 
 export default defineModel({
-  id: "my-lamp",
-  label: "My Lamp",
-  category: "grounds",
+  id: 'my-lamp',
+  label: 'My Lamp',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   // Colours drawn unlit at full brightness, so they still read after dark.
   emissive: [GLOW],

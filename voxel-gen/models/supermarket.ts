@@ -4,12 +4,12 @@
  * doors, on a low platform. 64x48x27 (16x12 m plot, a 15x8.5 m market 5.75 m
  * tall), a 4x3 tile. Storefront faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "supermarket",
-  label: "Supermarket",
-  category: "amenities",
+  id: 'supermarket',
+  label: 'Supermarket',
+  category: 'amenities',
   tiles: { x: 4, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

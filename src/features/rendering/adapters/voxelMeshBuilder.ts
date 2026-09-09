@@ -20,8 +20,8 @@
  *   that owns them and rebased onto the model's own origin.
  */
 
-import { BufferAttribute, BufferGeometry } from "three/webgpu";
-import type { MeshAttributes, ModelAttributes } from "../domain/modelAttributes";
+import { BufferAttribute, BufferGeometry } from 'three/webgpu';
+import type { MeshAttributes, ModelAttributes } from '../domain/modelAttributes';
 
 export interface ModelGeometry {
   readonly id: string;
@@ -36,11 +36,11 @@ export interface ModelGeometry {
 
 function toGeometry(attributes: MeshAttributes): BufferGeometry {
   const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(attributes.positions, 3));
-  geometry.setAttribute("normal", new BufferAttribute(attributes.normals, 3));
+  geometry.setAttribute('position', new BufferAttribute(attributes.positions, 3));
+  geometry.setAttribute('normal', new BufferAttribute(attributes.normals, 3));
   // Three.js reads a packed hex as sRGB and stores it in the linear working
   // space; the attributes arrive already converted, in exactly that space.
-  geometry.setAttribute("color", new BufferAttribute(attributes.colors, 3));
+  geometry.setAttribute('color', new BufferAttribute(attributes.colors, 3));
   geometry.setIndex(new BufferAttribute(attributes.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;

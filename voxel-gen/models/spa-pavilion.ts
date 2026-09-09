@@ -3,15 +3,15 @@
  * low hip roof, draped linen curtains on two sides, potted palms at the corners.
  * 48x32x27 (12x8 m, 6.75 m to the ridge), a 3x2 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** Wavy curtain hem: the height the linen starts at, cycling 6/8/7. */
 const hem = (i: number): number => 6 + (i % 3 === 0 ? 0 : i % 3 === 1 ? 2 : 1);
 
 export default defineModel({
-  id: "spa-pavilion",
-  label: "Spa Pavilion",
-  category: "leisure",
+  id: 'spa-pavilion',
+  label: 'Spa Pavilion',
+  category: 'leisure',
   tiles: { x: 3, z: 2 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

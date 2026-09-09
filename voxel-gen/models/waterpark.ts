@@ -3,12 +3,12 @@
  * it, a splash pool at the base and a climbing stair, on a low platform.
  * 80x80x56 (20x20 m, a 14 m tower), a 5x5 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "waterpark",
-  label: "Waterpark",
-  category: "leisure",
+  id: 'waterpark',
+  label: 'Waterpark',
+  category: 'leisure',
   tiles: { x: 5, z: 5 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

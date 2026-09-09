@@ -1,12 +1,12 @@
-import type { RefObject } from "react";
-import { BuildPalette } from "./BuildPalette";
-import { CameraPanel } from "./CameraPanel";
-import { ResortPanel } from "./ResortPanel";
-import { FpsCounter } from "./FpsCounter";
-import { ObjectLabels } from "./ObjectLabels";
-import type { ResortParams } from "../../layout/domain/resortGenerator";
-import type { CameraMode, CompassDirection } from "../../layout/domain/worldBounds";
-import type { LabelAnchor, ShowcaseStats } from "../../../app/showcase";
+import type { RefObject } from 'react';
+import { BuildPalette } from './BuildPalette';
+import { CameraPanel } from './CameraPanel';
+import { ResortPanel } from './ResortPanel';
+import { FpsCounter } from './FpsCounter';
+import { ObjectLabels } from './ObjectLabels';
+import type { ResortParams } from '../../layout/domain/resortGenerator';
+import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
+import type { LabelAnchor, ShowcaseStats } from '../../../app/showcase';
 
 export interface HudProps {
   readonly fps: number;

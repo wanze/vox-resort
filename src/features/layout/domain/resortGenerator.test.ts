@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { OBJECT_TYPES } from "../../catalog/domain/objectTypes";
-import { layoutItemFor } from "../../build/domain/buildPlan";
-import { layoutResort, streetTiles, tileKey } from "./resortLayout";
-import { HEDGE_ID, LAMP_ID, PATH_ID } from "./resortPlan";
-import { rotateExtent, ROTATIONS } from "./rotation";
+import { describe, expect, it } from 'vitest';
+import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { layoutItemFor } from '../../build/domain/buildPlan';
+import { layoutResort, streetTiles, tileKey } from './resortLayout';
+import { HEDGE_ID, LAMP_ID, PATH_ID } from './resortPlan';
+import { rotateExtent, ROTATIONS } from './rotation';
 import {
   clampParams,
   createRandom,
@@ -13,7 +13,7 @@ import {
   PLOT_TILES,
   type GeneratorType,
   type ResortParams,
-} from "./resortGenerator";
+} from './resortGenerator';
 
 const TYPES: GeneratorType[] = OBJECT_TYPES.map((type) => ({
   id: type.id,
@@ -53,19 +53,19 @@ const SWEEP: ResortParams[] = [
 /** The first eight numbers a seed produces. */
 const draw = (seed: number): number[] => Array.from({ length: 8 }, createRandom(seed));
 
-describe("createRandom", () => {
-  it("gives the same run twice for the same seed", () => {
+describe('createRandom', () => {
+  it('gives the same run twice for the same seed', () => {
     expect(draw(7)).toEqual(draw(7));
     expect(draw(7)).not.toEqual(draw(8));
   });
 
-  it("stays inside the unit interval", () => {
+  it('stays inside the unit interval', () => {
     const drawn = Array.from({ length: 500 }, createRandom(3));
     expect(Math.min(...drawn)).toBeGreaterThanOrEqual(0);
     expect(Math.max(...drawn)).toBeLessThan(1);
   });
 
-  it("spreads over the interval rather than sticking near one end", () => {
+  it('spreads over the interval rather than sticking near one end', () => {
     const drawn = Array.from({ length: 2000 }, createRandom(11));
     const mean = drawn.reduce((sum, value) => sum + value, 0) / drawn.length;
     expect(mean).toBeGreaterThan(0.45);
@@ -73,56 +73,56 @@ describe("createRandom", () => {
   });
 });
 
-describe("clampParams", () => {
-  it("pulls a plot too small up to the smallest one that works", () => {
+describe('clampParams', () => {
+  it('pulls a plot too small up to the smallest one that works', () => {
     expect(clampParams(params({ tilesX: 4, tilesZ: 4 }))).toMatchObject({
       tilesX: PLOT_TILES.min,
       tilesZ: PLOT_TILES.min,
     });
   });
 
-  it("pulls a plot too large down to what is worth baking", () => {
+  it('pulls a plot too large down to what is worth baking', () => {
     expect(clampParams(params({ tilesX: 5000, tilesZ: 5000 }))).toMatchObject({
       tilesX: PLOT_TILES.max,
       tilesZ: PLOT_TILES.max,
     });
   });
 
-  it("keeps density in range and the seed a whole number", () => {
+  it('keeps density in range and the seed a whole number', () => {
     expect(clampParams(params({ density: 5 })).density).toBe(PLOT_DENSITY.max);
     expect(clampParams(params({ density: -1 })).density).toBe(PLOT_DENSITY.min);
     expect(clampParams(params({ seed: -7.8 })).seed).toBe(7);
   });
 
-  it("rounds a fractional plot size to whole tiles", () => {
+  it('rounds a fractional plot size to whole tiles', () => {
     expect(clampParams(params({ tilesX: 80.6 })).tilesX).toBe(81);
   });
 });
 
-describe("generateResort", () => {
-  it("is a pure function of its parameters", () => {
+describe('generateResort', () => {
+  it('is a pure function of its parameters', () => {
     expect(generateResort(TYPES, params())).toEqual(generateResort(TYPES, params()));
   });
 
-  it("gives a different resort for a different seed", () => {
+  it('gives a different resort for a different seed', () => {
     const one = generateResort(TYPES, params({ seed: 1 }));
     const other = generateResort(TYPES, params({ seed: 2 }));
     expect(one.plots).not.toEqual(other.plots);
   });
 
-  it("builds more on a denser plot", () => {
+  it('builds more on a denser plot', () => {
     const sparse = generateResort(TYPES, params({ density: PLOT_DENSITY.min }));
     const packed = generateResort(TYPES, params({ density: PLOT_DENSITY.max }));
     expect(packed.plots.length).toBeGreaterThan(sparse.plots.length * 1.5);
   });
 
-  it("builds more on a bigger plot", () => {
+  it('builds more on a bigger plot', () => {
     const small = generateResort(TYPES, params({ tilesX: 48, tilesZ: 48 }));
     const large = generateResort(TYPES, params({ tilesX: 144, tilesZ: 144 }));
     expect(large.plots.length).toBeGreaterThan(small.plots.length);
   });
 
-  it("never places an object the layout scatters for itself", () => {
+  it('never places an object the layout scatters for itself', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       for (const plot of plan.plots) {
@@ -131,7 +131,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("stands the whole catalogue, at every size and density it offers", () => {
+  it('stands the whole catalogue, at every size and density it offers', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       const planted = new Set(plan.plots.map((plot) => plot.id));
@@ -143,7 +143,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("keeps every object inside the plot, turned as it stands", () => {
+  it('keeps every object inside the plot, turned as it stands', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       for (const plot of plan.plots) {
@@ -156,7 +156,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("never overlaps two objects, turned as they stand", () => {
+  it('never overlaps two objects, turned as they stand', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       const taken = new Set<string>();
@@ -172,7 +172,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("does not stand the whole resort facing one way", () => {
+  it('does not stand the whole resort facing one way', () => {
     // The point of the feature: a plot on which every turn is the same one is a
     // housing estate, whatever else it gets right.
     for (const set of SWEEP) {
@@ -182,7 +182,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("keeps most objects square to the row they stand in", () => {
+  it('keeps most objects square to the row they stand in', () => {
     // A quarter turn is the exception: it is what stops a row reading as a line
     // of clones, and a plot where it were the rule would read as a scrapyard.
     for (const set of SWEEP) {
@@ -192,17 +192,17 @@ describe("generateResort", () => {
     }
   });
 
-  it("turns the far gate to face back up the promenade", () => {
+  it('turns the far gate to face back up the promenade', () => {
     // Landmarks are stood before anything else, so the gates are the first two
     // plots on the plan; the pair is the one place a turn is authored outright.
     const plan = generateResort(TYPES, params());
     expect(plan.plots.slice(0, 2)).toMatchObject([
-      { id: "entrance", tileZ: 0, rotation: 0 },
-      { id: "entrance", rotation: 2 },
+      { id: 'entrance', tileZ: 0, rotation: 0 },
+      { id: 'entrance', rotation: 2 },
     ]);
   });
 
-  it("routes streets that stay on the plot", () => {
+  it('routes streets that stay on the plot', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       expect(() => streetTiles(plan)).not.toThrow();
@@ -210,7 +210,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("produces a plan the layout accepts, at every size, seed and density", () => {
+  it('produces a plan the layout accepts, at every size, seed and density', () => {
     // The one that matters: `layoutResort` throws on an overlap, an object off
     // the plot, an unknown type, or an object it cannot grow a spur from. A
     // generator that satisfies it has satisfied every invariant the hand-written
@@ -221,7 +221,7 @@ describe("generateResort", () => {
     }
   });
 
-  it("lays paths, lamps and hedges out around what it generated", () => {
+  it('lays paths, lamps and hedges out around what it generated', () => {
     const layout = layoutResort(ITEMS, generateResort(TYPES, params()));
     expect(layout.paths.length).toBeGreaterThan(0);
     expect(layout.props.some((prop) => prop.id === LAMP_ID)).toBe(true);
@@ -229,8 +229,8 @@ describe("generateResort", () => {
   });
 });
 
-describe("emptyResortPlan", () => {
-  it("has nothing on it", () => {
+describe('emptyResortPlan', () => {
+  it('has nothing on it', () => {
     const plan = emptyResortPlan(80, 80);
     expect(plan.plots).toEqual([]);
     expect(plan.nodes).toEqual([]);
@@ -238,7 +238,7 @@ describe("emptyResortPlan", () => {
     expect(plan.plazas).toEqual([]);
   });
 
-  it("does not claim to stand the catalogue, so the layout lets it be empty", () => {
+  it('does not claim to stand the catalogue, so the layout lets it be empty', () => {
     expect(emptyResortPlan(80, 80).standsWholeCatalogue).toBe(false);
     const layout = layoutResort(ITEMS, emptyResortPlan(80, 80));
     expect(layout.placements).toEqual([]);
@@ -246,7 +246,7 @@ describe("emptyResortPlan", () => {
     expect(layout.props).toEqual([]);
   });
 
-  it("keeps its size, clamped to what the generator will work at", () => {
+  it('keeps its size, clamped to what the generator will work at', () => {
     expect(emptyResortPlan(64, 72)).toMatchObject({ tilesX: 64, tilesZ: 72 });
     expect(emptyResortPlan(1, 1)).toMatchObject({ tilesX: PLOT_TILES.min, tilesZ: PLOT_TILES.min });
   });

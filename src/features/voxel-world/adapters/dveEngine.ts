@@ -10,10 +10,10 @@
  * every import below is deliberately dynamic and ordered after `syncSettings`.
  */
 
-import type { MaterialDefinition } from "../../catalog/domain/materials";
-import { materialIdFor, voxelIdFor } from "../../catalog/domain/materials";
-import { groupBySection, originsFor, type VolumeSize } from "../domain/sectionGrid";
-import type { VoxelWrite } from "../domain/voxelWrites";
+import type { MaterialDefinition } from '../../catalog/domain/materials';
+import { materialIdFor, voxelIdFor } from '../../catalog/domain/materials';
+import { groupBySection, originsFor, type VolumeSize } from '../domain/sectionGrid';
+import type { VoxelWrite } from '../domain/voxelWrites';
 
 /** Power-of-two exponents DVE uses to size sectors and sections. */
 export interface WorldScale {
@@ -38,7 +38,7 @@ export interface RawSectionMesh {
 
 const DIMENSION = 0;
 /** A single shared placeholder texture; colour comes from the material instead. */
-const PLACEHOLDER_TEXTURE = "resort_placeholder";
+const PLACEHOLDER_TEXTURE = 'resort_placeholder';
 
 const sizeFromPower2 = (power2: VolumeSize): VolumeSize => ({
   x: 1 << power2.x,
@@ -76,8 +76,8 @@ async function initializeEngine(
 
   // WorldSpaces installs the listener that turns settings into sector/section
   // maths, so it has to be loaded before the settings are pushed.
-  await import("@divinevoxel/vlox/World/WorldSpaces");
-  const { EngineSettings } = await import("@divinevoxel/vlox/Settings/EngineSettings");
+  await import('@divinevoxel/vlox/World/WorldSpaces');
+  const { EngineSettings } = await import('@divinevoxel/vlox/Settings/EngineSettings');
 
   EngineSettings.syncSettings({
     // SharedArrayBuffer would require cross-origin isolation; this build is
@@ -89,9 +89,9 @@ async function initializeEngine(
     // Only the mesher's vertex layout depends on this; geometry is identical
     // either way, and the Three.js material does the shading.
     rendererSettings: {
-      mode: "webgl",
+      mode: 'webgl',
       cpuBound: false,
-      bufferMode: "multi",
+      bufferMode: 'multi',
       textureSize: [16, 16],
     },
     world: {
@@ -110,15 +110,15 @@ async function initializeEngine(
 
   // DVE resolves every model's texture argument through a compiled texture set.
   // The showcase has no art yet, so one flat entry keeps that lookup happy.
-  const { TextureManager } = await import("@divinevoxel/vlox/Textures/TextureManager");
-  const { CompiledTexture } = await import("@divinevoxel/vlox/Textures/Classes/CompiledTexture");
-  const placeholder = new CompiledTexture("dve_voxel");
+  const { TextureManager } = await import('@divinevoxel/vlox/Textures/TextureManager');
+  const { CompiledTexture } = await import('@divinevoxel/vlox/Textures/Classes/CompiledTexture');
+  const placeholder = new CompiledTexture('dve_voxel');
   placeholder.textureMap[PLACEHOLDER_TEXTURE] = 0;
-  TextureManager._compiledTextures.set("dve_voxel", placeholder);
+  TextureManager._compiledTextures.set('dve_voxel', placeholder);
 
   const { default: InitDataGenerator } =
-    await import("@divinevoxel/vlox/Contexts/Base/Main/InitDataGenerator");
-  const { default: InitMesher } = await import("@divinevoxel/vlox/Mesher/InitMesher");
+    await import('@divinevoxel/vlox/Contexts/Base/Main/InitDataGenerator');
+  const { default: InitMesher } = await import('@divinevoxel/vlox/Mesher/InitMesher');
 
   InitDataGenerator({
     threads: { nexus: false },
@@ -131,11 +131,11 @@ async function initializeEngine(
       name: material.key,
       title: material.key,
       properties: {
-        dve_substance: "dve_solid",
+        dve_substance: 'dve_solid',
         dve_rendered_material: materialIdFor(material.key),
         dve_model_data: {
-          id: "dve_simple_cube",
-          inputs: { "*": { texture: PLACEHOLDER_TEXTURE } },
+          id: 'dve_simple_cube',
+          inputs: { '*': { texture: PLACEHOLDER_TEXTURE } },
         },
       },
     })),
@@ -156,11 +156,11 @@ export async function buildSectionMeshes(
 ): Promise<RawSectionMesh[]> {
   await initializeEngine(materials, scale);
 
-  const { WorldRegister } = await import("@divinevoxel/vlox/World/WorldRegister");
-  const { SectionCursor } = await import("@divinevoxel/vlox/World/Cursor/SectionCursor");
-  const { MeshSection } = await import("@divinevoxel/vlox/Mesher/Voxels/MeshSection");
+  const { WorldRegister } = await import('@divinevoxel/vlox/World/WorldRegister');
+  const { SectionCursor } = await import('@divinevoxel/vlox/World/Cursor/SectionCursor');
+  const { MeshSection } = await import('@divinevoxel/vlox/Mesher/Voxels/MeshSection');
   const { CompactedMeshData, CompactedSectionVoxelMesh } =
-    await import("@divinevoxel/vlox/Mesher/Voxels/Geometry/CompactedSectionVoxelMesh");
+    await import('@divinevoxel/vlox/Mesher/Voxels/Geometry/CompactedSectionVoxelMesh');
 
   const sectorSize = sectorSizeOf(scale);
   const sectionSize = sectionSizeOf(scale);

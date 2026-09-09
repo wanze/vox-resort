@@ -6,7 +6,7 @@
  * dark. They are deliberately small — a short reach each, rather than one lamp
  * flooding the whole course — so the holes read as a lit trail.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const GLOW = 0xffe3a3;
 
@@ -21,9 +21,9 @@ const BOLLARDS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 export default defineModel({
-  id: "minigolf",
-  label: "Minigolf",
-  category: "leisure",
+  id: 'minigolf',
+  label: 'Minigolf',
+  category: 'leisure',
   tiles: { x: 5, z: 4 },
   emissive: [GLOW],
   lights: BOLLARDS.map(([x, z]) => ({

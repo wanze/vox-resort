@@ -22,13 +22,13 @@
  * turn was chosen for the object that is no longer being placed.
  */
 
-import { Matrix4, type Camera } from "three/webgpu";
-import type { LayoutItem, Placement, Tile } from "../../layout/domain/resortLayout";
-import { normalizeRotation, type Rotation } from "../../layout/domain/rotation";
-import { isPaintable, planAt, tilesBetween } from "../domain/buildPlan";
-import { pickTile } from "../domain/groundPick";
-import type { TileOccupancy } from "../domain/tileOccupancy";
-import type { PlacementGhost } from "./placementGhost";
+import { Matrix4, type Camera } from 'three/webgpu';
+import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
+import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
+import { isPaintable, planAt, tilesBetween } from '../domain/buildPlan';
+import { pickTile } from '../domain/groundPick';
+import type { TileOccupancy } from '../domain/tileOccupancy';
+import type { PlacementGhost } from './placementGhost';
 
 export interface BuildPointerOptions {
   readonly canvas: HTMLCanvasElement;
@@ -59,12 +59,12 @@ export interface BuildPointer {
  * palette had just told the user about.
  */
 function inAField(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.matches("input, textarea, select");
+  return target instanceof HTMLElement && target.matches('input, textarea, select');
 }
 
 /** The turn a key press asks for, in quarters, or none at all. */
 function turnAsked(event: KeyboardEvent): number {
-  if (event.key.toLowerCase() !== "r" || inAField(event.target)) return 0;
+  if (event.key.toLowerCase() !== 'r' || inAField(event.target)) return 0;
   return event.shiftKey ? -1 : 1;
 }
 
@@ -177,7 +177,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
 
   const onKeyDown = (event: KeyboardEvent): void => {
     if (!item) return;
-    if (event.key === "Escape") {
+    if (event.key === 'Escape') {
       onCancel();
       return;
     }
@@ -185,12 +185,12 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     if (quarters !== 0) turnBy(quarters);
   };
 
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerUp);
-  canvas.addEventListener("pointerleave", onPointerLeave);
-  globalThis.addEventListener("keydown", onKeyDown);
+  canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('pointerup', onPointerUp);
+  canvas.addEventListener('pointercancel', onPointerUp);
+  canvas.addEventListener('pointerleave', onPointerLeave);
+  globalThis.addEventListener('keydown', onKeyDown);
 
   return {
     select(next) {
@@ -199,17 +199,17 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       rotation = 0;
       hovered = null;
       ghost.hide();
-      canvas.style.cursor = next ? "crosshair" : "";
+      canvas.style.cursor = next ? 'crosshair' : '';
       takeLeftButton(next !== null);
     },
     dispose() {
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
-      canvas.removeEventListener("pointerleave", onPointerLeave);
-      globalThis.removeEventListener("keydown", onKeyDown);
-      canvas.style.cursor = "";
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerUp);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      globalThis.removeEventListener('keydown', onKeyDown);
+      canvas.style.cursor = '';
       takeLeftButton(false);
     },
   };

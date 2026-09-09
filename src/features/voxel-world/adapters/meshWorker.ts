@@ -8,10 +8,10 @@
  * side and only typed arrays cross back.
  */
 
-import { transferablesOf } from "../../rendering/domain/modelAttributes";
-import { fromWire, meshOnThisThread, type WireRequest, type WireResponse } from "./meshJob";
+import { transferablesOf } from '../../rendering/domain/modelAttributes';
+import { fromWire, meshOnThisThread, type WireRequest, type WireResponse } from './meshJob';
 
-self.addEventListener("message", (event: MessageEvent<WireRequest>) => {
+self.addEventListener('message', (event: MessageEvent<WireRequest>) => {
   void (async () => {
     try {
       const { models, dveMs } = await meshOnThisThread(fromWire(event.data));

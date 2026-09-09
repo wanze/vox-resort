@@ -1,4 +1,4 @@
-import { useMemo, useRef, type RefObject } from "react";
+import { useMemo, useRef, type RefObject } from 'react';
 
 /**
  * The HUD nodes the render loop writes to directly.

@@ -3,12 +3,12 @@
  * backrest, a small folded parasol and a solid frame, on a low square base.
  * 16x16x8 (4x2 m), a 1x1 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "sun-lounger",
-  label: "Sun Lounger",
-  category: "grounds",
+  id: 'sun-lounger',
+  label: 'Sun Lounger',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

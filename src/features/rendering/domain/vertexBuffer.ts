@@ -25,7 +25,7 @@ export function deinterleaveVertices(
   vertices: Float32Array,
   vertexCount: number,
 ): VertexAttributes {
-  if (vertexCount < 0) throw new Error("Vertex count cannot be negative");
+  if (vertexCount < 0) throw new Error('Vertex count cannot be negative');
   if (vertices.length < vertexCount * VERTEX_FLOAT_STRIDE) {
     throw new Error(
       `Vertex buffer holds ${vertices.length} floats, need ${vertexCount * VERTEX_FLOAT_STRIDE}`,

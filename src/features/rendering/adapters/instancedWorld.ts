@@ -35,11 +35,11 @@ import {
   MeshStandardNodeMaterial,
   type BufferGeometry,
   type Material,
-} from "three/webgpu";
-import { vertexColor } from "three/tsl";
-import type { BakedLightVolume } from "../../lighting/adapters/bakedLightVolume";
-import type { Placement } from "../../layout/domain/resortLayout";
-import { rotationRadians, turnedOrigin } from "../../layout/domain/rotation";
+} from 'three/webgpu';
+import { vertexColor } from 'three/tsl';
+import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
+import type { Placement } from '../../layout/domain/resortLayout';
+import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import {
   bucketByChunk,
   capacityFor,
@@ -47,8 +47,8 @@ import {
   chunkKey,
   chunkOf,
   diffPlacements,
-} from "../domain/spatialChunks";
-import type { ModelGeometry } from "./voxelMeshBuilder";
+} from '../domain/spatialChunks';
+import type { ModelGeometry } from './voxelMeshBuilder';
 
 export interface InstancedWorld {
   readonly group: Group;
@@ -126,7 +126,7 @@ export function instancesByType(
 }
 
 /** The two halves of a model, and the material each is drawn with. */
-type MaterialKind = "lit" | "glow";
+type MaterialKind = 'lit' | 'glow';
 
 interface ModelPart {
   readonly kind: MaterialKind;
@@ -286,7 +286,7 @@ export function buildInstancedWorld(
   options: InstancedWorldOptions = {},
 ): InstancedWorld {
   const group = new Group();
-  group.name = "voxel-world";
+  group.name = 'voxel-world';
 
   const lit = litMaterial(options.lightVolume ?? null);
   const glow = glowMaterial();
@@ -297,8 +297,8 @@ export function buildInstancedWorld(
   for (const model of geometries) {
     const parts: ModelPart[] = [];
     for (const [kind, geometry, material] of [
-      ["lit", model.lit, lit] as const,
-      ["glow", model.emissive, glow] as const,
+      ['lit', model.lit, lit] as const,
+      ['glow', model.emissive, glow] as const,
     ]) {
       if (!geometry) continue;
       parts.push({ kind, geometry, material, triangles: (geometry.getIndex()?.count ?? 0) / 3 });

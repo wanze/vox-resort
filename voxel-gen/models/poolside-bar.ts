@@ -3,12 +3,12 @@
  * cabinet), drum stools, blenders + cocktails on the top, hanging string lights,
  * on a low platform. 32x32x30 (8x8 m, 6.75 m to the apex), a 2x2 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "poolside-bar",
-  label: "Poolside Bar",
-  category: "amenities",
+  id: 'poolside-bar',
+  label: 'Poolside Bar',
+  category: 'amenities',
   tiles: { x: 2, z: 2 },
   emissive: [0xf4d57c],
   lights: [{ x: 15, y: 22, z: 16, color: 0xffd489, intensity: 110, distance: 60 }],

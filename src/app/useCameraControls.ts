@@ -1,6 +1,6 @@
-import { useCallback, useState, type RefObject } from "react";
-import type { CameraMode, CompassDirection } from "../features/layout/domain/worldBounds";
-import type { CameraView, Showcase } from "./showcase";
+import { useCallback, useState, type RefObject } from 'react';
+import type { CameraMode, CompassDirection } from '../features/layout/domain/worldBounds';
+import type { CameraView, Showcase } from './showcase';
 
 /**
  * The camera panel, as React state.
@@ -19,7 +19,7 @@ export interface CameraControls {
 }
 
 /** What the panel shows before a scene exists to ask. */
-const INITIAL_VIEW: CameraView = { mode: "perspective", direction: "southeast" };
+const INITIAL_VIEW: CameraView = { mode: 'perspective', direction: 'southeast' };
 
 export function useCameraControls(showcase: RefObject<Showcase | null>): CameraControls {
   const [view, setView] = useState<CameraView>(INITIAL_VIEW);

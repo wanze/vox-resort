@@ -13,11 +13,11 @@
  * pins the two together.
  */
 
-import { srgbToLinear } from "../../lighting/domain/lightGrid";
-import type { ScratchRegion } from "../../voxel-world/domain/modelScratch";
-import { regionOwning } from "../../voxel-world/domain/modelScratch";
-import { greedyMesh, quadCorners, quadNormal } from "./greedyMesh";
-import { deinterleaveVertices, needsThirtyTwoBitIndices } from "./vertexBuffer";
+import { srgbToLinear } from '../../lighting/domain/lightGrid';
+import type { ScratchRegion } from '../../voxel-world/domain/modelScratch';
+import { regionOwning } from '../../voxel-world/domain/modelScratch';
+import { greedyMesh, quadCorners, quadNormal } from './greedyMesh';
+import { deinterleaveVertices, needsThirtyTwoBitIndices } from './vertexBuffer';
 
 /** Magenta is the deliberate "material was never registered" colour. */
 export const MISSING_COLOR = 0xff00ff;

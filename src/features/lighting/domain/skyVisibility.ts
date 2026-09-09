@@ -42,8 +42,8 @@
  * tested as such.
  */
 
-import type { CellRange, LightGridSpec } from "./lightGrid";
-import { forEachCell, gridInterior, rangeCells, rangeDims } from "./lightGrid";
+import type { CellRange, LightGridSpec } from './lightGrid';
+import { forEachCell, gridInterior, rangeCells, rangeDims } from './lightGrid';
 
 /**
  * A box on the plot, in voxels, and how solidly it is filled.

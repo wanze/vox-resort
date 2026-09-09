@@ -25,13 +25,13 @@
  * WebGPU so the run exercises the WebGL2 fallback instead.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { spawn, type ChildProcess } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
-const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 /** Default window size; `--width`/`--height` override it, and pixel count matters. */
 const DEFAULT_WINDOW = { width: 1440, height: 900 };
@@ -41,7 +41,7 @@ const DEVICE_SCALE = 2;
 
 interface BenchCase {
   readonly name: string;
-  readonly view: "overview" | "street";
+  readonly view: 'overview' | 'street';
   readonly time: number;
   readonly note: string;
 }
@@ -51,10 +51,10 @@ interface BenchCase {
  * ground. `night-street` is the case the whole exercise is about.
  */
 const SUITE: readonly BenchCase[] = [
-  { name: "day-overview", view: "overview", time: 0.62, note: "the view the app opens on" },
-  { name: "day-street", view: "street", time: 0.62, note: "daylight, camera at eye level" },
-  { name: "night-overview", view: "overview", time: 0.02, note: "the whole plot after dark" },
-  { name: "night-street", view: "street", time: 0.02, note: "after dark, camera at eye level" },
+  { name: 'day-overview', view: 'overview', time: 0.62, note: 'the view the app opens on' },
+  { name: 'day-street', view: 'street', time: 0.62, note: 'daylight, camera at eye level' },
+  { name: 'night-overview', view: 'overview', time: 0.02, note: 'the whole plot after dark' },
+  { name: 'night-street', view: 'street', time: 0.02, note: 'after dark, camera at eye level' },
 ];
 
 interface BenchStats {
@@ -110,42 +110,42 @@ function parseCli(argv: readonly string[]): Cli {
   const flags = new Map<string, string>();
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index]!;
-    if (!argument.startsWith("--")) continue;
-    const [name, inline] = argument.slice(2).split("=", 2);
+    if (!argument.startsWith('--')) continue;
+    const [name, inline] = argument.slice(2).split('=', 2);
     if (inline === undefined) {
       const next = argv[index + 1];
-      if (next !== undefined && !next.startsWith("--")) {
+      if (next !== undefined && !next.startsWith('--')) {
         flags.set(name!, next);
         index++;
-      } else flags.set(name!, "true");
+      } else flags.set(name!, 'true');
     } else flags.set(name!, inline);
   }
 
-  const only = flags.get("case");
-  const cases = only ? SUITE.filter((entry) => only.split(",").includes(entry.name)) : SUITE;
+  const only = flags.get('case');
+  const cases = only ? SUITE.filter((entry) => only.split(',').includes(entry.name)) : SUITE;
   if (cases.length === 0) throw new Error(`No such case: ${only}`);
 
-  const rawRepeats = flags.get("repeat");
+  const rawRepeats = flags.get('repeat');
   const repeats = rawRepeats
-    ? rawRepeats.split(",").map((value) => Number.parseInt(value, 10))
+    ? rawRepeats.split(',').map((value) => Number.parseInt(value, 10))
     : [1];
 
   return {
-    url: flags.get("url") ?? "http://localhost:5173/",
+    url: flags.get('url') ?? 'http://localhost:5173/',
     cases,
     repeats,
-    warmup: Number.parseInt(flags.get("warmup") ?? "150", 10),
-    frames: Number.parseInt(flags.get("frames") ?? "600", 10),
-    vsync: flags.get("no-vsync") === undefined,
-    webgl: flags.get("webgl") !== undefined,
-    mainThread: flags.get("no-worker") !== undefined,
-    json: flags.get("json") !== undefined,
-    label: flags.get("label") ?? "",
+    warmup: Number.parseInt(flags.get('warmup') ?? '150', 10),
+    frames: Number.parseInt(flags.get('frames') ?? '600', 10),
+    vsync: flags.get('no-vsync') === undefined,
+    webgl: flags.get('webgl') !== undefined,
+    mainThread: flags.get('no-worker') !== undefined,
+    json: flags.get('json') !== undefined,
+    label: flags.get('label') ?? '',
     window: {
-      width: Number.parseInt(flags.get("width") ?? String(DEFAULT_WINDOW.width), 10),
-      height: Number.parseInt(flags.get("height") ?? String(DEFAULT_WINDOW.height), 10),
+      width: Number.parseInt(flags.get('width') ?? String(DEFAULT_WINDOW.width), 10),
+      height: Number.parseInt(flags.get('height') ?? String(DEFAULT_WINDOW.height), 10),
     },
-    shotDir: flags.get("shots") ?? null,
+    shotDir: flags.get('shots') ?? null,
   };
 }
 
@@ -159,48 +159,48 @@ interface Browser {
 }
 
 async function readDevToolsUrl(userDataDir: string): Promise<string> {
-  const portFile = join(userDataDir, "DevToolsActivePort");
+  const portFile = join(userDataDir, 'DevToolsActivePort');
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
-      const [port, path] = (await readFile(portFile, "utf8")).split("\n");
+      const [port, path] = (await readFile(portFile, 'utf8')).split('\n');
       if (port && path) return `ws://127.0.0.1:${port.trim()}${path.trim()}`;
     } catch {
       // Chrome has not written the file yet.
     }
     await delay(50);
   }
-  throw new Error("Chrome never reported a DevTools port");
+  throw new Error('Chrome never reported a DevTools port');
 }
 
 async function launch(cli: Cli): Promise<Browser> {
-  const userDataDir = await mkdtemp(join(tmpdir(), "vox-bench-"));
+  const userDataDir = await mkdtemp(join(tmpdir(), 'vox-bench-'));
   const args = [
     `--user-data-dir=${userDataDir}`,
-    "--remote-debugging-port=0",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-background-timer-throttling",
-    "--disable-backgrounding-occluded-windows",
-    "--disable-renderer-backgrounding",
-    "--autoplay-policy=no-user-gesture-required",
+    '--remote-debugging-port=0',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--autoplay-policy=no-user-gesture-required',
     // Without this Dawn refuses timestamp queries, and the GPU columns stay empty.
-    "--enable-dawn-features=allow_unsafe_apis",
+    '--enable-dawn-features=allow_unsafe_apis',
     `--force-device-scale-factor=${DEVICE_SCALE}`,
     `--window-size=${cli.window.width},${cli.window.height}`,
-    "--window-position=0,0",
-    "about:blank",
+    '--window-position=0,0',
+    'about:blank',
   ];
   // Unlocking the frame rate is the only way to see past the display's refresh;
   // with it left on, anything faster than 120 fps reads as exactly 120.
-  if (!cli.vsync) args.splice(1, 0, "--disable-gpu-vsync", "--disable-frame-rate-limit");
+  if (!cli.vsync) args.splice(1, 0, '--disable-gpu-vsync', '--disable-frame-rate-limit');
 
-  const child: ChildProcess = spawn(CHROME, args, { stdio: "ignore" });
+  const child: ChildProcess = spawn(CHROME, args, { stdio: 'ignore' });
   const wsUrl = await readDevToolsUrl(userDataDir);
 
   const socket = new WebSocket(wsUrl);
   await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", () => resolve(), { once: true });
-    socket.addEventListener("error", () => reject(new Error("CDP socket failed")), { once: true });
+    socket.addEventListener('open', () => resolve(), { once: true });
+    socket.addEventListener('error', () => reject(new Error('CDP socket failed')), { once: true });
   });
 
   let nextId = 1;
@@ -209,7 +209,7 @@ async function launch(cli: Cli): Promise<Browser> {
     { resolve: (value: unknown) => void; reject: (e: Error) => void }
   >();
   const events = new Map<string, () => void>();
-  socket.addEventListener("message", (event) => {
+  socket.addEventListener('message', (event) => {
     const message = JSON.parse(String(event.data)) as {
       id?: number;
       method?: string;
@@ -243,38 +243,38 @@ async function launch(cli: Cli): Promise<Browser> {
 
   // Attach to the one tab Chrome opened, and drive it through its own session.
   const { targetInfos } = await send<{ targetInfos: { targetId: string; type: string }[] }>(
-    "Target.getTargets",
+    'Target.getTargets',
   );
-  const page = targetInfos.find((target) => target.type === "page");
-  if (!page) throw new Error("Chrome opened no page target");
-  const { sessionId } = await send<{ sessionId: string }>("Target.attachToTarget", {
+  const page = targetInfos.find((target) => target.type === 'page');
+  if (!page) throw new Error('Chrome opened no page target');
+  const { sessionId } = await send<{ sessionId: string }>('Target.attachToTarget', {
     targetId: page.targetId,
     flatten: true,
   });
 
   const sendToPage = senderFor(sessionId);
 
-  await sendToPage("Page.enable");
-  await sendToPage("Runtime.enable");
+  await sendToPage('Page.enable');
+  await sendToPage('Runtime.enable');
 
   return {
     async navigate(url) {
-      const loaded = new Promise<void>((resolve) => events.set("Page.loadEventFired", resolve));
-      await sendToPage("Page.navigate", { url });
+      const loaded = new Promise<void>((resolve) => events.set('Page.loadEventFired', resolve));
+      await sendToPage('Page.navigate', { url });
       await loaded;
-      events.delete("Page.loadEventFired");
+      events.delete('Page.loadEventFired');
     },
     async evaluate<T>(expression: string) {
       const response = await sendToPage<{
         result: { value?: T };
         exceptionDetails?: { text: string };
-      }>("Runtime.evaluate", { expression, returnByValue: true, awaitPromise: true });
+      }>('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
       if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
       return response.result.value as T;
     },
     async screenshot() {
-      const { data } = await sendToPage<{ data: string }>("Page.captureScreenshot", {
-        format: "png",
+      const { data } = await sendToPage<{ data: string }>('Page.captureScreenshot', {
+        format: 'png',
       });
       return data;
     },
@@ -305,22 +305,22 @@ async function runCase(
   repeat: number,
 ): Promise<BenchReport> {
   const params = new URLSearchParams({
-    bench: "1",
+    bench: '1',
     view: benchCase.view,
     time: String(benchCase.time),
     warmup: String(cli.warmup),
     frames: String(cli.frames),
     repeat: String(repeat),
   });
-  if (cli.webgl) params.set("webgl", "1");
-  if (cli.mainThread) params.set("worker", "0");
+  if (cli.webgl) params.set('webgl', '1');
+  if (cli.mainThread) params.set('worker', '0');
 
   await browser.navigate(`${cli.url}?${params.toString()}`);
 
   const deadline = Date.now() + CASE_TIMEOUT_MS;
   for (;;) {
     const result = await browser.evaluate<BenchReport | null>(
-      "globalThis.__voxBench ? JSON.parse(JSON.stringify(globalThis.__voxBench)) : null",
+      'globalThis.__voxBench ? JSON.parse(JSON.stringify(globalThis.__voxBench)) : null',
     );
     if (result) return result;
     const failure = await browser.evaluate<string | null>(
@@ -347,10 +347,10 @@ async function main(): Promise<void> {
         rows.push({ case: benchCase.name, repeat, report });
         if (cli.shotDir) {
           await mkdir(cli.shotDir, { recursive: true });
-          const suffix = repeat === 1 ? "" : `-x${repeat}`;
-          const name = `${cli.label ? `${cli.label}-` : ""}${benchCase.name}${suffix}.png`;
+          const suffix = repeat === 1 ? '' : `-x${repeat}`;
+          const name = `${cli.label ? `${cli.label}-` : ''}${benchCase.name}${suffix}.png`;
           const png = await browser.screenshot();
-          await writeFile(join(cli.shotDir, name.replaceAll(" ", "-")), Buffer.from(png, "base64"));
+          await writeFile(join(cli.shotDir, name.replaceAll(' ', '-')), Buffer.from(png, 'base64'));
         }
       }
     }
@@ -365,53 +365,53 @@ async function main(): Promise<void> {
 
   const backendRow = rows[0]!.report;
   console.info(
-    `\n${cli.label ? `${cli.label} — ` : ""}${backendRow.backend}, ` +
+    `\n${cli.label ? `${cli.label} — ` : ''}${backendRow.backend}, ` +
       `${backendRow.drawingBufferSize.width}x${backendRow.drawingBufferSize.height} device pixels, ` +
-      `dpr ${backendRow.pixelRatio}, vsync ${cli.vsync ? "on" : "off"}\n`,
+      `dpr ${backendRow.pixelRatio}, vsync ${cli.vsync ? 'on' : 'off'}\n`,
   );
   const sweeping = cli.repeats.length > 1 || cli.repeats[0] !== 1;
   const header =
-    pad("case", 16) +
-    (sweeping ? padStart("plots", 7) : "") +
-    padStart("on", 5) +
-    padStart("calls", 7) +
-    padStart("tris", 11) +
-    padStart("fps", 9) +
-    padStart("median", 9) +
-    padStart("p95", 9) +
-    padStart("gpu", 9) +
-    padStart("gpu p95", 9);
+    pad('case', 16) +
+    (sweeping ? padStart('plots', 7) : '') +
+    padStart('on', 5) +
+    padStart('calls', 7) +
+    padStart('tris', 11) +
+    padStart('fps', 9) +
+    padStart('median', 9) +
+    padStart('p95', 9) +
+    padStart('gpu', 9) +
+    padStart('gpu p95', 9);
   console.info(header);
-  console.info("-".repeat(header.length));
+  console.info('-'.repeat(header.length));
   for (const row of rows) {
     console.info(
       pad(row.case, 16) +
-        (sweeping ? padStart(`${row.repeat * row.repeat}x`, 7) : "") +
+        (sweeping ? padStart(`${row.repeat * row.repeat}x`, 7) : '') +
         padStart(String(row.report.activeLights), 5) +
-        padStart(row.report.drawn ? String(row.report.drawn.drawCalls) : "-", 7) +
-        padStart(row.report.drawn ? row.report.drawn.triangles.toLocaleString("en-US") : "-", 11) +
+        padStart(row.report.drawn ? String(row.report.drawn.drawCalls) : '-', 7) +
+        padStart(row.report.drawn ? row.report.drawn.triangles.toLocaleString('en-US') : '-', 11) +
         padStart(row.report.stats.fps.toFixed(1), 9) +
         padStart(`${row.report.stats.medianMs.toFixed(2)}ms`, 9) +
         padStart(`${row.report.stats.p95Ms.toFixed(2)}ms`, 9) +
-        padStart(row.report.gpu ? `${row.report.gpu.medianMs.toFixed(2)}ms` : "-", 9) +
-        padStart(row.report.gpu ? `${row.report.gpu.p95Ms.toFixed(2)}ms` : "-", 9),
+        padStart(row.report.gpu ? `${row.report.gpu.medianMs.toFixed(2)}ms` : '-', 9) +
+        padStart(row.report.gpu ? `${row.report.gpu.p95Ms.toFixed(2)}ms` : '-', 9),
     );
   }
-  console.info("");
+  console.info('');
   for (const row of rows) {
     const { scene } = row.report;
     if (!scene) continue;
     console.info(
       `${pad(`${row.case} ${row.repeat * row.repeat}x`, 24)}` +
-        `${scene.instanceCount.toLocaleString("en-US")} instances, ` +
+        `${scene.instanceCount.toLocaleString('en-US')} instances, ` +
         `${scene.lightCount} lamps, ` +
         `bake ${(scene.lightGridBytes / 1024 / 1024).toFixed(1)} MB in ${scene.lightBakeMs} ms, ` +
         `startup ${scene.startupMs} ms ` +
-        `(${scene.dveMs} ms mesher${scene.meshedInWorker ? " in a worker" : " on the main thread"}, ` +
+        `(${scene.dveMs} ms mesher${scene.meshedInWorker ? ' in a worker' : ' on the main thread'}, ` +
         `${scene.startupFrames} frames painted while it ran)`,
     );
   }
-  console.info("");
+  console.info('');
 }
 
 await main();

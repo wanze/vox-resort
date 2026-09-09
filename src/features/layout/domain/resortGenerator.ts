@@ -37,7 +37,7 @@
  * a plot be shared, benchmarked and regression-tested.
  */
 
-import type { ModelCategory } from "../../../../voxel-gen/voxelgen.ts";
+import type { ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import {
   HEDGE_ID,
   LAMP_ID,
@@ -45,15 +45,15 @@ import {
   type PathNode,
   type ResortPlan,
   type ResortPlot,
-} from "./resortPlan";
-import { streetTiles, tileKey, widthOffsets } from "./resortLayout";
-import { normalizeRotation, rotateExtent, type Extent, type Rotation } from "./rotation";
+} from './resortPlan';
+import { streetTiles, tileKey, widthOffsets } from './resortLayout';
+import { normalizeRotation, rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** The gate object, stood at both ends of the promenade. */
-const GATE_ID = "entrance";
+const GATE_ID = 'entrance';
 
 /** The object dropped in the middle of the promenade's plaza. */
-const PLAZA_ID = "fountain";
+const PLAZA_ID = 'fountain';
 
 /** Object types the layout scatters itself, which no plan should place. */
 const DERIVED = new Set([PATH_ID, LAMP_ID, HEDGE_ID]);
@@ -223,7 +223,7 @@ function gapsBetween(
 function themesFor(random: () => number, count: number): ModelCategory[] {
   // Grounds is dressing rather than a quarter of a resort, so it never leads a
   // district; it fills the gaps everywhere instead.
-  const pool: ModelCategory[] = ["lodging", "amenities", "leisure"];
+  const pool: ModelCategory[] = ['lodging', 'amenities', 'leisure'];
   return Array.from({ length: count }, (_, index) => {
     // Walk the pool rather than draw from it, so a resort never comes out as
     // five lodging districts in a row, and jitter the walk so it is not a cycle.
@@ -506,15 +506,15 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
 
   const down = streetGraph(
     columns,
-    "col",
-    (street) => ({ id: "", tileX: street.at, tileZ: 1 }),
-    (street) => ({ id: "", tileX: street.at, tileZ: tilesZ - 2 }),
+    'col',
+    (street) => ({ id: '', tileX: street.at, tileZ: 1 }),
+    (street) => ({ id: '', tileX: street.at, tileZ: tilesZ - 2 }),
   );
   const across = streetGraph(
     bands,
-    "band",
-    (street) => ({ id: "", tileX: columns[0]!.at, tileZ: street.at }),
-    (street) => ({ id: "", tileX: columns[columns.length - 1]!.at, tileZ: street.at }),
+    'band',
+    (street) => ({ id: '', tileX: columns[0]!.at, tileZ: street.at }),
+    (street) => ({ id: '', tileX: columns[columns.length - 1]!.at, tileZ: street.at }),
   );
   const skeleton: ResortPlan = {
     tilesX,

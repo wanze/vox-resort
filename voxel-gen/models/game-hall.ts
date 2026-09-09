@@ -3,12 +3,12 @@
  * windows revealing arcade cabinets, on a low platform. 48x48x25 (12x12 m plot,
  * an 11x9 m hall 5.5 m tall), a 3x3 tile. Glass front faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "game-hall",
-  label: "Game Hall",
-  category: "leisure",
+  id: 'game-hall',
+  label: 'Game Hall',
+  category: 'leisure',
   tiles: { x: 3, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

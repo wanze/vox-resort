@@ -3,12 +3,12 @@
  * parasol overhead, a cold-drink cooler and a small blank chalkboard, on a low
  * base. 16x16x15 (4x3.75 m), a 1x1 tile. Serving side faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "icecream",
-  label: "Ice Cream Cart",
-  category: "amenities",
+  id: 'icecream',
+  label: 'Ice Cream Cart',
+  category: 'amenities',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

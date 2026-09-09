@@ -26,15 +26,15 @@ import {
   RGBAFormat,
   UnsignedByteType,
   Vector3,
-} from "three/webgpu";
-import { float, mix, normalWorld, positionWorld, texture3D, uniform } from "three/tsl";
-import type { Node } from "three/webgpu";
+} from 'three/webgpu';
+import { float, mix, normalWorld, positionWorld, texture3D, uniform } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 
 /** A TSL node carrying an RGB albedo. */
-export type ColorNode = Node<"vec3">;
+export type ColorNode = Node<'vec3'>;
 /** A TSL node carrying a single scalar. */
-export type FloatNode = Node<"float">;
-import type { BakedLightGrid, CellRange } from "../domain/lightGrid";
+export type FloatNode = Node<'float'>;
+import type { BakedLightGrid, CellRange } from '../domain/lightGrid';
 
 /**
  * What a surface receives when the lamps around it agree on no direction at all.
@@ -50,7 +50,7 @@ export interface BakedLightVolume {
    * Outgoing lamp radiance for a surface of this albedo, as a `vec3` node.
    * Zero in daylight, because the day/night factor scales it.
    */
-  lampLight(albedo: ColorNode): Node<"vec3">;
+  lampLight(albedo: ColorNode): Node<'vec3'>;
   /**
    * How much of the sky a surface here can see, 0..1, as a `float` node.
    *

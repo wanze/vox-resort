@@ -7,7 +7,7 @@
  * court can be played in the evening. They are the tallest lamps on the plot —
  * 6.75 m — and the only ones that light a surface rather than a walkway.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const FLOOD = 0xfff0d8;
 
@@ -20,9 +20,9 @@ const MASTS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 export default defineModel({
-  id: "tennis-court",
-  label: "Tennis Court",
-  category: "leisure",
+  id: 'tennis-court',
+  label: 'Tennis Court',
+  category: 'leisure',
   tiles: { x: 9, z: 5 },
   emissive: [FLOOD],
   lights: MASTS.map(([x, z]) => ({

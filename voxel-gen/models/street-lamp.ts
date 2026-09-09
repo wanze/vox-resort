@@ -6,14 +6,14 @@
  * The lantern pane is emissive and the model declares the point light it casts,
  * which is what the night lighting picks up.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const GLOW = 0xffe3a3;
 
 export default defineModel({
-  id: "street-lamp",
-  label: "Street Lamp",
-  category: "grounds",
+  id: 'street-lamp',
+  label: 'Street Lamp',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   emissive: [GLOW],
   // The bulb sits inside the lantern, a touch below its middle.

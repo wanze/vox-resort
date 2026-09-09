@@ -8,8 +8,8 @@
  * the shader reads that instead. See there for why.
  */
 
-import type { ModelLight } from "../../../../voxel-gen/voxelgen.ts";
-import type { GridReservation } from "./lightGrid";
+import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
+import type { GridReservation } from './lightGrid';
 
 export interface LightAnchor {
   /** Placement key the light belongs to, unique across the resort. */

@@ -13,9 +13,9 @@
  * the same convention `hud/domain/labelProjection.ts` reads them in.
  */
 
-import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
-import type { Tile } from "../../layout/domain/resortLayout";
-import type { Viewport } from "../../hud/domain/labelProjection";
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { Tile } from '../../layout/domain/resortLayout';
+import type { Viewport } from '../../hud/domain/labelProjection';
 
 /** Where the pointer is, in CSS pixels from the canvas's top-left corner. */
 export interface PointerPosition {
@@ -60,7 +60,7 @@ export function groundPointAt(
   viewport: Viewport,
   inverseViewProjection: ArrayLike<number>,
 ): GroundPoint | null {
-  if (inverseViewProjection.length < 16) throw new Error("Expected a 4x4 matrix of 16 elements");
+  if (inverseViewProjection.length < 16) throw new Error('Expected a 4x4 matrix of 16 elements');
   if (viewport.width <= 0 || viewport.height <= 0) return null;
 
   const ndcX = (pointer.x / viewport.width) * 2 - 1;

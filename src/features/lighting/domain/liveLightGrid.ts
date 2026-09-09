@@ -33,9 +33,9 @@
  * is how a caller learns it happened anyway.
  */
 
-import type { LightAnchor } from "./lightAnchors";
-import type { BakedLightGrid, CellRange, LightGridSpec } from "./lightGrid";
-import { countRegion, gridInterior, rangeCells, reachOf, rebakeRegion } from "./lightGrid";
+import type { LightAnchor } from './lightAnchors';
+import type { BakedLightGrid, CellRange, LightGridSpec } from './lightGrid';
+import { countRegion, gridInterior, rangeCells, reachOf, rebakeRegion } from './lightGrid';
 
 export interface LightGridEdit {
   /**

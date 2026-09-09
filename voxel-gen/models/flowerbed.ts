@@ -3,12 +3,12 @@
  * and yellow blossoms across the top, on a low square base. 16x16 footprint,
  * fits a 1x1 tile.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "flowerbed",
-  label: "Flower Bed",
-  category: "grounds",
+  id: 'flowerbed',
+  label: 'Flower Bed',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
   Matrix4,
   OrthographicCamera,
@@ -6,11 +6,11 @@ import {
   WebGLCoordinateSystem,
   WebGPUCoordinateSystem,
   type CoordinateSystem,
-} from "three/webgpu";
-import type { CompassDirection } from "../../layout/domain/worldBounds";
-import { isometricFramingFor } from "../../layout/domain/worldBounds";
-import type { GroundPoint, PointerPosition } from "./groundPick";
-import { groundPointAt, pickTile, tileOf } from "./groundPick";
+} from 'three/webgpu';
+import type { CompassDirection } from '../../layout/domain/worldBounds';
+import { isometricFramingFor } from '../../layout/domain/worldBounds';
+import type { GroundPoint, PointerPosition } from './groundPick';
+import { groundPointAt, pickTile, tileOf } from './groundPick';
 
 /**
  * The inverse view-projection of a camera looking straight down from `height`,
@@ -43,14 +43,14 @@ const climbing = (height: number, half: number): number[] => {
 
 const VIEWPORT = { width: 800, height: 400 };
 
-describe("groundPointAt", () => {
-  it("lands the centre of the screen under the camera", () => {
+describe('groundPointAt', () => {
+  it('lands the centre of the screen under the camera', () => {
     const point = groundPointAt({ x: 400, y: 200 }, VIEWPORT, topDown(100, 64));
     expect(point?.x).toBeCloseTo(0);
     expect(point?.z).toBeCloseTo(0);
   });
 
-  it("follows the pointer across the ground", () => {
+  it('follows the pointer across the ground', () => {
     const matrix = topDown(100, 64);
     const east = groundPointAt({ x: 800, y: 200 }, VIEWPORT, matrix);
     const north = groundPointAt({ x: 400, y: 0 }, VIEWPORT, matrix);
@@ -60,29 +60,29 @@ describe("groundPointAt", () => {
     expect(north?.z).toBeCloseTo(-64);
   });
 
-  it("misses when the ray never comes down to the ground", () => {
+  it('misses when the ray never comes down to the ground', () => {
     // A camera whose ray climbs: the pointer is on the sky above the horizon.
     expect(groundPointAt({ x: 400, y: 200 }, VIEWPORT, climbing(100, 64))).toBeNull();
   });
 
-  it("misses when the view is edge-on to the ground", () => {
+  it('misses when the view is edge-on to the ground', () => {
     const flat = topDown(100, 64);
     flat[4 * 2 + 1] = 0;
     flat[4 * 3 + 1] = 20; // every point of the ray sits at y = 20
     expect(groundPointAt({ x: 400, y: 200 }, VIEWPORT, flat)).toBeNull();
   });
 
-  it("has nothing to pick in a canvas of no size", () => {
+  it('has nothing to pick in a canvas of no size', () => {
     expect(groundPointAt({ x: 0, y: 0 }, { width: 0, height: 0 }, topDown(100, 64))).toBeNull();
   });
 
-  it("rejects a matrix that is not 4x4", () => {
+  it('rejects a matrix that is not 4x4', () => {
     expect(() => groundPointAt({ x: 0, y: 0 }, VIEWPORT, [1, 0, 0, 1])).toThrow(/16 elements/);
   });
 });
 
-describe("tileOf", () => {
-  it("floors a point onto its tile", () => {
+describe('tileOf', () => {
+  it('floors a point onto its tile', () => {
     expect(tileOf({ x: 0, z: 0 }, 16)).toEqual({ x: 0, z: 0 });
     expect(tileOf({ x: 15.9, z: 31.2 }, 16)).toEqual({ x: 0, z: 1 });
   });
@@ -93,12 +93,12 @@ describe("tileOf", () => {
   });
 });
 
-describe("pickTile", () => {
-  it("gives the tile under the pointer", () => {
+describe('pickTile', () => {
+  it('gives the tile under the pointer', () => {
     expect(pickTile({ x: 800, y: 200 }, VIEWPORT, topDown(100, 64), 16)).toEqual({ x: 4, z: 0 });
   });
 
-  it("gives nothing when the pointer is off the ground", () => {
+  it('gives nothing when the pointer is off the ground', () => {
     expect(pickTile({ x: 400, y: 200 }, VIEWPORT, climbing(100, 64), 16)).toBeNull();
   });
 });
@@ -131,9 +131,9 @@ interface DepthConvention {
 }
 
 const DEPTH_CONVENTIONS: DepthConvention[] = [
-  { label: "WebGPU, reversed depth", coordinateSystem: WebGPUCoordinateSystem, reversed: true },
-  { label: "WebGPU", coordinateSystem: WebGPUCoordinateSystem, reversed: false },
-  { label: "WebGL2 fallback", coordinateSystem: WebGLCoordinateSystem, reversed: false },
+  { label: 'WebGPU, reversed depth', coordinateSystem: WebGPUCoordinateSystem, reversed: true },
+  { label: 'WebGPU', coordinateSystem: WebGPUCoordinateSystem, reversed: false },
+  { label: 'WebGL2 fallback', coordinateSystem: WebGLCoordinateSystem, reversed: false },
 ];
 
 function isoCamera(
@@ -188,11 +188,11 @@ const POINTERS: PointerPosition[] = [0.02, 0.5, 0.98].flatMap((fx) =>
   })),
 );
 
-const DIRECTIONS: CompassDirection[] = ["northeast", "southeast", "southwest", "northwest"];
+const DIRECTIONS: CompassDirection[] = ['northeast', 'southeast', 'southwest', 'northwest'];
 const ZOOMS = [0.25, 1, 4];
 
-describe.each(DEPTH_CONVENTIONS)("groundPointAt under an orthographic camera ($label)", (depth) => {
-  it("hits the ground everywhere on the canvas, at every direction and zoom", () => {
+describe.each(DEPTH_CONVENTIONS)('groundPointAt under an orthographic camera ($label)', (depth) => {
+  it('hits the ground everywhere on the canvas, at every direction and zoom', () => {
     for (const direction of DIRECTIONS) {
       for (const zoom of ZOOMS) {
         const camera = isoCamera(direction, zoom, depth);
@@ -208,7 +208,7 @@ describe.each(DEPTH_CONVENTIONS)("groundPointAt under an orthographic camera ($l
     }
   });
 
-  it("lands the hit back under the pointer that asked for it", () => {
+  it('lands the hit back under the pointer that asked for it', () => {
     for (const direction of DIRECTIONS) {
       for (const zoom of ZOOMS) {
         const camera = isoCamera(direction, zoom, depth);
@@ -223,7 +223,7 @@ describe.each(DEPTH_CONVENTIONS)("groundPointAt under an orthographic camera ($l
     }
   });
 
-  it("puts the middle of the screen on the middle of the plot", () => {
+  it('puts the middle of the screen on the middle of the plot', () => {
     const middle = { x: ISO_VIEWPORT.width / 2, y: ISO_VIEWPORT.height / 2 };
     for (const direction of DIRECTIONS) {
       const point = groundPointAt(middle, ISO_VIEWPORT, inverseOf(isoCamera(direction, 1, depth)))!;
@@ -236,7 +236,7 @@ describe.each(DEPTH_CONVENTIONS)("groundPointAt under an orthographic camera ($l
     }
   });
 
-  it("picks every tile of the plot, whichever way the camera faces", () => {
+  it('picks every tile of the plot, whichever way the camera faces', () => {
     for (const direction of DIRECTIONS) {
       const camera = isoCamera(direction, 1, depth);
       const inverse = inverseOf(camera);

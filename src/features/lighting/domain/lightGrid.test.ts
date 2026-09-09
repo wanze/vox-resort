@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import type { LightAnchor } from "./lightAnchors";
+import { describe, expect, it } from 'vitest';
+import type { LightAnchor } from './lightAnchors';
 import {
   bakeLightGrid,
   cellCount,
@@ -21,10 +21,10 @@ import {
   srgbToLinear,
   wholeGrid,
   type LightGridSpec,
-} from "./lightGrid";
+} from './lightGrid';
 
 const anchor = (overrides: Partial<LightAnchor> = {}): LightAnchor => ({
-  key: "lamp",
+  key: 'lamp',
   x: 0,
   y: 0,
   z: 0,
@@ -74,29 +74,29 @@ function cellFor(spec: LightGridSpec, x: number, y: number, z: number): [number,
   ];
 }
 
-describe("srgbToLinear", () => {
-  it("pins both ends", () => {
+describe('srgbToLinear', () => {
+  it('pins both ends', () => {
     expect(srgbToLinear(0)).toBe(0);
     expect(srgbToLinear(1)).toBeCloseTo(1, 10);
   });
 
-  it("takes the linear segment near black", () => {
+  it('takes the linear segment near black', () => {
     expect(srgbToLinear(0.02)).toBeCloseTo(0.02 / 12.92, 10);
   });
 
-  it("darkens mid grey, as the curve must", () => {
+  it('darkens mid grey, as the curve must', () => {
     expect(srgbToLinear(0.5)).toBeLessThan(0.5);
     expect(srgbToLinear(0.5)).toBeCloseTo(0.2140411, 6);
   });
 });
 
-describe("linearRgbOf", () => {
-  it("splits a packed colour", () => {
+describe('linearRgbOf', () => {
+  it('splits a packed colour', () => {
     expect(linearRgbOf(0xffffff).map((v) => Math.round(v * 1000))).toEqual([1000, 1000, 1000]);
     expect(linearRgbOf(0x000000)).toEqual([0, 0, 0]);
   });
 
-  it("keeps the channels apart and in order", () => {
+  it('keeps the channels apart and in order', () => {
     const [r, g, b] = linearRgbOf(0xff8000);
     expect(r).toBeGreaterThan(g);
     expect(g).toBeGreaterThan(b);
@@ -104,38 +104,38 @@ describe("linearRgbOf", () => {
   });
 });
 
-describe("pointLightAttenuation", () => {
-  it("falls off with the inverse square", () => {
+describe('pointLightAttenuation', () => {
+  it('falls off with the inverse square', () => {
     const near = pointLightAttenuation(4, 0);
     const far = pointLightAttenuation(8, 0);
     expect(near / far).toBeCloseTo(4, 6);
   });
 
-  it("reaches exactly zero at the cutoff, and past it", () => {
+  it('reaches exactly zero at the cutoff, and past it', () => {
     expect(pointLightAttenuation(40, 40)).toBe(0);
     expect(pointLightAttenuation(60, 40)).toBe(0);
   });
 
-  it("is windowed below the cutoff, so it never steps down", () => {
+  it('is windowed below the cutoff, so it never steps down', () => {
     expect(pointLightAttenuation(39, 40)).toBeGreaterThan(0);
     expect(pointLightAttenuation(39, 40)).toBeLessThan(pointLightAttenuation(20, 40));
   });
 
-  it("clamps the singularity at the lamp itself", () => {
+  it('clamps the singularity at the lamp itself', () => {
     expect(Number.isFinite(pointLightAttenuation(0, 40))).toBe(true);
   });
 });
 
-describe("luminance", () => {
-  it("weights green most and blue least", () => {
+describe('luminance', () => {
+  it('weights green most and blue least', () => {
     expect(luminance(0, 1, 0)).toBeGreaterThan(luminance(1, 0, 0));
     expect(luminance(1, 0, 0)).toBeGreaterThan(luminance(0, 0, 1));
     expect(luminance(1, 1, 1)).toBeCloseTo(1, 6);
   });
 });
 
-describe("gridSpecAt", () => {
-  it("has nothing to cover without lamps", () => {
+describe('gridSpecAt', () => {
+  it('has nothing to cover without lamps', () => {
     expect(gridSpecAt([], 4)).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe("gridSpecAt", () => {
     expect(spec.origin.y).toBeGreaterThanOrEqual(-2 * spec.cellSize);
   });
 
-  it("leaves a dark border on every side for the sampler to clamp against", () => {
+  it('leaves a dark border on every side for the sampler to clamp against', () => {
     const anchors = [anchor({ x: 0, y: 12, z: 0, distance: 20 })];
     const spec = gridSpecAt(anchors, 4)!;
     const grid = bakeLightGrid(anchors, spec);
@@ -168,8 +168,8 @@ describe("gridSpecAt", () => {
     }
   });
 
-  it("grows with the plot, and shrinks as cells get coarser", () => {
-    const anchors = [anchor({ x: 0 }), anchor({ key: "far", x: 400 })];
+  it('grows with the plot, and shrinks as cells get coarser', () => {
+    const anchors = [anchor({ x: 0 }), anchor({ key: 'far', x: 400 })];
     const fine = gridSpecAt(anchors, 4)!;
     const coarse = gridSpecAt(anchors, 8)!;
     expect(cellCount(coarse)).toBeLessThan(cellCount(fine));
@@ -177,7 +177,7 @@ describe("gridSpecAt", () => {
   });
 });
 
-describe("lightGridSpecFor", () => {
+describe('lightGridSpecFor', () => {
   /** A plot of `span` voxels a side, lit on a regular grid of street lamps. */
   const plotOf = (span: number): LightAnchor[] => {
     const lamps: LightAnchor[] = [];
@@ -189,40 +189,40 @@ describe("lightGridSpecFor", () => {
     return lamps;
   };
 
-  it("has nothing to cover without lamps", () => {
+  it('has nothing to cover without lamps', () => {
     expect(lightGridSpecFor([])).toBeNull();
   });
 
-  it("bakes this plot at the finest cell size", () => {
+  it('bakes this plot at the finest cell size', () => {
     expect(lightGridSpecFor(plotOf(960))?.cellSize).toBe(FINEST_CELL_SIZE);
   });
 
-  it("never goes finer than the finest cell size", () => {
+  it('never goes finer than the finest cell size', () => {
     expect(lightGridSpecFor(plotOf(200))?.cellSize).toBe(FINEST_CELL_SIZE);
   });
 
-  it("coarsens rather than blowing the budget on a bigger resort", () => {
+  it('coarsens rather than blowing the budget on a bigger resort', () => {
     for (const span of [960, 2880, 5760, 12_000]) {
       const spec = lightGridSpecFor(plotOf(span))!;
       expect(gridByteSize(spec)).toBeLessThanOrEqual(DEFAULT_GRID_BUDGET_BYTES);
     }
   });
 
-  it("takes coarser cells the larger the plot gets", () => {
+  it('takes coarser cells the larger the plot gets', () => {
     const small = lightGridSpecFor(plotOf(960))!;
     const large = lightGridSpecFor(plotOf(5760))!;
     expect(large.cellSize).toBeGreaterThan(small.cellSize);
   });
 
-  it("honours a tighter budget", () => {
+  it('honours a tighter budget', () => {
     const spec = lightGridSpecFor(plotOf(960), 1024 * 1024)!;
     expect(gridByteSize(spec)).toBeLessThanOrEqual(1024 * 1024);
     expect(spec.cellSize).toBeGreaterThan(FINEST_CELL_SIZE);
   });
 });
 
-describe("bakeLightGrid", () => {
-  it("leaves the whole grid dark when nothing burns", () => {
+describe('bakeLightGrid', () => {
+  it('leaves the whole grid dark when nothing burns', () => {
     const spec = gridSpecAt([anchor()], 4)!;
     const grid = bakeLightGrid([anchor({ intensity: 0 })], spec);
     expect(grid.scale).toBe(0);
@@ -230,7 +230,7 @@ describe("bakeLightGrid", () => {
     expect([...grid.irradiance].every((byte) => byte === 0)).toBe(true);
   });
 
-  it("is brightest at the lamp and fades outward", () => {
+  it('is brightest at the lamp and fades outward', () => {
     const anchors = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
     const spec = gridSpecAt(anchors, 4)!;
     const grid = bakeLightGrid(anchors, spec);
@@ -260,10 +260,10 @@ describe("bakeLightGrid", () => {
     expect(b).toBe(0);
   });
 
-  it("adds two lamps reaching the same cell", () => {
+  it('adds two lamps reaching the same cell', () => {
     const middle = { y: 20, z: 0 };
-    const one = [anchor({ key: "a", x: -10, ...middle })];
-    const both = [...one, anchor({ key: "b", x: 10, ...middle })];
+    const one = [anchor({ key: 'a', x: -10, ...middle })];
+    const both = [...one, anchor({ key: 'b', x: 10, ...middle })];
     const spec = gridSpecAt(both, 4)!;
     const lit = bakeLightGrid(one, spec);
     const brighter = bakeLightGrid(both, spec);
@@ -273,7 +273,7 @@ describe("bakeLightGrid", () => {
     expect(irradianceAt(brighter, ...cell)[0]).toBeGreaterThan(irradianceAt(lit, ...cell)[0] * 1.5);
   });
 
-  describe("direction", () => {
+  describe('direction', () => {
     const readDirection = (
       grid: ReturnType<typeof bakeLightGrid>,
       cell: readonly [number, number, number],
@@ -290,7 +290,7 @@ describe("bakeLightGrid", () => {
       };
     };
 
-    it("points at the one lamp that reaches the cell, and agrees fully", () => {
+    it('points at the one lamp that reaches the cell, and agrees fully', () => {
       const anchors = [anchor({ x: 0, y: 40, z: 0, distance: 60 })];
       const spec = gridSpecAt(anchors, 4)!;
       const grid = bakeLightGrid(anchors, spec);
@@ -301,9 +301,9 @@ describe("bakeLightGrid", () => {
       expect(agreement).toBeGreaterThan(0.95);
     });
 
-    it("mostly cancels between two opposed lamps, so the cell shades flatly", () => {
-      const west = anchor({ key: "west", x: -20, y: 8, z: 0, distance: 60 });
-      const east = anchor({ key: "east", x: 20, y: 8, z: 0, distance: 60 });
+    it('mostly cancels between two opposed lamps, so the cell shades flatly', () => {
+      const west = anchor({ key: 'west', x: -20, y: 8, z: 0, distance: 60 });
+      const east = anchor({ key: 'east', x: 20, y: 8, z: 0, distance: 60 });
       const spec = gridSpecAt([west, east], 4)!;
       const cell = cellFor(spec, 0, 8, 0);
       const alone = readDirection(bakeLightGrid([west], spec), cell).agreement;
@@ -313,14 +313,14 @@ describe("bakeLightGrid", () => {
     });
   });
 
-  describe("the encoding scale", () => {
+  describe('the encoding scale', () => {
     /** A dim lamp and, far enough away not to reach it, a much brighter one. */
-    const west = anchor({ key: "west", x: -100, y: 20, z: 0, distance: 40, intensity: 100 });
-    const east = anchor({ key: "east", x: 100, y: 20, z: 0, distance: 40, intensity: 400 });
+    const west = anchor({ key: 'west', x: -100, y: 20, z: 0, distance: 40, intensity: 100 });
+    const east = anchor({ key: 'east', x: 100, y: 20, z: 0, distance: 40, intensity: 400 });
     const spec = gridSpecAt([west, east], 4)!;
     const westCell = cellFor(spec, -100, 20, 0);
 
-    it("leaves room above the brightest cell", () => {
+    it('leaves room above the brightest cell', () => {
       const grid = bakeLightGrid([west], spec);
       // Colour only: the fourth byte is the agreement term, not irradiance.
       let brightest = 0;
@@ -332,7 +332,7 @@ describe("bakeLightGrid", () => {
       expect(brightest).toBe(Math.round(Math.sqrt(1 / SCALE_HEADROOM) * 255));
     });
 
-    it("re-encodes the whole grid when each bake measures its own scale", () => {
+    it('re-encodes the whole grid when each bake measures its own scale', () => {
       // The behaviour that made incremental baking impossible: the west lamp has
       // not changed, and its bytes move anyway, because a brighter lamp arrived
       // somewhere else entirely.
@@ -342,7 +342,7 @@ describe("bakeLightGrid", () => {
       expect(bytesAt(measured, westCell)).not.toEqual(bytesAt(alone, westCell));
     });
 
-    it("holds every byte a new lamp does not reach, given a scale to keep to", () => {
+    it('holds every byte a new lamp does not reach, given a scale to keep to', () => {
       const alone = bakeLightGrid([west], spec);
       const fixed = bakeLightGrid([west, east], spec, { scale: alone.scale });
 
@@ -358,7 +358,7 @@ describe("bakeLightGrid", () => {
       expect(fixed.litCells).toBeGreaterThan(alone.litCells);
     });
 
-    it("clamps what a kept scale cannot hold, and says how much", () => {
+    it('clamps what a kept scale cannot hold, and says how much', () => {
       const alone = bakeLightGrid([west], spec);
       expect(alone.clampedCells).toBe(0);
       expect(bakeLightGrid([west, east], spec).clampedCells).toBe(0);
@@ -367,7 +367,7 @@ describe("bakeLightGrid", () => {
       ).toBeGreaterThan(0);
     });
 
-    it("measures as usual when handed a scale of nothing", () => {
+    it('measures as usual when handed a scale of nothing', () => {
       const measured = bakeLightGrid([west], spec);
       expect(bakeLightGrid([west], spec, { scale: 0 }).scale).toBe(measured.scale);
     });
@@ -393,19 +393,19 @@ describe("bakeLightGrid", () => {
   });
 });
 
-describe("cell ranges", () => {
+describe('cell ranges', () => {
   const spec = gridSpecAt([anchor()], 4)!;
 
-  it("counts the whole grid", () => {
+  it('counts the whole grid', () => {
     expect(rangeCells(wholeGrid(spec))).toBe(cellCount(spec));
     expect(rangeDims(wholeGrid(spec))).toEqual(spec.dims);
   });
 
-  it("counts an empty range as holding nothing", () => {
+  it('counts an empty range as holding nothing', () => {
     expect(rangeCells({ lowX: 4, highX: 3, lowY: 0, highY: 0, lowZ: 0, highZ: 0 })).toBe(0);
   });
 
-  it("holds the interior back from every wall the sampler clamps against", () => {
+  it('holds the interior back from every wall the sampler clamps against', () => {
     const interior = gridInterior(spec);
     expect(interior.lowX).toBe(1);
     expect(interior.lowZ).toBe(1);
@@ -418,7 +418,7 @@ describe("cell ranges", () => {
   });
 });
 
-describe("reachOf", () => {
+describe('reachOf', () => {
   const spec = gridSpecAt([anchor({ x: 0, y: 20, z: 0, distance: 40 })], 4)!;
 
   it("spans the lamp's falloff and no more", () => {
@@ -429,29 +429,29 @@ describe("reachOf", () => {
     expect(dims.z).toBeLessThanOrEqual(80 / 4 + 2);
   });
 
-  it("grows with the falloff distance", () => {
+  it('grows with the falloff distance', () => {
     const near = reachOf(anchor({ distance: 20 }), spec, wholeGrid(spec));
     const far = reachOf(anchor({ distance: 40 }), spec, wholeGrid(spec));
     expect(rangeCells(far)).toBeGreaterThan(rangeCells(near));
   });
 
-  it("clips to the window it is given", () => {
+  it('clips to the window it is given', () => {
     const window = { lowX: 5, highX: 6, lowY: 0, highY: 1, lowZ: 5, highZ: 6 };
     const range = reachOf(anchor({ distance: 400 }), spec, window);
     expect(range).toEqual(window);
   });
 
-  it("is empty for a lamp that reaches nothing in the window", () => {
+  it('is empty for a lamp that reaches nothing in the window', () => {
     const far = anchor({ x: 10_000, z: 10_000, distance: 10 });
     expect(rangeCells(reachOf(far, spec, wholeGrid(spec)))).toBe(0);
   });
 });
 
-describe("countRegion", () => {
+describe('countRegion', () => {
   const anchors = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
   const spec = gridSpecAt(anchors, 4)!;
 
-  it("agrees with what the bake reported for the whole grid", () => {
+  it('agrees with what the bake reported for the whole grid', () => {
     const grid = bakeLightGrid(anchors, spec);
     expect(countRegion(grid.irradiance, spec, wholeGrid(spec))).toEqual({
       litCells: grid.litCells,
@@ -459,16 +459,16 @@ describe("countRegion", () => {
     });
   });
 
-  it("counts nothing in a corner no lamp reaches", () => {
+  it('counts nothing in a corner no lamp reaches', () => {
     const grid = bakeLightGrid(anchors, spec);
     const corner = { lowX: 0, highX: 0, lowY: 0, highY: 0, lowZ: 0, highZ: 0 };
     expect(countRegion(grid.irradiance, spec, corner).litCells).toBe(0);
   });
 });
 
-describe("rebakeRegion", () => {
-  const west = anchor({ key: "west", x: -60, y: 20, z: 0, distance: 40 });
-  const east = anchor({ key: "east", x: 60, y: 20, z: 0, distance: 40 });
+describe('rebakeRegion', () => {
+  const west = anchor({ key: 'west', x: -60, y: 20, z: 0, distance: 40 });
+  const east = anchor({ key: 'east', x: 60, y: 20, z: 0, distance: 40 });
   const spec = gridSpecAt([west, east], 4)!;
 
   /** A grid holding only the west lamp, with the east lamp's block re-baked in. */
@@ -482,7 +482,7 @@ describe("rebakeRegion", () => {
       direction: grid.direction,
     });
 
-  it("writes what a whole-grid bake at the same scale would have written", () => {
+  it('writes what a whole-grid bake at the same scale would have written', () => {
     const partial = bakeLightGrid([west], spec);
     rebakeInto(partial, [west, east]);
     const whole = bakeLightGrid([west, east], spec, { scale: partial.scale });
@@ -490,7 +490,7 @@ describe("rebakeRegion", () => {
     expect(partial.direction).toEqual(whole.direction);
   });
 
-  it("leaves every cell outside the range alone", () => {
+  it('leaves every cell outside the range alone', () => {
     const partial = bakeLightGrid([west], spec);
     const before = partial.irradiance.slice();
     const range = reachOf(east, spec, wholeGrid(spec));
@@ -508,7 +508,7 @@ describe("rebakeRegion", () => {
     }
   });
 
-  it("takes a lamp away as exactly as it put one there", () => {
+  it('takes a lamp away as exactly as it put one there', () => {
     const both = bakeLightGrid([west, east], spec);
     const expected = bakeLightGrid([west], spec, { scale: both.scale });
     rebakeInto(both, [west]);
@@ -516,7 +516,7 @@ describe("rebakeRegion", () => {
     expect(both.direction).toEqual(expected.direction);
   });
 
-  it("does nothing at all for an empty range", () => {
+  it('does nothing at all for an empty range', () => {
     const grid = bakeLightGrid([west], spec);
     const before = grid.irradiance.slice();
     rebakeRegion({
@@ -530,7 +530,7 @@ describe("rebakeRegion", () => {
     expect(grid.irradiance).toEqual(before);
   });
 
-  it("measures a scale when it is given none", () => {
+  it('measures a scale when it is given none', () => {
     const grid = bakeLightGrid([], spec);
     expect(grid.scale).toBe(0);
     const baked = rebakeInto(grid, [east]);
@@ -538,10 +538,10 @@ describe("rebakeRegion", () => {
   });
 });
 
-describe("a reserved box", () => {
+describe('a reserved box', () => {
   const lamps = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
 
-  it("stretches the grid to cover ground no lamp reaches", () => {
+  it('stretches the grid to cover ground no lamp reaches', () => {
     const reserve = { minX: -400, maxX: 400, minY: 0, maxY: 60, minZ: -400, maxZ: 400 };
     const spec = gridSpecAt(lamps, 4, reserve)!;
     expect(spec.origin.x).toBeLessThanOrEqual(-400);
@@ -550,18 +550,18 @@ describe("a reserved box", () => {
     expect(spec.origin.z + spec.dims.z * spec.cellSize).toBeGreaterThanOrEqual(400);
   });
 
-  it("never shrinks the grid below the lamps standing on it", () => {
+  it('never shrinks the grid below the lamps standing on it', () => {
     const tight = { minX: 0, maxX: 1, minY: 0, maxY: 1, minZ: 0, maxZ: 1 };
     expect(gridSpecAt(lamps, 4, tight)).toEqual(gridSpecAt(lamps, 4));
   });
 
-  it("is enough on its own to make a grid for a plot with no lamps yet", () => {
+  it('is enough on its own to make a grid for a plot with no lamps yet', () => {
     const reserve = { minX: -100, maxX: 100, minY: 0, maxY: 60, minZ: -100, maxZ: 100 };
     expect(gridSpecAt([], 4, reserve)).not.toBeNull();
     expect(gridSpecAt([], 4)).toBeNull();
   });
 
-  it("coarsens with the budget like everything else the grid has to cover", () => {
+  it('coarsens with the budget like everything else the grid has to cover', () => {
     const reserve = { minX: -4000, maxX: 4000, minY: 0, maxY: 200, minZ: -4000, maxZ: 4000 };
     const spec = lightGridSpecFor(lamps, DEFAULT_GRID_BUDGET_BYTES, reserve)!;
     expect(gridByteSize(spec)).toBeLessThanOrEqual(DEFAULT_GRID_BUDGET_BYTES);

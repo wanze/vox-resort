@@ -3,12 +3,12 @@
  * low planter, on a low platform. 32x16x17 (8x4 m, 4.25 m tall), a 2x1 tile.
  * Doors face +z (toward the preview camera).
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "restrooms",
-  label: "Restrooms",
-  category: "amenities",
+  id: 'restrooms',
+  label: 'Restrooms',
+  category: 'amenities',
   tiles: { x: 2, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

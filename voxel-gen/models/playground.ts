@@ -3,12 +3,12 @@
  * rubber matting, plus a sandpit, on a low platform. 64x48 (16x12 m), a 4x3
  * tile. Equipment keeps child-scale heights: the slide platform is 2.25 m.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "playground",
-  label: "Playground",
-  category: "leisure",
+  id: 'playground',
+  label: 'Playground',
+  category: 'leisure',
   tiles: { x: 4, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

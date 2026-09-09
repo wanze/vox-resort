@@ -12,15 +12,15 @@
  * were 30% of every triangle submitted. Eight-by-four pavers cost 96, for a
  * bond that still reads as paving from the height the ground is ever seen at.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** Flagstone size in voxels, grout line included. One tile is 16 across. */
 const PAVER = { width: 8, depth: 4 } as const;
 
 export default defineModel({
-  id: "path",
-  label: "Path",
-  category: "grounds",
+  id: 'path',
+  label: 'Path',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

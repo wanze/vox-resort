@@ -2,12 +2,12 @@
  * Classical white marble statue of a standing figure on a square stone plinth,
  * on a low square base. 16x16 footprint, fits a 1x1 tile (tall).
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "statue",
-  label: "Statue",
-  category: "grounds",
+  id: 'statue',
+  label: 'Statue',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

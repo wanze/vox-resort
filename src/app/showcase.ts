@@ -9,7 +9,7 @@
  * repeats become instances. See `instancedWorld.ts` for why that is safe here.
  */
 
-import { materialKeyFor, voxelIdFor } from "../features/catalog/domain/materials";
+import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials';
 import {
   allMaterials,
   emissiveByModelId,
@@ -18,75 +18,75 @@ import {
   objectTypeById,
   objectTypeTop,
   TILE_VOXELS,
-} from "../features/catalog/domain/objectTypes";
-import type { Placement, ResortLayout } from "../features/layout/domain/resortLayout";
-import { layoutResort, placementCenter } from "../features/layout/domain/resortLayout";
-import { rotateLights } from "../features/layout/domain/rotation";
-import type { ResortPlan } from "../features/layout/domain/resortPlan";
-import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from "../features/layout/domain/resortPlan";
-import type { GeneratorType, ResortParams } from "../features/layout/domain/resortGenerator";
+} from '../features/catalog/domain/objectTypes';
+import type { Placement, ResortLayout } from '../features/layout/domain/resortLayout';
+import { layoutResort, placementCenter } from '../features/layout/domain/resortLayout';
+import { rotateLights } from '../features/layout/domain/rotation';
+import type { ResortPlan } from '../features/layout/domain/resortPlan';
+import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN } from '../features/layout/domain/resortPlan';
+import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
 import {
   clampParams,
   emptyResortPlan,
   generateResort,
-} from "../features/layout/domain/resortGenerator";
-import { layoutItemFor } from "../features/build/domain/buildPlan";
-import type { TileOccupancy } from "../features/build/domain/tileOccupancy";
-import { createTileOccupancy } from "../features/build/domain/tileOccupancy";
-import { createBuildPointer } from "../features/build/adapters/buildPointer";
-import { createPlacementGhost } from "../features/build/adapters/placementGhost";
-import type { WorldBounds } from "../features/layout/domain/worldBounds";
-import { cameraFramingFor, worldBoundsFor } from "../features/layout/domain/worldBounds";
-import { skyStateFor } from "../features/lighting/domain/dayNight";
-import type { ModelLight } from "../../voxel-gen/voxelgen.ts";
-import type { Ground } from "../features/lighting/domain/lightAnchors";
-import { anchorsFor, lampReservationFor } from "../features/lighting/domain/lightAnchors";
-import type { LightGridSpec } from "../features/lighting/domain/lightGrid";
+} from '../features/layout/domain/resortGenerator';
+import { layoutItemFor } from '../features/build/domain/buildPlan';
+import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
+import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
+import { createBuildPointer } from '../features/build/adapters/buildPointer';
+import { createPlacementGhost } from '../features/build/adapters/placementGhost';
+import type { WorldBounds } from '../features/layout/domain/worldBounds';
+import { cameraFramingFor, worldBoundsFor } from '../features/layout/domain/worldBounds';
+import { skyStateFor } from '../features/lighting/domain/dayNight';
+import type { ModelLight } from '../../voxel-gen/voxelgen.ts';
+import type { Ground } from '../features/lighting/domain/lightAnchors';
+import { anchorsFor, lampReservationFor } from '../features/lighting/domain/lightAnchors';
+import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
 import {
   bakeLightGrid,
   cellCount,
   DEFAULT_GRID_BUDGET_BYTES,
   gridByteSize,
   lightGridSpecFor,
-} from "../features/lighting/domain/lightGrid";
-import type { LiveLightGrid } from "../features/lighting/domain/liveLightGrid";
-import { createLiveLightGrid } from "../features/lighting/domain/liveLightGrid";
-import type { LiveSkyVisibility, Occluder } from "../features/lighting/domain/skyVisibility";
-import { createLiveSkyVisibility } from "../features/lighting/domain/skyVisibility";
-import type { BakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
-import { createBakedLightVolume } from "../features/lighting/adapters/bakedLightVolume";
-import type { ScratchLayout } from "../features/voxel-world/domain/modelScratch";
-import { scratchLayoutFor } from "../features/voxel-world/domain/modelScratch";
-import { DEFAULT_WORLD_SCALE, sectionSizeOf } from "../features/voxel-world/adapters/dveEngine";
-import { meshCatalogue } from "../features/voxel-world/adapters/meshCatalogue";
-import type { InstancedWorld } from "../features/rendering/adapters/instancedWorld";
-import { buildInstancedWorld } from "../features/rendering/adapters/instancedWorld";
-import type { ModelGeometry } from "../features/rendering/adapters/voxelMeshBuilder";
-import { buildModelGeometries } from "../features/rendering/adapters/voxelMeshBuilder";
-import type { BlobShadow, ShadowCaster } from "../features/rendering/domain/blobShadows";
-import { blobShadowFor, blobShadowsFor } from "../features/rendering/domain/blobShadows";
-import type { BlobShadowField } from "../features/rendering/adapters/blobShadowField";
-import { buildBlobShadowField } from "../features/rendering/adapters/blobShadowField";
+} from '../features/lighting/domain/lightGrid';
+import type { LiveLightGrid } from '../features/lighting/domain/liveLightGrid';
+import { createLiveLightGrid } from '../features/lighting/domain/liveLightGrid';
+import type { LiveSkyVisibility, Occluder } from '../features/lighting/domain/skyVisibility';
+import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibility';
+import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
+import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
+import type { ScratchLayout } from '../features/voxel-world/domain/modelScratch';
+import { scratchLayoutFor } from '../features/voxel-world/domain/modelScratch';
+import { DEFAULT_WORLD_SCALE, sectionSizeOf } from '../features/voxel-world/adapters/dveEngine';
+import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
+import type { InstancedWorld } from '../features/rendering/adapters/instancedWorld';
+import { buildInstancedWorld } from '../features/rendering/adapters/instancedWorld';
+import type { ModelGeometry } from '../features/rendering/adapters/voxelMeshBuilder';
+import { buildModelGeometries } from '../features/rendering/adapters/voxelMeshBuilder';
+import type { BlobShadow, ShadowCaster } from '../features/rendering/domain/blobShadows';
+import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blobShadows';
+import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
+import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import type {
   CameraFraming,
   CameraMode,
   CompassDirection,
-} from "../features/layout/domain/worldBounds";
-import { turnDirection } from "../features/layout/domain/worldBounds";
-import type { SceneHandle } from "../features/rendering/adapters/threeScene";
-import { CAMERA_FOV_DEGREES, createScene } from "../features/rendering/adapters/threeScene";
-import { createCameraKeys } from "../features/rendering/adapters/cameraKeys";
-import { createFpsState, sampleFrame } from "../features/hud/domain/fps";
-import { projectToScreen, type ScreenPosition } from "../features/hud/domain/labelProjection";
-import type { FrameUpdate } from "../features/hud/adapters/hudOverlay";
-import { spreadLabelAnchors } from "../features/hud/domain/labelPlacement";
+} from '../features/layout/domain/worldBounds';
+import { turnDirection } from '../features/layout/domain/worldBounds';
+import type { SceneHandle } from '../features/rendering/adapters/threeScene';
+import { CAMERA_FOV_DEGREES, createScene } from '../features/rendering/adapters/threeScene';
+import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
+import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
+import { projectToScreen, type ScreenPosition } from '../features/hud/domain/labelProjection';
+import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
+import { spreadLabelAnchors } from '../features/hud/domain/labelPlacement';
 import {
   benchFraming,
   parseBenchConfig,
   type BenchConfig,
-} from "../features/bench/domain/benchConfig";
-import { repeatPlot } from "../features/bench/domain/plotRepeat";
-import { roundStats, summarizeFrames, type FrameStats } from "../features/bench/domain/frameStats";
+} from '../features/bench/domain/benchConfig';
+import { repeatPlot } from '../features/bench/domain/plotRepeat';
+import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
 
 /**
  * Voxels one instance of each type is made of.
@@ -129,7 +129,7 @@ export interface LabelAnchor {
 }
 
 export interface ShowcaseStats {
-  readonly backend: "webgpu" | "webgl2";
+  readonly backend: 'webgpu' | 'webgl2';
   /** Distinct object types on the plot. */
   readonly typeCount: number;
   /** Authored objects, excluding derived props and paths. */
@@ -199,7 +199,7 @@ export interface ShowcaseStats {
  */
 export interface BenchResult {
   readonly config: BenchConfig;
-  readonly backend: "webgpu" | "webgl2";
+  readonly backend: 'webgpu' | 'webgl2';
   readonly pixelRatio: number;
   /** Pixels actually rasterised per frame, device ratio included. */
   readonly drawingBufferSize: { readonly width: number; readonly height: number };
@@ -1017,7 +1017,7 @@ function createBenchRecorder(parts: {
     async sampleGpu() {
       if (result) return;
       const duration = await handle.renderer.resolveTimestampsAsync();
-      if (typeof duration === "number" && duration > 0) gpuFrames.push(duration);
+      if (typeof duration === 'number' && duration > 0) gpuFrames.push(duration);
     },
     result: () => result,
   };
@@ -1140,7 +1140,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // `?bench=1` pins the camera and the clock so two builds are compared on the
   // same pixels. Absent the flag this is null and nothing that reads it runs.
-  const bench = parseBenchConfig(globalThis.location?.search ?? "");
+  const bench = parseBenchConfig(globalThis.location?.search ?? '');
 
   const scratch = scratchForCatalogue();
   const catalogue = await meshModels(scratch, bench);
@@ -1210,7 +1210,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       canvas.clientHeight || globalThis.innerHeight,
     );
   };
-  globalThis.addEventListener("resize", resize);
+  globalThis.addEventListener('resize', resize);
 
   const statsNow = createStatsReader({
     handle,
@@ -1300,7 +1300,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);
-      globalThis.removeEventListener("resize", resize);
+      globalThis.removeEventListener('resize', resize);
       cameraKeys.dispose();
       build.dispose();
       current().dispose();

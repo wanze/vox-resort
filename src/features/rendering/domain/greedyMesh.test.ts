@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest';
 import {
   facesFromTriangles,
   greedyMesh,
@@ -8,7 +8,7 @@ import {
   type FaceAxis,
   type MergedQuad,
   type TriangleSoup,
-} from "./greedyMesh";
+} from './greedyMesh';
 
 /**
  * Builds the triangle soup a voxel mesher would emit for a set of unit faces.
@@ -76,7 +76,7 @@ const grid = (
   return faces;
 };
 
-describe("planeAxes", () => {
+describe('planeAxes', () => {
   it("picks in-plane axes whose cross product is the face's own axis", () => {
     expect(planeAxes(0)).toEqual({ u: 1, v: 2 });
     expect(planeAxes(1)).toEqual({ u: 2, v: 0 });
@@ -84,21 +84,21 @@ describe("planeAxes", () => {
   });
 });
 
-describe("greedyMesh", () => {
-  it("has nothing to merge in an empty submesh", () => {
+describe('greedyMesh', () => {
+  it('has nothing to merge in an empty submesh', () => {
     const mesh = greedyMesh(soupOf([]));
     expect(mesh.quads).toEqual([]);
     expect(mesh.sourceTriangleCount).toBe(0);
   });
 
-  it("leaves a single face alone", () => {
+  it('leaves a single face alone', () => {
     const mesh = greedyMesh(soupOf([{ axis: 1, positive: true, slice: 2, u: 0, v: 0 }]));
     expect(mesh.quads).toEqual([
       { axis: 1, positive: true, slice: 2, u: 0, v: 0, width: 1, height: 1 },
     ]);
   });
 
-  it("collapses a flat 16x16 face to one rectangle", () => {
+  it('collapses a flat 16x16 face to one rectangle', () => {
     // This is the path tile's underside, and the whole reason the pass exists.
     const mesh = greedyMesh(soupOf(grid(1, false, 0, 16, 16)));
     expect(mesh.quads).toHaveLength(1);
@@ -106,33 +106,33 @@ describe("greedyMesh", () => {
     expect(mesh.sourceTriangleCount).toBe(512);
   });
 
-  it("merges a row before it grows a column", () => {
+  it('merges a row before it grows a column', () => {
     const mesh = greedyMesh(soupOf(grid(1, true, 0, 4, 1)));
     expect(mesh.quads).toEqual([
       { axis: 1, positive: true, slice: 0, u: 0, v: 0, width: 4, height: 1 },
     ]);
   });
 
-  it("never merges across a hole", () => {
+  it('never merges across a hole', () => {
     const faces = grid(1, true, 0, 3, 1).filter((face) => face.u !== 1);
     const mesh = greedyMesh(soupOf(faces));
     expect(mesh.quads).toHaveLength(2);
     expect(coveredCells(mesh.quads)).toHaveLength(2);
   });
 
-  it("keeps opposite faces of the same plane apart", () => {
+  it('keeps opposite faces of the same plane apart', () => {
     const mesh = greedyMesh(soupOf([...grid(1, true, 4, 2, 2), ...grid(1, false, 4, 2, 2)]));
     expect(mesh.quads).toHaveLength(2);
     expect(mesh.quads.map((quad) => quad.positive).toSorted()).toEqual([false, true]);
   });
 
-  it("keeps parallel planes apart", () => {
+  it('keeps parallel planes apart', () => {
     const mesh = greedyMesh(soupOf([...grid(1, true, 0, 2, 2), ...grid(1, true, 1, 2, 2)]));
     expect(mesh.quads).toHaveLength(2);
     expect(mesh.quads.map((quad) => quad.slice).toSorted()).toEqual([0, 1]);
   });
 
-  it("covers exactly the cells it was given, on every axis", () => {
+  it('covers exactly the cells it was given, on every axis', () => {
     const faces = [
       ...grid(0, true, 3, 4, 5),
       ...grid(1, false, -2, 6, 2),
@@ -145,13 +145,13 @@ describe("greedyMesh", () => {
     expect(coveredCells(mesh.quads)).toEqual(expected);
   });
 
-  it("collapses the two triangles of one quad into one cell", () => {
+  it('collapses the two triangles of one quad into one cell', () => {
     const mesh = greedyMesh(soupOf([{ axis: 2, positive: true, slice: 0, u: 0, v: 0 }]));
     expect(mesh.sourceTriangleCount).toBe(2);
     expect(mesh.quads).toHaveLength(1);
   });
 
-  it("handles negative coordinates", () => {
+  it('handles negative coordinates', () => {
     const faces = grid(1, true, 0, 3, 1);
     for (const face of faces) Object.assign(face, { u: face.u - 8, v: -5 });
     const mesh = greedyMesh(soupOf(faces));
@@ -160,7 +160,7 @@ describe("greedyMesh", () => {
     ]);
   });
 
-  it("passes a triangle that is not an axis-aligned unit face through untouched", () => {
+  it('passes a triangle that is not an axis-aligned unit face through untouched', () => {
     const soup: TriangleSoup = {
       positions: Float32Array.from([0, 0, 0, 3, 0, 0, 0, 3, 3]),
       normals: Float32Array.from([0.577, 0.577, 0.577, 0.577, 0.577, 0.577, 0.577, 0.577, 0.577]),
@@ -171,7 +171,7 @@ describe("greedyMesh", () => {
     expect(mesh.passthrough).toEqual([0]);
   });
 
-  it("passes an oversized axis-aligned triangle through rather than mangling it", () => {
+  it('passes an oversized axis-aligned triangle through rather than mangling it', () => {
     const soup: TriangleSoup = {
       positions: Float32Array.from([0, 0, 0, 4, 0, 0, 4, 0, 4]),
       normals: Float32Array.from([0, 1, 0, 0, 1, 0, 0, 1, 0]),
@@ -199,8 +199,8 @@ describe("greedyMesh", () => {
   });
 });
 
-describe("facesFromTriangles", () => {
-  it("groups faces into one plane per side and slice", () => {
+describe('facesFromTriangles', () => {
+  it('groups faces into one plane per side and slice', () => {
     const { planes } = facesFromTriangles(
       soupOf([...grid(1, true, 0, 2, 2), ...grid(1, false, 0, 1, 1)]),
     );
@@ -223,8 +223,8 @@ const subtract = (
   b: readonly [number, number, number],
 ): [number, number, number] => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 
-describe("quadCorners", () => {
-  it("winds counter-clockwise as seen from the side the face points at", () => {
+describe('quadCorners', () => {
+  it('winds counter-clockwise as seen from the side the face points at', () => {
     for (const axis of [0, 1, 2] as FaceAxis[]) {
       for (const positive of [true, false]) {
         const quad: MergedQuad = { axis, positive, slice: 1, u: 0, v: 0, width: 2, height: 3 };
@@ -238,7 +238,7 @@ describe("quadCorners", () => {
     }
   });
 
-  it("spans the rectangle it describes", () => {
+  it('spans the rectangle it describes', () => {
     const corners = quadCorners({
       axis: 1,
       positive: true,

@@ -3,12 +3,12 @@
  * lounge seating, on a low platform. 64x64x20 (16x16 m), a 4x4 tile.
  * The open lounge faces +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "beach-club",
-  label: "Beach Club",
-  category: "leisure",
+  id: 'beach-club',
+  label: 'Beach Club',
+  category: 'leisure',
   tiles: { x: 4, z: 4 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

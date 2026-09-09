@@ -3,12 +3,12 @@
  * gently arcing water jets, on a low platform. 32x32x19 (8x8 m, 4.75 m tall), a
  * 2x2 tile filled edge to edge.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "fountain",
-  label: "Fountain",
-  category: "amenities",
+  id: 'fountain',
+  label: 'Fountain',
+  category: 'amenities',
   tiles: { x: 2, z: 2 },
   lights: [{ x: 16, y: 8, z: 16, color: 0x9fd8f2, intensity: 120, distance: 64 }],
   build: (b: VoxelBuilder) => {

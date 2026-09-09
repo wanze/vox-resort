@@ -3,12 +3,12 @@
  * tables under parasols and potted plants, on a low platform. 64x48x27
  * (16x12 m, 6.75 m to the ridge), a 4x3 tile. Terrace opens toward +z.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "restaurant",
-  label: "Restaurant",
-  category: "amenities",
+  id: 'restaurant',
+  label: 'Restaurant',
+  category: 'amenities',
   tiles: { x: 4, z: 3 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

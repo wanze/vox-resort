@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { TILE_VOXELS } from "../../../../voxel-gen/voxelgen.ts";
-import { OBJECT_TYPES } from "../../catalog/domain/objectTypes";
+import { describe, expect, it } from 'vitest';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import {
   decorationsFor,
   derivedKey,
@@ -17,8 +17,8 @@ import {
   widthOffsets,
   type LayoutItem,
   type ResortLayout,
-} from "./resortLayout";
-import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN, type ResortPlan } from "./resortPlan";
+} from './resortLayout';
+import { HEDGE_ID, LAMP_ID, PATH_ID, RESORT_PLAN, type ResortPlan } from './resortPlan';
 
 /** An item that exactly fills the tiles it claims. */
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
@@ -30,159 +30,159 @@ const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
 });
 
 /** A tiny plan: one 2x2 hut on a 4x4 plot, ringed by streets. */
-const tinyItems: LayoutItem[] = [item(PATH_ID), item("hut", 2, 2)];
+const tinyItems: LayoutItem[] = [item(PATH_ID), item('hut', 2, 2)];
 const tinyPlan: ResortPlan = {
   tilesX: 4,
   tilesZ: 4,
-  plots: [{ id: "hut", tileX: 1, tileZ: 1 }],
+  plots: [{ id: 'hut', tileX: 1, tileZ: 1 }],
   nodes: [
-    { id: "nw", tileX: 0, tileZ: 0 },
-    { id: "ne", tileX: 3, tileZ: 0 },
-    { id: "sw", tileX: 0, tileZ: 3 },
-    { id: "se", tileX: 3, tileZ: 3 },
+    { id: 'nw', tileX: 0, tileZ: 0 },
+    { id: 'ne', tileX: 3, tileZ: 0 },
+    { id: 'sw', tileX: 0, tileZ: 3 },
+    { id: 'se', tileX: 3, tileZ: 3 },
   ],
   edges: [
-    { from: "nw", to: "ne" },
-    { from: "sw", to: "se" },
-    { from: "nw", to: "sw" },
-    { from: "ne", to: "se" },
+    { from: 'nw', to: 'ne' },
+    { from: 'sw', to: 'se' },
+    { from: 'nw', to: 'sw' },
+    { from: 'ne', to: 'se' },
   ],
   plazas: [],
 };
 
 const node = (id: string, tileX: number, tileZ: number) => ({ id, tileX, tileZ });
 
-describe("widthOffsets", () => {
-  it("keeps a one-tile street on its centre line", () => {
+describe('widthOffsets', () => {
+  it('keeps a one-tile street on its centre line', () => {
     expect(widthOffsets(1)).toEqual([0]);
   });
 
-  it("grows an even width towards the low side", () => {
+  it('grows an even width towards the low side', () => {
     expect(widthOffsets(2)).toEqual([-1, 0]);
     expect(widthOffsets(4)).toEqual([-2, -1, 0, 1]);
   });
 
-  it("grows an odd width symmetrically", () => {
+  it('grows an odd width symmetrically', () => {
     expect(widthOffsets(3)).toEqual([-1, 0, 1]);
   });
 
-  it("rejects a street with no width", () => {
+  it('rejects a street with no width', () => {
     expect(() => widthOffsets(0)).toThrow(/cannot be/);
   });
 });
 
-describe("routeEdgeTiles", () => {
-  it("runs straight along one axis", () => {
-    const tiles = routeEdgeTiles(node("a", 2, 5), node("b", 5, 5));
+describe('routeEdgeTiles', () => {
+  it('runs straight along one axis', () => {
+    const tiles = routeEdgeTiles(node('a', 2, 5), node('b', 5, 5));
     expect(tiles.map((tile) => tile.x).toSorted()).toEqual([2, 3, 4, 5]);
     expect(tiles.every((tile) => tile.z === 5)).toBe(true);
   });
 
-  it("turns as an L, taking the x leg first by default", () => {
+  it('turns as an L, taking the x leg first by default', () => {
     const tiles = new Set(
-      routeEdgeTiles(node("a", 0, 0), node("b", 2, 2)).map((t) => `${t.x},${t.z}`),
+      routeEdgeTiles(node('a', 0, 0), node('b', 2, 2)).map((t) => `${t.x},${t.z}`),
     );
-    expect(tiles.has("1,0")).toBe(true); // along x at the start z
-    expect(tiles.has("2,1")).toBe(true); // then down z at the end x
-    expect(tiles.has("0,1")).toBe(false);
+    expect(tiles.has('1,0')).toBe(true); // along x at the start z
+    expect(tiles.has('2,1')).toBe(true); // then down z at the end x
+    expect(tiles.has('0,1')).toBe(false);
   });
 
-  it("takes the z leg first when asked", () => {
+  it('takes the z leg first when asked', () => {
     const tiles = new Set(
-      routeEdgeTiles(node("a", 0, 0), node("b", 2, 2), 1, "z-first").map((t) => `${t.x},${t.z}`),
+      routeEdgeTiles(node('a', 0, 0), node('b', 2, 2), 1, 'z-first').map((t) => `${t.x},${t.z}`),
     );
-    expect(tiles.has("0,1")).toBe(true);
-    expect(tiles.has("1,0")).toBe(false);
+    expect(tiles.has('0,1')).toBe(true);
+    expect(tiles.has('1,0')).toBe(false);
   });
 
-  it("squares the corner off so a wide street does not pinch", () => {
+  it('squares the corner off so a wide street does not pinch', () => {
     const tiles = new Set(
-      routeEdgeTiles(node("a", 0, 0), node("b", 4, 4), 2).map((t) => `${t.x},${t.z}`),
+      routeEdgeTiles(node('a', 0, 0), node('b', 4, 4), 2).map((t) => `${t.x},${t.z}`),
     );
     // Both legs are two wide, and the corner carries the full width.
-    expect(tiles.has("3,-1")).toBe(true);
-    expect(tiles.has("4,-1")).toBe(true);
-    expect(tiles.has("3,0")).toBe(true);
-    expect(tiles.has("4,0")).toBe(true);
+    expect(tiles.has('3,-1')).toBe(true);
+    expect(tiles.has('4,-1')).toBe(true);
+    expect(tiles.has('3,0')).toBe(true);
+    expect(tiles.has('4,0')).toBe(true);
   });
 });
 
-describe("streetTiles", () => {
-  it("paves the whole ring the tiny plan describes", () => {
+describe('streetTiles', () => {
+  it('paves the whole ring the tiny plan describes', () => {
     expect(streetTiles(tinyPlan)).toHaveLength(12);
   });
 
-  it("paves a plaza wholesale", () => {
+  it('paves a plaza wholesale', () => {
     const withPlaza: ResortPlan = { ...tinyPlan, plazas: [{ x0: 1, x1: 2, z0: 1, z1: 2 }] };
     expect(streetTiles(withPlaza)).toHaveLength(16);
   });
 
-  it("rejects a street that leaves the plot", () => {
+  it('rejects a street that leaves the plot', () => {
     const plan: ResortPlan = {
       ...tinyPlan,
-      nodes: [...tinyPlan.nodes, { id: "far", tileX: 9, tileZ: 0 }],
-      edges: [{ from: "nw", to: "far" }],
+      nodes: [...tinyPlan.nodes, { id: 'far', tileX: 9, tileZ: 0 }],
+      edges: [{ from: 'nw', to: 'far' }],
     };
     expect(() => streetTiles(plan)).toThrow(/leaves the plot/);
   });
 
-  it("rejects an edge naming a node the plan never placed", () => {
-    const plan: ResortPlan = { ...tinyPlan, edges: [{ from: "nw", to: "nowhere" }] };
+  it('rejects an edge naming a node the plan never placed', () => {
+    const plan: ResortPlan = { ...tinyPlan, edges: [{ from: 'nw', to: 'nowhere' }] };
     expect(() => streetTiles(plan)).toThrow(/unknown node/);
   });
 });
 
-describe("plotKeys", () => {
-  it("leaves a type placed once with its bare id", () => {
-    expect(plotKeys([{ id: "hut", tileX: 0, tileZ: 0 }])).toEqual(["hut"]);
+describe('plotKeys', () => {
+  it('leaves a type placed once with its bare id', () => {
+    expect(plotKeys([{ id: 'hut', tileX: 0, tileZ: 0 }])).toEqual(['hut']);
   });
 
-  it("numbers the repeats of a type", () => {
+  it('numbers the repeats of a type', () => {
     expect(
       plotKeys([
-        { id: "hut", tileX: 0, tileZ: 0 },
-        { id: "shed", tileX: 1, tileZ: 0 },
-        { id: "hut", tileX: 2, tileZ: 0 },
+        { id: 'hut', tileX: 0, tileZ: 0 },
+        { id: 'shed', tileX: 1, tileZ: 0 },
+        { id: 'hut', tileX: 2, tileZ: 0 },
       ]),
-    ).toEqual(["hut", "shed", "hut#2"]);
+    ).toEqual(['hut', 'shed', 'hut#2']);
   });
 });
 
-describe("derivedKey", () => {
-  it("names a derived placement after the tile it stands on", () => {
+describe('derivedKey', () => {
+  it('names a derived placement after the tile it stands on', () => {
     expect(derivedKey(PATH_ID, 12, 7)).toBe(`${PATH_ID}@12,7`);
   });
 
-  it("separates tiles that differ on either axis", () => {
+  it('separates tiles that differ on either axis', () => {
     expect(derivedKey(PATH_ID, 1, 2)).not.toBe(derivedKey(PATH_ID, 2, 1));
   });
 
-  it("gives two types on the same tile different keys", () => {
+  it('gives two types on the same tile different keys', () => {
     expect(derivedKey(LAMP_ID, 3, 3)).not.toBe(derivedKey(HEDGE_ID, 3, 3));
   });
 });
 
-describe("place", () => {
-  it("anchors a full-footprint model on its tile", () => {
-    const placement = place(item("hut", 2, 2), "hut", 3, 4);
-    expect(placement).toMatchObject({ key: "hut", id: "hut", tileX: 3, tileZ: 4 });
+describe('place', () => {
+  it('anchors a full-footprint model on its tile', () => {
+    const placement = place(item('hut', 2, 2), 'hut', 3, 4);
+    expect(placement).toMatchObject({ key: 'hut', id: 'hut', tileX: 3, tileZ: 4 });
     expect([placement.x, placement.z]).toEqual([3 * TILE_VOXELS, 4 * TILE_VOXELS]);
   });
 
-  it("centres a model smaller than the footprint it claims", () => {
-    const narrow: LayoutItem = { id: "post", tilesX: 2, tilesZ: 2, width: 4, depth: 4 };
-    const placement = place(narrow, "post", 1, 1);
+  it('centres a model smaller than the footprint it claims', () => {
+    const narrow: LayoutItem = { id: 'post', tilesX: 2, tilesZ: 2, width: 4, depth: 4 };
+    const placement = place(narrow, 'post', 1, 1);
     expect(placement.x).toBe(TILE_VOXELS + Math.floor((2 * TILE_VOXELS - 4) / 2));
     expect(placement.z).toBe(placement.x);
   });
 
-  it("stands an object unturned when nobody said otherwise", () => {
-    expect(place(item("hut", 2, 3), "hut", 0, 0).rotation).toBe(0);
+  it('stands an object unturned when nobody said otherwise', () => {
+    expect(place(item('hut', 2, 3), 'hut', 0, 0).rotation).toBe(0);
   });
 
-  it("swaps the footprint and the extent a quarter turn swaps", () => {
-    const cottage: LayoutItem = { id: "cottage", tilesX: 2, tilesZ: 3, width: 30, depth: 44 };
-    expect(place(cottage, "cottage", 4, 5, 1)).toMatchObject({
+  it('swaps the footprint and the extent a quarter turn swaps', () => {
+    const cottage: LayoutItem = { id: 'cottage', tilesX: 2, tilesZ: 3, width: 30, depth: 44 };
+    expect(place(cottage, 'cottage', 4, 5, 1)).toMatchObject({
       tileX: 4,
       tileZ: 5,
       tilesX: 3,
@@ -193,12 +193,12 @@ describe("place", () => {
     });
   });
 
-  it("still anchors a turned object on the tile it was placed on", () => {
+  it('still anchors a turned object on the tile it was placed on', () => {
     // The turn is about the object, not about the plot: whichever way it faces,
     // its footprint starts on the same north-west tile.
-    const cottage: LayoutItem = { id: "cottage", tilesX: 2, tilesZ: 3, width: 32, depth: 48 };
+    const cottage: LayoutItem = { id: 'cottage', tilesX: 2, tilesZ: 3, width: 32, depth: 48 };
     for (const rotation of [0, 1, 2, 3] as const) {
-      const placement = place(cottage, "cottage", 4, 5, rotation);
+      const placement = place(cottage, 'cottage', 4, 5, rotation);
       expect({ rotation, x: placement.x, z: placement.z }).toEqual({
         rotation,
         x: 4 * TILE_VOXELS,
@@ -207,22 +207,22 @@ describe("place", () => {
     }
   });
 
-  it("centres a turned model in the footprint it now claims", () => {
-    const narrow: LayoutItem = { id: "post", tilesX: 1, tilesZ: 2, width: 4, depth: 20 };
-    const placement = place(narrow, "post", 0, 0, 1);
+  it('centres a turned model in the footprint it now claims', () => {
+    const narrow: LayoutItem = { id: 'post', tilesX: 1, tilesZ: 2, width: 4, depth: 20 };
+    const placement = place(narrow, 'post', 0, 0, 1);
     expect(placement).toMatchObject({ tilesX: 2, tilesZ: 1, width: 20, depth: 4 });
     expect(placement.x).toBe(Math.floor((2 * TILE_VOXELS - 20) / 2));
     expect(placement.z).toBe(Math.floor((TILE_VOXELS - 4) / 2));
   });
 });
 
-describe("layoutResort", () => {
-  it("places each plot on its tile boundary", () => {
+describe('layoutResort', () => {
+  it('places each plot on its tile boundary', () => {
     const { placements } = layoutResort(tinyItems, tinyPlan);
     expect(placements).toHaveLength(1);
     expect(placements[0]).toMatchObject({
-      key: "hut",
-      id: "hut",
+      key: 'hut',
+      id: 'hut',
       tileX: 1,
       tileZ: 1,
       x: TILE_VOXELS,
@@ -230,81 +230,81 @@ describe("layoutResort", () => {
     });
   });
 
-  it("centres a model that does not fill its footprint", () => {
-    const narrow: LayoutItem = { id: "hut", tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
+  it('centres a model that does not fill its footprint', () => {
+    const narrow: LayoutItem = { id: 'hut', tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
     const { placements } = layoutResort([item(PATH_ID), narrow], tinyPlan);
     expect(placements[0]?.x).toBe(TILE_VOXELS + 6); // (32 - 20) / 2
     expect(placements[0]?.z).toBe(TILE_VOXELS);
   });
 
-  it("paves every street tile no object stands on", () => {
+  it('paves every street tile no object stands on', () => {
     const { paths } = layoutResort(tinyItems, tinyPlan);
     expect(paths).toHaveLength(12); // the 4x4 ring
     expect(paths.every((placement) => placement.id === PATH_ID)).toBe(true);
     expect(paths.some((placement) => placement.tileX === 1 && placement.tileZ === 1)).toBe(false);
   });
 
-  it("gives every placement a unique key", () => {
+  it('gives every placement a unique key', () => {
     const plan: ResortPlan = {
       ...tinyPlan,
       tilesX: 6,
       tilesZ: 6,
       plots: [
-        { id: "hut", tileX: 1, tileZ: 1 },
-        { id: "hut", tileX: 3, tileZ: 3 },
+        { id: 'hut', tileX: 1, tileZ: 1 },
+        { id: 'hut', tileX: 3, tileZ: 3 },
       ],
       nodes: [
-        { id: "nw", tileX: 0, tileZ: 0 },
-        { id: "ne", tileX: 5, tileZ: 0 },
-        { id: "sw", tileX: 0, tileZ: 5 },
-        { id: "se", tileX: 5, tileZ: 5 },
+        { id: 'nw', tileX: 0, tileZ: 0 },
+        { id: 'ne', tileX: 5, tileZ: 0 },
+        { id: 'sw', tileX: 0, tileZ: 5 },
+        { id: 'se', tileX: 5, tileZ: 5 },
       ],
     };
     const layout = layoutResort(tinyItems, plan);
     const keys = [...layout.placements, ...layout.props, ...layout.paths].map((p) => p.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(layout.placements.map((p) => p.key)).toEqual(["hut", "hut#2"]);
+    expect(layout.placements.map((p) => p.key)).toEqual(['hut', 'hut#2']);
   });
 
-  it("leaves a street tile unpaved where an object stands on it", () => {
-    const plan: ResortPlan = { ...tinyPlan, plots: [{ id: "hut", tileX: 0, tileZ: 0 }] };
+  it('leaves a street tile unpaved where an object stands on it', () => {
+    const plan: ResortPlan = { ...tinyPlan, plots: [{ id: 'hut', tileX: 0, tileZ: 0 }] };
     const paved = pathTilesFor(tinyItems, plan);
     expect(paved.some((tile) => tile.x < 2 && tile.z < 2)).toBe(false);
     expect(paved).toHaveLength(9); // the 12-tile ring, less the 3 the hut covers
   });
 
-  it("rejects two objects on the same tile", () => {
+  it('rejects two objects on the same tile', () => {
     const plan: ResortPlan = {
       ...tinyPlan,
       plots: [
-        { id: "hut", tileX: 1, tileZ: 1 },
-        { id: "shed", tileX: 2, tileZ: 2 },
+        { id: 'hut', tileX: 1, tileZ: 1 },
+        { id: 'shed', tileX: 2, tileZ: 2 },
       ],
     };
-    expect(() => occupiedTiles([...tinyItems, item("shed", 2, 2)], plan)).toThrow(/overlaps/);
+    expect(() => occupiedTiles([...tinyItems, item('shed', 2, 2)], plan)).toThrow(/overlaps/);
   });
 
-  it("rejects an object hanging off the plot", () => {
-    const plan: ResortPlan = { ...tinyPlan, plots: [{ id: "hut", tileX: 3, tileZ: 1 }] };
+  it('rejects an object hanging off the plot', () => {
+    const plan: ResortPlan = { ...tinyPlan, plots: [{ id: 'hut', tileX: 3, tileZ: 1 }] };
     expect(() => occupiedTiles(tinyItems, plan)).toThrow(/does not fit/);
   });
 
-  it("rejects a model larger than the tiles it claims", () => {
-    const fat: LayoutItem = { id: "hut", tilesX: 2, tilesZ: 2, width: 40, depth: 32 };
+  it('rejects a model larger than the tiles it claims', () => {
+    const fat: LayoutItem = { id: 'hut', tilesX: 2, tilesZ: 2, width: 40, depth: 32 };
     expect(() => occupiedTiles([item(PATH_ID), fat], tinyPlan)).toThrow(/larger than/);
   });
 
-  it("rejects an object the plan never places", () => {
-    expect(() => layoutResort([...tinyItems, item("shed")], tinyPlan)).toThrow(/no plot/);
+  it('rejects an object the plan never places', () => {
+    expect(() => layoutResort([...tinyItems, item('shed')], tinyPlan)).toThrow(/no plot/);
   });
 
-  it("does not require a plot for the objects it scatters itself", () => {
+  it('does not require a plot for the objects it scatters itself', () => {
     const items = [...tinyItems, item(LAMP_ID), item(HEDGE_ID)];
     expect(() => layoutResort(items, tinyPlan)).not.toThrow();
   });
 
-  it("rejects a catalogue with nothing to pave with", () => {
-    expect(() => layoutResort([item("hut", 2, 2)], tinyPlan)).toThrow(/pave with/);
+  it('rejects a catalogue with nothing to pave with', () => {
+    expect(() => layoutResort([item('hut', 2, 2)], tinyPlan)).toThrow(/pave with/);
   });
 });
 
@@ -312,7 +312,7 @@ describe("layoutResort", () => {
 const derived = (layout: ResortLayout): Set<string> =>
   new Set([...layout.paths, ...layout.props].map((placement) => placement.key));
 
-describe("derived keys under an edit", () => {
+describe('derived keys under an edit', () => {
   const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
@@ -323,17 +323,17 @@ describe("derived keys under an edit", () => {
   /** The real plan, plus one more cottage on a free tile in the north-west. */
   const edited: ResortPlan = {
     ...RESORT_PLAN,
-    plots: [...RESORT_PLAN.plots, { id: "cottage", tileX: 5, tileZ: 5 }],
+    plots: [...RESORT_PLAN.plots, { id: 'cottage', tileX: 5, tileZ: 5 }],
   };
 
-  it("keys every derived placement on the tile it stands on", () => {
+  it('keys every derived placement on the tile it stands on', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     for (const placement of [...layout.paths, ...layout.props]) {
       expect(placement.key).toBe(derivedKey(placement.id, placement.tileX, placement.tileZ));
     }
   });
 
-  it("renames only what an edit actually moved", () => {
+  it('renames only what an edit actually moved', () => {
     const before = layoutResort(items, RESORT_PLAN);
     const after = layoutResort(items, edited);
     const was = derived(before);
@@ -351,22 +351,22 @@ describe("derived keys under an edit", () => {
   });
 });
 
-describe("spurs", () => {
+describe('spurs', () => {
   /** A 7x7 plot with one street across the top and a hut two rows below it. */
   const plan: ResortPlan = {
     tilesX: 7,
     tilesZ: 7,
-    plots: [{ id: "hut", tileX: 2, tileZ: 3 }],
+    plots: [{ id: 'hut', tileX: 2, tileZ: 3 }],
     nodes: [
-      { id: "w", tileX: 0, tileZ: 0 },
-      { id: "e", tileX: 6, tileZ: 0 },
+      { id: 'w', tileX: 0, tileZ: 0 },
+      { id: 'e', tileX: 6, tileZ: 0 },
     ],
-    edges: [{ from: "w", to: "e" }],
+    edges: [{ from: 'w', to: 'e' }],
     plazas: [],
   };
 
-  it("grows the shortest path from an object to the network", () => {
-    const paved = pathTilesFor([item(PATH_ID), item("hut", 2, 2)], plan);
+  it('grows the shortest path from an object to the network', () => {
+    const paved = pathTilesFor([item(PATH_ID), item('hut', 2, 2)], plan);
     const spur = paved.filter((tile) => tile.z > 0);
     // Two tiles: the hut's border row at z = 2, then z = 1 to reach the street.
     expect(spur).toHaveLength(2);
@@ -374,37 +374,37 @@ describe("spurs", () => {
     expect(isPathNetworkConnected(paved)).toBe(true);
   });
 
-  it("grows nothing when a street already touches the object", () => {
-    const touching: ResortPlan = { ...plan, plots: [{ id: "hut", tileX: 2, tileZ: 1 }] };
-    expect(pathTilesFor([item(PATH_ID), item("hut", 2, 2)], touching)).toHaveLength(7);
+  it('grows nothing when a street already touches the object', () => {
+    const touching: ResortPlan = { ...plan, plots: [{ id: 'hut', tileX: 2, tileZ: 1 }] };
+    expect(pathTilesFor([item(PATH_ID), item('hut', 2, 2)], touching)).toHaveLength(7);
   });
 
-  it("reports an object it cannot reach", () => {
+  it('reports an object it cannot reach', () => {
     // Four sheds box the hut in on every side; nothing is left to route through.
     const walled: ResortPlan = {
       tilesX: 3,
       tilesZ: 3,
       plots: [
-        { id: "hut", tileX: 1, tileZ: 1 },
-        { id: "shed", tileX: 1, tileZ: 0 },
-        { id: "shed", tileX: 0, tileZ: 1 },
-        { id: "shed", tileX: 2, tileZ: 1 },
-        { id: "shed", tileX: 1, tileZ: 2 },
+        { id: 'hut', tileX: 1, tileZ: 1 },
+        { id: 'shed', tileX: 1, tileZ: 0 },
+        { id: 'shed', tileX: 0, tileZ: 1 },
+        { id: 'shed', tileX: 2, tileZ: 1 },
+        { id: 'shed', tileX: 1, tileZ: 2 },
       ],
       nodes: [],
       edges: [],
       plazas: [{ x0: 0, x1: 0, z0: 0, z1: 0 }],
     };
-    expect(() => pathTilesFor([item(PATH_ID), item("hut"), item("shed")], walled)).toThrow(
+    expect(() => pathTilesFor([item(PATH_ID), item('hut'), item('shed')], walled)).toThrow(
       /cannot be reached/,
     );
   });
 });
 
-describe("decorationsFor", () => {
-  const items = [item(PATH_ID), item("hut", 2, 2), item(LAMP_ID), item(HEDGE_ID)];
+describe('decorationsFor', () => {
+  const items = [item(PATH_ID), item('hut', 2, 2), item(LAMP_ID), item(HEDGE_ID)];
 
-  it("never puts a lamp or a hedge on a paved or occupied tile", () => {
+  it('never puts a lamp or a hedge on a paved or occupied tile', () => {
     const { lamps, hedges } = decorationsFor(items, tinyPlan);
     const paved = new Set(pathTilesFor(items, tinyPlan).map((tile) => `${tile.x},${tile.z}`));
     const occupied = new Set(occupiedTiles(items, tinyPlan).keys());
@@ -414,7 +414,7 @@ describe("decorationsFor", () => {
     }
   });
 
-  it("keeps lamps at least the spacing apart", () => {
+  it('keeps lamps at least the spacing apart', () => {
     const { lamps } = decorationsFor(
       OBJECT_TYPES.map((type) => ({
         id: type.id,
@@ -436,12 +436,12 @@ describe("decorationsFor", () => {
   });
 });
 
-describe("isPathNetworkConnected", () => {
-  it("accepts an empty network", () => {
+describe('isPathNetworkConnected', () => {
+  it('accepts an empty network', () => {
     expect(isPathNetworkConnected([])).toBe(true);
   });
 
-  it("accepts a run of touching tiles", () => {
+  it('accepts a run of touching tiles', () => {
     expect(
       isPathNetworkConnected([
         { x: 0, z: 0 },
@@ -451,7 +451,7 @@ describe("isPathNetworkConnected", () => {
     ).toBe(true);
   });
 
-  it("rejects tiles that only touch diagonally", () => {
+  it('rejects tiles that only touch diagonally', () => {
     expect(
       isPathNetworkConnected([
         { x: 0, z: 0 },
@@ -461,7 +461,7 @@ describe("isPathNetworkConnected", () => {
   });
 });
 
-describe("the resort plan", () => {
+describe('the resort plan', () => {
   const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
@@ -470,7 +470,7 @@ describe("the resort plan", () => {
     depth: type.model.depth,
   }));
 
-  it("gives every object in the catalogue a plot or a reason not to need one", () => {
+  it('gives every object in the catalogue a plot or a reason not to need one', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     expect(layout.placements.length).toBe(RESORT_PLAN.plots.length);
     expect(new Set(layout.placements.map((placement) => placement.key)).size).toBe(
@@ -483,7 +483,7 @@ describe("the resort plan", () => {
     }
   });
 
-  it("keeps every object on tile boundaries inside the plot", () => {
+  it('keeps every object on tile boundaries inside the plot', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     for (const placement of [...layout.placements, ...layout.props, ...layout.paths]) {
       expect(placement.tileX).toBeGreaterThanOrEqual(0);
@@ -493,7 +493,7 @@ describe("the resort plan", () => {
     }
   });
 
-  it("never lets two objects share a tile", () => {
+  it('never lets two objects share a tile', () => {
     // occupiedTiles throws on overlap; reaching the count means it found none.
     const occupied = occupiedTiles(items, RESORT_PLAN);
     const claimed = RESORT_PLAN.plots.reduce((total, plot) => {
@@ -503,29 +503,29 @@ describe("the resort plan", () => {
     expect(occupied.size).toBe(claimed);
   });
 
-  it("never paves a tile an object stands on", () => {
+  it('never paves a tile an object stands on', () => {
     const occupied = occupiedTiles(items, RESORT_PLAN);
     for (const tile of pathTilesFor(items, RESORT_PLAN)) {
       expect(occupied.has(`${tile.x},${tile.z}`)).toBe(false);
     }
   });
 
-  it("routes the paths as one connected network", () => {
+  it('routes the paths as one connected network', () => {
     const tiles = pathTilesFor(items, RESORT_PLAN);
     expect(tiles.length).toBeGreaterThan(100);
     expect(isPathNetworkConnected(tiles)).toBe(true);
   });
 
-  it("leaves every object reachable from the path network", () => {
+  it('leaves every object reachable from the path network', () => {
     expect(plotsWithoutPathAccess(items, RESORT_PLAN)).toEqual([]);
   });
 
-  it("paves sparingly: streets and spurs, not blocks", () => {
+  it('paves sparingly: streets and spurs, not blocks', () => {
     const tiles = pathTilesFor(items, RESORT_PLAN);
     expect(tiles.length).toBeLessThan((RESORT_PLAN.tilesX * RESORT_PLAN.tilesZ) / 4);
   });
 
-  it("dresses the paths with lamps and hedges", () => {
+  it('dresses the paths with lamps and hedges', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     const lamps = layout.props.filter((prop) => prop.id === LAMP_ID);
     const hedges = layout.props.filter((prop) => prop.id === HEDGE_ID);
@@ -533,20 +533,20 @@ describe("the resort plan", () => {
     expect(hedges.length).toBeGreaterThan(50);
   });
 
-  it("stands more than one of the types the resort repeats", () => {
+  it('stands more than one of the types the resort repeats', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     const counts = new Map<string, number>();
     for (const placement of layout.placements) {
       counts.set(placement.id, (counts.get(placement.id) ?? 0) + 1);
     }
-    expect(counts.get("cottage")).toBeGreaterThan(5);
-    expect(counts.get("bungalow")).toBeGreaterThan(5);
+    expect(counts.get('cottage')).toBeGreaterThan(5);
+    expect(counts.get('bungalow')).toBeGreaterThan(5);
   });
 });
 
-describe("placementCenter", () => {
-  it("takes the middle of the model, not of its footprint", () => {
-    const narrow: LayoutItem = { id: "hut", tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
+describe('placementCenter', () => {
+  it('takes the middle of the model, not of its footprint', () => {
+    const narrow: LayoutItem = { id: 'hut', tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
     const { placements } = layoutResort([item(PATH_ID), narrow], tinyPlan);
     expect(placementCenter(placements[0]!)).toEqual({ x: TILE_VOXELS + 16, z: TILE_VOXELS + 16 });
   });

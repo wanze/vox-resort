@@ -4,12 +4,12 @@
  * (8x4 m kiosk, 4.75 m to the sign), a 2x1 tile. Front (counter) faces +z. The isometric preview
  * camera sits in the +z/-x octant, so detail lives on those two faces.
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "snack-bar",
-  label: "Snack Bar",
-  category: "amenities",
+  id: 'snack-bar',
+  label: 'Snack Bar',
+  category: 'amenities',
   tiles: { x: 2, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

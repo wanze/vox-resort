@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { objectTypeGroups } from "../../catalog/domain/objectTypes";
+import { useMemo } from 'react';
+import { objectTypeGroups } from '../../catalog/domain/objectTypes';
 
 export interface BuildPaletteProps {
   /** Type the pointer is armed with, or null when nothing is being placed. */
@@ -7,7 +7,7 @@ export interface BuildPaletteProps {
   readonly onSelect: (typeId: string | null) => void;
 }
 
-const toCssColor = (color: number): string => `#${color.toString(16).padStart(6, "0")}`;
+const toCssColor = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
 
 /**
  * The build palette: every object in the catalogue, on the shelf its model
@@ -54,7 +54,7 @@ export function BuildPalette({ selected, onSelect }: BuildPaletteProps) {
                       <span className="hud-palette-label">{type.label}</span>
                       <span className="hud-palette-size">
                         {type.model.tiles.x}×{type.model.tiles.z}
-                        {single ? " ✎" : ""}
+                        {single ? ' ✎' : ''}
                       </span>
                     </button>
                   </li>
@@ -66,8 +66,8 @@ export function BuildPalette({ selected, onSelect }: BuildPaletteProps) {
       </div>
       <p className="hud-palette-hint">
         {selected
-          ? "Click to place, drag to draw ✎ objects. R turns the object a quarter, shift-R the other way. The right button moves the camera while a type is armed; Esc cancels."
-          : "Pick an object, then click the ground to place it. R turns it before it goes down; ✎ objects can be drawn by dragging."}
+          ? 'Click to place, drag to draw ✎ objects. R turns the object a quarter, shift-R the other way. The right button moves the camera while a type is armed; Esc cancels.'
+          : 'Pick an object, then click the ground to place it. R turns it before it goes down; ✎ objects can be drawn by dragging.'}
       </p>
     </section>
   );

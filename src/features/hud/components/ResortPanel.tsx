@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState } from 'react';
 import {
   clampParams,
   PLOT_DENSITY,
   PLOT_TILES,
   type ResortParams,
-} from "../../layout/domain/resortGenerator";
+} from '../../layout/domain/resortGenerator';
 
 export interface ResortPanelProps {
   /** What the resort on screen was grown from. */
@@ -30,8 +30,8 @@ function isStaged(draft: ResortParams, grown: ResortParams): boolean {
 
 /** What the button offers: the work, a different resort, or the same one again. */
 function goLabel(busy: boolean, staged: boolean): string {
-  if (busy) return "Building…";
-  return staged ? "Generate" : "Generate again";
+  if (busy) return 'Building…';
+  return staged ? 'Generate' : 'Generate again';
 }
 
 /**

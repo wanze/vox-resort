@@ -3,12 +3,12 @@
  * green fronds spreading on all sides, plus a few coconuts, on a low square base.
  * 16x16 footprint, fits a 1x1 tile (tall).
  */
-import { defineModel, type VoxelBuilder } from "../voxelgen.ts";
+import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: "palm",
-  label: "Palm",
-  category: "grounds",
+  id: 'palm',
+  label: 'Palm',
+  category: 'grounds',
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

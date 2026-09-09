@@ -1,15 +1,15 @@
-import { Color } from "three/webgpu";
-import { describe, expect, it } from "vitest";
-import type { ScratchRegion } from "../../voxel-world/domain/modelScratch";
-import { srgbToLinear } from "../../lighting/domain/lightGrid";
+import { Color } from 'three/webgpu';
+import { describe, expect, it } from 'vitest';
+import type { ScratchRegion } from '../../voxel-world/domain/modelScratch';
+import { srgbToLinear } from '../../lighting/domain/lightGrid';
 import {
   buildModelAttributes,
   MISSING_COLOR,
   transferablesOf,
   type SectionMesh,
-} from "./modelAttributes";
-import { planeAxes, type FaceAxis } from "./greedyMesh";
-import { VERTEX_FLOAT_STRIDE } from "./vertexBuffer";
+} from './modelAttributes';
+import { planeAxes, type FaceAxis } from './greedyMesh';
+import { VERTEX_FLOAT_STRIDE } from './vertexBuffer';
 
 /** Builds a DVE-shaped interleaved vertex stream for one axis-aligned face. */
 function sectionOf(
@@ -47,30 +47,30 @@ function sectionOf(
 }
 
 const regions: ScratchRegion[] = [
-  { id: "path", x: 0, endX: 32 },
-  { id: "lamp", x: 64, endX: 96 },
+  { id: 'path', x: 0, endX: 32 },
+  { id: 'lamp', x: 64, endX: 96 },
 ];
 
 const flat = (count: number): { axis: FaceAxis; slice: number; u: number; v: number }[] =>
   Array.from({ length: count }, (_, index) => ({ axis: 1 as FaceAxis, slice: 0, u: index, v: 0 }));
 
-describe("buildModelAttributes", () => {
-  it("returns one entry per region, in region order, even for models with no faces", () => {
+describe('buildModelAttributes', () => {
+  it('returns one entry per region, in region order, even for models with no faces', () => {
     const models = buildModelAttributes({
       sections: [],
       regions,
       colorsByMaterialId: new Map(),
       emissiveByModelId: new Map(),
     });
-    expect(models.map((model) => model.id)).toEqual(["path", "lamp"]);
+    expect(models.map((model) => model.id)).toEqual(['path', 'lamp']);
     expect(models.every((model) => model.lit === null && model.emissive === null)).toBe(true);
   });
 
-  it("rebases a section onto the model that owns it", () => {
+  it('rebases a section onto the model that owns it', () => {
     const models = buildModelAttributes({
-      sections: [sectionOf("m1", { x: 64, y: 0, z: 0 }, flat(1))],
+      sections: [sectionOf('m1', { x: 64, y: 0, z: 0 }, flat(1))],
       regions,
-      colorsByMaterialId: new Map([["m1", 0xffffff]]),
+      colorsByMaterialId: new Map([['m1', 0xffffff]]),
       emissiveByModelId: new Map(),
     });
     // The region starts at x = 64, so the face lands at the model's own origin.
@@ -78,38 +78,38 @@ describe("buildModelAttributes", () => {
     expect(models[0]!.lit).toBeNull();
   });
 
-  it("merges coplanar faces of one colour", () => {
+  it('merges coplanar faces of one colour', () => {
     const models = buildModelAttributes({
-      sections: [sectionOf("m1", { x: 0, y: 0, z: 0 }, flat(8))],
+      sections: [sectionOf('m1', { x: 0, y: 0, z: 0 }, flat(8))],
       regions,
-      colorsByMaterialId: new Map([["m1", 0x808080]]),
+      colorsByMaterialId: new Map([['m1', 0x808080]]),
       emissiveByModelId: new Map(),
     });
     expect(models[0]!.unmergedTriangleCount).toBe(16);
     expect(models[0]!.triangleCount).toBe(2);
   });
 
-  it("splits the colours a model declares emissive into their own geometry", () => {
+  it('splits the colours a model declares emissive into their own geometry', () => {
     const models = buildModelAttributes({
       sections: [
-        sectionOf("stone", { x: 0, y: 0, z: 0 }, flat(2)),
-        sectionOf("glow", { x: 0, y: 4, z: 0 }, flat(2)),
+        sectionOf('stone', { x: 0, y: 0, z: 0 }, flat(2)),
+        sectionOf('glow', { x: 0, y: 4, z: 0 }, flat(2)),
       ],
       regions,
       colorsByMaterialId: new Map([
-        ["stone", 0x404040],
-        ["glow", 0xffee88],
+        ['stone', 0x404040],
+        ['glow', 0xffee88],
       ]),
-      emissiveByModelId: new Map([["path", new Set([0xffee88])]]),
+      emissiveByModelId: new Map([['path', new Set([0xffee88])]]),
     });
     expect(models[0]!.lit).not.toBeNull();
     expect(models[0]!.emissive).not.toBeNull();
     expect(models[0]!.triangleCount).toBe(4);
   });
 
-  it("paints an unregistered material the deliberate missing colour", () => {
+  it('paints an unregistered material the deliberate missing colour', () => {
     const models = buildModelAttributes({
-      sections: [sectionOf("nope", { x: 0, y: 0, z: 0 }, flat(1))],
+      sections: [sectionOf('nope', { x: 0, y: 0, z: 0 }, flat(1))],
       regions,
       colorsByMaterialId: new Map(),
       emissiveByModelId: new Map(),
@@ -121,18 +121,18 @@ describe("buildModelAttributes", () => {
     expect(b).toBeCloseTo(missing.b, 5);
   });
 
-  it("refuses a section that belongs to no model", () => {
+  it('refuses a section that belongs to no model', () => {
     expect(() =>
       buildModelAttributes({
-        sections: [sectionOf("m1", { x: 9999, y: 0, z: 0 }, flat(1))],
+        sections: [sectionOf('m1', { x: 9999, y: 0, z: 0 }, flat(1))],
         regions,
-        colorsByMaterialId: new Map([["m1", 0xffffff]]),
+        colorsByMaterialId: new Map([['m1', 0xffffff]]),
         emissiveByModelId: new Map(),
       }),
     ).toThrow(/belongs to no model/);
   });
 
-  it("writes the same linear colour Three.js would", () => {
+  it('writes the same linear colour Three.js would', () => {
     // The whole reason this module can run in a worker is that it converts
     // colours itself rather than through a `Color`. If the two ever part
     // company the resort changes shade, so they are pinned together here.
@@ -145,26 +145,26 @@ describe("buildModelAttributes", () => {
   });
 });
 
-describe("transferablesOf", () => {
-  it("lists every buffer a worker would hand over", () => {
+describe('transferablesOf', () => {
+  it('lists every buffer a worker would hand over', () => {
     const models = buildModelAttributes({
       sections: [
-        sectionOf("stone", { x: 0, y: 0, z: 0 }, flat(2)),
-        sectionOf("glow", { x: 0, y: 4, z: 0 }, flat(2)),
+        sectionOf('stone', { x: 0, y: 0, z: 0 }, flat(2)),
+        sectionOf('glow', { x: 0, y: 4, z: 0 }, flat(2)),
       ],
       regions,
       colorsByMaterialId: new Map([
-        ["stone", 0x404040],
-        ["glow", 0xffee88],
+        ['stone', 0x404040],
+        ['glow', 0xffee88],
       ]),
-      emissiveByModelId: new Map([["path", new Set([0xffee88])]]),
+      emissiveByModelId: new Map([['path', new Set([0xffee88])]]),
     });
     // Two geometries, four attributes each.
     expect(transferablesOf(models)).toHaveLength(8);
     expect(new Set(transferablesOf(models)).size).toBe(8);
   });
 
-  it("has nothing to transfer for an empty catalogue", () => {
+  it('has nothing to transfer for an empty catalogue', () => {
     expect(transferablesOf([])).toEqual([]);
   });
 });

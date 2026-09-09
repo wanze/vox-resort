@@ -73,7 +73,7 @@ import {
 } from './elevation';
 import { groundAt, isSandGround } from './ground';
 import { stairTilesFor } from './stairs';
-import { railTilesFor } from './railings';
+import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -808,39 +808,60 @@ function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan)
   }
 }
 
+/** The model each kind of rail is drawn with; a catalogue may have neither. */
+export type RailModels = { readonly [kind in RailKind]: LayoutItem | undefined };
+
+/** The rail models a catalogue offers, looked up by the ids the layout owns. */
+export function railModelsIn(items: readonly LayoutItem[]): RailModels {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return { flight: byId.get(STAIR_RAILING_ID), edge: byId.get(RAILING_ID) };
+}
+
 /**
- * The handrails, which the ground asks for exactly as it asks for the flights: a
- * drop beside a paved tile, or the flanks of a flight.
+ * Stands the rails the ground asked for, one placement per rail.
  *
- * They stand on the tile they guard rather than claiming one of their own, and a
- * catalogue with neither model in it simply comes out with no rails. See
- * `railings.ts` for the rule and `placeOnEdge` for why one of the two is not
- * centred in its tile.
+ * Split from the rule so the pointer stands a rail exactly as the layout does —
+ * same model, same key, same offset in the tile — for the same reason `climbAt`
+ * is shared: the two would otherwise drift, and a rail drawn by hand would land
+ * a voxel off the one beside it. A catalogue with neither model in it simply
+ * comes out with no rails.
+ *
+ * A rail stands on the tile it guards rather than claiming one of its own. See
+ * `railings.ts` for the rule and `placeOnEdge` for why one of the two kinds is
+ * not centred in its tile.
  */
-function railPlacements(
-  byId: ReadonlyMap<string, LayoutItem>,
-  paved: readonly Tile[],
+export function railPlacementsFor(
+  models: RailModels,
+  rails: readonly RailTile[],
   levelOf: LevelProvider,
 ): Placement[] {
-  const models = { flight: byId.get(STAIR_RAILING_ID), edge: byId.get(RAILING_ID) };
-  const rails: Placement[] = [];
-  for (const rail of railTilesFor(paved, levelOf)) {
+  const placements: Placement[] = [];
+  for (const rail of rails) {
     const item = models[rail.kind];
     if (!item) continue;
     const { x, z } = rail.tile;
-    // Keyed by the edge as well as the tile, because a corner of a terrace is
-    // one tile with two rails on it, and a derived key has to be unique.
-    const key = `${derivedKey(item.id, x, z)}:${rail.rotation}`;
     const level = levelOf(x, z);
     // A flight's balustrade covers the whole tile and is placed like anything
     // else; an edge rail is stood flush against the edge it guards.
-    rails.push(
+    placements.push(
       rail.kind === 'flight'
-        ? place(item, key, x, z, rail.rotation, level)
-        : placeOnEdge(item, key, x, z, rail.rotation, level),
+        ? place(item, railKey(item, rail), x, z, rail.rotation, level)
+        : placeOnEdge(item, railKey(item, rail), x, z, rail.rotation, level),
     );
   }
-  return rails;
+  return placements;
+}
+
+/**
+ * Key one rail stands under: its model, its tile, and the edge it guards.
+ *
+ * The edge as well as the tile, because a corner of a terrace is one tile with
+ * two rails on it and a derived key has to be unique. Everything a rail is, is
+ * in the key — which is what lets the pointer tell the rails a tile wants from
+ * the ones already standing on it by key alone. See `build/domain/handrails.ts`.
+ */
+function railKey(item: LayoutItem, rail: RailTile): string {
+  return `${derivedKey(item.id, rail.tile.x, rail.tile.z)}:${rail.rotation}`;
 }
 
 /**
@@ -905,7 +926,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     ),
   );
 
-  const rails = railPlacements(byId, paved, levelOf);
+  const rails = railPlacementsFor(railModelsIn(items), railTilesFor(paved, levelOf), levelOf);
 
   const props: Placement[] = [];
   const { lamps, hedges } = decorationsFor(items, plan);

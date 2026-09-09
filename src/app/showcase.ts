@@ -20,7 +20,11 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
-import { layoutResort, placementCenter } from '../features/layout/domain/resortLayout';
+import {
+  layoutResort,
+  placementCenter,
+  railModelsIn,
+} from '../features/layout/domain/resortLayout';
 import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
@@ -28,7 +32,9 @@ import {
   HEDGE_ID,
   LAMP_ID,
   PAVING_IDS,
+  RAILING_ID,
   RESORT_PLAN,
+  STAIR_RAILING_ID,
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
@@ -44,6 +50,7 @@ import {
 } from '../features/layout/domain/resortGenerator';
 import { layoutItemFor } from '../features/build/domain/buildPlan';
 import { isPaving, pavedGroundOf, type PavingRules } from '../features/build/domain/paving';
+import { type HandrailRules } from '../features/build/domain/handrails';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
@@ -1085,12 +1092,23 @@ function createBenchRecorder(parts: {
  */
 function listFor(plot: Plot, id: string): Placement[] {
   if (PAVING_IDS.has(id)) return plot.paths;
+  if (RAIL_IDS.has(id)) return plot.rails;
   if (PROP_IDS.has(id)) return plot.props;
   return plot.placements;
 }
 
 /** The props the layout scatters itself, kept apart from the plan's own plots. */
 const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
+
+/**
+ * The rails, which are a list of their own rather than props.
+ *
+ * Because a rail claims no ground: everything that asks what stands on a tile
+ * leaves them out, and `claimingOn` is where that is done. A rail filed with the
+ * lamps would be indexed, shadowed and baked as though it stood on the tile it
+ * only leans against.
+ */
+const RAIL_IDS: ReadonlySet<string> = new Set([RAILING_ID, STAIR_RAILING_ID]);
 
 /**
  * Holds the camera still for a benchmark run. Damping would otherwise keep
@@ -1162,11 +1180,13 @@ function createBuildMode(parts: {
   // sand, and the flight up a terrace step where a path climbs one. The items
   // come from the catalogue rather than from a list here, so paving the plot
   // with something new is a model file and nothing else.
-  const pavingItems = OBJECT_TYPES.map(layoutItemFor).filter((item) => isPaving(item));
+  const catalogue = OBJECT_TYPES.map(layoutItemFor);
+  const pavingItems = catalogue.filter((item) => isPaving(item));
   const pavingItem = (id: string): LayoutItem | null =>
     pavingItems.find((item) => item.id === id) ?? null;
+  const pavedWith = pavedGroundOf(occupancy, pavingItems);
   const paving: PavingRules = {
-    pavedWith: pavedGroundOf(occupancy, pavingItems),
+    pavedWith,
     levelOf: ground.levelOf,
     // Forwarded to whichever resort is standing, exactly as the levels are: the
     // coast moves when the plot is regenerated and the pointer does not. Sand is
@@ -1175,6 +1195,19 @@ function createBuildMode(parts: {
     isSand: (tileX, tileZ) => isSandGround(resort().shore, resort().elevation, tileX, tileZ),
     decking: pavingItem(BOARDWALK_ID),
     stairs: pavingItem(STAIRS_ID),
+  };
+
+  // The same paving and the same levels the flights are decided from, so a rail
+  // drawn by hand lands where a generated one would. What is standing is read off
+  // the plot's own list of rails rather than out of an index of its own: a rail
+  // claims no tile, so there is no index it could be in, and the only question
+  // ever asked is about the five tiles around one placement.
+  const handrails: HandrailRules = {
+    pavedWith,
+    levelOf: ground.levelOf,
+    models: railModelsIn(catalogue),
+    standing: (tileX, tileZ) =>
+      resort().plot.rails.filter((rail) => rail.tileX === tileX && rail.tileZ === tileZ),
   };
 
   const pointer = createBuildPointer({
@@ -1187,6 +1220,7 @@ function createBuildMode(parts: {
     occupancy,
     ground,
     paving,
+    handrails,
     onPlace(placement, lifted) {
       const { plot, world, lighting, shadows } = resort();
       // A flight of stairs replaces the slab a path had already laid on the
@@ -1212,6 +1246,24 @@ function createBuildMode(parts: {
       // the model brought with it.
       lighting.add(placement);
       listFor(plot, placement.id).push(placement);
+      onChange();
+    },
+    onRails(stand, lift) {
+      const { plot, world } = resort();
+      // Nothing but the world and the plot's own list: a rail stands on the
+      // paving it guards, so it is not in the occupancy index, throws no blob
+      // shadow of its own and takes no sky away — see `claimingOn`.
+      for (const rail of lift) {
+        world.remove(rail.key);
+        const at = plot.rails.findIndex((standing) => standing.key === rail.key);
+        if (at !== -1) plot.rails.splice(at, 1);
+      }
+      // Taken down first, so a tile whose edge rails become a balustrade never
+      // has both standing at once.
+      for (const rail of stand) {
+        world.add(rail);
+        plot.rails.push(rail);
+      }
       onChange();
     },
     onCancel,

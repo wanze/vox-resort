@@ -19,6 +19,13 @@
  * be lifted and laid again as one. `paving.ts` owns that rule; this only asks it,
  * once per tile, so the ghost previews the flight and the click stands it.
  *
+ * A paved tile also brings handrails with it, and takes others away — the rail
+ * along an edge the new paving now carries on across. `handrails.ts` owns that
+ * rule; this asks it once per tile placed, after the paving has settled. The
+ * ghost previews the paving only: a rail stands on the tile beside the pointer as
+ * often as on the one under it, and a preview of the neighbourhood would be
+ * showing you an answer to a question you have not asked yet.
+ *
  * The other thing this owns is which way round the object is going down. `R`
  * turns it a quarter, shift-`R` the other way, and the turn is kept across
  * placements rather than reset per click — a row of cottages all facing the
@@ -33,6 +40,7 @@ import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt, tilesBetween } from '../domain/buildPlan';
 import { pickTile, type PickGround } from '../domain/groundPick';
 import { pavingAt, relaidBy, type PavingRules } from '../domain/paving';
+import { railChangeAt, type HandrailRules } from '../domain/handrails';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 
@@ -52,6 +60,8 @@ export interface BuildPointerOptions {
   readonly ground: PickGround;
   /** What the ground makes of a tile of paving laid on it; see `paving.ts`. */
   readonly paving: PavingRules;
+  /** Which tiles want holding on to, and which no longer do; see `handrails.ts`. */
+  readonly handrails: HandrailRules;
   /**
    * Stands one object, taking up the placement it replaces first if there is
    * one. The caller owns the world and the occupancy index.
@@ -61,6 +71,13 @@ export interface BuildPointerOptions {
    * moment ago.
    */
   readonly onPlace: (placement: Placement, lifted?: Placement) => void;
+  /**
+   * Stands and takes down handrails. Kept apart from `onPlace` because a rail
+   * claims no tile of its own — it stands on the paving it guards — so the caller
+   * must not put it in the occupancy index or under a blob shadow of its own.
+   * See `handrails.ts`.
+   */
+  readonly onRails: (stand: readonly Placement[], lift: readonly Placement[]) => void;
   /** Called when the gesture itself ends build mode, so the HUD can follow. */
   readonly onCancel: () => void;
 }
@@ -89,8 +106,19 @@ function turnAsked(event: KeyboardEvent): number {
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { canvas, camera, ghost, occupancy, ground, paving, onPlace, onCancel, takeLeftButton } =
-    options;
+  const {
+    canvas,
+    camera,
+    ghost,
+    occupancy,
+    ground,
+    paving,
+    handrails,
+    onPlace,
+    onRails,
+    onCancel,
+    takeLeftButton,
+  } = options;
 
   // Reused across pointer moves: picking must not hand the collector work while
   // the mouse is being dragged across the plot.
@@ -148,6 +176,24 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     ghost.show(plan.placement, plan.blocked);
   };
 
+  /**
+   * Re-rails the ground around a tile that has just been built on.
+   *
+   * Last of the three questions a placement asks, once what is paved and what
+   * climbs are both settled: a rail is a fact about the ground *around* a tile,
+   * so paving one tile puts rails up beside it and takes others down. See
+   * `handrails.ts`.
+   *
+   * A placement that changes nothing — anything that is not paving — says so
+   * rather than handing the caller two empty lists, so a row of cottages does
+   * not tell the HUD the scene changed once per cottage.
+   */
+  const railAround = (tile: Tile): void => {
+    const { stand, lift } = railChangeAt(tile, handrails);
+    if (stand.length === 0 && lift.length === 0) return;
+    onRails(stand, lift);
+  };
+
   const placeOn = (tile: Tile): void => {
     if (!item) return;
     const plan = planOn(item, tile);
@@ -156,6 +202,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     // Asked after the tile is standing, because that is what turns the slab
     // below a step into the flight up it — see `paving.ts`.
     for (const relaid of relaidBy(tile, paving)) onPlace(relaid.placement, relaid.lifted);
+    railAround(tile);
   };
 
   /**

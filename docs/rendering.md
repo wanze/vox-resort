@@ -412,6 +412,27 @@ the paving. It is also the one thing not centred in its footprint: `placeOnEdge`
 stands it flush against the edge its turn points at, while everything else on the
 plot is centred in the tiles it claims.
 
+**A path drawn by hand is railed too**, and that is a diff rather than a list —
+`handrails.ts` is the pointer's half of the rule the way `paving.ts` is the
+pointer's half of the stairs. Paving one tile does not only rail that tile, it
+re-rails the ground around it, and some of what stood there has to come back
+down: pave below a railed walk and that edge is a way down rather than a fall;
+pave the upper half of a step and the slab below it becomes a flight, trading its
+edge rails for a balustrade; pave alongside an existing flight and the two are one
+wide staircase, which is left open. Every one of those is the same rule read from
+the other side — paving is always the way through.
+
+So the tile and its **four neighbours** are each re-asked from scratch what rails
+they want, and the answer is diffed by key against what is standing on them. Four
+neighbours and no further: what rails a tile is what it stands next to, and a tile
+two steps away has no neighbour whose paving changed. Recomputing rather than
+adjusting means nothing has to know which of the cases above it is looking at, or
+which gesture is running — and because a rail's key holds everything a rail is
+(its model, its tile and the edge it guards), a rail that already stands where one
+belongs is left alone rather than lifted and stood again. The build ghost previews
+the paving only: a rail as often lands on the tile beside the pointer as on the one
+under it.
+
 ### An object stands on one level
 
 A voxel model is a box with a flat underside. Across a step, half of it hangs in

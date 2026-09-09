@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { shoreFor, waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL, SEA_LEVEL, terrainSurfacesFor, type SurfaceGeometry } from './terrainSurface';
+import {
+  elevationFor,
+  levelHeight,
+  type Elevation,
+  type TerraceSpec,
+} from '../../layout/domain/elevation';
+import type { ShoreSpec } from '../../layout/domain/shoreline';
 
 const TILE = 16;
 
@@ -12,12 +19,28 @@ const shore = (over: Partial<{ inset: number; beach: number; wave: number }> = {
   })!;
 
 /** The middle of a 40x40 plot, with the box reaching a plot's width past it. */
-const request = (coast: Shore | null, reach = 640) => ({
+const request = (coast: Shore | null, reach = 640, land: Elevation | null = null) => ({
   shore: coast,
+  elevation: land,
   center: { x: 320, z: 320 },
   reach,
   tileVoxels: TILE,
 });
+
+/** Terraces climbing away from the water, on the same 40x40 plot. */
+const terraced = (
+  terraces: readonly TerraceSpec[] = [
+    { level: 1, fromWater: 8, wave: 0 },
+    { level: 2, fromWater: 16, wave: 0 },
+  ],
+  coast: ShoreSpec | null = null,
+): Elevation =>
+  elevationFor({
+    tilesX: 40,
+    tilesZ: 40,
+    ...(coast ? { shore: coast } : {}),
+    elevation: { terraces, seed: 1 },
+  })!;
 
 /** Every quad of a surface, as its own bounding box. */
 function quadsOf(surface: SurfaceGeometry) {
@@ -41,9 +64,46 @@ function quadsOf(surface: SurfaceGeometry) {
   return quads;
 }
 
+/** Every quad's normal, one entry per quad. */
+function normalsOf(surface: SurfaceGeometry) {
+  const normals = surface.normals!;
+  return Array.from({ length: surface.quadCount }, (_, quad) => ({
+    x: normals[quad * 12]!,
+    y: normals[quad * 12 + 1]!,
+    z: normals[quad * 12 + 2]!,
+  }));
+}
+
+/**
+ * Whether a quad faces the way its winding says it does.
+ *
+ * The normal is in the buffer and the winding is in the positions, and nothing
+ * forces them to agree — so a quad wound the wrong way round is lit correctly
+ * and culled anyway. This is the check that they match.
+ */
+function windingAgreesWithNormal(surface: SurfaceGeometry, quad: number): boolean {
+  const at = (corner: number, axis: number): number =>
+    surface.positions[(quad * 4 + corner) * 3 + axis]!;
+  const edge = (from: number, to: number): number[] => [
+    at(to, 0) - at(from, 0),
+    at(to, 1) - at(from, 1),
+    at(to, 2) - at(from, 2),
+  ];
+  const [ax, ay, az] = edge(0, 1) as [number, number, number];
+  const [bx, by, bz] = edge(1, 2) as [number, number, number];
+  const cross = [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx];
+  const normal = normalsOf(surface)[quad]!;
+  return cross[0]! * normal.x + cross[1]! * normal.y + cross[2]! * normal.z > 0;
+}
+
 describe('terrainSurfacesFor', () => {
-  it('draws nothing at all without a shore', () => {
-    expect(terrainSurfacesFor(request(null))).toEqual({ sand: null, sea: null });
+  it('draws nothing at all on flat land with no shore', () => {
+    expect(terrainSurfacesFor(request(null))).toEqual({
+      sand: null,
+      sea: null,
+      terraces: null,
+      risers: null,
+    });
   });
 
   it('builds both surfaces for a plot with a coast', () => {
@@ -190,5 +250,159 @@ describe('terrainSurfacesFor', () => {
     const sea = terrainSurfacesFor(request(shore())).sea!;
     // A tile of underlap, and no more: the sand hides exactly that much water.
     expect(Math.min(...sea.shoreDistances!.edge)).toBeCloseTo(-TILE, 3);
+  });
+});
+
+describe('the terraces', () => {
+  it('draws nothing on flat land, however much sea there is', () => {
+    const { terraces, risers } = terrainSurfacesFor(request(shore()));
+    expect({ terraces, risers }).toEqual({ terraces: null, risers: null });
+  });
+
+  it('draws a bench and a riser for a terraced plot with no sea at all', () => {
+    // The terraces are independent of the coast: a plot can be terraced without
+    // a shore, and the surfaces have to come out either way.
+    const { terraces, risers } = terrainSurfacesFor(request(null, 640, terraced()));
+    expect(terraces).not.toBeNull();
+    expect(risers).not.toBeNull();
+  });
+
+  it('lays each bench at its own level and none at sea level', () => {
+    // Sea level is the infinite grass plane's job; a quad laid over it would be
+    // a second surface at the same height, fighting for the same fragments.
+    const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
+    const heights = new Set(quadsOf(terraces!).map((quad) => quad.y));
+    expect([...heights].toSorted((a, b) => a - b)).toEqual([levelHeight(1), levelHeight(2)]);
+  });
+
+  it('faces every bench straight up', () => {
+    const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
+    for (const normal of normalsOf(terraces!)) expect(normal).toEqual({ x: 0, y: 1, z: 0 });
+  });
+
+  it('stands every riser upright, never flat', () => {
+    // A riser lit as a floor is a riser the sun cannot pick out, which is the
+    // whole reason this surface carries normals of its own.
+    const { risers } = terrainSurfacesFor(request(null, 640, terraced()));
+    for (const normal of normalsOf(risers!)) {
+      expect({ y: normal.y, upright: Math.abs(normal.x) + Math.abs(normal.z) }).toEqual({
+        y: 0,
+        upright: 1,
+      });
+    }
+  });
+
+  it('winds every quad to agree with the normal it carries', () => {
+    const { terraces, risers } = terrainSurfacesFor(
+      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+    );
+    for (const surface of [terraces!, risers!]) {
+      for (let quad = 0; quad < surface.quadCount; quad++) {
+        expect({ quad, agrees: windingAgreesWithNormal(surface, quad) }).toEqual({
+          quad,
+          agrees: true,
+        });
+      }
+    }
+  });
+
+  it('turns a riser to face the lower ground beside it', () => {
+    // The land climbs inland, so every step's face looks out to sea: +z.
+    const { risers } = terrainSurfacesFor(request(null, 640, terraced()));
+    const acrossX = normalsOf(risers!).filter((normal) => normal.z !== 0);
+    expect(acrossX.length).toBeGreaterThan(0);
+    for (const normal of acrossX) expect(normal.z).toBe(1);
+  });
+
+  it('turns a riser round where the land falls away inland instead', () => {
+    const knoll = terraced([
+      { level: 1, fromWater: 8, wave: 0 },
+      { level: 0, fromWater: 16, wave: 0 },
+    ]);
+    const { risers } = terrainSurfacesFor(request(null, 640, knoll));
+    const facings = new Set(
+      normalsOf(risers!)
+        .filter((normal) => normal.z !== 0)
+        .map((normal) => normal.z),
+    );
+    // One step up out of the sea and one back down behind it, facing opposite ways.
+    expect([...facings].toSorted()).toEqual([-1, 1]);
+  });
+
+  it('spans each bench from one step to the next, with no gap between them', () => {
+    const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
+    const column = quadsOf(terraces!)
+      .filter((quad) => quad.x0 === 320)
+      .toSorted((a, b) => a.z0 - b.z0);
+    expect(column.length).toBe(2);
+    // The upper bench runs from the back of the box to the lower bench's start.
+    expect(column[0]!.z1).toBe(column[1]!.z0);
+    expect(column[0]!.y).toBe(levelHeight(2));
+    expect(column[1]!.y).toBe(levelHeight(1));
+  });
+
+  it('closes the slot a wandering step leaves between two columns', () => {
+    // A straight step rounds to the same tile in every column and needs no
+    // closure; a wandering one steps between columns, and each of those steps is
+    // a vertical slot at the boundary the two columns share.
+    const straight = terrainSurfacesFor(
+      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 0 }])),
+    );
+    const wandering = terrainSurfacesFor(
+      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+    );
+    const alongZ = (surface: SurfaceGeometry): number =>
+      normalsOf(surface).filter((normal) => normal.x !== 0).length;
+    expect(alongZ(straight.risers!)).toBe(0);
+    expect(alongZ(wandering.risers!)).toBeGreaterThan(0);
+  });
+
+  it('never lets a riser span more than one level, whichever axis it closes', () => {
+    const wandering = terrainSurfacesFor(
+      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+    );
+    // Every closure spans whole tiles and rises exactly one level: a slot deeper
+    // than a level would mean two steps had been allowed to meet.
+    for (const quad of quadsOf(wandering.risers!)) {
+      expect(Number.isInteger((quad.z1 - quad.z0) / TILE)).toBe(true);
+    }
+    const ys: number[] = [];
+    const { risers } = wandering;
+    for (let quad = 0; quad < risers!.quadCount; quad++) {
+      for (let corner = 0; corner < 4; corner++) {
+        ys.push(risers!.positions[(quad * 4 + corner) * 3 + 1]!);
+      }
+    }
+    expect(new Set(ys)).toEqual(new Set([0, levelHeight(1)]));
+  });
+
+  it('keeps every bench clear of the sand, column by column', () => {
+    // `elevationFor` refuses a step that cuts into the beach; this is the same
+    // invariant seen from the geometry, with a coast that wanders under it. A
+    // bench overlapping the sand would draw grass over the beach.
+    const coast: ShoreSpec = { inset: 20, beach: 6, wave: 3, seed: 1 };
+    const wandering = shore({ wave: 3 });
+    const withCoast = terraced(
+      [
+        { level: 1, fromWater: 10, wave: 2 },
+        { level: 2, fromWater: 20, wave: 2 },
+      ],
+      coast,
+    );
+    const { terraces } = terrainSurfacesFor(request(wandering, 640, withCoast));
+    const quads = quadsOf(terraces!).filter((quad) => quad.x0 >= 0 && quad.x1 <= 40 * TILE);
+    expect(quads.length).toBeGreaterThan(0);
+    for (const quad of quads) {
+      const tileX = quad.x0 / TILE;
+      const grass = (waterStartZ(wandering, tileX) - 6) * TILE;
+      expect({ tileX, past: quad.z1 > grass }).toEqual({ tileX, past: false });
+    }
+  });
+
+  it('runs the terraces past the plot, the way the beach runs past it', () => {
+    const { terraces } = terrainSurfacesFor(request(null, 640, terraced()));
+    const quads = quadsOf(terraces!);
+    expect(Math.min(...quads.map((quad) => quad.x0))).toBeLessThan(0);
+    expect(Math.max(...quads.map((quad) => quad.x1))).toBeGreaterThan(40 * TILE);
   });
 });

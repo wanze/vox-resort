@@ -1,6 +1,6 @@
 /**
- * The two surfaces the ground plane cannot draw: the sea, and the sand in front
- * of it.
+ * The surfaces the ground plane cannot draw: the sea, the sand in front of it,
+ * and the terraces behind it.
  *
  * The resort stands on one flat green plane that runs past the horizon — see
  * `threeScene.ts` — and a coast is the one thing that plane cannot express,
@@ -51,9 +51,31 @@
  * sand sits above the sea, and the sea runs a tile in under the sand, so the
  * shoreline is a seam between two surfaces that overlap rather than a gap
  * between two that abut.
+ *
+ * **The terraces.** Land above sea level is the same problem a third time, and
+ * it gets the same answer: one span per tile column, at the height of whichever
+ * bench that column is on. What it adds is the **risers** — the vertical faces
+ * between one bench and the next — and they are the only geometry here that does
+ * not lie flat, so they are the only geometry that carries its own normals. A
+ * riser lit as though it were a floor is a riser the sun cannot pick out, and a
+ * step you cannot see is not a step.
+ *
+ * Ground at sea level is left to the infinite grass plane, which is why only
+ * benches above it are emitted: every terrace stands over that plane rather than
+ * replacing it, exactly as the sand does.
+ *
+ * **Why the risers need closing along x too.** A step line wanders, so two
+ * neighbouring columns round it to different tiles, and between those two rows
+ * one column stands a level above the other. That leaves a vertical slot at the
+ * boundary they share — the staircase the tile grid makes of the step, seen
+ * end-on. {@link terraceGeometry} walks each pair of neighbouring columns and
+ * closes exactly the z ranges where their heights disagree. It is the same
+ * staircase the layout reads when it decides where a flight of stairs goes, so
+ * the ground and the stairs on it step together.
  */
 
 import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
+import { levelHeight, maxLevelOf, stepStartZ, type Elevation } from '../../layout/domain/elevation';
 
 /**
  * Where each surface lies, in voxels.
@@ -85,6 +107,15 @@ export interface ShoreDistances {
 
 export interface SurfaceGeometry {
   readonly positions: Float32Array;
+  /**
+   * One normal per vertex, or null for a surface that lies flat.
+   *
+   * Only the risers carry them: everything else here is a floor, and the caller
+   * points a floor's normals straight up without being told to. A riser is the
+   * one face in the resort's terrain that stands upright, and it has to be lit
+   * as one.
+   */
+  readonly normals: Float32Array | null;
   /** Null for a surface whose shader has no use for the numbers — the sand. */
   readonly shoreDistances: ShoreDistances | null;
   readonly indices: Uint32Array;
@@ -96,10 +127,16 @@ export interface TerrainSurfaces {
   readonly sand: SurfaceGeometry | null;
   /** The water, out to the horizon. Null when the plot has no shore. */
   readonly sea: SurfaceGeometry | null;
+  /** The flat top of every bench above sea level. Null on a flat plot. */
+  readonly terraces: SurfaceGeometry | null;
+  /** The vertical faces between one bench and the next. Null on a flat plot. */
+  readonly risers: SurfaceGeometry | null;
 }
 
 export interface TerrainRequest {
   readonly shore: Shore | null;
+  /** How the land rises behind the beach. Null lays it all at sea level. */
+  readonly elevation: Elevation | null;
   /** Middle of the ground the surfaces have to cover, in voxels. */
   readonly center: { readonly x: number; readonly z: number };
   /** How far either side of the centre they have to reach, in voxels. */
@@ -163,6 +200,7 @@ class SurfaceBuilder {
     if (this.quads === 0) return null;
     return {
       positions: new Float32Array(this.positions),
+      normals: null,
       shoreDistances: this.coastAt
         ? { edge: new Float32Array(this.edges), coast: new Float32Array(this.coasts) }
         : null,
@@ -173,6 +211,249 @@ class SurfaceBuilder {
 }
 
 /**
+ * Collects the terraces: flat tops at any height, and upright risers that carry
+ * their own normals.
+ *
+ * Apart, rather than folded into {@link SurfaceBuilder}, because the two want
+ * different things. That one lays a single surface at a single height and
+ * measures every corner against the coast; this one lays quads at whatever
+ * height the bench is and has to wind an upright face the right way round. The
+ * bookkeeping they share is four pushes and six indices.
+ */
+class TerraceBuilder {
+  private readonly positions: number[] = [];
+  private readonly normals: number[] = [];
+  private readonly indices: number[] = [];
+  private quads = 0;
+
+  /** One quad from four corners already in winding order, plus its normal. */
+  private quad(corners: readonly number[], nx: number, ny: number, nz: number): void {
+    for (let corner = 0; corner < corners.length; corner += 3) {
+      this.positions.push(corners[corner]!, corners[corner + 1]!, corners[corner + 2]!);
+      this.normals.push(nx, ny, nz);
+    }
+    const base = this.quads * 4;
+    this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    this.quads++;
+  }
+
+  /** The flat top of a bench, wound anticlockwise from above so it faces up. */
+  top(x0: number, x1: number, z0: number, z1: number, y: number): void {
+    if (x1 <= x0 || z1 <= z0) return;
+    this.quad([x0, y, z0, x0, y, z1, x1, y, z1, x1, y, z0], 0, 1, 0);
+  }
+
+  /**
+   * The riser across a step, at one z, facing the lower ground beside it.
+   *
+   * `landward` and `seaward` are the two bench heights either side of the line;
+   * which is higher decides both the winding and the way the normal points, so
+   * a step down inland is drawn as readily as a step up.
+   */
+  riserAlongX(x0: number, x1: number, z: number, landward: number, seaward: number): void {
+    const low = Math.min(landward, seaward);
+    const high = Math.max(landward, seaward);
+    if (x1 <= x0 || high <= low) return;
+    if (landward > seaward) {
+      // The face is exposed towards the sea, which is +z.
+      this.quad([x0, low, z, x1, low, z, x1, high, z, x0, high, z], 0, 0, 1);
+      return;
+    }
+    this.quad([x0, low, z, x0, high, z, x1, high, z, x1, low, z], 0, 0, -1);
+  }
+
+  /**
+   * The riser along a column boundary, at one x: what closes the slot left where
+   * two neighbouring columns round a wandering step line to different tiles.
+   */
+  riserAlongZ(x: number, z0: number, z1: number, west: number, east: number): void {
+    const low = Math.min(west, east);
+    const high = Math.max(west, east);
+    if (z1 <= z0 || high <= low) return;
+    if (west > east) {
+      // The face is exposed towards the east, which is +x.
+      this.quad([x, low, z0, x, high, z0, x, high, z1, x, low, z1], 1, 0, 0);
+      return;
+    }
+    this.quad([x, low, z0, x, low, z1, x, high, z1, x, high, z0], -1, 0, 0);
+  }
+
+  build(): SurfaceGeometry | null {
+    if (this.quads === 0) return null;
+    return {
+      positions: new Float32Array(this.positions),
+      normals: new Float32Array(this.normals),
+      shoreDistances: null,
+      indices: new Uint32Array(this.indices),
+      quadCount: this.quads,
+    };
+  }
+}
+
+/**
+ * One tile column's height profile: where its steps fall and how high the land
+ * stands between them.
+ *
+ * Ordered by ascending z, which runs landward to seaward: `heights[0]` is the
+ * bench at the back of the plot, `heights[edges.length]` is sea level at the
+ * front, and `edges[j]` is the line between benches `j` and `j + 1`. Everything
+ * is in voxels.
+ */
+interface ColumnProfile {
+  readonly edges: readonly number[];
+  readonly heights: readonly number[];
+}
+
+/** The height profile of one tile column, walked from the back of the plot forward. */
+function profileOf(elevation: Elevation, tileX: number, tileVoxels: number): ColumnProfile {
+  const { terraces } = elevation.spec;
+  const edges: number[] = [];
+  const heights: number[] = [levelHeight(terraces[terraces.length - 1]!.level)];
+  for (let index = terraces.length - 1; index >= 0; index--) {
+    edges.push(stepStartZ(elevation, index, tileX) * tileVoxels);
+    heights.push(levelHeight(index > 0 ? terraces[index - 1]!.level : 0));
+  }
+  return { edges, heights };
+}
+
+/** How high one column stands at a given z. */
+function heightAt(profile: ColumnProfile, z: number): number {
+  let band = 0;
+  while (band < profile.edges.length && z >= profile.edges[band]!) band++;
+  return profile.heights[band]!;
+}
+
+/** The z range the box covers, so a bench running past it is cropped to it. */
+interface ZBounds {
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
+/**
+ * One column's benches: a flat quad per band that stands above sea level.
+ *
+ * Sea level is left to the infinite grass plane under everything, so a band at
+ * level 0 contributes nothing — a quad laid over that plane would be a second
+ * surface at the same height, fighting for the same fragments.
+ */
+function layBenches(
+  tops: TerraceBuilder,
+  profile: ColumnProfile,
+  x0: number,
+  x1: number,
+  { minZ, maxZ }: ZBounds,
+): void {
+  const clamp = (value: number): number => Math.min(maxZ, Math.max(minZ, value));
+  for (const [band, height] of profile.heights.entries()) {
+    if (height <= 0) continue;
+    const from = band === 0 ? minZ : profile.edges[band - 1]!;
+    const to = band === profile.edges.length ? maxZ : profile.edges[band]!;
+    tops.top(x0, x1, clamp(from), clamp(to), height);
+  }
+}
+
+/** One column's own steps, each drawn as an upright face across the column. */
+function layStepRisers(
+  risers: TerraceBuilder,
+  profile: ColumnProfile,
+  x0: number,
+  x1: number,
+  { minZ, maxZ }: ZBounds,
+): void {
+  for (const [band, edge] of profile.edges.entries()) {
+    if (edge <= minZ || edge >= maxZ) continue;
+    risers.riserAlongX(x0, x1, edge, profile.heights[band]!, profile.heights[band + 1]!);
+  }
+}
+
+/**
+ * The slot along the boundary two neighbouring columns share.
+ *
+ * A wandering step rounds to a different tile in each of them, and between those
+ * two rows one column stands a level above the other. This closes exactly the z
+ * ranges where they disagree — the staircase the tile grid makes of the step,
+ * seen end-on.
+ */
+function laySeam(
+  risers: TerraceBuilder,
+  west: ColumnProfile,
+  east: ColumnProfile,
+  x: number,
+  bounds: ZBounds,
+): void {
+  for (const [from, to] of spansBetween(west, east, bounds.minZ, bounds.maxZ)) {
+    const middle = (from + to) / 2;
+    risers.riserAlongZ(x, from, to, heightAt(west, middle), heightAt(east, middle));
+  }
+}
+
+/**
+ * The terraces and their risers, one span per tile column.
+ *
+ * Three passes over each column: its benches, the risers across its own steps,
+ * and the seam against the column east of it. The profile is carried forward
+ * rather than recomputed, so each column's steps are solved once even though two
+ * columns read them.
+ */
+function terraceGeometry(
+  elevation: Elevation,
+  bounds: ZBounds & { firstColumn: number; lastColumn: number },
+  tileVoxels: number,
+): { tops: SurfaceGeometry | null; risers: SurfaceGeometry | null } {
+  const tops = new TerraceBuilder();
+  const risers = new TerraceBuilder();
+
+  let profile = profileOf(elevation, bounds.firstColumn, tileVoxels);
+  for (let tileX = bounds.firstColumn; tileX <= bounds.lastColumn; tileX++) {
+    const x0 = tileX * tileVoxels;
+    const x1 = x0 + tileVoxels;
+    const next = profileOf(elevation, tileX + 1, tileVoxels);
+
+    layBenches(tops, profile, x0, x1, bounds);
+    layStepRisers(risers, profile, x0, x1, bounds);
+    laySeam(risers, profile, next, x1, bounds);
+
+    profile = next;
+  }
+
+  return { tops: tops.build(), risers: risers.build() };
+}
+
+/**
+ * The z ranges over which two neighbouring columns stand at different heights.
+ *
+ * Both profiles are piecewise constant in z with one breakpoint per terrace, so
+ * the answer is a walk over the merged breakpoints — at most a couple of spans
+ * per boundary, and none at all along the stretches where the step line happens
+ * to round to the same tile in both columns.
+ */
+function spansBetween(
+  west: ColumnProfile,
+  east: ColumnProfile,
+  minZ: number,
+  maxZ: number,
+): [number, number][] {
+  const cuts = [
+    minZ,
+    ...[...west.edges, ...east.edges].filter((edge) => edge > minZ && edge < maxZ),
+    maxZ,
+  ].toSorted((a, b) => a - b);
+  const spans: [number, number][] = [];
+  for (let cut = 1; cut < cuts.length; cut++) {
+    const from = cuts[cut - 1]!;
+    const to = cuts[cut]!;
+    if (to <= from) continue;
+    const middle = (from + to) / 2;
+    if (heightAt(west, middle) === heightAt(east, middle)) continue;
+    // Merged with the last span when they meet, so a long slot is one quad.
+    const last = spans[spans.length - 1];
+    if (last && last[1] === from) last[1] = to;
+    else spans.push([from, to]);
+  }
+  return spans;
+}
+
+/**
  * Builds the sea and the sand for a plot.
  *
  * Both run over the whole box rather than over the plot, so the coast carries on
@@ -180,13 +461,23 @@ class SurfaceBuilder {
  * would read as a swimming pool.
  */
 export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
-  const { shore, center, reach, tileVoxels } = request;
-  if (!shore) return { sand: null, sea: null };
+  const { shore, elevation, center, reach, tileVoxels } = request;
 
   const minZ = center.z - reach;
   const maxZ = center.z + reach;
   const firstColumn = Math.floor((center.x - reach) / tileVoxels);
   const lastColumn = Math.ceil((center.x + reach) / tileVoxels);
+
+  // The terraces are independent of the coast: a plot can be terraced without a
+  // sea, and a plot can have a sea and be flat.
+  const terraced =
+    elevation && maxLevelOf(elevation) > 0
+      ? terraceGeometry(elevation, { minZ, maxZ, firstColumn, lastColumn }, tileVoxels)
+      : { tops: null, risers: null };
+
+  if (!shore) {
+    return { sand: null, sea: null, terraces: terraced.tops, risers: terraced.risers };
+  }
 
   const coastAt: CoastAt = (x) => waterEdgeZ(shore, x / tileVoxels) * tileVoxels;
   const sand = new SurfaceBuilder(SAND_LEVEL, null);
@@ -205,5 +496,10 @@ export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
     sand.add(x0, x1, clamp(water - shore.spec.beach * tileVoxels), clamp(water));
   }
 
-  return { sand: sand.build(), sea: sea.build() };
+  return {
+    sand: sand.build(),
+    sea: sea.build(),
+    terraces: terraced.tops,
+    risers: terraced.risers,
+  };
 }

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
-import { BOARDWALK_ID, HEDGE_ID, LAMP_ID, PATH_ID } from './resortPlan';
+import { BOARDWALK_ID, DERIVED_IDS, HEDGE_ID, LAMP_ID, PATH_ID, STAIRS_ID } from './resortPlan';
+import { elevationFor, levelAt } from './elevation';
 import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
@@ -127,7 +128,7 @@ describe('generateResort', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       for (const plot of plan.plots) {
-        expect([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]).not.toContain(plot.id);
+        expect([...DERIVED_IDS]).not.toContain(plot.id);
       }
     }
   });
@@ -136,10 +137,7 @@ describe('generateResort', () => {
     for (const set of SWEEP) {
       const plan = generateResort(TYPES, set);
       const planted = new Set(plan.plots.map((plot) => plot.id));
-      const owed = TYPES.filter(
-        (type) =>
-          ![PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID].includes(type.id) && !planted.has(type.id),
-      );
+      const owed = TYPES.filter((type) => !DERIVED_IDS.has(type.id) && !planted.has(type.id));
       expect({ set, missing: owed.map((type) => type.id) }).toEqual({ set, missing: [] });
       expect(plan.standsWholeCatalogue).toBe(true);
     }
@@ -284,16 +282,45 @@ describe('the shore a generated plot gets', () => {
     expect(reserved.filter((tile) => covered.has(`${tile.x},${tile.z}`))).toEqual([]);
   });
 
-  it('paves the beach with boardwalks and the rest with flagstones', () => {
+  it('paves the beach with boardwalks, the steps with stairs and the rest with flagstones', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const elevation = elevationFor(plan)!;
+    const { paths } = layoutResort(ITEMS, plan);
+    const paved = new Set(paths.map((tile) => `${tile.tileX},${tile.tileZ}`));
+
+    expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
+    expect(paths.some((tile) => tile.id === STAIRS_ID)).toBe(true);
+
+    for (const tile of paths) {
+      // Taken from what a flight *is* rather than from the classifier: a paved
+      // tile with paved ground one level above it on any side.
+      const level = levelAt(elevation, tile.tileX, tile.tileZ);
+      const climbs = [
+        [0, -1],
+        [-1, 0],
+        [0, 1],
+        [1, 0],
+      ].some(
+        ([dx, dz]) =>
+          paved.has(`${tile.tileX + dx!},${tile.tileZ + dz!}`) &&
+          levelAt(elevation, tile.tileX + dx!, tile.tileZ + dz!) === level + 1,
+      );
+      const sand = terrainAt(shore, tile.tileX, tile.tileZ) === 'beach';
+      expect({ key: tile.key, id: tile.id }).toEqual({
+        key: tile.key,
+        id: climbs ? STAIRS_ID : sand ? BOARDWALK_ID : PATH_ID,
+      });
+    }
+  });
+
+  it('lays no stairs on the sand, because the beach is all one level', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const { paths } = layoutResort(ITEMS, plan);
-    expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
     for (const tile of paths) {
-      expect({ key: tile.key, id: tile.id }).toEqual({
-        key: tile.key,
-        id: terrainAt(shore, tile.tileX, tile.tileZ) === 'beach' ? BOARDWALK_ID : PATH_ID,
-      });
+      if (tile.id !== STAIRS_ID) continue;
+      expect(terrainAt(shore, tile.tileX, tile.tileZ)).not.toBe('beach');
     }
   });
 });

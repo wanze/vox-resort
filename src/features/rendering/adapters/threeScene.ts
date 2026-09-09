@@ -51,6 +51,7 @@ import type {
 } from '../../layout/domain/worldBounds';
 import { isometricFramingFor } from '../../layout/domain/worldBounds';
 import type { Shore } from '../../layout/domain/shoreline';
+import type { Elevation } from '../../layout/domain/elevation';
 import type { SurfaceGeometry } from '../domain/terrainSurface';
 import { terrainSurfacesFor } from '../domain/terrainSurface';
 import type { SeaMaterial } from './seaMaterial';
@@ -64,6 +65,18 @@ const GROUND_COLOR = 0x5d7a45;
 
 /** Beach colour. One flat tone, exactly as the grass is. */
 const SAND_COLOR = 0xd8c69c;
+
+/**
+ * The terraces, and the cut faces between them.
+ *
+ * A bench is the same grass the plot is, because it *is* the plot — a terrace is
+ * lawn that happens to be two metres up, and giving it a tone of its own would
+ * read as a different material rather than as higher ground. The riser is what
+ * carries the step: bare earth, darker than the grass above and below it, so the
+ * edge reads even where the sun is square on it.
+ */
+const TERRACE_COLOR = GROUND_COLOR;
+const RISER_COLOR = 0x6b5a3e;
 
 /** How far past the framed plot the ground, the sea and the beach run. */
 const GROUND_SPREAD = 3;
@@ -206,6 +219,7 @@ export interface SceneHandle {
     framing: CameraFraming,
     lightVolume: BakedLightVolume | null,
     shore: Shore | null,
+    elevation: Elevation | null,
   ): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
@@ -233,6 +247,11 @@ export interface SceneOptions {
    * caller makes, not one this falls back on.
    */
   readonly shore: Shore | null;
+  /**
+   * How the land rises behind the beach. Null lays it flat, and is required
+   * rather than defaulted for the same reason the shore is.
+   */
+  readonly elevation: Elevation | null;
   /**
    * Asks the backend for GPU timestamp queries. Only the benchmark harness wants
    * them; they have to be requested when the renderer is built, not later.
@@ -310,15 +329,23 @@ interface Terrain {
 }
 
 /**
- * Wraps one surface's buffers in a geometry. Normals are all straight up — the
- * sea bends its own in the fragment shader, and the sand has nothing to bend.
+ * Wraps one surface's buffers in a geometry.
+ *
+ * Normals are all straight up unless the surface brought its own: the sea bends
+ * its own in the fragment shader, the sand and the terrace tops have nothing to
+ * bend, and the risers are the one upright face in the terrain and say so.
  */
+function normalsFor(surface: SurfaceGeometry): Float32Array {
+  if (surface.normals) return surface.normals;
+  const up = new Float32Array(surface.positions.length);
+  for (let index = 1; index < up.length; index += 3) up[index] = 1;
+  return up;
+}
+
 function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
   const geometry = new BufferGeometry();
-  const normals = new Float32Array(surface.positions.length);
-  for (let index = 1; index < normals.length; index += 3) normals[index] = 1;
   geometry.setAttribute('position', new BufferAttribute(surface.positions, 3));
-  geometry.setAttribute('normal', new BufferAttribute(normals, 3));
+  geometry.setAttribute('normal', new BufferAttribute(normalsFor(surface), 3));
   if (surface.shoreDistances) {
     const { edge, coast } = surface.shoreDistances;
     geometry.setAttribute('shoreEdgeDistance', new BufferAttribute(edge, 1));
@@ -329,9 +356,29 @@ function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
   return geometry;
 }
 
+/**
+ * A flat-coloured lit surface, lamps and sky shading included.
+ *
+ * The sand, the terrace tops and the risers all want exactly this and differ
+ * only in colour, so they share the recipe rather than three copies of it. The
+ * sea does not: it is shaded end to end in `seaMaterial.ts`.
+ */
+function surfaceMaterial(
+  color: number,
+  lightVolume: BakedLightVolume | null,
+): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0 });
+  if (lightVolume) {
+    material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(color)));
+    material.aoNode = lightVolume.skyVisibility();
+  }
+  return material;
+}
+
 function layTerrain(
   scene: Scene,
   shore: Shore | null,
+  elevation: Elevation | null,
   framing: CameraFraming,
   worldExtent: number,
   lightVolume: BakedLightVolume | null,
@@ -342,6 +389,7 @@ function layTerrain(
 
   const surfaces = terrainSurfacesFor({
     shore,
+    elevation,
     center: { x: framing.target.x, z: framing.target.z },
     reach: worldExtent * GROUND_SPREAD,
     tileVoxels: TILE_VOXELS,
@@ -355,17 +403,14 @@ function layTerrain(
     disposables.push(geometry, sea);
   }
 
-  if (surfaces.sand) {
-    const geometry = toSurfaceGeometry(surfaces.sand);
-    const material = new MeshStandardNodeMaterial({
-      color: SAND_COLOR,
-      roughness: 1,
-      metalness: 0,
-    });
-    if (lightVolume) {
-      material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(SAND_COLOR)));
-      material.aoNode = lightVolume.skyVisibility();
-    }
+  for (const [surface, color] of [
+    [surfaces.sand, SAND_COLOR],
+    [surfaces.terraces, TERRACE_COLOR],
+    [surfaces.risers, RISER_COLOR],
+  ] as const) {
+    if (!surface) continue;
+    const geometry = toSurfaceGeometry(surface);
+    const material = surfaceMaterial(color, lightVolume);
     group.add(new Mesh(geometry, material));
     disposables.push(geometry, material);
   }
@@ -382,7 +427,7 @@ function layTerrain(
 }
 
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
-  const { canvas, width, height, framing, bounds, shore } = options;
+  const { canvas, width, height, framing, bounds, shore, elevation } = options;
   const lightVolume = options.lightVolume ?? null;
   const trackTimestamp = options.trackTimestamp ?? false;
 
@@ -514,7 +559,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   scene.add(sun);
 
   let ground = layGround(scene, framing, extent, lightVolume);
-  let terrain = layTerrain(scene, shore, framing, extent, lightVolume);
+  let terrain = layTerrain(scene, shore, elevation, framing, extent, lightVolume);
 
   /**
    * Stands the isometric camera on its compass point, around whatever it is
@@ -572,7 +617,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       leftButtonTaken = taken;
       applyMode();
     },
-    reframe(nextBounds, nextFraming, nextVolume, nextShore) {
+    reframe(nextBounds, nextFraming, nextVolume, nextShore, nextElevation) {
       plot = nextBounds;
       extent = extentOf(plot);
       ground.dispose();
@@ -582,7 +627,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // to the light volume, and a new resort is a new bake in new textures.
       terrain.dispose();
       scene.remove(terrain.group);
-      terrain = layTerrain(scene, nextShore, nextFraming, extent, nextVolume);
+      terrain = layTerrain(scene, nextShore, nextElevation, nextFraming, extent, nextVolume);
 
       perspectiveCamera.position.set(
         nextFraming.position.x,

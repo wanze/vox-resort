@@ -26,7 +26,7 @@ import { Matrix4, type Camera } from 'three/webgpu';
 import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt, tilesBetween } from '../domain/buildPlan';
-import { pickTile } from '../domain/groundPick';
+import { pickTile, type PickGround } from '../domain/groundPick';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 
@@ -39,6 +39,11 @@ export interface BuildPointerOptions {
   readonly ghost: PlacementGhost;
   /** What already stands on the plot; the pointer only reads it. */
   readonly occupancy: TileOccupancy;
+  /**
+   * How high the ground is: what the pick aims at, and what the object being
+   * placed stands on once it lands.
+   */
+  readonly ground: PickGround;
   /** Stands one object. The caller owns the world and the occupancy index. */
   readonly onPlace: (placement: Placement) => void;
   /** Called when the gesture itself ends build mode, so the HUD can follow. */
@@ -69,7 +74,7 @@ function turnAsked(event: KeyboardEvent): number {
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { canvas, camera, ghost, occupancy, onPlace, onCancel, takeLeftButton } = options;
+  const { canvas, camera, ghost, occupancy, ground, onPlace, onCancel, takeLeftButton } = options;
 
   // Reused across pointer moves: picking must not hand the collector work while
   // the mouse is being dragged across the plot.
@@ -100,8 +105,13 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
       viewport(),
       inverseViewProjection.elements,
+      undefined,
+      ground,
     );
   };
+
+  /** The terrace a tile stands on, which is where anything dropped on it goes. */
+  const levelUnder = (tile: Tile): number => ground.levelOf(tile);
 
   /** Redraws the preview for the tile under the pointer. */
   const preview = (tile: Tile | null): void => {
@@ -110,13 +120,13 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       ghost.hide();
       return;
     }
-    const plan = planAt(item, tile, occupancy, rotation);
+    const plan = planAt(item, tile, occupancy, rotation, levelUnder(tile));
     ghost.show(plan.placement, plan.blocked);
   };
 
   const placeOn = (tile: Tile): void => {
     if (!item) return;
-    const plan = planAt(item, tile, occupancy, rotation);
+    const plan = planAt(item, tile, occupancy, rotation, levelUnder(tile));
     if (plan.blocked) return;
     onPlace(plan.placement);
   };

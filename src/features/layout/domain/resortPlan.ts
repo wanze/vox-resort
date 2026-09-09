@@ -147,9 +147,28 @@ export const PATH_ID = 'path';
 /** The paving a path is laid with where it crosses sand. */
 export const BOARDWALK_ID = 'boardwalk';
 
+/** The paving a path is laid with where it climbs a terrace step. */
+export const STAIRS_ID = 'stairs';
+
 /** The object types the layout scatters along the paths on its own. */
 export const LAMP_ID = 'street-lamp';
 export const HEDGE_ID = 'hedge';
+
+/**
+ * Every type the layout lays for itself, and so every type a plan must not.
+ *
+ * One list rather than five: a plan may not place these, the generator may not
+ * pick them, `layoutResort` does not hold a plan to having planted them, and the
+ * tests that assert all three read it from here. Adding a fourth kind of paving
+ * used to mean finding four copies of the same array.
+ */
+export const DERIVED_IDS: ReadonlySet<string> = new Set([
+  PATH_ID,
+  BOARDWALK_ID,
+  STAIRS_ID,
+  LAMP_ID,
+  HEDGE_ID,
+]);
 
 const at = (id: string, tileX: number, tileZ: number): ResortPlot => ({ id, tileX, tileZ });
 

@@ -20,6 +20,7 @@ import {
 } from './resortLayout';
 import {
   BOARDWALK_ID,
+  DERIVED_IDS,
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
@@ -541,13 +542,7 @@ describe('the resort plan', () => {
     );
     const placed = new Set(layout.placements.map((placement) => placement.id));
     for (const type of OBJECT_TYPES) {
-      if (
-        type.id === PATH_ID ||
-        type.id === BOARDWALK_ID ||
-        type.id === LAMP_ID ||
-        type.id === HEDGE_ID
-      )
-        continue;
+      if (DERIVED_IDS.has(type.id)) continue;
       expect(placed).toContain(type.id);
     }
   });

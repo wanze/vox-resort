@@ -28,6 +28,7 @@ import restaurant from './restaurant.ts';
 import restrooms from './restrooms.ts';
 import snack_bar from './snack-bar.ts';
 import spa_pavilion from './spa-pavilion.ts';
+import stairs from './stairs.ts';
 import statue from './statue.ts';
 import street_lamp from './street-lamp.ts';
 import sun_lounger from './sun-lounger.ts';
@@ -41,6 +42,7 @@ import waterpark from './waterpark.ts';
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,
   boardwalk,
+  stairs,
   hedge,
   street_lamp,
   flowerbed,

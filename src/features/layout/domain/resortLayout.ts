@@ -26,6 +26,12 @@
  * laid on it comes out as a boardwalk rather than as flagstones. See
  * `shoreline.ts`.
  *
+ * A plan may also give the land terraces, in which case the plot is no longer
+ * flat and every placement carries the height of the ground it stands on. Paving
+ * follows from that the same way it follows from the ground being sand: a paved
+ * tile with paved ground one level above it comes out as a flight of stairs
+ * rather than as a slab. See `elevation.ts` and `stairs.ts`.
+ *
  * Tile-to-voxel conversion happens here, so everything downstream works in
  * voxels: a model smaller than its declared footprint is centred in it.
  */
@@ -33,9 +39,11 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   BOARDWALK_ID,
+  DERIVED_IDS,
   HEDGE_ID,
   LAMP_ID,
   PATH_ID,
+  STAIRS_ID,
   type Bend,
   type PathNode,
   type ResortPlan,
@@ -43,6 +51,7 @@ import {
 } from './resortPlan';
 import { isBeach, isWater, shoreFor, terrainAt, type Shore } from './shoreline';
 import { elevationFor, levelAt, levelHeight, type Elevation } from './elevation';
+import { stairTilesFor } from './stairs';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -583,10 +592,9 @@ export function decorationsFor(
  */
 function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan): void {
   if (plan.standsWholeCatalogue === false) return;
-  const derived = new Set([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]);
   const planted = new Set(plan.plots.map((plot) => plot.id));
   for (const item of items) {
-    if (!derived.has(item.id) && !planted.has(item.id)) {
+    if (!DERIVED_IDS.has(item.id) && !planted.has(item.id)) {
       throw new Error(`"${item.id}" has no plot on the resort plan`);
     }
   }
@@ -608,8 +616,9 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   requireEveryTypePlanted(items, plan);
 
   // The paving a tile gets is a fact about the ground under it, not about the
-  // route: the same street comes out as flagstones on grass and as decking on
-  // sand. A catalogue without a boardwalk simply paves the beach in stone.
+  // route: the same street comes out as flagstones on grass, decking on sand and
+  // a flight of stairs where it climbs a terrace. A catalogue missing one of
+  // those simply paves that ground in stone.
   const shore = shoreFor(plan);
   const boardwalk = byId.get(BOARDWALK_ID) ?? path;
   const pavingFor = (tile: Tile): LayoutItem => (isBeach(shore, tile.x, tile.z) ? boardwalk : path);
@@ -621,10 +630,21 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const levelOf = (tileX: number, tileZ: number): number => levelAt(elevation, tileX, tileZ);
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
-  const paths = pathTilesFor(items, plan).map((tile) => {
-    const paving = pavingFor(tile);
+  const paved = pathTilesFor(items, plan);
+  const stairs = byId.get(STAIRS_ID);
+  const flights = new Map(
+    stairTilesFor(paved, levelOf).map((flight) => [
+      tileKey(flight.tile.x, flight.tile.z),
+      flight.rotation,
+    ]),
+  );
+  const paths = paved.map((tile) => {
+    // A flight stands on the lower tile of the step and is turned to face the
+    // higher ground; everything else is laid flat and unturned.
+    const climb = stairs ? flights.get(tileKey(tile.x, tile.z)) : undefined;
+    const paving = climb === undefined ? pavingFor(tile) : stairs!;
     const key = derivedKey(paving.id, tile.x, tile.z);
-    return place(paving, key, tile.x, tile.z, 0, levelOf(tile.x, tile.z));
+    return place(paving, key, tile.x, tile.z, climb ?? 0, levelOf(tile.x, tile.z));
   });
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>

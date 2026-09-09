@@ -147,6 +147,18 @@ export function levelAt(elevation: Elevation | null, tileX: number, tileZ: numbe
 }
 
 /**
+ * The highest level anywhere on the plot.
+ *
+ * Read by the two callers that have to walk every level rather than ask about
+ * one tile: the surface that draws the terraces, and the pointer, which tests
+ * the levels from the top down so a terrace in front hides the ground behind it.
+ */
+export function maxLevelOf(elevation: Elevation | null): number {
+  if (!elevation) return 0;
+  return elevation.spec.terraces.reduce((highest, terrace) => Math.max(highest, terrace.level), 0);
+}
+
+/**
  * Anchors a plan's terraces on its plot, or null when the plan is flat.
  *
  * Throws on a spec that cannot be built rather than laying out something quietly

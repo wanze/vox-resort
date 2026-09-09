@@ -44,15 +44,7 @@
  */
 
 import type { ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
-import {
-  BOARDWALK_ID,
-  HEDGE_ID,
-  LAMP_ID,
-  PATH_ID,
-  type PathNode,
-  type ResortPlan,
-  type ResortPlot,
-} from './resortPlan';
+import { DERIVED_IDS, type PathNode, type ResortPlan, type ResortPlot } from './resortPlan';
 import { streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
 import {
   beachDepthAt,
@@ -63,6 +55,7 @@ import {
   type Shore,
   type ShoreSpec,
 } from './shoreline';
+import type { ElevationSpec } from './elevation';
 import { normalizeRotation, rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** The gate object, stood at both ends of the promenade. */
@@ -70,9 +63,6 @@ const GATE_ID = 'entrance';
 
 /** The object dropped in the middle of the promenade's plaza. */
 const PLAZA_ID = 'fountain';
-
-/** Object types the layout scatters itself, which no plan should place. */
-const DERIVED = new Set([PATH_ID, BOARDWALK_ID, LAMP_ID, HEDGE_ID]);
 
 /** Plot sizes the generator will work at, in tiles. */
 export const PLOT_TILES = { min: 40, max: 160 } as const;
@@ -437,6 +427,28 @@ function fillRow(parts: FillParts, z: number, rowTurn: Rotation): number {
 const SHORE_INSET = { of: 0.1, min: 6 } as const;
 const SHORE_BEACH = { of: 0.16, min: 8, max: 18, wander: 3 } as const;
 
+/**
+ * TEMPORARY: the terraces a generated plot gets, so the stairs can be seen.
+ *
+ * Two benches climbing away from the water — the sand and a strip of grass at
+ * sea level, a bench above that, and the rest of the resort a bench above that
+ * again. Both steps clear the whole sand band, which `elevationFor` insists on.
+ *
+ * This is a stopgap for looking at, not the real thing. It ignores the districts
+ * entirely, so a building laid across a step straddles it, and the ground itself
+ * is not drawn yet — see the milestone this belongs to. Deriving terraces the
+ * districts actually respect is the generator's own step, still to come.
+ */
+function temporaryElevationFor(params: ResortParams, shore: ShoreSpec): ElevationSpec {
+  return {
+    terraces: [
+      { level: 1, fromWater: shore.beach + 6, wave: 2 },
+      { level: 2, fromWater: shore.beach + 20, wave: 2 },
+    ],
+    seed: params.seed,
+  };
+}
+
 /** The coastline a generated plot of this size and seed gets. */
 function shoreSpecFor(params: ResortParams): ShoreSpec {
   return {
@@ -767,7 +779,7 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
   const { tilesX, tilesZ, density, seed } = clampParams(params);
   const random = createRandom(seed);
 
-  const buildable = types.filter((type) => !DERIVED.has(type.id));
+  const buildable = types.filter((type) => !DERIVED_IDS.has(type.id));
   const byId = new Map(buildable.map((type) => [type.id, type]));
   // Largest first, so a tennis court gets its pick of the districts while there
   // is still a district that will take it.
@@ -798,6 +810,10 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
     edges: [...down.edges, ...across.edges],
     plazas: [plaza],
     shore: shoreSpecFor({ tilesX, tilesZ, density, seed }),
+    elevation: temporaryElevationFor(
+      { tilesX, tilesZ, density, seed },
+      shoreSpecFor({ tilesX, tilesZ, density, seed }),
+    ),
   };
   const shore = shoreFor(skeleton);
 
@@ -877,10 +893,11 @@ export function emptyResortPlan(tilesX: number, tilesZ: number): ResortPlan {
     nodes: [],
     edges: [],
     plazas: [],
-    // Bare ground, but not bare land: the coast is a fact about the plot rather
-    // than about what has been built on it, so a cleared plot still has its
-    // beach to build on.
+    // Bare ground, but not bare land: the coast and the terraces are facts about
+    // the plot rather than about what has been built on it, so a cleared plot
+    // still has its beach and its benches to build on.
     shore: shoreSpecFor(params),
+    elevation: temporaryElevationFor(params, shoreSpecFor(params)),
     standsWholeCatalogue: false,
   };
 }

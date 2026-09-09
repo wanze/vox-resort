@@ -29,9 +29,12 @@ import {
   LAMP_ID,
   PATH_ID,
   RESORT_PLAN,
+  STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
 import { shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
+import type { Elevation } from '../features/layout/domain/elevation';
+import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
 import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
 import {
   clampParams,
@@ -42,6 +45,7 @@ import { layoutItemFor } from '../features/build/domain/buildPlan';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
+import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
 import type { WorldBounds } from '../features/layout/domain/worldBounds';
 import { cameraFramingFor, worldBoundsFor } from '../features/layout/domain/worldBounds';
@@ -663,6 +667,8 @@ interface Resort {
   readonly occupancy: TileOccupancy;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
+  /** How this plot's land rises; the scene draws the terraces from it. */
+  readonly elevation: Elevation | null;
   readonly anchors: readonly LabelAnchor[];
   /** How much ground the resort covers: what both cameras are framed on. */
   readonly bounds: WorldBounds;
@@ -691,6 +697,7 @@ function buildResort(parts: {
   const shadows = buildBlobShadowField(blobShadowsFor(everything.map(casterOf)));
   const bounds = plotBounds(parts.plan, everything);
   const shore = shoreFor(parts.plan);
+  const elevation = elevationFor(parts.plan);
 
   return {
     plot,
@@ -698,6 +705,7 @@ function buildResort(parts: {
     world,
     shadows,
     shore,
+    elevation,
     // Seeded from the resort as planned, then kept up to date one placement at a
     // time; it is what tells the pointer whether a tile is free. The sea goes in
     // with it, so the pointer turns red over water for the same reason it turns
@@ -755,7 +763,13 @@ function createResortSlot(parts: {
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
-      scene?.reframe(resort.bounds, resort.framing, resort.lighting.volume, resort.shore);
+      scene?.reframe(
+        resort.bounds,
+        resort.framing,
+        resort.lighting.volume,
+        resort.shore,
+        resort.elevation,
+      );
       previous.dispose();
       return resort;
     },
@@ -1056,7 +1070,7 @@ function listFor(plot: Plot, id: string): Placement[] {
 }
 
 /** The two kinds of thing the layout derives rather than the plan authoring them. */
-const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID]);
+const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, STAIRS_ID]);
 const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
 
 /**
@@ -1116,6 +1130,15 @@ function createBuildMode(parts: {
     },
   };
 
+  // Forwarded to whichever resort is standing, for the same reason the occupancy
+  // index is: the pointer outlives the plot it is aiming at.
+  const ground: PickGround = {
+    levelOf: (tile) => levelAt(resort().elevation, tile.x, tile.z),
+    get maxLevel() {
+      return maxLevelOf(resort().elevation);
+    },
+  };
+
   const pointer = createBuildPointer({
     canvas,
     // Read per pick rather than captured: switching to the isometric view puts a
@@ -1124,6 +1147,7 @@ function createBuildMode(parts: {
     takeLeftButton: (taken) => handle.takeLeftButton(taken),
     ghost,
     occupancy,
+    ground,
     onPlace(placement) {
       const { plot, world, lighting, shadows } = resort();
       // Claimed first: if the tiles are gone the scene must not gain an object
@@ -1183,6 +1207,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     framing: current().framing,
     lightVolume: current().lighting.volume,
     shore: current().shore,
+    elevation: current().elevation,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
     // GPU's own timers keep measuring past that point.

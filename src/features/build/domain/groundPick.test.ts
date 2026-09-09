@@ -10,7 +10,7 @@ import {
 import type { CompassDirection } from '../../layout/domain/worldBounds';
 import { isometricFramingFor } from '../../layout/domain/worldBounds';
 import type { GroundPoint, PointerPosition } from './groundPick';
-import { groundPointAt, pickTile, tileOf } from './groundPick';
+import { groundPointAt, pickTile, tileOf, type PickGround } from './groundPick';
 
 /**
  * The inverse view-projection of a camera looking straight down from `height`,
@@ -166,8 +166,8 @@ function isoCamera(
 }
 
 /** Where a ground point lands on screen, so a pick can be checked by round trip. */
-function screenOf(camera: OrthographicCamera, point: GroundPoint): PointerPosition {
-  const projected = new Vector3(point.x, 0, point.z).project(camera);
+function screenOf(camera: OrthographicCamera, point: GroundPoint, height = 0): PointerPosition {
+  const projected = new Vector3(point.x, height, point.z).project(camera);
   return {
     x: (projected.x * 0.5 + 0.5) * ISO_VIEWPORT.width,
     y: (0.5 - projected.y * 0.5) * ISO_VIEWPORT.height,
@@ -251,5 +251,114 @@ describe.each(DEPTH_CONVENTIONS)('groundPointAt under an orthographic camera ($l
         expect(picked?.z).toBeCloseTo(corner.z, 3);
       }
     }
+  });
+});
+
+describe('pickTile over terraced ground', () => {
+  /** Land that rises one level north of z = 0, and another north of z = -160. */
+  const benched: PickGround = {
+    levelOf: (tile) => (tile.z < -10 ? 2 : tile.z < 0 ? 1 : 0),
+    maxLevel: 2,
+  };
+
+  it('aims at sea level when the plot is flat', () => {
+    const flat: PickGround = { levelOf: () => 0, maxLevel: 0 };
+    const pointer = { x: 800, y: 200 };
+    expect(pickTile(pointer, VIEWPORT, topDown(100, 64), 16, flat)).toEqual(
+      pickTile(pointer, VIEWPORT, topDown(100, 64), 16),
+    );
+  });
+
+  it('lands on the terrace under the pointer, not on the plane beneath it', () => {
+    // Straight down, so every level projects to the same column and the answer
+    // is decided purely by which level the tile is actually on.
+    // Wide enough to reach past both step lines: the top of the screen is
+    // twenty tiles north, the bottom twenty south.
+    const matrix = topDown(400, 320);
+    const high = pickTile({ x: 400, y: 0 }, VIEWPORT, matrix, 16, benched);
+    expect({ tile: high, level: high && benched.levelOf(high) }).toEqual({
+      tile: { x: 0, z: -20 },
+      level: 2,
+    });
+    const low = pickTile({ x: 400, y: 400 }, VIEWPORT, matrix, 16, benched);
+    expect({ tile: low, level: low && benched.levelOf(low) }).toEqual({
+      tile: { x: 0, z: 20 },
+      level: 0,
+    });
+  });
+
+  it('gives back the tile whose own surface was aimed at, from every direction', () => {
+    // The property that makes the pointer usable: click a bench and you get the
+    // tile you clicked, not the one the sea-level plane happens to lie under.
+    // Every tile's top is visible here — the land rises away from the camera, so
+    // no bench hides the ground in front of it.
+    for (const direction of DIRECTIONS) {
+      const camera = isoCamera(direction, 1, DEPTH_CONVENTIONS[0]!);
+      const inverse = inverseOf(camera);
+      for (const tile of [
+        { x: 2, z: 4 },
+        { x: 5, z: 0 },
+        { x: 3, z: -1 },
+        { x: 1, z: -6 },
+        { x: 4, z: -11 },
+        { x: 0, z: -20 },
+      ]) {
+        const level = benched.levelOf(tile);
+        const middle = { x: (tile.x + 0.5) * 16, z: (tile.z + 0.5) * 16 };
+        const pointer = screenOf(camera, middle, level * 8);
+        expect({
+          direction,
+          tile,
+          picked: pickTile(pointer, ISO_VIEWPORT, inverse, 16, benched),
+        }).toEqual({ direction, tile, picked: tile });
+      }
+    }
+  });
+
+  it('reports no pick at all when no level holds the ground it crossed', () => {
+    // What a ray grazing a riser comes to. The sea-level tile behind it would be
+    // the wrong answer, not a lesser one: it is where the object would be built.
+    const impossible: PickGround = { levelOf: () => 2, maxLevel: 1 };
+    expect(pickTile({ x: 400, y: 200 }, VIEWPORT, topDown(100, 64), 16, impossible)).toBeNull();
+  });
+
+  it('prefers the higher bench where two levels both claim the ray', () => {
+    // Top down, both crossings land on the same tile, so the walk has to be the
+    // thing that decides — and it has to decide upwards.
+    const everywhere: PickGround = { levelOf: () => 2, maxLevel: 2 };
+    const tile = pickTile({ x: 400, y: 200 }, VIEWPORT, topDown(400, 64), 16, everywhere);
+    expect(tile).not.toBeNull();
+  });
+});
+
+describe('groundPointAt at a height', () => {
+  it('solves against the plane it was asked for', () => {
+    // Straight down from 400, so the crossing is directly under the pointer
+    // whichever plane it is: what changes is nothing but the plane.
+    const matrix = topDown(400, 64);
+    const sea = groundPointAt({ x: 800, y: 200 }, VIEWPORT, matrix, 0);
+    const bench = groundPointAt({ x: 800, y: 200 }, VIEWPORT, matrix, 8);
+    expect(sea?.x).toBeCloseTo(64);
+    expect(bench?.x).toBeCloseTo(64);
+  });
+
+  it('moves the crossing towards the camera as the plane rises', () => {
+    // An oblique ray meets a higher plane earlier, which is the whole reason the
+    // levels have to be tried separately rather than solved once.
+    const camera = isoCamera('southeast', 1, DEPTH_CONVENTIONS[0]!);
+    const inverse = inverseOf(camera);
+    const pointer = { x: ISO_VIEWPORT.width / 2, y: ISO_VIEWPORT.height / 2 };
+    const sea = groundPointAt(pointer, ISO_VIEWPORT, inverse, 0)!;
+    const bench = groundPointAt(pointer, ISO_VIEWPORT, inverse, 32)!;
+    // The camera stands to the south-east, so earlier is further south and east.
+    expect(bench.z).toBeGreaterThan(sea.z);
+    expect(bench.x).toBeGreaterThan(sea.x);
+  });
+
+  it('still defaults to sea level', () => {
+    const matrix = topDown(100, 64);
+    expect(groundPointAt({ x: 800, y: 200 }, VIEWPORT, matrix)).toEqual(
+      groundPointAt({ x: 800, y: 200 }, VIEWPORT, matrix, 0),
+    );
   });
 });

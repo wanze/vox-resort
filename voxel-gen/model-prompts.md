@@ -1,3 +1,8 @@
+> These are the original briefs the models were first drawn from. The reference
+> renders the resort's look is now held to, and the prompts they were generated
+> with, are in [../docs/references/](../docs/references/) — see
+> [../docs/art-direction.md](../docs/art-direction.md).
+
 ### Dimensions (W × H × D, voxels — **16 per tile edge**, 1 voxel = 25 cm)
 
 Every model fills the footprint it claims; `pnpm preview --audit` is the check.

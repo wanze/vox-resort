@@ -17,7 +17,9 @@ export default defineConfig({
     exclude: ['@divinevoxel/vlox', '@amodx/math', '@amodx/binary', '@amodx/threads'],
   },
   test: {
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // voxel-gen is the art, and the parts and palette it is drawn from are
+    // pure enough to be tested next to themselves.
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'voxel-gen/**/*.test.ts'],
     environment: 'node',
     server: {
       deps: {

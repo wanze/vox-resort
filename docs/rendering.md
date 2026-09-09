@@ -985,7 +985,9 @@ was already happening — and the shadows should cost one draw call and whatever
 
 Objects are hand-authored voxel models under `voxel-gen/models/`; adding one is a
 new file plus a line in `models/index.ts`, and `voxel-gen/README.md` documents the
-authoring API and the conventions. Nothing in `src/` needs to change: the
+authoring API and the conventions. What an object is supposed to look like — the
+reference renders, the shared palette, the parts a building is composed of, and
+the colour ceiling the mesher imposes — is [art-direction.md](art-direction.md). Nothing in `src/` needs to change: the
 catalogue, materials, layout, meshing, instancing, HUD labels and the shelf of the
 build palette it appears on all derive from the registry — the last of those from
 the `category` the model declares.

@@ -27,27 +27,54 @@ Outputs land in `voxel-gen/out/` (git-ignored); `VOXELGEN_OUT` overrides it.
 
 ## Add or change a model
 
-Copy a file in `models/` and edit the geometry, then add it to
-`models/index.ts`. The shape of a model:
+Copy a file in `models/` and edit it, then add it to `models/index.ts`. A
+building is a composition of parts from `parts/`, painting in colours from
+`palette.ts`, and it reads as a description rather than as arithmetic:
 
 ```ts
+import { PALETTE } from '../palette.ts';
+import { plinth, steps } from '../parts/ground.ts';
+import { pottedPlant } from '../parts/props.ts';
+import { gableRoof } from '../parts/roof.ts';
+import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+
+const BODY = { x: 2, z: 2, w: 28, d: 36 } as const;
+const FRONT = BODY.z + BODY.d - 1;
 
 export default defineModel({
   id: 'my-asset',
   label: 'My Asset',
   // Shelf of the build palette it is offered on: see MODEL_CATEGORIES.
   category: 'amenities',
-  tiles: { x: 2, z: 2 },
+  tiles: { x: 2, z: 3 },
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b); // set(x, y, z, 0xRRGGBB)
-    const box = b.box.bind(b); // box(x0, x1, y0, y1, z0, z1, color) — inclusive
-    const del = b.del.bind(b); // remove a voxel, e.g. carving a recess
+    // Each part hands back the first free layer above it, so a building stacks.
+    const ground = plinth(b, { x: 0, z: 0, w: 32, d: 48 });
+    const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
+    gableRoof(b, { ...BODY, y: eaves, ridge: 'z' });
 
-    box(0, 31, 0, 0, 0, 31, 0xc9c2b4); // a 2x2 tile stone slab
+    doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
+    steps(b, { x: 13, z: FRONT + 1, w: 6, y: ground, descends: 'z+' });
+    shutteredWindow(b, { face: 'z+', at: FRONT, along: 6, y: ground + 4 });
+    for (const x of [10, 20]) pottedPlant(b, { x, z: FRONT + 2, y: ground });
   },
 });
 ```
+
+Anything the parts do not cover is still painted by hand on the builder:
+
+```ts
+b.set(x, y, z, PALETTE.teak.base); // one voxel
+b.box(x0, x1, y0, y1, z0, z1, PALETTE.stone.base); // an inclusive box
+b.del(x, y, z); // remove one, e.g. carving a recess
+```
+
+**Colours come from `palette.ts` and nothing else** — 14 materials, each a
+four-step ramp, and a unit test fails a model that paints anything outside it.
+`docs/art-direction.md` is what the palette and the parts are for, which
+reference each model is drawn from, and which models still have their style pass
+to come.
 
 `category` is what groups the object in the app's build palette — `grounds`,
 `lodging`, `amenities` or `leisure`, declared in `MODEL_CATEGORIES` in
@@ -122,10 +149,15 @@ Conventions:
   gets its own inside surface, so hollowing roughly doubles a building's
   triangles while saving voxels nobody has to draw. Solid is cheaper to render.
 - **Colours are flat and unlit.** The app shades them with its own lights, so
-  never bake highlights or shadows into a colour.
+  never bake highlights or shadows into a colour — a ramp's `shade` is for a part
+  that is a different material, not for a face that faces away from the sun.
+- **Never dither a pattern across a face.** The mesher merges coplanar faces of
+  one colour into rectangles, so a checkerboard wall costs more triangles than a
+  hotel. See `docs/art-direction.md`.
 - Every distinct colour in the catalogue becomes one DVE voxel and one rendered
-  material, so reusing a colour across models is free — inventing near-duplicate
-  shades is not.
+  material, so reusing a colour across models is free — and the catalogue may
+  hold **250 of them in total**, because DVE writes a submesh's material as a
+  byte. That ceiling is why the palette is enforced.
 
 An object also needs somewhere to stand: add it to `RESORT_PLAN` in
 `src/features/layout/domain/resortPlan.ts`, or the layout tests will fail. It

@@ -84,3 +84,8 @@ not app code, so they live in `voxel-gen/` outside `src/` — see
 [docs/rendering.md](docs/rendering.md) — the pipeline from models to frame, how
 the resort is laid out, what is optimised and what is not, benchmark numbers,
 the baked lighting, how to add an object, and notes on the DVE integration.
+
+[docs/art-direction.md](docs/art-direction.md) — what the objects are meant to
+look like: the reference renders in [docs/references/](docs/references/), the
+shared palette every model paints from, the parts a building is composed of, and
+which models still have their style pass to come.

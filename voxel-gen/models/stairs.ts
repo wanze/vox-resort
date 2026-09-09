@@ -33,16 +33,13 @@
  * continues: the greedy mesher merges each tread's top into one rectangle and
  * the buried faces are culled before it ever sees them.
  */
-import { defineModel, LEVEL_VOXELS, TILE_VOXELS, type VoxelBuilder } from '../voxelgen.ts';
-
-/**
- * Top surface of a path slab, in voxels.
- *
- * `path.ts` and `boardwalk.ts` both fill their lowest two layers, so their
- * walking surface is at 2. This flight has to start one step above that and end
- * one level above it.
- */
-const PAVING_TOP = 2;
+import {
+  defineModel,
+  LEVEL_VOXELS,
+  PAVING_VOXELS,
+  TILE_VOXELS,
+  type VoxelBuilder,
+} from '../voxelgen.ts';
 
 /** One voxel of rise per tread, which is as shallow as the grid goes. */
 const TREADS = LEVEL_VOXELS;
@@ -75,7 +72,7 @@ export default defineModel({
     // topmost voxel of tread `step` is the tread you walk on, and its exposed
     // south face is the riser down to the next one.
     for (let step = 0; step < TREADS; step++) {
-      const top = PAVING_TOP + LEVEL_VOXELS - 1 - step;
+      const top = PAVING_VOXELS + LEVEL_VOXELS - 1 - step;
       const z0 = step * GOING;
       const z1 = z0 + GOING - 1;
       box(0, N, 0, top - 1, z0, z1, C.core);

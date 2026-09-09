@@ -7,39 +7,39 @@
 
 Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 
-| Asset         | Footprint | W × H × D     | Real size                              |
-| ------------- | --------- | ------------- | -------------------------------------- |
-| path          | 1×1       | 16 × 2 × 16   | a 4 m paving tile                      |
-| palm          | 1×1       | 16 × 45 × 16  | 11 m trunk, 4 m crown                  |
-| statue        | 1×1       | 16 × 22 × 16  | plinth + figure, 5.5 m                 |
-| icecream      | 1×1       | 16 × 15 × 16  | 2 x 1.5 m cart under a parasol         |
-| tikitorch     | 1×1       | 16 × 12 × 16  | a 3 m garden torch                     |
-| street-lamp   | 1×1       | 16 × 21 × 16  | a 5.25 m lamp post                     |
-| flowerbed     | 1×1       | 16 × 9 × 16   | a 4 x 4 m bed                          |
-| hedge         | 1×1       | 16 × 8 × 16   | a 2 m hedge run                        |
-| sun-lounger   | 1×1       | 16 × 8 × 16   | lounger + folded parasol               |
-| restrooms     | 2×1       | 32 × 17 × 16  | two-WC block, 8 x 4 m                  |
-| snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m       |
-| entrance      | 3×1       | 48 × 28 × 16  | a 12 m gate, 7 m to the arch           |
-| fountain      | 2×2       | 32 × 19 × 32  | an 8 m plaza fountain                  |
-| first-aid     | 2×2       | 32 × 17 × 32  | 6 x 5 m hut on an 8 x 8 m plot         |
-| poolside-bar  | 2×2       | 32 × 30 × 32  | palapa, 6.75 m to the apex             |
-| bungalow      | 2×2       | 32 × 32 × 32  | 6 x 6 m hut on stilts, 8 m tall        |
-| resort-bar    | 3×2       | 48 × 21 × 32  | 12 x 8 m deck bar                      |
-| spa-pavilion  | 3×2       | 48 × 27 × 32  | 12 x 8 m pavilion                      |
-| cottage       | 2×3       | 32 × 26 × 48  | 7 x 11 m cottage, 6.5 m ridge          |
-| house         | 3×3       | 48 × 43 × 48  | 10 x 10 m, two 3 m storeys             |
-| game-hall     | 3×3       | 48 × 25 × 48  | 11 x 9 m arcade hall                   |
-| playground    | 4×3       | 64 × 14 × 48  | 190 m² of equipment + sandpit          |
-| supermarket   | 4×3       | 64 × 27 × 48  | 15 x 8.5 m minimarket                  |
-| restaurant    | 4×3       | 64 × 27 × 48  | pavilion + terrace, 16 x 12 m          |
-| swimming-pool | 4×3       | 64 × 11 × 48  | 12 x 6 m pool + deck                   |
-| villa         | 4×4       | 64 × 40 × 64  | 9.5 x 10 m villa, veranda, plunge pool |
-| beach-club    | 4×4       | 64 × 20 × 64  | 16 x 16 m deck                         |
-| minigolf      | 5×4       | 80 × 17 × 64  | 20 x 16 m, five holes                  |
-| waterpark     | 5×5       | 80 × 55 × 80  | 20 x 20 m, a 14 m slide tower          |
-| hotel         | 6×4       | 96 × 55 × 64  | 24 x 16 m, four 3 m storeys            |
-| tennis-court  | 9×5       | 144 × 16 × 80 | 36 x 20 m club enclosure               |
+| Asset         | Footprint | W × H × D     | Real size                         |
+| ------------- | --------- | ------------- | --------------------------------- |
+| path          | 1×1       | 16 × 2 × 16   | a 4 m paving tile                 |
+| palm          | 1×1       | 16 × 45 × 16  | 11 m trunk, 4 m crown             |
+| statue        | 1×1       | 16 × 22 × 16  | plinth + figure, 5.5 m            |
+| icecream      | 1×1       | 16 × 15 × 16  | 2 x 1.5 m cart under a parasol    |
+| tikitorch     | 1×1       | 16 × 12 × 16  | a 3 m garden torch                |
+| street-lamp   | 1×1       | 16 × 21 × 16  | a 5.25 m lamp post                |
+| flowerbed     | 1×1       | 16 × 9 × 16   | a 4 x 4 m bed                     |
+| hedge         | 1×1       | 16 × 8 × 16   | a 2 m hedge run                   |
+| sun-lounger   | 1×1       | 16 × 8 × 16   | lounger + folded parasol          |
+| restrooms     | 2×1       | 32 × 17 × 16  | two-WC block, 8 x 4 m             |
+| snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m  |
+| entrance      | 3×1       | 48 × 28 × 16  | a 12 m gate, 7 m to the arch      |
+| fountain      | 2×2       | 32 × 19 × 32  | an 8 m plaza fountain             |
+| first-aid     | 2×2       | 32 × 17 × 32  | 6 x 5 m hut on an 8 x 8 m plot    |
+| poolside-bar  | 2×2       | 32 × 30 × 32  | palapa, 6.75 m to the apex        |
+| bungalow      | 2×2       | 32 × 32 × 32  | 6 x 3 m hut on stilts, 8 m ridge  |
+| resort-bar    | 3×2       | 48 × 21 × 32  | 12 x 8 m deck bar                 |
+| spa-pavilion  | 3×2       | 48 × 27 × 32  | 12 x 8 m pavilion                 |
+| cottage       | 2×3       | 32 × 26 × 48  | 7 x 11 m cottage, 6.5 m ridge     |
+| house         | 3×3       | 48 × 43 × 48  | 10 x 10 m, two 3 m storeys        |
+| game-hall     | 3×3       | 48 × 25 × 48  | 11 x 9 m arcade hall              |
+| playground    | 4×3       | 64 × 14 × 48  | 190 m² of equipment + sandpit     |
+| supermarket   | 4×3       | 64 × 27 × 48  | 15 x 8.5 m minimarket             |
+| restaurant    | 4×3       | 64 × 27 × 48  | pavilion + terrace, 16 x 12 m     |
+| swimming-pool | 4×3       | 64 × 11 × 48  | 12 x 6 m pool + deck              |
+| villa         | 4×4       | 64 × 40 × 64  | 10.75 x 10 m, arcade, plunge pool |
+| beach-club    | 4×4       | 64 × 20 × 64  | 16 x 16 m deck                    |
+| minigolf      | 5×4       | 80 × 17 × 64  | 20 x 16 m, five holes             |
+| waterpark     | 5×5       | 80 × 55 × 80  | 20 x 20 m, a 14 m slide tower     |
+| hotel         | 6×4       | 96 × 57 × 64  | 21 x 12 m, four 3 m storeys       |
+| tennis-court  | 9×5       | 144 × 16 × 80 | 36 x 20 m club enclosure          |
 
 ---
 

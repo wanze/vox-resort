@@ -1,10 +1,43 @@
 /**
- * Rustic thatched-roof beach bungalow: a hut raised on four wooden stilts with
- * woven palm walls, a pyramidal thatched roof, a small porch and a ladder, on a
- * low platform. 32x32x32 (8x8 m plot, a 6x6 m hut standing 8 m), a 2x2 tile.
- * Porch faces +z.
+ * Beach bungalow: a timber hut on stilts under a deep hipped thatch, with a
+ * boarded deck across the front and a flight down to the sand.
+ * 32x32 (8x8 m plot, a 6x3 m hut and a 1 m deck, 8 m to the ridge pole), a
+ * 2x2 tile. Deck faces +z.
+ *
+ * Drawn from `docs/references/beach-bungalow.jpg`. The reference weaves its
+ * walls and combs its thatch at a resolution this grid cannot reach, and the
+ * previous pass tried anyway: checkerboarding both surfaces made a hut of 6 070
+ * voxels cost 5 440 triangles, against the hotel's 246 147 voxels for 2 706,
+ * because a dithered face defeats the mesher's merge completely. So the walls
+ * and the roof are flat here, and the variation the reference gets from texture
+ * comes from geometry instead: a sill course and a wall plate round the walls,
+ * two courses of cut ends at the eaves, a pole over the ridge. See
+ * `docs/art-direction.md`.
  */
+import { PALETTE } from '../palette.ts';
+import { plinth, steps } from '../parts/ground.ts';
+import { thatchRoof } from '../parts/roof.ts';
+import { balustrade } from '../parts/veranda.ts';
+import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+
+/** The hut itself. */
+const HUT = { x: 4, z: 6, w: 24, d: 12 } as const;
+const FRONT = HUT.z + HUT.d - 1;
+const LEFT = HUT.x;
+const RIGHT = HUT.x + HUT.w - 1;
+
+/**
+ * The deck, which the thatch is carried out over on two posts. The hut is drawn
+ * wide and shallow on purpose: a hipped roof only has a ridge where the plan is
+ * longer than it is wide, and on a square plan the pole the reference finishes
+ * on would have nowhere to run.
+ */
+const DECK = { z: FRONT + 1, d: 4 } as const;
+const BRINK = DECK.z + DECK.d - 1;
+
+/** Layers of stilt between the sand and the deck. Three is 75 cm of clearance. */
+const STILTS = 3;
 
 export default defineModel({
   id: 'bungalow',
@@ -12,85 +45,110 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b);
-    const box = b.box.bind(b);
+    const sand = plinth(b, { x: 0, z: 0, w: 32, d: 32, height: 2, stone: PALETTE.sand });
 
-    const C = {
-      base: 0xdcc79a,
-      baseDark: 0xc3ad80,
-      stilt: 0x6b4a2c,
-      stiltDark: 0x543a22,
-      deck: 0xb5834e,
-      deckDark: 0xa5763f,
-      wallA: 0xc9a86a,
-      wallB: 0xb5934f,
-      door: 0x5a3f26,
-      window: 0x8fc4cf,
-      thatchA: 0xc7a24e,
-      thatchB: 0xad8636,
-      finial: 0x4a3320,
-      rail: 0x7a5330,
-    };
-
-    const N = 31;
-
-    // low sandy platform base + darker lip
-    box(0, N, 0, 1, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 1, 0, C.baseDark);
-      set(x, 1, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 1, z, C.baseDark);
-      set(N, 1, z, C.baseDark);
+    // Stilts under each corner of the hut and under the two deck posts.
+    const floor = sand + STILTS;
+    for (const x of [HUT.x, RIGHT - 1]) {
+      for (const z of [HUT.z, FRONT - 1, BRINK - 1]) {
+        b.box(x, x + 1, sand, floor - 1, z, z + 1, PALETTE.teak.shade);
+      }
     }
 
-    // four wooden stilts
-    for (const [x, z] of [
-      [5, 5],
-      [24, 5],
-      [5, 24],
-      [24, 24],
-    ] as const) {
-      box(x, x + 1, 2, 7, z, z + 1, C.stilt);
-      set(x, 7, z, C.stiltDark);
+    // One boarded plane for the hut floor and the deck together, lipped along
+    // the three edges that stand in the open.
+    b.box(HUT.x, RIGHT, floor, floor, HUT.z, BRINK, PALETTE.teak.base);
+    b.box(HUT.x, RIGHT, floor, floor, BRINK, BRINK, PALETTE.teak.shade);
+    for (const x of [HUT.x, RIGHT]) {
+      b.box(x, x, floor, floor, DECK.z, BRINK, PALETTE.teak.shade);
     }
 
-    // raised deck floor
-    for (let x = 4; x <= 27; x++)
-      for (let z = 4; z <= 27; z++) set(x, 8, z, (x + z) % 2 === 0 ? C.deck : C.deckDark);
+    // The walls are timber, so they take the palette's teak rather than stucco,
+    // and the part's quoins and cornice become corner posts and a wall plate.
+    const plate = stuccoWall(b, {
+      ...HUT,
+      y: floor + 1,
+      storeys: 1,
+      wall: PALETTE.teak,
+      trim: PALETTE.teak,
+      skirting: 0,
+    });
+    // The thatch is drawn over the deck as well as the hut, because on this
+    // reference the roof is the building: it comes out past the posts and the
+    // hut sits under it rather than wearing it.
+    thatchRoof(b, { ...HUT, d: HUT.d + DECK.d, y: plate });
 
-    // woven palm walls (two-tone), open front porch bay
-    const wall = (x0: number, x1: number, z0: number, z1: number) => {
-      for (let x = x0; x <= x1; x++)
-        for (let y = 9; y <= 17; y++)
-          for (let z = z0; z <= z1; z++) set(x, y, z, (x + y + z) % 2 === 0 ? C.wallA : C.wallB);
-    };
-    wall(6, 25, 6, 6); // back (-z)
-    wall(6, 6, 6, 25); // -x
-    wall(25, 25, 6, 25); // +x
-    wall(6, 12, 25, 25); // front left
-    wall(19, 25, 25, 25); // front right (door gap between)
-    box(13, 18, 9, 16, 25, 25, C.door); // doorway on the front
-    box(8, 10, 12, 15, 6, 6, C.window); // back window
-    box(21, 23, 12, 15, 6, 6, C.window); // back window
-    box(6, 6, 12, 15, 12, 15, C.window); // side window
-    box(25, 25, 12, 15, 16, 19, C.window); // side window
+    // A sill course right round the hut, which is the answer to the reference's
+    // boarding: one horizontal plane costs two quads a face, where boards
+    // painted voxel by voxel would cost one per board.
+    const sill = floor + 4;
+    b.box(HUT.x, RIGHT, sill, sill, HUT.z, FRONT, PALETTE.teak.light);
 
-    // pyramidal thatched roof (slabs inset 1 a side) + finial
-    let layer = 0;
-    for (let lo = 4, hi = 27; lo < hi; lo++, hi--, layer++) {
-      const y = 18 + layer;
-      box(lo, hi, y, y, lo, hi, layer % 2 === 0 ? C.thatchA : C.thatchB);
+    doorway(b, {
+      face: 'z+',
+      at: FRONT,
+      along: HUT.x + 10,
+      y: floor + 1,
+      w: 4,
+      h: 9,
+      trim: PALETTE.teak,
+    });
+    for (const along of [HUT.x + 4, RIGHT - 6]) {
+      shutteredWindow(b, {
+        face: 'z+',
+        at: FRONT,
+        along,
+        y: sill + 1,
+        w: 3,
+        trim: PALETTE.teak,
+        shutters: false,
+      });
     }
-    box(15, 16, 18 + layer, 19 + layer, 15, 16, C.finial);
+    for (const along of [HUT.z + 4]) {
+      for (const face of ['x-', 'x+'] as const) {
+        shutteredWindow(b, {
+          face,
+          at: face === 'x-' ? LEFT : RIGHT,
+          along,
+          y: sill + 1,
+          w: 3,
+          trim: PALETTE.teak,
+          shutters: false,
+        });
+      }
+    }
+    for (const along of [HUT.x + 4, RIGHT - 6]) {
+      shutteredWindow(b, {
+        face: 'z-',
+        at: HUT.z,
+        along,
+        y: sill + 1,
+        w: 3,
+        trim: PALETTE.teak,
+        shutters: false,
+      });
+    }
 
-    // front porch with a railing + a ladder down to the sand
-    for (let x = 11; x <= 20; x++)
-      for (let z = 28; z <= 29; z++) set(x, 8, z, (x + z) % 2 === 0 ? C.deck : C.deckDark);
-    for (const x of [11, 20]) box(x, x, 9, 12, 28, 29, C.rail);
-    box(11, 20, 12, 12, 29, 29, C.rail);
-    box(15, 16, 2, 8, 30, 30, C.stilt); // ladder stringers
-    for (let y = 3; y <= 7; y += 2) box(15, 16, y, y, 29, 30, C.rail); // rungs
+    // The deck: a rail either side of the way down, and the two posts that
+    // carry the thatch out over it. The posts go on last so the rail stops
+    // against them rather than painting over them.
+    const rail = floor + 1;
+    for (const x of [HUT.x, RIGHT - 8]) {
+      balustrade(b, { x, z: BRINK, y: rail, w: 9, along: 'x', rail: PALETTE.teak });
+    }
+    for (const x of [HUT.x, RIGHT]) {
+      balustrade(b, { x, z: DECK.z, y: rail, w: DECK.d, along: 'z', rail: PALETTE.teak });
+      b.box(x, x, rail, plate - 1, BRINK, BRINK, PALETTE.teak.light);
+    }
+
+    steps(b, {
+      x: HUT.x + 9,
+      z: BRINK + 1,
+      w: 6,
+      y: floor,
+      treads: 4,
+      descends: 'z+',
+      stone: PALETTE.teak,
+    });
   },
 });

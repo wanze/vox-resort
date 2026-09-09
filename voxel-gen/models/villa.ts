@@ -1,11 +1,40 @@
 /**
- * Premium resort villa: whitewashed two-storey walls, a terracotta hipped roof,
- * an arched veranda colonnade along the front and a small rectangular plunge pool
- * inset into a side terrace, on a low platform. 64x64x40 (16x16 m plot, a
- * 9.5x10 m villa with two 3 m storeys, 10 m to the ridge), a 4x4 tile.
- * Veranda faces +z; the plunge pool sits on the -x terrace.
+ * Premium resort villa: two whitewashed storeys under a terracotta hipped roof,
+ * an arcaded veranda along the front carrying a first-floor terrace, and a
+ * plunge pool sunk into the paved terrace beside it.
+ * 64x64 (16x16 m plot, a 10.75x10 m villa with two 3 m storeys, 10 m to the
+ * ridge), a 4x4 tile. Veranda faces +z; the pool sits on the -x terrace.
+ *
+ * Drawn from `docs/references/villa.jpg`, which is the render the whole resort
+ * is held against — see `docs/art-direction.md`. The two moves that carry the
+ * reference across the gap are the ones a plain box cannot make: the arcade,
+ * whose arches are cut through masonry rather than painted on it, and the
+ * balustraded terrace it holds up, which stops the elevation an eave short of
+ * the roof so the building has a middle as well as a top and a bottom.
  */
+import { PALETTE } from '../palette.ts';
+import { plinth, steps } from '../parts/ground.ts';
+import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { gableRoof } from '../parts/roof.ts';
+import { arcade, balustrade } from '../parts/veranda.ts';
+import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+
+/** The body, set back so the +z end is a veranda and the -x end a pool terrace. */
+const BODY = { x: 18, z: 6, w: 43, d: 40 } as const;
+const FRONT = BODY.z + BODY.d - 1;
+const LEFT = BODY.x;
+const RIGHT = BODY.x + BODY.w - 1;
+
+/** The veranda, three voxels of pier standing clear of the wall behind it. */
+const VERANDA = { z: 49, d: 3 } as const;
+/** Where each arch stands, so the openings behind them line up with the bays. */
+const BAYS = [21, 29, 37, 45, 53] as const;
+/** The bay on the centre line, which the front door and the steps sit under. */
+const CENTRE = BAYS[2];
+
+/** The plunge pool, sunk one layer into the terrace inside a stone coping. */
+const POOL = { x: 3, z: 20, w: 13, d: 36 } as const;
 
 export default defineModel({
   id: 'villa',
@@ -13,125 +42,100 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 4, z: 4 },
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b);
-    const box = b.box.bind(b);
-    const del = b.del.bind(b);
+    const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64 });
+    const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 2 });
+    gableRoof(b, { ...BODY, y: eaves, ridge: 'x' });
 
-    const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
-      terrace: 0xd8d2c4,
-      terraceDark: 0xc3bca9,
-      coping: 0xe4dfd0,
-      water: 0x37abd2,
-      waterHi: 0x69c9e0,
-      wall: 0xf1ede2,
-      wallShade: 0xdcd6c6,
-      quoin: 0xe0cfa8,
-      column: 0xeae4d6,
-      arch: 0xd8d0bd,
-      roofA: 0xc06a3f,
-      roofB: 0xa9572f,
-      ridge: 0xcf7b4e,
-      door: 0x6b4a2c,
-      window: 0x9fd0dc,
-      shutter: 0x3f7d76,
-      rail: 0xe4dfd0,
-      lounger: 0xf3efe6,
-    };
+    // The veranda, and the terrace its roof doubles as. The arcade hands back
+    // the layer its cornice ends on, so the roof lands wherever the arches did.
+    const cornice = arcade(b, {
+      x: BODY.x,
+      z: VERANDA.z,
+      w: BODY.w,
+      d: VERANDA.d,
+      y: ground,
+      along: 'x',
+      bays: BAYS.length,
+      pier: 3,
+      height: 8,
+    });
+    // A tiled eave course, standing out past the arcade to throw the line of
+    // shadow a roof is for, and a paved deck laid on top of it.
+    const terrace = cornice + 1;
+    const brink = VERANDA.z + 3;
+    b.box(BODY.x - 2, RIGHT + 2, cornice, cornice, FRONT + 1, brink + 1, PALETTE.terracotta.deep);
+    b.box(BODY.x - 1, RIGHT + 1, terrace, terrace, FRONT + 1, brink, PALETTE.stone.base);
 
-    const N = 63;
-
-    // low platform base (3 layers) + darker top lip
-    box(0, N, 0, 2, 0, N, C.base);
-    for (let x = 0; x <= N; x++) {
-      set(x, 2, 0, C.baseDark);
-      set(x, 2, N, C.baseDark);
-    }
-    for (let z = 0; z <= N; z++) {
-      set(0, 2, z, C.baseDark);
-      set(N, 2, z, C.baseDark);
+    // The terrace is edged rather than left as a cliff, which is the reference's
+    // one loud detail and the reason the first floor reads as lived on.
+    const rail = terrace + 1;
+    balustrade(b, { x: BODY.x + 1, z: brink, y: rail, w: BODY.w - 2, along: 'x' });
+    for (const x of [BODY.x + 1, RIGHT - 1]) {
+      balustrade(b, { x, z: FRONT + 2, y: rail, w: brink - FRONT - 1, along: 'z' });
     }
 
-    // paved terrace (two layers) across the footprint
-    for (let x = 2; x <= 61; x++)
-      for (let z = 2; z <= 61; z++) {
-        box(x, x, 3, 4, z, z, C.terraceDark);
-        set(x, 4, z, (Math.floor(x / 4) + Math.floor(z / 4)) % 2 === 0 ? C.terrace : C.terraceDark);
-      }
-
-    // plunge pool inset into the -x terrace (recessed one level, coping rim)
-    for (let x = 5; x <= 18; x++)
-      for (let z = 20; z <= 51; z++) {
-        const border = x === 5 || x === 18 || z === 20 || z === 51;
-        if (border) {
-          set(x, 4, z, C.coping);
+    // The pool, cut into the paving rather than stood on it, and ringed by a
+    // coping that stands a voxel proud of the paving. Two layers between the
+    // coping and the water is what makes it read as a hole rather than as a
+    // blue mat: the coping's inner face is the only thing that says it has
+    // depth, and there is no shading in these colours to say it for us.
+    const poolX = POOL.x + POOL.w - 1;
+    const poolZ = POOL.z + POOL.d - 1;
+    for (let x = POOL.x; x <= poolX; x++) {
+      for (let z = POOL.z; z <= poolZ; z++) {
+        if (x === POOL.x || x === poolX || z === POOL.z || z === poolZ) {
+          b.box(x, x, ground - 1, ground, z, z, PALETTE.stone.light);
           continue;
         }
-        del(x, 4, z);
-        set(x, 3, z, (x * 5 + z * 3) % 9 < 2 ? C.waterHi : C.water);
+        b.del(x, ground - 1, z);
+        b.set(x, ground - 2, z, PALETTE.water.base);
       }
-    // a pair of loungers beside the pool
-    for (const lz of [26, 40]) box(20, 23, 5, 5, lz, lz + 5, C.lounger);
-
-    // whitewashed two-storey body (3 m a floor) with corner quoins
-    box(22, 59, 5, 28, 12, 52, C.wall);
-    for (let x = 22; x <= 59; x++) box(x, x, 5, 28, 12, 12, C.wallShade); // plain back (-z)
-    for (const [x, z] of [
-      [22, 12],
-      [59, 12],
-      [22, 52],
-      [59, 52],
-    ] as const)
-      box(x, x, 5, 28, z, z, C.quoin);
-    box(22, 59, 16, 16, 12, 52, C.quoin); // floor-divider band
-
-    // terracotta hipped roof over the body
-    for (let s = 0; s <= 9; s++) {
-      const y = 29 + s;
-      const xlo = 22 + 2 * s;
-      const xhi = 59 - 2 * s;
-      const zlo = 12 + 2 * s;
-      const zhi = 52 - 2 * s;
-      if (xlo > xhi || zlo > zhi) break;
-      box(xlo, xhi, y, y, zlo, zhi, s % 2 === 0 ? C.roofA : C.roofB);
     }
-    box(40, 41, 39, 39, 30, 34, C.ridge);
 
-    // shuttered windows: upper storey on the front (+z, z=52), both on the -x side
-    const winZ = (wx: number, wy: number) => {
-      box(wx, wx + 3, wy, wy + 5, 52, 52, C.window);
-      box(wx - 1, wx - 1, wy, wy + 5, 52, 52, C.shutter);
-      box(wx + 4, wx + 4, wy, wy + 5, 52, 52, C.shutter);
-    };
-    for (const wx of [26, 35, 46, 55]) winZ(wx, 19);
-    for (const wx of [26, 55]) winZ(wx, 8);
-    const winX = (wy: number, wz: number) => {
-      box(22, 22, wy, wy + 5, wz, wz + 3, C.window);
-      box(22, 22, wy, wy + 5, wz - 1, wz - 1, C.shutter);
-      box(22, 22, wy, wy + 5, wz + 4, wz + 4, C.shutter);
-    };
-    for (const wz of [17, 29, 41]) winX(19, wz);
-    for (const wz of [17, 41]) winX(8, wz);
-
-    // arched veranda colonnade along the front (+z)
-    const cols: readonly number[] = [22, 31, 40, 49, 58];
-    for (const x of cols) box(x, x + 1, 5, 22, 56, 57, C.column);
-    box(22, 59, 23, 25, 56, 57, C.arch); // entablature spanning the columns
-    // carve arch openings between neighbouring columns
-    for (let i = 0; i < cols.length - 1; i++) {
-      const a = cols[i]! + 2;
-      const c = cols[i + 1]! - 1;
-      for (let x = a; x <= c; x++)
-        for (let z = 56; z <= 57; z++) {
-          del(x, 23, z);
-          if (x > a + 1 && x < c - 1) del(x, 24, z);
-        }
+    // Ground floor: the door and a window under every arch of the veranda.
+    doorway(b, { face: 'z+', at: FRONT, along: CENTRE, y: ground, w: 5 });
+    steps(b, { x: CENTRE, z: FRONT + 1, w: 5, y: ground, treads: 1, descends: 'z+' });
+    for (const along of BAYS) {
+      if (along === CENTRE) continue;
+      shutteredWindow(b, { face: 'z+', at: FRONT, along, y: ground + 3, w: 4 });
     }
-    // veranda roof + a low front rail with an entrance gap
-    box(21, 60, 26, 26, 52, 58, C.roofB);
-    box(22, 59, 27, 27, 52, 58, C.roofA);
-    for (let x = 22; x <= 59; x++) if (x < 36 || x > 45) set(x, 5, 58, C.rail);
-    box(36, 45, 5, 16, 52, 52, C.door); // arched entrance doorway
+
+    // First floor: a French window onto the terrace behind every arch, so the
+    // openings of the two storeys sit on the same five vertical lines.
+    for (const along of BAYS) {
+      if (along === CENTRE) {
+        doorway(b, { face: 'z+', at: FRONT, along, y: rail, w: 5, h: 8 });
+        continue;
+      }
+      shutteredWindow(b, { face: 'z+', at: FRONT, along, y: rail, w: 4, h: 8 });
+    }
+
+    // The other three sides, both storeys, on the same rhythm: the reference is
+    // detailed all the way round, which is what a model seen from any angle has
+    // to be.
+    for (const y of [ground + 3, ground + 3 + STOREY_VOXELS]) {
+      for (const along of [12, 22, 32, 40]) {
+        shutteredWindow(b, { face: 'x-', at: LEFT, along, y });
+        shutteredWindow(b, { face: 'x+', at: RIGHT, along, y });
+      }
+      for (const along of [24, 32, 46, 54]) {
+        shutteredWindow(b, { face: 'z-', at: BODY.z, along, y });
+      }
+    }
+
+    // Planting, the one high-frequency detail the lane allows, by the entrance
+    // and down the long side of the pool.
+    for (const x of [BODY.x + 1, CENTRE - 4, CENTRE + 6, RIGHT - 2]) {
+      pottedPlant(b, { x, z: VERANDA.z + 4, y: ground });
+    }
+    flowerBox(b, {
+      x: poolX + 2,
+      z: POOL.z + 2,
+      y: ground,
+      w: POOL.d - 4,
+      along: 'z',
+      blooms: [PALETTE.foliage.base, PALETTE.foliage.light],
+    });
+    flowerBox(b, { x: CENTRE + 10, z: brink + 4, y: ground, w: 10, along: 'x' });
   },
 });

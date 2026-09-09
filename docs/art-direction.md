@@ -82,8 +82,8 @@ probed and pinned by a test in `catalog/domain/objectTypes.test.ts`.
 The catalogue sat at 234 of those 250 before the palette existed, which is the
 practical argument for the palette: detail has to be able to grow, and colours
 are the budget that runs out first. Every model that has its style pass hands
-its private shades back — the four passed over so far took the catalogue from
-255 to 244 — and the end state is a catalogue that paints in 56.
+its private shades back — the seven passed over so far took the catalogue from
+255 to 230 — and the end state is a catalogue that paints in 56.
 
 ## The parts
 
@@ -108,6 +108,9 @@ doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 | `roof.gableRoof`       | a pitched roof with a ridge and two gables                 |
 | `roof.hipRoof`         | a roof falling away on all four sides                      |
 | `roof.flatRoof`        | a slab with a parapet, for the utility buildings           |
+| `roof.thatchRoof`      | a steep hipped palm roof with a pole over its ridge        |
+| `veranda.arcade`       | piers with round arches cut between them, under a cornice  |
+| `veranda.balustrade`   | balusters between a bottom rail and a coping               |
 | `props.pottedPlant`    | greenery in a rimmed terracotta pot                        |
 | `props.flowerBox`      | a planter, flowering or green                              |
 
@@ -123,10 +126,12 @@ face plus a position across it and a depth into it onto a voxel, which is why
 
 ### Not parts yet
 
-The next passes want, roughly in this order: `arcade` (piers and arches, for the
-villa's veranda), `balustrade`, `pergola`, `awning`, `thatchRoof`, `deck`, and
+The next passes want, roughly in this order: `pergola`, `awning`, `deck` and
 `poolWater`. They are deliberately not written until a model needs them —
-speculative parts are dead code, and `pnpm fallow:audit` says so.
+speculative parts are dead code, and `pnpm fallow:audit` says so. `arcade`,
+`balustrade` and `thatchRoof` came off this list with the lodging pass, which is
+the order it is meant to work in: a model asks for a part, not the other way
+round.
 
 ## Rules that hold whatever else changes
 
@@ -141,15 +146,18 @@ speculative parts are dead code, and `pnpm fallow:audit` says so.
   coplanar faces of one colour into maximal rectangles, so cost is the number of
   flat single-coloured rectangles, not the number of voxels:
 
-  | model                      | voxels  | triangles | per tile |
-  | -------------------------- | ------- | --------- | -------- |
-  | `hotel`, plain walls       | 246 147 | 2 706     | 113      |
-  | `bungalow`, dithered walls | 6 070   | 5 440     | 1 360    |
+  | model                              | voxels  | triangles | per tile |
+  | ---------------------------------- | ------- | --------- | -------- |
+  | `hotel`, plain walls, before       | 246 147 | 2 706     | 113      |
+  | `bungalow`, dithered walls, before | 6 070   | 5 440     | 1 360    |
+  | `bungalow`, the same hut, after    | 9 460   | 1 076     | 269      |
 
-  The hotel is forty times the bungalow's voxels and half its triangles. A
+  The hotel was forty times the old bungalow's voxels and half its triangles. A
   checkerboard, a woven texture or a tile grid painted voxel by voxel across a
   wall defeats the merge completely. Where a surface wants variation, give it
-  geometry — a course, a recess, a band — or leave it to the shader.
+  geometry — a course, a recess, a band — or leave it to the shader: the third
+  row is that hut redrawn with a sill course and a plate instead of a weave, and
+  it is a bigger, more detailed model for a fifth of the triangles.
 
 - **Detail is cheap; detail multiplied by placements is not.** Per-frame cost is
   a model's triangles times the number of times it stands on the plot. The style
@@ -174,14 +182,14 @@ against a reference is how the drift started.
 
 ## Where the passes have got to
 
-| Pass                                                     | State                                            |
-| -------------------------------------------------------- | ------------------------------------------------ |
-| Palette, and the parts to compose a building             | done                                             |
-| `cottage`, `house`, `restrooms`, `first-aid`             | done                                             |
-| `villa`, `hotel`, `bungalow` — the lodging range         | next; wants `arcade`, `balustrade`, `thatchRoof` |
-| `restaurant`, `resort-bar`, `poolside-bar`, `beach-club` | wants `pergola`, `awning`, `deck`                |
-| `swimming-pool`, `waterpark`                             | wants `poolWater`                                |
-| The 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed        |
+| Pass                                                     | State                                     |
+| -------------------------------------------------------- | ----------------------------------------- |
+| Palette, and the parts to compose a building             | done                                      |
+| `cottage`, `house`, `restrooms`, `first-aid`             | done                                      |
+| `villa`, `hotel`, `bungalow` — the lodging range         | done                                      |
+| `restaurant`, `resort-bar`, `poolside-bar`, `beach-club` | next; wants `pergola`, `awning`, `deck`   |
+| `swimming-pool`, `waterpark`                             | wants `poolWater`                         |
+| The 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that
 has not had its pass. The list only ever shrinks.

@@ -81,6 +81,52 @@ export function gableRoof(b: VoxelBuilder, o: GableRoofOptions): number {
 
 export type HipRoofOptions = RoofOptions;
 
+/** The last course a hipped roof laid, and the first free layer above it. */
+interface HipCap {
+  readonly xLo: number;
+  readonly xHi: number;
+  readonly zLo: number;
+  readonly zHi: number;
+  readonly y: number;
+}
+
+/**
+ * Lays a hipped roof course by course, each one stepping in `step` voxels a side
+ * from the one below it, and hands back the last course laid — which is what a
+ * ridge cap or a ridge pole then has to be fitted to.
+ *
+ * `step` is the pitch: two voxels in for every one up is the 26 degrees the
+ * lane's tile roofs are laid at, one is the 45 degrees thatch is.
+ */
+function hipCourses(
+  b: VoxelBuilder,
+  o: RoofOptions,
+  overhang: number,
+  step: number,
+  color: (course: number) => number,
+): HipCap {
+  let xLo = o.x - overhang;
+  let xHi = o.x + o.w - 1 + overhang;
+  let zLo = o.z - overhang;
+  let zHi = o.z + o.d - 1 + overhang;
+  if (xHi < xLo || zHi < zLo) throw new Error('A roof needs a footprint to cover');
+
+  let cap: HipCap = { xLo, xHi, zLo, zHi, y: o.y };
+  let y = o.y;
+  let course = 0;
+  while (xLo <= xHi && zLo <= zHi) {
+    b.box(xLo, xHi, y, y, zLo, zHi, color(course));
+    y++;
+    cap = { xLo, xHi, zLo, zHi, y };
+    xLo += step;
+    xHi -= step;
+    zLo += step;
+    zHi -= step;
+    course++;
+  }
+  return cap;
+}
+
 /**
  * A roof that falls away on all four sides, capped by a ridge where the plan is
  * longer than it is wide and by a point where it is square.
@@ -88,37 +134,20 @@ export type HipRoofOptions = RoofOptions;
  * Returns the first free layer above the cap.
  */
 export function hipRoof(b: VoxelBuilder, o: HipRoofOptions): number {
-  const overhang = o.overhang ?? 2;
   const tile = o.tile ?? PALETTE.terracotta;
-  let xLo = o.x - overhang;
-  let xHi = o.x + o.w - 1 + overhang;
-  let zLo = o.z - overhang;
-  let zHi = o.z + o.d - 1 + overhang;
-  if (xHi < xLo || zHi < zLo) throw new Error('A roof needs a footprint to cover');
-
-  let y = o.y;
-  let course = 0;
-  let capXLo = xLo;
-  let capXHi = xHi;
-  let capZLo = zLo;
-  let capZHi = zHi;
-  while (xLo <= xHi && zLo <= zHi) {
-    b.box(xLo, xHi, y, y, zLo, zHi, courseColor(tile, course));
-    capXLo = xLo;
-    capXHi = xHi;
-    capZLo = zLo;
-    capZHi = zHi;
-    xLo += 2;
-    xHi -= 2;
-    zLo += 2;
-    zHi -= 2;
-    y++;
-    course++;
-  }
-  const insetX = capInset(capXLo, capXHi);
-  const insetZ = capInset(capZLo, capZHi);
-  b.box(capXLo + insetX, capXHi - insetX, y, y, capZLo + insetZ, capZHi - insetZ, tile.light);
-  return y + 1;
+  const cap = hipCourses(b, o, o.overhang ?? 2, 2, (course) => courseColor(tile, course));
+  const insetX = capInset(cap.xLo, cap.xHi);
+  const insetZ = capInset(cap.zLo, cap.zHi);
+  b.box(
+    cap.xLo + insetX,
+    cap.xHi - insetX,
+    cap.y,
+    cap.y,
+    cap.zLo + insetZ,
+    cap.zHi - insetZ,
+    tile.light,
+  );
+  return cap.y + 1;
 }
 
 export interface FlatRoofOptions extends Omit<RoofOptions, 'tile'> {
@@ -155,4 +184,49 @@ export function flatRoof(b: VoxelBuilder, o: FlatRoofOptions): number {
     }
   }
   return o.y + parapet + 1;
+}
+
+export interface ThatchRoofOptions extends RoofOptions {
+  /**
+   * The axis the ridge pole runs along. Defaults to the longer side of the cap,
+   * which is the way the ridge of a hipped roof already falls.
+   */
+  readonly ridge?: 'x' | 'z';
+  /** The timber the ridge pole is cut from. */
+  readonly pole?: Ramp;
+  /** Courses of cut ends at the eaves. Two is 50 cm of exposed bundle. */
+  readonly eaves?: number;
+}
+
+/**
+ * A hipped roof of dried palm, with a timber pole lashed over its ridge.
+ *
+ * Thatch differs from tile in the two ways that matter at this scale: it is laid
+ * far steeper — a voxel in a side for every one it rises, against tile's two —
+ * and it stands further out over the wall, because the whole point of a thatched
+ * hut is that the roof is the building. Both are what makes the bungalow read as
+ * thatch rather than as a terracotta hip in a different colour.
+ *
+ * The eave courses take the roof's `shade`, on the same grounds `gableRoof`
+ * darkens its first course: the cut ends of the bundle are genuinely a different
+ * surface from the laid slope above them, not the same surface in shadow.
+ *
+ * Returns the first free layer above the pole.
+ */
+export function thatchRoof(b: VoxelBuilder, o: ThatchRoofOptions): number {
+  const thatch = o.tile ?? PALETTE.thatch;
+  const pole = o.pole ?? PALETTE.teak;
+  const eaves = o.eaves ?? 2;
+  const cap = hipCourses(b, o, o.overhang ?? 3, 1, (course) =>
+    course < eaves ? thatch.shade : thatch.base,
+  );
+  b.box(cap.xLo, cap.xHi, cap.y, cap.y, cap.zLo, cap.zHi, thatch.light);
+
+  // The pole overruns the ridge a voxel at either end, the way a lashed beam
+  // does, so the roof finishes in a line rather than in a blunt corner.
+  const alongX = (o.ridge ?? (cap.xHi - cap.xLo >= cap.zHi - cap.zLo ? 'x' : 'z')) === 'x';
+  const ridge = cap.y + 1;
+  if (alongX) b.box(cap.xLo - 1, cap.xHi + 1, ridge, ridge, cap.zLo, cap.zHi, pole.base);
+  else b.box(cap.xLo, cap.xHi, ridge, ridge, cap.zLo - 1, cap.zHi + 1, pole.base);
+  return ridge + 1;
 }

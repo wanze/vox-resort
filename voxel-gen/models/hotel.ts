@@ -1,15 +1,62 @@
 /**
- * Multi-storey resort hotel block: floors of balconied rooms, a grand ground
- * entrance and a rooftop terrace, on a low platform. 96x64x55 (24x16 m, four
- * 3 m storeys and a 13.5 m parapet), a 6x4 tile. Balconied facades face +z and -x.
+ * Resort hotel block: four whitewashed storeys of balconied rooms over an
+ * arcaded entrance loggia, under a paved roof terrace with a plunge pool.
+ * 96x64 (24x16 m plot, a 21x12 m block of four 3 m storeys, 14.25 m to the
+ * roof rail), a 6x4 tile. Entrance and balconies face +z.
  *
- * A pair of lanterns flanks the entrance under the canopy, so after dark the
- * forecourt in front of the entry is lit rather than the block being a dark
- * cliff above a lit street.
+ * `docs/references/hotel.jpg` is a golden-hour render, so it is read here for
+ * massing only — where the balconies go, how the entrance is covered, that the
+ * top of the block is occupied rather than blank. The colour and the detailing
+ * come from `docs/references/villa.jpg`, which is the lane; see
+ * `docs/art-direction.md`. That is why a hotel and a villa share an arcade, a
+ * balustrade and a whitewashed wall: they are the same resort.
+ *
+ * A pair of lanterns hangs in the loggia, so after dark the entrance is lit
+ * rather than the block being a dark cliff over a lit street.
  */
+import { PALETTE } from '../palette.ts';
+import { plinth, steps } from '../parts/ground.ts';
+import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flatRoof } from '../parts/roof.ts';
+import { arcade, balustrade } from '../parts/veranda.ts';
+import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const LANTERN = 0xffdca8;
+/** Lit at night, so it is drawn unlit at full brightness. */
+const LANTERN = PALETTE.amber.light;
+
+const BODY = { x: 6, z: 8, w: 84, d: 48 } as const;
+const FRONT = BODY.z + BODY.d - 1;
+const LEFT = BODY.x;
+const RIGHT = BODY.x + BODY.w - 1;
+const STOREYS = 4;
+
+/** The entrance loggia, centred on the block and three bays wide. */
+const LOGGIA = { x: 31, w: 34, z: 58, d: 3 } as const;
+/** The three arches of it, so the entrance can sit under the middle one. */
+const ARCHES = [35, 45, 55] as const;
+
+/**
+ * Where each balcony starts, and how wide it is. Six to a storey reads as a
+ * hotel rather than as a house with too many windows, and lines the balconies
+ * up with the six tiles the block claims.
+ */
+const BALCONIES = [8, 22, 36, 50, 64, 78] as const;
+const BALCONY_W = 12;
+/** Balconies clear of the loggia, which takes the middle of the first floor. */
+const FIRST_FLOOR = BALCONIES.filter((x) => x + BALCONY_W <= LOGGIA.x || x >= LOGGIA.x + LOGGIA.w);
+
+/** The roof pool, sunk into the terrace the way the villa's is into its paving. */
+const POOL = { x: 26, z: 16, w: 25, d: 24 } as const;
+
+/**
+ * Balusters every three voxels rather than every two, which is the one place
+ * this block differs from the villa's detailing. A hotel is eighteen runs of
+ * balustrade against the villa's three, and every baluster is four quads the
+ * mesher cannot merge away; at the villa's pitch the block costs more triangles
+ * than the four buildings that went before it put together. See `veranda.ts`.
+ */
+const PITCH = 3;
 
 export default defineModel({
   id: 'hotel',
@@ -19,107 +66,149 @@ export default defineModel({
   emissive: [LANTERN],
   // One lamp per lantern, a voxel clear of the wall it hangs on.
   lights: [
-    { x: 40, y: 12, z: 59, color: LANTERN, intensity: 100, distance: 58 },
-    { x: 56, y: 12, z: 59, color: LANTERN, intensity: 100, distance: 58 },
+    { x: 42, y: 11, z: 57, color: LANTERN, intensity: 100, distance: 58 },
+    { x: 53, y: 11, z: 57, color: LANTERN, intensity: 100, distance: 58 },
   ],
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b);
-    const box = b.box.bind(b);
+    const ground = plinth(b, { x: 0, z: 0, w: 96, d: 64 });
+    const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: STOREYS });
+    // No parapet: a roof somebody swims on is a terrace, so it is edged the way
+    // the balconies and the villa's terrace are, and the pool can be seen from
+    // the street rather than walled off behind a kerb.
+    const deck = flatRoof(b, { ...BODY, y: eaves, parapet: 0, cover: PALETTE.stone });
 
-    const C = {
-      base: 0xcdb98f,
-      baseDark: 0xb5a274,
-      wall: 0xeadfca,
-      wallShade: 0xd6cab2,
-      band: 0xd2b98c,
-      rail: 0xf4efe4,
-      glass: 0x5aa6c0,
-      glassDark: 0x3f88a4,
-      roofFloor: 0xc9b7d0,
-      door: 0x7a5330,
-      canopy: 0xc24d5a,
-      lantern: LANTERN,
-      lanternTrim: 0x4a4440,
-      pot: 0x4a6f74,
-      leaf: 0x3f7d45,
-      water: 0x37abd2,
-    };
+    // The loggia over the entrance, and the first-floor terrace its roof is.
+    const cornice = arcade(b, {
+      x: LOGGIA.x,
+      z: LOGGIA.z,
+      w: LOGGIA.w,
+      d: LOGGIA.d,
+      y: ground,
+      along: 'x',
+      bays: ARCHES.length,
+      pier: 4,
+      height: 8,
+    });
+    const terrace = cornice + 1;
+    const brink = LOGGIA.z + LOGGIA.d - 1;
+    b.box(
+      LOGGIA.x - 2,
+      LOGGIA.x + LOGGIA.w + 1,
+      cornice,
+      cornice,
+      FRONT + 1,
+      brink + 1,
+      PALETTE.terracotta.deep,
+    );
+    b.box(
+      LOGGIA.x - 1,
+      LOGGIA.x + LOGGIA.w,
+      terrace,
+      terrace,
+      FRONT + 1,
+      brink,
+      PALETTE.stone.base,
+    );
 
-    const NX = 95;
-    const NZ = 63;
+    /**
+     * A storey's floor level: the layer its balcony slabs are laid on, and one
+     * below the layer everything standing on them starts at. The loggia roof
+     * comes out on the first of these, which is what lets the terrace over the
+     * entrance and the balconies either side of it read as one floor.
+     */
+    const floors = [1, 2, 3].map((storey) => ground + storey * STOREY_VOXELS + 1);
 
-    // low platform base (3 layers) + darker top lip
-    box(0, NX, 0, 2, 0, NZ, C.base);
-    for (let x = 0; x <= NX; x++) {
-      set(x, 2, 0, C.baseDark);
-      set(x, 2, NZ, C.baseDark);
-    }
-    for (let z = 0; z <= NZ; z++) {
-      set(0, 2, z, C.baseDark);
-      set(NX, 2, z, C.baseDark);
-    }
-
-    // building body: four 3 m storeys, y 3..50
-    box(4, 91, 3, 50, 6, 57, C.wall);
-    for (let x = 4; x <= 91; x++) for (let y = 3; y <= 50; y++) set(x, y, 6, C.wallShade); // back
-
-    // ground floor: windows either side of the entrance
-    for (const wx of [10, 22, 34, 60, 72, 84]) {
-      box(wx, wx + 5, 6, 12, 57, 57, (wx / 6) % 2 === 0 ? C.glass : C.glassDark);
-    }
-
-    // upper storeys: floor bands, windows and balconies on +z and -x
-    const floors = [15, 27, 39];
-    for (const fy of floors) {
-      box(4, 91, fy - 1, fy - 1, 57, 57, C.band);
-      box(4, 4, fy - 1, fy - 1, 6, 57, C.band);
-
-      // +z facade
-      for (let x = 8; x <= 82; x += 10) {
-        box(x, x + 5, fy + 3, fy + 9, 57, 57, (x / 10) % 2 === 0 ? C.glass : C.glassDark);
-        box(x - 1, x + 6, fy - 1, fy - 1, 58, 59, C.rail); // balcony slab
-        box(x - 1, x + 6, fy, fy + 1, 59, 59, C.rail); // front rail
-        box(x - 1, x - 1, fy, fy + 1, 58, 59, C.rail);
-        box(x + 6, x + 6, fy, fy + 1, 58, 59, C.rail);
-      }
-      // -x facade
-      for (let z = 10; z <= 46; z += 10) {
-        box(4, 4, fy + 3, fy + 9, z, z + 5, (z / 10) % 2 === 0 ? C.glass : C.glassDark);
-        box(2, 3, fy - 1, fy - 1, z - 1, z + 6, C.rail);
-        box(2, 2, fy, fy + 1, z - 1, z + 6, C.rail);
-        box(2, 3, fy, fy + 1, z - 1, z - 1, C.rail);
-        box(2, 3, fy, fy + 1, z + 6, z + 6, C.rail);
+    for (const [storey, floor] of floors.entries()) {
+      const rail = floor + 1;
+      for (const x of storey === 0 ? FIRST_FLOOR : BALCONIES) {
+        // A tiled nosing under each slab. Sixteen of these are the only strong
+        // colour on the elevation, and they are what keeps the block in the same
+        // family as the villa's roof rather than reading as a cream cliff.
+        b.box(x - 1, x + BALCONY_W, floor, floor, FRONT + 1, FRONT + 5, PALETTE.terracotta.deep);
+        b.box(x, x + BALCONY_W - 1, floor, floor, FRONT + 1, FRONT + 4, PALETTE.stone.base);
+        balustrade(b, { x, z: FRONT + 4, y: rail, w: BALCONY_W, along: 'x', pitch: PITCH });
+        for (const edge of [x, x + BALCONY_W - 1]) {
+          balustrade(b, { x: edge, z: FRONT + 1, y: rail, w: 4, along: 'z', pitch: PITCH });
+        }
+        doorway(b, { face: 'z+', at: FRONT, along: x + 4, y: rail, w: 4, h: 8 });
       }
     }
 
-    // grand ground entrance on +z with a canopy on columns
-    box(42, 53, 3, 14, 57, 57, C.door);
-    box(38, 57, 15, 16, 57, 62, C.canopy);
-    for (const cx of [38, 56]) box(cx, cx + 1, 3, 14, 61, 62, C.rail);
-    // lanterns on the wall either side of the doors, under the canopy
-    for (const lx of [39, 55]) {
-      box(lx, lx + 1, 10, 13, 58, 58, C.lanternTrim);
-      box(lx, lx + 1, 11, 12, 58, 58, C.lantern);
+    // The terrace over the loggia, edged like the villa's and reached by the
+    // same French windows the balconies are.
+    balustrade(b, { x: LOGGIA.x, z: brink, y: terrace + 1, w: LOGGIA.w, along: 'x', pitch: PITCH });
+    for (const edge of [LOGGIA.x, LOGGIA.x + LOGGIA.w - 1]) {
+      balustrade(b, {
+        x: edge,
+        z: FRONT + 1,
+        y: terrace + 1,
+        w: brink - FRONT,
+        along: 'z',
+        pitch: PITCH,
+      });
     }
-    for (const [px, pz] of [
-      [34, 60],
-      [60, 60],
-    ] as const) {
-      box(px, px + 2, 3, 6, pz, pz + 2, C.pot);
-      box(px - 1, px + 3, 7, 10, pz - 1, pz + 3, C.leaf);
+    for (const along of ARCHES) {
+      doorway(b, { face: 'z+', at: FRONT, along, y: terrace + 1, w: 5, h: 8 });
     }
 
-    // rooftop terrace: floor, parapet, a plunge pool and loungers
-    box(4, 91, 51, 51, 6, 57, C.roofFloor);
-    for (let x = 4; x <= 91; x++) {
-      box(x, x, 52, 53, 6, 6, C.rail);
-      box(x, x, 52, 53, 57, 57, C.rail);
+    // The entrance, under the middle arch and on the block's centre line.
+    doorway(b, { face: 'z+', at: FRONT, along: ARCHES[1], y: ground, w: 6, h: 10 });
+    steps(b, { x: ARCHES[1], z: FRONT + 1, w: 6, y: ground, treads: 1, descends: 'z+' });
+    for (const along of [ARCHES[0], ARCHES[2]]) {
+      shutteredWindow(b, { face: 'z+', at: FRONT, along, y: ground + 3, w: 4, shutters: false });
     }
-    for (let z = 6; z <= 57; z++) {
-      box(4, 4, 52, 53, z, z, C.rail);
-      box(91, 91, 52, 53, z, z, C.rail);
+    // The lanterns, hung off the wall inside the loggia rather than out in the
+    // weather, which is where the reference puts the light it burns.
+    for (const x of [42, 53]) {
+      b.box(x, x + 1, ground + 6, ground + 9, FRONT + 1, FRONT + 1, PALETTE.metal.deep);
+      b.box(x, x + 1, ground + 7, ground + 8, FRONT + 1, FRONT + 1, LANTERN);
     }
-    box(14, 38, 52, 52, 16, 46, C.water);
-    for (const x of [50, 58, 66, 74]) box(x, x + 2, 52, 54, 20, 28, C.rail); // loungers
+
+    // Every storey, on the three sides the balconies do not take. A room has a
+    // window whichever way it faces, and the block is seen from all of them.
+    for (let storey = 0; storey < STOREYS; storey++) {
+      const sill = ground + 3 + storey * STOREY_VOXELS;
+      for (const along of [14, 24, 34, 46]) {
+        shutteredWindow(b, { face: 'x-', at: LEFT, along, y: sill, w: 4 });
+        shutteredWindow(b, { face: 'x+', at: RIGHT, along, y: sill, w: 4 });
+      }
+      for (const along of [12, 24, 36, 48, 60, 72, 84]) {
+        shutteredWindow(b, { face: 'z-', at: BODY.z, along, y: sill, w: 4 });
+      }
+    }
+    // Ground floor, outboard of the loggia.
+    for (const along of [12, 24, 72, 84]) {
+      shutteredWindow(b, { face: 'z+', at: FRONT, along, y: ground + 3, w: 4 });
+    }
+
+    // The roof terrace: edged, then a pool sunk into the paving the way the
+    // villa's is into its own.
+    for (const z of [BODY.z - 1, FRONT + 1]) {
+      balustrade(b, { x: BODY.x - 1, z, y: deck, w: BODY.w + 2, along: 'x', pitch: PITCH });
+    }
+    for (const x of [BODY.x - 1, RIGHT + 1]) {
+      balustrade(b, { x, z: BODY.z - 1, y: deck, w: BODY.d + 2, along: 'z', pitch: PITCH });
+    }
+    const poolX = POOL.x + POOL.w - 1;
+    const poolZ = POOL.z + POOL.d - 1;
+    for (let x = POOL.x; x <= poolX; x++) {
+      for (let z = POOL.z; z <= poolZ; z++) {
+        if (x === POOL.x || x === poolX || z === POOL.z || z === poolZ) {
+          b.box(x, x, eaves, eaves + 1, z, z, PALETTE.stone.light);
+          continue;
+        }
+        b.del(x, eaves, z);
+        b.set(x, eaves - 1, z, PALETTE.water.base);
+      }
+    }
+
+    // Planting at the entrance and nowhere else, the roof terrace included: the
+    // lane spends its one piece of high-frequency detail on the way in.
+    for (const x of [LOGGIA.x - 5, LOGGIA.x + LOGGIA.w + 3]) {
+      pottedPlant(b, { x, z: brink + 1, y: ground });
+    }
+    for (const x of [LOGGIA.x - 12, LOGGIA.x + LOGGIA.w + 8]) {
+      flowerBox(b, { x, z: brink + 1, y: ground, w: 6, along: 'x' });
+    }
   },
 });

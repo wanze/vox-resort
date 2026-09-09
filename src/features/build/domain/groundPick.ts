@@ -27,7 +27,7 @@
  */
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { levelHeight } from '../../layout/domain/elevation';
+import { levelHeight, type LevelProvider } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
 import type { Viewport } from '../../hud/domain/labelProjection';
 
@@ -117,7 +117,7 @@ export function tileOf(point: GroundPoint, tileVoxels: number = TILE_VOXELS): Ti
  */
 export interface PickGround {
   /** How many levels above sea level the ground under a tile stands. */
-  readonly levelOf: (tile: Tile) => number;
+  readonly levelOf: LevelProvider;
   /** The highest level anywhere: where the walk down starts. */
   readonly maxLevel: number;
 }
@@ -140,7 +140,7 @@ export function pickTile(
     const point = groundPointAt(pointer, viewport, inverseViewProjection, levelHeight(level));
     if (!point) continue;
     const tile = tileOf(point, tileVoxels);
-    if (!ground || ground.levelOf(tile) === level) return tile;
+    if (!ground || ground.levelOf(tile.x, tile.z) === level) return tile;
   }
   return null;
 }

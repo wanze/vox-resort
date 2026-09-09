@@ -29,6 +29,7 @@
  * the steps are, and a corner is not a reason to refuse a whole resort.
  */
 
+import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import type { Rotation } from './rotation';
 
@@ -53,11 +54,6 @@ export interface StairTile {
   readonly tile: Tile;
   /** Quarter turns that point the climb at the higher ground. */
   readonly rotation: Rotation;
-}
-
-/** How high the ground under a tile is, in levels. */
-export interface LevelProvider {
-  (tileX: number, tileZ: number): number;
 }
 
 /**

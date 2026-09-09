@@ -45,11 +45,17 @@ shore lies across the front of the frame with the resort behind it. Bungalows,
 loungers and parasols stand on the sand, paths laid over it come out as
 boardwalks, and nothing can be built on the water.
 
+Behind the beach the land is terraced: a raised bench carrying its own
+neighbourhood, with the rest of the resort behind it back at sea level. Paths
+that cross a step come out as flights of stairs, laid and turned by the layout
+rather than placed by hand.
+
 Pick an object from the build palette on the right and click the ground to place
 it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is
 laid. The pointer previews where it would land, green where it fits and red where
-something is already standing. While building, the right button takes over moving
-the camera and Escape puts the object down.
+something is already standing — or where the footprint would straddle a terrace
+step, since an object can only stand on level ground. While building, the right
+button takes over moving the camera and Escape puts the object down.
 
 ## Structure
 

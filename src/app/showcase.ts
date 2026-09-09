@@ -1133,7 +1133,7 @@ function createBuildMode(parts: {
   // Forwarded to whichever resort is standing, for the same reason the occupancy
   // index is: the pointer outlives the plot it is aiming at.
   const ground: PickGround = {
-    levelOf: (tile) => levelAt(resort().elevation, tile.x, tile.z),
+    levelOf: (tileX, tileZ) => levelAt(resort().elevation, tileX, tileZ),
     get maxLevel() {
       return maxLevelOf(resort().elevation);
     },

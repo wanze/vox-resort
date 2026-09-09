@@ -50,7 +50,7 @@ import {
   type ResortPlot,
 } from './resortPlan';
 import { isBeach, isWater, shoreFor, terrainAt, type Shore } from './shoreline';
-import { elevationFor, levelAt, levelHeight, type Elevation } from './elevation';
+import { elevationFor, levelAt, levelHeight, straddledTile, type Elevation } from './elevation';
 import { stairTilesFor } from './stairs';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
@@ -220,9 +220,13 @@ export function occupiedTiles(
   const byId = new Map(items.map((item) => [item.id, item]));
   const keys = plotKeys(plan.plots);
   const occupied = new Map<string, string>();
+  // Built once rather than per plot: anchoring an elevation spec validates it
+  // against every column of the plot, which is not a thing to do five hundred
+  // times over.
+  const elevation = elevationFor(plan);
   plan.plots.forEach((plot, index) => {
     const key = keys[index]!;
-    const tiles = claimableTiles(byId, plot, key, plan);
+    const tiles = claimableTiles(byId, plot, key, plan, elevation);
     for (let x = plot.tileX; x < plot.tileX + tiles.x; x++) {
       for (let z = plot.tileZ; z < plot.tileZ + tiles.z; z++) {
         const cell = tileKey(x, z);
@@ -248,6 +252,7 @@ function claimableTiles(
   plot: ResortPlot,
   key: string,
   plan: ResortPlan,
+  elevation: Elevation | null,
 ): Extent {
   const item = byId.get(plot.id);
   if (!item) throw new Error(`The plot places unknown object "${plot.id}"`);
@@ -264,7 +269,35 @@ function claimableTiles(
     throw new Error(`"${key}" does not fit inside the ${plan.tilesX}x${plan.tilesZ} plot`);
   }
   requireDryGround(plan, plot, tiles, key);
+  requireOneLevel(elevation, plot, tiles, key);
   return tiles;
+}
+
+/**
+ * Throws if a plot would stand across a terrace step.
+ *
+ * A model is a box with a flat underside, so a building laid across a step hangs
+ * in the air at one end and is buried at the other — see `straddledTile` for why
+ * there is no height that would do. A plan that does it is a mistake in the plan,
+ * which is the same bargain `requireDryGround` strikes with one that builds in
+ * the sea.
+ */
+function requireOneLevel(
+  elevation: Elevation | null,
+  plot: ResortPlot,
+  tiles: Extent,
+  key: string,
+): void {
+  if (!elevation) return;
+  const straddled = straddledTile((x, z) => levelAt(elevation, x, z), {
+    tileX: plot.tileX,
+    tileZ: plot.tileZ,
+    tilesX: tiles.x,
+    tilesZ: tiles.z,
+  });
+  if (straddled) {
+    throw new Error(`"${key}" straddles a step at tile ${straddled.x},${straddled.z}`);
+  }
 }
 
 /** Throws if any tile a plot would claim is sea rather than ground. */

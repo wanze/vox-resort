@@ -10,6 +10,7 @@ import {
   tilesBetween,
 } from './buildPlan';
 import { createTileOccupancy } from './tileOccupancy';
+import type { LevelProvider } from '../../layout/domain/elevation';
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -38,6 +39,12 @@ describe('isPaintable', () => {
   });
 });
 
+/** Land that rises one level north of `z`, so a step runs along x there. */
+const stepAt =
+  (z: number): LevelProvider =>
+  (_tileX, tileZ) =>
+    tileZ < z ? 1 : 0;
+
 describe('planAt', () => {
   it('stands the object on the tile it was dropped on', () => {
     const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy());
@@ -50,7 +57,7 @@ describe('planAt', () => {
   });
 
   it('drops the object on the terrace under the pointer', () => {
-    const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, 2);
+    const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, () => 2);
     expect(plan.placement).toEqual(place(COTTAGE, 'cottage@3,5', 3, 5, 0, 2));
   });
 
@@ -59,6 +66,31 @@ describe('planAt', () => {
     const plan = planAt(COTTAGE, { x: 3, z: 5 }, occupancy);
     expect(plan.blocked).toBe(true);
     expect(plan.placement.tileX).toBe(3);
+  });
+
+  it('is blocked when its footprint straddles a step', () => {
+    // The cottage is 2x3, so a step anywhere inside those six tiles refuses it
+    // even though every one of them is empty.
+    const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, stepAt(6));
+    expect(plan.blocked).toBe(true);
+    // Still planned, so the preview can paint the footprint red where it fell.
+    expect(plan.placement.tileX).toBe(3);
+  });
+
+  it('stands the same object one tile over, where the ground is level', () => {
+    const plan = planAt(COTTAGE, { x: 3, z: 6 }, createTileOccupancy(), 0, stepAt(6));
+    expect({ blocked: plan.blocked, y: plan.placement.y }).toEqual({ blocked: false, y: 0 });
+  });
+
+  it('asks about the tiles the turned footprint covers, not the ones it would not', () => {
+    // A step running along x refuses the cottage standing tall and accepts it
+    // turned, because a turn changes which six tiles it needs.
+    const upright = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, stepAt(7));
+    const turned = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 1, stepAt(7));
+    expect({ upright: upright.blocked, turned: turned.blocked }).toEqual({
+      upright: true,
+      turned: false,
+    });
   });
 
   it('is blocked by anything under any tile of its footprint', () => {

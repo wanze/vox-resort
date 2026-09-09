@@ -110,9 +110,6 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     );
   };
 
-  /** The terrace a tile stands on, which is where anything dropped on it goes. */
-  const levelUnder = (tile: Tile): number => ground.levelOf(tile);
-
   /** Redraws the preview for the tile under the pointer. */
   const preview = (tile: Tile | null): void => {
     hovered = tile;
@@ -120,13 +117,13 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       ghost.hide();
       return;
     }
-    const plan = planAt(item, tile, occupancy, rotation, levelUnder(tile));
+    const plan = planAt(item, tile, occupancy, rotation, ground.levelOf);
     ghost.show(plan.placement, plan.blocked);
   };
 
   const placeOn = (tile: Tile): void => {
     if (!item) return;
-    const plan = planAt(item, tile, occupancy, rotation, levelUnder(tile));
+    const plan = planAt(item, tile, occupancy, rotation, ground.levelOf);
     if (plan.blocked) return;
     onPlace(plan.placement);
   };

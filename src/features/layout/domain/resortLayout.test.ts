@@ -244,12 +244,16 @@ describe('place', () => {
 
 describe('a terraced plot', () => {
   /**
-   * The tiny plan cut into two benches: everything north of row 2 stands one
-   * level up, which puts the hut on the terrace and the southern street below it.
+   * The tiny plan cut into two benches, with the step on its southern street:
+   * the hut and the northern street stand a level up, the southern street below.
+   *
+   * The step has to fall on a street rather than through the middle of the plot,
+   * because a hut laid across it is exactly what `layoutResort` now refuses —
+   * see the last case in this block.
    */
   const terraced: ResortPlan = {
     ...tinyPlan,
-    elevation: { terraces: [{ level: 1, fromWater: 1, wave: 0 }], seed: 1 },
+    elevation: { terraces: [{ level: 1, inset: 0, wave: 0 }], seed: 1 },
   };
 
   it('stands each object on the terrace its own tile is on', () => {
@@ -277,6 +281,24 @@ describe('a terraced plot', () => {
   it('draws both benches, so a terrace is something you can see', () => {
     const { paths } = layoutResort(tinyItems, terraced);
     expect(new Set(paths.map((tile) => tile.y))).toEqual(new Set([0, LEVEL_VOXELS]));
+  });
+
+  it('refuses a plot laid across a step, naming the tile that straddles it', () => {
+    // A model is a box with a flat underside: across a step one end hangs in the
+    // air and the other is buried, and no height for it would be right.
+    const across: ResortPlan = {
+      ...tinyPlan,
+      elevation: { terraces: [{ level: 1, inset: 1, wave: 0 }], seed: 1 },
+    };
+    expect(() => layoutResort(tinyItems, across)).toThrow(/"hut" straddles a step at tile 1,2/);
+  });
+
+  it('accepts a one-tile object either side of a step', () => {
+    // The rule is about a footprint, not about being near a step: a path tile
+    // stands on whichever bench it is on, and there are plenty on both.
+    const { paths } = layoutResort(tinyItems, terraced);
+    expect(paths.filter((tile) => tile.y === 0).length).toBeGreaterThan(0);
+    expect(paths.filter((tile) => tile.y === LEVEL_VOXELS).length).toBeGreaterThan(0);
   });
 });
 

@@ -257,7 +257,7 @@ describe.each(DEPTH_CONVENTIONS)('groundPointAt under an orthographic camera ($l
 describe('pickTile over terraced ground', () => {
   /** Land that rises one level north of z = 0, and another north of z = -160. */
   const benched: PickGround = {
-    levelOf: (tile) => (tile.z < -10 ? 2 : tile.z < 0 ? 1 : 0),
+    levelOf: (_tileX, tileZ) => (tileZ < -10 ? 2 : tileZ < 0 ? 1 : 0),
     maxLevel: 2,
   };
 
@@ -276,12 +276,12 @@ describe('pickTile over terraced ground', () => {
     // twenty tiles north, the bottom twenty south.
     const matrix = topDown(400, 320);
     const high = pickTile({ x: 400, y: 0 }, VIEWPORT, matrix, 16, benched);
-    expect({ tile: high, level: high && benched.levelOf(high) }).toEqual({
+    expect({ tile: high, level: high && benched.levelOf(high.x, high.z) }).toEqual({
       tile: { x: 0, z: -20 },
       level: 2,
     });
     const low = pickTile({ x: 400, y: 400 }, VIEWPORT, matrix, 16, benched);
-    expect({ tile: low, level: low && benched.levelOf(low) }).toEqual({
+    expect({ tile: low, level: low && benched.levelOf(low.x, low.z) }).toEqual({
       tile: { x: 0, z: 20 },
       level: 0,
     });
@@ -303,7 +303,7 @@ describe('pickTile over terraced ground', () => {
         { x: 4, z: -11 },
         { x: 0, z: -20 },
       ]) {
-        const level = benched.levelOf(tile);
+        const level = benched.levelOf(tile.x, tile.z);
         const middle = { x: (tile.x + 0.5) * 16, z: (tile.z + 0.5) * 16 };
         const pointer = screenOf(camera, middle, level * 8);
         expect({

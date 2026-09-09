@@ -38,6 +38,12 @@
  *    the water, bungalows and palms behind them, and lanes left clear so the
  *    layout can walk a boardwalk out to every one of them. See {@link fillBeach}.
  *
+ * 6. **The land is terraced under all of it.** A raised bench runs along the
+ *    shore, carrying its own neighbourhood, with the rest of the resort behind
+ *    it back at sea level. The two steps are anchored differently on purpose —
+ *    see {@link elevationSpecFor} — and the district fill refuses anything that
+ *    would stand across one, so a plot is buildable everywhere it is flat.
+ *
  * Everything here is a pure function of the parameters, and the seed makes it
  * reproducible: the same four numbers give the same resort, which is what lets
  * a plot be shared, benchmarked and regression-tested.
@@ -55,7 +61,13 @@ import {
   type Shore,
   type ShoreSpec,
 } from './shoreline';
-import type { ElevationSpec } from './elevation';
+import {
+  elevationFor,
+  levelAt,
+  straddledTile,
+  type ElevationSpec,
+  type LevelProvider,
+} from './elevation';
 import { normalizeRotation, rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** The gate object, stood at both ends of the promenade. */
@@ -243,6 +255,8 @@ interface Site {
   readonly taken: Set<string>;
   readonly tilesX: number;
   readonly tilesZ: number;
+  /** How high the ground is, so nothing is laid across a terrace step. */
+  readonly levelOf: LevelProvider;
 }
 
 /**
@@ -260,7 +274,15 @@ function fits(site: Site, footprint: Extent, tileX: number, tileZ: number): bool
       if (site.taken.has(tileKey(x, z))) return false;
     }
   }
-  return true;
+  // The ground has to be level under the whole footprint, which `layoutResort`
+  // would otherwise refuse the finished plan for — see `straddledTile`.
+  const straddled = straddledTile(site.levelOf, {
+    tileX,
+    tileZ,
+    tilesX: footprint.x,
+    tilesZ: footprint.z,
+  });
+  return straddled === null;
 }
 
 function claim(site: Site, footprint: Extent, tileX: number, tileZ: number): void {
@@ -428,22 +450,57 @@ const SHORE_INSET = { of: 0.1, min: 6 } as const;
 const SHORE_BEACH = { of: 0.16, min: 8, max: 18, wander: 3 } as const;
 
 /**
- * TEMPORARY: the terraces a generated plot gets, so the stairs can be seen.
+ * How far behind the sand the shore bench begins, and how deep it is at least.
  *
- * Two benches climbing away from the water — the sand and a strip of grass at
- * sea level, a bench above that, and the rest of the resort a bench above that
- * again. Both steps clear the whole sand band, which `elevationFor` insists on.
- *
- * This is a stopgap for looking at, not the real thing. It ignores the districts
- * entirely, so a building laid across a step straddles it, and the ground itself
- * is not drawn yet — see the milestone this belongs to. Deriving terraces the
- * districts actually respect is the generator's own step, still to come.
+ * Two tiles of grass between the beach and the step, so the bench reads as
+ * standing back from the sand rather than as a sea wall; and eight tiles of
+ * depth at minimum, or the bungalows on it have nowhere to stand.
  */
-function temporaryElevationFor(params: ResortParams, shore: ShoreSpec): ElevationSpec {
+const BENCH_MARGIN = 2;
+const BENCH_DEPTH = { min: 8, of: 0.18 } as const;
+
+/**
+ * The terraces a generated plot gets: a raised bench along the shore, and the
+ * rest of the resort behind it back at sea level.
+ *
+ * The two steps are anchored differently, and that is the whole design:
+ *
+ * - The **seaward** step follows the water, so the bench runs parallel to the
+ *   beach however the coastline wanders. A bench that ignored the coast would
+ *   crowd the sand at one end of the plot and stand a district back from it at
+ *   the other.
+ * - The **landward** step is anchored to the plot and given no wobble, so it
+ *   falls on one row in every column — the row just past a **cross street**.
+ *   Just past rather than on: a step laid on the street's own rows splits it
+ *   lengthwise, leaving half the street on the bench and half below it with a
+ *   hundred-tile staircase between. Past it, the whole street stays on the
+ *   bench, the district below starts at sea level, and the only things that
+ *   climb are the paths crossing it — the promenade, the service lanes and the
+ *   spurs, which is a dozen flights instead of one per column.
+ *
+ * Districts are the gaps between streets, so keeping the only step that reaches
+ * inland hard against a street is what makes the whole plot buildable rather
+ * than something the district fill has to work around. The seaward step still
+ * cuts into the first band, and `fits` skips whatever would straddle it — a
+ * handful of objects along a wandering line, not a district.
+ *
+ * Null when the plot is too shallow to hold a bench and a resort behind it.
+ */
+function elevationSpecFor(
+  params: ResortParams,
+  shore: ShoreSpec,
+  bands: readonly Street[],
+): ElevationSpec | null {
+  // Both insets are measured landward, one from the water and one from the
+  // plot's edge, so they are compared through the rows they land on.
+  const benchStart = params.tilesZ - 1 - shore.inset - shore.beach - BENCH_MARGIN;
+  const depth = Math.max(BENCH_DEPTH.min, Math.round(params.tilesZ * BENCH_DEPTH.of));
+  const street = bands.findLast((band) => band.at <= benchStart - depth);
+  if (!street || street.at < MIN_DISTRICT_DEPTH) return null;
   return {
     terraces: [
-      { level: 1, fromWater: shore.beach + 6, wave: 2 },
-      { level: 2, fromWater: shore.beach + 20, wave: 2 },
+      { level: 1, inset: shore.beach + BENCH_MARGIN, anchor: 'water', wave: 2 },
+      { level: 0, inset: params.tilesZ - 2 - street.at, anchor: 'plot', wave: 0 },
     ],
     seed: params.seed,
   };
@@ -787,6 +844,10 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
 
   const columns = columnsFor(random, tilesX);
   const bands = bandsFor(tilesZ);
+  const shoreSpec = shoreSpecFor({ tilesX, tilesZ, density, seed });
+  // Absent rather than present-and-flat on a plot too shallow to terrace, which
+  // is what `exactOptionalPropertyTypes` asks of an optional field.
+  const terraces = elevationSpecFor({ tilesX, tilesZ, density, seed }, shoreSpec, bands);
   const promenade = columns.find((street) => street.width === PROMENADE_WIDTH) ?? columns[0]!;
   const plaza = plazaAt(promenade, bands[Math.floor(bands.length / 2)]!, tilesX, tilesZ);
 
@@ -809,15 +870,18 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
     nodes: [...down.nodes, ...across.nodes],
     edges: [...down.edges, ...across.edges],
     plazas: [plaza],
-    shore: shoreSpecFor({ tilesX, tilesZ, density, seed }),
-    elevation: temporaryElevationFor(
-      { tilesX, tilesZ, density, seed },
-      shoreSpecFor({ tilesX, tilesZ, density, seed }),
-    ),
+    shore: shoreSpec,
+    ...(terraces ? { elevation: terraces } : {}),
   };
   const shore = shoreFor(skeleton);
 
-  const site: Site = { taken: new Set(), tilesX, tilesZ };
+  const terraced = elevationFor(skeleton);
+  const site: Site = {
+    taken: new Set(),
+    tilesX,
+    tilesZ,
+    levelOf: (tileX2, tileZ2) => levelAt(terraced, tileX2, tileZ2),
+  };
   const missing = new Set(buildable.map((type) => type.id));
   // The sea is spoken for before anything is stood, so nothing below has to
   // check for it: a district, a landmark and a lane all just find the tiles
@@ -886,6 +950,8 @@ export function generateResort(types: readonly GeneratorType[], params: ResortPa
  */
 export function emptyResortPlan(tilesX: number, tilesZ: number): ResortPlan {
   const params = clampParams({ tilesX, tilesZ, density: 1, seed: 0 });
+  const shore = shoreSpecFor(params);
+  const terraces = elevationSpecFor(params, shore, bandsFor(params.tilesZ));
   return {
     tilesX: params.tilesX,
     tilesZ: params.tilesZ,
@@ -896,8 +962,8 @@ export function emptyResortPlan(tilesX: number, tilesZ: number): ResortPlan {
     // Bare ground, but not bare land: the coast and the terraces are facts about
     // the plot rather than about what has been built on it, so a cleared plot
     // still has its beach and its benches to build on.
-    shore: shoreSpecFor(params),
-    elevation: temporaryElevationFor(params, shoreSpecFor(params)),
+    shore,
+    ...(terraces ? { elevation: terraces } : {}),
     standsWholeCatalogue: false,
   };
 }

@@ -11,16 +11,27 @@ and a storey is 12 voxels. Every model is authored at that scale and fills the
 footprint it declares, which is what keeps a palm, a bungalow and a hotel in
 proportion once they stand on the same plot.
 
+One **level** of elevation is `LEVEL_VOXELS` (8) voxels — **2 m**, two-thirds of
+a storey. Both constants live in `voxel-gen/voxelgen.ts` rather than in `src/`,
+because both are facts the art has to agree with: the stair model is authored to
+climb exactly one level across exactly one tile, in eight treads of one voxel
+rise by two of going. Steps of 25 by 50 cm are steep, and are the shallowest a
+grid this coarse can express.
+
 The plot is 112 × 100 tiles — **448 × 400 m**.
 
 ## What is on the plot
 
+The authored plan is flat and has no coast — it is the plot a `?bench=1` run
+measures, and a run only compares with the one before it if the scene has not
+moved. A generated plot is the one with a beach and terraces on it.
+
 |                                             |                                      |
 | ------------------------------------------- | ------------------------------------ |
-| Authored objects                            | 515, of 28 types                     |
+| Authored objects                            | 517, of 29 types                     |
 | Lamps and hedges the layout scatters itself | 920                                  |
-| Paved tiles                                 | 2 529 (23% of the plot)              |
-| Instances drawn                             | 3 964                                |
+| Paved tiles                                 | 2 530 (23% of the plot)              |
+| Instances drawn                             | 3 967                                |
 | Draw calls                                  | 528, over 43 chunks                  |
 | Triangles submitted per frame               | 2.18 M (1.25 M at eye level, culled) |
 | Triangles uploaded to the GPU               | 84 k, merged down from 526 k         |
@@ -37,6 +48,12 @@ east wing and the two southern bands added 279 objects, 1 894 instances and
 Measured in Chrome on the WebGPU backend, at 2880 × 1626 device pixels on an
 M2 Pro: **120 fps (vsync) in daylight and after dark alike**. `pnpm bench`
 reproduces it — see _Measuring_ below.
+
+> The draw-call, triangle and frame-cost rows above were measured before the
+> terraces landed and have not been re-run since. The terrain grew two static
+> surfaces (about 2 100 quads and two draw calls on a plot with a coast, and
+> nothing at all on the flat authored plan the bench measures), which should not
+> move them — but that is a claim, not a measurement, until `pnpm bench` says so.
 
 ## How the pipeline fits together
 
@@ -97,6 +114,13 @@ plaza or two. Everything else is derived, in three stages:
    over, skipping anything pressed against a building so the planting reads as a
    border rather than as undergrowth.
 
+Each paved tile is then given its paving from the ground under it rather than
+from the route over it: flagstones on grass, a `boardwalk` on sand, and `stairs`
+where the tile's paved neighbour stands a level higher. Every placement also
+carries the height of the ground it stands on, so nothing downstream — the
+instance matrix, the occluder box, a lamp's position, the shadow it throws, its
+HUD label — has to know which terrace it is on. See _Elevation_.
+
 Because the plan stands two dozen cottages on the plot, a placement carries both
 its type (`id`) and a unique `key`.
 
@@ -155,6 +179,127 @@ The southern gate moves with the coast: it straddles the promenade where it runs
 out onto the sand rather than at the plot's own edge, which is under water. The
 service lanes keep running south and are cut off at the shore, so each arrives at
 the beach as a boardwalk pier.
+
+## Elevation
+
+The land is not one plane. A **raised bench** runs along the shore behind the
+beach, carrying its own neighbourhood of bungalows, and the rest of the resort
+sits behind it back at sea level. A tile's **level** is an integer, 0 at sea
+level, and one level is 8 voxels up.
+
+`elevation.ts` describes the terraces the way `shoreline.ts` describes the coast,
+and for the same reasons: **per tile column**, as a function rather than a stored
+field. `stepStartZ(i, x)` is where terrace `i`'s step runs in column `x`, and a
+tile's level falls out of that one number — so the layout and the terrain
+renderer make the same staircase of a wandering step without having to agree on
+anything but the seed.
+
+Two invariants hold, and between them they are what make the rest tractable:
+
+- **Neighbouring tiles differ by at most one level.** A taller drop is two
+  terraces a tile apart, which comes out as two flights in a row rather than as a
+  cliff no stair model could climb.
+- **The beach is always level 0.** Terraces are anchored landward of the sand, so
+  a coastline that wanders cannot drag a step across the sand — which is what
+  lets the sand stay the flat sheet it is and a boardwalk run out to the water
+  without a step in it.
+
+Both are checked when a plan's spec is anchored, per column, against the rounded
+lines the layout will actually read. Not against the spec's own numbers: two
+steps four tiles apart with three tiles of wobble on each are a spec that looks
+fine and crosses itself in one column out of thirty.
+
+### What a step is measured from
+
+A terrace is anchored to the **water** or to the **plot**, and the choice is
+visible:
+
+- **`water`** follows the coast. The sand is a fixed depth, so a step a fixed
+  distance in from the water keeps a fixed distance behind the sand however the
+  coastline wanders — which is what the shore bench wants, because it should read
+  as parallel to the beach.
+- **`plot`** measures from the plot's southern edge and ignores the coast. With
+  no wobble the step falls on one row in every column, which is the only way a
+  step can sit on a **street**.
+
+That second one is what makes a terraced plot buildable. Districts are the gaps
+between streets, so a step on a street crosses nothing but paving and cuts no
+district at all. The generator uses one of each: the seaward step follows the
+water, and the landward step is pinned to the row just past a cross street.
+
+Just _past_ it, not on it. A step laid on a two-wide cross street splits the
+street lengthwise, leaving half of it on the bench and half below with a stair
+wall the full width of the plot between them — 110 flights in one row on the
+reference plot. One row further and the whole street stays on the bench, the
+district below starts at sea level, and the only flights are where north-south
+paths come down off the bench: about 20 on that same plot, in ones and twos.
+
+### Paths become stairs
+
+A path that crosses a step is not a slab, it is the flight up it. This is the
+third case of a rule the layout already had — paving is a fact about the ground
+under a tile, so the same street is flagstones on grass, decking on sand and
+stairs on a step.
+
+`stairs.ts` classifies each paved tile: a flight goes on the **lower** tile of
+the step, because there is no tile between two adjacent tiles and the lower one
+is the only choice that starts at the paving it continues and ends flush with the
+paving above. It is turned to face the higher ground, so **one model and a
+quarter turn** cover all four directions — no second geometry, no second bucket,
+exactly as a turned cottage costs nothing but a different matrix.
+
+Two rules keep it honest. The higher neighbour has to be **paved** too, or the
+flight would end in a lawn. And where a path _turns_ on a step — an L-bend with
+higher paved ground on two perpendicular sides — one tile cannot climb both ways,
+so the first by compass order wins. That is a deliberate fudge rather than a
+refusal: the routing picks those corners without knowing where the steps are, and
+a corner is not a reason to refuse a whole resort.
+
+### An object stands on one level
+
+A voxel model is a box with a flat underside. Across a step, half of it hangs in
+the air and the other half is buried, and there is no height that would be right
+— the anchor tile's is wrong for the rest of it. So an object may only stand
+where every tile of its footprint is on one terrace, and that is enforced in
+three places from one implementation (`straddledTile`):
+
+- **Authored plans throw.** Alongside the check that nothing stands in the sea: a
+  plan that does it is a mistake in the plan.
+- **Build mode blocks**, in `buildPlan.ts` rather than in the occupancy index —
+  straddling is a fact about a footprint, so it cannot be seeded as a reserved
+  tile the way water is. The cursor goes red and the ghost still shows where the
+  object would have gone.
+- **The generator avoids it.** `fits` requires level ground under a whole
+  footprint, so districts lay their rows on one bench.
+
+Cutting a building to the ground under it is a different feature, and a much
+bigger one. Until then the ground has to be level.
+
+### Drawing the terraces
+
+Land above sea level is the same problem the coast is, a third time, and it gets
+the same answer: **one span per tile column** at whichever bench that column is
+on. Sea level is left to the infinite grass plane, so only benches above it are
+emitted — a quad laid over that plane would be two surfaces fighting for the same
+fragments.
+
+What it adds is the **risers**, the vertical faces between one bench and the
+next, and they are the only geometry in the terrain that does not lie flat — so
+they are the only geometry that carries its own normals. A riser lit as though it
+were a floor is a riser the sun cannot pick out, and a step you cannot see is not
+a step. A bench is the same green as the plot, because a terrace _is_ the plot,
+just two metres up; the riser is bare earth.
+
+The awkward part is closing the risers along **x** as well as **z**. A step line
+wanders, so two neighbouring columns round it to different tiles, and between
+those rows one column stands a level above the other — a vertical slot at the
+boundary they share, the staircase the tile grid makes of the step seen end-on.
+Each pair of neighbouring columns is walked and exactly the z ranges where their
+heights disagree are closed, adjacent spans merged so a long slot is one quad.
+
+On the reference generated plot that is 673 bench quads — one per column, since
+the profile has a single bench above sea level — and about 1 450 risers, on top
+of the 673 sea and 673 sand. Four static meshes, built once per resort.
 
 ### Drawing the water
 
@@ -339,13 +484,22 @@ running. Pricing the isometric view means a preset of its own.
 Placing is the other half of the mutable scene: the renderer could already take
 one more object, and this is what points a mouse at it.
 
-**Picking.** The resort stands on one flat plane at `y = 0`, so the tile under
-the pointer is solved rather than searched for: `groundPick.ts` unprojects the
-pointer through the camera's inverse view-projection and meets the ground plane
-at a single point. No raycaster, no scene traversal, nothing allocated per
-pointer move — and unlike a raycast against the ground mesh, the answer does not
-depend on how large that mesh happens to be drawn. Tiles run negative off the
-plot's corner, so the resort can grow west and north of the plan it started with.
+**Picking.** `groundPick.ts` unprojects the pointer through the camera's inverse
+view-projection and meets a level of ground at a single solved point. No
+raycaster, no scene traversal, nothing allocated per pointer move — and unlike a
+raycast against the ground mesh, the answer does not depend on how large that
+mesh happens to be drawn. Tiles run negative off the plot's corner, so the resort
+can grow west and north of the plan it started with.
+
+With terraces there is no single plane to intersect, so it becomes a short search
+rather than one solve: the ray crosses one plane per level, and only one of those
+crossings is on ground that is actually there. The levels are tried from the **top
+down**, keeping the first crossing that lands on a tile standing at that very
+level — which is the whole of the hidden-surface problem here, in four lines of
+arithmetic instead of a raycast against a few thousand quads. A ray that grazes a
+riser matches nothing and is reported as no pick, rather than as the sea-level
+tile behind it: the tile under the cursor decides where the object gets built, so
+a wrong tile builds in the wrong place.
 
 **What may stand where.** `layoutResort` checks its own plan for overlaps once
 and throws when it finds one, which is right for a plan and useless for a pointer
@@ -707,6 +861,14 @@ having to author it.
 
 Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, procedural
 terrain, physics and multiplayer.
+
+The terrain has terraces but not slopes: the land steps a level at a time and is
+flat between, and nothing is cut to the ground under it. So an object stands only
+where the ground is level, a step is always exactly one level, and there is no
+digging — the levels are a function of the plot, not something a player edits.
+Terrace risers do not shade what stands at the foot of them either; they are not
+in the sky-visibility bake, and a blob shadow that runs off the edge of a bench
+hangs above the ground below rather than falling onto it.
 
 Shadows are half in scope now: the resort shades itself against the sky and
 objects throw a shadow across the ground, but neither is a shadow map. There is

@@ -3,7 +3,7 @@ import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
 import { BOARDWALK_ID, DERIVED_IDS, HEDGE_ID, LAMP_ID, PATH_ID, STAIRS_ID } from './resortPlan';
-import { elevationFor, levelAt } from './elevation';
+import { elevationFor, levelAt, maxLevelOf, stepStartZ } from './elevation';
 import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
@@ -345,5 +345,89 @@ describe('emptyResortPlan', () => {
   it('keeps its size, clamped to what the generator will work at', () => {
     expect(emptyResortPlan(64, 72)).toMatchObject({ tilesX: 64, tilesZ: 72 });
     expect(emptyResortPlan(1, 1)).toMatchObject({ tilesX: PLOT_TILES.min, tilesZ: PLOT_TILES.min });
+  });
+});
+
+describe('the terraces a generated plot gets', () => {
+  it('cuts one raised bench along the shore, at every size it offers', () => {
+    // Beach at sea level, a bench above it, and the resort behind back down
+    // again: one level up and one level down, so the plot never climbs past 1.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const elevation = elevationFor(plan)!;
+      expect({ set, levels: maxLevelOf(elevation) }).toEqual({ set, levels: 1 });
+      expect({ set, benches: elevation.spec.terraces.map((terrace) => terrace.level) }).toEqual({
+        set,
+        benches: [1, 0],
+      });
+    }
+  });
+
+  it('stands a neighbourhood on the bench rather than a token building', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const { placements } = layoutResort(ITEMS, plan);
+    const raised = placements.filter((placement) => placement.y > 0);
+    expect(raised.length).toBeGreaterThan(20);
+    // And it is a mixed neighbourhood, not one repeated type.
+    expect(new Set(raised.map((placement) => placement.id)).size).toBeGreaterThan(3);
+  });
+
+  it('never turns a whole cross street into one long staircase', () => {
+    // The failure the landward step is placed to avoid. Laid *on* a two-wide
+    // cross street it splits the street lengthwise, and every column of it
+    // becomes a flight — a stair wall the full width of the plot. Laid just past
+    // it, the flights are only where north-south paths come down off the bench,
+    // which is a dozen or so spread along that street rather than all of it.
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const { paths } = layoutResort(ITEMS, plan);
+      const perRow = new Map<number, number>();
+      for (const tile of paths) {
+        if (tile.id !== STAIRS_ID) continue;
+        perRow.set(tile.tileZ, (perRow.get(tile.tileZ) ?? 0) + 1);
+      }
+      const widest = Math.max(0, ...perRow.values());
+      // A quarter of the width is far above what the lanes crossing a street can
+      // account for, and far below the every-column wall a split street gives.
+      expect({ set, widest: widest < plan.tilesX / 4 }).toEqual({ set, widest: true });
+    }
+  });
+
+  it('keeps every east-west street on one level where the step is straight', () => {
+    // The landward step has no wobble, so it lands on one row everywhere and can
+    // be checked exactly: the row it steps down at is not a street row, and the
+    // row behind it is.
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const elevation = elevationFor(plan)!;
+    const step = stepStartZ(elevation, 1, 0);
+    // Straight, so every column agrees.
+    for (let tileX = 0; tileX < plan.tilesX; tileX++) {
+      expect(stepStartZ(elevation, 1, tileX)).toBe(step);
+    }
+    // The two rows either side of it are the bench and the resort behind it.
+    expect(levelAt(elevation, 0, step)).toBe(1);
+    expect(levelAt(elevation, 0, step - 1)).toBe(0);
+  });
+
+  it('climbs onto the bench from both sides', () => {
+    // One flight up off the beach lane and one down off the resort: the two
+    // steps face opposite ways, which is what a bench between them means.
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const { paths } = layoutResort(ITEMS, plan);
+    const turns = new Set(
+      paths.filter((tile) => tile.id === STAIRS_ID).map((tile) => tile.rotation),
+    );
+    expect(turns.has(0)).toBe(true);
+    expect(turns.has(2)).toBe(true);
+  });
+
+  it('lays a flight where a path crosses a step and nowhere else', () => {
+    // Stairs are the exception, not the paving: a dozen or two on a plot that
+    // lays a few thousand slabs.
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const { paths } = layoutResort(ITEMS, plan);
+    const stairs = paths.filter((tile) => tile.id === STAIRS_ID).length;
+    expect(stairs).toBeGreaterThan(5);
+    expect(stairs).toBeLessThan(paths.length / 20);
   });
 });

@@ -37,20 +37,40 @@ import { LEVEL_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { shoreFor, waterEdgeZ, waterStartZ, type Shore, type ShorePlan } from './shoreline';
 import { meanderAt } from './wander';
 
+/**
+ * What a step is measured from.
+ *
+ * The two are not interchangeable, and picking the wrong one is visible:
+ *
+ * - `"water"` follows the coast. The sand band is a fixed depth, so a step a
+ *   fixed distance in from the water keeps a fixed distance behind the sand
+ *   however the coastline wanders — which is what a bench along the shore wants,
+ *   because it should read as parallel to the beach.
+ * - `"plot"` measures from the plot's southern edge and so ignores the coast
+ *   entirely. With no wave on it the step falls on one row in every column, which
+ *   is the only way a step can sit exactly on a street: and a step on a street is
+ *   a step that crosses nothing but paving, so no district is ever cut by it.
+ *
+ * A plot with no sea has no coast to follow, and `"water"` falls back to the
+ * plot's edge there — the two anchors coincide.
+ */
+export type StepAnchor = 'water' | 'plot';
+
 /** One bench of the terraced land, and the step up onto it. */
 export interface TerraceSpec {
   /** Level the land stands at behind this step. Differs by one from the last. */
   readonly level: number;
   /**
-   * Where the step runs, in tiles landward of the water's edge.
+   * Where the step runs, in tiles landward of whatever it is anchored to.
    *
-   * Measured off the water rather than off the plot's edge so the terraces
-   * follow the coast: the sand band is a fixed depth, so a step a fixed distance
-   * in from the water is a step a fixed distance behind the sand however the
-   * coastline wanders. Must grow from one terrace to the next — the list runs
-   * seaward to landward.
+   * Must put each terrace landward of the one before it — the list runs seaward
+   * to landward — which is checked against the rounded lines rather than against
+   * these numbers, because two anchors and two wobbles can cross even when the
+   * insets look well apart.
    */
-  readonly fromWater: number;
+  readonly inset: number;
+  /** What the inset is measured from. Defaults to the water's edge. */
+  readonly anchor?: StepAnchor;
   /** How far this step strays off a straight line, in tiles. */
   readonly wave: number;
 }
@@ -85,17 +105,62 @@ export interface ElevationPlan extends ShorePlan {
  */
 const stepSalt = (index: number): number => 3 + index * 2;
 
+/** How high the ground under a tile is, in levels. */
+export interface LevelProvider {
+  (tileX: number, tileZ: number): number;
+}
+
+/** A rectangle of tiles, as everything that stands on the grid describes one. */
+export interface LevelFootprint {
+  readonly tileX: number;
+  readonly tileZ: number;
+  readonly tilesX: number;
+  readonly tilesZ: number;
+}
+
+/**
+ * The first tile of a footprint standing on a different terrace from its anchor,
+ * or null when the whole footprint is on one.
+ *
+ * **Why an object may only stand on one level.** A voxel model is a box with a
+ * flat underside; stood across a step, half of it hangs in the air and the other
+ * half is buried. There is no sensible height to place it at either — the anchor
+ * tile's is wrong for the rest of it. Cutting a building to the ground under it
+ * is a different feature (and a much bigger one), so until then the rule is that
+ * the ground has to be level.
+ *
+ * The offending tile comes back rather than a boolean because the two callers
+ * that refuse a plan want to name it, and the one that only draws the cursor red
+ * can ignore it.
+ */
+export function straddledTile(
+  levelOf: LevelProvider,
+  footprint: LevelFootprint,
+): { readonly x: number; readonly z: number } | null {
+  const level = levelOf(footprint.tileX, footprint.tileZ);
+  for (let x = footprint.tileX; x < footprint.tileX + footprint.tilesX; x++) {
+    for (let z = footprint.tileZ; z < footprint.tileZ + footprint.tilesZ; z++) {
+      if (levelOf(x, z) !== level) return { x, z };
+    }
+  }
+  return null;
+}
+
 /** How far above sea level a level stands, in voxels. */
 export function levelHeight(level: number): number {
   return level * LEVEL_VOXELS;
 }
 
 /**
- * Where the terraces are measured from: the water's edge, or — on a plot with
- * no sea — the plot's own southern edge, which is where the water would be.
+ * The line one terrace's inset is measured from — see {@link StepAnchor}.
+ *
+ * The plot's southern edge stands in for the water on a plot that has none, so a
+ * terraced inland plot needs no special case anywhere.
  */
-function anchorZ(elevation: Elevation, tileX: number): number {
-  return elevation.shore ? waterEdgeZ(elevation.shore, tileX) : elevation.tilesZ - 1;
+function anchorZ(elevation: Elevation, terrace: TerraceSpec, tileX: number): number {
+  const edge = elevation.tilesZ - 1;
+  if ((terrace.anchor ?? 'water') === 'plot' || !elevation.shore) return edge;
+  return waterEdgeZ(elevation.shore, tileX);
 }
 
 /**
@@ -111,8 +176,8 @@ export function stepEdgeZ(elevation: Elevation, index: number, tileX: number): n
   const terrace = elevation.spec.terraces[index];
   if (!terrace) throw new Error(`The plot has no terrace ${index}`);
   return (
-    anchorZ(elevation, tileX) -
-    terrace.fromWater +
+    anchorZ(elevation, terrace, tileX) -
+    terrace.inset +
     meanderAt(elevation.spec.seed, stepSalt(index), tileX, terrace.wave)
   );
 }
@@ -191,29 +256,25 @@ export function elevationFor(plan: ElevationPlan): Elevation | null {
  */
 function requireOneLevelPerStep(elevation: Elevation): void {
   let last = 0;
-  let lastFromWater = Number.NEGATIVE_INFINITY;
   for (const [index, terrace] of elevation.spec.terraces.entries()) {
     if (Math.abs(terrace.level - last) !== 1) {
       throw new Error(
         `Terrace ${index} steps from level ${last} to ${terrace.level}; a step is one level`,
       );
     }
-    if (terrace.fromWater <= lastFromWater) {
-      throw new Error(`Terrace ${index} is not landward of the one before it`);
-    }
     last = terrace.level;
-    lastFromWater = terrace.fromWater;
   }
 }
 
 /**
- * Throws if two steps meet in any column of the plot.
+ * Throws unless every step runs landward of the one before it, in every column.
  *
- * Checked against the rounded lines the layout will read, column by column,
- * because that is the only place the answer lives: two steps four tiles apart
- * with three tiles of wobble on each are a spec that reads as fine and collides
- * in one column out of thirty. Where they met, one tile would carry two steps,
- * and no single stair could climb it.
+ * The only place the answer lives, and the reason the insets are not checked on
+ * their own: two terraces four tiles apart with three tiles of wobble on each are
+ * a spec that reads as fine and crosses itself in one column out of thirty, and
+ * two terraces on *different anchors* have insets that cannot be compared at all.
+ * Where two steps met, one tile would carry both, and no single stair could
+ * climb it.
  */
 function requireStepsApart(elevation: Elevation): void {
   for (let index = 1; index < elevation.spec.terraces.length; index++) {

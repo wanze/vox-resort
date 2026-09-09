@@ -30,8 +30,8 @@ const request = (coast: Shore | null, reach = 640, land: Elevation | null = null
 /** Terraces climbing away from the water, on the same 40x40 plot. */
 const terraced = (
   terraces: readonly TerraceSpec[] = [
-    { level: 1, fromWater: 8, wave: 0 },
-    { level: 2, fromWater: 16, wave: 0 },
+    { level: 1, inset: 8, wave: 0 },
+    { level: 2, inset: 16, wave: 0 },
   ],
   coast: ShoreSpec | null = null,
 ): Elevation =>
@@ -294,7 +294,7 @@ describe('the terraces', () => {
 
   it('winds every quad to agree with the normal it carries', () => {
     const { terraces, risers } = terrainSurfacesFor(
-      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+      request(null, 640, terraced([{ level: 1, inset: 8, wave: 2 }])),
     );
     for (const surface of [terraces!, risers!]) {
       for (let quad = 0; quad < surface.quadCount; quad++) {
@@ -316,8 +316,8 @@ describe('the terraces', () => {
 
   it('turns a riser round where the land falls away inland instead', () => {
     const knoll = terraced([
-      { level: 1, fromWater: 8, wave: 0 },
-      { level: 0, fromWater: 16, wave: 0 },
+      { level: 1, inset: 8, wave: 0 },
+      { level: 0, inset: 16, wave: 0 },
     ]);
     const { risers } = terrainSurfacesFor(request(null, 640, knoll));
     const facings = new Set(
@@ -346,10 +346,10 @@ describe('the terraces', () => {
     // closure; a wandering one steps between columns, and each of those steps is
     // a vertical slot at the boundary the two columns share.
     const straight = terrainSurfacesFor(
-      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 0 }])),
+      request(null, 640, terraced([{ level: 1, inset: 8, wave: 0 }])),
     );
     const wandering = terrainSurfacesFor(
-      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+      request(null, 640, terraced([{ level: 1, inset: 8, wave: 2 }])),
     );
     const alongZ = (surface: SurfaceGeometry): number =>
       normalsOf(surface).filter((normal) => normal.x !== 0).length;
@@ -359,7 +359,7 @@ describe('the terraces', () => {
 
   it('never lets a riser span more than one level, whichever axis it closes', () => {
     const wandering = terrainSurfacesFor(
-      request(null, 640, terraced([{ level: 1, fromWater: 8, wave: 2 }])),
+      request(null, 640, terraced([{ level: 1, inset: 8, wave: 2 }])),
     );
     // Every closure spans whole tiles and rises exactly one level: a slot deeper
     // than a level would mean two steps had been allowed to meet.
@@ -384,8 +384,8 @@ describe('the terraces', () => {
     const wandering = shore({ wave: 3 });
     const withCoast = terraced(
       [
-        { level: 1, fromWater: 10, wave: 2 },
-        { level: 2, fromWater: 20, wave: 2 },
+        { level: 1, inset: 10, wave: 2 },
+        { level: 2, inset: 20, wave: 2 },
       ],
       coast,
     );

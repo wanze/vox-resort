@@ -3,7 +3,8 @@ import { LEVEL_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import { BOARDWALK_ID, PATH_ID, STAIRS_ID } from './resortPlan';
 import type { Tile } from './resortLayout';
-import { stairTilesFor, type LevelProvider } from './stairs';
+import type { LevelProvider } from './elevation';
+import { stairTilesFor } from './stairs';
 
 const tiles = (...pairs: readonly [number, number][]): Tile[] => pairs.map(([x, z]) => ({ x, z }));
 

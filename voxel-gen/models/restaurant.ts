@@ -30,7 +30,7 @@
  */
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
-import { flowerBox, pottedPlant } from '../parts/props.ts';
+import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
 import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
@@ -120,7 +120,7 @@ export default defineModel({
   ],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
-    const { amber, foliage, stone, stucco, teak, terracotta } = PALETTE;
+    const { foliage, stone, stucco, teak, terracotta } = PALETTE;
 
     // Two slabs rather than one: the terrace stands a course above the apron,
     // which is the reference's step down to the lane and the cheapest way a
@@ -220,25 +220,13 @@ export default defineModel({
     // Inside, one behind each arch, forward of the counter.
     for (const x of COVERS) table(x, HALL.z + 5);
 
-    /**
-     * A parasol over a terrace table: a pole up through its middle and a
-     * square of canvas 2 m over the paving, drawn the way the pool terrace's
-     * are, so that the resort has one idea of what a parasol is.
-     *
-     * One flat plane, and nothing else. The model this replaces built each
-     * canopy as four stepped rings of two alternating reds — a dome nobody can
-     * make out the shape of from above, and a pattern the mesher cannot merge.
-     */
-    const parasol = (x: number, z: number): void => {
-      box(x, x, ground, ground + 7, z, z, teak.base);
-      box(x - 2, x + 2, ground + 8, ground + 8, z - 2, z + 2, amber.base);
-      b.set(x, ground + 9, z, teak.shade);
-    };
-
-    // The terrace: four tables out in the open, each under its own canvas.
+    // The terrace: four tables out in the open, each under its own canvas, 2 m
+    // over the paving. The parasol is the part this pass asked for and the
+    // beach club's pass wrote — one flat plane, where the model this replaces
+    // built each canopy as four stepped rings of two alternating reds.
     for (const x of OUTDOORS) {
       table(x, TERRACE.z + 7);
-      parasol(x + 1, TERRACE.z + 8);
+      parasol(b, { x: x + 1, z: TERRACE.z + 8, y: ground });
     }
 
     /**

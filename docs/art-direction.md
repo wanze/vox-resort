@@ -82,8 +82,8 @@ probed and pinned by a test in `catalog/domain/objectTypes.test.ts`.
 The catalogue sat at 234 of those 250 before the palette existed, which is the
 practical argument for the palette: detail has to be able to grow, and colours
 are the budget that runs out first. Every model that has its style pass hands
-its private shades back — the ten passed over so far took the catalogue from
-255 to 216 — and the end state is a catalogue that paints in 56.
+its private shades back — the eleven passed over so far took the catalogue from
+255 to 208 — and the end state is a catalogue that paints in 56.
 
 ## The parts
 
@@ -114,6 +114,7 @@ doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 | `pool.poolWater`       | a basin sunk into a deck, rimmed with coping and filled    |
 | `props.pottedPlant`    | greenery in a rimmed terracotta pot                        |
 | `props.flowerBox`      | a planter, flowering or green                              |
+| `props.parasol`        | one flat square of canvas on a pole, with a finial         |
 
 Every part takes explicit voxel dimensions and defaults its materials from the
 palette, so a model reads as intent rather than as arithmetic, and a change to
@@ -127,13 +128,14 @@ face plus a position across it and a depth into it onto a voxel, which is why
 
 ### Not parts yet
 
-The next passes want, roughly in this order: `parasol`, `awning` and `deck`.
-They are deliberately not written until a model needs them — speculative parts
-are dead code, and `pnpm fallow:audit` says so. `arcade`, `balustrade` and
-`thatchRoof` came off this list with the lodging pass and `poolWater` with the
-pool, which is the order it is meant to work in: a model asks for a part, not
-the other way round. `poolWater` was written when one model wanted three
-basins, which is the moment a shape stops being a drawing and becomes a part.
+The next passes want `awning`, and that is the whole of the list. Parts are
+deliberately not written until a model needs them — speculative parts are dead
+code, and `pnpm fallow:audit` says so. `arcade`, `balustrade` and `thatchRoof`
+came off this list with the lodging pass, `poolWater` with the pool and
+`parasol` with the beach club, which is the order it is meant to work in: a
+model asks for a part, not the other way round. `poolWater` was written when one
+model wanted three basins, which is the moment a shape stops being a drawing and
+becomes a part.
 
 The restaurant pass tried `pergola` and gave it back, which is the same rule
 read the other way. A written and tested `pergola` — posts, beams and rafters
@@ -141,10 +143,17 @@ over the taverna terrace — made the model worse from the only angle the resort
 is ever seen at: the terrace is in the foreground of a camera looking down at
 30 degrees, so a frame two thirds of the building's height standing in front of
 it hides the arcade the pass was for. The terrace wanted a **parasol** instead,
-which the reference had all along, and it is now drawn in two models —
+which the reference had all along, and it was then drawn by hand in two models —
 `swimming-pool` and `restaurant`, the same tone of `amber` on the same teak
-pole. That is the `poolWater` moment: `parasol` is what the next pass should
-write, ahead of the three above, and the bars will want it too.
+pole. The beach club wanting a third was the `poolWater` moment, so `parasol` is
+now a part in `props.ts` and all three models call it. The bars will too.
+
+`deck` came off the list without being written, which is the third way an entry
+leaves it: the beach club **is** a deck, and its deck turned out to be
+`plinth` handed `PALETTE.teak`. A plinth is a slab with a darker lip round its
+top edge, which is exactly a boarded deck with a skirt, so the part that was
+wanted already existed under another name. Before writing a part, check whether
+one of the fourteen above is it in a different material.
 
 The lesson is worth keeping separately from the part: **anything tall standing
 between the camera and a building's front is a thing the building loses.** The
@@ -208,6 +217,16 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   and furnished — and came out **5 378 triangles a placement cheaper**, which
   over its nine placements took 48 k triangles off the overview frame.
 
+  The beach club had both faults at once and paid the same price for them: a
+  deck checkerboarded voxel by voxel over 3 000 cells and four parasols of
+  stepped rings made a 26 000-voxel deck cost more triangles than the hotel's
+  221 000. Redrawn as one flat deck and four flat canopies, with a thatched bar,
+  a lounge, seven daybeds, a lit bar and a beach added on top of that, it came
+  out at the same voxel count and **5 192 triangles a placement cheaper** — 47 k
+  off the overview frame again, from nine placements again. Two models, the same
+  two mistakes, the same 5 k each: this is what a dithered plane costs, every
+  time.
+
 - **Detail is cheap; detail multiplied by placements is not.** Per-frame cost is
   a model's triangles times the number of times it stands on the plot. The style
   pass added about 270 triangles to each building it touched, which is nothing
@@ -239,7 +258,8 @@ against a reference is how the drift started.
 | `swimming-pool` — the pool terrace, and `poolWater`       | done                                      |
 | `game-hall` — the open front, and what is behind it       | done                                      |
 | `restaurant` — the arcaded hall, and the terrace it faces | done; asked for no new part               |
-| `resort-bar`, `poolside-bar`, `beach-club`                | next; want `parasol`, `awning`, `deck`    |
+| `beach-club` — the deck, the bar over it, and `parasol`   | done; `deck` turned out to be `plinth`    |
+| `resort-bar`, `poolside-bar` — the two remaining bars     | next; want `awning`, and `parasol` exists |
 | `waterpark`                                               | wants the pool pass's `poolWater`         |
 | The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 

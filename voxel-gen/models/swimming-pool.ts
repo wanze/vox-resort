@@ -25,7 +25,7 @@
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
 import { poolWater } from '../parts/pool.ts';
-import { pottedPlant } from '../parts/props.ts';
+import { parasol, pottedPlant } from '../parts/props.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const X = 95;
@@ -173,16 +173,17 @@ export default defineModel({
     for (const x of [18, 28, 38, 48, 58, 68, 78]) lounger(x, 2, true);
     for (const x of [6, 16, 26, 36, 46, 56]) lounger(x, 53, false);
 
-    /** A parasol, its canopy wide enough to shade the loungers either side. */
-    const parasol = (x: number, z: number): void => {
-      box(x, x, top, top + 7, z, z, teak.base);
-      box(x - 2, x + 2, top + 8, top + 8, z - 2, z + 2, amber.base);
-      set(x, top + 9, z, teak.shade);
-    };
-    parasol(24, 5);
-    parasol(64, 5);
-    parasol(12, 55);
-    parasol(42, 55);
+    // A parasol over each row of loungers, its canopy wide enough to shade the
+    // two either side of the pole. Drawn by the part now rather than here: the
+    // restaurant wanted the same object and so does the beach club, which is
+    // the point at which a drawing becomes a part.
+    for (const [x, z] of [
+      [24, 5],
+      [64, 5],
+      [12, 55],
+      [42, 55],
+    ] as const)
+      parasol(b, { x, z, y: top });
 
     // Planting at the corners of the terrace, which is where the eye enters it.
     for (const [x, z] of [

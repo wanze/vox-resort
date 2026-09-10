@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { flowerBox, pottedPlant } from './props.ts';
+import { flowerBox, parasol, pottedPlant } from './props.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
@@ -57,6 +57,46 @@ describe('flowerBox', () => {
     expect(at(b, 3, 0, 1)).toBeUndefined();
     expect(() => flowerBox(new VoxelBuilder(), { x: 0, z: 0, y: 0, w: 0, along: 'z' })).toThrow(
       /one voxel long/,
+    );
+  });
+});
+
+describe('parasol', () => {
+  it('carries one flat square of canvas on a pole, with a finial over it', () => {
+    const b = new VoxelBuilder();
+    parasol(b, { x: 10, z: 10, y: 4 });
+    for (let y = 4; y <= 11; y++) expect(at(b, 10, y, 10)).toBe(PALETTE.teak.base);
+    for (const x of [8, 10, 12]) {
+      for (const z of [8, 10, 12]) expect(at(b, x, 12, z)).toBe(PALETTE.amber.base);
+    }
+    expect(at(b, 7, 12, 10)).toBeUndefined();
+    expect(at(b, 10, 13, 10)).toBe(PALETTE.teak.shade);
+    expect(at(b, 10, 14, 10)).toBeUndefined();
+  });
+
+  it('keeps the canopy one plane however far it reaches', () => {
+    // The whole reason this is a part: a dome of stepped rings is a shape
+    // nobody reads from above and a pattern the mesher cannot merge.
+    const b = new VoxelBuilder();
+    parasol(b, { x: 20, z: 20, y: 0, height: 5, reach: 4 });
+    expect(at(b, 16, 5, 16)).toBe(PALETTE.amber.base);
+    expect(at(b, 24, 5, 24)).toBe(PALETTE.amber.base);
+    expect(at(b, 20, 4, 20)).toBe(PALETTE.teak.base);
+    expect(at(b, 16, 4, 16)).toBeUndefined();
+    expect(at(b, 16, 6, 16)).toBeUndefined();
+  });
+
+  it('takes the timber and the canvas it is given, and refuses no pole at all', () => {
+    const b = new VoxelBuilder();
+    parasol(b, { x: 0, z: 0, y: 0, pole: PALETTE.metal, canvas: PALETTE.bloom });
+    expect(at(b, 0, 0, 0)).toBe(PALETTE.metal.base);
+    expect(at(b, 0, 8, 0)).toBe(PALETTE.bloom.base);
+    expect(at(b, 0, 9, 0)).toBe(PALETTE.metal.shade);
+    expect(() => parasol(new VoxelBuilder(), { x: 0, z: 0, y: 0, height: 0 })).toThrow(
+      /one layer of pole/,
+    );
+    expect(() => parasol(new VoxelBuilder(), { x: 0, z: 0, y: 0, reach: 0 })).toThrow(
+      /one voxel past/,
     );
   });
 });

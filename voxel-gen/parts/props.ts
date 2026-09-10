@@ -6,6 +6,11 @@
  * That is deliberate and worth copying — it puts the eye where the entrance is,
  * and it is the cheapest detail in the catalogue because it is a handful of
  * voxels rather than a pattern across a wall.
+ *
+ * The parasol is here on the same grounds. It is not architecture — it stands on
+ * a terrace the way a pot does, it is the thing three models put over their
+ * tables, loungers and daybeds, and what it is for is the same: somewhere for
+ * the eye to land on a flat deck.
  */
 
 import { PALETTE, type Ramp } from '../palette.ts';
@@ -73,4 +78,47 @@ export function flowerBox(b: VoxelBuilder, o: FlowerBoxOptions): void {
     b.box(x, x, o.y, o.y + 1, z, z, timber.deep);
     b.set(x, o.y + 2, z, bloom[step % bloom.length]!);
   }
+}
+
+export interface ParasolOptions {
+  /** The column the pole stands in; the canopy is centred on it. */
+  readonly x: number;
+  readonly z: number;
+  /** Layer the pole stands on. */
+  readonly y: number;
+  /** Clear layers of pole under the canopy. Eight is 2 m of headroom. */
+  readonly height?: number;
+  /** Voxels the canopy reaches out from the pole. Two is a 1.25 m square. */
+  readonly reach?: number;
+  readonly pole?: Ramp;
+  readonly canvas?: Ramp;
+}
+
+/**
+ * A parasol: a pole up through the middle of one flat square of canvas, with a
+ * finial over it.
+ *
+ * The canopy is a plane and nothing else, which is the whole reason this is a
+ * part. Both models it is lifted from used to build theirs as four stepped
+ * rings of two alternating colours — a dome nobody can make out the shape of
+ * from a camera looking down at 30 degrees, and the one pattern the mesher
+ * cannot merge. Flat, it is six quads whatever its reach.
+ *
+ * It is also the part `docs/art-direction.md` picked out of the restaurant
+ * pass: a terrace that cannot carry a pergola can carry a parasol, because a
+ * canopy 2 m up hides nothing of what is behind it and a frame does.
+ */
+export function parasol(b: VoxelBuilder, o: ParasolOptions): void {
+  const height = o.height ?? 8;
+  const reach = o.reach ?? 2;
+  if (height < 1) throw new Error('A parasol stands on at least one layer of pole');
+  if (reach < 1) throw new Error('A parasol reaches at least one voxel past its pole');
+
+  const pole = o.pole ?? PALETTE.teak;
+  const canvas = o.canvas ?? PALETTE.amber;
+  const canopy = o.y + height;
+
+  b.box(o.x, o.x, o.y, canopy - 1, o.z, o.z, pole.base);
+  b.box(o.x - reach, o.x + reach, canopy, canopy, o.z - reach, o.z + reach, canvas.base);
+  b.set(o.x, canopy + 1, o.z, pole.shade);
 }

@@ -66,7 +66,6 @@ const LEGACY = new Set([
   'spa-pavilion',
   'playground',
   'supermarket',
-  'beach-club',
   'tennis-court',
   'minigolf',
   'waterpark',

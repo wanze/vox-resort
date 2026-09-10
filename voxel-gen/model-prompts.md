@@ -30,7 +30,7 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | cottage       | 2×3       | 32 × 26 × 48  | 7 x 11 m cottage, 6.5 m ridge     |
 | house         | 3×3       | 48 × 43 × 48  | 10 x 10 m, two 3 m storeys        |
 | game-hall     | 3×3       | 48 × 24 × 48  | 10 x 8.5 m open games hall        |
-| playground    | 4×3       | 64 × 14 × 48  | 190 m² of equipment + sandpit     |
+| playground    | 4×3       | 64 × 20 × 48  | tower, swings, bars, sandpit      |
 | supermarket   | 4×3       | 64 × 23 × 48  | 15 x 8 m minimarket, flat roof    |
 | restaurant    | 4×3       | 64 × 24 × 48  | arcaded hall + terrace, 16 x 12 m |
 | villa         | 4×4       | 64 × 40 × 64  | 10.75 x 10 m, arcade, plunge pool |

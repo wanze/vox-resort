@@ -310,6 +310,22 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   for a hotel placed four times. The same 270 on `path`, which is laid on 2 530
   tiles, would be 680 k.
 
+  The playground is the pass that had to pay this rather than collect it, and
+  it is worth keeping for that. Its matting was a tile grid — three colours
+  laid `(⌊x/6⌋ + ⌊z/6⌋) % 3` over 60x44 cells — which looks like the fault
+  every pass above gave back thousands of triangles for, and is not: the blocks
+  were 6x6, so they merged into about eighty rectangles rather than into 2 640.
+  There was nothing to reclaim. What the model actually had wrong was the
+  opposite of a dither — three of its four structures were open frames of
+  single voxels, a chute of loose bars hanging in mid-air and a wireframe cube
+  of twelve edges, which is the shape this grid is worst at and which no merge
+  can help. Building them properly — posts, a deck, a rail, a hipped cap, a
+  chute with a bed under it — cost `pnpm bench` **12 254 triangles on the
+  overview frame**, 1 114 a placement over eleven placements. That is the right
+  trade and it is still the largest per-placement addition any pass has made,
+  which is the number to hold the next one against: a dithered plane is free to
+  fix, and a thing that was never built is not.
+
 ## The loop
 
 ```bash
@@ -339,6 +355,7 @@ against a reference is how the drift started.
 | `supermarket` — the shopfront, and `awning`               | done; the last name off the parts list    |
 | `resort-bar`, `poolside-bar` — the two bars, in one pass  | done; asked for no new part               |
 | `minigolf` — ten holes, the windmill, and the hedge       | done; `poolWater` at hazard scale         |
+| `playground` — the tower, the slide, and what climbs      | done; the one pass that cost triangles    |
 | `waterpark`                                               | next; wants the pool pass's `poolWater`   |
 | The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 

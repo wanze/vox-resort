@@ -82,8 +82,8 @@ probed and pinned by a test in `catalog/domain/objectTypes.test.ts`.
 The catalogue sat at 234 of those 250 before the palette existed, which is the
 practical argument for the palette: detail has to be able to grow, and colours
 are the budget that runs out first. Every model that has its style pass hands
-its private shades back — the seven passed over so far took the catalogue from
-255 to 230 — and the end state is a catalogue that paints in 56.
+its private shades back — the nine passed over so far took the catalogue from
+255 to 220 — and the end state is a catalogue that paints in 56.
 
 ## The parts
 
@@ -213,6 +213,7 @@ against a reference is how the drift started.
 | `cottage`, `house`, `restrooms`, `first-aid`             | done                                      |
 | `villa`, `hotel`, `bungalow` — the lodging range         | done                                      |
 | `swimming-pool` — the pool terrace, and `poolWater`      | done                                      |
+| `game-hall` — the open front, and what is behind it      | done                                      |
 | `restaurant`, `resort-bar`, `poolside-bar`, `beach-club` | next; wants `pergola`, `awning`, `deck`   |
 | `waterpark`                                              | wants the pool pass's `poolWater`         |
 | The 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed |

@@ -278,6 +278,21 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   placements**, 580 each. It is the smaller number and the plainer lesson: a
   shape this grid cannot draw costs the same as a pattern it cannot merge.
 
+  The mini-golf course is the case where the dithered plane was the _whole
+  model_. It had no walls and no roof: a course is a ground, and its ground was
+  painted twice over — a lawn alternating two greens `(x + z) % 2` across
+  76x60 cells, and paths alternating two sands over another 1 700 on top of it.
+  There was nothing else to merge. Flat, and with the plot grown from 5x4 tiles
+  to 6x5 and the holes doubled from five to ten, `pnpm bench` read **51 938
+  triangles off the overview frame** — a course half again the size, with a
+  kerb round every green, a built windmill, two `poolWater` hazards and a
+  clipped hedge round the boundary, for less than the old one cost. Part of
+  that is the footprint: eight larger plots displace some of the hedging the
+  layout dresses its path edges with, so 24 instances went with them. The
+  lesson is the first sentence rather than the number. Where a model _is_ a
+  surface, the surface is the entire triangle budget, and there is no wall
+  elsewhere to pay for a pattern on it.
+
   That is the useful shape of the cases together: what a dithered plane
   costs is roughly fixed per plane, so the saving is set by how many planes a
   model dithered rather than by how large it is. The restaurant and the beach
@@ -323,6 +338,7 @@ against a reference is how the drift started.
 | `beach-club` — the deck, the bar over it, and `parasol`   | done; `deck` turned out to be `plinth`    |
 | `supermarket` — the shopfront, and `awning`               | done; the last name off the parts list    |
 | `resort-bar`, `poolside-bar` — the two bars, in one pass  | done; asked for no new part               |
+| `minigolf` — ten holes, the windmill, and the hedge       | done; `poolWater` at hazard scale         |
 | `waterpark`                                               | next; wants the pool pass's `poolWater`   |
 | The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 

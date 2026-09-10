@@ -82,8 +82,8 @@ probed and pinned by a test in `catalog/domain/objectTypes.test.ts`.
 The catalogue sat at 234 of those 250 before the palette existed, which is the
 practical argument for the palette: detail has to be able to grow, and colours
 are the budget that runs out first. Every model that has its style pass hands
-its private shades back — the nine passed over so far took the catalogue from
-255 to 220 — and the end state is a catalogue that paints in 56.
+its private shades back — the ten passed over so far took the catalogue from
+255 to 216 — and the end state is a catalogue that paints in 56.
 
 ## The parts
 
@@ -127,13 +127,30 @@ face plus a position across it and a depth into it onto a voxel, which is why
 
 ### Not parts yet
 
-The next passes want, roughly in this order: `pergola`, `awning` and `deck`.
+The next passes want, roughly in this order: `parasol`, `awning` and `deck`.
 They are deliberately not written until a model needs them — speculative parts
 are dead code, and `pnpm fallow:audit` says so. `arcade`, `balustrade` and
 `thatchRoof` came off this list with the lodging pass and `poolWater` with the
 pool, which is the order it is meant to work in: a model asks for a part, not
 the other way round. `poolWater` was written when one model wanted three
 basins, which is the moment a shape stops being a drawing and becomes a part.
+
+The restaurant pass tried `pergola` and gave it back, which is the same rule
+read the other way. A written and tested `pergola` — posts, beams and rafters
+over the taverna terrace — made the model worse from the only angle the resort
+is ever seen at: the terrace is in the foreground of a camera looking down at
+30 degrees, so a frame two thirds of the building's height standing in front of
+it hides the arcade the pass was for. The terrace wanted a **parasol** instead,
+which the reference had all along, and it is now drawn in two models —
+`swimming-pool` and `restaurant`, the same tone of `amber` on the same teak
+pole. That is the `poolWater` moment: `parasol` is what the next pass should
+write, ahead of the three above, and the bars will want it too.
+
+The lesson is worth keeping separately from the part: **anything tall standing
+between the camera and a building's front is a thing the building loses.** The
+villa can carry an arcade because a terrace is over it rather than in front of
+it; a one-storey pavilion cannot carry anything at all on its terrace above
+about a metre.
 
 ## Water is a shader, not a colour
 
@@ -184,6 +201,13 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   row is that hut redrawn with a sill course and a plate instead of a weave, and
   it is a bigger, more detailed model for a fifth of the triangles.
 
+  The restaurant pass is the same trade a third time. Its terrace was paved in
+  a two-tone checker and its four parasols were built as stepped domes of two
+  alternating reds; redrawn as one flat course of paving and four flat squares
+  of canvas, the model gained 900 voxels — a whole arcaded dining room, hollow
+  and furnished — and came out **5 378 triangles a placement cheaper**, which
+  over its nine placements took 48 k triangles off the overview frame.
+
 - **Detail is cheap; detail multiplied by placements is not.** Per-frame cost is
   a model's triangles times the number of times it stands on the plot. The style
   pass added about 270 triangles to each building it touched, which is nothing
@@ -207,16 +231,17 @@ against a reference is how the drift started.
 
 ## Where the passes have got to
 
-| Pass                                                     | State                                     |
-| -------------------------------------------------------- | ----------------------------------------- |
-| Palette, and the parts to compose a building             | done                                      |
-| `cottage`, `house`, `restrooms`, `first-aid`             | done                                      |
-| `villa`, `hotel`, `bungalow` — the lodging range         | done                                      |
-| `swimming-pool` — the pool terrace, and `poolWater`      | done                                      |
-| `game-hall` — the open front, and what is behind it      | done                                      |
-| `restaurant`, `resort-bar`, `poolside-bar`, `beach-club` | next; wants `pergola`, `awning`, `deck`   |
-| `waterpark`                                              | wants the pool pass's `poolWater`         |
-| The 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed |
+| Pass                                                      | State                                     |
+| --------------------------------------------------------- | ----------------------------------------- |
+| Palette, and the parts to compose a building              | done                                      |
+| `cottage`, `house`, `restrooms`, `first-aid`              | done                                      |
+| `villa`, `hotel`, `bungalow` — the lodging range          | done                                      |
+| `swimming-pool` — the pool terrace, and `poolWater`       | done                                      |
+| `game-hall` — the open front, and what is behind it       | done                                      |
+| `restaurant` — the arcaded hall, and the terrace it faces | done; asked for no new part               |
+| `resort-bar`, `poolside-bar`, `beach-club`                | next; want `parasol`, `awning`, `deck`    |
+| `waterpark`                                               | wants the pool pass's `poolWater`         |
+| The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that
 has not had its pass. The list only ever shrinks.

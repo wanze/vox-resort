@@ -97,7 +97,7 @@ export default defineModel({
   tiles: { x: 1, z: 1 },
   // Colours drawn unlit at full brightness, so they still read after dark.
   emissive: [GLOW],
-  // Point lights the scene may switch on at night.
+  // Lamps the night bake picks up, and the day/night cycle fades in.
   lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],
   build: (b: VoxelBuilder) => {
     /* ... */
@@ -106,11 +106,18 @@ export default defineModel({
 ```
 
 `emissive` costs nothing — the glowing colours are split into a second geometry
-that shares one unlit material across the whole scene. `lights` is not free: the
-scene keeps a small pool of real point lights and aims it at the anchors nearest
-the camera, so a model that declares a light is competing for that pool. Declare
-one for something that genuinely lights its surroundings (a lamp, a torch, a pool
-flood), not for every lit window.
+that shares one unlit material across the whole scene. `lights` no longer costs
+a frame either: there is not a real point light left in `src/`, and
+`lighting/domain/lightGrid.ts` bakes every anchor on the plot into one
+irradiance volume at load, which the shader reads in two texture fetches. All of
+them burn, none of them pop as the camera moves, and night renders in what day
+renders in — `pnpm bench` reports the same milliseconds for its day and night
+cases over 439 lamps.
+
+What a lamp does cost is bake time and the volume's memory, both paid once, so
+declare one for something that genuinely lights its surroundings (a lamp, a
+torch, a pool flood) rather than for every lit window — that is now a rule about
+what the resort should look like after dark, not about a budget.
 
 A light needs no voxel behind it — the swimming pool declares four submerged
 floods that nothing paints.

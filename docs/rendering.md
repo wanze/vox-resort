@@ -824,11 +824,13 @@ export default defineModel({
 });
 ```
 
-Ten of the thirty-three models cast light: the street lamp and the tiki torch, the
-fountain and the swimming pool, the entrance gate, both bars, the hotel's
-entrance lanterns, the mini-golf bollards and the tennis court's four floodlight
-masts. Between them they put 438 lamps on the plot, so the resort is lit by what
-stands on it rather than by lamp posts alone.
+Twelve of the forty-three models cast light: the street lamp and the tiki torch,
+the fountain and the swimming pool, the entrance gate, both bars, the hotel's
+entrance lanterns, the mini-golf bollards, the tennis court's four floodlight
+masts, the game hall's one room lamp and the restaurant's two. Between them they
+put 457 lamps on the bench's plot — the figure `pnpm bench` prints in its `on`
+column — so the resort is lit by what stands on it rather than by lamp posts
+alone.
 
 `skyStateFor(time)` turns a normalised time of day into the sun's direction,
 colour and intensity, the ambient fill, the sky and fog colour, and a lamp factor

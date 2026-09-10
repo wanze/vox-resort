@@ -32,7 +32,7 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | game-hall     | 3×3       | 48 × 24 × 48  | 10 x 8.5 m open games hall        |
 | playground    | 4×3       | 64 × 14 × 48  | 190 m² of equipment + sandpit     |
 | supermarket   | 4×3       | 64 × 27 × 48  | 15 x 8.5 m minimarket             |
-| restaurant    | 4×3       | 64 × 27 × 48  | pavilion + terrace, 16 x 12 m     |
+| restaurant    | 4×3       | 64 × 24 × 48  | arcaded hall + terrace, 16 x 12 m |
 | villa         | 4×4       | 64 × 40 × 64  | 10.75 x 10 m, arcade, plunge pool |
 | beach-club    | 4×4       | 64 × 20 × 64  | 16 x 16 m deck                    |
 | swimming-pool | 6×4       | 96 × 15 × 64  | three pools on a 24 x 16 m deck   |

@@ -80,8 +80,9 @@ export default defineModel({
   tiles: { x: 3, z: 3 },
   emissive: [NEON, SIGN, SCREEN],
   // One lamp, standing in the middle of the room a little forward of the
-  // tables, so after dark the hall spills onto its own forecourt. Eleven of
-  // these stand on the plot and the scene's light pool is small, so one each.
+  // tables, so after dark the hall spills onto its own forecourt. One is all
+  // this model wants: it is a single room 12 m across, and a lamp reaching 13
+  // of them from the middle of it already lights the forecourt as well.
   lights: [{ x: 24, y: 11, z: 26, color: SIGN, intensity: 90, distance: 52 }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

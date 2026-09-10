@@ -82,8 +82,8 @@ probed and pinned by a test in `catalog/domain/objectTypes.test.ts`.
 The catalogue sat at 234 of those 250 before the palette existed, which is the
 practical argument for the palette: detail has to be able to grow, and colours
 are the budget that runs out first. Every model that has its style pass hands
-its private shades back — the eleven passed over so far took the catalogue from
-255 to 208 — and the end state is a catalogue that paints in 56.
+its private shades back — the fourteen passed over so far took the catalogue
+from 255 to 176 — and the end state is a catalogue that paints in 56.
 
 ## The parts
 
@@ -105,6 +105,7 @@ doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 | `wall.stuccoWall`      | a solid body with skirting, string course, quoins, cornice |
 | `wall.shutteredWindow` | a pane recessed a voxel, with sill, lintel and shutters    |
 | `wall.doorway`         | a leaf recessed into a stone frame                         |
+| `wall.awning`          | a flat blind cantilevered off a wall, with a valance       |
 | `roof.gableRoof`       | a pitched roof with a ridge and two gables                 |
 | `roof.hipRoof`         | a roof falling away on all four sides                      |
 | `roof.flatRoof`        | a slab with a parapet, for the utility buildings           |
@@ -128,14 +129,27 @@ face plus a position across it and a depth into it onto a voxel, which is why
 
 ### Not parts yet
 
-The next passes want `awning`, and that is the whole of the list. Parts are
-deliberately not written until a model needs them — speculative parts are dead
-code, and `pnpm fallow:audit` says so. `arcade`, `balustrade` and `thatchRoof`
-came off this list with the lodging pass, `poolWater` with the pool and
-`parasol` with the beach club, which is the order it is meant to work in: a
-model asks for a part, not the other way round. `poolWater` was written when one
-model wanted three basins, which is the moment a shape stops being a drawing and
+**The list is empty.** Parts are deliberately not written until a model needs
+them — speculative parts are dead code, and `pnpm fallow:audit` says so.
+`arcade`, `balustrade` and `thatchRoof` came off this list with the lodging
+pass, `poolWater` with the pool, `parasol` with the beach club and `awning`
+with the supermarket, which is the order it is meant to work in: a model asks
+for a part, not the other way round. `poolWater` was written when one model
+wanted three basins, which is the moment a shape stops being a drawing and
 becomes a part.
+
+`awning` was the last name on it, and the supermarket is the model that had
+one. It is worth saying what the check that comes first turned up, because it
+is the check that removed the previous entry without writing anything.
+`flatRoof` is the near miss: it lays a slab, it takes any ramp, and a blind is
+a slab. It is still not one. A roof oversails a footprint by the same overhang
+on all four sides where a blind stands out from exactly one, and the lip it can
+draw is a parapet standing **up** round its edge where a blind's valance hangs
+**down** at its brink — and the valance is the part that matters, because a
+canopy one voxel thick seen from 30 degrees above is a coloured rectangle lying
+on the air. So it is a part, and it is drawn where the produce is rather than
+over the glazing: see the pergola below, which is the same lesson from the
+other end.
 
 The restaurant pass tried `pergola` and gave it back, which is the same rule
 read the other way. A written and tested `pergola` — posts, beams and rafters
@@ -146,14 +160,15 @@ it hides the arcade the pass was for. The terrace wanted a **parasol** instead,
 which the reference had all along, and it was then drawn by hand in two models —
 `swimming-pool` and `restaurant`, the same tone of `amber` on the same teak
 pole. The beach club wanting a third was the `poolWater` moment, so `parasol` is
-now a part in `props.ts` and all three models call it. The bars will too.
+now a part in `props.ts` and all three models call it. Both bars do too, since
+their pass: five of the catalogue's models put up the same canvas.
 
 `deck` came off the list without being written, which is the third way an entry
 leaves it: the beach club **is** a deck, and its deck turned out to be
 `plinth` handed `PALETTE.teak`. A plinth is a slab with a darker lip round its
 top edge, which is exactly a boarded deck with a skirt, so the part that was
 wanted already existed under another name. Before writing a part, check whether
-one of the fourteen above is it in a different material.
+one of the fifteen above is it in a different material.
 
 The lesson is worth keeping separately from the part: **anything tall standing
 between the camera and a building's front is a thing the building loses.** The
@@ -227,6 +242,53 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   two mistakes, the same 5 k each: this is what a dithered plane costs, every
   time.
 
+  The supermarket had all three at once and is the other end of the same scale.
+  Its storefront was highlighted `(x + y) % 4` across a 56x14 pane, its blind's
+  front lip alternated `x % 2` over 62 voxels and each of its five crates laid
+  three fruits `(dx + dz + i) % 3` across a 4x4 top: three surfaces that were
+  **three quarters of the whole model's triangles**, the largest share of a
+  model yet. Flat, they take it from 1 576 triangles to 372. What it came out
+  at is 762 — the difference is the pass itself, which spent about a third of
+  what the dither gave back on a plinth, a `stuccoWall` with its skirting and
+  cornice, openings cut into the render instead of painted on it, a blind, six
+  crates, a roof deck and its planting. Net, `pnpm bench` took **6 624
+  triangles off the overview frame** over its nine placements — 736 a
+  placement — for a far better shop.
+
+  The two bars are the same trade at the two ends of one family, and the
+  resort bar is the largest share of a model a single plane has ever taken.
+  Its deck was checkerboarded `(x + z) % 2` across 44x28 cells — 1 052 of the
+  model's 1 567 quads, **two thirds of the whole model on one surface** — and
+  its bottle shelf laid 40 bottles `(x + y) % 3` shoulder to shoulder down one
+  run. Flat, the two take a scratch build from 3 062 triangles to 1 084; what
+  it came out at is 1 216, and the difference is a servery, three parasol
+  tables and a thatched roof where the model had had a light rail. `pnpm bench`
+  read the balance as **19 778 triangles off the overview frame** — 1 798 a
+  placement over the eleven placements that make it the most-placed building in
+  the catalogue, and the largest saving any pass has taken.
+
+  The poolside bar is the case worth keeping separately, because its fault was
+  not a plane at all. Its counter was a crescent found with `Math.hypot` and
+  slatted `Math.floor(ang / (PI / 24)) % 2` in two browns around its own arc. A
+  curve on a 25 cm grid is already a staircase, and a two-tone curve is a
+  staircase no two treads of which share a colour — the dithering rule applied
+  to the one surface in a model that had no flat plane to merge into in the
+  first place. Redrawn straight, from the same parts as its sibling, it came
+  out at 870 triangles against 1 366 and gave back **3 480 triangles over six
+  placements**, 580 each. It is the smaller number and the plainer lesson: a
+  shape this grid cannot draw costs the same as a pattern it cannot merge.
+
+  That is the useful shape of the cases together: what a dithered plane
+  costs is roughly fixed per plane, so the saving is set by how many planes a
+  model dithered rather than by how large it is. The restaurant and the beach
+  club each dithered a whole terrace and each gave back about 5 200 triangles a
+  placement; the supermarket dithered three smaller surfaces on a model that
+  was only 1 576 triangles to begin with, so the ceiling on the trade was 1 200
+  and it kept 736 of that after paying for the pass. Both are worth taking.
+  Neither is a reason to expect the same number twice — and the count a scratch
+  build gives you is a proxy, so the number that goes in a table here is the one
+  `pnpm bench` read off a frame.
+
 - **Detail is cheap; detail multiplied by placements is not.** Per-frame cost is
   a model's triangles times the number of times it stands on the plot. The style
   pass added about 270 triangles to each building it touched, which is nothing
@@ -259,8 +321,9 @@ against a reference is how the drift started.
 | `game-hall` — the open front, and what is behind it       | done                                      |
 | `restaurant` — the arcaded hall, and the terrace it faces | done; asked for no new part               |
 | `beach-club` — the deck, the bar over it, and `parasol`   | done; `deck` turned out to be `plinth`    |
-| `resort-bar`, `poolside-bar` — the two remaining bars     | next; want `awning`, and `parasol` exists |
-| `waterpark`                                               | wants the pool pass's `poolWater`         |
+| `supermarket` — the shopfront, and `awning`               | done; the last name off the parts list    |
+| `resort-bar`, `poolside-bar` — the two bars, in one pass  | done; asked for no new part               |
+| `waterpark`                                               | next; wants the pool pass's `poolWater`   |
 | The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that

@@ -191,3 +191,70 @@ export function doorway(b: VoxelBuilder, o: DoorwayOptions): void {
     faceCell(b, o.face, o.at, along, o.y + h, 0, trim.light);
   }
 }
+
+export interface AwningOptions {
+  readonly face: Face;
+  /** Where the wall's outer surface sits on the face's own axis. */
+  readonly at: number;
+  /** Where the run starts across the face. */
+  readonly along: number;
+  /** Length across the face. */
+  readonly w: number;
+  /** The layer the canopy lies in. */
+  readonly y: number;
+  /** Voxels the canopy stands out from the wall. Four is a metre of shade. */
+  readonly reach?: number;
+  /** Layers of valance hanging under the brink. Two is 50 cm. */
+  readonly drop?: number;
+  readonly canvas?: Ramp;
+}
+
+/**
+ * A shop blind: one flat plane of canvas cantilevered off a wall, with a
+ * valance hanging at its brink.
+ *
+ * `docs/art-direction.md` has wanted this since the first pass and the
+ * supermarket is the model that asked for it. The check that list asks for
+ * first — whether one of the parts that exist is already this in another
+ * material — comes back no. `flatRoof` is the near miss: it lays a slab and it
+ * would take `PALETTE.bloom`, but it oversails a footprint by the same
+ * overhang on all four sides, where an awning stands out from exactly one, and
+ * the lip it can draw is a parapet standing up round the edge rather than a
+ * valance hanging under one. The valance is not decoration: a canopy one voxel
+ * thick, seen from a camera looking down at 30 degrees, is a coloured rectangle
+ * lying on the air, and the drop at its brink is the whole of what makes it
+ * read as canvas over a shopfront.
+ *
+ * Both surfaces are single flat planes, which is the point of drawing it here
+ * rather than by hand. The awning this replaces striped its front lip
+ * `x % 2` over 62 voxels — 62 quads where a plane is one, and the one pattern
+ * the mesher cannot merge. A striped blind is what the reference has and what
+ * this grid cannot hold: at 25 cm a voxel, a stripe is the noise in
+ * `docs/art-direction.md`'s first table.
+ *
+ * Reach is deliberately short by default. A blind is the one thing on a
+ * shopfront that stands between the camera and the elevation the pass was for,
+ * and every voxel it reaches out hides rather more than half a voxel of the
+ * wall under it at the angle the resort is seen from — which is the pergola
+ * lesson read forwards, and the reason this is drawn over the produce rather
+ * than over the glazing.
+ */
+export function awning(b: VoxelBuilder, o: AwningOptions): void {
+  const reach = o.reach ?? 4;
+  const drop = o.drop ?? 2;
+  if (o.w < 1) throw new Error('An awning is at least one voxel long');
+  if (reach < 1) throw new Error('An awning reaches at least one voxel past its wall');
+  if (drop < 0) throw new Error('An awning hangs no less than nothing');
+
+  const canvas = o.canvas ?? PALETTE.bloom;
+  for (let along = o.along; along < o.along + o.w; along++) {
+    // Negative depth is outwards, which is what `faceCell` counts inwards from:
+    // the canopy starts one voxel clear of the wall rather than repainting it.
+    for (let out = 1; out <= reach; out++) {
+      faceCell(b, o.face, o.at, along, o.y, -out, canvas.base);
+    }
+    for (let layer = o.y - drop; layer < o.y; layer++) {
+      faceCell(b, o.face, o.at, along, layer, -reach, canvas.shade);
+    }
+  }
+}

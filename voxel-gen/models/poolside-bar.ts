@@ -1,131 +1,177 @@
 /**
- * Poolside tiki bar: pyramidal thatched roof over a curved counter (solid bamboo
- * cabinet), drum stools, blenders + cocktails on the top, hanging string lights,
- * on a low platform. 32x32x30 (8x8 m, 6.75 m to the apex), a 2x2 tile.
+ * Poolside bar: a thatched palapa on a stone terrace, with a servery under it,
+ * a 5 m counter, four stools drawn up and a lantern either end of the run;
+ * two parasol tables on the paving in front.
+ * 32x32x24 (8 x 8 m plot, 3 m to the eaves and 6 m to the ridge pole), a
+ * 2x2 tile. The counter faces +z.
+ *
+ * Massing and dressing from `docs/references/tiki-bar.jpg`, read for shape
+ * rather than colour — it is the golden-hour lane, so the timber and the cream
+ * come from `villa.jpg` as everything else in the resort does. See
+ * `docs/art-direction.md`.
+ *
+ * This is `resort-bar` at two thirds of its width, drawn from the same parts in
+ * the same tones, and that is the point of doing the two in one sitting: the
+ * resort has one bar, in two sizes, rather than two ideas of what a bar is. The
+ * one thing it does differently is the ground it stands on. A `plinth` in the
+ * default stone rather than in teak, because this bar stands on the pool
+ * terrace and `swimming-pool` pays its whole deck in stone — a timber deck
+ * abutting a stone one is two terraces, where a timber hut on a stone one is a
+ * bar on a terrace.
+ *
+ * The model it replaces was drawn before the palette and before the parts, and
+ * its fault was the curve. Its counter was a crescent found with `Math.hypot`
+ * and slatted `Math.floor(ang / (PI / 24)) % 2` in two browns around its own
+ * arc, which is a dither laid on the one surface in the model that had no flat
+ * plane to merge into in the first place. A curve on a 25 cm grid is a
+ * staircase; a two-tone curve is a staircase no two treads of which are the
+ * same colour. It also hung fifteen bulbs in mid-air off nothing, built its
+ * roof and its base by hand where `thatchRoof` and `plinth` exist, and painted
+ * twelve private colours nothing else in the catalogue used — a teal cushion,
+ * two bamboos, two thatches, four drinks and a pair of near-identical yellows
+ * for the one fitting.
  */
+import { PALETTE } from '../palette.ts';
+import { plinth } from '../parts/ground.ts';
+import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
+import { thatchRoof } from '../parts/roof.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+
+const X = 31;
+const Z = 31;
+
+/** The palapa: a servery wall at the back, the counter on its front two rows. */
+const BAR = { x: 6, z: 4, w: 20, d: 10 } as const;
+
+/**
+ * The counter's back row, and how far the thatch stands out past the hut.
+ *
+ * The same ten rows deep and the same two voxels of eave as `resort-bar`, so
+ * the two roofs are the same roof and the stools stand the same distance clear
+ * of the same eave line.
+ */
+const COUNTER = BAR.z + BAR.d - 2;
+const EAVE_OVERHANG = 2;
+
+/** Where a stool stands at the counter, four across a 5 m run. */
+const STOOLS = [8, 13, 18, 23] as const;
+
+/**
+ * The two tables out on the paving: the column each parasol's pole stands in.
+ *
+ * At the front corners for the reason `resort-bar` puts its there — a canopy
+ * 2 m up on the centre of the terrace is a canopy over the counter from a
+ * camera looking down at 30 degrees — and because the middle of the front is
+ * the way in.
+ */
+const TABLES = [
+  [5, 27],
+  [26, 27],
+] as const;
+
+/** The one colour that burns after dark, and the lamp colour that goes with it. */
+const LANTERN = PALETTE.amber.light;
 
 export default defineModel({
   id: 'poolside-bar',
   label: 'Poolside Bar',
   category: 'amenities',
   tiles: { x: 2, z: 2 },
-  emissive: [0xf4d57c],
-  lights: [{ x: 15, y: 22, z: 16, color: 0xffd489, intensity: 110, distance: 60 }],
+  emissive: [LANTERN],
+  /**
+   * One lamp under the eave, over the middle of the counter.
+   *
+   * One rather than `resort-bar`'s two: that counter is 10 m and this one is 5,
+   * which one lamp at 2 m covers end to end. It is also the count this model
+   * already declared, so the pass changes no anchor totals — six placements,
+   * six lamps, before and after.
+   */
+  lights: [{ x: 15, y: 12, z: 14, color: LANTERN, intensity: 100, distance: 52 }],
   build: (b: VoxelBuilder) => {
-    const set = b.set.bind(b);
     const box = b.box.bind(b);
+    const { amber, bloom, foliage, stone, stucco, teak } = PALETTE;
 
-    const C = {
-      deck: 0xcbb78d,
-      deckDark: 0xb39e74,
-      barLight: 0xc79a5b,
-      barDark: 0xb0864a, // low contrast -> counter reads solid
-      counter: 0x6b4a2c,
-      post: 0x5a3f26,
-      beam: 0x4a3320,
-      thatchA: 0xc7a24e,
-      thatchB: 0xad8636,
-      finial: 0x4a3320,
-      rattan: 0xb98b4e,
-      cushion: 0x3e7f86,
-      bulb: 0xf4d57c,
-      wire: 0x3a2f22,
-      blender: 0x40444a,
-      jar: 0xc2e0e8,
-      straw: 0xede6d6,
+    // The terrace: the pool deck's own stone, so a bar set against the pool
+    // reads as standing on it rather than as a second plot beside it.
+    const floor = plinth(b, { x: 0, z: 0, w: X + 1, d: Z + 1 });
+    const deck = floor - 1;
+
+    // The palapa stands on its own boards, run out past the eave as far as the
+    // stools: the one patch of timber on a stone terrace, which is what tells
+    // the bar from the paving it is laid into.
+    box(BAR.x - 2, BAR.x + BAR.w + 1, deck, deck, 1, COUNTER + 6, teak.light);
+
+    // The servery: a low wall with a stone base course and a plate over it, a
+    // shelf of bottles on its front, and the counter out in front of that.
+    // Two metres of it, not a storey, so the hut is open under its eaves.
+    const wall = floor + 8;
+    box(BAR.x, BAR.x + BAR.w - 1, floor, wall, BAR.z, BAR.z + 1, stucco.base);
+    box(BAR.x, BAR.x + BAR.w - 1, floor, floor + 1, BAR.z, BAR.z + 1, stone.base);
+    box(BAR.x, BAR.x + BAR.w - 1, wall, wall, BAR.z, BAR.z + 1, stucco.light);
+    box(BAR.x + 1, BAR.x + BAR.w - 2, floor + 4, floor + 4, BAR.z + 2, BAR.z + 2, teak.shade);
+
+    // Six bottles, three colours, spaced — the beach club's shelf at this
+    // shelf's length. The blenders, jars, straws and four cocktails the old
+    // model stood along its counter are gone with them: at 25 cm a voxel a
+    // cocktail is one coloured speck, and eleven of them in seven colours is
+    // the noise `docs/art-direction.md` opens by saying this grid cannot hold.
+    const BOTTLES = [foliage.base, amber.base, bloom.base] as const;
+    for (let bottle = 0; bottle < 6; bottle++) {
+      const x = BAR.x + 3 + bottle * 3;
+      box(x, x, floor + 5, floor + 6, BAR.z + 2, BAR.z + 2, BOTTLES[bottle % BOTTLES.length]!);
+    }
+
+    // The counter: a teak body under a pale stone top, straight rather than
+    // curved. What the crescent bought was a shape the grid cannot draw; what
+    // it cost was every quad in the model that might have merged.
+    box(BAR.x, BAR.x + BAR.w - 1, floor, floor + 3, COUNTER, COUNTER + 1, teak.shade);
+    box(BAR.x, BAR.x + BAR.w - 1, floor + 4, floor + 4, COUNTER, COUNTER + 1, stone.light);
+
+    /** A stool: two legs and a cushioned seat, the beach club's at the counter. */
+    const stool = (x: number, z: number): void => {
+      box(x, x + 1, floor, floor + 1, z, z + 1, teak.deep);
+      box(x, x + 1, floor + 2, floor + 2, z, z + 1, amber.base);
     };
-    const drinks = [0xe85d8a, 0x6fbf59, 0xee9a3c, 0xf2d45e];
+    for (const x of STOOLS) stool(x, COUNTER + 3);
 
-    const cx = 15.5;
-    const cz = 1.5; // curve center near the back edge
-    const dist = (x: number, z: number) => Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
-    const N = 31;
-
-    // low platform base + darker top lip
-    box(0, N, 0, 2, 0, N, C.deck);
-    for (let x = 0; x <= N; x++) {
-      set(x, 2, 0, C.deckDark);
-      set(x, 2, N, C.deckDark);
+    // Four posts under the corners of the thatch, and the roof over them.
+    const eaves = floor + 12;
+    for (const x of [BAR.x, BAR.x + BAR.w - 1]) {
+      for (const z of [BAR.z, BAR.z + BAR.d - 1]) box(x, x, floor, eaves - 1, z, z, teak.base);
     }
-    for (let z = 0; z <= N; z++) {
-      set(0, 2, z, C.deckDark);
-      set(N, 2, z, C.deckDark);
-    }
+    thatchRoof(b, { ...BAR, y: eaves, ridge: 'x', overhang: EAVE_OVERHANG });
 
-    // curved bar: solid bamboo-slat cabinet + overhanging counter top
-    for (let x = 0; x <= N; x++)
-      for (let z = 0; z <= N; z++) {
-        const d = dist(x, z);
-        if (z + 0.5 < cz) continue; // front crescent only
-        if (d >= 17.3 && d <= 20.3) {
-          const ang = Math.atan2(z + 0.5 - cz, x + 0.5 - cx);
-          const slat = Math.floor(ang / (Math.PI / 24)) % 2 === 0 ? C.barLight : C.barDark;
-          box(x, x, 3, 8, z, z, slat);
-        }
-        if (d >= 16.8 && d <= 20.8) set(x, 9, z, C.counter);
-      }
-
-    // drum stools around the curved front
-    const stoolAngles = [46, 60, 75, 90, 105, 120, 134];
-    for (const deg of stoolAngles) {
-      const a = (deg * Math.PI) / 180;
-      const r = 21.9;
-      const ex = Math.round(cx - 0.5 + r * Math.cos(a));
-      const ez = Math.round(cz - 0.5 + r * Math.sin(a));
-      box(ex, ex + 1, 3, 6, ez, ez + 1, C.rattan);
-      box(ex, ex + 1, 7, 7, ez, ez + 1, C.cushion);
+    // A lantern at either end of the counter: a pane of two voxels with a teak
+    // strap above it, hung against the thatch's lowest course. This is where
+    // the fifteen bulbs the old model strung under its eaves went — they hung
+    // off nothing, in a yellow four points from the one its lamp used, and one
+    // fitting is one colour.
+    for (const x of [BAR.x + 4, BAR.x + 15]) {
+      box(x, x, eaves - 3, eaves - 2, COUNTER + 2, COUNTER + 2, LANTERN);
+      box(x, x, eaves - 1, eaves - 1, COUNTER + 2, COUNTER + 2, teak.shade);
     }
 
-    // corner posts + top plate frame (2.5 m of headroom under the beams)
-    const posts: ReadonlyArray<readonly [number, number]> = [
-      [4, 4],
-      [4, 26],
-      [26, 4],
-      [26, 26],
-    ];
-    for (const [x, z] of posts) box(x, x + 1, 3, 12, z, z + 1, C.post);
-    for (let x = 4; x <= 27; x++) for (const z of [4, 5, 26, 27]) set(x, 13, z, C.beam);
-    for (let z = 4; z <= 27; z++) for (const x of [4, 5, 26, 27]) set(x, 13, z, C.beam);
-
-    // pyramidal thatched roof (filled slabs, inset 1/side) + finial
-    let layer = 0;
-    for (let lo = 2, hi = 29; lo < hi; lo++, hi--, layer++) {
-      const y = 14 + layer;
-      box(lo, hi, y, y, lo, hi, layer % 2 === 0 ? C.thatchA : C.thatchB);
-    }
-    box(15, 16, 14 + layer, 15 + layer, 15, 16, C.finial);
-
-    // hanging string lights under the front & side eaves
-    const lights = [
-      ...[8, 12, 16, 20, 24].map((x): [number, number, number] => [x, 11, 26]),
-      ...[10, 15, 20].map((z): [number, number, number] => [5, 11, z]),
-      ...[10, 15, 20].map((z): [number, number, number] => [26, 11, z]),
-    ];
-    for (const [x, y, z] of lights) {
-      set(x, y, z, C.bulb);
-      set(x, y + 1, z, C.wire);
+    // A table on the paving: a teak pedestal under a stone top that stands a
+    // voxel proud, with a parasol up through the middle of it and a stool at
+    // its inner side. The one teak voxel showing in the stone is the pole
+    // coming through, which is what a parasol table is.
+    for (const [x, z] of TABLES) {
+      box(x - 1, x + 1, floor, floor + 3, z - 1, z + 1, teak.shade);
+      box(x - 2, x + 2, floor + 4, floor + 4, z - 2, z + 2, stone.light);
+      parasol(b, { x, z, y: floor });
+      stool(x < X / 2 ? x + 4 : x - 5, z - 1);
     }
 
-    // blenders on the bartender (inner) edge
-    for (const deg of [78, 102]) {
-      const a = (deg * Math.PI) / 180;
-      const r = 17.8;
-      const bx = Math.round(cx - 0.5 + r * Math.cos(a));
-      const bz = Math.round(cz - 0.5 + r * Math.sin(a));
-      set(bx, 10, bz, C.blender);
-      box(bx, bx, 11, 12, bz, bz, C.jar);
-      set(bx, 13, bz, drinks[1]!);
+    // Planting, the one high-frequency detail the lane allows: a pot at each
+    // end of the counter and at each front corner, and a green box down each
+    // flank between them. One green rather than the box's usual three, because
+    // a run of three alternating voxel by voxel is bunting.
+    for (const x of [0, X - 1]) {
+      pottedPlant(b, { x, z: COUNTER + 3, y: floor });
+      pottedPlant(b, { x, z: Z - 1, y: floor });
     }
-
-    // cocktails in front of each stool (outer counter edge) with straws
-    stoolAngles.forEach((deg, i) => {
-      const a = (deg * Math.PI) / 180;
-      const r = 19.6;
-      const dx = Math.round(cx - 0.5 + r * Math.cos(a));
-      const dz = Math.round(cz - 0.5 + r * Math.sin(a));
-      set(dx, 10, dz, drinks[i % drinks.length]!);
-      set(dx, 11, dz, C.straw);
-    });
+    for (const x of [0, X]) {
+      flowerBox(b, { x, z: 19, y: floor, w: 10, along: 'z', blooms: [foliage.base] });
+    }
   },
 });

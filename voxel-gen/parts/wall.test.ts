@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from './wall.ts';
+import { awning, doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from './wall.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
@@ -110,5 +110,49 @@ describe('doorway', () => {
     expect(at(b, 1, 3, 7)).toBe(PALETTE.stone.light);
     expect(at(b, 5, 11, 7)).toBe(PALETTE.stone.light);
     expect(at(b, 2, 12, 7)).toBe(PALETTE.stone.light);
+  });
+});
+
+describe('awning', () => {
+  it('cantilevers a flat canopy clear of the wall it hangs on', () => {
+    const b = new VoxelBuilder();
+    wall(b);
+    awning(b, { face: 'z+', at: 7, along: 2, w: 3, y: 9, reach: 4, drop: 2 });
+    // The wall itself is untouched: the canopy starts a voxel out from it.
+    expect(at(b, 2, 9, 7)).toBe(PALETTE.stucco.base);
+    for (let out = 1; out <= 4; out++) expect(at(b, 2, 9, 7 + out)).toBe(PALETTE.bloom.base);
+    expect(at(b, 2, 9, 12)).toBeUndefined();
+  });
+
+  it('hangs a valance at the brink, which is what makes a plane read as canvas', () => {
+    const b = new VoxelBuilder();
+    awning(b, { face: 'z+', at: 7, along: 2, w: 3, y: 9, reach: 4, drop: 2 });
+    expect(at(b, 3, 8, 11)).toBe(PALETTE.bloom.shade);
+    expect(at(b, 3, 7, 11)).toBe(PALETTE.bloom.shade);
+    expect(at(b, 3, 6, 11)).toBeUndefined();
+    // And nowhere else: a valance under the whole canopy would be a soffit.
+    expect(at(b, 3, 8, 10)).toBeUndefined();
+  });
+
+  it('hangs on any of the four faces, standing out from each', () => {
+    for (const [face, atFace, brink] of [
+      ['z+', 7, { x: 3, y: 6, z: 9 }],
+      ['z-', 0, { x: 3, y: 6, z: -2 }],
+      ['x+', 7, { x: 9, y: 6, z: 3 }],
+      ['x-', 0, { x: -2, y: 6, z: 3 }],
+    ] as const) {
+      const b = new VoxelBuilder();
+      awning(b, { face, at: atFace, along: 3, w: 1, y: 6, reach: 2 });
+      expect(at(b, brink.x, brink.y, brink.z), face).toBe(PALETTE.bloom.base);
+    }
+  });
+
+  it('refuses a blind with no length or no reach', () => {
+    expect(() => awning(new VoxelBuilder(), { face: 'z+', at: 7, along: 2, w: 0, y: 9 })).toThrow(
+      /one voxel long/,
+    );
+    expect(() =>
+      awning(new VoxelBuilder(), { face: 'z+', at: 7, along: 2, w: 3, y: 9, reach: 0 }),
+    ).toThrow(/one voxel past/);
   });
 });

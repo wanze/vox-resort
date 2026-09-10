@@ -160,6 +160,18 @@ export function emissiveByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
   return byId;
 }
 
+/**
+ * The colours each model draws as water, by model id. Empty for everything but
+ * the pools: water is a shader, and a model asks for it by name.
+ */
+export function waterByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
+  const byId = new Map<string, ReadonlySet<number>>();
+  for (const model of PAINTED_MODELS) {
+    if (model.water.length > 0) byId.set(model.id, new Set(model.water));
+  }
+  return byId;
+}
+
 /** Colour per DVE material id, for colouring the decoded submeshes. */
 export function materialColorsById(): ReadonlyMap<string, number> {
   return new Map(allMaterials().map((material) => [materialIdFor(material.key), material.color]));

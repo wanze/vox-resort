@@ -48,6 +48,7 @@ import {
   chunkOf,
   diffPlacements,
 } from '../domain/spatialChunks';
+import { createPoolWaterMaterial } from './poolWaterMaterial';
 import type { ModelGeometry } from './voxelMeshBuilder';
 
 export interface InstancedWorld {
@@ -63,6 +64,8 @@ export interface InstancedWorld {
   /** Triangles the renderer walks per frame, instances included. */
   readonly drawnTriangleCount: number;
   readonly instanceCount: number;
+  /** Repaints the sky the resort's water reflects, in packed sRGB. */
+  setSky(sky: number): void;
   /** Stands one more object on the plot. Throws if its key is already taken. */
   add(placement: Placement): void;
   /** Takes one object off the plot. False if nothing stood under that key. */
@@ -131,8 +134,8 @@ export function instancesByType(
   return byType;
 }
 
-/** The two halves of a model, and the material each is drawn with. */
-type MaterialKind = 'lit' | 'glow';
+/** The three parts a model is split into, and the material each is drawn with. */
+type MaterialKind = 'lit' | 'glow' | 'water';
 
 interface ModelPart {
   readonly kind: MaterialKind;
@@ -297,6 +300,8 @@ export function buildInstancedWorld(
 
   const lit = litMaterial(options.lightVolume ?? null);
   const glow = glowMaterial();
+  // The pools, drawn with the sea's own shader; see `poolWaterMaterial.ts`.
+  const poolWater = createPoolWaterMaterial(options.lightVolume ?? null);
   const chunkVoxels = options.chunkVoxels ?? CHUNK_VOXELS;
 
   const modelById = new Map(geometries.map((entry) => [entry.id, entry]));
@@ -306,6 +311,7 @@ export function buildInstancedWorld(
     for (const [kind, geometry, material] of [
       ['lit', model.lit, lit] as const,
       ['glow', model.emissive, glow] as const,
+      ['water', model.water, poolWater.material] as const,
     ]) {
       if (!geometry) continue;
       parts.push({ kind, geometry, material, triangles: (geometry.getIndex()?.count ?? 0) / 3 });
@@ -445,6 +451,9 @@ export function buildInstancedWorld(
     get instanceCount() {
       return live.size;
     },
+    setSky(sky) {
+      poolWater.setSky(sky);
+    },
     add,
     remove,
     setPlacements(next) {
@@ -459,9 +468,11 @@ export function buildInstancedWorld(
       group.clear();
       lit.dispose();
       glow.dispose();
+      poolWater.dispose();
       for (const model of geometries) {
         model.lit?.dispose();
         model.emissive?.dispose();
+        model.water?.dispose();
       }
     },
   };

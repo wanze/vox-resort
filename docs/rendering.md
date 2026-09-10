@@ -80,9 +80,10 @@ reproduces it — see _Measuring_ below.
    not start.
 5. **Attributes** — `buildModelAttributes` groups the mesher's submeshes back per
    model, **merges coplanar faces** of the same colour into maximal rectangles,
-   folds the colour into a **vertex attribute**, and splits the emissive colours
-   into a second set. All of it is plain typed arrays, which is what lets it run
-   in the worker and be transferred back rather than copied.
+   folds the colour into a **vertex attribute**, and splits the colours a model
+   declares emissive or water into sets of their own. All of it is plain typed
+   arrays, which is what lets it run in the worker and be transferred back
+   rather than copied.
 6. **Geometry** — `buildModelGeometries` wraps those arrays in buffer geometries
    on the thread that owns the renderer. That is all it does.
 7. **Instances** — `buildInstancedWorld` creates one `InstancedMesh` per model,
@@ -513,6 +514,17 @@ and would otherwise poke through the water.
 Both surfaces are bound to the same baked light volume the ground is, so the
 beach shades with the resort and catches the lamps standing on it.
 
+**The pools are the same water.** A model may declare which of the colours it
+paints are water (`voxel-gen/voxelgen.ts`), and those faces are meshed into a
+geometry of their own and drawn with the sea's shader rather than the shaded
+material — a wave field bending the normal so the scene's own sun glints off
+it, and a Schlick term reflecting the same sky uniform the sea reflects. What
+the two share is in `waterSurface.ts`; what only the sea has — a depth gradient
+off the shore distances, and foam — stays in `seaMaterial.ts`, and the pools'
+shorter, crossing ripples are in `poolWaterMaterial.ts`. It costs one more
+material for the scene and one more `InstancedMesh` per chunk that holds a
+pool.
+
 ## Rendering: what is optimised, and what is not
 
 **Face culling, twice.** DVE's mesher drops the faces between two solid voxels,
@@ -523,8 +535,8 @@ front-facing convention first (see the notes below).
 **Colour in the vertices.** Milestone 1 gave each of the 217 colours its own
 material and its own mesh. That is 217 draw calls, and each mesh spanned the
 whole world, so frustum culling never had anything to cull. Colour now rides in a
-vertex attribute and the whole resort shares two materials — one shaded, one
-unlit — which is what makes instancing possible at all.
+vertex attribute and the whole resort shares three materials — one shaded, one
+unlit, one water — which is what makes instancing possible at all.
 
 **Instancing.** Every object stands in its own footprint and never touches its
 neighbours, so a model can be meshed once and repeated. Adding another fifty
@@ -815,7 +827,7 @@ export default defineModel({
 Ten of the thirty-three models cast light: the street lamp and the tiki torch, the
 fountain and the swimming pool, the entrance gate, both bars, the hotel's
 entrance lanterns, the mini-golf bollards and the tennis court's four floodlight
-masts. Between them they put 425 lamps on the plot, so the resort is lit by what
+masts. Between them they put 438 lamps on the plot, so the resort is lit by what
 stands on it rather than by lamp posts alone.
 
 `skyStateFor(time)` turns a normalised time of day into the sun's direction,

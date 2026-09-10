@@ -111,6 +111,7 @@ doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 | `roof.thatchRoof`      | a steep hipped palm roof with a pole over its ridge        |
 | `veranda.arcade`       | piers with round arches cut between them, under a cornice  |
 | `veranda.balustrade`   | balusters between a bottom rail and a coping               |
+| `pool.poolWater`       | a basin sunk into a deck, rimmed with coping and filled    |
 | `props.pottedPlant`    | greenery in a rimmed terracotta pot                        |
 | `props.flowerBox`      | a planter, flowering or green                              |
 
@@ -126,12 +127,36 @@ face plus a position across it and a depth into it onto a voxel, which is why
 
 ### Not parts yet
 
-The next passes want, roughly in this order: `pergola`, `awning`, `deck` and
-`poolWater`. They are deliberately not written until a model needs them —
-speculative parts are dead code, and `pnpm fallow:audit` says so. `arcade`,
-`balustrade` and `thatchRoof` came off this list with the lodging pass, which is
-the order it is meant to work in: a model asks for a part, not the other way
-round.
+The next passes want, roughly in this order: `pergola`, `awning` and `deck`.
+They are deliberately not written until a model needs them — speculative parts
+are dead code, and `pnpm fallow:audit` says so. `arcade`, `balustrade` and
+`thatchRoof` came off this list with the lodging pass and `poolWater` with the
+pool, which is the order it is meant to work in: a model asks for a part, not
+the other way round. `poolWater` was written when one model wanted three
+basins, which is the moment a shape stops being a drawing and becomes a part.
+
+## Water is a shader, not a colour
+
+`PALETTE.water` is an albedo like every other family, and painted as one it
+reads as flat blue next to a sea that swells, glints and goes orange at dusk.
+So a model may declare which of its colours are water:
+
+```ts
+water: [PALETTE.water.base],
+```
+
+Those faces are meshed into a geometry of their own and drawn with the sea's
+shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
+`waterSurface.ts` for the part the two share. Three things follow for the art:
+
+- **One tone, no ripples painted in.** The shader supplies the movement; a
+  second blue dithered across the surface would defeat the merge and fight the
+  waves. `swimming-pool` paints 3 189 voxels of water in exactly one colour.
+- **The albedo still matters.** It is what the shader starts from, so a
+  paddling pool and a lagoon can be different blues off the one material.
+- **A declared colour is water everywhere in that model.** Not a shade of it, a
+  colour — the shower's stream is `water.light` precisely so that it stays a
+  painted surface.
 
 ## Rules that hold whatever else changes
 
@@ -187,8 +212,9 @@ against a reference is how the drift started.
 | Palette, and the parts to compose a building             | done                                      |
 | `cottage`, `house`, `restrooms`, `first-aid`             | done                                      |
 | `villa`, `hotel`, `bungalow` — the lodging range         | done                                      |
+| `swimming-pool` — the pool terrace, and `poolWater`      | done                                      |
 | `restaurant`, `resort-bar`, `poolside-bar`, `beach-club` | next; wants `pergola`, `awning`, `deck`   |
-| `swimming-pool`, `waterpark`                             | wants `poolWater`                         |
+| `waterpark`                                              | wants the pool pass's `poolWater`         |
 | The 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that

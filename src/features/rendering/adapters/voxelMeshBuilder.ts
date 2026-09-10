@@ -25,10 +25,12 @@ import type { MeshAttributes, ModelAttributes } from '../domain/modelAttributes'
 
 export interface ModelGeometry {
   readonly id: string;
-  /** Shaded geometry: everything that is not declared emissive. */
+  /** Shaded geometry: everything that is neither emissive nor water. */
   readonly lit: BufferGeometry | null;
   /** Unlit geometry: the model's glowing colours. */
   readonly emissive: BufferGeometry | null;
+  /** The model's water, drawn with the sea's shader. */
+  readonly water: BufferGeometry | null;
   readonly triangleCount: number;
   /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
@@ -52,6 +54,7 @@ export function buildModelGeometries(models: readonly ModelAttributes[]): ModelG
     id: model.id,
     lit: model.lit ? toGeometry(model.lit) : null,
     emissive: model.emissive ? toGeometry(model.emissive) : null,
+    water: model.water ? toGeometry(model.water) : null,
     triangleCount: model.triangleCount,
     unmergedTriangleCount: model.unmergedTriangleCount,
   }));

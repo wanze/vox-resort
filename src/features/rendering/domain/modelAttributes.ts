@@ -31,12 +31,27 @@ export interface MeshAttributes {
   readonly triangleCount: number;
 }
 
+/**
+ * The three ways a model's faces can be shaded, which is the three geometries
+ * a model is split into.
+ *
+ * The split is by colour: a model declares which of the colours it paints with
+ * glow and which are water, and everything else is shaded normally. It happens
+ * here rather than in the renderer because a submesh already comes back one
+ * material at a time, so sorting the faces costs nothing at the point they are
+ * turned into vertices — and because the split is what lets the whole scene
+ * share three materials instead of one per model.
+ */
+type SurfaceKind = 'lit' | 'emissive' | 'water';
+
 export interface ModelAttributes {
   readonly id: string;
-  /** Shaded geometry: everything that is not declared emissive. */
+  /** Shaded geometry: everything that is neither emissive nor water. */
   readonly lit: MeshAttributes | null;
   /** Unlit geometry: the model's glowing colours. */
   readonly emissive: MeshAttributes | null;
+  /** The model's water, drawn with the sea's shader. */
+  readonly water: MeshAttributes | null;
   readonly triangleCount: number;
   /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
@@ -58,6 +73,8 @@ export interface ModelAttributeInput {
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
   /** Colours each model draws unlit, by model id. */
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
+  /** Colours each model draws as water, by model id. */
+  readonly waterByModelId: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
 /** Splits a packed `0xRRGGBB` into the linear RGB the shader works in. */
@@ -158,11 +175,11 @@ class AttributeBatch {
 }
 
 /**
- * Groups the mesher's output back into one lit and one emissive set of
- * attributes per model, in scratch-region order.
+ * Groups the mesher's output into one set of attributes per model and surface
+ * kind, in scratch-region order.
  */
 export function buildModelAttributes(input: ModelAttributeInput): ModelAttributes[] {
-  const { sections, regions, colorsByMaterialId, emissiveByModelId } = input;
+  const { sections, regions, colorsByMaterialId, emissiveByModelId, waterByModelId } = input;
 
   const colorCache = new Map<string, [number, number, number]>();
   const colorFor = (materialId: string): [number, number, number] => {
@@ -174,24 +191,34 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
     return color;
   };
 
-  const batches = new Map<string, { lit: AttributeBatch; emissive: AttributeBatch }>();
+  const batches = new Map<string, Record<SurfaceKind, AttributeBatch>>();
   for (const region of regions) {
-    batches.set(region.id, { lit: new AttributeBatch(), emissive: new AttributeBatch() });
+    batches.set(region.id, {
+      lit: new AttributeBatch(),
+      emissive: new AttributeBatch(),
+      water: new AttributeBatch(),
+    });
   }
+
+  /** Which of the three geometries a colour this model paints belongs in. */
+  const kindOf = (modelId: string, color: number): SurfaceKind => {
+    if (emissiveByModelId.get(modelId)?.has(color) === true) return 'emissive';
+    if (waterByModelId.get(modelId)?.has(color) === true) return 'water';
+    return 'lit';
+  };
 
   for (const section of sections) {
     const region = regionOwning(regions, section.origin.x);
     if (!region) throw new Error(`Meshed section at x=${section.origin.x} belongs to no model`);
     const batch = batches.get(region.id)!;
     const raw = colorsByMaterialId.get(section.materialId) ?? MISSING_COLOR;
-    const glows = emissiveByModelId.get(region.id)?.has(raw) === true;
     const { positions, normals } = deinterleaveVertices(section.vertices, section.vertexCount);
     const offset = {
       x: section.origin.x - region.x,
       y: section.origin.y,
       z: section.origin.z,
     };
-    (glows ? batch.emissive : batch.lit).add(
+    batch[kindOf(region.id, raw)].add(
       section,
       positions,
       normals,
@@ -201,13 +228,15 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
   }
 
   return regions.map((region) => {
-    const { lit, emissive } = batches.get(region.id)!;
+    const { lit, emissive, water } = batches.get(region.id)!;
+    const all = [lit, emissive, water];
     return {
       id: region.id,
       lit: lit.isEmpty ? null : lit.toAttributes(),
       emissive: emissive.isEmpty ? null : emissive.toAttributes(),
-      triangleCount: lit.triangleCount + emissive.triangleCount,
-      unmergedTriangleCount: lit.unmergedTriangleCount + emissive.unmergedTriangleCount,
+      water: water.isEmpty ? null : water.toAttributes(),
+      triangleCount: all.reduce((total, batch) => total + batch.triangleCount, 0),
+      unmergedTriangleCount: all.reduce((total, batch) => total + batch.unmergedTriangleCount, 0),
     };
   });
 }
@@ -216,7 +245,7 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
 export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer[] {
   const buffers: ArrayBuffer[] = [];
   for (const model of models) {
-    for (const attributes of [model.lit, model.emissive]) {
+    for (const attributes of [model.lit, model.emissive, model.water]) {
       if (!attributes) continue;
       buffers.push(
         attributes.positions.buffer as ArrayBuffer,

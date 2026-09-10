@@ -103,8 +103,20 @@ export const PALETTE = {
   glass: ramp(0x8fb8c4),
   /** Ironwork: gates, railings, fence posts, fittings. */
   metal: ramp(0x474d57),
-  /** Pool and sea water. */
-  water: ramp(0x53b9c8),
+  /**
+   * Pool water.
+   *
+   * Brighter and bluer than the sea, which does not paint from here at all:
+   * `seaMaterial.ts` grades its own sandbank green through turquoise to a deep
+   * blue off the shore distances its geometry carries. A pool has no shore and
+   * no depth to grade, so what it has instead is this — a metre of clear water
+   * over pale tile, which really is a lighter, cleaner blue than an ocean.
+   *
+   * Read as an albedo by `poolWaterMaterial.ts`, which shades it with the sea's
+   * own swell and glint, so the difference between the two bodies of water is
+   * this colour and nothing else.
+   */
+  water: ramp(0x4fc6de),
   /** Blossom red, for flower beds and awnings. */
   bloom: ramp(0xd2483c),
   /** Blossom yellow, and the canvas of a parasol. */

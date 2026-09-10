@@ -42,7 +42,14 @@ function personGeometry(id: string, height: number): ModelGeometry {
       1,
     ),
   );
-  return { id, lit: geometry, emissive: null, triangleCount: 8, unmergedTriangleCount: 8 };
+  return {
+    id,
+    lit: geometry,
+    emissive: null,
+    water: null,
+    triangleCount: 8,
+    unmergedTriangleCount: 8,
+  };
 }
 
 const MODELS: readonly ModelGeometry[] = [

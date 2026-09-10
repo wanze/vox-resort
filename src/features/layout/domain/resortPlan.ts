@@ -304,7 +304,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // C — the pool quarter
     at('swimming-pool', 30, 11),
-    at('poolside-bar', 35, 11),
+    at('poolside-bar', 36, 11),
     at('tikitorch', 38, 11),
     ...row('sun-lounger', 30, 15, 4, 1),
     ...row('beach-umbrella', 34, 15, 2, 2),
@@ -319,7 +319,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('tikitorch', 55, 11),
     ...row('bungalow', 44, 17, 4, 3),
     at('swimming-pool', 44, 21),
-    at('poolside-bar', 49, 21),
+    at('poolside-bar', 50, 21),
     at('palm', 52, 21),
     ...row('sun-lounger', 44, 25, 4, 1),
 
@@ -342,7 +342,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // G — the east pool quarter
     at('swimming-pool', 83, 11),
-    at('poolside-bar', 88, 11),
+    at('poolside-bar', 89, 11),
     at('tikitorch', 91, 11),
     ...row('sun-lounger', 83, 15, 4, 1),
     at('beach-club', 83, 17),
@@ -386,7 +386,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // C — the third pool and the west water park
     at('swimming-pool', 30, 37),
-    at('poolside-bar', 35, 37),
+    at('poolside-bar', 36, 37),
     at('tikitorch', 38, 37),
     ...row('sun-lounger', 30, 41, 4, 1),
     ...row('cottage', 30, 43, 4, 3),
@@ -526,7 +526,7 @@ export const RESORT_PLAN: ResortPlan = {
 
     // B — the south pool quarter
     at('swimming-pool', 16, 75),
-    at('poolside-bar', 21, 75),
+    at('poolside-bar', 22, 75),
     at('tikitorch', 24, 75),
     ...row('sun-lounger', 16, 79, 4, 1),
     at('beach-club', 16, 81),
@@ -584,10 +584,13 @@ export const RESORT_PLAN: ResortPlan = {
     at('villa', 89, 75),
     at('tikitorch', 94, 75),
     at('swimming-pool', 83, 81),
-    at('poolside-bar', 88, 81),
+    at('poolside-bar', 89, 81),
     at('palm', 91, 81),
     at('statue', 95, 81),
-    ...row('sun-lounger', 83, 85, 4, 1),
+    // Beside the bar rather than under the pool: the pool terrace is six tiles
+    // by four, and a row squeezed between it and the bungalows behind is a row
+    // no path can reach.
+    ...row('sun-lounger', 88, 85, 4, 1),
     ...row('bungalow', 83, 86, 4, 3),
 
     // H — the south-east beach club and its lodging

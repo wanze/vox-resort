@@ -61,6 +61,7 @@ describe('buildModelAttributes', () => {
       regions,
       colorsByMaterialId: new Map(),
       emissiveByModelId: new Map(),
+      waterByModelId: new Map(),
     });
     expect(models.map((model) => model.id)).toEqual(['path', 'lamp']);
     expect(models.every((model) => model.lit === null && model.emissive === null)).toBe(true);
@@ -72,6 +73,7 @@ describe('buildModelAttributes', () => {
       regions,
       colorsByMaterialId: new Map([['m1', 0xffffff]]),
       emissiveByModelId: new Map(),
+      waterByModelId: new Map(),
     });
     // The region starts at x = 64, so the face lands at the model's own origin.
     expect(Array.from(models[1]!.lit!.positions.slice(0, 3))).toEqual([0, 0, 0]);
@@ -84,6 +86,7 @@ describe('buildModelAttributes', () => {
       regions,
       colorsByMaterialId: new Map([['m1', 0x808080]]),
       emissiveByModelId: new Map(),
+      waterByModelId: new Map(),
     });
     expect(models[0]!.unmergedTriangleCount).toBe(16);
     expect(models[0]!.triangleCount).toBe(2);
@@ -101,10 +104,46 @@ describe('buildModelAttributes', () => {
         ['glow', 0xffee88],
       ]),
       emissiveByModelId: new Map([['path', new Set([0xffee88])]]),
+      waterByModelId: new Map(),
     });
     expect(models[0]!.lit).not.toBeNull();
     expect(models[0]!.emissive).not.toBeNull();
     expect(models[0]!.triangleCount).toBe(4);
+  });
+
+  it('splits the colours a model declares water into a geometry of their own', () => {
+    const models = buildModelAttributes({
+      sections: [
+        sectionOf('stone', { x: 0, y: 0, z: 0 }, flat(2)),
+        sectionOf('pool', { x: 0, y: 4, z: 0 }, flat(3)),
+      ],
+      regions,
+      colorsByMaterialId: new Map([
+        ['stone', 0x404040],
+        ['pool', 0x53b9c8],
+      ]),
+      emissiveByModelId: new Map(),
+      waterByModelId: new Map([['path', new Set([0x53b9c8])]]),
+    });
+    expect(models[0]!.water).not.toBeNull();
+    expect(models[0]!.emissive).toBeNull();
+    // Two faces of stone and three of water, each pair merged into one quad.
+    expect(models[0]!.lit!.triangleCount).toBe(2);
+    expect(models[0]!.water!.triangleCount).toBe(2);
+    expect(models[0]!.triangleCount).toBe(4);
+  });
+
+  it('leaves a colour lit unless the model that paints it asks otherwise', () => {
+    const models = buildModelAttributes({
+      sections: [sectionOf('pool', { x: 0, y: 0, z: 0 }, flat(1))],
+      regions,
+      colorsByMaterialId: new Map([['pool', 0x53b9c8]]),
+      emissiveByModelId: new Map(),
+      // The water is another model's; this one merely paints the same blue.
+      waterByModelId: new Map([['lamp', new Set([0x53b9c8])]]),
+    });
+    expect(models[0]!.water).toBeNull();
+    expect(models[0]!.lit).not.toBeNull();
   });
 
   it('paints an unregistered material the deliberate missing colour', () => {
@@ -113,6 +152,7 @@ describe('buildModelAttributes', () => {
       regions,
       colorsByMaterialId: new Map(),
       emissiveByModelId: new Map(),
+      waterByModelId: new Map(),
     });
     const [r, g, b] = models[0]!.lit!.colors;
     const missing = new Color(MISSING_COLOR);
@@ -128,6 +168,7 @@ describe('buildModelAttributes', () => {
         regions,
         colorsByMaterialId: new Map([['m1', 0xffffff]]),
         emissiveByModelId: new Map(),
+        waterByModelId: new Map(),
       }),
     ).toThrow(/belongs to no model/);
   });
@@ -158,6 +199,7 @@ describe('transferablesOf', () => {
         ['glow', 0xffee88],
       ]),
       emissiveByModelId: new Map([['path', new Set([0xffee88])]]),
+      waterByModelId: new Map(),
     });
     // Two geometries, four attributes each.
     expect(transferablesOf(models)).toHaveLength(8);

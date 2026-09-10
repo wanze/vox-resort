@@ -81,11 +81,11 @@ to come.
 `voxelgen.ts`. It is a fact about the art, which is why it is declared with the
 art: a new model shows up on the right shelf without the app being touched.
 
-## Glowing and lighting
+## Glowing, water and lighting
 
-Two optional fields let a model take part in the day/night cycle. Both are in the
-model's own coordinates, so wherever the object is placed the light lands in the
-right spot.
+Three optional fields change how a model's colours are drawn. Two of them let it
+take part in the day/night cycle, and are in the model's own coordinates, so
+wherever the object is placed the light lands in the right spot.
 
 ```ts
 const GLOW = 0xffe3a3;
@@ -112,8 +112,19 @@ the camera, so a model that declares a light is competing for that pool. Declare
 one for something that genuinely lights its surroundings (a lamp, a torch, a pool
 flood), not for every lit window.
 
-A light needs no voxel behind it — the swimming pool declares two submerged
+A light needs no voxel behind it — the swimming pool declares four submerged
 floods that nothing paints.
+
+The third field is `water`, and it is the same idea for a different shader:
+
+```ts
+water: [PALETTE.water.base], // colours drawn with the sea's shader
+```
+
+Those faces are meshed apart and drawn rippling, glinting and reflecting the
+sky, exactly as the sea is. Paint them in one flat tone and let the shader do
+the movement; see _Water is a shader, not a colour_ in
+`docs/art-direction.md`.
 
 ## Scale
 

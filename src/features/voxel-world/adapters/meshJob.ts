@@ -22,6 +22,7 @@ export interface MeshCatalogueRequest {
   readonly regions: readonly ScratchRegion[];
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
+  readonly waterByModelId: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
 export interface MeshCatalogueResult {
@@ -42,6 +43,7 @@ export interface WireRequest {
   readonly regions: readonly ScratchRegion[];
   readonly colors: readonly (readonly [string, number])[];
   readonly emissive: readonly (readonly [string, readonly number[]])[];
+  readonly water: readonly (readonly [string, readonly number[]])[];
 }
 
 export interface WireResponse {
@@ -57,6 +59,7 @@ export function toWire(request: MeshCatalogueRequest): WireRequest {
     regions: request.regions,
     colors: [...request.colorsByMaterialId],
     emissive: [...request.emissiveByModelId].map(([id, colors]) => [id, [...colors]] as const),
+    water: [...request.waterByModelId].map(([id, colors]) => [id, [...colors]] as const),
   };
 }
 
@@ -67,6 +70,7 @@ export function fromWire(wire: WireRequest): MeshCatalogueRequest {
     regions: wire.regions,
     colorsByMaterialId: new Map(wire.colors),
     emissiveByModelId: new Map(wire.emissive.map(([id, colors]) => [id, new Set(colors)])),
+    waterByModelId: new Map(wire.water.map(([id, colors]) => [id, new Set(colors)])),
   };
 }
 
@@ -83,6 +87,7 @@ export async function meshOnThisThread(
       regions: request.regions,
       colorsByMaterialId: request.colorsByMaterialId,
       emissiveByModelId: request.emissiveByModelId,
+      waterByModelId: request.waterByModelId,
     }),
     dveMs,
   };

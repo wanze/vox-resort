@@ -62,8 +62,21 @@ function model(id: string, triangles: number, glowing = false): ModelGeometry {
     id,
     lit: geometryOf(triangles),
     emissive: glowing ? geometryOf(1) : null,
+    water: null,
     triangleCount: triangles,
     unmergedTriangleCount: triangles * 2,
+  };
+}
+
+/** A model with water in it, which is a third geometry and a third material. */
+function wetModel(id: string, triangles: number): ModelGeometry {
+  return {
+    id,
+    lit: geometryOf(triangles),
+    emissive: null,
+    water: geometryOf(2),
+    triangleCount: triangles + 2,
+    unmergedTriangleCount: (triangles + 2) * 2,
   };
 }
 
@@ -224,6 +237,17 @@ describe('buildInstancedWorld', () => {
     expect(world.drawCalls).toBe(1);
     expect(world.chunkCount).toBe(1);
     expect(world.uniqueTriangleCount).toBe(2);
+    world.dispose();
+  });
+
+  it('draws a model with water in it as a mesh of its own', () => {
+    const world = build([wetModel('pool', 4)], [at('a', 'pool', 0)]);
+    expect(world.drawCalls).toBe(2);
+    expect(world.drawnTriangleCount).toBe(6);
+    // The two meshes share a name and differ in material, which is what the
+    // bucket key is for; both go when the pool does.
+    expect(world.remove('a')).toBe(true);
+    expect(world.drawCalls).toBe(0);
     world.dispose();
   });
 

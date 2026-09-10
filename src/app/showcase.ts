@@ -13,6 +13,7 @@ import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials
 import {
   allMaterials,
   emissiveByModelId,
+  waterByModelId,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
@@ -451,6 +452,7 @@ async function meshModels(
       regions: scratch.regions,
       colorsByMaterialId: materialColorsById(),
       emissiveByModelId: emissiveByModelId(),
+      waterByModelId: waterByModelId(),
     },
     { forceMainThread: bench?.forceMainThreadMeshing ?? false },
   );
@@ -1045,6 +1047,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
     // A quad per shadow, rewritten only when the sun has actually moved.
     resort().shadows.applySky(sky);
+    // The pools reflect the sky exactly as the sea does, and from the same
+    // shader, so they have to be told about the sunset too.
+    resort().world.setSky(sky.skyColor);
     applied = time;
   };
   apply();

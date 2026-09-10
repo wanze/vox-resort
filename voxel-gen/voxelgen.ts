@@ -121,6 +121,13 @@ export interface VoxelModelSource {
    * shaded, so a flame or a lamp head still reads as lit after dark.
    */
   readonly emissive?: readonly Color[];
+  /**
+   * Colours that are water: they are meshed apart from the rest of the model
+   * and drawn with the sea's shader, so a pool ripples, glints and reflects the
+   * sky exactly as the sea does. Everything else about them is ordinary — the
+   * colour is still the albedo the shader starts from.
+   */
+  readonly water?: readonly Color[];
   /** Point lights the object casts once the scene turns the lights on. */
   readonly lights?: readonly ModelLight[];
   readonly build: (builder: VoxelBuilder) => void;
@@ -148,6 +155,8 @@ export interface VoxelModel {
   readonly voxels: readonly PaintedVoxel[];
   /** Glowing colours, deduplicated. */
   readonly emissive: readonly Color[];
+  /** Colours drawn as water, deduplicated. */
+  readonly water: readonly Color[];
   /** Lights, shifted onto the same origin as the voxels. */
   readonly lights: readonly ModelLight[];
 }
@@ -236,6 +245,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     depth: maxZ - minZ + 1,
     voxels,
     emissive: [...new Set(source.emissive ?? [])],
+    water: [...new Set(source.water ?? [])],
     // Lights ride along with the voxels, so they stay put when the model is
     // shifted onto its own origin.
     lights: (source.lights ?? []).map((light) => ({

@@ -38,11 +38,22 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 const X = 63;
 const Z = 63;
 
+/**
+ * The deck's own surface layer: two courses of sand plus four of boards, which
+ * is what the two plinths in `build` hand back. Written down here because the
+ * seats are declared against it and a declaration cannot read a local, so
+ * `build` checks that the two still agree.
+ */
+const TOP_LAYER = 6;
+
 /** The raised deck. What is left in front of it, at +z, is beach. */
 const DECK = { x: 2, z: 2, w: 60, d: 52 } as const;
 const BRINK = DECK.z + DECK.d - 1;
 const LEFT = DECK.x;
 const RIGHT = DECK.x + DECK.w - 1;
+
+/** Where a stool stands at the counter, five across the 7 m run. */
+const STOOLS = [7, 12, 17, 22, 27] as const;
 
 /** The bar hut: a servery wall, a counter in front of it, thatch over both. */
 const BAR = { x: 5, z: 4, w: 28, d: 10 } as const;
@@ -112,6 +123,32 @@ export default defineModel({
   tiles: { x: 4, z: 4 },
   emissive: [LANTERN],
   /**
+   * Eighteen people: five on stools at the counter, six round the lounge, and
+   * one stretched out on each daybed.
+   *
+   * Three kinds of furniture and so three ways of working the numbers out, all
+   * from the layer the piece is drawn on. A stool's cushion is `TOP_LAYER + 2`,
+   * so hips are a layer above it and the sitter looks back at the counter at
+   * -z. The sofas' cushions are `TOP_LAYER + 1` and each run is four voxels
+   * deep with its back on the two rows behind, so a sitter takes the front pair
+   * and faces out of it — +z off the north arm, -x off the east one. A daybed's mattress is `TOP_LAYER + 1` with the raise at its
+   * -z end, so the sunbather's hips sit four voxels along from it, which lands
+   * their head on it and their feet at the brink; they take the half of the bed
+   * the parasol's pole does not come up through.
+   */
+  seats: [
+    ...STOOLS.map((x) => ({ x, y: TOP_LAYER + 3, z: COUNTER + 3, facing: 2 }) as const),
+    ...[LOUNGE.x + 3, LOUNGE.x + 8, LOUNGE.x + 13].map(
+      (x) => ({ x, y: TOP_LAYER + 2, z: LOUNGE.z + 2, facing: 0 }) as const,
+    ),
+    ...[LOUNGE.z + 8, LOUNGE.z + 14, LOUNGE.z + 20].map(
+      (z) => ({ x: LOUNGE.x1 - 3, y: TOP_LAYER + 2, z, facing: 3 }) as const,
+    ),
+    ...DAYBEDS.map(
+      ([x, z]) => ({ x: x + 2, y: TOP_LAYER + 2, z: z + 4, facing: 0, pose: 'lie' }) as const,
+    ),
+  ],
+  /**
    * One lamp, over the counter, where the lanterns hang.
    *
    * One rather than the taverna's two: that model is two rooms and the terrace
@@ -143,6 +180,7 @@ export default defineModel({
      * defeats the coplanar merge completely — one quad became three thousand.
      */
     const top = plinth(b, { ...DECK, y: beach, height: 4, stone: teak });
+    if (top !== TOP_LAYER) throw new Error('The deck and its furniture must agree on its surface');
     const deck = top - 1;
 
     // The bar stands on its own boarded floor, a step of the ramp lighter than
@@ -183,7 +221,7 @@ export default defineModel({
       box(x, x + 1, top, top + 1, COUNTER + 3, COUNTER + 4, teak.deep);
       box(x, x + 1, top + 2, top + 2, COUNTER + 3, COUNTER + 4, amber.base);
     };
-    for (const x of [7, 12, 17, 22, 27]) stool(x);
+    for (const x of STOOLS) stool(x);
 
     // Four posts under the corners of the thatch, and the roof over them. The
     // thatch is carried a good way out past the counter, which is what the

@@ -39,6 +39,11 @@
  * itself, and when `t` passes 1 the ordinary arrival branch stands the person
  * up.
  *
+ * A lounger is the same thing with a different pose and a different way in:
+ * nothing on the beach is paved, so a seat out there hangs off no node, and a
+ * roamer picks one out of the handful within a few columns of them instead of
+ * walking to a spot. They get up onto the sand again rather than onto a path.
+ *
  * That is the whole trick, and it is worth being explicit about what it saves:
  * a `sitting` flag tested per person per frame would put a branch in the one
  * loop this file exists to keep branchless, to serve the handful of people on
@@ -61,8 +66,15 @@
  * same seed replays the same afternoon.
  */
 
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom } from '../../layout/domain/random';
-import { BEACH_SURFACE, beachPointAt, type WalkNetwork, type WalkNode } from './walkNetwork';
+import {
+  BEACH_SURFACE,
+  beachPointAt,
+  OFF_THE_GRAPH,
+  type WalkNetwork,
+  type WalkNode,
+} from './walkNetwork';
 
 /**
  * How fast a person walks, in voxels a second.
@@ -147,6 +159,29 @@ const ONTO_SEAT = 0.12;
  * somebody forgot to animate rather than as a person.
  */
 const SIT_SECONDS = { min: 20, max: 90 } as const;
+
+/**
+ * How long a person lies on a lounger, in seconds: longer than they sit.
+ *
+ * A minute to five. The argument against a long hold is that a figure which has
+ * not moved for as long as anybody looks at the plot reads as a bug — and that
+ * argument is much weaker lying down: somebody stretched out on a sun lounger
+ * is *supposed* to be still, where somebody motionless on a bench is a person
+ * who forgot what they were doing. It is also what a beach looks like: the
+ * loungers stay taken while the paths keep moving.
+ */
+const LIE_SECONDS = { min: 60, max: 300 } as const;
+
+/**
+ * How far a roamer will walk to a lounger, in tile columns.
+ *
+ * The same three columns a roamer picks their next spot within, and for the
+ * same reason it is a correctness rule there rather than a nicety: they walk to
+ * it in a **straight line**, and the coast wanders, so a lounger picked from the
+ * whole beach could have a bay between it and the person walking to it. See
+ * `ROAM_COLUMNS` in `walkNetwork.ts`.
+ */
+const SEAT_COLUMNS = 3;
 
 /**
  * A person heading back to the path is aimed at this node; while roaming they
@@ -387,11 +422,23 @@ function arriveAtNode(crowd: Crowd, i: number): void {
   crowd.cameFrom[i] = arrived;
 }
 
-/** A roamer picks another spot on the sand, or heads back in through its gate. */
+/**
+ * A roamer reaching the spot they picked: a lounger, the way back in, or
+ * another spot on the sand.
+ *
+ * The lounger is tried first and the gate second, which is the order the two
+ * chances read best in — somebody who has just walked up to a free lounger
+ * takes it rather than turning round and going home.
+ */
 function roamOn(crowd: Crowd, i: number): void {
   crowd.fromX[i] = crowd.toX[i]!;
   crowd.fromY[i] = crowd.toY[i]!;
   crowd.fromZ[i] = crowd.toZ[i]!;
+  const lounger = crowd.network.beachSeats.length > 0 ? nearbyBeachSeat(crowd, i) : -1;
+  if (lounger !== -1 && crowd.random() < ONTO_SEAT) {
+    takeSeat(crowd, i, lounger);
+    return;
+  }
   if (crowd.random() < OFF_SAND && crowd.gate[i]! >= 0) {
     // Aiming at the gate node puts them back on the graph the moment they get
     // there: arrival at a node is arrival at a node, whatever they crossed to
@@ -413,9 +460,44 @@ function roamTo(crowd: Crowd, i: number): void {
   segment(crowd, i, point.x, BEACH_SURFACE, point.z);
 }
 
-/** Whether a person is sitting down rather than walking. */
+/** Whether a person is resting on a seat rather than walking. */
 export function isSeated(crowd: Crowd, i: number): boolean {
   return crowd.node[i] === SEATED;
+}
+
+/**
+ * What a person is doing, as the thing that draws them needs it: 0 walking,
+ * 1 sitting, 2 lying.
+ *
+ * A number rather than a pair of flags because it is written straight into an
+ * instanced buffer and the shader takes it apart with arithmetic — see
+ * `crowdField.ts`. The pose is the *seat's*, not the person's: which is the
+ * whole reason a person carries no pose of their own.
+ */
+export const RESTING = { none: 0, sitting: 1, lying: 2 } as const;
+
+export function restingOn(crowd: Crowd, i: number): number {
+  if (crowd.node[i] !== SEATED) return RESTING.none;
+  return crowd.network.seats[crowd.seat[i]!]!.pose === 'lie' ? RESTING.lying : RESTING.sitting;
+}
+
+/**
+ * A free lounger within reach of where a roamer stands, or -1.
+ *
+ * A scan rather than a lookup, and it can be: the list is the loungers on the
+ * plot, the window is {@link SEAT_COLUMNS} wide, and this runs once every few
+ * seconds per roamer rather than once per frame per person. Indexing the beach
+ * by column would be a structure to build and keep for a loop that is already
+ * far cheaper than the walk it interrupts.
+ */
+function nearbyBeachSeat(crowd: Crowd, i: number): number {
+  const reach = SEAT_COLUMNS * TILE_VOXELS;
+  const x = crowd.fromX[i]!;
+  for (const seat of crowd.network.beachSeats) {
+    if (crowd.seatBy[seat] !== -1) continue;
+    if (Math.abs(crowd.network.seats[seat]!.x - x) <= reach) return seat;
+  }
+  return -1;
 }
 
 /** The first free seat beside a node, or -1 when they are all taken. */
@@ -462,11 +544,18 @@ function sitDown(crowd: Crowd, i: number): void {
   crowd.toZ[i] = spot.z;
   crowd.heading[i] = spot.heading;
   crowd.node[i] = SEATED;
-  const seconds = SIT_SECONDS.min + crowd.random() * (SIT_SECONDS.max - SIT_SECONDS.min);
-  crowd.rate[i] = 1 / seconds;
+  const rest = spot.pose === 'lie' ? LIE_SECONDS : SIT_SECONDS;
+  crowd.rate[i] = 1 / (rest.min + crowd.random() * (rest.max - rest.min));
 }
 
-/** The rest is over: the seat is given up and the walk starts again. */
+/**
+ * The rest is over: the seat is given up and the walk starts again.
+ *
+ * Where they go is where they came from, which the seat itself says: back to
+ * the node it hangs off, or back out onto the sand for a lounger, which hangs
+ * off none. Both are one line because leaving a seat is the arrival that
+ * brought them to it, run backwards.
+ */
 function standUp(crowd: Crowd, i: number): void {
   const seat = crowd.seat[i]!;
   const spot = crowd.network.seats[seat]!;
@@ -475,6 +564,11 @@ function standUp(crowd: Crowd, i: number): void {
   crowd.fromX[i] = spot.x;
   crowd.fromY[i] = spot.y;
   crowd.fromZ[i] = spot.z;
+  if (spot.node === OFF_THE_GRAPH) {
+    crowd.node[i] = ROAMING;
+    roamTo(crowd, i);
+    return;
+  }
   // Back to the node the seat hangs off, which is the paving they left: from
   // there they are on the graph again and the onward pick takes over.
   aim(crowd, i, spot.node);

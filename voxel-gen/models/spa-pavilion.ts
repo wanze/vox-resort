@@ -8,11 +8,23 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 /** Wavy curtain hem: the height the linen starts at, cycling 6/8/7. */
 const hem = (i: number): number => 6 + (i % 3 === 0 ? 0 : i % 3 === 1 ? 2 : 1);
 
+/** The rows the two treatment beds stand in, each 5 voxels across. */
+const DAYBEDS = [11, 20] as const;
+
 export default defineModel({
   id: 'spa-pavilion',
   label: 'Spa Pavilion',
   category: 'leisure',
   tiles: { x: 3, z: 2 },
+  /**
+   * One guest on each treatment bed, lying with their head on the bolster.
+   *
+   * A bed's linen top is laid in layer 6, so hips rest on 7; the bolster is at
+   * the -x end, so the legs point +x and the head lands on it four voxels back
+   * along the bed. The beds are 5 voxels across and the figure is 3, so it is
+   * centred on `bz + 2`.
+   */
+  seats: DAYBEDS.map((bz) => ({ x: 20, y: 7, z: bz + 2, facing: 1, pose: 'lie' }) as const),
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -76,7 +88,7 @@ export default defineModel({
       for (let y = hem(z); y <= 15; y++) set(5, y, z, z % 2 === 0 ? C.linen : C.linenShade);
 
     // two treatment daybeds under the roof, heads toward the curtained side
-    for (const bz of [11, 20]) {
+    for (const bz of DAYBEDS) {
       box(14, 33, 4, 5, bz, bz + 4, C.deckDark); // frame
       box(14, 33, 6, 6, bz, bz + 4, C.linen); // linen top
       box(14, 17, 7, 7, bz + 1, bz + 3, C.linenShade); // bolster

@@ -98,6 +98,16 @@ export interface ModelLight {
 export type QuarterTurns = 0 | 1 | 2 | 3;
 
 /**
+ * What a person does on a seat: sit up on it, or lie back on it.
+ *
+ * A fact about the furniture rather than about the person, which is why it is
+ * declared here with the rest of the art: a bench is sat on and a sun lounger
+ * is lain on, and no model has both. The crowd draws the pose from the seat it
+ * walked to — see `crowd/adapters/crowdField.ts`, where both are one shader.
+ */
+export type SeatPose = 'sit' | 'lie';
+
+/**
  * A place a person may sit, in the model's own coordinates.
  *
  * Here for the reason {@link ModelLight} is here: it is a fact about the art.
@@ -106,24 +116,35 @@ export type QuarterTurns = 0 | 1 | 2 | 3;
  * and a model that grows a second bench grows a second seat in the same edit,
  * with nothing in `src/` to change. See `crowd/domain/seating.ts`.
  *
- * `x` and `z` are the column the sitter's body fills and `y` is the layer their
- * **hips** rest on, which is the first free layer above the seat — the same
- * "first free layer above" that `plinth` and `stuccoWall` hand back. It is the
- * hips rather than the feet because a seated person's feet are off the ground:
- * what the seat fixes is where the body folds, and the legs hang forward from
- * there. See `crowd/adapters/crowdField.ts`, which is where they are folded.
+ * `x` and `z` are the column the person's **hips** fill and `y` is the layer
+ * they rest on, which is the first free layer above the seat — the same "first
+ * free layer above" that `plinth` and `stuccoWall` hand back. It is the hips
+ * rather than the feet because a seated person's feet are off the ground, and a
+ * lying one has no feet on anything: what a seat fixes is where the body folds.
+ * Everything else is worked out from there — see `crowd/adapters/crowdField.ts`.
+ *
+ * The hips are also the right anchor for a lounger, and not by luck: a figure
+ * lain flat runs from four voxels behind the anchor to three in front of it, so
+ * a mattress is drawn round the same point a cushion would be.
  */
 export interface ModelSeat {
   readonly x: number;
   readonly y: number;
   readonly z: number;
   /**
-   * Quarter turns from the model's own +z that the sitter looks in.
+   * Quarter turns from the model's own +z that the person's **legs** point in.
    *
    * A figure faces +z — see `people/figure.ts` — so `0` is a seat whose sitter
    * looks the way the model does, which for a bench is out over its front edge.
+   *
+   * The legs rather than the eyes, because that is the half of it both poses
+   * agree on: somebody sitting looks the way their legs point, and somebody
+   * lying looks straight up with their legs down the lounger and their head at
+   * the backrest. So a lounger's seat faces the **foot** end of its mattress.
    */
   readonly facing: QuarterTurns;
+  /** Defaults to sitting, which is what all but the loungers do. */
+  readonly pose?: SeatPose;
 }
 
 export interface VoxelModelSource {
@@ -199,8 +220,8 @@ export interface VoxelModel {
   readonly water: readonly Color[];
   /** Lights, shifted onto the same origin as the voxels. */
   readonly lights: readonly ModelLight[];
-  /** Seats, shifted onto the same origin as the voxels. */
-  readonly seats: readonly ModelSeat[];
+  /** Seats, shifted onto the same origin as the voxels, each with a pose. */
+  readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
 }
 
 /** Voxels along one tile edge — the scale every model is authored against. */
@@ -305,6 +326,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       y: seat.y - minY,
       z: seat.z - minZ,
       facing: seat.facing,
+      pose: seat.pose ?? 'sit',
     })),
   };
 }

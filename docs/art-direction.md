@@ -198,6 +198,66 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
 - **A declared colour is water everywhere in that model.** Not a shade of it, a
   colour — the shower's stream is `water.light` precisely so that it stays a
   painted surface.
+- **Water that moves is horizontal water.** This is the fourth thing, and the
+  fountain is what found it. `waterSurface.ts` never displaces a vertex: it sums
+  the waves for their slope alone, samples the phase from `positionWorld.xz`,
+  and hands back a normal built as `vec3(-slopeX, 1, -slopeZ)` — one that always
+  points **up**. That is a complete description of a horizontal surface and no
+  description at all of a vertical one. A falling sheet shaded with it takes one
+  phase down its entire height and lights as though it were lying flat, so the
+  choice for a stream is not between a static one and an animated one; it is
+  between a static one and none.
+
+  The fountain was drawn both ways. It first ran — four sheets of `water.light`
+  spilling between its bowls and a jet two metres out of the top one, painted
+  rather than declared precisely so they would not ripple in mid-air the way the
+  water park's flume would have. The reasoning was right and the result was
+  still flat blue plastic hanging in the air. What replaced it is a **third
+  bowl**: three tiers of horizontal water, every one of them meshed into the
+  pool's shader and moving, with the stone between them saying the fountain
+  cascades. It also took the model from 24 layers to 15 — seven with the jet, and
+  three more by shortening the column so the upper two bowls sit down onto the
+  lower one rather than standing over it. A plaza ornament is walked round, not
+  looked up at. Where a model wants running water, give it another surface to
+  run into, and keep the tiers nested.
+
+## A lamp lights a walkway; a beam lights a surface
+
+`lightGrid.ts` bakes every anchor a model declares as a **point** lamp, with
+three.js's own windowed inverse-square falloff. That is the right shape for
+almost everything the resort hangs — a lantern over a bar, a bollard on a path,
+a torch on a beach — because those things really are points and what they light
+is the ground immediately under them.
+
+It is the wrong shape for a floodlight, and the tennis court is where that
+showed. Four masts declaring one anchor each **at the lamp**, 9.5 m up and 140
+strong, lit the clay directly beneath each mast at more than a `street-lamp`
+throws on the paving and left the middle of the court at a third of one: four
+bright patches with a dark court between them, which reads as a court nobody
+lit rather than as a court lit from four corners. Inverse-square is why. A lamp
+47 voxels from what it is meant to light has already given away 97% of itself,
+and no intensity fixes that without turning the mast's own foot white.
+
+What fixes it is moving the point to where the **beam lands**. A floodlight is
+directional and the bake has no directional lamp, so the faithful stand-in for
+one is an anchor over the surface it is aimed at, not over the fitting it comes
+out of — the same licence `swimming-pool` already takes with four floods that no
+voxel paints. Each mast now declares two, spread along its gantry and thrown
+15 voxels in over the clay. The court reads between **0.89 and 3.0 street-lamp
+pools, a median of 2.1**, which is even enough to have no patches in it and
+bright enough to be the brightest thing on the plot after dark.
+
+Two things to take from it when lighting anything else:
+
+- **Measure it, do not guess it.** The falloff is one exported function and the
+  reference is one lamp the whole resort already has, so what a surface will
+  actually read at is arithmetic rather than taste.
+- **Declaring a lamp costs nothing per frame and something per load.** Going
+  from 8 anchors a court to 12 took the plot from 547 lamps to 583 and the bake
+  from 26.0 MB in 446 ms to 34.3 MB in 606 ms — the volume grows with the lamps'
+  _reach_, so a long-throw flood is the expensive kind. Both numbers are paid
+  once at load, and `pnpm bench` reads the same 8.30 ms a frame at night as it
+  does by day either way.
 
 ## Rules that hold whatever else changes
 
@@ -321,7 +381,12 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   rather than a floor on "a neighbourhood", and it is now written as the floor
   it was meant to be. A model's footprint is an input to the generator, so a
   pass that changes one can move a generated plot's statistics without moving
-  anything about where the generator puts a house.
+  anything about where the generator puts a house. The gate is the same change with
+  nothing behind it, which is the other half of the lesson: growing `entrance`
+  from 3x1 tiles to 4x1 moved no test and displaced no object, because both of
+  its plots stand on an otherwise empty edge row of the plan and the two tiles
+  it gained were free. Whether growing a model costs anything is a fact about
+  where that model stands, not about how much it grew.
 
   Two things in that pass are worth keeping apart from the number. The blue
   flume is painted `glass`, not `water`, because a colour a model declares as
@@ -334,6 +399,31 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   camera and half the plot. Drawn open — treads, a stringer under the nosings,
   a post every sixth one — it is the same stair and none of the wall. The part
   was not wrong; the span was.
+
+  The tennis court takes the record the resort bar held, and takes it by a
+  distance. Its playing surface was `(x + z) % 2` in two terracottas over 95x45
+  cells — 4 275 of them, every one its own quad — and that single plane was
+  **8 550 of the model's 10 316 triangles: five sixths of the whole model on one
+  surface**, against the bar's two thirds. It is the mini-golf case in a second
+  sport, and the lesson is the same sentence: where a model _is_ a ground, the
+  ground is the entire triangle budget. Laid flat in one tone, cut up only by
+  its own markings — and a line 96 voxels long is one rectangle, not a dither —
+  the court came out at 1 340 triangles with a clipped hedge round it in place
+  of the fence, a gate on each side, four benches and four built floodlight
+  masts. `pnpm bench` read **77 396 triangles off the overview frame** for the
+  pass as a whole, nine placements of the court doing almost all of it.
+
+  The flower bed is the same fault at the other end of the scale, and it is
+  worth keeping because of what it says about props. It dithered
+  `[red, pink, yellow]` at `(x + z) % 3` across a 10x10 top **and** raised each
+  column to `(x * 5 + z * 3) % 3` — a two-dimensional dither with a random height
+  field over it, so nothing merged in any direction and a 1x1 prop cost 470
+  triangles, ten times a hedge. Redrawn as a kerb, a two-step green mound and
+  four 2x2 clumps of blossom it is 138. Two colours meeting down the middle of
+  the bed was tried first and given back: it rendered as a flag, and the bed as a
+  layer cake under it. Four clumps read as four flowering plants, and a clump
+  2x2 is a rectangle where a clump 1x1 is six quads — which is the playground's
+  matting lesson the right way round.
 
   That is the useful shape of the cases together: what a dithered plane
   costs is roughly fixed per plane, so the saving is set by how many planes a
@@ -351,6 +441,23 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   pass added about 270 triangles to each building it touched, which is nothing
   for a hotel placed four times. The same 270 on `path`, which is laid on 2 530
   tiles, would be 680 k.
+
+  The hedge is the smallest deliberate purchase in the catalogue and the one
+  that prices this rule most exactly. It stands **570 times** on the authored
+  plan and around 1 100 on a generated one, so it is the single model where one
+  quad is a four-figure number on the frame, and three earlier attempts at
+  detail on it were all given back — a stippled top and striped flanks at 452
+  triangles, a crown of raised leaf clumps at 156, against a bare block's 44.
+  What this pass bought instead is the one thing that was nearly free: the
+  block is drawn in two courses, `foliage.shade` for the flanks and
+  `foliage.base` for the top layer, because a hedge seen from 30 degrees above
+  is mostly its top face and the new growth on a clipped hedge really is
+  lighter. Because the crown is the **full width** of the block rather than an
+  inset cap, each flank merges into two rectangles instead of many: the whole
+  change is four quads, 52 triangles against 44, or 4 560 on the overview frame.
+  The flower bed's 4 316 pays for it almost exactly, which is the shape a props
+  pass should have — the mass-placed model buys its detail from the one beside
+  it rather than from the budget.
 
   The playground is the pass that had to pay this rather than collect it, and
   it is worth keeping for that. Its matting was a tile grid — three colours
@@ -385,21 +492,25 @@ against a reference is how the drift started.
 
 ## Where the passes have got to
 
-| Pass                                                      | State                                     |
-| --------------------------------------------------------- | ----------------------------------------- |
-| Palette, and the parts to compose a building              | done                                      |
-| `cottage`, `house`, `restrooms`, `first-aid`              | done                                      |
-| `villa`, `hotel`, `bungalow` — the lodging range          | done                                      |
-| `swimming-pool` — the pool terrace, and `poolWater`       | done                                      |
-| `game-hall` — the open front, and what is behind it       | done                                      |
-| `restaurant` — the arcaded hall, and the terrace it faces | done; asked for no new part               |
-| `beach-club` — the deck, the bar over it, and `parasol`   | done; `deck` turned out to be `plinth`    |
-| `supermarket` — the shopfront, and `awning`               | done; the last name off the parts list    |
-| `resort-bar`, `poolside-bar` — the two bars, in one pass  | done; asked for no new part               |
-| `minigolf` — ten holes, the windmill, and the hedge       | done; `poolWater` at hazard scale         |
-| `playground` — the tower, the slide, and what climbs      | done; the one pass that cost triangles    |
-| `waterpark` — the stepped tower and its three flumes      | done; the largest saving of any pass      |
-| The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
+| Pass                                                       | State                                     |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| Palette, and the parts to compose a building               | done                                      |
+| `cottage`, `house`, `restrooms`, `first-aid`               | done                                      |
+| `villa`, `hotel`, `bungalow` — the lodging range           | done                                      |
+| `swimming-pool` — the pool terrace, and `poolWater`        | done                                      |
+| `game-hall` — the open front, and what is behind it        | done                                      |
+| `restaurant` — the arcaded hall, and the terrace it faces  | done; asked for no new part               |
+| `beach-club` — the deck, the bar over it, and `parasol`    | done; `deck` turned out to be `plinth`    |
+| `supermarket` — the shopfront, and `awning`                | done; the last name off the parts list    |
+| `resort-bar`, `poolside-bar` — the two bars, in one pass   | done; asked for no new part               |
+| `minigolf` — ten holes, the windmill, and the hedge        | done; `poolWater` at hazard scale         |
+| `playground` — the tower, the slide, and what climbs       | done; the one pass that cost triangles    |
+| `waterpark` — the stepped tower and its three flumes       | done; the largest saving of any pass      |
+| `tennis-court` — the clay, the hedge, the seats, the masts | done; one plane, and the floodlight rule  |
+| `fountain` — three tiers, and the pool's own water         | done; found the horizontal-water rule     |
+| `entrance` — the leaves swung open, and the lit piers      | done; the one pass that grew a footprint  |
+| `hedge`, `flowerbed` — the two the layout scatters itself  | done; 570 placements, priced to the quad  |
+| The rest of the 1×1 props, and the ground tiles            | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that
 has not had its pass. The list only ever shrinks.

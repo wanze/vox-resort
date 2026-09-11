@@ -1,7 +1,17 @@
 /**
  * Single sun lounger: low reclined seat with a striped cushion, an angled
  * backrest, a small folded parasol and a solid frame, on a low square base.
- * 16x16x8 (4x2 m), a 1x1 tile.
+ * 16x16x8 (4x2 m), a 1x1 tile. The head end is at -z.
+ *
+ * The one object in the catalogue somebody **lies** on, and the model that the
+ * `lie` pose was drawn for: the pad is a metre and three quarters of flat
+ * cushion with the backrest at one end, which is a person's own length, so the
+ * figure fits it with its head on the rise and its feet at the brink. See
+ * `ModelSeat` in `voxelgen.ts`, and `docs/crowd.md`.
+ *
+ * On the beach it is also the object that proved seats had to work off the
+ * sand: not one tile of a beach is paved, so a lounger reached only from paving
+ * would be furniture nobody could ever use. See `crowd/domain/walkNetwork.ts`.
  */
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
@@ -10,6 +20,15 @@ export default defineModel({
   label: 'Sun Lounger',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  /**
+   * One sunbather, head on the backrest and feet at the foot of the pad.
+   *
+   * `y` is the layer above the cushion the pad is laid in, and `z` is their
+   * hips: the figure runs four voxels back from there and three forward, so at
+   * 8 its head lands on the rise at `z` 3-4 and its feet at the pad's own end.
+   * `facing` is the way the legs point, which for a lounger is the foot end.
+   */
+  seats: [{ x: 7, y: 5, z: 8, facing: 0, pose: 'lie' }],
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

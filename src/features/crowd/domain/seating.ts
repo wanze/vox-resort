@@ -22,7 +22,7 @@
  * the plank is four voxels wide. Nothing downstream rounds it to a tile.
  */
 
-import { TILE_VOXELS, type ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
+import { TILE_VOXELS, type ModelSeat, type SeatPose } from '../../../../voxel-gen/voxelgen.ts';
 import { rotateSeats, rotationRadians, type Rotation } from '../../layout/domain/rotation';
 
 /**
@@ -49,15 +49,20 @@ export interface SeatSite {
   readonly seats: readonly ModelSeat[];
 }
 
-/** One place a person may sit, in the world. */
+/** One place a person may sit or lie, in the world. */
 export interface SeatSpot {
-  /** Where the sitter's body is, in world voxels; the centre of its column. */
+  /** Where their hips are, in world voxels; the centre of the seat's column. */
   readonly x: number;
   readonly z: number;
-  /** The layer the sitter's hips rest on. */
+  /** The layer their hips rest on. */
   readonly y: number;
-  /** Which way they look, in radians about Y — the crowd's own convention. */
+  /**
+   * Which way their legs point, in radians about Y — the crowd's own heading
+   * convention, which is also the way a sitter looks.
+   */
   readonly heading: number;
+  /** Sitting up on it, or lain back along it. */
+  readonly pose: SeatPose;
   /** The tile the seat stands on, which is how the network finds its paving. */
   readonly tileX: number;
   readonly tileZ: number;
@@ -83,6 +88,7 @@ export function seatSpotsFor(sites: readonly SeatSite[]): SeatSpot[] {
         z,
         y: site.y + seat.y,
         heading: rotationRadians(seat.facing),
+        pose: seat.pose ?? 'sit',
         tileX: Math.floor(x / TILE_VOXELS),
         tileZ: Math.floor(z / TILE_VOXELS),
       });

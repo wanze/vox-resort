@@ -4,7 +4,9 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createRandom } from '../../layout/domain/random';
 import {
+  BEACH_SURFACE,
   beachPointAt,
+  OFF_THE_GRAPH,
   walkingSurface,
   walkNetworkFor,
   type PavedTile,
@@ -325,6 +327,7 @@ const seatOn = (tileX: number, tileZ: number, y = walkingSurface(0)): SeatSpot =
   z: (tileZ + 0.5) * TILE_VOXELS,
   y,
   heading: 0,
+  pose: 'sit',
   tileX,
   tileZ,
 });
@@ -418,5 +421,73 @@ describe('the seats a network hangs off its nodes', () => {
     expect(
       walkNetworkFor({ paved: flat([[0, 0]]), levelOf: FLAT, shore: null, tilesX: 4 }).seats,
     ).toEqual([]);
+  });
+});
+
+describe('the seats out on the sand', () => {
+  // Water from z = 8, four rows of sand in front of it: z = 4..7 is beach.
+  const shore = shoreFor({
+    tilesX: 10,
+    tilesZ: 10,
+    shore: { inset: 1, beach: 4, wave: 0, seed: 1 },
+  });
+
+  /** A lounger's worth of seat, on the sand at this tile. */
+  const lounger = (tileX: number, tileZ: number): SeatSpot => ({
+    ...seatOn(tileX, tileZ, BEACH_SURFACE + 5),
+    pose: 'lie',
+  });
+
+  it('keeps a lounger on the sand, hung off no node at all', () => {
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore,
+      tilesX: 10,
+      seats: [lounger(5, 6)],
+    });
+    // Nowhere near the one paved tile, and kept anyway: the sand is walked on.
+    expect(network.seats).toHaveLength(1);
+    expect(network.seats[0]!.node).toBe(OFF_THE_GRAPH);
+    expect(network.beachSeats).toEqual([0]);
+    expect(network.seats[0]!.pose).toBe('lie');
+  });
+
+  it('still prefers the paving where a seat has both', () => {
+    const network = walkNetworkFor({
+      // A boardwalk tile out on the sand, with a seat on the tile beside it.
+      paved: [{ tileX: 5, tileZ: 6, y: 0 }],
+      levelOf: FLAT,
+      shore,
+      tilesX: 10,
+      seats: [{ ...seatOn(5, 5, walkingSurface(0) + 2), pose: 'sit' }],
+    });
+    expect(network.seats[0]!.node).toBe(nodeAt(network, 5, 6));
+    expect(network.beachSeats).toEqual([]);
+  });
+
+  it('drops a seat that is neither on sand nor near paving', () => {
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore,
+      // On the grass behind the beach, four tiles from the only paving there is.
+      seats: [seatOn(5, 2)],
+      tilesX: 10,
+    });
+    expect(network.seats).toEqual([]);
+    expect(network.beachSeats).toEqual([]);
+  });
+
+  it('finds no beach seats on a plot with no coast', () => {
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 10,
+      seats: [lounger(5, 6)],
+    });
+    expect(network.seats).toEqual([]);
+    expect(network.beachSeats).toEqual([]);
   });
 });

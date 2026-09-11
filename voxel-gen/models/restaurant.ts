@@ -53,6 +53,12 @@ const ARCADE = { z: 23, d: 2, bays: 5 } as const;
 /** The room, carved out of the body: the kitchen is what is left behind it. */
 const HALL = { x: 7, x1: 56, z: 12, z1: 22 } as const;
 
+/**
+ * The plinth's own surface layer: what `plinth` hands back in `build`, and what
+ * the terrace chairs are declared against. `build` checks the two agree.
+ */
+const GROUND = 3;
+
 /** The open terrace, from the eaves out to the brink. */
 const TERRACE = { z: 27, d: 14 } as const;
 
@@ -98,6 +104,25 @@ export default defineModel({
   tiles: { x: 4, z: 3 },
   emissive: [LANTERN],
   /**
+   * Eight diners: a chair at either end of each of the four terrace tables.
+   *
+   * The terrace only, not the dining room. A chair indoors is two tiles from
+   * any edge of the plot, so no paving is ever within reach of it and the
+   * network would drop every one — see `crowd/domain/walkNetwork.ts`. The
+   * terrace tables stand in the plot's own front row, which is where the spur
+   * arrives.
+   *
+   * A chair's seat is laid in `GROUND + 1`, so hips rest on the layer above,
+   * and each faces across the table it is drawn up to.
+   */
+  seats: OUTDOORS.flatMap(
+    (x) =>
+      [
+        { x: x + 1, y: GROUND + 2, z: TERRACE.z + 6, facing: 0 },
+        { x: x + 1, y: GROUND + 2, z: TERRACE.z + 11, facing: 2 },
+      ] as const,
+  ),
+  /**
    * Two lamps: one in the middle of the dining room, one over the terrace.
    *
    * Both are needed because the model is two rooms, one of them roofed — a
@@ -126,6 +151,7 @@ export default defineModel({
     // which is the reference's step down to the lane and the cheapest way a
     // 16 m plot gets a middle instead of being one flat table.
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: BRINK + 1 });
+    if (ground !== GROUND) throw new Error('The plinth and the chairs must agree on its surface');
     const apron = plinth(b, { x: 0, z: APRON.z, w: 64, d: APRON.d, height: 2 });
 
     // The terrace is paved a course darker than the plinth it is cut from, the

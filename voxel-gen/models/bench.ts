@@ -1,6 +1,6 @@
 /**
  * Promenade bench: a timber seat for three under a back rail, with an arm at
- * either end, standing in the middle of a low stone slab.
+ * either end, standing in the middle of a low sand-coloured slab.
  * 16x7x16 (4 m of seat, 1.5 m to the rail), a 1x1 tile. The seat faces +z.
  *
  * The first object in the catalogue drawn for the crowd rather than for the
@@ -24,8 +24,18 @@ import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** The slab, which is the whole tile: a model fills the footprint it claims. */
-const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2 } as const;
+/**
+ * The slab, which is the whole tile: a model fills the footprint it claims.
+ *
+ * In `sand` rather than the `plinth` part's default `stone`, which is what the
+ * three things the layout scatters along its walks have in common — this, the
+ * `hedge` and the `street-lamp`. A plinth under a building is the plot the
+ * building stands on and is rightly paved; a bench has no plot, it stands on
+ * the verge of a path, and `path` is laid in the sandy `0xc3b189` family that
+ * the lamps and every tree already put under themselves. `stone.base` beside
+ * that is a grey tile dropped into a sand-coloured network, 95 times over.
+ */
+const SLAB = { x: 0, z: 0, w: 16, d: 16, height: 2, stone: PALETTE.sand } as const;
 
 /** First free layer above the slab, where the bench itself starts. */
 const GROUND = SLAB.height;

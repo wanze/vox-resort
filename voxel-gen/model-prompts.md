@@ -15,14 +15,14 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | icecream      | 1×1       | 16 × 15 × 16  | 2 x 1.5 m cart under a parasol     |
 | tikitorch     | 1×1       | 16 × 12 × 16  | a 3 m garden torch                 |
 | street-lamp   | 1×1       | 16 × 21 × 16  | a 5.25 m lamp post                 |
-| flowerbed     | 1×1       | 16 × 9 × 16   | a 4 x 4 m bed                      |
-| hedge         | 1×1       | 16 × 8 × 16   | a 2 m hedge run                    |
+| flowerbed     | 1×1       | 16 × 7 × 16   | a 3 m bed on a 4 m tile            |
+| hedge         | 1×1       | 16 × 7 × 16   | a 3 m run, 1.25 m tall             |
 | sun-lounger   | 1×1       | 16 × 8 × 16   | lounger + folded parasol           |
 | bench         | 1×1       | 16 × 7 × 16   | a 4 m seat for three               |
 | restrooms     | 2×1       | 32 × 17 × 16  | two-WC block, 8 x 4 m              |
 | snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m   |
-| entrance      | 3×1       | 48 × 28 × 16  | a 12 m gate, 7 m to the arch       |
-| fountain      | 2×2       | 32 × 19 × 32  | an 8 m plaza fountain              |
+| entrance      | 4×1       | 64 × 41 × 16  | a 16 m gate, 10 m to the lanterns  |
+| fountain      | 2×2       | 32 × 15 × 32  | an 8 m plaza fountain, three tiers |
 | first-aid     | 2×2       | 32 × 17 × 32  | 6 x 5 m hut on an 8 x 8 m plot     |
 | poolside-bar  | 2×2       | 32 × 24 × 32  | 5 m palapa bar, 6 m to the ridge   |
 | bungalow      | 2×2       | 32 × 32 × 32  | 6 x 3 m hut on stilts, 8 m ridge   |
@@ -41,7 +41,7 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | minigolf      | 6×5       | 96 × 24 × 80  | 24 x 20 m, ten holes               |
 | waterpark     | 6×6       | 96 × 59 × 96  | 24 x 24 m, three straight flumes   |
 | hotel         | 6×4       | 96 × 57 × 64  | 21 x 12 m, four 3 m storeys        |
-| tennis-court  | 9×5       | 144 × 16 × 80 | 36 x 20 m club enclosure           |
+| tennis-court  | 9×5       | 144 × 29 × 80 | 36 x 20 m club enclosure           |
 
 ---
 

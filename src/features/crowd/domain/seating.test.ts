@@ -6,6 +6,9 @@ import { seatSpotsFor, type SeatSite } from './seating';
 /** A bench-shaped model: one tile, three seats in a row facing its own +z. */
 const BENCH: readonly ModelSeat[] = [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 }));
 
+/** A lounger-shaped one: a single seat somebody lies on. */
+const LOUNGER: readonly ModelSeat[] = [{ x: 7, y: 5, z: 8, facing: 0, pose: 'lie' }];
+
 const benchAt = (tileX: number, tileZ: number, rotation: Rotation = 0): SeatSite => ({
   x: tileX * TILE_VOXELS,
   z: tileZ * TILE_VOXELS,
@@ -25,6 +28,7 @@ describe('seatSpotsFor', () => {
       z: 3 * TILE_VOXELS + 7.5,
       y: 4,
       heading: 0,
+      pose: 'sit',
       tileX: 2,
       tileZ: 3,
     });
@@ -53,6 +57,18 @@ describe('seatSpotsFor', () => {
         expect(spot.tileZ, `turn ${rotation}`).toBe(6);
       }
     }
+  });
+
+  it('carries the pose the art declared, and sitting where it declared none', () => {
+    expect(seatSpotsFor([{ ...benchAt(0, 0), seats: LOUNGER }])[0]!.pose).toBe('lie');
+    expect(seatSpotsFor([benchAt(0, 0)])[0]!.pose).toBe('sit');
+  });
+
+  it('turns a lounger without turning what somebody on it is doing', () => {
+    const spots = seatSpotsFor([{ ...benchAt(4, 4, 3), seats: LOUNGER }]);
+    expect(spots[0]!.pose).toBe('lie');
+    // Three quarter turns take the foot end of the mattress round to -x.
+    expect(spots[0]!.heading).toBeCloseTo(rotationRadians(3));
   });
 
   it('offers nothing for the objects that declare no seats', () => {

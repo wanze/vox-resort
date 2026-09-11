@@ -50,6 +50,13 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 const X = 47;
 const Z = 31;
 
+/**
+ * The deck's own surface layer: what the plinth in `build` hands back. Written
+ * down because the stools' seats are declared against it and a declaration
+ * cannot read a local, so `build` checks that the two still agree.
+ */
+const FLOOR = 3;
+
 /** The hut: a servery wall at the back, the counter on its front two rows. */
 const BAR = { x: 4, z: 2, w: 40, d: 10 } as const;
 
@@ -103,6 +110,27 @@ export default defineModel({
   tiles: { x: 3, z: 2 },
   emissive: [LANTERN],
   /**
+   * Thirteen drinkers: seven on stools along the counter, and one either side
+   * of each of the three tables.
+   *
+   * A stool's cushion is `FLOOR + 2`, so hips rest a layer above it. The ones
+   * at the counter look back at it, which is -z; the ones at a table look
+   * across it, so the stool west of a table faces +x and the one east of it
+   * -x. Both are the same two columns `build` stands the stools in, read off
+   * the same constants, which is what keeps a sitter on a seat rather than
+   * beside one.
+   */
+  seats: [
+    ...STOOLS.map((x) => ({ x, y: FLOOR + 3, z: COUNTER + 3, facing: 2 }) as const),
+    ...TABLES.flatMap(
+      ([x, z]) =>
+        [
+          { x: x - 5, y: FLOOR + 3, z: z - 1, facing: 1 },
+          { x: x + 4, y: FLOOR + 3, z: z - 1, facing: 3 },
+        ] as const,
+    ),
+  ],
+  /**
    * Two lamps under the eave, a quarter of the way in from each end.
    *
    * Two rather than the beach club's one because that model's counter is 7 m
@@ -135,6 +163,7 @@ export default defineModel({
      * model on its own.
      */
     const floor = plinth(b, { x: 0, z: 0, w: X + 1, d: Z + 1, stone: teak });
+    if (floor !== FLOOR) throw new Error('The deck and its stools must agree on its surface');
     const deck = floor - 1;
 
     // The hut stands on its own boards, a step of the ramp lighter than the

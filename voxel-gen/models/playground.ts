@@ -81,11 +81,40 @@ const RUNGS = [41, 44, 47, 50] as const;
 /** The gate through the hedge, on the side the benches and the planting are. */
 const GATE = { lo: 29, hi: 34 } as const;
 
+/**
+ * Where a bench stands: the near corner of its plank, which is six voxels long
+ * and seats two.
+ *
+ * One by the sandpit and three along the south rail, which is the side the gate
+ * and the planting are on — see {@link GATE}.
+ */
+const BENCHES = [
+  [51, 7],
+  [28, 36],
+  [38, 36],
+  [48, 36],
+] as const;
+
 export default defineModel({
   id: 'playground',
   label: 'Playground',
   category: 'leisure',
   tiles: { x: 4, z: 3 },
+  /**
+   * Two grown-ups on every bench, watching.
+   *
+   * The plank is laid in `GROUND + 3`, so hips rest on the layer above it, and
+   * the back rail is on the +z row, so everybody on one looks -z — across the
+   * equipment on the three by the rail, and at the sandpit on the fourth. Six
+   * voxels of plank take two figures of three, at `x + 1` and `x + 4`.
+   */
+  seats: BENCHES.flatMap(
+    ([x, z]) =>
+      [
+        { x: x + 1, y: GROUND + 4, z, facing: 2 },
+        { x: x + 4, y: GROUND + 4, z, facing: 2 },
+      ] as const,
+  ),
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);
@@ -247,10 +276,7 @@ export default defineModel({
       box(x, x + 5, GROUND + 3, GROUND + 3, z, z + 1, teak.base);
       box(x, x + 5, GROUND + 4, GROUND + 5, z + 1, z + 1, teak.base);
     };
-    bench(51, 7);
-    bench(28, 36);
-    bench(38, 36);
-    bench(48, 36);
+    for (const [x, z] of BENCHES) bench(x, z);
 
     // A parasol over the sandpit, which is the one thing on a plot of this kind
     // that has to be in the shade. The same canvas the terraces and the daybeds

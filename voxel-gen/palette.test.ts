@@ -43,9 +43,7 @@ const LEGACY = new Set([
   'stairs',
   'railing',
   'stair-railing',
-  'hedge',
   'street-lamp',
-  'flowerbed',
   'palm',
   'pine',
   'cypress',
@@ -58,11 +56,8 @@ const LEGACY = new Set([
   'beach-umbrella',
   'tikitorch',
   'icecream',
-  'entrance',
-  'fountain',
   'snack-bar',
   'spa-pavilion',
-  'tennis-court',
 ]);
 
 describe('PALETTE', () => {

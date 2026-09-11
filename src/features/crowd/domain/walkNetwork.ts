@@ -69,6 +69,15 @@
  * is a chair nobody crosses the grass to, exactly as a flight of stairs is never
  * a beach gate. It is what lets the coffee shop declare a terrace of six chairs
  * and have them used on the plots where paving runs past them.
+ *
+ * With one exception, and it is the sand again: a seat **standing on the beach**
+ * hangs off no node at all, because the beach hangs off no node at all. A sun
+ * lounger on the sand is reached the way everything on the sand is reached — by
+ * somebody already out there walking to it — so those seats are collected
+ * separately, in {@link WalkNetwork.beachSeats}, and a roamer picks one out of
+ * the handful within a few columns of where they stand. Without this the rows of
+ * loungers the beach is laid with would be furniture nobody could ever use: not
+ * one tile of the beach is paved, by design.
  */
 
 import { LEVEL_VOXELS, PAVING_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
@@ -77,6 +86,7 @@ import type { Tile } from '../../layout/domain/resortLayout';
 import { CLIMBS, stairTilesFor } from '../../layout/domain/stairs';
 import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
+import type { SeatPose } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSpot } from './seating';
 
 /**
@@ -153,16 +163,25 @@ export interface BeachBand {
  * step they took would seat half of them looking into the back rail.
  */
 export interface WalkSeat {
-  /** Where the sitter's body is, in world voxels. */
+  /** Where their hips are, in world voxels. */
   readonly x: number;
   readonly z: number;
   /** The layer their hips rest on. */
   readonly y: number;
-  /** Which way they look, in radians about Y. */
+  /** Which way their legs point, in radians about Y. */
   readonly heading: number;
-  /** The node a person leaves the graph at to sit here, and returns to. */
+  /** Sitting up on it, or lain back along it; the art decides. */
+  readonly pose: SeatPose;
+  /**
+   * The node a person leaves the graph at to sit here and returns to, or
+   * {@link OFF_THE_GRAPH} for a seat out on the sand, which is walked to from
+   * wherever the roamer happens to be.
+   */
   readonly node: number;
 }
+
+/** What a seat on the beach carries instead of a node; see {@link WalkSeat}. */
+export const OFF_THE_GRAPH = -1;
 
 export interface WalkNetwork {
   readonly nodes: readonly WalkNode[];
@@ -177,6 +196,15 @@ export interface WalkNetwork {
    * ever sits rather than one that has to be special-cased.
    */
   readonly seats: readonly WalkSeat[];
+  /**
+   * The ones out on the sand, as indices into {@link seats}: the loungers, and
+   * whatever a beach club puts on its deck.
+   *
+   * A list of their own because they are found a different way — a roamer is
+   * not at a node, so there is no node's own list to read. It is short, and the
+   * scan over it is bounded by how far a roamer will walk; see `crowd.ts`.
+   */
+  readonly beachSeats: readonly number[];
 }
 
 const tileKey = (x: number, z: number): string => `${x},${z}`;
@@ -288,9 +316,16 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     }
   }
 
-  const seats = seatsAmong(input.seats ?? [], nodes, seatsOf);
+  const { seats, beachSeats } = seatsAmong(input.seats ?? [], nodes, seatsOf, shore);
 
-  return { nodes, edges, gates, beach: shore ? { shore, tilesX } : null, seats };
+  return {
+    nodes,
+    edges,
+    gates,
+    beach: shore ? { shore, tilesX } : null,
+    seats,
+    beachSeats,
+  };
 }
 
 /**
@@ -317,20 +352,43 @@ function seatsAmong(
   spots: readonly SeatSpot[],
   nodes: readonly WalkNode[],
   seatsOf: readonly number[][],
-): WalkSeat[] {
-  if (spots.length === 0) return [];
+  shore: Shore | null,
+): { readonly seats: WalkSeat[]; readonly beachSeats: number[] } {
+  const seats: WalkSeat[] = [];
+  const beachSeats: number[] = [];
+  if (spots.length === 0) return { seats, beachSeats };
 
   const byTile = nodesByTile(nodes);
-  const seats: WalkSeat[] = [];
   for (const spot of spots) {
     const node = nodeFor(spot, nodes, byTile);
-    // A seat with no paving within reach is simply never sat on; see the note
-    // at the top of the file.
-    if (node === -1) continue;
-    seatsOf[node]!.push(seats.length);
-    seats.push({ x: spot.x, y: spot.y, z: spot.z, heading: spot.heading, node });
+    const sand = node === OFF_THE_GRAPH && onOpenSand(spot, shore);
+    // A seat with neither paving nor sand within reach is simply never used;
+    // see the note at the top of the file.
+    if (node === OFF_THE_GRAPH && !sand) continue;
+    if (sand) beachSeats.push(seats.length);
+    else seatsOf[node]!.push(seats.length);
+    seats.push({
+      x: spot.x,
+      y: spot.y,
+      z: spot.z,
+      heading: spot.heading,
+      pose: spot.pose,
+      node,
+    });
   }
-  return seats;
+  return { seats, beachSeats };
+}
+
+/**
+ * Whether a seat stands on the open beach, which is what makes it reachable
+ * without a node.
+ *
+ * Asked of `shoreline.ts` rather than of the paving, so it is the same question
+ * a gate asks — and asked of the seat's own tile, because a lounger laid in a
+ * line down the sand stands on sand.
+ */
+function onOpenSand(spot: SeatSpot, shore: Shore | null): boolean {
+  return shore !== null && terrainAt(shore, spot.tileX, spot.tileZ) === 'beach';
 }
 
 /** The nodes standing on each tile: one, or the two ends of a flight. */
@@ -359,7 +417,7 @@ function nodeFor(
   nodes: readonly WalkNode[],
   byTile: ReadonlyMap<string, number[]>,
 ): number {
-  let nearest = -1;
+  let nearest = OFF_THE_GRAPH;
   let best = Infinity;
   for (const [dx, dz] of SEAT_TILES) {
     for (const index of byTile.get(tileKey(spot.tileX + dx, spot.tileZ + dz)) ?? []) {

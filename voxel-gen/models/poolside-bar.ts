@@ -40,6 +40,12 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 const X = 31;
 const Z = 31;
 
+/**
+ * The terrace's own surface layer: what the plinth in `build` hands back, and
+ * what the stools' seats are declared against. `build` checks the two agree.
+ */
+const FLOOR = 3;
+
 /** The palapa: a servery wall at the back, the counter on its front two rows. */
 const BAR = { x: 6, z: 4, w: 20, d: 10 } as const;
 
@@ -55,6 +61,14 @@ const EAVE_OVERHANG = 2;
 
 /** Where a stool stands at the counter, four across a 5 m run. */
 const STOOLS = [8, 13, 18, 23] as const;
+
+/**
+ * Which column the one stool at a table stands in: the inner side of it, so
+ * that a stool at the west table is east of its top and the other way round at
+ * the east one. A stool on the outer side would stand off the edge of the
+ * paving.
+ */
+const tableStool = (x: number): number => (x < X / 2 ? x + 4 : x - 5);
 
 /**
  * The two tables out on the paving: the column each parasol's pole stands in.
@@ -79,6 +93,25 @@ export default defineModel({
   tiles: { x: 2, z: 2 },
   emissive: [LANTERN],
   /**
+   * Six drinkers: four along the counter and one at each table.
+   *
+   * The counter's stools look back at it, which is -z. A table's single stool
+   * stands on the inner side of the top and looks across it, so which way that
+   * is follows {@link tableStool} rather than being written out twice.
+   */
+  seats: [
+    ...STOOLS.map((x) => ({ x, y: FLOOR + 3, z: COUNTER + 3, facing: 2 }) as const),
+    ...TABLES.map(
+      ([x, z]) =>
+        ({
+          x: tableStool(x),
+          y: FLOOR + 3,
+          z: z - 1,
+          facing: tableStool(x) > x ? 3 : 1,
+        }) as const,
+    ),
+  ],
+  /**
    * One lamp under the eave, over the middle of the counter.
    *
    * One rather than `resort-bar`'s two: that counter is 10 m and this one is 5,
@@ -94,6 +127,7 @@ export default defineModel({
     // The terrace: the pool deck's own stone, so a bar set against the pool
     // reads as standing on it rather than as a second plot beside it.
     const floor = plinth(b, { x: 0, z: 0, w: X + 1, d: Z + 1 });
+    if (floor !== FLOOR) throw new Error('The terrace and its stools must agree on its surface');
     const deck = floor - 1;
 
     // The palapa stands on its own boards, run out past the eave as far as the
@@ -159,7 +193,7 @@ export default defineModel({
       box(x - 1, x + 1, floor, floor + 3, z - 1, z + 1, teak.shade);
       box(x - 2, x + 2, floor + 4, floor + 4, z - 2, z + 2, stone.light);
       parasol(b, { x, z, y: floor });
-      stool(x < X / 2 ? x + 4 : x - 5, z - 1);
+      stool(tableStool(x), z - 1);
     }
 
     // Planting, the one high-frequency detail the lane allows: a pot at each

@@ -138,17 +138,27 @@ and they stop a tile short of the water, which is where the sea washes over the
 sand anyway. Both are cheap because they are arithmetic on a number
 `waterStartZ` already returns.
 
-## Sitting down
+## Sitting down, and lying down
 
 The first thing a person on this plot does that is not walking, and it is built
 so that it still is.
 
 A seat is declared by the **art**, beside the lights: `bench.ts` names three
-columns of its own plank, the layer a sitter's hips rest on and which way they
-look, and `coffee-shop.ts` names the six chairs on its terrace. Nothing in
-`src/` holds a list of what can be sat on, so a model that grows a second bench
-grows two more seats in the same edit — the rule the catalogue has held since
-the beginning, applied to a second kind of fact about a model.
+columns of its own plank, the layer a person's hips rest on and which way their
+legs point, and `coffee-shop.ts` names the six chairs on its terrace. Nothing
+in `src/` holds a list of what can be sat on, so a model that grows a second
+bench grows two more seats in the same edit — the rule the catalogue has held
+since the beginning, applied to a second kind of fact about a model.
+
+Which is what made the pass over the rest of the catalogue cheap. Eleven models
+already drew furniture nobody could use — stools at three bars, chairs on the
+taverna's terrace, sofas and daybeds on the beach club's deck, benches in the
+playground, beds in the spa, and 21 loungers across the pool terrace, the water
+park and the sun lounger itself. Declaring their seats is a field on each model
+and no change anywhere else: 992 seats on the authored plot, 803 on a generated
+one. `voxel-gen/seats.test.ts` is what keeps them honest — every seat has to
+have something solid under it and room for a body over it, because a seat is
+two numbers written in one file about voxels painted in another.
 
 `crowd/domain/seating.ts` turns those into points in the world, which is the
 same journey `rotateLights` makes a lamp take, with one thing added: the turn
@@ -170,31 +180,87 @@ And the sit itself is **a segment like any other**: `from` and `to` are the same
 point, `rate` is `1 / seconds`, so `t` measures how much of the rest is left and
 the per-frame loop learns nothing. When `t` passes 1 the ordinary arrival branch
 stands the person up. A `sitting` flag tested per person per frame would have put
-a branch in the one loop that exists to have none, for the fifty-odd people who
-are sitting at any moment.
+a branch in the one loop that exists to have none, for the hundred-odd people who
+are resting at any moment.
 
 Two columns pay for all of it: the seat a person holds, and who holds each seat.
 The claim is taken when they **set off**, not when they arrive, or two people
 walk to the same plank.
 
-### The pose is a shader, not a second model
+### The loungers are reached off the sand
 
-A seated figure is the same geometry as a walking one, folded by the same
-`positionNode` the walk rides on: the body drops by the height of its own hips,
-and the vertices below the hip — the ones the walk already knows about, because
-they are the ones it swings — rotate forward and down about it. One instanced
-float per person says who that applies to, and it is written with the matrix.
+Not one tile of a beach is paved — that is the design, see _The walk network_ —
+so a lounger on the sand hangs off no node, and the rule above would drop every
+one of them. The rows of loungers the beach is laid with would be furniture
+nobody could ever use.
 
-A second geometry would have cost more than geometry: a person sitting down
-would have to move from one mesh's instance slots to another's, every time
-anybody sat or stood, on a field whose slots are handed out once and never
-change.
+So a seat standing on beach terrain goes into a list of its own,
+`network.beachSeats`, and the roamers pick from it: on reaching the spot they
+walked to, a person takes a free lounger within three columns of them instead of
+picking another spot, and gets up onto the sand again rather than onto a path.
+Three columns is the same bound a roamer's next spot is drawn within, and for
+the same reason it is a correctness rule there — they walk in a **straight
+line**, and a target across a wandering coast has water in the way.
 
-How much of the crowd sits is `ONTO_SEAT` and `SIT_SECONDS` together, and they
-were tuned by measurement rather than by feel — see the note on them in
-`crowd.ts`. A quarter chance with sits of up to three minutes put 155 of 600
-people on seats, which with the quarter already out on the sand left the
-promenade looking closed. It is 56 now.
+The scan is a loop over the loungers on the plot, which is fine and is worth
+saying why: it runs when somebody arrives somewhere on the sand, every few
+seconds per roamer, not per person per frame. 183 beach seats on a generated
+plot, with a window three columns wide.
+
+### Lying down is the same seat with a different pose
+
+`pose: 'lie'` on the seat, declared by the art, because it is a fact about the
+furniture: a bench is sat on and a sun lounger is lain on, and no model has
+both. Everything up to the shader is unchanged — a lounger is claimed, walked
+to, held and given up exactly as a bench is. Two things differ, and both are one
+line: the rest is longer (a minute to five, against twenty seconds to ninety —
+somebody stretched out in the sun is _supposed_ to be still, where somebody
+motionless on a bench looks like a bug), and the pose the renderer is handed.
+
+The hips are the anchor for both, which is what makes one seat serve two poses.
+A lying figure runs from four voxels behind them to three in front, so a
+mattress is drawn round the same point a cushion would be, and the head lands on
+the raised end of a lounger without the art having to say so.
+
+### Both poses are a shader, not a second model
+
+A figure at rest is the same geometry as a walking one, folded by the same
+`positionNode` the walk rides on.
+
+**Sitting**: the body drops by the height of its own hips, and the vertices
+below the hip — the ones the walk already knows about, because they are the ones
+it swings — swing forward and down about it, half the leg's length down and nine
+tenths of it forward, which is a leg that keeps its own length.
+
+**Lying**: the same figure turned on its back about the same hips. It is three
+substitutions and no trigonometry: the body's long axis becomes the direction
+the legs point, its thickness becomes its height, and the two contributions the
+instance matrix already made along those axes are taken back out. An adult comes
+out 7 voxels long, 3 wide and 2 high, resting on the layer the seat named —
+which is the check that stood in for a browser while this was written.
+
+That costs three floats a vertex, baked once: how far up the body from the hip a
+vertex is, how far through its thickness, and where this model's hip is. Baked
+rather than computed because past the instance matrix the figure's own axes are
+gone, and because a uniform would be a uniform per model on a material every
+model shares — which is also what keeps the adult and the child on one material.
+
+One instanced float per person says which of the three states they are in, and
+the shader takes it apart with two multiplies, so a vertex pays for all three
+and is displaced by one.
+
+A second and third geometry are what that avoids, and the cost is not the
+geometry: a person sitting down would have to move from one mesh's instance
+slots to another's, every time anybody sat, lay down or got up, on a field whose
+slots are handed out once and never change.
+
+How much of the crowd rests is `ONTO_SEAT`, `SIT_SECONDS` and `LIE_SECONDS`
+together, and they were tuned by measurement rather than by feel — see the notes
+on them in `crowd.ts`. A quarter chance with sits of up to three minutes put 155
+of 600 people on seats, which with the quarter already out on the sand left the
+promenade looking closed. Across the whole catalogue's furniture it now settles
+at about a hundred: 52 sitting and 49 lying on the authored plot, 51 and 69 on a
+generated one, where the extra loungers are the beach's.
 
 ## How the crowd is stored
 
@@ -451,6 +517,38 @@ thing that makes the second one a port of the first.
     hidden completely by the back rail from a camera looking down at 30 degrees,
     and a pot at each front corner stands taller than the bench. The model is a
     seat on a slab, and that is all.
+
+- **The catalogue's own furniture, and the loungers. Landed.** The seats pass:
+  eleven models that already drew stools, chairs, sofas, daybeds, benches and
+  loungers now declare them, which is a field on each model and nothing else —
+  992 seats on the authored plot, 803 on a generated one, of which 452 and 462
+  are reachable. `voxel-gen/seats.test.ts` checks the art rather than the logic:
+  something solid under every seat, room for a body over it, nobody sitting
+  shoulder to shoulder.
+
+  With it, the two things a lounger needed. A `lie` pose, declared by the art
+  and drawn by the same shader node the walk and the sit ride on — see _Both
+  poses are a shader_ above. And a way to reach a seat that stands on **sand**,
+  since no tile of a beach is paved and the rule as written dropped every
+  lounger on it: beach seats are a list of their own and the roamers pick from
+  it, which is the second time the beach has needed a rule of its own and the
+  second time it has been worth it.
+
+  Three things came out of building it rather than out of the design:
+
+  - **The hips are the anchor, and that is what makes one seat serve two poses.**
+    A lying figure is drawn about the same point a sitting one is, so a lounger's
+    mattress and a bench's plank are declared the same way.
+  - **A lying figure lies on the soft furnishings, and should.** The first pass
+    of `seats.test.ts` demanded the seat's own cell be empty, and the beach
+    club's daybeds failed it: a towel is drawn in exactly the course a body
+    occupies. The rule now applies to sitters, where a rail through the chest is
+    a fault, and not to liers, where an overlap is the model working as drawn.
+  - **Declaring a seat found a model's numbers had drifted out of reach.** The
+    ground layer is a local in `build`, and a seat is declared at module scope,
+    so five models now name theirs as a constant and `build` throws if the
+    plinth hands back anything else. That is the idiom the restaurant already
+    used for its arcade and its eaves.
 
 - **Step 7.** Not started. The crowd is on the plot; `?people=n`, a count in the
   HUD, a bench case and the real numbers for the table above are still to come.

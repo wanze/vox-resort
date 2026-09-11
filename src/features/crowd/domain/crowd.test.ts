@@ -2,8 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
-import { createCrowd, isSeated, MAX_STEP, stepCrowd, WALK_SPEED, type Crowd } from './crowd';
-import { walkingSurface, walkNetworkFor, type PavedTile, type WalkNetwork } from './walkNetwork';
+import {
+  createCrowd,
+  isSeated,
+  MAX_STEP,
+  RESTING,
+  restingOn,
+  stepCrowd,
+  WALK_SPEED,
+  type Crowd,
+} from './crowd';
+import {
+  BEACH_SURFACE,
+  walkingSurface,
+  walkNetworkFor,
+  type PavedTile,
+  type WalkNetwork,
+} from './walkNetwork';
+import type { SeatSpot } from './seating';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -291,6 +307,7 @@ describe('the people who sit down', () => {
         z: TILE_VOXELS * 1.5,
         y: walkingSurface(0) + 2,
         heading: Math.PI,
+        pose: 'sit' as const,
         tileX: Math.floor(length / 2),
         tileZ: 1,
       })),
@@ -374,5 +391,97 @@ describe('the people who sit down', () => {
     run(bare, 120);
     expect(bare.seatBy).toHaveLength(0);
     for (const seat of bare.seat) expect(seat).toBe(-1);
+  });
+});
+
+/**
+ * A row of loungers on the sand, two columns clear of the boardwalk in the
+ * fixture below, so not one of them is within reach of a paved tile: every seat
+ * here is a beach seat, which is the point of it. A lounger laid against the
+ * boardwalk hangs off its node instead — that is `walkNetwork.test.ts`'s case.
+ */
+const loungers = (count: number): SeatSpot[] =>
+  Array.from({ length: count }, (_, index) => ({
+    x: (12 + index) * TILE_VOXELS + 8,
+    z: 14 * TILE_VOXELS + 8,
+    y: BEACH_SURFACE + 5,
+    heading: 0,
+    pose: 'lie' as const,
+    tileX: 12 + index,
+    tileZ: 14,
+  }));
+
+describe('the people who lie down', () => {
+  // Water from z = 18, six rows of sand in front of it, a boardwalk down to it
+  // and a row of loungers on the sand beside the boardwalk's foot.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+    tileX: 10,
+    tileZ: 10 + index,
+    y: 0,
+  }));
+  const sandy = (count = 6): WalkNetwork =>
+    walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers(count) });
+
+  it('takes loungers nobody could have reached from the paving', () => {
+    const network = sandy();
+    expect(network.beachSeats).toHaveLength(6);
+    const crowd = createCrowd({ network, count: 40, variants: 2, seed: 21 });
+    let lying = 0;
+    for (let frame = 0; frame < 60 * 600; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      for (let i = 0; i < crowd.count; i++) if (restingOn(crowd, i) === RESTING.lying) lying++;
+    }
+    expect(lying, 'nobody ever lay on a lounger').toBeGreaterThan(0);
+  });
+
+  it('reports lying rather than sitting, off the seat rather than the person', () => {
+    const crowd = createCrowd({ network: sandy(), count: 40, variants: 2, seed: 22 });
+    // Sampled once a second rather than every frame: what is being checked is a
+    // state, not a transition, and 36 000 frames of it is 1.4 million
+    // assertions for the same answer.
+    const seen = new Set<number>();
+    for (let frame = 0; frame < 60 * 600; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      if (frame % 60 !== 0) continue;
+      for (let i = 0; i < crowd.count; i++) {
+        // Every seat on this plot is a lounger, so everybody resting is lying.
+        const pose = restingOn(crowd, i);
+        expect(pose).toBe(isSeated(crowd, i) ? RESTING.lying : RESTING.none);
+        seen.add(pose);
+      }
+    }
+    expect(seen, 'nobody was ever seen lying down').toContain(RESTING.lying);
+  });
+
+  it('sends a sunbather back out onto the sand rather than to a node', () => {
+    const crowd = createCrowd({ network: sandy(1), count: 40, variants: 2, seed: 23 });
+    let rose = 0;
+    let onSand = 0;
+    for (let frame = 0; frame < 60 * 900; frame++) {
+      const before = crowd.seatBy[0]!;
+      stepCrowd(crowd, 1 / 60);
+      // The frame the one lounger is given up: whoever was on it is roaming,
+      // not walking to a node, and is out on the beach rather than on paving.
+      if (before >= 0 && crowd.seatBy[0] === -1) {
+        rose++;
+        if (crowd.node[before] === -1) onSand++;
+      }
+    }
+    expect(rose, 'the lounger was never given up').toBeGreaterThan(0);
+    expect(onSand).toBe(rose);
+  });
+
+  it('keeps a lounger held while its sunbather walks over to it', () => {
+    const crowd = createCrowd({ network: sandy(2), count: 40, variants: 2, seed: 24 });
+    for (let frame = 0; frame < 60 * 600; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      const held = Array.from(crowd.seat).filter((seat) => seat >= 0);
+      expect(new Set(held).size, 'two people on one lounger').toBe(held.length);
+    }
   });
 });

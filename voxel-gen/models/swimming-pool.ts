@@ -31,6 +31,26 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 const X = 95;
 const Z = 63;
 
+/**
+ * The deck's own surface layer: what the plinth below hands back, written down
+ * here because the loungers' seats are declared against it and a declaration
+ * cannot read a local. `build` checks the two agree.
+ */
+const TOP_LAYER = 4;
+
+/**
+ * The two rows of loungers: the column each one starts in, and the row the row
+ * stands in.
+ *
+ * Ten voxels from one to the next, against the seven the five-tile terrace
+ * could afford: a lounger is four wide, so that is a metre and a half of towel
+ * and bag between neighbours instead of three quarters. The north row starts
+ * clear of the diving board's steps, and its backrests are at its north end so
+ * that everybody on it lies facing the water.
+ */
+const NORTH_ROW = { z: 2, at: [18, 28, 38, 48, 58, 68, 78] } as const;
+const SOUTH_ROW = { z: 53, at: [6, 16, 26, 36, 46, 56] } as const;
+
 /** The long pool, the children's round one, and the basin under the slide. */
 const LENGTHS = { x: 5, z: 15, w: 46, d: 34 } as const;
 const PADDLING = { x: 64, z: 10, w: 25, d: 25 } as const;
@@ -45,6 +65,24 @@ export default defineModel({
   label: 'Swimming Pool',
   category: 'leisure',
   tiles: { x: 6, z: 4 },
+  /**
+   * One sunbather per lounger, thirteen of them.
+   *
+   * The mattress is laid in `TOP_LAYER + 1`, so the hips rest on the layer
+   * above it, and `facing` is the way the legs point — away from the backrest,
+   * which is at the north end of the north row and the south end of the south
+   * one. Four voxels back from the hips is the head, which lands on the raised
+   * end; three forward is the feet, which is where a lounger this long puts
+   * them.
+   */
+  seats: [
+    ...NORTH_ROW.at.map(
+      (x) => ({ x: x + 1, y: TOP_LAYER + 2, z: NORTH_ROW.z + 4, facing: 0, pose: 'lie' }) as const,
+    ),
+    ...SOUTH_ROW.at.map(
+      (x) => ({ x: x + 1, y: TOP_LAYER + 2, z: SOUTH_ROW.z + 1, facing: 2, pose: 'lie' }) as const,
+    ),
+  ],
   // The colour the renderer draws as water rather than as a painted surface.
   water: [PALETTE.water.base],
   // Submerged lights: no voxel emits them, the water is simply lit at night.
@@ -62,6 +100,7 @@ export default defineModel({
     // One slab, one colour, a metre high. `deck` is its top layer; everything
     // that stands on the terrace stands on `top`.
     const top = plinth(b, { x: 0, z: 0, w: X + 1, d: Z + 1, height: 4 });
+    if (top !== TOP_LAYER) throw new Error('The deck and the loungers must agree on its surface');
     const deck = top - 1;
 
     const surface = poolWater(b, { ...LENGTHS, deck });
@@ -166,12 +205,8 @@ export default defineModel({
       box(x, x + 3, top + 2, top + 3, head, head, stucco.light);
       box(x, x + 3, top + 4, top + 4, head, head, teak.base);
     };
-    // Ten voxels from one lounger to the next, against the seven the five-tile
-    // terrace could afford: a lounger is four wide, so that is a metre and a
-    // half of towel and bag between neighbours instead of three quarters. The
-    // north row starts clear of the diving board's steps.
-    for (const x of [18, 28, 38, 48, 58, 68, 78]) lounger(x, 2, true);
-    for (const x of [6, 16, 26, 36, 46, 56]) lounger(x, 53, false);
+    for (const x of NORTH_ROW.at) lounger(x, NORTH_ROW.z, true);
+    for (const x of SOUTH_ROW.at) lounger(x, SOUTH_ROW.z, false);
 
     // A parasol over each row of loungers, its canopy wide enough to shade the
     // two either side of the pole. Drawn by the part now rather than here: the

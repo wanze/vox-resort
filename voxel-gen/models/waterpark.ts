@@ -141,6 +141,16 @@ const LOUNGERS = [
   [4, 66],
 ] as const;
 
+/**
+ * Where a lounger's sunbather lies: the middle of the mattress, on the layer
+ * above it, with their head on the raise at the lounger's own `z` end.
+ *
+ * A lounger here is five wide and ten long, so the figure is centred on it
+ * exactly rather than half a voxel off, and the ten voxels are room enough for
+ * a person and the towel folded at their feet.
+ */
+const LIE_ON = { x: 2, y: TOP + 2, z: 6 } as const;
+
 /** The parasols, set between the loungers rather than over them. */
 const PARASOLS = [
   [18, 90],
@@ -160,6 +170,11 @@ export default defineModel({
   label: 'Waterpark',
   category: 'leisure',
   tiles: { x: 6, z: 6 },
+  /** One sunbather per lounger, all of them facing down the flumes. */
+  seats: LOUNGERS.map(
+    ([x, z]) =>
+      ({ x: x + LIE_ON.x, y: LIE_ON.y, z: z + LIE_ON.z, facing: 0, pose: 'lie' }) as const,
+  ),
   water: [PALETTE.water.base],
   lights: [
     { x: 24, y: 3, z: 70, color: FLOOD, intensity: 120, distance: 66 },

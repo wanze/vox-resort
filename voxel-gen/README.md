@@ -140,20 +140,46 @@ A model with a seat in it says so, and the crowd does the rest:
 ```ts
 // Three sitters on a bench plank, all looking out over its front.
 seats: [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 })),
+
+// One sunbather on a lounger: head on the backrest, feet at the foot end.
+seats: [{ x: 7, y: 5, z: 8, facing: 0, pose: 'lie' }],
 ```
 
-`x` and `z` are the column the sitter's body fills, `y` is the layer their
-**hips** rest on — the first free layer above the seat, the same "first free
-layer" the parts hand back — and `facing` is quarter turns from the model's own
-+z, which is the way a figure faces. So `0` looks out of the front of the model,
-`2` back into it.
+`x` and `z` are the column the person's **hips** fill and `y` is the layer they
+rest on — the first free layer above the seat, the same "first free layer" the
+parts hand back. The hips rather than the feet, because a sitter's feet are off
+the ground and a lier's are off everything: what a seat fixes is where the body
+folds, and both poses are drawn about that point. A figure lying down runs four
+voxels back from it and three forward, so a 7-voxel mattress is declared round
+its middle.
+
+`facing` is quarter turns from the model's own +z, which is the way a figure
+faces — and it is the direction the **legs** point, which is the half both poses
+agree on. A sitter looks where their legs point, so `0` looks out of the front of
+the model and `2` back into it; a lounger's seat faces the **foot** end of its
+mattress, and whoever is on it looks at the sky.
+
+`pose` is `'sit'` unless it says otherwise. It belongs to the furniture rather
+than to the person: a bench is sat on, a lounger is lain on, and no model has
+both.
 
 The app needs nothing: `crowd/domain/seating.ts` turns the seats along with the
 object and hangs each one off the paving it can be reached from, and the crowd
-walks off the path, sits for a minute or two and gets up again. A seat with no
-paving within a tile of it is simply never used — draw the chairs where the
-paving will be, or accept that the ones at the back of a terrace are scenery.
-See `docs/crowd.md`, _Sitting down_.
+walks off the path, rests for a minute or a few and gets up again. Two rules are
+worth knowing when you draw one:
+
+- A seat with **no paving within a tile of it** is simply never used. Draw the
+  chairs where the paving will be, or accept that the ones at the back of a
+  terrace are scenery — a coffee shop the generator drops mid-district has a
+  terrace nobody crosses the grass to.
+- Unless it stands on the **beach**, which is the exception: no tile of a beach
+  is ever paved, so a seat on sand is reached by whoever is already walking
+  there. That is what makes a row of loungers on the sand worth drawing.
+
+`seats.test.ts` checks the art against the model's own voxels — something solid
+under every seat, room for a body over it, and nobody sitting shoulder to
+shoulder — so a cushion moved up a course fails a test rather than leaving
+somebody hovering. See `docs/crowd.md`, _Sitting down, and lying down_.
 
 ## Scale
 

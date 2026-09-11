@@ -27,17 +27,19 @@
  * {@link walkMaterial}, which is also where the reason the direction cannot just
  * be read back off the matrix is written down.
  *
- * **Sitting down is drawn, not modelled.** A seated figure is the same geometry
- * as a walking one, folded by the same `positionNode` the walk rides on: the
- * body drops onto the seat by the height of its own hips, and the legs — the
- * vertices the walk already knows about, because they are the ones it swings —
- * rotate forward and down about the hip. One instanced float says which people
- * that applies to. See {@link walkMaterial}, and `docs/crowd.md`.
+ * **Sitting and lying down are drawn, not modelled.** A figure at rest is the
+ * same geometry as a walking one, folded by the same `positionNode` the walk
+ * rides on. Sitting: the body drops onto the seat by the height of its own hips
+ * and the legs — the vertices the walk already knows about, because they are the
+ * ones it swings — swing forward and down about the hip. Lying: the whole figure
+ * is turned on its back about the same hip, so it runs along the lounger with
+ * its head at the raised end. One instanced float says which of the three each
+ * person is doing. See {@link walkMaterial}, and `docs/crowd.md`.
  *
- * A second geometry for a sitting pose is what that avoids, and the cost is not
- * the geometry: it is that a person sitting down would have to be moved from one
- * mesh's instance slots into another's, every time anybody sat down or stood up,
- * on a field whose slots are handed out once and never change.
+ * A second and third geometry are what that avoids, and the cost is not the
+ * geometry: it is that a person sitting down would have to be moved from one
+ * mesh's instance slots into another's, every time anybody sat, lay down or got
+ * up, on a field whose slots are handed out once and never change.
  *
  * **People are drawn, and nothing else.** They are not `Placement`s: nothing
  * here reaches `tileOccupancy`, `diffPlacements`, the label anchors, the blob
@@ -64,7 +66,7 @@ import { hipHeight } from '../../../../voxel-gen/people/figure.ts';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { litMaterial } from '../../rendering/adapters/instancedWorld';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
-import { isSeated, MAX_STEP, stepCrowd, type Crowd } from '../domain/crowd';
+import { MAX_STEP, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
 
 /**
  * How fast the legs swing, in radians a second.
@@ -112,6 +114,16 @@ const BOB_VOXELS = 0.12;
  */
 const SIT_RISE = 0.5;
 const SIT_REACH = 0.9;
+
+/**
+ * How far a lying figure's back is lifted off the cushion, in voxels.
+ *
+ * One, which puts the body in the two voxels above the layer the seat named —
+ * the same 50 cm it is wide lying down, because it is the figure's own depth
+ * turned upright. Zero would bury the back half of it in the mattress, since a
+ * voxel at `y` fills `[y, y+1]` and the cushion is the layer below.
+ */
+const LIE_CLEAR = 1;
 
 export interface CrowdField {
   readonly group: Group;
@@ -164,13 +176,14 @@ interface PersonMesh {
    */
   readonly facing: InstancedBufferAttribute;
   /**
-   * Whether each person is sitting down, as 0 or 1 per instance.
+   * What each person is doing, as `RESTING`: 0 walking, 1 sitting, 2 lying.
    *
-   * A float rather than a flag because it is what the shader multiplies by, and
-   * per instance rather than per person because that is the buffer the draw
-   * reads. It is written with the matrix, off the one integer the crowd keeps.
+   * A float rather than two flags because the shader takes it apart with two
+   * multiplies — see {@link walkMaterial} — and per instance rather than per
+   * person because that is the buffer the draw reads. It is written with the
+   * matrix, off the one integer the crowd keeps.
    */
-  readonly seated: InstancedBufferAttribute;
+  readonly resting: InstancedBufferAttribute;
 }
 
 /**
@@ -205,6 +218,7 @@ function figureGeometry(model: ModelGeometry, capacity: number): BufferGeometry 
   const positions = geometry.getAttribute('position');
   const hip = hipHeight(height);
   const swing = new Float32Array(positions.count);
+  const body = new Float32Array(positions.count * 3);
   for (let vertex = 0; vertex < positions.count; vertex++) {
     // Nothing above the hip swings, the feet swing fully, and the left leg
     // swings against the right — which after the centring above is the sign of
@@ -212,22 +226,27 @@ function figureGeometry(model: ModelGeometry, capacity: number): BufferGeometry 
     // itself, because the two ends interpolate.
     const taper = hip > 0 ? Math.max(0, (hip - positions.getY(vertex)) / hip) : 0;
     swing[vertex] = Math.sign(positions.getX(vertex)) * taper;
+    // The figure in its own terms, which is what both poses are worked out in:
+    // how far up or down the body a vertex is from the hip, how far through its
+    // thickness, and where this model's hip is at all. Baked rather than
+    // computed, for the reason the swing weight is: past the instance matrix
+    // the figure's own axes are gone, and a uniform would be a uniform per
+    // model on a material every model shares. Three floats on a figure of a few
+    // dozen vertices, and it keeps the adult and the child on one material.
+    body[vertex * 3] = positions.getY(vertex) - hip;
+    body[vertex * 3 + 1] = positions.getZ(vertex);
+    body[vertex * 3 + 2] = hip;
   }
   geometry.setAttribute('swing', new BufferAttribute(swing, 1));
-  // The hip height, baked flat across the figure for the reason `swing` is
-  // baked at all: the fold is a rotation about the hip, so the shader needs the
-  // height of this model's hip, and a uniform would be a uniform per model on a
-  // material shared by all of them. One float a vertex on a figure of a few
-  // dozen is nothing, and it keeps the adult and the child on one material.
-  geometry.setAttribute('hip', new BufferAttribute(new Float32Array(positions.count).fill(hip), 1));
+  geometry.setAttribute('body', new BufferAttribute(body, 3));
   // Filled by the caller, which is the only thing that knows who stands where.
   geometry.setAttribute('phase', new InstancedBufferAttribute(new Float32Array(capacity), 1));
   const facing = new InstancedBufferAttribute(new Float32Array(capacity * 2), 2);
   facing.setUsage(DynamicDrawUsage);
   geometry.setAttribute('facing', facing);
-  const seated = new InstancedBufferAttribute(new Float32Array(capacity), 1);
-  seated.setUsage(DynamicDrawUsage);
-  geometry.setAttribute('seated', seated);
+  const resting = new InstancedBufferAttribute(new Float32Array(capacity), 1);
+  resting.setUsage(DynamicDrawUsage);
+  geometry.setAttribute('resting', resting);
   return geometry;
 }
 
@@ -247,6 +266,12 @@ interface WalkMaterial {
  * over, lifts the whole figure — the body is highest with the legs together,
  * which is where the swing crosses zero. So a walk is one `sin` per vertex and
  * nothing per person per frame.
+ *
+ * The two poses ride the same node, each scaled by one of the two weights the
+ * instanced `resting` attribute is taken apart into, so a vertex pays for all
+ * three states and is only ever displaced by one of them. Both are worked out
+ * in the figure's own axes, which is why they are baked per vertex: past this
+ * point the instance matrix has turned them into the world's.
  *
  * **It builds on `positionLocal`, and that is not a detail.** A material's
  * `positionNode` is applied last of everything Three.js does to a vertex, and it
@@ -270,27 +295,51 @@ function walkMaterial(volume: BakedLightVolume | null): WalkMaterial {
   const material = litMaterial(volume);
   const facing = attribute<'vec2'>('facing', 'vec2');
   const weight = attribute<'float'>('swing', 'float');
-  const seated = attribute<'float'>('seated', 'float');
-  const hip = attribute<'float'>('hip', 'float');
+  // The figure in its own terms: `axis` is how far up the body from the hip a
+  // vertex is and negative down the legs, `thick` how far through its depth,
+  // `hip` where this model's hip stands. See {@link figureGeometry}.
+  const body = attribute<'vec3'>('body', 'vec3');
+  const axis = body.x;
+  const thick = body.y;
+  const hip = body.z;
+
+  // What the person is doing, taken apart with two multiplies rather than a
+  // branch: a shader has no cheap branch, and one of these is always zero.
+  // 0 walking, 1 sitting, 2 lying — see `RESTING` in `crowd.ts`.
+  const doing = attribute<'float'>('resting', 'float');
+  const still = doing.min(1);
+  const lying = doing.sub(1).max(0);
+  const sitting = still.sub(lying);
+  const afoot = still.oneMinus();
+
   const wave = sin(clock.mul(CADENCE).add(attribute<'float'>('phase', 'float')));
-  // Nobody sitting down walks, and both halves of the walk are turned off by
-  // the same factor rather than by a branch: a shader has no cheap branch, and
-  // a multiply by zero is what this costs.
-  const afoot = seated.oneMinus();
   const swing = wave.mul(weight).mul(SWING_VOXELS).mul(afoot);
   const bob = wave.abs().oneMinus().mul(BOB_VOXELS).mul(afoot);
-  // How far below the hip a vertex sits, in voxels: the taper the walk weight
-  // already carries, taken back to the length it was derived from. Zero
-  // everywhere above the hip, which is why the whole torso simply drops.
-  const leg = weight.abs().mul(hip);
-  const sitDrop = leg.mul(SIT_RISE).sub(hip).mul(seated);
-  const sitReach = leg.mul(SIT_REACH).mul(seated);
-  // The two displacements along the ground share the one direction the person
-  // faces: the legs swing along it walking, and hang forward along it seated.
-  const along = swing.add(sitReach);
-  material.positionNode = positionLocal.add(
-    vec3(along.mul(facing.x), bob.add(sitDrop), along.mul(facing.y)),
-  );
+
+  // Sitting: the body drops by its own hip height, so the hips land on the
+  // layer the seat named, and the legs — everything below the hip, which is
+  // where `axis` is negative — swing forward and down about it.
+  const leg = axis.negate().max(0);
+  const sitAlong = leg.mul(SIT_REACH);
+  const sitUp = leg.mul(SIT_RISE).sub(hip);
+
+  // Lying: the same figure turned on its back about the same hips, which is
+  // three substitutions and no trigonometry. The body's long axis becomes the
+  // direction the legs point, so it runs from the head four voxels behind the
+  // hips to the feet three in front (`-axis`); its thickness becomes the
+  // height, lifted clear of the cushion (`thick + LIE_CLEAR`); and both of the
+  // contributions the instance matrix already made along those axes are taken
+  // back out — `thick` along the ground, and the vertex's own height, which is
+  // `axis + hip`.
+  const lieAlong = axis.add(thick).negate();
+  const lieUp = thick.add(LIE_CLEAR).sub(axis).sub(hip);
+
+  // Everything that moves the body over the ground shares the one direction it
+  // faces: the legs swing along it walking, hang forward along it seated, and
+  // the whole figure stretches out along it lying.
+  const along = swing.add(sitAlong.mul(sitting)).add(lieAlong.mul(lying));
+  const up = bob.add(sitUp.mul(sitting)).add(lieUp.mul(lying));
+  material.positionNode = positionLocal.add(vec3(along.mul(facing.x), up, along.mul(facing.y)));
   return {
     material,
     setClock(seconds) {
@@ -341,7 +390,7 @@ function buildPersonMesh(
     people: Int32Array.from(people),
     triangles: (geometry.getIndex()?.count ?? 0) / 3,
     facing: geometry.getAttribute('facing') as InstancedBufferAttribute,
-    seated: geometry.getAttribute('seated') as InstancedBufferAttribute,
+    resting: geometry.getAttribute('resting') as InstancedBufferAttribute,
   };
 }
 
@@ -360,7 +409,7 @@ function buildPersonMesh(
 function writeInstances(part: PersonMesh, crowd: Crowd): void {
   const matrices = part.mesh.instanceMatrix.array;
   const facing = part.facing.array;
-  const seated = part.seated.array;
+  const resting = part.resting.array;
   for (let slot = 0; slot < part.people.length; slot++) {
     const person = part.people[slot]!;
     const heading = crowd.heading[person]!;
@@ -376,11 +425,11 @@ function writeInstances(part: PersonMesh, crowd: Crowd): void {
     matrices[at + 14] = crowd.z[person]!;
     facing[slot * 2] = yawSin;
     facing[slot * 2 + 1] = yawCos;
-    seated[slot] = isSeated(crowd, person) ? 1 : 0;
+    resting[slot] = restingOn(crowd, person);
   }
   part.mesh.instanceMatrix.needsUpdate = true;
   part.facing.needsUpdate = true;
-  part.seated.needsUpdate = true;
+  part.resting.needsUpdate = true;
 }
 
 /**

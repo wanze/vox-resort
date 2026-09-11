@@ -17,13 +17,31 @@ const BODY = { x: 4, z: 4, w: 24, d: 20 } as const;
 const FRONT = BODY.z + BODY.d - 1;
 const LEFT = BODY.x;
 
+/**
+ * The forecourt's own surface layer: what the plinth in `build` hands back, and
+ * what the bench's seats are declared against. `build` checks the two agree.
+ */
+const GROUND = 3;
+
 export default defineModel({
   id: 'first-aid',
   label: 'First Aid',
   category: 'amenities',
   tiles: { x: 2, z: 2 },
+  /**
+   * Two people waiting on the bench by the door.
+   *
+   * Its plank is laid in `GROUND + 1` — it is a bench without a plinth of its
+   * own, so it sits low — and its back is the +z row, so both look -z, across
+   * the forecourt rather than into the wall.
+   */
+  seats: [
+    { x: 21, y: GROUND + 2, z: FRONT + 2, facing: 2 },
+    { x: 24, y: GROUND + 2, z: FRONT + 2, facing: 2 },
+  ],
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 32 });
+    if (ground !== GROUND) throw new Error('The forecourt and its bench must agree on its surface');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
     flatRoof(b, { ...BODY, y: eaves });
 

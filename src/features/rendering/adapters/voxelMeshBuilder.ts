@@ -31,6 +31,12 @@ export interface ModelGeometry {
   readonly emissive: BufferGeometry | null;
   /** The model's water, drawn with the sea's shader. */
   readonly water: BufferGeometry | null;
+  /**
+   * The model's window glass, carrying a `pane` attribute alongside the usual
+   * three: the seed that decides whether a light is burning behind it. See
+   * `domain/modelAttributes.ts` and `instancedWorld.ts`.
+   */
+  readonly window: BufferGeometry | null;
   readonly triangleCount: number;
   /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
@@ -43,6 +49,9 @@ function toGeometry(attributes: MeshAttributes): BufferGeometry {
   // Three.js reads a packed hex as sRGB and stores it in the linear working
   // space; the attributes arrive already converted, in exactly that space.
   geometry.setAttribute('color', new BufferAttribute(attributes.colors, 3));
+  if (attributes.panes) {
+    geometry.setAttribute('pane', new BufferAttribute(attributes.panes, 1));
+  }
   geometry.setIndex(new BufferAttribute(attributes.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
@@ -55,6 +64,7 @@ export function buildModelGeometries(models: readonly ModelAttributes[]): ModelG
     lit: model.lit ? toGeometry(model.lit) : null,
     emissive: model.emissive ? toGeometry(model.emissive) : null,
     water: model.water ? toGeometry(model.water) : null,
+    window: model.window ? toGeometry(model.window) : null,
     triangleCount: model.triangleCount,
     unmergedTriangleCount: model.unmergedTriangleCount,
   }));

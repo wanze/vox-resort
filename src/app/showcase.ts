@@ -14,12 +14,14 @@ import {
   allMaterials,
   emissiveByModelId,
   waterByModelId,
+  windowsByModelId,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  SKY_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
@@ -38,7 +40,7 @@ import {
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { isWater, shoreFor } from '../features/layout/domain/shoreline';
+import { beachTilesOf, isWater, shoreFor } from '../features/layout/domain/shoreline';
 import { isSandGround } from '../features/layout/domain/ground';
 import type { Elevation } from '../features/layout/domain/elevation';
 import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
@@ -86,6 +88,7 @@ import type { ModelGeometry } from '../features/rendering/adapters/voxelMeshBuil
 import { buildModelGeometries } from '../features/rendering/adapters/voxelMeshBuilder';
 import type { BlobShadow, ShadowCaster } from '../features/rendering/domain/blobShadows';
 import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blobShadows';
+import { SAND_LEVEL } from '../features/rendering/domain/terrainSurface';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
@@ -93,6 +96,13 @@ import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor, type SeatSite } from '../features/crowd/domain/seating';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
+import type { BalloonField } from '../features/balloons/adapters/balloonField';
+import { buildBalloonField } from '../features/balloons/adapters/balloonField';
+import {
+  createBalloons,
+  releaseStrength,
+  type ReleaseSite,
+} from '../features/balloons/domain/balloons';
 import type {
   CameraFraming,
   CameraMode,
@@ -154,6 +164,19 @@ const CROWD_SIZE = 600;
  * the network under them, which is what makes two resorts differ.
  */
 const CROWD_SEED = 1;
+
+/**
+ * Lucky balloons the beach can have going at once, in the air and waiting.
+ *
+ * Three dozen, which at the height of the release is a sky with twenty or so
+ * lanterns climbing out of it — enough to read as an event from across the plot
+ * and few enough that a single one can still be followed up. A constant for the
+ * reason {@link CROWD_SIZE} is one: nothing offers it yet.
+ */
+const BALLOON_COUNT = 36;
+
+/** The seed every sky is drawn from; fixed, for {@link CROWD_SEED}'s reason. */
+const BALLOON_SEED = 2;
 
 /** Where the clock starts: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
@@ -413,13 +436,22 @@ interface MeshedCatalogue {
    * They belong to the crowd field instead — see `crowd/adapters/crowdField.ts`.
    */
   readonly people: readonly ModelGeometry[];
+  /**
+   * The sky's, kept apart for the reason the crowd's are: a balloon is not a
+   * placement either, and the instanced world must never be able to stand one
+   * on a tile. They belong to the balloon field — see `features/balloons/`.
+   */
+  readonly sky: readonly ModelGeometry[];
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
 }
 
-/** Ids the crowd is drawn from, which is what tells the two halves apart. */
+/** Ids the crowd is drawn from, which is what tells the three apart. */
 const PEOPLE_IDS: ReadonlySet<string> = new Set(PEOPLE_MODELS.map((model) => model.id));
+
+/** Ids the sky is drawn from, likewise. */
+const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id));
 
 /** Meshes every model once and wraps the result in buffer geometries. */
 async function meshModels(
@@ -435,14 +467,17 @@ async function meshModels(
       colorsByMaterialId: materialColorsById(),
       emissiveByModelId: emissiveByModelId(),
       waterByModelId: waterByModelId(),
+      windowsByModelId: windowsByModelId(),
     },
     { forceMainThread: bench?.forceMainThreadMeshing ?? false },
   );
   const geometries = buildModelGeometries(meshed.models);
   return {
-    geometries: geometries.filter((model) => !PEOPLE_IDS.has(model.id)),
+    geometries: geometries.filter((model) => !PEOPLE_IDS.has(model.id) && !SKY_IDS.has(model.id)),
     // In registry order, because a person's `variant` indexes into it.
     people: geometries.filter((model) => PEOPLE_IDS.has(model.id)),
+    // Likewise a balloon's.
+    sky: geometries.filter((model) => SKY_IDS.has(model.id)),
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
@@ -753,6 +788,15 @@ interface Resort {
    * tiles that were paved when the plot was laid.
    */
   readonly crowd: CrowdField;
+  /**
+   * The lucky balloons this plot's beach lets go at dusk.
+   *
+   * Part of the resort for the reason the crowd is: they go up off *this*
+   * plot's sand, so a plot generated without a shore has none, and regenerating
+   * gives the beach a different shape to release them from. See
+   * `features/balloons/`.
+   */
+  readonly balloons: BalloonField;
   readonly occupancy: TileOccupancy;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
@@ -814,6 +858,42 @@ function crowdFor(parts: {
 }
 
 /**
+ * The sky this plot can fill, from the sand it has.
+ *
+ * One release site per beach tile, in the middle of it: a balloon is let go by
+ * somebody standing on the sand, and the sand is the one part of the plot that
+ * is described per tile without anything being built on it. The whole beach
+ * rather than the water's edge, because the crowd is spread over all of it and
+ * the balloons should be going up from where the people are.
+ *
+ * A plot with no shore hands back no sites at all, and `createBalloons` turns
+ * that into a field with nothing in it. See `balloons/domain/balloons.ts`.
+ */
+function balloonsFor(parts: {
+  readonly shore: Shore | null;
+  readonly sky: readonly ModelGeometry[];
+  /** The lamps a balloon's basket hangs in on its way up off the sand. */
+  readonly lightVolume: BakedLightVolume | null;
+}): BalloonField {
+  const sites: ReleaseSite[] = beachTilesOf(parts.shore).map((tile) => ({
+    x: (tile.x + 0.5) * TILE_VOXELS,
+    z: (tile.z + 0.5) * TILE_VOXELS,
+    y: SAND_LEVEL,
+  }));
+  return buildBalloonField({
+    balloons: createBalloons({
+      sites,
+      count: BALLOON_COUNT,
+      variants: parts.sky.length,
+      seed: BALLOON_SEED,
+    }),
+    sites,
+    models: parts.sky,
+    lightVolume: parts.lightVolume,
+  });
+}
+
+/**
  * Lays a plan out and builds everything that hangs off it.
  *
  * The bake happens before the world, because the volume is what the world's
@@ -823,6 +903,7 @@ function buildResort(parts: {
   readonly plan: ResortPlan;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
+  readonly sky: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): Resort {
   const plot = layOut(parts.plan, parts.bench);
@@ -844,6 +925,7 @@ function buildResort(parts: {
     people: parts.people,
     lightVolume: lighting.volume,
   });
+  const balloons = balloonsFor({ shore, sky: parts.sky, lightVolume: lighting.volume });
 
   return {
     plot,
@@ -851,6 +933,7 @@ function buildResort(parts: {
     world,
     shadows,
     crowd,
+    balloons,
     shore,
     elevation,
     // Seeded from the resort as planned, then kept up to date one placement at a
@@ -864,6 +947,7 @@ function buildResort(parts: {
       world.dispose();
       shadows.dispose();
       crowd.dispose();
+      balloons.dispose();
       lighting.volume?.dispose();
     },
   };
@@ -889,6 +973,7 @@ function createResortSlot(parts: {
   readonly plan: ResortPlan;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
+  readonly sky: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): ResortSlot {
   let resort = buildResort(parts);
@@ -910,9 +995,11 @@ function createResortSlot(parts: {
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.crowd.group);
+      scene?.scene.remove(previous.balloons.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
       scene?.scene.add(resort.crowd.group);
+      scene?.scene.add(resort.balloons.group);
       scene?.reframe(
         resort.bounds,
         resort.framing,
@@ -966,7 +1053,7 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, shadows, crowd, lighting } = parts.resort;
+  const { plot, world, shadows, crowd, balloons, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -979,11 +1066,15 @@ function sceneStats(parts: {
     // a blob is one more draw and two more triangles, a person model is one more
     // draw and fifty per person, and a count that hid either would stop matching
     // what a bench reads back off the renderer.
-    drawCalls: world.drawCalls + shadows.drawCalls + crowd.drawCalls,
+    drawCalls: world.drawCalls + shadows.drawCalls + crowd.drawCalls + balloons.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
-    drawnTriangleCount: world.drawnTriangleCount + shadows.triangleCount + crowd.triangleCount,
+    drawnTriangleCount:
+      world.drawnTriangleCount +
+      shadows.triangleCount +
+      crowd.triangleCount +
+      balloons.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -1014,6 +1105,8 @@ interface Clock {
   readonly time: number;
   /** Lamps contributing right now: the bake lights all of them, or none. */
   readonly litLamps: number;
+  /** How freely the beach is letting balloons go; see `releaseStrength`. */
+  readonly balloonReadiness: number;
   /** Moves the clock on by a frame's worth of seconds, if it is running. */
   advance(elapsedSeconds: number): void;
   /** Re-applies the time of day to a scene that has just been rebuilt. */
@@ -1034,6 +1127,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     sky = skyStateFor(time);
     handle.applySky(sky);
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
+    // The windows light from the same number, but not out of the same volume:
+    // a lit room is a glow on its own glass rather than a lamp in the bake.
+    resort().world.setLampFactor(sky.lampFactor);
     // A quad per shadow, rewritten only when the sun has actually moved.
     resort().shadows.applySky(sky);
     // The pools reflect the sky exactly as the sea does, and from the same
@@ -1049,6 +1145,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     },
     get litLamps() {
       return sky.lampFactor > 0 ? resort().lighting.litCount : 0;
+    },
+    get balloonReadiness() {
+      return releaseStrength(time);
     },
     relight() {
       // A new resort is a new volume and a new set of blobs, and both start at
@@ -1372,6 +1471,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     plan: startingPlan(bench, params),
     geometries: catalogue.geometries,
     people: catalogue.people,
+    sky: catalogue.sky,
     bench,
   });
   const current = slot.current;
@@ -1394,6 +1494,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().world.group);
   handle.scene.add(current().shadows.group);
   handle.scene.add(current().crowd.group);
+  handle.scene.add(current().balloons.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -1479,6 +1580,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // the same frame of each, and the frame's `dt` is exactly what differs
     // between a fast machine and a slow one. See `crowd.ts`.
     current().crowd.advance(bench ? MAX_STEP : elapsed);
+    // Off the same fixed step as the crowd under a benchmark, and for the same
+    // reason: two runs only compare if the scene is in the same place on the
+    // same frame of each. See `crowd.ts`.
+    current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
     if (!bench) handle.controls.update();
     handle.renderer.render(handle.scene, handle.camera);
 

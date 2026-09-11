@@ -47,15 +47,16 @@ export class VoxelBuilder {
  * so it is declared here with the rest of the model: a new model file lands in
  * the right group of the HUD without anything in `src/` being touched.
  */
-export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure' | 'people';
+export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure' | 'people' | 'sky';
 
 /**
  * Every category, with its heading, in the order the palette shows them.
  *
- * `people` is here for completeness and will never be shown: the people live in
- * their own registry rather than in `models/index.ts`, so no `OBJECT_TYPES`
- * entry ever carries it and the palette drops the empty shelf. A person is not
- * something to place — they walk in on their own. See `docs/crowd.md`.
+ * `people` and `sky` are here for completeness and will never be shown: both
+ * live in registries of their own rather than in `models/index.ts`, so no
+ * `OBJECT_TYPES` entry ever carries either and the palette drops the empty
+ * shelves. Neither is something to place — a person walks in on their own, and
+ * a balloon is let go. See `docs/crowd.md` and `features/balloons/`.
  */
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
@@ -66,6 +67,7 @@ export const MODEL_CATEGORIES: readonly {
   { id: 'amenities', label: 'Amenities' },
   { id: 'leisure', label: 'Leisure' },
   { id: 'people', label: 'People' },
+  { id: 'sky', label: 'Sky' },
 ];
 
 /** Footprint in resort tiles; see `TILE_VOXELS` for the tile edge in voxels. */
@@ -181,6 +183,22 @@ export interface VoxelModelSource {
    * colour is still the albedo the shader starts from.
    */
   readonly water?: readonly Color[];
+  /**
+   * Colours that are window glass: shaded like any other surface by day, and
+   * lit from inside after dark — half of them per building, drawn at random, so
+   * no two buildings of one type show the same pattern of occupied rooms.
+   *
+   * Declared here rather than inferred from the palette because "this glass is
+   * a window somebody lives behind" is a fact about the art: a lantern pane, a
+   * bus shelter and a flume are all glass and none of them has a room behind
+   * it. See `WINDOW_GLASS` in `parts/wall.ts` for what the buildings pass.
+   *
+   * Which windows are lit is decided on the GPU, from the pane and the instance
+   * — see `rendering/adapters/instancedWorld.ts`. No light is cast on anything:
+   * a window glows, it does not illuminate the street. A model that should
+   * light its surroundings declares a {@link ModelLight} as well.
+   */
+  readonly windows?: readonly Color[];
   /** Point lights the object casts once the scene turns the lights on. */
   readonly lights?: readonly ModelLight[];
   /**
@@ -218,6 +236,8 @@ export interface VoxelModel {
   readonly emissive: readonly Color[];
   /** Colours drawn as water, deduplicated. */
   readonly water: readonly Color[];
+  /** Window glass, deduplicated. */
+  readonly windows: readonly Color[];
   /** Lights, shifted onto the same origin as the voxels. */
   readonly lights: readonly ModelLight[];
   /** Seats, shifted onto the same origin as the voxels, each with a pose. */
@@ -309,6 +329,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     voxels,
     emissive: [...new Set(source.emissive ?? [])],
     water: [...new Set(source.water ?? [])],
+    windows: [...new Set(source.windows ?? [])],
     // Lights ride along with the voxels, so they stay put when the model is
     // shifted onto its own origin.
     lights: (source.lights ?? []).map((light) => ({

@@ -19,7 +19,13 @@ import { plinth, steps } from '../parts/ground.ts';
 import { flowerBox, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
-import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from '../parts/wall.ts';
+import {
+  doorway,
+  shutteredWindow,
+  STOREY_VOXELS,
+  stuccoWall,
+  WINDOW_GLASS,
+} from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** Lit at night, so it is drawn unlit at full brightness. */
@@ -64,6 +70,7 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 6, z: 4 },
   emissive: [LANTERN],
+  windows: WINDOW_GLASS,
   // One lamp per lantern, a voxel clear of the wall it hangs on.
   lights: [
     { x: 42, y: 11, z: 57, color: LANTERN, intensity: 100, distance: 58 },

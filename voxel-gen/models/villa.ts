@@ -17,7 +17,13 @@ import { plinth, steps } from '../parts/ground.ts';
 import { flowerBox, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
-import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from '../parts/wall.ts';
+import {
+  doorway,
+  shutteredWindow,
+  STOREY_VOXELS,
+  stuccoWall,
+  WINDOW_GLASS,
+} from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The body, set back so the +z end is a veranda and the -x end a pool terrace. */
@@ -41,6 +47,7 @@ export default defineModel({
   label: 'Villa',
   category: 'lodging',
   tiles: { x: 4, z: 4 },
+  windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 2 });

@@ -36,7 +36,7 @@ import { plinth } from '../parts/ground.ts';
 import { flowerBox, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
 import { arcade } from '../parts/veranda.ts';
-import { shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type Color, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The three things that are lit after dark, and nothing else is. */
@@ -79,6 +79,7 @@ export default defineModel({
   category: 'leisure',
   tiles: { x: 3, z: 3 },
   emissive: [NEON, SIGN, SCREEN],
+  windows: WINDOW_GLASS,
   // One lamp, standing in the middle of the room a little forward of the
   // tables, so after dark the hall spills onto its own forecourt. One is all
   // this model wants: it is a single room 12 m across, and a lamp reaching 13

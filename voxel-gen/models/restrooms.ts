@@ -13,7 +13,7 @@ import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { flowerBox } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
-import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const BODY = { x: 2, z: 2, w: 28, d: 10 } as const;
@@ -24,6 +24,7 @@ export default defineModel({
   label: 'Restrooms',
   category: 'amenities',
   tiles: { x: 2, z: 1 },
+  windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 16 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1, wall: PALETTE.slate });

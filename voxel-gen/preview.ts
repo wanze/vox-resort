@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
+import { SKY_SOURCES } from './sky/index.ts';
 import {
   buildModel,
   TILE_VOXELS,
@@ -386,9 +387,9 @@ async function chooseSources(
   const ids = positional.filter((arg) => !arg.endsWith('.ts'));
   if (!ids.length && !files.length) return [...registry];
 
-  // Ids are looked up across both registries whichever one is the default, so
+  // Ids are looked up across every registry whichever one is the default, so
   // `preview child` works without anyone having to remember the flag.
-  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES];
+  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
 
@@ -404,15 +405,27 @@ async function chooseSources(
   return [...known.filter((source) => ids.includes(source.id)), ...loaded];
 }
 
+/** What a contact sheet of one registry is called. */
+function sheetNameFor(registry: readonly VoxelModelSource[]): string {
+  if (registry === PEOPLE_SOURCES) return 'crowd';
+  if (registry === SKY_SOURCES) return 'sky';
+  return 'contact-sheet';
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const here = path.dirname(fileURLToPath(import.meta.url));
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  // The crowd is a registry of its own — it is not part of the catalogue and
-  // does not fill a tile, so it is never in the default set. See `people/`.
-  const registry = args.includes('--people') ? PEOPLE_SOURCES : MODEL_SOURCES;
+  // The crowd and the sky are registries of their own — neither is part of the
+  // catalogue and neither fills a tile, so neither is ever in the default set.
+  // See `people/` and `sky/`.
+  const registry = args.includes('--people')
+    ? PEOPLE_SOURCES
+    : args.includes('--sky')
+      ? SKY_SOURCES
+      : MODEL_SOURCES;
   const sources = await chooseSources(
     args.filter((arg) => !arg.startsWith('--')),
     registry,
@@ -423,7 +436,7 @@ async function main(): Promise<void> {
     return;
   }
   if (args.includes('--sheet')) {
-    const file = path.join(outDir, registry === PEOPLE_SOURCES ? 'crowd.png' : 'contact-sheet.png');
+    const file = path.join(outDir, `${sheetNameFor(registry)}.png`);
     writeFileSync(file, renderSheet(models, 320, 6));
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;

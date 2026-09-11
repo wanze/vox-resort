@@ -13,7 +13,15 @@ function geometry(): BufferGeometry {
 }
 
 function model(id: string, lit: BufferGeometry | null): ModelGeometry {
-  return { id, lit, emissive: null, water: null, triangleCount: 1, unmergedTriangleCount: 2 };
+  return {
+    id,
+    lit,
+    emissive: null,
+    water: null,
+    window: null,
+    triangleCount: 1,
+    unmergedTriangleCount: 2,
+  };
 }
 
 const COTTAGE: LayoutItem = { id: 'cottage', tilesX: 2, tilesZ: 3, width: 32, depth: 44 };

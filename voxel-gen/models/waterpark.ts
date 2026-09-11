@@ -47,7 +47,7 @@ import { poolWater } from '../parts/pool.ts';
 import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
 import { balustrade } from '../parts/veranda.ts';
-import { shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const X = 95;
@@ -176,6 +176,7 @@ export default defineModel({
       ({ x: x + LIE_ON.x, y: LIE_ON.y, z: z + LIE_ON.z, facing: 0, pose: 'lie' }) as const,
   ),
   water: [PALETTE.water.base],
+  windows: WINDOW_GLASS,
   lights: [
     { x: 24, y: 3, z: 70, color: FLOOD, intensity: 120, distance: 66 },
     { x: 40, y: 3, z: 70, color: FLOOD, intensity: 120, distance: 66 },

@@ -12,7 +12,44 @@ import {
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  SKY_MODELS,
+  windowsByModelId,
 } from './objectTypes';
+
+describe('windowsByModelId', () => {
+  it('names the buildings, and only what they glaze with', () => {
+    const windows = windowsByModelId();
+    expect(windows.size).toBeGreaterThan(6);
+    for (const [id, colors] of windows) {
+      const model = objectTypeById(id).model;
+      expect(colors.size).toBeGreaterThan(0);
+      const painted = new Set(model.voxels.map((voxel) => voxel.color));
+      for (const color of colors) {
+        expect(painted.has(color), `${id} declares a window colour it never paints`).toBe(true);
+      }
+    }
+  });
+
+  it('glazes the hotel and leaves the palm alone', () => {
+    const windows = windowsByModelId();
+    expect(windows.get('hotel')).toContain(PALETTE.glass.base);
+    expect(windows.has('palm')).toBe(false);
+    expect(windows.has('street-lamp')).toBe(false);
+  });
+
+  it('never calls a colour both a window and a glow', () => {
+    // They are two different geometries, and the split reads the emissive set
+    // first — so a colour in both would silently never be a window.
+    const emissive = emissiveByModelId();
+    for (const [id, colors] of windowsByModelId()) {
+      for (const color of colors) {
+        expect(emissive.get(id)?.has(color) ?? false, `${id} paints ${color} twice over`).toBe(
+          false,
+        );
+      }
+    }
+  });
+});
 
 describe('model lights', () => {
   it('declares a light on the street lamp, inside its own bounding box', () => {
@@ -46,9 +83,22 @@ describe('model lights', () => {
 });
 
 describe('PAINTED_MODELS', () => {
-  it('is the catalogue and the crowd, and nothing twice', () => {
-    expect(PAINTED_MODELS).toHaveLength(OBJECT_TYPES.length + PEOPLE_MODELS.length);
+  it('is the catalogue, the crowd and the sky, and nothing twice', () => {
+    expect(PAINTED_MODELS).toHaveLength(
+      OBJECT_TYPES.length + PEOPLE_MODELS.length + SKY_MODELS.length,
+    );
     expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
+  });
+
+  it('keeps the balloons out of the catalogue, which is what they are apart from', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(SKY_MODELS.length).toBeGreaterThan(0);
+    for (const balloon of SKY_MODELS) {
+      expect(catalogue.has(balloon.id), `${balloon.id} is in the catalogue too`).toBe(false);
+      expect(balloon.category).toBe('sky');
+      // A balloon is a lit paper envelope, and it is nothing if it does not glow.
+      expect(balloon.emissive.length).toBeGreaterThan(0);
+    }
   });
 
   it('keeps the people out of the catalogue, which is what they are apart from', () => {

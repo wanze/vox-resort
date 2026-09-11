@@ -26,7 +26,7 @@ import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
 import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
-import { awning, doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { awning, doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The plot: three tiles by two. */
@@ -73,6 +73,7 @@ export default defineModel({
   category: 'amenities',
   tiles: { x: 3, z: 2 },
   emissive: [LANTERN],
+  windows: WINDOW_GLASS,
   /**
    * One lamp, over the terrace rather than inside the room.
    *

@@ -33,7 +33,7 @@ import { plinth, steps } from '../parts/ground.ts';
 import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
 import { arcade, balustrade } from '../parts/veranda.ts';
-import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The building: a solid kitchen at the back, the dining room carved in front. */
@@ -122,6 +122,7 @@ export default defineModel({
         { x: x + 1, y: GROUND + 2, z: TERRACE.z + 11, facing: 2 },
       ] as const,
   ),
+  windows: WINDOW_GLASS,
   /**
    * Two lamps: one in the middle of the dining room, one over the terrace.
    *

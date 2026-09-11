@@ -10,7 +10,7 @@ import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
-import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const BODY = { x: 4, z: 4, w: 24, d: 20 } as const;
@@ -28,6 +28,7 @@ export default defineModel({
   label: 'First Aid',
   category: 'amenities',
   tiles: { x: 2, z: 2 },
+  windows: WINDOW_GLASS,
   /**
    * Two people waiting on the bench by the door.
    *

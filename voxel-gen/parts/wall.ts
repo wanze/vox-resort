@@ -22,6 +22,20 @@ export type Face = 'x-' | 'x+' | 'z-' | 'z+';
 export const STOREY_VOXELS = 12;
 
 /**
+ * The glass a building declares as its windows.
+ *
+ * It is exactly what {@link shutteredWindow} fills a recess with, written down
+ * once so that a building says `windows: WINDOW_GLASS` rather than repeating a
+ * ramp step the part it called already chose. A model that glazes by hand, or
+ * with a ramp of its own, declares its own colours instead.
+ *
+ * Only `base`. The other steps of the glass ramp are used for things with no
+ * room behind them — a vent slot, a shopfront door leaf, a water flume — and a
+ * light burning in one of those is a light burning in a wall.
+ */
+export const WINDOW_GLASS: readonly Color[] = [PALETTE.glass.base];
+
+/**
  * Paints one cell of a face, in the face's own two dimensions.
  *
  * `at` is where the wall's outer surface sits on the face's own axis, `along`

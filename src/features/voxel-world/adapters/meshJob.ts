@@ -23,6 +23,7 @@ export interface MeshCatalogueRequest {
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
   readonly waterByModelId: ReadonlyMap<string, ReadonlySet<number>>;
+  readonly windowsByModelId: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
 export interface MeshCatalogueResult {
@@ -44,6 +45,7 @@ export interface WireRequest {
   readonly colors: readonly (readonly [string, number])[];
   readonly emissive: readonly (readonly [string, readonly number[]])[];
   readonly water: readonly (readonly [string, readonly number[]])[];
+  readonly windows: readonly (readonly [string, readonly number[]])[];
 }
 
 export interface WireResponse {
@@ -60,6 +62,7 @@ export function toWire(request: MeshCatalogueRequest): WireRequest {
     colors: [...request.colorsByMaterialId],
     emissive: [...request.emissiveByModelId].map(([id, colors]) => [id, [...colors]] as const),
     water: [...request.waterByModelId].map(([id, colors]) => [id, [...colors]] as const),
+    windows: [...request.windowsByModelId].map(([id, colors]) => [id, [...colors]] as const),
   };
 }
 
@@ -71,6 +74,7 @@ export function fromWire(wire: WireRequest): MeshCatalogueRequest {
     colorsByMaterialId: new Map(wire.colors),
     emissiveByModelId: new Map(wire.emissive.map(([id, colors]) => [id, new Set(colors)])),
     waterByModelId: new Map(wire.water.map(([id, colors]) => [id, new Set(colors)])),
+    windowsByModelId: new Map(wire.windows.map(([id, colors]) => [id, new Set(colors)])),
   };
 }
 
@@ -88,6 +92,7 @@ export async function meshOnThisThread(
       colorsByMaterialId: request.colorsByMaterialId,
       emissiveByModelId: request.emissiveByModelId,
       waterByModelId: request.waterByModelId,
+      windowsByModelId: request.windowsByModelId,
     }),
     dveMs,
   };

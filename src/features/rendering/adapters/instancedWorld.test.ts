@@ -63,6 +63,7 @@ function model(id: string, triangles: number, glowing = false): ModelGeometry {
     lit: geometryOf(triangles),
     emissive: glowing ? geometryOf(1) : null,
     water: null,
+    window: null,
     triangleCount: triangles,
     unmergedTriangleCount: triangles * 2,
   };
@@ -75,6 +76,7 @@ function wetModel(id: string, triangles: number): ModelGeometry {
     lit: geometryOf(triangles),
     emissive: null,
     water: geometryOf(2),
+    window: null,
     triangleCount: triangles + 2,
     unmergedTriangleCount: (triangles + 2) * 2,
   };

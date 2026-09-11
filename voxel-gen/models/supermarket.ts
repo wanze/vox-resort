@@ -44,7 +44,7 @@ import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { flowerBox, pottedPlant } from '../parts/props.ts';
 import { flatRoof } from '../parts/roof.ts';
-import { awning, doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { awning, doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The shop: 15 x 8 m, set back to leave an apron for the produce and trolleys. */
@@ -108,6 +108,7 @@ export default defineModel({
   category: 'amenities',
   tiles: { x: 4, z: 3 },
   emissive: [SIGN],
+  windows: WINDOW_GLASS,
   /**
    * One lamp, on the apron under the sign rather than inside the shop.
    *

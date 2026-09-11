@@ -18,7 +18,7 @@ import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
 import { thatchRoof } from '../parts/roof.ts';
 import { balustrade } from '../parts/veranda.ts';
-import { doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
+import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The hut itself. */
@@ -44,6 +44,7 @@ export default defineModel({
   label: 'Bungalow',
   category: 'lodging',
   tiles: { x: 2, z: 2 },
+  windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const sand = plinth(b, { x: 0, z: 0, w: 32, d: 32, height: 2, stone: PALETTE.sand });
 

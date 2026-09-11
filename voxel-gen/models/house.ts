@@ -11,7 +11,13 @@ import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
 import { pottedPlant } from '../parts/props.ts';
 import { gableRoof } from '../parts/roof.ts';
-import { doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from '../parts/wall.ts';
+import {
+  doorway,
+  shutteredWindow,
+  STOREY_VOXELS,
+  stuccoWall,
+  WINDOW_GLASS,
+} from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** The body, inset so the +z end of the plot is left as a terrace. */
@@ -25,6 +31,7 @@ export default defineModel({
   label: 'House',
   category: 'lodging',
   tiles: { x: 3, z: 3 },
+  windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 48, d: 48 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 2 });

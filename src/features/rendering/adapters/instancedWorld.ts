@@ -36,8 +36,22 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three/webgpu';
-import { vertexColor } from 'three/tsl';
+import {
+  attribute,
+  float,
+  fract,
+  instanceIndex,
+  sin,
+  smoothstep,
+  step,
+  uniform,
+  vec3,
+  vertexColor,
+  vertexStage,
+} from 'three/tsl';
+import type { Node } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
+import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import {
@@ -66,6 +80,12 @@ export interface InstancedWorld {
   readonly instanceCount: number;
   /** Repaints the sky the resort's water reflects, in packed sRGB. */
   setSky(sky: number): void;
+  /**
+   * Sets how far through the evening the resort is, 0 by day and 1 after dark:
+   * what turns the lights on behind the windows. The same number the baked lamp
+   * volume takes — see `lighting/domain/dayNight.ts`.
+   */
+  setLampFactor(factor: number): void;
   /** Stands one more object on the plot. Throws if its key is already taken. */
   add(placement: Placement): void;
   /** Takes one object off the plot. False if nothing stood under that key. */
@@ -118,6 +138,120 @@ function glowMaterial(): MeshBasicNodeMaterial {
   return new MeshBasicNodeMaterial({ vertexColors: true });
 }
 
+/**
+ * How many of a building's windows have somebody behind them after dark.
+ *
+ * Half, which is what the resort's own evenings look like from the road, and
+ * far more legible than either extreme: every window lit reads as a render with
+ * the interior lighting left on, and a scattering of two or three reads as an
+ * empty hotel. It is a fraction rather than a count because the buildings run
+ * from a bungalow's three windows to a hotel's forty, and half of each is a
+ * bungalow with one or two lights on and a hotel with a full facade of them.
+ */
+const LIT_WINDOW_FRACTION = 0.5;
+
+/** The warm interior a lit room throws onto its own glass. */
+const WINDOW_GLOW = 0xffc27a;
+
+/**
+ * How brightly it burns, as outgoing radiance.
+ *
+ * Under one on purpose: a window is a room seen through glass, not a lamp, and
+ * a pane at full strength blows out against the street lamps standing in front
+ * of it — which are the thing that is actually a light.
+ */
+const WINDOW_GLOW_STRENGTH = 0.85;
+
+/**
+ * How the windows come on through the evening, against the lamp factor.
+ *
+ * `SPREAD` is how much of the dusk the first window and the last are apart, and
+ * `RAMP` how long one of them takes to reach full. Together they are the reason
+ * a building does not switch on like a signboard: each room takes its own
+ * moment, drawn from the same hash that decided whether it is occupied at all.
+ */
+const WINDOW_DUSK_SPREAD = 0.55;
+const WINDOW_DUSK_RAMP = 0.18;
+
+/** A cheap, well-spread hash of one number, in the shader. */
+const hashOf = (value: Node<'float'>): Node<'float'> => fract(sin(value).mul(43758.5453));
+
+/** The lit material, and the evening the windows in it follow. */
+interface WindowMaterial {
+  readonly material: MeshStandardNodeMaterial;
+  /** 0 by day, 1 after dark; see {@link InstancedWorld.setLampFactor}. */
+  setLampFactor(factor: number): void;
+}
+
+/**
+ * Window glass: the resort's own lit material, with a light switched on behind
+ * half the panes once the sun is down.
+ *
+ * **Which half is decided on the GPU, and it has to be.** A building is an
+ * instance rather than a geometry — every hotel on the plot draws the one mesh
+ * the catalogue meshed — so there is no CPU-side place to put "this hotel has
+ * its third window lit" that the other hotels would not read too. What there
+ * is instead is the two numbers a vertex already knows: which pane it belongs
+ * to, baked per vertex by `domain/modelAttributes.ts` and equal across the four
+ * corners of a quad, and which instance is being drawn. Hashed together they
+ * give a room its own answer, stable from frame to frame and different in every
+ * building — for one float of geometry and no per-frame work at all.
+ *
+ * The hash is computed in the vertex stage, which is not a micro-optimisation:
+ * `instanceIndex` is a vertex builtin, and on the WebGL2 fallback it is
+ * `gl_InstanceID`, which does not exist in a fragment shader. Being constant
+ * across the quad, it survives the interpolation as exactly itself.
+ *
+ * What the instance index costs is that it is a *slot* and not a placement.
+ * Demolishing a building moves the last instance of its bucket into the hole —
+ * see {@link dropInstance} — so that one neighbour's rooms are redrawn, and two
+ * buildings of one type that hold the same slot in two different chunks light
+ * the same rooms. Neither is visible at the distance chunks are apart, and the
+ * alternative is a per-instance buffer kept in step with the matrices through
+ * every grow, push and swap — which is a great deal of machinery for a hotel
+ * sixty metres away that switched a light on.
+ *
+ * A lit window glows and lights nothing. Casting light would mean a lamp per
+ * pane in the bake — hundreds per building — and the bake is what the night
+ * costs; a model that should light the street beneath it declares a `ModelLight`
+ * as well, which is what the hotel's lanterns are.
+ */
+function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
+  const lampFactor = uniform(0);
+  const material = litMaterial(volume);
+
+  // The pane, and the building it is in. The instance is folded in through the
+  // golden ratio and wrapped, which does two things: it spreads consecutive
+  // buildings as far apart as a sequence can, and it keeps the number the hash
+  // takes a sine of small. A raw index would put `sin` in the thousands, where a
+  // GPU's own precision is what decides the answer — and the resort would show
+  // it as banding down a facade.
+  const building = fract(float(instanceIndex).mul(0.6180339887));
+  const seed = attribute<'float'>('pane', 'float').add(building);
+  const occupied = hashOf(seed.mul(12.9898).add(78.233));
+  const eager = hashOf(seed.mul(39.3468).add(11.135));
+
+  const dusk = eager.mul(WINDOW_DUSK_SPREAD);
+  const burning = vertexStage(
+    step(occupied, LIT_WINDOW_FRACTION).mul(
+      smoothstep(dusk, dusk.add(WINDOW_DUSK_RAMP), lampFactor),
+    ),
+  );
+
+  const [r, g, b] = linearRgbOf(WINDOW_GLOW);
+  const glow = vec3(r, g, b).mul(WINDOW_GLOW_STRENGTH).mul(burning);
+  // Added to the lamp light rather than replacing it: the glass still catches
+  // the street lamp outside it, exactly as the wall around it does.
+  material.emissiveNode = volume ? volume.lampLight(vertexColor().rgb).add(glow) : glow;
+
+  return {
+    material,
+    setLampFactor(factor) {
+      lampFactor.value = factor;
+    },
+  };
+}
+
 /** Groups placements by object type, preserving plan order. */
 export function instancesByType(
   placements: readonly Placement[],
@@ -134,8 +268,8 @@ export function instancesByType(
   return byType;
 }
 
-/** The three parts a model is split into, and the material each is drawn with. */
-type MaterialKind = 'lit' | 'glow' | 'water';
+/** The four parts a model is split into, and the material each is drawn with. */
+type MaterialKind = 'lit' | 'glow' | 'water' | 'window';
 
 interface ModelPart {
   readonly kind: MaterialKind;
@@ -302,6 +436,7 @@ export function buildInstancedWorld(
   const glow = glowMaterial();
   // The pools, drawn with the sea's own shader; see `poolWaterMaterial.ts`.
   const poolWater = createPoolWaterMaterial(options.lightVolume ?? null);
+  const windows = windowMaterial(options.lightVolume ?? null);
   const chunkVoxels = options.chunkVoxels ?? CHUNK_VOXELS;
 
   const modelById = new Map(geometries.map((entry) => [entry.id, entry]));
@@ -312,6 +447,7 @@ export function buildInstancedWorld(
       ['lit', model.lit, lit] as const,
       ['glow', model.emissive, glow] as const,
       ['water', model.water, poolWater.material] as const,
+      ['window', model.window, windows.material] as const,
     ]) {
       if (!geometry) continue;
       parts.push({ kind, geometry, material, triangles: (geometry.getIndex()?.count ?? 0) / 3 });
@@ -454,6 +590,9 @@ export function buildInstancedWorld(
     setSky(sky) {
       poolWater.setSky(sky);
     },
+    setLampFactor(factor) {
+      windows.setLampFactor(factor);
+    },
     add,
     remove,
     setPlacements(next) {
@@ -469,10 +608,12 @@ export function buildInstancedWorld(
       lit.dispose();
       glow.dispose();
       poolWater.dispose();
+      windows.material.dispose();
       for (const model of geometries) {
         model.lit?.dispose();
         model.emissive?.dispose();
         model.water?.dispose();
+        model.window?.dispose();
       }
     },
   };

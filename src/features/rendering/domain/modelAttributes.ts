@@ -29,20 +29,50 @@ export interface MeshAttributes {
   readonly colors: Float32Array;
   readonly indices: Uint32Array | Uint16Array;
   readonly triangleCount: number;
+  /**
+   * One seed per vertex, equal across the four corners of a window pane, or
+   * null for the surfaces that are not windows. See {@link paneSeed}.
+   */
+  readonly panes: Float32Array | null;
 }
 
 /**
- * The three ways a model's faces can be shaded, which is the three geometries
- * a model is split into.
+ * A window's own number, drawn from where the pane is on the model.
  *
- * The split is by colour: a model declares which of the colours it paints with
- * glow and which are water, and everything else is shaded normally. It happens
- * here rather than in the renderer because a submesh already comes back one
- * material at a time, so sorting the faces costs nothing at the point they are
- * turned into vertices — and because the split is what lets the whole scene
- * share three materials instead of one per model.
+ * This is half of what decides whether a light is burning behind it; the other
+ * half is which building it is, which only the GPU knows, because a building is
+ * an instance rather than a geometry. See `rendering/adapters/instancedWorld.ts`.
+ *
+ * It is hashed rather than counted for the same reason the light anchors are
+ * keyed within their placement: a count would renumber every window behind the
+ * one an edit added, and the numbering has to stay put — a room whose light
+ * moved to the flat next door every time the model was touched is a room nobody
+ * can author against. A pane's position in the model does not move.
+ *
+ * Deterministic, and spread evenly over 0..1: what reads it is a threshold.
  */
-type SurfaceKind = 'lit' | 'emissive' | 'water';
+export function paneSeed(x: number, y: number, z: number): number {
+  let hash = Math.imul(Math.round(x) | 0, 0x27d4eb2d);
+  hash = Math.imul(hash ^ (Math.round(y) | 0), 0x165667b1);
+  hash = Math.imul(hash ^ (Math.round(z) | 0), 0x9e3779b1);
+  hash ^= hash >>> 15;
+  hash = Math.imul(hash, 0x85ebca6b);
+  hash ^= hash >>> 13;
+  return (hash >>> 0) / 4294967296;
+}
+
+/**
+ * The four ways a model's faces can be shaded, which is the four geometries a
+ * model is split into.
+ *
+ * The split is by colour: a model declares which of the colours it paints glow,
+ * which are water and which are window glass, and everything else is shaded
+ * normally. It happens here rather than in the renderer because a submesh
+ * already comes back one material at a time, so sorting the faces costs nothing
+ * at the point they are turned into vertices — and because the split is what
+ * lets the whole scene share four materials instead of one per model.
+ */
+type SurfaceKind = 'lit' | 'emissive' | 'water' | 'window';
 
 export interface ModelAttributes {
   readonly id: string;
@@ -52,6 +82,8 @@ export interface ModelAttributes {
   readonly emissive: MeshAttributes | null;
   /** The model's water, drawn with the sea's shader. */
   readonly water: MeshAttributes | null;
+  /** The model's window glass, which lights up from inside after dark. */
+  readonly window: MeshAttributes | null;
   readonly triangleCount: number;
   /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
@@ -75,6 +107,8 @@ export interface ModelAttributeInput {
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
   /** Colours each model draws as water, by model id. */
   readonly waterByModelId: ReadonlyMap<string, ReadonlySet<number>>;
+  /** Colours each model glazes its windows with, by model id. */
+  readonly windowsByModelId: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
 /** Splits a packed `0xRRGGBB` into the linear RGB the shader works in. */
@@ -92,8 +126,18 @@ class AttributeBatch {
   private readonly normals: number[] = [];
   private readonly colors: number[] = [];
   private readonly indices: number[] = [];
+  private readonly panes: number[] | null;
   private vertexCount = 0;
   private sourceTriangles = 0;
+
+  /**
+   * `tracksPanes` is only true of the window batch, which is the one surface
+   * whose faces have to be told apart from each other rather than merely from
+   * the faces of another material.
+   */
+  constructor(tracksPanes: boolean) {
+    this.panes = tracksPanes ? [] : null;
+  }
 
   get triangleCount(): number {
     return this.indices.length / 3;
@@ -129,10 +173,17 @@ class AttributeBatch {
       const base = this.vertexCount;
       // The merged corners are already wound counter-clockwise as seen from the
       // side the face points at, which is the winding Three.js treats as front.
-      for (const [x, y, z] of quadCorners(quad)) {
+      const corners = quadCorners(quad);
+      // One seed for the whole quad, off the corner the merge started at. Equal
+      // across the four vertices, so it survives interpolation as itself and the
+      // shader reads the same number everywhere on the pane.
+      const [sx, sy, sz] = corners[0]!;
+      const seed = paneSeed(sx + offset.x, sy + offset.y, sz + offset.z);
+      for (const [x, y, z] of corners) {
         this.positions.push(x + offset.x, y + offset.y, z + offset.z);
         this.normals.push(nx, ny, nz);
         this.colors.push(color[0], color[1], color[2]);
+        this.panes?.push(seed);
       }
       this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
       this.vertexCount += 4;
@@ -154,6 +205,13 @@ class AttributeBatch {
         );
         this.normals.push(normals[vertex * 3]!, normals[vertex * 3 + 1]!, normals[vertex * 3 + 2]!);
         this.colors.push(color[0], color[1], color[2]);
+        this.panes?.push(
+          paneSeed(
+            positions[vertex * 3]! + offset.x,
+            positions[vertex * 3 + 1]! + offset.y,
+            positions[vertex * 3 + 2]! + offset.z,
+          ),
+        );
       }
       this.indices.push(base, base + 1, base + 2);
       this.vertexCount += 3;
@@ -170,6 +228,7 @@ class AttributeBatch {
       // inside that; halving the index buffer is worth the check.
       indices: needsThirtyTwoBitIndices(indices) ? indices : Uint16Array.from(indices),
       triangleCount: this.triangleCount,
+      panes: this.panes ? Float32Array.from(this.panes) : null,
     };
   }
 }
@@ -179,7 +238,14 @@ class AttributeBatch {
  * kind, in scratch-region order.
  */
 export function buildModelAttributes(input: ModelAttributeInput): ModelAttributes[] {
-  const { sections, regions, colorsByMaterialId, emissiveByModelId, waterByModelId } = input;
+  const {
+    sections,
+    regions,
+    colorsByMaterialId,
+    emissiveByModelId,
+    waterByModelId,
+    windowsByModelId,
+  } = input;
 
   const colorCache = new Map<string, [number, number, number]>();
   const colorFor = (materialId: string): [number, number, number] => {
@@ -194,16 +260,18 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
   const batches = new Map<string, Record<SurfaceKind, AttributeBatch>>();
   for (const region of regions) {
     batches.set(region.id, {
-      lit: new AttributeBatch(),
-      emissive: new AttributeBatch(),
-      water: new AttributeBatch(),
+      lit: new AttributeBatch(false),
+      emissive: new AttributeBatch(false),
+      water: new AttributeBatch(false),
+      window: new AttributeBatch(true),
     });
   }
 
-  /** Which of the three geometries a colour this model paints belongs in. */
+  /** Which of the four geometries a colour this model paints belongs in. */
   const kindOf = (modelId: string, color: number): SurfaceKind => {
     if (emissiveByModelId.get(modelId)?.has(color) === true) return 'emissive';
     if (waterByModelId.get(modelId)?.has(color) === true) return 'water';
+    if (windowsByModelId.get(modelId)?.has(color) === true) return 'window';
     return 'lit';
   };
 
@@ -228,13 +296,14 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
   }
 
   return regions.map((region) => {
-    const { lit, emissive, water } = batches.get(region.id)!;
-    const all = [lit, emissive, water];
+    const { lit, emissive, water, window } = batches.get(region.id)!;
+    const all = [lit, emissive, water, window];
     return {
       id: region.id,
       lit: lit.isEmpty ? null : lit.toAttributes(),
       emissive: emissive.isEmpty ? null : emissive.toAttributes(),
       water: water.isEmpty ? null : water.toAttributes(),
+      window: window.isEmpty ? null : window.toAttributes(),
       triangleCount: all.reduce((total, batch) => total + batch.triangleCount, 0),
       unmergedTriangleCount: all.reduce((total, batch) => total + batch.unmergedTriangleCount, 0),
     };
@@ -245,7 +314,7 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
 export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer[] {
   const buffers: ArrayBuffer[] = [];
   for (const model of models) {
-    for (const attributes of [model.lit, model.emissive, model.water]) {
+    for (const attributes of [model.lit, model.emissive, model.water, model.window]) {
       if (!attributes) continue;
       buffers.push(
         attributes.positions.buffer as ArrayBuffer,
@@ -253,6 +322,7 @@ export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer
         attributes.colors.buffer as ArrayBuffer,
         attributes.indices.buffer as ArrayBuffer,
       );
+      if (attributes.panes) buffers.push(attributes.panes.buffer as ArrayBuffer);
     }
   }
   return buffers;

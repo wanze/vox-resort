@@ -42,7 +42,7 @@ import {
   type RailModels,
   type Tile,
 } from '../../layout/domain/resortLayout';
-import { railsAt } from '../../layout/domain/railings';
+import { railsAt, type WaterProvider } from '../../layout/domain/railings';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
 import type { PavedGround } from './paving';
@@ -58,6 +58,11 @@ export interface HandrailRules {
   readonly pavedWith: PavedGround;
   /** How high the ground under a tile stands, in levels. */
   readonly levelOf: LevelProvider;
+  /**
+   * Whether a tile is open water, which a jetty's edge has to be guarded against
+   * even though the sea beside it is at the pier's own level. See `railings.ts`.
+   */
+  readonly isWater: WaterProvider;
   /** The rail models the catalogue offers, either of which may be missing. */
   readonly models: RailModels;
   /** What rails are standing now, which is what the recomputed answer is diffed against. */
@@ -89,7 +94,7 @@ const AROUND: readonly { readonly dx: number; readonly dz: number }[] = [
  * stroke along the top of a terrace re-rails only its own far end.
  */
 export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
-  const { pavedWith, levelOf, models, standing } = rules;
+  const { pavedWith, levelOf, isWater, models, standing } = rules;
   const isPaved: PavedProvider = (tileX, tileZ) => pavedWith(tileX, tileZ) !== null;
   const stand: Placement[] = [];
   const lift: Placement[] = [];
@@ -99,7 +104,7 @@ export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
     // unpaved tile wants none and can have none standing on it either. Paving is
     // only ever laid, never taken up, so there is nothing there to clear.
     if (!isPaved(around.x, around.z)) continue;
-    const wanted = railPlacementsFor(models, railsAt(around, isPaved, levelOf), levelOf);
+    const wanted = railPlacementsFor(models, railsAt(around, isPaved, levelOf, isWater), levelOf);
     const already = standing(around.x, around.z);
     const wantedKeys = new Set(wanted.map((rail) => rail.key));
     const standingKeys = new Set(already.map((rail) => rail.key));

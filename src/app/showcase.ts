@@ -33,6 +33,7 @@ import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
   HEDGE_ID,
+  JETTY_ID,
   LAMP_ID,
   PAVING_IDS,
   RAILING_ID,
@@ -41,7 +42,7 @@ import {
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { shoreFor, waterTilesOf } from '../features/layout/domain/shoreline';
+import { isWater, shoreFor } from '../features/layout/domain/shoreline';
 import { isSandGround } from '../features/layout/domain/ground';
 import type { Elevation } from '../features/layout/domain/elevation';
 import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
@@ -874,10 +875,10 @@ function buildResort(parts: {
     shore,
     elevation,
     // Seeded from the resort as planned, then kept up to date one placement at a
-    // time; it is what tells the pointer whether a tile is free. The sea goes in
-    // with it, so the pointer turns red over water for the same reason it turns
-    // red over a cottage.
-    occupancy: createTileOccupancy(claiming, waterTilesOf(shore)),
+    // time; it is what tells the pointer whether a tile is free. The sea is not
+    // in it: a pier stands on water, so what the sea will take is a rule about
+    // the object rather than a tile somebody already holds — see `paving.ts`.
+    occupancy: createTileOccupancy(claiming),
     anchors: labelAnchorsFor(plot.placements),
     bounds,
     framing: frameCamera(bounds, parts.bench),
@@ -1341,7 +1342,9 @@ function createBuildMode(parts: {
     // asked of the ground rather than of the shore, so a path drawn by hand
     // along the dune comes out as decking exactly as a generated one does.
     isSand: (tileX, tileZ) => isSandGround(resort().shore, resort().elevation, tileX, tileZ),
+    isWater: (tileX, tileZ) => isWater(resort().shore, tileX, tileZ),
     decking: pavingItem(BOARDWALK_ID),
+    pier: pavingItem(JETTY_ID),
     stairs: pavingItem(STAIRS_ID),
   };
 
@@ -1353,6 +1356,7 @@ function createBuildMode(parts: {
   const handrails: HandrailRules = {
     pavedWith,
     levelOf: ground.levelOf,
+    isWater: paving.isWater,
     models: railModelsIn(catalogue),
     standing: (tileX, tileZ) =>
       resort().plot.rails.filter((rail) => rail.tileX === tileX && rail.tileZ === tileZ),

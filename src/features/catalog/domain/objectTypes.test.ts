@@ -82,7 +82,7 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(44);
+    expect(OBJECT_TYPES.length).toBe(50);
   });
 
   it('uses unique ids and labels', () => {
@@ -162,13 +162,15 @@ describe('objectTypeGroups', () => {
     for (const id of decided) expect(picked.has(id)).toBe(false);
   });
 
-  it('offers one paving tool, not the three kinds of paving it lays', () => {
-    // Picked by hand, a flight is a staircase up the middle of a lawn and
-    // decking is a jetty over grass. A path is what you draw; the ground decides
-    // which of the three it comes out as. See `paving.ts`.
+  it('offers one paving tool, not the four kinds of paving it lays', () => {
+    // Picked by hand, a flight is a staircase up the middle of a lawn, decking
+    // is a jetty over grass, and a jetty is decking over a lawn. A path is what
+    // you draw; the ground decides which of the four it comes out as. See
+    // `paving.ts`.
     expect(offered()).toContain('path');
     expect(offered()).not.toContain('stairs');
     expect(offered()).not.toContain('boardwalk');
+    expect(offered()).not.toContain('jetty');
   });
 
   it('groups the rest under the shelf its model declares, in registry order', () => {

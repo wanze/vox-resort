@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { place, type LayoutItem } from '../../layout/domain/resortLayout';
+import { place, type LayoutItem, type Tile } from '../../layout/domain/resortLayout';
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import {
   buildKey,
@@ -11,6 +11,12 @@ import {
 } from './buildPlan';
 import { createTileOccupancy } from './tileOccupancy';
 import type { LevelProvider } from '../../layout/domain/elevation';
+
+/**
+ * The sea, as `paving.ts` hands it over: everything from row 7 down refuses
+ * everything. Nothing here knows that is what water means.
+ */
+const dry = ({ z }: Tile): boolean => z < 7;
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -114,6 +120,27 @@ describe('planAt', () => {
     const besideIt = createTileOccupancy([place(PATH, 'path@5,5', 5, 5)]);
     expect(planAt(COTTAGE, { x: 3, z: 5 }, besideIt).blocked).toBe(false);
     expect(planAt(COTTAGE, { x: 3, z: 5 }, besideIt, 1).blocked).toBe(true);
+  });
+
+  it('blocks an object the ground under it will not take', () => {
+    expect(planAt(COTTAGE, { x: 3, z: 7 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
+      true,
+    );
+    expect(planAt(COTTAGE, { x: 3, z: 3 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
+      false,
+    );
+  });
+
+  it('asks the ground about every tile of the footprint, not only its corner', () => {
+    // A 2x3 cottage anchored on row 5 reaches row 7, which is the tile that
+    // refuses it — exactly as the level rule reaches it.
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
+      true,
+    );
+    // Turned, it is 3x2 and stops one row short of the water.
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 1, undefined, dry).blocked).toBe(
+      false,
+    );
   });
 });
 

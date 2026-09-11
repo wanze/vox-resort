@@ -15,9 +15,12 @@
  * swap and this only says when it applies. See `SceneHandle.takeLeftButton`.
  *
  * What is going down is not always what was picked, either: a path drawn over a
- * terrace step comes out as the flight up it, and the slab it was drawn from may
- * be lifted and laid again as one. `paving.ts` owns that rule; this only asks it,
- * once per tile, so the ghost previews the flight and the click stands it.
+ * terrace step comes out as the flight up it, a path drawn off the shore comes
+ * out as a jetty, and the slab a path was drawn from may be lifted and laid again
+ * as a flight. `paving.ts` owns those rules; this only asks them, once per tile,
+ * so the ghost previews the flight or the pier and the click stands it. It asks
+ * the same module what the ground will *take*, too — the sea takes a pier and
+ * nothing else — so a cottage dropped in the bay previews red.
  *
  * A paved tile also brings handrails with it, and takes others away — the rail
  * along an edge the new paving now carries on across. `handrails.ts` owns that
@@ -39,7 +42,7 @@ import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayo
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt, tilesBetween } from '../domain/buildPlan';
 import { pickTile, type PickGround } from '../domain/groundPick';
-import { pavingAt, relaidBy, type PavingRules } from '../domain/paving';
+import { pavingAt, relaidBy, standsOn, type PavingRules } from '../domain/paving';
 import { railChangeAt, type HandrailRules } from '../domain/handrails';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
@@ -162,7 +165,9 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
    */
   const planOn = (picked: LayoutItem, tile: Tile) => {
     const laid = pavingAt(picked, tile, rotation, paving);
-    return planAt(laid.item, tile, occupancy, laid.rotation, ground.levelOf);
+    return planAt(laid.item, tile, occupancy, laid.rotation, ground.levelOf, (under) =>
+      standsOn(laid.item, under, paving),
+    );
   };
 
   /** Redraws the preview for the tile under the pointer. */

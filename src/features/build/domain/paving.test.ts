@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { derivedKey, place, type LayoutItem, type Tile } from '../../layout/domain/resortLayout';
 import type { LevelProvider } from '../../layout/domain/elevation';
-import { BOARDWALK_ID, PATH_ID, STAIRS_ID } from '../../layout/domain/resortPlan';
+import { BOARDWALK_ID, JETTY_ID, PATH_ID, STAIRS_ID } from '../../layout/domain/resortPlan';
 import {
   isPaving,
   pavedGroundOf,
   pavingAt,
   relaidBy,
+  standsOn,
   type PavedGround,
   type PavingRules,
 } from './paving';
@@ -23,6 +24,7 @@ const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
 const PATH = item(PATH_ID);
 const BOARDWALK = item(BOARDWALK_ID);
 const STAIRS = item(STAIRS_ID);
+const JETTY = item(JETTY_ID);
 const COTTAGE = item('cottage', 2, 3);
 
 /** A plot where everything north of `z` stands one level up. */
@@ -42,14 +44,16 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   pavedWith: () => null,
   levelOf: () => 0,
   isSand: () => false,
+  isWater: () => false,
   decking: BOARDWALK,
+  pier: JETTY,
   stairs: STAIRS,
   ...parts,
 });
 
 describe('isPaving', () => {
-  it('knows the three kinds of paving a path network is laid with', () => {
-    expect([PATH, BOARDWALK, STAIRS].map(isPaving)).toEqual([true, true, true]);
+  it('knows the four kinds of paving a path network is laid with', () => {
+    expect([PATH, BOARDWALK, STAIRS, JETTY].map(isPaving)).toEqual([true, true, true, true]);
   });
 
   it('does not treat a building as paving', () => {
@@ -65,7 +69,7 @@ describe('pavedGroundOf', () => {
         place(STAIRS, derivedKey(STAIRS_ID, 1, 2), 1, 2),
         place(COTTAGE, 'cottage#0', 4, 4),
       ]),
-      [PATH, BOARDWALK, STAIRS],
+      [PATH, BOARDWALK, STAIRS, JETTY],
     );
 
   it('reads the paving on a tile off the live index, without parsing a key', () => {
@@ -291,5 +295,48 @@ describe('relaidBy', () => {
       }),
     );
     expect(relaid).toEqual([]);
+  });
+});
+
+describe('pavingAt, over water', () => {
+  const sea = rules({ isWater: (_x, tileZ) => tileZ >= 5 });
+
+  it('lays a jetty where a path is drawn off the shore', () => {
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, sea).item).toBe(JETTY);
+  });
+
+  it('still lays flagstones on the tile behind it', () => {
+    expect(pavingAt(PATH, { x: 2, z: 4 }, 0, sea).item).toBe(PATH);
+  });
+
+  it('lays a jetty flat, because the sea has no step to climb', () => {
+    // Paving one level up beside it would be a flight anywhere else; out on the
+    // water there is nothing to climb and the pier answer comes first.
+    const climbing = rules({
+      isWater: (_x, tileZ) => tileZ >= 5,
+      pavedWith: (tileX, tileZ) => (tileX === 2 && tileZ === 4 ? PATH : null),
+      levelOf: (_x, tileZ) => (tileZ < 5 ? 1 : 0),
+    });
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, climbing)).toEqual({ item: JETTY, rotation: 0 });
+  });
+
+  it('leaves the water unpavable when the catalogue has no jetty', () => {
+    const none = rules({ isWater: () => true, pier: null });
+    expect(standsOn(PATH, { x: 2, z: 5 }, none)).toBe(false);
+  });
+});
+
+describe('standsOn', () => {
+  const sea = rules({ isWater: (_x, tileZ) => tileZ >= 5 });
+
+  it('lets the pier, and only the pier, stand on water', () => {
+    expect(standsOn(JETTY, { x: 2, z: 5 }, sea)).toBe(true);
+    expect(standsOn(COTTAGE, { x: 2, z: 5 }, sea)).toBe(false);
+    expect(standsOn(PATH, { x: 2, z: 5 }, sea)).toBe(false);
+  });
+
+  it('refuses nothing on dry ground', () => {
+    expect(standsOn(COTTAGE, { x: 2, z: 4 }, sea)).toBe(true);
+    expect(standsOn(JETTY, { x: 2, z: 4 }, sea)).toBe(true);
   });
 });

@@ -109,6 +109,9 @@ describe('the network of a generated resort', () => {
   });
 });
 
+/** The tiles the plot paves, which out on the water are the two piers. */
+const paved = new Set(layout.paths.map((path) => `${path.tileX},${path.tileZ}`));
+
 describe('a crowd on a generated resort', () => {
   it('keeps everybody on the plot and out of the sea', () => {
     // Counted rather than asserted per person per frame: a million expectations
@@ -125,7 +128,12 @@ describe('a crowd on a generated resort', () => {
         const tileX = Math.floor(crowd.x[i]! / TILE_VOXELS);
         const tileZ = Math.floor(crowd.z[i]! / TILE_VOXELS);
         if (tileX < 0 || tileX >= plan.tilesX || tileZ < 0) wrong.offPlot++;
-        else if (terrainAt(shore, tileX, tileZ) === 'water') wrong.inTheSea++;
+        // Over water is only wrong where there is no pier under them: the two
+        // sea lanes carry on past the tideline as jetties, and walking to the
+        // end of one is the point of building it. See `jetty.ts`.
+        else if (terrainAt(shore, tileX, tileZ) === 'water' && !paved.has(`${tileX},${tileZ}`)) {
+          wrong.inTheSea++;
+        }
       }
     }
     expect(wrong).toEqual({ nowhere: 0, offPlot: 0, inTheSea: 0 });

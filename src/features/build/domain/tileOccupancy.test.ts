@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { place, type LayoutItem } from '../../layout/domain/resortLayout';
-import { RESERVED_KEY, createTileOccupancy, footprintTiles } from './tileOccupancy';
+import { createTileOccupancy, footprintTiles } from './tileOccupancy';
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -82,24 +82,15 @@ describe('createTileOccupancy', () => {
   });
 });
 
-describe('reserved ground', () => {
-  it('is never free, and never something the pointer can take', () => {
-    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
-    expect(occupancy.isFree({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(false);
-    expect(occupancy.isFree({ tileX: 2, tileZ: 4, tilesX: 2, tilesZ: 1 })).toBe(false);
-    expect(occupancy.isFree({ tileX: 2, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(true);
-  });
-
-  it('says what is holding it', () => {
-    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
-    expect(occupancy.keyAt({ x: 3, z: 4 })).toBe(RESERVED_KEY);
-    expect(occupancy.size).toBe(1);
-  });
-
-  it('refuses a placement that would stand on it', () => {
-    const occupancy = createTileOccupancy([], [{ x: 3, z: 4 }]);
-    expect(() => occupancy.claim({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 }, 'hut')).toThrow(
-      /has it/,
-    );
+describe('ground nothing is standing on', () => {
+  // The sea used to be seeded in here so the pointer refused it by the ordinary
+  // rule. A pier put a stop to that: what a tile of water will take is a fact
+  // about the object, which lives in `paving.ts` — see `standsOn` — so an index
+  // of tiles now holds only what is actually standing.
+  it('is free, whatever the ground under it happens to be', () => {
+    const occupancy = createTileOccupancy();
+    expect(occupancy.isFree({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(true);
+    expect(occupancy.keyAt({ x: 3, z: 4 })).toBeUndefined();
+    expect(occupancy.size).toBe(0);
   });
 });

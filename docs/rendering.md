@@ -127,8 +127,8 @@ plaza or two. Everything else is derived, in four stages:
    handrails_.
 
 Each paved tile is then given its paving from the ground under it rather than
-from the route over it: flagstones on grass, a `boardwalk` on sand, and `stairs`
-where the tile's paved neighbour stands a level higher. Every placement also
+from the route over it: flagstones on grass, a `boardwalk` on sand, a `jetty` on
+water, and `stairs` where the tile's paved neighbour stands a level higher. Every placement also
 carries the height of the ground it stands on, so nothing downstream — the
 instance matrix, the occluder box, a lamp's position, the shadow it throws, its
 HUD label — has to know which terrace it is on. See _Elevation_.
@@ -173,9 +173,14 @@ Three things follow from a tile being water, sand or land:
 
 - **Water is not ground.** No object stands on it, no street crosses it — a
   street runs into the shore and stops there rather than the plan being refused —
-  and no spur routes through it. In the app the tiles are seeded into the live
-  occupancy index as reserved, so the build pointer turns red over the sea by the
-  ordinary rule rather than by a second one written beside it.
+  and no spur routes through it. **One thing does stand on it, and that is a
+  pier.** An edge that declares `overWater` keeps its tiles past the tideline and
+  they come out as `jetty`, which is the same rule as the boardwalk one tile
+  landward of them. In the app what the sea will take is therefore a rule about
+  the _object_ rather than a tile somebody already holds — `standsOn` in
+  `paving.ts` — which is why the water is no longer seeded into the live
+  occupancy index as reserved ground: an index of tiles cannot hold a fact about
+  objects.
 - **Sand is ordinary buildable ground with one difference**: a path laid on it
   comes out as a `boardwalk` rather than as flagstones. The paving is a fact
   about the ground under a tile, not about the route over it, so the same street
@@ -190,7 +195,10 @@ Three things follow from a tile being water, sand or land:
 - **The generator keeps its districts off the sand entirely** and fills it on its
   own terms — three **lines** of loungers and parasols at fixed depths into the
   sand, and a band of beach clubs, bars, palms and torches against the dune
-  behind them. A depth follows the water, so each line curves with the bay the
+  behind them — plus a **lifeguard tower** every twenty-four columns, stood on
+  the seaward row _before_ the lines are laid, because a tower pushed behind the
+  sunbathers is a tower watching the backs of their heads. A depth follows the
+  water, so each line curves with the bay the
   way the dune behind it does, and the density slider breaks a line into runs
   rather than thinning it tile by tile: a line with every third lounger missing
   reads as a scatter that happens to be in a row. The band at the back is skirted
@@ -205,9 +213,12 @@ rising straight off the back of it, and a gate three tiles wide would stand
 across the first step. Every street stops there with it, except the two **sea
 lanes** — the service lanes nearest three tenths and seven tenths of the width,
 which carry on over the hill as flights of stairs, cross the sand as boardwalk
-and are cut off at the shore. Eight lanes used to do that, which paved the beach
-in stripes and made the dune a wall of staircases; two is enough to reach the sea
-with, and the hill is climbed by walks of its own instead.
+and run six tiles out onto the water as a jetty. Eight lanes used to do that,
+which paved the beach in stripes and made the dune a wall of staircases; two is
+enough to reach the sea with, and the hill is climbed by walks of its own
+instead. The pier's length is measured off the water rather than off the plot's
+own southern edge, so the same twenty-four metres of jetty come out on a shallow
+plot as on a deep one.
 
 ## Elevation
 
@@ -335,8 +346,8 @@ between them: 110 flights in one row.
 
 A path that crosses a step is not a slab, it is the flight up it. This is the
 third case of a rule the layout already had — paving is a fact about the ground
-under a tile, so the same street is flagstones on grass, decking on sand and
-stairs on a step.
+under a tile, so the same street is flagstones on grass, decking on sand, a
+jetty on water and stairs on a step.
 
 `stairs.ts` classifies each paved tile: a flight goes on the **lower** tile of
 the step, because there is no tile between two adjacent tiles and the lower one
@@ -355,13 +366,15 @@ a corner is not a reason to refuse a whole resort.
 **Paving is never picked, only drawn.** The same rule holds for a path drawn by
 hand, and it is what makes the paving tool a single tool: a staircase chosen by
 hand can only be wrong — up the middle of a lawn, facing a wall, or buried on the
-upper tile of a step — and decking chosen by hand is a jetty over grass. So both
-models declare `groundDecides`, the palette offers neither, and `path` is the one
-thing you draw with. `paving.ts` is the pointer's half of the rule `stairs.ts`
+upper tile of a step — decking chosen by hand is a jetty over grass, and a jetty
+chosen by hand is decking over a lawn. So all three models declare
+`groundDecides`, the palette offers none of them, and `path` is the one thing you
+draw with. `paving.ts` is the pointer's half of the rule `stairs.ts`
 holds, so a hand-drawn path comes out exactly as a generated one does.
 
-Sand is the easy half of that: what a tile is made of is a fact about that tile
-alone, so decking is decided as the tile goes down and never revisited. A step is
+Sand and water are the easy half of that: what a tile is made of is a fact about
+that tile alone, so decking and a pier are decided as the tile goes down and
+never revisited. A step is
 a fact about _two_ tiles, and a stroke can cross one either way — so it takes two
 halves. Drawing _downhill_, the tile going down is the lower one and comes out as
 the flight. Drawing _uphill_, the slab laid a moment ago is lifted and laid again
@@ -386,7 +399,11 @@ needs holding on to. Two cases, and they are the two the eye expects:
   paved is a tile you could walk off the side of, so a rail is stood along that
   edge — the balustrade along the top of a terrace, and along the walks that
   follow the hill's benches. One rail per edge, so the corner of a bench comes
-  out with two.
+  out with two. **Open water counts as a drop**, whatever it measures: a pier
+  stands at sea level and so does the sea beside it, so the heights alone would
+  say there was nothing to fall into. That one clause is what rails a jetty down
+  both flanks and across its head, with no model knowing which tile of the pier
+  it is.
 - **The flanks of a flight.** A staircase is guarded up both sides whether or not
   the ground beside it drops, which is what a staircase looks like everywhere it
   has ever been built.

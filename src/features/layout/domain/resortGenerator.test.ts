@@ -4,6 +4,7 @@ import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
 import {
   BOARDWALK_ID,
+  JETTY_ID,
   DERIVED_IDS,
   HEDGE_ID,
   LAMP_ID,
@@ -13,7 +14,14 @@ import {
   STAIRS_ID,
 } from './resortPlan';
 import { elevationFor, levelAt, maxLevelOf, raisedTilesOf } from './elevation';
-import { beachDepthAt, beachTilesOf, shoreFor, terrainAt, waterTilesOf } from './shoreline';
+import {
+  beachDepthAt,
+  beachTilesOf,
+  shoreFor,
+  terrainAt,
+  waterStartZ,
+  waterTilesOf,
+} from './shoreline';
 import { groundAt } from './ground';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
@@ -333,7 +341,7 @@ describe('the shore a generated plot gets', () => {
     expect(reserved.filter((tile) => covered.has(`${tile.x},${tile.z}`))).toEqual([]);
   });
 
-  it('paves the beach with boardwalks, the steps with stairs and the rest with flagstones', () => {
+  it('paves the water with jetties, the beach with boardwalks, the steps with stairs and the rest with flagstones', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const elevation = elevationFor(plan)!;
@@ -342,6 +350,7 @@ describe('the shore a generated plot gets', () => {
 
     expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
     expect(paths.some((tile) => tile.id === STAIRS_ID)).toBe(true);
+    expect(paths.some((tile) => tile.id === JETTY_ID)).toBe(true);
 
     for (const tile of paths) {
       // Taken from what a flight *is* rather than from the classifier: a paved
@@ -359,11 +368,82 @@ describe('the shore a generated plot gets', () => {
       );
       // Sand rather than beach: the sidewalk along the shelf on top of the dune
       // is decking for the same reason the pier out to the water is.
-      const sand = groundAt(shore, elevation, tile.tileX, tile.tileZ) === 'sand';
-      expect({ key: tile.key, id: tile.id }).toEqual({
-        key: tile.key,
-        id: climbs ? STAIRS_ID : sand ? BOARDWALK_ID : PATH_ID,
+      const ground = groundAt(shore, elevation, tile.tileX, tile.tileZ);
+      const wanted =
+        ground === 'water'
+          ? JETTY_ID
+          : climbs
+            ? STAIRS_ID
+            : ground === 'sand'
+              ? BOARDWALK_ID
+              : PATH_ID;
+      expect({ key: tile.key, id: tile.id }).toEqual({ key: tile.key, id: wanted });
+    }
+  });
+
+  it('runs two piers out over the water, and paves nothing else wet', () => {
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
+      // Every wet tile is a jetty, and they stand in at most two columns: the
+      // two sea lanes and nothing else. A plot narrow enough that both lanes
+      // land on the same street gets one. See `SEA_LANES`.
+      expect({ set, other: wet.filter((tile) => tile.id !== JETTY_ID) }).toEqual({
+        set,
+        other: [],
       });
+      const columns = new Set(wet.map((tile) => tile.tileX));
+      expect({ set, columns: columns.size }).toEqual({ set, columns: Math.min(2, columns.size) });
+      expect(columns.size).toBeGreaterThan(0);
+    }
+  });
+
+  it('stops each pier the same distance out whatever the plot is', () => {
+    for (const set of SWEEP) {
+      const plan = generateResort(TYPES, set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const wet = paths.filter((tile) => tile.id === JETTY_ID);
+      for (const tile of wet) {
+        // Measured off the water rather than off the plot's own edge, so the
+        // same pier comes out on a shallow plot as on a deep one.
+        const out = tile.tileZ - waterStartZ(shore, tile.tileX);
+        expect({ set, x: tile.tileX, out }).toEqual({ set, x: tile.tileX, out });
+        expect(out).toBeGreaterThanOrEqual(0);
+        expect(out).toBeLessThan(6);
+      }
+    }
+  });
+
+  it('stands a lifeguard tower along the tideline, and none of them inland', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const towers = plan.plots.filter((plot) => plot.id === 'lifeguard-tower');
+    expect(towers.length).toBeGreaterThan(2);
+    for (const tower of towers) {
+      expect({
+        x: tower.tileX,
+        depth: beachDepthAt(shore, tower.tileX, tower.tileZ),
+        rotation: tower.rotation,
+      }).toEqual({ x: tower.tileX, depth: 1, rotation: 0 });
+    }
+  });
+
+  it('cuts a volleyball court into the back of the beach, never onto the tideline', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const shore = shoreFor(plan)!;
+    const courts = plan.plots.filter((plot) => plot.id === 'volleyball');
+    const onSand = courts.filter((court) => beachDepthAt(shore, court.tileX, court.tileZ) >= 0);
+    // The sand gets first refusal, because the court is in `BEACH_BACK` and the
+    // beach is filled before the districts are. The ones inland are a court on a
+    // lawn, which is a court.
+    expect(onSand.length).toBeGreaterThan(0);
+    // Behind the three lines of loungers, which is the whole of the rule that
+    // keeps a four-tile object off the tideline.
+    for (const court of onSand) {
+      expect(beachDepthAt(shore, court.tileX, court.tileZ)).toBeGreaterThanOrEqual(6);
     }
   });
 

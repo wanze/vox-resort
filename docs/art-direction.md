@@ -492,25 +492,29 @@ against a reference is how the drift started.
 
 ## Where the passes have got to
 
-| Pass                                                       | State                                     |
-| ---------------------------------------------------------- | ----------------------------------------- |
-| Palette, and the parts to compose a building               | done                                      |
-| `cottage`, `house`, `restrooms`, `first-aid`               | done                                      |
-| `villa`, `hotel`, `bungalow` — the lodging range           | done                                      |
-| `swimming-pool` — the pool terrace, and `poolWater`        | done                                      |
-| `game-hall` — the open front, and what is behind it        | done                                      |
-| `restaurant` — the arcaded hall, and the terrace it faces  | done; asked for no new part               |
-| `beach-club` — the deck, the bar over it, and `parasol`    | done; `deck` turned out to be `plinth`    |
-| `supermarket` — the shopfront, and `awning`                | done; the last name off the parts list    |
-| `resort-bar`, `poolside-bar` — the two bars, in one pass   | done; asked for no new part               |
-| `minigolf` — ten holes, the windmill, and the hedge        | done; `poolWater` at hazard scale         |
-| `playground` — the tower, the slide, and what climbs       | done; the one pass that cost triangles    |
-| `waterpark` — the stepped tower and its three flumes       | done; the largest saving of any pass      |
-| `tennis-court` — the clay, the hedge, the seats, the masts | done; one plane, and the floodlight rule  |
-| `fountain` — three tiers, and the pool's own water         | done; found the horizontal-water rule     |
-| `entrance` — the leaves swung open, and the lit piers      | done; the one pass that grew a footprint  |
-| `hedge`, `flowerbed` — the two the layout scatters itself  | done; 570 placements, priced to the quad  |
-| The rest of the 1×1 props, and the ground tiles            | last: cheapest to change, and mass-placed |
+| Pass                                                                 | State                                        |
+| -------------------------------------------------------------------- | -------------------------------------------- |
+| Palette, and the parts to compose a building                         | done                                         |
+| `cottage`, `house`, `restrooms`, `first-aid`                         | done                                         |
+| `villa`, `hotel`, `bungalow` — the lodging range                     | done                                         |
+| `swimming-pool` — the pool terrace, and `poolWater`                  | done                                         |
+| `game-hall` — the open front, and what is behind it                  | done                                         |
+| `restaurant` — the arcaded hall, and the terrace it faces            | done; asked for no new part                  |
+| `beach-club` — the deck, the bar over it, and `parasol`              | done; `deck` turned out to be `plinth`       |
+| `supermarket` — the shopfront, and `awning`                          | done; the last name off the parts list       |
+| `resort-bar`, `poolside-bar` — the two bars, in one pass             | done; asked for no new part                  |
+| `minigolf` — ten holes, the windmill, and the hedge                  | done; `poolWater` at hazard scale            |
+| `playground` — the tower, the slide, and what climbs                 | done; the one pass that cost triangles       |
+| `waterpark` — the stepped tower and its three flumes                 | done; the largest saving of any pass         |
+| `tennis-court` — the clay, the hedge, the seats, the masts           | done; one plane, and the floodlight rule     |
+| `fountain` — three tiers, and the pool's own water                   | done; found the horizontal-water rule        |
+| `entrance` — the leaves swung open, and the lit piers                | done; the one pass that grew a footprint     |
+| `hedge`, `flowerbed` — the two the layout scatters itself            | done; 570 placements, priced to the quad     |
+| `bench` — the first model drawn for the crowd rather than the camera | done; where `ModelSeat` came from            |
+| `litter-bin`, `sign-post`, `picnic-table` — the walk's own dressing  | drawn in the palette from their first commit |
+| `lifeguard-tower`, `volleyball` — what the beach was missing         | drawn in the palette from their first commit |
+| `jetty` — the fourth paving, and the pier it makes                   | drawn in the palette from its first commit   |
+| The rest of the 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed    |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that
 has not had its pass. The list only ever shrinks.

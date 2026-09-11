@@ -10,6 +10,9 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | Asset         | Footprint | W × H × D     | Real size                          |
 | ------------- | --------- | ------------- | ---------------------------------- |
 | path          | 1×1       | 16 × 2 × 16   | a 4 m paving tile                  |
+| jetty         | 1×1       | 16 × 2 × 16   | a 4 m tile of pier decking         |
+| litter-bin    | 1×1       | 16 × 7 × 16   | a 1.5 m bin on a 4 m tile          |
+| sign-post     | 1×1       | 16 × 17 × 16  | a 3.5 m fingerpost, three boards   |
 | palm          | 1×1       | 16 × 45 × 16  | 11 m trunk, 4 m crown              |
 | statue        | 1×1       | 16 × 22 × 16  | plinth + figure, 5.5 m             |
 | icecream      | 1×1       | 16 × 15 × 16  | 2 x 1.5 m cart under a parasol     |
@@ -19,6 +22,9 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | hedge         | 1×1       | 16 × 7 × 16   | a 3 m run, 1.25 m tall             |
 | sun-lounger   | 1×1       | 16 × 8 × 16   | lounger + folded parasol           |
 | bench         | 1×1       | 16 × 7 × 16   | a 4 m seat for three               |
+| lifeguard-tw. | 1×1       | 16 × 19 × 16  | a 4.75 m tower, deck 2 m up        |
+| picnic-table  | 2×1       | 32 × 6 × 16   | a 4 m table seating eight          |
+| volleyball    | 4×2       | 64 × 12 × 32  | a 16 x 8 m beach court             |
 | restrooms     | 2×1       | 32 × 17 × 16  | two-WC block, 8 x 4 m              |
 | snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m   |
 | entrance      | 4×1       | 64 × 41 × 16  | a 16 m gate, 10 m to the lanterns  |
@@ -167,4 +173,26 @@ voxel model of a premium resort villa, finely detailed, small crisp voxels, whit
 
 # hotel (3x3)
 voxel model of a multi-storey resort hotel block, finely detailed, small crisp voxels, several floors of balconied rooms with railings, a grand ground-floor entrance and a rooftop terrace, tall solid rectangular massing with balconies on all facades, occupying a 3x3 footprint on its own low platform/base, flat neutral shading, no baked lighting or shadows, blank unmarked signs, no text, no lettering.
+```
+
+## The shore and the walk (Phase 3.4)
+
+```
+# jetty
+voxel model of one tile of a wooden pier deck, finely detailed, small crisp voxels, wet dark planking laid across the run over a single beam course, exactly as tall as a path slab so the two butt together, no posts and no railing of its own, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# litter-bin
+voxel model of a slatted timber litter bin, finely detailed, small crisp voxels, a square drum with two darker hoops, an iron collar standing proud of it and a dark open mouth, on its own low square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# sign-post
+voxel model of a resort fingerpost, finely detailed, small crisp voxels, a square timber post with a small cap and three fingerboards pointing three different ways at three different heights, each board a coloured band under a pale face, blank unmarked boards, on its own low square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# picnic-table
+voxel model of a long timber trestle picnic table with a bench down either side, finely detailed, small crisp voxels, one pair of A-frame legs at each end carried out under both benches, a planter across each end of the slab, on its own low 2x1 platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# lifeguard-tower
+voxel model of a beach lifeguard tower, finely detailed, small crisp voxels, four braced timber legs carrying a railed deck two metres up, a red panel with a white band at the back and down both flanks, a bench across the back of the deck for the lifeguard and a red parasol standing beside it, a ladder up the open side, on its own low square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# volleyball
+voxel model of a beach volleyball court, finely detailed, small crisp voxels, a single course of raked sand with a pale taped boundary running to the very edge of its footprint, no plinth and no kerb of any kind, a thin net strung between two timber posts across the middle, and a ball lying on the sand, the court lying flat in the beach rather than standing on it, occupying a 4x2 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```

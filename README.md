@@ -43,8 +43,11 @@ A generated plot's southern end is sea, with a wide beach the full width of the
 plot in front of it — the isometric camera opens over the south-east corner, so
 the shore lies across the front of the frame with the resort behind it. Loungers
 and parasols fill the sand in runs, divided into bands by boardwalks that follow
-the water, with beach clubs and bars along the back of it. Paths laid over sand
-come out as boardwalks, and nothing can be built on the water.
+the water, with beach clubs and bars along the back of it, a lifeguard tower
+every hundred metres along the tideline — a lifeguard sits on it — and a
+volleyball court taped out flat in the sand behind. Paths laid over sand come out as boardwalks, and paths laid over the
+water come out as a **jetty** — nothing else can be built on the sea, and two
+lanes run out onto it as piers.
 
 Behind the beach the land climbs a **hill**. Three steps of sand rise straight
 off the back of the sand onto a flat shelf, still sand, where bungalows stand
@@ -55,13 +58,15 @@ beach and the flights up it land on a different row in every lane. The rest of
 the resort is the level ground behind. Paths that cross a step come out as
 flights of stairs, turned to face the climb.
 
-The palette offers no stairs and no boardwalk, because neither is something you
-pick: **there is one paving tool, and the ground decides what a tile of it comes
-out as** — flagstones on grass, decking on sand, a flight where it climbs a step.
-Draw over a step in either direction and the tile below it turns into the flight
-up it, whether that tile was laid a moment or a session ago. So a path drawn by
-hand comes out exactly as a generated one does, and there is no way to lay
-decking on a lawn or a staircase up the middle of one.
+The palette offers no stairs, no boardwalk and no jetty, because none of them is
+something you pick: **there is one paving tool, and the ground decides what a
+tile of it comes out as** — flagstones on grass, decking on sand, a flight where
+it climbs a step, and a jetty where it leaves the shore. Draw over a step in
+either direction and the tile below it turns into the flight up it, whether that
+tile was laid a moment or a session ago; draw off the sand and the path keeps
+going as a pier, railed down both flanks because open water is a drop. So a path
+drawn by hand comes out exactly as a generated one does, and there is no way to
+lay decking on a lawn, a staircase up the middle of one, or a jetty over grass.
 
 Pick an object from the build palette on the right and click the ground to place
 it; one-tile objects (marked ✎) can be drawn by dragging, which is how a path is

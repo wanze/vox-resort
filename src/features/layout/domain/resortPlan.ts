@@ -88,6 +88,19 @@ export interface PathEdge {
   readonly width?: number;
   /** Defaults to `"x-first"`; only matters for a diagonal edge. */
   readonly bend?: Bend;
+  /**
+   * Whether this run carries on over the water instead of stopping at it.
+   *
+   * Off by default, and that default is the one that matters: a street graph
+   * strung corner to corner over a plot with a bay in one corner is the normal
+   * case, and what a promenade wants there is to stop at the sand rather than to
+   * pave a causeway across the water. So a street ends at the tideline unless it
+   * says otherwise, and a run that says otherwise is a **pier** — its tiles over
+   * the water come out as `jetty`, exactly as its tiles on sand come out as
+   * `boardwalk`. See `resortLayout.ts`, and `resortGenerator.ts` for the two
+   * lanes a generated plot runs out to sea.
+   */
+  readonly overWater?: boolean;
 }
 
 /** An inclusive rectangle paved wholesale — a plaza or a deck. */
@@ -150,15 +163,23 @@ export const BOARDWALK_ID = 'boardwalk';
 /** The paving a path is laid with where it climbs a terrace step. */
 export const STAIRS_ID = 'stairs';
 
+/** The paving a path is laid with where it runs out over the water. */
+export const JETTY_ID = 'jetty';
+
 /**
- * Every kind of paving a path network is laid with, flights included.
+ * Every kind of paving a path network is laid with, flights and piers included.
  *
- * The three are interchangeable per tile — which one a tile gets is a fact about
+ * The four are interchangeable per tile — which one a tile gets is a fact about
  * the ground under it — so everything that treats "a tile of paving" as one
  * thing reads this: the plot's own list of paved tiles, and the paving tool that
- * swaps one for another as a path crosses a step.
+ * swaps one for another as a path crosses a step or leaves the shore.
  */
-export const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, STAIRS_ID]);
+export const PAVING_IDS: ReadonlySet<string> = new Set([
+  PATH_ID,
+  BOARDWALK_ID,
+  STAIRS_ID,
+  JETTY_ID,
+]);
 
 /** The object types the layout scatters along the paths on its own. */
 export const LAMP_ID = 'street-lamp';
@@ -196,6 +217,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   PATH_ID,
   BOARDWALK_ID,
   STAIRS_ID,
+  JETTY_ID,
   LAMP_ID,
   HEDGE_ID,
   BENCH_ID,
@@ -286,6 +308,10 @@ export const RESORT_PLAN: ResortPlan = {
     at('blossom', 74, 6),
     at('blossom', 78, 6),
     at('flowerbed', 76, 8),
+    at('litter-bin', 72, 5),
+    at('sign-post', 73, 5),
+    at('picnic-table', 79, 6),
+    at('lifeguard-tower', 81, 5),
 
     // G — the east-wing shops
     at('supermarket', 83, 1),
@@ -390,6 +416,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('cottage', 3, 48, 4, 3),
     ...row('bungalow', 3, 52, 4, 3),
     at('pine', 13, 37),
+    at('volleyball', 3, 55),
 
     // B — lodging above the spa quarter
     ...row('house', 16, 37, 4, 3),

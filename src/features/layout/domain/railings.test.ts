@@ -102,3 +102,63 @@ describe('railTilesFor', () => {
     ]);
   });
 });
+
+/** Everything from row 2 down is sea. */
+const sea = (_tileX: number, tileZ: number): boolean => tileZ >= 2;
+
+/** A plot with no terraces on it, which is what a bay in front of one is. */
+const flat = (): number => 0;
+
+describe('railsAt, over water', () => {
+  it('rails both flanks of a pier, though nothing beside it is any lower', () => {
+    // The whole point of the water rule. A jetty stands at sea level and so does
+    // the sea, so the level test alone says there is nothing to fall into.
+    const pier = pavedOf([
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+      { x: 1, z: 3 },
+    ]);
+    expect(railsAt({ x: 1, z: 2 }, pier, flat)).toEqual([]);
+    expect(sides(railsAt({ x: 1, z: 2 }, pier, flat, sea)).toSorted()).toEqual([1, 3]);
+  });
+
+  it('rails the head of a pier on three sides and leaves the way back open', () => {
+    const pier = pavedOf([
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+      { x: 1, z: 3 },
+    ]);
+    expect(sides(railsAt({ x: 1, z: 3 }, pier, flat, sea)).toSorted()).toEqual([1, 2, 3]);
+  });
+
+  it('rails the last tile of dry paving against the water in front of it', () => {
+    const shore = pavedOf([{ x: 1, z: 1 }]);
+    expect(sides(railsAt({ x: 1, z: 1 }, shore, flat, sea))).toEqual([2]);
+  });
+
+  it('leaves dry ground alone, however flat it is', () => {
+    const inland = pavedOf([{ x: 1, z: 0 }]);
+    expect(railsAt({ x: 1, z: 0 }, inland, flat, sea)).toEqual([]);
+  });
+});
+
+describe('railTilesFor, over water', () => {
+  it('carries the water rule over a whole run of paving', () => {
+    const pier: Tile[] = [
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ];
+    const rails = railTilesFor(
+      pier,
+      () => 0,
+      (_x, tileZ) => tileZ >= 2,
+    );
+    // Only the wet tile is railed: the one on dry land has flat, unpaved ground
+    // on three sides of it, which is a verge rather than a drop.
+    expect(rails.map((rail) => ({ z: rail.tile.z, rotation: rail.rotation }))).toEqual([
+      { z: 2, rotation: 1 },
+      { z: 2, rotation: 2 },
+      { z: 2, rotation: 3 },
+    ]);
+  });
+});

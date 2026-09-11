@@ -28,13 +28,14 @@
  * {@link derivedKey}.
  *
  * A plan may also give the plot a shore, in which case its southern end is sea.
- * Water is not ground: nothing stands on it, no street crosses it and no spur
- * routes through it — a street simply stops where the beach ends. The sand in
- * between is ordinary buildable ground with one difference, which is that a path
- * laid on it comes out as a boardwalk rather than as flagstones. See
- * `shoreline.ts`, and `ground.ts` for why sand is not only the flat band in
- * front of the water: a terrace can be made of it too, and the dune behind a
- * beach is.
+ * Water is not ground: nothing *stands* on it and no spur routes through it, and
+ * a street stops where the beach ends unless it says it is a pier — in which case
+ * its tiles over the water come out as a jetty, which is the same rule as the
+ * boardwalk one tile landward of them. The sand in between is ordinary buildable
+ * ground with that one difference, which is that a path laid on it comes out as
+ * decking rather than as flagstones. See `shoreline.ts`, `PathEdge.overWater`,
+ * and `ground.ts` for why sand is not only the flat band in front of the water:
+ * a terrace can be made of it too, and the dune behind a beach is.
  *
  * A plan may also give the land terraces, in which case the plot is no longer
  * flat and every placement carries the height of the ground it stands on. Paving
@@ -54,12 +55,14 @@ import {
   BENCH_ID,
   DERIVED_IDS,
   HEDGE_ID,
+  JETTY_ID,
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
   type Bend,
+  type PathEdge,
   type PathNode,
   type ResortPlan,
   type ResortPlot,
@@ -464,26 +467,27 @@ export function routeEdgeTiles(
  * reaching the shore is not, because a street graph strung corner to corner over
  * a plot with a beach in one corner is the normal case, and the answer a
  * promenade wants there is to stop at the sand.
+ *
+ * Unless the edge is a **pier**, which is the one run that means to be out
+ * there: `overWater` keeps its tiles over the water, and `layoutResort` paves
+ * them with the jetty. Nothing else changes — a pier is paving like any other,
+ * so the crowd walks it, the rails guard it and the plazas, which are never
+ * piers, still stop at the sand. See `PathEdge.overWater`.
  */
 export function streetTiles(plan: ResortPlan): Tile[] {
   const nodes = new Map(plan.nodes.map((node) => [node.id, node]));
   const shore = shoreFor(plan);
   const tiles = new Map<string, Tile>();
-  const add = (tile: Tile): void => {
-    if (tile.x < 0 || tile.z < 0 || tile.x >= plan.tilesX || tile.z >= plan.tilesZ) {
-      throw new Error(`A street leaves the plot at tile ${tile.x},${tile.z}`);
-    }
-    if (isWater(shore, tile.x, tile.z)) return;
+  const add = (tile: Tile, overWater = false): void => {
+    requireInsidePlot(plan, tile);
+    if (!overWater && isWater(shore, tile.x, tile.z)) return;
     tiles.set(tileKey(tile.x, tile.z), tile);
   };
 
   for (const edge of plan.edges) {
-    const from = nodes.get(edge.from);
-    const to = nodes.get(edge.to);
-    if (!from) throw new Error(`Street edge references unknown node "${edge.from}"`);
-    if (!to) throw new Error(`Street edge references unknown node "${edge.to}"`);
+    const [from, to] = endsOf(nodes, edge);
     for (const tile of routeEdgeTiles(from, to, edge.width ?? 1, edge.bend ?? 'x-first')) {
-      add(tile);
+      add(tile, edge.overWater ?? false);
     }
   }
   for (const plaza of plan.plazas) {
@@ -492,6 +496,25 @@ export function streetTiles(plan: ResortPlan): Tile[] {
     }
   }
   return [...tiles.values()];
+}
+
+/** Throws if a tile falls outside the plot, which is a plan that does not fit. */
+function requireInsidePlot(plan: ResortPlan, tile: Tile): void {
+  if (tile.x < 0 || tile.z < 0 || tile.x >= plan.tilesX || tile.z >= plan.tilesZ) {
+    throw new Error(`A street leaves the plot at tile ${tile.x},${tile.z}`);
+  }
+}
+
+/** The two nodes an edge is strung between, or a throw naming the missing one. */
+function endsOf(
+  nodes: ReadonlyMap<string, PathNode>,
+  edge: PathEdge,
+): readonly [PathNode, PathNode] {
+  const from = nodes.get(edge.from);
+  const to = nodes.get(edge.to);
+  if (!from) throw new Error(`Street edge references unknown node "${edge.from}"`);
+  if (!to) throw new Error(`Street edge references unknown node "${edge.to}"`);
+  return [from, to];
 }
 
 /** The tiles orthogonally touching a footprint — where a spur can attach. */
@@ -973,11 +996,16 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const levelOf = (tileX: number, tileZ: number): number => levelAt(elevation, tileX, tileZ);
 
   const boardwalk = byId.get(BOARDWALK_ID) ?? path;
-  // Sand rather than beach: the sidewalk along the top of a dune is decking for
-  // the same reason the pier out to the water is, and both are sand. See
-  // `ground.ts`.
-  const pavingFor = (tile: Tile): LayoutItem =>
-    groundAt(shore, elevation, tile.x, tile.z) === 'sand' ? boardwalk : path;
+  const jetty = byId.get(JETTY_ID) ?? boardwalk;
+  // Three answers from one question about the ground under a tile. Sand rather
+  // than beach, because the sidewalk along the top of a dune is decking for the
+  // same reason the pier is — see `ground.ts`; and water only ever reaches here
+  // on a pier, because nothing else paves it.
+  const pavingFor = (tile: Tile): LayoutItem => {
+    const ground = groundAt(shore, elevation, tile.x, tile.z);
+    if (ground === 'water') return jetty;
+    return ground === 'sand' ? boardwalk : path;
+  };
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
   const paved = pathTilesFor(items, plan);
@@ -1008,7 +1036,16 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     ),
   );
 
-  const rails = railPlacementsFor(railModelsIn(items), railTilesFor(paved, levelOf), levelOf);
+  // Water counts as a drop, which is what rails a pier down both flanks and
+  // across its head: the sea beside a jetty stands at the jetty's own level, so
+  // the heights alone would say there was nothing to fall into. See
+  // `railings.ts`.
+  const overWater = (tileX: number, tileZ: number): boolean => isWater(shore, tileX, tileZ);
+  const rails = railPlacementsFor(
+    railModelsIn(items),
+    railTilesFor(paved, levelOf, overWater),
+    levelOf,
+  );
 
   const props: Placement[] = [];
   const { lamps, benches, hedges } = decorationsFor(items, plan);

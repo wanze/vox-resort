@@ -24,6 +24,7 @@ import {
   BOARDWALK_ID,
   DERIVED_IDS,
   HEDGE_ID,
+  JETTY_ID,
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
@@ -778,6 +779,7 @@ describe('a plot with a shore', () => {
   const items = [
     item(PATH_ID),
     item(BOARDWALK_ID),
+    item(JETTY_ID),
     item('hut', 2, 2),
     item(LAMP_ID),
     item(HEDGE_ID),
@@ -854,6 +856,72 @@ describe('a plot with a shore', () => {
     expect(() =>
       layoutResort(items, coastal({ plots: [{ id: 'hut', tileX: 2, tileZ: 10 }] })),
     ).toThrow(/stands in the sea/);
+  });
+
+  /**
+   * The same plot, with its southern street declared a pier.
+   *
+   * `x-first`, so the run turns on row 2 and comes straight down column 5 to the
+   * node at row 11 — three tiles of it out past the tideline at row 9. The plot's
+   * own `z-first` would take the same edge down column 11 *through* the water and
+   * then west along row 11, which is a causeway rather than a pier.
+   */
+  const withPier = (): ResortPlan =>
+    coastal({
+      edges: [
+        { from: 'nw', to: 'ne' },
+        { from: 'ne', to: 's', overWater: true },
+      ],
+    });
+
+  it('carries a pier out over the water and paves it with the jetty', () => {
+    const shore = shoreFor(withPier())!;
+    const { paths } = layoutResort(items, withPier());
+    const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
+    // Three rows of sea, from the tideline at row 9 to the node at row 11.
+    expect(wet.map((tile) => tile.tileZ).toSorted((a, b) => a - b)).toEqual([9, 10, 11]);
+    expect(wet.every((tile) => tile.id === JETTY_ID && tile.tileX === 5)).toBe(true);
+  });
+
+  it('rails a pier down both flanks and across its head', () => {
+    const railed = [
+      ...items,
+      { id: RAILING_ID, tilesX: 1, tilesZ: 1, width: TILE_VOXELS, depth: 2 },
+    ];
+    const { rails } = layoutResort(railed, withPier());
+    const head = rails.filter((rail) => rail.tileZ === 11);
+    // The sea is at the pier's own level, so only the water rule can put these
+    // there: west, south and east of the last tile, and nothing to the north
+    // where the pier carries on. See `railings.ts`.
+    expect(head.map((rail) => rail.rotation).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
+    // And every wet tile of the pier is railed on both flanks, which is what a
+    // pier is: the two turns across its run, and nothing along it.
+    for (const z of [9, 10]) {
+      const along = rails.filter((rail) => rail.tileZ === z);
+      expect({ z, turns: along.map((rail) => rail.rotation).toSorted((a, b) => a - b) }).toEqual({
+        z,
+        turns: [1, 3],
+      });
+    }
+  });
+
+  it('falls back to decking when the catalogue has no jetty', () => {
+    const noPier = items.filter((candidate) => candidate.id !== JETTY_ID);
+    const shore = shoreFor(withPier())!;
+    const { paths } = layoutResort(noPier, withPier());
+    const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
+    expect(wet.length).toBe(3);
+    expect(wet.every((tile) => tile.id === BOARDWALK_ID)).toBe(true);
+  });
+
+  it('routes no spur over the water, pier or no pier', () => {
+    const shore = shoreFor(withPier())!;
+    const stilted = withPier();
+    for (const tile of pathTilesFor(items, stilted)) {
+      if (terrainAt(shore, tile.x, tile.z) !== 'water') continue;
+      // Everything wet is the pier's own column and nothing else.
+      expect({ x: tile.x, z: tile.z }).toEqual({ x: 5, z: tile.z });
+    }
   });
 
   it('plants no lamp, bench or hedge on the sand', () => {

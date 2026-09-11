@@ -56,6 +56,7 @@ const standingOf = (rails: readonly Placement[]) => (tileX: number, tileZ: numbe
 const rules = (parts: Partial<HandrailRules> = {}): HandrailRules => ({
   pavedWith: () => null,
   levelOf: () => 0,
+  isWater: () => false,
   models: railModelsIn(CATALOGUE),
   standing: () => [],
   ...parts,

@@ -9,17 +9,19 @@
  * and it asks `stairs.ts` the same question the layout does — a path drawn
  * across a step climbs it exactly where a generated one would.
  *
- * **You do not place a flight or a boardwalk, you draw a path.** Both can only
- * ever be wrong when picked by hand: a staircase on flat ground climbs nothing,
- * one facing the wrong way walks into a wall, and decking laid on a lawn is a
- * jetty over grass. Both models say as much about themselves (`groundDecides`),
- * so the palette offers neither and this decides where they go — which leaves one
- * paving tool, and no way to pave a tile wrongly with it.
+ * **You do not place a flight, a boardwalk or a pier, you draw a path.** All
+ * three can only ever be wrong when picked by hand: a staircase on flat ground
+ * climbs nothing, one facing the wrong way walks into a wall, decking laid on a
+ * lawn is a jetty over grass, and a jetty laid on grass is the same joke the
+ * other way round. All three models say as much about themselves
+ * (`groundDecides`), so the palette offers none of them and this decides where
+ * they go — which leaves one paving tool, and no way to pave a tile wrongly with
+ * it.
  *
- * Sand is the easy half: what a tile is made of is a fact about that tile alone,
- * so decking is decided once, as the tile goes down, and never revisited. A step
- * is not, because a step is a fact about two tiles and a stroke can cross one in
- * either direction — so that decision has two halves:
+ * Sand and water are the easy half: what a tile is made of is a fact about that
+ * tile alone, so decking and a pier are decided once, as the tile goes down, and
+ * never revisited. A step is not, because a step is a fact about two tiles and a
+ * stroke can cross one in either direction — so that decision has two halves:
  *
  * - {@link pavingAt} answers for the tile being paved. Drawing *downhill*, the
  *   tile is the lower one and the paving above it is already there, so the tile
@@ -91,8 +93,16 @@ export interface PavingRules {
   readonly levelOf: LevelProvider;
   /** Whether the ground under a tile is sand rather than grass. */
   readonly isSand: (tileX: number, tileZ: number) => boolean;
+  /** Whether the tile is open water, which only a pier may be laid over. */
+  readonly isWater: (tileX: number, tileZ: number) => boolean;
   /** The decking a path becomes on sand, or null when the catalogue has none. */
   readonly decking: LayoutItem | null;
+  /**
+   * The jetty a path becomes over water, or null when the catalogue has none —
+   * in which case the water stays the one ground nothing can be laid on, which
+   * is what it was before there was a pier to lay on it.
+   */
+  readonly pier: LayoutItem | null;
   /**
    * The flight a path becomes where it climbs, or null when the catalogue has
    * none — in which case a step is simply paved flat, exactly as `layoutResort`
@@ -140,6 +150,10 @@ export function pavingAt(
   rules: PavingRules,
 ): Paving {
   if (!isPaving(item)) return { item, rotation };
+  // Water first, and it is the one answer no other rule can overrule: a pier
+  // climbs nothing — the sea is level — and there is no such thing as wet sand
+  // you could lay decking on out there.
+  if (rules.isWater(tile.x, tile.z)) return { item: rules.pier ?? item, rotation: 0 };
   const { stairs } = rules;
   if (stairs) {
     const climb = climbAt(tile, pavedProvider(rules), rules.levelOf);
@@ -147,6 +161,25 @@ export function pavingAt(
   }
   const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
   return { item: decking ?? item, rotation: 0 };
+}
+
+/**
+ * Whether the ground under a tile will take this object at all.
+ *
+ * The sea is the only ground that refuses anything, and it refuses everything
+ * but the pier — so a hotel in the bay is turned down here, and the jetty that
+ * {@link pavingAt} just handed back for the very same tile is not.
+ *
+ * This is a rule rather than a reservation, and that is the change a pier makes.
+ * Water used to be seeded into the occupancy index as ground held by nobody, so
+ * the pointer refused it by the ordinary "something is already there" rule and
+ * no second rule existed to keep in step. Once one thing *can* stand on water
+ * that no longer says what it needs to say: what may go on a tile of sea is a
+ * fact about the object, and an index of tiles cannot hold a fact about objects.
+ */
+export function standsOn(item: LayoutItem, tile: Tile, rules: PavingRules): boolean {
+  if (!rules.isWater(tile.x, tile.z)) return true;
+  return rules.pier !== null && item.id === rules.pier.id;
 }
 
 /** A tile of paving that has to be laid again, and the paving it replaces. */

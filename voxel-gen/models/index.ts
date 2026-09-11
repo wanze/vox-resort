@@ -22,11 +22,15 @@ import hedge from './hedge.ts';
 import hotel from './hotel.ts';
 import house from './house.ts';
 import icecream from './icecream.ts';
+import jetty from './jetty.ts';
+import lifeguard_tower from './lifeguard-tower.ts';
+import litter_bin from './litter-bin.ts';
 import minigolf from './minigolf.ts';
 import oak from './oak.ts';
 import olive from './olive.ts';
 import palm from './palm.ts';
 import path from './path.ts';
+import picnic_table from './picnic-table.ts';
 import pine from './pine.ts';
 import playground from './playground.ts';
 import poolside_bar from './poolside-bar.ts';
@@ -34,6 +38,7 @@ import railing from './railing.ts';
 import resort_bar from './resort-bar.ts';
 import restaurant from './restaurant.ts';
 import restrooms from './restrooms.ts';
+import sign_post from './sign-post.ts';
 import snack_bar from './snack-bar.ts';
 import spa_pavilion from './spa-pavilion.ts';
 import stair_railing from './stair-railing.ts';
@@ -46,17 +51,21 @@ import swimming_pool from './swimming-pool.ts';
 import tennis_court from './tennis-court.ts';
 import tikitorch from './tikitorch.ts';
 import villa from './villa.ts';
+import volleyball from './volleyball.ts';
 import waterpark from './waterpark.ts';
 import willow from './willow.ts';
 
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,
   boardwalk,
+  jetty,
   stairs,
   railing,
   stair_railing,
   hedge,
   street_lamp,
+  litter_bin,
+  sign_post,
   flowerbed,
   palm,
   pine,
@@ -68,6 +77,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   statue,
   sun_lounger,
   bench,
+  picnic_table,
   beach_umbrella,
   tikitorch,
   icecream,
@@ -76,6 +86,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   snack_bar,
   restrooms,
   first_aid,
+  lifeguard_tower,
   coffee_shop,
   poolside_bar,
   resort_bar,
@@ -92,6 +103,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   beach_club,
   swimming_pool,
   tennis_court,
+  volleyball,
   minigolf,
   waterpark,
 ];

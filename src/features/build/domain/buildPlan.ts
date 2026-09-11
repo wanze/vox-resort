@@ -16,11 +16,13 @@
  * - **A stroke skips what it cannot have.** The pointer crosses a building on
  *   its way somewhere, and stopping the stroke dead there — or refusing the
  *   whole drag — would both be worse than paving around it.
- * - **The ground has to be level.** An object may only stand where every tile of
- *   its footprint is on one terrace, which is a rule about the footprint rather
- *   than about any single tile — so it cannot be seeded into the occupancy index
- *   the way the sea is, and it lives here instead. `elevation.ts` says why the
- *   rule exists at all.
+ * - **The ground has to be level, and it has to take what is being put on it.**
+ *   An object may only stand where every tile of its footprint is on one terrace,
+ *   which is a rule about the footprint rather than about any single tile;
+ *   and the sea takes a pier and nothing else, which is a rule about the object.
+ *   Neither can be seeded into the occupancy index, which holds only what is
+ *   already standing, so both live here. `elevation.ts` says why the first rule
+ *   exists; `paving.ts` and its `standsOn` say why the second does.
  *
  * A turn is carried through rather than owned here: `place` takes it, and what
  * comes back is a placement whose footprint is already turned, so a quarter-
@@ -39,10 +41,24 @@ import {
 } from '../../layout/domain/resortLayout';
 import { straddledTile, type LevelProvider } from '../../layout/domain/elevation';
 import type { Rotation } from '../../layout/domain/rotation';
-import type { TileOccupancy } from './tileOccupancy';
+import { footprintTiles, type TileOccupancy } from './tileOccupancy';
 
 /** The ground of a plot with no terraces on it: sea level everywhere. */
 const FLAT: LevelProvider = () => 0;
+
+/**
+ * Whether the ground under one tile will take what is being placed.
+ *
+ * Closed over the object rather than given it, because every caller already has
+ * one in hand and the only rule there is — the sea takes a pier and nothing else
+ * — is about a pair. See `paving.ts`, `standsOn`.
+ */
+export interface GroundRule {
+  (tile: Tile): boolean;
+}
+
+/** A plot whose ground refuses nothing, which is any plot with no sea on it. */
+const ANY_GROUND: GroundRule = () => true;
 
 /** Key a placed object gets: its type and the tile it stands on. */
 export function buildKey(item: LayoutItem, tile: Tile): string {
@@ -59,10 +75,11 @@ export interface PlacementPlan {
   readonly placement: Placement;
   /**
    * True when the object may not stand here: something is already on one of the
-   * tiles it needs, or those tiles are not all on the same terrace.
+   * tiles it needs, those tiles are not all on the same terrace, or the ground
+   * under one of them will not take it.
    *
-   * One flag for both, because the cursor says the same thing either way. What
-   * it cannot be is two flags nobody reads.
+   * One flag for all three, because the cursor says the same thing whichever it
+   * is. What it cannot be is three flags nobody reads.
    */
   readonly blocked: boolean;
 }
@@ -80,6 +97,7 @@ export function planAt(
   occupancy: TileOccupancy,
   rotation: Rotation = 0,
   levelOf: LevelProvider = FLAT,
+  standsOn: GroundRule = ANY_GROUND,
 ): PlacementPlan {
   const placement = place(
     item,
@@ -89,8 +107,11 @@ export function planAt(
     rotation,
     levelOf(tile.x, tile.z),
   );
-  const level = !occupancy.isFree(placement) || straddledTile(levelOf, placement) !== null;
-  return { placement, blocked: level };
+  const blocked =
+    !occupancy.isFree(placement) ||
+    straddledTile(levelOf, placement) !== null ||
+    !footprintTiles(placement).every(standsOn);
+  return { placement, blocked };
 }
 
 /**
@@ -135,9 +156,10 @@ export function planStroke(
   occupancy: TileOccupancy,
   rotation: Rotation = 0,
   levelOf: LevelProvider = FLAT,
+  standsOn: GroundRule = ANY_GROUND,
 ): Placement[] {
   return tiles
-    .map((tile) => planAt(item, tile, occupancy, rotation, levelOf))
+    .map((tile) => planAt(item, tile, occupancy, rotation, levelOf, standsOn))
     .filter((plan) => !plan.blocked)
     .map((plan) => plan.placement);
 }

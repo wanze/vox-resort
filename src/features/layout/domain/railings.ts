@@ -13,7 +13,11 @@
  *   not paved is a tile you could walk off the side of, so it gets a rail along
  *   that edge — the balustrade along the top of a terrace, and along the walks
  *   that follow the hill's benches. It takes one railing per edge, so the corner
- *   of a bench comes out with two.
+ *   of a bench comes out with two. **Open water counts as a drop**, whatever it
+ *   measures: a pier stands at sea level and the sea beside it stands at sea
+ *   level, so nothing about the heights says you would fall in. That is what
+ *   rails a jetty down both flanks and across its head without the model knowing
+ *   which tile of the pier it is — see `jetty.ts`.
  * - **The flanks of a flight.** A staircase is guarded up both sides whether or
  *   not the ground beside it drops, which is what a staircase looks like
  *   everywhere it has ever been built. One model carries both flanks, because
@@ -35,6 +39,14 @@ import { CLIMBS, climbAt, type PavedProvider } from './stairs';
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import { normalizeRotation, type Rotation } from './rotation';
+
+/** Whether a tile is open water, asked of the ground around the tile being judged. */
+export interface WaterProvider {
+  (tileX: number, tileZ: number): boolean;
+}
+
+/** A plot with no sea on it, which is every flat authored plan. */
+const NO_WATER: WaterProvider = () => false;
 
 /** What a rail is: the balustrade of a flight, or a rail along one edge. */
 export type RailKind = 'flight' | 'edge';
@@ -70,7 +82,12 @@ function stepOf(rotation: Rotation): { readonly dx: number; readonly dz: number 
  * itself is not asked whether it is paved, because every caller only ever asks
  * about a tile it is paving.
  */
-export function railsAt(tile: Tile, isPaved: PavedProvider, levelOf: LevelProvider): RailTile[] {
+export function railsAt(
+  tile: Tile,
+  isPaved: PavedProvider,
+  levelOf: LevelProvider,
+  isWater: WaterProvider = NO_WATER,
+): RailTile[] {
   const climb = climbAt(tile, isPaved, levelOf);
   if (climb !== null) {
     // Both flanks, or neither. One model carries the pair, so a flight with
@@ -85,9 +102,11 @@ export function railsAt(tile: Tile, isPaved: PavedProvider, levelOf: LevelProvid
   }
 
   const level = levelOf(tile.x, tile.z);
-  return CLIMBS.filter(
-    ({ dx, dz }) => !isPaved(tile.x + dx, tile.z + dz) && levelOf(tile.x + dx, tile.z + dz) < level,
-  ).map(({ rotation }) => ({ tile, rotation, kind: 'edge' as const }));
+  return CLIMBS.filter(({ dx, dz }) => {
+    const beside = { x: tile.x + dx, z: tile.z + dz };
+    if (isPaved(beside.x, beside.z)) return false;
+    return levelOf(beside.x, beside.z) < level || isWater(beside.x, beside.z);
+  }).map(({ rotation }) => ({ tile, rotation, kind: 'edge' as const }));
 }
 
 /**
@@ -97,8 +116,12 @@ export function railsAt(tile: Tile, isPaved: PavedProvider, levelOf: LevelProvid
  * flights are, so the answer does not depend on where the walk started: an edge
  * either has a drop beyond it or it does not.
  */
-export function railTilesFor(paved: readonly Tile[], levelOf: LevelProvider): RailTile[] {
+export function railTilesFor(
+  paved: readonly Tile[],
+  levelOf: LevelProvider,
+  isWater: WaterProvider = NO_WATER,
+): RailTile[] {
   const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
   const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
-  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf));
+  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater));
 }

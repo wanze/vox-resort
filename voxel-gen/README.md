@@ -233,5 +233,13 @@ the nearest street — but it does need a free tile for that spur to run through
 A type may be placed as many times as you like; each placement becomes one more
 instance of the same geometry, which is nearly free.
 
+Paving is the one part of the catalogue you do not choose from. `path` is the
+tool; the ground decides what a tile of it comes out as — flagstones on grass,
+`boardwalk` on sand, `jetty` on water, `stairs` where it climbs a terrace step —
+and the three it becomes declare `groundDecides` so the build palette leaves them
+out. All four are authored two layers tall, `PAVING_VOXELS`, so they butt
+together wherever the ground changes under a street. A fifth kind of paving is a
+model file and an entry in `PAVING_IDS`, and nothing else.
+
 `model-prompts.md` holds the original text prompts each model was authored from,
 plus the dimension table they were specified against.

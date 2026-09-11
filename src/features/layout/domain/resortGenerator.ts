@@ -14,8 +14,9 @@
  *    network is laid out before anything is built on it, which is what makes
  *    every district border a street by construction rather than by luck. All of
  *    it stops at the foot of the hill, because that is where the level ground
- *    stops; two lanes carry on over the hill and across the sand to the water,
- *    and they are the only paving the beach ever sees — see {@link SEA_LANES}.
+ *    stops; two lanes carry on over the hill, across the sand and out onto the
+ *    water as piers, and they are the only paving the beach ever sees — see
+ *    {@link SEA_LANES} and {@link PIER_TILES}.
  * 2. **Districts are the gaps.** Whatever rectangle is left between two streets
  *    is a district, and each is given a theme — a category of the catalogue that
  *    will dominate it — so the resort reads as a lodging quarter and a leisure
@@ -688,6 +689,45 @@ function isBuildableSand(shore: Shore, tileX: number, tileZ: number): boolean {
 const LOUNGER_ID = 'sun-lounger';
 const UMBRELLA_ID = 'beach-umbrella';
 
+/** What watches the water from the tideline. */
+const LIFEGUARD_ID = 'lifeguard-tower';
+
+/** The court the back of the beach gets first pick of a stretch of sand for. */
+const VOLLEYBALL_ID = 'volleyball';
+
+/**
+ * Types the districts never draw from, because the shore is where they belong.
+ *
+ * The first rule of its kind on the plot, and it is worth saying why it took
+ * this long to need one — and why it holds exactly one id. A beach club inland
+ * is a pool club, a palm inland is a palm, and a volleyball court on a lawn is a
+ * volleyball court, which is why that one is *not* here: it is offered to the
+ * sand first, by being in {@link BEACH_BACK}, and is perfectly welcome in a
+ * district when the sand has no six-by-four to give it. Almost everything the
+ * beach carries reads somewhere else, which is why the generator has always let
+ * the whole catalogue into every district and let the beach take its pick first.
+ *
+ * A lifeguard tower is the one that does not read anywhere else. It watches
+ * water, and there is none behind the hotels.
+ *
+ * It stays in `missing` rather than being filtered out of the catalogue, which
+ * matters: were the beach ever unable to stand one, the plot would report that
+ * it does not hold the whole catalogue rather than claiming it does and being
+ * caught out by `requireEveryTypePlanted`.
+ */
+const SHORE_ONLY: ReadonlySet<string> = new Set([LIFEGUARD_ID]);
+
+/**
+ * Tiles of shore between one lifeguard tower and the next.
+ *
+ * Twenty-four is a hundred metres of beach apiece, which is about what a real
+ * bay is patrolled at and — the reason the number is here rather than drawn from
+ * the density — what keeps a tower reading as a landmark. Scattered at the
+ * density the loungers are laid at, a bay came out with a dozen of them and they
+ * stopped being the thing your eye goes to along the sand.
+ */
+const LIFEGUARD_SPACING = 24;
+
 /**
  * What stands on the sand behind the lines.
  *
@@ -698,6 +738,7 @@ const UMBRELLA_ID = 'beach-umbrella';
  */
 const BEACH_BACK: readonly string[] = [
   'beach-club',
+  VOLLEYBALL_ID,
   'poolside-bar',
   'poolside-bar',
   'palm',
@@ -787,8 +828,47 @@ const BEACH_DRAWS = 3;
  * `resortLayout.ts`.
  */
 function fillBeach(parts: BeachParts): void {
+  standLifeguards(parts);
   layBeachLines(parts);
   fillBeachBack(parts);
+}
+
+/**
+ * Stands a lifeguard tower every {@link LIFEGUARD_SPACING} columns of shore, on
+ * the seaward-most row anything is allowed to stand on.
+ *
+ * Before the lines rather than after them, and that order is the whole of it: a
+ * tower belongs on the tideline looking at the water, which is exactly the row
+ * the first line of loungers wants, and whichever of the two goes down first
+ * gets it. The line is the thing that can afford to give way — it stops for a
+ * tile and carries on, which is what it already does where a lane crosses the
+ * sand — and a tower pushed behind the sunbathers is a tower watching the backs
+ * of their heads.
+ *
+ * Unturned, always: the model's open side and its ladder face +z, which on every
+ * generated plot is the water. This is the one thing on the sand that has a front
+ * and knows where it has to point, so it is the one thing `standOne`'s quarter
+ * turn is not offered to.
+ */
+function standLifeguards(parts: BeachParts): void {
+  const { shore, types, missing, site, plots } = parts;
+  const tower = types.get(LIFEGUARD_ID);
+  if (!tower) return;
+  for (let anchor = 0; anchor < site.tilesX; anchor += LIFEGUARD_SPACING) {
+    // Walked forward from the anchor rather than dropped on it, as far as the
+    // next tower's column: where a sea lane comes down to the water the anchor's
+    // own tile is already spoken for, and a bay that quietly went one tower short
+    // there would be a bay the catalogue is not fully stood on.
+    for (let tileX = anchor; tileX < Math.min(site.tilesX, anchor + LIFEGUARD_SPACING); tileX++) {
+      const tileZ = waterStartZ(shore, tileX) - 1 - BEACH_LINES.first;
+      if (!isBuildableSand(shore, tileX, tileZ)) continue;
+      if (site.taken.has(tileKey(tileX, tileZ))) continue;
+      site.taken.add(tileKey(tileX, tileZ));
+      plots.push({ id: tower.id, tileX, tileZ, rotation: 0 });
+      missing.delete(tower.id);
+      break;
+    }
+  }
 }
 
 /**
@@ -1374,6 +1454,25 @@ function plazaAt(promenade: Street, band: Street, tilesX: number, tilesZ: number
 const SEA_LANES: readonly number[] = [0.3, 0.7];
 
 /**
+ * How far a sea lane carries on past the tideline, in tiles of pier.
+ *
+ * Six is twenty-four metres of jetty, which is a pier somebody walks to the end
+ * of rather than a step off the sand — and it is short enough to stay inside the
+ * water the plot actually owns, whose inset is `SHORE_INSET` and whose edge
+ * wanders by `SHORE_BEACH.wander` either way. A lane that ran to the plot's own
+ * southern edge, which is what these two used to be strung to before the water
+ * could be paved at all, would be a causeway to nowhere on a deep plot and a
+ * one-tile stub on a shallow one; measured off the water it is the same pier on
+ * every plot. See `PathEdge.overWater`.
+ */
+const PIER_TILES = 6;
+
+/** Where a sea lane's pier ends in one column: `PIER_TILES` out from the shore. */
+function pierEndZ(shore: Shore, tilesZ: number, tileX: number): number {
+  return Math.min(tilesZ - 1, waterStartZ(shore, tileX) + PIER_TILES - 1);
+}
+
+/**
  * The streets that run all the way to the water, by the tile they stand on.
  *
  * The promenade is never one of them. It ends at the southern gate, at the foot
@@ -1398,19 +1497,27 @@ function seaLanesOf(
   return lanes;
 }
 
-/** Nodes and edges for one run of parallel streets, strung between two bounds. */
+/**
+ * Nodes and edges for one run of parallel streets, strung between two bounds.
+ *
+ * `overWater` is asked of each street rather than set for the run, because only
+ * two of the columns are piers and the rest of them stop at the hill's foot with
+ * the cross streets. A run that says nothing is an ordinary street, which stops
+ * at the tideline — see `PathEdge.overWater`.
+ */
 function streetGraph(
   streets: readonly Street[],
   prefix: string,
   from: (street: Street) => PathNode,
   to: (street: Street) => PathNode,
+  overWater: (street: Street) => boolean = () => false,
 ) {
   const nodes: PathNode[] = [];
   const edges = streets.map((street, index) => {
     const head = { ...from(street), id: `${prefix}${index}-a` };
     const tail = { ...to(street), id: `${prefix}${index}-b` };
     nodes.push(head, tail);
-    return { from: head.id, to: tail.id, width: street.width };
+    return { from: head.id, to: tail.id, width: street.width, overWater: overWater(street) };
   });
   return { nodes, edges };
 }
@@ -1515,8 +1622,12 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
   const buildable = types.filter((type) => !DERIVED_IDS.has(type.id));
   const byId = new Map(buildable.map((type) => [type.id, type]));
   // Largest first, so a tennis court gets its pick of the districts while there
-  // is still a district that will take it.
-  const bySize = buildable.toSorted((a, b) => b.tilesX * b.tilesZ - a.tilesX * a.tilesZ);
+  // is still a district that will take it — and without the two the shore keeps
+  // to itself, which the beach stands and a district never should. See
+  // `SHORE_ONLY`.
+  const bySize = buildable
+    .filter((type) => !SHORE_ONLY.has(type.id))
+    .toSorted((a, b) => b.tilesX * b.tilesZ - a.tilesX * a.tilesZ);
 
   const shoreSpec = shoreSpecFor(params);
   const shore = shoreFor({ tilesX, tilesZ, shore: shoreSpec });
@@ -1548,8 +1659,9 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
     (street) => ({
       id: '',
       tileX: street.at,
-      tileZ: seaLanes.has(street.at) ? tilesZ - 2 : hillFoot,
+      tileZ: seaLanes.has(street.at) && shore ? pierEndZ(shore, tilesZ, street.at) : hillFoot,
     }),
+    (street) => seaLanes.has(street.at),
   );
   const across = streetGraph(
     bands,

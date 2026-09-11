@@ -37,7 +37,7 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | beach-club    | 4×4       | 64 × 27 × 64  | 16 x 16 m deck, thatched bar      |
 | swimming-pool | 6×4       | 96 × 15 × 64  | three pools on a 24 x 16 m deck   |
 | minigolf      | 6×5       | 96 × 24 × 80  | 24 x 20 m, ten holes              |
-| waterpark     | 5×5       | 80 × 55 × 80  | 20 x 20 m, a 14 m slide tower     |
+| waterpark     | 5×6       | 80 × 59 × 96  | 20 x 24 m, three straight flumes  |
 | hotel         | 6×4       | 96 × 57 × 64  | 21 x 12 m, four 3 m storeys       |
 | tennis-court  | 9×5       | 144 × 16 × 80 | 36 x 20 m club enclosure          |
 

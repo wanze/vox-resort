@@ -293,6 +293,48 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   surface, the surface is the entire triangle budget, and there is no wall
   elsewhere to pay for a pattern on it.
 
+  The water park is the largest of these by a wide margin, because it had
+  every fault on this page at once. Its deck was checkerboarded `(x + z) % 2`
+  over 5 776 cells; its water was dithered a second blue at `(x * 3 + z) % 7`
+  on top of that, which defeats the water merge as well as the coplanar one;
+  its splash pool was a circle found with `Math.hypot` and its rim a second
+  circle found with two more; its tower was fifty courses of two alternating
+  colours; and its flume was a **helix**, 900 samples of `cos` and `sin`
+  spiralling down a shrinking radius. The helix is the poolside bar's counter
+  one dimension further on: a curve on this grid is a staircase, and a curve in
+  three dimensions is a staircase no two treads of which share a plane, so
+  there was nothing anywhere in it to merge — every voxel of that flume was its
+  own six quads. Redrawn as a stepped tower with three **straight** flumes off
+  it, one rectangular basin cut with `poolWater`, and the plot grown from 5x5
+  tiles to 6x6 — depth for the tallest flume's run, width for a basin worth
+  swimming in and deck enough round the loungers — `pnpm bench` read **48 218
+  triangles off the overview frame**: 9 644 a placement over five placements,
+  against the 1 798 the resort bar gave back over eleven, and on a model half
+  again the footprint of the one it replaces.
+
+  Growing it cost something outside the art, which is worth recording because
+  nothing else in these passes has. `resortGenerator.test.ts` asserted that a
+  generated plot puts more than ten houses on grass, measured at the one seed
+  that case fixes; a 6x6 `waterpark` packs the plot differently and moved that
+  seed's count from twelve to ten. The count ranges from 3 to 14 over the
+  twelve seeds the suite sweeps, so the bound was a measurement of one seed
+  rather than a floor on "a neighbourhood", and it is now written as the floor
+  it was meant to be. A model's footprint is an input to the generator, so a
+  pass that changes one can move a generated plot's statistics without moving
+  anything about where the generator puts a house.
+
+  Two things in that pass are worth keeping apart from the number. The blue
+  flume is painted `glass`, not `water`, because a colour a model declares as
+  water is water _everywhere_ in that model — painted `water.base` it would be
+  meshed into the basin's geometry and come out rippling in mid-air six metres
+  up. And `steps` was tried for the access stair and given back, which is the
+  restaurant's pergola a second time: the part fills solid from its floor up,
+  which is right for a terrace and for a doorstep, and at the 38 treads a 9.5 m
+  climb takes it is a triangular wall 76 voxels long standing between the
+  camera and half the plot. Drawn open — treads, a stringer under the nosings,
+  a post every sixth one — it is the same stair and none of the wall. The part
+  was not wrong; the span was.
+
   That is the useful shape of the cases together: what a dithered plane
   costs is roughly fixed per plane, so the saving is set by how many planes a
   model dithered rather than by how large it is. The restaurant and the beach
@@ -356,7 +398,7 @@ against a reference is how the drift started.
 | `resort-bar`, `poolside-bar` — the two bars, in one pass  | done; asked for no new part               |
 | `minigolf` — ten holes, the windmill, and the hedge       | done; `poolWater` at hazard scale         |
 | `playground` — the tower, the slide, and what climbs      | done; the one pass that cost triangles    |
-| `waterpark`                                               | next; wants the pool pass's `poolWater`   |
+| `waterpark` — the stepped tower and its three flumes      | done; the largest saving of any pass      |
 | The 1×1 props, and the ground tiles                       | last: cheapest to change, and mass-placed |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that

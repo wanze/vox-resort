@@ -63,7 +63,6 @@ const LEGACY = new Set([
   'snack-bar',
   'spa-pavilion',
   'tennis-court',
-  'waterpark',
 ]);
 
 describe('PALETTE', () => {

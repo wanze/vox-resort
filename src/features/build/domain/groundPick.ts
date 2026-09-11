@@ -22,14 +22,18 @@
  * cursor is what decides where an object is built, and a wrong tile builds in
  * the wrong place.
  *
- * Matrices arrive column-major, the layout Three.js uses in `Matrix4.elements`,
- * the same convention `hud/domain/labelProjection.ts` reads them in.
+ * Matrices arrive column-major, the layout Three.js uses in `Matrix4.elements`.
  */
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { levelHeight, type LevelProvider } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
-import type { Viewport } from '../../hud/domain/labelProjection';
+
+/** The canvas the pointer is over, in CSS pixels. */
+export interface Viewport {
+  readonly width: number;
+  readonly height: number;
+}
 
 /** Where the pointer is, in CSS pixels from the canvas's top-left corner. */
 export interface PointerPosition {

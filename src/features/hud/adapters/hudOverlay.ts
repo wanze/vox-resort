@@ -1,17 +1,15 @@
 /**
  * The parts of the HUD that are written straight to the DOM, once a frame.
  *
- * Re-rendering React sixty times a second to move a caption would distort the
- * very frame rate the caption sits next to, so the label elements, the lamp
- * count and the time slider are positioned and written here, on the nodes
- * themselves. React still owns creating those nodes; this only moves them.
+ * Re-rendering React sixty times a second to move a number would distort the
+ * very frame rate that number reports, so the lamp count and the time slider
+ * are written here, on the nodes themselves. React still owns creating those
+ * nodes; this only writes to them.
  *
  * It lives in `adapters/` because that is what it is — DOM I/O on the hot path —
  * and keeping it out of the component leaves `App` with state and effects, which
  * is all a component should have to explain.
  */
-
-import { sortByDepth, type ScreenPosition } from '../domain/labelProjection';
 
 /** What the render loop reports at the end of every frame. */
 export interface FrameUpdate {
@@ -20,8 +18,6 @@ export interface FrameUpdate {
   readonly time: number;
   /** Lamps contributing to this frame; all of them after dark, none by day. */
   readonly activeLights: number;
-  /** Screen position per anchor id; missing ids are off-screen this frame. */
-  readonly labels: ReadonlyMap<string, ScreenPosition>;
 }
 
 /**
@@ -33,8 +29,6 @@ interface Slot<T> {
 }
 
 export interface HudOverlayParts {
-  /** The rendered label nodes, by anchor id. */
-  readonly labels: Slot<Map<string, HTMLDivElement>>;
   readonly activeLights: Slot<HTMLSpanElement>;
   readonly time: Slot<HTMLInputElement>;
   /** Called only when the displayed frame rate actually changes. */
@@ -44,25 +38,6 @@ export interface HudOverlayParts {
 export interface HudOverlay {
   /** Writes one frame's worth of HUD state. */
   update(frame: FrameUpdate): void;
-}
-
-/** Moves the label nodes onto this frame's screen positions. */
-function positionLabels(
-  elements: Map<string, HTMLDivElement>,
-  labels: ReadonlyMap<string, ScreenPosition>,
-): void {
-  for (const [id, element] of elements) {
-    if (!labels.has(id)) element.style.visibility = 'hidden';
-  }
-  const visible = sortByDepth([...labels].map(([id, screen]) => ({ id, screen })));
-  visible.forEach(({ id, screen }, index) => {
-    const element = elements.get(id);
-    if (!element) return;
-    element.style.visibility = 'visible';
-    // Far to near, so a nearby label always covers one behind it.
-    element.style.zIndex = String(index);
-    element.style.transform = `translate3d(${screen.x}px, ${screen.y}px, 0) translate(-50%, -100%)`;
-  });
 }
 
 export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
@@ -88,7 +63,6 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
 
   return {
     update(frame) {
-      if (parts.labels.current) positionLabels(parts.labels.current, frame.labels);
       if (frame.fps !== fps) {
         fps = frame.fps;
         parts.onFpsChange(frame.fps);

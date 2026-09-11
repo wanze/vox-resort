@@ -22,13 +22,13 @@ const CORNERS: Readonly<Record<CompassDirection, { initials: string; label: stri
 };
 
 /**
- * The camera panel: which view the resort is drawn through, and which corner the
- * isometric one stands over.
+ * Which view the resort is drawn through, and which corner the isometric one
+ * stands over.
  *
- * The compass row stays on screen in both modes rather than appearing with the
- * isometric view, so the panel does not change height under the pointer; it is
- * simply disabled, which is also what says the four corners belong to that mode
- * and not to the other one.
+ * The compass row stays in both modes rather than appearing with the isometric
+ * view, so the panel does not change height under the pointer; it is simply
+ * disabled, which is also what says the four corners belong to that mode and
+ * not to the other one.
  */
 export function CameraPanel({
   mode,
@@ -39,12 +39,7 @@ export function CameraPanel({
   const isometric = mode === 'isometric';
 
   return (
-    <section className="hud-camera" aria-label="Camera">
-      <header className="hud-camera-head">
-        <h2>View</h2>
-        <span className="hud-camera-key">C</span>
-      </header>
-
+    <div className="hud-camera">
       <div className="hud-camera-modes" role="group" aria-label="Camera mode">
         {MODES.map((option) => (
           <button
@@ -68,19 +63,12 @@ export function CameraPanel({
             disabled={!isometric}
             aria-pressed={isometric && direction === point}
             aria-label={`Face the plot from the ${CORNERS[point].label}`}
-            title={`From the ${CORNERS[point].label}`}
             onClick={() => onDirectionChange(point)}
           >
             {CORNERS[point].initials}
           </button>
         ))}
       </div>
-
-      <p className="hud-camera-hint">
-        {isometric
-          ? `Orthographic, from the ${CORNERS[direction].label}. Q and E turn it a quarter; drag to pan, wheel to zoom.`
-          : 'Free camera. Drag to orbit, right-drag to pan, wheel to dolly.'}
-      </p>
-    </section>
+    </div>
   );
 }

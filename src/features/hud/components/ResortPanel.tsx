@@ -57,14 +57,7 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
   };
 
   return (
-    <section className="hud-resort" aria-label="Resort generator">
-      <header className="hud-resort-head">
-        <h2>Resort</h2>
-        <span className="hud-resort-plot">
-          {draft.tilesX}×{draft.tilesZ} tiles
-        </span>
-      </header>
-
+    <div className="hud-resort">
       <label className="hud-resort-row">
         <span>Width</span>
         <input
@@ -76,6 +69,7 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           onChange={(event) => change({ tilesX: Number(event.target.value) })}
           aria-label="Plot width in tiles"
         />
+        <span className="hud-resort-value">{draft.tilesX}</span>
       </label>
 
       <label className="hud-resort-row">
@@ -89,6 +83,7 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           onChange={(event) => change({ tilesZ: Number(event.target.value) })}
           aria-label="Plot depth in tiles"
         />
+        <span className="hud-resort-value">{draft.tilesZ}</span>
       </label>
 
       <label className="hud-resort-row">
@@ -117,7 +112,7 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           type="button"
           className="hud-resort-roll"
           onClick={() => change({ seed: rollSeed() })}
-          title="A different resort"
+          aria-label="A different resort"
         >
           ⟳
         </button>
@@ -137,11 +132,11 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           className="hud-resort-clear"
           disabled={busy}
           onClick={commit(onClear)}
-          title="Bare ground, to build on by hand"
+          aria-label="Bare ground, to build on by hand"
         >
           Clear
         </button>
       </div>
-    </section>
+    </div>
   );
 }

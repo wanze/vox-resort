@@ -5,7 +5,7 @@ import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls } from './useClockControls';
 import { useResortControls } from './useResortControls';
-import { mountShowcase, type LabelAnchor, type Showcase, type ShowcaseStats } from './showcase';
+import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 
 /**
  * Mount and dispose are serialised through this chain so React 19's StrictMode
@@ -22,7 +22,6 @@ export function App() {
   const buildTypeRef = useRef<string | null>(null);
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
-  const [anchors, setAnchors] = useState<readonly LabelAnchor[]>([]);
   const [buildType, setBuildType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resort = useResortControls(showcaseRef);
@@ -59,9 +58,6 @@ export function App() {
       // Escape leaves build mode from the canvas; the palette follows. Arming
       // the pointer again with what it just put down costs nothing.
       onBuildSelectionChange: selectBuildType,
-      // A new resort brings its own labels; the old ones name objects that are
-      // no longer standing.
-      onAnchorsChange: setAnchors,
       // C, Q and E move the camera from the canvas; the panel follows.
       onCameraChange: adoptCamera,
       onFrame: overlay.update,
@@ -78,7 +74,6 @@ export function App() {
         showcaseRef.current = mounted;
         mounted.selectBuildType(buildTypeRef.current);
         setStats(mounted.stats);
-        setAnchors(mounted.anchors);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
       } catch (cause: unknown) {
@@ -103,23 +98,13 @@ export function App() {
       <Hud
         fps={fps}
         stats={stats}
-        anchors={anchors}
-        labelElements={hudNodes.labels}
         activeLightsElement={hudNodes.activeLights}
         timeElement={hudNodes.time}
-        cycling={clock.cycling}
-        onTimeChange={clock.setTime}
-        onCyclingChange={clock.setCycling}
+        clock={clock}
+        camera={camera}
+        resort={resort}
         buildType={buildType}
         onBuildTypeChange={selectBuildType}
-        params={resort.params}
-        onGenerate={resort.generate}
-        onClear={resort.clear}
-        building={resort.building}
-        cameraMode={camera.view.mode}
-        cameraDirection={camera.view.direction}
-        onCameraModeChange={camera.setMode}
-        onCameraDirectionChange={camera.setDirection}
         error={error}
       />
     </div>

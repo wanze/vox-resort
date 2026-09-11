@@ -23,11 +23,7 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
-import {
-  layoutResort,
-  placementCenter,
-  railModelsIn,
-} from '../features/layout/domain/resortLayout';
+import { layoutResort, railModelsIn } from '../features/layout/domain/resortLayout';
 import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
@@ -107,9 +103,7 @@ import type { SceneHandle } from '../features/rendering/adapters/threeScene';
 import { CAMERA_FOV_DEGREES, createScene } from '../features/rendering/adapters/threeScene';
 import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
-import { projectToScreen, type ScreenPosition } from '../features/hud/domain/labelProjection';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
-import { spreadLabelAnchors } from '../features/hud/domain/labelPlacement';
 import {
   benchFraming,
   parseBenchConfig,
@@ -142,9 +136,6 @@ const DENSITY_PER_TYPE = new Map(
   ]),
 );
 
-/** How far above an object its label floats, in voxels. */
-const LABEL_LIFT = 2;
-
 /**
  * People walking the resort.
  *
@@ -169,13 +160,6 @@ const INITIAL_TIME = 0.62;
 
 /** Real seconds one full day takes when the cycle is running. */
 const DAY_SECONDS = 90;
-
-export interface LabelAnchor {
-  readonly id: string;
-  readonly label: string;
-  readonly color: number;
-  readonly world: { readonly x: number; readonly y: number; readonly z: number };
-}
 
 export interface ShowcaseStats {
   readonly backend: 'webgpu' | 'webgl2';
@@ -283,8 +267,6 @@ export interface ShowcaseOptions {
    * through here; the HUD already knows.
    */
   readonly onBuildSelectionChange?: (typeId: string | null) => void;
-  /** Called when a new resort replaces the old one, with the labels it needs. */
-  readonly onAnchorsChange?: (anchors: readonly LabelAnchor[]) => void;
   /**
    * Called when the camera changes mode or turns, so the HUD follows the
    * keyboard. Changing it *from* the HUD does not come back through here; the
@@ -302,7 +284,6 @@ export interface CameraView {
 
 export interface Showcase {
   readonly stats: ShowcaseStats;
-  readonly anchors: readonly LabelAnchor[];
   /** Populated once a `?bench=1` run has collected its frames. */
   readonly benchResult: BenchResult | null;
   /** The parameters the resort on screen was grown from. */
@@ -355,7 +336,7 @@ function trackStartupFrames(): StartupTracker {
 
 interface Plot {
   readonly layout: ResortLayout;
-  /** Authored objects, the only placements that can carry a label. */
+  /** Authored objects: what the generator laid out, and what the pointer adds. */
   readonly placements: Placement[];
   /** Lamps and hedges the layout scattered along the paths. */
   readonly props: Placement[];
@@ -391,7 +372,6 @@ function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
   const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan);
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
-  // Paths and scattered props are placements too; they just never get a label.
   return {
     layout,
     placements: tile(layout.placements),
@@ -778,7 +758,6 @@ interface Resort {
   readonly shore: Shore | null;
   /** How this plot's land rises; the scene draws the terraces from it. */
   readonly elevation: Elevation | null;
-  readonly anchors: readonly LabelAnchor[];
   /** How much ground the resort covers: what both cameras are framed on. */
   readonly bounds: WorldBounds;
   /** Where the perspective camera stands; the isometric one is framed in the scene. */
@@ -879,7 +858,6 @@ function buildResort(parts: {
     // in it: a pier stands on water, so what the sea will take is a rule about
     // the object rather than a tile somebody already holds — see `paving.ts`.
     occupancy: createTileOccupancy(claiming),
-    anchors: labelAnchorsFor(plot.placements),
     bounds,
     framing: frameCamera(bounds, parts.bench),
     dispose() {
@@ -946,28 +924,6 @@ function createResortSlot(parts: {
       return resort;
     },
   };
-}
-
-/**
- * One label per object *type*, not per placement: fifteen cottages do not need
- * fifteen captions, and the HUD stays the size it was. Which cottage carries it
- * is chosen to spread the captions over the plot — see `labelPlacement.ts`.
- */
-function labelAnchorsFor(placements: readonly Placement[]): LabelAnchor[] {
-  return spreadLabelAnchors(placements).map((placement) => {
-    const type = objectTypeById(placement.id);
-    const center = placementCenter(placement);
-    return {
-      id: placement.id,
-      label: type.label,
-      color: type.color,
-      world: {
-        x: center.x,
-        y: placement.y + objectTypeTop(placement.id) + LABEL_LIFT,
-        z: center.z,
-      },
-    };
-  });
 }
 
 /**
@@ -1135,40 +1091,6 @@ function createStatsReader(parts: {
   };
   parts.startup.stop();
   return () => sceneStats({ ...parts, resort: parts.resort(), startup });
-}
-
-/**
- * Projects the label anchors to screen space, allocating nothing: the render
- * loop must not hand the garbage collector work to do sixty times a second.
- *
- * The camera's own two matrices are handed over as they are rather than
- * multiplied into one, because the step between them is where the depth a label
- * sorts on lives — under an orthographic projection the combined matrix has
- * thrown it away. See `labelProjection.ts`.
- */
-function createLabelProjector(
-  handle: SceneHandle,
-  canvas: HTMLCanvasElement,
-  anchors: () => readonly LabelAnchor[],
-): (into: Map<string, ScreenPosition>) => void {
-  return (into) => {
-    const camera = handle.camera;
-    camera.updateMatrixWorld();
-    const viewport = {
-      width: canvas.clientWidth || globalThis.innerWidth,
-      height: canvas.clientHeight || globalThis.innerHeight,
-    };
-    into.clear();
-    for (const anchor of anchors()) {
-      const screen = projectToScreen(
-        anchor.world,
-        camera.matrixWorldInverse.elements,
-        camera.projectionMatrix.elements,
-        viewport,
-      );
-      if (screen) into.set(anchor.id, screen);
-    }
-  };
 }
 
 interface BenchRecorder {
@@ -1538,18 +1460,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
 
   /** Tells everything above the renderer that the resort underneath it changed. */
-  const rebuilt = (resort: Resort): void => {
+  const rebuilt = (): void => {
     clock.relight();
-    options.onAnchorsChange?.(resort.anchors);
     onSceneChange?.(statsNow());
   };
 
   const recorder = bench
     ? createBenchRecorder({ bench, handle, stats: statsNow, litLamps: () => clock.litLamps })
     : null;
-  const projectLabels = createLabelProjector(handle, canvas, () => current().anchors);
-  const labels = new Map<string, ScreenPosition>();
-
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
 
@@ -1567,8 +1485,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;
 
-    projectLabels(labels);
-    onFrame({ fps: fpsState.fps, time: clock.time, activeLights: clock.litLamps, labels });
+    onFrame({ fps: fpsState.fps, time: clock.time, activeLights: clock.litLamps });
 
     if (recorder) {
       recorder.record(elapsed * 1000);
@@ -1583,9 +1500,6 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get stats() {
       return statsNow();
     },
-    get anchors() {
-      return current().anchors;
-    },
     get params() {
       return params;
     },
@@ -1597,11 +1511,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
     generate(next) {
       params = clampParams(next);
-      rebuilt(slot.replace(generateResort(GENERATOR_TYPES, params)));
+      slot.replace(generateResort(GENERATOR_TYPES, params));
+      rebuilt();
     },
     clear(next) {
       params = clampParams(next);
-      rebuilt(slot.replace(emptyResortPlan(params.tilesX, params.tilesZ)));
+      slot.replace(emptyResortPlan(params.tilesX, params.tilesZ));
+      rebuilt();
     },
     selectBuildType: (typeId) => build.select(typeId),
     setTime: clock.setTime,

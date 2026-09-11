@@ -29,6 +29,23 @@
  * walking a straight line does not turn, so computing a heading per frame would
  * be computing the same number sixty times.
  *
+ * ## Sitting down is a segment too
+ *
+ * Somebody on a bench is the one person who is genuinely not walking, and they
+ * are still stored as a segment: `from` and `to` are the **same point** — the
+ * seat — and `rate` is `1 / seconds`, so the parameter that measures how far
+ * along a walk somebody is measures how much of a sit is left instead. The
+ * per-frame loop does not learn a thing; it advances `t` and lerps a point onto
+ * itself, and when `t` passes 1 the ordinary arrival branch stands the person
+ * up.
+ *
+ * That is the whole trick, and it is worth being explicit about what it saves:
+ * a `sitting` flag tested per person per frame would put a branch in the one
+ * loop this file exists to keep branchless, to serve the handful of people on
+ * the plot who are sitting at any moment. What sits in the columns instead is
+ * one integer per person — the seat they hold — read only when somebody arrives
+ * somewhere.
+ *
  * ## Where the height comes from
  *
  * Nowhere. It is lerped along with x and z, because the network's nodes already
@@ -45,7 +62,7 @@
  */
 
 import { createRandom } from '../../layout/domain/random';
-import { BEACH_SURFACE, beachPointAt, type WalkNetwork } from './walkNetwork';
+import { BEACH_SURFACE, beachPointAt, type WalkNetwork, type WalkNode } from './walkNetwork';
 
 /**
  * How fast a person walks, in voxels a second.
@@ -103,10 +120,45 @@ const OFF_SAND = 0.01;
 const ON_SAND_AT_START = 0.25;
 
 /**
+ * Chance per arrival at a node with a free seat beside it that a person takes
+ * it.
+ *
+ * Rolled only where there is something free to sit on, which is a hundred-odd
+ * nodes among a couple of thousand, so unlike {@link ONTO_SAND} it can be a
+ * number a person would recognise. It has to be read together with
+ * {@link SIT_SECONDS}, because between them they decide how much of the crowd
+ * is sitting at any moment: the two are what the measurement below is of.
+ *
+ * One in four was the first pass and it emptied the paths. The reference plot
+ * offers 287 reachable seats to 600 people, and at a quarter with sits of up to
+ * three minutes 155 of them were sitting — a quarter of the crowd, on top of
+ * the quarter out on the sand, which left the promenade looking closed. At
+ * these two numbers it is 56, which reads as benches in use.
+ */
+const ONTO_SEAT = 0.12;
+
+/**
+ * How long a person sits, in seconds: drawn between these two.
+ *
+ * Twenty seconds to a minute and a half, which is a rest rather than an
+ * afternoon. The upper bound is the load-bearing one and it is a matter of
+ * looks rather than of cost: a seat held for ten minutes is a figure that has
+ * not moved for as long as anybody looks at the plot, which reads as a mesh
+ * somebody forgot to animate rather than as a person.
+ */
+const SIT_SECONDS = { min: 20, max: 90 } as const;
+
+/**
  * A person heading back to the path is aimed at this node; while roaming they
  * have none.
  */
 const ROAMING = -1;
+
+/** Walking off the graph to a seat they have already claimed. */
+const TO_SEAT = -2;
+
+/** Sitting on it. See the note on sitting at the top of the file. */
+const SEATED = -3;
 
 export interface Crowd {
   readonly network: WalkNetwork;
@@ -144,6 +196,18 @@ export interface Crowd {
   readonly cameFrom: Int32Array;
   /** The gate a roamer came out of, and will go back in by. */
   readonly gate: Int32Array;
+  /**
+   * The seat each person holds, or -1. Held from the moment they set off for it
+   * until they get up, so nobody sits down on somebody's lap.
+   */
+  readonly seat: Int32Array;
+  /**
+   * Who holds each seat of the network, or -1 where it is free. One entry per
+   * `network.seats`, which is why it lives on the crowd rather than on the
+   * network: the network is derived from the plot and never changes, and this
+   * changes every time somebody stands up.
+   */
+  readonly seatBy: Int32Array;
 
   /** Every draw the crowd makes, so the same seed replays the same afternoon. */
   readonly random: () => number;
@@ -195,6 +259,8 @@ export function createCrowd(options: CrowdOptions): Crowd {
     node: new Int32Array(capacity),
     cameFrom: new Int32Array(capacity),
     gate: new Int32Array(capacity),
+    seat: new Int32Array(capacity).fill(-1),
+    seatBy: new Int32Array(network.seats.length).fill(-1),
     random,
   };
 
@@ -265,39 +331,60 @@ function place(crowd: Crowd, i: number): void {
 /**
  * What happens when someone reaches the end of their segment.
  *
- * Three cases, and which one applies is entirely a question of where they are:
- * out on the sand, arriving at a gate, or walking the graph. The leftover `t` is
- * carried into the next segment rather than dropped, so a very short edge taken
- * at speed does not cost a frame of standing still.
+ * Which one applies is entirely a question of what they were doing: out on the
+ * sand, on their way to a seat, sitting on one, or walking the graph. The
+ * leftover `t` is carried into the next segment rather than dropped, so a very
+ * short edge taken at speed does not cost a frame of standing still — and so a
+ * sit that ends mid-frame does not either.
  */
 function arrive(crowd: Crowd, i: number): void {
   const leftover = crowd.t[i]! - 1;
 
   if (crowd.node[i] === ROAMING) {
     roamOn(crowd, i);
+  } else if (crowd.node[i] === TO_SEAT) {
+    sitDown(crowd, i);
+  } else if (crowd.node[i] === SEATED) {
+    standUp(crowd, i);
   } else {
-    const arrived = crowd.node[i]!;
-    const node = crowd.network.nodes[arrived]!;
-    crowd.fromX[i] = node.x;
-    crowd.fromY[i] = node.y;
-    crowd.fromZ[i] = node.z;
-    if (node.gate && crowd.network.beach && crowd.random() < ONTO_SAND) {
-      crowd.gate[i] = arrived;
-      crowd.node[i] = ROAMING;
-      roamTo(crowd, i);
-    } else {
-      // The onward pick reads `cameFrom` to know what turning back would be, so
-      // it has to happen before this arrival becomes the node walked in from.
-      const next = nextNode(crowd, i, arrived);
-      aim(crowd, i, next);
-    }
-    crowd.cameFrom[i] = arrived;
+    arriveAtNode(crowd, i);
   }
 
   // Rounding on a very short segment can leave this at or past 1 again, which
   // would arrive twice in one frame; a fraction of the new segment is close
   // enough and cannot loop.
   crowd.t[i] = Math.min(leftover, 0.99);
+}
+
+/**
+ * Reaching a node of the graph, and what a person does next there: step off
+ * onto the sand, sit down on something beside it, or walk on.
+ *
+ * The three are tried in that order and only one of them happens. The sand is
+ * first because it is the rarer roll and a boardwalk tile is hardly ever a
+ * bench tile too; walking on is what is left, which is what makes it the case
+ * that needs no chance of its own.
+ */
+function arriveAtNode(crowd: Crowd, i: number): void {
+  const arrived = crowd.node[i]!;
+  const node = crowd.network.nodes[arrived]!;
+  crowd.fromX[i] = node.x;
+  crowd.fromY[i] = node.y;
+  crowd.fromZ[i] = node.z;
+
+  const seat = node.seats.length > 0 ? freeSeat(crowd, node) : -1;
+  if (node.gate && crowd.network.beach && crowd.random() < ONTO_SAND) {
+    crowd.gate[i] = arrived;
+    crowd.node[i] = ROAMING;
+    roamTo(crowd, i);
+  } else if (seat !== -1 && crowd.random() < ONTO_SEAT) {
+    takeSeat(crowd, i, seat);
+  } else {
+    // The onward pick reads `cameFrom` to know what turning back would be, so
+    // it has to happen before this arrival becomes the node walked in from.
+    aim(crowd, i, nextNode(crowd, i, arrived));
+  }
+  crowd.cameFrom[i] = arrived;
 }
 
 /** A roamer picks another spot on the sand, or heads back in through its gate. */
@@ -324,6 +411,73 @@ function roamTo(crowd: Crowd, i: number): void {
   }
   const point = beachPointAt(beach, crowd.random, crowd.fromX[i]!);
   segment(crowd, i, point.x, BEACH_SURFACE, point.z);
+}
+
+/** Whether a person is sitting down rather than walking. */
+export function isSeated(crowd: Crowd, i: number): boolean {
+  return crowd.node[i] === SEATED;
+}
+
+/** The first free seat beside a node, or -1 when they are all taken. */
+function freeSeat(crowd: Crowd, node: WalkNode): number {
+  for (const seat of node.seats) {
+    if (crowd.seatBy[seat] === -1) return seat;
+  }
+  return -1;
+}
+
+/**
+ * Claims a seat and sets off for it.
+ *
+ * Claimed now rather than on arrival, which is the one rule that keeps two
+ * people off one plank: the walk from the path to the seat takes a second or
+ * two, and anybody arriving at the node in the meantime would otherwise see it
+ * free and set off for the same voxel.
+ */
+function takeSeat(crowd: Crowd, i: number, seat: number): void {
+  const spot = crowd.network.seats[seat]!;
+  crowd.seat[i] = seat;
+  crowd.seatBy[seat] = i;
+  crowd.node[i] = TO_SEAT;
+  segment(crowd, i, spot.x, spot.y, spot.z);
+}
+
+/**
+ * Arriving at the seat: the walk becomes a rest.
+ *
+ * Written out rather than handed to {@link segment}, because the two things
+ * that function works out are exactly the two this case has to decide for
+ * itself. A zero-length segment would be given a rate that ends it next frame,
+ * where a sit's rate is how long the sit lasts; and it would keep the heading
+ * of the last step taken, where a sitter faces the way the *seat* faces —
+ * out over the front of the bench, not back up the path they came down.
+ */
+function sitDown(crowd: Crowd, i: number): void {
+  const spot = crowd.network.seats[crowd.seat[i]!]!;
+  crowd.fromX[i] = spot.x;
+  crowd.fromY[i] = spot.y;
+  crowd.fromZ[i] = spot.z;
+  crowd.toX[i] = spot.x;
+  crowd.toY[i] = spot.y;
+  crowd.toZ[i] = spot.z;
+  crowd.heading[i] = spot.heading;
+  crowd.node[i] = SEATED;
+  const seconds = SIT_SECONDS.min + crowd.random() * (SIT_SECONDS.max - SIT_SECONDS.min);
+  crowd.rate[i] = 1 / seconds;
+}
+
+/** The rest is over: the seat is given up and the walk starts again. */
+function standUp(crowd: Crowd, i: number): void {
+  const seat = crowd.seat[i]!;
+  const spot = crowd.network.seats[seat]!;
+  crowd.seatBy[seat] = -1;
+  crowd.seat[i] = -1;
+  crowd.fromX[i] = spot.x;
+  crowd.fromY[i] = spot.y;
+  crowd.fromZ[i] = spot.z;
+  // Back to the node the seat hangs off, which is the paving they left: from
+  // there they are on the graph again and the onward pick takes over.
+  aim(crowd, i, spot.node);
 }
 
 /**

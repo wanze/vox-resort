@@ -138,6 +138,64 @@ and they stop a tile short of the water, which is where the sea washes over the
 sand anyway. Both are cheap because they are arithmetic on a number
 `waterStartZ` already returns.
 
+## Sitting down
+
+The first thing a person on this plot does that is not walking, and it is built
+so that it still is.
+
+A seat is declared by the **art**, beside the lights: `bench.ts` names three
+columns of its own plank, the layer a sitter's hips rest on and which way they
+look, and `coffee-shop.ts` names the six chairs on its terrace. Nothing in
+`src/` holds a list of what can be sat on, so a model that grows a second bench
+grows two more seats in the same edit — the rule the catalogue has held since
+the beginning, applied to a second kind of fact about a model.
+
+`crowd/domain/seating.ts` turns those into points in the world, which is the
+same journey `rotateLights` makes a lamp take, with one thing added: the turn
+the object stands at is **added to** the seat's own facing. Miss that and every
+turned bench seats people looking into its back rail.
+
+`walkNetwork.ts` then hangs each seat off the one node a person can reach it
+from — the nearest paved node on the seat's tile or one of its four neighbours,
+within half a level — and **drops the ones with no paving within reach**. That
+is the design, not a failure: a chair in the middle of a lawn is a chair nobody
+crosses the grass to. On the reference plot 287 of 297 declared seats are
+reachable; on a generated one, 223 of 252, the difference being coffee-shop
+terraces the streets happen not to run past.
+
+A seat is **not a node** and no edge is laid to it, so the walk is exactly the
+walk it was: the onward pick at a junction counts exits, and a seat is not one.
+
+And the sit itself is **a segment like any other**: `from` and `to` are the same
+point, `rate` is `1 / seconds`, so `t` measures how much of the rest is left and
+the per-frame loop learns nothing. When `t` passes 1 the ordinary arrival branch
+stands the person up. A `sitting` flag tested per person per frame would have put
+a branch in the one loop that exists to have none, for the fifty-odd people who
+are sitting at any moment.
+
+Two columns pay for all of it: the seat a person holds, and who holds each seat.
+The claim is taken when they **set off**, not when they arrive, or two people
+walk to the same plank.
+
+### The pose is a shader, not a second model
+
+A seated figure is the same geometry as a walking one, folded by the same
+`positionNode` the walk rides on: the body drops by the height of its own hips,
+and the vertices below the hip — the ones the walk already knows about, because
+they are the ones it swings — rotate forward and down about it. One instanced
+float per person says who that applies to, and it is written with the matrix.
+
+A second geometry would have cost more than geometry: a person sitting down
+would have to move from one mesh's instance slots to another's, every time
+anybody sat or stood, on a field whose slots are handed out once and never
+change.
+
+How much of the crowd sits is `ONTO_SEAT` and `SIT_SECONDS` together, and they
+were tuned by measurement rather than by feel — see the note on them in
+`crowd.ts`. A quarter chance with sits of up to three minutes put 155 of 600
+people on seats, which with the quarter already out on the sand left the
+promenade looking closed. It is 56 now.
+
 ## How the crowd is stored
 
 Structure of arrays, fixed capacity, no allocation per frame. This is the same
@@ -150,6 +208,7 @@ Float32Array  x, y, z, heading, phase        // where a person is, and facing
 Float32Array  fromX/Y/Z, toX/Y/Z, t, rate    // the segment they are walking
 Float32Array  speed
 Int32Array    node, cameFrom, gate, variant
+Int32Array    seat                          // the seat they hold, or -1
 ```
 
 `node` is the node being walked to, or `-1` while out on the sand, and that one
@@ -362,6 +421,36 @@ thing that makes the second one a port of the first.
   node at the centre of a tile whose surface climbs across that tile — see _The
   walk network_ above, which now describes the two-node flight and the sideways
   crossing that came with it.
+
+- **Somewhere to sit. Landed.** Two models drawn for the crowd rather than for
+  the camera — a bench and a coffee shop — and the four steps between a plank
+  and a person on it: `ModelSeat` in the art, `crowd/domain/seating.ts` to place
+  it, a seat hung off a node in `walkNetwork.ts`, and a sit stored as a
+  zero-length segment in `crowd.ts`. See _Sitting down_ above.
+
+  The bench is **scattered by the layout** rather than planned, which is the
+  decision worth recording. Benches belong to paths, not to districts, and
+  `resortLayout.ts` is the one thing that knows where the paths ended up — so it
+  stands one every nine tiles along the path edges, turned to face the paving,
+  exactly as it already scattered the lamps and the hedges. The authored plot
+  gets 95 and a generated one 76, neither of which is written down anywhere, and
+  every one of them is reachable by construction. It also made the layout turn a
+  prop for the first time: a lamp and a hedge look the same from four sides and
+  a seat does not.
+
+  Three things came out of building it rather than out of the design:
+
+  - **A seat names the sitter's hips, not their feet.** A seated person's feet
+    are off the ground, so the thing the art can actually fix is where the body
+    folds. It also makes the pose a shader: the figure drops by its own hip
+    height and the legs swing out from there.
+  - **The turn has two halves.** Position _and_ facing. The first pass turned
+    only the position, and three quarters of the benches on the plot seated
+    people facing their own back rail.
+  - **The bench lost its planting twice.** A flower box behind the seat is
+    hidden completely by the back rail from a camera looking down at 30 degrees,
+    and a pot at each front corner stands taller than the bench. The model is a
+    seat on a slab, and that is all.
 
 - **Step 7.** Not started. The crowd is on the plot; `?people=n`, a count in the
   HUD, a bench case and the real numbers for the table above are still to come.

@@ -53,6 +53,22 @@
  * The two are joined by **gates**: paved nodes with open sand next to them, which
  * is exactly where a boardwalk runs out onto the beach. A person leaves the graph
  * at a gate and comes back through one.
+ *
+ * ## Seats hang off the graph, they are not in it
+ *
+ * A bench is not somewhere to walk *through*, so a seat is not a node: it is a
+ * point hung off the one node a person can reach it from, and an edge is never
+ * laid to it. What that buys is that nothing about the walk changes — the
+ * onward pick at a junction counts exits, and a seat is not one, so a bench
+ * beside a path does not bend the route past it.
+ *
+ * Which node a seat hangs off is the whole of the rule: the nearest paved node
+ * on the seat's own tile or one of its four neighbours, no more than
+ * {@link SEAT_RISE} above or below it. A seat with no such node is **dropped**,
+ * and that is the design rather than a failure — a chair in the middle of a lawn
+ * is a chair nobody crosses the grass to, exactly as a flight of stairs is never
+ * a beach gate. It is what lets the coffee shop declare a terrace of six chairs
+ * and have them used on the plots where paving runs past them.
  */
 
 import { LEVEL_VOXELS, PAVING_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
@@ -61,6 +77,7 @@ import type { Tile } from '../../layout/domain/resortLayout';
 import { CLIMBS, stairTilesFor } from '../../layout/domain/stairs';
 import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
+import type { SeatSpot } from './seating';
 
 /**
  * A paved tile, as the layout describes one.
@@ -96,6 +113,13 @@ export interface WalkNode {
   readonly exits: readonly number[];
   /** Whether open sand adjoins this tile, so a person may step off onto it. */
   readonly gate: boolean;
+  /**
+   * Indices into {@link WalkNetwork.seats} of every seat reachable from here.
+   *
+   * Empty for almost every node on the plot, which is what makes the check an
+   * arriving person does a length test on an array they were already holding.
+   */
+  readonly seats: readonly number[];
 }
 
 /**
@@ -119,6 +143,27 @@ export interface BeachBand {
   readonly tilesX: number;
 }
 
+/**
+ * One seat a person can actually get to: where they sit, which way they look,
+ * and the node they walk off to reach it.
+ *
+ * The heading comes from the art by way of `seating.ts` rather than from the
+ * walk, and that is the point of carrying it: a person on a bench faces out over
+ * its front however they arrived at it, where a heading worked out from the last
+ * step they took would seat half of them looking into the back rail.
+ */
+export interface WalkSeat {
+  /** Where the sitter's body is, in world voxels. */
+  readonly x: number;
+  readonly z: number;
+  /** The layer their hips rest on. */
+  readonly y: number;
+  /** Which way they look, in radians about Y. */
+  readonly heading: number;
+  /** The node a person leaves the graph at to sit here, and returns to. */
+  readonly node: number;
+}
+
 export interface WalkNetwork {
   readonly nodes: readonly WalkNode[];
   readonly edges: readonly WalkEdge[];
@@ -126,6 +171,12 @@ export interface WalkNetwork {
   readonly gates: readonly number[];
   /** Null when the plan has no beach, which is every flat authored plan. */
   readonly beach: BeachBand | null;
+  /**
+   * Every reachable seat on the plot, each hung off the node it is reached
+   * from. Empty on a plot with nothing to sit on, which is a plot where nobody
+   * ever sits rather than one that has to be special-cased.
+   */
+  readonly seats: readonly WalkSeat[];
 }
 
 const tileKey = (x: number, z: number): string => `${x},${z}`;
@@ -145,6 +196,11 @@ export interface WalkNetworkInput {
   readonly shore: Shore | null;
   /** Columns the plot has, which bounds the beach. */
   readonly tilesX: number;
+  /**
+   * Every seat the objects on the plot offer; see `seating.ts`. Omit it and
+   * nobody sits, which is what a fixture built out of four paved tiles wants.
+   */
+  readonly seats?: readonly SeatSpot[];
 }
 
 /**
@@ -163,6 +219,8 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
 
   const nodes: WalkNode[] = [];
   const exits: number[][] = [];
+  /** Each node's own seat list, parallel to {@link nodes}; see `standAt`. */
+  const seatsOf: number[][] = [];
   const edges: WalkEdge[] = [];
   const gates: number[] = [];
   /** Nodes by the point they stand on, which is what lets two flights share one. */
@@ -181,11 +239,23 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     const existing = standing.get(key);
     if (existing !== undefined) return existing;
     const index = nodes.length;
-    // The node's own list, held on to here so a link can push to it: what a node
-    // can be walked to is only known once every node exists.
+    // The node's own lists, held on to here so a link and a seat can push to
+    // them: what a node can be walked to, and what can be sat on from it, are
+    // only known once every node exists.
     const own: number[] = [];
-    nodes.push({ x, y, z, tileX: tile.tileX, tileZ: tile.tileZ, exits: own, gate });
+    const sittable: number[] = [];
+    nodes.push({
+      x,
+      y,
+      z,
+      tileX: tile.tileX,
+      tileZ: tile.tileZ,
+      exits: own,
+      gate,
+      seats: sittable,
+    });
     exits.push(own);
+    seatsOf.push(sittable);
     standing.set(key, index);
     if (gate) gates.push(index);
     return index;
@@ -218,7 +288,90 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     }
   }
 
-  return { nodes, edges, gates, beach: shore ? { shore, tilesX } : null };
+  const seats = seatsAmong(input.seats ?? [], nodes, seatsOf);
+
+  return { nodes, edges, gates, beach: shore ? { shore, tilesX } : null, seats };
+}
+
+/**
+ * How far above or below a seat its paving may be, in voxels.
+ *
+ * A metre, which is half a terrace. It is a generous bound on purpose: a seat
+ * names the layer a sitter's *hips* are at, so a bench beside a path is already
+ * two voxels up on the paving next to it, and a chair on a plinth three courses
+ * high is four. What it excludes is the thing worth excluding — paving a whole
+ * terrace above or below the seat, which is a bench on the roof of the terrace
+ * wall as far as anybody walking the lower path is concerned.
+ */
+const SEAT_RISE = LEVEL_VOXELS / 2;
+
+/**
+ * Hangs every reachable seat off the node it is reached from, and drops the
+ * rest.
+ *
+ * The search is the seat's own tile and its four neighbours, which is a fixed
+ * five tiles per seat however big the plot is — the reason the nodes are indexed
+ * by tile first. See {@link nodeFor}.
+ */
+function seatsAmong(
+  spots: readonly SeatSpot[],
+  nodes: readonly WalkNode[],
+  seatsOf: readonly number[][],
+): WalkSeat[] {
+  if (spots.length === 0) return [];
+
+  const byTile = nodesByTile(nodes);
+  const seats: WalkSeat[] = [];
+  for (const spot of spots) {
+    const node = nodeFor(spot, nodes, byTile);
+    // A seat with no paving within reach is simply never sat on; see the note
+    // at the top of the file.
+    if (node === -1) continue;
+    seatsOf[node]!.push(seats.length);
+    seats.push({ x: spot.x, y: spot.y, z: spot.z, heading: spot.heading, node });
+  }
+  return seats;
+}
+
+/** The nodes standing on each tile: one, or the two ends of a flight. */
+function nodesByTile(nodes: readonly WalkNode[]): ReadonlyMap<string, number[]> {
+  const byTile = new Map<string, number[]>();
+  for (const [index, node] of nodes.entries()) {
+    const key = tileKey(node.tileX, node.tileZ);
+    const standing = byTile.get(key);
+    if (standing) standing.push(index);
+    else byTile.set(key, [index]);
+  }
+  return byTile;
+}
+
+/** The tiles a seat looks for its paving on: its own, and its four neighbours. */
+const SEAT_TILES = [[0, 0] as const, ...NEIGHBOURS];
+
+/**
+ * The node a seat is reached from, or -1 when there is none.
+ *
+ * Nearest wins, measured on the ground plane only, because the vertical part of
+ * the distance is the rise {@link SEAT_RISE} has already had its say about.
+ */
+function nodeFor(
+  spot: SeatSpot,
+  nodes: readonly WalkNode[],
+  byTile: ReadonlyMap<string, number[]>,
+): number {
+  let nearest = -1;
+  let best = Infinity;
+  for (const [dx, dz] of SEAT_TILES) {
+    for (const index of byTile.get(tileKey(spot.tileX + dx, spot.tileZ + dz)) ?? []) {
+      const node = nodes[index]!;
+      const reach = Math.hypot(node.x - spot.x, node.z - spot.z);
+      if (reach < best && Math.abs(node.y - spot.y) <= SEAT_RISE) {
+        best = reach;
+        nearest = index;
+      }
+    }
+  }
+  return nearest;
 }
 
 /**

@@ -133,6 +133,28 @@ sky, exactly as the sea is. Paint them in one flat tone and let the shader do
 the movement; see _Water is a shader, not a colour_ in
 `docs/art-direction.md`.
 
+## Somewhere to sit
+
+A model with a seat in it says so, and the crowd does the rest:
+
+```ts
+// Three sitters on a bench plank, all looking out over its front.
+seats: [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 })),
+```
+
+`x` and `z` are the column the sitter's body fills, `y` is the layer their
+**hips** rest on — the first free layer above the seat, the same "first free
+layer" the parts hand back — and `facing` is quarter turns from the model's own
++z, which is the way a figure faces. So `0` looks out of the front of the model,
+`2` back into it.
+
+The app needs nothing: `crowd/domain/seating.ts` turns the seats along with the
+object and hangs each one off the paving it can be reached from, and the crowd
+walks off the path, sits for a minute or two and gets up again. A seat with no
+paving within a tile of it is simply never used — draw the chairs where the
+paving will be, or accept that the ones at the back of a terrace are scenery.
+See `docs/crowd.md`, _Sitting down_.
+
 ## Scale
 
 **One tile is `TILE_VOXELS` (16) voxels and stands for 4 m.** Everything follows

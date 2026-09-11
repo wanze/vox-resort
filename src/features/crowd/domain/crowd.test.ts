@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
-import { createCrowd, MAX_STEP, stepCrowd, WALK_SPEED, type Crowd } from './crowd';
+import { createCrowd, isSeated, MAX_STEP, stepCrowd, WALK_SPEED, type Crowd } from './crowd';
 import { walkingSurface, walkNetworkFor, type PavedTile, type WalkNetwork } from './walkNetwork';
 
 const FLAT: LevelProvider = () => 0;
@@ -260,5 +260,119 @@ describe('roaming the beach', () => {
       }
     }
     expect(returned, 'everybody stayed on the beach for ever').toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Comfortably longer than the longest sit, so a test that waits this out is
+ * waiting for somebody to get up rather than racing them.
+ */
+const SIT_LIMIT = 400;
+
+/** Who is sitting on each seat, as the crowd's own claims report it. */
+const sitters = (crowd: Crowd): number[] => Array.from(crowd.seatBy);
+
+/** The first person actually sitting down, or -1 while they are all walking. */
+const anyoneSeated = (crowd: Crowd): number => {
+  for (let i = 0; i < crowd.count; i++) if (isSeated(crowd, i)) return i;
+  return -1;
+};
+
+describe('the people who sit down', () => {
+  /** A street with one three-seat bench beside its middle tile. */
+  const benched = (length: number, seats = 3): WalkNetwork =>
+    walkNetworkFor({
+      paved: street(length),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 20,
+      seats: Array.from({ length: seats }, (_, index) => ({
+        x: (Math.floor(length / 2) + 0.25 + index * 0.1) * TILE_VOXELS,
+        z: TILE_VOXELS * 1.5,
+        y: walkingSurface(0) + 2,
+        heading: Math.PI,
+        tileX: Math.floor(length / 2),
+        tileZ: 1,
+      })),
+    });
+
+  it('fills a bench beside a busy path', () => {
+    const crowd = createCrowd({ network: benched(9), count: 30, variants: 2, seed: 11 });
+    expect(sitters(crowd)).toEqual([-1, -1, -1]);
+    run(crowd, 120);
+    expect(sitters(crowd).filter((person) => person >= 0).length).toBeGreaterThan(0);
+  });
+
+  /** Runs until somebody is sitting down, and hands them back. */
+  const untilSeated = (crowd: Crowd, seconds = 600): number => {
+    for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 30) {
+      stepCrowd(crowd, 1 / 30);
+      const seated = anyoneSeated(crowd);
+      if (seated >= 0) return seated;
+    }
+    throw new Error('nobody sat down');
+  };
+
+  it('seats a person on the seat, facing the way the seat faces', () => {
+    const crowd = createCrowd({ network: benched(9), count: 30, variants: 2, seed: 12 });
+    const person = untilSeated(crowd);
+    const spot = crowd.network.seats[crowd.seat[person]!]!;
+    expect(crowd.x[person]).toBeCloseTo(spot.x);
+    expect(crowd.y[person]).toBeCloseTo(spot.y);
+    expect(crowd.z[person]).toBeCloseTo(spot.z);
+    // The seat's own heading, not the one the last step they took would give
+    // them: a person on a bench faces out over its front however they arrived.
+    expect(crowd.heading[person]).toBeCloseTo(spot.heading);
+  });
+
+  it('never seats two people on one seat', () => {
+    const crowd = createCrowd({ network: benched(9), count: 60, variants: 2, seed: 13 });
+    for (let elapsed = 0; elapsed < 600; elapsed += 1 / 30) {
+      stepCrowd(crowd, 1 / 30);
+      const held = Array.from(crowd.seat).filter((seat) => seat >= 0);
+      expect(new Set(held).size, 'two people on one seat').toBe(held.length);
+      // And the two halves of the claim agree: the seat a person holds is the
+      // seat that says it is held by them.
+      for (let i = 0; i < crowd.count; i++) {
+        if (crowd.seat[i]! >= 0) expect(crowd.seatBy[crowd.seat[i]!]).toBe(i);
+      }
+    }
+  });
+
+  it('gets people up again, and back onto the paving', () => {
+    const crowd = createCrowd({ network: benched(9), count: 30, variants: 2, seed: 14 });
+    const first = untilSeated(crowd);
+    // Long enough that the longest sit is over several times: whoever was found
+    // sitting is up and walking again, which is the only thing asserted here.
+    run(crowd, SIT_LIMIT);
+    expect(crowd.seat[first]).toBe(-1);
+    expect(isSeated(crowd, first)).toBe(false);
+    expect(crowd.rate[first]!).toBeGreaterThan(1 / SIT_LIMIT);
+  });
+
+  it('holds a seat while walking to it, so nobody sets off for a taken one', () => {
+    const crowd = createCrowd({ network: benched(9, 1), count: 40, variants: 2, seed: 15 });
+    run(crowd, 400);
+    const claims = Array.from(crowd.seat).filter((seat) => seat === 0).length;
+    expect(claims).toBeLessThanOrEqual(1);
+  });
+
+  it('leaves a seated person exactly where they sat', () => {
+    const crowd = createCrowd({ network: benched(9), count: 40, variants: 2, seed: 16 });
+    const person = untilSeated(crowd);
+    const where = [crowd.x[person]!, crowd.y[person]!, crowd.z[person]!];
+    // Five seconds against a sit of at least thirty, so they are certainly
+    // still on it: the point is that a lerp between a point and itself is that
+    // point, however many frames it is run for.
+    run(crowd, 5);
+    expect(isSeated(crowd, person)).toBe(true);
+    expect([crowd.x[person]!, crowd.y[person]!, crowd.z[person]!]).toEqual(where);
+  });
+
+  it('walks a plot with nothing to sit on exactly as it did before', () => {
+    const bare = createCrowd({ network: networkOf(street(9)), count: 20, variants: 2, seed: 17 });
+    run(bare, 120);
+    expect(bare.seatBy).toHaveLength(0);
+    for (const seat of bare.seat) expect(seat).toBe(-1);
   });
 });

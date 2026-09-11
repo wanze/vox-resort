@@ -164,6 +164,20 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([PATH_ID, BOARDWALK_ID, S
 export const LAMP_ID = 'street-lamp';
 export const HEDGE_ID = 'hedge';
 
+/**
+ * The seat the layout stands along the paths, facing whichever one it is beside.
+ *
+ * Scattered rather than planned for the reason the lamps are: a bench belongs
+ * *to* a path, not to a district, and the layout is the one thing that knows
+ * where the paths ended up — on a generated plot as much as on this one. It is
+ * also what makes every bench reachable by construction, which matters here in
+ * a way it does not for a lamp: somebody has to be able to walk to a seat and
+ * sit on it. See `crowd/domain/walkNetwork.ts`.
+ *
+ * Nothing to do with `?bench=1`, which is the benchmark.
+ */
+export const BENCH_ID = 'bench';
+
 /** The rail stood along a path's edge where the ground beside it drops away. */
 export const RAILING_ID = 'railing';
 
@@ -184,6 +198,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   STAIRS_ID,
   LAMP_ID,
   HEDGE_ID,
+  BENCH_ID,
   RAILING_ID,
   STAIR_RAILING_ID,
 ]);
@@ -244,6 +259,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('restrooms', 30, 5),
     at('game-hall', 33, 5),
     at('first-aid', 37, 5),
+    at('coffee-shop', 39, 5),
 
     // D — services
     at('spa-pavilion', 44, 1),
@@ -261,6 +277,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('snack-bar', 58, 5),
     at('icecream', 61, 5),
     at('restrooms', 63, 5),
+    at('coffee-shop', 65, 5),
     at('palm', 68, 4),
 
     // F — the second hotel

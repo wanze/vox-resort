@@ -11,6 +11,7 @@ import {
   type WalkNetwork,
   type WalkNode,
 } from './walkNetwork';
+import type { SeatSpot } from './seating';
 
 /** A flat run of paved tiles along z, all at sea level. */
 const flat = (tiles: readonly (readonly [number, number])[]): PavedTile[] =>
@@ -315,5 +316,107 @@ describe('beachPointAt', () => {
       ]);
     };
     expect(walk()).toEqual(walk());
+  });
+});
+
+/** A seat standing in the middle of a tile, at the height of its paving. */
+const seatOn = (tileX: number, tileZ: number, y = walkingSurface(0)): SeatSpot => ({
+  x: (tileX + 0.5) * TILE_VOXELS,
+  z: (tileZ + 0.5) * TILE_VOXELS,
+  y,
+  heading: 0,
+  tileX,
+  tileZ,
+});
+
+describe('the seats a network hangs off its nodes', () => {
+  it('hangs a seat off the node of its own tile', () => {
+    const network = walkNetworkFor({
+      paved: flat([
+        [0, 0],
+        [1, 0],
+      ]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 4,
+      seats: [seatOn(1, 0)],
+    });
+    expect(network.seats).toHaveLength(1);
+    expect(network.seats[0]!.node).toBe(nodeAt(network, 1, 0));
+    expect(network.nodes[nodeAt(network, 1, 0)]!.seats).toEqual([0]);
+    expect(network.nodes[nodeAt(network, 0, 0)]!.seats).toEqual([]);
+  });
+
+  it('reaches a seat on an unpaved tile from the paving beside it', () => {
+    // The bench the layout actually stands: on the grass, against a path.
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 4,
+      seats: [seatOn(0, 1)],
+    });
+    expect(network.seats).toHaveLength(1);
+    expect(network.seats[0]!.node).toBe(nodeAt(network, 0, 0));
+  });
+
+  it('takes the nearest paving when a seat has a choice of it', () => {
+    const network = walkNetworkFor({
+      paved: flat([
+        [0, 0],
+        [3, 0],
+      ]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 6,
+      // On the tile next to the first, and three tiles from the second.
+      seats: [seatOn(1, 0)],
+    });
+    expect(network.seats[0]!.node).toBe(nodeAt(network, 0, 0));
+  });
+
+  it('drops a seat with no paving within a tile of it', () => {
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 8,
+      seats: [seatOn(4, 4)],
+    });
+    expect(network.seats).toEqual([]);
+    expect(network.nodes[nodeAt(network, 0, 0)]!.seats).toEqual([]);
+  });
+
+  it('drops a seat a whole terrace above its paving', () => {
+    // A bench on the terrace above a path is not something to walk up to; the
+    // flight is, and it is somewhere else. Half a level is allowed, because a
+    // seat names the layer a sitter's hips are at.
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 4,
+      seats: [seatOn(0, 1, walkingSurface(0) + LEVEL_VOXELS), seatOn(1, 0, walkingSurface(0) + 3)],
+    });
+    expect(network.seats).toHaveLength(1);
+    expect(network.seats[0]!.y).toBe(walkingSurface(0) + 3);
+  });
+
+  it('keeps every seat of a bench, and in the order they came in', () => {
+    const network = walkNetworkFor({
+      paved: flat([[0, 0]]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 4,
+      seats: [seatOn(0, 1), seatOn(0, 1), seatOn(0, 1)],
+    });
+    expect(network.seats).toHaveLength(3);
+    expect(network.nodes[nodeAt(network, 0, 0)]!.seats).toEqual([0, 1, 2]);
+  });
+
+  it('offers none when the plot has nothing to sit on', () => {
+    expect(
+      walkNetworkFor({ paved: flat([[0, 0]]), levelOf: FLAT, shore: null, tilesX: 4 }).seats,
+    ).toEqual([]);
   });
 });

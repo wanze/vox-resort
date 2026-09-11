@@ -6,9 +6,11 @@
 import type { VoxelModelSource } from '../voxelgen.ts';
 import beach_club from './beach-club.ts';
 import beach_umbrella from './beach-umbrella.ts';
+import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
 import bungalow from './bungalow.ts';
+import coffee_shop from './coffee-shop.ts';
 import cottage from './cottage.ts';
 import cypress from './cypress.ts';
 import entrance from './entrance.ts';
@@ -65,6 +67,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   willow,
   statue,
   sun_lounger,
+  bench,
   beach_umbrella,
   tikitorch,
   icecream,
@@ -73,6 +76,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   snack_bar,
   restrooms,
   first_aid,
+  coffee_shop,
   poolside_bar,
   resort_bar,
   spa_pavilion,

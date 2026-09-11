@@ -93,6 +93,7 @@ import type { BlobShadowField } from '../features/rendering/adapters/blobShadowF
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
 import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
+import { seatSpotsFor, type SeatSite } from '../features/crowd/domain/seating';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import type {
@@ -515,6 +516,28 @@ function lightsOf(placement: Placement): readonly ModelLight[] {
 }
 
 /**
+ * An object as its seats see it: where the model's corner is, how high it
+ * stands, which way round it is, and the seats the art declared on it.
+ *
+ * The model's own size goes along with it for the reason it does in
+ * {@link lightsOf} — a placement's extent is already turned, and a seat turned
+ * against it would seat somebody outside the chair it was declared in. The turn
+ * itself is `seating.ts`'s to apply.
+ */
+function seatSiteOf(placement: Placement): SeatSite {
+  const { model } = objectTypeById(placement.id);
+  return {
+    x: placement.x,
+    z: placement.z,
+    y: placement.y,
+    rotation: placement.rotation,
+    width: model.width,
+    depth: model.depth,
+    seats: model.seats,
+  };
+}
+
+/**
  * The box an object stands in, as far as the sky behind it is concerned.
  *
  * The placement's own extents, which are already turned, and the model's height
@@ -766,8 +789,9 @@ interface Resort {
  * The crowd this plot can hold, from the paving it was laid with.
  *
  * Every question about the ground is asked here, once — which tiles are paved,
- * how high each one stands, where the sand is — and answered into a graph the
- * per-frame step never has to leave. See `crowd/domain/walkNetwork.ts`.
+ * how high each one stands, where the sand is, what can be sat on — and
+ * answered into a graph the per-frame step never has to leave. See
+ * `crowd/domain/walkNetwork.ts`.
  *
  * The network is built from the *layout's* paving rather than from the plot's,
  * which is the same list on every plot but one: the benchmark tiles the plan out
@@ -788,6 +812,14 @@ function crowdFor(parts: {
     levelOf: (tileX, tileZ) => levelAt(parts.elevation, tileX, tileZ),
     shore: parts.shore,
     tilesX: parts.plan.tilesX,
+    // The authored objects *and* the scattered props, because the bench is one
+    // of the latter: the layout stands benches along the path edges itself, so
+    // a crowd built off `placements` alone would have nothing to sit on at all.
+    // Off the layout's own lists for the reason the paving is: a benchmark's
+    // tiled copies stand on ground the shore and the elevation never heard of.
+    seats: seatSpotsFor(
+      [...parts.plot.layout.placements, ...parts.plot.layout.props].map(seatSiteOf),
+    ),
   });
   return buildCrowdField({
     crowd: createCrowd({

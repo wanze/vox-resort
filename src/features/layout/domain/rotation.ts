@@ -23,7 +23,7 @@
  * that translation on its own, and {@link rotatePoint} is it applied.
  */
 
-import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelLight, ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
 
 /** Quarter turns an object stands at. */
 export type Rotation = 0 | 1 | 2 | 3;
@@ -131,5 +131,32 @@ export function rotateLights(
   return lights.map((light) => ({
     ...light,
     ...rotatePoint(light, width, depth, rotation),
+  }));
+}
+
+/**
+ * A model's seats, moved to where a turned model puts them.
+ *
+ * Two things turn, not one: where the seat is, which is {@link rotatePoint} as
+ * it is for a lamp, and **which way the sitter looks**, which is the model's own
+ * turn added to the seat's. A bench turned to face a path is exactly that sum —
+ * miss the second half and every bench on the plot seats people facing the way
+ * the unturned model did, which on three quarters of them is into its own back
+ * rail.
+ *
+ * Height is untouched, as a lamp's is: a turn about the vertical axis raises
+ * nothing. An unturned model hands its own list straight back.
+ */
+export function rotateSeats(
+  seats: readonly ModelSeat[],
+  width: number,
+  depth: number,
+  rotation: Rotation,
+): readonly ModelSeat[] {
+  if (rotation === 0 || seats.length === 0) return seats;
+  return seats.map((seat) => ({
+    ...seat,
+    ...rotatePoint(seat, width, depth, rotation),
+    facing: normalizeRotation(seat.facing + rotation),
   }));
 }

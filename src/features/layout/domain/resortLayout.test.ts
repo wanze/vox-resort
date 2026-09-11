@@ -20,6 +20,7 @@ import {
   type ResortLayout,
 } from './resortLayout';
 import {
+  BENCH_ID,
   BOARDWALK_ID,
   DERIVED_IDS,
   HEDGE_ID,
@@ -575,8 +576,18 @@ describe('spurs', () => {
   });
 });
 
+/** The real catalogue, as the layout takes it. */
+const catalogueItems = (): LayoutItem[] =>
+  OBJECT_TYPES.map((type) => ({
+    id: type.id,
+    tilesX: type.model.tiles.x,
+    tilesZ: type.model.tiles.z,
+    width: type.model.width,
+    depth: type.model.depth,
+  }));
+
 describe('decorationsFor', () => {
-  const items = [item(PATH_ID), item('hut', 2, 2), item(LAMP_ID), item(HEDGE_ID)];
+  const items = [item(PATH_ID), item('hut', 2, 2), item(LAMP_ID), item(HEDGE_ID), item(BENCH_ID)];
 
   it('never puts a lamp or a hedge on a paved or occupied tile', () => {
     const { lamps, hedges } = decorationsFor(items, tinyPlan);
@@ -588,18 +599,53 @@ describe('decorationsFor', () => {
     }
   });
 
-  it('keeps lamps at least the spacing apart', () => {
-    const { lamps } = decorationsFor(
-      OBJECT_TYPES.map((type) => ({
-        id: type.id,
-        tilesX: type.model.tiles.x,
-        tilesZ: type.model.tiles.z,
-        width: type.model.width,
-        depth: type.model.depth,
-      })),
-      RESORT_PLAN,
-      6,
+  it('never puts a bench on a paved or occupied tile either', () => {
+    const { benches } = decorationsFor(items, tinyPlan);
+    const paved = new Set(pathTilesFor(items, tinyPlan).map((tile) => `${tile.x},${tile.z}`));
+    const occupied = new Set(occupiedTiles(items, tinyPlan).keys());
+    for (const { tile } of benches) {
+      expect(paved.has(`${tile.x},${tile.z}`)).toBe(false);
+      expect(occupied.has(`${tile.x},${tile.z}`)).toBe(false);
+    }
+  });
+
+  it('turns every bench to face the path it stands beside', () => {
+    const { benches } = decorationsFor(catalogueItems(), RESORT_PLAN);
+    const paved = new Set(
+      pathTilesFor(catalogueItems(), RESORT_PLAN).map((tile) => `${tile.x},${tile.z}`),
     );
+    expect(benches.length).toBeGreaterThan(10);
+    // A seat's own facing is 0, so the turn the tile carries *is* the direction
+    // the sitters look — and it has to be the direction the paving is in.
+    const towards = [
+      [0, 1],
+      [1, 0],
+      [0, -1],
+      [-1, 0],
+    ] as const;
+    for (const { tile, rotation } of benches) {
+      const [dx, dz] = towards[rotation]!;
+      expect(
+        paved.has(`${tile.x + dx},${tile.z + dz}`),
+        `the bench at ${tile.x},${tile.z} faces no path`,
+      ).toBe(true);
+    }
+  });
+
+  it('stands no two benches on top of each other', () => {
+    const { benches } = decorationsFor(catalogueItems(), RESORT_PLAN);
+    for (const a of benches) {
+      for (const b of benches) {
+        if (a === b) continue;
+        expect(
+          Math.max(Math.abs(a.tile.x - b.tile.x), Math.abs(a.tile.z - b.tile.z)),
+        ).toBeGreaterThanOrEqual(9);
+      }
+    }
+  });
+
+  it('keeps lamps at least the spacing apart', () => {
+    const { lamps } = decorationsFor(catalogueItems(), RESORT_PLAN, 6);
     expect(lamps.length).toBeGreaterThan(10);
     for (const a of lamps) {
       for (const b of lamps) {
@@ -699,12 +745,21 @@ describe('the resort plan', () => {
     expect(tiles.length).toBeLessThan((RESORT_PLAN.tilesX * RESORT_PLAN.tilesZ) / 4);
   });
 
-  it('dresses the paths with lamps and hedges', () => {
+  it('dresses the paths with lamps, benches and hedges', () => {
     const layout = layoutResort(items, RESORT_PLAN);
     const lamps = layout.props.filter((prop) => prop.id === LAMP_ID);
     const hedges = layout.props.filter((prop) => prop.id === HEDGE_ID);
+    const benches = layout.props.filter((prop) => prop.id === BENCH_ID);
     expect(lamps.length).toBeGreaterThan(20);
     expect(hedges.length).toBeGreaterThan(50);
+    expect(benches.length).toBeGreaterThan(10);
+    // The bench is the one prop that stands at a turn, and its footprint is a
+    // single tile, so the turn costs it nothing on the grid.
+    expect(benches.some((bench) => bench.rotation !== 0)).toBe(true);
+    for (const bench of benches) {
+      expect(bench.tilesX).toBe(1);
+      expect(bench.tilesZ).toBe(1);
+    }
   });
 
   it('stands more than one of the types the resort repeats', () => {
@@ -801,10 +856,10 @@ describe('a plot with a shore', () => {
     ).toThrow(/stands in the sea/);
   });
 
-  it('plants no lamp or hedge on the sand', () => {
+  it('plants no lamp, bench or hedge on the sand', () => {
     const shore = shoreFor(coastal())!;
-    const { lamps, hedges } = decorationsFor(items, coastal());
-    for (const tile of [...lamps, ...hedges]) {
+    const { lamps, benches, hedges } = decorationsFor(items, coastal());
+    for (const tile of [...lamps, ...hedges, ...benches.map((bench) => bench.tile)]) {
       expect(terrainAt(shore, tile.x, tile.z)).toBe('land');
     }
   });

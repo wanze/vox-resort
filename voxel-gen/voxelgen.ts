@@ -94,6 +94,38 @@ export interface ModelLight {
   readonly distance: number;
 }
 
+/** Quarter turns about the vertical axis, in the renderer's own sense. */
+export type QuarterTurns = 0 | 1 | 2 | 3;
+
+/**
+ * A place a person may sit, in the model's own coordinates.
+ *
+ * Here for the reason {@link ModelLight} is here: it is a fact about the art.
+ * The bench knows where its own plank is and which way somebody on it looks, so
+ * wherever the bench is put the sitter lands on the seat and faces out of it —
+ * and a model that grows a second bench grows a second seat in the same edit,
+ * with nothing in `src/` to change. See `crowd/domain/seating.ts`.
+ *
+ * `x` and `z` are the column the sitter's body fills and `y` is the layer their
+ * **hips** rest on, which is the first free layer above the seat — the same
+ * "first free layer above" that `plinth` and `stuccoWall` hand back. It is the
+ * hips rather than the feet because a seated person's feet are off the ground:
+ * what the seat fixes is where the body folds, and the legs hang forward from
+ * there. See `crowd/adapters/crowdField.ts`, which is where they are folded.
+ */
+export interface ModelSeat {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  /**
+   * Quarter turns from the model's own +z that the sitter looks in.
+   *
+   * A figure faces +z — see `people/figure.ts` — so `0` is a seat whose sitter
+   * looks the way the model does, which for a bench is out over its front edge.
+   */
+  readonly facing: QuarterTurns;
+}
+
 export interface VoxelModelSource {
   /** Stable identifier, used for the catalogue entry and the preview filename. */
   readonly id: string;
@@ -130,6 +162,14 @@ export interface VoxelModelSource {
   readonly water?: readonly Color[];
   /** Point lights the object casts once the scene turns the lights on. */
   readonly lights?: readonly ModelLight[];
+  /**
+   * Where a person may sit on this object, if anywhere.
+   *
+   * Most of the catalogue declares none, and a seat nobody can reach is never
+   * sat on rather than being an error — a chair in the middle of a lawn is a
+   * chair nobody walks to. See `crowd/domain/walkNetwork.ts`.
+   */
+  readonly seats?: readonly ModelSeat[];
   readonly build: (builder: VoxelBuilder) => void;
 }
 
@@ -159,6 +199,8 @@ export interface VoxelModel {
   readonly water: readonly Color[];
   /** Lights, shifted onto the same origin as the voxels. */
   readonly lights: readonly ModelLight[];
+  /** Seats, shifted onto the same origin as the voxels. */
+  readonly seats: readonly ModelSeat[];
 }
 
 /** Voxels along one tile edge — the scale every model is authored against. */
@@ -255,6 +297,14 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       color: light.color,
       intensity: light.intensity,
       distance: light.distance,
+    })),
+    // Seats ride along for the same reason the lights do: a seat is a point on
+    // the model, so it has to move with the model onto its own origin.
+    seats: (source.seats ?? []).map((seat) => ({
+      x: seat.x - minX,
+      y: seat.y - minY,
+      z: seat.z - minZ,
+      facing: seat.facing,
     })),
   };
 }

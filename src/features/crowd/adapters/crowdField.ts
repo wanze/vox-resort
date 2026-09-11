@@ -27,6 +27,18 @@
  * {@link walkMaterial}, which is also where the reason the direction cannot just
  * be read back off the matrix is written down.
  *
+ * **Sitting down is drawn, not modelled.** A seated figure is the same geometry
+ * as a walking one, folded by the same `positionNode` the walk rides on: the
+ * body drops onto the seat by the height of its own hips, and the legs — the
+ * vertices the walk already knows about, because they are the ones it swings —
+ * rotate forward and down about the hip. One instanced float says which people
+ * that applies to. See {@link walkMaterial}, and `docs/crowd.md`.
+ *
+ * A second geometry for a sitting pose is what that avoids, and the cost is not
+ * the geometry: it is that a person sitting down would have to be moved from one
+ * mesh's instance slots into another's, every time anybody sat down or stood up,
+ * on a field whose slots are handed out once and never change.
+ *
  * **People are drawn, and nothing else.** They are not `Placement`s: nothing
  * here reaches `tileOccupancy`, `diffPlacements`, the label anchors, the blob
  * shadows or either bake. The last of those is the load-bearing one — the lamp
@@ -52,7 +64,7 @@ import { hipHeight } from '../../../../voxel-gen/people/figure.ts';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { litMaterial } from '../../rendering/adapters/instancedWorld';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
-import { MAX_STEP, stepCrowd, type Crowd } from '../domain/crowd';
+import { isSeated, MAX_STEP, stepCrowd, type Crowd } from '../domain/crowd';
 
 /**
  * How fast the legs swing, in radians a second.
@@ -82,6 +94,24 @@ const SWING_VOXELS = 1.2;
  * the same wave rather than needing one of its own.
  */
 const BOB_VOXELS = 0.12;
+
+/**
+ * How much of its own length a folded leg gives back in height, and how far
+ * forward it reaches, as fractions of the hip height.
+ *
+ * These are one thing said twice: they are the sine and cosine of a thigh
+ * swung down and forward off a seat, and the pair is chosen so that the leg
+ * keeps about the length it had — 1.5 voxels down and 2.7 forward on an adult's
+ * three voxels of leg, which is a hypotenuse of 3.1. A pair that did not would
+ * either tear the leg off the hip or telescope it.
+ *
+ * The result is a figure whose feet land half a voxel above the paving from a
+ * bench seat two voxels over it, which is what sitting looks like. It is not a
+ * knee: a knee needs a second joint and this grid gives a leg three voxels to
+ * hold one in.
+ */
+const SIT_RISE = 0.5;
+const SIT_REACH = 0.9;
 
 export interface CrowdField {
   readonly group: Group;
@@ -133,6 +163,14 @@ interface PersonMesh {
    * two numbers the matrix write already worked out.
    */
   readonly facing: InstancedBufferAttribute;
+  /**
+   * Whether each person is sitting down, as 0 or 1 per instance.
+   *
+   * A float rather than a flag because it is what the shader multiplies by, and
+   * per instance rather than per person because that is the buffer the draw
+   * reads. It is written with the matrix, off the one integer the crowd keeps.
+   */
+  readonly seated: InstancedBufferAttribute;
 }
 
 /**
@@ -176,11 +214,20 @@ function figureGeometry(model: ModelGeometry, capacity: number): BufferGeometry 
     swing[vertex] = Math.sign(positions.getX(vertex)) * taper;
   }
   geometry.setAttribute('swing', new BufferAttribute(swing, 1));
+  // The hip height, baked flat across the figure for the reason `swing` is
+  // baked at all: the fold is a rotation about the hip, so the shader needs the
+  // height of this model's hip, and a uniform would be a uniform per model on a
+  // material shared by all of them. One float a vertex on a figure of a few
+  // dozen is nothing, and it keeps the adult and the child on one material.
+  geometry.setAttribute('hip', new BufferAttribute(new Float32Array(positions.count).fill(hip), 1));
   // Filled by the caller, which is the only thing that knows who stands where.
   geometry.setAttribute('phase', new InstancedBufferAttribute(new Float32Array(capacity), 1));
   const facing = new InstancedBufferAttribute(new Float32Array(capacity * 2), 2);
   facing.setUsage(DynamicDrawUsage);
   geometry.setAttribute('facing', facing);
+  const seated = new InstancedBufferAttribute(new Float32Array(capacity), 1);
+  seated.setUsage(DynamicDrawUsage);
+  geometry.setAttribute('seated', seated);
   return geometry;
 }
 
@@ -222,10 +269,28 @@ function walkMaterial(volume: BakedLightVolume | null): WalkMaterial {
   const clock = uniform(0);
   const material = litMaterial(volume);
   const facing = attribute<'vec2'>('facing', 'vec2');
+  const weight = attribute<'float'>('swing', 'float');
+  const seated = attribute<'float'>('seated', 'float');
+  const hip = attribute<'float'>('hip', 'float');
   const wave = sin(clock.mul(CADENCE).add(attribute<'float'>('phase', 'float')));
-  const swing = wave.mul(attribute<'float'>('swing', 'float')).mul(SWING_VOXELS);
-  const bob = wave.abs().oneMinus().mul(BOB_VOXELS);
-  material.positionNode = positionLocal.add(vec3(swing.mul(facing.x), bob, swing.mul(facing.y)));
+  // Nobody sitting down walks, and both halves of the walk are turned off by
+  // the same factor rather than by a branch: a shader has no cheap branch, and
+  // a multiply by zero is what this costs.
+  const afoot = seated.oneMinus();
+  const swing = wave.mul(weight).mul(SWING_VOXELS).mul(afoot);
+  const bob = wave.abs().oneMinus().mul(BOB_VOXELS).mul(afoot);
+  // How far below the hip a vertex sits, in voxels: the taper the walk weight
+  // already carries, taken back to the length it was derived from. Zero
+  // everywhere above the hip, which is why the whole torso simply drops.
+  const leg = weight.abs().mul(hip);
+  const sitDrop = leg.mul(SIT_RISE).sub(hip).mul(seated);
+  const sitReach = leg.mul(SIT_REACH).mul(seated);
+  // The two displacements along the ground share the one direction the person
+  // faces: the legs swing along it walking, and hang forward along it seated.
+  const along = swing.add(sitReach);
+  material.positionNode = positionLocal.add(
+    vec3(along.mul(facing.x), bob.add(sitDrop), along.mul(facing.y)),
+  );
   return {
     material,
     setClock(seconds) {
@@ -276,6 +341,7 @@ function buildPersonMesh(
     people: Int32Array.from(people),
     triangles: (geometry.getIndex()?.count ?? 0) / 3,
     facing: geometry.getAttribute('facing') as InstancedBufferAttribute,
+    seated: geometry.getAttribute('seated') as InstancedBufferAttribute,
   };
 }
 
@@ -289,11 +355,12 @@ function buildPersonMesh(
  * why the `(sin, cos)` the turn is built from is worth keeping: it is the
  * direction the legs swing along, and it has already been paid for.
  *
- * Both buffers go up whole, without update ranges: everybody moved.
+ * All three buffers go up whole, without update ranges: everybody moved.
  */
 function writeInstances(part: PersonMesh, crowd: Crowd): void {
   const matrices = part.mesh.instanceMatrix.array;
   const facing = part.facing.array;
+  const seated = part.seated.array;
   for (let slot = 0; slot < part.people.length; slot++) {
     const person = part.people[slot]!;
     const heading = crowd.heading[person]!;
@@ -309,9 +376,11 @@ function writeInstances(part: PersonMesh, crowd: Crowd): void {
     matrices[at + 14] = crowd.z[person]!;
     facing[slot * 2] = yawSin;
     facing[slot * 2 + 1] = yawCos;
+    seated[slot] = isSeated(crowd, person) ? 1 : 0;
   }
   part.mesh.instanceMatrix.needsUpdate = true;
   part.facing.needsUpdate = true;
+  part.seated.needsUpdate = true;
 }
 
 /**

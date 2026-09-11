@@ -14,7 +14,8 @@
  *    {@link growSpurs} for why a palm and a sun lounger are not places you walk
  *    to.
  * 3. **Dressing** — street lamps are scattered along the path edges at an even
- *    spacing, and hedges fill the straight runs between them.
+ *    spacing, benches at a wider one facing the path they stand beside, and
+ *    hedges fill the straight runs between them.
  * 4. **Rails** — a handrail is stood along every paved edge the ground drops
  *    away beyond, and a balustrade up both flanks of every flight of stairs. Like
  *    the paving a tile gets, it is a fact about the ground rather than about the
@@ -50,6 +51,7 @@
 import { TILE_VOXELS, type ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import {
   BOARDWALK_ID,
+  BENCH_ID,
   DERIVED_IDS,
   HEDGE_ID,
   LAMP_ID,
@@ -78,6 +80,16 @@ import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
 const LAMP_SPACING = 5;
+
+/**
+ * Tiles between one bench and the next.
+ *
+ * Nine, against the lamps' five: a lamp every 20 m of path is lighting and a
+ * bench every 36 m is furniture, and the resort has a couple of thousand paved
+ * tiles. At the lamps' spacing the promenade came out as a run of benches with
+ * nowhere to walk between them, and every one of them wanted a person on it.
+ */
+const BENCH_SPACING = 9;
 
 export interface LayoutItem {
   readonly id: string;
@@ -696,9 +708,41 @@ export function plotsWithoutPathAccess(items: readonly LayoutItem[], plan: Resor
     .map(({ key }) => key);
 }
 
+/**
+ * A tile of dressing that has to face something: the bench, and so far only the
+ * bench.
+ *
+ * A lamp and a hedge are the same from all four sides, so the layout has never
+ * had to turn a prop before. A seat is not: it has a front, and the front has
+ * to look at the path, or the resort fills up with people sitting with their
+ * backs to it. See {@link facingRotation}.
+ */
+export interface TurnedTile {
+  readonly tile: Tile;
+  readonly rotation: Rotation;
+}
+
 export interface Decorations {
   readonly lamps: readonly Tile[];
+  /** Benches, each turned to face the path it stands beside. */
+  readonly benches: readonly TurnedTile[];
   readonly hedges: readonly Tile[];
+}
+
+/**
+ * The turn that points a model's own +z the way `(dx, dz)` points.
+ *
+ * The convention is `rotation.ts`'s, and the one fact worth writing down is why
+ * these four are the answer: a turn of 1 swings +z round to +x — see
+ * {@link rotatePoint} — so the sequence runs +z, +x, -z, -x. It is the same
+ * sequence a seat's own `facing` is declared in, which is what lets the two be
+ * added together.
+ */
+function facingRotation(dx: number, dz: number): Rotation {
+  if (dz > 0) return 0;
+  if (dx > 0) return 1;
+  if (dz < 0) return 2;
+  return 3;
 }
 
 /**
@@ -730,10 +774,17 @@ function edgeRing(parts: {
 }
 
 /**
- * Dresses the path edges. Both lists come from the same ring of free tiles that
- * touch a path: lamps are taken first at an even spacing, then hedges fill the
- * straight runs left over, skipping anything pressed against a building so the
- * planting reads as a border rather than as undergrowth.
+ * Dresses the path edges. All three lists come from the same ring of free tiles
+ * that touch a path: lamps are taken first at an even spacing, then benches at
+ * a wider one, then hedges fill the straight runs left over, skipping anything
+ * pressed against a building so the planting reads as a border rather than as
+ * undergrowth.
+ *
+ * Benches are taken before the hedges rather than after, and that order is the
+ * only thing about it worth arguing over: the tiles all three want are the same
+ * tiles, and a bench is worth more than a hedge on any of them — one is a place
+ * a person sits, the other is a line of green. Taken last there were none left
+ * on the promenade at all.
  */
 export function decorationsFor(
   items: readonly LayoutItem[],
@@ -758,6 +809,37 @@ export function decorationsFor(
     );
     if (!clear) continue;
     lamps.push(tile);
+    taken.add(tileKey(tile.x, tile.z));
+  }
+
+  /**
+   * The one paved neighbour of a tile, or null where it has none or several.
+   *
+   * A bench wants exactly one: it is what makes the facing unambiguous, and a
+   * tile with paving on two sides is a corner, where a seat would have its back
+   * to a path people walk along.
+   */
+  const soleNeighbour = (x: number, z: number): readonly [number, number] | null => {
+    let found: readonly [number, number] | null = null;
+    for (const [dx, dz] of NEIGHBOURS) {
+      if (!paved.has(tileKey(x + dx, z + dz))) continue;
+      if (found) return null;
+      found = [dx, dz];
+    }
+    return found;
+  };
+
+  const benches: TurnedTile[] = [];
+  for (const tile of ring) {
+    if (taken.has(tileKey(tile.x, tile.z))) continue;
+    const facing = soleNeighbour(tile.x, tile.z);
+    if (!facing) continue;
+    const clear = benches.every(
+      (bench) =>
+        Math.max(Math.abs(bench.tile.x - tile.x), Math.abs(bench.tile.z - tile.z)) >= BENCH_SPACING,
+    );
+    if (!clear) continue;
+    benches.push({ tile, rotation: facingRotation(facing[0], facing[1]) });
     taken.add(tileKey(tile.x, tile.z));
   }
 
@@ -787,7 +869,7 @@ export function decorationsFor(
       candidateKeys.has(tileKey(tile.x, tile.z + 1)),
   );
 
-  return { lamps, hedges };
+  return { lamps, benches, hedges };
 }
 
 /**
@@ -929,7 +1011,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const rails = railPlacementsFor(railModelsIn(items), railTilesFor(paved, levelOf), levelOf);
 
   const props: Placement[] = [];
-  const { lamps, hedges } = decorationsFor(items, plan);
+  const { lamps, benches, hedges } = decorationsFor(items, plan);
   for (const [id, tiles] of [
     [LAMP_ID, lamps],
     [HEDGE_ID, hedges],
@@ -939,6 +1021,26 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     for (const tile of tiles) {
       props.push(
         place(item, derivedKey(id, tile.x, tile.z), tile.x, tile.z, 0, levelOf(tile.x, tile.z)),
+      );
+    }
+  }
+  // The bench is scattered like the other two and turned like nothing else, so
+  // it is laid on its own rather than bent into the loop above: its own model is
+  // 1x1, so the turn costs it no footprint, only a different instance matrix
+  // and — the point of the whole thing — a sitter facing the path. See
+  // `crowd/domain/seating.ts`.
+  const bench = byId.get(BENCH_ID);
+  if (bench) {
+    for (const { tile, rotation } of benches) {
+      props.push(
+        place(
+          bench,
+          derivedKey(BENCH_ID, tile.x, tile.z),
+          tile.x,
+          tile.z,
+          rotation,
+          levelOf(tile.x, tile.z),
+        ),
       );
     }
   }

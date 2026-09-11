@@ -5,11 +5,13 @@
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import beach_club from './beach-club.ts';
+import beach_shower from './beach-shower.ts';
 import beach_umbrella from './beach-umbrella.ts';
 import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
 import bungalow from './bungalow.ts';
+import changing_cabins from './changing-cabins.ts';
 import coffee_shop from './coffee-shop.ts';
 import cottage from './cottage.ts';
 import cypress from './cypress.ts';
@@ -85,6 +87,8 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   fountain,
   snack_bar,
   restrooms,
+  changing_cabins,
+  beach_shower,
   first_aid,
   lifeguard_tower,
   coffee_shop,

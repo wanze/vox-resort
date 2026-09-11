@@ -732,15 +732,25 @@ const LIFEGUARD_SPACING = 24;
  * What stands on the sand behind the lines.
  *
  * Weighted by repetition rather than by a table of numbers: the back of a beach
- * is mostly palms and torches with a club here and there, and the shortest way
- * to say that is to write the palms down more often. The list is also the whole
- * of the rule that a beach club does not end up on the tideline.
+ * is mostly palms and torches with a club, a rinse or a row of huts here and
+ * there, and the shortest way to say that is to write the palms down more often.
+ * The list is also the whole of the rule that a beach club does not end up on
+ * the tideline.
+ *
+ * The cabins and the showers are here for the reason the bar is: they are what
+ * the back of a beach has, and they are wanted behind the sunbathers rather than
+ * among them. Neither is in {@link SHORE_ONLY} — a rinse and a row of changing
+ * huts read by a pool exactly as they read on sand, so a district that draws one
+ * has drawn something that belongs there.
  */
 const BEACH_BACK: readonly string[] = [
   'beach-club',
   VOLLEYBALL_ID,
   'poolside-bar',
   'poolside-bar',
+  'changing-cabins',
+  'beach-shower',
+  'beach-shower',
   'palm',
   'palm',
   'palm',

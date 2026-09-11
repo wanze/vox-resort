@@ -24,8 +24,10 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | bench         | 1×1       | 16 × 7 × 16   | a 4 m seat for three               |
 | lifeguard-tw. | 1×1       | 16 × 19 × 16  | a 4.75 m tower, deck 2 m up        |
 | picnic-table  | 2×1       | 32 × 6 × 16   | a 4 m table seating eight          |
+| beach-shower  | 1×1       | 16 × 12 × 16  | a 3 m rinse post and a towel rail  |
 | volleyball    | 4×2       | 64 × 12 × 32  | a 16 x 8 m beach court             |
 | restrooms     | 2×1       | 32 × 17 × 16  | two-WC block, 8 x 4 m              |
+| changing-cab. | 2×1       | 32 × 16 × 16  | three 2 m huts on an 8 x 4 m walk  |
 | snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m   |
 | entrance      | 4×1       | 64 × 41 × 16  | a 16 m gate, 10 m to the lanterns  |
 | fountain      | 2×2       | 32 × 15 × 32  | an 8 m plaza fountain, three tiers |
@@ -195,4 +197,14 @@ voxel model of a beach lifeguard tower, finely detailed, small crisp voxels, fou
 
 # volleyball
 voxel model of a beach volleyball court, finely detailed, small crisp voxels, a single course of raked sand with a pale taped boundary running to the very edge of its footprint, no plinth and no kerb of any kind, a thin net strung between two timber posts across the middle, and a ball lying on the sand, the court lying flat in the beach rather than standing on it, occupying a 4x2 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+```
+
+## The bathing beach
+
+```
+# changing-cabins
+voxel model of a row of three beach changing huts, finely detailed, small crisp voxels, each a small whitewashed timber box with corner posts and a plank sill, a recessed door with a handle under a gable roof, the three roofs painted red, yellow and blue, a boarded walk running along their fronts, standing on a low sand-coloured slab that fills a 2x1 footprint, flat neutral shading, no baked lighting or shadows, blank unmarked doors, no text, no lettering.
+
+# beach-shower
+voxel model of an open-air beach shower, finely detailed, small crisp voxels, a square timber post on a slatted duckboard with an arm cantilevered out over it, a metal rose hanging under the end of the arm and a short fall of water under that, the boards beneath it darker where they are wet, a towel rail with two towels over it standing alongside, on its own low sand-coloured square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```

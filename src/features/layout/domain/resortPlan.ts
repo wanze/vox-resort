@@ -351,6 +351,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('tikitorch', 38, 11),
     ...row('sun-lounger', 30, 15, 4, 1),
     ...row('beach-umbrella', 34, 15, 2, 2),
+    at('changing-cabins', 37, 15),
+    at('beach-shower', 39, 15),
     at('beach-club', 30, 17),
     at('resort-bar', 35, 17),
     at('willow', 39, 17),
@@ -365,6 +367,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('poolside-bar', 50, 21),
     at('palm', 52, 21),
     ...row('sun-lounger', 44, 25, 4, 1),
+    at('changing-cabins', 50, 25),
+    at('beach-shower', 53, 25),
 
     // E — the beach club and the villa quarter
     at('beach-club', 58, 11),
@@ -388,6 +392,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('poolside-bar', 89, 11),
     at('tikitorch', 91, 11),
     ...row('sun-lounger', 83, 15, 4, 1),
+    at('changing-cabins', 88, 15),
+    at('beach-shower', 90, 15),
     at('beach-club', 83, 17),
     at('resort-bar', 88, 17),
     at('palm', 92, 17),

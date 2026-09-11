@@ -27,6 +27,14 @@
  * swell lift a boat by writing one number, and what makes the roll heel it about
  * its own keel.
  *
+ * **The passengers are drawn from here too**, and they are not a third thing
+ * this file knows how to write. They are a figure field of their own in
+ * `crewField.ts`, built and stepped by this one for a reason that is about the
+ * frame and not about tidiness: a passenger's position is a function of a hull's
+ * pose *this* frame, so it has to be written between the step below and the
+ * draw. Handing a caller both halves is handing them the chance to seat
+ * everybody in last frame's boats.
+ *
  * Nothing here is a `Placement` and nothing here reaches either bake, for the
  * reason people and balloons do not: the lamp and sky-visibility volumes are
  * static by construction, and a fleet that crosses the bay would rebuild them
@@ -45,15 +53,31 @@ import {
 } from '../../rendering/adapters/movingField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { MAX_STEP, poseOf, stepFlotilla, type Flotilla } from '../domain/flotilla';
+import type { Passengers } from '../domain/passengers';
 import type { SailingGround } from '../domain/swimArea';
+import { buildCrewField } from './crewField';
 
 export interface SeaField {
   readonly group: Group;
   /** Everything afloat: the buoys and the craft together. */
   readonly count: number;
-  /** Draw calls this costs: one per surface of each model anybody is drawn in. */
+  /** People sitting in the boats right now. */
+  readonly crewCount: number;
+  /**
+   * Draw calls this costs: one per surface of each model anybody is drawn in,
+   * and one more per person model somebody afloat is drawn in right now.
+   *
+   * Read on demand for the reason {@link triangleCount} is: the crew's half of
+   * it falls to nothing while the hire boats are tied up. See `crewField.ts`.
+   */
   readonly drawCalls: number;
-  /** Triangles it submits per frame. */
+  /**
+   * Triangles it submits per frame, the passengers included.
+   *
+   * Read on demand rather than worked out once, because the crew's half of it
+   * moves: a hire boat lying at its berth carries nobody, so the figures drawn
+   * rise and fall with the hire trade. See `crewField.ts`.
+   */
   readonly triangleCount: number;
   /** Steps the bay by a frame's worth of seconds and writes where it ended up. */
   advance(dt: number): void;
@@ -69,8 +93,31 @@ export interface SeaFieldOptions {
    * a craft's `variant` is an index into this.
    */
   readonly models: readonly ModelGeometry[];
+  /**
+   * The people to sit in the boats, and the models to draw them in.
+   *
+   * Not optional, because "nobody is afloat" is already what an empty passenger
+   * list means and a second way of saying it would be a second branch in every
+   * line below that reads the crew. A resort inland has no craft, so it has no
+   * passengers, and the field it gets is an empty group.
+   *
+   * Passed alongside the flotilla rather than derived from it for the reason the
+   * craft's own variants are: the registries are read by the caller that reads
+   * registries. See `domain/passengers.ts`.
+   */
+  readonly crew: SeaCrewOptions;
   /** The lamps the bay lies under; without it, it is lit by the sky alone. */
   readonly lightVolume?: BakedLightVolume | null;
+}
+
+/** Who is aboard the bay's craft, and the art they are drawn from. */
+export interface SeaCrewOptions {
+  readonly passengers: Passengers;
+  /**
+   * One geometry per person model, in the order the people registry declares
+   * them: a passenger's `variant` is an index into this.
+   */
+  readonly models: readonly ModelGeometry[];
 }
 
 /** One matrix, built once and refilled per instance; see the header. */
@@ -132,20 +179,40 @@ export function buildSeaField(options: SeaFieldOptions): SeaField {
     writeInstances(part, flotilla);
   }
 
+  const crew = buildCrewField({
+    flotilla,
+    passengers: options.crew.passengers,
+    models: options.crew.models,
+    lightVolume: options.lightVolume ?? null,
+  });
+  group.add(crew.group);
+
+  const hulls = fieldTriangles(parts);
   return {
     group,
     get count() {
       return flotilla.count;
     },
-    drawCalls: parts.length,
-    triangleCount: fieldTriangles(parts),
+    get crewCount() {
+      return crew.count;
+    },
+    get drawCalls() {
+      return parts.length + crew.drawCalls;
+    },
+    get triangleCount() {
+      return hulls + crew.triangleCount;
+    },
     advance(dt) {
       const step = Math.min(Math.max(dt, 0), MAX_STEP);
       if (step === 0) return;
       stepFlotilla(flotilla, step, ground);
       for (const part of parts) writeInstances(part, flotilla);
+      // After the hulls and off the same poses: a passenger sits in the boat as
+      // it is now, not as it was last frame. See the note at the top.
+      crew.write();
     },
     dispose() {
+      crew.dispose();
       disposeFieldMeshes(parts);
       group.clear();
       disposeMaterials();

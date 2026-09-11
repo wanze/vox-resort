@@ -254,6 +254,29 @@ geometry: a person sitting down would have to move from one mesh's instance
 slots to another's, every time anybody sat, lay down or got up, on a field whose
 slots are handed out once and never change.
 
+### The figure is drawn by more than the crowd
+
+The geometry above, the three baked per-vertex attributes and the one material
+that folds all three poses are not the crowd's. They are a **figure field**,
+`rendering/adapters/figureField.ts`, and two features build one: the crowd on
+the paving, and the bay, which sits a couple of dozen people in its boats. See
+_People in the boats_ under the milestones.
+
+It sits beside the other two shapes of field the renderer has, and the three are
+worth naming together. A **chunked field** buckets static instances so a whole
+bucket can be rejected (`rendering/domain/spatialChunks.ts`). A **moving field**
+hangs a model on its own middle and rewrites a matrix per instance per frame
+(`rendering/adapters/movingField.ts`); the balloons and the boats are two. A
+**figure field** is a moving field hung on its instances' feet instead, carrying
+the attributes the three poses are folded from.
+
+One consequence is worth knowing before drawing anything somebody sits on: a
+seated figure's legs reach nearly three voxels _forward_ of its hips, and half a
+voxel down below the surface its feet would clear from a bench. So a seat is not
+just a clear column, it is a clear column with three voxels of room in front of
+it at knee height. It is what decided which way round a rowing boat's passenger
+faces.
+
 How much of the crowd rests is `ONTO_SEAT`, `SIT_SECONDS` and `LIE_SECONDS`
 together, and they were tuned by measurement rather than by feel — see the notes
 on them in `crowd.ts`. A quarter chance with sits of up to three minutes put 155
@@ -549,6 +572,42 @@ thing that makes the second one a port of the first.
     so five models now name theirs as a constant and `build` throws if the
     plinth hands back anything else. That is the idiom the restaurant already
     used for its arcade and its eaves.
+
+- **People in the boats. Landed.** Somebody is visibly sitting in the bay's
+  craft, and the hire pedalos go out carrying a guest and come home empty. It is
+  the first thing outside `crowd/` to draw a person, so the figure and its poses
+  moved into a field of their own: see _The figure is drawn by more than the
+  crowd_ above.
+
+  The design question was whether passengers are rows of `Crowd` or a field of
+  their own, and they are their own: `sea/domain/passengers.ts` carries the
+  reasoning. In short, a passenger's position is not a segment between two points
+  but a function of a hull's pose this frame; a passenger holds no node, no gate
+  and no seat of the walk network; and somebody has to be _undrawn_ when a hire
+  boat ties up, which a couple of dozen rows can do by compacting their slots and
+  six hundred should not.
+
+  Three things came out of building it rather than out of the design:
+
+  - **A boat's seat cannot be baked, and that is why the boats declared none.**
+    `crowd/domain/seating.ts` turns a `ModelSeat` into a world position once, off
+    a static placement. A hull moves, heels and pitches every frame, so what is
+    worked out once is the seat's offset in the craft's own frame and the pose is
+    applied to it per frame. The art's own declaration needed no change at all:
+    a seat in model coordinates was already the right thing to write down.
+  - **Neither obvious way to undraw somebody works here.** A zero-scaled instance
+    leaves the seated fold behind as a cross of stray voxels, because
+    `positionNode` displaces a vertex after the instance matrix and is not scaled
+    by it. And `resting` says which of three poses somebody is in, not whether
+    they exist. So the aboard rows are written into the front of the buffer and
+    `InstancedMesh.count` is cut to however many that was.
+  - **Three voxels of leg decided the art.** A rowing boat's stern passenger
+    faces _astern_, because the oars are shipped across the gunwales between the
+    two thwarts and a forward-facing passenger's shins go straight through one.
+    There is exactly one station between the thwarts that neither figure reaches,
+    and a pair of oars needs two. For the same reason a pedalo seats one rather
+    than the two it is drawn with: its footwell is five voxels across and a
+    figure is three, so two abreast would each put a leg inside a float.
 
 - **Step 7.** Not started. The crowd is on the plot; `?people=n`, a count in the
   HUD, a bench case and the real numbers for the table above are still to come.

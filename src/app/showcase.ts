@@ -108,6 +108,7 @@ import {
 import type { SeaField } from '../features/sea/adapters/seaField';
 import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
+import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
 import type { Rental, SailingGround } from '../features/sea/domain/swimArea';
 import { sailingGroundFor, swimAreaMoorings } from '../features/sea/domain/swimArea';
 import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
@@ -211,6 +212,16 @@ const HIRE_COUNT = 6;
 
 /** The seed every bay is drawn from; fixed, for {@link CROWD_SEED}'s reason. */
 const SEA_SEED = 3;
+
+/**
+ * The seed the bay's passengers are seated from; fixed, for the same reason.
+ *
+ * Its own rather than the bay's, so that adding or taking away a berth does not
+ * reshuffle the fleet itself: the flotilla draws its speeds and headings from
+ * {@link SEA_SEED} before anybody is put in a boat, and a shared generator would
+ * have made where the boats are depend on how many people are in them.
+ */
+const CREW_SEED = 4;
 
 /** Where the clock starts: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
@@ -983,6 +994,15 @@ function seaGroundOf(shore: Shore | null, rental: Rental | null): SailingGround 
 }
 
 /**
+ * The berths each of the bay's models offers, in registry order.
+ *
+ * Module level, because it is a fact about the art rather than about a plot: the
+ * seats are declared in `voxel-gen/sea/` and turned into offsets from a hull's
+ * own middle once, not per resort. See `sea/domain/passengers.ts`.
+ */
+const SEA_BERTHS = SEA_MODELS.map(berthsOf);
+
+/**
  * The models that drift about on their own: every boat nobody hires out.
  *
  * The buoy is not a boat, and the pedalos belong to the hut — they are handed to
@@ -1013,6 +1033,12 @@ function seaFor(parts: {
   /** Everything standing on the plot, which is where the hire hut is found. */
   readonly placements: readonly Placement[];
   readonly sea: readonly ModelGeometry[];
+  /**
+   * The crowd's own art, because the figures sitting in the boats are the same
+   * people: a passenger is drawn from the people registry and holds no place in
+   * the walk network. See `sea/domain/passengers.ts`.
+   */
+  readonly people: readonly ModelGeometry[];
   /** The lamps the water lies under, so a hull catches what the paving does. */
   readonly lightVolume: BakedLightVolume | null;
 }): SeaField {
@@ -1038,7 +1064,19 @@ function seaFor(parts: {
     waterline: SEA_LEVEL,
     seed: SEA_SEED,
   });
-  return buildSeaField({ flotilla, ground, models: parts.sea, lightVolume: parts.lightVolume });
+  const passengers = createPassengers({
+    flotilla,
+    berths: SEA_BERTHS,
+    variants: parts.people.length,
+    seed: CREW_SEED,
+  });
+  return buildSeaField({
+    flotilla,
+    ground,
+    models: parts.sea,
+    crew: { passengers, models: parts.people },
+    lightVolume: parts.lightVolume,
+  });
 }
 
 /**
@@ -1080,6 +1118,7 @@ function buildResort(parts: {
     paved: plot.layout.paths,
     placements: plot.layout.placements,
     sea: parts.sea,
+    people: parts.people,
     lightVolume: lighting.volume,
   });
 

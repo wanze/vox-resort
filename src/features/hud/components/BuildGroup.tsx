@@ -1,57 +1,58 @@
+import { BuildTile } from './BuildTile';
+import type { PreviewLookup } from './BuildPalette';
 import type { ObjectTypeGroup } from '../../catalog/domain/objectTypes';
 
 export interface BuildGroupProps {
   readonly group: ObjectTypeGroup;
+  readonly preview: PreviewLookup;
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly selected: string | null;
   readonly onSelect: (typeId: string | null) => void;
 }
 
-const toCssColor = (color: number): string => `#${color.toString(16).padStart(6, '0')}`;
-
-/** One shelf of the catalogue: its name, and its objects once it is opened. */
-export function BuildGroup({ group, open, onToggle, selected, onSelect }: BuildGroupProps) {
+/**
+ * One shelf of the catalogue: its name, its count, and its objects as a grid.
+ *
+ * Shelves stack rather than take turns — all of them are open until somebody
+ * folds one away — because the thing being picked is a picture, and a picture
+ * you have to open a drawer to see is no faster to find than a word.
+ */
+export function BuildGroup({
+  group,
+  preview,
+  open,
+  onToggle,
+  selected,
+  onSelect,
+}: BuildGroupProps) {
   return (
-    <div className="hud-palette-group">
-      <button
-        type="button"
-        className="hud-palette-group-toggle"
-        aria-expanded={open}
-        onClick={onToggle}
-      >
-        {group.label}
-      </button>
+    <section className="build-group">
+      <h3 className="build-group-head">
+        <button
+          type="button"
+          className="build-group-toggle"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          <span className="build-group-caret" aria-hidden="true" />
+          <span className="build-group-label">{group.label}</span>
+          <span className="build-group-count">{group.types.length}</span>
+        </button>
+      </h3>
       {open ? (
-        <ul className="hud-palette-items">
-          {group.types.map((type) => {
-            // A one-tile object can be drawn by dragging rather than clicked
-            // down one at a time.
-            const drawable = type.model.tiles.x === 1 && type.model.tiles.z === 1;
-            return (
-              <li key={type.id}>
-                <button
-                  type="button"
-                  className="hud-palette-item"
-                  aria-pressed={selected === type.id}
-                  // Clicking the armed type again puts the pointer down.
-                  onClick={() => onSelect(selected === type.id ? null : type.id)}
-                >
-                  <span
-                    className="hud-palette-swatch"
-                    style={{ background: toCssColor(type.color) }}
-                  />
-                  <span className="hud-palette-label">{type.label}</span>
-                  <span className="hud-palette-size">
-                    {type.model.tiles.x}×{type.model.tiles.z}
-                    {drawable ? ' ✎' : ''}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="build-grid">
+          {group.types.map((type) => (
+            <BuildTile
+              key={type.id}
+              type={type}
+              preview={preview}
+              selected={selected === type.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
       ) : null}
-    </div>
+    </section>
   );
 }

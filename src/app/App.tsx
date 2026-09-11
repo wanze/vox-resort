@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { previewUrl } from '../features/catalog/adapters/previews';
 import { createHudOverlay } from '../features/hud/adapters/hudOverlay';
 import { Hud } from '../features/hud/components/Hud';
 import { useHudNodes } from './useHudNodes';
@@ -103,6 +104,7 @@ export function App() {
         clock={clock}
         camera={camera}
         resort={resort}
+        preview={previewUrl}
         buildType={buildType}
         onBuildTypeChange={selectBuildType}
         error={error}

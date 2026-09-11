@@ -18,7 +18,20 @@
  */
 
 import { PALETTE, type Ramp } from '../palette.ts';
-import type { VoxelBuilder } from '../voxelgen.ts';
+import type { ModelSeat, VoxelBuilder } from '../voxelgen.ts';
+
+/**
+ * Layers of freeboard a planked hull has: the first free layer above its
+ * gunwale, measured from its own waterline.
+ *
+ * Exported because it is where everything that stands *in* a boat starts, and
+ * because two places now need it that cannot ask {@link hull} for it. A model's
+ * thwarts are painted off what {@link hull} returns, but the {@link ModelSeat}s
+ * on those thwarts are declared as data, outside the builder that painted them.
+ * Left as arithmetic in both it is exactly the kind of number that drifts, and a
+ * seat one course out is a passenger sunk into the thwart or hovering over it.
+ */
+export const HULL_RIM = 4;
 
 /**
  * Half-beam at eight stations from the stern to the bow, as fractions.
@@ -74,7 +87,7 @@ export function hull(b: VoxelBuilder, o: HullOptions): number {
 
   const timber = o.timber ?? PALETTE.teak;
   const floor = o.y + 1;
-  const rim = o.y + 3;
+  const rim = o.y + HULL_RIM - 1;
 
   for (let along = 0; along < o.length; along++) {
     const half = beamAt(o, along);
@@ -95,12 +108,41 @@ export function hull(b: VoxelBuilder, o: HullOptions): number {
     b.box(ends ? west : east, east, rim, rim, z, z, timber.light);
     b.box(west, ends ? east : west, rim, rim, z, z, timber.light);
   }
-  return rim + 1;
+  return o.y + HULL_RIM;
 }
 
 /** Voxels a pedalo measures from transom to bow, and either side of its keel. */
 export const PEDALO_LENGTH = 12;
 export const PEDALO_BEAM = 4;
+
+/** Layers above a pedalo's waterline that its moulded seats are slung at. */
+const PEDALO_GUNWALE = 2;
+
+/**
+ * Where somebody pedalling a pedalo sits, in the coordinates it was drawn at.
+ *
+ * Declared here rather than in `sea/pedalo.ts` for the reason the stripe and the
+ * paddle wheel are painted here: the seats are the part's, so wherever the part
+ * is drawn the sitter lands on one. See {@link HULL_RIM} for why a seat cannot
+ * simply read the layer back off the builder.
+ *
+ * **One seat, on a craft drawn with two.** The footwell is five voxels across
+ * and a figure is three, so two of them abreast would each put a leg inside a
+ * float: two seats no figure fits on are worth less than one it does, and a
+ * pedalo out on a bay with one person aboard is the ordinary sight anyway. The
+ * port seat, because the outer of a figure's two legs then stands over the
+ * footwell rather than over the float beside it.
+ *
+ * The hips ride one course over the moulded pan, which is a course lower over
+ * the sole than a bench seat is over its paving, so the feet finish just under
+ * the footwell floor rather than just over it. That is where pedals are, and it
+ * is 12 cm at this scale.
+ */
+export function pedaloSeats(o: { x: number; y: number; z: number }): ModelSeat[] {
+  // Facing the bow, which is the way the pan faces and the way the paddle wheel
+  // aft of it drives.
+  return [{ x: o.x - 1, y: o.y + PEDALO_GUNWALE + 1, z: o.z + 4, facing: 0 }];
+}
 
 export interface PedaloOptions {
   /** The column between the two floats; the craft is drawn either side of it. */
@@ -136,7 +178,7 @@ export function pedalo(b: VoxelBuilder, o: PedaloOptions): void {
   const stern = o.z;
   const bow = o.z + PEDALO_LENGTH - 1;
   const well = o.y + 1;
-  const gunwale = o.y + 2;
+  const gunwale = o.y + PEDALO_GUNWALE;
 
   // The two floats, two columns wide and three courses deep, with a lighter
   // deck along the top of each. They stand a course proud of the footwell

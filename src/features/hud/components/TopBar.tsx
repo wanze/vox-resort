@@ -45,32 +45,41 @@ export function TopBar(props: TopBarProps) {
         onCyclingChange={clock.setCycling}
       />
 
-      <HudReadout label="Objects" value={stats ? stats.objectCount.toLocaleString('en-US') : '—'} />
-      <HudReadout label="FPS" value={fps} />
-
-      <HudPopover label="Details" open={tool === 'details'} onToggle={toggle('details')}>
-        <RenderStats stats={stats} activeLightsElement={activeLightsElement} />
-      </HudPopover>
-
-      <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>
-        {resort.params ? (
-          <ResortPanel
-            params={resort.params}
-            onGenerate={resort.generate}
-            onClear={resort.clear}
-            busy={resort.building}
-          />
-        ) : null}
-      </HudPopover>
-
-      <HudPopover label="Camera" open={tool === 'camera'} onToggle={toggle('camera')}>
-        <CameraPanel
-          mode={camera.view.mode}
-          direction={camera.view.direction}
-          onModeChange={camera.setMode}
-          onDirectionChange={camera.setDirection}
+      <div className="hud-bar-readouts">
+        <HudReadout
+          label="Objects"
+          value={stats ? stats.objectCount.toLocaleString('en-US') : '—'}
         />
-      </HudPopover>
+        <HudReadout label="FPS" value={fps} />
+      </div>
+
+      {/* Pushed to the far edge, so the bar reads as what the scene is doing on
+          one side and what you can do to it on the other. */}
+      <div className="hud-bar-tools">
+        <HudPopover label="Details" open={tool === 'details'} onToggle={toggle('details')}>
+          <RenderStats stats={stats} activeLightsElement={activeLightsElement} />
+        </HudPopover>
+
+        <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>
+          {resort.params ? (
+            <ResortPanel
+              params={resort.params}
+              onGenerate={resort.generate}
+              onClear={resort.clear}
+              busy={resort.building}
+            />
+          ) : null}
+        </HudPopover>
+
+        <HudPopover label="Camera" open={tool === 'camera'} onToggle={toggle('camera')}>
+          <CameraPanel
+            mode={camera.view.mode}
+            direction={camera.view.direction}
+            onModeChange={camera.setMode}
+            onDirectionChange={camera.setDirection}
+          />
+        </HudPopover>
+      </div>
     </header>
   );
 }

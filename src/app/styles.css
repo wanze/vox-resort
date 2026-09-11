@@ -1,8 +1,117 @@
+/**
+ * The HUD's design system, and the overlay cut from it.
+ *
+ * One idea holds the whole file together: the resort is built out of stone, so
+ * the panel you build it from is too. Every surface is a slab — a dark granite
+ * ground, a grain over it, a lit top edge and a shadowed bottom one — and every
+ * control is either a block sitting proud of its slab or a groove cut into it.
+ * The accents are not invented: they are the art's own palette, read straight
+ * off `voxel-gen/palette.ts`, so a terracotta highlight in the HUD is the same
+ * terracotta as the roof tiles under it.
+ *
+ * The tokens below are the system, and everything after them only spends them.
+ * A component that needs a surface takes `--slab`; one that needs an edge takes
+ * `--bevel`. Nothing past the token block should introduce a colour, a radius or
+ * a shadow of its own — if a part seems to need one, the system is missing a
+ * token and that is where to add it.
+ */
+
 :root {
   color-scheme: dark;
-  --hud-bg: rgb(16 22 30 / 82%);
-  --hud-border: rgb(255 255 255 / 12%);
-  --hud-text: #e9edf2;
+
+  /* ---- Stone ------------------------------------------------------------
+     The chrome itself: a warm basalt, dark enough to sit over a bright noon
+     beach without either of them washing the other out. It runs dark only —
+     everything light enough to read as text is taken from the resort's own
+     palette below, which is what keeps the two ends of the HUD related. */
+  --stone-950: #101316;
+  --stone-900: #171b1f;
+  --stone-850: #1d2226;
+  --stone-800: #23282d;
+  --stone-700: #2c3238;
+  --stone-600: #394047;
+  --stone-500: #4a5258;
+  --stone-400: #626b73;
+  --stone-300: #8d959c;
+
+  /* ---- The resort's own colours ----------------------------------------
+     Straight from `PALETTE` in the art. Used for anything that means something
+     rather than anything that is merely chrome. */
+  --sand: #dcbe95;
+  --stucco: #e8dcc6;
+  --terracotta: #c46a42;
+  --terracotta-lit: #d78f6a;
+  --foliage: #7d9a3c;
+
+  /* ---- Surfaces ---------------------------------------------------------
+     `--slab` and `--slab-blend` travel together: the grain is blended into the
+     stone rather than laid over it, so a surface never looks like a texture
+     stuck onto a colour. */
+  --grain: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
+  --slab: var(--grain), linear-gradient(180deg, var(--stone-700) 0%, var(--stone-850) 100%);
+  --slab-blend: soft-light, normal;
+  --slab-raised: var(--grain), linear-gradient(180deg, var(--stone-600) 0%, var(--stone-800) 100%);
+  --sunken: linear-gradient(180deg, var(--stone-950) 0%, var(--stone-900) 100%);
+  /* Flat on purpose: the one ground a sticky heading can share with the tiles
+     scrolling under it. */
+  --tray: var(--stone-900);
+
+  /* ---- Edges -----------------------------------------------------------
+     A block is lit along the top and dark along the bottom; a groove is the
+     other way round. That one inversion is what makes the HUD read as carved
+     rather than drawn. */
+  --edge: rgb(0 0 0 / 55%);
+  --edge-lit: rgb(255 255 255 / 9%);
+  --bevel: inset 0 1px 0 var(--edge-lit), inset 0 -1px 0 rgb(0 0 0 / 40%);
+  --bevel-in: inset 0 2px 5px rgb(0 0 0 / 55%), inset 0 -1px 0 var(--edge-lit);
+  --shadow-slab: 0 1px 0 rgb(0 0 0 / 50%), 0 10px 26px rgb(0 0 0 / 40%);
+  --shadow-lift: 0 4px 14px rgb(0 0 0 / 45%);
+  --shadow-plate: 0 1px 2px rgb(0 0 0 / 80%);
+  /* The knob a slider is dragged by: sunlit stucco, rimmed and dropped. The rim
+     rides in the shadow rather than in a border, so both engines' thumbs are
+     short enough to stop reading as the same rule written twice. */
+  --knob-size: 13px;
+  --knob-face: linear-gradient(180deg, var(--stucco), var(--sand));
+  --knob-shadow: 0 0 0 1px rgb(0 0 0 / 60%), 0 1px 3px rgb(0 0 0 / 60%);
+
+  /* ---- Text ------------------------------------------------------------- */
+  --text: #e7e4de;
+  --text-dim: var(--stone-300);
+  --text-faint: var(--stone-400);
+  --text-on-accent: #1b1207;
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-num: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --size-label: 9.5px;
+  --size-small: 11px;
+  --size-body: 12.5px;
+  --size-lead: 15px;
+  --track-label: 0.12em;
+
+  /* ---- Metrics ---------------------------------------------------------- */
+  --space-1: 3px;
+  --space-2: 6px;
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 20px;
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 11px;
+  --control-h: 26px;
+  --bar-h: 48px;
+  --palette-w: 304px;
+  --tile-min: 80px;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --quick: 120ms var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --quick: 1ms linear;
+  }
 }
 
 * {
@@ -11,20 +120,15 @@
 
 html,
 body,
-#root {
+:where(#root) {
   height: 100%;
   margin: 0;
 }
 
 body {
-  background: #11161d;
-  color: var(--hud-text);
-  font:
-    13px/1.45 ui-sans-serif,
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+  background: var(--stone-950);
+  color: var(--text);
+  font: var(--size-body) / 1.45 var(--font-ui);
   overflow: hidden;
 }
 
@@ -48,58 +152,724 @@ body {
   pointer-events: none;
 }
 
-/* Layout only, on purpose: the HUD is being shaped before it is dressed, so
-   this file says where things sit and nothing about how they look. */
+/* ===========================================================================
+   Shared shapes
+   Three selectors carry most of the HUD: a slab, a block and a groove. Written
+   as selector lists rather than as extra class names on the components, so the
+   markup stays about what a thing is and this file stays about how it looks.
+   ======================================================================== */
+
+/* A surface. */
+.hud-bar,
+.hud-popover-panel,
+.hud-palette,
+.hud-error {
+  background-image: var(--slab);
+  background-blend-mode: var(--slab-blend);
+  color: var(--text);
+}
+
+/* A block sitting proud of one. */
+.hud-popover-toggle,
+.hud-camera-mode,
+.hud-camera-point,
+.hud-resort-roll,
+.hud-resort-go,
+.hud-resort-clear,
+.build-group-toggle,
+.hud-palette-armed {
+  appearance: none;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background-image: var(--slab-raised);
+  background-blend-mode: var(--slab-blend);
+  box-shadow: var(--bevel);
+  color: var(--text);
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background-color var(--quick),
+    box-shadow var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.hud-popover-toggle:hover,
+.hud-camera-mode:hover:not(:disabled),
+.hud-camera-point:hover:not(:disabled),
+.hud-resort-roll:hover:not(:disabled),
+.hud-resort-go:hover:not(:disabled),
+.hud-resort-clear:hover:not(:disabled),
+.build-group-toggle:hover,
+.hud-palette-armed:hover {
+  background-color: rgb(255 255 255 / 6%);
+  color: var(--stucco);
+}
+
+/* Pressed in, which is what "on" looks like in stone. */
+.hud-popover-toggle[aria-expanded='true'],
+.hud-camera-mode[aria-pressed='true'],
+.hud-camera-point[aria-pressed='true'] {
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in);
+  border-color: rgb(0 0 0 / 70%);
+  color: var(--sand);
+}
+
+.hud-camera-point[aria-pressed='true'],
+.hud-camera-mode[aria-pressed='true'] {
+  color: var(--terracotta-lit);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--terracotta-lit);
+  outline-offset: 1px;
+}
+
+button:disabled,
+input:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+/* A groove cut into one.
+   The two engines' pseudo-elements cannot share a selector — an unrecognised
+   vendor pseudo voids the whole rule it appears in — so what they have in
+   common is hoisted into the tokens above and into `--track`, and each rule is
+   left with only the part its engine actually needs. */
+input[type='range'] {
+  appearance: none;
+  height: 14px;
+  margin: 0;
+  background: transparent;
+  cursor: ew-resize;
+}
+
+/* What the groove is filled with, defaulted in the `var()` rather than declared
+   on the input: a custom property set on the element itself would beat the one
+   a slider that means something inherits from its wrapper. See `.hud-time`.
+
+   The two track rules really are the same rule twice over. They have to be:
+   putting both pseudo-elements in one selector list voids it in both engines,
+   and painting the groove on the input instead would leave a 6px hit target. */
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track, var(--sunken));
+  box-shadow: var(--bevel-in);
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track, var(--sunken));
+  box-shadow: var(--bevel-in);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -3.5px;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 50%;
+  background: var(--knob-face);
+  box-shadow: var(--knob-shadow);
+}
+
+input[type='range']::-moz-range-thumb {
+  border: 0;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 50%;
+  background: var(--knob-face);
+  box-shadow: var(--knob-shadow);
+}
+
+input[type='number'],
+input[type='search'] {
+  appearance: none;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in);
+  color: var(--text);
+  font: var(--size-small) / 1 var(--font-num);
+}
+
+input[type='search'] {
+  font-family: var(--font-ui);
+}
+
+input::placeholder {
+  color: var(--text-faint);
+}
+
+input[type='checkbox'] {
+  accent-color: var(--terracotta);
+}
+
+/* The one type treatment the whole HUD shares: a small carved caption. */
+.hud-readout-label,
+.hud-palette-title,
+.build-group-label,
+.hud-palette-armed-label,
+.hud-time-cycle,
+.hud-stat dt {
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* Scrollbars, so a panel's overflow is part of the stone rather than the OS. */
+.hud-popover-panel,
+.hud-palette-shelves {
+  scrollbar-width: thin;
+  scrollbar-color: var(--stone-500) transparent;
+}
+
+.hud-popover-panel::-webkit-scrollbar,
+.hud-palette-shelves::-webkit-scrollbar {
+  width: 9px;
+}
+
+.hud-popover-panel::-webkit-scrollbar-thumb,
+.hud-palette-shelves::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 5px;
+  background: var(--stone-500);
+  background-clip: content-box;
+}
+
+/* ===========================================================================
+   The top bar: one lintel across the scene
+   ======================================================================== */
 
 .hud-bar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
+  height: var(--bar-h);
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 12px;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--edge);
+  box-shadow: var(--shadow-slab);
   pointer-events: auto;
 }
+
+.hud-bar::after {
+  /* The lit chamfer along the top of the lintel, where the sun would catch it. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-top: 1px solid var(--edge-lit);
+  pointer-events: none;
+}
+
+.hud-bar-readouts {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.hud-bar-tools {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.hud-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 44px;
+}
+
+.hud-readout-value {
+  font: 600 var(--size-lead) / 1.1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--sand);
+}
+
+/* ---- Time of day ------------------------------------------------------ */
+
+.hud-time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hud-time input[type='range'] {
+  width: 168px;
+}
+
+/* The groove for the sun runs through the day it sets: night, dawn, noon, dusk,
+   night. It is the one control whose track means something, and it says so by
+   filling the groove every other slider leaves plain. */
+.hud-time {
+  --track: linear-gradient(
+    90deg,
+    #101a2c 0%,
+    #2e3f5e 18%,
+    var(--terracotta) 30%,
+    var(--sand) 46%,
+    #9fd4e8 56%,
+    var(--terracotta) 72%,
+    #2e3f5e 84%,
+    #101a2c 100%
+  );
+}
+
+.hud-time-cycle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ---- Popovers --------------------------------------------------------- */
 
 .hud-popover {
   position: relative;
 }
 
+.hud-popover-toggle {
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+}
+
 .hud-popover-panel {
   position: absolute;
-  top: 100%;
+  top: calc(100% + var(--space-3));
   left: 0;
-  z-index: 1;
-  min-width: 240px;
-  max-height: 70vh;
+  z-index: 2;
+  min-width: 260px;
+  max-height: min(70vh, 520px);
   overflow: auto;
-  padding: 8px;
-  background: var(--hud-bg);
-  border: 1px solid var(--hud-border);
+  padding: var(--space-4);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-slab), var(--bevel);
 }
+
+/* The tools sit at the right edge, so their panels hang from it too. */
+.hud-bar-tools .hud-popover-panel {
+  left: auto;
+  right: 0;
+}
+
+/* ---- Render stats ----------------------------------------------------- */
+
+.hud-loading {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.hud-stats {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.hud-stat {
+  display: contents;
+}
+
+.hud-stats dt {
+  padding-top: 2px;
+}
+
+.hud-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-stat-note {
+  color: var(--text-faint);
+  font-size: var(--size-small);
+}
+
+.hud-lights-active {
+  color: var(--sand);
+  font-weight: 600;
+}
+
+/* ---- Camera ----------------------------------------------------------- */
+
+.hud-camera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hud-camera-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.hud-camera-mode {
+  height: var(--control-h);
+}
+
+.hud-camera-compass {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+.hud-camera-point {
+  height: 34px;
+  font-family: var(--font-num);
+  letter-spacing: var(--track-label);
+}
+
+/* ---- Resort ----------------------------------------------------------- */
+
+.hud-resort {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 264px;
+}
+
+.hud-resort-row {
+  display: grid;
+  grid-template-columns: 58px 1fr 44px;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.hud-resort-row > span:first-child {
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.hud-resort-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-num);
+  color: var(--sand);
+}
+
+.hud-resort-seed input[type='number'] {
+  width: 100%;
+}
+
+.hud-resort-roll {
+  width: 100%;
+  height: var(--control-h);
+  font-size: var(--size-body);
+}
+
+.hud-resort-actions {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.hud-resort-go,
+.hud-resort-clear {
+  height: 30px;
+}
+
+/* The one button that makes a resort: terracotta, like the roofs it lays. */
+.hud-resort-go {
+  border-color: rgb(0 0 0 / 65%);
+  background-image: var(--grain), linear-gradient(180deg, var(--terracotta-lit), var(--terracotta));
+  background-blend-mode: var(--slab-blend);
+  color: var(--text-on-accent);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 18%);
+}
+
+.hud-resort-go:hover:not(:disabled) {
+  background-color: rgb(255 255 255 / 12%);
+  color: var(--text-on-accent);
+}
+
+/* ===========================================================================
+   The build palette
+   ======================================================================== */
 
 .hud-palette {
   position: absolute;
-  top: 48px;
-  right: 0;
-  width: 220px;
-  max-height: calc(100% - 64px);
-  overflow: auto;
-  padding: 8px;
+  top: calc(var(--bar-h) + var(--space-3));
+  right: var(--space-3);
+  width: var(--palette-w);
+  /* As tall as it needs to be and no taller, so folding every shelf away leaves
+     a chip at the corner rather than an empty column down the screen. */
+  max-height: calc(100% - var(--bar-h) - var(--space-3) * 2);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3);
+  gap: var(--space-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-slab), var(--bevel);
   pointer-events: auto;
-  background: var(--hud-bg);
-  border: 1px solid var(--hud-border);
 }
+
+.hud-palette-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.hud-palette-title {
+  margin: 0;
+  font-size: var(--size-label);
+}
+
+.hud-palette-count {
+  margin-left: auto;
+  font: var(--size-small) / 1 var(--font-num);
+  color: var(--text-faint);
+}
+
+.hud-palette-search input {
+  width: 100%;
+}
+
+/* What the pointer is holding, and the way to put it down. */
+.hud-palette-armed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border-color: rgb(0 0 0 / 65%);
+  background-image: var(--grain), linear-gradient(180deg, var(--terracotta-lit), var(--terracotta));
+  background-blend-mode: var(--slab-blend);
+  color: var(--text-on-accent);
+}
+
+.hud-palette-armed-label {
+  color: rgb(27 18 7 / 65%);
+}
+
+.hud-palette-armed-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-palette-armed-stop {
+  margin-left: auto;
+  opacity: 0.7;
+}
+
+.hud-palette-armed:hover {
+  background-color: rgb(255 255 255 / 12%);
+  color: var(--text-on-accent);
+}
+
+/* A tray recessed into the slab, so the shelves read as objects set into the
+   panel rather than printed on it — and so a sticky heading has one flat colour
+   to sit on while the tiles scroll under it. */
+.hud-palette-shelves {
+  /* Shrinks to its shelves, and only starts scrolling once they outgrow the
+     height the panel is allowed. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-2) var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--tray);
+  box-shadow: var(--bevel-in);
+}
+
+.hud-palette-empty {
+  margin: var(--space-4) 0;
+  color: var(--text-faint);
+}
+
+/* ---- Shelves ---------------------------------------------------------- */
+
+.build-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  /* Its own padding rather than the tray's, so the heading covers the gap above
+     the tiles instead of letting them slide out from under it. */
+  padding: var(--space-2) 0;
+  background: var(--tray);
+}
+
+.build-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 24px;
+  padding: 0 var(--space-2);
+  text-align: left;
+}
+
+.build-group-caret {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--text-faint);
+  transition: transform var(--quick);
+}
+
+.build-group-toggle[aria-expanded='true'] .build-group-caret {
+  transform: rotate(90deg);
+}
+
+.build-group-count {
+  margin-left: auto;
+  font: var(--size-label) / 1 var(--font-num);
+  color: var(--text-faint);
+}
+
+.build-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+/* ---- One object ------------------------------------------------------- */
+
+.build-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
+  background: var(--stone-950);
+  box-shadow: var(--bevel-in);
+  color: var(--text);
+  cursor: pointer;
+  --art-zoom: 1.04;
+  transition:
+    box-shadow var(--quick),
+    border-color var(--quick),
+    transform var(--quick);
+}
+
+.build-tile-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.build-tile-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* The previews centre the object in a square; lifting it clears the name
+     plate without cropping anything that is actually drawn. The zoom is a token
+     so the hover state can lean on it without reaching through the tile. */
+  transform: translateY(-7%) scale(var(--art-zoom));
+  transition: transform var(--quick);
+}
+
+/* No preview rendered yet: the type's own dominant colour stands in. */
+.build-tile-swatch {
+  position: absolute;
+  inset: 22%;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bevel);
+}
+
+.build-tile-name {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  padding: var(--space-4) var(--space-2) var(--space-1);
+  background: linear-gradient(180deg, rgb(16 19 22 / 0%), rgb(16 19 22 / 88%) 55%);
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1.15;
+  text-align: left;
+  text-shadow: var(--shadow-plate);
+  color: var(--stucco);
+}
+
+.build-tile-badge {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  z-index: 1;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  background: rgb(16 19 22 / 72%);
+  font: var(--size-label) / 1.4 var(--font-num);
+  color: var(--text-dim);
+}
+
+.build-tile-draw {
+  color: var(--foliage);
+}
+
+.build-tile:hover {
+  border-color: var(--stone-400);
+  box-shadow: var(--bevel-in), var(--shadow-lift);
+  transform: translateY(-1px);
+  --art-zoom: 1.1;
+}
+
+/* Armed: lit from the resort's own terracotta, so the tile you are holding is
+   the only warm thing on the shelf. */
+.build-tile[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow:
+    var(--bevel-in),
+    0 0 0 1px var(--terracotta),
+    0 0 14px rgb(196 106 66 / 45%);
+}
+
+.build-tile[aria-pressed='true'] .build-tile-name {
+  background: linear-gradient(180deg, rgb(122 58 30 / 0%), rgb(122 58 30 / 92%) 55%);
+  color: #fff3e6;
+}
+
+/* ===========================================================================
+   The one thing on the overlay that means nothing else on it is true
+   ======================================================================== */
 
 .hud-error {
   position: absolute;
-  bottom: 16px;
-  left: 16px;
+  bottom: var(--space-5);
+  left: var(--space-5);
   max-width: 520px;
-  padding: 12px 14px;
-  background: var(--hud-bg);
-  border: 1px solid var(--hud-border);
+  padding: var(--space-4);
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-slab);
   pointer-events: auto;
+}
+
+.hud-error strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--terracotta-lit);
+  letter-spacing: 0.02em;
+}
+
+.hud-error p {
+  margin: 0;
+  color: var(--text-dim);
+  font-family: var(--font-num);
+  font-size: var(--size-small);
 }

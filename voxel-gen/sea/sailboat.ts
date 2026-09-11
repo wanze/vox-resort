@@ -16,10 +16,16 @@
  * with a symmetrical fin. The bay's craft are all on the same tack, which is
  * what a bay under one breeze looks like — the same decision the balloons make
  * about the evening wind. See `features/sea/domain/flotilla.ts`.
+ *
+ * **One seat, and it is to port**, which is the tack deciding where somebody
+ * sits rather than taste. The wind is on the port side, so the helm sits to
+ * windward; and it is the only column of the thwart where a figure three voxels
+ * across clears both the gunwale beside it and the boom over it. A second hand
+ * would have to sit under that boom. See `features/sea/domain/passengers.ts`.
  */
 
 import { PALETTE } from '../palette.ts';
-import { hull } from '../parts/boat.ts';
+import { hull, HULL_RIM } from '../parts/boat.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 /** Voxels from transom to stem, and of beam either side of the keel. */
@@ -29,6 +35,9 @@ const BEAM = 3;
 /** Where the mast is stepped, as a station along the hull, and how tall it is. */
 const STEP = 13;
 const MAST = 16;
+
+/** The station the thwart is laid across, which is where the helm sits. */
+const HELM_THWART = 4;
 
 /**
  * Voxels the sail reaches aft of the mast at its foot, and voxels of draught in
@@ -60,6 +69,8 @@ export default defineModel({
   label: 'Sailing Dinghy',
   category: 'sea',
   tiles: { x: 1, z: 2 },
+  // The helm, on the thwart and facing the bow with the tiller aft of them.
+  seats: [{ x: -1, y: HULL_RIM, z: HELM_THWART, facing: 0 }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, stucco, teak } = PALETTE;
@@ -67,7 +78,7 @@ export default defineModel({
     const rim = hull(b, { x: 0, z: 0, y: 0, length: LENGTH, beam: BEAM, timber: teak });
 
     // The thwart the helm sits on, and the tiller running aft from it.
-    box(-BEAM, BEAM, rim - 1, rim - 1, 4, 5, teak.light);
+    box(-BEAM, BEAM, rim - 1, rim - 1, HELM_THWART, HELM_THWART + 1, teak.light);
     box(0, 0, rim, rim, 1, 3, teak.base);
 
     // The mast, and the boom lying off to starboard with the sail.

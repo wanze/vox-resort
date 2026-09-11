@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { BuildPalette } from './BuildPalette';
+import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { HudError } from './HudError';
 import { TopBar } from './TopBar';
 import type { CameraControls } from '../../../app/useCameraControls';
@@ -15,6 +15,8 @@ export interface HudProps {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
+  /** Where the palette's tiles get their pictures; see {@link PreviewLookup}. */
+  readonly preview: PreviewLookup;
   /** Object type the pointer is armed with, or null when nothing is. */
   readonly buildType: string | null;
   readonly onBuildTypeChange: (typeId: string | null) => void;
@@ -34,7 +36,11 @@ export function Hud(props: HudProps) {
         camera={props.camera}
         resort={props.resort}
       />
-      <BuildPalette selected={props.buildType} onSelect={props.onBuildTypeChange} />
+      <BuildPalette
+        preview={props.preview}
+        selected={props.buildType}
+        onSelect={props.onBuildTypeChange}
+      />
       {props.error ? <HudError message={props.error} /> : null}
     </div>
   );

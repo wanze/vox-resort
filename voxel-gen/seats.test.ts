@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_SOURCES } from './models/index.ts';
+import { SEA_SOURCES } from './sea/index.ts';
 import { buildModel, TILE_VOXELS, type ModelSeat, type VoxelModel } from './voxelgen.ts';
 
 /**
@@ -16,8 +17,15 @@ import { buildModel, TILE_VOXELS, type ModelSeat, type VoxelModel } from './voxe
  * deliberately *not* checked is the space the body sweeps out — a head on a
  * bolster and feet over the end of a lounger are both wanted, and both overlap
  * the model.
+ *
+ * The bay's craft are in here alongside the catalogue, and they are the reason
+ * the checks earn their keep twice over. A thwart is declared against
+ * `HULL_RIM` in a second file, and a boat's own seat is the one thing on it
+ * that nothing on the plot can be measured against: a bench that seats somebody
+ * a course high is obvious beside its paving, where a rower a course high is
+ * just a figure over open water. See `features/sea/domain/passengers.ts`.
  */
-const MODELS: readonly VoxelModel[] = MODEL_SOURCES.map(buildModel);
+const MODELS: readonly VoxelModel[] = [...MODEL_SOURCES, ...SEA_SOURCES].map(buildModel);
 
 const withSeats = MODELS.filter((model) => model.seats.length > 0);
 

@@ -47,16 +47,24 @@ export class VoxelBuilder {
  * so it is declared here with the rest of the model: a new model file lands in
  * the right group of the HUD without anything in `src/` being touched.
  */
-export type ModelCategory = 'grounds' | 'lodging' | 'amenities' | 'leisure' | 'people' | 'sky';
+export type ModelCategory =
+  | 'grounds'
+  | 'lodging'
+  | 'amenities'
+  | 'leisure'
+  | 'people'
+  | 'sky'
+  | 'sea';
 
 /**
  * Every category, with its heading, in the order the palette shows them.
  *
- * `people` and `sky` are here for completeness and will never be shown: both
- * live in registries of their own rather than in `models/index.ts`, so no
- * `OBJECT_TYPES` entry ever carries either and the palette drops the empty
- * shelves. Neither is something to place — a person walks in on their own, and
- * a balloon is let go. See `docs/crowd.md` and `features/balloons/`.
+ * `people`, `sky` and `sea` are here for completeness and will never be shown:
+ * all three live in registries of their own rather than in `models/index.ts`, so
+ * no `OBJECT_TYPES` entry ever carries any of them and the palette drops the
+ * empty shelves. None of them is something to place — a person walks in on their
+ * own, a balloon is let go, and a boat is afloat on water nothing may stand on.
+ * See `docs/crowd.md`, `features/balloons/` and `features/sea/`.
  */
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
@@ -68,6 +76,7 @@ export const MODEL_CATEGORIES: readonly {
   { id: 'leisure', label: 'Leisure' },
   { id: 'people', label: 'People' },
   { id: 'sky', label: 'Sky' },
+  { id: 'sea', label: 'Sea' },
 ];
 
 /** Footprint in resort tiles; see `TILE_VOXELS` for the tile edge in voxels. */

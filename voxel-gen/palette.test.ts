@@ -2,17 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { MODEL_SOURCES } from './models/index.ts';
 import { PALETTE } from './palette.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
+import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import { buildModel, type Color } from './voxelgen.ts';
 
 /**
- * Everything that is painted, all three registries. The people and the balloons
- * are drawn from the same palette as the buildings on purpose — a crowd in
- * colours the resort never uses is a crowd that looks pasted on, and so is a sky
- * — so they are checked here rather than needing a rule of their own. None of
- * them is exempt: the palette was already in place when they were drawn.
+ * Everything that is painted, all four registries. The people, the balloons and
+ * the bay's craft are drawn from the same palette as the buildings on purpose —
+ * a crowd in colours the resort never uses is a crowd that looks pasted on, and
+ * so is a sky and so is a sea — so they are checked here rather than needing a
+ * rule of their own. None of them is exempt: the palette was already in place
+ * when they were drawn.
  */
-const PAINTED = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES];
+const PAINTED = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES];
 
 const families = (): [string, [string, Color][]][] =>
   Object.entries(PALETTE).map(([family, ramp]) => [family, Object.entries(ramp)]);

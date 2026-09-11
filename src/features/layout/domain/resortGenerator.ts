@@ -76,6 +76,7 @@ import type { ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom } from './random';
 import {
   DERIVED_IDS,
+  PEDALO_RENTAL_ID,
   type PathEdge,
   type PathNode,
   type ResortPlan,
@@ -708,14 +709,18 @@ const VOLLEYBALL_ID = 'volleyball';
  * the whole catalogue into every district and let the beach take its pick first.
  *
  * A lifeguard tower is the one that does not read anywhere else. It watches
- * water, and there is none behind the hotels.
+ * water, and there is none behind the hotels. The pedalo rental is the second,
+ * and it is the same case: what the hut is for is the boats it lets out onto the
+ * bay — see `features/sea/` — so one behind the hotels is a hut hiring pedalos
+ * to a lawn. The row of them drawn up on its own sand gives the game away from
+ * further off than the tower does.
  *
- * It stays in `missing` rather than being filtered out of the catalogue, which
+ * They stay in `missing` rather than being filtered out of the catalogue, which
  * matters: were the beach ever unable to stand one, the plot would report that
  * it does not hold the whole catalogue rather than claiming it does and being
  * caught out by `requireEveryTypePlanted`.
  */
-const SHORE_ONLY: ReadonlySet<string> = new Set([LIFEGUARD_ID]);
+const SHORE_ONLY: ReadonlySet<string> = new Set([LIFEGUARD_ID, PEDALO_RENTAL_ID]);
 
 /**
  * Tiles of shore between one lifeguard tower and the next.
@@ -742,6 +747,12 @@ const LIFEGUARD_SPACING = 24;
  * among them. Neither is in {@link SHORE_ONLY} — a rinse and a row of changing
  * huts read by a pool exactly as they read on sand, so a district that draws one
  * has drawn something that belongs there.
+ *
+ * The pedalo rental is not in this list at all, and it is the one thing on the
+ * sand that is neither drawn from here nor laid in a line: a bay has exactly one
+ * hire hut, and one is not something a weighted draw can be asked for. It is
+ * stood on its own, the way the lifeguard towers are — see
+ * {@link standPedaloRental}.
  */
 const BEACH_BACK: readonly string[] = [
   'beach-club',
@@ -839,8 +850,55 @@ const BEACH_DRAWS = 3;
  */
 function fillBeach(parts: BeachParts): void {
   standLifeguards(parts);
+  standPedaloRental(parts);
   layBeachLines(parts);
   fillBeachBack(parts);
+}
+
+/**
+ * Stands the bay's one pedalo rental on the back of the beach.
+ *
+ * Stood deliberately rather than drawn from {@link BEACH_BACK}, and for two
+ * reasons that pull the same way. A bay has **one** hire hut — two is a bay with
+ * a hire trade rather than a resort — and a weighted draw has no way of asking
+ * for exactly one. And the hut is four tiles square with its skirt, which is the
+ * largest thing the back of a beach ever takes: on the smallest plot the
+ * generator builds, the back band is two rows deep and the handful of anchors
+ * that will hold it are gone by the time the palms have filled in. Drawn, the
+ * smallest resort came out without one at all.
+ *
+ * Unturned, always, for the lifeguard tower's reason: the counter and the rack
+ * of boats face +z, which on every generated plot is the water. A hut with its
+ * boats drawn up facing the dune is a hut facing the wrong way.
+ *
+ * The column it takes is seeded rather than the first that fits, so the hut is
+ * not in the same corner of every bay — the sand is walked landward-first, so
+ * the first anchor that fits is always the western end of the back row.
+ */
+function standPedaloRental(parts: BeachParts): void {
+  const { shore, types, missing, site, plots, random } = parts;
+  const hut = types.get(PEDALO_RENTAL_ID);
+  if (!hut) return;
+
+  const behind = beachBackDepth(shore);
+  const footprint = footprintOf(hut, 0);
+  const standable = (tile: Tile): boolean =>
+    isBuildableSand(shore, tile.x, tile.z) && beachDepthAt(shore, tile.x, tile.z) >= behind;
+
+  const anchors = beachTilesOf(shore).filter((tile) => standable(tile));
+  if (anchors.length === 0) return;
+  const from = Math.floor(random() * anchors.length);
+  for (let step = 0; step < anchors.length; step++) {
+    const tile = anchors[(from + step) % anchors.length]!;
+    const covered = footprintTilesAt(footprint, tile);
+    if (!covered.every(standable)) continue;
+    const region = withSkirt(covered);
+    if (!tilesFree(site, region)) continue;
+    claimTiles(site, region);
+    plots.push({ id: hut.id, tileX: tile.x, tileZ: tile.z, rotation: 0 });
+    missing.delete(hut.id);
+    return;
+  }
 }
 
 /**

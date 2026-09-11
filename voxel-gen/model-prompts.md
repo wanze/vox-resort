@@ -6,6 +6,8 @@
 ### Dimensions (W × H × D, voxels — **16 per tile edge**, 1 voxel = 25 cm)
 
 Every model fills the footprint it claims; `pnpm preview --audit` is the check.
+A dash for a footprint is a model that stands on no tile at all — the people, the
+balloons and the bay's craft — so there is nothing for it to fill.
 
 | Asset         | Footprint | W × H × D     | Real size                          |
 | ------------- | --------- | ------------- | ---------------------------------- |
@@ -23,6 +25,10 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | sun-lounger   | 1×1       | 16 × 8 × 16   | lounger + folded parasol           |
 | bench         | 1×1       | 16 × 7 × 16   | a 4 m seat for three               |
 | lifeguard-tw. | 1×1       | 16 × 19 × 16  | a 4.75 m tower, deck 2 m up        |
+| buoy          | —         | 5 × 11 × 5    | a 2.75 m marker, afloat            |
+| rowboat       | —         | 11 × 5 × 16   | a 4 m open boat with oars          |
+| sailboat      | —         | 7 × 21 × 20   | a 5 m dinghy, 3.5 m of rig         |
+| pedalo        | —         | 9 × 5 × 12    | a 2.25 x 3 m pedal boat            |
 | picnic-table  | 2×1       | 32 × 6 × 16   | a 4 m table seating eight          |
 | beach-shower  | 1×1       | 16 × 12 × 16  | a 3 m rinse post and a towel rail  |
 | volleyball    | 4×2       | 64 × 12 × 32  | a 16 x 8 m beach court             |
@@ -31,6 +37,7 @@ Every model fills the footprint it claims; `pnpm preview --audit` is the check.
 | snack-bar     | 2×1       | 32 × 19 × 16  | kiosk + serving counter, 8 x 4 m   |
 | entrance      | 4×1       | 64 × 41 × 16  | a 16 m gate, 10 m to the lanterns  |
 | fountain      | 2×2       | 32 × 15 × 32  | an 8 m plaza fountain, three tiers |
+| pedalo-rental | 2×2       | 32 × 24 × 32  | hire hut + three boats, 8 x 8 m    |
 | first-aid     | 2×2       | 32 × 17 × 32  | 6 x 5 m hut on an 8 x 8 m plot     |
 | poolside-bar  | 2×2       | 32 × 24 × 32  | 5 m palapa bar, 6 m to the ridge   |
 | bungalow      | 2×2       | 32 × 32 × 32  | 6 x 3 m hut on stilts, 8 m ridge   |
@@ -207,4 +214,27 @@ voxel model of a row of three beach changing huts, finely detailed, small crisp 
 
 # beach-shower
 voxel model of an open-air beach shower, finely detailed, small crisp voxels, a square timber post on a slatted duckboard with an arm cantilevered out over it, a metal rose hanging under the end of the arm and a short fall of water under that, the boards beneath it darker where they are wet, a towel rail with two towels over it standing alongside, on its own low sand-coloured square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+```
+
+## The bay (Phase 3.6)
+
+The swimming area, the hire trade and what is out on the water. These four are
+the `sea` registry — nothing here stands on a tile, so none of them has a
+footprint to fill. See [sea/index.ts](sea/index.ts).
+
+```
+# buoy
+voxel model of a marker buoy for a bathing area, finely detailed, small crisp voxels, an amber drum with one red band round its middle drawn in at the waterline and again at the shoulder, a short metal mast standing out of it, a red cross topmark under a small glowing lamp at the masthead, nothing below the waterline, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# rowboat
+voxel model of a small wooden rowing boat, finely detailed, small crisp voxels, an open clinker hull with a wet dark bottom strake and a lighter gunwale capping the topsides, two thwarts across it, a pair of oars shipped across both gunwales with their blades out over the water, a red cushion on the after thwart and a coil of rope in the bow, nothing below the waterline, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# sailboat
+voxel model of a small sailing dinghy, finely detailed, small crisp voxels, the same open wooden hull with a thwart and a tiller aft, a mast stepped forward carrying one white mainsail with a red band across it, the sail full and curved to one side rather than flat, a boom lying with it, nothing below the waterline, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# pedalo
+voxel model of a plastic pedal boat, finely detailed, small crisp voxels, two moulded white floats with a turquoise stripe down the outside of each, a footwell slung between them a course lower than their decks, two moulded bucket seats side by side facing the bow, a paddle wheel standing proud at the stern, nothing below the waterline, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# pedalo-rental
+voxel model of a beach pedalo hire hut, finely detailed, small crisp voxels, a small timber shack with corner posts under a thatched hip roof, a serving hatch with a counter and a red blind over it facing the water, a price board and two red and white life rings on the side wall, one shuttered window on the other flank, three pedal boats in turquoise, red and yellow drawn up on the sand in front of it with their bows to the water, a rail of paddles and buoyancy aids alongside, standing on a low sand-coloured slab that fills a 2x2 footprint, flat neutral shading, no baked lighting or shadows, blank unmarked boards, no text, no lettering.
 ```

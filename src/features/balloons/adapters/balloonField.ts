@@ -31,16 +31,16 @@
  * frame. A balloon lights nothing on the ground. It is a hundred metres up.
  */
 
-import {
-  DynamicDrawUsage,
-  Group,
-  InstancedMesh,
-  MeshBasicNodeMaterial,
-  type BufferGeometry,
-  type Material,
-} from 'three/webgpu';
+import { Group } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
-import { litMaterial } from '../../rendering/adapters/instancedWorld';
+import {
+  disposeFieldMeshes,
+  fieldMaterials,
+  fieldMeshesFor,
+  fieldTriangles,
+  slotsFor,
+  type FieldMesh,
+} from '../../rendering/adapters/movingField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { poseOf, stepBalloons, type Balloons, type ReleaseSite } from '../domain/balloons';
 
@@ -85,95 +85,6 @@ export interface BalloonFieldOptions {
   readonly lightVolume?: BakedLightVolume | null;
 }
 
-/** One balloon model's geometry of one kind, and who is drawn in each slot. */
-interface BalloonMesh {
-  readonly mesh: InstancedMesh;
-  /** This field's own copy; see {@link flownGeometry}. */
-  readonly geometry: BufferGeometry;
-  /** Balloon index drawn in each instance slot, in slot order. */
-  readonly balloons: Int32Array;
-  /** Triangles in a single balloon of this geometry. */
-  readonly triangles: number;
-}
-
-/**
- * A balloon model's geometry, hung on its own middle.
- *
- * Cloned rather than used as it stands, for the reason the crowd clones its
- * figures: the geometries belong to the meshed catalogue, which is built once at
- * load and outlives every resort, and this translation must not be applied to
- * them twice. Centred across and along and on the foot of the basket, so the
- * matrix carries where the balloon *is* rather than where the corner of its
- * bounding box is — which is what lets the scale in that matrix grow it about
- * itself instead of dragging it sideways.
- */
-function flownGeometry(source: BufferGeometry): BufferGeometry {
-  const geometry = source.clone();
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox!;
-  geometry.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
-  return geometry;
-}
-
-/** Allocates one mesh for one model's geometry of one kind. */
-function buildBalloonMesh(parts: {
-  readonly source: BufferGeometry;
-  readonly material: Material;
-  readonly name: string;
-  readonly balloons: Int32Array;
-}): BalloonMesh {
-  const geometry = flownGeometry(parts.source);
-  const mesh = new InstancedMesh(geometry, parts.material, parts.balloons.length);
-  mesh.name = parts.name;
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-  // Every instance moves every frame; see the note at the top of the file.
-  mesh.frustumCulled = false;
-  return {
-    mesh,
-    geometry,
-    balloons: parts.balloons,
-    triangles: (geometry.getIndex()?.count ?? 0) / 3,
-  };
-}
-
-/** Which balloons are drawn in one model, as the slots of its own meshes. */
-function slotsFor(balloons: Balloons, variant: number): Int32Array {
-  const mine: number[] = [];
-  for (let index = 0; index < balloons.count; index++) {
-    if (balloons.variant[index] === variant) mine.push(index);
-  }
-  return Int32Array.from(mine);
-}
-
-/**
- * The meshes one balloon model needs: its glowing envelope, and the basket that
- * hangs under it in the resort's own light.
- *
- * Nothing at all for a model nobody is drawn in, and nothing for a surface the
- * model does not have — a balloon with no basket would simply be a glow.
- */
-function meshesFor(parts: {
-  readonly model: ModelGeometry;
-  readonly slots: Int32Array;
-  readonly glow: Material;
-  readonly lit: Material;
-}): BalloonMesh[] {
-  if (parts.slots.length === 0) return [];
-  return [
-    { kind: 'glow', source: parts.model.emissive, material: parts.glow },
-    { kind: 'lit', source: parts.model.lit, material: parts.lit },
-  ]
-    .filter((surface) => surface.source !== null)
-    .map((surface) =>
-      buildBalloonMesh({
-        source: surface.source!,
-        material: surface.material,
-        name: `balloon-${parts.model.id}-${surface.kind}`,
-        balloons: parts.slots,
-      }),
-    );
-}
-
 /**
  * Writes one mesh's worth of instances.
  *
@@ -182,10 +93,10 @@ function meshesFor(parts: {
  * nothing a `Matrix4` would do for the cost of allocating one. The buffer goes
  * up whole and without update ranges, because everything moved.
  */
-function writeInstances(part: BalloonMesh, balloons: Balloons): void {
+function writeInstances(part: FieldMesh, balloons: Balloons): void {
   const matrices = part.mesh.instanceMatrix.array;
-  for (let slot = 0; slot < part.balloons.length; slot++) {
-    const pose = poseOf(balloons, part.balloons[slot]!);
+  for (let slot = 0; slot < part.members.length; slot++) {
+    const pose = poseOf(balloons, part.members[slot]!);
     const at = slot * 16;
     matrices[at] = pose.scale;
     matrices[at + 5] = pose.scale;
@@ -210,13 +121,20 @@ export function buildBalloonField(options: BalloonFieldOptions): BalloonField {
   const group = new Group();
   group.name = 'balloons';
 
-  const lit = litMaterial(options.lightVolume ?? null);
-  // Unlit, exactly as the resort's own glowing surfaces are: the vertex colour
-  // goes straight to the screen, which is what a lit paper envelope wants.
-  const glow = new MeshBasicNodeMaterial({ vertexColors: true });
+  const { lit, glow, dispose: disposeMaterials } = fieldMaterials(options.lightVolume ?? null);
 
+  // Two meshes per model: the glowing envelope, and the basket that hangs under
+  // it in the resort's own light. That is what makes a balloon read as lit from
+  // the inside rather than as a painted shape.
   const parts = models.flatMap((model, variant) =>
-    meshesFor({ model, slots: slotsFor(balloons, variant), glow, lit }),
+    fieldMeshesFor({
+      name: `balloon-${model.id}`,
+      members: slotsFor(balloons.variant, balloons.count, variant),
+      surfaces: [
+        { kind: 'glow', source: model.emissive, material: glow },
+        { kind: 'lit', source: model.lit, material: lit },
+      ],
+    }),
   );
   for (const part of parts) {
     group.add(part.mesh);
@@ -229,7 +147,7 @@ export function buildBalloonField(options: BalloonFieldOptions): BalloonField {
       return balloons.count;
     },
     drawCalls: parts.length,
-    triangleCount: parts.reduce((total, part) => total + part.triangles * part.balloons.length, 0),
+    triangleCount: fieldTriangles(parts),
     advance(dt, readiness) {
       const step = Math.min(Math.max(dt, 0), MAX_STEP);
       if (step === 0) return;
@@ -237,15 +155,9 @@ export function buildBalloonField(options: BalloonFieldOptions): BalloonField {
       for (const part of parts) writeInstances(part, balloons);
     },
     dispose() {
-      for (const part of parts) {
-        part.mesh.dispose();
-        // This field's own clone, unlike the geometry it was taken from: that
-        // one belongs to the meshed catalogue and outlives every resort.
-        part.geometry.dispose();
-      }
+      disposeFieldMeshes(parts);
       group.clear();
-      lit.dispose();
-      glow.dispose();
+      disposeMaterials();
     },
   };
 }

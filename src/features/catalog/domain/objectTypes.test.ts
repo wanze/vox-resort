@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
+import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
@@ -12,6 +13,7 @@ import {
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  SEA_MODELS,
   SKY_MODELS,
   windowsByModelId,
 } from './objectTypes';
@@ -83,9 +85,9 @@ describe('model lights', () => {
 });
 
 describe('PAINTED_MODELS', () => {
-  it('is the catalogue, the crowd and the sky, and nothing twice', () => {
+  it('is the catalogue, the crowd, the sky and the sea, and nothing twice', () => {
     expect(PAINTED_MODELS).toHaveLength(
-      OBJECT_TYPES.length + PEOPLE_MODELS.length + SKY_MODELS.length,
+      OBJECT_TYPES.length + PEOPLE_MODELS.length + SKY_MODELS.length + SEA_MODELS.length,
     );
     expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
   });
@@ -108,6 +110,18 @@ describe('PAINTED_MODELS', () => {
       expect(catalogue.has(person.id), `${person.id} is in the catalogue too`).toBe(false);
       expect(person.category).toBe('people');
     }
+  });
+
+  it('keeps the bay out of the catalogue, and declares the buoy first', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(SEA_MODELS.length).toBeGreaterThan(1);
+    for (const afloat of SEA_MODELS) {
+      expect(catalogue.has(afloat.id), `${afloat.id} is in the catalogue too`).toBe(false);
+      expect(afloat.category).toBe('sea');
+    }
+    // The flotilla draws a buoy at every mooring and a craft for everything
+    // else, and it tells the two apart by this index. See `voxel-gen/sea/`.
+    expect(SEA_MODELS[BUOY_INDEX]?.id).toBe('buoy');
   });
 });
 
@@ -132,7 +146,7 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(52);
+    expect(OBJECT_TYPES.length).toBe(53);
   });
 
   it('uses unique ids and labels', () => {

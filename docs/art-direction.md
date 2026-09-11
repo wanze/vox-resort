@@ -514,6 +514,8 @@ against a reference is how the drift started.
 | `litter-bin`, `sign-post`, `picnic-table` — the walk's own dressing  | drawn in the palette from their first commit |
 | `lifeguard-tower`, `volleyball` — what the beach was missing         | drawn in the palette from their first commit |
 | `jetty` — the fourth paving, and the pier it makes                   | drawn in the palette from its first commit   |
+| `pedalo-rental` — the hire hut, and the rack of boats outside it     | drawn in the palette from its first commit   |
+| `buoy`, `rowboat`, `sailboat`, `pedalo` — the bay, and `hull`        | drawn in the palette from their first commit |
 | The rest of the 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed    |
 
 Every id still on the exempt list in `voxel-gen/palette.test.ts` is a model that

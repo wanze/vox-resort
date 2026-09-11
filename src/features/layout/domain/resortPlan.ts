@@ -199,6 +199,18 @@ export const HEDGE_ID = 'hedge';
  */
 export const BENCH_ID = 'bench';
 
+/**
+ * The hut that hires the bay's pedalos out.
+ *
+ * Not a derived id — the plan places one like any other object, and the layout
+ * lays nothing of the sort itself. It is named here because it is the one
+ * catalogue entry two features outside the layout have to find by name: the
+ * generator holds it to the shore (see `SHORE_ONLY`), and the bay steers its
+ * hire craft home to wherever it ended up standing (see `features/sea/`). Two
+ * copies of a string literal is exactly how a rename goes quietly wrong.
+ */
+export const PEDALO_RENTAL_ID = 'pedalo-rental';
+
 /** The rail stood along a path's edge where the ground beside it drops away. */
 export const RAILING_ID = 'railing';
 
@@ -369,6 +381,12 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('sun-lounger', 44, 25, 4, 1),
     at('changing-cabins', 50, 25),
     at('beach-shower', 53, 25),
+    // The hire hut. It belongs on sand and this plan has none — it is the plot a
+    // `?bench=1` run measures, and that plot is land to its edges — so it stands
+    // by the pool here, which is the nearest thing to a shore the authored
+    // resort has. A generated plot puts it where it goes; see `SHORE_ONLY` in
+    // `resortGenerator.ts`.
+    at('pedalo-rental', 55, 25),
 
     // E — the beach club and the villa quarter
     at('beach-club', 58, 11),

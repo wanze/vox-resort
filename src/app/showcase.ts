@@ -21,11 +21,12 @@ import {
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  SEA_MODELS,
   SKY_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
-import { layoutResort, railModelsIn } from '../features/layout/domain/resortLayout';
+import { layoutResort, railModelsIn, tileKey } from '../features/layout/domain/resortLayout';
 import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
@@ -34,6 +35,7 @@ import {
   JETTY_ID,
   LAMP_ID,
   PAVING_IDS,
+  PEDALO_RENTAL_ID,
   RAILING_ID,
   RESORT_PLAN,
   STAIR_RAILING_ID,
@@ -88,7 +90,7 @@ import type { ModelGeometry } from '../features/rendering/adapters/voxelMeshBuil
 import { buildModelGeometries } from '../features/rendering/adapters/voxelMeshBuilder';
 import type { BlobShadow, ShadowCaster } from '../features/rendering/domain/blobShadows';
 import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blobShadows';
-import { SAND_LEVEL } from '../features/rendering/domain/terrainSurface';
+import { SAND_LEVEL, SEA_LEVEL } from '../features/rendering/domain/terrainSurface';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
@@ -103,6 +105,12 @@ import {
   releaseStrength,
   type ReleaseSite,
 } from '../features/balloons/domain/balloons';
+import type { SeaField } from '../features/sea/adapters/seaField';
+import { buildSeaField } from '../features/sea/adapters/seaField';
+import { createFlotilla } from '../features/sea/domain/flotilla';
+import type { Rental, SailingGround } from '../features/sea/domain/swimArea';
+import { sailingGroundFor, swimAreaMoorings } from '../features/sea/domain/swimArea';
+import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
 import type {
   CameraFraming,
   CameraMode,
@@ -177,6 +185,32 @@ const BALLOON_COUNT = 36;
 
 /** The seed every sky is drawn from; fixed, for {@link CROWD_SEED}'s reason. */
 const BALLOON_SEED = 2;
+
+/**
+ * Craft drifting about the bay, on top of the buoys the swimming area is marked
+ * with — those are one per mooring, and the coast decides how many that is.
+ *
+ * A dozen, which on the bay a generated plot comes out with is a boat every
+ * hundred metres or so of water: enough that there is always one in frame from
+ * the beach, and few enough that the water still reads as water rather than as a
+ * marina. A constant for the reason {@link CROWD_SIZE} is one: nothing offers it
+ * yet. See `features/sea/`.
+ */
+const CRAFT_COUNT = 12;
+
+/**
+ * Pedalos the hire hut has, which is also how many berths are laid in front of
+ * it.
+ *
+ * Six, and the number is capped by the hut rather than chosen freely: the berths
+ * are a row in the corridor cut through the bathing area, and a rack wider than
+ * that corridor would moor its outside boats in among the swimmers. See
+ * `BERTH_SPACING` in `sea/domain/flotilla.ts`.
+ */
+const HIRE_COUNT = 6;
+
+/** The seed every bay is drawn from; fixed, for {@link CROWD_SEED}'s reason. */
+const SEA_SEED = 3;
 
 /** Where the clock starts: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
@@ -442,6 +476,12 @@ interface MeshedCatalogue {
    * on a tile. They belong to the balloon field — see `features/balloons/`.
    */
   readonly sky: readonly ModelGeometry[];
+  /**
+   * The bay's, kept apart for the reason the sky's are — and for one more: a
+   * boat stands on water, and `layoutResort` refuses to stand anything there.
+   * They belong to the sea field — see `features/sea/`.
+   */
+  readonly sea: readonly ModelGeometry[];
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
@@ -452,6 +492,9 @@ const PEOPLE_IDS: ReadonlySet<string> = new Set(PEOPLE_MODELS.map((model) => mod
 
 /** Ids the sky is drawn from, likewise. */
 const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id));
+
+/** Ids the bay is drawn from, likewise. */
+const SEA_IDS: ReadonlySet<string> = new Set(SEA_MODELS.map((model) => model.id));
 
 /** Meshes every model once and wraps the result in buffer geometries. */
 async function meshModels(
@@ -473,11 +516,15 @@ async function meshModels(
   );
   const geometries = buildModelGeometries(meshed.models);
   return {
-    geometries: geometries.filter((model) => !PEOPLE_IDS.has(model.id) && !SKY_IDS.has(model.id)),
+    geometries: geometries.filter(
+      (model) => !PEOPLE_IDS.has(model.id) && !SKY_IDS.has(model.id) && !SEA_IDS.has(model.id),
+    ),
     // In registry order, because a person's `variant` indexes into it.
     people: geometries.filter((model) => PEOPLE_IDS.has(model.id)),
     // Likewise a balloon's.
     sky: geometries.filter((model) => SKY_IDS.has(model.id)),
+    // Likewise a boat's; see `BUOY_INDEX` in `voxel-gen/sea/index.ts`.
+    sea: geometries.filter((model) => SEA_IDS.has(model.id)),
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
@@ -797,6 +844,14 @@ interface Resort {
    * `features/balloons/`.
    */
   readonly balloons: BalloonField;
+  /**
+   * The boats and buoys on this plot's bay.
+   *
+   * Part of the resort for the reason the balloons are: the swimming area is
+   * marked off *this* plot's coastline and the craft sail *this* plot's water,
+   * so a plot generated without a shore has neither. See `features/sea/`.
+   */
+  readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
@@ -894,6 +949,99 @@ function balloonsFor(parts: {
 }
 
 /**
+ * The middle of the hire hut, in voxels, or null on a plot without one.
+ *
+ * The middle of its whole footprint rather than the corner it is anchored on,
+ * because what the bay wants from it is the column its boats come in on — and a
+ * 2x2 hut anchored at its north-west corner is four metres off that.
+ *
+ * A plot can genuinely have none: the generator stands exactly one and only on
+ * sand, so an inland plan has none and a bay too small to hold one has none
+ * either. The rest of the bay then reads as a bay with no hire trade — an
+ * unbroken line of buoys and nothing but private boats. See `standPedaloRental`
+ * in `resortGenerator.ts`.
+ */
+function rentalOn(placements: readonly Placement[]): Rental | null {
+  const hut = placements.find((placement) => placement.id === PEDALO_RENTAL_ID);
+  if (!hut) return null;
+  return {
+    x: (hut.tileX + hut.tilesX / 2) * TILE_VOXELS,
+    z: (hut.tileZ + hut.tilesZ / 2) * TILE_VOXELS,
+  };
+}
+
+/**
+ * The water this plot's craft have, or a bay of nothing on a plot with no sea.
+ *
+ * An empty ground rather than a null one, so everything downstream is spared a
+ * case for a resort that is inland: a flotilla built on it has no moorings and
+ * no craft, so nothing is ever steered around it.
+ */
+function seaGroundOf(shore: Shore | null, rental: Rental | null): SailingGround {
+  if (!shore) return { westX: 0, eastX: 0, seawardZ: 0, landwardZ: () => 0 };
+  return sailingGroundFor(shore, rental);
+}
+
+/**
+ * The models that drift about on their own: every boat nobody hires out.
+ *
+ * The buoy is not a boat, and the pedalos belong to the hut — they are handed to
+ * the flotilla separately, because what they do is different. See
+ * `voxel-gen/sea/index.ts` for why these are indices rather than ids.
+ */
+const driftingVariants = (sea: readonly ModelGeometry[]): number[] =>
+  sea
+    .map((_, variant) => variant)
+    .filter((variant) => variant !== BUOY_INDEX && variant !== PEDALO_INDEX);
+
+/**
+ * The bay this plot can float, from the coast it has.
+ *
+ * The buoys are strung along the tideline and the craft are turned loose on the
+ * water outside them — see `sea/domain/swimArea.ts` for the line that separates
+ * the two, which is the whole point of the buoys. The plot's own paving is
+ * passed in so no buoy is moored in a pier: the sea lanes run six tiles of jetty
+ * out from the sand, straight through the line.
+ *
+ * A plot with no shore hands back no moorings and no ground, and the field then
+ * draws nothing. See `sea/domain/flotilla.ts`.
+ */
+function seaFor(parts: {
+  readonly shore: Shore | null;
+  /** The paving as laid, so a mooring never lands in the decking of a pier. */
+  readonly paved: readonly Placement[];
+  /** Everything standing on the plot, which is where the hire hut is found. */
+  readonly placements: readonly Placement[];
+  readonly sea: readonly ModelGeometry[];
+  /** The lamps the water lies under, so a hull catches what the paving does. */
+  readonly lightVolume: BakedLightVolume | null;
+}): SeaField {
+  const paved = new Set(parts.paved.map((placement) => tileKey(placement.tileX, placement.tileZ)));
+  const shore = parts.shore;
+  // A hut standing on a plot with no sea hires nothing out: the authored plan is
+  // land to its edges and stands one by the pool, and there is no water for its
+  // boats to be on. See `RESORT_PLAN`.
+  const rental = shore ? rentalOn(parts.placements) : null;
+  const ground = seaGroundOf(shore, rental);
+  const flotilla = createFlotilla({
+    moorings: swimAreaMoorings({
+      shore,
+      rental,
+      claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
+    }),
+    buoyVariant: BUOY_INDEX,
+    craft: shore ? CRAFT_COUNT : 0,
+    craftVariants: driftingVariants(parts.sea),
+    // A bay with no hut on it hires nothing out; see `standPedaloRental`.
+    hire: rental ? { count: HIRE_COUNT, variant: PEDALO_INDEX, rental } : null,
+    ground,
+    waterline: SEA_LEVEL,
+    seed: SEA_SEED,
+  });
+  return buildSeaField({ flotilla, ground, models: parts.sea, lightVolume: parts.lightVolume });
+}
+
+/**
  * Lays a plan out and builds everything that hangs off it.
  *
  * The bake happens before the world, because the volume is what the world's
@@ -904,6 +1052,7 @@ function buildResort(parts: {
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
+  readonly sea: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): Resort {
   const plot = layOut(parts.plan, parts.bench);
@@ -926,6 +1075,13 @@ function buildResort(parts: {
     lightVolume: lighting.volume,
   });
   const balloons = balloonsFor({ shore, sky: parts.sky, lightVolume: lighting.volume });
+  const sea = seaFor({
+    shore,
+    paved: plot.layout.paths,
+    placements: plot.layout.placements,
+    sea: parts.sea,
+    lightVolume: lighting.volume,
+  });
 
   return {
     plot,
@@ -934,6 +1090,7 @@ function buildResort(parts: {
     shadows,
     crowd,
     balloons,
+    sea,
     shore,
     elevation,
     // Seeded from the resort as planned, then kept up to date one placement at a
@@ -948,6 +1105,7 @@ function buildResort(parts: {
       shadows.dispose();
       crowd.dispose();
       balloons.dispose();
+      sea.dispose();
       lighting.volume?.dispose();
     },
   };
@@ -974,6 +1132,7 @@ function createResortSlot(parts: {
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
+  readonly sea: readonly ModelGeometry[];
   readonly bench: BenchConfig | null;
 }): ResortSlot {
   let resort = buildResort(parts);
@@ -996,10 +1155,12 @@ function createResortSlot(parts: {
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.crowd.group);
       scene?.scene.remove(previous.balloons.group);
+      scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
       scene?.scene.add(resort.crowd.group);
       scene?.scene.add(resort.balloons.group);
+      scene?.scene.add(resort.sea.group);
       scene?.reframe(
         resort.bounds,
         resort.framing,
@@ -1053,7 +1214,7 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, shadows, crowd, balloons, lighting } = parts.resort;
+  const { plot, world, shadows, crowd, balloons, sea, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -1066,7 +1227,8 @@ function sceneStats(parts: {
     // a blob is one more draw and two more triangles, a person model is one more
     // draw and fifty per person, and a count that hid either would stop matching
     // what a bench reads back off the renderer.
-    drawCalls: world.drawCalls + shadows.drawCalls + crowd.drawCalls + balloons.drawCalls,
+    drawCalls:
+      world.drawCalls + shadows.drawCalls + crowd.drawCalls + balloons.drawCalls + sea.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
@@ -1074,7 +1236,8 @@ function sceneStats(parts: {
       world.drawnTriangleCount +
       shadows.triangleCount +
       crowd.triangleCount +
-      balloons.triangleCount,
+      balloons.triangleCount +
+      sea.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -1472,6 +1635,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     geometries: catalogue.geometries,
     people: catalogue.people,
     sky: catalogue.sky,
+    sea: catalogue.sea,
     bench,
   });
   const current = slot.current;
@@ -1495,6 +1659,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().shadows.group);
   handle.scene.add(current().crowd.group);
   handle.scene.add(current().balloons.group);
+  handle.scene.add(current().sea.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -1584,6 +1749,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // reason: two runs only compare if the scene is in the same place on the
     // same frame of each. See `crowd.ts`.
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
+    // Likewise the bay, and for the third time the same reason: a run only
+    // compares with the one before it if the boats are where they were.
+    current().sea.advance(bench ? MAX_STEP : elapsed);
     if (!bench) handle.controls.update();
     handle.renderer.render(handle.scene, handle.camera);
 

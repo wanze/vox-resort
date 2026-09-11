@@ -7,15 +7,17 @@
  * each model, derives the material set from the colours they paint with, and
  * picks the HUD swatch colour.
  *
- * There are three registries of art, and the difference between them is the
+ * There are four registries of art, and the difference between them is the
  * whole reason {@link PAINTED_MODELS} exists: `OBJECT_TYPES` is the things that
- * stand on tiles, and the people and the balloons are registries of their own
- * because neither stands on anything. Anything that asks *what the app paints
- * with* has to read all three — see the note on `PAINTED_MODELS`.
+ * stand on tiles, and the people, the balloons and the bay's craft are
+ * registries of their own because none of them stands on anything. Anything that
+ * asks *what the app paints with* has to read all four — see the note on
+ * `PAINTED_MODELS`.
  */
 
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PEOPLE_SOURCES } from '../../../../voxel-gen/people/index.ts';
+import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
 import {
   buildModel,
@@ -87,7 +89,17 @@ export const PEOPLE_MODELS: readonly VoxelModel[] = PEOPLE_SOURCES.map(buildMode
 export const SKY_MODELS: readonly VoxelModel[] = SKY_SOURCES.map(buildModel);
 
 /**
- * Every model the app paints: catalogue, crowd and sky alike.
+ * The bay's art: one built model per thing the sea can have afloat on it.
+ *
+ * Here for the reason {@link PEOPLE_MODELS} and {@link SKY_MODELS} are, with one
+ * more of its own: a boat has no swatch, no shelf and no footprint, and it
+ * stands on water, which `layoutResort` refuses to stand anything on. See
+ * `features/sea/`.
+ */
+export const SEA_MODELS: readonly VoxelModel[] = SEA_SOURCES.map(buildModel);
+
+/**
+ * Every model the app paints: catalogue, crowd, sky and sea alike.
  *
  * The one place the registries are joined, and the reason it is one place:
  * the material set, the emissive lookup and the scratch layout are all questions
@@ -96,14 +108,15 @@ export const SKY_MODELS: readonly VoxelModel[] = SKY_SOURCES.map(buildModel);
  * nothing but a person paints with — would never be registered as a DVE voxel,
  * and the scratch writes would ask the mesher for a voxel that does not exist.
  *
- * A fourth registry is then one line here rather than an edit in each of the
+ * A further registry is then one line here rather than an edit in each of the
  * four places that used to assume the catalogue was the whole world — which is
- * exactly what the sky cost when it landed.
+ * exactly what the sky cost when it landed, and exactly what the sea did not.
  */
 export const PAINTED_MODELS: readonly VoxelModel[] = [
   ...OBJECT_TYPES.map((type) => type.model),
   ...PEOPLE_MODELS,
   ...SKY_MODELS,
+  ...SEA_MODELS,
 ];
 
 export interface ObjectTypeGroup {

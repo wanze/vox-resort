@@ -32,6 +32,7 @@ import oak from './oak.ts';
 import olive from './olive.ts';
 import palm from './palm.ts';
 import path from './path.ts';
+import pedalo_rental from './pedalo-rental.ts';
 import picnic_table from './picnic-table.ts';
 import pine from './pine.ts';
 import playground from './playground.ts';
@@ -96,6 +97,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   resort_bar,
   spa_pavilion,
   playground,
+  pedalo_rental,
   bungalow,
   house,
   cottage,

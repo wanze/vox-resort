@@ -21,6 +21,7 @@ pnpm preview                 # every model -> voxel-gen/out/<id>.png
 pnpm preview bungalow hotel  # just these
 pnpm preview --sheet         # one contact sheet of all models
 pnpm preview --audit         # size table: does each model fill its tiles?
+pnpm preview --people        # the crowd; --sky the balloons, --sea the bay
 ```
 
 Outputs land in `voxel-gen/out/` (git-ignored); `VOXELGEN_OUT` overrides it.
@@ -224,6 +225,25 @@ Conventions:
   material, so reusing a colour across models is free — and the catalogue may
   hold **250 of them in total**, because DVE writes a submesh's material as a
   byte. That ceiling is why the palette is enforced.
+
+## Art that stands on nothing
+
+Four registries feed the same pipeline, and `models/index.ts` is only the first
+of them. `people/`, `sky/` and `sea/` hold the art that claims no tile: a person
+walks in, a balloon is let go, and a boat is afloat on water the layout refuses
+to stand anything on. None of them is offered on the build palette, none is
+placed by the generator, and each declares a `category` of its own so the palette
+drops the empty shelf.
+
+They are meshed exactly as a cottage is — `PAINTED_MODELS` in
+`src/features/catalog/domain/objectTypes.ts` is where the four are joined, and it
+is the one place that has to know there is more than one. What differs is only
+what moves them: `features/crowd/`, `features/balloons/` and `features/sea/`.
+
+A model in one of those registries is drawn from the point its matrix carries:
+the people from their feet, the balloons from the foot of the basket, and
+everything in `sea/` from **its own waterline**, with nothing below it drawn at
+all. See `parts/boat.ts`.
 
 An object also needs somewhere to stand: add it to `RESORT_PLAN` in
 `src/features/layout/domain/resortPlan.ts`, or the layout tests will fail. It

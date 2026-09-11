@@ -12,6 +12,7 @@
  *   node voxel-gen/preview.ts --sheet              # one contact sheet
  *   node voxel-gen/preview.ts --audit              # size table, no rendering
  *   node voxel-gen/preview.ts --people             # the crowd, not the catalogue
+ *   node voxel-gen/preview.ts --sea                # the bay's craft, likewise
  *
  * A path renders a model that is not in the registry yet, which is how a
  * candidate is looked at before anyone decides to keep it: registering it would
@@ -24,6 +25,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
+import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import {
   buildModel,
@@ -389,7 +391,7 @@ async function chooseSources(
 
   // Ids are looked up across every registry whichever one is the default, so
   // `preview child` works without anyone having to remember the flag.
-  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES];
+  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
 
@@ -409,6 +411,7 @@ async function chooseSources(
 function sheetNameFor(registry: readonly VoxelModelSource[]): string {
   if (registry === PEOPLE_SOURCES) return 'crowd';
   if (registry === SKY_SOURCES) return 'sky';
+  if (registry === SEA_SOURCES) return 'sea';
   return 'contact-sheet';
 }
 
@@ -418,14 +421,16 @@ async function main(): Promise<void> {
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  // The crowd and the sky are registries of their own — neither is part of the
-  // catalogue and neither fills a tile, so neither is ever in the default set.
-  // See `people/` and `sky/`.
+  // The crowd, the sky and the bay are registries of their own — none of them is
+  // part of the catalogue and none of them fills a tile, so none is ever in the
+  // default set. See `people/`, `sky/` and `sea/`.
   const registry = args.includes('--people')
     ? PEOPLE_SOURCES
     : args.includes('--sky')
       ? SKY_SOURCES
-      : MODEL_SOURCES;
+      : args.includes('--sea')
+        ? SEA_SOURCES
+        : MODEL_SOURCES;
   const sources = await chooseSources(
     args.filter((arg) => !arg.startsWith('--')),
     registry,

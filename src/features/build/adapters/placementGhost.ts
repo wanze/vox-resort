@@ -24,7 +24,7 @@ import {
 } from 'three/webgpu';
 import { color, mix, vertexColor } from 'three/tsl';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import type { Placement } from '../../layout/domain/resortLayout';
+import type { Placement, Tile } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 
@@ -48,6 +48,16 @@ export interface PlacementGhost {
   readonly group: Group;
   /** Shows the object standing at a placement, tinted by whether it may. */
   show(placement: Placement, blocked: boolean): void;
+  /**
+   * Shows one tile of ground at a height, and no object at all.
+   *
+   * What the terrain tool wants, and the whole of what it wants: a brush places
+   * nothing, so there is no model to borrow and the footprint patch alone says
+   * where the spade would go. It is the same patch, the same two tints and the
+   * same rule about what red means — which is why it lives here rather than in a
+   * cursor of its own that would have to be kept looking like this one.
+   */
+  showGround(tile: Tile, y: number, blocked: boolean): void;
   hide(): void;
   dispose(): void;
 }
@@ -107,13 +117,16 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
   ghost.visible = false;
   group.add(ghost);
 
-  const placePad = (placement: Placement, blocked: boolean): void => {
+  const placePad = (
+    footprint: { tileX: number; tileZ: number; tilesX: number; tilesZ: number; y: number },
+    blocked: boolean,
+  ): void => {
     pad.material = blocked ? pads.blocked : pads.valid;
-    pad.scale.set(placement.tilesX, 1, placement.tilesZ);
+    pad.scale.set(footprint.tilesX, 1, footprint.tilesZ);
     pad.position.set(
-      (placement.tileX + placement.tilesX / 2) * TILE_VOXELS,
-      placement.y + PAD_LIFT,
-      (placement.tileZ + placement.tilesZ / 2) * TILE_VOXELS,
+      (footprint.tileX + footprint.tilesX / 2) * TILE_VOXELS,
+      footprint.y + PAD_LIFT,
+      (footprint.tileZ + footprint.tilesZ / 2) * TILE_VOXELS,
     );
     group.visible = true;
   };
@@ -138,6 +151,10 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
       ghost.position.set(placement.x + origin.x, placement.y, placement.z + origin.z);
       ghost.visible = true;
+    },
+    showGround(tile, y, blocked) {
+      placePad({ tileX: tile.x, tileZ: tile.z, tilesX: 1, tilesZ: 1, y }, blocked);
+      ghost.visible = false;
     },
     hide() {
       group.visible = false;

@@ -31,6 +31,7 @@ import { rotateLights } from '../features/layout/domain/rotation';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
+  BRIDGE_ID,
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
@@ -42,10 +43,9 @@ import {
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { beachTilesOf, isWater, shoreFor } from '../features/layout/domain/shoreline';
-import { isSandGround } from '../features/layout/domain/ground';
-import type { Elevation } from '../features/layout/domain/elevation';
-import { elevationFor, levelAt, maxLevelOf } from '../features/layout/domain/elevation';
+import { beachTilesOf, shoreFor } from '../features/layout/domain/shoreline';
+import type { Terrain } from '../features/layout/domain/terrain';
+import { overlooksDrop, terrainFor } from '../features/layout/domain/terrain';
 import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
 import {
   clampParams,
@@ -55,8 +55,11 @@ import {
 import { layoutItemFor } from '../features/build/domain/buildPlan';
 import { isPaving, pavedGroundOf, type PavingRules } from '../features/build/domain/paving';
 import { type HandrailRules } from '../features/build/domain/handrails';
+import type { TerrainRules } from '../features/build/domain/terrainBrush';
+import { armedBrush, armedObject, type BuildTool } from '../features/build/domain/buildTool';
+import { createTerrainPointer } from '../features/build/adapters/terrainPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
-import { createTileOccupancy } from '../features/build/domain/tileOccupancy';
+import { createTileOccupancy, footprintTiles } from '../features/build/domain/tileOccupancy';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
 import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
@@ -330,11 +333,11 @@ export interface ShowcaseOptions {
    */
   readonly onSceneChange?: (stats: ShowcaseStats) => void;
   /**
-   * Called when the scene itself leaves build mode — pressing Escape — so the
-   * palette can drop its highlight. Selecting from the HUD does not come back
+   * Called when the scene itself puts the pointer down — pressing Escape — so
+   * the palette can drop its highlight. Arming from the HUD does not come back
    * through here; the HUD already knows.
    */
-  readonly onBuildSelectionChange?: (typeId: string | null) => void;
+  readonly onToolChange?: (tool: BuildTool | null) => void;
   /**
    * Called when the camera changes mode or turns, so the HUD follows the
    * keyboard. Changing it *from* the HUD does not come back through here; the
@@ -366,8 +369,11 @@ export interface Showcase {
   generate(params: ResortParams): void;
   /** Clears the plot to bare ground of this size, to build on by hand. */
   clear(params: ResortParams): void;
-  /** Arms the pointer to place this object type, or null to leave build mode. */
-  selectBuildType(typeId: string | null): void;
+  /**
+   * Arms the pointer with an object to stand or a brush to work the ground with,
+   * or null to put it down. One tool at a time; see `buildTool.ts`.
+   */
+  selectTool(tool: BuildTool | null): void;
   /** Jumps the clock to a moment of the day and stops the cycle. */
   setTime(time: number): void;
   /** Starts or stops the automatic day/night cycle. */
@@ -866,8 +872,15 @@ interface Resort {
   readonly occupancy: TileOccupancy;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
-  /** How this plot's land rises; the scene draws the terraces from it. */
-  readonly elevation: Elevation | null;
+  /**
+   * What every tile of this plot is made of and how high it stands.
+   *
+   * Part of the resort and mutable with it: the coast and the terraces resolved
+   * into a field, with whatever ground has been dug or piled on top. The scene
+   * draws every surface but the sea from it, the pointer asks it what a tile
+   * will take, and the terrain tool writes into it. See `terrain.ts`.
+   */
+  readonly terrain: Terrain;
   /** How much ground the resort covers: what both cameras are framed on. */
   readonly bounds: WorldBounds;
   /** Where the perspective camera stands; the isometric one is framed in the scene. */
@@ -892,14 +905,14 @@ function crowdFor(parts: {
   readonly plot: Plot;
   readonly plan: ResortPlan;
   readonly shore: Shore | null;
-  readonly elevation: Elevation | null;
+  readonly terrain: Terrain;
   readonly people: readonly ModelGeometry[];
   /** The lamps the crowd walks under, so a person catches the light a wall does. */
   readonly lightVolume: BakedLightVolume | null;
 }): CrowdField {
   const network = walkNetworkFor({
     paved: parts.plot.layout.paths,
-    levelOf: (tileX, tileZ) => levelAt(parts.elevation, tileX, tileZ),
+    levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
     shore: parts.shore,
     tilesX: parts.plan.tilesX,
     // The authored objects *and* the scattered props, because the bench is one
@@ -1103,12 +1116,12 @@ function buildResort(parts: {
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const bounds = plotBounds(parts.plan, everything);
   const shore = shoreFor(parts.plan);
-  const elevation = elevationFor(parts.plan);
+  const terrain = terrainFor(parts.plan);
   const crowd = crowdFor({
     plot,
     plan: parts.plan,
     shore,
-    elevation,
+    terrain,
     people: parts.people,
     lightVolume: lighting.volume,
   });
@@ -1131,7 +1144,7 @@ function buildResort(parts: {
     balloons,
     sea,
     shore,
-    elevation,
+    terrain,
     // Seeded from the resort as planned, then kept up to date one placement at a
     // time; it is what tells the pointer whether a tile is free. The sea is not
     // in it: a pier stands on water, so what the sea will take is a rule about
@@ -1205,7 +1218,7 @@ function createResortSlot(parts: {
         resort.framing,
         resort.lighting.volume,
         resort.shore,
-        resort.elevation,
+        resort.terrain,
       );
       previous.dispose();
       return resort;
@@ -1498,15 +1511,21 @@ function pinCamera(handle: SceneHandle): void {
   handle.controls.enableDamping = false;
 }
 
-/** Build mode: what the pointer is placing, and how it reaches the scene. */
-interface BuildMode {
-  /** Picks the type to place, or null to leave build mode. */
-  select(typeId: string | null): void;
+/** Edit mode: what the pointer is holding, and how it reaches the scene. */
+interface EditMode {
+  /** Arms one tool, or null to put the pointer down. */
+  select(tool: BuildTool | null): void;
   dispose(): void;
 }
 
 /**
- * Wires the pointer to the mutable scene.
+ * Wires both pointers to the mutable scene.
+ *
+ * Two pointers and one cursor, because there is one left mouse button: arming
+ * either disarms the other, which is what {@link BuildTool} makes structural
+ * rather than a rule to remember. They share the ghost too — a brush shows the
+ * footprint patch alone and an object shows the model standing in it, and a
+ * second cursor object would be a second thing to keep looking like this one.
  *
  * The occupancy index is the piece worth naming: the layout checks its own plan
  * for overlaps once, up front, and throws when it finds one, which is right for
@@ -1514,14 +1533,22 @@ interface BuildMode {
  * tile. This keeps the same answer live, one placement at a time, so a hover
  * costs a map lookup per tile of the footprint.
  */
-function createBuildMode(parts: {
+function createEditMode(parts: {
   readonly canvas: HTMLCanvasElement;
   readonly handle: SceneHandle;
   readonly resort: () => Resort;
   readonly geometries: readonly ModelGeometry[];
   readonly onChange: () => void;
+  /**
+   * Called when the shape of the ground has changed, so the terrain can be
+   * redrawn: a spadeful moved, or something stood on a tile that was sloped.
+   * The ground under anything that stands is drawn square — see
+   * `rendering/domain/terrainSurface.ts` — so placing is as much a change to the
+   * terrain as digging is.
+   */
+  readonly onGroundChange: () => void;
   readonly onCancel: () => void;
-}): BuildMode {
+}): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
   handle.scene.add(ghost.group);
@@ -1540,11 +1567,12 @@ function createBuildMode(parts: {
   };
 
   // Forwarded to whichever resort is standing, for the same reason the occupancy
-  // index is: the pointer outlives the plot it is aiming at.
+  // index is: the pointer outlives the plot it is aiming at — and the ground
+  // itself moves under it, so even one plot's levels cannot be captured.
   const ground: PickGround = {
-    levelOf: (tileX, tileZ) => levelAt(resort().elevation, tileX, tileZ),
+    levelOf: (tileX, tileZ) => resort().terrain.levelOf(tileX, tileZ),
     get maxLevel() {
-      return maxLevelOf(resort().elevation);
+      return resort().terrain.maxLevel;
     },
   };
 
@@ -1564,10 +1592,15 @@ function createBuildMode(parts: {
     // coast moves when the plot is regenerated and the pointer does not. Sand is
     // asked of the ground rather than of the shore, so a path drawn by hand
     // along the dune comes out as decking exactly as a generated one does.
-    isSand: (tileX, tileZ) => isSandGround(resort().shore, resort().elevation, tileX, tileZ),
-    isWater: (tileX, tileZ) => isWater(resort().shore, tileX, tileZ),
+    isSand: (tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ) === 'sand',
+    isWater: (tileX, tileZ) => resort().terrain.surfaceOf(tileX, tileZ) === 'water',
+    // The base rather than the tile as it stands, which is the one question the
+    // two bodies of water differ on: a river gets a bridge and the bay gets a
+    // pier. See `terrain.ts` and `paving.ts`.
+    isSea: (tileX, tileZ) => resort().terrain.isSea(tileX, tileZ),
     decking: pavingItem(BOARDWALK_ID),
     pier: pavingItem(JETTY_ID),
+    bridge: pavingItem(BRIDGE_ID),
     stairs: pavingItem(STAIRS_ID),
   };
 
@@ -1585,12 +1618,85 @@ function createBuildMode(parts: {
       resort().plot.rails.filter((rail) => rail.tileX === tileX && rail.tileZ === tileZ),
   };
 
+  /**
+   * Which pointer is holding the left mouse button, so handing it back is never
+   * the losing tool's last word.
+   *
+   * Two pointers ask for the same button, and `takeLeftButton` is a state rather
+   * than a count: arming the spade while an object is armed would otherwise be an
+   * arm and a disarm in whichever order `select` happened to run them, and one of
+   * those orders gives the button back to the camera with a tool still in hand.
+   * Naming the holder takes the ordering out of it entirely.
+   */
+  let holder: 'object' | 'terrain' | null = null;
+  const lendLeftButton =
+    (who: 'object' | 'terrain') =>
+    (taken: boolean): void => {
+      if (taken) holder = who;
+      else if (holder === who) holder = null;
+      handle.takeLeftButton(holder !== null);
+    };
+
+  /**
+   * Stands and takes down handrails, for whichever tool asked.
+   *
+   * Nothing but the world and the plot's own list: a rail stands on the paving it
+   * guards, so it is not in the occupancy index, throws no blob shadow of its own
+   * and takes no sky away — see `claimingOn`. Shared because both tools change
+   * the same answer: paving a tile rails the ground around it, and raising that
+   * ground rails the paving.
+   */
+  const changeRails = (stand: readonly Placement[], lift: readonly Placement[]): void => {
+    const { plot, world } = resort();
+    for (const rail of lift) {
+      world.remove(rail.key);
+      const at = plot.rails.findIndex((standing) => standing.key === rail.key);
+      if (at !== -1) plot.rails.splice(at, 1);
+    }
+    // Taken down first, so a tile whose edge rails become a balustrade never has
+    // both standing at once.
+    for (const rail of stand) {
+      world.add(rail);
+      plot.rails.push(rail);
+    }
+    onChange();
+  };
+
+  /**
+   * Whether standing this changes the ground the terrain draws.
+   *
+   * The ground under what stands on it is drawn square rather than sloped, so a
+   * placement on the edge of a terrace changes the terrain as surely as a
+   * spadeful does — but only there. A path dragged across a flat bench changes
+   * no ground at all, and rebuilding the terrain once per tile of it is what a
+   * drag cannot afford. See `terrain.ts`, `overlooksDrop`.
+   */
+  /**
+   * Takes one placement back off the plot.
+   *
+   * A flight of stairs replaces the slab a path had already laid on the tile, so
+   * that one comes up first — off the index, out of the world and out of the
+   * plot's own list — or the tile would be double-booked and the slab would go
+   * on being drawn inside the flight. See `paving.ts`.
+   */
+  const lift = (placement: Placement): void => {
+    const { plot, world } = resort();
+    occupancy.release(placement, placement.key);
+    world.remove(placement.key);
+    const laid = listFor(plot, placement.id);
+    const at = laid.findIndex((standing) => standing.key === placement.key);
+    if (at !== -1) laid.splice(at, 1);
+  };
+
+  const reshapesGround = (placement: Placement): boolean =>
+    footprintTiles(placement).some((tile) => overlooksDrop(resort().terrain, tile.x, tile.z));
+
   const pointer = createBuildPointer({
     canvas,
     // Read per pick rather than captured: switching to the isometric view puts a
     // different camera on screen, and the pointer must aim through that one.
     camera: () => handle.camera,
-    takeLeftButton: (taken) => handle.takeLeftButton(taken),
+    takeLeftButton: lendLeftButton('object'),
     ghost,
     occupancy,
     ground,
@@ -1598,17 +1704,7 @@ function createBuildMode(parts: {
     handrails,
     onPlace(placement, lifted) {
       const { plot, world, lighting, shadows } = resort();
-      // A flight of stairs replaces the slab a path had already laid on the
-      // tile, so that one comes up first — off the index, out of the world and
-      // out of the plot's own list — or the tile would be double-booked and the
-      // slab would go on being drawn inside the flight. See `paving.ts`.
-      if (lifted) {
-        occupancy.release(lifted, lifted.key);
-        world.remove(lifted.key);
-        const laid = listFor(plot, lifted.id);
-        const at = laid.findIndex((standing) => standing.key === lifted.key);
-        if (at !== -1) laid.splice(at, 1);
-      }
+      if (lifted) lift(lifted);
       // Claimed first: if the tiles are gone the scene must not gain an object
       // the index does not know about.
       occupancy.claim(placement, placement.key);
@@ -1621,35 +1717,53 @@ function createBuildMode(parts: {
       // the model brought with it.
       lighting.add(placement);
       listFor(plot, placement.id).push(placement);
+      if (reshapesGround(placement)) parts.onGroundChange();
       onChange();
     },
-    onRails(stand, lift) {
-      const { plot, world } = resort();
-      // Nothing but the world and the plot's own list: a rail stands on the
-      // paving it guards, so it is not in the occupancy index, throws no blob
-      // shadow of its own and takes no sky away — see `claimingOn`.
-      for (const rail of lift) {
-        world.remove(rail.key);
-        const at = plot.rails.findIndex((standing) => standing.key === rail.key);
-        if (at !== -1) plot.rails.splice(at, 1);
-      }
-      // Taken down first, so a tile whose edge rails become a balustrade never
-      // has both standing at once.
-      for (const rail of stand) {
-        world.add(rail);
-        plot.rails.push(rail);
-      }
-      onChange();
+    onRails: changeRails,
+    onCancel,
+  });
+
+  // The ground itself, forwarded to whichever resort is standing exactly as
+  // everything else here is. What is standing on a tile is asked of the occupancy
+  // index, which is the only thing that knows: a tile with a rail on it is a tile
+  // with paving on it, so one question covers everything. See `terrainBrush.ts`.
+  const terrainRules: TerrainRules = {
+    get terrain() {
+      return resort().terrain;
+    },
+    isClear: (tileX, tileZ) => occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
+  };
+
+  const spade = createTerrainPointer({
+    canvas,
+    camera: () => handle.camera,
+    takeLeftButton: lendLeftButton('terrain'),
+    ghost,
+    ground,
+    rules: terrainRules,
+    handrails,
+    onRails: changeRails,
+    onDig(tile, next) {
+      resort().terrain.set(tile.x, tile.z, next);
+      // Two callbacks rather than one, because they cost different things: the
+      // HUD's counts have not changed and the terrain meshes have to be rebuilt.
+      parts.onGroundChange();
     },
     onCancel,
   });
 
   return {
-    select(typeId) {
-      pointer.select(typeId === null ? null : layoutItemFor(objectTypeById(typeId)));
+    select(tool) {
+      // Both are told, every time, and the order does not matter: see
+      // `lendLeftButton` for why it cannot.
+      const id = armedObject(tool);
+      pointer.select(id === null ? null : layoutItemFor(objectTypeById(id)));
+      spade.select(armedBrush(tool));
     },
     dispose() {
       pointer.dispose();
+      spade.dispose();
       handle.scene.remove(ghost.group);
       ghost.dispose();
     },
@@ -1687,7 +1801,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     framing: current().framing,
     lightVolume: current().lighting.volume,
     shore: current().shore,
-    elevation: current().elevation,
+    terrain: current().terrain,
+    // Forwarded to whichever resort is standing, exactly as the terrain is: the
+    // ground under a cottage is drawn square rather than sloped, so the mesher
+    // has to ask the live occupancy index and not a snapshot of it.
+    isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
     // GPU's own timers keep measuring past that point.
@@ -1752,15 +1870,29 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     mountStarted,
   });
 
-  const build = createBuildMode({
+  /**
+   * Whether the ground has moved since the terrain was last drawn.
+   *
+   * A flag rather than a rebuild per spadeful: a drag digs a tile per pointer
+   * move, and the surfaces are one mesh over the whole box — so the rebuild is
+   * coalesced to at most one per frame, which is what the render loop below does
+   * with this. The alternative was rebuilding a few hundred quads five times
+   * between two frames and drawing four of them to nobody.
+   */
+  let ground = false;
+
+  const build = createEditMode({
     canvas,
     handle,
     resort: current,
     geometries: catalogue.geometries,
     onChange: () => onSceneChange?.(statsNow()),
+    onGroundChange: () => {
+      ground = true;
+    },
     onCancel: () => {
       build.select(null);
-      options.onBuildSelectionChange?.(null);
+      options.onToolChange?.(null);
     },
   });
 
@@ -1775,6 +1907,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     : null;
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
+
+    // Before anything else this frame: the ground the crowd walks and the
+    // surfaces the camera sees have to agree, and a stroke may have moved a
+    // dozen tiles since the last frame was drawn.
+    if (ground) {
+      handle.retile();
+      ground = false;
+    }
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
@@ -1828,10 +1968,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     clear(next) {
       params = clampParams(next);
-      slot.replace(emptyResortPlan(params.tilesX, params.tilesZ));
+      // The seed goes along, so clearing is a random landscape rather than the
+      // same one every time: a coast, a hill and a river off it. See
+      // `emptyResortPlan`.
+      slot.replace(emptyResortPlan(params.tilesX, params.tilesZ, params.seed));
       rebuilt();
     },
-    selectBuildType: (typeId) => build.select(typeId),
+    selectTool: (tool) => build.select(tool),
     setTime: clock.setTime,
     setCycling: clock.setCycling,
     dispose() {

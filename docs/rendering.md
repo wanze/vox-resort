@@ -479,6 +479,16 @@ on. Sea level is left to the infinite grass plane, so only benches above it are
 emitted — a quad laid over that plane would be two surfaces fighting for the same
 fragments.
 
+What the spans are read _off_ changed when the ground became editable. The mesher
+used to ask the coast and the terrace specs where their lines fell, which is the
+right shape while ground is grown and the wrong one the moment it can be dug:
+there is no inset that means "this tile is a lake". So it walks tiles off the
+**terrain field** (see _Shaping the ground_) and merges each column's runs
+afterwards, which comes out at the same handful of quads per column and answers
+for a river or an island as readily as for a bench. The sea is the one surface
+still read off a line, because it reaches the horizon and its shader grades by
+how far out each fragment lies.
+
 What it adds is the **risers**, the vertical faces between one bench and the
 next, and they are the only geometry in the terrain that does not lie flat — so
 they are the only geometry that carries its own normals. A riser lit as though it
@@ -753,6 +763,142 @@ startup, so a street lamp placed by hand casts nothing. The bake's scale is
 already frozen for exactly this — see _The lamps are baked_ — so splatting one
 lamp into the cells it reaches and re-uploading that corner of the texture is the
 next step, not a rebake.
+
+## Shaping the ground
+
+The ground the resort stands on is described three times, and the third
+description is the one the tools read.
+
+`shoreline.ts` and `elevation.ts` describe it as **lines strung across the plot**
+— a coastline and a set of step lines, evaluated per tile column. That is exactly
+right for ground that is grown: a coast is a function of `x`, the renderer asks
+about columns the layout never visits, and a seed reproduces the whole landscape.
+It is exactly wrong for ground somebody is standing on with a spade. There is no
+inset that means "this one tile is a lake", and a river running down four
+terraces is not a line you can anchor to the water.
+
+So `terrain.ts` is a **field**: what every tile is made of and how high it stands,
+with a sparse layer of per-tile overrides in front of the procedural answer. A
+tile nobody has touched answers exactly what `groundAt` and `levelAt` answer for
+it — asserted tile by tile in the tests, because everything above rests on an
+edited plot and an unedited one being the same kind of thing. Everything that
+reads the ground now reads the field: the layout, the paving rule, the rails, the
+pick, and the terrain mesher.
+
+A tile is **two independent facts** — its level and its surface — and that is what
+makes a lake on a hilltop and an island in the bay the same feature rather than
+two. An island is a sea tile whose level went up; a lake is a grass tile whose
+surface went to water; neither needed a rule of its own.
+
+**Water is flush with the ground it is cut into.** A channel's tiles keep the
+level of the bank around them and the surface is drawn a hair above that bench,
+exactly as the sea is drawn a hair above sea level. Digging it would read better
+as a gorge and break two things: paving stands at `levelOf`, so a sunken river
+would carry a sunken bridge, and `climbAt` would read the bank as a flight of
+stairs down into the water. Flush water costs the gorge and buys a bridge that
+lands level with the path either side of it, which is what a bridge is. Anybody
+who wants banks raises the land around the channel.
+
+### The brushes
+
+Five, and between them they are the two facts a tile is. **Raise** and **lower**
+move the level; **grass**, **sand** and **water** set the surface. Nothing sets
+both, which is why an island is built by raising the sea rather than by a brush
+called "island". Four rules hold, and each is a rule from somewhere else read
+from this side:
+
+- **The ground has to be clear.** An object stands on one level and has a flat
+  underside, so moving the ground under a cottage would bury half of it. Paving
+  is worse: whether a tile is flagstones, decking, a flight, a pier or a bridge is
+  decided _as it is laid_, off the ground under it, so changing that ground
+  afterwards leaves paving of the wrong kind and a flight that climbs nothing.
+  Rather than re-deriving the plot after every spadeful, a tile with anything on
+  it is simply not diggable — which is also the rule anybody would guess.
+- **Neighbours differ by at most one level.** The invariant every generated plot
+  is already held to, and the one the flights rest on: a two-level step is a step
+  nothing in the catalogue can climb. Refusing it is what makes terracing by hand
+  feel like terracing — ground is feathered up a level at a time rather than
+  pulled into a tower.
+- **The sea cannot be changed.** It is not the plot's to move: the bay, the buoys,
+  the balloons and the beach are all measured off the coast. What it _can_ have is
+  something stood in it, which is why raising a sea tile is allowed and painting
+  one is not. Water raised out of itself comes up as **sand**, because what breaks
+  the surface of a bay is a sandbank — and an island lowered back to sea level
+  gives the bay back, since an override that equals its base is dropped rather
+  than stored.
+- **Sea level is the floor.** Below it the infinite grass plane would cover the
+  ground, and a negative level has nothing to mean anyway.
+
+The gesture is the build gesture. `tileStroke.ts` is the half both tools share —
+the pick, the Bresenham fill between pointer samples, the pointer capture, the
+borrowed left mouse button, Escape — and each tool says only what working a tile
+_means_. Both apply **one tile at a time, in order**, because both have a rule
+that reads ground the stroke itself has just changed: paving a tile can turn the
+slab beside it into a flight, and raising a tile changes what its neighbour may be
+raised to. A stroke that planned its whole run up front would come out
+differently from the same run drawn slowly.
+
+Two pointers want one left mouse button, so the edit mode names which of them is
+holding it rather than counting: arming either disarms the other, and
+`BuildTool` makes that structural — one union, so two flags cannot both be set.
+
+The terrain meshes are rebuilt **at most once per frame**, on a dirty flag the
+render loop reads. A drag digs a tile per pointer move and the surfaces are one
+mesh over the whole framed box, so rebuilding per spadeful would draw four
+versions nobody saw. No material is recompiled — the geometries are swapped and
+the materials are not.
+
+### Paths become bridges
+
+`paving.ts` already turned a path into decking on sand, a flight on a step and a
+pier over the sea. Inland water is the fourth case and the only one that needed a
+new question: **which body of water is this?** The sea gets a jetty and a river
+gets a bridge, because a pier is timber walked _out_ from a shore and a bridge is
+masonry carried _across_. The question is asked of the _base_ terrain rather than
+of the tile as it stands, so an island still knows it is standing in the bay.
+
+Neither span has parapets of its own. Water counts as a drop in `railings.ts`, so
+a handrail is stood along every edge of the deck with water beyond it — which
+keeps the parapets to the sides you would fall off, and leaves the ends open where
+the bridge meets the road, without the model knowing which tile of the crossing it
+is.
+
+A planned street **stops at the sea** unless its edge says `overWater`, and
+**crosses a river** without being asked. A run strung corner to corner over a plot
+with a bay in one corner wants to stop at the sand rather than pave a causeway;
+a channel two tiles wide is nothing of the sort — it is something a road goes over.
+
+### A bare plot is a landscape
+
+The _Terrain_ button clears the plot to ground with nothing built on it, and that
+is bare ground rather than _blank_ ground: a bay, a beach, a terraced hill behind
+it, and a river coming down off that hill into the sea. A blank green rectangle is
+not somewhere anybody wants to start building, and every one of those is a fact
+about the plot rather than about what has been put on it.
+
+The seed is the whole landscape, exactly as it is the whole resort. `river.ts`
+walks a two-tile channel from the back of the plot down to the water, holding its
+column for a few rows at a time so it reads as a run of reaches with a kink
+between them rather than as the diagonal a tile grid makes of a 45-degree line.
+Each tile is flooded **at the level it already stands**, so a river crossing four
+terraces comes out as four flat reaches with a fall between each — and so the
+river moves no ground and cannot break the one-level-per-step invariant. It is
+banked in sand one tile either side, at its own level only, because a strip of
+water through a lawn reads as a canal and a strip of water through sand reads as a
+river.
+
+The river travels on the plan as terrain edits, which is what makes it the same
+kind of thing as ground dug by hand: one layer, one set of rules, and a plan that
+carries a channel is refused a hotel standing in it.
+
+### What it does not do
+
+Terrain edits are live state on the resort, so growing or clearing the plot
+replaces them along with everything else — there is no undo and nothing is saved.
+The crowd, the balloons and the bay are built with the resort and not kept live,
+so nobody walks a path laid by hand and nobody swims a lake dug after the fact;
+that is the same limit hand-laid paving already had. The light volume is not
+re-baked either, so a terrace raised by hand does not shade what stands beside it.
 
 ## What it costs now
 
@@ -1081,16 +1227,17 @@ having to author it.
 
 ## Out of scope for this milestone
 
-Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, procedural
-terrain, physics and multiplayer.
+Texture atlases, LOD, occlusion culling, GPU-driven/indirect draws, physics and
+multiplayer.
 
 The terrain has terraces but not slopes: the land steps a level at a time and is
 flat between, and nothing is cut to the ground under it. So an object stands only
-where the ground is level, a step is always exactly one level, and there is no
-digging — the levels are a function of the plot, not something a player edits.
-Terrace risers do not shade what stands at the foot of them either; they are not
-in the sky-visibility bake, and a blob shadow that runs off the edge of a bench
-hangs above the ground below rather than falling onto it.
+where the ground is level, and a step is always exactly one level — a rule the
+terrain tool now enforces on ground dug by hand as well as on ground that was
+grown. Terrace risers do not shade what stands at the foot of them either; they
+are not in the sky-visibility bake, and a blob shadow that runs off the edge of a
+bench hangs above the ground below rather than falling onto it. See _Shaping the
+ground_ for what editing the ground does not do.
 
 Shadows are half in scope now: the resort shades itself against the sky and
 objects throw a shadow across the ground, but neither is a shadow map. There is

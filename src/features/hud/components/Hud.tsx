@@ -6,6 +6,7 @@ import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { ShowcaseStats } from '../../../app/showcase';
+import type { BuildTool } from '../../build/domain/buildTool';
 
 export interface HudProps {
   readonly fps: number;
@@ -17,9 +18,9 @@ export interface HudProps {
   readonly resort: ResortControls;
   /** Where the palette's tiles get their pictures; see {@link PreviewLookup}. */
   readonly preview: PreviewLookup;
-  /** Object type the pointer is armed with, or null when nothing is. */
-  readonly buildType: string | null;
-  readonly onBuildTypeChange: (typeId: string | null) => void;
+  /** What the pointer is holding, or null when it is empty. */
+  readonly tool: BuildTool | null;
+  readonly onToolChange: (tool: BuildTool | null) => void;
   readonly error: string | null;
 }
 
@@ -36,11 +37,7 @@ export function Hud(props: HudProps) {
         camera={props.camera}
         resort={props.resort}
       />
-      <BuildPalette
-        preview={props.preview}
-        selected={props.buildType}
-        onSelect={props.onBuildTypeChange}
-      />
+      <BuildPalette preview={props.preview} tool={props.tool} onToolChange={props.onToolChange} />
       {props.error ? <HudError message={props.error} /> : null}
     </div>
   );

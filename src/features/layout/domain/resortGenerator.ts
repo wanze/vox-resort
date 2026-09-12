@@ -83,6 +83,7 @@ import {
   type ResortPlot,
 } from './resortPlan';
 import { streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
+import { riverEditsFor } from './river';
 import {
   beachDepthAt,
   beachTilesOf,
@@ -1817,28 +1818,46 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
 }
 
 /**
- * Bare ground of a given size: no objects, no streets, nothing to look at.
+ * Bare ground of a given size: no objects, no streets, nothing built.
  *
- * The starting point for building a resort by hand rather than being handed one.
+ * The starting point for building a resort by hand rather than being handed one,
+ * and it is bare ground rather than *blank* ground. A cleared plot is a
+ * landscape — a bay, a beach, a terraced hill behind it and a river coming down
+ * off that hill into the sea — because a blank green rectangle is not somewhere
+ * anybody wants to start building, and every one of those is a fact about the
+ * plot rather than about what has been put on it.
+ *
+ * The seed is the whole landscape, exactly as it is the whole resort: clearing
+ * with a different one gives a different coast, a different hill and a different
+ * river.
+ *
  * It is the one plan that cannot claim to stand the whole catalogue, which is
  * why `standsWholeCatalogue` exists at all.
  */
-export function emptyResortPlan(tilesX: number, tilesZ: number): ResortPlan {
-  const params = clampParams({ tilesX, tilesZ, density: 1, seed: 0 });
-  const shore = shoreSpecFor(params);
-  const terraces = elevationSpecFor(hillFor(params, shore), params.seed);
-  return {
+export function emptyResortPlan(tilesX: number, tilesZ: number, seed = 0): ResortPlan {
+  const params = clampParams({ tilesX, tilesZ, density: 1, seed });
+  const shoreSpec = shoreSpecFor(params);
+  const terraces = elevationSpecFor(hillFor(params, shoreSpec), params.seed);
+  const plan: ResortPlan = {
     tilesX: params.tilesX,
     tilesZ: params.tilesZ,
     plots: [],
     nodes: [],
     edges: [],
     plazas: [],
-    // Bare ground, but not bare land: the coast and the terraces are facts about
-    // the plot rather than about what has been built on it, so a cleared plot
-    // still has its beach and its benches to build on.
-    shore,
+    shore: shoreSpec,
     ...(terraces ? { elevation: terraces } : {}),
     standsWholeCatalogue: false,
   };
+  // Carved against the plan's own ground, so the river reads the levels the hill
+  // actually stands at — and carried as terrain edits, because a channel running
+  // down the plot is not a line that can be strung across it. See `river.ts`.
+  const river = riverEditsFor({
+    shore: shoreFor(plan),
+    elevation: elevationFor(plan),
+    tilesX: params.tilesX,
+    tilesZ: params.tilesZ,
+    seed: params.seed,
+  });
+  return river.length > 0 ? { ...plan, terrain: river } : plan;
 }

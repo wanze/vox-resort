@@ -132,9 +132,10 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           className="hud-resort-clear"
           disabled={busy}
           onClick={commit(onClear)}
-          aria-label="Bare ground, to build on by hand"
+          aria-label="A bare landscape to build on by hand: a bay, a hill and a river"
+          title="Bare ground: a bay, a terraced hill and a river off it, nothing built"
         >
-          Clear
+          Terrain
         </button>
       </div>
     </div>

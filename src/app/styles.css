@@ -822,6 +822,38 @@ input[type='checkbox'] {
   color: var(--foliage);
 }
 
+/* ---- One brush -------------------------------------------------------- */
+
+/* A brush has no model and so no preview: the tile is a glyph on the resort's
+   own stone instead of a picture, which is also what tells the ground apart from
+   the catalogue at a glance. */
+.terrain-tile {
+  background: linear-gradient(160deg, var(--stone-700), var(--stone-950));
+}
+
+.terrain-tile-glyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Lifted off the name plate the same way a preview is. */
+  padding-bottom: 18%;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text-dim);
+  text-shadow: var(--shadow-plate);
+  transition: color var(--quick);
+}
+
+.terrain-tile:hover .terrain-tile-glyph {
+  color: var(--stucco);
+}
+
+.terrain-tile[aria-pressed='true'] .terrain-tile-glyph {
+  color: #fff3e6;
+}
+
 .build-tile:hover {
   border-color: var(--stone-400);
   box-shadow: var(--bevel-in), var(--shadow-lift);

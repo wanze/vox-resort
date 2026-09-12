@@ -51,11 +51,12 @@ import type {
 } from '../../layout/domain/worldBounds';
 import { isometricFramingFor } from '../../layout/domain/worldBounds';
 import type { Shore } from '../../layout/domain/shoreline';
-import type { Elevation } from '../../layout/domain/elevation';
+import type { Terrain } from '../../layout/domain/terrain';
 import type { SurfaceGeometry } from '../domain/terrainSurface';
 import { terrainSurfacesFor } from '../domain/terrainSurface';
-import type { SeaMaterial } from './seaMaterial';
 import { createSeaMaterial } from './seaMaterial';
+import { createRiverMaterial } from './riverMaterial';
+import type { WaterMaterial } from './waterSurface';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 
 export const CAMERA_FOV_DEGREES = 55;
@@ -80,9 +81,7 @@ const SAND_COLOR = 0xd8c69c;
  * a dune is sand, and shading it earth turned the beach into a quarry — so it
  * takes the sand's own tone, a shade down so the step is still a step.
  */
-const TERRACE_COLOR = GROUND_COLOR;
 const RISER_COLOR = 0x6b5a3e;
-const SAND_TERRACE_COLOR = SAND_COLOR;
 const SAND_RISER_COLOR = 0xc0ab7f;
 
 /** How far past the framed plot the ground, the sea and the beach run. */
@@ -226,8 +225,20 @@ export interface SceneHandle {
     framing: CameraFraming,
     lightVolume: BakedLightVolume | null,
     shore: Shore | null,
-    elevation: Elevation | null,
+    terrain: Terrain,
   ): void;
+  /**
+   * Rebuilds the terrain meshes from the ground as it now is.
+   *
+   * The one thing in the scene that is rebuilt without a new resort under it:
+   * moving a tile of ground changes the shape of the sand, the benches, the
+   * risers and the rivers, and none of that is instanced geometry a placement
+   * could be added to. It is a few hundred quads and no material to compile — the
+   * meshes are swapped and the materials are not — which is what a frame can
+   * afford, and why the caller may leave this until the frame it is drawing
+   * rather than calling it once per spadeful of a drag.
+   */
+  retile(): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
   resize(width: number, height: number): void;
@@ -255,10 +266,18 @@ export interface SceneOptions {
    */
   readonly shore: Shore | null;
   /**
-   * How the land rises behind the beach. Null lays it flat, and is required
-   * rather than defaulted for the same reason the shore is.
+   * What every tile of the plot is made of and how high it stands: the coast and
+   * the terraces resolved together, with any ground that has been dug or piled
+   * since. Everything but the sea is drawn from it. See `terrain.ts`.
    */
-  readonly elevation: Elevation | null;
+  readonly terrain: Terrain;
+  /**
+   * Whether nothing at all stands on a tile, which decides whether its ground is
+   * drawn as a slope or left square. Read afresh on every rebuild rather than
+   * captured, so it follows whichever resort is standing exactly as the terrain
+   * does. See `terrainSurface.ts`.
+   */
+  readonly isClear?: (tileX: number, tileZ: number) => boolean;
   /**
    * Asks the backend for GPU timestamp queries. Only the benchmark harness wants
    * them; they have to be requested when the renderer is built, not later.
@@ -316,22 +335,23 @@ function layGround(
 }
 
 /**
- * The sea and the beach, when the plot has a coast.
+ * The sea, the sand, the benches, their cut faces and the water inland: every
+ * surface the flat ground plane cannot draw.
  *
- * Two static meshes over the ground plane, sharing its lighting so the shore
- * shades and catches the lamps like everything else. `domain/terrainSurface.ts`
- * decides what shape they are; this only uploads them and picks their materials.
+ * Static meshes over that plane, sharing its lighting so the shore shades and
+ * catches the lamps like everything else. `domain/terrainSurface.ts` decides
+ * what shape they are; this only uploads them and picks their materials.
  *
- * The two materials could hardly be less alike. The sand is the same flat lit
+ * The materials could hardly be less alike. The ground is the same flat lit
  * colour the grass is, because sand seen from the resort's distance *is* flat —
  * every earlier attempt to give it wet bands and a per-column wobble read as
- * dirt rather than as a beach. The sea is the opposite: flat geometry doing
- * everything in the shader, in `seaMaterial.ts`.
+ * dirt rather than as a beach. The two bodies of water are the opposite: flat
+ * geometry doing everything in the shader, in `seaMaterial.ts` and
+ * `riverMaterial.ts`.
  */
-interface Terrain {
+interface TerrainMeshes {
   readonly group: Group;
-  /** Repaints the sky the water reflects, in packed sRGB. */
-  setSky(color: number): void;
+  /** Gives back the geometry alone; the materials outlive it. See {@link TerrainPalette}. */
   dispose(): void;
 }
 
@@ -366,9 +386,9 @@ function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
 /**
  * A flat-coloured lit surface, lamps and sky shading included.
  *
- * The sand, the terrace tops and the risers all want exactly this and differ
- * only in colour, so they share the recipe rather than three copies of it. The
- * sea does not: it is shaded end to end in `seaMaterial.ts`.
+ * The sand, the benches and the risers all want exactly this and differ only in
+ * colour, so they share the recipe rather than four copies of it. The two bodies
+ * of water do not: both are shaded end to end in a material of their own.
  */
 function surfaceMaterial(
   color: number,
@@ -382,53 +402,129 @@ function surfaceMaterial(
   return material;
 }
 
+/** Anything the terrain group has to give back when it is replaced. */
+type Disposable = { dispose(): void };
+
+/**
+ * The materials the terrain is drawn with, which outlive the meshes.
+ *
+ * Six flat tones and two bodies of water, made once and kept. That is the whole
+ * point of them being here rather than inside the rebuild: a material is a
+ * shader, and a shader the backend has not seen before is a pipeline to compile
+ * — so making them afresh on every spadeful put a compile in the middle of every
+ * drag. Only the geometry actually changes when the ground moves.
+ *
+ * They are bound to the light volume, so a *new resort* does need new ones; see
+ * `reframe`.
+ */
+interface TerrainPalette {
+  readonly sea: WaterMaterial;
+  readonly river: WaterMaterial;
+  readonly flat: ReadonlyMap<number, MeshStandardNodeMaterial>;
+  /** Repaints the sky both bodies of water reflect, in packed sRGB. */
+  setSky(color: number): void;
+  dispose(): void;
+}
+
+/** The flat tones the terrain is drawn in; see the colour constants above. */
+const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, RISER_COLOR, SAND_RISER_COLOR] as const;
+
+function createTerrainPalette(lightVolume: BakedLightVolume | null): TerrainPalette {
+  const sea = createSeaMaterial(lightVolume);
+  const river = createRiverMaterial(lightVolume);
+  const flat = new Map(FLAT_TONES.map((tone) => [tone, surfaceMaterial(tone, lightVolume)]));
+  return {
+    sea,
+    river,
+    flat,
+    setSky(color) {
+      sea.setSky(color);
+      river.setSky(color);
+    },
+    dispose() {
+      sea.dispose();
+      river.dispose();
+      for (const material of flat.values()) material.dispose();
+    },
+  };
+}
+
+/** Uploads the bodies of water that have any geometry, on the materials they keep. */
+function layWater(
+  group: Group,
+  disposables: Disposable[],
+  bodies: readonly (readonly [SurfaceGeometry | null, WaterMaterial])[],
+): void {
+  for (const [surface, water] of bodies) {
+    if (!surface) continue;
+    const geometry = toSurfaceGeometry(surface);
+    group.add(new Mesh(geometry, water.material));
+    disposables.push(geometry);
+  }
+}
+
+/** Uploads the flat-coloured surfaces that have any geometry, one mesh per tone. */
+function layFlat(
+  group: Group,
+  disposables: Disposable[],
+  palette: TerrainPalette,
+  surfaces: readonly (readonly [SurfaceGeometry | null, number])[],
+): void {
+  for (const [surface, color] of surfaces) {
+    if (!surface) continue;
+    const geometry = toSurfaceGeometry(surface);
+    group.add(new Mesh(geometry, palette.flat.get(color)!));
+    disposables.push(geometry);
+  }
+}
+
+/**
+ * Builds every terrain mesh for the ground as it now stands.
+ *
+ * Called once per resort and again on every rebuild the terrain tool asks for,
+ * which is what makes the list of disposables worth keeping: the group is thrown
+ * away whole and replaced, so nothing here has to work out which of five meshes
+ * a spadeful of ground changed.
+ */
 function layTerrain(
   scene: Scene,
   shore: Shore | null,
-  elevation: Elevation | null,
+  terrain: Terrain,
   framing: CameraFraming,
   worldExtent: number,
-  lightVolume: BakedLightVolume | null,
-): Terrain {
+  palette: TerrainPalette,
+  isClear: (tileX: number, tileZ: number) => boolean,
+): TerrainMeshes {
   const group = new Group();
   scene.add(group);
-  const disposables: { dispose(): void }[] = [];
+  const disposables: Disposable[] = [];
 
   const surfaces = terrainSurfacesFor({
+    terrain,
+    isClear,
     shore,
-    elevation,
     center: { x: framing.target.x, z: framing.target.z },
     reach: worldExtent * GROUND_SPREAD,
     tileVoxels: TILE_VOXELS,
   });
 
-  let sea: SeaMaterial | null = null;
-  if (surfaces.sea) {
-    sea = createSeaMaterial(lightVolume);
-    const geometry = toSurfaceGeometry(surfaces.sea);
-    group.add(new Mesh(geometry, sea.material));
-    disposables.push(geometry, sea);
-  }
+  // The two bodies of water, each with its own shader: see `seaMaterial.ts` for
+  // the bay's depth gradient and foam, and `riverMaterial.ts` for why a channel
+  // wants neither.
+  layWater(group, disposables, [
+    [surfaces.sea, palette.sea],
+    [surfaces.water, palette.river],
+  ]);
 
-  for (const [surface, color] of [
-    [surfaces.sand, SAND_COLOR],
-    [surfaces.terraces.grass, TERRACE_COLOR],
-    [surfaces.terraces.sand, SAND_TERRACE_COLOR],
+  layFlat(group, disposables, palette, [
+    [surfaces.ground.grass, GROUND_COLOR],
+    [surfaces.ground.sand, SAND_COLOR],
     [surfaces.risers.grass, RISER_COLOR],
     [surfaces.risers.sand, SAND_RISER_COLOR],
-  ] as const) {
-    if (!surface) continue;
-    const geometry = toSurfaceGeometry(surface);
-    const material = surfaceMaterial(color, lightVolume);
-    group.add(new Mesh(geometry, material));
-    disposables.push(geometry, material);
-  }
+  ]);
 
   return {
     group,
-    setSky(color) {
-      sea?.setSky(color);
-    },
     dispose() {
       for (const disposable of disposables) disposable.dispose();
     },
@@ -436,9 +532,10 @@ function layTerrain(
 }
 
 export async function createScene(options: SceneOptions): Promise<SceneHandle> {
-  const { canvas, width, height, framing, bounds, shore, elevation } = options;
+  const { canvas, width, height, framing, bounds, shore } = options;
   const lightVolume = options.lightVolume ?? null;
   const trackTimestamp = options.trackTimestamp ?? false;
+  const isClear = options.isClear ?? ((): boolean => true);
 
   const renderer = new WebGPURenderer({
     canvas,
@@ -568,7 +665,17 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   scene.add(sun);
 
   let ground = layGround(scene, framing, extent, lightVolume);
-  let terrain = layTerrain(scene, shore, elevation, framing, extent, lightVolume);
+  // Kept, because `retile` rebuilds the surfaces from whatever the ground has
+  // become since: the terrain object is the live one, and the framing and the
+  // volume are what the meshes were last built against.
+  let terrain = options.terrain;
+  let terrainFraming = framing;
+  let terrainVolume = lightVolume;
+  // Made once and kept across every rebuild: a material is a shader, and the
+  // ground moving is not a reason to compile one. See `TerrainPalette`.
+  let palette = createTerrainPalette(lightVolume);
+  let surfaces = layTerrain(scene, shore, terrain, framing, extent, palette, isClear);
+  let coast = shore;
 
   /**
    * Stands the isometric camera on its compass point, around whatever it is
@@ -626,7 +733,15 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       leftButtonTaken = taken;
       applyMode();
     },
-    reframe(nextBounds, nextFraming, nextVolume, nextShore, nextElevation) {
+    retile() {
+      surfaces.dispose();
+      scene.remove(surfaces.group);
+      // Geometry alone: the materials are the ones the meshes were already
+      // drawn with, so the sea keeps the sky it was last painted and there is
+      // nothing for the backend to compile.
+      surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
+    },
+    reframe(nextBounds, nextFraming, nextVolume, nextShore, nextTerrain) {
       plot = nextBounds;
       extent = extentOf(plot);
       ground.dispose();
@@ -634,9 +749,16 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       ground = layGround(scene, nextFraming, extent, nextVolume);
       // The coast is rebuilt for the same reason the ground is: both are bound
       // to the light volume, and a new resort is a new bake in new textures.
-      terrain.dispose();
-      scene.remove(terrain.group);
-      terrain = layTerrain(scene, nextShore, nextElevation, nextFraming, extent, nextVolume);
+      surfaces.dispose();
+      scene.remove(surfaces.group);
+      palette.dispose();
+      terrain = nextTerrain;
+      terrainFraming = nextFraming;
+      terrainVolume = nextVolume;
+      coast = nextShore;
+      palette = createTerrainPalette(terrainVolume);
+      palette.setSky(sky.getHex());
+      surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
 
       perspectiveCamera.position.set(
         nextFraming.position.x,
@@ -673,7 +795,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // perspective view does not bring yesterday's sky with it.
       fog.color.setHex(state.skyColor);
       // The sea reflects the sky, so a sunset has to reach the water too.
-      terrain.setSky(state.skyColor);
+      palette.setSky(state.skyColor);
     },
     resize(nextWidth, nextHeight) {
       aspect = nextWidth / nextHeight;
@@ -685,7 +807,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     dispose() {
       controls.dispose();
       ground.dispose();
-      terrain.dispose();
+      surfaces.dispose();
+      palette.dispose();
       renderer.dispose();
     },
   };

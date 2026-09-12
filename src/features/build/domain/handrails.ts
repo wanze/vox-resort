@@ -1,12 +1,19 @@
 /**
- * Which handrails an edit stands, and which it takes away, as a path is drawn by
- * hand.
+ * Which handrails an edit stands, and which it takes away, as the plot is edited
+ * by hand.
  *
  * `railings.ts` already says which paved tiles want a rail and along which edge,
  * and `layoutResort` asks it once for a whole authored plan. This is the other
  * shape of the same question, the one a pointer needs: paving one tile does not
  * only rail that tile, it re-rails the ground around it, and some of what was
  * standing there has to come back down.
+ *
+ * Both editing tools ask it, and the second is the one worth naming. A rail is a
+ * fact about the ground *beside* a paved tile — whether it drops away, and
+ * whether it is water — so the terrain tool changes the answer as surely as the
+ * paving tool does: raise the ground next to a promenade and that edge stops
+ * being a fall, flood it and a lawn becomes something you could fall into. One
+ * question, asked from both sides; see {@link reRailAround}.
  *
  * **Paving takes rails away as well as putting them up**, which is what makes
  * this a diff rather than a list. Every case is the one rule in `railings.ts` —
@@ -112,4 +119,28 @@ export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
     for (const rail of already) if (!wantedKeys.has(rail.key)) lift.push(rail);
   }
   return { stand, lift };
+}
+
+/** Where a rail change is handed to: the world that actually stands them. */
+export interface RailSink {
+  (stand: readonly Placement[], lift: readonly Placement[]): void;
+}
+
+/**
+ * Re-rails the ground around a tile something has just happened to.
+ *
+ * The shape both editing tools want, and the reason it is here rather than in
+ * each of them: paving a tile rails the ground around it, and *raising* that
+ * ground rails the paving, so the two pointers ask the same question at the same
+ * moment — after the tile has changed — and had the same four lines in them to
+ * do it.
+ *
+ * A change that changes nothing says nothing at all rather than handing the
+ * caller two empty lists, so a row of cottages or a stroke across open lawn does
+ * not tell the HUD the scene changed once per tile.
+ */
+export function reRailAround(tile: Tile, rules: HandrailRules, onRails: RailSink): void {
+  const { stand, lift } = railChangeAt(tile, rules);
+  if (stand.length === 0 && lift.length === 0) return;
+  onRails(stand, lift);
 }

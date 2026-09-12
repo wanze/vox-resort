@@ -51,8 +51,9 @@
 
 import { TILE_VOXELS, type ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
 import {
-  BOARDWALK_ID,
   BENCH_ID,
+  BOARDWALK_ID,
+  BRIDGE_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
@@ -67,16 +68,9 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
-import { isWater, shoreFor, type Shore } from './shoreline';
-import {
-  elevationFor,
-  levelAt,
-  levelHeight,
-  straddledTile,
-  type Elevation,
-  type LevelProvider,
-} from './elevation';
-import { groundAt, isSandGround } from './ground';
+import type { Terrain } from './terrain';
+import { terrainFor } from './terrain';
+import { levelHeight, straddledTile, type LevelProvider } from './elevation';
 import { stairTilesFor } from './stairs';
 import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
@@ -324,10 +318,10 @@ export function occupiedTiles(
   // Built once rather than per plot: anchoring an elevation spec validates it
   // against every column of the plot, which is not a thing to do five hundred
   // times over.
-  const elevation = elevationFor(plan);
+  const terrain = terrainFor(plan);
   plan.plots.forEach((plot, index) => {
     const key = keys[index]!;
-    const tiles = claimableTiles(byId, plot, key, plan, elevation);
+    const tiles = claimableTiles(byId, plot, key, plan, terrain);
     for (let x = plot.tileX; x < plot.tileX + tiles.x; x++) {
       for (let z = plot.tileZ; z < plot.tileZ + tiles.z; z++) {
         const cell = tileKey(x, z);
@@ -353,7 +347,7 @@ function claimableTiles(
   plot: ResortPlot,
   key: string,
   plan: ResortPlan,
-  elevation: Elevation | null,
+  terrain: Terrain,
 ): Extent {
   const item = byId.get(plot.id);
   if (!item) throw new Error(`The plot places unknown object "${plot.id}"`);
@@ -369,8 +363,8 @@ function claimableTiles(
   ) {
     throw new Error(`"${key}" does not fit inside the ${plan.tilesX}x${plan.tilesZ} plot`);
   }
-  requireDryGround(plan, plot, tiles, key);
-  requireOneLevel(elevation, plot, tiles, key);
+  requireDryGround(terrain, plot, tiles, key);
+  requireOneLevel(terrain, plot, tiles, key);
   return tiles;
 }
 
@@ -383,14 +377,8 @@ function claimableTiles(
  * which is the same bargain `requireDryGround` strikes with one that builds in
  * the sea.
  */
-function requireOneLevel(
-  elevation: Elevation | null,
-  plot: ResortPlot,
-  tiles: Extent,
-  key: string,
-): void {
-  if (!elevation) return;
-  const straddled = straddledTile((x, z) => levelAt(elevation, x, z), {
+function requireOneLevel(terrain: Terrain, plot: ResortPlot, tiles: Extent, key: string): void {
+  const straddled = straddledTile((x, z) => terrain.levelOf(x, z), {
     tileX: plot.tileX,
     tileZ: plot.tileZ,
     tilesX: tiles.x,
@@ -401,13 +389,19 @@ function requireOneLevel(
   }
 }
 
-/** Throws if any tile a plot would claim is sea rather than ground. */
-function requireDryGround(plan: ResortPlan, plot: ResortPlot, tiles: Extent, key: string): void {
-  const shore = shoreFor(plan);
-  if (!shore) return;
+/**
+ * Throws if any tile a plot would claim is water rather than ground.
+ *
+ * Any water: the bay, and a river or a lake the plan carries as terrain edits.
+ * Nothing in the catalogue floats, and a hotel standing in a channel is a
+ * mistake in the plan wherever the channel came from.
+ */
+function requireDryGround(terrain: Terrain, plot: ResortPlot, tiles: Extent, key: string): void {
   for (let x = plot.tileX; x < plot.tileX + tiles.x; x++) {
     for (let z = plot.tileZ; z < plot.tileZ + tiles.z; z++) {
-      if (isWater(shore, x, z)) throw new Error(`"${key}" stands in the sea at tile ${x},${z}`);
+      if (terrain.surfaceOf(x, z) === 'water') {
+        throw new Error(`"${key}" stands in the water at tile ${x},${z}`);
+      }
     }
   }
 }
@@ -476,11 +470,17 @@ export function routeEdgeTiles(
  */
 export function streetTiles(plan: ResortPlan): Tile[] {
   const nodes = new Map(plan.nodes.map((node) => [node.id, node]));
-  const shore = shoreFor(plan);
+  const terrain = terrainFor(plan);
   const tiles = new Map<string, Tile>();
   const add = (tile: Tile, overWater = false): void => {
     requireInsidePlot(plan, tile);
-    if (!overWater && isWater(shore, tile.x, tile.z)) return;
+    // The *sea* stops a street; a river does not. A run strung corner to corner
+    // over a plot with a bay in one corner wants to stop at the sand rather than
+    // pave a causeway across the water, which is what `overWater` is for — and a
+    // channel two tiles wide is nothing of the sort. It is something a road goes
+    // over, and `pavingFor` turns those tiles into the bridge. See
+    // `PathEdge.overWater`.
+    if (!overWater && terrain.isSea(tile.x, tile.z)) return;
     tiles.set(tileKey(tile.x, tile.z), tile);
   };
 
@@ -564,7 +564,7 @@ function growSpurs(
   occupied: ReadonlyMap<string, string>,
   paved: Map<string, Tile>,
 ): void {
-  const { byId, keys, shore, elevation } = spurContext(items, plan);
+  const { byId, keys, terrain } = spurContext(items, plan);
   // Sand is not routed *through* either, for the same reason nothing standing on
   // it grows a spur: a walk laid across the beach to reach a building on the
   // grass behind it is a boardwalk nobody asked for, and the BFS will happily
@@ -574,8 +574,7 @@ function growSpurs(
     z >= 0 &&
     x < plan.tilesX &&
     z < plan.tilesZ &&
-    !isWater(shore, x, z) &&
-    !isSandGround(shore, elevation, x, z) &&
+    terrain.surfaceOf(x, z) === 'grass' &&
     !occupied.has(tileKey(x, z)) &&
     !paved.has(tileKey(x, z));
   const touchesPath = (x: number, z: number): boolean =>
@@ -583,7 +582,7 @@ function growSpurs(
 
   plan.plots.forEach((plot, index) => {
     const item = byId.get(plot.id)!;
-    if (!needsPaving(item, plot, shore, elevation)) return;
+    if (!needsPaving(item, plot, terrain)) return;
     const border = borderTiles(plot, item, plan);
     if (border.some((tile) => paved.has(tileKey(tile.x, tile.z)))) return;
 
@@ -606,8 +605,7 @@ function spurContext(items: readonly LayoutItem[], plan: ResortPlan) {
   return {
     byId: new Map(items.map((item) => [item.id, item])),
     keys: plotKeys(plan.plots),
-    shore: shoreFor(plan),
-    elevation: elevationFor(plan),
+    terrain: terrainFor(plan),
   };
 }
 
@@ -620,13 +618,8 @@ function spurContext(items: readonly LayoutItem[], plan: ResortPlan) {
  * grounds shelf — is not a destination, and sand is walked on. See
  * {@link growSpurs}.
  */
-function needsPaving(
-  item: LayoutItem,
-  plot: ResortPlot,
-  shore: Shore | null,
-  elevation: Elevation | null,
-): boolean {
-  return item.category !== 'grounds' && !isSandGround(shore, elevation, plot.tileX, plot.tileZ);
+function needsPaving(item: LayoutItem, plot: ResortPlot, terrain: Terrain): boolean {
+  return item.category !== 'grounds' && terrain.surfaceOf(plot.tileX, plot.tileZ) !== 'sand';
 }
 
 /**
@@ -718,14 +711,14 @@ export function isPathNetworkConnected(tiles: readonly Tile[]): boolean {
  * Both are the rules `growSpurs` lays no paving by.
  */
 export function plotsWithoutPathAccess(items: readonly LayoutItem[], plan: ResortPlan): string[] {
-  const { byId, keys, shore, elevation } = spurContext(items, plan);
+  const { byId, keys, terrain } = spurContext(items, plan);
   const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
   return plan.plots
     .map((plot, index) => ({ plot, key: keys[index]! }))
     .filter(({ plot }) => {
       const item = byId.get(plot.id);
       if (!item) return true;
-      if (!needsPaving(item, plot, shore, elevation)) return false;
+      if (!needsPaving(item, plot, terrain)) return false;
       return !borderTiles(plot, item, plan).some((tile) => paved.has(tileKey(tile.x, tile.z)));
     })
     .map(({ key }) => key);
@@ -777,19 +770,18 @@ function facingRotation(dx: number, dz: number): Rotation {
  */
 function edgeRing(parts: {
   readonly plan: ResortPlan;
-  readonly shore: Shore | null;
-  readonly elevation: Elevation | null;
+  readonly terrain: Terrain;
   readonly occupied: ReadonlyMap<string, string>;
   readonly paved: ReadonlySet<string>;
   readonly pathNeighbours: (x: number, z: number) => number;
 }): Tile[] {
-  const { plan, shore, elevation, occupied, paved, pathNeighbours } = parts;
+  const { plan, terrain, occupied, paved, pathNeighbours } = parts;
   const ring: Tile[] = [];
   for (let z = 0; z < plan.tilesZ; z++) {
     for (let x = 0; x < plan.tilesX; x++) {
       const key = tileKey(x, z);
       if (occupied.has(key) || paved.has(key)) continue;
-      if (groundAt(shore, elevation, x, z) !== 'grass') continue;
+      if (terrain.surfaceOf(x, z) !== 'grass') continue;
       if (pathNeighbours(x, z) > 0) ring.push({ x, z });
     }
   }
@@ -815,14 +807,13 @@ export function decorationsFor(
   spacing = LAMP_SPACING,
 ): Decorations {
   const occupied = occupiedTiles(items, plan);
-  const shore = shoreFor(plan);
-  const elevation = elevationFor(plan);
+  const terrain = terrainFor(plan);
   const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
 
   const pathNeighbours = (x: number, z: number): number =>
     NEIGHBOURS.filter(([dx, dz]) => paved.has(tileKey(x + dx, z + dz))).length;
 
-  const ring = edgeRing({ plan, shore, elevation, occupied, paved, pathNeighbours });
+  const ring = edgeRing({ plan, terrain, occupied, paved, pathNeighbours });
 
   const lamps: Tile[] = [];
   const taken = new Set<string>();
@@ -985,25 +976,28 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   requireEveryTypePlanted(items, plan);
 
   // The paving a tile gets is a fact about the ground under it, not about the
-  // route: the same street comes out as flagstones on grass, decking on sand and
-  // a flight of stairs where it climbs a terrace. A catalogue missing one of
-  // those simply paves that ground in stone.
-  const shore = shoreFor(plan);
-  // How high the ground is under a tile is a fact about the plot, exactly as
-  // what the ground is made of is: a flat plan reports level 0 everywhere, so
-  // nothing below here has to know whether the plot has terraces on it.
-  const elevation: Elevation | null = elevationFor(plan);
-  const levelOf = (tileX: number, tileZ: number): number => levelAt(elevation, tileX, tileZ);
+  // route: the same street comes out as flagstones on grass, decking on sand, a
+  // flight of stairs where it climbs a terrace, a pier where it leaves the shore
+  // and a bridge where it crosses a channel. A catalogue missing one of those
+  // simply paves that ground in stone.
+  //
+  // How high the ground is, and what it is made of, both come off the one field:
+  // a flat plan with no coast reports grass at level 0 everywhere, so nothing
+  // below here has to know whether the plot has terraces, a bay or a river on it.
+  const terrain = terrainFor(plan);
+  const levelOf = (tileX: number, tileZ: number): number => terrain.levelOf(tileX, tileZ);
 
   const boardwalk = byId.get(BOARDWALK_ID) ?? path;
   const jetty = byId.get(JETTY_ID) ?? boardwalk;
-  // Three answers from one question about the ground under a tile. Sand rather
+  const bridge = byId.get(BRIDGE_ID) ?? jetty;
+  // Four answers from one question about the ground under a tile. Sand rather
   // than beach, because the sidewalk along the top of a dune is decking for the
   // same reason the pier is — see `ground.ts`; and water only ever reaches here
-  // on a pier, because nothing else paves it.
+  // on a run that means to be out there, because nothing else paves it. Which
+  // span it gets is the one thing the bay and a river disagree about.
   const pavingFor = (tile: Tile): LayoutItem => {
-    const ground = groundAt(shore, elevation, tile.x, tile.z);
-    if (ground === 'water') return jetty;
+    const ground = terrain.surfaceOf(tile.x, tile.z);
+    if (ground === 'water') return terrain.isSea(tile.x, tile.z) ? jetty : bridge;
     return ground === 'sand' ? boardwalk : path;
   };
 
@@ -1040,7 +1034,8 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   // across its head: the sea beside a jetty stands at the jetty's own level, so
   // the heights alone would say there was nothing to fall into. See
   // `railings.ts`.
-  const overWater = (tileX: number, tileZ: number): boolean => isWater(shore, tileX, tileZ);
+  const overWater = (tileX: number, tileZ: number): boolean =>
+    terrain.surfaceOf(tileX, tileZ) === 'water';
   const rails = railPlacementsFor(
     railModelsIn(items),
     railTilesFor(paved, levelOf, overWater),

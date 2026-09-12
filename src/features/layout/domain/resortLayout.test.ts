@@ -22,6 +22,7 @@ import {
 import {
   BENCH_ID,
   BOARDWALK_ID,
+  BRIDGE_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
@@ -780,6 +781,7 @@ describe('a plot with a shore', () => {
     item(PATH_ID),
     item(BOARDWALK_ID),
     item(JETTY_ID),
+    item(BRIDGE_ID),
     item('hut', 2, 2),
     item(LAMP_ID),
     item(HEDGE_ID),
@@ -855,7 +857,42 @@ describe('a plot with a shore', () => {
   it('refuses an object standing in the sea', () => {
     expect(() =>
       layoutResort(items, coastal({ plots: [{ id: 'hut', tileX: 2, tileZ: 10 }] })),
-    ).toThrow(/stands in the sea/);
+    ).toThrow(/stands in the water/);
+  });
+
+  /**
+   * Terrain edits are the third description of the ground, and the layout reads
+   * the plot through them: a river the plan carries is ground like the bay is,
+   * so nothing may stand in it and a street crossing it is bridged.
+   */
+  it('bridges a street where the plan carries a river under it', () => {
+    const river = coastal({
+      plots: [],
+      // The east-west street runs along row 2; a channel down column 5 crosses
+      // it, and the channel is not the sea, so the crossing is a bridge.
+      terrain: [
+        { tileX: 5, tileZ: 1, level: 0, surface: 'water' },
+        { tileX: 5, tileZ: 2, level: 0, surface: 'water' },
+        { tileX: 5, tileZ: 3, level: 0, surface: 'water' },
+      ],
+    });
+    const laid = layoutResort(items, river);
+    const crossing = laid.paths.find((path) => path.tileX === 5 && path.tileZ === 2);
+    expect(crossing?.id).toBe(BRIDGE_ID);
+    // And the street either side of it is still flagstones.
+    expect(laid.paths.find((path) => path.tileX === 4 && path.tileZ === 2)?.id).toBe(PATH_ID);
+  });
+
+  it('refuses an object standing in a river the plan carries', () => {
+    expect(() =>
+      layoutResort(
+        items,
+        coastal({
+          plots: [{ id: 'hut', tileX: 2, tileZ: 5 }],
+          terrain: [{ tileX: 2, tileZ: 5, level: 0, surface: 'water' }],
+        }),
+      ),
+    ).toThrow(/stands in the water at tile 2,5/);
   });
 
   /**

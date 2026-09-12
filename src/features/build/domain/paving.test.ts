@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { derivedKey, place, type LayoutItem, type Tile } from '../../layout/domain/resortLayout';
 import type { LevelProvider } from '../../layout/domain/elevation';
-import { BOARDWALK_ID, JETTY_ID, PATH_ID, STAIRS_ID } from '../../layout/domain/resortPlan';
+import {
+  BOARDWALK_ID,
+  BRIDGE_ID,
+  JETTY_ID,
+  PATH_ID,
+  STAIRS_ID,
+} from '../../layout/domain/resortPlan';
 import {
   isPaving,
   pavedGroundOf,
@@ -25,6 +31,7 @@ const PATH = item(PATH_ID);
 const BOARDWALK = item(BOARDWALK_ID);
 const STAIRS = item(STAIRS_ID);
 const JETTY = item(JETTY_ID);
+const BRIDGE = item(BRIDGE_ID);
 const COTTAGE = item('cottage', 2, 3);
 
 /** A plot where everything north of `z` stands one level up. */
@@ -45,15 +52,23 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   levelOf: () => 0,
   isSand: () => false,
   isWater: () => false,
+  isSea: () => true,
   decking: BOARDWALK,
   pier: JETTY,
+  bridge: BRIDGE,
   stairs: STAIRS,
   ...parts,
 });
 
 describe('isPaving', () => {
-  it('knows the four kinds of paving a path network is laid with', () => {
-    expect([PATH, BOARDWALK, STAIRS, JETTY].map(isPaving)).toEqual([true, true, true, true]);
+  it('knows every kind of paving a path network is laid with', () => {
+    expect([PATH, BOARDWALK, STAIRS, JETTY, BRIDGE].map(isPaving)).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
   });
 
   it('does not treat a building as paving', () => {
@@ -320,9 +335,35 @@ describe('pavingAt, over water', () => {
     expect(pavingAt(PATH, { x: 2, z: 5 }, 0, climbing)).toEqual({ item: JETTY, rotation: 0 });
   });
 
-  it('leaves the water unpavable when the catalogue has no jetty', () => {
+  it('leaves the sea unpavable when the catalogue has no jetty', () => {
     const none = rules({ isWater: () => true, pier: null });
     expect(standsOn(PATH, { x: 2, z: 5 }, none)).toBe(false);
+  });
+});
+
+describe('pavingAt, over a river', () => {
+  /** Water the sea does not own: a channel cut through the middle of the plot. */
+  const river = rules({ isWater: (_x, tileZ) => tileZ === 5, isSea: () => false });
+
+  it('lays a bridge rather than a pier, which is the one thing they differ on', () => {
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river).item).toBe(BRIDGE);
+  });
+
+  it('lays it flat, because inland water is flush with its own banks', () => {
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river).rotation).toBe(0);
+  });
+
+  it('leaves a river unpavable when the catalogue has no bridge', () => {
+    const none = rules({ isWater: () => true, isSea: () => false, bridge: null });
+    expect(standsOn(PATH, { x: 2, z: 5 }, none)).toBe(false);
+  });
+
+  it('keeps the two spans to their own water', () => {
+    expect(standsOn(BRIDGE, { x: 2, z: 5 }, river)).toBe(true);
+    expect(standsOn(JETTY, { x: 2, z: 5 }, river)).toBe(false);
+    const sea = rules({ isWater: (_x, tileZ) => tileZ >= 5 });
+    expect(standsOn(JETTY, { x: 2, z: 5 }, sea)).toBe(true);
+    expect(standsOn(BRIDGE, { x: 2, z: 5 }, sea)).toBe(false);
   });
 });
 

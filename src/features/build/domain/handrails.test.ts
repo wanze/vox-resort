@@ -15,7 +15,7 @@ import {
   STAIR_RAILING_ID,
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
-import { railChangeAt, type HandrailRules } from './handrails';
+import { railChangeAt, reRailAround, type HandrailRules } from './handrails';
 import type { PavedGround } from './paving';
 
 const item = (id: string, width = 16, depth = 16): LayoutItem => ({
@@ -212,5 +212,57 @@ describe('railChangeAt', () => {
     }
     // And the placement is stood on the level of the tile it guards.
     expect(change.stand[0]!.y).toBe(place(PATH, 'x', 1, 1, 0, 1).y);
+  });
+});
+
+describe('reRailAround', () => {
+  it('says nothing at all when nothing changed', () => {
+    let told = 0;
+    reRailAround({ x: 1, z: 1 }, rules(), () => {
+      told++;
+    });
+    expect(told).toBe(0);
+  });
+
+  it('hands the change over once when there is one', () => {
+    const changes: { stand: number; lift: number }[] = [];
+    reRailAround(
+      { x: 1, z: 1 },
+      rules({ levelOf: bench, pavedWith: pavedOf([{ x: 1, z: 1 }]) }),
+      (stand, lift) => changes.push({ stand: stand.length, lift: lift.length }),
+    );
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.stand).toBeGreaterThan(0);
+  });
+
+  /**
+   * The terrain tool's case: nothing was paved, the ground beside a walk moved.
+   * The rail along an edge that has stopped being a drop has to come down.
+   */
+  it('lifts the rail on an edge that has stopped being a drop', () => {
+    const walk = { x: 1, z: 1 };
+    const rail = place(
+      item(RAILING_ID, 16, 2),
+      derivedKey(RAILING_ID, walk.x, walk.z),
+      walk.x,
+      walk.z,
+      2,
+      1,
+    );
+    const changes: Placement[][] = [];
+    reRailAround(
+      walk,
+      rules({
+        // The ground south of the walk has come up to meet it, so the edge that
+        // was a fall is now a way across.
+        levelOf: groundOf(['1111', '1111', '1111', '0000']),
+        pavedWith: pavedOf([walk]),
+        standing: standingOf([rail]),
+      }),
+      (_stand, lift) => changes.push([...lift]),
+    );
+    expect(railsOf(changes[0] ?? [])).toEqual(
+      railsOf([rail]).filter((entry) => entry.rotation === 2),
+    );
   });
 });

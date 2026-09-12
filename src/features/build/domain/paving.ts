@@ -9,17 +9,17 @@
  * and it asks `stairs.ts` the same question the layout does — a path drawn
  * across a step climbs it exactly where a generated one would.
  *
- * **You do not place a flight, a boardwalk or a pier, you draw a path.** All
- * three can only ever be wrong when picked by hand: a staircase on flat ground
- * climbs nothing, one facing the wrong way walks into a wall, decking laid on a
- * lawn is a jetty over grass, and a jetty laid on grass is the same joke the
- * other way round. All three models say as much about themselves
- * (`groundDecides`), so the palette offers none of them and this decides where
- * they go — which leaves one paving tool, and no way to pave a tile wrongly with
- * it.
+ * **You do not place a flight, a boardwalk, a pier or a bridge, you draw a
+ * path.** All four can only ever be wrong when picked by hand: a staircase on
+ * flat ground climbs nothing, one facing the wrong way walks into a wall,
+ * decking laid on a lawn is a jetty over grass, a jetty laid on grass is the
+ * same joke the other way round, and a bridge over a lawn is a bridge over
+ * nothing. All four models say as much about themselves (`groundDecides`), so
+ * the palette offers none of them and this decides where they go — which leaves
+ * one paving tool, and no way to pave a tile wrongly with it.
  *
  * Sand and water are the easy half: what a tile is made of is a fact about that
- * tile alone, so decking and a pier are decided once, as the tile goes down, and
+ * tile alone, so decking and a span are decided once, as the tile goes down, and
  * never revisited. A step is not, because a step is a fact about two tiles and a
  * stroke can cross one in either direction — so that decision has two halves:
  *
@@ -93,16 +93,31 @@ export interface PavingRules {
   readonly levelOf: LevelProvider;
   /** Whether the ground under a tile is sand rather than grass. */
   readonly isSand: (tileX: number, tileZ: number) => boolean;
-  /** Whether the tile is open water, which only a pier may be laid over. */
+  /** Whether the tile is open water, which only a span may be laid over. */
   readonly isWater: (tileX: number, tileZ: number) => boolean;
+  /**
+   * Whether a tile of water is the *sea* rather than a river or a lake.
+   *
+   * The one thing the two bodies of water do not agree about. A pier is walked
+   * out from a shore and a bridge is carried across a channel, so which of the
+   * two a tile gets is this question and nothing else — see `terrain.ts`, where
+   * the sea is the ground no brush may change.
+   */
+  readonly isSea: (tileX: number, tileZ: number) => boolean;
   /** The decking a path becomes on sand, or null when the catalogue has none. */
   readonly decking: LayoutItem | null;
   /**
-   * The jetty a path becomes over water, or null when the catalogue has none —
-   * in which case the water stays the one ground nothing can be laid on, which
-   * is what it was before there was a pier to lay on it.
+   * The jetty a path becomes over the sea, or null when the catalogue has none —
+   * in which case the sea stays the one ground nothing can be laid on, which is
+   * what it was before there was a pier to lay on it.
    */
   readonly pier: LayoutItem | null;
+  /**
+   * The bridge a path becomes over a river or a lake, or null when the catalogue
+   * has none — in which case inland water refuses paving exactly as the sea did
+   * before there was a pier.
+   */
+  readonly bridge: LayoutItem | null;
   /**
    * The flight a path becomes where it climbs, or null when the catalogue has
    * none — in which case a step is simply paved flat, exactly as `layoutResort`
@@ -150,10 +165,15 @@ export function pavingAt(
   rules: PavingRules,
 ): Paving {
   if (!isPaving(item)) return { item, rotation };
-  // Water first, and it is the one answer no other rule can overrule: a pier
-  // climbs nothing — the sea is level — and there is no such thing as wet sand
-  // you could lay decking on out there.
-  if (rules.isWater(tile.x, tile.z)) return { item: rules.pier ?? item, rotation: 0 };
+  // Water first, and it is the one answer no other rule can overrule: a span
+  // climbs nothing — water is flush with whatever it is cut into, see
+  // `terrain.ts` — and there is no such thing as wet sand you could lay decking
+  // on out there. Which span it is, is the only thing the sea and a river
+  // disagree about.
+  if (rules.isWater(tile.x, tile.z)) {
+    const span = spanOver(tile, rules);
+    return { item: span ?? item, rotation: 0 };
+  }
   const { stairs } = rules;
   if (stairs) {
     const climb = climbAt(tile, pavedProvider(rules), rules.levelOf);
@@ -164,22 +184,39 @@ export function pavingAt(
 }
 
 /**
+ * The span a tile of water takes: a pier out at sea, a bridge over a river.
+ *
+ * One place rather than two, because {@link pavingAt} and {@link standsOn} ask
+ * the same question from the two sides — what goes down here, and what may —
+ * and two copies of a two-line rule is how a bridge ends up standing on ground
+ * that refuses it.
+ */
+function spanOver(tile: Tile, rules: PavingRules): LayoutItem | null {
+  return rules.isSea(tile.x, tile.z) ? rules.pier : rules.bridge;
+}
+
+/**
  * Whether the ground under a tile will take this object at all.
  *
- * The sea is the only ground that refuses anything, and it refuses everything
- * but the pier — so a hotel in the bay is turned down here, and the jetty that
- * {@link pavingAt} just handed back for the very same tile is not.
+ * Water is the only ground that refuses anything, and it refuses everything but
+ * the span that crosses it — so a hotel in the bay is turned down here, and the
+ * jetty that {@link pavingAt} just handed back for the very same tile is not.
  *
  * This is a rule rather than a reservation, and that is the change a pier makes.
  * Water used to be seeded into the occupancy index as ground held by nobody, so
  * the pointer refused it by the ordinary "something is already there" rule and
  * no second rule existed to keep in step. Once one thing *can* stand on water
- * that no longer says what it needs to say: what may go on a tile of sea is a
+ * that no longer says what it needs to say: what may go on a tile of water is a
  * fact about the object, and an index of tiles cannot hold a fact about objects.
+ *
+ * A river makes it a fact about the *pair*: the bay takes a pier and not a
+ * bridge, and a river takes a bridge and not a pier, so the tile is asked which
+ * body of water it is before the object is asked what it is.
  */
 export function standsOn(item: LayoutItem, tile: Tile, rules: PavingRules): boolean {
   if (!rules.isWater(tile.x, tile.z)) return true;
-  return rules.pier !== null && item.id === rules.pier.id;
+  const span = spanOver(tile, rules);
+  return span !== null && item.id === span.id;
 }
 
 /** A tile of paving that has to be laid again, and the paving it replaces. */

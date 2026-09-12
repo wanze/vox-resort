@@ -51,6 +51,7 @@
 import type { ShoreSpec } from './shoreline';
 import type { ElevationSpec } from './elevation';
 import type { Rotation } from './rotation';
+import type { TerrainEdit } from './terrain';
 
 /** One object standing on the plot, anchored at its north-west tile. */
 export interface ResortPlot {
@@ -143,6 +144,18 @@ export interface ResortPlan {
    */
   readonly elevation?: ElevationSpec;
   /**
+   * Tiles whose ground is not what the coast and the terraces above would make
+   * of them: the rivers, the lakes and the islands.
+   *
+   * Absent on the authored plan and on every generated resort, and that is the
+   * point of it being a list rather than another spec. A coast and a hill are
+   * lines strung across the plot, and there is no line that means "this one tile
+   * is a lake" — so ground that is *built* rather than grown travels as the
+   * tiles it changed. A bare plot carries the river it was handed here, and the
+   * terrain tool writes into the same layer. See `terrain.ts`.
+   */
+  readonly terrain?: readonly TerrainEdit[];
+  /**
    * Whether every catalogue type is meant to stand somewhere on this plan.
    *
    * True by default, and true of the authored plan: a type in the catalogue that
@@ -163,13 +176,25 @@ export const BOARDWALK_ID = 'boardwalk';
 /** The paving a path is laid with where it climbs a terrace step. */
 export const STAIRS_ID = 'stairs';
 
-/** The paving a path is laid with where it runs out over the water. */
+/** The paving a path is laid with where it runs out over the sea. */
 export const JETTY_ID = 'jetty';
 
 /**
- * Every kind of paving a path network is laid with, flights and piers included.
+ * The paving a path is laid with where it crosses a river or a lake.
  *
- * The four are interchangeable per tile — which one a tile gets is a fact about
+ * The counterpart of the jetty and not the same thing: a pier is timber walked
+ * *out* from a shore and a bridge is masonry carried *across*, and the sea and
+ * the water inland are two different grounds — see `terrain.ts`. Which of the
+ * two a tile of water gets is the only paving question the sea answers
+ * differently from a river.
+ */
+export const BRIDGE_ID = 'bridge';
+
+/**
+ * Every kind of paving a path network is laid with, flights, piers and spans
+ * included.
+ *
+ * The five are interchangeable per tile — which one a tile gets is a fact about
  * the ground under it — so everything that treats "a tile of paving" as one
  * thing reads this: the plot's own list of paved tiles, and the paving tool that
  * swaps one for another as a path crosses a step or leaves the shore.
@@ -179,6 +204,7 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([
   BOARDWALK_ID,
   STAIRS_ID,
   JETTY_ID,
+  BRIDGE_ID,
 ]);
 
 /** The object types the layout scatters along the paths on its own. */
@@ -230,6 +256,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   BOARDWALK_ID,
   STAIRS_ID,
   JETTY_ID,
+  BRIDGE_ID,
   LAMP_ID,
   HEDGE_ID,
   BENCH_ID,

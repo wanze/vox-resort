@@ -7,6 +7,7 @@ import { useCameraControls } from './useCameraControls';
 import { useClockControls } from './useClockControls';
 import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
+import type { BuildTool } from '../features/build/domain/buildTool';
 
 /**
  * Mount and dispose are serialised through this chain so React 19's StrictMode
@@ -18,12 +19,12 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  /** Mirrors the palette selection, so a type picked while the catalogue is
+  /** Mirrors the palette selection, so a tool picked while the catalogue is
    * still being meshed is armed as soon as the scene exists. */
-  const buildTypeRef = useRef<string | null>(null);
+  const toolRef = useRef<BuildTool | null>(null);
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
-  const [buildType, setBuildType] = useState<string | null>(null);
+  const [tool, setTool] = useState<BuildTool | null>(null);
   const [error, setError] = useState<string | null>(null);
   const resort = useResortControls(showcaseRef);
   const camera = useCameraControls(showcaseRef);
@@ -34,11 +35,11 @@ export function App() {
   const { adopt: adoptParams } = resort;
   const { adopt: adoptCamera } = camera;
 
-  /** Arms the pointer with a type, and keeps the palette showing which. */
-  const selectBuildType = useCallback((typeId: string | null) => {
-    buildTypeRef.current = typeId;
-    setBuildType(typeId);
-    showcaseRef.current?.selectBuildType(typeId);
+  /** Arms the pointer with a tool, and keeps the palette showing which. */
+  const selectTool = useCallback((next: BuildTool | null) => {
+    toolRef.current = next;
+    setTool(next);
+    showcaseRef.current?.selectTool(next);
   }, []);
 
   useEffect(() => {
@@ -56,9 +57,9 @@ export function App() {
       // The scene is mutable, so the panel is re-rendered when something is
       // placed. This runs on an edit, not on a frame.
       onSceneChange: setStats,
-      // Escape leaves build mode from the canvas; the palette follows. Arming
-      // the pointer again with what it just put down costs nothing.
-      onBuildSelectionChange: selectBuildType,
+      // Escape puts the pointer down from the canvas; the palette follows.
+      // Arming it again with what it just put down costs nothing.
+      onToolChange: selectTool,
       // C, Q and E move the camera from the canvas; the panel follows.
       onCameraChange: adoptCamera,
       onFrame: overlay.update,
@@ -73,7 +74,7 @@ export function App() {
           return;
         }
         showcaseRef.current = mounted;
-        mounted.selectBuildType(buildTypeRef.current);
+        mounted.selectTool(toolRef.current);
         setStats(mounted.stats);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
@@ -91,7 +92,7 @@ export function App() {
       });
     };
     // All of them are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectBuildType, adoptParams, adoptCamera]);
+  }, [hudNodes, selectTool, adoptParams, adoptCamera]);
 
   return (
     <div className="app">
@@ -105,8 +106,8 @@ export function App() {
         camera={camera}
         resort={resort}
         preview={previewUrl}
-        buildType={buildType}
-        onBuildTypeChange={selectBuildType}
+        tool={tool}
+        onToolChange={selectTool}
         error={error}
       />
     </div>

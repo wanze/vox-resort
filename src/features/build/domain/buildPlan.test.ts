@@ -11,6 +11,8 @@ import {
 } from './buildPlan';
 import { createTileOccupancy } from './tileOccupancy';
 import type { LevelProvider } from '../../layout/domain/elevation';
+import { createTerrain } from '../../layout/domain/terrain';
+import { shoreFor } from '../../layout/domain/shoreline';
 
 /**
  * The sea, as `paving.ts` hands it over: everything from row 7 down refuses
@@ -129,6 +131,27 @@ describe('planAt', () => {
     expect(planAt(COTTAGE, { x: 3, z: 3 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
       false,
     );
+  });
+
+  it('builds on an island out in the bay, past the plot itself', () => {
+    // Placement was never bounded by the plot — what bounded an island was the
+    // ground, and `terrain.ts` now lets a brush raise one anywhere in the apron.
+    // So this is the rule read from the far side: sea refuses everything, and
+    // the moment the same tile is land it refuses nothing. See `paving.ts`.
+    const coast = shoreFor({
+      tilesX: 20,
+      tilesZ: 20,
+      shore: { inset: 6, beach: 4, wave: 0, seed: 1 },
+    });
+    const bay = createTerrain({ shore: coast, elevation: null, tilesX: 20, tilesZ: 20 });
+    const island: Tile = { x: -6, z: 28 };
+    const isDry = (tile: Tile): boolean => bay.surfaceOf(tile.x, tile.z) !== 'water';
+    const levelOf: LevelProvider = (tileX, tileZ) => bay.levelOf(tileX, tileZ);
+    expect(bay.isSea(island.x, island.z)).toBe(true);
+    expect(planAt(PATH, island, createTileOccupancy(), 0, levelOf, isDry).blocked).toBe(true);
+
+    bay.set(island.x, island.z, { level: 1, surface: 'sand' });
+    expect(planAt(PATH, island, createTileOccupancy(), 0, levelOf, isDry).blocked).toBe(false);
   });
 
   it('asks the ground about every tile of the footprint, not only its corner', () => {

@@ -53,15 +53,17 @@ describe('buildSectionMeshes', () => {
     // Face culling has to remove the interiors: unmeshed, the catalogue's
     // voxels would each contribute twelve triangles rather than a handful.
     const triangles = sections.reduce((total, section) => total + section.indices.length / 3, 0);
-    expect(triangles).toBeLessThan(writes.length * 4);
+    expect(triangles).toBeLessThan(writes.voxelIds.length * 4);
   }, 30_000);
 
   it('emits faces that point outwards once their winding is flipped', async () => {
     // DVE keeps its world in module-level statics, so park this voxel well past
     // the scratch regions the test above painted into the same world.
-    const writes = [
-      { x: 6000, y: 100, z: 1000, voxelId: voxelIdFor(materialKeyFor(OBJECT_TYPES[0]!.color)) },
-    ];
+    const writes = {
+      positions: Int32Array.of(6000, 100, 1000),
+      voxelIds: Uint16Array.of(0),
+      palette: [voxelIdFor(materialKeyFor(OBJECT_TYPES[0]!.color))],
+    };
     const [section] = await buildSectionMeshes(allMaterials(), writes);
     expect(section).toBeDefined();
 

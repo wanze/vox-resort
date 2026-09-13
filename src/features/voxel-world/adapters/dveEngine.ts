@@ -13,7 +13,7 @@
 import type { MaterialDefinition } from '../../catalog/domain/materials';
 import { materialIdFor, voxelIdFor } from '../../catalog/domain/materials';
 import { groupBySection, originsFor, type VolumeSize } from '../domain/sectionGrid';
-import type { VoxelWrite } from '../domain/voxelWrites';
+import type { PackedVoxelWrites } from '../domain/modelScratch';
 
 /** Power-of-two exponents DVE uses to size sectors and sections. */
 export interface WorldScale {
@@ -151,9 +151,10 @@ async function initializeEngine(
  */
 export async function buildSectionMeshes(
   materials: readonly MaterialDefinition[],
-  writes: readonly VoxelWrite[],
+  writes: PackedVoxelWrites,
   scale: WorldScale = DEFAULT_WORLD_SCALE,
 ): Promise<RawSectionMesh[]> {
+  const { positions, voxelIds, palette } = writes;
   await initializeEngine(materials, scale);
 
   const { WorldRegister } = await import('@divinevoxel/vlox/World/WorldRegister');
@@ -161,26 +162,48 @@ export async function buildSectionMeshes(
   const { MeshSection } = await import('@divinevoxel/vlox/Mesher/Voxels/MeshSection');
   const { CompactedMeshData, CompactedSectionVoxelMesh } =
     await import('@divinevoxel/vlox/Mesher/Voxels/Geometry/CompactedSectionVoxelMesh');
+  const { VoxelLUT } = await import('@divinevoxel/vlox/Voxels/Data/VoxelLUT');
+
+  // Resolved once per palette entry rather than once per voxel: `setStringId` is
+  // exactly this lookup followed by `setId`, and the catalogue asks it three
+  // quarters of a million times for a couple of hundred answers. An id the
+  // registry never heard of would otherwise paint air, silently.
+  const engineIds = palette.map((id) => {
+    if (!VoxelLUT.voxelIds.isRegistered(id)) {
+      throw new Error(`Voxel id ${id} was never registered with the engine`);
+    }
+    return VoxelLUT.getVoxelIdFromString(id);
+  });
 
   const sectorSize = sectorSizeOf(scale);
   const sectionSize = sectionSizeOf(scale);
 
-  for (const origin of originsFor(writes, sectorSize)) {
+  for (const origin of originsFor(positions, sectorSize)) {
     WorldRegister.sectors.new(DIMENSION, origin.x, origin.y, origin.z);
   }
 
   const cursor = new SectionCursor();
-  const buckets = groupBySection(writes, sectionSize);
+  const buckets = groupBySection(positions, sectionSize);
   for (const bucket of buckets) {
     if (!cursor.loadSection(DIMENSION, bucket.origin.x, bucket.origin.y, bucket.origin.z)) {
       throw new Error(
         `No sector backing section ${bucket.origin.x},${bucket.origin.y},${bucket.origin.z}`,
       );
     }
-    for (const write of bucket.writes) {
-      const voxel = cursor.getVoxel(write.x, write.y, write.z);
+    for (const write of bucket.indices) {
+      const voxel = cursor.getVoxel(
+        positions[write * 3]!,
+        positions[write * 3 + 1]!,
+        positions[write * 3 + 2]!,
+      );
       if (!voxel) continue;
-      voxel.setStringId(write.voxelId);
+      const engineId = engineIds[voxelIds[write]!];
+      if (engineId === undefined) {
+        throw new Error(
+          `Write ${write} names palette entry ${voxelIds[write]}, which is not there`,
+        );
+      }
+      voxel.setId(engineId);
       voxel.updateVoxel(0);
     }
   }

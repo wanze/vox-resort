@@ -1424,7 +1424,7 @@ function sceneStats(parts: {
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
-    meshedVoxelCount: scratch.writes.length,
+    meshedVoxelCount: scratch.writes.voxelIds.length,
     lightCount: lighting.anchorCount,
     litLightCount: lighting.litCount,
     lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,

@@ -11,14 +11,13 @@
 import type { MaterialDefinition } from '../../catalog/domain/materials';
 import type { ModelAttributes } from '../../rendering/domain/modelAttributes';
 import { buildModelAttributes } from '../../rendering/domain/modelAttributes';
-import type { ScratchRegion } from '../domain/modelScratch';
-import type { PackedVoxelWrites, VoxelWrite } from '../domain/voxelWrites';
-import { packVoxelWrites, unpackVoxelWrites } from '../domain/voxelWrites';
+import type { PackedVoxelWrites, ScratchRegion } from '../domain/modelScratch';
 import { buildSectionMeshes } from './dveEngine';
 
 export interface MeshCatalogueRequest {
   readonly materials: readonly MaterialDefinition[];
-  readonly writes: readonly VoxelWrite[];
+  /** Packed from the moment they are laid out, on both sides of the worker. */
+  readonly writes: PackedVoxelWrites;
   readonly regions: readonly ScratchRegion[];
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
@@ -55,9 +54,14 @@ export interface WireResponse {
 }
 
 export function toWire(request: MeshCatalogueRequest): WireRequest {
+  const { positions, voxelIds, palette } = request.writes;
   return {
     materials: request.materials,
-    writes: packVoxelWrites(request.writes),
+    // Copied, not handed over: the worker takes these buffers by transfer, which
+    // empties them on this side, and the main-thread fallback still has to read
+    // the request if the worker fails after the post. Ten megabytes of memcpy is
+    // nothing against the object per voxel this used to be packed from.
+    writes: { positions: positions.slice(), voxelIds: voxelIds.slice(), palette },
     regions: request.regions,
     colors: [...request.colorsByMaterialId],
     emissive: [...request.emissiveByModelId].map(([id, colors]) => [id, [...colors]] as const),
@@ -69,7 +73,7 @@ export function toWire(request: MeshCatalogueRequest): WireRequest {
 export function fromWire(wire: WireRequest): MeshCatalogueRequest {
   return {
     materials: wire.materials,
-    writes: unpackVoxelWrites(wire.writes),
+    writes: wire.writes,
     regions: wire.regions,
     colorsByMaterialId: new Map(wire.colors),
     emissiveByModelId: new Map(wire.emissive.map(([id, colors]) => [id, new Set(colors)])),

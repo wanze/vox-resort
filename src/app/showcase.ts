@@ -70,6 +70,8 @@ import { armedBrush, armedObject, type BuildTool } from '../features/build/domai
 import { createTerrainPointer } from '../features/build/adapters/terrainPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy, footprintTiles } from '../features/build/domain/tileOccupancy';
+import type { RailIndex } from '../features/build/domain/railIndex';
+import { createRailIndex } from '../features/build/domain/railIndex';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
 import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
@@ -924,6 +926,14 @@ interface Resort {
    */
   readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
+  /**
+   * The plot's rails by tile, and the only writer of `plot.rails`.
+   *
+   * A rail claims no tile, so it has no place in `occupancy`; this is the index
+   * it gets instead, so asking what guards the tiles around an edit costs five
+   * lookups rather than five scans of the plot. See `build/domain/railIndex.ts`.
+   */
+  readonly railIndex: RailIndex;
   /** Where this plot meets the sea, if it does; the scene draws the coast from it. */
   readonly shore: Shore | null;
   /**
@@ -1270,6 +1280,7 @@ function buildResort(parts: {
     // in it: a pier stands on water, so what the sea will take is a rule about
     // the object rather than a tile somebody already holds — see `paving.ts`.
     occupancy: createTileOccupancy(claiming),
+    railIndex: createRailIndex(plot.rails),
     bounds,
     framing: frameCamera(bounds, parts.bench),
     dispose() {
@@ -1733,18 +1744,17 @@ function createEditMode(parts: {
   };
 
   // The same paving and the same levels the flights are decided from, so a rail
-  // drawn by hand lands where a generated one would. What is standing is read off
-  // the plot's own list of rails rather than out of an index of its own: a rail
-  // claims no tile, so there is no index it could be in, and the only question
-  // ever asked is about the five tiles around one placement.
+  // drawn by hand lands where a generated one would. What is standing is asked of
+  // the resort's rail index rather than filtered out of the plot's list: a rail
+  // claims no tile, so it is not in the occupancy index, and every edit asks
+  // about five tiles — which on a drag is five scans of the plot per pointer move.
   const handrails: HandrailRules = {
     pavedWith,
     levelOf: ground.levelOf,
     isWater: paving.isWater,
     isSpan: raisedProvider(paving),
     models: railModelsIn(catalogue),
-    standing: (tileX, tileZ) =>
-      resort().plot.rails.filter((rail) => rail.tileX === tileX && rail.tileZ === tileZ),
+    standing: (tileX, tileZ) => resort().railIndex.at(tileX, tileZ),
   };
 
   /**
@@ -1769,19 +1779,18 @@ function createEditMode(parts: {
   /**
    * Stands and takes down handrails, for whichever tool asked.
    *
-   * Nothing but the world and the plot's own list: a rail stands on the paving it
-   * guards, so it is not in the occupancy index, throws no blob shadow of its own
-   * and takes no sky away — see `claimingOn`. Shared because both tools change
-   * the same answer: paving a tile rails the ground around it, and raising that
-   * ground rails the paving.
+   * Nothing but the world, the lamps and the rail index, which keeps the plot's
+   * own list: a rail stands on the paving it guards, so it is not in the
+   * occupancy index, throws no blob shadow of its own and takes no sky away — see
+   * `claimingOn`. Shared because both tools change the same answer: paving a tile
+   * rails the ground around it, and raising that ground rails the paving.
    */
   const changeRails = (stand: readonly Placement[], lift: readonly Placement[]): void => {
-    const { plot, world, lighting } = resort();
+    const { world, lighting, railIndex } = resort();
     for (const rail of lift) {
       world.remove(rail.key);
       lighting.unlight(rail);
-      const at = plot.rails.findIndex((standing) => standing.key === rail.key);
-      if (at !== -1) plot.rails.splice(at, 1);
+      railIndex.remove(rail);
     }
     // Taken down first, so a tile whose edge rails become a balustrade never has
     // both standing at once — and so a lantern re-stood under the same key is
@@ -1789,7 +1798,7 @@ function createEditMode(parts: {
     for (const rail of stand) {
       world.add(rail);
       lighting.light(rail);
-      plot.rails.push(rail);
+      railIndex.add(rail);
     }
     onChange();
   };
@@ -2039,12 +2048,24 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
    */
   let ground = false;
 
+  /**
+   * Whether anything the HUD counts has changed since it was last told.
+   *
+   * The same bargain `ground` strikes, for the same reason: a placement is a
+   * scan over every placement on the plot and a React render, and a drag places
+   * a tile per pointer move. The HUD cannot show more than one number a frame,
+   * so it is told once a frame.
+   */
+  let counted = false;
+
   const build = createEditMode({
     canvas,
     handle,
     resort: current,
     geometries: catalogue.geometries,
-    onChange: () => onSceneChange?.(statsNow()),
+    onChange: () => {
+      counted = true;
+    },
     onGroundChange: () => {
       ground = true;
     },
@@ -2072,6 +2093,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (ground) {
       handle.retile();
       ground = false;
+    }
+    if (counted) {
+      onSceneChange?.(statsNow());
+      counted = false;
     }
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;

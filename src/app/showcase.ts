@@ -39,6 +39,7 @@ import {
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
+  PATH_ID,
   PAVING_IDS,
   PEDALO_RENTAL_ID,
   PIER_RAILING_ID,
@@ -66,8 +67,14 @@ import {
 } from '../features/build/domain/paving';
 import { type HandrailRules } from '../features/build/domain/handrails';
 import type { TerrainRules } from '../features/build/domain/terrainBrush';
-import { armedBrush, armedObject, type BuildTool } from '../features/build/domain/buildTool';
+import {
+  armedBrush,
+  armedObject,
+  armedRemove,
+  type BuildTool,
+} from '../features/build/domain/buildTool';
 import { createTerrainPointer } from '../features/build/adapters/terrainPointer';
+import { createDemolishPointer } from '../features/build/adapters/demolishPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy, footprintTiles } from '../features/build/domain/tileOccupancy';
 import type { RailIndex } from '../features/build/domain/railIndex';
@@ -639,6 +646,7 @@ function seatSiteOf(placement: Placement): SeatSite {
  */
 function occluderOf(placement: Placement): Occluder {
   return {
+    key: placement.key,
     minX: placement.x,
     maxX: placement.x + placement.width,
     minY: placement.y,
@@ -709,6 +717,12 @@ function splatSkyVisibility(baked: BakedLighting, placement: Placement): void {
   if (region) baked.volume.updateSkyVisibility(region);
 }
 
+/** Gives back the sky an object taken off the plot was keeping from the ground. */
+function unsplatSkyVisibility(baked: BakedLighting, placement: Placement): void {
+  const region = baked.sky.remove(placement.key);
+  if (region) baked.volume.updateSkyVisibility(region);
+}
+
 interface Lighting {
   /** Lamps the objects on the plot declare between them. */
   readonly anchorCount: number;
@@ -733,6 +747,13 @@ interface Lighting {
   light(placement: Placement): void;
   /** Puts out whatever lamps a placement taken off the plot declared. */
   unlight(placement: Placement): void;
+  /**
+   * Gives back the sky a placement taken off the plot was shading.
+   *
+   * Its own verb rather than part of `unlight`, for the reason `light` is apart
+   * from `add`: a rail's lanterns go out without it ever having shaded anything.
+   */
+  unshade(placement: Placement): void;
 }
 
 /**
@@ -751,6 +772,7 @@ function unlitLighting(anchorCount: number): Lighting {
     add() {},
     light() {},
     unlight() {},
+    unshade() {},
   };
 }
 
@@ -835,6 +857,9 @@ function createLighting(parts: {
     unlight(placement) {
       anchorCount -= lightsOf(placement).length;
       unsplatLights(baked, placement);
+    },
+    unshade(placement) {
+      unsplatSkyVisibility(baked, placement);
     },
   };
 }
@@ -1657,13 +1682,15 @@ interface EditMode {
 }
 
 /**
- * Wires both pointers to the mutable scene.
+ * Wires the three pointers — objects, the spade and the bulldozer — to the
+ * mutable scene.
  *
- * Two pointers and one cursor, because there is one left mouse button: arming
- * either disarms the other, which is what {@link BuildTool} makes structural
+ * Three pointers and one cursor, because there is one left mouse button: arming
+ * any one disarms the others, which is what {@link BuildTool} makes structural
  * rather than a rule to remember. They share the ghost too — a brush shows the
- * footprint patch alone and an object shows the model standing in it, and a
- * second cursor object would be a second thing to keep looking like this one.
+ * footprint patch alone, an object shows the model standing in it and the
+ * bulldozer marks what it would take, and a second cursor object would be a
+ * second thing to keep looking like this one.
  *
  * The occupancy index is the piece worth naming: the layout checks its own plan
  * for overlaps once, up front, and throws when it finds one, which is right for
@@ -1741,6 +1768,7 @@ function createEditMode(parts: {
     bridge: pavingItem(BRIDGE_ID),
     bridgeRamp: pavingItem(BRIDGE_RAMP_ID),
     stairs: pavingItem(STAIRS_ID),
+    flagstones: pavingItem(PATH_ID),
   };
 
   // The same paving and the same levels the flights are decided from, so a rail
@@ -1761,15 +1789,15 @@ function createEditMode(parts: {
    * Which pointer is holding the left mouse button, so handing it back is never
    * the losing tool's last word.
    *
-   * Two pointers ask for the same button, and `takeLeftButton` is a state rather
-   * than a count: arming the spade while an object is armed would otherwise be an
-   * arm and a disarm in whichever order `select` happened to run them, and one of
-   * those orders gives the button back to the camera with a tool still in hand.
-   * Naming the holder takes the ordering out of it entirely.
+   * Three pointers ask for the same button, and `takeLeftButton` is a state
+   * rather than a count: arming the spade while an object is armed would
+   * otherwise be an arm and a disarm in whichever order `select` happened to run
+   * them, and one of those orders gives the button back to the camera with a tool
+   * still in hand. Naming the holder takes the ordering out of it entirely.
    */
-  let holder: 'object' | 'terrain' | null = null;
+  let holder: BuildTool['kind'] | null = null;
   const lendLeftButton =
-    (who: 'object' | 'terrain') =>
+    (who: BuildTool['kind']) =>
     (taken: boolean): void => {
       if (taken) holder = who;
       else if (holder === who) holder = null;
@@ -1813,18 +1841,24 @@ function createEditMode(parts: {
    * drag cannot afford. See `terrain.ts`, `overlooksDrop`.
    */
   /**
-   * Takes one placement back off the plot.
+   * Takes one placement back off the plot: every effect {@link stand} has, in
+   * reverse.
    *
-   * A flight of stairs replaces the slab a path had already laid on the tile, so
-   * that one comes up first — off the index, out of the world and out of the
-   * plot's own list — or the tile would be double-booked and the slab would go
-   * on being drawn inside the flight. See `paving.ts`.
+   * Two callers. A flight of stairs replaces the slab a path had already laid on
+   * the tile, so that one comes up first — off the index, out of the world and
+   * out of the plot's own list — or the tile would be double-booked and the slab
+   * would go on being drawn inside the flight; see `paving.ts`. And the bulldozer,
+   * which is nothing but this.
    */
   const lift = (placement: Placement): void => {
     const { plot, world, lighting, shadows } = resort();
     occupancy.release(placement, placement.key);
     world.remove(placement.key);
     lighting.unlight(placement);
+    // The sky it was shading, which `stand` took away with `lighting.add`. A
+    // re-laid bridge deck is tall enough to shade, and without this every pass
+    // over the crossing stood one more box under the same key.
+    lighting.unshade(placement);
     // The shadow goes with the lamps, and for the same reason: a re-laid tile is
     // lifted and stood again, so a bridge drawn across a river would stack one
     // quad per pass and darken with each. Harmless when it cast none; `remove`
@@ -1838,6 +1872,33 @@ function createEditMode(parts: {
   const reshapesGround = (placement: Placement): boolean =>
     footprintTiles(placement).some((tile) => overlooksDrop(resort().terrain, tile.x, tile.z));
 
+  /**
+   * Stands one placement, taking up the one it replaces first if there is one.
+   *
+   * The specification of what a placement touches — the index, the world, its
+   * shadow, its lamps and the sky it shades, and the plot's own list — and so the
+   * thing {@link lift} has to mirror. A placement that grows a new effect grows
+   * it in both.
+   */
+  const stand = (placement: Placement, lifted?: Placement): void => {
+    const { plot, world, lighting, shadows } = resort();
+    if (lifted) lift(lifted);
+    // Claimed first: if the tiles are gone the scene must not gain an object
+    // the index does not know about.
+    occupancy.claim(placement, placement.key);
+    world.add(placement);
+    // Anything but a paving slab throws one; the model's height says which.
+    const blob = blobOf(placement);
+    if (blob) shadows.add(blob);
+    // Any model may declare lights — a tiki torch and a swimming pool both do
+    // — so this is not a check for one object type but a splat of whatever
+    // the model brought with it.
+    lighting.add(placement);
+    listFor(plot, placement.id).push(placement);
+    if (reshapesGround(placement)) parts.onGroundChange();
+    onChange();
+  };
+
   const pointer = createBuildPointer({
     canvas,
     // Read per pick rather than captured: switching to the isometric view puts a
@@ -1849,24 +1910,7 @@ function createEditMode(parts: {
     ground,
     paving,
     handrails,
-    onPlace(placement, lifted) {
-      const { plot, world, lighting, shadows } = resort();
-      if (lifted) lift(lifted);
-      // Claimed first: if the tiles are gone the scene must not gain an object
-      // the index does not know about.
-      occupancy.claim(placement, placement.key);
-      world.add(placement);
-      // Anything but a paving slab throws one; the model's height says which.
-      const blob = blobOf(placement);
-      if (blob) shadows.add(blob);
-      // Any model may declare lights — a tiki torch and a swimming pool both do
-      // — so this is not a check for one object type but a splat of whatever
-      // the model brought with it.
-      lighting.add(placement);
-      listFor(plot, placement.id).push(placement);
-      if (reshapesGround(placement)) parts.onGroundChange();
-      onChange();
-    },
+    onPlace: stand,
     onRails: changeRails,
     onCancel,
   });
@@ -1900,17 +1944,59 @@ function createEditMode(parts: {
     onCancel,
   });
 
+  /**
+   * The placement standing under a key, for the bulldozer.
+   *
+   * A scan of the lists that claim ground rather than a table of its own: the
+   * occupancy index already says which key a tile holds, and a second table from
+   * key to placement would be one more thing every edit had to keep in step —
+   * the reason `railIndex.ts` is the only writer of its list. Asked once per
+   * pointer move over something standing, which is a few thousand key compares.
+   */
+  const placementOf = (key: string): Placement | undefined => {
+    const { plot } = resort();
+    for (const list of [plot.placements, plot.props, plot.paths]) {
+      const found = list.find((placement) => placement.key === key);
+      if (found) return found;
+    }
+    return undefined;
+  };
+
+  const bulldozer = createDemolishPointer({
+    canvas,
+    camera: () => handle.camera,
+    takeLeftButton: lendLeftButton('remove'),
+    ghost,
+    occupancy,
+    ground,
+    paving,
+    handrails,
+    placementOf,
+    onDemolish(placement) {
+      lift(placement);
+      // The ground under what stood is drawn square, so taking it off the edge
+      // of a terrace lets the slope back — the same test `stand` makes.
+      if (reshapesGround(placement)) parts.onGroundChange();
+      onChange();
+    },
+    onPlace: stand,
+    onRails: changeRails,
+    onCancel,
+  });
+
   return {
     select(tool) {
-      // Both are told, every time, and the order does not matter: see
+      // All three are told, every time, and the order does not matter: see
       // `lendLeftButton` for why it cannot.
       const id = armedObject(tool);
       pointer.select(id === null ? null : layoutItemFor(objectTypeById(id)));
       spade.select(armedBrush(tool));
+      bulldozer.select(armedRemove(tool));
     },
     dispose() {
       pointer.dispose();
       spade.dispose();
+      bulldozer.dispose();
       handle.scene.remove(ghost.group);
       ghost.dispose();
     },

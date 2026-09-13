@@ -15,8 +15,10 @@ import {
   pavingAt,
   relaidBy,
   standsOn,
+  unlaidBy,
   type PavedGround,
   type PavingRules,
+  type Relaid,
 } from './paving';
 import { createTileOccupancy } from './tileOccupancy';
 
@@ -60,6 +62,7 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   bridge: BRIDGE,
   bridgeRamp: BRIDGE_RAMP,
   stairs: STAIRS,
+  flagstones: PATH,
   ...parts,
 });
 
@@ -313,6 +316,88 @@ describe('relaidBy', () => {
       }),
     );
     expect(relaid).toEqual([]);
+  });
+});
+
+/** What was laid, in the terms the assertions are written in. */
+const laidOf = (relaid: readonly Relaid[]) =>
+  relaid.map(({ placement }) => ({
+    id: placement.id,
+    x: placement.tileX,
+    z: placement.tileZ,
+    rotation: placement.rotation,
+  }));
+
+describe('unlaidBy', () => {
+  it('lays a flight flat again once the tile it climbed to is taken up', () => {
+    // The flight at 0,1 climbed to 0,0, and 0,0 is gone.
+    const relaid = unlaidBy(
+      { x: 0, z: 0 },
+      rules({ pavedWith: paved({ '0,1': STAIRS }), levelOf: benchAt(1) }),
+    );
+    expect(laidOf(relaid)).toEqual([{ id: PATH_ID, x: 0, z: 1, rotation: 0 }]);
+    expect(relaid[0]!.lifted.key).toBe(derivedKey(STAIRS_ID, 0, 1));
+  });
+
+  it('lays decking rather than flagstones where the flight stands on sand', () => {
+    const relaid = unlaidBy(
+      { x: 0, z: 0 },
+      rules({ pavedWith: paved({ '0,1': STAIRS }), levelOf: benchAt(1), isSand: () => true }),
+    );
+    expect(laidOf(relaid)).toEqual([{ id: BOARDWALK_ID, x: 0, z: 1, rotation: 0 }]);
+  });
+
+  it('turns a flight to the paving it still climbs to', () => {
+    // An L-bend: the flight at 1,1 had paving above it to the north and to the
+    // west. The northern tile is taken up, so it faces west now.
+    const relaid = unlaidBy(
+      { x: 1, z: 0 },
+      rules({
+        pavedWith: paved({ '1,1': STAIRS, '0,1': PATH }),
+        levelOf: (x, z) => (x === 1 && z === 1 ? 0 : 1),
+      }),
+    );
+    expect(laidOf(relaid)).toEqual([{ id: STAIRS_ID, x: 1, z: 1, rotation: 1 }]);
+  });
+
+  it('leaves the flat paving around a removed tile alone', () => {
+    const flat = rules({ pavedWith: paved({ '2,1': PATH, '1,2': BOARDWALK }) });
+    expect(unlaidBy({ x: 1, z: 1 }, flat)).toEqual([]);
+  });
+
+  it('leaves the flight when the catalogue has nothing flat to lay', () => {
+    const relaid = unlaidBy(
+      { x: 0, z: 0 },
+      rules({ pavedWith: paved({ '0,1': STAIRS }), levelOf: benchAt(1), flagstones: null }),
+    );
+    expect(relaid).toEqual([]);
+  });
+
+  it('takes a crossing back off a bank that has been taken up', () => {
+    // The ramp at 2,5 came ashore at 2,4; with the bank gone it is deck again.
+    const river = rules({
+      isWater: (_x, tileZ) => tileZ === 5,
+      isSea: () => false,
+      pavedWith: paved({ '2,5': BRIDGE_RAMP }),
+    });
+    const relaid = unlaidBy({ x: 2, z: 4 }, river);
+    expect(laidOf(relaid)).toEqual([{ id: BRIDGE_ID, x: 2, z: 5, rotation: 0 }]);
+    expect(relaid[0]!.lifted.id).toBe(BRIDGE_RAMP_ID);
+  });
+
+  it('takes back exactly what paving the tile made', () => {
+    // Pave the top of a step, then take it up again: the flight it made goes
+    // back to the slab it was.
+    const levelOf = benchAt(1);
+    const made = relaidBy(
+      { x: 0, z: 0 },
+      rules({ pavedWith: paved({ '0,0': PATH, '0,1': PATH }), levelOf }),
+    );
+    const unmade = unlaidBy(
+      { x: 0, z: 0 },
+      rules({ pavedWith: paved({ '0,1': STAIRS }), levelOf }),
+    );
+    expect(unmade[0]!.placement).toEqual(made[0]!.lifted);
   });
 });
 

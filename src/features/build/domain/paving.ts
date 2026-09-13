@@ -39,14 +39,15 @@
  * does a step or a crossing paved by two separate strokes days apart. Nothing
  * here has to know which gesture is running.
  *
- * Only ever more stairs, never fewer: paving a tile can turn a slab into a
- * flight, and no tile that is already a flight stops being one, so a relaid tile
- * is always a slab and this never has to work out what a flight would have been
- * if it were flat. Taking paving *up* — which nothing can do yet — is the case
- * that would need that, and it belongs with the bulldozer that introduces it.
- * A crossing is the exception and pays for it by being re-asked from scratch:
- * which end of a span a tile is *can* change back, so `relaidBy` re-lays every
- * tile of a crossing beside an edit rather than looking for a state to stop at.
+ * Laying paving only ever makes more stairs, never fewer: paving a tile can turn
+ * a slab into a flight, and no tile that is already a flight stops being one, so
+ * a tile `relaidBy` re-lays is always a slab. Taking paving *up* is the other
+ * way round, and it is {@link unlaidBy}: the bulldozer can take away the very
+ * tile a flight climbs to, and that flight has to be re-asked — it climbs
+ * somewhere else now, or it is flat again. A crossing pays for the same thing by
+ * being re-asked from scratch on either side: which end of a span a tile is
+ * *can* change back, so both re-lay every tile of a crossing beside an edit
+ * rather than looking for a state to stop at.
  */
 
 import {
@@ -139,6 +140,13 @@ export interface PavingRules {
    * treats a catalogue missing one kind of paving.
    */
   readonly stairs: LayoutItem | null;
+  /**
+   * The flat paving a flight goes back to on grass once there is nothing left
+   * for it to climb, or null when the catalogue has none — in which case the
+   * flight is left standing. Laying never needs it, because what is laid flat is
+   * whatever was picked; only taking paving up has nothing picked to fall back on.
+   */
+  readonly flagstones: LayoutItem | null;
 }
 
 /** An object as it actually goes down: what it is, and the way it faces. */
@@ -291,7 +299,56 @@ export function relaidBy(tile: Tile, rules: PavingRules): Relaid[] {
   // So a cottage or a hedge re-lays nothing, and the caller needs no second
   // branch to know that.
   if (rules.pavedWith(tile.x, tile.z) === null) return [];
+  return relayBeside(tile, rules, (beside, slab, isPaved, isRaised) =>
+    isRaised(beside.x, beside.z)
+      ? spanBeside(beside, rules, isPaved, isRaised)
+      : flightBeside(beside, slab, rules, isPaved),
+  );
+}
 
+/**
+ * The tiles already paved that taking the paving off `tile` has just changed.
+ *
+ * The other half of {@link relaidBy}, for the bulldozer, and asked *after* the
+ * tile is gone, so it counts as unpaved. Two things beside it can have changed
+ * their answer and nothing else can: a flight that climbed to it, which now
+ * climbs to another neighbour or is flat again, and a tile of a crossing it was
+ * the bank of. A flat slab cannot — taking paving away never gives a tile
+ * something to climb to.
+ *
+ * Both are re-asked from scratch and laid again whatever the answer, for the
+ * reason {@link spanBeside} gives: which way a flight faces is not on the index,
+ * so a flight still facing the right way cannot be told from one that is not,
+ * and re-laying what was already right costs a placement nobody sees.
+ *
+ * Only worth asking when what came up was paving: a cottage going changes
+ * neither answer, and would re-lay every flight beside it for nothing. The piece
+ * that comes up is rebuilt unturned, which is enough — a lift finds what it takes
+ * down by key.
+ */
+export function unlaidBy(tile: Tile, rules: PavingRules): Relaid[] {
+  return relayBeside(tile, rules, (beside, standing, isPaved, isRaised) => {
+    if (isRaised(beside.x, beside.z)) return spanBeside(beside, rules, isPaved, isRaised);
+    if (standing.id !== rules.stairs?.id) return null;
+    return flightOrFlat(beside, rules, isPaved);
+  });
+}
+
+/** What a paved neighbour should be laid as, or null to leave it standing. */
+interface RelayRule {
+  (
+    beside: Tile,
+    standing: LayoutItem,
+    isPaved: PavedProvider,
+    isRaised: SpanProvider,
+  ): Paving | null;
+}
+
+/**
+ * Asks a rule of each paved tile beside `tile`, and pairs every answer with the
+ * piece already standing there that has to come up first.
+ */
+function relayBeside(tile: Tile, rules: PavingRules, rule: RelayRule): Relaid[] {
   const isPaved = pavedProvider(rules);
   const isRaised = raisedProvider(rules);
   const relaid: Relaid[] = [];
@@ -299,9 +356,7 @@ export function relaidBy(tile: Tile, rules: PavingRules): Relaid[] {
     const beside: Tile = { x: tile.x + dx, z: tile.z + dz };
     const slab = rules.pavedWith(beside.x, beside.z);
     if (!slab) continue;
-    const laid = isRaised(beside.x, beside.z)
-      ? spanBeside(beside, rules, isPaved, isRaised)
-      : flightBeside(beside, slab, rules, isPaved);
+    const laid = rule(beside, slab, isPaved, isRaised);
     if (!laid) continue;
     const level = rules.levelOf(beside.x, beside.z);
     relaid.push({
@@ -359,4 +414,18 @@ function flightBeside(
   if (!stairs || slab.id === stairs.id) return null;
   const climb = climbAt(tile, isPaved, rules.levelOf);
   return climb === null ? null : { item: stairs, rotation: climb };
+}
+
+/**
+ * What a flight should be once a tile beside it has been taken up: still a
+ * flight, faced at whatever it climbs to now, or the flat paving its ground
+ * takes — decking on sand, flagstones elsewhere, the same choice {@link pavingAt}
+ * makes. Null, and the flight is left, when the catalogue has nothing flat.
+ */
+function flightOrFlat(tile: Tile, rules: PavingRules, isPaved: PavedProvider): Paving | null {
+  const climb = climbAt(tile, isPaved, rules.levelOf);
+  if (climb !== null) return { item: rules.stairs!, rotation: climb };
+  const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
+  const flat = decking ?? rules.flagstones;
+  return flat === null ? null : { item: flat, rotation: 0 };
 }

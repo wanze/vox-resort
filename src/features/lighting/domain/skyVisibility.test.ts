@@ -21,6 +21,7 @@ import {
 } from './skyVisibility';
 
 const box = (overrides: Partial<Occluder> = {}): Occluder => ({
+  key: 'box',
   minX: 0,
   minY: 0,
   minZ: 0,
@@ -34,6 +35,10 @@ const box = (overrides: Partial<Occluder> = {}): Occluder => ({
 /** A grid over a fixed block of world, so cells map to voxels predictably. */
 const specOver = (cellSize = 4): LightGridSpec =>
   gridSpecAt([], cellSize, { minX: -64, maxX: 128, minY: 0, maxY: 96, minZ: -64, maxZ: 128 })!;
+
+/** A direction volume with every cell open to the sky. */
+const blank = (spec: LightGridSpec): Uint8Array =>
+  new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
 
 /** Reads a cell's baked visibility back off the alpha channel. */
 function visibilityAt(
@@ -292,6 +297,65 @@ describe('createLiveSkyVisibility', () => {
     it('leaves every cell open with no boxes at all', () => {
       const direction = expectSameBake([]);
       expect(direction.every((byte) => byte === 255)).toBe(true);
+    });
+  });
+
+  describe('taking a box away', () => {
+    const hotel = box({ key: 'hotel', maxX: 48, maxY: 40, maxZ: 48, density: 0.7 });
+    // Overlapping the hotel's reach, which is the case a subtraction gets wrong.
+    const villa = box({ key: 'villa', minX: 32, maxX: 64, minZ: 24, maxZ: 56, maxY: 36 });
+
+    it('leaves exactly the bytes a bake without it would have', () => {
+      const spec = specOver();
+      const direction = blank(spec);
+      const live = createLiveSkyVisibility(spec, direction, []);
+      live.add(hotel);
+      expect(live.remove('hotel')).toEqual(occluderRange(hotel, spec, gridInterior(spec)));
+      expect(direction).toEqual(referenceSkyBake(spec, []));
+    });
+
+    it('returns null and changes nothing for a key that never shaded', () => {
+      const spec = specOver();
+      const direction = blank(spec);
+      const live = createLiveSkyVisibility(spec, direction, [hotel]);
+      const before = direction.slice();
+      expect(live.remove('nobody')).toBeNull();
+      expect(direction).toEqual(before);
+      expect(live.occluderCount).toBe(1);
+    });
+
+    it('keeps the shading of an overlapping box that stays', () => {
+      const spec = specOver();
+      const direction = blank(spec);
+      const live = createLiveSkyVisibility(spec, direction, [hotel, villa]);
+      live.remove('villa');
+      expect(direction).toEqual(referenceSkyBake(spec, [hotel]));
+      expect(direction.some((byte) => byte < 255)).toBe(true);
+    });
+
+    it('round-trips to identical bytes when the same box is stood again', () => {
+      const spec = specOver();
+      const direction = blank(spec);
+      const live = createLiveSkyVisibility(spec, direction, [hotel, villa]);
+      const before = direction.slice();
+      live.remove('villa');
+      live.add(villa);
+      expect(direction).toEqual(before);
+    });
+
+    it('counts one fewer box once one is gone', () => {
+      const spec = specOver();
+      const live = createLiveSkyVisibility(spec, blank(spec), [hotel, villa]);
+      live.remove('hotel');
+      expect(live.occluderCount).toBe(1);
+    });
+
+    it('returns null for a box too low ever to have been counted', () => {
+      const spec = specOver();
+      const slab = box({ key: 'slab', maxY: MIN_OCCLUDER_HEIGHT - 1 });
+      const live = createLiveSkyVisibility(spec, blank(spec), [slab]);
+      expect(live.remove('slab')).toBeNull();
+      expect(live.occluderCount).toBe(0);
     });
   });
 

@@ -1,6 +1,6 @@
 /**
- * What the pointer is holding: one object to stand, or one brush to work the
- * ground with.
+ * What the pointer is holding: one object to stand, one brush to work the ground
+ * with, or the bulldozer to take things away again.
  *
  * A union rather than two nullable fields, and that is the whole content of this
  * module. There is one pointer, one left mouse button and one cursor, so there
@@ -27,7 +27,30 @@ export interface TerrainTool {
   readonly brush: TerrainBrush;
 }
 
-export type BuildTool = ObjectTool | TerrainTool;
+/** The bulldozer: takes away whatever is standing, rather than standing anything. */
+export interface RemoveTool {
+  readonly kind: 'remove';
+}
+
+export type BuildTool = ObjectTool | TerrainTool | RemoveTool;
+
+/**
+ * The bulldozer as the palette offers it.
+ *
+ * Here rather than in the component for the reason `TERRAIN_BRUSHES` is: the
+ * label and the hint are facts about the tool, and a shelf that held them would
+ * be a second place to change them.
+ */
+export const BULLDOZER = {
+  label: 'Bulldozer',
+  hint: 'Take away whatever stands on a tile',
+  glyph: '✕',
+} as const;
+
+/** Whether the bulldozer is armed, rather than an object or a brush. */
+export function armedRemove(tool: BuildTool | null): boolean {
+  return tool?.kind === 'remove';
+}
 
 /** The catalogue id armed, or null when a brush is armed or nothing is. */
 export function armedObject(tool: BuildTool | null): string | null {

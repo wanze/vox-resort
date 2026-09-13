@@ -208,6 +208,28 @@ describe('railChangeAt', () => {
     expect(change.stand[0]!.key).toBe(`${derivedKey(RAILING_ID, 1, 1)}:2`);
   });
 
+  it('takes every rail off a tile whose paving has been taken up', () => {
+    // The bulldozer's case: the walk on the lip of the drop was railed, and now
+    // the walk itself is gone. Nothing is paved to ask, and the rail still goes.
+    const walk = { x: 1, z: 1 };
+    const railed = railChangeAt(walk, rules({ pavedWith: pavedOf([walk]), levelOf: bench })).stand;
+    const change = railChangeAt(
+      walk,
+      rules({ pavedWith: pavedOf([]), levelOf: bench, standing: standingOf(railed) }),
+    );
+    expect(railsOf(change.lift)).toEqual([{ id: RAILING_ID, x: 1, z: 1, rotation: 2 }]);
+    expect(change.stand).toEqual([]);
+  });
+
+  it('rails the paving left beside a tile that was taken up', () => {
+    // A walk on the terrace top with the path carrying on down the step: taking
+    // up the tile below turns the walk's southern edge back into a fall.
+    const walk = { x: 1, z: 1 };
+    const below = { x: 1, z: 2 };
+    const change = railChangeAt(below, rules({ pavedWith: pavedOf([walk]), levelOf: bench }));
+    expect(railsOf(change.stand)).toEqual([{ id: RAILING_ID, x: 1, z: 1, rotation: 2 }]);
+  });
+
   it('never asks for a rail on a tile that is not paved', () => {
     const paved = [{ x: 1, z: 1 }];
     const change = railChangeAt(

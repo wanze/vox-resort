@@ -114,16 +114,19 @@ export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
   const lift: Placement[] = [];
   for (const { dx, dz } of AROUND) {
     const around: Tile = { x: tile.x + dx, z: tile.z + dz };
-    // Bare ground is skipped rather than asked: a rail guards paving, so an
-    // unpaved tile wants none and can have none standing on it either. Paving is
-    // only ever laid, never taken up, so there is nothing there to clear.
-    if (!isPaved(around.x, around.z)) continue;
+    const already = standing(around.x, around.z);
+    // Bare ground is not asked: a rail guards paving, so an unpaved tile wants
+    // none. It is still cleared, because it may have been paved a moment ago —
+    // the bulldozer takes paving up, and the rails it wore have to come with it.
+    if (!isPaved(around.x, around.z)) {
+      lift.push(...already);
+      continue;
+    }
     const wanted = railPlacementsFor(
       models,
       railsAt(around, isPaved, levelOf, isWater, isSpan),
       levelOf,
     );
-    const already = standing(around.x, around.z);
     const wantedKeys = new Set(wanted.map((rail) => rail.key));
     const standingKeys = new Set(already.map((rail) => rail.key));
     for (const rail of wanted) if (!standingKeys.has(rail.key)) stand.push(rail);

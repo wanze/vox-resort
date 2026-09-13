@@ -2,9 +2,16 @@ import { useMemo, useState } from 'react';
 import { BuildGroup } from './BuildGroup';
 import { BuildPaletteHead } from './BuildPaletteHead';
 import { TerrainShelf } from './TerrainShelf';
+import { ToolShelf } from './ToolShelf';
 import { objectTypeById, objectTypeGroups } from '../../catalog/domain/objectTypes';
-import { armedBrush, armedObject, type BuildTool } from '../../build/domain/buildTool';
-import { TERRAIN_BRUSHES } from '../../build/domain/terrainBrush';
+import {
+  armedBrush,
+  armedObject,
+  armedRemove,
+  BULLDOZER,
+  type BuildTool,
+} from '../../build/domain/buildTool';
+import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBrush';
 import { countTypes, filterGroups } from '../domain/paletteFilter';
 
 /**
@@ -20,14 +27,19 @@ export type PreviewLookup = (modelId: string) => string | null;
 /**
  * What the head prints as the thing you are holding, or null when nothing is.
  *
- * A function rather than an expression in the body because the two halves of it
- * come from two registries — the catalogue names an object, `TERRAIN_BRUSHES`
- * names a brush — and neither knows about the other.
+ * A function rather than an expression in the body because its answers come from
+ * three places — the catalogue names an object, `TERRAIN_BRUSHES` names a brush
+ * and `BULLDOZER` names itself — and none knows about the others.
  */
 function armedLabel(tool: BuildTool | null): string | null {
+  if (armedRemove(tool)) return BULLDOZER.label;
   const id = armedObject(tool);
   if (id) return objectTypeById(id).label;
-  const brush = armedBrush(tool);
+  return brushLabel(armedBrush(tool));
+}
+
+/** What `TERRAIN_BRUSHES` calls a brush, or null for none. */
+function brushLabel(brush: TerrainBrush | null): string | null {
   return TERRAIN_BRUSHES.find((entry) => entry.id === brush)?.label ?? null;
 }
 
@@ -50,9 +62,10 @@ export interface BuildPaletteProps {
  *
  * **The ground comes first**, above the objects, because it is what you build on:
  * a terrain edit needs a clear tile, so shaping the plot is a thing you do before
- * standing anything on it and not after. It is also the one shelf a search leaves
- * alone — the search box narrows *the catalogue*, and a query that hid the spade
- * would be answering a question nobody asked.
+ * standing anything on it and not after. The bulldozer sits with it, because it
+ * too works the plot rather than adding to it. Those two are the shelves a search
+ * leaves alone — the search box narrows *the catalogue*, and a query that hid the
+ * spade or the bulldozer would be answering a question nobody asked.
  *
  * Folding is tracked as the shelves that are *shut* rather than the one that is
  * open: the palette is five shelves of pictures and the useful default is to see
@@ -93,6 +106,13 @@ export function BuildPalette({ preview, tool, onToolChange }: BuildPaletteProps)
           onToggle={toggle('terrain')}
           selected={brush}
           onSelect={(next) => onToolChange(next === null ? null : { kind: 'terrain', brush: next })}
+        />
+
+        <ToolShelf
+          open={!shut.has('tools')}
+          onToggle={toggle('tools')}
+          armed={armedRemove(tool)}
+          onArm={(armed) => onToolChange(armed ? { kind: 'remove' } : null)}
         />
 
         {shown.map((group) => (

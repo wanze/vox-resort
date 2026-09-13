@@ -52,6 +52,11 @@ import { forEachCell, gridInterior, rangeCells, rangeDims } from './lightGrid';
  * is what a placement already carries.
  */
 export interface Occluder {
+  /**
+   * The placement the box stands for, which is how it is found again to be
+   * taken away. Nothing in the bake reads it.
+   */
+  readonly key: string;
   readonly minX: number;
   readonly minY: number;
   readonly minZ: number;
@@ -284,6 +289,15 @@ export interface LiveSkyVisibility {
    * outside the grid that none of its reach lands in it.
    */
   add(occluder: Occluder): CellRange | null;
+  /**
+   * Takes one box away and re-bakes the block it shaded.
+   *
+   * Null when nothing shaded under that key. The block is re-derived from the
+   * boxes that are left rather than the removed one's obscurance being
+   * subtracted, which is what makes taking a box away as exact as adding one —
+   * the same bargain `add` strikes, and `liveLightGrid.ts` before it.
+   */
+  remove(key: string): CellRange | null;
 }
 
 /**
@@ -317,6 +331,17 @@ export function createLiveSkyVisibility(
       const range = occluderRange(occluder, spec, interior);
       if (rangeCells(range) === 0) return null;
       standing.push(occluder);
+      bakeSkyVisibility({ occluders: standing, spec, range, direction });
+      return range;
+    },
+    remove(key) {
+      const at = standing.findIndex((occluder) => occluder.key === key);
+      if (at === -1) return null;
+      // Spliced rather than swapped with the last box: the block is summed in
+      // list order, and keeping the order is what keeps the bytes identical to a
+      // bake that never had the box in it.
+      const [gone] = standing.splice(at, 1);
+      const range = occluderRange(gone!, spec, interior);
       bakeSkyVisibility({ occluders: standing, spec, range, direction });
       return range;
     },

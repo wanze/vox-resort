@@ -89,6 +89,23 @@ describe('createPlacementGhost', () => {
     ghost.dispose();
   });
 
+  it('marks what the bulldozer would take with its footprint alone, drawn through it', () => {
+    const ghost = createPlacementGhost([model('cottage', geometry())]);
+    const placement = place(COTTAGE, 'cottage@4,5', 4, 5);
+    ghost.show(placement, true);
+    const [pad, object] = meshes(ghost);
+    const refused = pad.material;
+
+    ghost.showRemoval(placement);
+    expect(object.visible).toBe(false);
+    expect(ghost.group.visible).toBe(true);
+    expect([pad.scale.x, pad.scale.z]).toEqual([2, 3]);
+    // Its own patch, because the refused one hides under the cottage it marks.
+    expect(pad.material).not.toBe(refused);
+    expect((pad.material as { depthTest: boolean }).depthTest).toBe(false);
+    ghost.dispose();
+  });
+
   it('hides itself entirely once the pointer leaves the ground', () => {
     const ghost = createPlacementGhost([model('cottage', geometry())]);
     ghost.show(place(COTTAGE, 'cottage@0,0', 0, 0), false);

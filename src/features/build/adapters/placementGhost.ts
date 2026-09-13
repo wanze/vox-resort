@@ -58,6 +58,17 @@ export interface PlacementGhost {
    * cursor of its own that would have to be kept looking like this one.
    */
   showGround(tile: Tile, y: number, blocked: boolean): void;
+  /**
+   * Marks a placement's footprint as about to be taken away, and draws no model.
+   *
+   * The same patch in the refused tint, because red already means "this will not
+   * be standing" — but drawn through whatever stands on it. The patch lies on the
+   * ground, and the thing being demolished is standing on exactly that ground: a
+   * patch hidden under the cottage it marks would mark nothing. The model is not
+   * redrawn on top, because a translucent copy exactly over the original fights
+   * it for depth and shimmers.
+   */
+  showRemoval(placement: Placement): void;
   hide(): void;
   dispose(): void;
 }
@@ -101,7 +112,12 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
     valid: ghostMaterial(VALID_TINT, 0.55),
     blocked: ghostMaterial(BLOCKED_TINT, 0.4),
   };
-  const pads = { valid: padMaterial(VALID_TINT), blocked: padMaterial(BLOCKED_TINT) };
+  const pads = {
+    valid: padMaterial(VALID_TINT),
+    blocked: padMaterial(BLOCKED_TINT),
+    removal: padMaterial(BLOCKED_TINT),
+  };
+  pads.removal.depthTest = false;
 
   // A unit tile lying flat; the footprint it draws comes from the mesh's scale,
   // so a 2x3 building needs no geometry of its own.
@@ -156,6 +172,11 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       placePad({ tileX: tile.x, tileZ: tile.z, tilesX: 1, tilesZ: 1, y }, blocked);
       ghost.visible = false;
     },
+    showRemoval(placement) {
+      placePad(placement, true);
+      pad.material = pads.removal;
+      ghost.visible = false;
+    },
     hide() {
       group.visible = false;
       ghost.visible = false;
@@ -166,7 +187,13 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       empty.dispose();
       // The ghost's own geometry is the catalogue's, which outlives every resort
       // and is freed by the showcase. See `instancedWorld.ts`.
-      for (const material of [materials.valid, materials.blocked, pads.valid, pads.blocked]) {
+      for (const material of [
+        materials.valid,
+        materials.blocked,
+        pads.valid,
+        pads.blocked,
+        pads.removal,
+      ]) {
         material.dispose();
       }
     },

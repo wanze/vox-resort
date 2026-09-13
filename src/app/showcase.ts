@@ -115,6 +115,18 @@ import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blob
 import { SAND_LEVEL, SEA_LEVEL } from '../features/rendering/domain/terrainSurface';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
+import {
+  buildConstructionField,
+  type ConstructionField,
+} from '../features/construction/adapters/constructionField';
+import {
+  advanceSites,
+  buildSeconds,
+  openSite,
+  progressOf,
+  revealHeightOf,
+  type ConstructionSite,
+} from '../features/construction/domain/construction';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
 import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor, type SeatSite } from '../features/crowd/domain/seating';
@@ -666,6 +678,25 @@ function casterOf(placement: Placement): ShadowCaster {
   return { ...placement, height: objectTypeTop(placement.id) };
 }
 
+/**
+ * How long a placement takes to go up, or zero if it should simply appear.
+ *
+ * Zero for a re-laid slab whatever the catalogue says about it: `paving.ts`
+ * lifts and re-stands under one key as a path crosses a step or leaves the
+ * shore, and a slab that went missing for a moment on every pass would be a
+ * hole in the path. See `construction/domain/construction.ts` for what decides
+ * the rest.
+ */
+function buildTimeOf(placement: Placement, lifted?: Placement): number {
+  if (lifted) return 0;
+  const { model } = objectTypeById(placement.id);
+  return buildSeconds({
+    category: model.category,
+    height: model.height,
+    voxelCount: model.voxels.length,
+  });
+}
+
 /** The shadow an object throws, or null if it is too flat to throw one. */
 function blobOf(placement: Placement): BlobShadow | null {
   return blobShadowFor(casterOf(placement));
@@ -918,6 +949,15 @@ interface Resort {
   readonly world: InstancedWorld;
   /** The shadows thrown by whatever is tall enough; see `blobShadows.ts`. */
   readonly shadows: BlobShadowField;
+  /**
+   * The buildings on this plot that are still going up.
+   *
+   * Part of the resort rather than of the renderer above it, because its
+   * materials are bound to this plot's baked light volume — a field that
+   * outlived the resort would hold freed textures — and because a building site
+   * belongs to the plot it was pegged out on. See `features/construction/`.
+   */
+  readonly construction: ConstructionField;
   /**
    * The people walking this plot's paving.
    *
@@ -1269,6 +1309,7 @@ function buildResort(parts: {
     lightVolume: lighting.volume,
   });
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
+  const construction = buildConstructionField(parts.geometries, lighting.volume);
   const bounds = plotBounds(parts.plan, everything);
   const terrain = terrainFor(parts.plan);
   const crowd = crowdFor({
@@ -1295,6 +1336,7 @@ function buildResort(parts: {
     lighting,
     world,
     shadows,
+    construction,
     crowd,
     balloons,
     sea,
@@ -1311,6 +1353,7 @@ function buildResort(parts: {
     dispose() {
       world.dispose();
       shadows.dispose();
+      construction.dispose();
       crowd.dispose();
       balloons.dispose();
       sea.dispose();
@@ -1361,11 +1404,13 @@ function createResortSlot(parts: {
       resort = buildResort({ ...parts, plan });
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
+      scene?.scene.remove(previous.construction.group);
       scene?.scene.remove(previous.crowd.group);
       scene?.scene.remove(previous.balloons.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
+      scene?.scene.add(resort.construction.group);
       scene?.scene.add(resort.crowd.group);
       scene?.scene.add(resort.balloons.group);
       scene?.scene.add(resort.sea.group);
@@ -1422,7 +1467,7 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, shadows, crowd, balloons, sea, lighting } = parts.resort;
+  const { plot, world, shadows, construction, crowd, balloons, sea, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -1436,13 +1481,19 @@ function sceneStats(parts: {
     // draw and fifty per person, and a count that hid either would stop matching
     // what a bench reads back off the renderer.
     drawCalls:
-      world.drawCalls + shadows.drawCalls + crowd.drawCalls + balloons.drawCalls + sea.drawCalls,
+      world.drawCalls +
+      shadows.drawCalls +
+      construction.drawCalls +
+      crowd.drawCalls +
+      balloons.drawCalls +
+      sea.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
     drawnTriangleCount:
       world.drawnTriangleCount +
       shadows.triangleCount +
+      construction.triangleCount +
       crowd.triangleCount +
       balloons.triangleCount +
       sea.triangleCount,
@@ -1678,6 +1729,16 @@ function pinCamera(handle: SceneHandle): void {
 interface EditMode {
   /** Arms one tool, or null to put the pointer down. */
   select(tool: BuildTool | null): void;
+  /** Carries the buildings that are going up forward by one frame. */
+  advance(dt: number): void;
+  /**
+   * Drops every building site without standing what it was building.
+   *
+   * For the moment the plot they were pegged out on goes: their placements were
+   * only ever in that plot's lists and its occupancy index, both of which go
+   * with it, and the field drawing them is disposed with it too.
+   */
+  abandon(): void;
   dispose(): void;
 }
 
@@ -1853,6 +1914,16 @@ function createEditMode(parts: {
   const lift = (placement: Placement): void => {
     const { plot, world, lighting, shadows } = resort();
     occupancy.release(placement, placement.key);
+    // A building still going up was never in the world, threw no shadow and lit
+    // nothing: cancelling its site is the whole of taking it down. This is what
+    // keeps `lift` a mirror of `stand` now that `stand` has two halves — it
+    // mirrors whichever half actually ran.
+    if (cancelSite(placement.key)) {
+      const laid = listFor(plot, placement.id);
+      const at = laid.findIndex((standing) => standing.key === placement.key);
+      if (at !== -1) laid.splice(at, 1);
+      return;
+    }
     world.remove(placement.key);
     lighting.unlight(placement);
     // The sky it was shading, which `stand` took away with `lighting.add`. A
@@ -1873,19 +1944,17 @@ function createEditMode(parts: {
     footprintTiles(placement).some((tile) => overlooksDrop(resort().terrain, tile.x, tile.z));
 
   /**
-   * Stands one placement, taking up the one it replaces first if there is one.
+   * The half of standing that only becomes true once the building is finished:
+   * what the scene draws, the shadow it throws and the lamps it lights.
    *
-   * The specification of what a placement touches — the index, the world, its
-   * shadow, its lamps and the sky it shades, and the plot's own list — and so the
-   * thing {@link lift} has to mirror. A placement that grows a new effect grows
-   * it in both.
+   * Apart from {@link stand} because a building that is still going up holds its
+   * ground and its place in the plot's list from the moment it is placed, and
+   * none of these three until the work is done — a blob shadow is sized from the
+   * model's full height, and a hotel whose lanterns burned over a foundation
+   * would be lighting a street from a building that is not there yet.
    */
-  const stand = (placement: Placement, lifted?: Placement): void => {
-    const { plot, world, lighting, shadows } = resort();
-    if (lifted) lift(lifted);
-    // Claimed first: if the tiles are gone the scene must not gain an object
-    // the index does not know about.
-    occupancy.claim(placement, placement.key);
+  const raise = (placement: Placement): void => {
+    const { world, lighting, shadows } = resort();
     world.add(placement);
     // Anything but a paving slab throws one; the model's height says which.
     const blob = blobOf(placement);
@@ -1894,8 +1963,62 @@ function createEditMode(parts: {
     // — so this is not a check for one object type but a splat of whatever
     // the model brought with it.
     lighting.add(placement);
+  };
+
+  /**
+   * The buildings still going up, and the clock they go up on.
+   *
+   * Held here rather than in the field, which only draws them: the field knows
+   * about Three.js and nothing about time, and the domain's sites are values
+   * folded forward a frame at a time. See `construction/domain/construction.ts`.
+   */
+  let sites: readonly ConstructionSite[] = [];
+
+  /** Redraws every site at the height its build has reached. */
+  const redrawSites = (): void => {
+    const { construction } = resort();
+    for (const site of sites) {
+      construction.show(site.placement, site.height, revealHeightOf(progressOf(site), site.height));
+    }
+  };
+
+  /** Drops a site that is still going up. False if nothing was being built there. */
+  const cancelSite = (key: string): boolean => {
+    if (!resort().construction.hide(key)) return false;
+    sites = sites.filter((site) => site.placement.key !== key);
+    return true;
+  };
+
+  /**
+   * Stands one placement, taking up the one it replaces first if there is one.
+   *
+   * The specification of what a placement touches — the index, the world, its
+   * shadow, its lamps and the sky it shades, and the plot's own list — and so the
+   * thing {@link lift} has to mirror. A placement that grows a new effect grows
+   * it in both. What it no longer specifies is *when*: everything {@link raise}
+   * does waits for the building to be finished, and everything here does not.
+   */
+  const stand = (placement: Placement, lifted?: Placement): void => {
+    const { plot, construction } = resort();
+    if (lifted) lift(lifted);
+    // Claimed first: if the tiles are gone the scene must not gain an object
+    // the index does not know about. A building going up holds its ground from
+    // the moment it is placed, which is what stops a second one being put on
+    // top of a site.
+    occupancy.claim(placement, placement.key);
     listFor(plot, placement.id).push(placement);
+    // Before anything is built on it, and whether or not this takes time: the
+    // ground under what stands is drawn square from the moment the tiles are
+    // claimed.
     if (reshapesGround(placement)) parts.onGroundChange();
+    const seconds = buildTimeOf(placement, lifted);
+    if (seconds > 0) {
+      const height = objectTypeTop(placement.id);
+      sites = [...sites, openSite(placement, height, seconds)];
+      construction.show(placement, height, revealHeightOf(0, height));
+    } else {
+      raise(placement);
+    }
     onChange();
   };
 
@@ -1993,6 +2116,22 @@ function createEditMode(parts: {
       spade.select(armedBrush(tool));
       bulldozer.select(armedRemove(tool));
     },
+    advance(dt) {
+      if (sites.length === 0) return;
+      const tick = advanceSites(sites, dt);
+      sites = tick.sites;
+      redrawSites();
+      for (const site of tick.finished) {
+        cancelSite(site.placement.key);
+        raise(site.placement);
+      }
+      // One call for the whole frame, however many topped out on it: the HUD
+      // cannot show more than one set of numbers a frame anyway.
+      if (tick.finished.length > 0) onChange();
+    },
+    abandon() {
+      sites = [];
+    },
     dispose() {
       pointer.dispose();
       spade.dispose();
@@ -2067,6 +2206,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
   handle.scene.add(current().world.group);
   handle.scene.add(current().shadows.group);
+  handle.scene.add(current().construction.group);
   handle.scene.add(current().crowd.group);
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().sea.group);
@@ -2200,6 +2340,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Likewise the bay, and for the third time the same reason: a run only
     // compares with the one before it if the boats are where they were.
     current().sea.advance(bench ? MAX_STEP : elapsed);
+    // Off the same fixed step under a benchmark as everything else, and for the
+    // same reason, even though a bench run places nothing and so never has a
+    // site: the rule should not depend on that staying true.
+    build.advance(bench ? MAX_STEP : elapsed);
     if (!bench) handle.controls.update();
     handle.renderer.render(handle.scene, handle.camera);
 
@@ -2232,11 +2376,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
     generate(next) {
       params = clampParams(next);
+      // Whatever was going up goes with the plot it was going up on.
+      build.abandon();
       slot.replace(generateResort(GENERATOR_TYPES, params));
       rebuilt();
     },
     clear(next) {
       params = clampParams(next);
+      build.abandon();
       // The seed goes along, so clearing is a random landscape rather than the
       // same one every time: a coast, a hill and a river off it. See
       // `emptyResortPlan`.

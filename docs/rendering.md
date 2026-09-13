@@ -173,6 +173,40 @@ time, in order. `BuildTool` holds exactly one armed tool.
   not painted, level 0 is the floor. Brushes reach the plot plus a plot's width
   all round.
 
+### Buildings take time to go up
+
+A building placed is a foundation that fills in over a few seconds, not a
+building. `construction/domain/construction.ts` owns the clock — `buildSeconds`
+derives a duration from the model's size, `revealHeightOf` says how far up the
+model the work has reached — and `constructionField.ts` draws what is there so
+far. `showcase.ts` holds the sites and ticks them from the one render loop.
+
+- **The stages are computed, never authored.** The catalogue is meshed through
+  DVE once per page load and there is no runtime re-mesh path, so a stage cannot
+  be a geometry of its own. The finished geometry is drawn with a cut instead,
+  and a model added to `voxel-gen/` gets a construction animation by existing.
+- **The cut is per fragment**, on `maskNode`, against the interpolated
+  model-space height. The greedy merge makes a wall one quad many voxels tall,
+  so hiding vertices could only take the wall away entire; a fragment discard
+  cuts through the middle of a merged quad. The shadow pass honours `maskNode`
+  too, so a half-built wall throws a half-built shadow.
+- **Two hashes make it read as voxels.** One per voxel _column_ gives structure
+  — a corner post up while the wall beside it is knee high — and one per voxel
+  _cell_ gives grain, so single voxels appear along the frontier rather than a
+  clean stair edge. Both hold a column _behind_ the reveal, which is why the
+  reveal travels past the model's own top before a building is whole.
+- **A site is a plain `Mesh` per surface**, drawn with the catalogue's own
+  geometry and one of two shared materials; how high the cut stands rides on the
+  mesh's `userData`, which a reference node reads per render object. Four draw
+  calls for as long as the crane is up, against the resort's forty.
+- **Which objects** — `lodging` and `amenities` above 3 000 voxels. Paving is
+  painted by dragging, and `paving.ts` lifts and re-stands a slab under one key
+  as a path crosses a step, so a slab must never become a site.
+- **`stand` has two halves.** The tiles, the plot's list and the square ground
+  under the footprint are claimed at once; the instance, the blob shadow and the
+  lamps wait for `raise`, when the work is done. `lift` mirrors whichever half
+  ran, so bulldozing a site cancels it and frees the tile.
+
 ## Lighting
 
 A model declares its lights beside its voxels:

@@ -51,6 +51,23 @@ function visibilityAt(
   return direction[(ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4 + 3]! / 255;
 }
 
+/** The first bake as it was written: one pass over every interior cell. */
+function referenceSkyBake(spec: LightGridSpec, occluders: readonly Occluder[]): Uint8Array {
+  const direction = new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
+  const standing = occluders.filter(occludes);
+  bakeSkyVisibility({ occluders: standing, spec, range: gridInterior(spec), direction });
+  return direction;
+}
+
+/** Bakes `occluders` the way the app does, and holds it to the reference byte for byte. */
+function expectSameBake(occluders: readonly Occluder[]): Uint8Array {
+  const spec = specOver();
+  const direction = new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
+  createLiveSkyVisibility(spec, direction, occluders);
+  expect(direction).toEqual(referenceSkyBake(spec, occluders));
+  return direction;
+}
+
 describe('occludes', () => {
   it('ignores anything lying flat on the ground', () => {
     expect(occludes(box({ maxY: MIN_OCCLUDER_HEIGHT - 1 }))).toBe(false);
@@ -249,6 +266,33 @@ describe('createLiveSkyVisibility', () => {
     const live = createLiveSkyVisibility(spec, direction, []);
     expect(live.add(box({ maxY: 2 }))).toBeNull();
     expect(live.occluderCount).toBe(0);
+  });
+
+  describe('against a bake of the whole interior', () => {
+    it('agrees for one box', () => {
+      const direction = expectSameBake([box({ maxX: 48, maxY: 40, maxZ: 48, density: 0.7 })]);
+      expect(direction.some((byte) => byte < 255)).toBe(true);
+    });
+
+    it('agrees for boxes whose reach overlaps', () => {
+      expectSameBake([
+        box({ maxX: 48, maxY: 40, maxZ: 48, density: 0.7 }),
+        box({ minX: 32, maxX: 64, minZ: 24, maxZ: 56, maxY: 36, density: 0.5 }),
+        box({ minX: 8, maxX: 12, minZ: 60, maxZ: 64, maxY: 44, density: 0.05 }),
+      ]);
+    });
+
+    it('agrees when a box too low to shade is mixed in', () => {
+      expectSameBake([
+        box({ maxY: MIN_OCCLUDER_HEIGHT - 1, maxX: 96, maxZ: 96, density: 1 }),
+        box({ minX: 64, maxX: 96, minZ: 0, maxZ: 32, maxY: 36, density: 0.7 }),
+      ]);
+    });
+
+    it('leaves every cell open with no boxes at all', () => {
+      const direction = expectSameBake([]);
+      expect(direction.every((byte) => byte === 255)).toBe(true);
+    });
   });
 
   it('leaves the shell the sampler clamps against fully open', () => {

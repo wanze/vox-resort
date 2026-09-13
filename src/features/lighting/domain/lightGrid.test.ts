@@ -538,6 +538,102 @@ describe('rebakeRegion', () => {
   });
 });
 
+/**
+ * The bake as it was written first: one pass over every cell in the grid.
+ *
+ * Kept here rather than in the module because it is not how the bake runs any
+ * more — it is what the scoped bake has to agree with, byte for byte, and a
+ * reference you can read in twenty lines is worth more than a golden blob.
+ */
+function referenceBake(anchors: readonly LightAnchor[], spec: LightGridSpec, scale = 0) {
+  const count = cellCount(spec);
+  const irradiance = new Uint8Array(count * 4);
+  const direction = new Uint8Array(count * 4);
+  direction.fill(255);
+  const range = wholeGrid(spec);
+  const baked = rebakeRegion({ anchors, spec, range, scale, irradiance, direction });
+  return { irradiance, direction, scale: baked.scale, ...countRegion(irradiance, spec, range) };
+}
+
+describe('bakeLightGrid against a bake of every cell', () => {
+  /** A grid wide enough that lamps at its far ends leave most of it untouched. */
+  const spec = gridSpecAt([], 4, {
+    minX: -120,
+    maxX: 120,
+    minY: 0,
+    maxY: 48,
+    minZ: -40,
+    maxZ: 40,
+  })!;
+
+  const expectSameBake = (anchors: readonly LightAnchor[], scale?: number) => {
+    const baked = bakeLightGrid(anchors, spec, scale === undefined ? {} : { scale });
+    const reference = referenceBake(anchors, spec, scale);
+    expect(baked.irradiance).toEqual(reference.irradiance);
+    expect(baked.direction).toEqual(reference.direction);
+    expect(baked.scale).toBe(reference.scale);
+    expect(baked.litCells).toBe(reference.litCells);
+    expect(baked.clampedCells).toBe(reference.clampedCells);
+    return baked;
+  };
+
+  it('keeps the test grid small', () => {
+    expect(cellCount(spec)).toBeLessThan(20_000);
+  });
+
+  it('agrees for one lamp', () => {
+    expect(expectSameBake([anchor({ x: 10, y: 16, z: 4, distance: 30 })]).litCells).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('agrees for lamps whose reach overlaps', () => {
+    // Different intensities, so a scale measured per block would differ from the
+    // global one in every block but the brightest.
+    expectSameBake([
+      anchor({ key: 'a', x: -12, y: 16, z: 0, distance: 30, intensity: 60, color: 0xffcc88 }),
+      anchor({ key: 'b', x: 6, y: 20, z: 8, distance: 36, intensity: 240, color: 0x88ccff }),
+      anchor({ key: 'c', x: 18, y: 10, z: -10, distance: 24, intensity: 120 }),
+    ]);
+  });
+
+  it('agrees for lamps far apart, leaving most of the grid unbaked', () => {
+    const grid = expectSameBake([
+      anchor({ key: 'west', x: -100, y: 16, z: 0, distance: 16 }),
+      anchor({ key: 'east', x: 100, y: 16, z: 0, distance: 16, intensity: 300 }),
+    ]);
+    expect(grid.litCells).toBeLessThan(cellCount(spec) / 10);
+  });
+
+  it('agrees with no lamps at all', () => {
+    expect(expectSameBake([]).litCells).toBe(0);
+  });
+
+  it('agrees when lamps that give no light are mixed in', () => {
+    expectSameBake([
+      anchor({ key: 'dark', x: 0, y: 16, z: 0, intensity: 0 }),
+      anchor({ key: 'real', x: 20, y: 16, z: 0, distance: 30 }),
+      anchor({ key: 'point', x: -20, y: 16, z: 0, distance: 0 }),
+    ]);
+  });
+
+  it('agrees when a lamp reaches nothing inside the grid', () => {
+    expectSameBake([
+      anchor({ key: 'far', x: 10_000, y: 16, z: 10_000, distance: 40 }),
+      anchor({ key: 'near', x: 0, y: 16, z: 0, distance: 20 }),
+    ]);
+  });
+
+  it('agrees when handed a scale, and keeps to it', () => {
+    const anchors = [
+      anchor({ key: 'a', x: -12, y: 16, z: 0, distance: 30 }),
+      anchor({ key: 'b', x: 6, y: 20, z: 8, distance: 36, intensity: 900 }),
+    ];
+    expect(expectSameBake(anchors, 3).scale).toBe(3);
+    expect(expectSameBake(anchors, 3).clampedCells).toBeGreaterThan(0);
+  });
+});
+
 describe('a reserved box', () => {
   const lamps = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
 

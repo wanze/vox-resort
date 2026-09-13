@@ -298,6 +298,9 @@ Float32Array  fromX/Y/Z, toX/Y/Z, t, rate    // the segment they are walking
 Float32Array  speed
 Int32Array    node, cameFrom, gate, variant
 Int32Array    seat                          // the seat they hold, or -1
+Float32Array  dirX, dirZ, side, pace         // getting past people; see below
+Uint8Array    lane                          // resting, to a seat, paving, sand
+Int32Array    cellHead (4 096), cellNext    // the spatial hash, allocated once
 ```
 
 `node` is the node being walked to, or `-1` while out on the sand, and that one
@@ -308,6 +311,78 @@ off the beach.
 No `Person` objects and no array of records. The attributes the crowd will grow
 later — sex, name, age, hunger, thirst, energy, a bed — are **more columns**, and
 none of them changes anything above.
+
+## Not walking into things
+
+Two kinds of thing are in a walker's way, and they are handled at two
+different rates on purpose.
+
+### What stands on the sand: once per segment
+
+A roamer walks a straight line to a spot they picked, and that line used to go
+straight through loungers, parasols, the hire hut and the beach clubs. What
+stands on the plot does not move, so the question is asked **when a segment
+starts**, not per frame.
+
+`crowd/domain/sandGrid.ts` rasterises every placement and prop that reaches the
+sand into a bitmap over the beach band — two-voxel cells, each box grown by half
+a body — once per resort. A roamer then draws up to eight candidate spots and
+takes the first that is free and whose chord is clear (`clearLine` samples every
+cell along it). A lounger is only walked to if the way in is clear, and the way
+back to a gate too. The ends of a walk are not asked about — the lounger somebody
+is getting up from, the one they are walking into — and a roamer with nowhere
+clear to go stands for a second and a half and tries again, which is a
+zero-length segment like a sit and costs the frame nothing.
+
+Paving is not an obstacle: a boardwalk is two voxels high and is stepped over.
+
+### Other people: one pass per frame
+
+People move, so this one is per frame, and it is built to change the walk as
+little as possible. The segment stays where a person _means_ to go; two numbers
+say how they are getting past whoever is in the way.
+
+- **`side`** — voxels to the right of their line. Everybody on the paving keeps
+  a voxel to the right with nobody about, which on its own solves most head-on
+  passes. When somebody is ahead and inside shoulder width, they step to
+  whichever side is the shorter step and still on the path — a tie goes right
+  for a meeting and left for an overtake — at most four voxels out.
+- **`pace`** — a multiplier on progress. Somebody who cannot step aside far
+  enough falls in behind; at a crossing the higher index waits and the lower one
+  walks on, so the two never wait for each other. Nobody slows below 15 %.
+
+"Somebody ahead" is found in a **fixed-size spatial hash**: 4 096 slots, a head
+per slot and a next per person, rebuilt each frame and scanned three by three
+round each walker. It does not grow with the plot and it never allocates.
+
+`place()` adds `side` across the segment's direction, `segment()` moves the start
+of a new segment by the difference in sideways between the old line and the new
+so nobody jumps across the path at a corner, and a person walking to a seat is
+eased back onto their line so they land on the plank. On the sand one bitmap
+read stops a sidestep into furniture, and another, a little ahead, brings
+somebody back onto their clear line before the offset one meets something.
+
+## The boats
+
+The bay's craft had the same problem on the water: they reflected off the edge
+of the sailing ground and nothing else, so they sailed through the piers — six
+tiles of jetty reach past the buoys — through the buoys beside the hire corridor,
+and through each other.
+
+`sea/domain/piers.ts` merges the paving over water into one box per pier, and
+every craft carries a radius, half the longer side of its model, read off the
+art in `showcase.ts`. `stepFlotilla` then does three things per craft, in the
+order they have to win in: it **looks ahead** six seconds of way plus its own
+radius and turns away from the nearest pier or craft that look comes within
+reach of (to starboard when dead ahead, which parts two boats meeting head on);
+it **pushes out** of any pier or craft it still ends up inside, half each for two
+under way and all of it against a buoy or a tied-up boat; and only then applies
+the **limits of the bay**, which must never lose. The rental's boats ignore each
+other in to their row of berths, where a pedalo ties up closer to the next one
+than their radii allow.
+
+It is a loop over every pair: a few dozen craft is a few hundred pairs, and a
+spatial index would cost more to keep than it saves.
 
 ## Determinism, because the benchmark depends on it
 
@@ -353,12 +428,12 @@ from a palette built for buildings, so it is the one family the crowd adds.
 
 Six hundred people, by arithmetic rather than by measurement:
 
-|                         |                                         |
-| ----------------------- | --------------------------------------- |
-| Draw calls              | 4, one per person model, never culled   |
-| Triangles per frame     | ~30 k, against 2.18 M already submitted |
-| Matrix upload per frame | ~38 KB                                  |
-| Step loop               | **11 µs**, measured                     |
+|                         |                                            |
+| ----------------------- | ------------------------------------------ |
+| Draw calls              | 4, one per person model, never culled      |
+| Triangles per frame     | ~30 k, against 2.18 M already submitted    |
+| Matrix upload per frame | ~38 KB                                     |
+| Step loop               | **50–65 µs**, measured, avoidance included |
 
 The last row is the only one that has actually been run: 600 people on the
 reference generated plot — 1 870 paved tiles, 4 328 edges, 28 gates onto the
@@ -366,6 +441,12 @@ beach — stepped at 11 µs a frame in Node. That is 0.07% of a 16 ms frame, and
 two orders of magnitude under the "few hundred µs" this table first estimated,
 because the loop turned out to be smaller than the guess: a multiply-add, a
 compare and three lerps.
+
+Getting past each other is most of the frame now: the same 600 people on the
+same plot, with the spatial hash and the sidesteps, step at 50–65 µs where they
+stepped at 5.5 µs without them on the same machine (the spread is the machine,
+not the scene) — under half a percent of a 16 ms frame. The bay, with 46 craft
+and buoys and two piers, steps at 26–32 µs.
 
 The other three rows are still arithmetic. Nothing is drawn yet, so `?people=n`
 and a bench case remain part of the build order below.

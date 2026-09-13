@@ -34,6 +34,7 @@
  */
 
 import { createRandom } from '../../layout/domain/random';
+import type { PierBox } from './piers';
 import type { Mooring, Rental, SailingGround } from './swimArea';
 
 /**
@@ -141,6 +142,25 @@ const BERTH_SPACING = 12;
 /** Voxels seaward of the landward limit the berths lie at. */
 const BERTH_OUT = 4;
 
+/**
+ * How far ahead a craft looks for something in its way, in seconds of its own
+ * way, and how hard it puts the helm over when it finds something.
+ *
+ * Six seconds is ten voxels at the fleet's pace, on top of the craft's own
+ * length — enough that a boat is seen to come round well short of a pier rather
+ * than to bounce off it. The turn is sharper than the idle swing and a little
+ * sharper than going home, because a boat that is avoiding something is a boat
+ * somebody is steering.
+ */
+const LOOK_SECONDS = 6;
+const AVOID_RADIANS = 0.6;
+
+/**
+ * Voxels a craft is reckoned to take up across, from its middle, when the caller
+ * did not say: about a rowing boat's half-length.
+ */
+const DEFAULT_RADIUS = 8;
+
 const HEAVE_VOXELS = 0.4;
 const HEAVE_RATE = 1.1;
 const ROLL_RADIANS = 0.06;
@@ -174,6 +194,14 @@ export interface FlotillaOptions {
   readonly hire?: HireOptions | null;
   /** The water the craft keep to; the buoys are moored wherever they are moored. */
   readonly ground: SailingGround;
+  /**
+   * How far each model reaches from its middle, in voxels, by variant: half its
+   * length, since a hull turns. Read off the art by the caller, so a new boat
+   * needs no change here; a variant it does not cover gets {@link DEFAULT_RADIUS}.
+   */
+  readonly radii?: readonly number[];
+  /** The piers out over the bay, which every craft steers round. See `piers.ts`. */
+  readonly piers?: readonly PierBox[];
   /** Voxels the sea surface lies at, which everything afloat rides on. */
   readonly waterline: number;
   readonly seed: number;
@@ -234,6 +262,10 @@ export interface Flotilla {
    * having the same turnaround every time, which nothing can see.
    */
   readonly gap: Float32Array;
+  /** Voxels each reaches from its middle: what nothing else may come inside. */
+  readonly radius: Float32Array;
+  /** The piers every craft steers round. */
+  readonly piers: readonly PierBox[];
   readonly waterline: number;
   /** Seconds since the bay was launched; what the swell is read off. */
   clock: number;
@@ -312,6 +344,8 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     berthZ: new Float32Array(count),
     berthHeading: new Float32Array(count),
     gap: new Float32Array(count),
+    radius: new Float32Array(count),
+    piers: options.piers ?? [],
     waterline: options.waterline,
     clock: 0,
   };
@@ -375,6 +409,10 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
       flotilla.z[index] = clamp(berth.z + Math.cos(bearing) * off, landward, ground.seawardZ);
       flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
     }
+  }
+
+  for (let index = 0; index < count; index++) {
+    flotilla.radius[index] = options.radii?.[flotilla.variant[index]!] ?? DEFAULT_RADIUS;
   }
   return flotilla;
 }
@@ -471,7 +509,16 @@ function steerHome(flotilla: Flotilla, index: number, dt: number, ground: Sailin
   hold(flotilla, index, wrapAngle(flotilla.heading[index]! + over), dt, ground);
 }
 
-/** Runs one craft a frame's worth along a heading, and keeps it in the bay. */
+/**
+ * Runs one craft a frame's worth along a heading, round whatever is in its way,
+ * and keeps it in the bay.
+ *
+ * Three steps, in the order they have to win in. Something ahead turns the
+ * craft away from it, overriding the helm it was given for the frame; anything
+ * it still ends up inside pushes it back out, so no hull is ever seen through a
+ * pier or another hull however the steering went; and the limits of the ground
+ * come last, because leaving the bay is the one thing that must never happen.
+ */
 function hold(
   flotilla: Flotilla,
   index: number,
@@ -480,9 +527,15 @@ function hold(
   ground: SailingGround,
 ): void {
   const speed = flotilla.speed[index]!;
-  let heading = steered;
-  let x = flotilla.x[index]! + Math.sin(heading) * speed * dt;
-  let z = flotilla.z[index]! + Math.cos(heading) * speed * dt;
+  let heading = avoid(flotilla, index, steered, dt);
+  shoveClear(
+    flotilla,
+    index,
+    flotilla.x[index]! + Math.sin(heading) * speed * dt,
+    flotilla.z[index]! + Math.cos(heading) * speed * dt,
+  );
+  let x = shovedX;
+  let z = shovedZ;
 
   // Mirrored about the limit: negating the heading flips the x it is made of
   // and keeps the z, and taking it from π flips the z and keeps the x.
@@ -499,6 +552,175 @@ function hold(
   flotilla.heading[index] = heading;
   flotilla.x[index] = x;
   flotilla.z[index] = z;
+}
+
+/**
+ * Whether two craft are left to lie alongside each other.
+ *
+ * The rental's own boats, both close in to their row of berths: a pedalo coming
+ * home ties up twelve voxels from the next one, and two boats' reach is more
+ * than that, so holding them apart would keep every one of them off its own
+ * berth — or send it circling the row, turned away by its neighbours.
+ */
+function berthedTogether(flotilla: Flotilla, one: number, other: number): boolean {
+  if (flotilla.hired[one] === 0 || flotilla.hired[other] === 0) return false;
+  const oneIn = nearBerth(flotilla, one);
+  const otherIn = nearBerth(flotilla, other);
+  // A boat on its way home is let through the row whatever distance it is
+  // still out: turned away by the boats already tied up, it would circle.
+  return (
+    (oneIn && otherIn) || (homing(flotilla, one) && otherIn) || (homing(flotilla, other) && oneIn)
+  );
+}
+
+const homing = (flotilla: Flotilla, index: number): boolean => flotilla.age[index]! >= HIRE_SECONDS;
+
+/** Voxels from its berth inside which a hire boat is coming in to the row. */
+const BERTH_APPROACH = BERTH_SPACING * 3;
+
+function nearBerth(flotilla: Flotilla, index: number): boolean {
+  return (
+    Math.hypot(
+      flotilla.x[index]! - flotilla.berthX[index]!,
+      flotilla.z[index]! - flotilla.berthZ[index]!,
+    ) < BERTH_APPROACH
+  );
+}
+
+/** Whether a craft stays put whatever bumps it: a buoy, or a boat tied up. */
+const fixed = (flotilla: Flotilla, index: number): boolean =>
+  flotilla.speed[index] === 0 || (flotilla.hired[index] === 1 && flotilla.age[index]! < 0);
+
+/**
+ * The heading a craft takes this frame, given what is in front of it.
+ *
+ * It looks along its heading for {@link LOOK_SECONDS} of way plus its own reach,
+ * and takes the nearest pier or craft that line comes within reach of. If there
+ * is one it turns away from it — away from the side it lies on, and to
+ * starboard when it is dead ahead, which is the rule of the road and is the
+ * same way for both of two boats meeting head on, so they part rather than
+ * mirroring each other for ever.
+ *
+ * A loop over every other craft, and it should be: there are a few dozen, which
+ * is a few hundred pairs a frame, and a spatial index would cost more to keep
+ * than it could save.
+ */
+function avoid(flotilla: Flotilla, index: number, heading: number, dt: number): number {
+  const aheadX = Math.sin(heading);
+  const aheadZ = Math.cos(heading);
+  nearest = Infinity;
+  piersAhead(flotilla, index, aheadX, aheadZ);
+  craftAhead(flotilla, index, aheadX, aheadZ);
+  if (nearest === Infinity) return heading;
+
+  const bearing = Math.atan2(threatX - flotilla.x[index]!, threatZ - flotilla.z[index]!);
+  const off = wrapAngle(bearing - heading);
+  return wrapAngle(heading + (off > 0 ? -1 : 1) * AVOID_RADIANS * dt);
+}
+
+/**
+ * The nearest thing in a craft's way found so far this frame, as how far along
+ * its look it is and the point to turn away from. Module-level, like the
+ * matrices a field refills, so a frame allocates nothing; only meaningful inside
+ * one call of {@link avoid}.
+ */
+let nearest = Infinity;
+let threatX = 0;
+let threatZ = 0;
+
+/** How far ahead a craft looks: its own reach, and some seconds of its way. */
+const lookOf = (flotilla: Flotilla, index: number): number =>
+  flotilla.radius[index]! + flotilla.speed[index]! * LOOK_SECONDS;
+
+/**
+ * Any pier the look comes within reach of, tested halfway along the look and at
+ * the end of it — close enough for a rectangle a tile across against a look of
+ * under twenty voxels.
+ */
+function piersAhead(flotilla: Flotilla, index: number, aheadX: number, aheadZ: number): void {
+  const look = lookOf(flotilla, index);
+  for (const pier of flotilla.piers) {
+    for (let half = 1; half <= 2; half++) {
+      const along = (look * half) / 2;
+      const px = flotilla.x[index]! + aheadX * along;
+      const pz = flotilla.z[index]! + aheadZ * along;
+      const cx = clamp(px, pier.minX, pier.maxX);
+      const cz = clamp(pz, pier.minZ, pier.maxZ);
+      if (along >= nearest || Math.hypot(px - cx, pz - cz) > flotilla.radius[index]!) continue;
+      nearest = along;
+      threatX = cx;
+      threatZ = cz;
+    }
+  }
+}
+
+/** Any craft ahead that the look passes within both craft's reach of. */
+function craftAhead(flotilla: Flotilla, index: number, aheadX: number, aheadZ: number): void {
+  const look = lookOf(flotilla, index);
+  for (let other = 0; other < flotilla.count; other++) {
+    if (other === index || berthedTogether(flotilla, index, other)) continue;
+    const rx = flotilla.x[other]! - flotilla.x[index]!;
+    const rz = flotilla.z[other]! - flotilla.z[index]!;
+    const along = rx * aheadX + rz * aheadZ;
+    // How far the other lies off the look, at its nearest point along it.
+    const at = Math.min(along, look);
+    const off = Math.hypot(rx - aheadX * at, rz - aheadZ * at);
+    if (along <= 0 || along >= nearest || off > flotilla.radius[index]! + flotilla.radius[other]!) {
+      continue;
+    }
+    nearest = along;
+    threatX = flotilla.x[other]!;
+    threatZ = flotilla.z[other]!;
+  }
+}
+
+/** Where {@link shoveClear} left the craft it was handed; see there. */
+let shovedX = 0;
+let shovedZ = 0;
+
+/**
+ * Where a craft that has moved to `x, z` actually ends up, written to
+ * {@link shovedX} and {@link shovedZ}: pushed out of any other craft it
+ * overlaps, and then out of any pier it is inside — the piers second, so being
+ * shouldered by another boat can never leave one in the decking.
+ *
+ * Two craft that are both under way each take half of the overlap on their own
+ * turn, so nothing here ever writes to a craft other than the one being
+ * stepped; one that is fixed — a buoy, a boat tied up — takes none of it.
+ */
+function shoveClear(flotilla: Flotilla, index: number, x: number, z: number): void {
+  shovedX = x;
+  shovedZ = z;
+  const reach = flotilla.radius[index]!;
+  for (let other = 0; other < flotilla.count; other++) {
+    if (other === index || berthedTogether(flotilla, index, other)) continue;
+    const rx = shovedX - flotilla.x[other]!;
+    const rz = shovedZ - flotilla.z[other]!;
+    const apart = Math.hypot(rx, rz);
+    const overlap = reach + flotilla.radius[other]! - apart;
+    if (overlap <= 0 || apart === 0) continue;
+    const share = fixed(flotilla, other) ? overlap : overlap / 2;
+    shovedX += (rx / apart) * share;
+    shovedZ += (rz / apart) * share;
+  }
+  for (const pier of flotilla.piers) outOfPier(pier, reach);
+}
+
+/**
+ * Pushes the shoved point out of one pier grown by `reach`, along whichever of
+ * its sides is nearest — never its shoreward end, which is the beach, and where
+ * the landward limit would only push the craft straight back into the decking.
+ */
+function outOfPier(pier: PierBox, reach: number): void {
+  const west = shovedX - (pier.minX - reach);
+  const east = pier.maxX + reach - shovedX;
+  const south = pier.maxZ + reach - shovedZ;
+  const inside = shovedZ > pier.minZ - reach && Math.min(west, east, south) > 0;
+  if (!inside) return;
+  const least = Math.min(west, east, south);
+  if (least === west) shovedX -= west;
+  else if (least === east) shovedX += east;
+  else shovedZ += south;
 }
 
 /**

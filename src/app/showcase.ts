@@ -112,6 +112,7 @@ import {
 import type { SeaField } from '../features/sea/adapters/seaField';
 import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
+import { pierBoxesFor } from '../features/sea/domain/piers';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
 import type { Rental, SailingGround } from '../features/sea/domain/swimArea';
 import { sailingGroundFor, swimAreaMoorings } from '../features/sea/domain/swimArea';
@@ -930,6 +931,9 @@ function crowdFor(parts: {
     seats: seatSpotsFor(
       [...parts.plot.layout.placements, ...parts.plot.layout.props].map(seatSiteOf),
     ),
+    // The same two lists, as boxes on the ground: whichever of them stand on the
+    // sand are what a roamer walks round. See `crowd/domain/sandGrid.ts`.
+    obstacles: [...parts.plot.layout.placements, ...parts.plot.layout.props],
   });
   return buildCrowdField({
     crowd: createCrowd({
@@ -1023,6 +1027,12 @@ function seaGroundOf(shore: Shore | null, rental: Rental | null): SailingGround 
 const SEA_BERTHS = SEA_MODELS.map(berthsOf);
 
 /**
+ * How far each of the bay's models reaches from its middle, in registry order:
+ * half its longer side, since a hull turns. What the craft keep apart by.
+ */
+const SEA_RADII = SEA_MODELS.map((model) => Math.max(model.width, model.depth) / 2);
+
+/**
  * The models that drift about on their own: every boat nobody hires out.
  *
  * The buoy is not a boat, and the pedalos belong to the hut — they are handed to
@@ -1081,6 +1091,10 @@ function seaFor(parts: {
     // A bay with no hut on it hires nothing out; see `standPedaloRental`.
     hire: rental ? { count: HIRE_COUNT, variant: PEDALO_INDEX, rental } : null,
     ground,
+    radii: SEA_RADII,
+    // The sea lanes' jetties reach past the buoys into the craft's water; every
+    // boat steers round them. See `sea/domain/piers.ts`.
+    piers: pierBoxesFor(shore, parts.paved),
     waterline: SEA_LEVEL,
     seed: SEA_SEED,
   });

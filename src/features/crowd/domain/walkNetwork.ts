@@ -102,6 +102,7 @@ import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shorelin
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
 import type { SeatPose } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSpot } from './seating';
+import { sandGridFor, type ObstacleBox, type SandGrid } from './sandGrid';
 
 /**
  * A paved tile, as the layout describes one.
@@ -219,6 +220,11 @@ export interface WalkNetwork {
    * scan over it is bounded by how far a roamer will walk; see `crowd.ts`.
    */
   readonly beachSeats: readonly number[];
+  /**
+   * What stands on the sand, so a roamer picks a line that goes round it. Null
+   * with no beach. See `sandGrid.ts`.
+   */
+  readonly sand: SandGrid | null;
 }
 
 const tileKey = (x: number, z: number): string => `${x},${z}`;
@@ -251,6 +257,11 @@ export interface WalkNetworkInput {
    * See `spans.ts`.
    */
   readonly bridged?: SpanProvider;
+  /**
+   * Every object standing on the plot, as the ground plane sees it: the ones on
+   * the sand are what a roamer walks round. Omit it and the beach is open.
+   */
+  readonly obstacles?: readonly ObstacleBox[];
 }
 
 /**
@@ -348,7 +359,18 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     beach: shore ? { shore, tilesX } : null,
     seats,
     beachSeats,
+    sand: sandOf(input),
   };
+}
+
+/** What stands on the plot's sand, or null on a plot with none. */
+function sandOf(input: WalkNetworkInput): SandGrid | null {
+  if (!input.shore) return null;
+  return sandGridFor({
+    shore: input.shore,
+    tilesX: input.tilesX,
+    obstacles: input.obstacles ?? [],
+  });
 }
 
 /**

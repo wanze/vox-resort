@@ -68,6 +68,8 @@
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom } from '../../layout/domain/random';
+import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
+import { blockedAt, clearLine } from './sandGrid';
 import {
   BEACH_SURFACE,
   beachPointAt,
@@ -195,7 +197,31 @@ const TO_SEAT = -2;
 /** Sitting on it. See the note on sitting at the top of the file. */
 const SEATED = -3;
 
-export interface Crowd {
+/**
+ * How many spots on the sand a roamer considers before standing still for a
+ * moment instead.
+ *
+ * A spot is refused when it is inside something or the straight line to it
+ * passes through something — see `sandGrid.ts`. Eight is plenty on a beach laid
+ * with lines of loungers, and the bound is what keeps a roamer boxed in by
+ * furniture from costing a frame of retries.
+ */
+const ROAM_TRIES = 8;
+
+/** Seconds a roamer with nowhere clear to go stands and looks about. */
+const PAUSE_SECONDS = 1.5;
+
+/**
+ * Voxels at either end of a walk that are not asked about obstacles.
+ *
+ * A roamer getting up from a lounger is standing *in* it, and one walking to a
+ * lounger is walking into it; a gate is on paving that lamps stand beside. The
+ * line in between is what must be clear.
+ */
+const SEAT_CLEAR = 8;
+const GATE_CLEAR = TILE_VOXELS / 2 + 2;
+
+export interface Crowd extends Walkers {
   readonly network: WalkNetwork;
   /** People the arrays hold room for. */
   readonly capacity: number;
@@ -296,6 +322,12 @@ export function createCrowd(options: CrowdOptions): Crowd {
     gate: new Int32Array(capacity),
     seat: new Int32Array(capacity).fill(-1),
     seatBy: new Int32Array(network.seats.length).fill(-1),
+    dirX: new Float32Array(capacity),
+    dirZ: new Float32Array(capacity),
+    side: new Float32Array(capacity),
+    pace: new Float32Array(capacity).fill(1),
+    lane: new Uint8Array(capacity),
+    ...proximityFor(capacity),
     random,
   };
 
@@ -310,7 +342,10 @@ export function createCrowd(options: CrowdOptions): Crowd {
     crowd.gate[i] = -1;
 
     if (beach && i < onSand) {
-      const start = beachPointAt(beach, random);
+      let start = beachPointAt(beach, random);
+      for (let tries = 1; tries < ROAM_TRIES && inObstacle(network, start); tries++) {
+        start = beachPointAt(beach, random);
+      }
       crowd.fromX[i] = start.x;
       crowd.fromY[i] = BEACH_SURFACE;
       crowd.fromZ[i] = start.z;
@@ -343,24 +378,38 @@ export function createCrowd(options: CrowdOptions): Crowd {
  * The loop is the feature: an add, a compare, and three lerps per person, with
  * the arrival branch taken by whoever happens to have reached the end of their
  * segment. Nothing here allocates and nothing here asks the terrain anything.
+ *
+ * Getting past each other comes first, as one pass of its own: it decides how
+ * far aside everybody is and how fast they are going, and the loop below then
+ * spends both as a multiply and an offset. See `avoidance.ts`.
  */
 export function stepCrowd(crowd: Crowd, dt: number): void {
   const step = Math.min(Math.max(dt, 0), MAX_STEP);
   if (step === 0) return;
 
+  steerWalkers(crowd, step, crowd.network.sand);
   for (let i = 0; i < crowd.count; i++) {
-    crowd.t[i]! += crowd.rate[i]! * step;
+    crowd.t[i]! += crowd.rate[i]! * crowd.pace[i]! * step;
     if (crowd.t[i]! >= 1) arrive(crowd, i);
     place(crowd, i);
   }
 }
 
-/** Writes a person's position from the segment they are on. */
+/**
+ * Writes a person's position from the segment they are on, stood `side` voxels
+ * to the right of it.
+ */
 function place(crowd: Crowd, i: number): void {
   const t = crowd.t[i]!;
-  crowd.x[i] = crowd.fromX[i]! + (crowd.toX[i]! - crowd.fromX[i]!) * t;
+  const side = crowd.side[i]!;
+  crowd.x[i] = crowd.fromX[i]! + (crowd.toX[i]! - crowd.fromX[i]!) * t + crowd.dirZ[i]! * side;
   crowd.y[i] = crowd.fromY[i]! + (crowd.toY[i]! - crowd.fromY[i]!) * t;
-  crowd.z[i] = crowd.fromZ[i]! + (crowd.toZ[i]! - crowd.fromZ[i]!) * t;
+  crowd.z[i] = crowd.fromZ[i]! + (crowd.toZ[i]! - crowd.fromZ[i]!) * t - crowd.dirX[i]! * side;
+}
+
+/** Whether a point on the sand is inside something standing there. */
+function inObstacle(network: WalkNetwork, point: { readonly x: number; readonly z: number }) {
+  return network.sand !== null && blockedAt(network.sand, point.x, point.z);
 }
 
 /**
@@ -411,7 +460,7 @@ function arriveAtNode(crowd: Crowd, i: number): void {
   if (node.gate && crowd.network.beach && crowd.random() < ONTO_SAND) {
     crowd.gate[i] = arrived;
     crowd.node[i] = ROAMING;
-    roamTo(crowd, i);
+    roamTo(crowd, i, GATE_CLEAR);
   } else if (seat !== -1 && crowd.random() < ONTO_SEAT) {
     takeSeat(crowd, i, seat);
   } else {
@@ -434,30 +483,86 @@ function roamOn(crowd: Crowd, i: number): void {
   crowd.fromX[i] = crowd.toX[i]!;
   crowd.fromY[i] = crowd.toY[i]!;
   crowd.fromZ[i] = crowd.toZ[i]!;
+  standOnLine(crowd, i);
   const lounger = crowd.network.beachSeats.length > 0 ? nearbyBeachSeat(crowd, i) : -1;
   if (lounger !== -1 && crowd.random() < ONTO_SEAT) {
     takeSeat(crowd, i, lounger);
     return;
   }
-  if (crowd.random() < OFF_SAND && crowd.gate[i]! >= 0) {
+  if (crowd.random() < OFF_SAND && crowd.gate[i]! >= 0 && clearTo(crowd, i, crowd.gate[i]!)) {
     // Aiming at the gate node puts them back on the graph the moment they get
     // there: arrival at a node is arrival at a node, whatever they crossed to
-    // reach it.
+    // reach it. The walk there is still over sand, so they step aside the way a
+    // roamer does.
     aim(crowd, i, crowd.gate[i]!);
+    crowd.lane[i] = LANE.sand;
     return;
   }
   roamTo(crowd, i);
 }
 
-/** Sends a roamer to a fresh point on the open sand. */
-function roamTo(crowd: Crowd, i: number): void {
+/**
+ * Makes where a person is actually standing the start of their next segment,
+ * with no sidestep left over.
+ *
+ * Called with `from` at the end of the segment they walked, which is where
+ * their *line* ended rather than where they are if they were stood aside of it.
+ * On the sand that difference matters: the walk onward is checked for obstacles
+ * from `from`, and a check made from a point a few voxels off the person is a
+ * check of a walk they will not take.
+ */
+function standOnLine(crowd: Crowd, i: number): void {
+  const side = crowd.side[i]!;
+  crowd.fromX[i]! += crowd.dirZ[i]! * side;
+  crowd.fromZ[i]! -= crowd.dirX[i]! * side;
+  crowd.side[i] = 0;
+}
+
+/** Whether the straight walk from where a roamer stands to a node is clear. */
+function clearTo(crowd: Crowd, i: number, node: number): boolean {
+  const sand = crowd.network.sand;
+  if (!sand) return true;
+  const target = crowd.network.nodes[node]!;
+  return clearLine(sand, crowd.fromX[i]!, crowd.fromZ[i]!, target.x, target.z, 0, GATE_CLEAR);
+}
+
+/**
+ * Sends a roamer to a fresh point on the open sand that nothing stands on, and
+ * that nothing stands between them and.
+ *
+ * `skipStart` is how far from where they stand obstacles are not asked about:
+ * somebody getting up from a lounger is inside its box. A roamer with nowhere
+ * clear to go stands still for {@link PAUSE_SECONDS} and tries again, which is a
+ * zero-length segment like a sit and so costs the per-frame loop nothing.
+ */
+function roamTo(crowd: Crowd, i: number, skipStart = 0): void {
   const beach = crowd.network.beach;
   if (!beach) {
     aim(crowd, i, crowd.gate[i]! >= 0 ? crowd.gate[i]! : crowd.cameFrom[i]!);
     return;
   }
-  const point = beachPointAt(beach, crowd.random, crowd.fromX[i]!);
-  segment(crowd, i, point.x, BEACH_SURFACE, point.z);
+  crowd.lane[i] = LANE.sand;
+  standOnLine(crowd, i);
+  const sand = crowd.network.sand;
+  const fromX = crowd.fromX[i]!;
+  const fromZ = crowd.fromZ[i]!;
+  for (let tries = 0; tries < ROAM_TRIES; tries++) {
+    const point = beachPointAt(beach, crowd.random, fromX);
+    if (
+      sand &&
+      (blockedAt(sand, point.x, point.z) ||
+        !clearLine(sand, fromX, fromZ, point.x, point.z, skipStart))
+    ) {
+      continue;
+    }
+    segment(crowd, i, point.x, BEACH_SURFACE, point.z);
+    return;
+  }
+  crowd.toX[i] = fromX;
+  crowd.toY[i] = crowd.fromY[i]!;
+  crowd.toZ[i] = fromZ;
+  crowd.rate[i] = 1 / PAUSE_SECONDS;
+  crowd.t[i] = 0;
 }
 
 /** Whether a person is resting on a seat rather than walking. */
@@ -493,9 +598,16 @@ export function restingOn(crowd: Crowd, i: number): number {
 function nearbyBeachSeat(crowd: Crowd, i: number): number {
   const reach = SEAT_COLUMNS * TILE_VOXELS;
   const x = crowd.fromX[i]!;
+  const z = crowd.fromZ[i]!;
+  const sand = crowd.network.sand;
   for (const seat of crowd.network.beachSeats) {
     if (crowd.seatBy[seat] !== -1) continue;
-    if (Math.abs(crowd.network.seats[seat]!.x - x) <= reach) return seat;
+    const spot = crowd.network.seats[seat]!;
+    if (Math.abs(spot.x - x) > reach) continue;
+    // One whose way in is blocked by the next lounger along is passed over for
+    // one that is not, rather than walked to through it.
+    if (sand && !clearLine(sand, x, z, spot.x, spot.z, 0, SEAT_CLEAR)) continue;
+    return seat;
   }
   return -1;
 }
@@ -521,6 +633,7 @@ function takeSeat(crowd: Crowd, i: number, seat: number): void {
   crowd.seat[i] = seat;
   crowd.seatBy[seat] = i;
   crowd.node[i] = TO_SEAT;
+  crowd.lane[i] = LANE.seat;
   segment(crowd, i, spot.x, spot.y, spot.z);
 }
 
@@ -544,6 +657,11 @@ function sitDown(crowd: Crowd, i: number): void {
   crowd.toZ[i] = spot.z;
   crowd.heading[i] = spot.heading;
   crowd.node[i] = SEATED;
+  // Eased back to the line on the way over; whatever is left of it goes, so a
+  // sitter is exactly on the plank.
+  crowd.lane[i] = LANE.none;
+  crowd.side[i] = 0;
+  crowd.pace[i] = 1;
   const rest = spot.pose === 'lie' ? LIE_SECONDS : SIT_SECONDS;
   crowd.rate[i] = 1 / (rest.min + crowd.random() * (rest.max - rest.min));
 }
@@ -566,7 +684,7 @@ function standUp(crowd: Crowd, i: number): void {
   crowd.fromZ[i] = spot.z;
   if (spot.node === OFF_THE_GRAPH) {
     crowd.node[i] = ROAMING;
-    roamTo(crowd, i);
+    roamTo(crowd, i, SEAT_CLEAR);
     return;
   }
   // Back to the node the seat hangs off, which is the paving they left: from
@@ -610,12 +728,19 @@ function nextNode(crowd: Crowd, i: number, at: number): number {
 function aim(crowd: Crowd, i: number, node: number): void {
   const target = crowd.network.nodes[node]!;
   crowd.node[i] = node;
+  crowd.lane[i] = LANE.paved;
   segment(crowd, i, target.x, target.y, target.z);
 }
 
 /**
- * Starts a person on a segment to a point, working out the two things that only
- * change when a segment does: how fast `t` runs, and which way they face.
+ * Starts a person on a segment to a point, working out the things that only
+ * change when a segment does: how fast `t` runs, which way they face, and the
+ * direction their sidestep is measured across.
+ *
+ * Somebody walking aside of their line keeps walking aside of the new one, so
+ * the start of the new segment is moved by the difference between the old
+ * sideways and the new: without it a person keeping right would jump across the
+ * path at every corner.
  *
  * A zero-length segment would divide by zero, so it is given a rate that gets
  * the person off it next frame, and the heading they already had.
@@ -626,8 +751,18 @@ function segment(crowd: Crowd, i: number, x: number, y: number, z: number): void
   crowd.toZ[i] = z;
   const dx = x - crowd.fromX[i]!;
   const dz = z - crowd.fromZ[i]!;
-  const length = Math.hypot(dx, y - crowd.fromY[i]!, dz);
+  const ground = Math.hypot(dx, dz);
+  if (ground > 0) {
+    const side = crowd.side[i]!;
+    const dirX = dx / ground;
+    const dirZ = dz / ground;
+    crowd.fromX[i]! += (crowd.dirZ[i]! - dirZ) * side;
+    crowd.fromZ[i]! += (dirX - crowd.dirX[i]!) * side;
+    crowd.dirX[i] = dirX;
+    crowd.dirZ[i] = dirZ;
+    crowd.heading[i] = Math.atan2(dx, dz);
+  }
+  const length = Math.hypot(x - crowd.fromX[i]!, y - crowd.fromY[i]!, z - crowd.fromZ[i]!);
   crowd.rate[i] = length > 0 ? crowd.speed[i]! / length : Number.POSITIVE_INFINITY;
-  if (length > 0) crowd.heading[i] = Math.atan2(dx, dz);
   crowd.t[i] = 0;
 }

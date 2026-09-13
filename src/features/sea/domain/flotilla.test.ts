@@ -158,6 +158,96 @@ describe('stepFlotilla', () => {
   });
 });
 
+describe('steering round things', () => {
+  /** A pier out from the coast, reaching well past the landward limit. */
+  const PIER = { minX: 184, maxX: 200, minZ: 480, maxZ: 620 };
+  /** Buoys, rowing boats and sailing boats, at roughly their real sizes. */
+  const RADII = [1.5, 8, 10];
+
+  const crowded = (craft: number, seed: number): Flotilla =>
+    createFlotilla({
+      moorings: MOORINGS,
+      buoyVariant: 0,
+      craft,
+      craftVariants: [1, 2],
+      ground: GROUND,
+      radii: RADII,
+      piers: [PIER],
+      waterline: WATERLINE,
+      seed,
+    });
+
+  it('takes each craft’s reach from the model it is drawn in', () => {
+    const flotilla = crowded(10, 1);
+    for (let index = 0; index < flotilla.count; index++) {
+      expect(flotilla.radius[index]).toBe(RADII[flotilla.variant[index]!]);
+    }
+    expect(bay().radius[MOORINGS.length], 'a model nobody measured').toBeGreaterThan(0);
+  });
+
+  it('never sails a craft into a pier', () => {
+    const flotilla = crowded(30, 2);
+    for (let tick = 0; tick < 6000; tick++) {
+      stepFlotilla(flotilla, 0.1, GROUND);
+      for (let index = MOORINGS.length; index < flotilla.count; index++) {
+        const reach = flotilla.radius[index]! - 0.5;
+        const x = flotilla.x[index]!;
+        const z = flotilla.z[index]!;
+        const inside =
+          x > PIER.minX - reach &&
+          x < PIER.maxX + reach &&
+          z > PIER.minZ - reach &&
+          z < PIER.maxZ + reach;
+        expect(inside, `craft ${index} in the pier at tick ${tick}`).toBe(false);
+      }
+    }
+  });
+
+  it('keeps craft off the buoys and off each other', () => {
+    const flotilla = crowded(30, 3);
+    // A few seconds to sort out craft that were dropped on top of each other.
+    run(flotilla, 5);
+    // The worst overlap over the run, as a share of how far apart the two should
+    // be: asserted once, because 6 000 ticks of every pair is a lot of expects.
+    let worst = Infinity;
+    for (let tick = 0; tick < 6000; tick++) {
+      stepFlotilla(flotilla, 0.1, GROUND);
+      for (let one = MOORINGS.length; one < flotilla.count; one++) {
+        for (let other = 0; other < one; other++) {
+          const apart = Math.hypot(
+            flotilla.x[one]! - flotilla.x[other]!,
+            flotilla.z[one]! - flotilla.z[other]!,
+          );
+          worst = Math.min(worst, apart / (flotilla.radius[one]! + flotilla.radius[other]!));
+        }
+      }
+    }
+    expect(worst).toBeGreaterThan(0.8);
+  });
+
+  it('still keeps them inside the bay while it does', () => {
+    const flotilla = crowded(30, 4);
+    run(flotilla, 600);
+    for (let index = MOORINGS.length; index < flotilla.count; index++) {
+      const x = flotilla.x[index]!;
+      expect(x).toBeGreaterThanOrEqual(GROUND.westX);
+      expect(x).toBeLessThanOrEqual(GROUND.eastX);
+      // A craft clamped onto the limit is stored as a 32-bit float, which can
+      // round it a hair to landward of the 64-bit limit it was clamped to.
+      expect(flotilla.z[index]).toBeGreaterThanOrEqual(GROUND.landwardZ(x) - 1e-3);
+      expect(flotilla.z[index]).toBeLessThanOrEqual(GROUND.seawardZ);
+    }
+  });
+
+  it('is the same bay from the same seed, obstacles and all', () => {
+    const one = crowded(20, 5);
+    const other = crowded(20, 5);
+    run(one, 120);
+    run(other, 120);
+    expect([...one.x]).toEqual([...other.x]);
+  });
+});
+
 describe('poseOf', () => {
   it('rides the swell: heaving about the waterline, heeling and pitching', () => {
     const flotilla = bay();

@@ -20,6 +20,7 @@ import {
   type WalkNetwork,
 } from './walkNetwork';
 import type { SeatSpot } from './seating';
+import { MAX_SIDE } from './avoidance';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -103,9 +104,10 @@ describe('stepCrowd', () => {
     const crowd = createCrowd({ network: networkOf(street(30)), count: 50, variants: 4, seed: 6 });
     run(crowd, 120);
     for (let i = 0; i < crowd.count; i++) {
-      expect(crowd.x[i]!).toBeGreaterThanOrEqual(0);
-      expect(crowd.x[i]!).toBeLessThanOrEqual(30 * TILE_VOXELS);
-      expect(crowd.z[i]!).toBeCloseTo(0.5 * TILE_VOXELS);
+      expect(crowd.x[i]!).toBeGreaterThanOrEqual(-MAX_SIDE);
+      expect(crowd.x[i]!).toBeLessThanOrEqual(30 * TILE_VOXELS + MAX_SIDE);
+      // Aside of the middle of the path to get past people, never off it.
+      expect(Math.abs(crowd.z[i]! - 0.5 * TILE_VOXELS)).toBeLessThanOrEqual(MAX_SIDE + 0.01);
       expect(Number.isFinite(crowd.x[i]!)).toBe(true);
     }
   });
@@ -260,6 +262,43 @@ describe('roaming the beach', () => {
     }
   });
 
+  it('walks round what stands on the sand rather than through it', () => {
+    // Two rows of parasol-sized boxes across the beach either side of the
+    // boardwalk, a tile apart: plenty of sand, and plenty in the way.
+    const boxes = Array.from({ length: 16 }, (_, index) => ({
+      x: (index < 8 ? 2 + index : 12 + index - 8) * TILE_VOXELS + 4,
+      z: (index % 2 === 0 ? 13 : 15) * TILE_VOXELS + 4,
+      width: 8,
+      depth: 8,
+    }));
+    const furnished = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, obstacles: boxes });
+    const crowd = createCrowd({ network: furnished, count: 40, variants: 2, seed: 18 });
+    const startX = Float32Array.from(crowd.x);
+    let travelled = 0;
+    // Collected and asserted once: a check per person per box per sample is a
+    // lot of expects for a test whose answer is one list.
+    const intruders: string[] = [];
+    for (let frame = 0; frame < 60 * 180; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      if (frame % 10 !== 0) continue;
+      for (let i = 0; i < crowd.count; i++) {
+        if (crowd.node[i] !== -1) continue;
+        for (const box of boxes) {
+          const inside =
+            crowd.x[i]! > box.x &&
+            crowd.x[i]! < box.x + box.width &&
+            crowd.z[i]! > box.z &&
+            crowd.z[i]! < box.z + box.depth;
+          if (inside) intruders.push(`person ${i} at frame ${frame}`);
+        }
+      }
+    }
+    expect(intruders).toEqual([]);
+    for (let i = 0; i < crowd.count; i++) travelled += Math.abs(crowd.x[i]! - startX[i]!);
+    // And the beach is still walked, rather than everybody stood still boxed in.
+    expect(travelled / crowd.count).toBeGreaterThan(TILE_VOXELS);
+  });
+
   it('brings people back onto the paving again', () => {
     // Watched over the run rather than sampled at the end of it: what has to be
     // true is that the sand is somewhere people leave, not that anybody in
@@ -360,10 +399,15 @@ describe('the people who sit down', () => {
     const crowd = createCrowd({ network: benched(9), count: 30, variants: 2, seed: 14 });
     const first = untilSeated(crowd);
     // Long enough that the longest sit is over several times: whoever was found
-    // sitting is up and walking again, which is the only thing asserted here.
-    run(crowd, SIT_LIMIT);
-    expect(crowd.seat[first]).toBe(-1);
-    expect(isSeated(crowd, first)).toBe(false);
+    // sitting is up and walking again at some point, which is the only thing
+    // asserted here — watched rather than sampled at the end, because somebody
+    // who got up is free to sit down again before the run is over.
+    let walkedOn = false;
+    for (let elapsed = 0; elapsed < SIT_LIMIT && !walkedOn; elapsed += 1 / 30) {
+      stepCrowd(crowd, 1 / 30);
+      walkedOn = crowd.seat[first] === -1 && !isSeated(crowd, first);
+    }
+    expect(walkedOn, 'the first sitter never got up').toBe(true);
     expect(crowd.rate[first]!).toBeGreaterThan(1 / SIT_LIMIT);
   });
 

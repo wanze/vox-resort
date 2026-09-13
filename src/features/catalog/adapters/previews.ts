@@ -14,7 +14,14 @@
  * compute.
  */
 
-/** Eager because the URLs are strings; the images themselves load on demand. */
+/**
+ * Eager because the URLs are strings; the images themselves load on demand.
+ *
+ * Not recursive, and that is load-bearing: `voxel-gen/preview.ts` writes its
+ * contact sheets to `out/sheets/` precisely so this glob does not match them.
+ * Anything this matches is emitted into the bundle whether the palette asks for
+ * it or not.
+ */
 const FILES = import.meta.glob<string>('../../../../voxel-gen/out/*.png', {
   eager: true,
   query: '?url',

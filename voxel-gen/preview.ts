@@ -19,7 +19,7 @@
  * put it in the build palette and oblige the resort plan to stand one somewhere.
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
@@ -415,6 +415,34 @@ function sheetNameFor(registry: readonly VoxelModelSource[]): string {
   return 'contact-sheet';
 }
 
+/**
+ * Deletes the renders in `outDir` that no registry has a model for.
+ *
+ * A renamed or removed model, or a sheet from before they moved to `sheets/`,
+ * would otherwise sit in `out/` and ship, since the palette's glob emits
+ * whatever it matches. What stays is every id in *every* registry rather than
+ * what one run wrote: the crowd, the sky and the bay render into the same folder
+ * under flags of their own, and a catalogue run must not take their pictures
+ * with it.
+ */
+function sweepStale(outDir: string): void {
+  const known = new Set(
+    [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES].map(
+      (source) => `${source.id}.png`,
+    ),
+  );
+  // Top level only: `sheets/` is a folder, and the `isFile` filter keeps it.
+  const stale = readdirSync(outDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => name.endsWith('.png'))
+    .filter((name) => !known.has(name));
+  for (const name of stale) {
+    rmSync(path.join(outDir, name));
+    console.info(`stale -> removed ${name}`);
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -441,7 +469,13 @@ async function main(): Promise<void> {
     return;
   }
   if (args.includes('--sheet')) {
-    const file = path.join(outDir, `${sheetNameFor(registry)}.png`);
+    // Sheets live one level down, because the app's build palette globs
+    // `out/*.png` for its thumbnails and a sheet is not a thumbnail — it is a
+    // few hundred kilobytes of contact print that would otherwise be emitted
+    // into the bundle and never fetched. The glob is not recursive.
+    const sheetDir = path.join(outDir, 'sheets');
+    mkdirSync(sheetDir, { recursive: true });
+    const file = path.join(sheetDir, `${sheetNameFor(registry)}.png`);
     writeFileSync(file, renderSheet(models, 320, 6));
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;
@@ -453,6 +487,9 @@ async function main(): Promise<void> {
       `${model.id}: ${model.width}x${model.height}x${model.depth} voxels=${model.voxels.length} -> ${file}`,
     );
   }
+  // Only a run over a whole registry sweeps, so naming a few ids never deletes
+  // anything.
+  if (args.every((arg) => arg.startsWith('--'))) sweepStale(outDir);
 }
 
 await main();

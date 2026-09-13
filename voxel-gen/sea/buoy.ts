@@ -13,11 +13,16 @@
  * one nobody sees. The drum is the part that has to read, so it is the part that
  * was given the height.
  *
- * **The lamp glows.** A buoy is a navigation mark, so it is lit after dark, and
- * a declared `emissive` costs nothing — the colour is split into the geometry
- * the whole scene shares one unlit material for. It lights nothing around it:
- * like a balloon it is not a `Placement` and reaches neither bake, so a lamp
- * anchor here would be inert. See `features/sea/adapters/seaField.ts`.
+ * **The lamp glows, and lights the water round it.** A buoy is a navigation
+ * mark, so it is lit after dark. The glow is a declared `emissive`, split into
+ * the geometry the whole scene shares one unlit material for; the light is a
+ * declared `lights` entry, which the app bakes at every mooring the way it bakes
+ * a street lamp at its post. A buoy never leaves its mooring, so the lamp is as
+ * static as the bake needs it to be. See `features/sea/domain/buoyLamps.ts`.
+ *
+ * The light is declared at the middle of the lamp voxel rather than on a voxel
+ * corner, because a buoy is drawn hung on its own middle and the bake puts the
+ * light back exactly there.
  */
 
 import { PALETTE } from '../palette.ts';
@@ -36,6 +41,9 @@ export default defineModel({
   category: 'sea',
   tiles: { x: 1, z: 1 },
   emissive: [LAMP],
+  // Brighter than a bridge lantern for the height it burns at: the water it
+  // lights is ten voxels under the lamp rather than a railing's few.
+  lights: [{ x: 0.5, y: DRUM + MAST + 0.5, z: 0.5, color: LAMP, intensity: 40, distance: 32 }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, metal } = PALETTE;

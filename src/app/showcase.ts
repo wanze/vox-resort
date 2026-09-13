@@ -77,7 +77,7 @@ import type { WorldBounds } from '../features/layout/domain/worldBounds';
 import { cameraFramingFor, worldBoundsFor } from '../features/layout/domain/worldBounds';
 import { skyStateFor } from '../features/lighting/domain/dayNight';
 import type { ModelLight } from '../../voxel-gen/voxelgen.ts';
-import type { Ground } from '../features/lighting/domain/lightAnchors';
+import type { Ground, LightAnchor } from '../features/lighting/domain/lightAnchors';
 import { anchorsFor, lampReservationFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
 import {
@@ -123,7 +123,8 @@ import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
 import { pierBoxesFor } from '../features/sea/domain/piers';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
-import type { Rental, SailingGround } from '../features/sea/domain/swimArea';
+import { buoyLampSites } from '../features/sea/domain/buoyLamps';
+import type { Mooring, Rental, SailingGround } from '../features/sea/domain/swimArea';
 import { sailingGroundFor, swimAreaMoorings } from '../features/sea/domain/swimArea';
 import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
 import type {
@@ -592,7 +593,6 @@ function startingPlan(bench: BenchConfig | null, params: ResortParams): ResortPl
 
 /** Every light the catalogue declares, whether or not one is standing yet. */
 const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
-
 /**
  * The lights an object carries, moved to where the way it stands puts them.
  *
@@ -686,6 +686,14 @@ function splatLights(baked: BakedLighting, placement: Placement): void {
   }
 }
 
+/** Puts out whatever lamps an object declares, re-baking only what they reached. */
+function unsplatLights(baked: BakedLighting, placement: Placement): void {
+  for (const anchor of anchorsFor(placement, lightsOf(placement))) {
+    const edit = baked.live.remove(anchor.key);
+    if (edit.region) baked.volume.update(edit.region, edit.scale);
+  }
+}
+
 /**
  * Shades the ground and the walls an object just placed now stands against,
  * re-baking only the cells it reaches.
@@ -716,6 +724,13 @@ interface Lighting {
    * stands in front of, without a re-bake of either.
    */
   add(placement: Placement): void;
+  /**
+   * Lights a rail's lanterns and nothing else: a rail claims no ground, so it
+   * takes no sky away either. See {@link claimingOn}.
+   */
+  light(placement: Placement): void;
+  /** Puts out whatever lamps a placement taken off the plot declared. */
+  unlight(placement: Placement): void;
 }
 
 /**
@@ -732,6 +747,8 @@ function unlitLighting(anchorCount: number): Lighting {
     bakeMs: 0,
     skyBakeMs: 0,
     add() {},
+    light() {},
+    unlight() {},
   };
 }
 
@@ -748,12 +765,30 @@ function unlitLighting(anchorCount: number): Lighting {
  * channels of it and the sky visibility owns the fourth, and neither writes the
  * other's. That is what lets a lamp go up without re-shading the resort, and an
  * object be built without re-lighting it.
+ *
+ * The lamps come from more than what claims ground. The rails carry lanterns —
+ * every bridge and pier is lit by them — and take no sky away, so they are baked
+ * for their light alone. The buoys are not placements at all, and are baked at
+ * their moorings; see {@link buoyLampsAt}.
  */
-function createLighting(everything: readonly Placement[], ground: Ground): Lighting {
-  const anchors = everything.flatMap((placement) => anchorsFor(placement, lightsOf(placement)));
+function createLighting(parts: {
+  /** Everything that claims a tile: lamps, and the boxes that shade the sky. */
+  readonly claiming: readonly Placement[];
+  /** The rails, whose lanterns light and whose boxes shade nothing. */
+  readonly rails: readonly Placement[];
+  /** The lamps on the buoys, already where their moorings put them. */
+  readonly buoys: readonly LightAnchor[];
+  readonly ground: Ground;
+}): Lighting {
+  const { claiming, ground } = parts;
+  const anchors = [...claiming, ...parts.rails]
+    .flatMap((placement) => anchorsFor(placement, lightsOf(placement)))
+    .concat(parts.buoys);
   const spec = lightGridSpecFor(
     anchors,
     DEFAULT_GRID_BUDGET_BYTES,
+    // The buoys are moored on the plot, so the catalogue's reach already covers
+    // them; see `swimAreaMoorings`.
     lampReservationFor(ground, CATALOGUE_LIGHTS),
   );
   if (!spec) return unlitLighting(anchors.length);
@@ -761,7 +796,7 @@ function createLighting(everything: readonly Placement[], ground: Ground): Light
   const started = performance.now();
   const grid = bakeLightGrid(anchors, spec);
   const skyStarted = performance.now();
-  const sky = createLiveSkyVisibility(spec, grid.direction, everything.map(occluderOf));
+  const sky = createLiveSkyVisibility(spec, grid.direction, claiming.map(occluderOf));
   const skyBakeMs = Math.round(performance.now() - skyStarted);
   // Built last, so both bakes are in the bytes before a texture is uploaded.
   const baked: BakedLighting = {
@@ -790,6 +825,14 @@ function createLighting(everything: readonly Placement[], ground: Ground): Light
       anchorCount += lightsOf(placement).length;
       splatLights(baked, placement);
       splatSkyVisibility(baked, placement);
+    },
+    light(placement) {
+      anchorCount += lightsOf(placement).length;
+      splatLights(baked, placement);
+    },
+    unlight(placement) {
+      anchorCount -= lightsOf(placement).length;
+      unsplatLights(baked, placement);
     },
   };
 }
@@ -1058,19 +1101,21 @@ const driftingVariants = (sea: readonly ModelGeometry[]): number[] =>
  *
  * The buoys are strung along the tideline and the craft are turned loose on the
  * water outside them — see `sea/domain/swimArea.ts` for the line that separates
- * the two, which is the whole point of the buoys. The plot's own paving is
- * passed in so no buoy is moored in a pier: the sea lanes run six tiles of jetty
- * out from the sand, straight through the line.
+ * the two, which is the whole point of the buoys. The moorings are worked out
+ * beforehand by {@link mooringsFor}, because the lamp bake needs them before
+ * there is a sea to float anything on.
  *
  * A plot with no shore hands back no moorings and no ground, and the field then
  * draws nothing. See `sea/domain/flotilla.ts`.
  */
 function seaFor(parts: {
   readonly shore: Shore | null;
-  /** The paving as laid, so a mooring never lands in the decking of a pier. */
+  /** The paving as laid, which is where the piers the boats steer round are. */
   readonly paved: readonly Placement[];
   /** Everything standing on the plot, which is where the hire hut is found. */
   readonly placements: readonly Placement[];
+  /** Where the buoys are moored; see {@link mooringsFor}. */
+  readonly moorings: readonly Mooring[];
   readonly sea: readonly ModelGeometry[];
   /**
    * The crowd's own art, because the figures sitting in the boats are the same
@@ -1081,19 +1126,11 @@ function seaFor(parts: {
   /** The lamps the water lies under, so a hull catches what the paving does. */
   readonly lightVolume: BakedLightVolume | null;
 }): SeaField {
-  const paved = new Set(parts.paved.map((placement) => tileKey(placement.tileX, placement.tileZ)));
   const shore = parts.shore;
-  // A hut standing on a plot with no sea hires nothing out: the authored plan is
-  // land to its edges and stands one by the pool, and there is no water for its
-  // boats to be on. See `RESORT_PLAN`.
-  const rental = shore ? rentalOn(parts.placements) : null;
+  const rental = rentalOf(shore, parts.placements);
   const ground = seaGroundOf(shore, rental);
   const flotilla = createFlotilla({
-    moorings: swimAreaMoorings({
-      shore,
-      rental,
-      claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
-    }),
+    moorings: parts.moorings,
     buoyVariant: BUOY_INDEX,
     craft: shore ? CRAFT_COUNT : 0,
     craftVariants: driftingVariants(parts.sea),
@@ -1123,6 +1160,48 @@ function seaFor(parts: {
 }
 
 /**
+ * The hire hut the bay lets boats out from, if it has both a hut and a bay.
+ *
+ * A hut standing on a plot with no sea hires nothing out: the authored plan is
+ * land to its edges and stands one by the pool, and there is no water for its
+ * boats to be on. See `RESORT_PLAN`.
+ */
+function rentalOf(shore: Shore | null, placements: readonly Placement[]): Rental | null {
+  return shore ? rentalOn(placements) : null;
+}
+
+/**
+ * Where the bay's buoys are moored.
+ *
+ * The plot's own paving is passed in so no buoy is moored in a pier: the sea
+ * lanes run six tiles of jetty out from the sand, straight through the line.
+ */
+function mooringsFor(parts: {
+  readonly shore: Shore | null;
+  readonly paved: readonly Placement[];
+  readonly placements: readonly Placement[];
+}): Mooring[] {
+  const paved = new Set(parts.paved.map((placement) => tileKey(placement.tileX, placement.tileZ)));
+  return swimAreaMoorings({
+    shore: parts.shore,
+    rental: rentalOf(parts.shore, parts.placements),
+    claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
+  });
+}
+
+/**
+ * The lamps on the buoys' masts, baked at their moorings.
+ *
+ * A buoy does not leave its mooring, so its lamp is as static as a street
+ * lamp's; see `sea/domain/buoyLamps.ts`. The model's own `lights` say whether it
+ * has one, so a buoy drawn without a lamp bakes nothing.
+ */
+function buoyLampsAt(moorings: readonly Mooring[]): LightAnchor[] {
+  const buoy = SEA_MODELS[BUOY_INDEX]!;
+  return buoyLampSites(moorings, buoy, SEA_LEVEL).flatMap((site) => anchorsFor(site, buoy.lights));
+}
+
+/**
  * Lays a plan out and builds everything that hangs off it.
  *
  * The bake happens before the world, because the volume is what the world's
@@ -1139,13 +1218,23 @@ function buildResort(parts: {
   const plot = layOut(parts.plan, parts.bench);
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
-  const lighting = createLighting(claiming, groundOf(parts.plan));
+  const shore = shoreFor(parts.plan);
+  const moorings = mooringsFor({
+    shore,
+    paved: plot.layout.paths,
+    placements: plot.layout.placements,
+  });
+  const lighting = createLighting({
+    claiming,
+    rails: plot.rails,
+    buoys: buoyLampsAt(moorings),
+    ground: groundOf(parts.plan),
+  });
   const world = buildInstancedWorld(parts.geometries, everything, {
     lightVolume: lighting.volume,
   });
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const bounds = plotBounds(parts.plan, everything);
-  const shore = shoreFor(parts.plan);
   const terrain = terrainFor(parts.plan);
   const crowd = crowdFor({
     plot,
@@ -1160,6 +1249,7 @@ function buildResort(parts: {
     shore,
     paved: plot.layout.paths,
     placements: plot.layout.placements,
+    moorings,
     sea: parts.sea,
     people: parts.people,
     lightVolume: lighting.volume,
@@ -1686,16 +1776,19 @@ function createEditMode(parts: {
    * ground rails the paving.
    */
   const changeRails = (stand: readonly Placement[], lift: readonly Placement[]): void => {
-    const { plot, world } = resort();
+    const { plot, world, lighting } = resort();
     for (const rail of lift) {
       world.remove(rail.key);
+      lighting.unlight(rail);
       const at = plot.rails.findIndex((standing) => standing.key === rail.key);
       if (at !== -1) plot.rails.splice(at, 1);
     }
     // Taken down first, so a tile whose edge rails become a balustrade never has
-    // both standing at once.
+    // both standing at once — and so a lantern re-stood under the same key is
+    // put out before it is lit again.
     for (const rail of stand) {
       world.add(rail);
+      lighting.light(rail);
       plot.rails.push(rail);
     }
     onChange();
@@ -1719,9 +1812,10 @@ function createEditMode(parts: {
    * on being drawn inside the flight. See `paving.ts`.
    */
   const lift = (placement: Placement): void => {
-    const { plot, world } = resort();
+    const { plot, world, lighting } = resort();
     occupancy.release(placement, placement.key);
     world.remove(placement.key);
+    lighting.unlight(placement);
     const laid = listFor(plot, placement.id);
     const at = laid.findIndex((standing) => standing.key === placement.key);
     if (at !== -1) laid.splice(at, 1);

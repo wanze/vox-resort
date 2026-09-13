@@ -38,7 +38,9 @@
  * Nothing here is a `Placement` and nothing here reaches either bake, for the
  * reason people and balloons do not: the lamp and sky-visibility volumes are
  * static by construction, and a fleet that crosses the bay would rebuild them
- * every frame. A buoy's lamp glows; it lights no water.
+ * every frame. The one exception is a buoy's lamp, which does light the water:
+ * a buoy never leaves its mooring, so the app bakes its lamp there before the
+ * field is built. See `domain/buoyLamps.ts`.
  */
 
 import { Euler, Group, Matrix4, Quaternion, Vector3 } from 'three/webgpu';

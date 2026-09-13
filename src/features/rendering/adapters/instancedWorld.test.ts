@@ -322,4 +322,39 @@ describe('buildInstancedWorld', () => {
     world.dispose();
     expect(world.group.children).toHaveLength(0);
   });
+
+  it('leaves the geometries it was handed alone, because the catalogue owns them', () => {
+    const models = [model('hut', 2), model('lamp', 3, true), wetModel('pool', 4)];
+    const disposed = countDisposals(models);
+    const world = build(models, [at('a', 'hut', 0), at('b', 'lamp', 10), at('c', 'pool', 20)]);
+    world.dispose();
+    expect(disposed()).toBe(0);
+  });
+
+  it('keeps the geometries for the world that replaces it', () => {
+    // A regenerate builds the new world over the same catalogue before the old
+    // one is let go, so the old one's dispose must not reach the new one's meshes.
+    const models = [model('hut', 2), model('lamp', 3, true)];
+    const disposed = countDisposals(models);
+    const previous = build(models, [at('a', 'hut', 0)]);
+    const next = build(models, [at('a', 'hut', 0), at('b', 'lamp', 10)]);
+    previous.dispose();
+    expect(disposed()).toBe(0);
+    expect(next.drawCalls).toBe(3);
+    next.dispose();
+    expect(disposed()).toBe(0);
+  });
 });
+
+/** Counts `dispose` events on every geometry of `models`, read through the returned function. */
+function countDisposals(models: readonly ModelGeometry[]): () => number {
+  let disposed = 0;
+  for (const entry of models) {
+    for (const geometry of [entry.lit, entry.emissive, entry.water, entry.window]) {
+      geometry?.addEventListener('dispose', () => {
+        disposed++;
+      });
+    }
+  }
+  return () => disposed;
+}

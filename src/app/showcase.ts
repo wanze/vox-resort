@@ -1903,6 +1903,26 @@ function createEditMode(parts: {
   };
 }
 
+/**
+ * Frees the meshed catalogue.
+ *
+ * The models are meshed once and shared by every resort, the crowd, the sky and
+ * the bay, so no one of those may free them — see `instancedWorld.ts`. This runs
+ * when the showcase itself goes away, which is the only moment nothing is
+ * holding them.
+ */
+function disposeCatalogue(catalogue: MeshedCatalogue): void {
+  const all = [catalogue.geometries, catalogue.people, catalogue.sky, catalogue.sea];
+  for (const models of all) {
+    for (const model of models) {
+      model.lit?.dispose();
+      model.emissive?.dispose();
+      model.water?.dispose();
+      model.window?.dispose();
+    }
+  }
+}
+
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
   const { canvas, onFrame, onSceneChange } = options;
   const mountStarted = performance.now();
@@ -2118,6 +2138,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       build.dispose();
       current().dispose();
       handle.dispose();
+      // Last: everything above is built over these, so nothing may still be
+      // holding them when they go.
+      disposeCatalogue(catalogue);
     },
   };
 }

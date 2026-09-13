@@ -164,7 +164,8 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       group.clear();
       padGeometry.dispose();
       empty.dispose();
-      // The ghost's own geometry is the catalogue's, which the world disposes.
+      // The ghost's own geometry is the catalogue's, which outlives every resort
+      // and is freed by the showcase. See `instancedWorld.ts`.
       for (const material of [materials.valid, materials.blocked, pads.valid, pads.blocked]) {
         material.dispose();
       }

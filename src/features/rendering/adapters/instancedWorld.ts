@@ -609,12 +609,10 @@ export function buildInstancedWorld(
       glow.dispose();
       poolWater.dispose();
       windows.material.dispose();
-      for (const model of geometries) {
-        model.lit?.dispose();
-        model.emissive?.dispose();
-        model.water?.dispose();
-        model.window?.dispose();
-      }
+      // The geometries are not freed here. They are the meshed catalogue's, made
+      // once at load and shared by every resort built over them — including the
+      // one that replaces this world, which is bound to them before this runs.
+      // The showcase frees them when it goes away. See `mountShowcase`.
     },
   };
 }

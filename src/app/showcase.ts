@@ -1812,10 +1812,15 @@ function createEditMode(parts: {
    * on being drawn inside the flight. See `paving.ts`.
    */
   const lift = (placement: Placement): void => {
-    const { plot, world, lighting } = resort();
+    const { plot, world, lighting, shadows } = resort();
     occupancy.release(placement, placement.key);
     world.remove(placement.key);
     lighting.unlight(placement);
+    // The shadow goes with the lamps, and for the same reason: a re-laid tile is
+    // lifted and stood again, so a bridge drawn across a river would stack one
+    // quad per pass and darken with each. Harmless when it cast none; `remove`
+    // says so.
+    shadows.remove(placement.key);
     const laid = listFor(plot, placement.id);
     const at = laid.findIndex((standing) => standing.key === placement.key);
     if (at !== -1) laid.splice(at, 1);

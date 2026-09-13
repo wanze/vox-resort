@@ -72,6 +72,8 @@ export interface BlobShadowField {
   readonly triangleCount: number;
   /** Adds one shadow, growing the buffer if it has run out of room. */
   add(blob: BlobShadow): void;
+  /** Takes one shadow away. False if nothing was cast under that key. */
+  remove(key: string): boolean;
   /** Stretches and fades every shadow to a moment of the day. */
   applySky(state: SkyState): void;
   dispose(): void;
@@ -146,6 +148,12 @@ export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowFi
   const { material, setStrength } = blobMaterial();
 
   const cast: BlobShadow[] = [];
+  // Slot each key is drawn in, so one can be taken out without a scan. The array
+  // and the map are the same table seen two ways, and every write keeps both.
+  const slots = new Map<string, number>();
+  // Slots written since the buffer was last uploaded whole — see `markDirty`.
+  let dirtyLow = Number.POSITIVE_INFINITY;
+  let dirtyHigh = Number.NEGATIVE_INFINITY;
   let sun: ShadowCast = { strength: 0, runX: 0, runZ: 0 };
   let mesh = createMesh(geometry, material, capacityFor(blobs.length), 0);
   group.add(mesh);
@@ -160,6 +168,32 @@ export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowFi
     );
   }
 
+  /**
+   * Marks one slot for upload.
+   *
+   * The range is the union of every slot written since the buffer was last
+   * uploaded whole, not just this one: Three.js reads an instance matrix's
+   * ranges without consuming them, so a range that replaced the last one would
+   * drop a write made earlier in the same frame — and a re-laid tile is a
+   * removal that moves a shadow and an add straight after it. Same reasoning as
+   * `instancedWorld.ts`'s `markDirty`.
+   */
+  function markDirty(slot: number): void {
+    dirtyLow = Math.min(dirtyLow, slot);
+    dirtyHigh = Math.max(dirtyHigh, slot);
+    const matrix = mesh.instanceMatrix;
+    matrix.clearUpdateRanges();
+    matrix.addUpdateRange(dirtyLow * 16, (dirtyHigh - dirtyLow + 1) * 16);
+    matrix.needsUpdate = true;
+  }
+
+  /** Forgets the dirty range, once the whole buffer is going up anyway. */
+  function markClean(): void {
+    dirtyLow = Number.POSITIVE_INFINITY;
+    dirtyHigh = Number.NEGATIVE_INFINITY;
+    mesh.instanceMatrix.clearUpdateRanges();
+  }
+
   /** Swaps in a longer buffer, keeping what it already drew. */
   function grow(capacity: number): void {
     const previous = mesh;
@@ -168,17 +202,20 @@ export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowFi
     group.remove(previous);
     previous.dispose();
     group.add(mesh);
+    // A fresh buffer is uploaded whole, so nothing is left partially written.
+    markClean();
   }
 
   /** Rewrites every quad, which is what a sun that has moved costs. */
   function reshape(): void {
     for (let slot = 0; slot < cast.length; slot++) writeSlot(slot, cast[slot]!);
-    mesh.instanceMatrix.clearUpdateRanges();
+    markClean();
     mesh.instanceMatrix.needsUpdate = true;
     if (cast.length > 0) mesh.computeBoundingSphere();
   }
 
   cast.push(...blobs);
+  for (const [slot, blob] of cast.entries()) slots.set(blob.key, slot);
   mesh.count = cast.length;
   reshape();
 
@@ -198,17 +235,34 @@ export function buildBlobShadowField(blobs: readonly BlobShadow[]): BlobShadowFi
       const capacity = capacityFor(slot + 1, mesh.instanceMatrix.count);
       if (capacity !== mesh.instanceMatrix.count) grow(capacity);
       cast.push(blob);
+      slots.set(blob.key, slot);
       mesh.count = cast.length;
       writeSlot(slot, blob);
-      // One instance at a time, so the range is the one slot rather than the
-      // union a bucket of the instanced world has to keep.
-      const matrix = mesh.instanceMatrix;
-      matrix.clearUpdateRanges();
-      matrix.addUpdateRange(slot * 16, 16);
-      matrix.needsUpdate = true;
+      markDirty(slot);
       // Without this the frustum test reads a sphere that predates the shadow
       // and culls it out of a view it is plainly lying in.
       mesh.computeBoundingSphere();
+    },
+    remove(key) {
+      const slot = slots.get(key);
+      if (slot === undefined) return false;
+      const last = cast.length - 1;
+      if (slot !== last) {
+        // The last shadow moves into the hole rather than the rest shuffling
+        // down: the order quads are drawn in carries no meaning, only the slot
+        // table does. Same reasoning as `instancedWorld.ts`'s `dropInstance`.
+        const moved = cast[last]!;
+        cast[slot] = moved;
+        slots.set(moved.key, slot);
+        writeSlot(slot, moved);
+        markDirty(slot);
+      }
+      cast.length = last;
+      slots.delete(key);
+      mesh.count = last;
+      // The sphere was computed around a shadow that is no longer there.
+      if (last > 0) mesh.computeBoundingSphere();
+      return true;
     },
     applySky(state) {
       const next = shadowCastFor(state.sunDirection);

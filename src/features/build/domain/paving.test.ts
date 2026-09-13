@@ -4,6 +4,7 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import {
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   JETTY_ID,
   PATH_ID,
   STAIRS_ID,
@@ -32,6 +33,7 @@ const BOARDWALK = item(BOARDWALK_ID);
 const STAIRS = item(STAIRS_ID);
 const JETTY = item(JETTY_ID);
 const BRIDGE = item(BRIDGE_ID);
+const BRIDGE_RAMP = item(BRIDGE_RAMP_ID);
 const COTTAGE = item('cottage', 2, 3);
 
 /** A plot where everything north of `z` stands one level up. */
@@ -56,6 +58,7 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   decking: BOARDWALK,
   pier: JETTY,
   bridge: BRIDGE,
+  bridgeRamp: BRIDGE_RAMP,
   stairs: STAIRS,
   ...parts,
 });
@@ -345,12 +348,79 @@ describe('pavingAt, over a river', () => {
   /** Water the sea does not own: a channel cut through the middle of the plot. */
   const river = rules({ isWater: (_x, tileZ) => tileZ === 5, isSea: () => false });
 
+  /** A channel two rows across, with the street either side of it already laid. */
+  const crossing = rules({
+    isWater: (_x, tileZ) => tileZ === 5 || tileZ === 6,
+    isSea: () => false,
+    pavedWith: (tileX, tileZ) => (tileX === 2 && (tileZ === 4 || tileZ === 7) ? PATH : null),
+  });
+
   it('lays a bridge rather than a pier, which is the one thing they differ on', () => {
     expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river).item).toBe(BRIDGE);
   });
 
-  it('lays it flat, because inland water is flush with its own banks', () => {
-    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river).rotation).toBe(0);
+  it('lays the deck unturned where the crossing has no shape yet', () => {
+    // Nothing paved around it: a tile of water on its own is the middle of a
+    // span that has not been drawn, and nothing says which way it runs.
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river)).toEqual({ item: BRIDGE, rotation: 0 });
+  });
+
+  it('brings the tile beside a bank ashore, turned to face it', () => {
+    // Unturned a ramp comes ashore to the north, so the tile at z = 5 with the
+    // street at z = 4 is laid unturned and the one at z = 6 is turned about.
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, crossing)).toEqual({
+      item: BRIDGE_RAMP,
+      rotation: 0,
+    });
+    expect(pavingAt(PATH, { x: 2, z: 6 }, 0, crossing)).toEqual({
+      item: BRIDGE_RAMP,
+      rotation: 2,
+    });
+  });
+
+  it('lays the deck where the catalogue has no ramp, so a crossing is never a gap', () => {
+    const none = rules({
+      isWater: (_x, tileZ) => tileZ === 5,
+      isSea: () => false,
+      bridgeRamp: null,
+      pavedWith: (tileX, tileZ) => (tileX === 2 && tileZ === 4 ? PATH : null),
+    });
+    expect(pavingAt(PATH, { x: 2, z: 5 }, 0, none).item).toBe(BRIDGE);
+  });
+
+  it('lets either half of a crossing stand on the water it crosses', () => {
+    expect(standsOn(BRIDGE_RAMP, { x: 2, z: 5 }, river)).toBe(true);
+    expect(standsOn(BRIDGE_RAMP, { x: 2, z: 5 }, rules({ isWater: () => true }))).toBe(false);
+  });
+
+  it('brings a span ashore when the bank beside it is paved', () => {
+    // A tile of water drawn before the bank it adjoins goes down as a deck —
+    // there is nothing yet to come ashore at. Paving the bank is what turns it
+    // into the ramp, and `relaidBy` is what takes the deck back up. That is the
+    // ordinary case and not an odd one: a stroke crossing a river paves the far
+    // bank *after* the last tile of water. See `paving.ts`.
+    const banked = rules({
+      isWater: (_x, tileZ) => tileZ === 5,
+      isSea: () => false,
+      pavedWith: (tileX, tileZ) =>
+        tileX === 2 ? (tileZ === 5 ? BRIDGE : tileZ === 6 ? PATH : null) : null,
+    });
+    const relaid = relaidBy({ x: 2, z: 6 }, banked);
+    expect(
+      relaid.map((one) => ({ id: one.placement.id, rotation: one.placement.rotation })),
+    ).toEqual([{ id: BRIDGE_RAMP_ID, rotation: 2 }]);
+    expect(relaid[0]!.lifted.id).toBe(BRIDGE_ID);
+  });
+
+  it('re-lays nothing beside a crossing when what went down is not paving', () => {
+    // A hedge or a cottage changes neither answer, so a placement that is not
+    // paving never disturbs the span next to it.
+    const banked = rules({
+      isWater: (_x, tileZ) => tileZ === 5,
+      isSea: () => false,
+      pavedWith: (tileX, tileZ) => (tileX === 2 && tileZ === 5 ? BRIDGE : null),
+    });
+    expect(relaidBy({ x: 2, z: 6 }, banked)).toEqual([]);
   });
 
   it('leaves a river unpavable when the catalogue has no bridge', () => {

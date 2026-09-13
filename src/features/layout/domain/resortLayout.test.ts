@@ -23,6 +23,7 @@ import {
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
@@ -782,6 +783,7 @@ describe('a plot with a shore', () => {
     item(BOARDWALK_ID),
     item(JETTY_ID),
     item(BRIDGE_ID),
+    item(BRIDGE_RAMP_ID),
     item('hut', 2, 2),
     item(LAMP_ID),
     item(HEDGE_ID),
@@ -878,9 +880,56 @@ describe('a plot with a shore', () => {
     });
     const laid = layoutResort(items, river);
     const crossing = laid.paths.find((path) => path.tileX === 5 && path.tileZ === 2);
-    expect(crossing?.id).toBe(BRIDGE_ID);
+    // A channel one tile across: the single tile of it is both ends of the
+    // crossing at once, so it comes out as the ramp, facing the first bank in
+    // compass order — west, since the tile north of it is more channel. See
+    // `spans.ts`.
+    expect({ id: crossing?.id, rotation: crossing?.rotation }).toEqual({
+      id: BRIDGE_RAMP_ID,
+      rotation: 1,
+    });
     // And the street either side of it is still flagstones.
     expect(laid.paths.find((path) => path.tileX === 4 && path.tileZ === 2)?.id).toBe(PATH_ID);
+  });
+
+  it('brings a crossing ashore at both ends, and levels the middle of it', () => {
+    // A channel three tiles across under the same street: a ramp off each bank
+    // and a level deck between them, which is the whole of what makes a bridge
+    // stand off the ground. See `spans.ts` and `voxel-gen/models/bridge.ts`.
+    const river = coastal({
+      plots: [],
+      terrain: [4, 5, 6].flatMap((tileX) =>
+        [1, 2, 3].map((tileZ) => ({ tileX, tileZ, level: 0, surface: 'water' }) as const),
+      ),
+    });
+    const laid = layoutResort(items, river);
+    const crossing = [4, 5, 6].map((tileX) =>
+      laid.paths.find((path) => path.tileX === tileX && path.tileZ === 2),
+    );
+    expect(crossing.map((tile) => ({ id: tile?.id, rotation: tile?.rotation }))).toEqual([
+      // The ramps face their own bank — west at x = 4, east at x = 6 — and the
+      // deck between them is turned along the run.
+      { id: BRIDGE_RAMP_ID, rotation: 1 },
+      { id: BRIDGE_ID, rotation: 1 },
+      { id: BRIDGE_RAMP_ID, rotation: 3 },
+    ]);
+  });
+
+  it('leaves a crossing to guard itself, because its deck is a metre up', () => {
+    // A rail stands on the tile it guards at that tile's own height, which is
+    // the water here: the bridge carries its parapet on its own planking
+    // instead. See `railings.ts`.
+    const river = coastal({
+      plots: [],
+      terrain: [4, 5, 6].flatMap((tileX) =>
+        [1, 2, 3].map((tileZ) => ({ tileX, tileZ, level: 0, surface: 'water' }) as const),
+      ),
+    });
+    const laid = layoutResort(items, river);
+    const guarded = laid.rails.filter(
+      (rail) => rail.tileZ === 2 && rail.tileX >= 4 && rail.tileX <= 6,
+    );
+    expect(guarded).toEqual([]);
   });
 
   it('refuses an object standing in a river the plan carries', () => {

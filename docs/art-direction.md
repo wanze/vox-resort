@@ -116,6 +116,7 @@ doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 | `props.pottedPlant`    | greenery in a rimmed terracotta pot                        |
 | `props.flowerBox`      | a planter, flowering or green                              |
 | `props.parasol`        | one flat square of canvas on a pole, with a finial         |
+| `span.spanDeck`        | a run of railed planking on trestles, for a crossing       |
 
 Every part takes explicit voxel dimensions and defaults its materials from the
 palette, so a model reads as intent rather than as arithmetic, and a change to
@@ -138,8 +139,15 @@ for a part, not the other way round. `poolWater` was written when one model
 wanted three basins, which is the moment a shape stops being a drawing and
 becomes a part.
 
-`awning` was the last name on it, and the supermarket is the model that had
-one. It is worth saying what the check that comes first turned up, because it
+`spanDeck` is the most recent, and it came off the list the way `poolWater` did:
+two models wanted the same run of it. `bridge` is one deck the length of its
+tile and `bridge-ramp` is four of them at four heights, so a plank pitch or a
+rail height written twice is exactly the pair of numbers that drifts — and a
+crossing is the one place on the plot where two models butt end to end at eye
+level.
+
+`awning` was the last name on it before that, and the supermarket is the model
+that had one. It is worth saying what the check that comes first turned up, because it
 is the check that removed the previous entry without writing anything.
 `flatRoof` is the near miss: it lays a slab, it takes any ramp, and a blind is
 a slab. It is still not one. A roof oversails a footprint by the same overhang
@@ -168,7 +176,7 @@ leaves it: the beach club **is** a deck, and its deck turned out to be
 `plinth` handed `PALETTE.teak`. A plinth is a slab with a darker lip round its
 top edge, which is exactly a boarded deck with a skirt, so the part that was
 wanted already existed under another name. Before writing a part, check whether
-one of the fifteen above is it in a different material.
+one of the sixteen above is it in a different material.
 
 The lesson is worth keeping separately from the part: **anything tall standing
 between the camera and a building's front is a thing the building loses.** The
@@ -220,6 +228,46 @@ shader at pool scale — see `rendering/adapters/poolWaterMaterial.ts`, and
   lower one rather than standing over it. A plaza ornament is walked round, not
   looked up at. Where a model wants running water, give it another surface to
   run into, and keep the tiers nested.
+
+## A paving may stand off the ground, and then it owns its own rails
+
+Five of the six pavings lie on the tile they are laid on: flagstones, decking, a
+flight and a pier are all `PAVING_VOXELS` proud of it, which is what lets a
+street run off the grass, over the sand and out onto the water without a step in
+it. The bridge is the sixth and it is the exception on purpose.
+
+Inland water is **flush with its banks** — `layout/domain/terrain.ts` says why,
+and it is the right call: a sunken river would carry a sunken bridge — so a deck
+laid at the path's own height is a path with blue painted under it. There is
+nothing about the masonry, the bond or the kerb that fixes that, and the model
+this replaced tried all three. What fixes it is a metre of air: `BRIDGE_VOXELS`
+puts the deck four voxels up, the water runs visibly between its trestles, and
+the crossing reads as a crossing from the side.
+
+Three things follow, and they are the whole cost of the metre:
+
+- **A raised span has ends.** A pier does not — every tile of one is the same
+  tile — so the bridge is the first paving that needed a second model and a rule
+  to choose between them. `spans.ts` is that rule, and it is `stairs.ts` in
+  shape: a tile of the crossing with a bank beside it is the ramp and faces it,
+  everything else is the level deck. A river is two tiles wide, so the common
+  crossing is two ramps meeting at their heads and no deck at all.
+- **A raised span carries its own parapet.** `railings.ts` stands a rail on the
+  tile it guards _at that tile's height_, which is right for a jetty and puts a
+  rail in the river here. So a crossing is the one paving the rail rule skips,
+  and the parapet is drawn on the planking — which is also what lets it step up
+  the ramp with the treads, where a straight rail would float over the first
+  half of them.
+- **A raised span can be turned, and so it may have a grain.** The masonry it
+  replaced was setts in running bond precisely because a bridge was laid
+  unturned and a plank run would have gone the wrong way across half the
+  crossings on the plot. Once `spans.ts` is asking which way the run goes, the
+  deck can be planked across it the way a real one is.
+
+The rise itself is a taste call and worth writing down: four voxels rather than
+`LEVEL_VOXELS`. A terrace's worth would be a humpback, and with the whole climb
+and fall happening across two tiles it would be a pitch nothing else on the plot
+has. A metre over four metres is a ramp somebody with a buggy gets up.
 
 ## A lamp lights a walkway; a beam lights a surface
 
@@ -425,6 +473,21 @@ Two things to take from it when lighting anything else:
   2x2 is a rectangle where a clump 1x1 is six quads — which is the playground's
   matting lesson the right way round.
 
+  The spa pavilion is the two-plane case at the smallest scale any pass has
+  found it. Its deck was striped `z % 2` in two browns across 44x28 cells and
+  its linen was striped `x % 2` over a 32x9 pane on one side and a 14x9 pane on
+  the other, with a hem that cycled 6/8/7 so no two columns of it agreed on
+  where they stopped. On top of that its four corner palms spelled their fronds
+  out as some 25 loose single voxels apiece, which is the playground's open
+  frame at prop scale. Redrawn as a `plinth`, a flat deck, four flat drapes a
+  side with a fold down each leading edge, and palms whose crowns are **one flat
+  layer** in the shape of a cross, it came out at 543 quads against 807 — and it
+  gained a `hipRoof` that overhangs, a flight of `steps` cut into the front of
+  the plinth, a trolley between the couches and four lanterns it did not have.
+  The gaps between the drapes are what reads as cloth, which is the lesson worth
+  keeping: where a surface wants texture, cut it up with geometry the mesher can
+  still merge either side of.
+
   That is the useful shape of the cases together: what a dithered plane
   costs is roughly fixed per plane, so the saving is set by how many planes a
   model dithered rather than by how large it is. The restaurant and the beach
@@ -514,6 +577,8 @@ against a reference is how the drift started.
 | `litter-bin`, `sign-post`, `picnic-table` — the walk's own dressing  | drawn in the palette from their first commit |
 | `lifeguard-tower`, `volleyball` — what the beach was missing         | drawn in the palette from their first commit |
 | `jetty` — the fourth paving, and the pier it makes                   | drawn in the palette from its first commit   |
+| `bridge`, `bridge-ramp` — the crossing raised, and `spanDeck`        | done; the pass that stood a paving up        |
+| `spa-pavilion` — the drapes, the palms, and the lanterns             | done; two dithered planes and a loose crown  |
 | `pedalo-rental` — the hire hut, and the rack of boats outside it     | drawn in the palette from its first commit   |
 | `buoy`, `rowboat`, `sailboat`, `pedalo` — the bay, and `hull`        | drawn in the palette from their first commit |
 | The rest of the 1×1 props, and the ground tiles                      | last: cheapest to change, and mass-placed    |

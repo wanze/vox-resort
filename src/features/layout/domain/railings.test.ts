@@ -142,6 +142,41 @@ describe('railsAt, over water', () => {
   });
 });
 
+/** Inland water from row 2 down, which a bridge stands a metre above. */
+const channel = (_x: number, tileZ: number): boolean => tileZ >= 2;
+
+describe('railsAt, over a crossing', () => {
+  it('leaves a raised span to guard itself, where it rails a flat pier', () => {
+    // The same three tiles of paving over the same water, asked twice. A jetty
+    // lies on the sea and gets its rails from here; a bridge's deck is a metre
+    // up, so a rail stood on the tile would be a rail in the river, and the
+    // model carries its own parapet instead. See `spans.ts`.
+    const span = pavedOf([
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+      { x: 1, z: 3 },
+    ]);
+    expect(sides(railsAt({ x: 1, z: 2 }, span, flat, sea)).toSorted()).toEqual([1, 3]);
+    expect(railsAt({ x: 1, z: 2 }, span, flat, sea, sea)).toEqual([]);
+  });
+
+  it('still rails the dry paving along the bank, which is not the bridge', () => {
+    // A promenade down the near bank with one crossing off it. The tile the
+    // crossing leaves from is open to it — paving is always the way through —
+    // and the tiles either side of that are railed against the river as they
+    // would be against any other water. Only the wet tile is skipped.
+    const bank = pavedOf([
+      { x: 0, z: 1 },
+      { x: 1, z: 1 },
+      { x: 2, z: 1 },
+      { x: 1, z: 2 },
+    ]);
+    expect(sides(railsAt({ x: 0, z: 1 }, bank, flat, channel, channel))).toEqual([2]);
+    expect(railsAt({ x: 1, z: 1 }, bank, flat, channel, channel)).toEqual([]);
+    expect(railsAt({ x: 1, z: 2 }, bank, flat, channel, channel)).toEqual([]);
+  });
+});
+
 describe('railTilesFor, over water', () => {
   it('carries the water rule over a whole run of paving', () => {
     const pier: Tile[] = [

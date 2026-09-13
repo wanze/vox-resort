@@ -13,6 +13,8 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | ------------- | --------- | ------------- | ---------------------------------- |
 | path          | 1×1       | 16 × 2 × 16   | a 4 m paving tile                  |
 | jetty         | 1×1       | 16 × 2 × 16   | a 4 m tile of pier decking         |
+| bridge        | 1×1       | 16 × 10 × 16  | a 4 m deck 1 m over the water      |
+| bridge-ramp   | 1×1       | 16 × 10 × 16  | the 4 m climb onto that deck       |
 | litter-bin    | 1×1       | 16 × 7 × 16   | a 1.5 m bin on a 4 m tile          |
 | sign-post     | 1×1       | 16 × 17 × 16  | a 3.5 m fingerpost, three boards   |
 | palm          | 1×1       | 16 × 45 × 16  | 11 m trunk, 4 m crown              |
@@ -43,7 +45,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | bungalow      | 2×2       | 32 × 32 × 32  | 6 x 3 m hut on stilts, 8 m ridge   |
 | resort-bar    | 3×2       | 48 × 24 × 32  | 12 x 8 m deck, thatched bar        |
 | coffee-shop   | 3×2       | 48 × 22 × 32  | 10 x 3.5 m bar + six-chair terrace |
-| spa-pavilion  | 3×2       | 48 × 27 × 32  | 12 x 8 m pavilion                  |
+| spa-pavilion  | 3×2       | 48 × 25 × 32  | 12 x 8 m pavilion                  |
 | cottage       | 2×3       | 32 × 26 × 48  | 7 x 11 m cottage, 6.5 m ridge      |
 | house         | 3×3       | 48 × 43 × 48  | 10 x 10 m, two 3 m storeys         |
 | game-hall     | 3×3       | 48 × 24 × 48  | 10 x 8.5 m open games hall         |

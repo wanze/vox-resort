@@ -182,19 +182,29 @@ export const JETTY_ID = 'jetty';
 /**
  * The paving a path is laid with where it crosses a river or a lake.
  *
- * The counterpart of the jetty and not the same thing: a pier is timber walked
- * *out* from a shore and a bridge is masonry carried *across*, and the sea and
- * the water inland are two different grounds — see `terrain.ts`. Which of the
- * two a tile of water gets is the only paving question the sea answers
- * differently from a river.
+ * The counterpart of the jetty and not the same thing: a pier is decking walked
+ * *out* from a shore and lying on it, and a bridge is a deck carried *across*
+ * and standing a metre above it. The sea and the water inland are two different
+ * grounds — see `terrain.ts` — and which of the two a tile of water gets is the
+ * only paving question the sea answers differently from a river.
  */
 export const BRIDGE_ID = 'bridge';
+
+/**
+ * The end of a crossing: the tile that climbs off the bank to the bridge's deck.
+ *
+ * A bridge is the one paving that stands *above* the ground it is laid on, so a
+ * crossing has ends the way a pier does not — and an end is a different model
+ * from a middle, turned to face the shore it comes off. See `spans.ts` for the
+ * rule and `voxel-gen/models/bridge-ramp.ts` for the climb.
+ */
+export const BRIDGE_RAMP_ID = 'bridge-ramp';
 
 /**
  * Every kind of paving a path network is laid with, flights, piers and spans
  * included.
  *
- * The five are interchangeable per tile — which one a tile gets is a fact about
+ * The six are interchangeable per tile — which one a tile gets is a fact about
  * the ground under it — so everything that treats "a tile of paving" as one
  * thing reads this: the plot's own list of paved tiles, and the paving tool that
  * swaps one for another as a path crosses a step or leaves the shore.
@@ -205,6 +215,7 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([
   STAIRS_ID,
   JETTY_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
 ]);
 
 /** The object types the layout scatters along the paths on its own. */
@@ -257,6 +268,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   STAIRS_ID,
   JETTY_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   LAMP_ID,
   HEDGE_ID,
   BENCH_ID,

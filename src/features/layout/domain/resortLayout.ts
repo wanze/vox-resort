@@ -54,6 +54,7 @@ import {
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
@@ -68,11 +69,13 @@ import {
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
+import type { Ground } from './ground';
 import type { Terrain } from './terrain';
 import { terrainFor } from './terrain';
 import { levelHeight, straddledTile, type LevelProvider } from './elevation';
 import { stairTilesFor } from './stairs';
 import { railTilesFor, type RailKind, type RailTile } from './railings';
+import { spanTilesFor, type SpanProvider } from './spans';
 import { rotateExtent, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
@@ -990,13 +993,36 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   const boardwalk = byId.get(BOARDWALK_ID) ?? path;
   const jetty = byId.get(JETTY_ID) ?? boardwalk;
   const bridge = byId.get(BRIDGE_ID) ?? jetty;
+  const bridgeRamp = byId.get(BRIDGE_RAMP_ID) ?? bridge;
+  // Which water a span stands *above* rather than on, which is the one thing a
+  // bridge does that no other paving does. Only where the catalogue actually has
+  // the bridge: with the model missing the crossing falls back to a pier laid
+  // flat, and a flat pier has neither ends nor a parapet of its own to speak of.
+  //
+  // Remembered per tile, because four separate passes ask what a tile is made of
+  // — the paving, the span rule, the span rule again about each neighbour, and
+  // the rails — and `surfaceOf` walks the terraces and evaluates a meander every
+  // time. Asked once per tile it is the cost it was before there were spans.
+  const spanning = byId.has(BRIDGE_ID);
+  const surfaceAt = new Map<string, Ground>();
+  const surfaceOf = (tileX: number, tileZ: number): Ground => {
+    const key = tileKey(tileX, tileZ);
+    let known = surfaceAt.get(key);
+    if (known === undefined) {
+      known = terrain.surfaceOf(tileX, tileZ);
+      surfaceAt.set(key, known);
+    }
+    return known;
+  };
+  const raised: SpanProvider = (tileX, tileZ) =>
+    spanning && surfaceOf(tileX, tileZ) === 'water' && !terrain.isSea(tileX, tileZ);
   // Four answers from one question about the ground under a tile. Sand rather
   // than beach, because the sidewalk along the top of a dune is decking for the
   // same reason the pier is — see `ground.ts`; and water only ever reaches here
   // on a run that means to be out there, because nothing else paves it. Which
   // span it gets is the one thing the bay and a river disagree about.
   const pavingFor = (tile: Tile): LayoutItem => {
-    const ground = terrain.surfaceOf(tile.x, tile.z);
+    const ground = surfaceOf(tile.x, tile.z);
     if (ground === 'water') return terrain.isSea(tile.x, tile.z) ? jetty : bridge;
     return ground === 'sand' ? boardwalk : path;
   };
@@ -1010,13 +1036,30 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
       flight.rotation,
     ]),
   );
+  // Which tiles of a crossing come ashore, and which way each one runs. Asked of
+  // `spans.ts` rather than re-derived, exactly as the flights are asked of
+  // `stairs.ts`: the paving tool asks the same question one tile at a time.
+  const spans = new Map(
+    spanTilesFor(paved, raised).map((span) => [tileKey(span.tile.x, span.tile.z), span]),
+  );
   const paths = paved.map((tile) => {
-    // A flight stands on the lower tile of the step and is turned to face the
-    // higher ground; everything else is laid flat and unturned.
-    const climb = stairs ? flights.get(tileKey(tile.x, tile.z)) : undefined;
-    const paving = climb === undefined ? pavingFor(tile) : stairs!;
+    // A span first, because a crossing answers to the water under it and nothing
+    // else — a tile of it climbs nothing, since inland water is flush with its
+    // banks. Then a flight, which stands on the lower tile of a step and is
+    // turned to face the higher ground; everything else is laid flat and
+    // unturned.
+    const span = spans.get(tileKey(tile.x, tile.z));
+    const climb = span || !stairs ? undefined : flights.get(tileKey(tile.x, tile.z));
+    const paving = span
+      ? span.kind === 'ramp'
+        ? bridgeRamp
+        : bridge
+      : climb === undefined
+        ? pavingFor(tile)
+        : stairs!;
     const key = derivedKey(paving.id, tile.x, tile.z);
-    return place(paving, key, tile.x, tile.z, climb ?? 0, levelOf(tile.x, tile.z));
+    const rotation = span ? span.rotation : (climb ?? 0);
+    return place(paving, key, tile.x, tile.z, rotation, levelOf(tile.x, tile.z));
   });
   const keys = plotKeys(plan.plots);
   const placements = plan.plots.map((plot, index) =>
@@ -1034,11 +1077,10 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   // across its head: the sea beside a jetty stands at the jetty's own level, so
   // the heights alone would say there was nothing to fall into. See
   // `railings.ts`.
-  const overWater = (tileX: number, tileZ: number): boolean =>
-    terrain.surfaceOf(tileX, tileZ) === 'water';
+  const overWater = (tileX: number, tileZ: number): boolean => surfaceOf(tileX, tileZ) === 'water';
   const rails = railPlacementsFor(
     railModelsIn(items),
-    railTilesFor(paved, levelOf, overWater),
+    railTilesFor(paved, levelOf, overWater, raised),
     levelOf,
   );
 

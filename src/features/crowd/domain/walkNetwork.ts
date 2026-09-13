@@ -35,6 +35,14 @@
  * - **one level apart**, and the lower tile is a flight of stairs *facing the
  *   higher one*.
  *
+ * A crossing is the same shape of thing one storey down. A bridge's deck stands
+ * `BRIDGE_VOXELS` above the water rather than `PAVING_VOXELS` — see
+ * `voxel-gen/models/bridge.ts` — so a tile of one is a metre above the tiles of
+ * path either side of it, and the tile that makes up the difference is the ramp
+ * at each end. That is a flight in everything but its rise, so it is one here:
+ * two nodes rather than one, and `spans.ts` is asked which tiles they are for
+ * the same reason `stairs.ts` is asked about the steps.
+ *
  * The second clause is the whole of the terrain handling, and it is deliberately
  * asked of `stairs.ts` rather than re-derived here. It is nearly true that any
  * paved pair a level apart is a flight — that is exactly what `climbAt` says —
@@ -80,10 +88,16 @@
  * one tile of the beach is paved, by design.
  */
 
-import { LEVEL_VOXELS, PAVING_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import {
+  BRIDGE_VOXELS,
+  LEVEL_VOXELS,
+  PAVING_VOXELS,
+  TILE_VOXELS,
+} from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
 import { CLIMBS, stairTilesFor } from '../../layout/domain/stairs';
+import { spanTilesFor, type SpanKind, type SpanProvider } from '../../layout/domain/spans';
 import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
 import type { SeatPose } from '../../../../voxel-gen/voxelgen.ts';
@@ -229,6 +243,14 @@ export interface WalkNetworkInput {
    * nobody sits, which is what a fixture built out of four paved tiles wants.
    */
   readonly seats?: readonly SeatSpot[];
+  /**
+   * Whether a paved tile is water a bridge is *raised* over.
+   *
+   * Omit it and nothing is raised, which is every plot with no river on it — and
+   * the jetty, which is paving over water and stands at the sea's own height.
+   * See `spans.ts`.
+   */
+  readonly bridged?: SpanProvider;
 }
 
 /**
@@ -244,6 +266,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   for (const [index, tile] of paved.entries()) indexOf.set(tileKey(tile.tileX, tile.tileZ), index);
 
   const climbs = climbsAmong(paved, levelOf);
+  const spans = spansAmong(paved, input.bridged);
 
   const nodes: WalkNode[] = [];
   const exits: number[][] = [];
@@ -298,7 +321,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     edges.push({ from, to, length: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) });
   };
 
-  const stands = paved.map((tile) => standFor(tile, climbs, shore, indexOf, standAt));
+  const stands = paved.map((tile) => standFor(tile, climbs, spans, shore, indexOf, standAt));
   // The climb itself, walked in both directions like every other adjacency.
   for (const stand of stands) {
     if (stand.kind !== 'flight') continue;
@@ -482,6 +505,7 @@ const HALF_TILE = TILE_VOXELS / 2;
 function standFor(
   tile: PavedTile,
   climbs: ReadonlyMap<string, { dx: number; dz: number }>,
+  spans: ReadonlyMap<string, Span>,
   shore: Shore | null,
   paved: ReadonlyMap<string, number>,
   standAt: (x: number, y: number, z: number, tile: PavedTile, gate?: boolean) => number,
@@ -489,7 +513,19 @@ function standFor(
   const x = (tile.tileX + 0.5) * TILE_VOXELS;
   const z = (tile.tileZ + 0.5) * TILE_VOXELS;
   const foot = walkingSurface(tile.y);
-  const climb = climbs.get(tileKey(tile.tileX, tile.tileZ));
+  const key = tileKey(tile.tileX, tile.tileZ);
+  const span = spans.get(key);
+  // The level middle of a crossing: one place to stand, like any ordinary tile,
+  // but on the deck rather than on the water it is carried over. It is never a
+  // beach gate for the reason a flight is not — you step onto the sand off the
+  // paving, and this is a metre above it.
+  if (span?.kind === 'deck') {
+    return { kind: 'centre', node: standAt(x, tile.y + BRIDGE_VOXELS, z, tile) };
+  }
+  // A ramp, and a flight: the same two-node shape at two different rises. See
+  // the note above on why a flight cannot be one node at the tile's centre.
+  const rise = span ? BRIDGE_VOXELS - PAVING_VOXELS : LEVEL_VOXELS;
+  const climb = span ? span.climb : climbs.get(key);
   if (!climb) {
     const gate = adjoinsOpenSand(tile, shore, paved);
     return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
@@ -498,9 +534,10 @@ function standFor(
     kind: 'flight',
     climb,
     low: standAt(x - climb.dx * HALF_TILE, foot, z - climb.dz * HALF_TILE, tile),
-    // The head of the flight is flush with the paving on the terrace above,
-    // which is what `stairs.ts` authors the topmost tread to be.
-    high: standAt(x + climb.dx * HALF_TILE, foot + LEVEL_VOXELS, z + climb.dz * HALF_TILE, tile),
+    // The head of the climb is flush with what it hands over to: the paving on
+    // the terrace above for a flight, which is what `stairs.ts` authors the
+    // topmost tread to be, and the bridge's own deck for a ramp.
+    high: standAt(x + climb.dx * HALF_TILE, foot + rise, z + climb.dz * HALF_TILE, tile),
   };
 }
 
@@ -514,6 +551,44 @@ function standFor(
 function facing(stand: TileStand, dx: number, dz: number): number {
   if (stand.kind === 'centre') return stand.node;
   return stand.climb.dx === dx && stand.climb.dz === dz ? stand.high : stand.low;
+}
+
+/**
+ * A tile of a crossing, as the walk needs it: which kind, and — for a ramp — the
+ * way it climbs *away* from the bank.
+ *
+ * The direction is flipped from the one `spans.ts` hands back, which names a
+ * ramp by the shore it comes off. What a stand wants is the way the surface
+ * rises, so that a ramp and a flight are the same two-node shape.
+ */
+interface Span {
+  readonly kind: SpanKind;
+  readonly climb: { readonly dx: number; readonly dz: number };
+}
+
+/**
+ * Which paved tiles are a crossing, and what each one of them is.
+ *
+ * Asked of `spans.ts` rather than re-derived, for the reason the flights are
+ * asked of `stairs.ts`: a crossing that came ashore in one module and not in the
+ * other is a crowd walking into the side of a bridge.
+ */
+function spansAmong(
+  paved: readonly PavedTile[],
+  bridged: SpanProvider | undefined,
+): ReadonlyMap<string, Span> {
+  const spans = new Map<string, Span>();
+  if (!bridged) return spans;
+  const asTiles: Tile[] = paved.map((tile) => ({ x: tile.tileX, z: tile.tileZ }));
+  for (const span of spanTilesFor(asTiles, bridged)) {
+    const bank = CLIMBS.find((candidate) => candidate.rotation === span.rotation);
+    if (!bank) continue;
+    spans.set(tileKey(span.tile.x, span.tile.z), {
+      kind: span.kind,
+      climb: { dx: -bank.dx, dz: -bank.dz },
+    });
+  }
+  return spans;
 }
 
 /**

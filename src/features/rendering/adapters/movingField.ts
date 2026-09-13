@@ -23,9 +23,11 @@
  */
 
 import {
+  Box3,
   DynamicDrawUsage,
   InstancedMesh,
   MeshBasicNodeMaterial,
+  Vector3,
   type BufferGeometry,
   type Material,
 } from 'three/webgpu';
@@ -44,34 +46,55 @@ export interface FieldMesh {
 }
 
 /**
- * A model's geometry, hung on its own middle and on the foot of its box.
+ * Where a model has to be moved to hang on its own middle and on the foot of its
+ * box: centred across and along, and with its lowest layer at zero.
+ *
+ * So the matrix carries where the thing *is* rather than where the corner of its
+ * bounding box is, which is what lets a scale in that matrix grow a balloon
+ * about itself instead of dragging it sideways, and a roll in it heel a boat
+ * about its own keel instead of swinging it round a corner.
+ *
+ * **Taken over every surface the model has, not over each one on its own.** A
+ * model arrives split by how its colours are shaded (see
+ * `domain/modelAttributes.ts`), and those pieces are parts of one object: the
+ * buoy's lamp is six metres above the drum it is a lamp for, and a balloon's
+ * envelope hangs over the basket rather than around it. Hung one box at a time,
+ * every piece would be dragged down onto the model's foot and in onto its
+ * middle, which puts the lamp inside the drum and the envelope around the
+ * basket: geometry sharing a plane with geometry, which is the stippled fight
+ * the depth buffer makes of two faces it cannot choose between.
+ */
+function hangOf(sources: readonly BufferGeometry[]): Vector3 {
+  const box = new Box3();
+  for (const source of sources) {
+    source.computeBoundingBox();
+    box.union(source.boundingBox!);
+  }
+  return new Vector3(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+}
+
+/**
+ * One surface's geometry, moved onto the hang its whole model shares.
  *
  * Cloned rather than used as it stands: the geometries belong to the meshed
  * catalogue, which is built once at load and outlives every resort, and this
  * translation must not be applied to them twice.
- *
- * Centred across and along and on the lowest layer, so the matrix carries where
- * the thing *is* rather than where the corner of its bounding box is. That is
- * what lets a scale in that matrix grow a balloon about itself instead of
- * dragging it sideways, and a roll in it heel a boat about its own keel instead
- * of swinging it round a corner.
  */
-function hungGeometry(source: BufferGeometry): BufferGeometry {
+function hungGeometry(source: BufferGeometry, hang: Vector3): BufferGeometry {
   const geometry = source.clone();
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox!;
-  geometry.translate(-(box.min.x + box.max.x) / 2, -box.min.y, -(box.min.z + box.max.z) / 2);
+  geometry.translate(hang.x, hang.y, hang.z);
   return geometry;
 }
 
 /** Allocates one never-culled instanced mesh for one model's geometry of one kind. */
 function buildFieldMesh(parts: {
   readonly source: BufferGeometry;
+  readonly hang: Vector3;
   readonly material: Material;
   readonly name: string;
   readonly members: Int32Array;
 }): FieldMesh {
-  const geometry = hungGeometry(parts.source);
+  const geometry = hungGeometry(parts.source, parts.hang);
   const mesh = new InstancedMesh(geometry, parts.material, parts.members.length);
   mesh.name = parts.name;
   mesh.instanceMatrix.setUsage(DynamicDrawUsage);
@@ -123,16 +146,18 @@ export function fieldMeshesFor(parts: {
   readonly members: Int32Array;
 }): FieldMesh[] {
   if (parts.members.length === 0) return [];
-  return parts.surfaces
-    .filter((surface) => surface.source !== null)
-    .map((surface) =>
-      buildFieldMesh({
-        source: surface.source!,
-        material: surface.material,
-        name: `${parts.name}-${surface.kind}`,
-        members: parts.members,
-      }),
-    );
+  const drawn = parts.surfaces.filter((surface) => surface.source !== null);
+  // One hang for all of them, taken before any is moved; see `hangOf`.
+  const hang = hangOf(drawn.map((surface) => surface.source!));
+  return drawn.map((surface) =>
+    buildFieldMesh({
+      source: surface.source!,
+      hang,
+      material: surface.material,
+      name: `${parts.name}-${surface.kind}`,
+      members: parts.members,
+    }),
+  );
 }
 
 /** The two materials a moving field draws its models with. */

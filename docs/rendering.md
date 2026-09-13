@@ -430,6 +430,18 @@ the paving. It is also the one thing not centred in its footprint: `placeOnEdge`
 stands it flush against the edge its turn points at, while everything else on the
 plot is centred in the tiles it claims.
 
+Standing on ground already spoken for is also the one thing on the plot that can
+put two models in the same voxel, and both rails do: a post's feet reach down
+through the slab, and a parapet's footing down through the flight, because
+`voxelgen` shifts a model onto its own origin and one that painted nothing at
+ground level would sink into the paving it stands on. The buried part is never
+seen, but it is still meshed, and drawn flush with the tile's edge it puts an
+outward face in the same plane as the paving's own. Two faces at one depth facing
+one way are two the depth buffer cannot choose between, which came out as a
+stippled band swimming up the side of every pier and staircase on the plot. So
+the buried part alone is drawn a voxel in, where the paving encloses it and wins
+every fragment. `voxel-gen/rails.test.ts` pins it.
+
 **A path drawn by hand is railed too**, and that is a diff rather than a list —
 `handrails.ts` is the pointer's half of the rule the way `paving.ts` is the
 pointer's half of the stairs. Paving one tile does not only rail that tile, it
@@ -489,32 +501,111 @@ for a river or an island as readily as for a bench. The sea is the one surface
 still read off a line, because it reaches the horizon and its shader grades by
 how far out each fragment lies.
 
-What it adds is the **risers**, the vertical faces between one bench and the
-next, and they are the only geometry in the terrain that does not lie flat — so
-they are the only geometry that carries its own normals. A riser lit as though it
-were a floor is a riser the sun cannot pick out, and a step you cannot see is not
-a step.
+What it adds is the **slopes**, the faces between one bench and the next. They
+used to be upright — one wall at the boundary between the two tiles — and ground
+made of whole square tiles at whole levels drawn that way reads as a stack of
+boxes. So a step is now a **ramp cut into the edge of the upper tile**: it keeps
+a flat plateau in the middle and gives up three eighths of its edge on whichever
+sides fall away, which at sixteen voxels to a tile and eight to a level comes out
+at a little over fifty degrees. That makes such a tile nine quads instead of one,
+so only tiles with something lower beside them are drawn that way and the flat
+interior of a bench still merges into runs.
+
+The heights come from one rule, and it is what makes the whole thing watertight
+without a seam quad anywhere: every point on a tile's rim stands at the **lowest**
+of the tiles that meet there. Two tiles sharing an edge work that edge out from
+the same pair and land on the same line; the four tiles round a corner land on
+the same point, so an outside corner falls away as a hip and an inside one as a
+valley. A tile that is the lowest of its neighbours comes out perfectly flat. The
+old per-column and per-column-boundary risers — and the awkward pass that closed
+the slot where a wandering step line rounded to different tiles in neighbouring
+columns — are gone with it.
+
+The ramp is cut into the **upper** tile rather than the lower one because the
+ground below a step is where the paths, the beach and the water are, and a ramp
+overlapping it would bury the foot of a promenade or drown a river bank.
+
+**Except under what stands on it.** A model is a box with a flat underside
+covering its whole tile, so a tile that gave three eighths of its edge to a ramp
+would leave whatever stands there overhanging the cut. A tile the occupancy index
+says is taken therefore keeps its whole square top and puts the drop back as an
+upright wall, down to the same rim a sloped tile is drawn against — so the two
+meet along their shared edge with nothing to close between them. It is the one
+thing the mesher reads that is not a fact about the ground, and it buys the rule
+the rest of the resort already lives by: an object may not stand across a step,
+the spade may not dig under one, and the ground may not slope away beneath one.
+What it looks like is a retaining wall under the promenade with grass slopes
+either side, which is what a path along a hillside has under it anyway. Placing
+an object is consequently a change to the terrain, and marks the same dirty flag
+a spadeful does.
+
+The second softening is in plan rather than in section. Where a tile has two
+**perpendicular** neighbours made of the same thing it is not, and all three
+stand on the same bench, the tile is split corner to corner and the far half is
+drawn in the neighbours' material. Every step of a staircase boundary mitred that
+way reads as a diagonal bank, and a river running diagonally across the grid
+comes out as one continuous channel rather than a chain of squares touching at
+their corners. A tile with two such corners or four is left square — it is the
+tip of a headland or an island, and has no one corner to cut. The sea is left out
+of it, because its foam is measured off the staircase the sand actually makes.
+
+It runs **one way only**: water takes a corner off sand and sand off grass, never
+the reverse. Both ways at once is what a staircase gets, and it is visibly wrong
+— the water tile at a step gives up its outer corner while the grass tile beyond
+it takes a corner of water, and the two halves, being on opposite sides of the
+point they share, come out as a spike and a notch with a wedge of grass between
+them. One direction turns the whole staircase into a single diagonal, and makes
+the tool honest as well: a lake keeps every tile it was painted on and only gains
+the corners between them.
 
 A bench is drawn in **whatever it is made of**, because a terrace _is_ the plot,
 just two metres up: a grass bench is the plot's own green and a dune is the
-beach's own sand. Each goes into the mesh for its own material, and a riser takes
+beach's own sand. Each goes into the mesh for its own material, and a slope takes
 the material of the bench _above_ it — a cut through turf is bare earth, and a
 cut through a dune is sand a shade down. Drawing the dune green put a lawn where
 the beach should have carried on, which is the whole reason the two are separate
 surfaces.
 
-The awkward part is closing the risers along **x** as well as **z**. A step line
-wanders, so two neighbouring columns round it to different tiles, and between
-those rows one column stands a level above the other — a vertical slot at the
-boundary they share, the staircase the tile grid makes of the step seen end-on.
-Each pair of neighbouring columns is walked and exactly the z ranges where their
-heights disagree are closed, adjacent spans merged so a long slot is one quad.
+Slopes cost geometry, and the file pays for them twice over rather than three
+times: a tile that steps down is a grid of nine cells, but its flat cells are
+merged into as few rectangles as their shape allows before they are emitted, so a
+tile that falls away on one side alone is four quads rather than nine. On a
+nine-terrace plot over the whole framed box that works out at about two and a
+half times what the upright risers cost — measured at 3.8 k quads before and
+9.6 k after, of which the slopes themselves are the larger half. Six static
+meshes, since the benches and the slopes are each split by material, built once
+per resort and drawn in six calls.
 
-On the reference generated plot that is about nine bench quads and eleven risers
-per column — the hill has nine benches above sea level and a step between each —
-on top of one sea quad and one sand quad each. Six static meshes now rather than
-four, since the benches and the risers are each split by material; call it 20 k
-quads over the whole framed box, built once per resort and drawn in six calls.
+### Paying for a rebuild
+
+The ground is rebuilt whole, every time it changes, and the terrain tool changes
+it once per spadeful of a drag — so the rebuild has a frame's budget to fit in
+and nothing is allowed to be sloppy about it. Four things had to be true, and
+three of them were not when the slopes landed:
+
+- **The materials outlive the meshes.** A material is a shader, and a shader the
+  backend has not seen before is a pipeline to compile: making the terrain's
+  eight afresh on every rebuild put a compile in the middle of every drag. They
+  are made once per resort — they are bound to the light volume — and only the
+  geometry is thrown away and rebuilt.
+- **Nothing allocates per tile.** The mesher walks tens of thousands of tiles per
+  rebuild, so a column profile holds ground as a small integer code rather than a
+  string, the tile lattice is one buffer reused from tile to tile, quads are
+  pushed as loose numbers rather than as arrays of them, and `terrain.ts` hands
+  back one shared tile object for each of the three grounds an unterraced plot is
+  made of. Together that is about a third of the rebuild.
+- **The occupancy index is asked about almost nothing.** Whether a tile is built
+  on only matters for a tile with ground falling away from it, so it is asked
+  there rather than resolved with the rest of the column — a few thousand lookups
+  instead of one per tile of the box.
+- **A placement that changes no ground rebuilds nothing.** Standing something on
+  a tile squares off its ground, but only if that ground was sloped to begin
+  with; a path dragged across a flat bench changes nothing the terrain draws, and
+  asks for no rebuild. `overlooksDrop` in `terrain.ts` is the same question the
+  mesher asks of every tile, asked of eight.
+
+Measured on a nine-terrace plot over the framed box: a rebuild is about 5 ms of
+CPU, against 3 ms for the same box before the slopes existed.
 
 ### Drawing the water
 
@@ -829,6 +920,16 @@ from this side:
 - **Sea level is the floor.** Below it the infinite grass plane would cover the
   ground, and a negative level has nothing to mean anyway.
 
+The ground a brush may touch is the **apron**: the plot, and a plot's width of
+ground all round it. It is wider than the ground anything can be _built_ on, and
+deliberately — an island is ground rather than an object, and an island you can
+only raise inside the plot is a sandbank at the end of the beach rather than
+something out in the bay. It stays bounded all the same: unbounded edits would
+cost the mesher a map lookup on every tile out to the horizon, and would let a
+stroke that runs off the screen pile up ground nobody can ever see again. A
+plot's width either side keeps every diggable tile inside the box the renderer
+draws, which reaches three times the resort's extent.
+
 The gesture is the build gesture. `tileStroke.ts` is the half both tools share —
 the pick, the Bresenham fill between pointer samples, the pointer capture, the
 borrowed left mouse button, Escape — and each tool says only what working a tile
@@ -853,15 +954,33 @@ the materials are not.
 `paving.ts` already turned a path into decking on sand, a flight on a step and a
 pier over the sea. Inland water is the fourth case and the only one that needed a
 new question: **which body of water is this?** The sea gets a jetty and a river
-gets a bridge, because a pier is timber walked _out_ from a shore and a bridge is
-masonry carried _across_. The question is asked of the _base_ terrain rather than
-of the tile as it stands, so an island still knows it is standing in the bay.
+gets a bridge, because a pier is decking walked _out_ from a shore and lying on
+it, and a bridge is a deck carried _across_ and standing above it. The question is
+asked of the _base_ terrain rather than of the tile as it stands, so an island
+still knows it is standing in the bay.
 
-Neither span has parapets of its own. Water counts as a drop in `railings.ts`, so
-a handrail is stood along every edge of the deck with water beyond it — which
-keeps the parapets to the sides you would fall off, and leaves the ends open where
-the bridge meets the road, without the model knowing which tile of the crossing it
-is.
+**A bridge is raised, and that is the difference the rest of it hangs off.**
+Inland water is flush with its banks, so a deck at the path's own height is a path
+with blue painted under it. `BRIDGE_VOXELS` puts it a metre up instead, which
+means a crossing has _ends_: `spans.ts` classifies each tile of one as the ramp
+that comes ashore or the level deck between two ramps, exactly as `stairs.ts`
+classifies the lower tile of a step. A river is two tiles wide, so the usual
+crossing is two ramps meeting at their heads.
+
+The pier has no parapets of its own. Water counts as a drop in `railings.ts`, so a
+handrail is stood along every edge of the deck with water beyond it — which keeps
+the parapets to the sides you would fall off, and leaves the ends open where the
+pier meets the shore, without the model knowing which tile of it it is. **The
+bridge is the one paving that rule skips**: a rail stands on the tile it guards at
+that tile's own height, which for a crossing is the water, so the bridge draws its
+parapet on its own planking instead — and that is also what lets the parapet step
+up the ramp with the treads.
+
+The crowd walks the deck rather than the water under it. A ramp is a flight in
+everything but its rise, so `walkNetwork.ts` gives it the same two nodes a
+staircase gets — at its foot and at its head — and a deck's single node stands
+`BRIDGE_VOXELS` up. Two ramps meeting at their heads share one node, the way two
+flights share a landing.
 
 A planned street **stops at the sea** unless its edge says `overWater`, and
 **crosses a river** without being asked. A run strung corner to corner over a plot

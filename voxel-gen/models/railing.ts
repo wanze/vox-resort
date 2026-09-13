@@ -20,6 +20,10 @@
  * voxels of them that fall inside the path slab are buried by the paving it
  * stands on, exactly as a real post is by the paving it is set into. The rail
  * comes out an even metre above that slab, which is what a handrail is.
+ *
+ * **And why the buried part is drawn a voxel in.** See {@link BURIED_IN}: a rail
+ * stands on the tile it guards rather than claiming one of its own, so it and
+ * the paving under it are two models in the same cubic metre of world.
  */
 import { defineModel, TILE_VOXELS, type VoxelBuilder } from '../voxelgen.ts';
 
@@ -28,6 +32,23 @@ const PAVING_TOP = 2;
 
 /** How far the handrail stands above the paving, in voxels. A voxel is 25 cm. */
 const RAIL_HEIGHT = 4;
+
+/**
+ * How far in from the tile's edge the buried feet of the posts are drawn.
+ *
+ * Nothing below `PAVING_TOP` is ever seen, because it is inside the slab the
+ * rail stands on, but drawn flush it is still *meshed* flush, and a face in the
+ * same plane as the paving's own outer face is one the depth buffer has no way
+ * to choose between. That comes out as the stippled band along the side of every
+ * pier and every terrace wall on the plot, the two models winning fragments off
+ * each other as the camera moves. A voxel in, the feet are strictly inside the
+ * slab and the slab wins every fragment, which is what being buried means.
+ *
+ * They cannot simply be left out instead: `voxelgen` shifts a model onto its own
+ * origin, so a post that started at the paving would drop back onto it and take
+ * the rail two voxels down with it.
+ */
+const BURIED_IN = 1;
 
 export default defineModel({
   id: 'railing',
@@ -48,10 +69,14 @@ export default defineModel({
     const N = TILE_VOXELS - 1;
     const top = PAVING_TOP + RAIL_HEIGHT;
 
-    // Posts at both ends and one in the middle, painted from the ground up so
-    // the model's base lands on the terrace and the paving buries their feet.
+    /** Pulls a buried coordinate off the tile's edge; see {@link BURIED_IN}. */
+    const inward = (v: number): number => Math.min(N - BURIED_IN, Math.max(BURIED_IN, v));
+
+    // Posts at both ends and one in the middle, and a foot under each that
+    // carries on down to the ground so the model's base lands on the terrace.
     for (const x of [0, Math.floor(TILE_VOXELS / 2) - 1, TILE_VOXELS - 2]) {
-      box(x, x + 1, 0, top - 1, 0, 1, C.post);
+      box(x, x + 1, PAVING_TOP, top - 1, 0, 1, C.post);
+      box(inward(x), inward(x + 1), 0, PAVING_TOP - 1, inward(0), inward(1), C.post);
     }
     // The rail itself, and a lower one under it so the run does not read as a
     // line floating over the paving.

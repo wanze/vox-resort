@@ -18,27 +18,35 @@
  * the palette offers none of them and this decides where they go — which leaves
  * one paving tool, and no way to pave a tile wrongly with it.
  *
- * Sand and water are the easy half: what a tile is made of is a fact about that
- * tile alone, so decking and a span are decided once, as the tile goes down, and
- * never revisited. A step is not, because a step is a fact about two tiles and a
- * stroke can cross one in either direction — so that decision has two halves:
+ * Sand is the easy half: what a tile is made of is a fact about that tile alone,
+ * so decking is decided once, as the tile goes down, and never revisited. A step
+ * is not, and neither is a crossing — both are facts about two tiles, and a
+ * stroke can cross either in whichever direction — so those decisions have two
+ * halves:
  *
  * - {@link pavingAt} answers for the tile being paved. Drawing *downhill*, the
  *   tile is the lower one and the paving above it is already there, so the tile
- *   itself comes out as the flight.
+ *   itself comes out as the flight; and the first tile of water past a bank that
+ *   is already paved comes out as the ramp onto the bridge.
  * - {@link relaidBy} answers for the tiles already laid. Drawing *uphill*, the
  *   lower tile went down as an ordinary slab a moment ago and only becomes a
- *   flight once the tile above it is paved — so it is lifted and laid again.
+ *   flight once the tile above it is paved — so it is lifted and laid again. The
+ *   far bank of a river is the same thing: the last tile of water went down as a
+ *   level deck because there was nothing ashore of it yet, and paving that bank
+ *   is what turns it into the ramp.
  *
  * Between them a stroke comes out the same whichever way it was drawn, and so
- * does a step paved by two separate strokes days apart. Nothing here has to know
- * which gesture is running.
+ * does a step or a crossing paved by two separate strokes days apart. Nothing
+ * here has to know which gesture is running.
  *
  * Only ever more stairs, never fewer: paving a tile can turn a slab into a
  * flight, and no tile that is already a flight stops being one, so a relaid tile
  * is always a slab and this never has to work out what a flight would have been
  * if it were flat. Taking paving *up* — which nothing can do yet — is the case
  * that would need that, and it belongs with the bulldozer that introduces it.
+ * A crossing is the exception and pays for it by being re-asked from scratch:
+ * which end of a span a tile is *can* change back, so `relaidBy` re-lays every
+ * tile of a crossing beside an edit rather than looking for a state to stop at.
  */
 
 import {
@@ -51,6 +59,7 @@ import {
 import { PAVING_IDS } from '../../layout/domain/resortPlan';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { climbAt, CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
+import { spanAt, type SpanProvider } from '../../layout/domain/spans';
 import type { Rotation } from '../../layout/domain/rotation';
 import type { TileOccupancy } from './tileOccupancy';
 
@@ -119,6 +128,12 @@ export interface PavingRules {
    */
   readonly bridge: LayoutItem | null;
   /**
+   * The end of a crossing — the tile that climbs off the bank up to the bridge's
+   * deck — or null when the catalogue has none, in which case a crossing is all
+   * deck and steps up out of the water at the shore.
+   */
+  readonly bridgeRamp: LayoutItem | null;
+  /**
    * The flight a path becomes where it climbs, or null when the catalogue has
    * none — in which case a step is simply paved flat, exactly as `layoutResort`
    * treats a catalogue missing one kind of paving.
@@ -172,7 +187,16 @@ export function pavingAt(
   // disagree about.
   if (rules.isWater(tile.x, tile.z)) {
     const span = spanOver(tile, rules);
-    return { item: span ?? item, rotation: 0 };
+    if (span === null) return { item, rotation: 0 };
+    // A pier is laid unturned — one tile of decking is every tile of it — where
+    // a bridge is raised and so has ends. Which this tile is, and which way it
+    // runs, is `spans.ts`; it is asked here and by `layoutResort` both, or a
+    // crossing drawn by hand would come ashore somewhere a generated one does
+    // not.
+    if (span.id !== rules.bridge?.id) return { item: span, rotation: 0 };
+    const crossing = spanAt(tile, pavedProvider(rules), raisedProvider(rules));
+    const ramp = crossing.kind === 'ramp' ? rules.bridgeRamp : null;
+    return { item: ramp ?? span, rotation: crossing.rotation };
   }
   const { stairs } = rules;
   if (stairs) {
@@ -196,6 +220,19 @@ function spanOver(tile: Tile, rules: PavingRules): LayoutItem | null {
 }
 
 /**
+ * Whether the ground under a tile is water a span stands *above*.
+ *
+ * Inland water with a bridge in the catalogue, which is the same pair of
+ * questions {@link spanOver} asks — it is asked twice because the two answers
+ * are different shapes, an item and a fact about the ground, and `spans.ts`
+ * wants the fact.
+ */
+const raisedProvider =
+  (rules: PavingRules): SpanProvider =>
+  (tileX, tileZ) =>
+    rules.bridge !== null && rules.isWater(tileX, tileZ) && !rules.isSea(tileX, tileZ);
+
+/**
  * Whether the ground under a tile will take this object at all.
  *
  * Water is the only ground that refuses anything, and it refuses everything but
@@ -216,7 +253,11 @@ function spanOver(tile: Tile, rules: PavingRules): LayoutItem | null {
 export function standsOn(item: LayoutItem, tile: Tile, rules: PavingRules): boolean {
   if (!rules.isWater(tile.x, tile.z)) return true;
   const span = spanOver(tile, rules);
-  return span !== null && item.id === span.id;
+  if (span === null) return false;
+  // Either half of a crossing: {@link pavingAt} hands back the bridge's deck on
+  // some tiles of one and its ramp on the others, and a tile of water has to
+  // take whichever of the two it was just given.
+  return item.id === span.id || (span.id === rules.bridge?.id && item.id === rules.bridgeRamp?.id);
 }
 
 /** A tile of paving that has to be laid again, and the paving it replaces. */
@@ -244,30 +285,77 @@ export interface Relaid {
  * been.
  */
 export function relaidBy(tile: Tile, rules: PavingRules): Relaid[] {
-  const { stairs, levelOf } = rules;
-  if (!stairs) return [];
+  // Nothing but paving changes either answer: a flight is a fact about what is
+  // paved around a tile, and so is which end of a crossing a tile of water is.
+  // So a cottage or a hedge re-lays nothing, and the caller needs no second
+  // branch to know that.
+  if (rules.pavedWith(tile.x, tile.z) === null) return [];
+
   const isPaved = pavedProvider(rules);
+  const isRaised = raisedProvider(rules);
   const relaid: Relaid[] = [];
   for (const { dx, dz } of CLIMBS) {
     const beside: Tile = { x: tile.x + dx, z: tile.z + dz };
     const slab = rules.pavedWith(beside.x, beside.z);
-    // A tile that is already a flight is left alone: it climbs somewhere, and
-    // re-facing it would only ever move the fudge an L-bend was resolved with.
-    if (!slab || slab.id === stairs.id) continue;
-    const climb = climbAt(beside, isPaved, levelOf);
-    if (climb === null) continue;
-    const level = levelOf(beside.x, beside.z);
+    if (!slab) continue;
+    const laid = isRaised(beside.x, beside.z)
+      ? spanBeside(beside, rules, isPaved, isRaised)
+      : flightBeside(beside, slab, rules, isPaved);
+    if (!laid) continue;
+    const level = rules.levelOf(beside.x, beside.z);
     relaid.push({
       placement: place(
-        stairs,
-        derivedKey(stairs.id, beside.x, beside.z),
+        laid.item,
+        derivedKey(laid.item.id, beside.x, beside.z),
         beside.x,
         beside.z,
-        climb,
+        laid.rotation,
         level,
       ),
       lifted: place(slab, derivedKey(slab.id, beside.x, beside.z), beside.x, beside.z, 0, level),
     });
   }
   return relaid;
+}
+
+/**
+ * What a tile of a crossing beside the new paving should be standing as.
+ *
+ * Re-asked every time rather than left alone once it is standing, which is where
+ * this differs from the flight below. Both halves of what `spans.ts` reads can
+ * change under a span — a bank paved *after* the water it adjoins turns that
+ * tile from the middle of the crossing into its end, and that is exactly what
+ * paving the far side of a river does — and unlike a flight there is no "already
+ * a flight" state to stop at, because the answer includes the way the tile is
+ * turned. Re-laying what was already right costs a placement nobody sees.
+ */
+function spanBeside(
+  tile: Tile,
+  rules: PavingRules,
+  isPaved: PavedProvider,
+  isRaised: SpanProvider,
+): Paving | null {
+  const { bridge } = rules;
+  if (!bridge) return null;
+  const crossing = spanAt(tile, isPaved, isRaised);
+  const item = crossing.kind === 'ramp' ? (rules.bridgeRamp ?? bridge) : bridge;
+  return { item, rotation: crossing.rotation };
+}
+
+/**
+ * The flight a slab beside the new paving has just become, or null for none.
+ *
+ * A tile that is already a flight is left alone: it climbs somewhere, and
+ * re-facing it would only ever move the fudge an L-bend was resolved with.
+ */
+function flightBeside(
+  tile: Tile,
+  slab: LayoutItem,
+  rules: PavingRules,
+  isPaved: PavedProvider,
+): Paving | null {
+  const { stairs } = rules;
+  if (!stairs || slab.id === stairs.id) return null;
+  const climb = climbAt(tile, isPaved, rules.levelOf);
+  return climb === null ? null : { item: stairs, rotation: climb };
 }

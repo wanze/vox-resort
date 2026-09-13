@@ -11,6 +11,7 @@ import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
 import bridge from './bridge.ts';
+import bridge_ramp from './bridge-ramp.ts';
 import bungalow from './bungalow.ts';
 import changing_cabins from './changing-cabins.ts';
 import coffee_shop from './coffee-shop.ts';
@@ -64,6 +65,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   boardwalk,
   jetty,
   bridge,
+  bridge_ramp,
   stairs,
   railing,
   stair_railing,

@@ -32,6 +32,7 @@ import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
@@ -915,6 +916,12 @@ function crowdFor(parts: {
     levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
     shore: parts.shore,
     tilesX: parts.plan.tilesX,
+    // Which paving stands a metre above what it is laid on: a bridge over a
+    // river or a lake, and nothing else — the pier out over the bay lies flat on
+    // the sea. Asked of the ground here exactly as `layoutResort` asks it, so the
+    // crowd walks the deck the layout actually stood. See `spans.ts`.
+    bridged: (tileX, tileZ) =>
+      parts.terrain.surfaceOf(tileX, tileZ) === 'water' && !parts.terrain.isSea(tileX, tileZ),
     // The authored objects *and* the scattered props, because the bench is one
     // of the latter: the layout stands benches along the path edges itself, so
     // a crowd built off `placements` alone would have nothing to sit on at all.
@@ -1601,6 +1608,7 @@ function createEditMode(parts: {
     decking: pavingItem(BOARDWALK_ID),
     pier: pavingItem(JETTY_ID),
     bridge: pavingItem(BRIDGE_ID),
+    bridgeRamp: pavingItem(BRIDGE_RAMP_ID),
     stairs: pavingItem(STAIRS_ID),
   };
 

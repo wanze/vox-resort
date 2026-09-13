@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { BRIDGE_VOXELS, LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createRandom } from '../../layout/domain/random';
@@ -236,6 +236,94 @@ describe('walkNetworkFor', () => {
       tilesX: 4,
     });
     expect(network.edges).toEqual([]);
+  });
+});
+
+/** Inland water two tiles wide, which a crossing of it stands a metre above. */
+const RIVER = (_x: number, tileZ: number): boolean => tileZ === 2 || tileZ === 3;
+
+/** The same channel a tile wider, so a crossing of it has a level middle. */
+const WIDE_RIVER = (_x: number, tileZ: number): boolean => tileZ >= 2 && tileZ <= 4;
+
+describe('a crossing over a river', () => {
+  // A channel two tiles wide at z = 2 and z = 3, with the street running over
+  // it: two ramps meeting at their heads, and a bank either side.
+  const paved = flat([
+    [0, 1],
+    [0, 2],
+    [0, 3],
+    [0, 4],
+  ]);
+  const network = (): WalkNetwork =>
+    walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 4, bridged: RIVER });
+
+  it('stands a node at each end of a ramp, as it does on a flight', () => {
+    // The same reason: the surface runs from the paving it continues to the deck
+    // above across the width of the tile, so one node at the centre would leave
+    // a person walking through the planking. See `standFor`.
+    const [foot, head] = standsOn(network(), 0, 2);
+    expect(foot!.y).toBe(walkingSurface(0));
+    expect(head!.y).toBe(BRIDGE_VOXELS);
+    // The foot at the bank edge of the tile and the head at the far one.
+    expect(foot!.z).toBe(2 * TILE_VOXELS);
+    expect(head!.z).toBe(3 * TILE_VOXELS);
+  });
+
+  it('lets two ramps meet at one node, the way two flights share a landing', () => {
+    const crossing = network();
+    const [, head] = standsOn(crossing, 0, 2);
+    const far = standsOn(crossing, 0, 3);
+    // The crown is one place, so the second ramp hangs its head on the same
+    // node and there is no zero-length edge between two points that are one.
+    expect(far.map((node) => node.y)).toEqual([walkingSurface(0)]);
+    expect(head!.z).toBe(3 * TILE_VOXELS);
+  });
+
+  it('walks the whole crossing, bank to bank, in both directions', () => {
+    const crossing = network();
+    for (const edge of crossing.edges) {
+      const back = crossing.edges.find((other) => other.from === edge.to && other.to === edge.from);
+      expect(back, `${edge.from} -> ${edge.to} has no way back`).toBeDefined();
+    }
+    // Every node is reachable from the near bank.
+    const seen = new Set([nodeAt(crossing, 0, 1)]);
+    for (let more = true; more;) {
+      more = false;
+      for (const edge of crossing.edges) {
+        if (seen.has(edge.from) && !seen.has(edge.to)) {
+          seen.add(edge.to);
+          more = true;
+        }
+      }
+    }
+    expect(seen.size).toBe(crossing.nodes.length);
+  });
+
+  it('stands on the deck of a crossing wide enough to have one', () => {
+    const deck = walkNetworkFor({
+      paved: flat([
+        [0, 1],
+        [0, 2],
+        [0, 3],
+        [0, 4],
+        [0, 5],
+      ]),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 4,
+      bridged: WIDE_RIVER,
+    });
+    // One node, at the middle tile's centre, a metre above the water it spans.
+    const middle = standsOn(deck, 0, 3);
+    expect(middle.map((node) => node.y)).toEqual([BRIDGE_VOXELS]);
+    expect(middle[0]!.z).toBe(3.5 * TILE_VOXELS);
+  });
+
+  it('leaves a pier flat, because nothing told it the paving was raised', () => {
+    // The same four tiles with no `bridged` at all, which is a jetty out over
+    // the bay and every plot with no river on it.
+    const pier = walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 4 });
+    for (const node of pier.nodes) expect(node.y).toBe(walkingSurface(0));
   });
 });
 

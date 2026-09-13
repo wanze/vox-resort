@@ -24,6 +24,14 @@
  *   the two are mirrors of each other and no quarter turn maps one onto the
  *   other — see `stair-railing.ts` — and it takes the flight's own rotation.
  *
+ * **A raised span carries its own parapet, so this leaves it alone.** That is
+ * the one exception, and it is forced: a rail claims no ground of its own, it
+ * stands on the tile it guards *at that tile's height* — which is right for a
+ * jetty, whose deck is at the sea's own level, and wrong for a bridge, whose
+ * deck is a metre up. A rail stood beside a bridge is a rail in the river. So
+ * the bridge draws its parapet on the planking it guards, and every tile of a
+ * crossing is skipped here. See `spans.ts` and `voxel-gen/models/bridge.ts`.
+ *
  * **Paving is always the way through.** A neighbour that is paved never gets a
  * rail between it and here, on either rule. That is what keeps a flight open at
  * the top and the bottom, what stops a rail being drawn down the middle of a
@@ -36,6 +44,7 @@
  */
 
 import { CLIMBS, climbAt, type PavedProvider } from './stairs';
+import type { SpanProvider } from './spans';
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import { normalizeRotation, type Rotation } from './rotation';
@@ -47,6 +56,9 @@ export interface WaterProvider {
 
 /** A plot with no sea on it, which is every flat authored plan. */
 const NO_WATER: WaterProvider = () => false;
+
+/** A plot with nothing raised over water on it, which is every plan with no river. */
+const NO_SPAN: SpanProvider = () => false;
 
 /** What a rail is: the balustrade of a flight, or a rail along one edge. */
 export type RailKind = 'flight' | 'edge';
@@ -87,7 +99,10 @@ export function railsAt(
   isPaved: PavedProvider,
   levelOf: LevelProvider,
   isWater: WaterProvider = NO_WATER,
+  isSpan: SpanProvider = NO_SPAN,
 ): RailTile[] {
+  // A tile of a raised crossing guards itself; see the note at the top.
+  if (isSpan(tile.x, tile.z)) return [];
   const climb = climbAt(tile, isPaved, levelOf);
   if (climb !== null) {
     // Both flanks, or neither. One model carries the pair, so a flight with
@@ -120,8 +135,9 @@ export function railTilesFor(
   paved: readonly Tile[],
   levelOf: LevelProvider,
   isWater: WaterProvider = NO_WATER,
+  isSpan: SpanProvider = NO_SPAN,
 ): RailTile[] {
   const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
   const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
-  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater));
+  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater, isSpan));
 }

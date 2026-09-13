@@ -285,6 +285,27 @@ export const LEVEL_VOXELS = 8;
  */
 export const PAVING_VOXELS = 2;
 
+/**
+ * Voxels a bridge's deck stands above the water it carries a path over.
+ *
+ * Six, which is {@link PAVING_VOXELS} plus a metre of rise, and that metre is
+ * the whole difference between a bridge and a painted river. Inland water is
+ * flush with its banks — see `layout/domain/terrain.ts` for why it is flush and
+ * not dug — so a deck laid at the paving's own height is a path with blue under
+ * it. Lifted, the span reads as a span from the side: you can see the water
+ * running beneath it and the trestles standing in it.
+ *
+ * A metre rather than a terrace. `LEVEL_VOXELS` would be a humpback bridge, and
+ * a river is two tiles wide, so the whole climb and fall would happen across 8 m
+ * at a pitch no resort path has anywhere else on the plot.
+ *
+ * Here for the reason the other three are: several things have to agree with it
+ * and none of them can read a number out of a model. `bridge.ts` lays its planks
+ * at it, `bridge-ramp.ts` climbs to it in four treads, and in `src/` the crowd
+ * walks on it. See `features/layout/domain/spans.ts`.
+ */
+export const BRIDGE_VOXELS = 6;
+
 /** Declares a model. Pure data: nothing is built until {@link buildModel}. */
 export function defineModel(source: VoxelModelSource): VoxelModelSource {
   return source;

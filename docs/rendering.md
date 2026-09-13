@@ -970,11 +970,17 @@ crossing is two ramps meeting at their heads.
 The pier has no parapets of its own. Water counts as a drop in `railings.ts`, so a
 handrail is stood along every edge of the deck with water beyond it — which keeps
 the parapets to the sides you would fall off, and leaves the ends open where the
-pier meets the shore, without the model knowing which tile of it it is. **The
-bridge is the one paving that rule skips**: a rail stands on the tile it guards at
-that tile's own height, which for a crossing is the water, so the bridge draws its
-parapet on its own planking instead — and that is also what lets the parapet step
-up the ramp with the treads.
+pier meets the shore, without the model knowing which tile of it it is. On a tile
+over the water that rail is `pier-railing` rather than the terraces' `railing`: the
+same posts in teak, with a lantern on the middle one, so a pier is lit after dark. **A
+bridge is railed the same way with railings of its own**: a rail stands on the tile
+it guards at that tile's own height, which for a crossing is the water, so the
+ordinary rail would stand inside the deck — and, drawn by hand, it did, as a white
+band flickering through the bridge's flanks. Instead a crossing takes
+`bridge-railing` along a deck's open edges and `bridge-ramp-railing-left`/`-right`
+up a ramp's, each on a trestle from the water to the planking and each with a
+lantern. Edge by edge rather than drawn into the deck, a junction of two crossings
+is open all four ways and a platform is railed only round its rim.
 
 The crowd walks the deck rather than the water under it. A ramp is a flight in
 everything but its rise, so `walkNetwork.ts` gives it the same two nodes a

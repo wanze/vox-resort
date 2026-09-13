@@ -1,7 +1,7 @@
 /**
  * Bridge ramp tile: the end of a span — four treads of decking climbing off the
- * bank to the height `bridge.ts` runs level at, on an abutment rather than on
- * trestles, with the parapet stepping up beside them.
+ * bank to the height `bridge.ts` runs level at, on an abutment at the bank end
+ * and piles under the rest.
  * 16x16 footprint, fits a 1x1 ground tile.
  *
  * **Where it stands.** On the tile of *water* nearest the bank, turned so that
@@ -22,41 +22,27 @@
  *
  * Between them that is a rise of four voxels in four treads of four voxels'
  * going — a metre up over four metres, which is a ramp somebody pushing a
- * buggy can get up and is nothing like the 1-in-2 a terrace step takes. A
- * crossing two tiles wide is two of these meeting at their heads, and there the
- * pitch matters: back to back they are a 2 m rise and fall across 8 m, and any
- * steeper would be a humpback.
+ * buggy can get up and is nothing like the 1-in-2 a terrace step takes.
  *
- * **The abutment is solid where the deck is open.** The trestles under
- * `bridge.ts` stop at the bed of the channel and the middle is left open so the
- * water runs visibly under the span; here the same stringers run down to the bed
- * and the bank end is filled in behind them, because what a ramp lands on is
- * ground rather than water.
+ * **Its parapets are two models of their own**, `bridge-ramp-railing-left` and
+ * `-right`, stood by `railings.ts` on whichever flank has nothing paved beside
+ * it. Two rather than one turned, because the parapet up one flank of a climb is
+ * the mirror of the one up the other, and no quarter turn is a mirror. See
+ * `parts/span.ts`.
  *
  * Nobody picks it either: it is what a path becomes on the last tile of water
  * before the bank. See `groundDecides` below, and `spans.ts` for the rule.
  */
 import { PALETTE } from '../palette.ts';
-import { spanDeck } from '../parts/span.ts';
 import {
-  BRIDGE_VOXELS,
-  defineModel,
-  PAVING_VOXELS,
-  TILE_VOXELS,
-  type VoxelBuilder,
-} from '../voxelgen.ts';
-
-/**
- * Treads in the climb, and so the rise of each one.
- *
- * The lowest plank sits one voxel above the paving and the highest is the
- * deck's, which is `BRIDGE_VOXELS - PAVING_VOXELS` voxels of rise over as many
- * treads — four, which divides the tile into four treads of four voxels.
- */
-const TREADS = BRIDGE_VOXELS - PAVING_VOXELS;
-
-/** How deep one tread is, so the climb fills the tile exactly. */
-const GOING = TILE_VOXELS / TREADS;
+  FLANK,
+  RAMP_GOING,
+  RAMP_TREADS,
+  rampPlanksAt,
+  spanDeck,
+  spanPiles,
+} from '../parts/span.ts';
+import { defineModel, PAVING_VOXELS, TILE_VOXELS, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
   id: 'bridge-ramp',
@@ -70,22 +56,23 @@ export default defineModel({
     const { teak } = PALETTE;
     const N = TILE_VOXELS - 1;
 
-    // Lowest tread at the north edge, climbing away from the bank. The planks
-    // of tread `step` sit in the layer below that tread's walking surface, so
-    // the last one lands in the layer `bridge.ts` lays its deck in.
-    for (let step = 0; step < TREADS; step++) {
-      const z0 = step * GOING;
-      spanDeck(b, {
-        y: PAVING_VOXELS + step,
-        z0,
-        z1: z0 + GOING - 1,
-        foot: 0,
-      });
+    // Lowest tread at the north edge, climbing away from the bank.
+    for (let step = 0; step < RAMP_TREADS; step++) {
+      const z0 = step * RAMP_GOING;
+      spanDeck(b, { y: rampPlanksAt(z0), z0, z1: z0 + RAMP_GOING - 1 });
     }
 
-    // The abutment: every layer under the lowest tread's beam, filled in across
-    // the whole width, because what the bank end lands on is ground rather than
-    // the channel the rest of the span crosses.
-    b.box(0, N, 0, PAVING_VOXELS - 2, 0, GOING - 1, teak.deep);
+    // The abutment: every layer under the lowest tread's beam, because what the
+    // bank end lands on is ground rather than the channel. Held in off both
+    // flanks by the depth of a railing's trestle, which stands in exactly those
+    // columns wherever the flank is railed.
+    b.box(FLANK, N - FLANK, 0, PAVING_VOXELS - 2, 0, RAMP_GOING - 1, teak.deep);
+
+    // One row of piles under each of the two highest treads, which are the ones
+    // with enough air under them to need holding up.
+    for (const step of [RAMP_TREADS - 2, RAMP_TREADS - 1]) {
+      const z0 = step * RAMP_GOING;
+      spanPiles(b, { beam: rampPlanksAt(z0) - 1, rows: [z0] });
+    }
   },
 });

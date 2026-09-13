@@ -23,7 +23,10 @@ import {
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAILING_ID,
   BRIDGE_RAMP_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
@@ -915,21 +918,38 @@ describe('a plot with a shore', () => {
     ]);
   });
 
-  it('leaves a crossing to guard itself, because its deck is a metre up', () => {
+  it('rails a crossing with the bridge parapets, because its deck is a metre up', () => {
     // A rail stands on the tile it guards at that tile's own height, which is
-    // the water here: the bridge carries its parapet on its own planking
-    // instead. See `railings.ts`.
+    // the water here: an ordinary rail would stand inside the deck, so a
+    // crossing is railed with parapets that stand on trestles. See `railings.ts`.
+    const railed = [
+      ...items,
+      item(RAILING_ID, 16, 2),
+      item(BRIDGE_RAILING_ID, 16, 2),
+      item(BRIDGE_RAMP_RAILING_LEFT_ID, 16, 2),
+      item(BRIDGE_RAMP_RAILING_RIGHT_ID, 16, 2),
+    ];
     const river = coastal({
       plots: [],
       terrain: [4, 5, 6].flatMap((tileX) =>
         [1, 2, 3].map((tileZ) => ({ tileX, tileZ, level: 0, surface: 'water' }) as const),
       ),
     });
-    const laid = layoutResort(items, river);
-    const guarded = laid.rails.filter(
-      (rail) => rail.tileZ === 2 && rail.tileX >= 4 && rail.tileX <= 6,
-    );
-    expect(guarded).toEqual([]);
+    const laid = layoutResort(railed, river);
+    const guarded = laid.rails
+      .filter((rail) => rail.tileZ === 2 && rail.tileX >= 4 && rail.tileX <= 6)
+      .map((rail) => ({ id: rail.id, x: rail.tileX, rotation: rail.rotation }))
+      .toSorted((a, b) => a.x - b.x || a.rotation - b.rotation);
+    expect(guarded).toEqual([
+      // The ramp off the west bank: north is on its left as you climb east.
+      { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 4, rotation: 0 },
+      { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 4, rotation: 2 },
+      { id: BRIDGE_RAILING_ID, x: 5, rotation: 0 },
+      { id: BRIDGE_RAILING_ID, x: 5, rotation: 2 },
+      // And off the east bank, climbing west, the other way round.
+      { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 6, rotation: 0 },
+      { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 6, rotation: 2 },
+    ]);
   });
 
   it('refuses an object standing in a river the plan carries', () => {

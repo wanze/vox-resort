@@ -54,12 +54,16 @@ import {
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAILING_ID,
   BRIDGE_RAMP_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
   DERIVED_IDS,
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
   PATH_ID,
+  PIER_RAILING_ID,
   RAILING_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
@@ -913,7 +917,15 @@ export type RailModels = { readonly [kind in RailKind]: LayoutItem | undefined }
 /** The rail models a catalogue offers, looked up by the ids the layout owns. */
 export function railModelsIn(items: readonly LayoutItem[]): RailModels {
   const byId = new Map(items.map((item) => [item.id, item]));
-  return { flight: byId.get(STAIR_RAILING_ID), edge: byId.get(RAILING_ID) };
+  return {
+    flight: byId.get(STAIR_RAILING_ID),
+    edge: byId.get(RAILING_ID),
+    // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
+    pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
+    span: byId.get(BRIDGE_RAILING_ID),
+    'ramp-left': byId.get(BRIDGE_RAMP_RAILING_LEFT_ID),
+    'ramp-right': byId.get(BRIDGE_RAMP_RAILING_RIGHT_ID),
+  };
 }
 
 /**
@@ -941,7 +953,8 @@ export function railPlacementsFor(
     const { x, z } = rail.tile;
     const level = levelOf(x, z);
     // A flight's balustrade covers the whole tile and is placed like anything
-    // else; an edge rail is stood flush against the edge it guards.
+    // else; every other rail — a bridge's parapets included — is stood flush
+    // against the edge it guards.
     placements.push(
       rail.kind === 'flight'
         ? place(item, railKey(item, rail), x, z, rail.rotation, level)

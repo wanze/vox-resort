@@ -251,8 +251,22 @@ export const PEDALO_RENTAL_ID = 'pedalo-rental';
 /** The rail stood along a path's edge where the ground beside it drops away. */
 export const RAILING_ID = 'railing';
 
+/** The rail stood along a pier's edge, which carries a lantern the terrace rail does not. */
+export const PIER_RAILING_ID = 'pier-railing';
+
 /** The balustrade stood up both flanks of a flight of stairs. */
 export const STAIR_RAILING_ID = 'stair-railing';
+
+/** The parapet stood along an open edge of a bridge's level deck. */
+export const BRIDGE_RAILING_ID = 'bridge-railing';
+
+/**
+ * The parapets up the two flanks of a bridge ramp, as you look up the climb from
+ * the bank. Two models because one is the other's mirror; see
+ * `voxel-gen/models/bridge-ramp-railing-left.ts`.
+ */
+export const BRIDGE_RAMP_RAILING_LEFT_ID = 'bridge-ramp-railing-left';
+export const BRIDGE_RAMP_RAILING_RIGHT_ID = 'bridge-ramp-railing-right';
 
 /**
  * Every type the layout lays for itself, and so every type a plan must not.
@@ -273,7 +287,11 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   HEDGE_ID,
   BENCH_ID,
   RAILING_ID,
+  PIER_RAILING_ID,
   STAIR_RAILING_ID,
+  BRIDGE_RAILING_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
 ]);
 
 const at = (id: string, tileX: number, tileZ: number): ResortPlot => ({ id, tileX, tileZ });

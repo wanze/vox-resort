@@ -32,12 +32,16 @@ import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
   BRIDGE_ID,
+  BRIDGE_RAILING_ID,
   BRIDGE_RAMP_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
   HEDGE_ID,
   JETTY_ID,
   LAMP_ID,
   PAVING_IDS,
   PEDALO_RENTAL_ID,
+  PIER_RAILING_ID,
   RAILING_ID,
   RESORT_PLAN,
   STAIR_RAILING_ID,
@@ -54,7 +58,12 @@ import {
   generateResort,
 } from '../features/layout/domain/resortGenerator';
 import { layoutItemFor } from '../features/build/domain/buildPlan';
-import { isPaving, pavedGroundOf, type PavingRules } from '../features/build/domain/paving';
+import {
+  isPaving,
+  pavedGroundOf,
+  raisedProvider,
+  type PavingRules,
+} from '../features/build/domain/paving';
 import { type HandrailRules } from '../features/build/domain/handrails';
 import type { TerrainRules } from '../features/build/domain/terrainBrush';
 import { armedBrush, armedObject, type BuildTool } from '../features/build/domain/buildTool';
@@ -1514,7 +1523,14 @@ const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
  * lamps would be indexed, shadowed and baked as though it stood on the tile it
  * only leans against.
  */
-const RAIL_IDS: ReadonlySet<string> = new Set([RAILING_ID, STAIR_RAILING_ID]);
+const RAIL_IDS: ReadonlySet<string> = new Set([
+  RAILING_ID,
+  PIER_RAILING_ID,
+  STAIR_RAILING_ID,
+  BRIDGE_RAILING_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
+]);
 
 /**
  * Holds the camera still for a benchmark run. Damping would otherwise keep
@@ -1635,6 +1651,7 @@ function createEditMode(parts: {
     pavedWith,
     levelOf: ground.levelOf,
     isWater: paving.isWater,
+    isSpan: raisedProvider(paving),
     models: railModelsIn(catalogue),
     standing: (tileX, tileZ) =>
       resort().plot.rails.filter((rail) => rail.tileX === tileX && rail.tileZ === tileZ),

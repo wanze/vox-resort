@@ -252,12 +252,17 @@ Three things follow, and they are the whole cost of the metre:
   shape: a tile of the crossing with a bank beside it is the ramp and faces it,
   everything else is the level deck. A river is two tiles wide, so the common
   crossing is two ramps meeting at their heads and no deck at all.
-- **A raised span carries its own parapet.** `railings.ts` stands a rail on the
+- **A raised span has parapets of its own.** `railings.ts` stands a rail on the
   tile it guards _at that tile's height_, which is right for a jetty and puts a
-  rail in the river here. So a crossing is the one paving the rail rule skips,
-  and the parapet is drawn on the planking — which is also what lets it step up
-  the ramp with the treads, where a straight rail would float over the first
-  half of them.
+  rail in the river here. So a crossing takes three railings nothing else
+  takes — along a deck's edge, and up a ramp's left and right flanks, which
+  step with the treads — each standing on a trestle from the water up to the
+  planking. They are models rather than part of the deck because a deck that
+  drew its own parapet drew it on both flanks whatever stood beside them, and a
+  junction of two crossings came out with a rail across the way through. Stood
+  edge by edge, a junction is open and a platform is railed only round its rim.
+  Each carries a lantern, so a crossing is lit after dark without anyone placing
+  a lamp on it.
 - **A raised span can be turned, and so it may have a grain.** The masonry it
   replaced was setts in running bond precisely because a bridge was laid
   unturned and a plank run would have gone the wrong way across half the

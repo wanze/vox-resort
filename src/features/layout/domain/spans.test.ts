@@ -124,15 +124,16 @@ describe('spanTilesFor', () => {
 describe('the bridge models', () => {
   it('stands the deck a metre above the paving that runs into it', () => {
     // The contract the art is authored to, and the whole point of the pair: a
-    // bridge is the one paving raised above the ground it is laid on.
-    expect(objectTypeById(BRIDGE_ID).model.height).toBe(BRIDGE_VOXELS + 4);
+    // bridge is the one paving raised above the ground it is laid on. Its
+    // parapets are railings of their own, so the deck's top is its planking.
+    expect(objectTypeById(BRIDGE_ID).model.height).toBe(BRIDGE_VOXELS);
     expect(objectTypeById(PATH_ID).model.height).toBe(PAVING_VOXELS);
     expect(BRIDGE_VOXELS).toBeGreaterThan(PAVING_VOXELS);
   });
 
   it('climbs the ramp to exactly the height the deck runs at', () => {
-    // Both are drawn from the same part at the same rail height, so the two
-    // models are as tall as each other exactly when the top tread is the deck.
+    // Both are drawn from the same part, so the two models are as tall as each
+    // other exactly when the top tread is the deck.
     expect(objectTypeById(BRIDGE_RAMP_ID).model.height).toBe(
       objectTypeById(BRIDGE_ID).model.height,
     );

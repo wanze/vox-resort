@@ -12,6 +12,9 @@ import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
 import bridge from './bridge.ts';
 import bridge_ramp from './bridge-ramp.ts';
+import bridge_ramp_railing_left from './bridge-ramp-railing-left.ts';
+import bridge_ramp_railing_right from './bridge-ramp-railing-right.ts';
+import bridge_railing from './bridge-railing.ts';
 import bungalow from './bungalow.ts';
 import changing_cabins from './changing-cabins.ts';
 import coffee_shop from './coffee-shop.ts';
@@ -35,6 +38,7 @@ import olive from './olive.ts';
 import palm from './palm.ts';
 import path from './path.ts';
 import pedalo_rental from './pedalo-rental.ts';
+import pier_railing from './pier-railing.ts';
 import picnic_table from './picnic-table.ts';
 import pine from './pine.ts';
 import playground from './playground.ts';
@@ -68,7 +72,11 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   bridge_ramp,
   stairs,
   railing,
+  pier_railing,
   stair_railing,
+  bridge_railing,
+  bridge_ramp_railing_left,
+  bridge_ramp_railing_right,
   hedge,
   street_lamp,
   litter_bin,

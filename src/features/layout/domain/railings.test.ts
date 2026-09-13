@@ -122,6 +122,20 @@ describe('railsAt, over water', () => {
     expect(sides(railsAt({ x: 1, z: 2 }, pier, flat, sea)).toSorted()).toEqual([1, 3]);
   });
 
+  it('rails a pier with the lit pier rail, and the dry paving with the plain one', () => {
+    const pier = pavedOf([
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ]);
+    const shore = pavedOf([{ x: 1, z: 1 }]);
+    expect(railsAt({ x: 1, z: 2 }, pier, flat, sea).map((rail) => rail.kind)).toEqual([
+      'pier',
+      'pier',
+      'pier',
+    ]);
+    expect(railsAt({ x: 1, z: 1 }, shore, flat, sea).map((rail) => rail.kind)).toEqual(['edge']);
+  });
+
   it('rails the head of a pier on three sides and leaves the way back open', () => {
     const pier = pavedOf([
       { x: 1, z: 1 },
@@ -145,26 +159,95 @@ describe('railsAt, over water', () => {
 /** Inland water from row 2 down, which a bridge stands a metre above. */
 const channel = (_x: number, tileZ: number): boolean => tileZ >= 2;
 
+/** A lake three rows deep, so a crossing of it has a deck in its middle. */
+const lake = (_x: number, tileZ: number): boolean => tileZ >= 2 && tileZ <= 4;
+
+/** Water under everything, which is what a platform out on a lake stands over. */
+const openWater = (): boolean => true;
+
 describe('railsAt, over a crossing', () => {
-  it('leaves a raised span to guard itself, where it rails a flat pier', () => {
-    // The same three tiles of paving over the same water, asked twice. A jetty
-    // lies on the sea and gets its rails from here; a bridge's deck is a metre
-    // up, so a rail stood on the tile would be a rail in the river, and the
-    // model carries its own parapet instead. See `spans.ts`.
-    const span = pavedOf([
+  /** A crossing north to south at x = 1, over rows 2 and 3 of the channel. */
+  const crossing = pavedOf([
+    { x: 1, z: 1 },
+    { x: 1, z: 2 },
+    { x: 1, z: 3 },
+    { x: 1, z: 4 },
+    { x: 1, z: 5 },
+  ]);
+
+  it('never stands the ordinary rail on a raised span, where it rails a flat pier', () => {
+    // The same paving over the same water, asked twice. A jetty lies on the sea
+    // and takes the ordinary rail; a bridge's deck is a metre up, so that rail
+    // would stand in the river, inside the deck.
+    expect(railsAt({ x: 1, z: 3 }, crossing, flat, lake).map((rail) => rail.kind)).toEqual([
+      'pier',
+      'pier',
+    ]);
+    expect(railsAt({ x: 1, z: 3 }, crossing, flat, lake, lake)).toEqual([
+      { tile: { x: 1, z: 3 }, rotation: 1, kind: 'span' },
+      { tile: { x: 1, z: 3 }, rotation: 3, kind: 'span' },
+    ]);
+  });
+
+  it('rails a ramp up both flanks with the two mirrored parapets', () => {
+    // The ramp at z = 2 comes off the bank to the north, so its turn is 0. Looking
+    // up the climb — south — the west flank is on the right and the east on the left.
+    expect(railsAt({ x: 1, z: 2 }, crossing, flat, lake, lake)).toEqual([
+      { tile: { x: 1, z: 2 }, rotation: 1, kind: 'ramp-right' },
+      { tile: { x: 1, z: 2 }, rotation: 3, kind: 'ramp-left' },
+    ]);
+    // And the far ramp comes off the south bank, which swaps which flank is which.
+    expect(railsAt({ x: 1, z: 4 }, crossing, flat, lake, lake)).toEqual([
+      { tile: { x: 1, z: 4 }, rotation: 1, kind: 'ramp-left' },
+      { tile: { x: 1, z: 4 }, rotation: 3, kind: 'ramp-right' },
+    ]);
+  });
+
+  it('leaves the junction of two crossings open all four ways', () => {
+    const junction = pavedOf([
       { x: 1, z: 1 },
       { x: 1, z: 2 },
       { x: 1, z: 3 },
+      { x: 1, z: 4 },
+      { x: 1, z: 5 },
+      { x: 0, z: 3 },
+      { x: 2, z: 3 },
     ]);
-    expect(sides(railsAt({ x: 1, z: 2 }, span, flat, sea)).toSorted()).toEqual([1, 3]);
-    expect(railsAt({ x: 1, z: 2 }, span, flat, sea, sea)).toEqual([]);
+    const everywhere = (tileX: number, tileZ: number): boolean => lake(tileX, tileZ) || tileZ === 3;
+    expect(railsAt({ x: 1, z: 3 }, junction, flat, everywhere, everywhere)).toEqual([]);
+  });
+
+  it('rails a platform round its rim and nowhere across its middle', () => {
+    const tiles: Tile[] = [];
+    for (let x = 0; x < 3; x++) for (let z = 2; z <= 4; z++) tiles.push({ x, z });
+    const platform = pavedOf(tiles);
+    expect(railsAt({ x: 1, z: 3 }, platform, flat, openWater, openWater)).toEqual([]);
+    // A corner is railed along its two outer edges.
+    expect(sides(railsAt({ x: 0, z: 2 }, platform, flat, openWater, openWater))).toEqual([0, 1]);
+    // And an edge tile along its one.
+    expect(railsAt({ x: 1, z: 4 }, platform, flat, openWater, openWater)).toEqual([
+      { tile: { x: 1, z: 4 }, rotation: 2, kind: 'span' },
+    ]);
+  });
+
+  it('rails the head of a crossing that stops one tile out', () => {
+    // Half a crossing: the ramp's far end is open water.
+    const stub = pavedOf([
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ]);
+    expect(railsAt({ x: 1, z: 2 }, stub, flat, lake, lake).map((rail) => rail.kind)).toEqual([
+      'ramp-right',
+      'span',
+      'ramp-left',
+    ]);
   });
 
   it('still rails the dry paving along the bank, which is not the bridge', () => {
     // A promenade down the near bank with one crossing off it. The tile the
     // crossing leaves from is open to it — paving is always the way through —
     // and the tiles either side of that are railed against the river as they
-    // would be against any other water. Only the wet tile is skipped.
+    // would be against any other water.
     const bank = pavedOf([
       { x: 0, z: 1 },
       { x: 1, z: 1 },
@@ -173,7 +256,6 @@ describe('railsAt, over a crossing', () => {
     ]);
     expect(sides(railsAt({ x: 0, z: 1 }, bank, flat, channel, channel))).toEqual([2]);
     expect(railsAt({ x: 1, z: 1 }, bank, flat, channel, channel)).toEqual([]);
-    expect(railsAt({ x: 1, z: 2 }, bank, flat, channel, channel)).toEqual([]);
   });
 });
 

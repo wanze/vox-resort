@@ -225,9 +225,10 @@ function spanOver(tile: Tile, rules: PavingRules): LayoutItem | null {
  * Inland water with a bridge in the catalogue, which is the same pair of
  * questions {@link spanOver} asks — it is asked twice because the two answers
  * are different shapes, an item and a fact about the ground, and `spans.ts`
- * wants the fact.
+ * wants the fact — and so does `handrails.ts`, which rails a crossing with the
+ * bridge's own parapets rather than the ordinary rail.
  */
-const raisedProvider =
+export const raisedProvider =
   (rules: PavingRules): SpanProvider =>
   (tileX, tileZ) =>
     rules.bridge !== null && rules.isWater(tileX, tileZ) && !rules.isSea(tileX, tileZ);

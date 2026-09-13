@@ -19,8 +19,9 @@
  *   beside it: the bank. It is turned to face that bank, and it carries the
  *   climb from the paving up to the deck.
  * - **A deck** is every other tile of the span — the level middle. It is turned
- *   along the crossing, so its planks lie across the run and its parapets stand
- *   on the flanks rather than across the way through.
+ *   along the crossing, so its planks lie across the run. Its parapets are not
+ *   its own: `railings.ts` stands them along whichever edges are open, which is
+ *   what leaves a junction of two crossings, or a platform, open in the middle.
  *
  * A crossing of the river a bare plot is handed is two tiles wide, so it is two
  * ramps meeting at their heads and no deck at all. Decks are what a lake three

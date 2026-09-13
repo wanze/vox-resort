@@ -10,6 +10,9 @@ import {
 import type { LevelProvider } from '../../layout/domain/elevation';
 import {
   BOARDWALK_ID,
+  BRIDGE_RAILING_ID,
+  BRIDGE_RAMP_RAILING_LEFT_ID,
+  BRIDGE_RAMP_RAILING_RIGHT_ID,
   PATH_ID,
   RAILING_ID,
   STAIR_RAILING_ID,
@@ -35,6 +38,9 @@ const CATALOGUE = [
   STAIRS,
   item(RAILING_ID, 16, 2),
   item(STAIR_RAILING_ID),
+  item(BRIDGE_RAILING_ID, 16, 2),
+  item(BRIDGE_RAMP_RAILING_LEFT_ID, 16, 2),
+  item(BRIDGE_RAMP_RAILING_RIGHT_ID, 16, 2),
 ];
 
 /** A level field from a picture: one string per row, digits for levels. */
@@ -57,6 +63,7 @@ const rules = (parts: Partial<HandrailRules> = {}): HandrailRules => ({
   pavedWith: () => null,
   levelOf: () => 0,
   isWater: () => false,
+  isSpan: () => false,
   models: railModelsIn(CATALOGUE),
   standing: () => [],
   ...parts,
@@ -212,6 +219,58 @@ describe('railChangeAt', () => {
     }
     // And the placement is stood on the level of the tile it guards.
     expect(change.stand[0]!.y).toBe(place(PATH, 'x', 1, 1, 0, 1).y);
+  });
+});
+
+/** A channel across rows 1 to 3, crossed north to south at x = 1. */
+const channel = (_x: number, tileZ: number): boolean => tileZ >= 1 && tileZ <= 3;
+
+describe('railChangeAt, over a crossing', () => {
+  const crossing = [
+    { x: 1, z: 0 },
+    { x: 1, z: 1 },
+    { x: 1, z: 2 },
+    { x: 1, z: 3 },
+    { x: 1, z: 4 },
+  ];
+
+  it('rails a crossing drawn by hand with its own parapets, never the ordinary rail', () => {
+    // The white rail that used to stand inside every hand-drawn bridge: the
+    // pointer asked the rail rule without saying which water is spanned.
+    const change = railChangeAt(
+      { x: 1, z: 2 },
+      rules({ pavedWith: pavedOf(crossing), isWater: channel, isSpan: channel }),
+    );
+    expect(railsOf(change.stand)).toEqual([
+      { id: BRIDGE_RAILING_ID, x: 1, z: 2, rotation: 1 },
+      { id: BRIDGE_RAILING_ID, x: 1, z: 2, rotation: 3 },
+      { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 1, z: 1, rotation: 3 },
+      { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 1, z: 3, rotation: 1 },
+      { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 1, z: 1, rotation: 1 },
+      { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 1, z: 3, rotation: 3 },
+    ]);
+  });
+
+  it('opens the middle of a crossing up when a second one is drawn across it', () => {
+    const along = railChangeAt(
+      { x: 1, z: 2 },
+      rules({ pavedWith: pavedOf(crossing), isWater: channel, isSpan: channel }),
+    ).stand;
+    const across = [...crossing, { x: 0, z: 2 }, { x: 2, z: 2 }];
+    const change = railChangeAt(
+      { x: 2, z: 2 },
+      rules({
+        pavedWith: pavedOf(across),
+        isWater: channel,
+        isSpan: channel,
+        standing: standingOf(along),
+      }),
+    );
+    // Both flanks of the middle tile are now the way through.
+    expect(railsOf(change.lift).filter((rail) => rail.z === 2 && rail.x === 1)).toEqual([
+      { id: BRIDGE_RAILING_ID, x: 1, z: 2, rotation: 1 },
+      { id: BRIDGE_RAILING_ID, x: 1, z: 2, rotation: 3 },
+    ]);
   });
 });
 

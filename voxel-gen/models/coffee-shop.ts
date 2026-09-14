@@ -1,9 +1,14 @@
 /**
  * Resort coffee shop: a whitewashed single-storey bar under a terracotta gable,
- * with a serving hatch under a red blind and a terrace of three parasol tables
- * in front of it, every one with a chair drawn up at either end.
- * 48x32 (12x8 m plot, a 10x3.5 m room 3 m to the eaves, before a 12x3.5 m
- * terrace), a 3x2 tile. The terrace faces +z.
+ * with a serving hatch under a red blind and a terrace of seven parasol tables
+ * in two staggered rows in front of it, every one with a chair drawn up at
+ * either end.
+ * 48x48 (12x12 m plot, a 10x5.5 m room 3 m to the eaves, before a 12x5.5 m
+ * terrace), a 3x3 tile. The terrace faces +z.
+ *
+ * The room was 3.5 m deep on a 3x2 plot, which is a kiosk with a roof on: no
+ * room behind the hatch for a back bar and a person to stand at it. A tile more
+ * of plot buys a room a café actually is, and a second row of tables.
  *
  * The companion to `bench.ts` and the second half of the same pass: a bench is
  * somewhere to sit on the way past something, and this is somewhere people sit
@@ -29,11 +34,11 @@ import { gableRoof } from '../parts/roof.ts';
 import { awning, doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** The plot: three tiles by two. */
-const PLOT = { w: 48, d: 32 } as const;
+/** The plot: three tiles by three. */
+const PLOT = { w: 48, d: 48 } as const;
 
 /** The room that does the serving, across the back of the plot. */
-const BODY = { x: 4, z: 3, w: 40, d: 14 } as const;
+const BODY = { x: 4, z: 3, w: 40, d: 22 } as const;
 const FRONT = BODY.z + BODY.d - 1;
 const LEFT = BODY.x;
 const RIGHT = BODY.x + BODY.w - 1;
@@ -45,18 +50,21 @@ const SLAB = 3;
 const HATCH = { along: 18, w: 12, h: 6 } as const;
 
 /**
- * The three tables, by the column their pedestal stands in.
+ * The two rows of tables: the columns their pedestals stand in, and the rows
+ * their tops span.
  *
- * Evenly across the plot rather than across the room: the terrace is the whole
- * width of the plinth, and a table under each third of it is what keeps the
- * outer two clear of the pots at the corners.
+ * Staggered, so the back chair of a front table and the front chair of a back
+ * one never stand in the same columns — the two rows are closer together than
+ * a pair of chairs is deep, and staggering is what lets them be.
  */
-const TABLES = [10, 23, 36] as const;
+const ROWS = [
+  { tables: [14, 26, 38], top: 29 },
+  { tables: [8, 20, 32, 44], top: 40 },
+] as const;
 
-/** The rows the two chairs of a table stand in, and the table top between them. */
-const TOP = { z: 22, z1: 25 } as const;
-const NEAR = TOP.z - 3;
-const FAR = TOP.z1 + 2;
+/** The rows the two chairs of a table stand in, from the row its top starts on. */
+const near = (top: number): number => top - 3;
+const far = (top: number): number => top + 5;
 
 /**
  * The one colour that burns after dark, and the lamp that goes with it.
@@ -71,7 +79,7 @@ export default defineModel({
   id: 'coffee-shop',
   label: 'Coffee Shop',
   category: 'amenities',
-  tiles: { x: 3, z: 2 },
+  tiles: { x: 3, z: 3 },
   emissive: [LANTERN],
   windows: WINDOW_GLASS,
   /**
@@ -83,18 +91,20 @@ export default defineModel({
    * tables instead of grazing their tops — the note the restaurant's second
    * lamp carries, for the same reason.
    */
-  lights: [{ x: 24, y: SLAB + 13, z: 24, color: LANTERN, intensity: 70, distance: 44 }],
+  lights: [{ x: 24, y: SLAB + 13, z: 36, color: LANTERN, intensity: 70, distance: 44 }],
   /**
-   * Six chairs: one at either end of each table, facing across it.
+   * Fourteen chairs: one at either end of each table, facing across it.
    *
    * A chair on all four sides would put four figures round a 1 m table with
    * their knees through it, and two is the pair the camera can see — the same
    * call the taverna's tables make.
    */
-  seats: TABLES.flatMap((x) => [
-    { x, y: SLAB + 2, z: NEAR, facing: 0 as const },
-    { x, y: SLAB + 2, z: FAR, facing: 2 as const },
-  ]),
+  seats: ROWS.flatMap((row) =>
+    row.tables.flatMap((x) => [
+      { x, y: SLAB + 2, z: near(row.top), facing: 0 as const },
+      { x, y: SLAB + 2, z: far(row.top), facing: 2 as const },
+    ]),
+  ),
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, foliage, glass, slate, stone, teak } = PALETTE;
@@ -167,7 +177,7 @@ export default defineModel({
       ['x-', LEFT],
       ['x+', RIGHT],
     ] as const) {
-      shutteredWindow(b, { face, at, along: BODY.z + 5, y: ground + 4 });
+      shutteredWindow(b, { face, at, along: BODY.z + 9, y: ground + 4 });
     }
 
     // The back bar, seen through the hatch: a counter with a glazed shelf over
@@ -184,26 +194,28 @@ export default defineModel({
      * one they rattle around in reads as a bench. The seat course is `ground`
      * plus one, so hips land on `ground + 2`, which is what the model declares.
      */
-    const table = (x: number): void => {
-      box(x, x + 1, ground, ground + 2, TOP.z + 1, TOP.z + 2, teak.shade);
-      box(x - 1, x + 2, ground + 3, ground + 3, TOP.z, TOP.z1, teak.light);
+    const table = (x: number, top: number): void => {
+      box(x, x + 1, ground, ground + 2, top + 1, top + 2, teak.shade);
+      box(x - 1, x + 2, ground + 3, ground + 3, top, top + 3, teak.light);
       for (const [z, rail] of [
-        [NEAR, NEAR - 1],
-        [FAR, FAR + 2],
+        [near(top), near(top) - 1],
+        [far(top), far(top) + 2],
       ] as const) {
         box(x - 1, x + 1, ground, ground + 1, z, z + 1, teak.base);
         box(x - 1, x + 1, ground + 2, ground + 3, rail, rail, teak.base);
       }
       // The canopy goes up through the pedestal, 2 m over the paving: a seated
       // figure's head is four courses above its hips, so it clears by two.
-      parasol(b, { x, z: TOP.z + 1, y: ground });
+      parasol(b, { x, z: top + 1, y: ground });
     };
 
-    for (const x of TABLES) table(x);
+    for (const row of ROWS) {
+      for (const x of row.tables) table(x, row.top);
+    }
 
     // Planting where the eye enters the plot: a pot at each front corner of the
-    // terrace and a box under each of the two back windows.
-    for (const x of [2, PLOT.w - 4]) pottedPlant(b, { x, z: PLOT.d - 4, y: ground });
+    // room and a box under each of the two back windows.
+    for (const x of [2, PLOT.w - 4]) pottedPlant(b, { x, z: FRONT + 3, y: ground });
     for (const x of [BODY.x + 4, BODY.x + 24]) {
       flowerBox(b, {
         x,
@@ -214,9 +226,5 @@ export default defineModel({
         blooms: [foliage.base, foliage.light],
       });
     }
-
-    // One green note on the terrace itself, at the end away from the door, so
-    // the paving is not one flat field of stone between the tables.
-    pottedPlant(b, { x: PLOT.w - 4, z: FRONT + 2, y: ground });
   },
 });

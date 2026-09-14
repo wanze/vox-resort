@@ -5,8 +5,12 @@
  * and an air hockey table in the middle and a prize counter down one side —
  * under a flat slate roof with a neon band round its eaves and a lit sign box
  * standing over the entrance.
- * 48x48x24 (12x12 m plot, a 10x8.5 m hall 3 m to the eaves, 6 m to the top of
- * the sign), a 3x3 tile. The open front faces +z.
+ * 64x64x24 (16x16 m plot, a 14x11 m hall 3 m to the eaves, 6 m to the top of
+ * the sign), a 4x4 tile. The open front faces +z.
+ *
+ * It was a 10x8.5 m hall on 3x3 tiles — 85 m², a games room rather than an
+ * arcade. At 150 m² the front takes five bays instead of three, and the room has
+ * space for a third table and a proper prize counter.
  *
  * Drawn from `docs/references/arcade.jpg` read back into the lane: the
  * reference is a cream box with a grey flat roof, red neon under the eaves and
@@ -44,7 +48,8 @@ const NEON = PALETTE.bloom.light;
 const SIGN = PALETTE.amber.light;
 const SCREEN = PALETTE.water.light;
 
-const BODY = { x: 4, z: 5, w: 40, d: 34 } as const;
+const PLOT = 64;
+const BODY = { x: 4, z: 5, w: 56, d: 44 } as const;
 const FRONT = BODY.z + BODY.d - 1;
 const LEFT = BODY.x;
 const RIGHT = BODY.x + BODY.w - 1;
@@ -56,9 +61,9 @@ const RIGHT = BODY.x + BODY.w - 1;
  * from a camera looking down at it, and what is behind these arches is the
  * model.
  */
-const ARCADE = { z: 37, d: 2, bays: 3 } as const;
+const ARCADE = { z: FRONT - 1, d: 2, bays: 5 } as const;
 /** The room, carved out of the body: the shell is what is left round it. */
-const HALL = { x: 7, x1: 40, z: 8, z1: 36 } as const;
+const HALL = { x: 7, x1: 56, z: 8, z1: FRONT - 2 } as const;
 
 /**
  * How far the roof oversails. One voxel rather than the two the pitched roofs
@@ -68,28 +73,29 @@ const HALL = { x: 7, x1: 40, z: 8, z1: 36 } as const;
 const OVERHANG = 1;
 
 /** The two tables, across the room from the centre bay that looks in at them. */
-const TABLES = { z: 27, z1: 33 } as const;
+const TABLES = { z: 34, z1: 40 } as const;
 
 /** The sign box on the parapet, centred on the middle bay. */
-const BOARD = { x: 16, x1: 31, y: 19, y1: 23 } as const;
+const BOARD = { x: 24, x1: 39, y: 19, y1: 23 } as const;
 
 export default defineModel({
   id: 'game-hall',
   label: 'Game Hall',
   category: 'leisure',
-  tiles: { x: 3, z: 3 },
+  tiles: { x: 4, z: 4 },
   emissive: [NEON, SIGN, SCREEN],
   windows: WINDOW_GLASS,
-  // One lamp, standing in the middle of the room a little forward of the
-  // tables, so after dark the hall spills onto its own forecourt. One is all
-  // this model wants: it is a single room 12 m across, and a lamp reaching 13
-  // of them from the middle of it already lights the forecourt as well.
-  lights: [{ x: 24, y: 11, z: 26, color: SIGN, intensity: 90, distance: 52 }],
+  // Two lamps down the middle of the room, the front one a little forward of
+  // the tables, so after dark the hall spills onto its own forecourt.
+  lights: [
+    { x: 32, y: 11, z: 34, color: SIGN, intensity: 90, distance: 52 },
+    { x: 32, y: 11, z: 16, color: SIGN, intensity: 70, distance: 40 },
+  ],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { stone, stucco, slate, metal, teak, foliage, bloom } = PALETTE;
 
-    const ground = plinth(b, { x: 0, z: 0, w: 48, d: 48 });
+    const ground = plinth(b, { x: 0, z: 0, w: PLOT, d: PLOT });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
 
     // The arcade repaints the front strip of the body and carves its bays
@@ -143,7 +149,7 @@ export default defineModel({
     // Windows all the way round, and big ones: a hall is seen from three sides
     // and glazed on all of them in the reference, so a pair of cottage windows
     // on an elevation this long would read as the back of the building.
-    for (const along of [10, 22]) {
+    for (const along of [10, 22, 34]) {
       for (const [face, at] of [
         ['x-', LEFT],
         ['x+', RIGHT],
@@ -151,7 +157,7 @@ export default defineModel({
         shutteredWindow(b, { face, at, along, y: ground + 3, w: 8, h: 7, shutters: false });
       }
     }
-    for (const along of [12, 26]) {
+    for (const along of [10, 24, 38, 50]) {
       shutteredWindow(b, {
         face: 'z-',
         at: BODY.z,
@@ -168,7 +174,8 @@ export default defineModel({
     const deck = eaves + 1;
     for (const [x, z] of [
       [9, 9],
-      [33, 13],
+      [45, 13],
+      [25, 30],
     ] as const) {
       box(x, x + 4, deck, deck + 1, z, z + 3, slate.shade);
       box(x, x + 4, deck + 2, deck + 2, z, z + 3, metal.base);
@@ -195,19 +202,19 @@ export default defineModel({
     // immediately inside the two outer bays, facing out through them; the back
     // wall gets a second, dimmer row for the room to have a depth at all.
     const screens = [SCREEN, NEON, SIGN];
-    for (const [i, x] of [8, 11, 14, 33, 36, 39].entries()) {
+    for (const [i, x] of [8, 11, 19, 22, 40, 43, 50, 53].entries()) {
       cabinet(x, HALL.z1 - 1, 'z+', screens[i % screens.length]!);
     }
-    for (const [i, x] of [12, 16, 20, 24, 28].entries()) {
+    for (const [i, x] of [12, 16, 20, 24, 28, 32, 36, 40, 44].entries()) {
       cabinet(x, HALL.z, 'z+', screens[(i + 2) % screens.length]!);
     }
-    for (const [i, z] of [12, 16, 20].entries()) {
+    for (const [i, z] of [12, 16, 20, 24, 28].entries()) {
       cabinet(HALL.x, z, 'x+', screens[(i + 1) % screens.length]!);
     }
 
     // The prize counter down the right-hand wall.
-    box(37, HALL.x1, ground, ground + 2, 12, 26, teak.shade);
-    box(37, HALL.x1, ground + 3, ground + 3, 12, 26, stone.light);
+    box(51, HALL.x1, ground, ground + 2, 12, 30, teak.shade);
+    box(51, HALL.x1, ground + 3, ground + 3, 12, 30, stone.light);
 
     /**
      * A table: a timber body, a rail round the top and a playing surface inside
@@ -222,14 +229,15 @@ export default defineModel({
       box(x + 1, x1 - 1, ground + 3, ground + 3, TABLES.z + 1, TABLES.z1 - 1, surface);
     };
     table(12, 20, metal.base, stucco.light);
-    table(23, 33, teak.base, foliage.shade);
+    table(26, 36, teak.base, foliage.shade);
+    table(40, 50, teak.base, foliage.shade);
     // The halfway line of the air hockey table, which is one course across it
     // rather than a pattern painted over it.
     box(13, 19, ground + 3, ground + 3, TABLES.z + 3, TABLES.z + 3, bloom.base);
 
     // The forecourt: a darker apron up to the middle bay, planting either side.
-    box(14, 33, ground - 1, ground - 1, FRONT + 1, 46, stone.shade);
-    for (const x of [8, 37]) pottedPlant(b, { x, z: FRONT + 2, y: ground });
-    for (const x of [LEFT, 35]) flowerBox(b, { x, z: 44, y: ground, w: 9, along: 'x' });
+    box(22, 41, ground - 1, ground - 1, FRONT + 1, PLOT - 2, stone.shade);
+    for (const x of [8, 53]) pottedPlant(b, { x, z: FRONT + 2, y: ground });
+    for (const x of [LEFT, 51]) flowerBox(b, { x, z: PLOT - 4, y: ground, w: 9, along: 'x' });
   },
 });

@@ -501,10 +501,10 @@ describe('derived keys under an edit', () => {
     width: type.model.width,
     depth: type.model.depth,
   }));
-  /** The real plan, plus one more cottage on a free tile in the north-west. */
+  /** The real plan, plus one more cottage on a free tile beside the north-west hotel. */
   const edited: ResortPlan = {
     ...RESORT_PLAN,
-    plots: [...RESORT_PLAN.plots, { id: 'cottage', tileX: 5, tileZ: 5 }],
+    plots: [...RESORT_PLAN.plots, { id: 'cottage', tileX: 13, tileZ: 4 }],
   };
 
   it('keys every derived placement on the tile it stands on', () => {

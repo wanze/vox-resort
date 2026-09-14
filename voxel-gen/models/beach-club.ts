@@ -2,8 +2,13 @@
  * Upscale beach club: a boarded timber deck raised over the sand, with a
  * thatched bar along the back, an L of lounge seating beside it, two rows of
  * daybeds under parasols, and two flights down to the beach.
- * 64x64x27 (16x16 m plot, a 15x13 m deck a metre over the sand, 6.75 m to the
- * bar's ridge pole), a 4x4 tile. The deck faces +z, out to the sea.
+ * 96x80x27 (24x20 m plot, a 23x16 m deck a metre over the sand, 6.75 m to the
+ * bar's ridge pole), a 6x5 tile. The deck faces +z, out to the sea.
+ *
+ * It was 16x16 m, which is a beach bar's deck rather than a club's: two rows of
+ * daybeds and a lounge had to share it with the bar. The plot is half again as
+ * wide and a tile deeper, and what the room bought is six daybeds to a row, a
+ * longer counter, and a third flight down to the sand.
  *
  * Massing and dressing from `docs/references/pool-deck.jpg` — a deck laid edge
  * to edge with its loungers along one side — and from `tiki-bar.jpg` for the
@@ -35,8 +40,8 @@ import { thatchRoof } from '../parts/roof.ts';
 import { balustrade } from '../parts/veranda.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const X = 63;
-const Z = 63;
+const X = 95;
+const Z = 79;
 
 /**
  * The deck's own surface layer: two courses of sand plus four of boards, which
@@ -47,16 +52,16 @@ const Z = 63;
 const TOP_LAYER = 6;
 
 /** The raised deck. What is left in front of it, at +z, is beach. */
-const DECK = { x: 2, z: 2, w: 60, d: 52 } as const;
+const DECK = { x: 2, z: 2, w: 92, d: 64 } as const;
 const BRINK = DECK.z + DECK.d - 1;
 const LEFT = DECK.x;
 const RIGHT = DECK.x + DECK.w - 1;
 
-/** Where a stool stands at the counter, five across the 7 m run. */
-const STOOLS = [7, 12, 17, 22, 27] as const;
+/** Where a stool stands at the counter, eight across the 10 m run. */
+const STOOLS = [7, 12, 17, 22, 27, 32, 37, 42] as const;
 
 /** The bar hut: a servery wall, a counter in front of it, thatch over both. */
-const BAR = { x: 5, z: 4, w: 28, d: 10 } as const;
+const BAR = { x: 5, z: 4, w: 40, d: 10 } as const;
 
 /**
  * The counter's back row, and the eave the thatch comes down to.
@@ -70,19 +75,18 @@ const COUNTER = BAR.z + BAR.d - 2;
 const EAVE_OVERHANG = 2;
 
 /** Where the lounge sits: the back corner the bar does not take. */
-const LOUNGE = { x: 38, z: 4, x1: 59, z1: 26 } as const;
+const LOUNGE = { x: 58, z: 4, x1: 89, z1: 30 } as const;
 
 /**
- * The two flights down to the sand, and how wide they are.
+ * The three flights down to the sand, and how wide they are.
  *
- * Two rather than the one the restaurant's terrace takes, and set in from the
- * ends rather than centred, because this front is 15 m of open deck: a single
- * flight on the centre line would leave the daybeds either side of a gap
- * nothing crosses, and it would cut the row in half. Two flights read as the
- * two ways down onto the beach, and they break the long balustrade run into
- * three at no cost, since the run is what they are cut out of.
+ * Set between the daybeds rather than centred on the front, because this front
+ * is 23 m of open deck: a single flight on the centre line would leave the
+ * daybeds either side of a gap nothing crosses. Three flights read as the ways
+ * down onto the beach, and they break the long balustrade run into four at no
+ * cost, since the run is what they are cut out of.
  */
-const FLIGHTS = [10, 46] as const;
+const FLIGHTS = [15, 43, 71] as const;
 const FLIGHT_W = 6;
 
 /**
@@ -107,20 +111,25 @@ const FLIGHT_W = 6;
 const LANTERN = PALETTE.amber.light;
 
 const DAYBEDS = [
-  [8, 42],
-  [22, 42],
-  [36, 42],
-  [50, 42],
-  [6, 22],
-  [20, 22],
-  [34, 22],
+  [4, 54],
+  [22, 54],
+  [32, 54],
+  [50, 54],
+  [60, 54],
+  [80, 54],
+  [6, 34],
+  [20, 34],
+  [34, 34],
+  [48, 34],
+  [62, 34],
+  [76, 34],
 ] as const;
 
 export default defineModel({
   id: 'beach-club',
   label: 'Beach Club',
   category: 'leisure',
-  tiles: { x: 4, z: 4 },
+  tiles: { x: 6, z: 5 },
   emissive: [LANTERN],
   /**
    * Eighteen people: five on stools at the counter, six round the lounge, and
@@ -138,7 +147,7 @@ export default defineModel({
    */
   seats: [
     ...STOOLS.map((x) => ({ x, y: TOP_LAYER + 3, z: COUNTER + 3, facing: 2 }) as const),
-    ...[LOUNGE.x + 3, LOUNGE.x + 8, LOUNGE.x + 13].map(
+    ...[LOUNGE.x + 3, LOUNGE.x + 8, LOUNGE.x + 13, LOUNGE.x + 18, LOUNGE.x + 23].map(
       (x) => ({ x, y: TOP_LAYER + 2, z: LOUNGE.z + 2, facing: 0 }) as const,
     ),
     ...[LOUNGE.z + 8, LOUNGE.z + 14, LOUNGE.z + 20].map(
@@ -160,7 +169,7 @@ export default defineModel({
    * rather than frame time — `lightGrid.ts` bakes every anchor into one
    * irradiance volume at load — and `pnpm bench` is where that shows up.
    */
-  lights: [{ x: 19, y: 15, z: 12, color: LANTERN, intensity: 90, distance: 52 }],
+  lights: [{ x: 25, y: 15, z: 12, color: LANTERN, intensity: 90, distance: 52 }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, sand, stone, stucco, teak } = PALETTE;
@@ -206,7 +215,7 @@ export default defineModel({
     // trade at the flower box's scale: nine loose voxels are nine quads and
     // nobody's frame notices, where nine hundred across a wall would be.
     const BOTTLES = [foliage.base, amber.base, bloom.base] as const;
-    for (let bottle = 0; bottle < 9; bottle++) {
+    for (let bottle = 0; bottle < 12; bottle++) {
       const x = BAR.x + 3 + bottle * 3;
       box(x, x, top + 5, top + 6, BAR.z + 2, BAR.z + 2, BOTTLES[bottle % BOTTLES.length]!);
     }
@@ -247,7 +256,7 @@ export default defineModel({
       box(x, x, eaves - 3, eaves - 2, COUNTER + 2, COUNTER + 2, LANTERN);
       box(x, x, eaves - 1, eaves - 1, COUNTER + 2, COUNTER + 2, teak.shade);
     };
-    for (const x of [BAR.x + 4, BAR.x + 13, BAR.x + 22]) lantern(x);
+    for (const x of [BAR.x + 4, BAR.x + 15, BAR.x + 26, BAR.x + 36]) lantern(x);
 
     /**
      * A low sofa: a teak frame, a pale seat cushion and a back against the side
@@ -273,11 +282,11 @@ export default defineModel({
     sofa(LOUNGE.x1 - 3, LOUNGE.x1, LOUNGE.z + 4, LOUNGE.z1, 'x+');
     // The table, drawn as the taverna's is: a teak block under a lighter top
     // that stands a voxel proud of it all the way round.
-    box(LOUNGE.x + 5, LOUNGE.x + 10, top, top + 1, LOUNGE.z + 10, LOUNGE.z + 15, teak.shade);
-    box(LOUNGE.x + 4, LOUNGE.x + 11, top + 2, top + 2, LOUNGE.z + 9, LOUNGE.z + 16, teak.light);
+    box(LOUNGE.x + 8, LOUNGE.x + 17, top, top + 1, LOUNGE.z + 10, LOUNGE.z + 17, teak.shade);
+    box(LOUNGE.x + 7, LOUNGE.x + 18, top + 2, top + 2, LOUNGE.z + 9, LOUNGE.z + 18, teak.light);
     // Cushions along both runs, which is where the amber of the parasols and
     // the bar stools comes back into the shade at the back of the deck.
-    for (const x of [LOUNGE.x + 3, LOUNGE.x + 15]) {
+    for (const x of [LOUNGE.x + 5, LOUNGE.x + 15, LOUNGE.x + 25]) {
       box(x, x + 2, top + 2, top + 3, LOUNGE.z + 1, LOUNGE.z + 1, amber.base);
     }
     for (const z of [LOUNGE.z + 7, LOUNGE.z1 - 4]) {
@@ -314,12 +323,11 @@ export default defineModel({
     for (const x of [LEFT, RIGHT]) {
       balustrade(b, { x, z: DECK.z, y: top, w: DECK.d, along: 'z', pitch: 3, rail: teak });
     }
-    const gaps = FLIGHTS.flatMap((x) => [x, x + FLIGHT_W - 1]);
-    for (const [from, to] of [
-      [LEFT, gaps[0]! - 1],
-      [gaps[1]! + 1, gaps[2]! - 1],
-      [gaps[3]! + 1, RIGHT],
-    ] as const) {
+    // The front run, cut into one length more than there are flights.
+    const starts = [LEFT, ...FLIGHTS.map((x) => x + FLIGHT_W)];
+    const ends = [...FLIGHTS.map((x) => x - 1), RIGHT];
+    for (const [i, from] of starts.entries()) {
+      const to = ends[i]!;
       balustrade(b, {
         x: from,
         z: BRINK,
@@ -358,12 +366,12 @@ export default defineModel({
     // Loungers left out on the sand beyond the deck, which is what tells a
     // beach club from a deck: the beach is part of the plot, and it is the one
     // thing on it a camera looking down at the front sees past the balustrade.
-    for (const x of [3, 20, 37, 54]) {
-      box(x, x + 3, beach, beach, 56, 61, teak.shade);
-      box(x, x + 3, beach + 1, beach + 1, 56, 61, stucco.light);
-      box(x, x + 3, beach + 2, beach + 2, 59, 59, amber.base);
-      box(x, x + 3, beach + 2, beach + 3, 56, 56, stucco.light);
-      box(x, x + 3, beach + 4, beach + 4, 56, 56, teak.base);
+    for (const x of [6, 26, 36, 56, 64, 86]) {
+      box(x, x + 3, beach, beach, 70, 75, teak.shade);
+      box(x, x + 3, beach + 1, beach + 1, 70, 75, stucco.light);
+      box(x, x + 3, beach + 2, beach + 2, 73, 73, amber.base);
+      box(x, x + 3, beach + 2, beach + 3, 70, 70, stucco.light);
+      box(x, x + 3, beach + 4, beach + 4, 70, 70, teak.base);
     }
   },
 });

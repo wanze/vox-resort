@@ -1,8 +1,14 @@
 /**
  * Resort hotel block: four whitewashed storeys of balconied rooms over an
  * arcaded entrance loggia, under a paved roof terrace with a plunge pool.
- * 96x64 (24x16 m plot, a 21x12 m block of four 3 m storeys, 14.25 m to the
- * roof rail), a 6x4 tile. Entrance and balconies face +z.
+ * 160x80 (40x20 m plot, a 37x14 m block of five 3 m storeys, about 17 m to the
+ * roof rail), a 10x5 tile. Entrance and balconies face +z.
+ *
+ * It was a 21x12 m block of four storeys on 6x4 tiles, which is a pension: a
+ * resort hotel block runs 40 m and more, and beside a 10 m house the old one was
+ * barely twice its length. The block is solid, as `wall.ts` asks, so it is the
+ * heaviest model in the catalogue by voxels — what it costs to draw is its
+ * surface, which grew far less than its volume.
  *
  * `docs/references/hotel.jpg` is a golden-hour render, so it is read here for
  * massing only — where the balconies go, how the entrance is covered, that the
@@ -31,29 +37,36 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 /** Lit at night, so it is drawn unlit at full brightness. */
 const LANTERN = PALETTE.amber.light;
 
-const BODY = { x: 6, z: 8, w: 84, d: 48 } as const;
+const PLOT = { w: 160, d: 80 } as const;
+const BODY = { x: 6, z: 10, w: 148, d: 56 } as const;
 const FRONT = BODY.z + BODY.d - 1;
 const LEFT = BODY.x;
 const RIGHT = BODY.x + BODY.w - 1;
-const STOREYS = 4;
+const STOREYS = 5;
 
 /** The entrance loggia, centred on the block and three bays wide. */
-const LOGGIA = { x: 31, w: 34, z: 58, d: 3 } as const;
+const LOGGIA = { x: 63, w: 34, z: FRONT + 3, d: 3 } as const;
 /** The three arches of it, so the entrance can sit under the middle one. */
-const ARCHES = [35, 45, 55] as const;
+const ARCHES = [67, 77, 87] as const;
 
 /**
- * Where each balcony starts, and how wide it is. Six to a storey reads as a
- * hotel rather than as a house with too many windows, and lines the balconies
- * up with the six tiles the block claims.
+ * Where each balcony starts, and how wide it is. Ten to a storey, one to every
+ * 3.5 m of front, which is the pitch a block of rooms is built at, centred on
+ * the block so both ends keep a pier of wall.
  */
-const BALCONIES = [8, 22, 36, 50, 64, 78] as const;
+const BALCONIES: readonly number[] = Array.from({ length: 10 }, (_, i) => 11 + i * 14);
 const BALCONY_W = 12;
 /** Balconies clear of the loggia, which takes the middle of the first floor. */
 const FIRST_FLOOR = BALCONIES.filter((x) => x + BALCONY_W <= LOGGIA.x || x >= LOGGIA.x + LOGGIA.w);
 
 /** The roof pool, sunk into the terrace the way the villa's is into its paving. */
-const POOL = { x: 26, z: 16, w: 25, d: 24 } as const;
+const POOL = { x: 30, z: 20, w: 40, d: 30 } as const;
+
+/** The stair and lift house on the roof, at the end away from the pool. */
+const STAIR_HOUSE = { x: 112, z: 24, w: 22, d: 18 } as const;
+
+/** The lanterns in the loggia, by the column they hang in. */
+const LANTERNS = [74, 85] as const;
 
 /**
  * Balusters every three voxels rather than every two, which is the one place
@@ -68,16 +81,20 @@ export default defineModel({
   id: 'hotel',
   label: 'Hotel',
   category: 'lodging',
-  tiles: { x: 6, z: 4 },
+  tiles: { x: 10, z: 5 },
   emissive: [LANTERN],
   windows: WINDOW_GLASS,
   // One lamp per lantern, a voxel clear of the wall it hangs on.
-  lights: [
-    { x: 42, y: 11, z: 57, color: LANTERN, intensity: 100, distance: 58 },
-    { x: 53, y: 11, z: 57, color: LANTERN, intensity: 100, distance: 58 },
-  ],
+  lights: LANTERNS.map((x) => ({
+    x,
+    y: 11,
+    z: FRONT + 2,
+    color: LANTERN,
+    intensity: 100,
+    distance: 58,
+  })),
   build: (b: VoxelBuilder) => {
-    const ground = plinth(b, { x: 0, z: 0, w: 96, d: 64 });
+    const ground = plinth(b, { x: 0, z: 0, w: PLOT.w, d: PLOT.d });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: STOREYS });
     // No parapet: a roof somebody swims on is a terrace, so it is edged the way
     // the balconies and the villa's terrace are, and the pool can be seen from
@@ -123,7 +140,10 @@ export default defineModel({
      * comes out on the first of these, which is what lets the terrace over the
      * entrance and the balconies either side of it read as one floor.
      */
-    const floors = [1, 2, 3].map((storey) => ground + storey * STOREY_VOXELS + 1);
+    const floors = Array.from(
+      { length: STOREYS - 1 },
+      (_, i) => ground + (i + 1) * STOREY_VOXELS + 1,
+    );
 
     for (const [storey, floor] of floors.entries()) {
       const rail = floor + 1;
@@ -166,7 +186,7 @@ export default defineModel({
     }
     // The lanterns, hung off the wall inside the loggia rather than out in the
     // weather, which is where the reference puts the light it burns.
-    for (const x of [42, 53]) {
+    for (const x of LANTERNS) {
       b.box(x, x + 1, ground + 6, ground + 9, FRONT + 1, FRONT + 1, PALETTE.metal.deep);
       b.box(x, x + 1, ground + 7, ground + 8, FRONT + 1, FRONT + 1, LANTERN);
     }
@@ -175,16 +195,16 @@ export default defineModel({
     // window whichever way it faces, and the block is seen from all of them.
     for (let storey = 0; storey < STOREYS; storey++) {
       const sill = ground + 3 + storey * STOREY_VOXELS;
-      for (const along of [14, 24, 34, 46]) {
+      for (const along of [16, 28, 40, 52]) {
         shutteredWindow(b, { face: 'x-', at: LEFT, along, y: sill, w: 4 });
         shutteredWindow(b, { face: 'x+', at: RIGHT, along, y: sill, w: 4 });
       }
-      for (const along of [12, 24, 36, 48, 60, 72, 84]) {
+      for (let along = 12; along <= 144; along += 12) {
         shutteredWindow(b, { face: 'z-', at: BODY.z, along, y: sill, w: 4 });
       }
     }
     // Ground floor, outboard of the loggia.
-    for (const along of [12, 24, 72, 84]) {
+    for (const along of [12, 24, 36, 48, 108, 120, 132, 144]) {
       shutteredWindow(b, { face: 'z+', at: FRONT, along, y: ground + 3, w: 4 });
     }
 
@@ -208,6 +228,13 @@ export default defineModel({
         b.set(x, eaves - 1, z, PALETTE.water.base);
       }
     }
+
+    // The stair and lift house: a whitewashed box on the terrace under a slate
+    // lid. A roof this long with nothing standing on it reads as a lid, and a
+    // block of five storeys has to come up onto its roof somewhere.
+    const lid = stuccoWall(b, { ...STAIR_HOUSE, y: deck, storeys: 1, skirting: 0 });
+    flatRoof(b, { ...STAIR_HOUSE, y: lid, parapet: 1 });
+    doorway(b, { face: 'x-', at: STAIR_HOUSE.x, along: STAIR_HOUSE.z + 7, y: deck, w: 4, h: 9 });
 
     // Planting at the entrance and nowhere else, the roof terrace included: the
     // lane spends its one piece of high-frequency detail on the way in.

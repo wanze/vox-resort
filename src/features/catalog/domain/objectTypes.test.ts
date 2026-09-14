@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DRAFT_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
@@ -146,7 +147,15 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(59);
+    expect(OBJECT_TYPES.length).toBe(58);
+  });
+
+  it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(DRAFT_SOURCES.length).toBeGreaterThan(0);
+    for (const draft of DRAFT_SOURCES) {
+      expect(catalogue.has(draft.id), `${draft.id} is in the catalogue`).toBe(false);
+    }
   });
 
   it('uses unique ids and labels', () => {

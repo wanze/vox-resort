@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_SOURCES } from './models/index.ts';
+import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PALETTE } from './palette.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
@@ -12,9 +12,16 @@ import { buildModel, type Color } from './voxelgen.ts';
  * a crowd in colours the resort never uses is a crowd that looks pasted on, and
  * so is a sky and so is a sea — so they are checked here rather than needing a
  * rule of their own. None of them is exempt: the palette was already in place
- * when they were drawn.
+ * when they were drawn. Drafts are held to it too, so one can be promoted
+ * without a palette pass of its own.
  */
-const PAINTED = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES];
+const PAINTED = [
+  ...MODEL_SOURCES,
+  ...DRAFT_SOURCES,
+  ...PEOPLE_SOURCES,
+  ...SKY_SOURCES,
+  ...SEA_SOURCES,
+];
 
 const families = (): [string, [string, Color][]][] =>
   Object.entries(PALETTE).map(([family, ramp]) => [family, Object.entries(ramp)]);

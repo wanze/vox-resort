@@ -1,7 +1,7 @@
 /**
  * Sign post: a timber post carrying three fingerboards, each pointing a
  * different way at a different height, on a low sand-coloured slab.
- * 16x16x17 (a 3.5 m post on a 4 m tile), a 1x1 tile.
+ * 16x16x14 (a 2.75 m post on a 4 m tile), a 1x1 tile.
  *
  * The same slab the bench, the hedge, the flower bed and the litter bin stand
  * on — two layers of `sand`, level with `PAVING_VOXELS`, because these are the
@@ -33,8 +33,8 @@ const GROUND = SLAB.height;
 /** The post: two voxels square, on the middle of the tile. */
 const POST = { x: 7, x1: 8, z: 7, z1: 8 } as const;
 
-/** Layers of post above the slab. Fourteen is three and a half metres. */
-const POST_HEIGHT = 14;
+/** Layers of post above the slab. Eleven is two and three quarter metres. */
+const POST_HEIGHT = 11;
 
 /** One fingerboard: the way it points, and the lowest of its two courses. */
 interface Finger {
@@ -51,8 +51,8 @@ interface Finger {
  * find the post inside them.
  */
 const FINGERS: readonly Finger[] = [
-  { points: 'x+', y: 12, band: PALETTE.bloom.base },
-  { points: 'x-', y: 9, band: PALETTE.amber.base },
+  { points: 'x+', y: 10, band: PALETTE.bloom.base },
+  { points: 'x-', y: 8, band: PALETTE.amber.base },
   { points: 'z+', y: 6, band: PALETTE.foliage.base },
 ];
 

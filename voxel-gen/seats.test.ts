@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MODEL_SOURCES } from './models/index.ts';
+import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { buildModel, TILE_VOXELS, type ModelSeat, type VoxelModel } from './voxelgen.ts';
 
@@ -25,7 +25,9 @@ import { buildModel, TILE_VOXELS, type ModelSeat, type VoxelModel } from './voxe
  * a course high is obvious beside its paving, where a rower a course high is
  * just a figure over open water. See `features/sea/domain/passengers.ts`.
  */
-const MODELS: readonly VoxelModel[] = [...MODEL_SOURCES, ...SEA_SOURCES].map(buildModel);
+const MODELS: readonly VoxelModel[] = [...MODEL_SOURCES, ...DRAFT_SOURCES, ...SEA_SOURCES].map(
+  buildModel,
+);
 
 const withSeats = MODELS.filter((model) => model.seats.length > 0);
 

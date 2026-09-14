@@ -1,8 +1,14 @@
 /**
- * Beach volleyball court: a single course of raked sand with a taped boundary, a
- * net strung between two posts across the middle, and a ball lying where
- * somebody left it. 64x11x32 (16 x 8 m), a 4x2 tile — which is the court a beach
- * volleyball court actually is, to the metre.
+ * Beach volleyball court: a single course of raked sand with a taped 16 x 8 m
+ * court in the middle of it, a net strung between two posts, a ball lying where
+ * somebody left it, and a bench and a parasol out in the run-off.
+ * 96x11x64 (24 x 16 m), a 6x4 tile.
+ *
+ * **The court is not the whole footprint any more.** A beach court is 16 x 8 m
+ * of lines inside a free zone at least 3 m deep all round, and the model was the
+ * lines alone — a court nobody could run off, drawn smaller than everything
+ * beside it. The tape is where it always was relative to the net, and there is
+ * 4 m of sand either side of it.
  *
  * **One course of sand, not the catalogue's two.** Every other object on the
  * plot stands on a slab: a plinth two or three layers deep with a darker lip
@@ -20,12 +26,6 @@
  * with no plate would have a shadow lying visibly across it. See
  * `rendering/domain/blobShadows.ts`.
  *
- * **The lines run to the footprint's own edge**, which is the other half of
- * taking the platform away. Inset, they were a court drawn smaller than the tiles
- * it claimed, with a border of sand around it that had to come from somewhere —
- * and where it came from was the platform. At the edge they are simply the 16 x 8
- * m the footprint already is.
- *
  * **The net is a solid plane.** A net is holes, and holes are the one thing this
  * grid must not draw — a mesh at one voxel a strand is a dither across a face,
  * which costs more triangles than a hotel and reads as noise from the height the
@@ -37,17 +37,21 @@
  * metre, so the whole thing is measured off the court rather than off the model.
  */
 import { PALETTE } from '../palette.ts';
+import { parasol } from '../parts/props.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** The court, which is the whole footprint: a model fills what it claims. */
-const COURT = { x1: 63, z1: 31 } as const;
+/** The sand, which is the whole footprint: a model fills what it claims. */
+const PLOT = { x1: 95, z1: 63 } as const;
+
+/** The taped court, 16 x 8 m, in the middle of the sand. */
+const COURT = { x0: 16, x1: 79, z0: 16, z1: 47 } as const;
 
 /** The layer the sand and its markings share, and the first free layer over it. */
 const SURFACE = 0;
 const GROUND = SURFACE + 1;
 
 /** The two net posts, on the middle of the long axis. */
-const POST = { x: 31, x1: 32 } as const;
+const POST = { x: 47, x1: 48 } as const;
 
 /** Layers of post above the court. Eleven is two and three quarter metres. */
 const POST_HEIGHT = 11;
@@ -59,40 +63,49 @@ export default defineModel({
   id: 'volleyball',
   label: 'Volleyball Court',
   category: 'leisure',
-  tiles: { x: 4, z: 2 },
+  tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, sand, stucco, teak } = PALETTE;
 
-    // The court: one course of sand across the whole footprint, no lip.
-    box(0, COURT.x1, SURFACE, SURFACE, 0, COURT.z1, sand.base);
+    // The sand: one course across the whole footprint, no lip.
+    box(0, PLOT.x1, SURFACE, SURFACE, 0, PLOT.z1, sand.base);
 
     // The boundary, laid into that same course so nothing is raised: four
-    // rectangles round the edge of the footprint, as a court is taped out.
-    box(0, COURT.x1, SURFACE, SURFACE, 0, 0, stucco.light);
-    box(0, COURT.x1, SURFACE, SURFACE, COURT.z1, COURT.z1, stucco.light);
-    box(0, 0, SURFACE, SURFACE, 0, COURT.z1, stucco.light);
-    box(COURT.x1, COURT.x1, SURFACE, SURFACE, 0, COURT.z1, stucco.light);
+    // rectangles, as a court is taped out.
+    box(COURT.x0, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z0, stucco.light);
+    box(COURT.x0, COURT.x1, SURFACE, SURFACE, COURT.z1, COURT.z1, stucco.light);
+    box(COURT.x0, COURT.x0, SURFACE, SURFACE, COURT.z0, COURT.z1, stucco.light);
+    box(COURT.x1, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z1, stucco.light);
 
-    // The posts, just outside the sidelines, as they stand on a real court.
+    // The posts, a metre outside the sidelines, as they stand on a real court.
     const top = GROUND + POST_HEIGHT - 1;
-    for (const z of [1, COURT.z1 - 2]) {
+    for (const z of [COURT.z0 - 5, COURT.z1 + 4]) {
       box(POST.x, POST.x1, GROUND, top, z, z + 1, teak.base);
     }
 
-    // The net: one voxel of shaded canvas under one voxel of lighter tape.
-    // Thin and dark on purpose — hung two voxels thick in the light tone it
-    // read as a wall across the court rather than as something you can see a
-    // rally through, and a net is a hole in the air. The posts stay two thick,
-    // which is what leaves them reading as posts beside it.
+    // The net: shaded canvas under one voxel of lighter tape, running from post
+    // to post. Thin and dark on purpose — hung two voxels thick in the light
+    // tone it read as a wall across the court rather than as something you can
+    // see a rally through.
     const tape = top - 1;
-    box(POST.x, POST.x, tape - NET_HEIGHT + 1, tape - 1, 2, COURT.z1 - 2, stucco.shade);
-    box(POST.x, POST.x, tape, tape, 2, COURT.z1 - 2, stucco.light);
+    const netZ0 = COURT.z0 - 3;
+    const netZ1 = COURT.z1 + 3;
+    box(POST.x, POST.x, tape - NET_HEIGHT + 1, tape - 1, netZ0, netZ1, stucco.shade);
+    box(POST.x, POST.x, tape, tape, netZ0, netZ1, stucco.light);
 
     // The ball, left on the sand at one end of the court: a 50 cm cube with one
     // red half. Two rectangles, because it is dressing — and dressing is what
     // tells you the court is played on rather than swept and photographed.
-    box(12, 13, GROUND, GROUND + 1, 14, 15, stucco.light);
-    box(12, 13, GROUND, GROUND + 1, 14, 14, bloom.base);
+    box(28, 29, GROUND, GROUND + 1, 30, 31, stucco.light);
+    box(28, 29, GROUND, GROUND + 1, 30, 30, bloom.base);
+
+    // Out in the run-off, beyond the east baseline: a plank bench for the team
+    // waiting to play on, and a parasol for their bags.
+    box(86, 87, GROUND, GROUND + 1, 22, 22, teak.shade);
+    box(86, 87, GROUND, GROUND + 1, 33, 33, teak.shade);
+    box(86, 87, GROUND + 2, GROUND + 2, 22, 33, teak.base);
+    parasol(b, { x: 90, z: 42, y: GROUND, reach: 3 });
+    box(88, 89, GROUND, GROUND + 1, 44, 45, bloom.base);
   },
 });

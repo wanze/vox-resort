@@ -133,10 +133,12 @@ models against each other.
 - **Done**: the palette and the building parts; `cottage`, `house`, `restrooms`,
   `first-aid`, `villa`, `hotel`, `bungalow`, `swimming-pool`, `game-hall`,
   `restaurant`, `beach-club`, `supermarket`, `resort-bar`, `poolside-bar`,
-  `minigolf`, `playground`, `waterpark`, `tennis-court`, `fountain`, `entrance`,
+  `minigolf`, `playground`, `tennis-court`, `fountain`, `entrance`,
   `hedge`, `flowerbed`, `bench`, `bridge`, `bridge-ramp`, `spa-pavilion`.
 - **In the palette from their first commit**: `litter-bin`, `sign-post`,
   `picnic-table`, `lifeguard-tower`, `volleyball`, `jetty`, `pedalo-rental`,
   `buoy`, `rowboat`, `sailboat`, `pedalo`.
+- **Withheld as a draft** (`DRAFT_SOURCES`, not in the app): `waterpark`, which
+  does not fit the resort yet.
 - **To do**: everything on the `LEGACY` list — the remaining 1×1 props and the
   ground tiles. Cheapest to change, and mass-placed.

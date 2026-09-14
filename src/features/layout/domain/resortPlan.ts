@@ -27,14 +27,14 @@
  *   cottage houses   │ pool   │ villas  tennis  pool    villas
  *   village lodging  │ quarter│ lodging lodging quarter lodging  <- avenue    (z 36)
  *                    └fountain┘
- *   tennis  lodging  │ pool & │ water   villas  water   courts
- *   minigolf spa     │ water  │ park    lodging park    lodging  <- south st  (z 60)
+ *   tennis  lodging  │ two    │ pool    villas  golf    courts
+ *   minigolf spa     │ pools  │ lodging lodging lodging lodging  <- south st  (z 60)
  *   ────────────────────────────────────────────────────────────
- *   courts  water    │ shops  │ shops   villas  shops   villas
- *   minigolf park    │minigolf│ minigolf tennis minigolf tennis  <- south lane (z 74)
+ *   courts  pool     │ shops  │ shops   villas  shops   villas
+ *   minigolf         │minigolf│ minigolf tennis minigolf tennis  <- south lane (z 74)
  *   ────────────────────────────────────────────────────────────
- *   lodging pool     │ villas │ water   courts  water   lodging
- *   play    quarter  │ lodging│ park    minigolf park   pool     <- south lane (z 90)
+ *   lodging pool     │ villas │ pool    courts  golf    lodging
+ *   play    quarter  │ lodging│ lodging minigolf lodging pool     <- south lane (z 90)
  *                    ┌─┐ gate ┌─┐
  *   hotels  villas   │ shops  │ shops   hotel   shops   hotel
  * ```
@@ -329,8 +329,8 @@ export const RESORT_PLAN: ResortPlan = {
 
     // ═══ north strip (z 1-8): the arrival frontage ═══════════════════════════
 
-    // A — the hotel blocks
-    ...row('hotel', 3, 1, 2, 6),
+    // A — the hotel block
+    at('hotel', 3, 1),
     ...row('cypress', 4, 6, 3, 4),
     at('flowerbed', 6, 8),
 
@@ -348,8 +348,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('icecream', 40, 1),
     at('snack-bar', 40, 3),
     at('restrooms', 30, 5),
-    at('game-hall', 33, 5),
-    at('first-aid', 37, 5),
+    at('game-hall', 32, 5),
+    at('first-aid', 36, 5),
     at('coffee-shop', 39, 5),
 
     // D — services
@@ -359,7 +359,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('first-aid', 44, 4),
     at('restrooms', 47, 4),
     at('snack-bar', 50, 4),
-    at('tikitorch', 55, 1),
+    at('tikitorch', 56, 1),
 
     // E — the east shops
     at('supermarket', 58, 1),
@@ -373,14 +373,13 @@ export const RESORT_PLAN: ResortPlan = {
 
     // F — the second hotel
     at('hotel', 72, 1),
-    at('villa', 78, 1),
     at('blossom', 74, 6),
     at('blossom', 78, 6),
     at('flowerbed', 76, 8),
-    at('litter-bin', 72, 5),
-    at('sign-post', 73, 5),
-    at('picnic-table', 79, 6),
-    at('lifeguard-tower', 81, 5),
+    at('litter-bin', 72, 7),
+    at('sign-post', 73, 7),
+    at('picnic-table', 79, 7),
+    at('lifeguard-tower', 81, 6),
 
     // G — the east-wing shops
     at('supermarket', 83, 1),
@@ -388,93 +387,91 @@ export const RESORT_PLAN: ResortPlan = {
     at('icecream', 93, 1),
     at('snack-bar', 93, 3),
     at('restrooms', 83, 5),
-    at('game-hall', 86, 5),
-    at('first-aid', 90, 5),
+    at('game-hall', 85, 5),
+    at('first-aid', 89, 5),
     at('palm', 93, 5),
     at('flowerbed', 93, 7),
 
     // H — the third hotel
     at('hotel', 97, 1),
-    at('villa', 104, 1),
     at('olive', 99, 6),
     at('olive', 103, 6),
     at('statue', 105, 6),
     at('flowerbed', 101, 7),
 
-    // ═══ upper band (z 11-34): lodging, the pools, the water park ════════════
+    // ═══ upper band (z 11-34): lodging, the pools, a minigolf ════════════════
 
     // A — the cottage village, reached by one lane
     ...block('cottage', 3, 11, 4, 2, 3, 4),
-    ...row('bungalow', 3, 19, 4, 3),
+    ...row('bungalow', 3, 19, 3, 4),
     at('tennis-court', 3, 25),
 
     // B — houses, bungalows and cottages down the lane
     ...row('house', 16, 11, 4, 3),
-    ...row('bungalow', 16, 15, 4, 3),
+    ...row('bungalow', 16, 15, 3, 4),
     ...row('cottage', 16, 19, 4, 3),
     at('playground', 16, 28),
 
     // C — the pool quarter
     at('swimming-pool', 30, 11),
-    at('poolside-bar', 36, 11),
-    at('tikitorch', 38, 11),
-    ...row('sun-lounger', 30, 15, 4, 1),
-    ...row('beach-umbrella', 34, 15, 2, 2),
-    at('changing-cabins', 37, 15),
-    at('beach-shower', 39, 15),
-    at('beach-club', 30, 17),
-    at('resort-bar', 35, 17),
+    at('poolside-bar', 38, 11),
+    at('tikitorch', 40, 11),
+    at('changing-cabins', 38, 14),
+    at('beach-shower', 40, 14),
+    ...row('sun-lounger', 30, 18, 4, 1),
+    ...row('beach-umbrella', 34, 18, 2, 2),
     at('willow', 39, 17),
-    ...row('cottage', 30, 22, 4, 3),
+    at('beach-club', 30, 20),
+    at('resort-bar', 37, 20),
+    ...row('cottage', 30, 28, 4, 3),
 
-    // D — the water park and the second pool
-    at('waterpark', 44, 11),
-    at('villa', 50, 11),
-    at('tikitorch', 55, 11),
-    ...row('bungalow', 44, 17, 4, 3),
-    at('swimming-pool', 44, 21),
-    at('poolside-bar', 50, 21),
-    at('palm', 52, 21),
-    ...row('sun-lounger', 44, 25, 4, 1),
-    at('changing-cabins', 50, 25),
-    at('beach-shower', 53, 25),
+    // D — a minigolf course and the second pool
+    at('minigolf', 44, 11),
+    at('villa', 53, 11),
+    at('tikitorch', 55, 16),
+    ...row('bungalow', 44, 19, 3, 4),
+    at('swimming-pool', 44, 23),
+    at('poolside-bar', 53, 23),
+    at('palm', 55, 23),
+    ...row('sun-lounger', 44, 30, 4, 1),
+    at('changing-cabins', 53, 26),
+    at('beach-shower', 55, 26),
     // The hire hut. It belongs on sand and this plan has none — it is the plot a
     // `?bench=1` run measures, and that plot is land to its edges — so it stands
     // by the pool here, which is the nearest thing to a shore the authored
     // resort has. A generated plot puts it where it goes; see `SHORE_ONLY` in
     // `resortGenerator.ts`.
-    at('pedalo-rental', 55, 25),
+    at('pedalo-rental', 53, 29),
 
     // E — the beach club and the villa quarter
     at('beach-club', 58, 11),
-    at('villa', 63, 11),
-    at('tikitorch', 68, 11),
-    at('villa', 58, 16),
-    at('villa', 63, 16),
-    ...row('house', 58, 21, 4, 3),
-    ...row('bungalow', 58, 25, 4, 3),
+    at('villa', 65, 11),
+    at('tikitorch', 69, 11),
+    at('villa', 58, 17),
+    at('villa', 63, 17),
+    ...row('house', 58, 22, 4, 3),
+    ...row('bungalow', 58, 26, 3, 4),
 
     // F — courts and the east lodging
     at('tennis-court', 72, 11),
     at('pine', 72, 17),
-    ...row('bungalow', 72, 19, 3, 3),
-    ...row('cottage', 72, 23, 3, 3),
-    ...row('house', 72, 27, 3, 3),
-    at('statue', 81, 23),
+    ...row('bungalow', 74, 17, 2, 4),
+    ...row('cottage', 72, 21, 3, 3),
+    ...row('house', 72, 25, 3, 3),
+    at('statue', 81, 21),
 
     // G — the east pool quarter
     at('swimming-pool', 83, 11),
-    at('poolside-bar', 89, 11),
-    at('tikitorch', 91, 11),
-    ...row('sun-lounger', 83, 15, 4, 1),
-    at('changing-cabins', 88, 15),
-    at('beach-shower', 90, 15),
-    at('beach-club', 83, 17),
-    at('resort-bar', 88, 17),
-    at('palm', 92, 17),
-    ...row('cottage', 83, 22, 4, 3),
-    ...row('bungalow', 83, 26, 4, 3),
-    ...row('house', 83, 30, 4, 3),
+    at('poolside-bar', 91, 11),
+    at('tikitorch', 93, 11),
+    at('changing-cabins', 91, 14),
+    at('beach-shower', 93, 14),
+    ...row('sun-lounger', 83, 18, 4, 1),
+    at('beach-club', 83, 20),
+    at('resort-bar', 90, 20),
+    at('palm', 94, 20),
+    ...row('cottage', 83, 26, 4, 3),
+    ...row('bungalow', 83, 30, 3, 4),
 
     // H — the east villa quarter
     at('villa', 97, 11),
@@ -484,104 +481,103 @@ export const RESORT_PLAN: ResortPlan = {
     at('villa', 102, 16),
     at('statue', 107, 16),
     ...row('house', 97, 21, 4, 3),
-    ...row('bungalow', 97, 25, 4, 3),
+    ...row('bungalow', 97, 25, 3, 4),
     ...row('cottage', 97, 29, 4, 3),
     at('cypress', 109, 21),
 
-    // ═══ lower band (z 37-58): courts, spa, the second water park ════════════
+    // ═══ lower band (z 37-58): courts, spa, pools ════════════════════════════
 
     // A — courts and the family corner
     at('tennis-court', 3, 37),
-    at('minigolf', 3, 43),
-    at('playground', 9, 43),
-    ...row('cottage', 3, 48, 4, 3),
-    ...row('bungalow', 3, 52, 4, 3),
     at('pine', 13, 37),
+    at('minigolf', 3, 43),
+    at('palm', 13, 43),
+    ...row('cottage', 3, 51, 4, 3),
     at('volleyball', 3, 55),
+    at('bungalow', 10, 55),
 
     // B — lodging above the spa quarter
     ...row('house', 16, 37, 4, 3),
-    ...row('bungalow', 16, 41, 4, 3),
+    ...row('bungalow', 16, 41, 3, 4),
     at('game-hall', 16, 45),
-    at('spa-pavilion', 20, 45),
+    at('spa-pavilion', 21, 45),
     at('first-aid', 24, 45),
     at('statue', 27, 45),
     at('minigolf', 16, 50),
-    at('playground', 22, 50),
+    at('playground', 25, 50),
 
-    // C — the third pool and the west water park
+    // C — the third pool and a court
     at('swimming-pool', 30, 37),
-    at('poolside-bar', 36, 37),
-    at('tikitorch', 38, 37),
-    ...row('sun-lounger', 30, 41, 4, 1),
-    ...row('cottage', 30, 43, 4, 3),
-    at('waterpark', 30, 48),
-    at('resort-bar', 36, 48),
+    at('poolside-bar', 38, 37),
+    at('tikitorch', 40, 37),
+    ...row('sun-lounger', 38, 40, 4, 1),
+    ...row('cottage', 30, 44, 4, 3),
+    at('volleyball', 30, 48),
+    at('resort-bar', 37, 48),
 
     // D — the south beach club and its villas
     at('beach-club', 45, 37),
-    at('resort-bar', 50, 37),
-    at('tikitorch', 54, 37),
-    at('villa', 44, 42),
-    at('villa', 49, 42),
-    ...row('house', 44, 47, 4, 3),
-    ...row('bungalow', 44, 51, 4, 3),
+    at('resort-bar', 51, 37),
+    at('tikitorch', 55, 37),
+    at('villa', 44, 43),
+    at('villa', 49, 43),
+    ...row('house', 44, 48, 4, 3),
+    ...row('bungalow', 44, 52, 3, 4),
 
-    // E — the east water park and more lodging
-    at('waterpark', 58, 37),
-    at('villa', 64, 37),
-    ...row('cottage', 58, 43, 4, 3),
-    ...row('bungalow', 58, 47, 4, 3),
-    at('beach-club', 58, 51),
-    at('resort-bar', 63, 51),
+    // E — the east pool and more lodging
+    at('swimming-pool', 58, 37),
+    at('villa', 66, 37),
+    ...row('cottage', 58, 44, 4, 3),
+    ...row('bungalow', 58, 48, 3, 4),
+    at('beach-club', 58, 52),
+    at('resort-bar', 65, 52),
 
     // F — the far-east villas
     at('villa', 72, 37),
     at('villa', 77, 37),
-    at('olive', 72, 42),
-    ...row('house', 72, 44, 3, 3),
-    ...row('cottage', 72, 48, 3, 3),
-    ...row('bungalow', 72, 52, 3, 3),
+    at('olive', 72, 41),
+    ...row('house', 72, 43, 3, 3),
+    ...row('cottage', 72, 47, 3, 3),
+    ...row('bungalow', 72, 51, 2, 4),
 
-    // G — the fourth water park and its lodging
-    at('waterpark', 83, 37),
-    at('villa', 89, 37),
-    at('tikitorch', 94, 37),
-    ...row('cottage', 83, 43, 4, 3),
-    ...row('bungalow', 83, 47, 4, 3),
-    at('beach-club', 83, 51),
-    at('resort-bar', 88, 51),
-    at('blossom', 92, 51),
-    at('playground', 83, 56),
+    // G — a minigolf course and its lodging
+    at('minigolf', 83, 37),
+    at('villa', 92, 37),
+    at('tikitorch', 92, 41),
+    ...row('cottage', 83, 45, 4, 3),
+    ...row('bungalow', 83, 49, 3, 4),
+    at('beach-club', 83, 53),
+    at('resort-bar', 90, 53),
+    at('blossom', 93, 53),
+    at('playground', 90, 56),
 
     // H — the east courts and lodging
     at('tennis-court', 97, 37),
     at('oak', 107, 37),
     at('minigolf', 97, 43),
-    at('playground', 103, 43),
-    ...row('house', 97, 48, 4, 3),
-    ...row('cottage', 97, 52, 4, 3),
-    ...row('bungalow', 97, 56, 4, 3),
-    at('statue', 109, 48),
+    at('playground', 106, 43),
+    at('statue', 109, 47),
+    ...row('house', 97, 51, 4, 3),
+    ...row('cottage', 97, 55, 4, 3),
 
     // ═══ south strip (z 61-72): courts, the second shops, the south gate ═════
 
-    // A — courts and minigolf
+    // A — courts and a beach court
     at('tennis-court', 3, 61),
-    at('minigolf', 3, 67),
-    at('playground', 9, 67),
+    at('volleyball', 3, 67),
+    at('playground', 10, 67),
     at('pine', 13, 61),
-    at('palm', 13, 66),
-    at('flowerbed', 13, 69),
+    at('palm', 13, 65),
+    at('flowerbed', 13, 71),
 
-    // B — the south water park and its services
-    at('waterpark', 16, 61),
-    at('game-hall', 22, 61),
-    at('first-aid', 26, 61),
-    at('spa-pavilion', 22, 65),
-    at('restrooms', 26, 65),
+    // B — the south pool and its services
+    at('swimming-pool', 16, 61),
+    at('game-hall', 24, 61),
+    at('first-aid', 25, 65),
     at('fountain', 17, 68),
-    at('statue', 21, 68),
+    at('statue', 20, 68),
+    at('spa-pavilion', 22, 68),
+    at('restrooms', 26, 68),
 
     // C — the south shops
     at('supermarket', 30, 61),
@@ -590,26 +586,26 @@ export const RESORT_PLAN: ResortPlan = {
     at('icecream', 33, 65),
     at('restrooms', 35, 65),
     at('resort-bar', 38, 65),
-    at('minigolf', 30, 68),
+    at('coffee-shop', 30, 68),
     at('playground', 36, 68),
 
-    // D — the south courts and the last water park
+    // D — the south courts and a beach court
     at('tennis-court', 44, 61),
     at('spa-pavilion', 54, 61),
     at('first-aid', 54, 64),
-    at('waterpark', 44, 67),
+    at('volleyball', 44, 67),
     at('beach-club', 50, 67),
-    at('palm', 55, 67),
+    at('palm', 56, 67),
 
     // E — the south-east shops
     at('supermarket', 58, 61),
     at('restaurant', 63, 61),
-    at('game-hall', 68, 61),
+    at('game-hall', 67, 61),
     at('snack-bar', 58, 65),
     at('icecream', 61, 65),
     at('restrooms', 63, 65),
     at('playground', 58, 68),
-    at('minigolf', 63, 68),
+    at('coffee-shop', 63, 68),
 
     // F — the south-east villas and courts
     at('villa', 72, 61),
@@ -618,15 +614,15 @@ export const RESORT_PLAN: ResortPlan = {
     at('oak', 81, 61),
     at('cypress', 81, 66),
 
-    // G — the east-wing shops and course
+    // G — the east-wing shops
     at('supermarket', 83, 61),
     at('restaurant', 88, 61),
-    at('game-hall', 93, 61),
+    at('game-hall', 92, 61),
     at('snack-bar', 83, 65),
     at('icecream', 86, 65),
     at('restrooms', 88, 65),
-    at('first-aid', 91, 65),
-    at('minigolf', 83, 68),
+    at('first-aid', 90, 65),
+    at('coffee-shop', 83, 68),
     at('playground', 89, 68),
     at('palm', 94, 68),
 
@@ -642,22 +638,22 @@ export const RESORT_PLAN: ResortPlan = {
 
     // A — lodging above the family corner
     ...row('house', 3, 75, 4, 3),
-    ...row('bungalow', 3, 79, 4, 3),
+    ...row('bungalow', 3, 79, 3, 4),
     ...row('cottage', 3, 82, 4, 3),
     at('playground', 3, 86),
-    at('game-hall', 8, 86),
+    at('game-hall', 8, 85),
     at('palm', 12, 86),
     at('flowerbed', 12, 88),
 
     // B — the south pool quarter
     at('swimming-pool', 16, 75),
-    at('poolside-bar', 22, 75),
-    at('tikitorch', 24, 75),
-    ...row('sun-lounger', 16, 79, 4, 1),
+    at('poolside-bar', 24, 75),
+    at('tikitorch', 26, 75),
+    ...row('sun-lounger', 24, 78, 4, 1),
     at('beach-club', 16, 81),
-    at('resort-bar', 21, 81),
+    at('resort-bar', 22, 81),
     at('palm', 25, 81),
-    ...row('bungalow', 16, 86, 4, 3),
+    ...row('bungalow', 16, 86, 3, 4),
     at('statue', 28, 86),
 
     // C — villas over a row of services
@@ -665,19 +661,17 @@ export const RESORT_PLAN: ResortPlan = {
     at('villa', 35, 75),
     at('cypress', 40, 75),
     ...row('cottage', 30, 80, 4, 3),
-    ...row('bungalow', 30, 84, 4, 3),
     at('first-aid', 30, 87),
     at('restrooms', 33, 87),
     at('snack-bar', 36, 87),
     at('icecream', 39, 87),
     at('palm', 40, 87),
 
-    // D — the fifth water park and the spa row
-    at('waterpark', 44, 75),
-    at('villa', 50, 75),
-    at('tikitorch', 55, 75),
+    // D — a pool and the spa row
+    at('swimming-pool', 44, 75),
+    at('villa', 52, 75),
+    at('tikitorch', 56, 75),
     ...row('house', 44, 81, 4, 3),
-    ...row('bungalow', 44, 85, 4, 3),
     at('statue', 56, 81),
     at('olive', 56, 85),
     at('spa-pavilion', 44, 87),
@@ -690,9 +684,8 @@ export const RESORT_PLAN: ResortPlan = {
     at('tennis-court', 58, 75),
     at('oak', 68, 75),
     at('minigolf', 58, 81),
-    at('playground', 64, 81),
-    at('statue', 69, 81),
-    ...row('cottage', 58, 86, 4, 3),
+    at('playground', 67, 81),
+    at('statue', 69, 85),
 
     // F — villas and lodging
     at('villa', 72, 75),
@@ -700,32 +693,26 @@ export const RESORT_PLAN: ResortPlan = {
     at('pine', 81, 75),
     ...row('house', 72, 80, 3, 3),
     at('olive', 81, 80),
-    ...row('bungalow', 72, 84, 3, 3),
+    ...row('bungalow', 72, 84, 2, 4),
     at('flowerbed', 81, 84),
-    ...row('cottage', 72, 86, 3, 3),
 
-    // G — the last water park and the last pool
-    at('waterpark', 83, 75),
-    at('villa', 89, 75),
-    at('tikitorch', 94, 75),
-    at('swimming-pool', 83, 81),
-    at('poolside-bar', 89, 81),
-    at('palm', 91, 81),
+    // G — a minigolf course and the last pool
+    at('minigolf', 83, 75),
+    at('villa', 92, 75),
+    at('tikitorch', 92, 79),
     at('statue', 95, 81),
-    // Beside the bar rather than under the pool: the pool terrace is six tiles
-    // by four, and a row squeezed between it and the bungalows behind is a row
-    // no path can reach.
-    ...row('sun-lounger', 88, 85, 4, 1),
-    ...row('bungalow', 83, 86, 4, 3),
+    at('swimming-pool', 83, 83),
+    at('poolside-bar', 91, 83),
+    at('palm', 93, 83),
+    ...row('sun-lounger', 91, 86, 4, 1),
 
     // H — the south-east beach club and its lodging
     at('beach-club', 97, 75),
-    at('resort-bar', 102, 75),
+    at('resort-bar', 103, 75),
     at('cypress', 106, 75),
     at('statue', 109, 80),
-    ...row('house', 97, 80, 4, 3),
-    ...row('cottage', 97, 84, 4, 3),
-    ...row('bungalow', 97, 87, 4, 3),
+    ...row('house', 97, 81, 4, 3),
+    ...row('cottage', 97, 85, 4, 3),
     at('palm', 109, 84),
 
     // ═══ south strip (z 91-98): the departure frontage, mirroring the north ══
@@ -734,10 +721,10 @@ export const RESORT_PLAN: ResortPlan = {
     // against the plot edge, so every spur here is three tiles straight up
     // rather than a lane running the width of the strip.
 
-    // A — the southern hotel blocks
+    // A — the southern hotel block
     at('flowerbed', 6, 91),
     ...row('cypress', 4, 92, 3, 4),
-    ...row('hotel', 3, 95, 2, 6),
+    at('hotel', 3, 94),
 
     // B — villas and a townhouse
     at('statue', 18, 92),
@@ -749,8 +736,8 @@ export const RESORT_PLAN: ResortPlan = {
 
     // C — the south-west shops
     at('restrooms', 30, 91),
-    at('game-hall', 33, 91),
-    at('first-aid', 37, 91),
+    at('game-hall', 32, 91),
+    at('first-aid', 36, 91),
     at('palm', 40, 91),
     at('supermarket', 30, 95),
     at('restaurant', 35, 95),
@@ -781,8 +768,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('flowerbed', 76, 91),
     at('cypress', 74, 92),
     at('cypress', 78, 92),
-    at('hotel', 72, 95),
-    at('villa', 78, 95),
+    at('hotel', 72, 94),
 
     // G — the last shops
     at('snack-bar', 83, 91),
@@ -792,15 +778,14 @@ export const RESORT_PLAN: ResortPlan = {
     at('palm', 94, 91),
     at('supermarket', 83, 95),
     at('restaurant', 88, 95),
-    at('game-hall', 93, 95),
+    at('game-hall', 92, 95),
 
     // H — the last hotel
     at('flowerbed', 101, 91),
     at('blossom', 99, 92),
     at('blossom', 103, 92),
     at('statue', 107, 92),
-    at('hotel', 97, 95),
-    at('villa', 104, 95),
+    at('hotel', 97, 94),
 
     // ── the fountain in the middle of its plaza, where the streets meet ──────
     at('fountain', 42, 36),

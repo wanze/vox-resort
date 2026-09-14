@@ -13,6 +13,8 @@
  *   node voxel-gen/preview.ts --audit              # size table, no rendering
  *   node voxel-gen/preview.ts --people             # the crowd, not the catalogue
  *   node voxel-gen/preview.ts --sea                # the bay's craft, likewise
+ *   node voxel-gen/preview.ts --drafts             # models withheld from the app
+ *   node voxel-gen/preview.ts --lineup             # every model at one scale, with a person
  *
  * A path renders a model that is not in the registry yet, which is how a
  * candidate is looked at before anyone decides to keep it: registering it would
@@ -23,7 +25,7 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
-import { MODEL_SOURCES } from './models/index.ts';
+import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
@@ -31,6 +33,7 @@ import {
   buildModel,
   TILE_VOXELS,
   type Color,
+  type PaintedVoxel,
   type VoxelModel,
   type VoxelModelSource,
 } from './voxelgen.ts';
@@ -116,7 +119,7 @@ const FACES: readonly Face[] = [
 const hexRgb = (hex: Color): Vec3 => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
 /** Culled triangle list: faces shared between two solid voxels are dropped. */
-function buildTriangles(model: VoxelModel): Triangle[] {
+function buildTriangles(model: Pick<VoxelModel, 'voxels'>): Triangle[] {
   const filled = new Set(model.voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
   const triangles: Triangle[] = [];
   for (const voxel of model.voxels) {
@@ -343,6 +346,54 @@ function renderSheet(models: readonly VoxelModel[], cell: number, columns: numbe
   return encodePng(pixels, width, height);
 }
 
+/** How far a lineup row runs before the next model starts a new one, in voxels. */
+const LINEUP_ROW = 420;
+/** Voxels of clear ground between two models of a lineup. */
+const LINEUP_GAP = 14;
+
+/** A model's voxels, moved along the ground by `dx` and `dz`. */
+const shifted = (from: VoxelModel, dx: number, dz: number): PaintedVoxel[] =>
+  from.voxels.map((voxel) => ({ ...voxel, x: voxel.x + dx, z: voxel.z + dz }));
+
+/** Where each model of a lineup starts: left to right, wrapping into rows. */
+function lineupOrigins(models: readonly VoxelModel[]): (readonly [number, number])[] {
+  const origins: (readonly [number, number])[] = [];
+  let x = 0;
+  let z = 0;
+  let rowDepth = 0;
+  for (const model of models) {
+    const wraps = x > 0 && x + model.width > LINEUP_ROW;
+    if (wraps) [x, z, rowDepth] = [0, z + rowDepth + LINEUP_GAP, 0];
+    origins.push([x, z]);
+    x += model.width + LINEUP_GAP;
+    rowDepth = Math.max(rowDepth, model.depth);
+  }
+  return origins;
+}
+
+/**
+ * Renders models side by side at one scale, each with a person standing at its
+ * front-left corner.
+ *
+ * The sheet fits every cell on its own, so a minigolf course and a litter bin
+ * come out the same size there; this is the picture that shows whether two
+ * objects are drawn at the same scale as each other and as a 1.75 m figure.
+ */
+function renderLineup(models: readonly VoxelModel[], person: VoxelModel, size: number): Buffer {
+  // Concatenated rather than spread into `push`: the hotel alone is more
+  // voxels than a call can take as arguments.
+  const voxels = lineupOrigins(models).flatMap(([x, z], index): PaintedVoxel[] => {
+    const model = models[index]!;
+    return shifted(model, x, z).concat(
+      shifted(person, x - person.width - 1, z + model.depth - person.depth),
+    );
+  });
+  const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE);
+  drawTriangles(fb, buildTriangles({ voxels }), { x: 0, y: 0, width: fb.width, height: fb.height });
+  const { pixels, width, height } = downsample(fb, SUPERSAMPLE);
+  return encodePng(pixels, width, height);
+}
+
 /**
  * Reports how well each model fills the tiles it claims. A model far below 100%
  * is drawn at a smaller scale than its neighbours, which is what makes a resort
@@ -391,7 +442,13 @@ async function chooseSources(
 
   // Ids are looked up across every registry whichever one is the default, so
   // `preview child` works without anyone having to remember the flag.
-  const known = [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES];
+  const known = [
+    ...MODEL_SOURCES,
+    ...DRAFT_SOURCES,
+    ...PEOPLE_SOURCES,
+    ...SKY_SOURCES,
+    ...SEA_SOURCES,
+  ];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
 
@@ -407,13 +464,30 @@ async function chooseSources(
   return [...known.filter((source) => ids.includes(source.id)), ...loaded];
 }
 
-/** What a contact sheet of one registry is called. */
-function sheetNameFor(registry: readonly VoxelModelSource[]): string {
-  if (registry === PEOPLE_SOURCES) return 'crowd';
-  if (registry === SKY_SOURCES) return 'sky';
-  if (registry === SEA_SOURCES) return 'sea';
-  return 'contact-sheet';
+interface Registry {
+  readonly sources: readonly VoxelModelSource[];
+  /** What a contact sheet of the registry is called. */
+  readonly sheet: string;
+  /**
+   * Whether a whole-registry run sweeps stale renders afterwards. Not a drafts
+   * run, which would otherwise delete the pictures it had just written.
+   */
+  readonly sweeps: boolean;
 }
+
+/**
+ * The registries a flag selects. The crowd, the sky and the bay are registries
+ * of their own — none of them is part of the catalogue and none of them fills a
+ * tile, so none is ever in the default set. See `people/`, `sky/` and `sea/`.
+ */
+const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
+  ['--people', { sources: PEOPLE_SOURCES, sheet: 'crowd', sweeps: true }],
+  ['--sky', { sources: SKY_SOURCES, sheet: 'sky', sweeps: true }],
+  ['--sea', { sources: SEA_SOURCES, sheet: 'sea', sweeps: true }],
+  ['--drafts', { sources: DRAFT_SOURCES, sheet: 'drafts', sweeps: false }],
+]);
+
+const CATALOGUE: Registry = { sources: MODEL_SOURCES, sheet: 'contact-sheet', sweeps: true };
 
 /**
  * Deletes the renders in `outDir` that no registry has a model for.
@@ -424,6 +498,10 @@ function sheetNameFor(registry: readonly VoxelModelSource[]): string {
  * what one run wrote: the crowd, the sky and the bay render into the same folder
  * under flags of their own, and a catalogue run must not take their pictures
  * with it.
+ *
+ * Drafts are the exception, and deliberately: their pictures are swept like a
+ * removed model's by any other whole-registry run, because anything left in
+ * `out/` ships in the bundle and a draft is not in the app.
  */
 function sweepStale(outDir: string): void {
   const known = new Set(
@@ -443,40 +521,49 @@ function sweepStale(outDir: string): void {
   }
 }
 
+/** The sheet the flags ask for, if any: a contact sheet, or a lineup at one scale. */
+function sheetFor(
+  args: readonly string[],
+  registry: Registry,
+  models: readonly VoxelModel[],
+): { readonly name: string; readonly png: () => Buffer } | null {
+  if (args.includes('--lineup')) {
+    const person = buildModel(PEOPLE_SOURCES[0]!);
+    return { name: `${registry.sheet}-lineup`, png: () => renderLineup(models, person, 2400) };
+  }
+  if (args.includes('--sheet')) {
+    return { name: registry.sheet, png: () => renderSheet(models, 320, 6) };
+  }
+  return null;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const here = path.dirname(fileURLToPath(import.meta.url));
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  // The crowd, the sky and the bay are registries of their own — none of them is
-  // part of the catalogue and none of them fills a tile, so none is ever in the
-  // default set. See `people/`, `sky/` and `sea/`.
-  const registry = args.includes('--people')
-    ? PEOPLE_SOURCES
-    : args.includes('--sky')
-      ? SKY_SOURCES
-      : args.includes('--sea')
-        ? SEA_SOURCES
-        : MODEL_SOURCES;
+  const flag = args.find((arg) => FLAGGED_REGISTRIES.has(arg));
+  const registry = (flag && FLAGGED_REGISTRIES.get(flag)) || CATALOGUE;
   const sources = await chooseSources(
     args.filter((arg) => !arg.startsWith('--')),
-    registry,
+    registry.sources,
   );
   const models = sources.map((source) => buildModel(source));
   if (args.includes('--audit')) {
     audit(models);
     return;
   }
-  if (args.includes('--sheet')) {
+  const sheet = sheetFor(args, registry, models);
+  if (sheet) {
     // Sheets live one level down, because the app's build palette globs
     // `out/*.png` for its thumbnails and a sheet is not a thumbnail — it is a
     // few hundred kilobytes of contact print that would otherwise be emitted
     // into the bundle and never fetched. The glob is not recursive.
     const sheetDir = path.join(outDir, 'sheets');
     mkdirSync(sheetDir, { recursive: true });
-    const file = path.join(sheetDir, `${sheetNameFor(registry)}.png`);
-    writeFileSync(file, renderSheet(models, 320, 6));
+    const file = path.join(sheetDir, `${sheet.name}.png`);
+    writeFileSync(file, sheet.png());
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;
   }
@@ -489,7 +576,7 @@ async function main(): Promise<void> {
   }
   // Only a run over a whole registry sweeps, so naming a few ids never deletes
   // anything.
-  if (args.every((arg) => arg.startsWith('--'))) sweepStale(outDir);
+  if (registry.sweeps && args.every((arg) => arg.startsWith('--'))) sweepStale(outDir);
 }
 
 await main();

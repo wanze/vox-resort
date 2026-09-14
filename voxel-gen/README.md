@@ -22,6 +22,8 @@ pnpm preview bungalow hotel  # just these
 pnpm preview --sheet         # one contact sheet of all models
 pnpm preview --audit         # size table: does each model fill its tiles?
 pnpm preview --people        # the crowd; --sky the balloons, --sea the bay
+pnpm preview --drafts        # models withheld from the app (DRAFT_SOURCES)
+pnpm preview --lineup        # models side by side at one scale, with a person
 ```
 
 Outputs land in `voxel-gen/out/` (git-ignored); `VOXELGEN_OUT` overrides it.
@@ -196,8 +198,8 @@ from that:
 | a tennis court    | 95 x 44 |
 
 Pick a model's `tiles` from what the object really measures — a snack kiosk is
-8 x 4 m (2x1), a resort villa's plot is 16 x 16 m (4x4), a hotel block 24 x 16 m
-(6x4) — then draw it to fill that footprint edge to edge. Heights follow the same
+8 x 4 m (2x1), a resort villa's plot is 16 x 16 m (4x4), a hotel block 40 x 20 m
+(10x5) — then draw it to fill that footprint edge to edge. Heights follow the same
 rule: a four-storey hotel is 4 x 12 voxels of wall, not whatever looks tall.
 
 Conventions:

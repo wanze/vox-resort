@@ -18,9 +18,10 @@
  * sea's own shader, so the swell, the sun's glint and the sky it reflects are
  * the same here as at the beach. Flat blue in the preview, wet in the app.
  *
- * 96 x 64, a 6x4 tile plot: 24 x 16 m. The sixth column is deck rather than
- * water: the basins only grew a little with it, and the rest went into the two
- * rows of loungers, which at five tiles were laid shoulder to shoulder.
+ * 128 x 96, an 8x6 tile plot: 32 x 24 m. It was 24 x 16 m with a long pool of
+ * 11.5 m, which is a hotel's plunge pool; a resort's main pool is 20 m and
+ * more, so the long pool is 20 x 9.5 m now, and the deck round it carries two
+ * full rows of loungers.
  */
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
@@ -28,8 +29,8 @@ import { poolWater } from '../parts/pool.ts';
 import { parasol, pottedPlant } from '../parts/props.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-const X = 95;
-const Z = 63;
+const X = 127;
+const Z = 95;
 
 /**
  * The deck's own surface layer: what the plinth below hands back, written down
@@ -42,31 +43,30 @@ const TOP_LAYER = 4;
  * The two rows of loungers: the column each one starts in, and the row the row
  * stands in.
  *
- * Ten voxels from one to the next, against the seven the five-tile terrace
- * could afford: a lounger is four wide, so that is a metre and a half of towel
- * and bag between neighbours instead of three quarters. The north row starts
- * clear of the diving board's steps, and its backrests are at its north end so
- * that everybody on it lies facing the water.
+ * Ten voxels from one to the next: a lounger is four wide, so that is a metre
+ * and a half of towel and bag between neighbours. The north row starts clear of
+ * the diving board's steps, and its backrests are at its north end so that
+ * everybody on it lies facing the water.
  */
-const NORTH_ROW = { z: 2, at: [18, 28, 38, 48, 58, 68, 78] } as const;
-const SOUTH_ROW = { z: 53, at: [6, 16, 26, 36, 46, 56] } as const;
+const NORTH_ROW = { z: 2, at: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120] } as const;
+const SOUTH_ROW = { z: 85, at: [6, 16, 26, 36, 46, 56, 66, 76, 86, 96, 106, 116] } as const;
 
 /** The long pool, the children's round one, and the basin under the slide. */
-const LENGTHS = { x: 5, z: 15, w: 46, d: 34 } as const;
-const PADDLING = { x: 64, z: 10, w: 25, d: 25 } as const;
-const SPLASH = { x: 64, z: 42, w: 21, d: 15 } as const;
+const LENGTHS = { x: 6, z: 26, w: 80, d: 38 } as const;
+const PADDLING = { x: 90, z: 14, w: 32, d: 28 } as const;
+const SPLASH = { x: 90, z: 58, w: 24, d: 20 } as const;
 
 /** Where the slide's platform stands, and how far it has to fall to the water. */
-const TOWER = { x: 87, z: 46, w: 5, d: 7, y: 11 } as const;
-const CHUTE = { from: 86, to: 74, top: TOWER.y, end: 3, z: 48 } as const;
+const TOWER = { x: 117, z: 62, w: 5, d: 7, y: 11 } as const;
+const CHUTE = { from: 116, to: 104, top: TOWER.y, end: 3, z: 64 } as const;
 
 export default defineModel({
   id: 'swimming-pool',
   label: 'Swimming Pool',
   category: 'leisure',
-  tiles: { x: 6, z: 4 },
+  tiles: { x: 8, z: 6 },
   /**
-   * One sunbather per lounger, thirteen of them.
+   * One sunbather per lounger.
    *
    * The mattress is laid in `TOP_LAYER + 1`, so the hips rest on the layer
    * above it, and `facing` is the way the legs point — away from the backrest,
@@ -87,10 +87,10 @@ export default defineModel({
   water: [PALETTE.water.base],
   // Submerged lights: no voxel emits them, the water is simply lit at night.
   lights: [
-    { x: 18, y: 4, z: 32, color: 0x7fd8ee, intensity: 120, distance: 66 },
-    { x: 38, y: 4, z: 32, color: 0x7fd8ee, intensity: 120, distance: 66 },
-    { x: 76, y: 4, z: 22, color: 0x7fd8ee, intensity: 90, distance: 52 },
-    { x: 74, y: 4, z: 49, color: 0x7fd8ee, intensity: 90, distance: 52 },
+    { x: 26, y: 4, z: 44, color: 0x7fd8ee, intensity: 120, distance: 66 },
+    { x: 66, y: 4, z: 44, color: 0x7fd8ee, intensity: 120, distance: 66 },
+    { x: 106, y: 4, z: 28, color: 0x7fd8ee, intensity: 90, distance: 52 },
+    { x: 102, y: 4, z: 68, color: 0x7fd8ee, intensity: 90, distance: 52 },
   ],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -109,7 +109,7 @@ export default defineModel({
 
     // The shallow end: a ledge at the waterline along the long pool's east
     // wall, wide enough to stand on and to walk in from.
-    box(47, 49, surface, surface, 17, 30, stone.light);
+    box(82, 84, surface, surface, 30, 50, stone.light);
 
     /** A ladder over a pool wall: two rails on the rim, hooked over the water. */
     const ladder = (x: number, z: number, over: number): void => {
@@ -119,19 +119,19 @@ export default defineModel({
       }
       for (const rung of [top, top + 2]) box(x + 1, x + 2, rung, rung, z, z, metal.base);
     };
-    ladder(29, 48, 47);
-    ladder(72, 42, 43);
+    ladder(40, 63, 62);
+    ladder(100, 58, 59);
 
     // The board, off the long pool's north side: three treads up onto a stone
-    // pedestal, and a plank cantilevered eight voxels out over the water.
-    steps(b, { x: 12, z: 8, w: 4, y: top + 2, treads: 3, descends: 'z-' });
-    box(12, 15, top, top + 2, 9, 11, stone.light);
-    box(12, 15, top + 3, top + 3, 9, 23, teak.base);
-    box(12, 15, top + 3, top + 3, 23, 23, teak.shade);
+    // pedestal, and a plank cantilevered out over the water.
+    steps(b, { x: 12, z: 19, w: 4, y: top + 2, treads: 3, descends: 'z-' });
+    box(12, 15, top, top + 2, 20, 22, stone.light);
+    box(12, 15, top + 3, top + 3, 20, 34, teak.base);
+    box(12, 15, top + 3, top + 3, 34, 34, teak.shade);
 
     // A jet in the middle of the paddling pool, which is the whole of what a
     // three-year-old wants from a pool.
-    box(76, 76, deck, deck + 3, 22, 22, water.light);
+    box(106, 106, deck, deck + 3, 28, 28, water.light);
 
     // The slide: a platform on four legs, a ladder up the back of it, and a
     // chute falling west into the splash pool.
@@ -148,9 +148,9 @@ export default defineModel({
       TOWER.z + TOWER.d - 1,
       teak.base,
     );
-    for (const rail of [47, 51]) box(92, 92, top, TOWER.y + 3, rail, rail, metal.base);
+    for (const rail of [63, 67]) box(122, 122, top, TOWER.y + 3, rail, rail, metal.base);
     for (const rung of [top + 1, top + 3, top + 5, top + 7])
-      box(92, 92, rung, rung, 48, 50, metal.base);
+      box(122, 122, rung, rung, 64, 66, metal.base);
 
     /**
      * How high the chute stands where the run has got to `step`.
@@ -168,19 +168,19 @@ export default defineModel({
       box(x, x, y, y + 1, CHUTE.z, CHUTE.z + 2, amber.base);
       for (const rail of [CHUTE.z - 1, CHUTE.z + 3]) box(x, x, y, y + 2, rail, rail, amber.shade);
     }
-    // Two legs: one on the pool's rim, one standing in the water half way down.
-    box(85, 85, top, chuteFloor(1) - 1, 49, 49, teak.shade);
-    box(80, 80, deck, chuteFloor(6) - 1, 49, 49, teak.shade);
+    // Two legs: one on the deck beside the rim, one standing in the water.
+    box(115, 115, top, chuteFloor(1) - 1, 65, 65, teak.shade);
+    box(110, 110, deck, chuteFloor(6) - 1, 65, 65, teak.shade);
 
-    // The shower, in the walk between the long pool and the paddling one: a
-    // darker apron of paving to stand on, a timber post, and the water coming
-    // off it. Timber rather than the metal a real one is, because a grey post
-    // on grey paving is a post nobody sees.
-    box(55, 58, deck, deck, 20, 26, stone.shade);
-    box(56, 56, top, top + 8, 22, 23, teak.base);
-    box(56, 56, top + 8, top + 8, 24, 25, teak.shade);
-    set(56, top + 7, 25, metal.light);
-    box(56, 56, top + 2, top + 6, 25, 25, water.light);
+    // The shower, on the deck south of the long pool: a darker apron of paving
+    // to stand on, a timber post, and the water coming off it. Timber rather
+    // than the metal a real one is, because a grey post on grey paving is a
+    // post nobody sees.
+    box(49, 52, deck, deck, 70, 76, stone.shade);
+    box(50, 50, top, top + 8, 72, 73, teak.base);
+    box(50, 50, top + 8, top + 8, 74, 75, teak.shade);
+    set(50, top + 7, 75, metal.light);
+    box(50, 50, top + 2, top + 6, 75, 75, water.light);
 
     /**
      * A lounger. `headNorth` puts the backrest at the north end, which is what
@@ -208,27 +208,28 @@ export default defineModel({
     for (const x of NORTH_ROW.at) lounger(x, NORTH_ROW.z, true);
     for (const x of SOUTH_ROW.at) lounger(x, SOUTH_ROW.z, false);
 
-    // A parasol over each row of loungers, its canopy wide enough to shade the
-    // two either side of the pole. Drawn by the part now rather than here: the
-    // restaurant wanted the same object and so does the beach club, which is
-    // the point at which a drawing becomes a part.
+    // A parasol between every few loungers, its canopy wide enough to shade the
+    // two either side of the pole.
     for (const [x, z] of [
-      [24, 5],
-      [64, 5],
-      [12, 55],
-      [42, 55],
+      [26, 5],
+      [56, 5],
+      [86, 5],
+      [116, 5],
+      [12, 88],
+      [42, 88],
+      [72, 88],
+      [102, 88],
     ] as const)
       parasol(b, { x, z, y: top });
 
     // Planting at the corners of the terrace, which is where the eye enters it.
     for (const [x, z] of [
       [1, 1],
-      [1, 61],
-      [93, 1],
-      [93, 61],
-      [58, 61],
-      [93, 30],
-      [86, 61],
+      [1, 93],
+      [125, 1],
+      [125, 93],
+      [125, 46],
+      [1, 46],
     ] as const)
       pottedPlant(b, { x, z, y: top });
   },

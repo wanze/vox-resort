@@ -282,6 +282,12 @@ export interface CrowdOptions {
   /** How many person models the scene has to draw them with. */
   readonly variants: number;
   readonly seed: number;
+  /**
+   * Which person model each walker is drawn with, when something else has
+   * decided - the guest registry, so that a child is drawn as a child. Omit it
+   * and the crowd draws its own at random, which is what a fixture wants.
+   */
+  readonly variantOf?: (index: number) => number;
 }
 
 /**
@@ -336,7 +342,14 @@ export function createCrowd(options: CrowdOptions): Crowd {
   const onSand = beach && network.gates.length > 0 ? Math.round(capacity * ON_SAND_AT_START) : 0;
 
   for (let i = 0; i < capacity; i++) {
-    crowd.variant[i] = Math.min(variants - 1, Math.floor(random() * variants));
+    // The draw happens either way, even when it is thrown away: the generator is
+    // the same sequence for the whole crowd, and skipping a draw for some people
+    // would shift every number after it - which is a different afternoon, and a
+    // different benchmark. See the note on seeding at the top of this file.
+    const drawn = Math.min(variants - 1, Math.floor(random() * variants));
+    crowd.variant[i] = options.variantOf
+      ? Math.min(variants - 1, Math.max(0, Math.floor(options.variantOf(i))))
+      : drawn;
     crowd.phase[i] = random() * Math.PI * 2;
     crowd.speed[i] = WALK_SPEED * (1 + (random() * 2 - 1) * SPEED_SPREAD);
     crowd.cameFrom[i] = -1;

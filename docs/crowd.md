@@ -31,6 +31,10 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | Obstacles on the sand                  | `crowd/domain/sandGrid.ts`                   |
 | Seats in world space                   | `crowd/domain/seating.ts`                    |
 | Putting people back on a rebuilt graph | `crowd/domain/nearestNode.ts`, `reseatCrowd` |
+| Guest registry                         | `guests/domain/guests.ts`                    |
+| Parties and who is a child             | `guests/domain/parties.ts`                   |
+| Beds                                   | `guests/domain/homes.ts`                     |
+| Names                                  | `guests/domain/names.ts`                     |
 | Drawing the crowd                      | `crowd/adapters/crowdField.ts`               |
 | Figure geometry and poses              | `rendering/adapters/figureField.ts`          |
 | Boats and piers                        | `sea/domain/piers.ts`, `stepFlotilla`        |
@@ -96,6 +100,32 @@ Int32Array    cellHead (4 096), cellNext     // spatial hash
 ```
 
 `node` is `-1` while on the sand. New attributes are new columns.
+
+## Who the people are
+
+`createGuests` builds a registry parallel to the crowd, keyed by person index:
+guest `i` is the walker at `crowd.x[i]`. It is not columns on `Crowd`, because
+nothing in it is read per frame, `reseatCrowd` would have to tell graph indices
+from biography, and a name is a string. Party, home, arrival day, stay length,
+age band and variant are typed columns; names are records.
+
+People arrive in parties, drawn from `PARTY_MIX` and trimmed to fit the count
+(adults first, so a party of one is never a lone child):
+
+| Kind    | Share | Adults | Children |
+| ------- | ----- | ------ | -------- |
+| family  | 0.40  | 2      | 1–3      |
+| couple  | 0.30  | 2      | 0        |
+| friends | 0.18  | 3–4    | 0        |
+| solo    | 0.12  | 1      | 0        |
+
+A child is drawn with the `child` model; `crowd.variant` is set from the
+registry through `CrowdOptions.variantOf`, with the crowd's own draw still made
+so the seeded sequence does not shift. Beds come off the art through `bedsOf`,
+from `layout.placements`; parties are housed biggest first into the biggest
+lodging. A party with no room gets `NO_HOME`, which is the bed-shortage signal;
+the HUD's Details panel shows beds taken of total. An edit reseats the crowd
+and leaves the registry alone. Nothing about a guest changes what they do yet.
 
 ## Drawing
 

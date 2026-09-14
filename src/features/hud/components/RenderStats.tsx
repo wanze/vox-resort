@@ -80,6 +80,9 @@ export function RenderStats({
       <StatRow label="Voxels" note={`${formatNumber(stats.meshedVoxelCount)} meshed`}>
         {formatNumber(stats.sceneVoxelCount)}
       </StatRow>
+      <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
+        {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
+      </StatRow>
       <StatRow label="Lamps">
         <span ref={activeLightsElement} className="hud-lights-active">
           0

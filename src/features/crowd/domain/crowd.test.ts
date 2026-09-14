@@ -62,6 +62,18 @@ describe('createCrowd', () => {
     }
   });
 
+  it('takes its variants from outside when told, without moving anybody', () => {
+    const options = { network: networkOf(street(12)), count: 12, variants: 4, seed: 7 };
+    const drawn = createCrowd(options);
+    const chosen = createCrowd({ ...options, variantOf: () => 2 });
+    expect(Array.from(chosen.variant)).toEqual(Array(12).fill(2));
+    // The default draw is pinned, so a change to the draw order is caught here.
+    expect(Array.from(drawn.variant)).toEqual([0, 1, 0, 1, 3, 2, 2, 3, 0, 1, 1, 0]);
+    // The draw is made either way, so choosing the variants changes nothing else.
+    expect(Array.from(chosen.x)).toEqual(Array.from(drawn.x));
+    expect(Array.from(chosen.phase)).toEqual(Array.from(drawn.phase));
+  });
+
   it('gives everybody their own pace and their own place in the walk cycle', () => {
     const crowd = createCrowd({ network: networkOf(street(20)), count: 60, variants: 2, seed: 3 });
     const speeds = Array.from(crowd.speed);

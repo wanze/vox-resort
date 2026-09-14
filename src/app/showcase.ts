@@ -15,6 +15,7 @@ import {
   emissiveByModelId,
   waterByModelId,
   windowsByModelId,
+  bedsOf,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
@@ -135,6 +136,8 @@ import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
 import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
 import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
+import { bedCount, createGuests, type Guests } from '../features/guests/domain/guests';
+import type { Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
@@ -242,6 +245,15 @@ const SEA_SEED = 3;
  */
 const CREW_SEED = 4;
 
+/**
+ * The seed the guests are named and housed from.
+ *
+ * Its own rather than the crowd's, for {@link CREW_SEED}'s reason: adding a
+ * bungalow changes how many beds the plot has, and a shared generator would
+ * make that rename everybody.
+ */
+const GUEST_SEED = 5;
+
 /** Where day 0 opens: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
 
@@ -308,6 +320,8 @@ export interface ShowcaseStats {
    * this — not `startupMs` — is what says whether the page stayed alive.
    */
   readonly startupFrames: number;
+  /** Beds on the plot, and guests who have one. */
+  readonly beds: { readonly total: number; readonly taken: number };
 }
 
 /**
@@ -482,6 +496,16 @@ interface MeshedCatalogue {
 
 /** Ids the crowd is drawn from, which is what tells the three apart. */
 const PEOPLE_IDS: ReadonlySet<string> = new Set(PEOPLE_MODELS.map((model) => model.id));
+
+/**
+ * Which person model is the child, by id rather than by index: the people
+ * registry's order is the art's to change. See `voxel-gen/people/index.ts`.
+ */
+const CHILD_VARIANT = PEOPLE_MODELS.findIndex((model) => model.id === 'child');
+if (CHILD_VARIANT < 0) {
+  // Loudly, because the quiet alternative draws every child as an adult.
+  throw new Error('No person model has the id "child"; the guests have no child to draw.');
+}
 
 /** Ids the sky is drawn from, likewise. */
 const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id));
@@ -768,6 +792,13 @@ interface Resort {
    */
   readonly crowd: CrowdField;
   /**
+   * Who the people in {@link crowd} are, keyed by the same person index.
+   *
+   * Built with the resort and left alone by an edit, which reseats the crowd
+   * but renames nobody. See `guests/domain/guests.ts`.
+   */
+  readonly guests: Guests;
+  /**
    * The lucky balloons this plot's beach lets go at dusk.
    *
    * Part of the resort for the reason the crowd is: they go up off *this*
@@ -818,6 +849,30 @@ interface Resort {
 }
 
 /**
+ * The lodging on the plot, biggest first, as `assignHomes` wants it.
+ *
+ * Off the *layout's* placements rather than the plot's, for the reason
+ * `networkFor` reads the layout's paving: a benchmark tiles the plan out
+ * ninefold, and a resort that slept nine times its guests would be reporting
+ * a plot that is not there.
+ */
+function homesOn(placements: readonly Placement[]): Home[] {
+  return (
+    placements
+      .map((placement) => ({
+        key: placement.key,
+        id: placement.id,
+        label: objectTypeById(placement.id).label,
+        beds: bedsOf(placement.id),
+      }))
+      .filter((home) => home.beds > 0)
+      // The key breaks ties so the order is total: without it two runs could
+      // house the same guests differently.
+      .toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key))
+  );
+}
+
+/**
  * The crowd this plot can hold, from the paving it was laid with.
  *
  * Every question about the ground is asked here, once — which tiles are paved,
@@ -838,6 +893,10 @@ function crowdFor(parts: {
   readonly people: readonly ModelGeometry[];
   /** The lamps the crowd walks under, so a person catches the light a wall does. */
   readonly lightVolume: BakedLightVolume | null;
+  /** Who the walkers are; a child is drawn with the child model. */
+  readonly guests: Guests;
+  /** How many people to put on the plot. */
+  readonly population: number;
 }): CrowdField {
   const network = networkFor({
     plan: parts.plan,
@@ -854,10 +913,9 @@ function crowdFor(parts: {
   return buildCrowdField({
     crowd: createCrowd({
       network,
-      // As many as the paving calls for, which a benchmark's tiled copies add
-      // nothing to: the network is walked over the layout's own paving.
-      count: crowdSizeFor(parts.plot.layout.paths.length, CROWD_OVERRIDE),
+      count: parts.population,
       variants: parts.people.length,
+      variantOf: (i) => parts.guests.variant[i] ?? 0,
       seed: CROWD_SEED,
     }),
     models: parts.people,
@@ -1081,6 +1139,16 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const construction = buildConstructionField(parts.geometries, lighting.volume);
   const terrain = terrainFor(plan);
+  // As many as the paving calls for, which a benchmark's tiled copies add
+  // nothing to: the network is walked over the layout's own paving.
+  const population = crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
+  const guests = createGuests({
+    count: population,
+    homes: homesOn(plot.layout.placements),
+    variants: parts.people.length,
+    childVariant: CHILD_VARIANT,
+    seed: GUEST_SEED,
+  });
   const crowd = crowdFor({
     plot,
     plan,
@@ -1088,6 +1156,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     terrain,
     people: parts.people,
     lightVolume: lighting.volume,
+    guests,
+    population,
   });
   const balloons = balloonsFor({ shore, sky: parts.sky, lightVolume: lighting.volume });
   const sea = seaFor({
@@ -1108,6 +1178,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     shadows,
     construction,
     crowd,
+    guests,
     balloons,
     sea,
     shore,
@@ -1235,6 +1306,7 @@ function sceneStats(parts: {
   const { handle, scratch, catalogue } = parts;
   const { plot, world, shadows, construction, crowd, balloons, sea, lighting } = parts.resort;
   const totals = plotTotals(plot);
+  const beds = bedCount(parts.resort.guests);
   return {
     backend: handle.backend,
     typeCount: totals.types,
@@ -1276,6 +1348,7 @@ function sceneStats(parts: {
     dveMs: catalogue.dveMs,
     meshMs: catalogue.meshMs,
     meshedInWorker: catalogue.threaded,
+    beds: { total: beds.beds, taken: beds.taken },
     ...parts.startup,
   };
 }

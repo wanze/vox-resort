@@ -43,16 +43,20 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | fountain       | 2×2       | 32 × 15 × 32   | an 8 m plaza fountain, three tiers |
 | pedalo-rental  | 2×2       | 32 × 24 × 32   | hire hut + three boats, 8 x 8 m    |
 | first-aid      | 2×2       | 32 × 17 × 32   | 6 x 5 m hut on an 8 x 8 m plot     |
+| bakery         | 2×2       | 32 × 27 × 32   | 6.5 x 4 m shop, oven chimney       |
 | poolside-bar   | 2×2       | 32 × 24 × 32   | 5 m palapa bar, 6 m to the ridge   |
 | bungalow       | 3×2       | 48 × 34 × 32   | 9 x 3.5 m hut on stilts, 8.5 m     |
 | resort-bar     | 3×2       | 48 × 24 × 32   | 12 x 8 m deck, thatched bar        |
 | coffee-shop    | 3×3       | 48 × 24 × 48   | 10 x 5.5 m bar + two-row terrace   |
 | spa-pavilion   | 3×2       | 48 × 25 × 32   | 12 x 8 m pavilion                  |
+| kids-club      | 3×3       | 48 × 23 × 48   | clubhouse and a fenced play yard   |
 | cottage        | 2×3       | 32 × 26 × 48   | 7 x 11 m cottage, 6.5 m ridge      |
 | house          | 3×3       | 48 × 43 × 48   | 10 x 10 m, two 3 m storeys         |
 | game-hall      | 4×4       | 64 × 24 × 64   | 14 x 11 m open games hall          |
 | playground     | 4×3       | 64 × 20 × 48   | tower, swings, bars, sandpit       |
 | supermarket    | 4×3       | 64 × 23 × 48   | 15 x 8 m minimarket, flat roof     |
+| reception      | 4×3       | 64 × 26 × 48   | 13 x 8 m check-in hall and loggia  |
+| gym-pavilion   | 4×3       | 64 × 25 × 48   | open gym pavilion, training yard   |
 | restaurant     | 4×3       | 64 × 24 × 48   | arcaded hall + terrace, 16 x 12 m  |
 | villa          | 4×4       | 64 × 40 × 64   | 10.75 x 10 m, arcade, plunge pool  |
 | beach-club     | 6×5       | 96 × 27 × 80   | 23 x 16 m deck, thatched bar       |
@@ -61,6 +65,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | waterpark      | 6×6       | 96 × 59 × 96   | draft: not in the app yet          |
 | hotel          | 10×5      | 160 × 80 × 80  | 37 x 14 m, five 3 m storeys        |
 | tennis-court   | 9×5       | 144 × 29 × 80  | 36 x 20 m club enclosure           |
+| basketball-c.  | 8×5       | 128 × 27 × 80  | 28 x 14 m court, stand, floodlit   |
 
 ---
 
@@ -241,4 +246,23 @@ voxel model of a plastic pedal boat, finely detailed, small crisp voxels, two mo
 
 # pedalo-rental
 voxel model of a beach pedalo hire hut, finely detailed, small crisp voxels, a small timber shack with corner posts under a thatched hip roof, a serving hatch with a counter and a red blind over it facing the water, a price board and two red and white life rings on the side wall, one shuttered window on the other flank, three pedal boats in turquoise, red and yellow drawn up on the sand in front of it with their bows to the water, a rail of paddles and buoyancy aids alongside, standing on a low sand-coloured slab that fills a 2x2 footprint, flat neutral shading, no baked lighting or shadows, blank unmarked boards, no text, no lettering.
+```
+
+## Arrival, fitness and family
+
+```
+# reception
+voxel model of a resort reception and check-in lodge, finely detailed, small crisp voxels, a whitewashed hall under a large hipped terracotta roof fronted by a five-bay arcaded loggia, glazed doors in the middle bay and a bench in each end bay, a lit blank sign on a stone base, three flagpoles and a brass luggage trolley on the forecourt, on a 4x3 footprint on its own low platform/base, flat neutral shading, no baked lighting or shadows, blank unmarked signs, no text, no lettering.
+
+# bakery
+voxel model of a small village bakery, finely detailed, small crisp voxels, a whitewashed shop under a terracotta gable roof with a stucco oven chimney, a shop window with loaves along its foot under an amber blind, a glazed door with a lantern beside it and two small tables with chairs on the forecourt, on a 2x2 footprint on its own low platform/base, flat neutral shading, no baked lighting or shadows, blank unmarked signs, no text, no lettering.
+
+# kids-club
+voxel model of a resort kids club, finely detailed, small crisp voxels, a small whitewashed clubhouse with an amber band and red, amber and blue shutters under a terracotta gable roof, a lawn yard behind a low white fence with a small red slide, a sandpit under a parasol, a playhouse with a red roof and a bench for parents, on a 3x3 footprint on its own low platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# gym-pavilion
+voxel model of an open-air resort gym pavilion, finely detailed, small crisp voxels, timber posts under a hipped terracotta roof over a dark rubber floor, a stucco changing-room block along the back with a mirror across its face, treadmills and exercise bikes facing it, a squat rack, mats and a dumbbell rack, an outdoor training yard beside it with a pull-up rig and plyo boxes, on a 4x3 footprint on its own low platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# basketball-court
+voxel model of an outdoor basketball court, finely detailed, small crisp voxels, a blue hard court with red keys and straight white lines laid into a grey slab, a hoop on a padded pole behind each baseline, three tiers of timber bleachers along one long side and four floodlight masts at the corners, occupying an 8x5 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```

@@ -62,9 +62,13 @@ const params = (overrides: Partial<ResortParams> = {}): ResortParams => ({
 /** Every seed and size the suite sweeps, as one list of parameter sets. */
 const SWEEP: ResortParams[] = [
   ...Array.from({ length: 12 }, (_, seed) => params({ seed })),
-  ...[40, 56, 80, 112, 140, 160].flatMap((size) => [
+  ...[PLOT_TILES.min, 56, 80, 112, 140, 160].flatMap((size) => [
     params({ tilesX: size, tilesZ: size, seed: size }),
-    params({ tilesX: size, tilesZ: Math.max(40, Math.round(size * 0.6)), seed: size + 1 }),
+    params({
+      tilesX: size,
+      tilesZ: Math.max(PLOT_TILES.min, Math.round(size * 0.6)),
+      seed: size + 1,
+    }),
   ]),
   // The stress-test sizes, once each: every rule has to hold out there too.
   ...[320, 480].map((size) => params({ tilesX: size, tilesZ: size, density: 1, seed: size })),

@@ -120,7 +120,7 @@ const PLAZA_ID = 'fountain';
  * times its area: a stress test more than a resort anybody would lay out by
  * hand, and what the level of detail is there to keep drawable.
  */
-export const PLOT_TILES = { min: 40, max: 480 } as const;
+export const PLOT_TILES = { min: 48, max: 480 } as const;
 
 /** How built-up a plot can be asked to be. */
 export const PLOT_DENSITY = { min: 0.2, max: 1 } as const;

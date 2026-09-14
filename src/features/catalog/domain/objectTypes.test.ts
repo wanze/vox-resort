@@ -147,7 +147,7 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(58);
+    expect(OBJECT_TYPES.length).toBe(63);
   });
 
   it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {

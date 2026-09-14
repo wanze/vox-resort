@@ -137,7 +137,8 @@ models against each other.
   `hedge`, `flowerbed`, `bench`, `bridge`, `bridge-ramp`, `spa-pavilion`.
 - **In the palette from their first commit**: `litter-bin`, `sign-post`,
   `picnic-table`, `lifeguard-tower`, `volleyball`, `jetty`, `pedalo-rental`,
-  `buoy`, `rowboat`, `sailboat`, `pedalo`.
+  `buoy`, `rowboat`, `sailboat`, `pedalo`, `reception`, `bakery`, `kids-club`,
+  `gym-pavilion`, `basketball-court`.
 - **Withheld as a draft** (`DRAFT_SOURCES`, not in the app): `waterpark`, which
   does not fit the resort yet.
 - **To do**: everything on the `LEGACY` list — the remaining 1×1 props and the

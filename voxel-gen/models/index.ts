@@ -4,6 +4,8 @@
  */
 
 import type { VoxelModelSource } from '../voxelgen.ts';
+import bakery from './bakery.ts';
+import basketball_court from './basketball-court.ts';
 import beach_club from './beach-club.ts';
 import beach_shower from './beach-shower.ts';
 import beach_umbrella from './beach-umbrella.ts';
@@ -25,11 +27,13 @@ import first_aid from './first-aid.ts';
 import flowerbed from './flowerbed.ts';
 import fountain from './fountain.ts';
 import game_hall from './game-hall.ts';
+import gym_pavilion from './gym-pavilion.ts';
 import hedge from './hedge.ts';
 import hotel from './hotel.ts';
 import house from './house.ts';
 import icecream from './icecream.ts';
 import jetty from './jetty.ts';
+import kids_club from './kids-club.ts';
 import lifeguard_tower from './lifeguard-tower.ts';
 import litter_bin from './litter-bin.ts';
 import minigolf from './minigolf.ts';
@@ -44,6 +48,7 @@ import pine from './pine.ts';
 import playground from './playground.ts';
 import poolside_bar from './poolside-bar.ts';
 import railing from './railing.ts';
+import reception from './reception.ts';
 import resort_bar from './resort-bar.ts';
 import restaurant from './restaurant.ts';
 import restrooms from './restrooms.ts';
@@ -103,12 +108,14 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   changing_cabins,
   beach_shower,
   first_aid,
+  bakery,
   lifeguard_tower,
   coffee_shop,
   poolside_bar,
   resort_bar,
   spa_pavilion,
   playground,
+  kids_club,
   pedalo_rental,
   bungalow,
   house,
@@ -116,11 +123,14 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   villa,
   hotel,
   supermarket,
+  reception,
+  gym_pavilion,
   game_hall,
   restaurant,
   beach_club,
   swimming_pool,
   tennis_court,
+  basketball_court,
   volleyball,
   minigolf,
 ];

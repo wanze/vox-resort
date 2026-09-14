@@ -360,6 +360,9 @@ export const RESORT_PLAN: ResortPlan = {
     at('restrooms', 47, 4),
     at('snack-bar', 50, 4),
     at('tikitorch', 56, 1),
+    // Check-in and a bakery right inside the north gate, where guests arrive.
+    at('reception', 44, 6),
+    at('bakery', 49, 7),
 
     // E — the east shops
     at('supermarket', 58, 1),
@@ -411,6 +414,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('bungalow', 16, 15, 3, 4),
     ...row('cottage', 16, 19, 4, 3),
     at('playground', 16, 28),
+    at('kids-club', 20, 28),
 
     // C — the pool quarter
     at('swimming-pool', 30, 11),
@@ -451,6 +455,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('villa', 63, 17),
     ...row('house', 58, 22, 4, 3),
     ...row('bungalow', 58, 26, 3, 4),
+    at('basketball-court', 60, 29),
 
     // F — courts and the east lodging
     at('tennis-court', 72, 11),
@@ -505,6 +510,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('statue', 27, 45),
     at('minigolf', 16, 50),
     at('playground', 25, 50),
+    at('gym-pavilion', 25, 54),
 
     // C — the third pool and a court
     at('swimming-pool', 30, 37),

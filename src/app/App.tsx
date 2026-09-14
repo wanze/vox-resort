@@ -5,6 +5,7 @@ import { Hud } from '../features/hud/components/Hud';
 import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls } from './useClockControls';
+import { useInspector } from './useInspector';
 import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import type { BuildTool } from '../features/build/domain/buildTool';
@@ -29,11 +30,13 @@ export function App() {
   const resort = useResortControls(showcaseRef);
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
+  const inspector = useInspector(showcaseRef);
   // Pulled out because the mount effect depends on them: the setters React hands
   // back are stable, the objects holding them are not, and depending on those
   // would tear the renderer down on every render.
   const { adopt: adoptParams } = resort;
   const { adopt: adoptCamera } = camera;
+  const { adopt: adoptSelection } = inspector;
 
   /** Arms the pointer with a tool, and keeps the palette showing which. */
   const selectTool = useCallback((next: BuildTool | null) => {
@@ -62,6 +65,8 @@ export function App() {
       onToolChange: selectTool,
       // C, Q and E move the camera from the canvas; the panel follows.
       onCameraChange: adoptCamera,
+      // A click on the canvas; runs on a click, not on a frame.
+      onSelectionChange: adoptSelection,
       onFrame: overlay.update,
     };
 
@@ -92,7 +97,7 @@ export function App() {
       });
     };
     // All of them are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectTool, adoptParams, adoptCamera]);
+  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection]);
 
   return (
     <div className="app">
@@ -115,6 +120,10 @@ export function App() {
         preview={previewUrl}
         tool={tool}
         onToolChange={selectTool}
+        selection={inspector.selection}
+        inspectElement={hudNodes.inspect}
+        onSelectPerson={inspector.selectPerson}
+        onClearSelection={inspector.clear}
         error={error}
       />
     </div>

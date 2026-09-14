@@ -63,6 +63,11 @@ import type { WalkNetwork } from '../domain/walkNetwork';
 
 export interface CrowdField {
   readonly group: Group;
+  /**
+   * The crowd as it stands. A getter, because {@link relocate} rebinds it: a
+   * caller holding a crowd of its own would be reading the one before the edit.
+   */
+  readonly crowd: Crowd;
   /** People being drawn. */
   readonly count: number;
   /** Draw calls this costs: one per person model somebody is walking in. */
@@ -274,6 +279,9 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
 
   return {
     group,
+    get crowd() {
+      return crowd;
+    },
     get count() {
       return crowd.count;
     },

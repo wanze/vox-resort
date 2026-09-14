@@ -17,6 +17,8 @@ export interface HudNodes {
   readonly cpu: RefObject<HTMLSpanElement | null>;
   readonly detail: RefObject<HTMLSpanElement | null>;
   readonly shaders: RefObject<HTMLSpanElement | null>;
+  /** What the selected guest is doing this instant; see `InspectPanel`. */
+  readonly inspect: RefObject<HTMLSpanElement | null>;
 }
 
 export function useHudNodes(): HudNodes {
@@ -27,10 +29,11 @@ export function useHudNodes(): HudNodes {
   const cpu = useRef<HTMLSpanElement | null>(null);
   const detail = useRef<HTMLSpanElement | null>(null);
   const shaders = useRef<HTMLSpanElement | null>(null);
+  const inspect = useRef<HTMLSpanElement | null>(null);
   // One stable object, so the effect that mounts the renderer can depend on it
   // and still run exactly once.
   return useMemo(
-    () => ({ activeLights, time, clock, drawn, cpu, detail, shaders }),
-    [activeLights, time, clock, drawn, cpu, detail, shaders],
+    () => ({ activeLights, time, clock, drawn, cpu, detail, shaders, inspect }),
+    [activeLights, time, clock, drawn, cpu, detail, shaders, inspect],
   );
 }

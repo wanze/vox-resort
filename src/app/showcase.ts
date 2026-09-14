@@ -140,6 +140,17 @@ import { bedCount, createGuests, type Guests } from '../features/guests/domain/g
 import type { Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
+import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
+import {
+  activityLine,
+  guestView,
+  namesPlacement,
+  personOf,
+  placeView,
+  type InspectTarget,
+  type SelectionView,
+} from '../features/inspect/domain/selection';
+import { hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
 import { buildBalloonField } from '../features/balloons/adapters/balloonField';
 import {
@@ -253,6 +264,13 @@ const CREW_SEED = 4;
  * make that rename everybody.
  */
 const GUEST_SEED = 5;
+
+/**
+ * How far above a person's feet a click is tested against, in voxels: the hips
+ * of the tallest figure, which is about half way up a body. The number the art
+ * already names, rather than a second guess at it; see `pickPerson.ts`.
+ */
+const AIM_HEIGHT = hipHeight(Math.max(...PEOPLE_MODELS.map((model) => model.height)));
 
 /** Where day 0 opens: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
@@ -371,6 +389,11 @@ export interface ShowcaseOptions {
    * HUD already knows.
    */
   readonly onCameraChange?: (view: CameraView) => void;
+  /**
+   * What was clicked on, or null when the selection was cleared. Not called per
+   * frame: the panel's live line goes through `onFrame` instead.
+   */
+  readonly onSelectionChange?: (selection: SelectionView | null) => void;
 }
 
 /** Which camera the resort is being drawn through, and which way it faces. */
@@ -412,6 +435,10 @@ export interface Showcase {
   setTime(time: number): void;
   /** How fast the resort runs, pause included; see `sim/domain/simClock.ts`. */
   setSpeed(speed: SimSpeed): void;
+  /** Inspects a guest, as a click on them would; the party list uses it. */
+  selectPerson(person: number): void;
+  /** Closes the inspector, as a click on empty ground would. */
+  clearSelection(): void;
   dispose(): void;
 }
 
@@ -1569,6 +1596,10 @@ interface EditMode {
    * with it, and the field drawing them is disposed with it too.
    */
   abandon(): void;
+  /** The ground every pointer aims at, forwarded to whichever resort is standing. */
+  readonly ground: PickGround;
+  /** The placement standing under a key, which the occupancy index only names. */
+  placementOf(key: string): Placement | undefined;
   dispose(): void;
 }
 
@@ -1604,6 +1635,8 @@ function createEditMode(parts: {
    */
   readonly onGroundChange: () => void;
   readonly onCancel: () => void;
+  /** Called as a placement comes off the plot, so nothing goes on describing it. */
+  readonly onLift: (placement: Placement) => void;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -1743,6 +1776,7 @@ function createEditMode(parts: {
    */
   const lift = (placement: Placement): void => {
     const { plot, world, lighting, shadows } = resort();
+    parts.onLift(placement);
     occupancy.release(placement, placement.key);
     // A building still going up was never in the world, threw no shadow and lit
     // nothing: cancelling its site is the whole of taking it down. This is what
@@ -1962,6 +1996,8 @@ function createEditMode(parts: {
     abandon() {
       sites = [];
     },
+    ground,
+    placementOf,
     dispose() {
       pointer.dispose();
       spade.dispose();
@@ -2179,9 +2215,74 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       ground = true;
     },
     onCancel: () => {
-      build.select(null);
+      selectTool(null);
       options.onToolChange?.(null);
     },
+    onLift: (placement) => {
+      // A panel describing a bungalow that is not there any more is worse than
+      // no panel at all.
+      if (namesPlacement(selected, placement.key)) select(null);
+    },
+  });
+
+  /**
+   * What the pointer is holding, or null: kept here because the edit mode only
+   * takes orders, and the inspector listens exactly when nothing is armed.
+   */
+  let armedTool: BuildTool | null = null;
+  const selectTool = (tool: BuildTool | null): void => {
+    armedTool = tool;
+    build.select(tool);
+  };
+
+  /**
+   * Who or what is being looked at, or null.
+   *
+   * The index rather than the view, because the view has to be rebuilt whenever
+   * the day changes or the resort is edited, and because the live line read per
+   * frame needs the index anyway.
+   */
+  let selected: InspectTarget = null;
+  /** The day the view on screen was worded on, so its nights left follow the clock. */
+  let selectedOn = clock.day;
+
+  const viewOf = (target: InspectTarget): SelectionView | null => {
+    if (!target) return null;
+    const { guests } = current();
+    if ('person' in target) return guestView(guests, target.person, clock.day);
+    const placement = build.placementOf(target.key);
+    return placement ? placeView(placement, objectTypeById(placement.id).label, guests) : null;
+  };
+
+  /** Selects something, or nothing, and tells the HUD what to show. */
+  const select = (target: InspectTarget): void => {
+    const view = viewOf(target);
+    selected = view ? target : null;
+    selectedOn = clock.day;
+    options.onSelectionChange?.(view);
+  };
+
+  /**
+   * The inspector's live line for this frame, or null with no guest selected.
+   *
+   * Re-words the selection once a simulated day, so a guest's nights left count
+   * down while they are being looked at; never per frame.
+   */
+  const inspectLine = (): string | null => {
+    if (selected !== null && clock.day !== selectedOn) select(selected);
+    const person = personOf(selected);
+    return person === null ? null : activityLine(current().crowd.crowd, person);
+  };
+
+  const inspector = createInspectPointer({
+    canvas,
+    camera: () => handle.camera,
+    armed: () => armedTool === null,
+    people: () => current().crowd.crowd,
+    aimHeight: AIM_HEIGHT,
+    ground: build.ground,
+    keyAt: (tile) => current().occupancy.keyAt(tile),
+    onSelect: select,
   });
 
   /** Tells everything above the renderer that the resort underneath it changed. */
@@ -2208,6 +2309,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     params = asked;
     // Whatever was going up goes with the plot it was going up on.
     build.abandon();
+    // So does whatever was being looked at: the person index and the placement
+    // key both name something on the old plot.
+    select(null);
     // The resort swapped in has a crowd built on its own graph already.
     walkStaleAt = null;
     slot.replace(prepared);
@@ -2318,6 +2422,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       detail: world.detailCounts,
       people: { drawn: crowd.drawnCount, total: crowd.count },
       shaderBuilds: handle.shaderBuilds(),
+      inspect: inspectLine(),
     });
 
     recorder?.record(elapsed * 1000);
@@ -2355,14 +2460,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       // `emptyResortPlan`.
       return regrow(asked, { kind: 'clear', params: asked });
     },
-    selectTool: (tool) => build.select(tool),
+    selectTool,
     setTime: clock.setTime,
     setSpeed: clock.setSpeed,
+    selectPerson: (person) => select({ person }),
+    clearSelection: () => select(null),
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener('resize', resize);
       cameraKeys.dispose();
+      inspector.dispose();
       build.dispose();
       preparer.dispose();
       current().dispose();

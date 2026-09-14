@@ -657,6 +657,16 @@ export function isSeated(crowd: Crowd, i: number): boolean {
 }
 
 /**
+ * Whether a person is out on the sand, off the walk graph.
+ *
+ * A predicate rather than the sentinel exported, so that nothing outside this
+ * file can compare the wrong column against it.
+ */
+export function isRoaming(crowd: Crowd, i: number): boolean {
+  return crowd.node[i] === ROAMING;
+}
+
+/**
  * What a person is doing, as the thing that draws them needs it: 0 walking,
  * 1 sitting, 2 lying.
  *

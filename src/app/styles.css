@@ -163,6 +163,7 @@ body {
 .hud-bar,
 .hud-popover-panel,
 .hud-palette,
+.hud-inspect,
 .hud-error {
   background-image: var(--slab);
   background-blend-mode: var(--slab-blend);
@@ -335,18 +336,21 @@ input[type='checkbox'] {
 
 /* Scrollbars, so a panel's overflow is part of the stone rather than the OS. */
 .hud-popover-panel,
-.hud-palette-shelves {
+.hud-palette-shelves,
+.hud-inspect {
   scrollbar-width: thin;
   scrollbar-color: var(--stone-500) transparent;
 }
 
 .hud-popover-panel::-webkit-scrollbar,
-.hud-palette-shelves::-webkit-scrollbar {
+.hud-palette-shelves::-webkit-scrollbar,
+.hud-inspect::-webkit-scrollbar {
   width: 9px;
 }
 
 .hud-popover-panel::-webkit-scrollbar-thumb,
-.hud-palette-shelves::-webkit-scrollbar-thumb {
+.hud-palette-shelves::-webkit-scrollbar-thumb,
+.hud-inspect::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 5px;
   background: var(--stone-500);
@@ -665,6 +669,55 @@ input[type='checkbox'] {
 .hud-resort-go:hover:not(:disabled) {
   background-color: rgb(255 255 255 / 12%);
   color: var(--text-on-accent);
+}
+
+/* ===========================================================================
+   The inspector: hangs off the left edge, opposite the build palette, so the
+   two never overlap
+   ======================================================================== */
+
+.hud-inspect {
+  position: absolute;
+  top: calc(var(--bar-h) + var(--space-3));
+  left: var(--space-3);
+  width: var(--palette-w);
+  max-height: calc(100% - var(--bar-h) - var(--space-3) * 2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  overflow: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  pointer-events: auto;
+}
+
+.hud-inspect-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.hud-inspect-title {
+  margin: 0;
+  font: 700 var(--size-small) / 1.3 var(--font-ui);
+}
+
+.hud-inspect-close {
+  flex: none;
+  width: var(--control-h);
+  margin-left: auto;
+}
+
+.hud-inspect-activity {
+  margin: 0;
+  color: var(--sand);
+}
+
+.hud-inspect-members {
+  display: grid;
+  gap: var(--space-2);
 }
 
 /* ===========================================================================

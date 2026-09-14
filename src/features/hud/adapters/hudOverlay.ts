@@ -55,6 +55,12 @@ export interface FrameUpdate {
   readonly people: { readonly drawn: number; readonly total: number };
   /** Shaders the renderer has built so far; one that climbs while moving is a stall. */
   readonly shaderBuilds: number;
+  /**
+   * What the selected guest is doing, already worded, or null when nobody is
+   * selected. The one line of the inspector that changes every frame, so it
+   * comes here rather than through React; see `inspect/domain/selection.ts`.
+   */
+  readonly inspect: string | null;
 }
 
 /**
@@ -78,6 +84,8 @@ export interface HudOverlayParts {
   readonly detail: Slot<HTMLSpanElement>;
   /** Shaders built so far. */
   readonly shaders: Slot<HTMLSpanElement>;
+  /** What the selected guest is doing; only on screen while a guest is selected. */
+  readonly inspect: Slot<HTMLSpanElement>;
   /** Called only when the displayed frame rate actually changes. */
   readonly onFpsChange: (fps: number) => void;
 }
@@ -166,6 +174,9 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
       writeText(parts.clock, frame.clock);
       writeDrawn(frame.drawCalls, frame.triangles);
       writeCost(frame);
+      // Blanked rather than left standing on null, so a guest's last activity is
+      // never read as somebody else's.
+      writeText(parts.inspect, frame.inspect ?? '');
     },
   };
 }

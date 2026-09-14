@@ -35,6 +35,10 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | Parties and who is a child             | `guests/domain/parties.ts`                   |
 | Beds                                   | `guests/domain/homes.ts`                     |
 | Names                                  | `guests/domain/names.ts`                     |
+| Which person a click is on             | `inspect/domain/pickPerson.ts`               |
+| What is selected, worded for the HUD   | `inspect/domain/selection.ts`                |
+| The inspector's click                  | `inspect/adapters/inspectPointer.ts`         |
+| The inspector panel                    | `hud/components/InspectPanel.tsx`            |
 | Drawing the crowd                      | `crowd/adapters/crowdField.ts`               |
 | Figure geometry and poses              | `rendering/adapters/figureField.ts`          |
 | Boats and piers                        | `sea/domain/piers.ts`, `stepFlotilla`        |
@@ -126,6 +130,27 @@ from `layout.placements`; parties are housed biggest first into the biggest
 lodging. A party with no room gets `NO_HOME`, which is the bed-shortage signal;
 the HUD's Details panel shows beds taken of total. An edit reseats the crowd
 and leaves the registry alone. Nothing about a guest changes what they do yet.
+
+## Inspecting
+
+A click on the canvas with no build tool armed selects what is under it. The
+inspector does not take the left mouse button from the camera: a press and
+release within 4 px and 400 ms is a click, anything else was a drag and is
+ignored (`inspectPointer.ts`).
+
+A person is tried first. `pickPerson` projects everybody forward through the
+view-projection, aimed at hip height, and the nearest in screen pixels within
+`PICK_PIXELS` wins, ties to the lower index. It does not pick on the ground:
+from the plot's high angle a click on somebody's head lands the ground ray past
+their feet, on whoever stands behind them. With nobody hit, `pickTile` and the
+occupancy index name the placement on the tile; empty ground clears the panel,
+as do Escape, a regenerate and demolishing the selected object.
+
+`selection.ts` turns the pick into a flat, worded view that `App` holds as
+React state, set once per click and re-worded once a simulated day. What a guest
+is doing is the one per-frame line, written to a DOM node by `hudOverlay.ts`.
+A lodging lists who sleeps there. Who is inside a venue is not tracked yet, and
+the panel says so rather than showing a zero.
 
 ## Drawing
 

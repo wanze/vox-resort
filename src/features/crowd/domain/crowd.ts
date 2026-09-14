@@ -69,6 +69,7 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom } from '../../layout/domain/random';
 import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
+import { nearestNodeTo, nodeIndexFor } from './nearestNode';
 import { blockedAt, clearLine } from './sandGrid';
 import {
   BEACH_SURFACE,
@@ -370,6 +371,78 @@ export function createCrowd(options: CrowdOptions): Crowd {
   }
 
   return crowd;
+}
+
+/**
+ * The same people, on a graph that has been rebuilt underneath them.
+ *
+ * Called when something is built or taken away, which changes what is paved and
+ * so changes every node index there is. Five of the crowd's columns are indices
+ * into the network — `node`, `cameFrom`, `gate`, `seat` and `seatBy` — and all
+ * five are meaningless afterwards. Everything else is about the person rather
+ * than about the graph: where they are, which way they face, how fast they walk,
+ * which model they are drawn as, and from plan 014 who they are. Those are
+ * carried across untouched, which is the whole point — putting a bench down must
+ * not cost the resort its guests.
+ *
+ * A new `Crowd` value rather than a mutation, because `network` is readonly and
+ * should be: the arrays are reused, so this allocates one object and one
+ * `seatBy`, not a crowd.
+ *
+ * **Everybody gives up their seat.** A seat index names a seat of the old
+ * network, and the object it was on may not be standing any more. Somebody sat
+ * on a bench that is still there stands up and may sit down again a moment
+ * later, which is a small and very rare oddity next to the alternative of
+ * somebody sitting on a bench that was demolished.
+ *
+ * **Whoever is out on the sand stays there**, when the new network still has a
+ * beach and a gate to go back in by: a roamer, and a sunbather getting up off a
+ * lounger, which hangs off no node. An edit does not move the beach, so where
+ * they stand is still somewhere to stand, and snapping them to the nearest node
+ * would march the whole beach back onto the boardwalk every time a flowerbed
+ * went down. Everybody else is walked from where they are to the node nearest
+ * them, and carries on from there.
+ *
+ * A network with no edges — every path taken up — hands back a crowd with
+ * `count` 0. Nobody is drawn and nobody is stepped, and paving one tile brings
+ * everybody back, because capacity and every column were kept.
+ */
+export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
+  const previous = crowd.network;
+  const count = network.edges.length === 0 ? 0 : crowd.capacity;
+  const reseated: Crowd = {
+    ...crowd,
+    network,
+    count,
+    seatBy: new Int32Array(network.seats.length).fill(-1),
+  };
+  const index = nodeIndexFor(network);
+  const canRoam = network.beach !== null && network.gates.length > 0;
+
+  for (let i = 0; i < count; i++) {
+    const seat = crowd.seat[i]!;
+    const lounging = seat >= 0 && previous.seats[seat]?.node === OFF_THE_GRAPH;
+    crowd.seat[i] = -1;
+    // The start of a segment is the point on their *line*, and they may be
+    // stood aside of it: the same undoing `standOnLine` does, from where they
+    // actually are rather than from where their old segment began.
+    const side = crowd.side[i]!;
+    crowd.fromX[i] = crowd.x[i]! - crowd.dirZ[i]! * side;
+    crowd.fromY[i] = crowd.y[i]!;
+    crowd.fromZ[i] = crowd.z[i]! + crowd.dirX[i]! * side;
+    crowd.cameFrom[i] = -1;
+
+    if (canRoam && (crowd.node[i] === ROAMING || lounging)) {
+      crowd.gate[i] = network.gates[Math.floor(crowd.random() * network.gates.length)]!;
+      crowd.node[i] = ROAMING;
+      roamTo(reseated, i, lounging ? SEAT_CLEAR : 0);
+      continue;
+    }
+    crowd.gate[i] = -1;
+    aim(reseated, i, nearestNodeTo(network, index, crowd.x[i]!, crowd.z[i]!, TILE_VOXELS));
+  }
+  crowd.seat.fill(-1, count);
+  return reseated;
 }
 
 /**

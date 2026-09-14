@@ -6,6 +6,7 @@ import {
   createCrowd,
   isSeated,
   MAX_STEP,
+  reseatCrowd,
   RESTING,
   restingOn,
   stepCrowd,
@@ -527,5 +528,209 @@ describe('the people who lie down', () => {
       const held = Array.from(crowd.seat).filter((seat) => seat >= 0);
       expect(new Set(held).size, 'two people on one lounger').toBe(held.length);
     }
+  });
+});
+
+/** Every column that is about the person rather than about the graph. */
+const personOf = (crowd: Crowd) => ({
+  variant: Array.from(crowd.variant),
+  speed: Array.from(crowd.speed),
+  phase: Array.from(crowd.phase),
+  capacity: crowd.capacity,
+});
+
+const positionsOf = (crowd: Crowd) => [
+  Array.from(crowd.x),
+  Array.from(crowd.y),
+  Array.from(crowd.z),
+];
+
+/** A boardwalk running south from the middle of the plot down onto the beach. */
+const boardwalk = (length: number): PavedTile[] =>
+  Array.from({ length }, (_, index) => ({ tileX: 10, tileZ: 10 + index, y: 0 }));
+
+describe('reseatCrowd', () => {
+  /** A street along z = 0 with a lane running north off its middle. */
+  const crossroads = (length: number): PavedTile[] => [
+    ...street(length),
+    ...Array.from({ length: 6 }, (_, index) => ({
+      tileX: Math.floor(length / 2),
+      tileZ: index + 1,
+      y: 0,
+    })),
+  ];
+
+  /** A crowd that has been walking a while, so nobody is where they started. */
+  const walked = (network: WalkNetwork, seed: number, count = 40): Crowd => {
+    const crowd = createCrowd({ network, count, variants: 4, seed });
+    run(crowd, 30);
+    return crowd;
+  };
+
+  it('keeps who everybody is', () => {
+    const crowd = walked(networkOf(street(20)), 31);
+    const before = personOf(crowd);
+    const reseated = reseatCrowd(crowd, networkOf(crossroads(20)));
+    expect(personOf(reseated)).toEqual(before);
+  });
+
+  it('keeps everybody where they are standing', () => {
+    const crowd = walked(networkOf(street(20)), 32);
+    const before = positionsOf(crowd);
+    const reseated = reseatCrowd(crowd, networkOf(crossroads(24)));
+    expect(positionsOf(reseated)).toEqual(before);
+  });
+
+  it('gives every seat up, against the new network’s seats', () => {
+    const seat: SeatSpot = {
+      x: 4.3 * TILE_VOXELS,
+      z: 1.5 * TILE_VOXELS,
+      y: walkingSurface(0) + 2,
+      heading: Math.PI,
+      pose: 'sit',
+      tileX: 4,
+      tileZ: 1,
+    };
+    const benched = walkNetworkFor({
+      paved: street(9),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 20,
+      seats: [seat, { ...seat, x: 4.5 * TILE_VOXELS }],
+    });
+    const crowd = createCrowd({ network: benched, count: 40, variants: 2, seed: 33 });
+    run(crowd, 120);
+    expect(
+      Array.from(crowd.seat).some((held) => held >= 0),
+      'nobody sat down',
+    ).toBe(true);
+    const moved = walkNetworkFor({
+      paved: street(9),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 20,
+      seats: [seat, { ...seat, x: 4.5 * TILE_VOXELS }, { ...seat, x: 4.7 * TILE_VOXELS }],
+    });
+    const reseated = reseatCrowd(crowd, moved);
+    expect(Array.from(reseated.seat)).toEqual(Array(reseated.capacity).fill(-1));
+    expect(Array.from(reseated.seatBy)).toEqual([-1, -1, -1]);
+    for (let i = 0; i < reseated.count; i++) expect(isSeated(reseated, i)).toBe(false);
+  });
+
+  it('puts everybody on the new graph', () => {
+    const crowd = walked(networkOf(crossroads(20)), 34);
+    const network = networkOf(street(12));
+    const reseated = reseatCrowd(crowd, network);
+    for (let i = 0; i < reseated.count; i++) {
+      const node = reseated.node[i]!;
+      expect(node === -1 || (node >= 0 && node < network.nodes.length), `node ${node}`).toBe(true);
+      const cameFrom = reseated.cameFrom[i]!;
+      expect(cameFrom >= -1 && cameFrom < network.nodes.length).toBe(true);
+    }
+  });
+
+  it('walks a person to the node beside them, not to the first node there is', () => {
+    const crowd = walked(networkOf(street(40)), 35);
+    // Laid east to west, so node 0 is at the far east end of the street.
+    const network = networkOf(street(40).toReversed());
+    expect(network.nodes[0]!.tileX).toBe(39);
+    const reseated = reseatCrowd(crowd, network);
+    let westerners = 0;
+    for (let i = 0; i < reseated.count; i++) {
+      const node = network.nodes[reseated.node[i]!]!;
+      expect(Math.abs(node.x - reseated.x[i]!), `person ${i}`).toBeLessThanOrEqual(TILE_VOXELS);
+      if (reseated.x[i]! < 20 * TILE_VOXELS) westerners++;
+    }
+    expect(westerners).toBeGreaterThan(0);
+  });
+
+  it('empties the plot when every path is taken up, without throwing', () => {
+    const crowd = walked(networkOf(street(20)), 36);
+    const reseated = reseatCrowd(crowd, networkOf([]));
+    expect(reseated.count).toBe(0);
+    expect(reseated.capacity).toBe(crowd.capacity);
+    expect(() => stepCrowd(reseated, 1 / 60)).not.toThrow();
+  });
+
+  it('brings everybody back when paving is laid again', () => {
+    const crowd = walked(networkOf(street(20)), 37);
+    const before = personOf(crowd);
+    const emptied = reseatCrowd(crowd, networkOf([]));
+    const back = reseatCrowd(emptied, networkOf(crossroads(20)));
+    expect(back.count).toBe(crowd.capacity);
+    expect(personOf(back)).toEqual(before);
+    const startX = Float32Array.from(back.x);
+    run(back, 5);
+    let moved = 0;
+    for (let i = 0; i < back.count; i++) if (back.x[i] !== startX[i]) moved++;
+    expect(moved).toBeGreaterThan(back.count / 2);
+  });
+
+  it('walks on afterwards, and stays on the new graph', () => {
+    const crowd = walked(networkOf(crossroads(30)), 38);
+    const network = networkOf(street(10));
+    const reseated = reseatCrowd(crowd, network);
+    // Long enough for everybody to have walked in off wherever the old graph
+    // left them: the far end of the old street is twenty tiles past the new one,
+    // which is a minute's walk.
+    run(reseated, 120);
+    for (let frame = 0; frame < 600; frame++) {
+      stepCrowd(reseated, 1 / 60);
+      for (let i = 0; i < reseated.count; i++) {
+        const node = reseated.node[i]!;
+        expect(node >= 0 && node < network.nodes.length, `node ${node}`).toBe(true);
+        expect(Number.isFinite(reseated.x[i]!)).toBe(true);
+      }
+    }
+    for (let i = 0; i < reseated.count; i++) {
+      expect(reseated.x[i]!).toBeGreaterThanOrEqual(-MAX_SIDE);
+      expect(reseated.x[i]!).toBeLessThanOrEqual(10 * TILE_VOXELS + MAX_SIDE);
+      expect(Math.abs(reseated.z[i]! - 0.5 * TILE_VOXELS)).toBeLessThanOrEqual(MAX_SIDE + 0.01);
+    }
+  });
+
+  describe('on the beach', () => {
+    const shore = shoreFor({
+      tilesX: 20,
+      tilesZ: 20,
+      shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+    });
+    const beachOf = (paved: PavedTile[], seats: SeatSpot[] = []): WalkNetwork =>
+      walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats });
+
+    it('leaves a roamer out on the sand', () => {
+      const crowd = createCrowd({
+        network: beachOf(boardwalk(8)),
+        count: 40,
+        variants: 2,
+        seed: 39,
+      });
+      const roamers = Array.from({ length: crowd.count }, (_, i) => i).filter(
+        (i) => crowd.node[i] === -1,
+      );
+      expect(roamers.length).toBeGreaterThan(0);
+      const network = beachOf([...boardwalk(8), { tileX: 11, tileZ: 10, y: 0 }]);
+      const reseated = reseatCrowd(crowd, network);
+      for (const i of roamers) {
+        expect(reseated.node[i], `person ${i}`).toBe(-1);
+        expect(network.gates).toContain(reseated.gate[i]);
+      }
+    });
+
+    it('gets a sunbather up onto the sand rather than onto the boardwalk', () => {
+      const network = beachOf(boardwalk(8), loungers(6));
+      const crowd = createCrowd({ network, count: 40, variants: 2, seed: 40 });
+      let lying = -1;
+      for (let frame = 0; frame < 60 * 600 && lying === -1; frame++) {
+        stepCrowd(crowd, 1 / 60);
+        for (let i = 0; i < crowd.count; i++) {
+          if (restingOn(crowd, i) === RESTING.lying) lying = i;
+        }
+      }
+      expect(lying, 'nobody lay down').toBeGreaterThanOrEqual(0);
+      const reseated = reseatCrowd(crowd, beachOf(boardwalk(8), loungers(6)));
+      expect(reseated.node[lying]).toBe(-1);
+      expect(reseated.seat[lying]).toBe(-1);
+    });
   });
 });

@@ -133,7 +133,7 @@ import {
 } from '../features/construction/domain/construction';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
 import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
-import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
+import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
@@ -761,11 +761,10 @@ interface Resort {
    * and the network, and so the crowd on it, is a different one. See
    * `crowd/domain/walkNetwork.ts`.
    *
-   * Which is also the limit of it: a path laid by hand is not walked until the
-   * plot is grown again, because the network is built with the resort and not
-   * kept live the way the occupancy index is. Nobody walks into a building that
-   * was not there either — a person is on an edge, and an edge is between two
-   * tiles that were paved when the plot was laid.
+   * The crowd itself outlives an edit, though its graph does not: a quarter of
+   * a second after the last one the network is rebuilt from what now stands and
+   * everybody is put back on it, keeping who they are. See `REANCHOR_DELAY_MS`
+   * and `reseatCrowd`.
    */
   readonly crowd: CrowdField;
   /**
@@ -786,6 +785,12 @@ interface Resort {
    */
   readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
+  /**
+   * The plan the plot was grown from, held so the walk graph can be rebuilt
+   * after an edit off the resort that is standing rather than off whichever one
+   * was standing when the page opened.
+   */
+  readonly plan: ResortPlan;
   /**
    * The plot's rails by tile, and the only writer of `plot.rails`.
    *
@@ -834,28 +839,17 @@ function crowdFor(parts: {
   /** The lamps the crowd walks under, so a person catches the light a wall does. */
   readonly lightVolume: BakedLightVolume | null;
 }): CrowdField {
-  const network = walkNetworkFor({
-    paved: parts.plot.layout.paths,
-    levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
+  const network = networkFor({
+    plan: parts.plan,
     shore: parts.shore,
-    tilesX: parts.plan.tilesX,
-    // Which paving stands a metre above what it is laid on: a bridge over a
-    // river or a lake, and nothing else — the pier out over the bay lies flat on
-    // the sea. Asked of the ground here exactly as `layoutResort` asks it, so the
-    // crowd walks the deck the layout actually stood. See `spans.ts`.
-    bridged: (tileX, tileZ) =>
-      parts.terrain.surfaceOf(tileX, tileZ) === 'water' && !parts.terrain.isSea(tileX, tileZ),
+    terrain: parts.terrain,
+    paved: parts.plot.layout.paths,
     // The authored objects *and* the scattered props, because the bench is one
     // of the latter: the layout stands benches along the path edges itself, so
     // a crowd built off `placements` alone would have nothing to sit on at all.
     // Off the layout's own lists for the reason the paving is: a benchmark's
     // tiled copies stand on ground the shore and the elevation never heard of.
-    seats: seatSpotsFor(
-      [...parts.plot.layout.placements, ...parts.plot.layout.props].map(seatSiteOf),
-    ),
-    // The same two lists, as boxes on the ground: whichever of them stand on the
-    // sand are what a roamer walks round. See `crowd/domain/sandGrid.ts`.
-    obstacles: [...parts.plot.layout.placements, ...parts.plot.layout.props],
+    standing: [...parts.plot.layout.placements, ...parts.plot.layout.props],
   });
   return buildCrowdField({
     crowd: createCrowd({
@@ -868,6 +862,56 @@ function crowdFor(parts: {
     }),
     models: parts.people,
     lightVolume: parts.lightVolume,
+  });
+}
+
+/**
+ * How long after the last edit the crowd is put back on a rebuilt graph, in
+ * milliseconds.
+ *
+ * Long enough that a drag across the plot costs one rebuild rather than one per
+ * tile, short enough that it reads as immediate. A quarter of a second is about
+ * the gap between two deliberate clicks.
+ */
+const REANCHOR_DELAY_MS = 250;
+
+/**
+ * The graph the crowd walks, from what is standing.
+ *
+ * Split out of {@link crowdFor} so an edit can rebuild it alone: the crowd keeps
+ * its people and is put back on the new graph rather than made again. See
+ * `reseatCrowd`.
+ *
+ * `paved` and `standing` are passed in rather than read off the plot here,
+ * because the two callers read different lists and the difference matters: the
+ * first build reads `layout.*`, which is the plot as planned and is what a
+ * benchmark's nine tiled copies must not be counted from, and a rebuild after an
+ * edit reads `plot.*`, which is the plot as it now stands, hand edits included.
+ * A benchmark never edits, so it never takes the second path.
+ */
+function networkFor(parts: {
+  readonly plan: ResortPlan;
+  readonly shore: Shore | null;
+  readonly terrain: Terrain;
+  readonly paved: readonly Placement[];
+  /** Everything standing that is not paving: what is sat on, and what is walked round. */
+  readonly standing: readonly Placement[];
+}): WalkNetwork {
+  return walkNetworkFor({
+    paved: parts.paved,
+    levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
+    shore: parts.shore,
+    tilesX: parts.plan.tilesX,
+    // Which paving stands a metre above what it is laid on: a bridge over a
+    // river or a lake, and nothing else — the pier out over the bay lies flat on
+    // the sea. Asked of the ground here exactly as `layoutResort` asks it, so the
+    // crowd walks the deck the layout actually stood. See `spans.ts`.
+    bridged: (tileX, tileZ) =>
+      parts.terrain.surfaceOf(tileX, tileZ) === 'water' && !parts.terrain.isSea(tileX, tileZ),
+    seats: seatSpotsFor(parts.standing.map(seatSiteOf)),
+    // The same list, as boxes on the ground: whichever of them stand on the sand
+    // are what a roamer walks round. See `crowd/domain/sandGrid.ts`.
+    obstacles: parts.standing,
   });
 }
 
@@ -1057,6 +1101,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   });
 
   return {
+    plan,
     plot,
     lighting,
     world,
@@ -2035,6 +2080,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
    */
   let counted = false;
 
+  /**
+   * When the walk graph last went stale, or null when it is current.
+   *
+   * A drag lays a tile per pointer move, and rebuilding a couple of thousand
+   * nodes per tile of a drag is not something a frame can spend — so the rebuild
+   * waits until the pointer has been still for {@link REANCHOR_DELAY_MS}, and a
+   * whole stroke costs one. The same bargain `ground` and `counted` strike, with a
+   * longer fuse because the work is bigger.
+   */
+  let walkStaleAt: number | null = null;
+
   const build = createEditMode({
     canvas,
     handle,
@@ -2042,6 +2098,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     geometries: catalogue.geometries,
     onChange: () => {
       counted = true;
+      // The paving may have moved, and with it every node index the crowd
+      // holds. Not now, though: see `walkStaleAt`.
+      walkStaleAt = performance.now();
     },
     onGroundChange: () => {
       ground = true;
@@ -2076,6 +2135,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     params = asked;
     // Whatever was going up goes with the plot it was going up on.
     build.abandon();
+    // The resort swapped in has a crowd built on its own graph already.
+    walkStaleAt = null;
     slot.replace(prepared);
     rebuilt();
   };
@@ -2107,6 +2168,23 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (counted) {
       onSceneChange?.(statsNow());
       counted = false;
+    }
+    // A benchmark places nothing, so this never fires in one; the guard is here
+    // so that stays true if a bench case ever does place something, because a
+    // rebuild mid-run would put the crowd somewhere the run before it was not.
+    if (walkStaleAt !== null && !bench && timeMs - walkStaleAt >= REANCHOR_DELAY_MS) {
+      walkStaleAt = null;
+      const { plan, plot, shore, terrain, crowd } = current();
+      crowd.relocate(
+        networkFor({
+          plan,
+          shore,
+          terrain,
+          // What is standing, hand edits included, rather than what was planned.
+          paved: plot.paths,
+          standing: [...plot.placements, ...plot.props],
+        }),
+      );
     }
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;

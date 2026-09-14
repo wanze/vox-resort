@@ -13,26 +13,33 @@ for what has landed.
 | Boats    | 12 craft (`CRAFT_COUNT`), plus buoys and the pedalo rental's boats                                                                      |
 | Balloons | 36 (`BALLOON_COUNT`)                                                                                                                    |
 
-The crowd, the balloons and the bay are built with the resort and thrown away
-with it; they do not follow hand edits.
+The crowd is built with the resort and thrown away with it, but it does follow
+hand edits: a quarter of a second after the last one (`REANCHOR_DELAY_MS`) the
+walk network is rebuilt from what now stands, and everybody is put back on it
+(`reseatCrowd`). People keep where they are, which way they face and who they
+are, and give up their seat; a roamer stays on the sand, everybody else walks to
+the nearest node. The crowd's size does not change with an edit. The balloons
+and the bay still do not follow edits, and have nothing to lose by not doing.
 
 ## Code
 
-| What                      | Where                                 |
-| ------------------------- | ------------------------------------- |
-| Walk network              | `crowd/domain/walkNetwork.ts`         |
-| Crowd state and step      | `crowd/domain/crowd.ts`               |
-| Avoidance between people  | `crowd/domain/avoidance.ts`           |
-| Obstacles on the sand     | `crowd/domain/sandGrid.ts`            |
-| Seats in world space      | `crowd/domain/seating.ts`             |
-| Drawing the crowd         | `crowd/adapters/crowdField.ts`        |
-| Figure geometry and poses | `rendering/adapters/figureField.ts`   |
-| Boats and piers           | `sea/domain/piers.ts`, `stepFlotilla` |
-| Passengers                | `sea/domain/passengers.ts`            |
+| What                                   | Where                                        |
+| -------------------------------------- | -------------------------------------------- |
+| Walk network                           | `crowd/domain/walkNetwork.ts`                |
+| Crowd state and step                   | `crowd/domain/crowd.ts`                      |
+| Avoidance between people               | `crowd/domain/avoidance.ts`                  |
+| Obstacles on the sand                  | `crowd/domain/sandGrid.ts`                   |
+| Seats in world space                   | `crowd/domain/seating.ts`                    |
+| Putting people back on a rebuilt graph | `crowd/domain/nearestNode.ts`, `reseatCrowd` |
+| Drawing the crowd                      | `crowd/adapters/crowdField.ts`               |
+| Figure geometry and poses              | `rendering/adapters/figureField.ts`          |
+| Boats and piers                        | `sea/domain/piers.ts`, `stepFlotilla`        |
+| Passengers                             | `sea/domain/passengers.ts`                   |
 
 ## The walk network
 
-Built once per resort from the layout.
+Built per resort from the layout, and rebuilt whole from the plot as it stands
+after a hand edit.
 
 - **Nodes** — one per paved tile, at its centre and height. A flight of stairs
   has two: at the foot and at the head. Adjoining flights share a landing.

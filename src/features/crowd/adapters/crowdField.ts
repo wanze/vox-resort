@@ -58,7 +58,8 @@ import {
 } from '../../rendering/adapters/figureField';
 import { pixelsPerVoxel, standsOut, type DetailView } from '../../rendering/domain/levelOfDetail';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
-import { MAX_STEP, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
+import { MAX_STEP, reseatCrowd, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
+import type { WalkNetwork } from '../domain/walkNetwork';
 
 export interface CrowdField {
   readonly group: Group;
@@ -84,6 +85,13 @@ export interface CrowdField {
   setView(view: DetailView | null): void;
   /** People drawn on the last frame written. */
   readonly drawnCount: number;
+  /**
+   * Puts the same people on a graph that has been rebuilt underneath them,
+   * after something was built or taken away. The meshes are untouched: who is
+   * drawn in which of them is decided by `variant`, which a reseat never
+   * changes. See `reseatCrowd`.
+   */
+  relocate(network: WalkNetwork): void;
   dispose(): void;
 }
 
@@ -186,6 +194,11 @@ function buildPersonMesh(
  *
  * Both buffers go up whole, without update ranges: everybody moved.
  * Returns how many were drawn.
+ *
+ * Only people below the crowd's `count` are drawn. The mesh was sized from the
+ * crowd as it was built, and a reseat onto a plot with no paving left keeps
+ * everybody's columns but walks nobody; see `reseatCrowd`. A mesh's people are
+ * in person order, so the first one past the count ends the loop.
  */
 function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null): number {
   const matrices = part.mesh.instanceMatrix.array;
@@ -194,6 +207,7 @@ function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null)
   let slot = 0;
   for (let index = 0; index < part.people.length; index++) {
     const person = part.people[index]!;
+    if (person >= crowd.count) break;
     if (view) {
       const dx = crowd.x[person]! - view.x;
       const dy = crowd.y[person]! + middle - view.y;
@@ -233,7 +247,10 @@ function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null)
  * that does nothing. That is a plot nobody can walk on, not a mistake.
  */
 export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
-  const { crowd, models } = options;
+  // Rebound by `relocate`, so every closure below reads this binding rather than
+  // holding a crowd of its own.
+  let crowd = options.crowd;
+  const { models } = options;
   const group = new Group();
   group.name = 'crowd';
 
@@ -277,6 +294,12 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
       stepCrowd(crowd, step);
       clock += step;
       walk.setClock(clock);
+      writeAll();
+    },
+    relocate(network) {
+      crowd = reseatCrowd(crowd, network);
+      // Now rather than on the next frame, so nothing is drawn with people
+      // standing where the old graph had them.
       writeAll();
     },
     dispose() {

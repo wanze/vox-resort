@@ -333,6 +333,54 @@ describe('buildCrowdField', () => {
     field.dispose();
   });
 
+  it('keeps its meshes and draw calls when the crowd is put on a new graph', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    const before = meshes(field.group);
+    const drawCalls = field.drawCalls;
+    field.relocate(networkOf(paved(12)));
+    expect(meshes(field.group)).toEqual(before);
+    expect(field.drawCalls).toBe(drawCalls);
+    field.dispose();
+  });
+
+  it('draws everybody the view admits after a relocate', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    field.relocate(networkOf(paved(3)));
+    expect(field.count).toBe(40);
+    expect(field.drawnCount).toBe(field.count);
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
+    field.advance(1 / 60);
+    expect(field.drawnCount).toBe(0);
+    field.dispose();
+  });
+
+  it('draws nobody once every path is taken up, and walks them back after', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    field.relocate(networkOf([]));
+    expect(field.count).toBe(0);
+    expect(field.drawnCount).toBe(0);
+    for (const mesh of meshes(field.group)) expect(mesh.count, mesh.name).toBe(0);
+    expect(() => field.advance(1 / 60)).not.toThrow();
+
+    field.relocate(networkOf(paved(4)));
+    expect(field.count).toBe(40);
+    expect(field.drawnCount).toBe(40);
+    field.dispose();
+  });
+
+  it('still fits WebGPU’s vertex buffers after a relocate', () => {
+    // The same guard as above, which exists because nine buffers drew a big
+    // resort with nobody in it: a relocate must not grow a buffer on the way.
+    const field = buildCrowdField({ crowd: crowdOf(3 * UNIFORM_MATRICES, 40), models: MODELS });
+    field.relocate(networkOf(paved(20)));
+    field.advance(1 / 60);
+    for (const mesh of meshes(field.group)) {
+      expect(mesh.instanceMatrix.count, mesh.name).toBeGreaterThan(UNIFORM_MATRICES);
+      expect(vertexBuffersOf(mesh), mesh.name).toBeLessThanOrEqual(MAX_VERTEX_BUFFERS);
+    }
+    field.dispose();
+  });
+
   it('empties the group on dispose', () => {
     const field = buildCrowdField({ crowd: crowdOf(20), models: MODELS });
     field.dispose();

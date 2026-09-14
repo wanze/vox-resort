@@ -25,24 +25,23 @@ import {
   SKY_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
+import {
+  blobOf,
+  casterOf,
+  lightsOf,
+  occluderOf,
+  seatSiteOf,
+} from '../features/catalog/domain/placementFacts';
 import type { LayoutItem, Placement } from '../features/layout/domain/resortLayout';
 import { railModelsIn } from '../features/layout/domain/resortLayout';
+import { listOf } from '../features/layout/domain/placementLists';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
   BRIDGE_ID,
-  BRIDGE_RAILING_ID,
   BRIDGE_RAMP_ID,
-  BRIDGE_RAMP_RAILING_LEFT_ID,
-  BRIDGE_RAMP_RAILING_RIGHT_ID,
-  HEDGE_ID,
   JETTY_ID,
-  LAMP_ID,
   PATH_ID,
-  PAVING_IDS,
-  PIER_RAILING_ID,
-  RAILING_ID,
-  STAIR_RAILING_ID,
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
@@ -55,8 +54,6 @@ import { layoutItemFor } from '../features/build/domain/buildPlan';
 import {
   claimingOn,
   everythingOn,
-  lightsOf,
-  occluderOf,
   rentalOf,
   type Plot,
   type PrepRequest,
@@ -107,8 +104,7 @@ import type { InstancedWorld } from '../features/rendering/adapters/instancedWor
 import { buildInstancedWorld } from '../features/rendering/adapters/instancedWorld';
 import type { ModelGeometry } from '../features/rendering/adapters/voxelMeshBuilder';
 import { buildModelGeometries } from '../features/rendering/adapters/voxelMeshBuilder';
-import type { BlobShadow, ShadowCaster } from '../features/rendering/domain/blobShadows';
-import { blobShadowFor, blobShadowsFor } from '../features/rendering/domain/blobShadows';
+import { blobShadowsFor } from '../features/rendering/domain/blobShadows';
 import { SAND_LEVEL, SEA_LEVEL } from '../features/rendering/domain/terrainSurface';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
@@ -127,7 +123,7 @@ import {
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
 import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
 import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
-import { seatSpotsFor, type SeatSite } from '../features/crowd/domain/seating';
+import { seatSpotsFor } from '../features/crowd/domain/seating';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
@@ -533,38 +529,6 @@ function startingParams(bench: BenchConfig | null): ResortParams {
   return { ...STARTING_PARAMS, seed: Math.floor(Math.random() * 0xffffffff) };
 }
 
-/** Every light the catalogue declares, whether or not one is standing yet. */
-/**
- * An object as its seats see it: where the model's corner is, how high it
- * stands, which way round it is, and the seats the art declared on it.
- *
- * The model's own size goes along with it for the reason it does in
- * {@link lightsOf} — a placement's extent is already turned, and a seat turned
- * against it would seat somebody outside the chair it was declared in. The turn
- * itself is `seating.ts`'s to apply.
- */
-function seatSiteOf(placement: Placement): SeatSite {
-  const { model } = objectTypeById(placement.id);
-  return {
-    x: placement.x,
-    z: placement.z,
-    y: placement.y,
-    rotation: placement.rotation,
-    width: model.width,
-    depth: model.depth,
-    seats: model.seats,
-  };
-}
-
-/**
- * An object as its shadow sees it: where it stands, how much ground it claims
- * and how tall it is. The first three are already on the placement, turn
- * included; the height is the model's.
- */
-function casterOf(placement: Placement): ShadowCaster {
-  return { ...placement, height: objectTypeTop(placement.id) };
-}
-
 /**
  * How long a placement takes to go up, or zero if it should simply appear.
  *
@@ -582,11 +546,6 @@ function buildTimeOf(placement: Placement, lifted?: Placement): number {
     height: model.height,
     voxelCount: model.voxels.length,
   });
-}
-
-/** The shadow an object throws, or null if it is too flat to throw one. */
-function blobOf(placement: Placement): BlobShadow | null {
-  return blobShadowFor(casterOf(placement));
 }
 
 /**
@@ -1423,40 +1382,10 @@ function createBenchRecorder(parts: {
   };
 }
 
-/**
- * Where a newly placed object is counted.
- *
- * The HUD reports objects, dressing and paving separately, and an object placed
- * by hand belongs in the same column the layout would have put it in — so the
- * three ids the layout derives for itself go to their own lists and everything
- * else counts as an object.
- */
+/** Where a newly placed object is counted; see `placementLists.ts`. */
 function listFor(plot: Plot, id: string): Placement[] {
-  if (PAVING_IDS.has(id)) return plot.paths;
-  if (RAIL_IDS.has(id)) return plot.rails;
-  if (PROP_IDS.has(id)) return plot.props;
-  return plot.placements;
+  return plot[listOf(id)];
 }
-
-/** The props the layout scatters itself, kept apart from the plan's own plots. */
-const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
-
-/**
- * The rails, which are a list of their own rather than props.
- *
- * Because a rail claims no ground: everything that asks what stands on a tile
- * leaves them out, and `claimingOn` is where that is done. A rail filed with the
- * lamps would be indexed, shadowed and baked as though it stood on the tile it
- * only leans against.
- */
-const RAIL_IDS: ReadonlySet<string> = new Set([
-  RAILING_ID,
-  PIER_RAILING_ID,
-  STAIR_RAILING_ID,
-  BRIDGE_RAILING_ID,
-  BRIDGE_RAMP_RAILING_LEFT_ID,
-  BRIDGE_RAMP_RAILING_RIGHT_ID,
-]);
 
 /**
  * Holds the camera still for a benchmark run. Damping would otherwise keep

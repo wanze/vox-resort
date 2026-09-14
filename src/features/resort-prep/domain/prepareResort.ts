@@ -8,12 +8,11 @@
  * screen keeps drawing, and what comes back is plain objects and typed arrays
  * the main thread only has to wrap: instance buffers, textures, meshes.
  *
- * The helpers the main thread also needs once a resort is standing — which
- * lamps an object carries, what box it takes sky away with — live here too, so
- * the bake and the edits that keep it current can never disagree about them.
+ * Which lamps an object carries and what box it takes sky away with are read
+ * from `catalog/domain/placementFacts.ts`, as the main thread's edits read them,
+ * so the bake and the edits that keep it current can never disagree about them.
  */
 
-import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { benchFraming, type BenchView } from '../../bench/domain/benchConfig';
 import { repeatPlot } from '../../bench/domain/plotRepeat';
@@ -21,11 +20,11 @@ import { layoutItemFor } from '../../build/domain/buildPlan';
 import { createTileOccupancy } from '../../build/domain/tileOccupancy';
 import {
   OBJECT_TYPES,
-  objectTypeById,
   objectTypeTop,
   SEA_MODELS,
   TILE_VOXELS,
 } from '../../catalog/domain/objectTypes';
+import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
 import {
   emptyResortPlan,
   generateResort,
@@ -39,7 +38,6 @@ import {
   type ResortLayout,
 } from '../../layout/domain/resortLayout';
 import { PEDALO_RENTAL_ID, RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
-import { rotateLights } from '../../layout/domain/rotation';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
 import {
@@ -63,7 +61,7 @@ import {
   lightGridSpecFor,
   type BakedLightGrid,
 } from '../../lighting/domain/lightGrid';
-import { bakeSkyVisibility, occludes, type Occluder } from '../../lighting/domain/skyVisibility';
+import { bakeSkyVisibility, occludes } from '../../lighting/domain/skyVisibility';
 import {
   SEA_LEVEL,
   TERRAIN_SPREAD,
@@ -85,21 +83,6 @@ const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
 
 /** Every light the catalogue declares, whether or not one is standing yet. */
 const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
-
-/**
- * How solidly each model fills its own bounding box, 0..1.
- *
- * The sky-visibility bake shades from boxes, and a box is a poor stand-in for a
- * street lamp: scaling its contribution by what the model actually fills is what
- * keeps a pole from shading like a pillar. Derived from the catalogue, so an
- * object added to the art needs no rule written for it here.
- */
-const DENSITY_PER_TYPE = new Map(
-  OBJECT_TYPES.map((type) => [
-    type.id,
-    type.model.voxels.length / Math.max(1, type.model.width * type.model.height * type.model.depth),
-  ]),
-);
 
 /** Where a new resort comes from. */
 export type ResortSource =
@@ -175,39 +158,6 @@ export function claimingOn(
   plot: Pick<Plot, 'placements' | 'props' | 'paths'> | ResortLayout,
 ): Placement[] {
   return [...plot.placements, ...plot.props, ...plot.paths];
-}
-
-/**
- * The lights an object carries, moved to where the way it stands puts them.
- *
- * The model's own size is what the turn is measured against, so this reads the
- * catalogue rather than the placement: a placement's extent is already turned,
- * and turning a light against it would send it out of the lantern it was
- * declared in.
- */
-export function lightsOf(placement: Placement): readonly ModelLight[] {
-  const { model } = objectTypeById(placement.id);
-  return rotateLights(model.lights, model.width, model.depth, placement.rotation);
-}
-
-/**
- * The box an object stands in, as far as the sky behind it is concerned.
- *
- * The placement's own extents, which are already turned, and the model's height
- * standing on its own terrace. A path slab comes out two voxels tall and is
- * dropped by the bake itself; see `MIN_OCCLUDER_HEIGHT`.
- */
-export function occluderOf(placement: Placement): Occluder {
-  return {
-    key: placement.key,
-    minX: placement.x,
-    maxX: placement.x + placement.width,
-    minY: placement.y,
-    maxY: placement.y + objectTypeTop(placement.id),
-    minZ: placement.z,
-    maxZ: placement.z + placement.depth,
-    density: DENSITY_PER_TYPE.get(placement.id) ?? 1,
-  };
 }
 
 /**

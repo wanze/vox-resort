@@ -3,9 +3,11 @@ import type { Rotation } from '../../layout/domain/rotation';
 import {
   bucketByChunk,
   capacityFor,
+  CHUNK_VOXELS,
   chunkKey,
   chunkOf,
-  CHUNK_VOXELS,
+  REGION_CHUNKS,
+  regionOf,
   diffPlacements,
   MIN_BUCKET_CAPACITY,
 } from './spatialChunks';
@@ -40,6 +42,24 @@ describe('chunkOf', () => {
     expect(CHUNK_VOXELS).toBe(256);
     expect(chunkOf(255, 0)).toEqual({ chunkX: 0, chunkZ: 0 });
     expect(chunkOf(256, 0)).toEqual({ chunkX: 1, chunkZ: 0 });
+  });
+});
+
+describe('regionOf', () => {
+  it('gathers four chunks a side into one region', () => {
+    expect(regionOf({ chunkX: 0, chunkZ: 3 })).toEqual({ chunkX: 0, chunkZ: 0 });
+    expect(regionOf({ chunkX: 4, chunkZ: 7 })).toEqual({ chunkX: 1, chunkZ: 1 });
+  });
+
+  it('rounds a negative chunk down, as a chunk itself is', () => {
+    expect(regionOf({ chunkX: -1, chunkZ: -4 })).toEqual({ chunkX: -1, chunkZ: -1 });
+    expect(regionOf({ chunkX: -5, chunkZ: 0 })).toEqual({ chunkX: -2, chunkZ: 0 });
+  });
+
+  it('is the same cell as a chunk four times the size', () => {
+    for (const x of [-700, -1, 0, 255, 1023, 1024, 5000]) {
+      expect(regionOf(chunkOf(x, x))).toEqual(chunkOf(x, x, CHUNK_VOXELS * REGION_CHUNKS));
+    }
   });
 });
 

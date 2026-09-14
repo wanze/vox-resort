@@ -22,12 +22,22 @@
  *
  * - **It is hung on its feet**, not centred on its box, so what a caller writes
  *   is where somebody stands rather than where the corner of their box is.
- * - **It carries three baked per-vertex attributes**, which is what lets one
- *   material draw an adult and a child: the walk weight, and the figure in its
- *   own axes. Past the instance matrix those axes are gone, and a uniform would
- *   be a uniform per model on a material every model shares.
- * - **It carries two instanced attributes** the shader reads alongside the
- *   matrix: which way the figure faces, and which of the three poses it is in.
+ * - **It carries baked per-vertex data**, which is what lets one material draw
+ *   an adult and a child: the walk weight, and the figure in its own axes. Past
+ *   the instance matrix those axes are gone, and a uniform would be a uniform
+ *   per model on a material every model shares.
+ * - **It carries per-instance data** the shader reads alongside the matrix:
+ *   which way the figure faces, which of the three poses it is in, and where in
+ *   its stride it is.
+ *
+ * **Both are packed into one `vec4` attribute each, and that is load-bearing.**
+ * WebGPU gives a pipeline eight vertex buffers. A figure's position, normal and
+ * colour take three; once a model draws more than 1 024 people, Three.js moves
+ * the instance matrix out of a uniform buffer and into a vertex buffer of its
+ * own, which takes a fourth. Six separate attributes on top of that was nine,
+ * the pipeline failed to build, and a large resort drew nobody at all — while a
+ * small one, under the threshold, drew everybody. `crowdField.test.ts` counts
+ * the buffers.
  *
  * The poses are drawn, not modelled, and that is the load-bearing decision. A
  * second and third geometry is what it avoids, and the cost is not the geometry:
@@ -121,13 +131,17 @@ const LIE_CLEAR = 1;
  * field rebuilt for a new resort would otherwise be translating the same
  * geometry a second time.
  *
- * `swing` is the walk weight, per vertex: how far that vertex is dragged by the
- * leg swing, signed by which leg it belongs to. It is baked here because it is a
- * fact about where the figure's legs are — the sign is which side of the centre
- * line a vertex sits, and the taper is how far below the hip — and baking it
- * leaves the shader one multiply, with no per-model constant in it. That is what
- * lets one material draw an adult and a child, whose hips are at different
- * heights.
+ * `figure` is baked per vertex, as `(swing, axis, thick, hip)`. `swing` is the
+ * walk weight: how far that vertex is dragged by the leg swing, signed by which
+ * leg it belongs to. It is baked here because it is a fact about where the
+ * figure's legs are — the sign is which side of the centre line a vertex sits,
+ * and the taper is how far below the hip — and baking it leaves the shader one
+ * multiply, with no per-model constant in it. That is what lets one material
+ * draw an adult and a child, whose hips are at different heights.
+ *
+ * `pose` is per instance, as `(sin, cos, resting, phase)` — see
+ * {@link POSE_STRIDE} — and filled by the caller, which is the only thing that
+ * knows who stands where.
  */
 export function figureGeometry(model: ModelGeometry, capacity: number): BufferGeometry {
   if (!model.lit) throw new Error(`Nothing was meshed for the person model "${model.id}"`);
@@ -141,15 +155,14 @@ export function figureGeometry(model: ModelGeometry, capacity: number): BufferGe
 
   const positions = geometry.getAttribute('position');
   const hip = hipHeight(height);
-  const swing = new Float32Array(positions.count);
-  const body = new Float32Array(positions.count * 3);
+  const figure = new Float32Array(positions.count * 4);
   for (let vertex = 0; vertex < positions.count; vertex++) {
     // Nothing above the hip swings, the feet swing fully, and the left leg
     // swings against the right — which after the centring above is the sign of
     // x. A greedy quad running the height of a leg carries the taper across
     // itself, because the two ends interpolate.
     const taper = hip > 0 ? Math.max(0, (hip - positions.getY(vertex)) / hip) : 0;
-    swing[vertex] = Math.sign(positions.getX(vertex)) * taper;
+    figure[vertex * 4] = Math.sign(positions.getX(vertex)) * taper;
     // The figure in its own terms, which is what both poses are worked out in:
     // how far up or down the body a vertex is from the hip, how far through its
     // thickness, and where this model's hip is at all. Baked rather than
@@ -157,22 +170,27 @@ export function figureGeometry(model: ModelGeometry, capacity: number): BufferGe
     // the figure's own axes are gone, and a uniform would be a uniform per
     // model on a material every model shares. Three floats on a figure of a few
     // dozen vertices, and it keeps the adult and the child on one material.
-    body[vertex * 3] = positions.getY(vertex) - hip;
-    body[vertex * 3 + 1] = positions.getZ(vertex);
-    body[vertex * 3 + 2] = hip;
+    figure[vertex * 4 + 1] = positions.getY(vertex) - hip;
+    figure[vertex * 4 + 2] = positions.getZ(vertex);
+    figure[vertex * 4 + 3] = hip;
   }
-  geometry.setAttribute('swing', new BufferAttribute(swing, 1));
-  geometry.setAttribute('body', new BufferAttribute(body, 3));
-  // Filled by the caller, which is the only thing that knows who stands where.
-  geometry.setAttribute('phase', new InstancedBufferAttribute(new Float32Array(capacity), 1));
-  const facing = new InstancedBufferAttribute(new Float32Array(capacity * 2), 2);
-  facing.setUsage(DynamicDrawUsage);
-  geometry.setAttribute('facing', facing);
-  const resting = new InstancedBufferAttribute(new Float32Array(capacity), 1);
-  resting.setUsage(DynamicDrawUsage);
-  geometry.setAttribute('resting', resting);
+  geometry.setAttribute('figure', new BufferAttribute(figure, 4));
+  const pose = new InstancedBufferAttribute(new Float32Array(capacity * POSE_STRIDE), POSE_STRIDE);
+  pose.setUsage(DynamicDrawUsage);
+  geometry.setAttribute('pose', pose);
   return geometry;
 }
+
+/**
+ * Floats per instance in a figure's `pose` attribute, and where each one sits:
+ * which way the figure faces as `(sin, cos)` of its heading, what it is doing as
+ * `RESTING` (0 walking, 1 sitting, 2 lying), and its walk phase in radians.
+ */
+export const POSE_STRIDE = 4;
+export const POSE_SIN = 0;
+export const POSE_COS = 1;
+export const POSE_RESTING = 2;
+export const POSE_PHASE = 3;
 
 /** The lit material every figure is drawn with, and the clock its walk runs on. */
 export interface FigureMaterial {
@@ -198,7 +216,7 @@ export interface FigureMaterial {
  * nothing per person per frame.
  *
  * The two poses ride the same node, each scaled by one of the two weights the
- * instanced `resting` attribute is taken apart into, so a vertex pays for all
+ * instanced pose's `resting` float is taken apart into, so a vertex pays for all
  * three states and is only ever displaced by one of them. Both are worked out
  * in the figure's own axes, which is why they are baked per vertex: past this
  * point the instance matrix has turned them into the world's.
@@ -210,7 +228,7 @@ export interface FigureMaterial {
  * the origin. `positionLocal` at this point is the instanced position, so the
  * walk is a displacement of a person already standing where they stand.
  *
- * Which is why the swing needs the `facing` attribute: past the instance matrix
+ * Which is why the swing needs the heading in the pose: past the instance matrix
  * there is no local +z left to swing a leg along, so the direction the person is
  * walking is handed to the shader as the vector it already is. The per-vertex
  * weight is still read off the *unturned* geometry, which is where knowing which
@@ -228,26 +246,28 @@ export interface FigureMaterial {
 export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial {
   const clock = uniform(0);
   const material = litMaterial(volume);
-  const facing = attribute<'vec2'>('facing', 'vec2');
-  const weight = attribute<'float'>('swing', 'float');
-  // The figure in its own terms: `axis` is how far up the body from the hip a
-  // vertex is and negative down the legs, `thick` how far through its depth,
-  // `hip` where this model's hip stands. See {@link figureGeometry}.
-  const body = attribute<'vec3'>('body', 'vec3');
-  const axis = body.x;
-  const thick = body.y;
-  const hip = body.z;
+  const pose = attribute<'vec4'>('pose', 'vec4');
+  const facing = pose.xy;
+  // The figure in its own terms: `weight` is the walk weight, `axis` how far up
+  // the body from the hip a vertex is and negative down the legs, `thick` how
+  // far through its depth, `hip` where this model's hip stands. See
+  // {@link figureGeometry}.
+  const figure = attribute<'vec4'>('figure', 'vec4');
+  const weight = figure.x;
+  const axis = figure.y;
+  const thick = figure.z;
+  const hip = figure.w;
 
   // What the person is doing, taken apart with two multiplies rather than a
   // branch: a shader has no cheap branch, and one of these is always zero.
   // 0 walking, 1 sitting, 2 lying — see `RESTING` in `crowd/domain/crowd.ts`.
-  const doing = attribute<'float'>('resting', 'float');
+  const doing = pose.z;
   const still = doing.min(1);
   const lying = doing.sub(1).max(0);
   const sitting = still.sub(lying);
   const afoot = still.oneMinus();
 
-  const wave = sin(clock.mul(CADENCE).add(attribute<'float'>('phase', 'float')));
+  const wave = sin(clock.mul(CADENCE).add(pose.w));
   const swing = wave.mul(weight).mul(SWING_VOXELS).mul(afoot);
   const bob = wave.abs().oneMinus().mul(BOB_VOXELS).mul(afoot);
 

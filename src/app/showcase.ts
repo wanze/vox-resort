@@ -25,9 +25,8 @@ import {
   SKY_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
-import type { LayoutItem, Placement, ResortLayout } from '../features/layout/domain/resortLayout';
-import { layoutResort, railModelsIn, tileKey } from '../features/layout/domain/resortLayout';
-import { rotateLights } from '../features/layout/domain/rotation';
+import type { LayoutItem, Placement } from '../features/layout/domain/resortLayout';
+import { railModelsIn } from '../features/layout/domain/resortLayout';
 import type { ResortPlan } from '../features/layout/domain/resortPlan';
 import {
   BOARDWALK_ID,
@@ -41,10 +40,8 @@ import {
   LAMP_ID,
   PATH_ID,
   PAVING_IDS,
-  PEDALO_RENTAL_ID,
   PIER_RAILING_ID,
   RAILING_ID,
-  RESORT_PLAN,
   STAIR_RAILING_ID,
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
@@ -52,13 +49,21 @@ import type { Shore } from '../features/layout/domain/shoreline';
 import { beachTilesOf, shoreFor } from '../features/layout/domain/shoreline';
 import type { Terrain } from '../features/layout/domain/terrain';
 import { overlooksDrop, terrainFor } from '../features/layout/domain/terrain';
-import type { GeneratorType, ResortParams } from '../features/layout/domain/resortGenerator';
-import {
-  clampParams,
-  emptyResortPlan,
-  generateResort,
-} from '../features/layout/domain/resortGenerator';
+import type { ResortParams } from '../features/layout/domain/resortGenerator';
+import { clampParams } from '../features/layout/domain/resortGenerator';
 import { layoutItemFor } from '../features/build/domain/buildPlan';
+import {
+  claimingOn,
+  everythingOn,
+  lightsOf,
+  occluderOf,
+  rentalOf,
+  type Plot,
+  type PrepRequest,
+  type PreparedResort,
+  type ResortSource,
+} from '../features/resort-prep/domain/prepareResort';
+import { createResortPreparer } from '../features/resort-prep/adapters/resortPreparer';
 import {
   isPaving,
   pavedGroundOf,
@@ -83,27 +88,19 @@ import { createBuildPointer } from '../features/build/adapters/buildPointer';
 import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
 import type { WorldBounds } from '../features/layout/domain/worldBounds';
-import { cameraFramingFor, worldBoundsFor } from '../features/layout/domain/worldBounds';
 import { skyStateFor } from '../features/lighting/domain/dayNight';
-import type { ModelLight } from '../../voxel-gen/voxelgen.ts';
-import type { Ground, LightAnchor } from '../features/lighting/domain/lightAnchors';
-import { anchorsFor, lampReservationFor } from '../features/lighting/domain/lightAnchors';
+import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
-import {
-  bakeLightGrid,
-  cellCount,
-  DEFAULT_GRID_BUDGET_BYTES,
-  gridByteSize,
-  lightGridSpecFor,
-} from '../features/lighting/domain/lightGrid';
+import { cellCount, gridByteSize } from '../features/lighting/domain/lightGrid';
 import type { LiveLightGrid } from '../features/lighting/domain/liveLightGrid';
 import { createLiveLightGrid } from '../features/lighting/domain/liveLightGrid';
-import type { LiveSkyVisibility, Occluder } from '../features/lighting/domain/skyVisibility';
+import type { LiveSkyVisibility } from '../features/lighting/domain/skyVisibility';
 import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibility';
 import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import type { ScratchLayout } from '../features/voxel-world/domain/modelScratch';
 import { scratchLayoutFor } from '../features/voxel-world/domain/modelScratch';
+import { coarseScratchModelOf } from '../features/voxel-world/domain/coarseVoxels';
 import { DEFAULT_WORLD_SCALE, sectionSizeOf } from '../features/voxel-world/adapters/dveEngine';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
 import type { InstancedWorld } from '../features/rendering/adapters/instancedWorld';
@@ -128,6 +125,7 @@ import {
   type ConstructionSite,
 } from '../features/construction/domain/construction';
 import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
+import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
 import { walkNetworkFor } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor, type SeatSite } from '../features/crowd/domain/seating';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
@@ -144,9 +142,8 @@ import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
 import { pierBoxesFor } from '../features/sea/domain/piers';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
-import { buoyLampSites } from '../features/sea/domain/buoyLamps';
 import type { Mooring, Rental, SailingGround } from '../features/sea/domain/swimArea';
-import { sailingGroundFor, swimAreaMoorings } from '../features/sea/domain/swimArea';
+import { sailingGroundFor } from '../features/sea/domain/swimArea';
 import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
 import type {
   CameraFraming,
@@ -155,16 +152,12 @@ import type {
 } from '../features/layout/domain/worldBounds';
 import { turnDirection } from '../features/layout/domain/worldBounds';
 import type { SceneHandle } from '../features/rendering/adapters/threeScene';
-import { CAMERA_FOV_DEGREES, createScene } from '../features/rendering/adapters/threeScene';
+import { createScene } from '../features/rendering/adapters/threeScene';
 import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
+import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
-import {
-  benchFraming,
-  parseBenchConfig,
-  type BenchConfig,
-} from '../features/bench/domain/benchConfig';
-import { repeatPlot } from '../features/bench/domain/plotRepeat';
+import { parseBenchConfig, type BenchConfig } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
 
 /**
@@ -177,28 +170,12 @@ import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/
 const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxels.length]));
 
 /**
- * How solidly each model fills its own bounding box, 0..1.
+ * People walking the resort, when the URL asks for a number: `?people=n`.
  *
- * The sky-visibility bake shades from boxes, and a box is a poor stand-in for a
- * street lamp: scaling its contribution by what the model actually fills is what
- * keeps a pole from shading like a pillar. Derived from the catalogue, so an
- * object added to the art needs no rule written for it here.
+ * Read once, at load, because it is a question about the page and not about
+ * any one resort; without it the crowd follows the paving. See `crowdSize.ts`.
  */
-const DENSITY_PER_TYPE = new Map(
-  OBJECT_TYPES.map((type) => [
-    type.id,
-    type.model.voxels.length / Math.max(1, type.model.width * type.model.height * type.model.depth),
-  ]),
-);
-
-/**
- * People walking the resort.
- *
- * The number `docs/crowd.md` costs the design out at, and the one the step loop
- * was measured against. It is a constant here rather than a parameter because
- * nothing offers it yet; `?people=n` is the next step of that document.
- */
-const CROWD_SIZE = 600;
+const CROWD_OVERRIDE = crowdOverrideFrom(globalThis.location?.search ?? '');
 
 /**
  * The seed every crowd is spawned from.
@@ -216,7 +193,7 @@ const CROWD_SEED = 1;
  * Three dozen, which at the height of the release is a sky with twenty or so
  * lanterns climbing out of it — enough to read as an event from across the plot
  * and few enough that a single one can still be followed up. A constant for the
- * reason {@link CROWD_SIZE} is one: nothing offers it yet.
+ * reason {@link CRAFT_COUNT} is one: nothing offers it yet.
  */
 const BALLOON_COUNT = 36;
 
@@ -230,8 +207,7 @@ const BALLOON_SEED = 2;
  * A dozen, which on the bay a generated plot comes out with is a boat every
  * hundred metres or so of water: enough that there is always one in frame from
  * the beach, and few enough that the water still reads as water rather than as a
- * marina. A constant for the reason {@link CROWD_SIZE} is one: nothing offers it
- * yet. See `features/sea/`.
+ * marina. A constant because nothing offers it yet. See `features/sea/`.
  */
 const CRAFT_COUNT = 12;
 
@@ -384,6 +360,8 @@ export interface CameraView {
   readonly mode: CameraMode;
   /** The compass point the isometric camera stands over; unused in perspective. */
   readonly direction: CompassDirection;
+  /** Whether far and small things are drawn coarse or not at all; see `levelOfDetail.ts`. */
+  readonly detail: boolean;
 }
 
 export interface Showcase {
@@ -396,12 +374,17 @@ export interface Showcase {
   readonly cameraView: CameraView;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
+  /** Turns the level of detail on or off, to see what it costs and what it saves. */
+  setDetail(enabled: boolean): void;
   /** Turns the isometric view a quarter; negative turns anticlockwise. */
   turnCamera(quarters: number): void;
-  /** Grows a new resort from these parameters and puts it on screen. */
-  generate(params: ResortParams): void;
-  /** Clears the plot to bare ground of this size, to build on by hand. */
-  clear(params: ResortParams): void;
+  /**
+   * Grows a new resort from these parameters and puts it on screen once it is
+   * ready; the one on screen keeps drawing until then. A later call wins.
+   */
+  generate(params: ResortParams): Promise<void>;
+  /** Clears the plot to bare ground of this size, to build on by hand; as {@link generate}. */
+  clear(params: ResortParams): Promise<void>;
   /**
    * Arms the pointer with an object to stand or a brush to work the ground with,
    * or null to put it down. One tool at a time; see `buildTool.ts`.
@@ -441,53 +424,7 @@ function trackStartupFrames(): StartupTracker {
   };
 }
 
-interface Plot {
-  readonly layout: ResortLayout;
-  /** Authored objects: what the generator laid out, and what the pointer adds. */
-  readonly placements: Placement[];
-  /** Lamps and hedges the layout scattered along the paths. */
-  readonly props: Placement[];
-  /** One placement per paved tile. */
-  readonly paths: Placement[];
-  /** Handrails, standing on the paving they guard rather than on ground of their own. */
-  readonly rails: Placement[];
-}
-
 /** Objects, scattered props, path tiles and rails: everything the scene draws. */
-function everythingOn(plot: Plot): Placement[] {
-  return [...plot.placements, ...plot.props, ...plot.paths, ...plot.rails];
-}
-
-/**
- * Everything that claims a tile of the plot.
- *
- * Everything the scene draws, less the handrails: a rail stands on the paving it
- * guards, so the tile under it is the slab's, and the three things that ask what
- * is standing on a tile — the occupancy index, the shadows and the sky-visibility
- * bake — would all get the wrong answer from it. A blob shadow the size of the
- * tile is the visible half of that; a pointer that refused to pave next to a
- * step would be the other.
- */
-function claimingOn(plot: Plot): Placement[] {
-  return [...plot.placements, ...plot.props, ...plot.paths];
-}
-
-/**
- * Lays a plan out, and tiles it when the benchmark asks for a bigger one.
- */
-function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
-  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan);
-  const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
-    repeatPlot(items, bench?.repeat ?? 1, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
-  return {
-    layout,
-    placements: tile(layout.placements),
-    props: tile(layout.props),
-    paths: tile(layout.paths),
-    rails: tile(layout.rails),
-  };
-}
-
 /**
  * One scratch region per model, so the mesher runs over each model exactly once.
  *
@@ -497,7 +434,9 @@ function layOut(plan: ResortPlan, bench: BenchConfig | null): Plot {
  */
 function scratchForModels(): ScratchLayout {
   const scratch = scratchLayoutFor(
-    PAINTED_MODELS,
+    // Every catalogue model's coarse copy is meshed in the same pass, after the
+    // rest; the people, the sky and the bay get none. See `coarseVoxels.ts`.
+    [...PAINTED_MODELS, ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model))],
     (color) => voxelIdFor(materialKeyFor(color)),
     sectionSizeOf(DEFAULT_WORLD_SCALE),
   );
@@ -582,13 +521,6 @@ async function meshModels(
 }
 
 /** The catalogue as the generator needs to see it: footprints and shelves. */
-const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
-  id: type.id,
-  category: type.category,
-  tilesX: type.model.tiles.x,
-  tilesZ: type.model.tiles.z,
-}));
-
 /** Plot the generator starts from: the size of the resort that was authored. */
 const STARTING_PARAMS: ResortParams = { tilesX: 112, tilesZ: 100, density: 0.7, seed: 1 };
 
@@ -601,32 +533,7 @@ function startingParams(bench: BenchConfig | null): ResortParams {
   return { ...STARTING_PARAMS, seed: Math.floor(Math.random() * 0xffffffff) };
 }
 
-/**
- * The plan the page opens on.
- *
- * A benchmark gets the hand-authored resort rather than a generated one: a run
- * is only comparable with the run before it if the scene is the same scene, and
- * `RESORT_PLAN` is the one plot that does not move between builds.
- */
-function startingPlan(bench: BenchConfig | null, params: ResortParams): ResortPlan {
-  return bench ? RESORT_PLAN : generateResort(GENERATOR_TYPES, params);
-}
-
 /** Every light the catalogue declares, whether or not one is standing yet. */
-const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
-/**
- * The lights an object carries, moved to where the way it stands puts them.
- *
- * The model's own size is what the turn is measured against, so this reads the
- * catalogue rather than the placement: a placement's extent is already turned,
- * and turning a light against it would send it out of the lantern it was
- * declared in.
- */
-function lightsOf(placement: Placement): readonly ModelLight[] {
-  const { model } = objectTypeById(placement.id);
-  return rotateLights(model.lights, model.width, model.depth, placement.rotation);
-}
-
 /**
  * An object as its seats see it: where the model's corner is, how high it
  * stands, which way round it is, and the seats the art declared on it.
@@ -646,26 +553,6 @@ function seatSiteOf(placement: Placement): SeatSite {
     width: model.width,
     depth: model.depth,
     seats: model.seats,
-  };
-}
-
-/**
- * The box an object stands in, as far as the sky behind it is concerned.
- *
- * The placement's own extents, which are already turned, and the model's height
- * standing on its own terrace. A path slab comes out two voxels tall and is
- * dropped by the bake itself; see `MIN_OCCLUDER_HEIGHT`.
- */
-function occluderOf(placement: Placement): Occluder {
-  return {
-    key: placement.key,
-    minX: placement.x,
-    maxX: placement.x + placement.width,
-    minY: placement.y,
-    maxY: placement.y + objectTypeTop(placement.id),
-    minZ: placement.z,
-    maxZ: placement.z + placement.depth,
-    density: DENSITY_PER_TYPE.get(placement.id) ?? 1,
   };
 }
 
@@ -824,42 +711,22 @@ function unlitLighting(anchorCount: number): Lighting {
  * The lamps come from more than what claims ground. The rails carry lanterns —
  * every bridge and pier is lit by them — and take no sky away, so they are baked
  * for their light alone. The buoys are not placements at all, and are baked at
- * their moorings; see {@link buoyLampsAt}.
+ * their moorings; see `resort-prep/domain/prepareResort.ts`.
+ *
+ * Both bakes arrive already done, off the main thread. What is left here is
+ * keeping the lamps and the boxes, so an edit re-bakes only what it reaches,
+ * and uploading the textures.
  */
-function createLighting(parts: {
-  /** Everything that claims a tile: lamps, and the boxes that shade the sky. */
-  readonly claiming: readonly Placement[];
-  /** The rails, whose lanterns light and whose boxes shade nothing. */
-  readonly rails: readonly Placement[];
-  /** The lamps on the buoys, already where their moorings put them. */
-  readonly buoys: readonly LightAnchor[];
-  readonly ground: Ground;
-}): Lighting {
-  const { claiming, ground } = parts;
-  const anchors = [...claiming, ...parts.rails]
-    .flatMap((placement) => anchorsFor(placement, lightsOf(placement)))
-    .concat(parts.buoys);
-  const spec = lightGridSpecFor(
-    anchors,
-    DEFAULT_GRID_BUDGET_BYTES,
-    // The buoys are moored on the plot, so the catalogue's reach already covers
-    // them; see `swimAreaMoorings`.
-    lampReservationFor(ground, CATALOGUE_LIGHTS),
-  );
-  if (!spec) return unlitLighting(anchors.length);
-
-  const started = performance.now();
-  const grid = bakeLightGrid(anchors, spec);
-  const skyStarted = performance.now();
-  const sky = createLiveSkyVisibility(spec, grid.direction, claiming.map(occluderOf));
-  const skyBakeMs = Math.round(performance.now() - skyStarted);
-  // Built last, so both bakes are in the bytes before a texture is uploaded.
+function createLighting(prepared: PreparedResort, claiming: readonly Placement[]): Lighting {
+  const { anchors, lighting: bake } = prepared;
+  if (!bake) return unlitLighting(anchors.length);
+  const { grid, bakeMs, skyBakeMs } = bake;
+  const { spec } = grid;
   const baked: BakedLighting = {
     live: createLiveLightGrid(grid, anchors),
-    sky,
+    sky: createLiveSkyVisibility(spec, grid.direction, claiming.map(occluderOf), true),
     volume: createBakedLightVolume(grid),
   };
-  const bakeMs = Math.round(performance.now() - started);
 
   let anchorCount = anchors.length;
   return {
@@ -893,45 +760,6 @@ function createLighting(parts: {
       unsplatSkyVisibility(baked, placement);
     },
   };
-}
-
-/**
- * The ground a lamp could be stood on: the plan's own extent, in voxels.
- *
- * The plan rather than the objects, because a bare plot has no objects and is
- * still somewhere to build — and because the light grid is sized from this and
- * has to cover the tiles nothing stands on yet.
- */
-function groundOf(plan: ResortPlan): Ground {
-  return { minX: 0, maxX: plan.tilesX * TILE_VOXELS, minZ: 0, maxZ: plan.tilesZ * TILE_VOXELS };
-}
-
-/**
- * How much ground the resort covers, and how tall it stands.
- *
- * Measured from what is actually standing, so the camera frames the resort
- * rather than the empty acres around it — except on a bare plot, where there is
- * nothing to measure and the plan's own extent is the only answer.
- */
-function plotBounds(plan: ResortPlan, everything: readonly Placement[]): WorldBounds {
-  if (everything.length === 0) return { ...groundOf(plan), height: 0 };
-  const topById = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.height]));
-  return worldBoundsFor(everything, (id) => topById.get(id) ?? 0);
-}
-
-/**
- * Frames the perspective camera on what is actually on the plot, or on the
- * bench's fixed view.
- *
- * Only the perspective one: the isometric camera is framed inside the scene,
- * because turning it to another compass point has to re-frame it and nothing
- * above the scene should have to know that. The bench presets are perspective
- * framings — see `benchConfig.ts` for why a run stays in that mode.
- */
-function frameCamera(bounds: WorldBounds, bench: BenchConfig | null): CameraFraming {
-  return bench
-    ? benchFraming(bench.view, bounds, CAMERA_FOV_DEGREES)
-    : cameraFramingFor(bounds, CAMERA_FOV_DEGREES);
 }
 
 /**
@@ -1065,7 +893,9 @@ function crowdFor(parts: {
   return buildCrowdField({
     crowd: createCrowd({
       network,
-      count: CROWD_SIZE,
+      // As many as the paving calls for, which a benchmark's tiled copies add
+      // nothing to: the network is walked over the layout's own paving.
+      count: crowdSizeFor(parts.plot.layout.paths.length, CROWD_OVERRIDE),
       variants: parts.people.length,
       seed: CROWD_SEED,
     }),
@@ -1108,28 +938,6 @@ function balloonsFor(parts: {
     models: parts.sky,
     lightVolume: parts.lightVolume,
   });
-}
-
-/**
- * The middle of the hire hut, in voxels, or null on a plot without one.
- *
- * The middle of its whole footprint rather than the corner it is anchored on,
- * because what the bay wants from it is the column its boats come in on — and a
- * 2x2 hut anchored at its north-west corner is four metres off that.
- *
- * A plot can genuinely have none: the generator stands exactly one and only on
- * sand, so an inland plan has none and a bay too small to hold one has none
- * either. The rest of the bay then reads as a bay with no hire trade — an
- * unbroken line of buoys and nothing but private boats. See `standPedaloRental`
- * in `resortGenerator.ts`.
- */
-function rentalOn(placements: readonly Placement[]): Rental | null {
-  const hut = placements.find((placement) => placement.id === PEDALO_RENTAL_ID);
-  if (!hut) return null;
-  return {
-    x: (hut.tileX + hut.tilesX / 2) * TILE_VOXELS,
-    z: (hut.tileZ + hut.tilesZ / 2) * TILE_VOXELS,
-  };
 }
 
 /**
@@ -1234,87 +1042,37 @@ function seaFor(parts: {
   });
 }
 
-/**
- * The hire hut the bay lets boats out from, if it has both a hut and a bay.
- *
- * A hut standing on a plot with no sea hires nothing out: the authored plan is
- * land to its edges and stands one by the pool, and there is no water for its
- * boats to be on. See `RESORT_PLAN`.
- */
-function rentalOf(shore: Shore | null, placements: readonly Placement[]): Rental | null {
-  return shore ? rentalOn(placements) : null;
-}
-
-/**
- * Where the bay's buoys are moored.
- *
- * The plot's own paving is passed in so no buoy is moored in a pier: the sea
- * lanes run six tiles of jetty out from the sand, straight through the line.
- */
-function mooringsFor(parts: {
-  readonly shore: Shore | null;
-  readonly paved: readonly Placement[];
-  readonly placements: readonly Placement[];
-}): Mooring[] {
-  const paved = new Set(parts.paved.map((placement) => tileKey(placement.tileX, placement.tileZ)));
-  return swimAreaMoorings({
-    shore: parts.shore,
-    rental: rentalOf(parts.shore, parts.placements),
-    claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
-  });
-}
-
-/**
- * The lamps on the buoys' masts, baked at their moorings.
- *
- * A buoy does not leave its mooring, so its lamp is as static as a street
- * lamp's; see `sea/domain/buoyLamps.ts`. The model's own `lights` say whether it
- * has one, so a buoy drawn without a lamp bakes nothing.
- */
-function buoyLampsAt(moorings: readonly Mooring[]): LightAnchor[] {
-  const buoy = SEA_MODELS[BUOY_INDEX]!;
-  return buoyLampSites(moorings, buoy, SEA_LEVEL).flatMap((site) => anchorsFor(site, buoy.lights));
-}
-
-/**
- * Lays a plan out and builds everything that hangs off it.
- *
- * The bake happens before the world, because the volume is what the world's
- * materials are wired to.
- */
-function buildResort(parts: {
-  readonly plan: ResortPlan;
+/** The meshed catalogue a resort is built over, which outlives every resort. */
+interface ResortArt {
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
-  readonly bench: BenchConfig | null;
-}): Resort {
-  const plot = layOut(parts.plan, parts.bench);
+}
+
+/**
+ * Builds everything that hangs off a prepared resort: instance buffers,
+ * textures and the fields that move.
+ *
+ * The plan was grown, laid out and baked before this — off the main thread, see
+ * `resort-prep` — so what is left is the work only the renderer's thread can do.
+ * The volume is wired up before the world, because the world's materials are.
+ */
+function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): Resort {
+  const { plan, plot, moorings, bounds, framing } = parts.prepared;
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
-  const shore = shoreFor(parts.plan);
-  const moorings = mooringsFor({
-    shore,
-    paved: plot.layout.paths,
-    placements: plot.layout.placements,
-  });
-  const lighting = createLighting({
-    claiming,
-    rails: plot.rails,
-    buoys: buoyLampsAt(moorings),
-    ground: groundOf(parts.plan),
-  });
+  const shore = shoreFor(plan);
+  const lighting = createLighting(parts.prepared, claiming);
   const world = buildInstancedWorld(parts.geometries, everything, {
     lightVolume: lighting.volume,
   });
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const construction = buildConstructionField(parts.geometries, lighting.volume);
-  const bounds = plotBounds(parts.plan, everything);
-  const terrain = terrainFor(parts.plan);
+  const terrain = terrainFor(plan);
   const crowd = crowdFor({
     plot,
-    plan: parts.plan,
+    plan,
     shore,
     terrain,
     people: parts.people,
@@ -1346,10 +1104,12 @@ function buildResort(parts: {
     // time; it is what tells the pointer whether a tile is free. The sea is not
     // in it: a pier stands on water, so what the sea will take is a rule about
     // the object rather than a tile somebody already holds — see `paving.ts`.
-    occupancy: createTileOccupancy(claiming),
+    // Off the layout${q}s own lists rather than the plot${q}s: a benchmark${q}s tiled
+    // copies stand on their original${q}s tiles, and would all claim the same ones.
+    occupancy: createTileOccupancy(claimingOn(plot.layout)),
     railIndex: createRailIndex(plot.rails),
     bounds,
-    framing: frameCamera(bounds, parts.bench),
+    framing,
     dispose() {
       world.dispose();
       shadows.dispose();
@@ -1374,18 +1134,11 @@ interface ResortSlot {
   readonly current: () => Resort;
   /** Attaches the scene the resort is drawn into, once the renderer exists. */
   attach(handle: SceneHandle): void;
-  /** Builds a new resort, puts it on screen, and hands it back. */
-  replace(plan: ResortPlan): Resort;
+  /** Builds a prepared resort, puts it on screen, and hands it back. */
+  replace(prepared: PreparedResort): Resort;
 }
 
-function createResortSlot(parts: {
-  readonly plan: ResortPlan;
-  readonly geometries: readonly ModelGeometry[];
-  readonly people: readonly ModelGeometry[];
-  readonly sky: readonly ModelGeometry[];
-  readonly sea: readonly ModelGeometry[];
-  readonly bench: BenchConfig | null;
-}): ResortSlot {
+function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort }): ResortSlot {
   let resort = buildResort(parts);
   // The first resort is built before the renderer is, because the scene is
   // created around the light volume it bakes.
@@ -1396,12 +1149,12 @@ function createResortSlot(parts: {
     attach(handle) {
       scene = handle;
     },
-    replace(plan) {
+    replace(prepared) {
       // The old resort is let go last, and only once nothing in the scene points
       // at it any more: the ground is bound to the light volume, so disposing
       // the volume first would leave a material holding freed textures.
       const previous = resort;
-      resort = buildResort({ ...parts, plan });
+      resort = buildResort({ ...parts, prepared });
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.construction.group);
@@ -1420,6 +1173,7 @@ function createResortSlot(parts: {
         resort.lighting.volume,
         resort.shore,
         resort.terrain,
+        prepared.surfaces,
       );
       previous.dispose();
       return resort;
@@ -1617,11 +1371,8 @@ function createStatsReader(parts: {
 interface BenchRecorder {
   /** Records one frame's wall-clock duration; a no-op once the run has finished. */
   readonly record: (frameMs: number) => void;
-  /**
-   * Reads back one frame's GPU duration. Resolving drains the query pool, so
-   * calling this once per frame gives one reading per frame.
-   */
-  readonly sampleGpu: () => Promise<void>;
+  /** Records one frame's GPU duration, as the render loop read it back. */
+  readonly recordGpu: (durationMs: number) => void;
   /** Populated once enough frames have been measured. */
   readonly result: () => BenchResult | null;
 }
@@ -1665,10 +1416,8 @@ function createBenchRecorder(parts: {
       };
       (globalThis as Record<string, unknown>).__voxBench = result;
     },
-    async sampleGpu() {
-      if (result) return;
-      const duration = await handle.renderer.resolveTimestampsAsync();
-      if (typeof duration === 'number' && duration > 0) gpuFrames.push(duration);
+    recordGpu(durationMs) {
+      if (!result) gpuFrames.push(durationMs);
     },
     result: () => result,
   };
@@ -2154,12 +1903,36 @@ function disposeCatalogue(catalogue: MeshedCatalogue): void {
   const all = [catalogue.geometries, catalogue.people, catalogue.sky, catalogue.sea];
   for (const models of all) {
     for (const model of models) {
-      model.lit?.dispose();
-      model.emissive?.dispose();
-      model.water?.dispose();
-      model.window?.dispose();
+      for (const copy of [model, model.coarse]) {
+        copy?.lit?.dispose();
+        copy?.emissive?.dispose();
+        copy?.water?.dispose();
+        copy?.window?.dispose();
+      }
     }
   }
+}
+
+/**
+ * The resort the page opens on: a generated one, unless a benchmark is running.
+ *
+ * A benchmark gets the hand-authored resort: a run is only comparable with the
+ * run before it if the scene is the same scene, and `RESORT_PLAN` is the one
+ * plot that does not move between builds.
+ */
+function startingSource(bench: BenchConfig | null, params: ResortParams): ResortSource {
+  return bench ? { kind: 'authored' } : { kind: 'generate', params };
+}
+
+/** What to prepare for a source: tiled and framed as a benchmark asks, if one is running. */
+function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRequest {
+  if (!bench) return { source, repeat: 1, view: null };
+  return { source, repeat: bench.repeat, view: bench.view };
+}
+
+/** Whether a page opens with the level of detail on: always, unless a bench run says not. */
+function detailFrom(bench: BenchConfig | null): boolean {
+  return bench?.detail ?? true;
 }
 
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
@@ -2172,16 +1945,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const bench = parseBenchConfig(globalThis.location?.search ?? '');
 
   const scratch = scratchForModels();
-  const catalogue = await meshModels(scratch, bench);
-
+  const preparer = createResortPreparer({
+    forceMainThread: bench?.forceMainThreadMeshing ?? false,
+  });
   let params = startingParams(bench);
+  // Meshed and grown at the same time, each in a worker of its own.
+  const [catalogue, first] = await Promise.all([
+    meshModels(scratch, bench),
+    preparer.prepare(prepRequestFor(startingSource(bench, params), bench)),
+  ]);
+
   const slot = createResortSlot({
-    plan: startingPlan(bench, params),
+    prepared: first,
     geometries: catalogue.geometries,
     people: catalogue.people,
     sky: catalogue.sky,
     sea: catalogue.sea,
-    bench,
   });
   const current = slot.current;
 
@@ -2194,14 +1973,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     lightVolume: current().lighting.volume,
     shore: current().shore,
     terrain: current().terrain,
+    surfaces: first.surfaces,
     // Forwarded to whichever resort is standing, exactly as the terrain is: the
     // ground under a cottage is drawn square rather than sloped, so the mesher
     // has to ask the live occupancy index and not a snapshot of it.
     isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
     // Wall-clock frame times stop discriminating as soon as a frame fits inside
     // the refresh interval: everything faster reads as exactly 120 fps. The
-    // GPU's own timers keep measuring past that point.
-    trackTimestamp: bench !== null,
+    // GPU's own timers keep measuring past that point, and the HUD shows them
+    // too, because a slow frame is either the main thread's or the GPU's.
+    trackTimestamp: true,
     forceWebGL: bench?.forceWebGL ?? false,
   });
   handle.scene.add(current().world.group);
@@ -2213,15 +1994,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   slot.attach(handle);
 
   let fpsState = createFpsState();
+  let frameCost = createFrameCostState();
+  /** The GPU's last reported frame, which arrives a few frames after it was drawn. */
+  let gpuMs: number | null = null;
   let running = true;
   let lastTimeMs: number | null = null;
   const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
 
   if (bench) pinCamera(handle);
 
+  /** Whether the level of detail is on; a benchmark can turn it off with `?lod=0`. */
+  let detail = detailFrom(bench);
+
   const cameraView = (): CameraView => ({
     mode: handle.cameraMode,
     direction: handle.isoDirection,
+    detail,
   });
 
   const setCameraMode = (mode: CameraMode): void => {
@@ -2307,11 +2095,44 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSceneChange?.(statsNow());
   };
 
+  /** How many resorts have been asked for; only the latest one is put on screen. */
+  let requested = 0;
+
+  /**
+   * Prepares a resort off the main thread and swaps it in once it is ready.
+   *
+   * The resort on screen keeps drawing — and keeps taking edits — while the new
+   * one is grown; those edits go with it when it is replaced, as do the
+   * buildings still going up. An answer overtaken by a later request is
+   * dropped rather than flashed on screen on its way past.
+   */
+  const regrow = async (asked: ResortParams, source: ResortSource): Promise<void> => {
+    const request = ++requested;
+    const prepared = await preparer.prepare(prepRequestFor(source, bench));
+    if (request !== requested || !running) return;
+    params = asked;
+    // Whatever was going up goes with the plot it was going up on.
+    build.abandon();
+    slot.replace(prepared);
+    rebuilt();
+  };
+
   const recorder = bench
     ? createBenchRecorder({ bench, handle, stats: statsNow, litLamps: () => clock.litLamps })
     : null;
+
+  /**
+   * Picks what is drawn coarse and what not at all, after the camera has settled
+   * for the frame and before anything is drawn: the view this frame renders.
+   */
+  const chooseDetail = (): void => {
+    const view = detail ? handle.detailView() : null;
+    current().world.updateDetail(view);
+    current().crowd.setView(view);
+  };
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
+    const frameStarted = performance.now();
 
     // Before anything else this frame: the ground the crowd walks and the
     // surfaces the camera sees have to agree, and a stroke may have moved a
@@ -2345,17 +2166,42 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // site: the rule should not depend on that staying true.
     build.advance(bench ? MAX_STEP : elapsed);
     if (!bench) handle.controls.update();
+    chooseDetail();
+    const renderStarted = performance.now();
     handle.renderer.render(handle.scene, handle.camera);
+    // Everything the main thread did for this frame, the render submission
+    // included: WebGPU records and submits here and the GPU works afterwards.
+    const frameEnded = performance.now();
+    frameCost = sampleFrameCost(frameCost, timeMs, frameEnded - frameStarted);
+    // Resolving drains the query pool, so once a frame gives one reading a frame.
+    void handle.renderer.resolveTimestampsAsync().then((duration) => {
+      if (typeof duration !== 'number' || duration <= 0) return;
+      gpuMs = duration;
+      recorder?.recordGpu(duration);
+    });
 
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;
 
-    onFrame({ fps: fpsState.fps, time: clock.time, activeLights: clock.litLamps });
+    const { world, crowd } = current();
+    onFrame({
+      fps: fpsState.fps,
+      time: clock.time,
+      activeLights: clock.litLamps,
+      drawCalls: handle.renderer.info.render.drawCalls,
+      triangles: handle.renderer.info.render.triangles,
+      cpu: {
+        latestMs: frameCost.latestMs,
+        worstMs: frameCost.worstMs,
+        renderMs: frameEnded - renderStarted,
+      },
+      gpuMs,
+      detail: world.detailCounts,
+      people: { drawn: crowd.drawnCount, total: crowd.count },
+      shaderBuilds: handle.shaderBuilds(),
+    });
 
-    if (recorder) {
-      recorder.record(elapsed * 1000);
-      void recorder.sampleGpu();
-    }
+    recorder?.record(elapsed * 1000);
   });
 
   return {
@@ -2373,22 +2219,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     setCameraMode,
     setIsoDirection,
+    setDetail(enabled) {
+      // A bench run says in its URL which it measures; see `benchConfig.ts`.
+      if (bench) return;
+      detail = enabled;
+    },
     turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
     generate(next) {
-      params = clampParams(next);
-      // Whatever was going up goes with the plot it was going up on.
-      build.abandon();
-      slot.replace(generateResort(GENERATOR_TYPES, params));
-      rebuilt();
+      const asked = clampParams(next);
+      return regrow(asked, { kind: 'generate', params: asked });
     },
     clear(next) {
-      params = clampParams(next);
-      build.abandon();
+      const asked = clampParams(next);
       // The seed goes along, so clearing is a random landscape rather than the
       // same one every time: a coast, a hill and a river off it. See
       // `emptyResortPlan`.
-      slot.replace(emptyResortPlan(params.tilesX, params.tilesZ, params.seed));
-      rebuilt();
+      return regrow(asked, { kind: 'clear', params: asked });
     },
     selectTool: (tool) => build.select(tool),
     setTime: clock.setTime,
@@ -2399,6 +2245,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       globalThis.removeEventListener('resize', resize);
       cameraKeys.dispose();
       build.dispose();
+      preparer.dispose();
       current().dispose();
       handle.dispose();
       // Last: everything above is built over these, so nothing may still be

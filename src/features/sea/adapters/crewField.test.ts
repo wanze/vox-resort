@@ -145,7 +145,7 @@ describe('buildCrewField', () => {
     const passengers = crewOf(flotilla);
     const field = fieldFor(flotilla, passengers);
     for (const [variant, mesh] of meshes(field.group).entries()) {
-      const facing = mesh.geometry.getAttribute('facing');
+      const facing = mesh.geometry.getAttribute('pose');
       for (const [slot, person] of membersOf(passengers, variant).entries()) {
         const pose = poseAboard(flotilla, passengers, person);
         // The berth's own turn included, which is what puts a rower's legs
@@ -160,9 +160,9 @@ describe('buildCrewField', () => {
     const flotilla = bay(8);
     const field = fieldFor(flotilla, crewOf(flotilla));
     for (const mesh of meshes(field.group)) {
-      const resting = mesh.geometry.getAttribute('resting');
-      for (let slot = 0; slot < resting.count; slot++) {
-        expect(resting.getX(slot)).toBe(RESTING.sitting);
+      const pose = mesh.geometry.getAttribute('pose');
+      for (let slot = 0; slot < pose.count; slot++) {
+        expect(pose.getZ(slot)).toBe(RESTING.sitting);
       }
     }
   });

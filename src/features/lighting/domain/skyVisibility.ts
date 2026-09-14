@@ -317,10 +317,15 @@ export function createLiveSkyVisibility(
   spec: LightGridSpec,
   direction: Uint8Array,
   occluders: readonly Occluder[],
+  /**
+   * Whether `direction` already holds this very bake — made off the main
+   * thread, see `resort-prep` — so the only work left is keeping the boxes.
+   */
+  alreadyBaked = false,
 ): LiveSkyVisibility {
   const standing = occluders.filter(occludes);
   const interior = gridInterior(spec);
-  bakeSkyVisibility({ occluders: standing, spec, range: interior, direction });
+  if (!alreadyBaked) bakeSkyVisibility({ occluders: standing, spec, range: interior, direction });
 
   return {
     get occluderCount() {

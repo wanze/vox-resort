@@ -52,7 +52,14 @@ import {
 } from 'three/webgpu';
 import { RESTING } from '../../crowd/domain/crowd';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
-import { figureGeometry, figureMaterial } from '../../rendering/adapters/figureField';
+import {
+  figureGeometry,
+  figureMaterial,
+  POSE_COS,
+  POSE_RESTING,
+  POSE_SIN,
+  POSE_STRIDE,
+} from '../../rendering/adapters/figureField';
 import { disposeFieldMeshes, slotsFor, type FieldMesh } from '../../rendering/adapters/movingField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import type { Flotilla } from '../domain/flotilla';
@@ -110,10 +117,11 @@ interface CrewMesh extends FieldMesh {
   readonly mesh: InstancedMesh;
   readonly geometry: BufferGeometry;
   /**
-   * Which way each drawn figure faces, as `(sin, cos)`: the direction their legs
-   * point. Written per slot rather than per passenger, because the slots move.
+   * Which way each drawn figure faces, as `(sin, cos)` in the first two floats
+   * of each slot's pose: the direction their legs point. Written per slot rather
+   * than per passenger, because the slots move. See `POSE_STRIDE`.
    */
-  readonly facing: InstancedBufferAttribute;
+  readonly pose: InstancedBufferAttribute;
   /** Figures written into this mesh's slots this frame; what the draw is cut to. */
   drawn: number;
 }
@@ -137,13 +145,13 @@ const UNSCALED = new Vector3(1, 1, 1);
  * and would come out mirrored on a figure facing astern.
  *
  * The buffers go up whole and without update ranges, because everybody moved:
- * every hull is riding the swell. `resting` is not touched at all, which is the
- * one buffer this field can write once: every slot holds somebody sitting,
- * whoever that turns out to be.
+ * every hull is riding the swell. The pose's `resting` float is not touched at
+ * all, which is the one number this field can write once: every slot holds
+ * somebody sitting, whoever that turns out to be.
  */
 function writeInstances(part: CrewMesh, flotilla: Flotilla, passengers: Passengers): void {
   const matrices = part.mesh.instanceMatrix.array;
-  const facing = part.facing.array;
+  const packed = part.pose.array;
   let slot = 0;
   for (const person of part.members) {
     if (!aboard(flotilla, passengers, person)) continue;
@@ -155,14 +163,14 @@ function writeInstances(part: CrewMesh, flotilla: Flotilla, passengers: Passenge
     at.set(pose.x, pose.y, pose.z);
     attitude.compose(at, spin, UNSCALED);
     attitude.toArray(matrices, slot * 16);
-    facing[slot * 2] = Math.sin(pose.heading);
-    facing[slot * 2 + 1] = Math.cos(pose.heading);
+    packed[slot * POSE_STRIDE + POSE_SIN] = Math.sin(pose.heading);
+    packed[slot * POSE_STRIDE + POSE_COS] = Math.cos(pose.heading);
     slot++;
   }
   part.drawn = slot;
   part.mesh.count = slot;
   part.mesh.instanceMatrix.needsUpdate = true;
-  part.facing.needsUpdate = true;
+  part.pose.needsUpdate = true;
 }
 
 /**
@@ -186,9 +194,10 @@ function buildCrewMesh(
   const geometry = figureGeometry(model, members.length);
   // Every slot of this mesh holds a seated figure whoever fills it, so the pose
   // buffer is filled here and never written again. See {@link writeInstances}.
-  const resting = geometry.getAttribute('resting');
-  for (let slot = 0; slot < members.length; slot++) resting.setX(slot, RESTING.sitting);
-  resting.needsUpdate = true;
+  const pose = geometry.getAttribute('pose') as InstancedBufferAttribute;
+  for (let slot = 0; slot < members.length; slot++) {
+    pose.array[slot * POSE_STRIDE + POSE_RESTING] = RESTING.sitting;
+  }
 
   const mesh = new InstancedMesh(geometry, material, members.length);
   mesh.name = `sea-crew-${model.id}`;
@@ -201,7 +210,7 @@ function buildCrewMesh(
     geometry,
     members,
     triangles: (geometry.getIndex()?.count ?? 0) / 3,
-    facing: geometry.getAttribute('facing') as InstancedBufferAttribute,
+    pose,
     drawn: 0,
   };
 }

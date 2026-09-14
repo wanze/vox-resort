@@ -63,6 +63,31 @@ export const FINEST_CELL_SIZE = 4;
  */
 export const DEFAULT_GRID_BUDGET_BYTES = 48 * 1024 * 1024;
 
+/** The most the budget grows to, however large the resort: see {@link gridBudgetFor}. */
+export const MAX_GRID_BUDGET_BYTES = 128 * 1024 * 1024;
+
+/**
+ * The span, in voxels a side, the default budget was sized for: a 160-tile plot
+ * and a lamp's reach beyond each edge.
+ */
+const BUDGET_BASE_SPAN = 2700;
+
+/**
+ * The budget for a grid that has to cover this reservation.
+ *
+ * The default up to the plot it was sized for, then growing with the area to a
+ * ceiling. A fixed budget over a plot nine times the area coarsens the cells
+ * from five voxels to eleven — a pool of light under a street lamp is then three
+ * or four cells across and reads as a blotch — while the ceiling keeps both
+ * volumes well inside what a GPU hands out without complaint.
+ */
+export function gridBudgetFor(reserve: GridReservation | null): number {
+  if (!reserve) return DEFAULT_GRID_BUDGET_BYTES;
+  const area = Math.max(0, reserve.maxX - reserve.minX) * Math.max(0, reserve.maxZ - reserve.minZ);
+  const scaled = (DEFAULT_GRID_BUDGET_BYTES * area) / (BUDGET_BASE_SPAN * BUDGET_BASE_SPAN);
+  return Math.round(Math.min(MAX_GRID_BUDGET_BYTES, Math.max(DEFAULT_GRID_BUDGET_BYTES, scaled)));
+}
+
 /** Rec. 709 luminance, used to weight which direction light came from. */
 export function luminance(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;

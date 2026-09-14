@@ -62,6 +62,18 @@ const closestOver = (step: (dt: number) => number, seconds: number): number => {
   return closest;
 };
 
+describe('proximityFor', () => {
+  it('keeps the smallest table for a small crowd', () => {
+    expect(proximityFor(600).cellHead).toHaveLength(4096);
+  });
+
+  it('grows the table with the crowd, a power of two with two slots a person', () => {
+    const { cellHead, cellNext } = proximityFor(5000);
+    expect(cellHead).toHaveLength(16_384);
+    expect(cellNext).toHaveLength(5000);
+  });
+});
+
 describe('steerWalkers', () => {
   it('passes two people walking at each other down the same line', () => {
     const { walkers, step } = walkersOn([

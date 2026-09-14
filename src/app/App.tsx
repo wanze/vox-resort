@@ -101,6 +101,12 @@ export function App() {
         fps={fps}
         stats={stats}
         activeLightsElement={hudNodes.activeLights}
+        drawnElement={hudNodes.drawn}
+        frameCostElements={{
+          cpu: hudNodes.cpu,
+          detail: hudNodes.detail,
+          shaders: hudNodes.shaders,
+        }}
         timeElement={hudNodes.time}
         clock={clock}
         camera={camera}

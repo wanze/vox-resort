@@ -49,6 +49,18 @@ export function worldBoundsFor(
   return { minX, minZ, maxX, maxZ, height };
 }
 
+/**
+ * The perspective camera's vertical field of view, in degrees. Here rather than
+ * with the camera because the resort is framed with it before any camera exists
+ * — off the main thread, even. See `resort-prep`.
+ */
+export const CAMERA_FOV_DEGREES = 55;
+
+/** Longest world dimension: what sizes the ground, the fog and the far plane. */
+export function worldExtentOf(bounds: WorldBounds): number {
+  return Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1);
+}
+
 /** How much of the fitted distance to actually stand back. */
 const FRAMING_FILL = 0.86;
 

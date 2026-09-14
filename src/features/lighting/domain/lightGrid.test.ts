@@ -6,8 +6,10 @@ import {
   countRegion,
   DEFAULT_GRID_BUDGET_BYTES,
   FINEST_CELL_SIZE,
+  gridBudgetFor,
   gridByteSize,
   gridInterior,
+  MAX_GRID_BUDGET_BYTES,
   gridSpecAt,
   lightGridSpecFor,
   linearRgbOf,
@@ -174,6 +176,27 @@ describe('gridSpecAt', () => {
     const coarse = gridSpecAt(anchors, 8)!;
     expect(cellCount(coarse)).toBeLessThan(cellCount(fine));
     expect(gridByteSize(fine)).toBe(cellCount(fine) * 8);
+  });
+});
+
+/** A reservation `span` voxels a side. */
+const square = (span: number) => ({ minX: 0, minY: 0, minZ: 0, maxX: span, maxY: 100, maxZ: span });
+
+describe('gridBudgetFor', () => {
+  it('keeps the default budget up to the plot it was sized for', () => {
+    expect(gridBudgetFor(null)).toBe(DEFAULT_GRID_BUDGET_BYTES);
+    expect(gridBudgetFor(square(1800))).toBe(DEFAULT_GRID_BUDGET_BYTES);
+    expect(gridBudgetFor(square(2700))).toBe(DEFAULT_GRID_BUDGET_BYTES);
+  });
+
+  it('grows with the area past that', () => {
+    const bigger = gridBudgetFor(square(3400));
+    expect(bigger).toBeGreaterThan(DEFAULT_GRID_BUDGET_BYTES);
+    expect(bigger).toBeLessThan(MAX_GRID_BUDGET_BYTES);
+  });
+
+  it('stops at the ceiling however large the resort', () => {
+    expect(gridBudgetFor(square(7800))).toBe(MAX_GRID_BUDGET_BYTES);
   });
 });
 

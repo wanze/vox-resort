@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
@@ -66,8 +66,32 @@ const SWEEP: ResortParams[] = [
     params({ tilesX: size, tilesZ: size, seed: size }),
     params({ tilesX: size, tilesZ: Math.max(40, Math.round(size * 0.6)), seed: size + 1 }),
   ]),
+  // The stress-test sizes, once each: every rule has to hold out there too.
+  ...[320, 480].map((size) => params({ tilesX: size, tilesZ: size, density: 1, seed: size })),
   ...[0.2, 0.4, 1].map((density) => params({ density, seed: 99 })),
 ];
+
+/**
+ * The plan a sweep entry grows, generated once however many rules read it.
+ *
+ * `generateResort` is a pure function of its parameters, so sharing the answer
+ * changes nothing a rule can see — and the largest plots take over a second each.
+ */
+const plans = new Map<ResortParams, ReturnType<typeof generateResort>>();
+function planOf(set: ResortParams): ReturnType<typeof generateResort> {
+  let plan = plans.get(set);
+  if (!plan) {
+    plan = generateResort(TYPES, set);
+    plans.set(set, plan);
+  }
+  return plan;
+}
+
+// Grown up front, under a timeout of their own, so that no single rule is left
+// paying for the whole sweep inside the default one.
+beforeAll(() => {
+  for (const set of SWEEP) planOf(set);
+}, 120_000);
 
 describe('clampParams', () => {
   it('pulls a plot too small up to the smallest one that works', () => {
@@ -123,7 +147,7 @@ describe('generateResort', () => {
 
   it('never places an object the layout scatters for itself', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       for (const plot of plan.plots) {
         expect([...DERIVED_IDS]).not.toContain(plot.id);
       }
@@ -132,7 +156,7 @@ describe('generateResort', () => {
 
   it('stands the whole catalogue, at every size and density it offers', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const planted = new Set(plan.plots.map((plot) => plot.id));
       const owed = TYPES.filter((type) => !DERIVED_IDS.has(type.id) && !planted.has(type.id));
       expect({ set, missing: owed.map((type) => type.id) }).toEqual({ set, missing: [] });
@@ -142,7 +166,7 @@ describe('generateResort', () => {
 
   it('keeps every object inside the plot, turned as it stands', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       for (const plot of plan.plots) {
         const footprint = footprintOf(plot);
         expect(plot.tileX).toBeGreaterThanOrEqual(0);
@@ -155,7 +179,7 @@ describe('generateResort', () => {
 
   it('never overlaps two objects, turned as they stand', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const taken = new Set<string>();
       for (const plot of plan.plots) {
         const footprint = footprintOf(plot);
@@ -173,7 +197,7 @@ describe('generateResort', () => {
     // The point of the feature: a plot on which every turn is the same one is a
     // housing estate, whatever else it gets right.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const turns = new Set(plan.plots.map((plot) => plot.rotation ?? 0));
       expect({ set, turns: turns.size }).toEqual({ set, turns: ROTATIONS.length });
     }
@@ -183,7 +207,7 @@ describe('generateResort', () => {
     // A quarter turn is the exception: it is what stops a row reading as a line
     // of clones, and a plot where it were the rule would read as a scrapyard.
     for (const set of SWEEP) {
-      const plots = generateResort(TYPES, set).plots;
+      const plots = planOf(set).plots;
       const square = plots.filter((plot) => (plot.rotation ?? 0) % 2 === 0).length;
       expect({ set, most: square > plots.length * 0.6 }).toEqual({ set, most: true });
     }
@@ -201,7 +225,7 @@ describe('generateResort', () => {
 
   it('routes streets that stay on the plot', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       expect(() => streetTiles(plan)).not.toThrow();
       expect(streetTiles(plan).length).toBeGreaterThan(0);
     }
@@ -213,7 +237,7 @@ describe('generateResort', () => {
     // generator that satisfies it has satisfied every invariant the hand-written
     // plan is held to.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       expect(() => layoutResort(ITEMS, plan)).not.toThrow();
     }
   });
@@ -229,7 +253,7 @@ describe('generateResort', () => {
 describe('the shore a generated plot gets', () => {
   it('cuts the sea into every plot, whatever its size', () => {
     for (const set of SWEEP) {
-      const shore = shoreFor(generateResort(TYPES, set));
+      const shore = shoreFor(planOf(set));
       expect({ set, sea: (shore ? waterTilesOf(shore) : []).length > 0 }).toEqual({
         set,
         sea: true,
@@ -239,7 +263,7 @@ describe('the shore a generated plot gets', () => {
 
   it('stands nothing in the water', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const wet = plan.plots.filter((plot) => terrainAt(shore, plot.tileX, plot.tileZ) === 'water');
       expect({ set, wet }).toEqual({ set, wet: [] });
@@ -260,7 +284,7 @@ describe('the shore a generated plot gets', () => {
 
   it('lays the loungers and the parasols out in three lines along the water', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const depths = new Set(
         plan.plots
@@ -284,7 +308,7 @@ describe('the shore a generated plot gets', () => {
 
   it('paves nothing across the beach but the lanes that run down to the water', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const onSand = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'beach');
@@ -308,7 +332,7 @@ describe('the shore a generated plot gets', () => {
     // The lodgings moved up onto the shelf on top of the dune. A bungalow in the
     // middle of the sand read as a building somebody had left there.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const lodging = plan.plots.filter(
         (plot) =>
@@ -383,7 +407,7 @@ describe('the shore a generated plot gets', () => {
 
   it('runs two piers out over the water, and paves nothing else wet', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
@@ -402,7 +426,7 @@ describe('the shore a generated plot gets', () => {
 
   it('stops each pier the same distance out whatever the plot is', () => {
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const wet = paths.filter((tile) => tile.id === JETTY_ID);
@@ -452,7 +476,7 @@ describe('the shore a generated plot gets', () => {
     // very back of it — the first of the dune's, whose lower tile is the last row
     // of sand. You climb off the beach; you never climb on it.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const wrong = paths.filter(
@@ -495,7 +519,7 @@ describe('the hill a generated plot gets', () => {
     // behind that back at zero: the levels climb and fall by one at a time and
     // end where they started, which is what makes it a hill rather than a cliff.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const elevation = elevationFor(plan);
       if (!elevation) continue;
       const levels = elevation.spec.terraces.map((terrace) => terrace.level);
@@ -581,7 +605,7 @@ describe('the hill a generated plot gets', () => {
     // it, the flights are only where north-south paths come down off the bench,
     // which is a dozen or so spread along that street rather than all of it.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const { paths } = layoutResort(ITEMS, plan);
       const perRow = new Map<number, number>();
       for (const tile of paths) {
@@ -602,7 +626,7 @@ describe('the hill a generated plot gets', () => {
     // north of the hill instead, which is why every tile of every one of them is
     // at sea level.
     for (const set of SWEEP) {
-      const plan = generateResort(TYPES, set);
+      const plan = planOf(set);
       const elevation = elevationFor(plan);
       if (!elevation) continue;
       const across = plan.edges.filter((edge) => edge.from.startsWith('band'));

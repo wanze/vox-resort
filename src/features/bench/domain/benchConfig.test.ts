@@ -27,7 +27,14 @@ describe('parseBenchConfig', () => {
       repeat: 3,
       forceWebGL: true,
       forceMainThreadMeshing: false,
+      detail: true,
     });
+  });
+
+  it('can turn the level of detail off, to price what it saves', () => {
+    expect(parseBenchConfig('?bench=1')?.detail).toBe(true);
+    expect(parseBenchConfig('?bench=1&lod=1')?.detail).toBe(true);
+    expect(parseBenchConfig('?bench=1&lod=0')?.detail).toBe(false);
   });
 
   it('can pin meshing to the main thread, to price what the worker saves', () => {

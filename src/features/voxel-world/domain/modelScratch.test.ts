@@ -25,6 +25,15 @@ describe('scratchLayoutFor', () => {
     expect(regions[0]).toEqual({ id: 'a', x: 0, endX: 16 });
   });
 
+  it('carries a scaled copy’s scale and source onto its region', () => {
+    const { regions } = scratchLayoutFor(
+      [{ ...model('a~coarse', 8, 1), scale: 2, source: 'a' }],
+      voxelIdOf,
+      SECTION,
+    );
+    expect(regions[0]).toEqual({ id: 'a~coarse', x: 0, endX: 16, scale: 2, source: 'a' });
+  });
+
   it('rounds a region up to whole sections', () => {
     const { regions } = scratchLayoutFor([model('a', 20, 1)], voxelIdOf, SECTION);
     expect(regions[0]?.endX).toBe(32);

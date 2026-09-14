@@ -83,6 +83,27 @@ describe('buildModelAttributes', () => {
     expect(models[0]!.lit).toBeNull();
   });
 
+  it('grows a scaled region back to full size and shades it as its source model', () => {
+    const models = buildModelAttributes({
+      sections: [sectionOf('glow', { x: 64, y: 2, z: 0 }, [{ axis: 1, slice: 0, u: 1, v: 1 }])],
+      regions: [
+        { id: 'lamp', x: 0, endX: 32 },
+        { id: 'lamp~coarse', x: 64, endX: 80, scale: 2, source: 'lamp' },
+      ],
+      colorsByMaterialId: new Map([['glow', 0xffee88]]),
+      emissiveByModelId: new Map([['lamp', new Set([0xffee88])]]),
+      waterByModelId: new Map(),
+      windowsByModelId: new Map(),
+    });
+    const coarse = models[1]!;
+    expect(coarse.lit).toBeNull();
+    // The quad's corners, at (1..2, 2, 1..2) in coarse voxels, doubled.
+    const positions = [...coarse.emissive!.positions];
+    expect(Math.min(...positions.filter((_, at) => at % 3 === 0))).toBe(2);
+    expect(Math.max(...positions.filter((_, at) => at % 3 === 0))).toBe(4);
+    expect(positions.filter((_, at) => at % 3 === 1).every((y) => y === 4)).toBe(true);
+  });
+
   it('merges coplanar faces of one colour', () => {
     const models = buildModelAttributes({
       sections: [sectionOf('m1', { x: 0, y: 0, z: 0 }, flat(8))],

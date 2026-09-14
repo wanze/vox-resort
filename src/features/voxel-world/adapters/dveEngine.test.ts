@@ -8,6 +8,7 @@ import {
   PEOPLE_MODELS,
 } from '../../catalog/domain/objectTypes';
 import { deinterleaveVertices, flipWinding } from '../../rendering/domain/vertexBuffer';
+import { coarseIdOf, coarseScratchModelOf } from '../domain/coarseVoxels';
 import { scratchLayoutFor } from '../domain/modelScratch';
 import { buildSectionMeshes, DEFAULT_WORLD_SCALE, sectionSizeOf } from './dveEngine';
 
@@ -31,13 +32,18 @@ const corner = (index: number, source: Float32Array): readonly number[] => [
 describe('buildSectionMeshes', () => {
   it('meshes the catalogue and the crowd into submeshes of known materials', async () => {
     const scratch = scratchLayoutFor(
-      PAINTED_MODELS,
+      // With every object's coarse copy, as the app meshes them: those are what
+      // the scratch extent has to have room for.
+      [...PAINTED_MODELS, ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model))],
       (color) => voxelIdFor(materialKeyFor(color)),
       sectionSizeOf(DEFAULT_WORLD_SCALE),
     );
     // Every person has a region of their own, exactly as every object does.
     const meshed = new Set(scratch.regions.map((region) => region.id));
     for (const person of PEOPLE_MODELS) expect(meshed.has(person.id), person.id).toBe(true);
+    for (const type of OBJECT_TYPES) {
+      expect(meshed.has(coarseIdOf(type.id)), type.id).toBe(true);
+    }
     expect(scratch.extentX).toBeLessThanOrEqual(DEFAULT_WORLD_SCALE.horizontalExtent);
     const writes = scratch.writes;
 

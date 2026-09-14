@@ -76,15 +76,24 @@ export interface Walkers {
   readonly cellNext: Int32Array;
 }
 
-/** Slots in the hash; a power of two, so a slot is a mask. */
-const SLOTS = 4096;
+/**
+ * Fewest slots the hash has; always a power of two, so a slot is a mask.
+ *
+ * A crowd grows with the paving (see `crowdSizeFor`), and a fixed table would
+ * pile a big resort's walkers into shared slots until every scan walked
+ * strangers from the other end of the plot. So the table keeps at least two
+ * slots per person.
+ */
+const MIN_SLOTS = 4096;
 
 /** The hash's buffers, for a crowd of `capacity`. */
 export function proximityFor(capacity: number): {
   readonly cellHead: Int32Array;
   readonly cellNext: Int32Array;
 } {
-  return { cellHead: new Int32Array(SLOTS), cellNext: new Int32Array(capacity) };
+  let slots = MIN_SLOTS;
+  while (slots < capacity * 2) slots *= 2;
+  return { cellHead: new Int32Array(slots), cellNext: new Int32Array(capacity) };
 }
 
 /** Voxels per hash cell. As far as anybody looks ahead, so three cells cover it. */
@@ -130,9 +139,9 @@ const SAME_WAY = 0.3;
 /** Voxels of height apart past which two people are on different ground. */
 const HEIGHT_APART = 3;
 
-const slotOf = (x: number, z: number): number =>
-  (Math.imul(Math.floor(x / CELL), 73856093) ^ Math.imul(Math.floor(z / CELL), 19349663)) &
-  (SLOTS - 1);
+/** The slot a point hashes to; `mask` is one less than the table's size. */
+const slotOf = (x: number, z: number, mask: number): number =>
+  (Math.imul(Math.floor(x / CELL), 73856093) ^ Math.imul(Math.floor(z / CELL), 19349663)) & mask;
 
 const clamp = (value: number, low: number, high: number): number =>
   Math.min(high, Math.max(low, value));
@@ -176,10 +185,11 @@ export function steerWalkers(walkers: Walkers, dt: number, sand: SandGrid | null
 /** Drops everybody who is walking into the hash. */
 function fillHash(walkers: Walkers): void {
   const { cellHead, cellNext } = walkers;
+  const mask = cellHead.length - 1;
   cellHead.fill(-1);
   for (let i = 0; i < walkers.count; i++) {
     if (walkers.lane[i] === LANE.none) continue;
-    const slot = slotOf(walkers.x[i]!, walkers.z[i]!);
+    const slot = slotOf(walkers.x[i]!, walkers.z[i]!, mask);
     cellNext[i] = cellHead[slot]!;
     cellHead[slot] = i;
   }
@@ -276,9 +286,10 @@ function sidestep(side: number, lateral: number, overtaking: boolean): number {
 function nearestAhead(walkers: Walkers, i: number): number {
   nearest = LOOK;
   let found = -1;
+  const mask = walkers.cellHead.length - 1;
   for (let ox = -CELL; ox <= CELL; ox += CELL) {
     for (let oz = -CELL; oz <= CELL; oz += CELL) {
-      found = scanSlot(walkers, i, slotOf(walkers.x[i]! + ox, walkers.z[i]! + oz), found);
+      found = scanSlot(walkers, i, slotOf(walkers.x[i]! + ox, walkers.z[i]! + oz, mask), found);
     }
   }
   return found;

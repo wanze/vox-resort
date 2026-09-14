@@ -113,8 +113,14 @@ const GATE_ID = 'entrance';
 /** The object dropped in the middle of the promenade's plaza. */
 const PLAZA_ID = 'fountain';
 
-/** Plot sizes the generator will work at, in tiles. */
-export const PLOT_TILES = { min: 40, max: 160 } as const;
+/**
+ * Plot sizes the generator will work at, in tiles.
+ *
+ * The largest is three times the width the resort was first built to, nine
+ * times its area: a stress test more than a resort anybody would lay out by
+ * hand, and what the level of detail is there to keep drawable.
+ */
+export const PLOT_TILES = { min: 40, max: 480 } as const;
 
 /** How built-up a plot can be asked to be. */
 export const PLOT_DENSITY = { min: 0.2, max: 1 } as const;

@@ -1,5 +1,5 @@
 /**
- * Builds the scene as instanced draws: one `InstancedMesh` per model, however
+ * Builds the scene as instanced draws: one instanced mesh per model, however
  * many of that model the plan puts on the plot.
  *
  * Every object stands in its own footprint and never touches its neighbours, so
@@ -14,8 +14,21 @@
  * enough for the renderer to cull — see `domain/spatialChunks.ts` for why one
  * mesh per model was never culled at all.
  *
+ * **A bucket is a plain `Mesh` over an instanced geometry, not an
+ * `InstancedMesh`, and that is the difference between a smooth zoom and a
+ * stalled one.** Three.js's WebGPU renderer puts every `InstancedMesh`'s own
+ * uuid into the key it caches built shaders under (`RenderObject.
+ * getMaterialCacheKey`), because its instance matrices are bound through a node
+ * of their own. So every bucket was a full node build — TSL to WGSL, milliseconds
+ * of main thread — the first frame it was drawn, and a large plot has fifteen
+ * thousand of them: zooming in turned a few hundred regions from far to near in
+ * one frame and paid for thousands of builds at once. Here the matrices are four
+ * columns of one interleaved instance buffer, read by the materials'
+ * `positionNode` like any other attribute, so every bucket of a material and an
+ * attribute layout shares one build. See {@link standOnInstances}.
+ *
  * The scene is mutable. A bucket's buffer is allocated with room above what it
- * draws, `mesh.count` says how much of it is live, and placing an object writes
+ * draws, the instance count says how much of it is live, and placing an object writes
  * one matrix into one bucket rather than rebuilding anything; a bucket that
  * overflows doubles, and only that bucket is reallocated. Removal fills the hole
  * with the last instance, which is why a bucket's slots are addressed by a map
@@ -29,23 +42,31 @@
 import {
   DynamicDrawUsage,
   Group,
-  InstancedMesh,
+  InstancedBufferGeometry,
+  InstancedInterleavedBuffer,
+  InterleavedBufferAttribute,
   Matrix4,
+  Mesh,
   MeshBasicNodeMaterial,
   MeshStandardNodeMaterial,
+  Sphere,
   type BufferGeometry,
   type Material,
+  type NodeMaterial,
 } from 'three/webgpu';
 import {
   attribute,
   float,
   fract,
   instanceIndex,
+  mat4,
+  positionLocal,
   sin,
   smoothstep,
   step,
   uniform,
   vec3,
+  vec4,
   vertexColor,
   vertexStage,
 } from 'three/tsl';
@@ -55,12 +76,25 @@ import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import {
+  distanceToBox,
+  isFar,
+  isHidden,
+  pixelsPerVoxel,
+  regionLevelOf,
+  type DetailBox,
+  type DetailView,
+  type RegionLevel,
+} from '../domain/levelOfDetail';
+import {
   bucketByChunk,
   capacityFor,
   CHUNK_VOXELS,
   chunkKey,
   chunkOf,
   diffPlacements,
+  REGION_CHUNKS,
+  regionOf,
+  type ChunkCoordinate,
 } from '../domain/spatialChunks';
 import { createPoolWaterMaterial } from './poolWaterMaterial';
 import type { ModelGeometry } from './voxelMeshBuilder';
@@ -92,6 +126,14 @@ export interface InstancedWorld {
   remove(key: string): boolean;
   /** Reconciles the scene against a whole set of placements, changing only what differs. */
   setPlacements(placements: readonly Placement[]): void;
+  /**
+   * Picks, per bucket, whether it is drawn in full, coarse or not at all, from
+   * how large it comes out through this camera. Null draws everything in full.
+   * Cheap enough to call every frame; see `domain/levelOfDetail.ts`.
+   */
+  updateDetail(view: DetailView | null): void;
+  /** Buckets at each level after the last {@link updateDetail}. */
+  readonly detailCounts: DetailCounts;
   dispose(): void;
 }
 
@@ -274,45 +316,204 @@ type MaterialKind = 'lit' | 'glow' | 'water' | 'window';
 interface ModelPart {
   readonly kind: MaterialKind;
   readonly geometry: BufferGeometry;
+  /**
+   * What this surface is drawn with in a far region: the coarse copy's same
+   * surface, the full geometry for a model with no coarse copy, or null when
+   * the coarse copy lost this surface altogether — a sliver of glass painted
+   * over — and it is simply not drawn from that far away.
+   */
+  readonly far: BufferGeometry | null;
   readonly material: Material;
   /** Triangles in a single instance of this geometry. */
   readonly triangles: number;
+  /** The whole model's largest extent in voxels, which is what hides it. */
+  readonly extent: number;
 }
 
 /**
- * One `InstancedMesh`: a model's geometry of one material kind, in one chunk.
+ * One instanced draw: a model's surface in one cell of a layer — a chunk of the
+ * near layer, or a region of the far one.
  *
  * `keys` is the slot table — `keys[i]` is the placement drawn at instance `i`,
- * and its length is the mesh's live count. The buffer behind it is longer than
- * that; see {@link capacityFor}.
+ * and its length is the geometry's live instance count. The buffer behind it is
+ * longer than that; see {@link capacityFor}.
  */
 interface Bucket {
-  readonly chunk: string;
+  readonly cell: string;
+  readonly coordinate: ChunkCoordinate;
   readonly part: ModelPart;
-  mesh: InstancedMesh;
+  /** The catalogue's geometry this bucket draws, which it shares and never frees. */
+  readonly geometry: BufferGeometry;
+  /** A plain mesh over {@link instances}; see the note at the top of the file. */
+  mesh: Mesh;
+  /** The bucket's own geometry: the catalogue's attributes and its instance buffer. */
+  instances: InstancedBufferGeometry;
+  /** Sixteen floats per slot, column-major: the instance matrices. */
+  matrices: InstancedInterleavedBuffer;
   readonly keys: string[];
   readonly slots: Map<string, number>;
   /** Slots written since the buffer was last uploaded whole. */
   dirtyLow: number;
   dirtyHigh: number;
+  /** Highest ground any placement in the bucket has stood on; never lowered. */
+  groundTop: number;
+  hidden: boolean;
+  /** The region this bucket's cell lies in, or null for a district's bucket. */
+  readonly region: string | null;
+  /** The district this bucket's cell lies in. */
+  readonly district: string;
+}
+
+/**
+ * Every placement, bucketed four times over.
+ *
+ * | layer    | cell                  | drawn with   |
+ * | -------- | --------------------- | ------------ |
+ * | near     | a chunk (64 m)        | the model    |
+ * | mid      | a region (4 × 4)      | the model    |
+ * | far      | a region              | coarse copy  |
+ * | district | a district (4 × 4 regions, 1 km) | coarse copy |
+ *
+ * The renderer's cost is per draw, so the cells grow as fast as the eye allows:
+ * chunks only where the frustum can throw most of a region away, whole regions
+ * past that, coarse copies once they cannot be told from the model, and whole
+ * districts once an entire district is that far. Each coarser cell is one draw
+ * per model where the finer ones were sixteen. See `domain/levelOfDetail.ts`.
+ */
+interface Layer {
+  readonly name: string;
+  readonly cellVoxels: number;
+  /** How many times a chunk the cell is grouped up: 0 a chunk, 1 a region, 2 a district. */
+  readonly span: 0 | 1 | 2;
+  readonly geometryOf: (part: ModelPart) => BufferGeometry | null;
+  readonly buckets: Map<string, Bucket>;
+}
+
+/** Counts of buckets drawn at each level by the last pass, and left out as too small. */
+export interface DetailCounts {
+  readonly near: number;
+  readonly mid: number;
+  readonly far: number;
+  readonly district: number;
+  readonly hidden: number;
+}
+
+/** Whether two views would pick the same levels, so a still camera costs nothing. */
+function sameView(a: DetailView | null, b: DetailView | null): boolean {
+  if (a === null || b === null) return a === b;
+  if (a.x !== b.x || a.y !== b.y || a.z !== b.z || a.lens.kind !== b.lens.kind) return false;
+  return a.lens.kind === 'perspective'
+    ? a.lens.focalPixels === (b.lens as typeof a.lens).focalPixels
+    : a.lens.pixelsPerVoxel === (b.lens as typeof a.lens).pixelsPerVoxel;
 }
 
 /** Scratch for a single matrix write; never escapes the call that uses it. */
 const scratch = new Matrix4();
 
-const bucketKey = (id: string, kind: MaterialKind, chunk: string): string =>
-  `${id}|${kind}|${chunk}`;
+const bucketKey = (id: string, kind: MaterialKind, cell: string): string => `${id}|${kind}|${cell}`;
 
-/** Allocates a mesh with room for `capacity` instances, drawing the first `count`. */
-function createMesh(part: ModelPart, name: string, capacity: number, count: number): InstancedMesh {
-  const mesh = new InstancedMesh(part.geometry, part.material, capacity);
-  mesh.name = name;
+/** The geometry attributes an instance matrix's four columns are read from. */
+const MATRIX_COLUMNS = [
+  'instanceColumn0',
+  'instanceColumn1',
+  'instanceColumn2',
+  'instanceColumn3',
+] as const;
+
+/**
+ * Makes a material stand each vertex where its instance's matrix puts it.
+ *
+ * What `InstancedMesh` does inside Three.js, done in the material instead so
+ * that the mesh stays a plain one and its shader is shared — see the note at the
+ * top of the file. Only the position is transformed: the lit materials shade
+ * flat, from the derivatives of the position this produces, the glow is unlit,
+ * and the water bends a world-space normal of its own.
+ */
+function standOnInstances(material: NodeMaterial): void {
+  const [c0, c1, c2, c3] = MATRIX_COLUMNS.map((name) => attribute<'vec4'>(name, 'vec4'));
+  const matrix = mat4(c0!, c1!, c2!, c3!);
+  material.positionNode = matrix.mul(vec4(positionLocal, 1)).xyz;
+}
+
+/**
+ * Wraps a catalogue geometry for one bucket: its attributes and index shared,
+ * not copied, and an instance buffer of `capacity` matrices of its own.
+ *
+ * One interleaved buffer rather than four attributes, so the matrices cost the
+ * pipeline one vertex buffer of the eight WebGPU allows.
+ */
+function instancedGeometryOf(
+  source: BufferGeometry,
+  capacity: number,
+): { readonly instances: InstancedBufferGeometry; readonly matrices: InstancedInterleavedBuffer } {
+  const instances = new InstancedBufferGeometry();
+  instances.setIndex(source.getIndex());
+  for (const [name, shared] of Object.entries(source.attributes)) {
+    instances.setAttribute(name, shared);
+  }
+  const matrices = new InstancedInterleavedBuffer(new Float32Array(capacity * 16), 16, 1);
   // The buffer is written a matrix at a time, which is what the dynamic hint is
   // for: it is what makes the renderer honour the update ranges below rather
   // than re-uploading the whole bucket for one changed instance.
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-  mesh.count = count;
-  return mesh;
+  matrices.setUsage(DynamicDrawUsage);
+  for (const [column, name] of MATRIX_COLUMNS.entries()) {
+    instances.setAttribute(name, new InterleavedBufferAttribute(matrices, 4, column * 4));
+  }
+  instances.instanceCount = 0;
+  // Kept by hand: the geometry's own would bound one model at the origin.
+  instances.boundingSphere = new Sphere().makeEmpty();
+  return { instances, matrices };
+}
+
+/** Allocates a mesh with room for `capacity` instances, drawing the first `count`. */
+function createMesh(bucket: Bucket, name: string, capacity: number, count: number): void {
+  const { instances, matrices } = instancedGeometryOf(bucket.geometry, capacity);
+  instances.instanceCount = count;
+  const mesh = new Mesh(instances, bucket.part.material);
+  mesh.name = name;
+  // Every bucket stands at the origin and the instances carry the placement, so
+  // there is no transform to keep current — and on a large plot the scene's own
+  // walk over thousands of meshes to recompute one was a cost per frame.
+  mesh.matrixAutoUpdate = false;
+  mesh.matrixWorldAutoUpdate = false;
+  bucket.mesh = mesh;
+  bucket.instances = instances;
+  bucket.matrices = matrices;
+}
+
+/**
+ * Lets a bucket's mesh go.
+ *
+ * Disposing the geometry is what frees the instance buffer on the GPU; it also
+ * makes the renderer drop the catalogue's shared attributes, which it uploads
+ * again the next time another bucket draws them. That is a few buffers per
+ * model, once, on an edit that emptied or outgrew a bucket — against a renderer
+ * that would otherwise hold every discarded bucket's buffer for as long as the
+ * page is open.
+ */
+function releaseMesh(bucket: Bucket): void {
+  bucket.instances.dispose();
+}
+
+/** Scratch for bounding one instance; never escapes the call that uses it. */
+const instanceSphere = new Sphere();
+
+/** Grows a bucket's bounding sphere over one more slot. */
+function boundSlot(bucket: Bucket, slot: number): void {
+  const source = bucket.geometry;
+  if (!source.boundingSphere) source.computeBoundingSphere();
+  scratch.fromArray(bucket.matrices.array, slot * 16);
+  instanceSphere.copy(source.boundingSphere!).applyMatrix4(scratch);
+  bucket.instances.boundingSphere!.union(instanceSphere);
+}
+
+/**
+ * Bounds a bucket over every slot it draws: what the frustum test reads, so a
+ * stale one would cull an instance out of a view it is plainly standing in.
+ */
+function boundBucket(bucket: Bucket): void {
+  bucket.instances.boundingSphere!.makeEmpty();
+  for (let slot = 0; slot < bucket.keys.length; slot++) boundSlot(bucket, slot);
 }
 
 /**
@@ -326,25 +527,27 @@ function createMesh(part: ModelPart, name: string, capacity: number, count: numb
 function markDirty(bucket: Bucket, slot: number): void {
   bucket.dirtyLow = Math.min(bucket.dirtyLow, slot);
   bucket.dirtyHigh = Math.max(bucket.dirtyHigh, slot);
-  const matrix = bucket.mesh.instanceMatrix;
-  matrix.clearUpdateRanges();
-  matrix.addUpdateRange(bucket.dirtyLow * 16, (bucket.dirtyHigh - bucket.dirtyLow + 1) * 16);
-  matrix.needsUpdate = true;
+  const matrices = bucket.matrices;
+  matrices.clearUpdateRanges();
+  matrices.addUpdateRange(bucket.dirtyLow * 16, (bucket.dirtyHigh - bucket.dirtyLow + 1) * 16);
+  matrices.needsUpdate = true;
 }
 
 /**
  * Swaps in a longer buffer for this bucket, keeping what it already drew.
  *
- * The mesh itself is replaced rather than its attribute: the shader's instance
- * matrix is built from the attribute the mesh had when the renderer first saw
- * it, so an attribute swapped in underneath would never be read.
+ * The mesh itself is replaced rather than its attribute: the renderer keeps the
+ * attributes a mesh had when it first drew it, so a buffer swapped in underneath
+ * would never be read. A new mesh costs no new shader; see the file's note.
  */
 function growBucket(bucket: Bucket, group: Group, capacity: number): void {
-  const previous = bucket.mesh;
-  bucket.mesh = createMesh(bucket.part, previous.name, capacity, bucket.keys.length);
-  bucket.mesh.instanceMatrix.array.set(previous.instanceMatrix.array);
-  group.remove(previous);
-  previous.dispose();
+  const previous = { ...bucket };
+  createMesh(bucket, previous.mesh.name, capacity, bucket.keys.length);
+  bucket.matrices.array.set(previous.matrices.array);
+  bucket.instances.boundingSphere!.copy(previous.instances.boundingSphere!);
+  bucket.mesh.visible = previous.mesh.visible;
+  group.remove(previous.mesh);
+  releaseMesh(previous);
   group.add(bucket.mesh);
   // A fresh buffer is uploaded whole, so nothing is left partially written.
   bucket.dirtyLow = Number.POSITIVE_INFINITY;
@@ -364,31 +567,30 @@ function growBucket(bucket: Bucket, group: Group, capacity: number): void {
  */
 function writeSlot(bucket: Bucket, slot: number, placement: Placement): void {
   const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
-  bucket.mesh.setMatrixAt(
-    slot,
-    scratch
-      .makeRotationY(rotationRadians(placement.rotation))
-      .setPosition(placement.x + origin.x, placement.y, placement.z + origin.z),
-  );
+  scratch
+    .makeRotationY(rotationRadians(placement.rotation))
+    .setPosition(placement.x + origin.x, placement.y, placement.z + origin.z)
+    .toArray(bucket.matrices.array, slot * 16);
 }
 
 /**
  * Appends one instance, growing the bucket first if it has run out of room.
  *
- * The bounding sphere is recomputed because it is what the frustum test reads:
+ * The bounding sphere grows over it because it is what the frustum test reads:
  * left stale, the renderer would cull the new instance out of a view it is
  * plainly standing in.
  */
 function pushInstance(bucket: Bucket, group: Group, placement: Placement): void {
   const slot = bucket.keys.length;
-  const capacity = capacityFor(slot + 1, bucket.mesh.instanceMatrix.count);
-  if (capacity !== bucket.mesh.instanceMatrix.count) growBucket(bucket, group, capacity);
+  const capacity = capacityFor(slot + 1, bucket.matrices.count);
+  if (capacity !== bucket.matrices.count) growBucket(bucket, group, capacity);
   bucket.keys.push(placement.key);
   bucket.slots.set(placement.key, slot);
-  bucket.mesh.count = bucket.keys.length;
+  bucket.instances.instanceCount = bucket.keys.length;
+  bucket.groundTop = Math.max(bucket.groundTop, placement.y);
   writeSlot(bucket, slot, placement);
   markDirty(bucket, slot);
-  bucket.mesh.computeBoundingSphere();
+  boundSlot(bucket, slot);
 }
 
 /**
@@ -412,10 +614,84 @@ function dropInstance(bucket: Bucket, key: string, live: ReadonlyMap<string, Pla
   }
   bucket.keys.length = last;
   bucket.slots.delete(key);
-  bucket.mesh.count = last;
-  if (last > 0) bucket.mesh.computeBoundingSphere();
+  bucket.instances.instanceCount = last;
+  if (last > 0) boundBucket(bucket);
   return last === 0;
 }
+
+/**
+ * The largest extent of a model across all of its surfaces, in voxels: the
+ * size its level of detail is judged by.
+ */
+function extentOf(model: ModelGeometry): number {
+  let extent = 0;
+  for (const geometry of [model.lit, model.emissive, model.water, model.window]) {
+    if (!geometry) continue;
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    const box = geometry.boundingBox!;
+    extent = Math.max(extent, box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
+  }
+  return extent;
+}
+
+/** Which of a model's geometries each material kind draws. */
+const SURFACES = [
+  ['lit', 'lit'],
+  ['glow', 'emissive'],
+  ['water', 'water'],
+  ['window', 'window'],
+] as const;
+
+/** Triangles in one instance of a geometry. */
+const trianglesIn = (geometry: BufferGeometry): number => (geometry.getIndex()?.count ?? 0) / 3;
+
+/** A model's surfaces, each with the material it is drawn in and what it is drawn with far away. */
+function modelPartsFor(
+  model: ModelGeometry,
+  materials: Readonly<Record<MaterialKind, Material>>,
+): ModelPart[] {
+  const extent = extentOf(model);
+  const coarse = model.coarse ?? null;
+  const parts: ModelPart[] = [];
+  for (const [kind, surface] of SURFACES) {
+    const geometry = model[surface];
+    if (!geometry) continue;
+    parts.push({
+      kind,
+      geometry,
+      far: coarse ? coarse[surface] : geometry,
+      material: materials[kind],
+      triangles: trianglesIn(geometry),
+      extent,
+    });
+  }
+  return parts;
+}
+
+/** The box a bucket's instances could reach, grown by the model for the ones that overhang. */
+function reachOf(bucket: Bucket, cellVoxels: number): DetailBox {
+  const { part, coordinate } = bucket;
+  return {
+    minX: coordinate.chunkX * cellVoxels - part.extent,
+    maxX: (coordinate.chunkX + 1) * cellVoxels + part.extent,
+    minZ: coordinate.chunkZ * cellVoxels - part.extent,
+    maxZ: (coordinate.chunkZ + 1) * cellVoxels + part.extent,
+    minY: 0,
+    maxY: bucket.groundTop + part.extent,
+  };
+}
+
+/** Whether a bucket is too small on screen to draw, remembered for its hysteresis. */
+function hideIfSmall(bucket: Bucket, view: DetailView, cellVoxels: number): boolean {
+  const box = reachOf(bucket, cellVoxels);
+  const distance = distanceToBox(view.x, view.y, view.z, box);
+  bucket.hidden = isHidden(bucket.hidden, pixelsPerVoxel(view.lens, distance), bucket.part.extent);
+  return bucket.hidden;
+}
+
+/** The cell of a layer a placement falls in. */
+const cellOf = (layer: Layer, placement: Placement): ChunkCoordinate =>
+  chunkOf(placement.x, placement.z, layer.cellVoxels);
 
 export interface InstancedWorldOptions {
   /** Baked lamp light to blend into the shaded material; without it, nothing glows at night. */
@@ -437,31 +713,63 @@ export function buildInstancedWorld(
   // The pools, drawn with the sea's own shader; see `poolWaterMaterial.ts`.
   const poolWater = createPoolWaterMaterial(options.lightVolume ?? null);
   const windows = windowMaterial(options.lightVolume ?? null);
+  for (const material of [lit, glow, poolWater.material, windows.material]) {
+    standOnInstances(material);
+  }
   const chunkVoxels = options.chunkVoxels ?? CHUNK_VOXELS;
 
   const modelById = new Map(geometries.map((entry) => [entry.id, entry]));
-  const partsById = new Map<string, readonly ModelPart[]>();
-  for (const model of geometries) {
-    const parts: ModelPart[] = [];
-    for (const [kind, geometry, material] of [
-      ['lit', model.lit, lit] as const,
-      ['glow', model.emissive, glow] as const,
-      ['water', model.water, poolWater.material] as const,
-      ['window', model.window, windows.material] as const,
-    ]) {
-      if (!geometry) continue;
-      parts.push({ kind, geometry, material, triangles: (geometry.getIndex()?.count ?? 0) / 3 });
-    }
-    partsById.set(model.id, parts);
-  }
+  const materials: Record<MaterialKind, Material> = {
+    lit,
+    glow,
+    water: poolWater.material,
+    window: windows.material,
+  };
+  const partsById = new Map<string, readonly ModelPart[]>(
+    geometries.map((model) => [model.id, modelPartsFor(model, materials)]),
+  );
+  /** The largest model in the catalogue: how far any region's objects can overhang it. */
+  const reach = Math.max(0, ...[...partsById.values()].flat().map((part) => part.extent));
 
-  const buckets = new Map<string, Bucket>();
-  /** How many buckets each chunk holds, so an emptied chunk stops being counted. */
+  const regionVoxels = chunkVoxels * REGION_CHUNKS;
+  const near: Layer = {
+    name: '',
+    cellVoxels: chunkVoxels,
+    span: 0,
+    geometryOf: (part) => part.geometry,
+    buckets: new Map(),
+  };
+  const mid: Layer = {
+    name: '~mid',
+    cellVoxels: regionVoxels,
+    span: 1,
+    geometryOf: (part) => part.geometry,
+    buckets: new Map(),
+  };
+  const far: Layer = {
+    name: '~far',
+    cellVoxels: regionVoxels,
+    span: 1,
+    geometryOf: (part) => part.far,
+    buckets: new Map(),
+  };
+  const district: Layer = {
+    name: '~district',
+    cellVoxels: regionVoxels * REGION_CHUNKS,
+    span: 2,
+    geometryOf: (part) => part.far,
+    buckets: new Map(),
+  };
+  const layers = [near, mid, far, district] as const;
+
+  /** How many near buckets each chunk holds, so an emptied chunk stops being counted. */
   const bucketsPerChunk = new Map<string, number>();
   const live = new Map<string, Placement>();
   /** Placements per object type, which is what says whose geometry is uploaded. */
   const typeCounts = new Map<string, number>();
   let drawnTriangleCount = 0;
+  /** Highest ground anything has stood on: how high a region's box reaches. */
+  let groundTop = 0;
 
   const partsOf = (id: string): readonly ModelPart[] => {
     const parts = partsById.get(id);
@@ -469,36 +777,64 @@ export function buildInstancedWorld(
     return parts;
   };
 
-  const chunkOfPlacement = (placement: Placement): string =>
-    chunkKey(chunkOf(placement.x, placement.z, chunkVoxels));
+  /** Set whenever a bucket comes or goes, so the next detail pass is not skipped. */
+  let detailStale = true;
+  let lastView: DetailView | null = null;
+  /** Each region's level on the last pass, which is what its hysteresis leans on. */
+  let regionLevels = new Map<string, RegionLevel>();
+  /** Districts drawn whole and coarse on the last pass. */
+  let farDistricts = new Set<string>();
+  const detailCounts = { near: 0, mid: 0, far: 0, district: 0, hidden: 0 };
 
-  /** The bucket a placement's part belongs in, created on first use. */
-  function openBucket(id: string, part: ModelPart, chunk: string, capacity: number): Bucket {
-    const key = bucketKey(id, part.kind, chunk);
-    const existing = buckets.get(key);
+  /** The bucket a placement's part belongs in on one layer, created on first use; null if it draws nothing there. */
+  function openBucket(
+    layer: Layer,
+    id: string,
+    part: ModelPart,
+    coordinate: ChunkCoordinate,
+    capacity: number,
+  ): Bucket | null {
+    const geometry = layer.geometryOf(part);
+    if (!geometry) return null;
+    const cell = chunkKey(coordinate);
+    const key = bucketKey(id, part.kind, cell);
+    const existing = layer.buckets.get(key);
     if (existing) return existing;
-    const bucket: Bucket = {
-      chunk,
+    const region = layer.span === 0 ? regionOf(coordinate) : layer.span === 1 ? coordinate : null;
+    const bucket = {
+      cell,
+      coordinate,
+      region: region ? chunkKey(region) : null,
+      district: chunkKey(region ? regionOf(region) : coordinate),
       part,
-      mesh: createMesh(part, `${id}@${chunk}`, capacity, 0),
+      geometry,
       keys: [],
       slots: new Map(),
       dirtyLow: Number.POSITIVE_INFINITY,
       dirtyHigh: Number.NEGATIVE_INFINITY,
-    };
+      groundTop: 0,
+      hidden: false,
+    } as unknown as Bucket;
+    createMesh(bucket, `${id}@${cell}${layer.name}`, capacity, 0);
+    // Every layer but the near one is off until a pass says otherwise; with no
+    // view at all, everything is drawn a chunk at a time and in full.
+    bucket.mesh.visible = layer === near;
     group.add(bucket.mesh);
-    buckets.set(key, bucket);
-    bucketsPerChunk.set(chunk, (bucketsPerChunk.get(chunk) ?? 0) + 1);
+    layer.buckets.set(key, bucket);
+    if (layer === near) bucketsPerChunk.set(cell, (bucketsPerChunk.get(cell) ?? 0) + 1);
+    detailStale = true;
     return bucket;
   }
 
-  function closeBucket(id: string, part: ModelPart, bucket: Bucket): void {
+  function closeBucket(layer: Layer, id: string, bucket: Bucket): void {
     group.remove(bucket.mesh);
-    bucket.mesh.dispose();
-    buckets.delete(bucketKey(id, part.kind, bucket.chunk));
-    const remaining = (bucketsPerChunk.get(bucket.chunk) ?? 1) - 1;
-    if (remaining > 0) bucketsPerChunk.set(bucket.chunk, remaining);
-    else bucketsPerChunk.delete(bucket.chunk);
+    releaseMesh(bucket);
+    layer.buckets.delete(bucketKey(id, bucket.part.kind, bucket.cell));
+    detailStale = true;
+    if (layer !== near) return;
+    const remaining = (bucketsPerChunk.get(bucket.cell) ?? 1) - 1;
+    if (remaining > 0) bucketsPerChunk.set(bucket.cell, remaining);
+    else bucketsPerChunk.delete(bucket.cell);
   }
 
   const countType = (id: string, delta: number): void => {
@@ -511,11 +847,20 @@ export function buildInstancedWorld(
     if (live.has(placement.key)) {
       throw new Error(`"${placement.key}" already stands on the plot`);
     }
-    const chunk = chunkOfPlacement(placement);
     for (const part of partsOf(placement.id)) {
-      pushInstance(openBucket(placement.id, part, chunk, capacityFor(1)), group, placement);
+      for (const layer of layers) {
+        const bucket = openBucket(
+          layer,
+          placement.id,
+          part,
+          cellOf(layer, placement),
+          capacityFor(1),
+        );
+        if (bucket) pushInstance(bucket, group, placement);
+      }
       drawnTriangleCount += part.triangles;
     }
+    groundTop = Math.max(groundTop, placement.y);
     live.set(placement.key, placement);
     countType(placement.id, 1);
   }
@@ -525,41 +870,138 @@ export function buildInstancedWorld(
     if (!placement) return false;
     // Removed first, so the swap-in below reads the placements that remain.
     live.delete(key);
-    const chunk = chunkOfPlacement(placement);
     for (const part of partsOf(placement.id)) {
-      const bucket = buckets.get(bucketKey(placement.id, part.kind, chunk));
-      if (!bucket) continue;
       drawnTriangleCount -= part.triangles;
-      if (dropInstance(bucket, key, live)) closeBucket(placement.id, part, bucket);
+      for (const layer of layers) {
+        const cell = chunkKey(cellOf(layer, placement));
+        const bucket = layer.buckets.get(bucketKey(placement.id, part.kind, cell));
+        if (bucket && dropInstance(bucket, key, live)) closeBucket(layer, placement.id, bucket);
+      }
     }
     countType(placement.id, -1);
     return true;
   }
 
-  /** Fills the buckets in bulk, so a full plot costs one allocation per bucket. */
+  /** Fills one layer's buckets for one part in bulk, so a full plot costs one allocation per bucket. */
+  function seedLayer(
+    layer: Layer,
+    id: string,
+    part: ModelPart,
+    instances: readonly Placement[],
+  ): void {
+    for (const chunked of bucketByChunk(instances, layer.cellVoxels)) {
+      const bucket = openBucket(layer, id, part, chunked.chunk, capacityFor(chunked.items.length));
+      if (!bucket) continue;
+      for (const placement of chunked.items) {
+        bucket.slots.set(placement.key, bucket.keys.length);
+        bucket.keys.push(placement.key);
+        bucket.groundTop = Math.max(bucket.groundTop, placement.y);
+        writeSlot(bucket, bucket.keys.length - 1, placement);
+      }
+      bucket.instances.instanceCount = bucket.keys.length;
+      bucket.matrices.needsUpdate = true;
+      boundBucket(bucket);
+    }
+  }
+
   function seed(initial: readonly Placement[]): void {
     for (const [id, instances] of instancesByType(initial)) {
       for (const part of partsOf(id)) {
-        for (const chunked of bucketByChunk(instances, chunkVoxels)) {
-          const chunk = chunkKey(chunked.chunk);
-          const bucket = openBucket(id, part, chunk, capacityFor(chunked.items.length));
-          for (const placement of chunked.items) {
-            bucket.slots.set(placement.key, bucket.keys.length);
-            bucket.keys.push(placement.key);
-            writeSlot(bucket, bucket.keys.length - 1, placement);
-          }
-          bucket.mesh.count = bucket.keys.length;
-          bucket.mesh.instanceMatrix.needsUpdate = true;
-          bucket.mesh.computeBoundingSphere();
-          drawnTriangleCount += part.triangles * chunked.items.length;
-        }
+        for (const layer of layers) seedLayer(layer, id, part, instances);
+        drawnTriangleCount += part.triangles * instances.length;
       }
       countType(id, instances.length);
     }
-    for (const placement of initial) live.set(placement.key, placement);
+    for (const placement of initial) {
+      groundTop = Math.max(groundTop, placement.y);
+      live.set(placement.key, placement);
+    }
   }
 
   seed(placements);
+
+  /** How large a voxel comes out at the nearest point of a cell of this layer. */
+  function pixelsPerVoxelAt(view: DetailView, layer: Layer, coordinate: ChunkCoordinate): number {
+    const { chunkX, chunkZ } = coordinate;
+    const distance = distanceToBox(view.x, view.y, view.z, {
+      minX: chunkX * layer.cellVoxels - reach,
+      maxX: (chunkX + 1) * layer.cellVoxels + reach,
+      minZ: chunkZ * layer.cellVoxels - reach,
+      maxZ: (chunkZ + 1) * layer.cellVoxels + reach,
+      minY: 0,
+      maxY: groundTop + reach,
+    });
+    return pixelsPerVoxel(view.lens, distance);
+  }
+
+  /**
+   * Judges every region and district through this camera, each at its nearest
+   * point: the cell, grown by the largest model for whatever overhangs it, from
+   * the ground to the top of the tallest thing on the highest terrace.
+   *
+   * Off the mid layer's buckets, because every region anything stands in has
+   * one: the full geometry is never missing, where a coarse copy can be.
+   */
+  function judgeCells(view: DetailView): void {
+    const levels = new Map<string, RegionLevel>();
+    const districts = new Set<string>();
+    const askedDistricts = new Set<string>();
+    for (const bucket of mid.buckets.values()) {
+      if (!askedDistricts.has(bucket.district)) {
+        askedDistricts.add(bucket.district);
+        const ppv = pixelsPerVoxelAt(view, district, regionOf(bucket.coordinate));
+        if (isFar(farDistricts.has(bucket.district), ppv)) districts.add(bucket.district);
+      }
+      if (levels.has(bucket.cell)) continue;
+      const ppv = pixelsPerVoxelAt(view, mid, bucket.coordinate);
+      levels.set(bucket.cell, regionLevelOf(regionLevels.get(bucket.cell) ?? null, ppv));
+    }
+    regionLevels = levels;
+    farDistricts = districts;
+  }
+
+  const LAYER_OF_LEVEL: Readonly<Record<RegionLevel, Layer>> = { near, mid, far };
+
+  /** The layer a bucket's placements are drawn from this pass. */
+  function drawnLayerOf(bucket: Bucket): Layer {
+    if (farDistricts.has(bucket.district)) return district;
+    const level = bucket.region === null ? undefined : regionLevels.get(bucket.region);
+    return LAYER_OF_LEVEL[level ?? 'near'];
+  }
+
+  /** Shows a bucket unless it is too small to see, and counts which way it went. */
+  function showUnlessSmall(bucket: Bucket, layer: Layer, view: DetailView | null): void {
+    const hidden = view ? hideIfSmall(bucket, view, layer.cellVoxels) : false;
+    bucket.mesh.visible = !hidden;
+    if (hidden) detailCounts.hidden++;
+    else if (layer === near) detailCounts.near++;
+    else if (layer === mid) detailCounts.mid++;
+    else if (layer === far) detailCounts.far++;
+    else detailCounts.district++;
+  }
+
+  function updateDetail(view: DetailView | null): void {
+    if (!detailStale && sameView(view, lastView)) return;
+    detailStale = false;
+    lastView = view;
+    detailCounts.near = 0;
+    detailCounts.mid = 0;
+    detailCounts.far = 0;
+    detailCounts.district = 0;
+    detailCounts.hidden = 0;
+    if (view) {
+      judgeCells(view);
+    } else {
+      regionLevels = new Map();
+      farDistricts = new Set();
+    }
+    for (const layer of layers) {
+      for (const bucket of layer.buckets.values()) {
+        if (drawnLayerOf(bucket) === layer) showUnlessSmall(bucket, layer, view);
+        else bucket.mesh.visible = false;
+      }
+    }
+  }
 
   const sumOverTypes = (of: (model: ModelGeometry) => number): number => {
     let total = 0;
@@ -570,7 +1012,7 @@ export function buildInstancedWorld(
   return {
     group,
     get drawCalls() {
-      return buckets.size;
+      return near.buckets.size;
     },
     get chunkCount() {
       return bucketsPerChunk.size;
@@ -600,9 +1042,15 @@ export function buildInstancedWorld(
       for (const key of diff.removed) remove(key);
       for (const placement of diff.added) add(placement);
     },
+    updateDetail,
+    get detailCounts() {
+      return { ...detailCounts };
+    },
     dispose() {
-      for (const bucket of buckets.values()) bucket.mesh.dispose();
-      buckets.clear();
+      for (const layer of layers) {
+        for (const bucket of layer.buckets.values()) releaseMesh(bucket);
+        layer.buckets.clear();
+      }
       bucketsPerChunk.clear();
       group.clear();
       lit.dispose();

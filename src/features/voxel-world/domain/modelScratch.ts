@@ -20,6 +20,13 @@ export interface ScratchModel {
   /** Model width in voxels; the region is sized from it. */
   readonly width: number;
   readonly voxels: readonly PaintedVoxel[];
+  /**
+   * How many voxels of the model one painted voxel stands for; 1 when absent.
+   * A coarse copy is painted small and scaled back up — see `coarseVoxels.ts`.
+   */
+  readonly scale?: number;
+  /** The model whose declared colours decide this one's surfaces; itself when absent. */
+  readonly source?: string;
 }
 
 export interface ScratchRegion {
@@ -28,6 +35,10 @@ export interface ScratchRegion {
   readonly x: number;
   /** One past the last voxel x the model may occupy. */
   readonly endX: number;
+  /** See {@link ScratchModel.scale}. */
+  readonly scale?: number;
+  /** See {@link ScratchModel.source}. */
+  readonly source?: string;
 }
 
 /**
@@ -107,7 +118,13 @@ export function scratchLayoutFor(
   let write = 0;
   for (const model of models) {
     const span = alignUp(Math.max(model.width, 1), sectionSize.x);
-    regions.push({ id: model.id, x: cursor, endX: cursor + span });
+    regions.push({
+      id: model.id,
+      x: cursor,
+      endX: cursor + span,
+      ...(model.scale === undefined ? {} : { scale: model.scale }),
+      ...(model.source === undefined ? {} : { source: model.source }),
+    });
     for (const voxel of model.voxels) {
       positions[write * 3] = cursor + voxel.x;
       positions[write * 3 + 1] = voxel.y;

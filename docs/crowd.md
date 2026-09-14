@@ -6,12 +6,12 @@ for what has landed.
 
 ## What is there
 
-|          |                                                                         |
-| -------- | ----------------------------------------------------------------------- |
-| People   | 600 (`CROWD_SIZE` in `showcase.ts`), four models: three adults, a child |
-| Poses    | walking, sitting, lying                                                 |
-| Boats    | 12 craft (`CRAFT_COUNT`), plus buoys and the pedalo rental's boats      |
-| Balloons | 36 (`BALLOON_COUNT`)                                                    |
+|          |                                                                                                                                         |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| People   | 0.25 per paved tile, at most 10 000 (`crowdSize.ts`); `?people=n` sets it. 600 on the authored plot. Four models: three adults, a child |
+| Poses    | walking, sitting, lying                                                                                                                 |
+| Boats    | 12 craft (`CRAFT_COUNT`), plus buoys and the pedalo rental's boats                                                                      |
+| Balloons | 36 (`BALLOON_COUNT`)                                                                                                                    |
 
 The crowd, the balloons and the bay are built with the resort and thrown away
 with it; they do not follow hand edits.
@@ -64,7 +64,8 @@ The per-frame step never queries the terrain, the occupancy index or the layout.
 - **On the sand**, `sandGrid.ts` rasterises everything standing there into a
   bitmap once per resort. A roamer tries up to eight candidate spots and takes the
   first that is free with a clear line (`clearLine`); with none, they wait 1.5 s.
-- **Between people**, a fixed spatial hash of 4 096 slots is rebuilt each frame
+- **Between people**, a spatial hash of at least 4 096 slots, two per person
+  (`proximityFor`), is rebuilt each frame
   and scanned 3 × 3 around each walker. `side` offsets a walker to the right of
   their line (at most four voxels); `pace` slows them (never below 15%). At a
   crossing the higher index waits.
@@ -91,11 +92,18 @@ Int32Array    cellHead (4 096), cellNext     // spatial hash
 
 ## Drawing
 
-- One `InstancedMesh` per person model, not chunked, never culled.
+- One `InstancedMesh` per person model, not chunked, never frustum culled.
+- Anybody under `HIDDEN_PIXELS` tall on screen is left out of the draw, not the
+  walk: the visible are packed into the front of the buffers, walk phase included,
+  and `count` is cut. See _Level of detail_ in [rendering.md](rendering.md).
 - The CPU writes a translation and yaw per person. The walk cycle, the sit and
   the lie are folded in the shader's `positionNode`, built on `positionLocal`,
-  from baked per-vertex attributes (leg weight, height above the hip, thickness)
-  and one instanced state float. The facing is an instanced vector.
+  from one baked per-vertex `figure` vec4 (leg weight, height above the hip,
+  thickness, hip) and one instanced `pose` vec4 (facing sin and cos, resting
+  state, walk phase). Packed because WebGPU allows eight vertex buffers: past
+  1 024 people in one model, Three.js moves the instance matrix into a vertex
+  buffer too, and one attribute per number came to nine — a big resort then drew
+  no guests at all. `crowdField.test.ts` counts the buffers.
 - People use the ordinary lit material, so they pick up the baked lamp light.
 - People get no blob shadow, are not placements, claim no tiles, and are not in
   `diffPlacements` or either bake.
@@ -130,14 +138,14 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 
 ## Milestones
 
-| #       | Step                                                              | State       |
-| ------- | ----------------------------------------------------------------- | ----------- |
-| 1       | The art: `skin`, the figure builder, four people, `--people`      | Landed      |
-| 2, 3    | Walk network and crowd, pure and unit-tested                      | Landed      |
-| 4, 5, 6 | Meshing, the crowd field, wiring into the showcase                | Landed      |
-| —       | Two-node flights                                                  | Landed      |
-| —       | Benches and the coffee shop's seats                               | Landed      |
-| —       | Seats across the catalogue, lying down, beach loungers            | Landed      |
-| —       | Avoidance on the sand, between people, and for boats              | Landed      |
-| —       | People in the boats                                               | Landed      |
-| 7       | Measure: `?people=n`, a HUD count, a bench case, real costs above | Not started |
+| #       | Step                                                              | State              |
+| ------- | ----------------------------------------------------------------- | ------------------ |
+| 1       | The art: `skin`, the figure builder, four people, `--people`      | Landed             |
+| 2, 3    | Walk network and crowd, pure and unit-tested                      | Landed             |
+| 4, 5, 6 | Meshing, the crowd field, wiring into the showcase                | Landed             |
+| —       | Two-node flights                                                  | Landed             |
+| —       | Benches and the coffee shop's seats                               | Landed             |
+| —       | Seats across the catalogue, lying down, beach loungers            | Landed             |
+| —       | Avoidance on the sand, between people, and for boats              | Landed             |
+| —       | People in the boats                                               | Landed             |
+| 7       | Measure: `?people=n`, a HUD count, a bench case, real costs above | `?people=n` landed |

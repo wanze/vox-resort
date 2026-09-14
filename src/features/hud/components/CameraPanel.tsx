@@ -6,6 +6,9 @@ export interface CameraPanelProps {
   readonly direction: CompassDirection;
   readonly onModeChange: (mode: CameraMode) => void;
   readonly onDirectionChange: (direction: CompassDirection) => void;
+  /** Whether far and small things are drawn coarse or left out. */
+  readonly detail: boolean;
+  readonly onDetailChange: (enabled: boolean) => void;
 }
 
 const MODES: readonly { readonly mode: CameraMode; readonly label: string }[] = [
@@ -35,6 +38,8 @@ export function CameraPanel({
   direction,
   onModeChange,
   onDirectionChange,
+  detail,
+  onDetailChange,
 }: CameraPanelProps) {
   const isometric = mode === 'isometric';
 
@@ -68,6 +73,20 @@ export function CameraPanel({
             {CORNERS[point].initials}
           </button>
         ))}
+      </div>
+
+      {/* A toggle rather than a setting, because what it is for is comparing:
+          the frame rate and the drawn count in Details, with it and without. */}
+      <div className="hud-camera-modes" role="group" aria-label="Level of detail">
+        <button
+          type="button"
+          className="hud-camera-mode"
+          aria-pressed={detail}
+          title="Draw far objects coarse and leave out ones too small to see"
+          onClick={() => onDetailChange(!detail)}
+        >
+          Level of detail {detail ? 'on' : 'off'}
+        </button>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
 } from 'three/webgpu';
 import { ADULT_VOXELS, CHILD_VOXELS, hipHeight } from '../../../../voxel-gen/people/figure.ts';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
+import { orthographicLens } from '../../rendering/domain/levelOfDetail';
 import { createCrowd, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
@@ -58,6 +59,31 @@ const MODELS: readonly ModelGeometry[] = [
   personGeometry('child', CHILD_VOXELS),
 ];
 
+/** WebGPU's default `maxVertexBuffers`, which Three.js does not raise. */
+const MAX_VERTEX_BUFFERS = 8;
+
+/** Matrices a default 64 KiB uniform buffer holds, which is where Three.js stops using one. */
+const UNIFORM_MATRICES = 65_536 / 64;
+
+/**
+ * Vertex buffers a mesh binds in the pipeline: one per distinct buffer behind
+ * its attributes, plus one for the instance matrices once there are too many
+ * of them for a uniform buffer. The normal and the colour are counted too,
+ * because the catalogue's person models carry them even where this stand-in
+ * does not.
+ */
+function vertexBuffersOf(mesh: InstancedMesh): number {
+  const buffers = new Set<unknown>();
+  for (const attribute of Object.values(mesh.geometry.attributes)) {
+    buffers.add('data' in attribute ? attribute.data : attribute);
+  }
+  for (const name of ['normal', 'color']) {
+    if (!mesh.geometry.getAttribute(name)) buffers.add(name);
+  }
+  const matrices = mesh.instanceMatrix.count > UNIFORM_MATRICES ? 1 : 0;
+  return buffers.size + matrices;
+}
+
 const crowdOf = (count: number, tiles = 6): Crowd =>
   createCrowd({ network: networkOf(paved(tiles)), count, variants: MODELS.length, seed: 1 });
 
@@ -86,6 +112,44 @@ describe('buildCrowdField', () => {
     // HUD and a bench report both read these back off the renderer.
     expect(field.drawCalls).toBe(MODELS.length);
     expect(field.triangleCount).toBe(field.count * 8);
+    field.dispose();
+  });
+
+  it('leaves out of the draw, not the walk, everybody too small to see', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    // A hundredth of a pixel per voxel: nobody is more than a speck.
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
+    field.advance(1 / 60);
+    expect(field.drawnCount).toBe(0);
+    for (const mesh of meshes(field.group)) expect(mesh.count, mesh.name).toBe(0);
+
+    // Four pixels per voxel: everybody stands out again, and all are drawn.
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(400, 100) });
+    field.advance(1 / 60);
+    expect(field.drawnCount).toBe(field.count);
+    field.setView(null);
+    field.advance(1 / 60);
+    const drawn = meshes(field.group).reduce((total, mesh) => total + mesh.count, 0);
+    expect(drawn).toBe(field.count);
+    field.dispose();
+  });
+
+  it('keeps a person’s walk phase with them when others drop out of the draw', () => {
+    const crowd = crowdOf(40);
+    const field = buildCrowdField({ crowd, models: MODELS });
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(400, 100) });
+    field.advance(1 / 60);
+    for (const mesh of meshes(field.group)) {
+      const pose = mesh.geometry.getAttribute('pose');
+      const phases = new Set(Array.from({ length: mesh.count }, (_, slot) => pose.getW(slot)));
+      const expected = new Set<number>();
+      for (let person = 0; person < crowd.count; person++) {
+        if (MODELS[crowd.variant[person]!]!.id === mesh.name.replace('crowd-', '')) {
+          expected.add(Math.fround(crowd.phase[person]!));
+        }
+      }
+      expect(phases).toEqual(expected);
+    }
     field.dispose();
   });
 
@@ -138,7 +202,7 @@ describe('buildCrowdField', () => {
     const crowd = crowdOf(20);
     const field = buildCrowdField({ crowd, models: MODELS });
     for (const mesh of meshes(field.group)) {
-      const facing = mesh.geometry.getAttribute('facing');
+      const facing = mesh.geometry.getAttribute('pose');
       expect((facing as { isInstancedBufferAttribute?: boolean }).isInstancedBufferAttribute).toBe(
         true,
       );
@@ -171,7 +235,7 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
     for (const mesh of meshes(field.group)) {
       const positions = mesh.geometry.getAttribute('position');
-      const swing = mesh.geometry.getAttribute('swing');
+      const swing = mesh.geometry.getAttribute('figure');
       expect(swing.count).toBe(positions.count);
       mesh.geometry.computeBoundingBox();
       const height = mesh.geometry.boundingBox!.max.y;
@@ -190,12 +254,12 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd, models: MODELS });
     const phases: number[] = [];
     for (const mesh of meshes(field.group)) {
-      const phase = mesh.geometry.getAttribute('phase');
-      expect((phase as { isInstancedBufferAttribute?: boolean }).isInstancedBufferAttribute).toBe(
+      const pose = mesh.geometry.getAttribute('pose');
+      expect((pose as { isInstancedBufferAttribute?: boolean }).isInstancedBufferAttribute).toBe(
         true,
       );
-      expect(phase.count).toBe(mesh.count);
-      for (let slot = 0; slot < phase.count; slot++) phases.push(phase.getX(slot));
+      expect(pose.count).toBe(mesh.count);
+      for (let slot = 0; slot < pose.count; slot++) phases.push(pose.getW(slot));
     }
     expect(phases.toSorted()).toEqual([...crowd.phase].toSorted());
     field.dispose();
@@ -242,6 +306,20 @@ describe('buildCrowdField', () => {
     expect([...long.x]).toEqual([...crowd.x]);
     field.dispose();
     longField.dispose();
+  });
+
+  it('fits WebGPU’s vertex buffers however many people walk in one model', () => {
+    // Past `UNIFORM_MATRICES` people, Three.js stops handing the instance
+    // matrices over in a uniform buffer and makes them a vertex buffer of their
+    // own (`nodes/accessors/Instance.js`). A crowd laid out one attribute per
+    // number took nine buffers there, WebGPU refused the pipeline, and a large
+    // resort drew nobody while a small one drew everybody.
+    const field = buildCrowdField({ crowd: crowdOf(3 * UNIFORM_MATRICES, 40), models: MODELS });
+    for (const mesh of meshes(field.group)) {
+      expect(mesh.instanceMatrix.count, mesh.name).toBeGreaterThan(UNIFORM_MATRICES);
+      expect(vertexBuffersOf(mesh), mesh.name).toBeLessThanOrEqual(MAX_VERTEX_BUFFERS);
+    }
+    field.dispose();
   });
 
   it('draws nothing on a plot with no paving to walk on', () => {

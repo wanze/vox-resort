@@ -228,6 +228,20 @@ describe('a bake and the lamp bake sharing one volume', () => {
 });
 
 describe('createLiveSkyVisibility', () => {
+  it('keeps a bake made elsewhere rather than making it again', () => {
+    const spec = specOver();
+    const occluders = [box({ maxX: 64, maxY: 48, maxZ: 64, density: 0.8 })];
+    const baked = referenceSkyBake(spec, occluders);
+    const adopted = baked.slice();
+    const live = createLiveSkyVisibility(spec, adopted, occluders, true);
+    expect(adopted).toEqual(baked);
+    expect(live.occluderCount).toBe(1);
+    // Kept, not redone: a volume handed over as baked is left exactly as it came.
+    const untouched = new Uint8Array(baked.length).fill(255);
+    createLiveSkyVisibility(spec, untouched, occluders, true);
+    expect(visibilityAt(untouched, spec, 70, 2, 32)).toBe(1);
+  });
+
   it('bakes what is standing when it is made', () => {
     const spec = specOver();
     const direction = new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);

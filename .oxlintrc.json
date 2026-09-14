@@ -52,7 +52,9 @@
     {
       "files": [
         "src/features/voxel-world/adapters/meshCatalogue.ts",
-        "src/features/voxel-world/adapters/meshWorker.ts"
+        "src/features/voxel-world/adapters/meshWorker.ts",
+        "src/features/resort-prep/adapters/resortPreparer.ts",
+        "src/features/resort-prep/adapters/prepWorker.ts"
       ],
       "rules": {
         "unicorn/require-post-message-target-origin": "off"

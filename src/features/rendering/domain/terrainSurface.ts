@@ -233,6 +233,12 @@ export interface TerrainSurfaces {
   readonly risers: SurfacesBySurface;
 }
 
+/**
+ * How far past the framed plot the ground, the sea and the beach run, in plot
+ * extents either side of the middle the camera is framed on.
+ */
+export const TERRAIN_SPREAD = 3;
+
 export interface TerrainRequest {
   /** What every tile of the world is, coast, terraces and edits together. */
   readonly terrain: Terrain;

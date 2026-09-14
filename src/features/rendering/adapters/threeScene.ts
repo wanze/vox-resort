@@ -49,17 +49,20 @@ import type {
   OrthographicFraming,
   WorldBounds,
 } from '../../layout/domain/worldBounds';
-import { isometricFramingFor } from '../../layout/domain/worldBounds';
+import {
+  CAMERA_FOV_DEGREES,
+  isometricFramingFor,
+  worldExtentOf,
+} from '../../layout/domain/worldBounds';
 import type { Shore } from '../../layout/domain/shoreline';
 import type { Terrain } from '../../layout/domain/terrain';
-import type { SurfaceGeometry } from '../domain/terrainSurface';
-import { terrainSurfacesFor } from '../domain/terrainSurface';
+import { orthographicLens, perspectiveLens, type DetailView } from '../domain/levelOfDetail';
+import type { SurfaceGeometry, TerrainSurfaces } from '../domain/terrainSurface';
+import { TERRAIN_SPREAD, terrainSurfacesFor } from '../domain/terrainSurface';
 import { createSeaMaterial } from './seaMaterial';
 import { createRiverMaterial } from './riverMaterial';
 import type { WaterMaterial } from './waterSurface';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-
-export const CAMERA_FOV_DEGREES = 55;
 
 /** Ground colour under and around the resort. */
 const GROUND_COLOR = 0x5d7a45;
@@ -83,9 +86,6 @@ const SAND_COLOR = 0xd8c69c;
  */
 const RISER_COLOR = 0x6b5a3e;
 const SAND_RISER_COLOR = 0xc0ab7f;
-
-/** How far past the framed plot the ground, the sea and the beach run. */
-const GROUND_SPREAD = 3;
 
 /**
  * Steps an integer depth buffer has to spread the whole scene over, and the
@@ -132,11 +132,6 @@ const ISO_MAX_ZOOM = 60;
 function nearPlaneFor(extent: number): number {
   const reach = extent * FRAMED_REACH;
   return Math.min(MAX_NEAR, Math.max(0.1, (reach * reach) / (RESOLVED_VOXELS * DEPTH_STEPS)));
-}
-
-/** Longest world dimension: what sizes the ground, the fog and the far plane. */
-function extentOf(bounds: WorldBounds): number {
-  return Math.max(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ, 1);
 }
 
 /** Which backend the renderer settled on, which the HUD and a bench report. */
@@ -226,6 +221,8 @@ export interface SceneHandle {
     lightVolume: BakedLightVolume | null,
     shore: Shore | null,
     terrain: Terrain,
+    /** The terrain already meshed for this resort, off the main thread; meshed here when absent. */
+    surfaces?: TerrainSurfaces | null,
   ): void;
   /**
    * Rebuilds the terrain meshes from the ground as it now is.
@@ -241,6 +238,17 @@ export interface SceneHandle {
   retile(): void;
   /** Pixels actually rasterised per frame, device pixel ratio included. */
   drawingBufferSize(): { width: number; height: number };
+  /**
+   * Where the camera on screen stands and how many pixels a voxel covers
+   * through it, which is what the level of detail is chosen from.
+   */
+  detailView(): DetailView;
+  /**
+   * Shaders the renderer has built from nodes so far. A number that climbs while
+   * the camera moves is the renderer building one per new mesh on screen, which
+   * is a frame's worth of main thread each; see `instancedWorld.ts`.
+   */
+  shaderBuilds(): number;
   resize(width: number, height: number): void;
   dispose(): void;
 }
@@ -279,6 +287,11 @@ export interface SceneOptions {
    */
   readonly isClear?: (tileX: number, tileZ: number) => boolean;
   /**
+   * The terrain already meshed for the first resort, framed on `framing` — see
+   * `resort-prep`. Meshed here, on the main thread, when absent.
+   */
+  readonly surfaces?: TerrainSurfaces | null;
+  /**
    * Asks the backend for GPU timestamp queries. Only the benchmark harness wants
    * them; they have to be requested when the renderer is built, not later.
    */
@@ -308,8 +321,8 @@ function layGround(
   lightVolume: BakedLightVolume | null,
 ): Ground {
   const geometry = new PlaneGeometry(
-    worldExtent * GROUND_SPREAD * 2,
-    worldExtent * GROUND_SPREAD * 2,
+    worldExtent * TERRAIN_SPREAD * 2,
+    worldExtent * TERRAIN_SPREAD * 2,
   );
   const material = new MeshStandardNodeMaterial({
     color: GROUND_COLOR,
@@ -494,19 +507,22 @@ function layTerrain(
   worldExtent: number,
   palette: TerrainPalette,
   isClear: (tileX: number, tileZ: number) => boolean,
+  precomputed: TerrainSurfaces | null = null,
 ): TerrainMeshes {
   const group = new Group();
   scene.add(group);
   const disposables: Disposable[] = [];
 
-  const surfaces = terrainSurfacesFor({
-    terrain,
-    isClear,
-    shore,
-    center: { x: framing.target.x, z: framing.target.z },
-    reach: worldExtent * GROUND_SPREAD,
-    tileVoxels: TILE_VOXELS,
-  });
+  const surfaces =
+    precomputed ??
+    terrainSurfacesFor({
+      terrain,
+      isClear,
+      shore,
+      center: { x: framing.target.x, z: framing.target.z },
+      reach: worldExtent * TERRAIN_SPREAD,
+      tileVoxels: TILE_VOXELS,
+    });
 
   // The two bodies of water, each with its own shader: see `seaMaterial.ts` for
   // the bay's depth gradient and foam, and `riverMaterial.ts` for why a channel
@@ -552,11 +568,13 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   await renderer.init();
 
   const scene = new Scene();
+  /** Scratch for the per-frame buffer size read; never escapes {@link SceneHandle.detailView}. */
+  const bufferSize = new Vector2();
   const sky = new Color(0x11161d);
   scene.background = sky;
 
   let plot = bounds;
-  let extent = extentOf(plot);
+  let extent = worldExtentOf(plot);
   let aspect = width / height;
   let mode: CameraMode = 'perspective';
   // The perspective camera already stands over the plot's south-east corner, so
@@ -674,7 +692,16 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   // Made once and kept across every rebuild: a material is a shader, and the
   // ground moving is not a reason to compile one. See `TerrainPalette`.
   let palette = createTerrainPalette(lightVolume);
-  let surfaces = layTerrain(scene, shore, terrain, framing, extent, palette, isClear);
+  let surfaces = layTerrain(
+    scene,
+    shore,
+    terrain,
+    framing,
+    extent,
+    palette,
+    isClear,
+    options.surfaces ?? null,
+  );
   let coast = shore;
 
   /**
@@ -709,6 +736,23 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       const size = renderer.getDrawingBufferSize(new Vector2());
       return { width: size.x, height: size.y };
     },
+    shaderBuilds() {
+      // Internal to Three.js, and read only for the HUD: a renderer without it
+      // reports nought rather than breaking the frame.
+      const nodes = Reflect.get(renderer, '_nodes') as
+        | { nodeBuilderCache?: Map<unknown, unknown> }
+        | undefined;
+      return nodes?.nodeBuilderCache?.size ?? 0;
+    },
+    detailView() {
+      const bufferHeight = renderer.getDrawingBufferSize(bufferSize).y;
+      const camera = cameraFor(mode);
+      const lens =
+        mode === 'perspective'
+          ? perspectiveLens(bufferHeight, perspectiveCamera.fov)
+          : orthographicLens(bufferHeight, (isoCamera.top - isoCamera.bottom) / isoCamera.zoom);
+      return { x: camera.position.x, y: camera.position.y, z: camera.position.z, lens };
+    },
     setCameraMode(next) {
       if (next === mode) return;
       targets[mode].copy(controls.target);
@@ -741,9 +785,9 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // nothing for the backend to compile.
       surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
     },
-    reframe(nextBounds, nextFraming, nextVolume, nextShore, nextTerrain) {
+    reframe(nextBounds, nextFraming, nextVolume, nextShore, nextTerrain, nextSurfaces) {
       plot = nextBounds;
-      extent = extentOf(plot);
+      extent = worldExtentOf(plot);
       ground.dispose();
       scene.remove(ground.mesh);
       ground = layGround(scene, nextFraming, extent, nextVolume);
@@ -758,7 +802,16 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       coast = nextShore;
       palette = createTerrainPalette(terrainVolume);
       palette.setSky(sky.getHex());
-      surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
+      surfaces = layTerrain(
+        scene,
+        coast,
+        terrain,
+        terrainFraming,
+        extent,
+        palette,
+        isClear,
+        nextSurfaces ?? null,
+      );
 
       perspectiveCamera.position.set(
         nextFraming.position.x,

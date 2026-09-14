@@ -47,7 +47,16 @@ import {
   type MeshStandardNodeMaterial,
 } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
-import { figureGeometry, figureMaterial } from '../../rendering/adapters/figureField';
+import {
+  figureGeometry,
+  figureMaterial,
+  POSE_COS,
+  POSE_PHASE,
+  POSE_RESTING,
+  POSE_SIN,
+  POSE_STRIDE,
+} from '../../rendering/adapters/figureField';
+import { pixelsPerVoxel, standsOut, type DetailView } from '../../rendering/domain/levelOfDetail';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { MAX_STEP, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
 
@@ -68,6 +77,13 @@ export interface CrowdField {
    * holding both halves of that is a caller who can get it wrong.
    */
   advance(dt: number): void;
+  /**
+   * The camera the next frames are drawn through, or null to draw everybody.
+   * A person too small on screen to see is left out of the draw, not the walk.
+   */
+  setView(view: DetailView | null): void;
+  /** People drawn on the last frame written. */
+  readonly drawnCount: number;
   dispose(): void;
 }
 
@@ -92,24 +108,19 @@ interface PersonMesh {
   readonly people: Int32Array;
   /** Triangles in a single figure of this model. */
   readonly triangles: number;
+  /** How tall the figure stands, in voxels: what decides whether it can be seen. */
+  readonly height: number;
   /**
-   * Which way each person is walking, as `(sin, cos)` of their heading: the
-   * direction their legs swing along.
+   * Each drawn slot's heading, what they are doing and their walk phase, packed
+   * as `figureGeometry` lays it out — see `POSE_STRIDE`.
    *
-   * The same turn the instance matrix carries, in the form the shader can use:
-   * see `figureMaterial` for why the matrix is no help to it. It costs the two
-   * numbers the matrix write already worked out.
+   * The heading is the same turn the instance matrix carries, in the form the
+   * shader can use: see `figureMaterial` for why the matrix is no help to it. It
+   * costs the two numbers the matrix write already worked out. All of it is per
+   * slot rather than per person, and so rewritten with the rest: who is in which
+   * slot changes as people come into and out of sight.
    */
-  readonly facing: InstancedBufferAttribute;
-  /**
-   * What each person is doing, as `RESTING`: 0 walking, 1 sitting, 2 lying.
-   *
-   * A float rather than two flags because the shader takes it apart with two
-   * multiplies (see `figureMaterial`), and per instance rather than per person
-   * because that is the buffer the draw reads. It is written with the matrix,
-   * off the one integer the crowd keeps.
-   */
-  readonly resting: InstancedBufferAttribute;
+  readonly pose: InstancedBufferAttribute;
 }
 
 /**
@@ -138,23 +149,23 @@ function buildPersonMesh(
   // draw calls it could save. See the note at the top of the file.
   mesh.frustumCulled = false;
 
-  const phase = geometry.getAttribute('phase');
   const matrices = mesh.instanceMatrix.array;
-  for (const [slot, person] of people.entries()) {
-    phase.setX(slot, crowd.phase[person]!);
+  for (let slot = 0; slot < people.length; slot++) {
     // The parts of the matrix a walking person never changes, written once: the
     // buffer is zero-filled, so this is the whole of the rest of it. The frame
     // loop then writes seven numbers per person rather than sixteen.
     matrices[slot * 16 + 5] = 1;
     matrices[slot * 16 + 15] = 1;
   }
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!;
   return {
     mesh,
     geometry,
     people: Int32Array.from(people),
     triangles: (geometry.getIndex()?.count ?? 0) / 3,
-    facing: geometry.getAttribute('facing') as InstancedBufferAttribute,
-    resting: geometry.getAttribute('resting') as InstancedBufferAttribute,
+    height: box.max.y - box.min.y,
+    pose: geometry.getAttribute('pose') as InstancedBufferAttribute,
   };
 }
 
@@ -168,14 +179,28 @@ function buildPersonMesh(
  * why the `(sin, cos)` the turn is built from is worth keeping: it is the
  * direction the legs swing along, and it has already been paid for.
  *
- * All three buffers go up whole, without update ranges: everybody moved.
+ * Everybody the camera could make out is packed into the front of the buffers
+ * and `count` is cut to them — the way the bay seats its passengers — so a
+ * person a pixel tall costs a distance test and nothing else. Their phase goes
+ * with them, since the slot they are drawn in changes as others come and go.
+ *
+ * Both buffers go up whole, without update ranges: everybody moved.
+ * Returns how many were drawn.
  */
-function writeInstances(part: PersonMesh, crowd: Crowd): void {
+function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null): number {
   const matrices = part.mesh.instanceMatrix.array;
-  const facing = part.facing.array;
-  const resting = part.resting.array;
-  for (let slot = 0; slot < part.people.length; slot++) {
-    const person = part.people[slot]!;
+  const pose = part.pose.array;
+  const middle = part.height / 2;
+  let slot = 0;
+  for (let index = 0; index < part.people.length; index++) {
+    const person = part.people[index]!;
+    if (view) {
+      const dx = crowd.x[person]! - view.x;
+      const dy = crowd.y[person]! + middle - view.y;
+      const dz = crowd.z[person]! - view.z;
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (!standsOut(pixelsPerVoxel(view.lens, distance), part.height)) continue;
+    }
     const heading = crowd.heading[person]!;
     const yawCos = Math.cos(heading);
     const yawSin = Math.sin(heading);
@@ -187,13 +212,17 @@ function writeInstances(part: PersonMesh, crowd: Crowd): void {
     matrices[at + 12] = crowd.x[person]!;
     matrices[at + 13] = crowd.y[person]!;
     matrices[at + 14] = crowd.z[person]!;
-    facing[slot * 2] = yawSin;
-    facing[slot * 2 + 1] = yawCos;
-    resting[slot] = restingOn(crowd, person);
+    const packed = slot * POSE_STRIDE;
+    pose[packed + POSE_SIN] = yawSin;
+    pose[packed + POSE_COS] = yawCos;
+    pose[packed + POSE_RESTING] = restingOn(crowd, person);
+    pose[packed + POSE_PHASE] = crowd.phase[person]!;
+    slot++;
   }
+  part.mesh.count = slot;
   part.mesh.instanceMatrix.needsUpdate = true;
-  part.facing.needsUpdate = true;
-  part.resting.needsUpdate = true;
+  part.pose.needsUpdate = true;
+  return slot;
 }
 
 /**
@@ -218,12 +247,24 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   }
 
   let clock = 0;
-  for (const part of parts) writeInstances(part, crowd);
+  let view: DetailView | null = null;
+  let drawnCount = 0;
+  const writeAll = (): void => {
+    drawnCount = 0;
+    for (const part of parts) drawnCount += writeInstances(part, crowd, view);
+  };
+  writeAll();
 
   return {
     group,
     get count() {
       return crowd.count;
+    },
+    get drawnCount() {
+      return drawnCount;
+    },
+    setView(next) {
+      view = next;
     },
     drawCalls: parts.length,
     triangleCount: parts.reduce((total, part) => total + part.triangles * part.people.length, 0),
@@ -236,7 +277,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
       stepCrowd(crowd, step);
       clock += step;
       walk.setClock(clock);
-      for (const part of parts) writeInstances(part, crowd);
+      writeAll();
     },
     dispose() {
       for (const part of parts) {

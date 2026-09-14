@@ -21,6 +21,8 @@
  */
 
 import { BufferAttribute, BufferGeometry } from 'three/webgpu';
+import { fullIdOf } from '../../voxel-world/domain/coarseVoxels';
+import { worthCoarsening } from '../domain/levelOfDetail';
 import type { MeshAttributes, ModelAttributes } from '../domain/modelAttributes';
 
 export interface ModelGeometry {
@@ -40,6 +42,13 @@ export interface ModelGeometry {
   readonly triangleCount: number;
   /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
+  /**
+   * The model re-voxelised at a coarser grid, in the same space, drawn once the
+   * full one is too small on screen to show its detail. Absent when the model
+   * has none, or when it would not have saved enough to be worth a draw — see
+   * `domain/levelOfDetail.ts`.
+   */
+  readonly coarse?: ModelGeometry | null;
 }
 
 function toGeometry(attributes: MeshAttributes): BufferGeometry {
@@ -57,9 +66,8 @@ function toGeometry(attributes: MeshAttributes): BufferGeometry {
   return geometry;
 }
 
-/** Builds one geometry pair per model from attributes the mesher produced. */
-export function buildModelGeometries(models: readonly ModelAttributes[]): ModelGeometry[] {
-  return models.map((model) => ({
+function geometryOf(model: ModelAttributes, coarse: ModelGeometry | null): ModelGeometry {
+  return {
     id: model.id,
     lit: model.lit ? toGeometry(model.lit) : null,
     emissive: model.emissive ? toGeometry(model.emissive) : null,
@@ -67,5 +75,32 @@ export function buildModelGeometries(models: readonly ModelAttributes[]): ModelG
     window: model.window ? toGeometry(model.window) : null,
     triangleCount: model.triangleCount,
     unmergedTriangleCount: model.unmergedTriangleCount,
-  }));
+    coarse,
+  };
+}
+
+/**
+ * Builds one geometry set per model from attributes the mesher produced.
+ *
+ * A coarse copy comes back from the mesher as a model of its own, and is hung
+ * off the model it was made from rather than listed: nothing but the level of
+ * detail should ever be able to ask for it by id. One that does not save enough
+ * triangles is dropped here, before it is ever uploaded.
+ */
+export function buildModelGeometries(models: readonly ModelAttributes[]): ModelGeometry[] {
+  const coarseByFullId = new Map<string, ModelAttributes>();
+  for (const model of models) {
+    const full = fullIdOf(model.id);
+    if (full !== null) coarseByFullId.set(full, model);
+  }
+  return models
+    .filter((model) => fullIdOf(model.id) === null)
+    .map((model) => {
+      const coarse = coarseByFullId.get(model.id);
+      const kept =
+        coarse && worthCoarsening(model.triangleCount, coarse.triangleCount)
+          ? geometryOf(coarse, null)
+          : null;
+      return geometryOf(model, kept);
+    });
 }

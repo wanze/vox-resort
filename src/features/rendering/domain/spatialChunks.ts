@@ -53,6 +53,21 @@ export function chunkOf(x: number, z: number, chunkVoxels: number = CHUNK_VOXELS
   };
 }
 
+/**
+ * Chunks along each side of a region: the unit a far part of the plot is drawn
+ * in. Four chunks is 256 m, which cut the draw calls of a 300-tile plot from
+ * six thousand to fourteen hundred. See `levelOfDetail.ts`.
+ */
+export const REGION_CHUNKS = 4;
+
+/** The region a chunk lies in, on the same coordinates a chunk uses. */
+export function regionOf(chunk: ChunkCoordinate): ChunkCoordinate {
+  return {
+    chunkX: Math.floor(chunk.chunkX / REGION_CHUNKS),
+    chunkZ: Math.floor(chunk.chunkZ / REGION_CHUNKS),
+  };
+}
+
 /** Stable, sortable key for a chunk. */
 export function chunkKey(chunk: ChunkCoordinate): string {
   return `${chunk.chunkX},${chunk.chunkZ}`;

@@ -33,9 +33,12 @@ a beach, a hill, a bay and a river; the crowd, balloons and boats are in
    derives one material per distinct colour. `PAINTED_MODELS` is the catalogue
    plus the people.
 2. **Layout** — `layoutResort` turns `RESORT_PLAN` (or a generated plan) into
-   placements, paving, props and rails.
+   placements, paving, props and rails. This, the plan, the bakes of step 8 and
+   the terrain mesh run in a worker; see _Preparing a resort off the main thread_.
 3. **Scratch regions** — `scratchLayoutFor` gives every model its own
-   section-aligned slice of the voxel world, padded by an empty section.
+   section-aligned slice of the voxel world, padded by an empty section. Every
+   catalogue model gets a second region holding its coarse copy
+   (`coarseVoxels.ts`); see _Level of detail_.
 4. **DVE** — `dveEngine.ts` registers one voxel per colour, paints the scratch
    regions and runs DVE's face-culling mesher, in a worker (`meshWorker.ts`).
    `meshCatalogue.ts` falls back to the main thread if the worker will not start.
@@ -43,9 +46,13 @@ a beach, a hill, a bay and a river; the crowd, balloons and boats are in
    coplanar same-colour faces into rectangles (`greedyMesh.ts`), puts colour in a
    vertex attribute, and splits emissive and water colours into sets of their own.
    Plain typed arrays, transferred back from the worker.
-6. **Geometry** — `buildModelGeometries` wraps the arrays in buffer geometries.
-7. **Instances** — `buildInstancedWorld` creates one `InstancedMesh` per model,
-   material kind and chunk, with spare capacity so placements are a matrix write.
+6. **Geometry** — `buildModelGeometries` wraps the arrays in buffer geometries
+   and hangs each coarse copy off its model, dropping any that save too little.
+7. **Instances** — `buildInstancedWorld` creates one instanced mesh per model,
+   material kind and chunk, with spare capacity so placements are a matrix write,
+   and again per region and per district for drawing further out; see _Level of
+   detail_ and _Shader
+   builds_.
 8. **Lighting** — lamps baked into an irradiance volume (`lightGrid.ts`), sky
    visibility in its alpha channel (`skyVisibility.ts`), one blob-shadow quad per
    object (`blobShadows.ts`). See _Lighting_.
@@ -152,6 +159,131 @@ Switched with `C` or the View panel; the mode survives regenerating the resort.
 - While a tool is armed, the left button is lent to the tool and the right button
   takes over what left did (shift-right pans).
 
+## Level of detail
+
+Frustum culling skips what is off screen. The level of detail handles what is
+on screen but far away or tiny, and it is chosen every frame in
+`InstancedWorld.updateDetail` from `rendering/domain/levelOfDetail.ts`.
+
+**Draw calls are the cost, not triangles.** Three.js spends roughly 14 µs of
+main thread per draw (a 400-tile plot at 100 %: 16.7 ms for 1 168 draws in the
+browser). Every model in every 64 m chunk is a draw of its own — 12 500 near
+buckets on that plot — and swapping each for a coarser mesh changes none of
+that, so every placement is bucketed four times:
+
+| Layer    | Cell                     | Drawn with                            | Shown when                                              |
+| -------- | ------------------------ | ------------------------------------- | ------------------------------------------------------- |
+| near     | a chunk (16 tiles, 64 m) | the model as meshed                   | a voxel at its region's nearest point is ≥ 3 px         |
+| mid      | a region (4 × 4 chunks)  | the model as meshed                   | its region is neither near nor far                      |
+| far      | a region                 | the coarse copy, or the model if none | a coarse voxel at the region is ≤ 1.5 px                |
+| district | 4 × 4 regions (1 km)     | the coarse copy, or the model if none | a coarse voxel at the district's nearest point ≤ 1.5 px |
+
+A region is **far** once one coarse voxel at its nearest point covers no more
+than `COARSE_VOXEL_PIXELS` (1.5 px), so the swap cannot be seen; a whole
+district that far is drawn a district at a time. A region is **chunked**
+(`CHUNKED_VOXEL_PIXELS`, 3 px a voxel, about 130 m in perspective) only where
+the frustum can throw most of it away; past that it is one draw per model. In
+every layer a bucket is **hidden** once the model's largest extent covers less
+than `HIDDEN_PIXELS` (3 px). The rules are `regionLevelOf`, `isFar` and
+`isHidden` in `levelOfDetail.ts`.
+
+- **Pixels per voxel** is the one number both cameras answer: perspective falls
+  off with distance (`focalPx / distance`), orthographic follows the zoom. Drawing
+  buffer pixels, device pixel ratio included.
+- **Distance** is to the nearest point anything in the cell could reach: the cell
+  grown by the model's extent (the largest model's, for a region), from the ground
+  to the top of the highest terrace.
+- **Hysteresis** — an answer changes only once the number is 20 % past its
+  threshold.
+- **Coarse copies are derived, not authored.** `coarsenVoxels` turns each 2×2×2
+  block into one voxel: solid if anything in it is (a post stays a post), the
+  colour most of it is (never mixed, so emissive, water and windows still split by
+  colour). It is meshed by DVE in the same pass, in its own scratch region, and
+  scaled back up in `modelAttributes.ts`, so it lands in the full model's space.
+- **Kept only if worth it** — a coarse copy with more than 60 % of the full
+  model's triangles is dropped (`worthCoarsening`), and that model's far buckets
+  draw its own geometry. Trees come out at 14–19 %, buildings around 40–55 %, a
+  path slab at 14 %; the stairs, hedge, sign post, statue, bench, beach shower,
+  lifeguard tower and resort bar are the ones dropped.
+- **Both layers are kept current.** Placing or removing an object writes both;
+  every bucket stands at the origin, so no mesh transform is updated per frame.
+- **People** are not bucketed: `crowdField.ts` packs everybody at least 3 px
+  tall on screen into the front of the buffer and cuts `count`, walk phase
+  included. They keep walking while not drawn, and near ones stay drawn. They are
+  four draw calls either way.
+- **Not covered**: construction sites and the placement ghost draw full geometry;
+  the terrain, balloons and the bay are not levelled.
+- **Toggle** — _Level of detail_ in the Camera panel, or `?lod=0` on a bench run.
+  _Details_ shows what the last frame actually drew, the main-thread cost of the
+  frame (latest, the render submission's share, worst of the last second), the
+  GPU's own time from timestamp queries, buckets per layer and hidden, people
+  drawn, and how many shaders the renderer has built.
+
+### Draws per zoom
+
+Measured in Node (no GPU) on a generated 400 × 400 plot at 100 % (43 270
+placements, 16.7 M triangles in full), real meshed catalogue, perspective camera
+on the opening diagonal at 2880 × 1626, zooming in; draws counted after the
+level of detail and a frustum test on each bucket's bounding sphere.
+
+| camera distance | chunks and far regions only | four layers | triangles (four layers) |
+| --------------- | --------------------------- | ----------- | ----------------------- |
+| 2 400 m         | 2 532                       | 295         | 5.7 M                   |
+| 1 200 m         | 2 426                       | 303         | 6.1 M                   |
+| 600 m           | 3 307                       | 1 767       | 6.6 M                   |
+| 300 m           | 3 260                       | 1 279       | 5.4 M                   |
+| 150 m           | 2 725                       | 1 616       | 4.3 M                   |
+| 37 m            | 2 655                       | 1 246       | 4.0 M                   |
+
+With two layers the browser showed 50 fps zoomed out, 15–20 fps at mid zoom and
+60 close in, which is the draw column at ~14 µs a draw. The mid layer costs
+some culling (a region is drawn whole, so up to 20 % more triangles at mid
+zoom). `updateDetail` walks all four layers, 1–5 ms per moving frame; the crowd
+step is ~1.2 ms for 5 800 people. Doubling `CHUNK_VOXELS` is the next cut if
+600 m is still slow.
+
+### Shader builds
+
+Three.js's WebGPU renderer caches a built shader under a key that includes the
+uuid of every `InstancedMesh` (`RenderObject.getMaterialCacheKey`), so each one
+costs a full node build — TSL to WGSL, milliseconds of main thread — the first
+frame it is drawn. The world had one per bucket: 15 000 on the plot above, and
+zooming in turned thousands of near buckets visible for the first time within a
+few frames.
+
+A bucket is therefore a plain `Mesh` over an `InstancedBufferGeometry`: the
+catalogue's attributes and index shared, and the instance matrix as four
+columns of one interleaved instance buffer, which `standOnInstances` reads in
+the materials' `positionNode`. Every bucket with the same material and
+attribute layout shares one build, so the whole world is a handful. Disposing a
+bucket's geometry makes the renderer re-upload the shared catalogue attributes
+the next time another bucket draws them; that is a few buffers per model on an
+edit that empties or outgrows a bucket. The crowd, the bay and the balloons are
+still `InstancedMesh`es: a few per resort.
+
+## Preparing a resort off the main thread
+
+Growing, laying out and baking a plot is seconds of work on a large one
+(measured in Node on a 400 × 400 plot at 100 %: generate 1.1 s, layout 0.7 s,
+lamp bake 2.1 s, sky visibility 0.5 s, terrain mesh 0.5 s). None of it needs the
+renderer, so `resort-prep/domain/prepareResort.ts` does all of it as one pure
+function, and `resortPreparer.ts` runs it in a long-lived worker
+(`prepWorker.ts`) with a main-thread fallback.
+
+- **What crosses back**: the plan, the laid-out lists, the lamp anchors and
+  moorings, the baked volume (sky visibility already in its alpha) and the terrain
+  surfaces. The volume and the terrain buffers are transferred, not copied.
+- **What stays on the main thread**: instance buffers, textures, the walk network
+  and crowd, the occupancy and rail indexes, the fields that move. The live light
+  and sky grids adopt the finished bake rather than redoing it.
+- **Generate and Clear are asynchronous.** The resort on screen keeps drawing, and
+  taking edits, until the new one is swapped in; those edits go with it. A later
+  request wins over an earlier one still in flight.
+- **At load**, the catalogue is meshed and the first resort prepared at the same
+  time, each in its own worker.
+- **A terrain edit still meshes on the main thread**, over the whole plot: half a
+  second per brush stroke on a 400-tile plot.
+
 ## Building
 
 All tools share `tileStroke.ts`: the pick, a Bresenham fill between pointer
@@ -225,7 +357,9 @@ export default defineModel({
 - **Lamps** — `lightGrid.ts` bakes every lamp into a volume at startup:
   irradiance and a weighted direction, as `RGBA8` 3D textures, sampled by
   `bakedLightVolume.ts` through `emissiveNode`. `lightGridSpecFor` picks the finest
-  cell size inside `DEFAULT_GRID_BUDGET_BYTES` (48 MB).
+  cell size inside `gridBudgetFor`: 48 MB up to a 160-tile plot, growing with the
+  area to `MAX_GRID_BUDGET_BYTES` (128 MB), so a 480-tile plot bakes ~8-voxel
+  cells rather than ~11.
 - **Kept live** — `liveLightGrid.ts` re-bakes only the block a placed or removed
   lamp reaches and re-uploads those slices. The scale is frozen at the first bake,
   and `lampReservationFor` sizes the grid so a lamp placed anywhere on the resort
@@ -253,6 +387,9 @@ export default defineModel({
 
 `fps` is capped by the display, so the GPU column is the one that discriminates.
 
+These numbers predate the level of detail and the paving-scaled crowd; rerun
+`pnpm bench` and `pnpm bench -- --no-lod` to refresh them.
+
 ## Measuring
 
 The script launches Chrome over the DevTools protocol against a running dev
@@ -265,12 +402,21 @@ pnpm bench                         # all four cases
 pnpm bench -- --case night-street  # one case
 pnpm bench -- --repeat 1,2,3       # tile the plot, to price a larger resort
 pnpm bench -- --no-worker          # mesh on the main thread
+pnpm bench -- --no-lod             # everything in full, to price the level of detail
 pnpm bench -- --webgl              # the WebGL2 fallback
 pnpm bench -- --shots ./shots      # a PNG per case
 ```
 
-The same knobs are URL parameters (`?bench=1&view=street&time=0.02&repeat=3`).
-A run only compares with the previous one if the scene has not changed.
+The same knobs are URL parameters (`?bench=1&view=street&time=0.02&repeat=3&lod=0`).
+`?people=n` sets the crowd, with or without `bench`. A run only compares with the
+previous one if the scene has not changed.
+
+The resort generator goes up to 480 × 480 tiles (`PLOT_TILES`), nine times the
+area of the old maximum. At 100 % density that is ~60 000 placements, ~32 000
+paved tiles and ~8 000 people. Generating, laying out and baking it runs in a
+worker, so the page keeps drawing while it does; see _Preparing a resort off the
+main thread_. Every terrain edit still rebuilds the whole terrain mesh on the main
+thread, which is the next cost a plot that size will show.
 
 ## Adding or changing an object
 
@@ -320,9 +466,12 @@ nine times the size without authoring it.
 
 ## Out of scope
 
-- LOD, occlusion culling, and fewer, bigger draws (GPU-driven or indirect draws,
-  merged chunk geometry). Out of scope for this milestone; the most likely next
-  work if larger plots (`pnpm bench -- --repeat`) matter.
+- Occlusion culling, and fewer, bigger draws still (larger chunks, a
+  `BatchedMesh` per region, indirect draws). A far region is one draw per model;
+  merging models would be the next factor. See _Draws per zoom_.
+- Dynamic resolution. The drawing buffer is the device pixel ratio capped at 2,
+  with MSAA.
+- Chunked terrain: a terrain edit rebuilds the whole terrain mesh.
 - Texture atlases, or any texturing.
 - Shadow maps. Sun light is not occluded; lamps cast no shadows.
 - Physics and multiplayer.

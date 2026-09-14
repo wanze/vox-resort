@@ -164,6 +164,7 @@ class AttributeBatch {
     normals: Float32Array,
     offset: { x: number; y: number; z: number },
     color: readonly [number, number, number],
+    scale: number,
   ): void {
     const merged = greedyMesh({ positions, normals, indices: section.indices });
     this.sourceTriangles += merged.sourceTriangleCount;
@@ -180,7 +181,7 @@ class AttributeBatch {
       const [sx, sy, sz] = corners[0]!;
       const seed = paneSeed(sx + offset.x, sy + offset.y, sz + offset.z);
       for (const [x, y, z] of corners) {
-        this.positions.push(x + offset.x, y + offset.y, z + offset.z);
+        this.positions.push((x + offset.x) * scale, (y + offset.y) * scale, (z + offset.z) * scale);
         this.normals.push(nx, ny, nz);
         this.colors.push(color[0], color[1], color[2]);
         this.panes?.push(seed);
@@ -199,9 +200,9 @@ class AttributeBatch {
         section.indices[triangle + 1]!,
       ]) {
         this.positions.push(
-          positions[vertex * 3]! + offset.x,
-          positions[vertex * 3 + 1]! + offset.y,
-          positions[vertex * 3 + 2]! + offset.z,
+          (positions[vertex * 3]! + offset.x) * scale,
+          (positions[vertex * 3 + 1]! + offset.y) * scale,
+          (positions[vertex * 3 + 2]! + offset.z) * scale,
         );
         this.normals.push(normals[vertex * 3]!, normals[vertex * 3 + 1]!, normals[vertex * 3 + 2]!);
         this.colors.push(color[0], color[1], color[2]);
@@ -286,12 +287,16 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
       y: section.origin.y,
       z: section.origin.z,
     };
-    batch[kindOf(region.id, raw)].add(
+    // A coarse copy is painted at its own small scale and grown back here, so
+    // it stands in exactly the space the full model does; its surfaces are the
+    // ones the full model declared. See `voxel-world/domain/coarseVoxels.ts`.
+    batch[kindOf(region.source ?? region.id, raw)].add(
       section,
       positions,
       normals,
       offset,
       colorFor(section.materialId),
+      region.scale ?? 1,
     );
   }
 

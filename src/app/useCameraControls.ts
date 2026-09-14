@@ -16,10 +16,11 @@ export interface CameraControls {
   adopt(view: CameraView): void;
   setMode(mode: CameraMode): void;
   setDirection(direction: CompassDirection): void;
+  setDetail(enabled: boolean): void;
 }
 
 /** What the panel shows before a scene exists to ask. */
-const INITIAL_VIEW: CameraView = { mode: 'perspective', direction: 'southeast' };
+const INITIAL_VIEW: CameraView = { mode: 'perspective', direction: 'southeast', detail: true };
 
 export function useCameraControls(showcase: RefObject<Showcase | null>): CameraControls {
   const [view, setView] = useState<CameraView>(INITIAL_VIEW);
@@ -45,6 +46,10 @@ export function useCameraControls(showcase: RefObject<Showcase | null>): CameraC
     ),
     setDirection: useCallback(
       (direction: CompassDirection) => apply((mounted) => mounted.setIsoDirection(direction)),
+      [apply],
+    ),
+    setDetail: useCallback(
+      (enabled: boolean) => apply((mounted) => mounted.setDetail(enabled)),
       [apply],
     ),
   };

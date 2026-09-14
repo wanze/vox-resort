@@ -59,6 +59,11 @@ export interface BenchConfig {
    * worker is worth.
    */
   readonly forceMainThreadMeshing: boolean;
+  /**
+   * Whether the level of detail is on. Off draws every object in full wherever
+   * it is, which is the run that says what the level of detail saves.
+   */
+  readonly detail: boolean;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -69,6 +74,7 @@ export const DEFAULT_BENCH: BenchConfig = {
   repeat: 1,
   forceWebGL: false,
   forceMainThreadMeshing: false,
+  detail: true,
 };
 
 const integerParam = (raw: string | null, fallback: number, min: number): number => {
@@ -99,6 +105,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     repeat: integerParam(params.get('repeat'), DEFAULT_BENCH.repeat, 1),
     forceWebGL: params.get('webgl') === '1',
     forceMainThreadMeshing: params.get('worker') === '0',
+    detail: params.get('lod') !== '0',
   };
 }
 

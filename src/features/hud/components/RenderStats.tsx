@@ -6,6 +6,17 @@ export interface RenderStatsProps {
   readonly stats: ShowcaseStats | null;
   /** Filled with the node the render loop writes the live lamp count to. */
   readonly activeLightsElement: RefObject<HTMLSpanElement | null>;
+  /** Filled with the node the render loop writes what it actually drew to. */
+  readonly drawnElement: RefObject<HTMLSpanElement | null>;
+  /** Filled with the nodes the render loop writes what the frame cost to. */
+  readonly frameCostElements: FrameCostElements;
+}
+
+/** The nodes the render loop writes a frame's cost to; see `hudOverlay.ts`. */
+export interface FrameCostElements {
+  readonly cpu: RefObject<HTMLSpanElement | null>;
+  readonly detail: RefObject<HTMLSpanElement | null>;
+  readonly shaders: RefObject<HTMLSpanElement | null>;
 }
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
@@ -26,7 +37,12 @@ function lampTotals(stats: ShowcaseStats): string {
 }
 
 /** Everything the renderer knows about the frame it just drew. */
-export function RenderStats({ stats, activeLightsElement }: RenderStatsProps) {
+export function RenderStats({
+  stats,
+  activeLightsElement,
+  drawnElement,
+  frameCostElements: { cpu, detail, shaders },
+}: RenderStatsProps) {
   if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;
 
   return (
@@ -40,8 +56,20 @@ export function RenderStats({ stats, activeLightsElement }: RenderStatsProps) {
       <StatRow label="Instances">
         {formatNumber(stats.instanceCount)} of {stats.typeCount} types
       </StatRow>
-      <StatRow label="Draw calls" note={`over ${stats.chunkCount} chunks`}>
+      <StatRow label="Draw calls" note={`in the scene, over ${stats.chunkCount} chunks`}>
         {formatNumber(stats.drawCalls)}
+      </StatRow>
+      <StatRow label="Drawn" note="last frame, after culling and level of detail">
+        <span ref={drawnElement}>—</span>
+      </StatRow>
+      <StatRow label="Frame cost" note="main thread, and the GPU's own timing">
+        <span ref={cpu}>—</span>
+      </StatRow>
+      <StatRow label="Detail" note="instanced buckets by level, last frame">
+        <span ref={detail}>—</span>
+      </StatRow>
+      <StatRow label="Shaders built" note="climbing while moving means a stall">
+        <span ref={shaders}>—</span>
       </StatRow>
       <StatRow
         label="Triangles"

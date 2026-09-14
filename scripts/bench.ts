@@ -19,6 +19,7 @@
  *   pnpm bench                       # every case in SUITE
  *   pnpm bench -- --case night-street --json
  *   pnpm bench -- --repeat 1,2,3          # tile the plot, to price a larger resort
+ *   pnpm bench -- --no-lod                # everything in full, to price the level of detail
  *
  * `--no-vsync` unlocks the frame rate, though the GPU columns are the better
  * measure once a frame fits inside the refresh interval. `--webgl` disables
@@ -99,6 +100,8 @@ interface Cli {
   readonly webgl: boolean;
   /** Pins meshing to the main thread, to price what the worker saves. */
   readonly mainThread: boolean;
+  /** Draws everything in full, to price what the level of detail saves. */
+  readonly noDetail: boolean;
   readonly json: boolean;
   readonly label: string;
   readonly window: { readonly width: number; readonly height: number };
@@ -139,6 +142,7 @@ function parseCli(argv: readonly string[]): Cli {
     vsync: flags.get('no-vsync') === undefined,
     webgl: flags.get('webgl') !== undefined,
     mainThread: flags.get('no-worker') !== undefined,
+    noDetail: flags.get('no-lod') !== undefined,
     json: flags.get('json') !== undefined,
     label: flags.get('label') ?? '',
     window: {
@@ -314,6 +318,7 @@ async function runCase(
   });
   if (cli.webgl) params.set('webgl', '1');
   if (cli.mainThread) params.set('worker', '0');
+  if (cli.noDetail) params.set('lod', '0');
 
   await browser.navigate(`${cli.url}?${params.toString()}`);
 

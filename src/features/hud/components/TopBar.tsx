@@ -2,7 +2,7 @@ import { useState, type RefObject } from 'react';
 import { CameraPanel } from './CameraPanel';
 import { HudPopover } from './HudPopover';
 import { HudReadout } from './HudReadout';
-import { RenderStats } from './RenderStats';
+import { RenderStats, type FrameCostElements } from './RenderStats';
 import { ResortPanel } from './ResortPanel';
 import { TimeOfDay } from './TimeOfDay';
 import type { CameraControls } from '../../../app/useCameraControls';
@@ -14,6 +14,8 @@ export interface TopBarProps {
   readonly fps: number;
   readonly stats: ShowcaseStats | null;
   readonly activeLightsElement: RefObject<HTMLSpanElement | null>;
+  readonly drawnElement: RefObject<HTMLSpanElement | null>;
+  readonly frameCostElements: FrameCostElements;
   readonly timeElement: RefObject<HTMLInputElement | null>;
   readonly clock: ClockControls;
   readonly camera: CameraControls;
@@ -32,7 +34,17 @@ type Tool = 'details' | 'resort' | 'camera';
  * screen.
  */
 export function TopBar(props: TopBarProps) {
-  const { fps, stats, activeLightsElement, timeElement, clock, camera, resort } = props;
+  const {
+    fps,
+    stats,
+    activeLightsElement,
+    drawnElement,
+    frameCostElements,
+    timeElement,
+    clock,
+    camera,
+    resort,
+  } = props;
   const [tool, setTool] = useState<Tool | null>(null);
   const toggle = (next: Tool) => (): void => setTool((current) => (current === next ? null : next));
 
@@ -57,7 +69,12 @@ export function TopBar(props: TopBarProps) {
           one side and what you can do to it on the other. */}
       <div className="hud-bar-tools">
         <HudPopover label="Details" open={tool === 'details'} onToggle={toggle('details')}>
-          <RenderStats stats={stats} activeLightsElement={activeLightsElement} />
+          <RenderStats
+            stats={stats}
+            activeLightsElement={activeLightsElement}
+            drawnElement={drawnElement}
+            frameCostElements={frameCostElements}
+          />
         </HudPopover>
 
         <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>
@@ -75,8 +92,10 @@ export function TopBar(props: TopBarProps) {
           <CameraPanel
             mode={camera.view.mode}
             direction={camera.view.direction}
+            detail={camera.view.detail}
             onModeChange={camera.setMode}
             onDirectionChange={camera.setDirection}
+            onDetailChange={camera.setDetail}
           />
         </HudPopover>
       </div>

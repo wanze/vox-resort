@@ -188,7 +188,7 @@ export interface FlotillaOptions {
    * and the hut they belong to.
    *
    * Absent on a bay with no hire hut, which is what a plot whose beach could not
-   * stand one comes out as — see `standPedaloRental` in `resortGenerator.ts`.
+   * stand one comes out as — see `standBeachFeatures` in `resortGenerator.ts`.
    * Every craft is then a private one and nothing goes home.
    */
   readonly hire?: HireOptions | null;

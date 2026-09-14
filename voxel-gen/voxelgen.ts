@@ -105,6 +105,27 @@ export interface ModelLight {
   readonly distance: number;
 }
 
+/**
+ * Ground an object refuses to stand anywhere but on.
+ *
+ * - `beach`: sand at sea level that runs straight down to the sea — the beach,
+ *   and not the dune behind it or a lawn.
+ * - `shore`: the same, but within a few tiles of the water, for things that are
+ *   *about* the water: a lifeguard tower, a pedalo rental.
+ */
+export type PlacementGround = 'beach' | 'shore';
+
+/** Where, and how often, the resort is allowed to stand an object. */
+export interface ModelPlacement {
+  /** Absent means any dry, level ground will do. */
+  readonly ground?: PlacementGround;
+  /**
+   * How many a generated resort stands: `min` on the smallest plot, growing to
+   * `max` on a large one. Absent means as many as the districts draw.
+   */
+  readonly perResort?: { readonly min: number; readonly max: number };
+}
+
 /** Quarter turns about the vertical axis, in the renderer's own sense. */
 export type QuarterTurns = 0 | 1 | 2 | 3;
 
@@ -218,6 +239,14 @@ export interface VoxelModelSource {
    * chair nobody walks to. See `crowd/domain/walkNetwork.ts`.
    */
   readonly seats?: readonly ModelSeat[];
+  /**
+   * Where the object belongs, and how many of it a resort wants.
+   *
+   * A fact about the art for the reason `groundDecides` is: a volleyball court
+   * is a beach court, and a pedalo rental hires boats to the bay, so the build
+   * tool and the generator both read it here rather than keeping lists of ids.
+   */
+  readonly placement?: ModelPlacement;
   readonly build: (builder: VoxelBuilder) => void;
 }
 
@@ -251,6 +280,8 @@ export interface VoxelModel {
   readonly lights: readonly ModelLight[];
   /** Seats, shifted onto the same origin as the voxels, each with a pose. */
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
+  /** Where the object belongs; empty when anywhere will do. */
+  readonly placement: ModelPlacement;
 }
 
 /** Voxels along one tile edge — the scale every model is authored against. */
@@ -379,5 +410,6 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       facing: seat.facing,
       pose: seat.pose ?? 'sit',
     })),
+    placement: source.placement ?? {},
   };
 }

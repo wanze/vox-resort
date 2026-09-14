@@ -605,6 +605,42 @@ describe('decorationsFor', () => {
     }
   });
 
+  it('lines an avenue with trees in straight rows, and no hedges', () => {
+    const street = { x0: 0, x1: 11, z0: 3, z1: 4 };
+    const avenue: ResortPlan = {
+      tilesX: 12,
+      tilesZ: 8,
+      plots: [],
+      nodes: [],
+      edges: [],
+      plazas: [street],
+      standsWholeCatalogue: false,
+    };
+    const lined = [...items, item('cypress')];
+    const plain = decorationsFor(lined, avenue);
+    expect(plain.trees).toEqual([]);
+    expect(plain.hedges.length).toBeGreaterThan(0);
+    const { trees, hedges, lamps, benches } = decorationsFor(lined, {
+      ...avenue,
+      avenues: { tree: 'cypress', streets: [street] },
+    });
+    expect(hedges).toEqual([]);
+    expect(trees.length).toBeGreaterThan(2);
+    const others = new Set(
+      [...lamps, ...benches.map((bench) => bench.tile)].map((t) => `${t.x},${t.z}`),
+    );
+    for (const tree of trees) {
+      expect([2, 5]).toContain(tree.z);
+      expect(tree.x % 3).toBe(0);
+      expect(others.has(`${tree.x},${tree.z}`)).toBe(false);
+    }
+    const props = layoutResort(lined, {
+      ...avenue,
+      avenues: { tree: 'cypress', streets: [street] },
+    }).props;
+    expect(props.filter((prop) => prop.id === 'cypress')).toHaveLength(trees.length);
+  });
+
   it('never puts a bench on a paved or occupied tile either', () => {
     const { benches } = decorationsFor(items, tinyPlan);
     const paved = new Set(pathTilesFor(items, tinyPlan).map((tile) => `${tile.x},${tile.z}`));

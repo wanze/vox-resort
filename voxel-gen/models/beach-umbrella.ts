@@ -18,6 +18,7 @@ export default defineModel({
   id: 'beach-umbrella',
   label: 'Beach Umbrella',
   category: 'grounds',
+  placement: { ground: 'beach' },
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

@@ -63,6 +63,7 @@ export default defineModel({
   id: 'volleyball',
   label: 'Volleyball Court',
   category: 'leisure',
+  placement: { ground: 'beach', perResort: { min: 1, max: 3 } },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

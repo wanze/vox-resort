@@ -38,6 +38,14 @@ describe('sandGridFor', () => {
     expect(inland.cells.every((cell) => cell === 0)).toBe(true);
     expect(blockedAt(inland, 20, 20), 'outside the band is never blocked').toBe(false);
   });
+
+  it('blocks everything past either end of the plot', () => {
+    const bare = sandGridFor({ shore, tilesX: 20, obstacles: [] });
+    const z = bare.originZ + 4;
+    expect(blockedAt(bare, -1, z)).toBe(true);
+    expect(blockedAt(bare, 20 * TILE_VOXELS + 1, z)).toBe(true);
+    expect(blockedAt(bare, 40, z)).toBe(false);
+  });
 });
 
 describe('clearLine', () => {

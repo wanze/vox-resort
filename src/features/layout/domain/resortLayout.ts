@@ -49,7 +49,11 @@
  * a handrail, which is stood against the edge it guards. See {@link placeOnEdge}.
  */
 
-import { TILE_VOXELS, type ModelCategory } from '../../../../voxel-gen/voxelgen.ts';
+import {
+  TILE_VOXELS,
+  type ModelCategory,
+  type PlacementGround,
+} from '../../../../voxel-gen/voxelgen.ts';
 import {
   BENCH_ID,
   BOARDWALK_ID,
@@ -70,6 +74,7 @@ import {
   type Bend,
   type PathEdge,
   type PathNode,
+  type Plaza,
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
@@ -95,6 +100,9 @@ const LAMP_SPACING = 5;
  */
 const BENCH_SPACING = 9;
 
+/** Tiles between one bench and the next along a park path, where sitting is the point. */
+const PARK_BENCH_SPACING = 4;
+
 export interface LayoutItem {
   readonly id: string;
   /** Footprint the object claims on the tile grid. */
@@ -115,6 +123,12 @@ export interface LayoutItem {
    * to.
    */
   readonly category?: ModelCategory;
+  /**
+   * Ground the object will stand on and nowhere else, when its model declares
+   * one. Only the build tool reads it — an authored plan is held to nothing of
+   * the kind. See `placementGround.ts`.
+   */
+  readonly ground?: PlacementGround;
 }
 
 export interface Placement {
@@ -750,6 +764,48 @@ export interface Decorations {
   /** Benches, each turned to face the path it stands beside. */
   readonly benches: readonly TurnedTile[];
   readonly hedges: readonly Tile[];
+  /** Trees in rows along the plan's avenues, where it has any. */
+  readonly trees: readonly Tile[];
+}
+
+/** Tiles from one tree of an avenue to the next. */
+const AVENUE_PITCH = 3;
+
+/**
+ * The trees of a plan's avenues: every third free tile beside one of its
+ * streets, counted along the street, so the trees either side of it stand in
+ * straight rows facing each other. A tile beside two avenues at once is a
+ * corner, where a tree would stand in the sight line of a junction, and gets none.
+ */
+function avenueTrees(
+  ring: readonly Tile[],
+  streets: readonly Plaza[],
+  taken: ReadonlySet<string>,
+): Tile[] {
+  return ring.filter((tile) => {
+    if (taken.has(tileKey(tile.x, tile.z))) return false;
+    const side = avenueSide(tile, streets);
+    if (side === 'north-south') return tile.x % AVENUE_PITCH === 0;
+    return side === 'east-west' && tile.z % AVENUE_PITCH === 0;
+  });
+}
+
+/**
+ * Which side of an avenue a tile is on: beside a street running east to west
+ * (so north or south of it), beside one running north to south, at a corner of
+ * both, or beside none.
+ */
+function avenueSide(
+  tile: Tile,
+  streets: readonly Plaza[],
+): 'north-south' | 'east-west' | 'corner' | null {
+  const on = (x: number, z: number) =>
+    streets.some((rect) => x >= rect.x0 && x <= rect.x1 && z >= rect.z0 && z <= rect.z1);
+  const across = on(tile.x, tile.z - 1) || on(tile.x, tile.z + 1);
+  const along = on(tile.x - 1, tile.z) || on(tile.x + 1, tile.z);
+  if (across && along) return 'corner';
+  if (across) return 'north-south';
+  return along ? 'east-west' : null;
 }
 
 /**
@@ -822,8 +878,31 @@ export function decorationsFor(
 
   const ring = edgeRing({ plan, terrain, occupied, paved, pathNeighbours });
 
-  const lamps: Tile[] = [];
   const taken = new Set<string>();
+  const lamps = spacedLamps(ring, spacing, taken);
+  const parks = plan.parks ?? [];
+  const inPark = (tile: Tile): boolean =>
+    parks.some(
+      (park) => tile.x >= park.x0 && tile.x <= park.x1 && tile.z >= park.z0 && tile.z <= park.z1,
+    );
+  const benches = spacedBenches({ ring, paved, taken, inPark });
+  const trees = plan.avenues ? avenueTrees(ring, plan.avenues.streets, taken) : [];
+  for (const tree of trees) taken.add(tileKey(tree.x, tree.z));
+  // An avenue is lined with trees and nothing else: no hedge on the tiles between them.
+  const streets = plan.avenues?.streets ?? [];
+  const hedges = hedgeRuns({
+    ring,
+    taken,
+    occupied,
+    skip: (tile) => inPark(tile) || (streets.length > 0 && avenueSide(tile, streets) !== null),
+    pathNeighbours,
+  });
+  return { lamps, benches, hedges, trees };
+}
+
+/** Lamps along the ring at an even spacing, each marked taken. */
+function spacedLamps(ring: readonly Tile[], spacing: number, taken: Set<string>): Tile[] {
+  const lamps: Tile[] = [];
   for (const tile of ring) {
     const clear = lamps.every(
       (lamp) => Math.max(Math.abs(lamp.x - tile.x), Math.abs(lamp.z - tile.z)) >= spacing,
@@ -832,65 +911,82 @@ export function decorationsFor(
     lamps.push(tile);
     taken.add(tileKey(tile.x, tile.z));
   }
+  return lamps;
+}
 
-  /**
-   * The one paved neighbour of a tile, or null where it has none or several.
-   *
-   * A bench wants exactly one: it is what makes the facing unambiguous, and a
-   * tile with paving on two sides is a corner, where a seat would have its back
-   * to a path people walk along.
-   */
-  const soleNeighbour = (x: number, z: number): readonly [number, number] | null => {
-    let found: readonly [number, number] | null = null;
-    for (const [dx, dz] of NEIGHBOURS) {
-      if (!paved.has(tileKey(x + dx, z + dz))) continue;
-      if (found) return null;
-      found = [dx, dz];
-    }
-    return found;
-  };
+/**
+ * The one paved neighbour of a tile, or null where it has none or several.
+ *
+ * A bench wants exactly one: it is what makes the facing unambiguous, and a
+ * tile with paving on two sides is a corner, where a seat would have its back
+ * to a path people walk along.
+ */
+function soleNeighbour(
+  paved: ReadonlySet<string>,
+  x: number,
+  z: number,
+): readonly [number, number] | null {
+  let found: readonly [number, number] | null = null;
+  for (const [dx, dz] of NEIGHBOURS) {
+    if (!paved.has(tileKey(x + dx, z + dz))) continue;
+    if (found) return null;
+    found = [dx, dz];
+  }
+  return found;
+}
 
+/** Benches on the free ring tiles with one path beside them, spaced apart, each marked taken. */
+function spacedBenches(parts: {
+  readonly ring: readonly Tile[];
+  readonly paved: ReadonlySet<string>;
+  readonly taken: Set<string>;
+  readonly inPark: (tile: Tile) => boolean;
+}): TurnedTile[] {
+  const { ring, paved, taken, inPark } = parts;
   const benches: TurnedTile[] = [];
   for (const tile of ring) {
     if (taken.has(tileKey(tile.x, tile.z))) continue;
-    const facing = soleNeighbour(tile.x, tile.z);
+    const facing = soleNeighbour(paved, tile.x, tile.z);
     if (!facing) continue;
+    // Closer together inside a park, where a bench is what the path is for.
+    const apart = inPark(tile) ? PARK_BENCH_SPACING : BENCH_SPACING;
     const clear = benches.every(
       (bench) =>
-        Math.max(Math.abs(bench.tile.x - tile.x), Math.abs(bench.tile.z - tile.z)) >= BENCH_SPACING,
+        Math.max(Math.abs(bench.tile.x - tile.x), Math.abs(bench.tile.z - tile.z)) >= apart,
     );
     if (!clear) continue;
     benches.push({ tile, rotation: facingRotation(facing[0], facing[1]) });
     taken.add(tileKey(tile.x, tile.z));
   }
+  return benches;
+}
 
-  // Hedge candidates: free of buildings on every side, and lying along a
-  // straight stretch of path rather than at a junction.
-  const nextToBuilding = (x: number, z: number): boolean => {
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) {
-        if (occupied.has(tileKey(x + dx, z + dz))) return true;
-      }
-    }
-    return false;
-  };
+/**
+ * Hedges along the straight runs left over: free tiles with one path beside
+ * them, clear of buildings on every side, and only where they continue a run so
+ * no hedge stands on its own.
+ */
+function hedgeRuns(parts: {
+  readonly ring: readonly Tile[];
+  readonly taken: ReadonlySet<string>;
+  readonly occupied: ReadonlyMap<string, string>;
+  readonly skip: (tile: Tile) => boolean;
+  readonly pathNeighbours: (x: number, z: number) => number;
+}): Tile[] {
+  const { ring, taken, occupied, skip, pathNeighbours } = parts;
+  const nextToBuilding = (x: number, z: number): boolean =>
+    [-1, 0, 1].some((dx) => [-1, 0, 1].some((dz) => occupied.has(tileKey(x + dx, z + dz))));
   const candidates = ring.filter(
     (tile) =>
       !taken.has(tileKey(tile.x, tile.z)) &&
+      !skip(tile) &&
       pathNeighbours(tile.x, tile.z) === 1 &&
       !nextToBuilding(tile.x, tile.z),
   );
   const candidateKeys = new Set(candidates.map((tile) => tileKey(tile.x, tile.z)));
-  // Keep only tiles that continue a run, so no hedge stands on its own.
-  const hedges = candidates.filter(
-    (tile) =>
-      candidateKeys.has(tileKey(tile.x - 1, tile.z)) ||
-      candidateKeys.has(tileKey(tile.x + 1, tile.z)) ||
-      candidateKeys.has(tileKey(tile.x, tile.z - 1)) ||
-      candidateKeys.has(tileKey(tile.x, tile.z + 1)),
+  return candidates.filter((tile) =>
+    NEIGHBOURS.some(([dx, dz]) => candidateKeys.has(tileKey(tile.x + dx, tile.z + dz))),
   );
-
-  return { lamps, benches, hedges };
 }
 
 /**
@@ -1097,42 +1193,42 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     levelOf,
   );
 
-  const props: Placement[] = [];
-  const { lamps, benches, hedges } = decorationsFor(items, plan);
-  for (const [id, tiles] of [
-    [LAMP_ID, lamps],
-    [HEDGE_ID, hedges],
-  ] as const) {
-    const item = byId.get(id);
-    if (!item) continue;
-    for (const tile of tiles) {
-      props.push(
-        place(item, derivedKey(id, tile.x, tile.z), tile.x, tile.z, 0, levelOf(tile.x, tile.z)),
-      );
-    }
-  }
-  // The bench is scattered like the other two and turned like nothing else, so
-  // it is laid on its own rather than bent into the loop above: its own model is
-  // 1x1, so the turn costs it no footprint, only a different instance matrix
-  // and — the point of the whole thing — a sitter facing the path. See
-  // `crowd/domain/seating.ts`.
-  const bench = byId.get(BENCH_ID);
-  if (bench) {
-    for (const { tile, rotation } of benches) {
-      props.push(
-        place(
-          bench,
-          derivedKey(BENCH_ID, tile.x, tile.z),
-          tile.x,
-          tile.z,
-          rotation,
-          levelOf(tile.x, tile.z),
-        ),
-      );
-    }
-  }
-
+  const props = propsFor(items, plan, levelOf);
   return { placements, props, paths, rails, tilesX: plan.tilesX, tilesZ: plan.tilesZ };
+}
+
+/** The dressing as placements: lamps, hedges and avenue trees unturned, benches facing their path. */
+function propsFor(
+  items: readonly LayoutItem[],
+  plan: ResortPlan,
+  levelOf: (tileX: number, tileZ: number) => number,
+): Placement[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const { lamps, benches, hedges, trees } = decorationsFor(items, plan);
+  // The bench is scattered like the others and turned like nothing else: its
+  // own model is 1x1, so the turn costs it no footprint, only a different
+  // instance matrix and — the point of the whole thing — a sitter facing the
+  // path. See `crowd/domain/seating.ts`.
+  const turned: { id: string; tile: Tile; rotation: Rotation }[] = [
+    ...lamps.map((tile) => ({ id: LAMP_ID, tile, rotation: 0 as Rotation })),
+    ...hedges.map((tile) => ({ id: HEDGE_ID, tile, rotation: 0 as Rotation })),
+    ...trees.map((tile) => ({ id: plan.avenues?.tree ?? '', tile, rotation: 0 as Rotation })),
+    ...benches.map(({ tile, rotation }) => ({ id: BENCH_ID, tile, rotation })),
+  ];
+  return turned.flatMap(({ id, tile, rotation }) => {
+    const item = byId.get(id);
+    if (!item) return [];
+    return [
+      place(
+        item,
+        derivedKey(id, tile.x, tile.z),
+        tile.x,
+        tile.z,
+        rotation,
+        levelOf(tile.x, tile.z),
+      ),
+    ];
+  });
 }
 
 /** Centre of a placement's model, useful for anchoring HUD labels. */

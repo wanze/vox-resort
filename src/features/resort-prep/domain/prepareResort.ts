@@ -80,6 +80,7 @@ const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
   category: type.category,
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
+  placement: type.model.placement,
 }));
 
 /** Every light the catalogue declares, whether or not one is standing yet. */

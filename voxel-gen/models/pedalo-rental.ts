@@ -19,11 +19,12 @@
  * one colour and because it is what keeps three copies of one part from reading
  * as one object stamped three times.
  *
- * **It belongs on the sand.** The generator will only stand it on the back of a
- * beach — see `SHORE_ONLY` in `resortGenerator.ts` — for the reason a lifeguard
- * tower is held there: a pedalo rental behind the hotels is renting boats to a
- * lawn. It needs no path: nothing standing on sand is given a spur, because sand
- * is walked on.
+ * **It belongs at the water.** `placement.ground` is `shore`, so neither the
+ * generator nor the build tool will stand it anywhere but on the sand a couple
+ * of tiles off the sea — the generator puts it beside a pier — for the reason a
+ * lifeguard tower is held there: a pedalo rental behind the hotels is renting
+ * boats to a lawn. It needs no path: nothing standing on sand is given a spur,
+ * because sand is walked on.
  */
 import { PALETTE } from '../palette.ts';
 import { PEDALO_BEAM, PEDALO_LENGTH, pedalo } from '../parts/boat.ts';
@@ -59,6 +60,7 @@ export default defineModel({
   id: 'pedalo-rental',
   label: 'Pedalo Rental',
   category: 'leisure',
+  placement: { ground: 'shore', perResort: { min: 1, max: 1 } },
   tiles: { x: 2, z: 2 },
   windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {

@@ -76,6 +76,7 @@ export default defineModel({
   id: 'changing-cabins',
   label: 'Changing Cabins',
   category: 'amenities',
+  placement: { ground: 'beach' },
   tiles: { x: 2, z: 1 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

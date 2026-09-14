@@ -58,6 +58,7 @@ import {
   type Tile,
 } from '../../layout/domain/resortLayout';
 import { PAVING_IDS } from '../../layout/domain/resortPlan';
+import { groundTakes } from '../../layout/domain/placementGround';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { climbAt, CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
 import { spanAt, type SpanProvider } from '../../layout/domain/spans';
@@ -260,6 +261,9 @@ export const raisedProvider =
  * body of water it is before the object is asked what it is.
  */
 export function standsOn(item: LayoutItem, tile: Tile, rules: PavingRules): boolean {
+  // An object that declares where it belongs — a parasol on the beach, a pedalo
+  // rental at the water — is held to it before water is asked about at all.
+  if (!groundTakes(item.ground, rules, tile.x, tile.z)) return false;
   if (!rules.isWater(tile.x, tile.z)) return true;
   const span = spanOver(tile, rules);
   if (span === null) return false;

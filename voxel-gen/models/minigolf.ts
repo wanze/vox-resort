@@ -171,6 +171,7 @@ export default defineModel({
   id: 'minigolf',
   label: 'Minigolf',
   category: 'leisure',
+  placement: { perResort: { min: 1, max: 3 } },
   tiles: { x: 9, z: 7 },
   emissive: [LANTERN],
   // The ponds and the fountain basin, meshed apart and shaded as the sea is.

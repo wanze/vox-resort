@@ -173,5 +173,6 @@ export function layoutItemFor(type: ObjectTypeDefinition): LayoutItem {
     width: type.model.width,
     depth: type.model.depth,
     category: type.category,
+    ...(type.model.placement.ground ? { ground: type.model.placement.ground } : {}),
   };
 }

@@ -47,6 +47,9 @@ export default defineModel({
   label: 'Villa',
   category: 'lodging',
   tiles: { x: 4, z: 4 },
+  // A few to a resort, mixed in among the houses rather than given a street of
+  // their own: see `hostsAccent` in `resortGenerator.ts`.
+  placement: { perResort: { min: 1, max: 12 } },
   windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64 });

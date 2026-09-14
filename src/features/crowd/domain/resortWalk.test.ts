@@ -23,6 +23,7 @@ const TYPES = OBJECT_TYPES.map((type) => ({
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
   category: type.category,
+  placement: type.model.placement,
 }));
 
 const ITEMS: LayoutItem[] = OBJECT_TYPES.map((type) => ({

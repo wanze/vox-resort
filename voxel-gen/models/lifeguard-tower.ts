@@ -84,6 +84,7 @@ export default defineModel({
   id: 'lifeguard-tower',
   label: 'Lifeguard Tower',
   category: 'amenities',
+  placement: { ground: 'shore' },
   tiles: { x: 1, z: 1 },
   /**
    * The lifeguard, looking out over the front of the deck at the water.

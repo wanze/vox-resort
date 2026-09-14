@@ -67,7 +67,8 @@ a beach, a hill, a bay and a river; the crowd, balloons and boats are in
   network. Dressing (the `grounds` category) and anything on sand get none. An
   unreachable object is a build error.
 - **Dressing**: street lamps on free tiles beside paths at a minimum spacing,
-  hedges along the remaining straight runs, a bench every nine tiles.
+  hedges along the remaining straight runs, a bench every nine tiles — every
+  four inside a plan's `parks`, which get no hedges.
 - **Placements** carry a type `id`, a unique `key` (derived ones keyed by tile,
   e.g. `path@12,7`), and the height of the ground they stand on.
 - **An object stands on one level.** `straddledTile` enforces it: authored plans
@@ -110,10 +111,28 @@ re-asks the edited tile and its four neighbours and diffs by key.
 - Water is not buildable ground and no street crosses it, except an `overWater`
   edge, which becomes a pier. `standsOn` in `paving.ts` says what the sea takes.
 - Sand is buildable; nothing is paved to or routed across it.
-- The generator fills the sand with lines of loungers and parasols, a band of
-  clubs, bars and palms behind them, and a lifeguard tower every 24 columns.
+- The generator lays loungers and parasols as a grid (three lines of
+  lounger–parasol–lounger sets, in bays of five), a band of clubs, bars and palms
+  behind them, and a lifeguard tower in the gap between bays (every 24 columns).
+- A model's `placement.ground` holds it to the `beach` (sand at sea level running
+  down to the sea) or the `shore` (the last three rows of it):
+  `placementGround.ts`, read by the generator and by `standsOn` in build mode.
+  `placement.perResort` caps how many a generated resort stands, from `min` on
+  the smallest plot to `max` at 200 tiles. Volleyball courts and the pedalo
+  rental (beside a pier) are stood that way.
 - Two sea lanes carry on over the hill, across the sand and out onto the water as
   jetties.
+
+### Districts
+
+- Cross streets run along the north edge and the hill's foot, so every district
+  has a street on all four sides. Gates stand only on the plot's edges: the
+  promenade's north end and both ends of the plaza's cross street.
+- `districtLayouts.ts` lays some districts out by design: **parks** (a pond two
+  rows deep, a walk along each bank, a bridged path down the middle, trees on a
+  mirrored grid) and **blocks** of one lodging type in back-to-back rows facing
+  the streets, with lanes between pairs. They only take district area the rest of
+  the catalogue can spare. Houses on the hill line the bench walks.
 
 ### Elevation
 
@@ -424,7 +443,9 @@ thread, which is the next cost a plot that size will show.
    `voxel-gen/models/index.ts`. `voxel-gen/README.md` is the authoring API;
    [art-direction.md](art-direction.md) is the palette, the parts and the rules.
 2. Declare its footprint in tiles and a `category` (which build-palette shelf it
-   appears on). Declare `emissive`, `water`, `lights` and seats if it has them.
+   appears on). Declare `emissive`, `water`, `lights` and seats if it has them,
+   and `placement` if it belongs only on the beach or the shore, or a resort
+   should only hold a few.
 3. Check it: `pnpm preview <id>` renders it, `pnpm preview --audit` reports
    footprint fill. Every model fills 100% except `beach-umbrella` (a round
    canopy) and the rails, which stand along an edge.

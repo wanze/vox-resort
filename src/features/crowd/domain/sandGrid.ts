@@ -94,14 +94,17 @@ export function sandGridFor(input: SandGridInput): SandGrid {
 /**
  * Whether a point on the sand is inside something.
  *
- * Anything outside the band answers no: where the sand ends is `beachPointAt`'s
- * business, and a gate on the paving behind the beach is somewhere a roamer is
- * allowed to walk to.
+ * Anything in front of or behind the band answers no: where the sand ends is
+ * `beachPointAt`'s business, and a gate on the paving behind the beach is
+ * somewhere a roamer is allowed to walk to. Past either end of the plot answers
+ * yes, though: the beach stops there, and a roamer stepping aside for somebody
+ * at the very end of it would otherwise step off the plot.
  */
 export function blockedAt(grid: SandGrid, x: number, z: number): boolean {
   const column = Math.floor(x / SAND_CELL);
   const row = Math.floor((z - grid.originZ) / SAND_CELL);
-  if (column < 0 || row < 0 || column >= grid.columns || row >= grid.rows) return false;
+  if (column < 0 || column >= grid.columns) return true;
+  if (row < 0 || row >= grid.rows) return false;
   return grid.cells[row * grid.columns + column] !== 0;
 }
 

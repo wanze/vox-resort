@@ -4,6 +4,8 @@ import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
 import {
   BOARDWALK_ID,
+  BRIDGE_ID,
+  BRIDGE_RAMP_ID,
   JETTY_ID,
   DERIVED_IDS,
   HEDGE_ID,
@@ -12,6 +14,7 @@ import {
   RAILING_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
+  type Plaza,
 } from './resortPlan';
 import { elevationFor, levelAt, maxLevelOf, raisedTilesOf } from './elevation';
 import {
@@ -23,6 +26,8 @@ import {
   waterTilesOf,
 } from './shoreline';
 import { groundAt } from './ground';
+import { terrainFor } from './terrain';
+import { groundTakes } from './placementGround';
 import { rotateExtent, ROTATIONS } from './rotation';
 import {
   clampParams,
@@ -39,6 +44,7 @@ const TYPES: GeneratorType[] = OBJECT_TYPES.map((type) => ({
   category: type.category,
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
+  placement: type.model.placement,
 }));
 
 const ITEMS = OBJECT_TYPES.map(layoutItemFor);
@@ -58,6 +64,14 @@ const params = (overrides: Partial<ResortParams> = {}): ResortParams => ({
   seed: 1,
   ...overrides,
 });
+
+/** How many of a type a plan stands. */
+const count = (plan: ReturnType<typeof generateResort>, id: string) =>
+  plan.plots.filter((plot) => plot.id === id).length;
+
+/** Whether a tile is inside a rectangle of the plot. */
+const inside = (rect: Plaza, x: number, z: number) =>
+  x >= rect.x0 && x <= rect.x1 && z >= rect.z0 && z <= rect.z1;
 
 /** Every seed and size the suite sweeps, as one list of parameter sets. */
 const SWEEP: ResortParams[] = [
@@ -217,14 +231,21 @@ describe('generateResort', () => {
     }
   });
 
-  it('turns the far gate to face back up the promenade', () => {
-    // Landmarks are stood before anything else, so the gates are the first two
-    // plots on the plan; the pair is the one place a turn is authored outright.
-    const plan = generateResort(TYPES, params());
-    expect(plan.plots.slice(0, 2)).toMatchObject([
-      { id: 'entrance', tileZ: 0, rotation: 0 },
-      { id: 'entrance', rotation: 2 },
-    ]);
+  it('stands the gates on the plot edges, facing in, and nowhere else', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const gates = plan.plots.filter((plot) => plot.id === 'entrance');
+      // One where the promenade meets the north edge, one at each end of the
+      // plaza's cross street: every one of them on an edge, turned to face in.
+      expect({ set, gates }).toMatchObject({
+        set,
+        gates: [
+          { tileZ: 0, rotation: 0 },
+          { tileX: 0, rotation: 1 },
+          { tileX: plan.tilesX - 1, rotation: 3 },
+        ],
+      });
+    }
   });
 
   it('routes streets that stay on the plot', () => {
@@ -251,6 +272,84 @@ describe('generateResort', () => {
     expect(layout.paths.length).toBeGreaterThan(0);
     expect(layout.props.some((prop) => prop.id === LAMP_ID)).toBe(true);
     expect(layout.props.some((prop) => prop.id === HEDGE_ID)).toBe(true);
+  });
+});
+
+describe('the advanced settings', () => {
+  /** Every setting pushed away from its default, at sizes that exercise each. */
+  const CONFIGS: ResortParams[] = [
+    params({ config: { gatePlazas: true, streetTrees: true } }),
+    params({ seed: 4, config: { housing: 'mixed', villaShare: 0.3, beach: 'packed' } }),
+    params({
+      tilesX: 56,
+      tilesZ: 56,
+      seed: 56,
+      config: { parkShare: 0, beach: 'quiet', gatePlazas: true },
+    }),
+    params({ tilesX: 160, tilesZ: 160, seed: 7, config: { parkShare: 0.4, villaShare: 0 } }),
+    params({
+      tilesX: 320,
+      tilesZ: 240,
+      seed: 9,
+      config: { parkShare: 0.4, streetTrees: true, gatePlazas: true },
+    }),
+  ];
+
+  it('keeps every rule the default sweep holds, whatever the settings', () => {
+    for (const set of CONFIGS) {
+      const plan = planOf(set);
+      const planted = new Set(plan.plots.map((plot) => plot.id));
+      const owed = TYPES.filter((type) => !DERIVED_IDS.has(type.id) && !planted.has(type.id));
+      expect({ set, missing: owed.map((type) => type.id) }).toEqual({ set, missing: [] });
+      const taken = new Set<string>();
+      for (const plot of plan.plots) {
+        const footprint = footprintOf(plot);
+        for (let z = plot.tileZ; z < plot.tileZ + footprint.z; z++) {
+          for (let x = plot.tileX; x < plot.tileX + footprint.x; x++) {
+            expect({ set, clash: taken.has(tileKey(x, z)) }).toEqual({ set, clash: false });
+            taken.add(tileKey(x, z));
+          }
+        }
+      }
+      expect(() => layoutResort(ITEMS, plan)).not.toThrow();
+    }
+  }, 60_000);
+
+  it('grows the same resort from an empty config as from the defaults', () => {
+    expect(generateResort(TYPES, params({ config: {} }))).toEqual(generateResort(TYPES, params()));
+  });
+
+  it('opens a square with a sign post inside every gate', () => {
+    const plan = planOf(CONFIGS[0]!);
+    expect(plan.plazas.length).toBeGreaterThanOrEqual(4);
+    expect(count(plan, 'sign-post')).toBeGreaterThanOrEqual(3);
+  });
+
+  it('lines the streets with trees instead of hedges', () => {
+    const plain = layoutResort(ITEMS, planOf(params()));
+    const lined = planOf(CONFIGS[0]!);
+    const { props } = layoutResort(ITEMS, lined);
+    const tree = lined.avenues!.tree;
+    expect(props.filter((prop) => prop.id === tree).length).toBeGreaterThan(20);
+    expect(props.filter((prop) => prop.id === HEDGE_ID).length).toBeLessThan(
+      plain.props.filter((prop) => prop.id === HEDGE_ID).length,
+    );
+  });
+
+  it('lays out no parks at a park share of nothing', () => {
+    expect(planOf(CONFIGS[2]!).parks ?? []).toEqual([]);
+  });
+
+  it('fills a packed beach fuller than a quiet one', () => {
+    const quiet = generateResort(TYPES, params({ config: { beach: 'quiet' } }));
+    const packed = generateResort(TYPES, params({ config: { beach: 'packed' } }));
+    expect(count(packed, 'sun-lounger')).toBeGreaterThan(count(quiet, 'sun-lounger'));
+  });
+
+  it('grows parks across two districts on a large plot', () => {
+    const plan = planOf(CONFIGS[4]!);
+    const widths = (plan.parks ?? []).map((park) => park.x1 - park.x0 + 1);
+    expect(Math.max(...widths)).toBeGreaterThan(Math.min(...widths) * 1.8);
   });
 });
 
@@ -373,6 +472,7 @@ describe('the shore a generated plot gets', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const elevation = elevationFor(plan)!;
+    const terrain = terrainFor(plan);
     const { paths } = layoutResort(ITEMS, plan);
     const paved = new Set(paths.map((tile) => `${tile.tileX},${tile.tileZ}`));
 
@@ -397,8 +497,13 @@ describe('the shore a generated plot gets', () => {
       // Sand rather than beach: the sidewalk along the shelf on top of the dune
       // is decking for the same reason the pier out to the water is.
       const ground = groundAt(shore, elevation, tile.tileX, tile.tileZ);
-      const wanted =
-        ground === 'water'
+      // A park's pond is water the sea is not, and a path crosses it on a bridge.
+      const inland = terrain.surfaceOf(tile.tileX, tile.tileZ) === 'water' && ground !== 'water';
+      const wanted = inland
+        ? tile.id === BRIDGE_RAMP_ID
+          ? BRIDGE_RAMP_ID
+          : BRIDGE_ID
+        : ground === 'water'
           ? JETTY_ID
           : climbs
             ? STAIRS_ID
@@ -459,19 +564,75 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('cuts a volleyball court into the back of the beach, never onto the tideline', () => {
+  it('stands every object that declares its ground on that ground, whole', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const terrain = terrainFor(plan);
+      const view = {
+        levelOf: terrain.levelOf,
+        isSand: (x: number, z: number) => terrain.surfaceOf(x, z) === 'sand',
+        isSea: terrain.isSea,
+      };
+      const wrong = plan.plots.filter((plot) => {
+        const ground = BY_ID.get(plot.id)!.placement?.ground;
+        if (!ground) return false;
+        const footprint = footprintOf(plot);
+        for (let x = plot.tileX; x < plot.tileX + footprint.x; x++) {
+          for (let z = plot.tileZ; z < plot.tileZ + footprint.z; z++) {
+            if (!groundTakes(ground, view, x, z)) return true;
+          }
+        }
+        return false;
+      });
+      expect({ set, wrong }).toEqual({ set, wrong: [] });
+    }
+  });
+
+  it('stands the volleyball courts and the pedalo rental in the numbers their models ask for', () => {
+    const small = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.min)!);
+    const large = planOf(SWEEP.find((set) => set.tilesX === 320)!);
+    expect(count(small, 'volleyball')).toBe(1);
+    expect(count(large, 'volleyball')).toBe(3);
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      expect({ set, courts: count(plan, 'volleyball') <= 3 }).toEqual({ set, courts: true });
+      expect({ set, minigolf: count(plan, 'minigolf') <= 3 }).toEqual({ set, minigolf: true });
+      expect({ set, rentals: count(plan, 'pedalo-rental') }).toEqual({ set, rentals: 1 });
+    }
+  });
+
+  it('stands the pedalo rental beside a pier, at the water', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const piers = new Set(paths.filter((tile) => tile.id === JETTY_ID).map((tile) => tile.tileX));
+      const hut = plan.plots.find((plot) => plot.id === 'pedalo-rental')!;
+      expect({ set, depth: beachDepthAt(shore, hut.tileX, hut.tileZ + 1) }).toEqual({
+        set,
+        depth: 1,
+      });
+      const beside = [...piers].some((x) => Math.abs(hut.tileX - x) <= 8);
+      expect({ set, beside }).toEqual({ set, beside: true });
+    }
+  });
+
+  it('lays the loungers and parasols out as a grid, a parasol behind a parasol', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
-    const shore = shoreFor(plan)!;
-    const courts = plan.plots.filter((plot) => plot.id === 'volleyball');
-    const onSand = courts.filter((court) => beachDepthAt(shore, court.tileX, court.tileZ) >= 0);
-    // The sand gets first refusal, because the court is in `BEACH_BACK` and the
-    // beach is filled before the districts are. The ones inland are a court on a
-    // lawn, which is a court.
-    expect(onSand.length).toBeGreaterThan(0);
-    // Behind the three lines of loungers, which is the whole of the rule that
-    // keeps a four-tile object off the tideline.
-    for (const court of onSand) {
-      expect(beachDepthAt(shore, court.tileX, court.tileZ)).toBeGreaterThanOrEqual(6);
+    const columns = (id: string) =>
+      new Set(plan.plots.filter((plot) => plot.id === id).map((plot) => plot.tileX));
+    const parasols = columns('beach-umbrella');
+    const loungers = columns('sun-lounger');
+    expect(parasols.size).toBeGreaterThan(3);
+    for (const x of parasols) {
+      expect({ x, flanked: loungers.has(x - 1) && loungers.has(x + 1) }).toEqual({
+        x,
+        flanked: true,
+      });
+      expect({ x, inLounger: loungers.has(x) }).toEqual({ x, inLounger: false });
+    }
+    for (const plot of plan.plots.filter((p) => p.id === 'beach-umbrella')) {
+      expect(plot.rotation).toBe(0);
     }
   });
 
@@ -490,6 +651,141 @@ describe('the shore a generated plot gets', () => {
           beachDepthAt(shore, tile.tileX, tile.tileZ) !== shore.spec.beach - 1,
       );
       expect({ set, wrong }).toEqual({ set, wrong: [] });
+    }
+  });
+});
+
+describe('the districts a generated plot lays out by design', () => {
+  it('lays out parks with a pond, a bridge over it, trees and benches', () => {
+    const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const { paths, props } = layoutResort(ITEMS, plan);
+    const parks = plan.parks ?? [];
+    expect(parks.length).toBeGreaterThan(1);
+    for (const park of parks) {
+      const ramps = paths.filter(
+        (tile) => tile.id === BRIDGE_RAMP_ID && inside(park, tile.tileX, tile.tileZ),
+      );
+      const benches = props.filter(
+        (prop) => prop.id === 'bench' && inside(park, prop.tileX, prop.tileZ),
+      );
+      const trees = plan.plots.filter(
+        (plot) =>
+          BY_ID.get(plot.id)!.category === 'grounds' && inside(park, plot.tileX, plot.tileZ),
+      );
+      // Every crossing comes ashore at both ends, so a park lays ramps in pairs;
+      // a park round a fountain may lay none.
+      expect({ park, ramps: ramps.length % 2 }).toEqual({ park, ramps: 0 });
+      expect({ park, benches: benches.length > 0 }).toEqual({ park, benches: true });
+      expect({ park, trees: trees.length > 0 }).toEqual({ park, trees: true });
+    }
+  });
+
+  it('lays the parks out in more than one design, with tables, fountains and long bridges', () => {
+    const inParks = (plan: ReturnType<typeof generateResort>, id: string) =>
+      plan.plots.filter(
+        (plot) =>
+          plot.id === id && (plan.parks ?? []).some((park) => inside(park, plot.tileX, plot.tileZ)),
+      ).length;
+    const grown = SWEEP.map(planOf);
+    expect(grown.some((plan) => inParks(plan, 'picnic-table') > 0)).toBe(true);
+    expect(grown.some((plan) => inParks(plan, 'fountain') > 0)).toBe(true);
+    const decks = grown.some((plan) => {
+      const { paths } = layoutResort(ITEMS, plan);
+      return paths.some(
+        (tile) =>
+          tile.id === BRIDGE_ID &&
+          (plan.parks ?? []).some((park) => inside(park, tile.tileX, tile.tileZ)),
+      );
+    });
+    expect(decks).toBe(true);
+    // Different shapes of water: not every park's pond is the same size.
+    const ponds = new Set(
+      grown.flatMap((plan) =>
+        (plan.parks ?? []).map(
+          (park) =>
+            (plan.terrain ?? []).filter((edit) => inside(park, edit.tileX, edit.tileZ)).length,
+        ),
+      ),
+    );
+    expect(ponds.size).toBeGreaterThan(3);
+  });
+
+  it('stands villas only in the numbers their model allows, and only among houses', () => {
+    const cap = BY_ID.get('villa')!.placement!.perResort!;
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const villas = plan.plots.filter((plot) => plot.id === 'villa');
+      expect({ set, capped: villas.length <= cap.max }).toEqual({ set, capped: true });
+      const houses = plan.plots.filter(
+        (plot) => plot.id !== 'villa' && BY_ID.get(plot.id)!.category === 'lodging',
+      );
+      // Near enough to read as on the same street, which a thinned walk spreads
+      // out to a lot or two apart.
+      const lonely = villas.filter(
+        (villa) =>
+          !houses.some(
+            (house) =>
+              Math.abs(house.tileX - villa.tileX) <= 16 && Math.abs(house.tileZ - villa.tileZ) <= 8,
+          ),
+      );
+      // A plot too small for a block of houses stands the one villa the
+      // catalogue owes wherever a district has room for it.
+      const owed = set.tilesX < 80 && villas.length === 1 ? 1 : 0;
+      expect({ set, lonely: lonely.length <= owed }).toEqual({ set, lonely: true });
+    }
+  });
+
+  it('stands fountains only in plazas and parks, and loungers only on the sand or by a pool', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const shore = shoreFor(plan)!;
+      const elevation = elevationFor(plan);
+      const squares = [...plan.plazas, ...(plan.parks ?? [])];
+      const stray = plan.plots.filter(
+        (plot) =>
+          plot.id === 'fountain' && !squares.some((rect) => inside(rect, plot.tileX, plot.tileZ)),
+      );
+      expect({ set, stray }).toEqual({ set, stray: [] });
+      const pools = plan.plots.filter((plot) => plot.id === 'swimming-pool');
+      const inland = plan.plots.filter(
+        (plot) =>
+          plot.id === 'sun-lounger' &&
+          terrainAt(shore, plot.tileX, plot.tileZ) !== 'beach' &&
+          levelAt(elevation, plot.tileX, plot.tileZ) === 0 &&
+          !pools.some((pool) => {
+            const extent = footprintOf(pool);
+            return (
+              plot.tileX === pool.tileX + extent.x &&
+              plot.tileZ >= pool.tileZ &&
+              plot.tileZ < pool.tileZ + extent.z
+            );
+          }),
+      );
+      // One can still stand where the catalogue owed it before the beach had any.
+      expect({ set, inland: inland.length <= 1 }).toEqual({ set, inland: true });
+    }
+  });
+
+  it('keeps the parks for plots with room to spare after the catalogue', () => {
+    const small = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.min)!);
+    expect(small.standsWholeCatalogue).toBe(true);
+    const large = planOf(SWEEP.find((set) => set.tilesX === 320)!);
+    expect((large.parks ?? []).length).toBeGreaterThan(5);
+  });
+
+  it('stands the houses on flat ground in rows facing the streets', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const elevation = elevationFor(plan);
+      const flat = plan.plots.filter(
+        (plot) =>
+          BY_ID.get(plot.id)!.category === 'lodging' &&
+          levelAt(elevation, plot.tileX, plot.tileZ) === 0,
+      );
+      // Blocks stand every house square to the street; only a lodging type the
+      // blocks could not stand is left to a mixed district to turn.
+      const square = flat.filter((plot) => (plot.rotation ?? 0) % 2 === 0);
+      expect({ set, square: square.length >= flat.length * 0.9 }).toEqual({ set, square: true });
     }
   });
 });
@@ -601,6 +897,23 @@ describe('the hill a generated plot gets', () => {
         .map((plot) => levelAt(elevation, plot.tileX, plot.tileZ)),
     );
     expect(heights.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it('stands every bungalow on the shelf facing the sea', () => {
+    // The model's veranda faces +z, which is the water on every generated plot,
+    // so the row south of the sidewalk stands with its back to the walk.
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const elevation = elevationFor(plan);
+      if (!elevation) continue;
+      const turned = plan.plots.filter(
+        (plot) =>
+          plot.id === 'bungalow' &&
+          levelAt(elevation, plot.tileX, plot.tileZ) > 0 &&
+          (plot.rotation ?? 0) !== 0,
+      );
+      expect({ set, turned }).toEqual({ set, turned: [] });
+    }
   });
 
   it('never turns a whole cross street into one long staircase', () => {

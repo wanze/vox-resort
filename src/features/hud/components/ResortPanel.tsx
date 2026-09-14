@@ -5,6 +5,8 @@ import {
   PLOT_TILES,
   type ResortParams,
 } from '../../layout/domain/resortGenerator';
+import { sameConfig } from '../../layout/domain/resortConfig';
+import { ResortAdvanced } from './ResortAdvanced';
 
 export interface ResortPanelProps {
   /** What the resort on screen was grown from. */
@@ -20,12 +22,10 @@ const rollSeed = (): number => Math.floor(Math.random() * 0xffffffff);
 
 /** Whether the controls have been moved since the resort on screen was grown. */
 function isStaged(draft: ResortParams, grown: ResortParams): boolean {
-  return (
-    draft.tilesX !== grown.tilesX ||
-    draft.tilesZ !== grown.tilesZ ||
-    draft.density !== grown.density ||
-    draft.seed !== grown.seed
+  const moved = (['tilesX', 'tilesZ', 'density', 'seed'] as const).some(
+    (key) => draft[key] !== grown[key],
   );
+  return moved || !sameConfig(draft.config, grown.config);
 }
 
 /** What the button offers: the work, a different resort, or the same one again. */
@@ -117,6 +117,8 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
           ⟳
         </button>
       </div>
+
+      <ResortAdvanced config={draft.config} onChange={(config) => change({ config })} />
 
       <div className="hud-resort-actions">
         <button

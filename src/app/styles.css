@@ -176,6 +176,7 @@ body {
 .hud-resort-roll,
 .hud-resort-go,
 .hud-resort-clear,
+.hud-resort-choice,
 .build-group-toggle,
 .hud-palette-armed {
   appearance: none;
@@ -201,6 +202,7 @@ body {
 .hud-resort-roll:hover:not(:disabled),
 .hud-resort-go:hover:not(:disabled),
 .hud-resort-clear:hover:not(:disabled),
+.hud-resort-choice:hover,
 .build-group-toggle:hover,
 .hud-palette-armed:hover {
   background-color: rgb(255 255 255 / 6%);
@@ -210,7 +212,8 @@ body {
 /* Pressed in, which is what "on" looks like in stone. */
 .hud-popover-toggle[aria-expanded='true'],
 .hud-camera-mode[aria-pressed='true'],
-.hud-camera-point[aria-pressed='true'] {
+.hud-camera-point[aria-pressed='true'],
+.hud-resort-choice[aria-pressed='true'] {
   background-image: var(--sunken);
   box-shadow: var(--bevel-in);
   border-color: rgb(0 0 0 / 70%);
@@ -571,6 +574,56 @@ input[type='checkbox'] {
   width: 100%;
   height: var(--control-h);
   font-size: var(--size-body);
+}
+
+/* Folded away by default: the settings most resorts never need touched. */
+.hud-resort-advanced > summary {
+  cursor: pointer;
+  font-size: var(--size-label);
+  font-weight: 700;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.hud-resort-advanced > summary:hover {
+  color: var(--stucco);
+}
+
+.hud-resort-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.hud-resort-choice-row {
+  grid-template-columns: 58px 1fr;
+}
+
+.hud-resort-choices {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.hud-resort-choice {
+  flex: 1;
+  height: 24px;
+  padding: 0 var(--space-1);
+  text-transform: capitalize;
+}
+
+.hud-resort-flags {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.hud-resort-flag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--size-small);
+  color: var(--text-dim);
 }
 
 .hud-resort-actions {

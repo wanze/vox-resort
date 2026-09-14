@@ -156,6 +156,22 @@ export interface ResortPlan {
    */
   readonly terrain?: readonly TerrainEdit[];
   /**
+   * Rectangles laid out as parks: lawns with a pond, a bridge and trees.
+   *
+   * The layout reads them for one thing, which is that a park is somewhere to
+   * sit: benches along its paths stand closer together than they do along a
+   * street, and no hedge walls a park lawn off. Absent means the plot has none.
+   */
+  readonly parks?: readonly Plaza[];
+  /**
+   * Streets lined with trees instead of hedges, and the tree they are lined with.
+   *
+   * Dressing like the hedges it replaces, so it is laid out by `layoutResort`
+   * once the spurs are down and can never wall anything in: a tree on every
+   * third free tile beside the street, in a straight row. Absent means hedges.
+   */
+  readonly avenues?: { readonly tree: string; readonly streets: readonly Plaza[] };
+  /**
    * Whether every catalogue type is meant to stand somewhere on this plan.
    *
    * True by default, and true of the authored plan: a type in the catalogue that
@@ -241,10 +257,10 @@ export const BENCH_ID = 'bench';
  *
  * Not a derived id — the plan places one like any other object, and the layout
  * lays nothing of the sort itself. It is named here because it is the one
- * catalogue entry two features outside the layout have to find by name: the
- * generator holds it to the shore (see `SHORE_ONLY`), and the bay steers its
- * hire craft home to wherever it ended up standing (see `features/sea/`). Two
- * copies of a string literal is exactly how a rename goes quietly wrong.
+ * catalogue entry a feature outside the layout has to find by name: the bay
+ * steers its hire craft home to wherever it ended up standing (see
+ * `features/sea/`). Where it may stand is the model's to say — its
+ * `placement.ground` holds it to the shore.
  */
 export const PEDALO_RENTAL_ID = 'pedalo-rental';
 
@@ -443,8 +459,8 @@ export const RESORT_PLAN: ResortPlan = {
     // The hire hut. It belongs on sand and this plan has none — it is the plot a
     // `?bench=1` run measures, and that plot is land to its edges — so it stands
     // by the pool here, which is the nearest thing to a shore the authored
-    // resort has. A generated plot puts it where it goes; see `SHORE_ONLY` in
-    // `resortGenerator.ts`.
+    // resort has. A generated plot puts it where it goes; see `standBeachFeatures`
+    // in `resortGenerator.ts`.
     at('pedalo-rental', 53, 29),
 
     // E — the beach club and the villa quarter

@@ -119,6 +119,29 @@ The benchmark only compares runs if the scene is identical. So spawning and ever
 choice use a seeded PRNG (`createRandom`), bench mode uses a fixed timestep, and
 outside bench mode the frame delta is clamped (`MAX_STEP`).
 
+## The clock
+
+`sim/domain/simClock.ts`. The whole state is `ticks`, whole simulated minutes
+since the resort opened, plus the speed and a sub-tick carry. Day, hour and time
+of day are derived from it; `skyStateFor` still takes only the time of day.
+
+- One tick is 60 simulated seconds; a day is 1 440 ticks.
+- The fraction of a tick a frame is worth is carried, so no time is lost.
+- One advance runs at most 12 ticks, for `MAX_STEP`'s reason. The overflow is
+  dropped, so under load the clock runs behind real time.
+- Under a benchmark it is stepped by `MAX_STEP`, like the crowd.
+- The resort opens paused. Speeds are real seconds per simulated day:
+
+| Speed  | Real seconds per day |
+| ------ | -------------------- |
+| Slow   | 900                  |
+| Normal | 300                  |
+| Fast   | 120                  |
+| Rush   | 30                   |
+
+Nothing runs on ticks yet. The crowd, balloons and sea are animation and stay on
+the frame delta.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`, so they

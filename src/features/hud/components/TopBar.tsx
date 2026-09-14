@@ -17,6 +17,7 @@ export interface TopBarProps {
   readonly drawnElement: RefObject<HTMLSpanElement | null>;
   readonly frameCostElements: FrameCostElements;
   readonly timeElement: RefObject<HTMLInputElement | null>;
+  readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
@@ -41,6 +42,7 @@ export function TopBar(props: TopBarProps) {
     drawnElement,
     frameCostElements,
     timeElement,
+    clockElement,
     clock,
     camera,
     resort,
@@ -52,9 +54,10 @@ export function TopBar(props: TopBarProps) {
     <header className="hud-bar">
       <TimeOfDay
         timeElement={timeElement}
-        cycling={clock.cycling}
+        clockElement={clockElement}
+        speed={clock.speed}
         onTimeChange={clock.setTime}
-        onCyclingChange={clock.setCycling}
+        onSpeedChange={clock.setSpeed}
       />
 
       <div className="hud-bar-readouts">

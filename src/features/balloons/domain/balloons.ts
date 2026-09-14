@@ -26,7 +26,7 @@
  */
 
 import { createRandom } from '../../layout/domain/random';
-import { normalizeTime, smoothstep } from '../../lighting/domain/dayNight';
+import { SUNSET_TIME, normalizeTime, smoothstep } from '../../lighting/domain/dayNight';
 
 /**
  * How long one balloon's flight lasts, in seconds.
@@ -143,12 +143,15 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
  * has to follow the sun because it *is* the sun — since what decides this is
  * the hour people come down to the beach for it.
  *
- * 0.75 is sunset, so this opens a little before it, is fully up through the
- * blue hour and is over by roughly ten at night.
+ * It opens an hour before {@link SUNSET_TIME}, is fully up through the blue hour
+ * and is over by about eleven.
  */
 export function releaseStrength(time: number): number {
   const clock = normalizeTime(time);
-  return smoothstep(0.71, 0.78, clock) * (1 - smoothstep(0.86, 0.94, clock));
+  return (
+    smoothstep(SUNSET_TIME - 0.04, SUNSET_TIME + 0.03, clock) *
+    (1 - smoothstep(SUNSET_TIME + 0.08, SUNSET_TIME + 0.13, clock))
+  );
 }
 
 /** Puts a balloon back on the sand, waiting for somebody to light it. */

@@ -32,23 +32,23 @@ function run(
 
 describe('releaseStrength', () => {
   it('lets nothing go in broad daylight', () => {
-    for (const time of [0.1, 0.3, 0.5, 0.62]) expect(releaseStrength(time)).toBe(0);
+    for (const time of [0.1, 0.3, 0.5, 0.62, 0.75]) expect(releaseStrength(time)).toBe(0);
   });
 
-  it('is fully up through the blue hour, either side of sunset', () => {
-    expect(releaseStrength(0.8)).toBeCloseTo(1, 5);
-    expect(releaseStrength(0.84)).toBeGreaterThan(0.9);
+  it('is fully up through the blue hour, just after sunset', () => {
+    expect(releaseStrength(0.875)).toBeCloseTo(1, 5);
+    expect(releaseStrength(0.9)).toBeGreaterThan(0.9);
   });
 
-  it('is over well before midnight, and does not come back', () => {
-    expect(releaseStrength(0.95)).toBe(0);
+  it('is over before midnight, and does not come back', () => {
+    expect(releaseStrength(0.975)).toBe(0);
     expect(releaseStrength(0.99)).toBe(0);
     expect(releaseStrength(0)).toBe(0);
   });
 
   it('reads a clock that has run past midnight', () => {
-    expect(releaseStrength(1.8)).toBe(releaseStrength(0.8));
-    expect(releaseStrength(-0.2)).toBe(releaseStrength(0.8));
+    expect(releaseStrength(1.875)).toBe(releaseStrength(0.875));
+    expect(releaseStrength(-0.125)).toBe(releaseStrength(0.875));
   });
 });
 

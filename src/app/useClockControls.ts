@@ -1,36 +1,36 @@
 import { useCallback, useState, type RefObject } from 'react';
 import type { Showcase } from './showcase';
+import type { SimSpeed } from '../features/sim/domain/simClock';
 
 /**
- * The time-of-day controls, as React state.
+ * The clock controls, as React state.
  *
- * Only whether the cycle is running lives here. The time itself does not: it
- * moves every frame while the cycle runs, and the slider is written straight to
- * the DOM by `hudOverlay` rather than through React — see `useHudNodes`.
+ * Only the speed lives here. The time does not: it moves every frame while the
+ * resort runs, and the slider and the day readout are written straight to the
+ * DOM by `hudOverlay` rather than through React — see `useHudNodes`.
  */
 export interface ClockControls {
-  readonly cycling: boolean;
-  /** Jumps to a moment of the day, which also stops the cycle. */
+  readonly speed: SimSpeed;
+  /** Jumps to a moment of the day; the resort keeps running. */
   setTime(time: number): void;
-  setCycling(cycling: boolean): void;
+  setSpeed(speed: SimSpeed): void;
 }
 
 export function useClockControls(showcase: RefObject<Showcase | null>): ClockControls {
-  const [cycling, setCycling] = useState(false);
+  const [speed, setSpeed] = useState<SimSpeed>('paused');
 
   return {
-    cycling,
+    speed,
     setTime: useCallback(
       (time: number) => {
-        setCycling(false);
         showcase.current?.setTime(time);
       },
       [showcase],
     ),
-    setCycling: useCallback(
-      (next: boolean) => {
-        setCycling(next);
-        showcase.current?.setCycling(next);
+    setSpeed: useCallback(
+      (next: SimSpeed) => {
+        setSpeed(next);
+        showcase.current?.setSpeed(next);
       },
       [showcase],
     ),

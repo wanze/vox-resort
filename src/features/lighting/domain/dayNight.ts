@@ -1,8 +1,9 @@
 /**
  * The day/night cycle, as pure arithmetic.
  *
- * Time runs 0..1 through one day: 0 is midnight, 0.25 sunrise, 0.5 noon, 0.75
- * sunset. Everything the scene needs is derived from the sun's elevation — the
+ * Time runs 0..1 through one day on the clock: 0 is midnight, {@link SUNRISE_TIME}
+ * is sunrise and {@link SUNSET_TIME} sunset. Everything the scene needs is
+ * derived from the sun's elevation — the
  * sun's own direction and colour, how much ambient sky light there is, what the
  * background fades to, and how strongly the lamps placed around the resort burn.
  *
@@ -68,11 +69,40 @@ const SUN_HIGH = 0xfff4e0;
 const AMBIENT_NIGHT = 0x2b3a5c;
 const AMBIENT_DAY = 0xc3d9f5;
 
+/** The sun is on the horizon, coming up, at 06:00. */
+const SUNRISE_TIME = 6 / 24;
+
+/**
+ * The sun is on the horizon, going down, at 20:00: a summer evening on the
+ * coast. The light turns golden about half an hour before and the sky is dark
+ * about ten minutes after, so the evening is still daylight at seven.
+ */
+export const SUNSET_TIME = 20 / 24;
+
+/**
+ * Where the sun is in its own arc, 0..1 with 0.25 rising and 0.75 setting, at a
+ * time on the clock.
+ *
+ * The arc itself stays a plain sine; what moves is how fast the clock walks it.
+ * The day, sunrise to sunset, is stretched over its fourteen hours and the night
+ * squeezed into the other ten. The two pieces meet at the horizon, so nothing
+ * jumps there, and solar noon falls at 13:00 rather than 12:00, which is also
+ * what summer time does.
+ */
+function solarTimeFor(clock: number): number {
+  const dayLength = SUNSET_TIME - SUNRISE_TIME;
+  if (clock >= SUNRISE_TIME && clock < SUNSET_TIME) {
+    return 0.25 + ((clock - SUNRISE_TIME) / dayLength) * 0.5;
+  }
+  const sinceSunset = normalizeTime(clock - SUNSET_TIME);
+  return normalizeTime(0.75 + (sinceSunset / (1 - dayLength)) * 0.5);
+}
+
 /** Everything the scene's lighting needs for one moment of the day. */
 export function skyStateFor(time: number): SkyState {
   const normalized = normalizeTime(time);
   // Angle 0 at sunrise, so elevation is simply its sine.
-  const angle = (normalized - 0.25) * TAU;
+  const angle = (solarTimeFor(normalized) - 0.25) * TAU;
   const elevation = Math.sin(angle);
   const length = Math.hypot(Math.cos(angle), elevation, 0.35);
 

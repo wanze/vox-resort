@@ -108,6 +108,7 @@ export function App() {
           shaders: hudNodes.shaders,
         }}
         timeElement={hudNodes.time}
+        clockElement={hudNodes.clock}
         clock={clock}
         camera={camera}
         resort={resort}

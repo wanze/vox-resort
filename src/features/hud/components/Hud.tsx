@@ -1,24 +1,10 @@
-import type { RefObject } from 'react';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { HudError } from './HudError';
-import { TopBar } from './TopBar';
-import type { FrameCostElements } from './RenderStats';
-import type { CameraControls } from '../../../app/useCameraControls';
-import type { ClockControls } from '../../../app/useClockControls';
-import type { ResortControls } from '../../../app/useResortControls';
-import type { ShowcaseStats } from '../../../app/showcase';
+import { TopBar, type TopBarProps } from './TopBar';
 import type { BuildTool } from '../../build/domain/buildTool';
 
-export interface HudProps {
-  readonly fps: number;
-  readonly stats: ShowcaseStats | null;
-  readonly activeLightsElement: RefObject<HTMLSpanElement | null>;
-  readonly drawnElement: RefObject<HTMLSpanElement | null>;
-  readonly frameCostElements: FrameCostElements;
-  readonly timeElement: RefObject<HTMLInputElement | null>;
-  readonly clock: ClockControls;
-  readonly camera: CameraControls;
-  readonly resort: ResortControls;
+/** Everything the bar takes, and the palette and the error beneath it. */
+export interface HudProps extends TopBarProps {
   /** Where the palette's tiles get their pictures; see {@link PreviewLookup}. */
   readonly preview: PreviewLookup;
   /** What the pointer is holding, or null when it is empty. */
@@ -38,6 +24,7 @@ export function Hud(props: HudProps) {
         drawnElement={props.drawnElement}
         frameCostElements={props.frameCostElements}
         timeElement={props.timeElement}
+        clockElement={props.clockElement}
         clock={props.clock}
         camera={props.camera}
         resort={props.resort}

@@ -11,6 +11,8 @@ import { useMemo, useRef, type RefObject } from 'react';
 export interface HudNodes {
   readonly activeLights: RefObject<HTMLSpanElement | null>;
   readonly time: RefObject<HTMLInputElement | null>;
+  /** The day and the hour, as text. */
+  readonly clock: RefObject<HTMLSpanElement | null>;
   readonly drawn: RefObject<HTMLSpanElement | null>;
   readonly cpu: RefObject<HTMLSpanElement | null>;
   readonly detail: RefObject<HTMLSpanElement | null>;
@@ -20,6 +22,7 @@ export interface HudNodes {
 export function useHudNodes(): HudNodes {
   const activeLights = useRef<HTMLSpanElement | null>(null);
   const time = useRef<HTMLInputElement | null>(null);
+  const clock = useRef<HTMLSpanElement | null>(null);
   const drawn = useRef<HTMLSpanElement | null>(null);
   const cpu = useRef<HTMLSpanElement | null>(null);
   const detail = useRef<HTMLSpanElement | null>(null);
@@ -27,7 +30,7 @@ export function useHudNodes(): HudNodes {
   // One stable object, so the effect that mounts the renderer can depend on it
   // and still run exactly once.
   return useMemo(
-    () => ({ activeLights, time, drawn, cpu, detail, shaders }),
-    [activeLights, time, drawn, cpu, detail, shaders],
+    () => ({ activeLights, time, clock, drawn, cpu, detail, shaders }),
+    [activeLights, time, clock, drawn, cpu, detail, shaders],
   );
 }

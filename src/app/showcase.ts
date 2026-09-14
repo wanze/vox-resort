@@ -86,6 +86,17 @@ import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
 import type { WorldBounds } from '../features/layout/domain/worldBounds';
 import { skyStateFor } from '../features/lighting/domain/dayNight';
+import {
+  advanceClock,
+  clockLabel,
+  createSimClock,
+  dayOf,
+  timeOf,
+  withSpeed,
+  withTime,
+  type SimClock,
+  type SimSpeed,
+} from '../features/sim/domain/simClock';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
 import { cellCount, gridByteSize } from '../features/lighting/domain/lightGrid';
@@ -231,11 +242,8 @@ const SEA_SEED = 3;
  */
 const CREW_SEED = 4;
 
-/** Where the clock starts: late afternoon, so the scene reads in daylight. */
+/** Where day 0 opens: late afternoon, so the scene reads in daylight. */
 const INITIAL_TIME = 0.62;
-
-/** Real seconds one full day takes when the cycle is running. */
-const DAY_SECONDS = 90;
 
 export interface ShowcaseStats {
   readonly backend: 'webgpu' | 'webgl2';
@@ -386,10 +394,10 @@ export interface Showcase {
    * or null to put it down. One tool at a time; see `buildTool.ts`.
    */
   selectTool(tool: BuildTool | null): void;
-  /** Jumps the clock to a moment of the day and stops the cycle. */
+  /** Jumps the clock to a moment of the current day; the resort keeps running. */
   setTime(time: number): void;
-  /** Starts or stops the automatic day/night cycle. */
-  setCycling(cycling: boolean): void;
+  /** How fast the resort runs, pause included; see `sim/domain/simClock.ts`. */
+  setSpeed(speed: SimSpeed): void;
   dispose(): void;
 }
 
@@ -1228,36 +1236,52 @@ function sceneStats(parts: {
 }
 
 /**
- * The scene's clock: the time of day, whether it is running, and the sky and
- * lamp strength that follow from it.
+ * The scene's clock: the simulation's calendar and speed, and the sky and lamp
+ * strength that follow from its time of day. See `sim/domain/simClock.ts`.
  *
- * The sky is recomputed only when the clock actually moves — which is most of
- * the time it does not, since the cycle starts stopped — and that is a whole
- * scene's worth of colour and light updates nothing would have looked at.
+ * The sky is recomputed only when the time of day actually moves — which is
+ * most of the time it does not, since the resort opens paused — and that is a
+ * whole scene's worth of colour and light updates nothing would have looked at.
  */
 interface Clock {
-  /** Normalised time of day, 0..1. */
+  /** Normalised time of day, 0..1, which is what the sky is drawn from. */
   readonly time: number;
+  /** Whole days since the resort opened. */
+  readonly day: number;
+  /** `"Day 3  14:20"`, for the HUD. */
+  readonly label: string;
+  readonly speed: SimSpeed;
   /** Lamps contributing right now: the bake lights all of them, or none. */
   readonly litLamps: number;
   /** How freely the beach is letting balloons go; see `releaseStrength`. */
   readonly balloonReadiness: number;
-  /** Moves the clock on by a frame's worth of seconds, if it is running. */
-  advance(elapsedSeconds: number): void;
+  /**
+   * Moves the clock on by a frame's worth of real seconds and hands back the
+   * whole simulated ticks that frame is worth. Nothing runs them yet; plan
+   * 016 is the first caller that will.
+   */
+  advance(elapsedSeconds: number): number;
   /** Re-applies the time of day to a scene that has just been rebuilt. */
   relight(): void;
-  /** Jumps to a moment of the day and stops the cycle. */
+  /**
+   * Jumps to a moment of the current day. Does not change the speed.
+   *
+   * Deliberately unlike the old cycle checkbox, which this stopped: with a speed
+   * control beside it, dragging the sun to sunset while the resort runs is a
+   * reasonable thing to want.
+   */
   setTime(time: number): void;
-  setCycling(cycling: boolean): void;
+  setSpeed(speed: SimSpeed): void;
 }
 
 function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
-  let time = startTime;
-  let cycling = false;
+  let clock: SimClock = createSimClock(0, startTime);
+  let time = timeOf(clock);
   let sky = skyStateFor(time);
   let applied: number | null = null;
 
   const apply = (): void => {
+    time = timeOf(clock);
     if (time === applied) return;
     sky = skyStateFor(time);
     handle.applySky(sky);
@@ -1278,6 +1302,15 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     get time() {
       return time;
     },
+    get day() {
+      return dayOf(clock);
+    },
+    get label() {
+      return clockLabel(clock);
+    },
+    get speed() {
+      return clock.speed;
+    },
     get litLamps() {
       return sky.lampFactor > 0 ? resort().lighting.litCount : 0;
     },
@@ -1291,15 +1324,16 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       apply();
     },
     advance(elapsedSeconds) {
-      if (cycling) time = (time + elapsedSeconds / DAY_SECONDS) % 1;
+      const advanced = advanceClock(clock, elapsedSeconds);
+      clock = advanced.clock;
       apply();
+      return advanced.ticks;
     },
     setTime(next) {
-      cycling = false;
-      time = next;
+      clock = withTime(clock, next);
     },
-    setCycling(next) {
-      cycling = next;
+    setSpeed(next) {
+      clock = withSpeed(clock, next);
     },
   };
 }
@@ -2077,7 +2111,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
-    clock.advance(elapsed);
+    // Off the fixed step under a benchmark, exactly as everything below it is: a
+    // clock driven by the frame's own delta is a scene that is somewhere else on
+    // the same frame of two runs. The ticks it hands back are not run by anything
+    // yet; plan 016 is the first to.
+    clock.advance(bench ? MAX_STEP : elapsed);
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on
     // the same frame of each, and the frame's `dt` is exactly what differs
@@ -2116,6 +2154,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onFrame({
       fps: fpsState.fps,
       time: clock.time,
+      clock: clock.label,
       activeLights: clock.litLamps,
       drawCalls: handle.renderer.info.render.drawCalls,
       triangles: handle.renderer.info.render.triangles,
@@ -2167,7 +2206,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     selectTool: (tool) => build.select(tool),
     setTime: clock.setTime,
-    setCycling: clock.setCycling,
+    setSpeed: clock.setSpeed,
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);

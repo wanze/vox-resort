@@ -172,6 +172,7 @@ body {
 /* A block sitting proud of one. */
 .hud-popover-toggle,
 .hud-camera-mode,
+.hud-time-speed,
 .hud-camera-point,
 .hud-resort-roll,
 .hud-resort-go,
@@ -198,6 +199,7 @@ body {
 
 .hud-popover-toggle:hover,
 .hud-camera-mode:hover:not(:disabled),
+.hud-time-speed:hover:not(:disabled),
 .hud-camera-point:hover:not(:disabled),
 .hud-resort-roll:hover:not(:disabled),
 .hud-resort-go:hover:not(:disabled),
@@ -212,6 +214,7 @@ body {
 /* Pressed in, which is what "on" looks like in stone. */
 .hud-popover-toggle[aria-expanded='true'],
 .hud-camera-mode[aria-pressed='true'],
+.hud-time-speed[aria-pressed='true'],
 .hud-camera-point[aria-pressed='true'],
 .hud-resort-choice[aria-pressed='true'] {
   background-image: var(--sunken);
@@ -221,7 +224,8 @@ body {
 }
 
 .hud-camera-point[aria-pressed='true'],
-.hud-camera-mode[aria-pressed='true'] {
+.hud-camera-mode[aria-pressed='true'],
+.hud-time-speed[aria-pressed='true'] {
   color: var(--terracotta-lit);
 }
 
@@ -321,7 +325,6 @@ input[type='checkbox'] {
 .hud-palette-title,
 .build-group-label,
 .hud-palette-armed-label,
-.hud-time-cycle,
 .hud-stat dt {
   font-size: var(--size-label);
   font-weight: 700;
@@ -422,21 +425,33 @@ input[type='checkbox'] {
     90deg,
     #101a2c 0%,
     #2e3f5e 18%,
-    var(--terracotta) 30%,
-    var(--sand) 46%,
-    #9fd4e8 56%,
-    var(--terracotta) 72%,
-    #2e3f5e 84%,
+    var(--terracotta) 28%,
+    var(--sand) 48%,
+    #9fd4e8 58%,
+    var(--terracotta) 82%,
+    #2e3f5e 88%,
     #101a2c 100%
   );
 }
 
-.hud-time-cycle {
+/* Fixed width and tabular figures, so the bar does not shift as the minutes and
+   the days tick over. */
+.hud-time-clock {
+  min-width: 11ch;
+  font: 600 var(--size-small) / 1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--sand);
+}
+
+.hud-time-speeds {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  cursor: pointer;
-  user-select: none;
+  gap: var(--space-1);
+}
+
+.hud-time-speed {
+  height: var(--control-h);
+  padding: 0 var(--space-2);
 }
 
 /* ---- Popovers --------------------------------------------------------- */

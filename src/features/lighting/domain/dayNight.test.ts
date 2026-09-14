@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { mixColor, normalizeTime, skyStateFor, smoothstep } from './dayNight';
+import { SUNSET_TIME, mixColor, normalizeTime, skyStateFor, smoothstep } from './dayNight';
+
+/** A time on the clock, from hours and minutes. */
+const at = (hours: number, minutes = 0): number => (hours + minutes / 60) / 24;
 
 describe('normalizeTime', () => {
   it('leaves a time already inside the day alone', () => {
@@ -45,9 +48,10 @@ describe('smoothstep', () => {
 });
 
 describe('skyStateFor', () => {
-  it('puts the sun overhead at noon and below the horizon at midnight', () => {
-    expect(skyStateFor(0.5).sunDirection.y).toBeGreaterThan(0.9);
-    expect(skyStateFor(0).sunDirection.y).toBeLessThan(-0.9);
+  it('puts the sun overhead at solar noon and below the horizon at solar midnight', () => {
+    // An hour after the clock's, since sunset is two hours later than sunrise is early.
+    expect(skyStateFor(at(13)).sunDirection.y).toBeGreaterThan(0.9);
+    expect(skyStateFor(at(1)).sunDirection.y).toBeLessThan(-0.9);
   });
 
   it('holds the sun direction on the unit sphere all day', () => {
@@ -58,8 +62,35 @@ describe('skyStateFor', () => {
   });
 
   it('rises in the east and sets in the west', () => {
-    expect(skyStateFor(0.25).sunDirection.x).toBeGreaterThan(0.5);
-    expect(skyStateFor(0.75).sunDirection.x).toBeLessThan(-0.5);
+    expect(skyStateFor(at(6)).sunDirection.x).toBeGreaterThan(0.5);
+    expect(skyStateFor(SUNSET_TIME).sunDirection.x).toBeLessThan(-0.5);
+  });
+
+  it('puts the sun on the horizon at six in the morning and at sunset', () => {
+    expect(skyStateFor(at(6)).sunDirection.y).toBeCloseTo(0, 6);
+    expect(skyStateFor(SUNSET_TIME).sunDirection.y).toBeCloseTo(0, 6);
+  });
+
+  it('stands the sun highest at one in the afternoon, as summer time does', () => {
+    const noon = skyStateFor(at(13)).sunDirection.y;
+    expect(noon).toBeGreaterThan(skyStateFor(at(12)).sunDirection.y);
+    expect(noon).toBeGreaterThan(skyStateFor(at(14)).sunDirection.y);
+  });
+
+  it('is still full daylight at seven in the evening and dark by a quarter past eight', () => {
+    expect(skyStateFor(at(19)).lampFactor).toBe(0);
+    expect(skyStateFor(at(19)).sunIntensity).toBeGreaterThan(1.5);
+    expect(skyStateFor(at(20, 15)).sunIntensity).toBe(0);
+    expect(skyStateFor(at(20, 15)).ambientIntensity).toBeCloseTo(0.22, 2);
+  });
+
+  it('moves the sun without a jump where the day and the night meet', () => {
+    const step = 1 / (24 * 60);
+    for (const edge of [at(6), SUNSET_TIME]) {
+      const before = skyStateFor(edge - step).sunDirection.y;
+      const after = skyStateFor(edge + step).sunDirection.y;
+      expect(Math.abs(after - before)).toBeLessThan(0.01);
+    }
   });
 
   it('burns the lamps at night and puts them out at noon', () => {

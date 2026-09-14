@@ -16,6 +16,11 @@ export interface FrameUpdate {
   readonly fps: number;
   /** Normalised time of day, 0..1. */
   readonly time: number;
+  /**
+   * The day and the hour, already formatted: formatting it per frame in a
+   * component is exactly what this module exists to avoid.
+   */
+  readonly clock: string;
   /** Lamps contributing to this frame; all of them after dark, none by day. */
   readonly activeLights: number;
   /** Draw calls the renderer actually submitted, after culling and the level of detail. */
@@ -63,6 +68,8 @@ interface Slot<T> {
 export interface HudOverlayParts {
   readonly activeLights: Slot<HTMLSpanElement>;
   readonly time: Slot<HTMLInputElement>;
+  /** The day and the hour. */
+  readonly clock: Slot<HTMLSpanElement>;
   /** What the last frame actually drew. */
   readonly drawn: Slot<HTMLSpanElement>;
   /** What the last frame cost the main thread. */
@@ -155,6 +162,8 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
       }
       writeLights(frame.activeLights);
       writeTime(frame.time);
+      // Changes once a simulated minute at most, so most frames write nothing.
+      writeText(parts.clock, frame.clock);
       writeDrawn(frame.drawCalls, frame.triangles);
       writeCost(frame);
     },

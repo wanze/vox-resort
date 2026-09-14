@@ -6,6 +6,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
   allMaterials,
+  bedsOf,
   emissiveByModelId,
   materialColorsById,
   OBJECT_TYPES,
@@ -16,6 +17,8 @@ import {
   PEOPLE_MODELS,
   SEA_MODELS,
   SKY_MODELS,
+  venueOf,
+  venueTypes,
   windowsByModelId,
 } from './objectTypes';
 
@@ -220,6 +223,40 @@ describe('OBJECT_TYPES', () => {
 
   it('rejects unknown ids', () => {
     expect(() => objectTypeById('casino')).toThrow(/casino/);
+  });
+});
+
+describe('venues', () => {
+  it('reads what a guest can do off the model', () => {
+    const hotel = venueOf('hotel');
+    expect(hotel?.role).toBe('lodging');
+    expect(hotel?.beds).toBe(40);
+  });
+
+  it('has nothing to offer at dressing', () => {
+    expect(venueOf('bench')).toBeNull();
+  });
+
+  it('answers null for an unknown id rather than throwing, unlike objectTypeById', () => {
+    expect(venueOf('not-a-model')).toBeNull();
+  });
+
+  it('counts the beds a type sleeps, and none where it is not a lodging', () => {
+    expect(bedsOf('bungalow')).toBe(4);
+    expect(bedsOf('path')).toBe(0);
+  });
+
+  it('lists only the types a guest can go to', () => {
+    const types = venueTypes();
+    expect(types.length).toBeGreaterThan(0);
+    for (const type of types) expect(type.venue, type.id).not.toBeNull();
+  });
+
+  it('always has somewhere to put people', () => {
+    const beds = venueTypes()
+      .filter((type) => type.venue!.role === 'lodging')
+      .reduce((sum, type) => sum + bedsOf(type.id), 0);
+    expect(beds).toBeGreaterThan(0);
   });
 });
 

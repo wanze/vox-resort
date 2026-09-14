@@ -10,6 +10,15 @@ export default defineModel({
   label: 'Ice Cream Cart',
   category: 'amenities',
   tiles: { x: 1, z: 1 },
+  venue: {
+    role: 'food',
+    satisfies: [
+      { need: 'hunger', amount: 0.25 },
+      { need: 'fun', amount: 0.15 },
+    ],
+    capacity: 4,
+    dwellSeconds: { min: 120, max: 300 },
+  },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

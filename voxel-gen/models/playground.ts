@@ -115,6 +115,15 @@ export default defineModel({
         { x: x + 4, y: GROUND + 4, z, facing: 2 },
       ] as const,
   ),
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.9 },
+      { need: 'energy', amount: -0.3 },
+    ],
+    capacity: 12,
+    dwellSeconds: { min: 900, max: 2400 },
+  },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

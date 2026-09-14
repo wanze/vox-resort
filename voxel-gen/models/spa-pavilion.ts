@@ -98,6 +98,15 @@ export default defineModel({
   lights: LANTERNS.map(
     ([x, z]) => ({ x, y: PLATE - 2, z, color: LANTERN, intensity: 60, distance: 36 }) as const,
   ),
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.6 },
+      { need: 'energy', amount: 0.5 },
+    ],
+    capacity: 10,
+    dwellSeconds: { min: 1800, max: 5400 },
+  },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

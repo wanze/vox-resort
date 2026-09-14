@@ -183,6 +183,15 @@ export default defineModel({
     { x: 56, y: 3, z: 70, color: FLOOD, intensity: 120, distance: 66 },
     { x: 40, y: 3, z: 18, color: FLOOD, intensity: 90, distance: 52 },
   ],
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 1 },
+      { need: 'energy', amount: -0.3 },
+    ],
+    capacity: 40,
+    dwellSeconds: { min: 3600, max: 10_800 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, foliage, stone, stucco, teak } = PALETTE;

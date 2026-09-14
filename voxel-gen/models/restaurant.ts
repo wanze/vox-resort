@@ -144,6 +144,15 @@ export default defineModel({
     // the row of them, the way the hotel's two stand for its balcony lamps.
     { x: 32, y: 13, z: 33, color: LANTERN, intensity: 90, distance: 56 },
   ],
+  venue: {
+    role: 'food',
+    satisfies: [
+      { need: 'hunger', amount: 1 },
+      { need: 'thirst', amount: 0.5 },
+    ],
+    capacity: 40,
+    dwellSeconds: { min: 1800, max: 3600 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { foliage, stone, stucco, teak, terracotta } = PALETTE;

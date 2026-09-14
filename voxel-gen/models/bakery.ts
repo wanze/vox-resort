@@ -53,6 +53,12 @@ export default defineModel({
     { x, y: GROUND + 2, z: near, facing: 0 as const },
     { x, y: GROUND + 2, z: far, facing: 2 as const },
   ]),
+  venue: {
+    role: 'food',
+    satisfies: [{ need: 'hunger', amount: 0.5 }],
+    capacity: 8,
+    dwellSeconds: { min: 240, max: 480 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, foliage, slate, stone, stucco, teak, terracotta } = PALETTE;

@@ -61,6 +61,15 @@ export default defineModel({
   label: 'Pedalo Rental',
   category: 'leisure',
   placement: { ground: 'shore', perResort: { min: 1, max: 1 } },
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.8 },
+      { need: 'energy', amount: -0.3 },
+    ],
+    capacity: 8,
+    dwellSeconds: { min: 1200, max: 2700 },
+  },
   tiles: { x: 2, z: 2 },
   windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {

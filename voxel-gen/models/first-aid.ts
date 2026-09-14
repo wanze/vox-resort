@@ -40,6 +40,11 @@ export default defineModel({
     { x: 21, y: GROUND + 2, z: FRONT + 2, facing: 2 },
     { x: 24, y: GROUND + 2, z: FRONT + 2, facing: 2 },
   ],
+  venue: {
+    role: 'service',
+    capacity: 4,
+    dwellSeconds: { min: 300, max: 900 },
+  },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 32 });
     if (ground !== GROUND) throw new Error('The forecourt and its bench must agree on its surface');

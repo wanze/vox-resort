@@ -60,6 +60,12 @@ export default defineModel({
   label: 'Beach Shower',
   category: 'amenities',
   tiles: { x: 1, z: 1 },
+  venue: {
+    role: 'service',
+    satisfies: [{ need: 'hygiene', amount: 0.6 }],
+    capacity: 1,
+    dwellSeconds: { min: 30, max: 90 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, metal, stucco, teak } = PALETTE;

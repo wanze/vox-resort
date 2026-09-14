@@ -209,6 +209,15 @@ export default defineModel({
       distance: 30,
     })),
   ],
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.8 },
+      { need: 'energy', amount: -0.4 },
+    ],
+    capacity: 4,
+    dwellSeconds: { min: 1800, max: 3600 },
+  },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

@@ -92,6 +92,16 @@ export default defineModel({
     { x: 106, y: 4, z: 28, color: 0x7fd8ee, intensity: 90, distance: 52 },
     { x: 102, y: 4, z: 68, color: 0x7fd8ee, intensity: 90, distance: 52 },
   ],
+  // A negative amount is a need a visit makes worse: a swim spends energy.
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.8 },
+      { need: 'energy', amount: -0.2 },
+    ],
+    capacity: 30,
+    dwellSeconds: { min: 1800, max: 5400 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const set = b.set.bind(b);

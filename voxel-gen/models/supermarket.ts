@@ -117,6 +117,15 @@ export default defineModel({
    * the crates and the trolleys. One is enough for a 15 m front from 2 m up.
    */
   lights: [{ x: 26, y: 12, z: 38, color: SIGN, intensity: 90, distance: 50 }],
+  venue: {
+    role: 'food',
+    satisfies: [
+      { need: 'hunger', amount: 0.8 },
+      { need: 'thirst', amount: 0.8 },
+    ],
+    capacity: 20,
+    dwellSeconds: { min: 480, max: 1200 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, glass, metal, slate, stone, teak, terracotta, water } = PALETTE;

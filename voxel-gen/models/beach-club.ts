@@ -170,6 +170,15 @@ export default defineModel({
    * irradiance volume at load — and `pnpm bench` is where that shows up.
    */
   lights: [{ x: 25, y: 15, z: 12, color: LANTERN, intensity: 90, distance: 52 }],
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.7 },
+      { need: 'thirst', amount: 0.4 },
+    ],
+    capacity: 25,
+    dwellSeconds: { min: 1800, max: 5400 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, sand, stone, stucco, teak } = PALETTE;

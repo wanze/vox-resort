@@ -11,6 +11,12 @@ export default defineModel({
   label: 'Snack Bar',
   category: 'amenities',
   tiles: { x: 2, z: 1 },
+  venue: {
+    role: 'food',
+    satisfies: [{ need: 'hunger', amount: 0.6 }],
+    capacity: 10,
+    dwellSeconds: { min: 300, max: 720 },
+  },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);
     const box = b.box.bind(b);

@@ -147,6 +147,15 @@ export default defineModel({
     { x: 15, y: 12, z: 12, color: LANTERN, intensity: 90, distance: 52 },
     { x: 33, y: 12, z: 12, color: LANTERN, intensity: 90, distance: 52 },
   ],
+  venue: {
+    role: 'drink',
+    satisfies: [
+      { need: 'thirst', amount: 1 },
+      { need: 'fun', amount: 0.3 },
+    ],
+    capacity: 24,
+    dwellSeconds: { min: 900, max: 2400 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, stone, stucco, teak } = PALETTE;

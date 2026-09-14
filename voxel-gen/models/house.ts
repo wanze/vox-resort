@@ -32,6 +32,12 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 3, z: 3 },
   windows: WINDOW_GLASS,
+  venue: {
+    role: 'lodging',
+    capacity: 6,
+    beds: 6,
+    dwellSeconds: { min: 25_200, max: 32_400 },
+  },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 48, d: 48 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 2 });

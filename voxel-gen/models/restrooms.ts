@@ -25,6 +25,12 @@ export default defineModel({
   category: 'amenities',
   tiles: { x: 2, z: 1 },
   windows: WINDOW_GLASS,
+  venue: {
+    role: 'service',
+    satisfies: [{ need: 'hygiene', amount: 1 }],
+    capacity: 4,
+    dwellSeconds: { min: 60, max: 180 },
+  },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 16 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1, wall: PALETTE.slate });

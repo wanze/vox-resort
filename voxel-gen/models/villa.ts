@@ -50,6 +50,12 @@ export default defineModel({
   // A few to a resort, mixed in among the houses rather than given a street of
   // their own: see `hostsAccent` in `resortGenerator.ts`.
   placement: { perResort: { min: 1, max: 12 } },
+  venue: {
+    role: 'lodging',
+    capacity: 8,
+    beds: 8,
+    dwellSeconds: { min: 25_200, max: 32_400 },
+  },
   windows: WINDOW_GLASS,
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 64, d: 64 });

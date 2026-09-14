@@ -105,6 +105,15 @@ export default defineModel({
       { x, y: SLAB + 2, z: far(row.top), facing: 2 as const },
     ]),
   ),
+  venue: {
+    role: 'drink',
+    satisfies: [
+      { need: 'thirst', amount: 0.7 },
+      { need: 'energy', amount: 0.2 },
+    ],
+    capacity: 16,
+    dwellSeconds: { min: 600, max: 1500 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, foliage, glass, slate, stone, teak } = PALETTE;

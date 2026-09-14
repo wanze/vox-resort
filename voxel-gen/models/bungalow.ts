@@ -55,6 +55,13 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 3, z: 2 },
   windows: WINDOW_GLASS,
+  // A lodging holds as many people as it has beds, and no more.
+  venue: {
+    role: 'lodging',
+    capacity: 4,
+    beds: 4,
+    dwellSeconds: { min: 25_200, max: 32_400 },
+  },
   build: (b: VoxelBuilder) => {
     const sand = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });
 

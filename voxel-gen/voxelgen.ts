@@ -179,6 +179,71 @@ export interface ModelSeat {
   readonly pose?: SeatPose;
 }
 
+/**
+ * A thing a guest wants seen to, which drives everything they do.
+ *
+ * Declared here rather than in `src/` because the other half of the pair is:
+ * a bakery is a place to eat, and that is a fact about the bakery, so the model
+ * says so. See {@link ModelVenue}.
+ */
+export type GuestNeed = 'hunger' | 'thirst' | 'energy' | 'fun' | 'hygiene';
+
+/**
+ * What kind of place an object is, for the things that do not care which need
+ * it happens to serve.
+ *
+ * - `lodging`: somewhere with beds, which a party can be given as a home.
+ * - `food`, `drink`: somewhere to eat or to buy something to drink.
+ * - `activity`: somewhere to spend time having a good time.
+ * - `service`: somewhere that sees to a guest without being a day out - the
+ *   restrooms, the first aid post, a shower.
+ */
+export type VenueRole = 'lodging' | 'food' | 'drink' | 'activity' | 'service';
+
+/** How much of one need a visit here sees to, on a 0..1 scale. */
+export interface NeedRelief {
+  readonly need: GuestNeed;
+  /** Share of the need cleared by one full visit; 1 clears it outright. */
+  readonly amount: number;
+}
+
+/**
+ * What a guest can do here: the facts the simulation needs and the art is the
+ * only honest source of.
+ *
+ * Here for the reason {@link ModelSeat} and {@link ModelPlacement} are. How many
+ * people fit in a bakery is a fact about the bakery that the person who drew it
+ * settled when they drew it, and a table of capacities in `src/` would be a
+ * second place to change it and a list to keep in step with sixty model files.
+ *
+ * Most of the catalogue declares none. A palm, a bench and a litter bin are
+ * dressing, and dressing is not somewhere to go.
+ */
+export interface ModelVenue {
+  readonly role: VenueRole;
+  /**
+   * What a visit sees to, and how much of it. Empty for a place that is somewhere
+   * to be rather than somewhere to be served - a lodging, whose whole point is
+   * the bed, declares its relief through {@link beds} instead.
+   */
+  readonly satisfies?: readonly NeedRelief[];
+  /**
+   * How many people can be inside at once. Beyond it a queue forms rather than
+   * the doors widening, which is the rule the whole thing exists for.
+   *
+   * For a lodging this is people under the roof, which is {@link beds} and no
+   * more: a bungalow that sleeps four does not hold nine.
+   */
+  readonly capacity: number;
+  /** How long one visit lasts, in simulated seconds. */
+  readonly dwellSeconds: { readonly min: number; readonly max: number };
+  /**
+   * Beds to sleep in, for a lodging and nothing else. How many guests the
+   * resort can hold at all is the sum of these over what is standing.
+   */
+  readonly beds?: number;
+}
+
 export interface VoxelModelSource {
   /** Stable identifier, used for the catalogue entry and the preview filename. */
   readonly id: string;
@@ -247,6 +312,13 @@ export interface VoxelModelSource {
    * tool and the generator both read it here rather than keeping lists of ids.
    */
   readonly placement?: ModelPlacement;
+  /**
+   * What a guest can do here, if anything. See {@link ModelVenue}.
+   *
+   * A fact about the art for the reason `placement` is: how many people fit in
+   * a pool is settled by the pool that was drawn, not by the app that draws it.
+   */
+  readonly venue?: ModelVenue;
   readonly build: (builder: VoxelBuilder) => void;
 }
 
@@ -282,6 +354,8 @@ export interface VoxelModel {
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
   /** Where the object belongs; empty when anywhere will do. */
   readonly placement: ModelPlacement;
+  /** What a guest can do here, or null where the object is dressing. */
+  readonly venue: ModelVenue | null;
 }
 
 /** Voxels along one tile edge — the scale every model is authored against. */
@@ -411,5 +485,9 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       pose: seat.pose ?? 'sit',
     })),
     placement: source.placement ?? {},
+    // Straight through, unlike the seats and the lights: a venue is a fact about
+    // the whole object rather than a point on it, so there is no origin to shift
+    // it onto. Same reason `placement` passes through.
+    venue: source.venue ?? null,
   };
 }

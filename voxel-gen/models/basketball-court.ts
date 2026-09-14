@@ -85,6 +85,15 @@ export default defineModel({
     intensity: 120,
     distance: 90,
   })),
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.8 },
+      { need: 'energy', amount: -0.4 },
+    ],
+    capacity: 10,
+    dwellSeconds: { min: 1200, max: 2700 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, glass, metal, slate, stucco, teak, terracotta } = PALETTE;

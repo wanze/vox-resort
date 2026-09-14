@@ -74,6 +74,11 @@ export default defineModel({
   seats: [BAYS[0], BAYS[4]].flatMap(([x0]) =>
     [x0 + 1, x0 + 5].map((x) => ({ x, y: BENCH_HIPS, z: BENCH.z + 1, facing: 0 as const })),
   ),
+  venue: {
+    role: 'service',
+    capacity: 12,
+    dwellSeconds: { min: 120, max: 480 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, glass, metal, stone, teak } = PALETTE;

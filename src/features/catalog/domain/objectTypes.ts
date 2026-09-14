@@ -24,11 +24,13 @@ import {
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
+  type ModelVenue,
   type VoxelModel,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
 export { TILE_VOXELS };
+export type { ModelVenue };
 
 export interface ObjectTypeDefinition {
   /** Stable identifier, shared with the model file and its preview. */
@@ -41,6 +43,8 @@ export interface ObjectTypeDefinition {
   readonly model: VoxelModel;
   /** Colour of the HUD swatch: the colour the model uses most. */
   readonly color: number;
+  /** What a guest can do here, or null where the type is dressing. */
+  readonly venue: ModelVenue | null;
 }
 
 /** The colour a model paints most cells with, used as its HUD swatch. */
@@ -66,6 +70,7 @@ export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = MODEL_SOURCES.map((
     category: model.category,
     model,
     color: dominantColor(model),
+    venue: model.venue,
   };
 });
 
@@ -156,6 +161,25 @@ export function objectTypeById(id: string): ObjectTypeDefinition {
 /** Highest occupied layer of a type, used to anchor its HUD label. */
 export function objectTypeTop(id: string): number {
   return objectTypeById(id).model.height;
+}
+
+/**
+ * What a guest can do at an object of this type, or null where it is
+ * dressing. Off the model, so a new venue is a model file and nothing else -
+ * see `ModelVenue` in `voxel-gen/voxelgen.ts`.
+ */
+export function venueOf(id: string): ModelVenue | null {
+  return OBJECT_TYPES.find((type) => type.id === id)?.venue ?? null;
+}
+
+/** Every type a guest can go to, in registry order. */
+export function venueTypes(): readonly ObjectTypeDefinition[] {
+  return OBJECT_TYPES.filter((type) => type.venue !== null);
+}
+
+/** Beds a type sleeps, or 0 where it is not a lodging. */
+export function bedsOf(id: string): number {
+  return venueOf(id)?.beds ?? 0;
 }
 
 /**

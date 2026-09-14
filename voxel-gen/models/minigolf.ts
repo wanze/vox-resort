@@ -172,6 +172,12 @@ export default defineModel({
   label: 'Minigolf',
   category: 'leisure',
   placement: { perResort: { min: 1, max: 3 } },
+  venue: {
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.7 }],
+    capacity: 16,
+    dwellSeconds: { min: 1800, max: 3600 },
+  },
   tiles: { x: 9, z: 7 },
   emissive: [LANTERN],
   // The ponds and the fountain basin, meshed apart and shaded as the sea is.

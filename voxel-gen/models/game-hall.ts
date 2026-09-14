@@ -91,6 +91,12 @@ export default defineModel({
     { x: 32, y: 11, z: 34, color: SIGN, intensity: 90, distance: 52 },
     { x: 32, y: 11, z: 16, color: SIGN, intensity: 70, distance: 40 },
   ],
+  venue: {
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.8 }],
+    capacity: 24,
+    dwellSeconds: { min: 1200, max: 3600 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { stone, stucco, slate, metal, teak, foliage, bloom } = PALETTE;

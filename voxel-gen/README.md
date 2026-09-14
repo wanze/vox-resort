@@ -184,6 +184,32 @@ under every seat, room for a body over it, and nobody sitting shoulder to
 shoulder — so a cushion moved up a course fails a test rather than leaving
 somebody hovering. See `docs/crowd.md`, _Sitting down, and lying down_.
 
+## Somewhere to go
+
+A model a guest can visit declares a `venue`; dressing — a palm, a bench, a
+litter bin — declares none:
+
+```ts
+venue: {
+  role: 'food',
+  satisfies: [{ need: 'hunger', amount: 0.5 }],
+  capacity: 8,
+  dwellSeconds: { min: 240, max: 480 },
+},
+```
+
+| Field          | Meaning                                                                             |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `role`         | `lodging`, `food`, `drink`, `activity` or `service`                                 |
+| `satisfies`    | needs a visit sees to — `hunger`, `thirst`, `energy`, `fun`, `hygiene` — each -1..1 |
+| `capacity`     | people inside at once; beyond it a queue forms                                      |
+| `dwellSeconds` | how long one visit lasts, in simulated seconds                                      |
+| `beds`         | lodging only, and equal to `capacity`: a bungalow that sleeps four holds four       |
+
+A negative `amount` is a need a visit makes worse: an hour of tennis spends
+energy. `venues.test.ts` checks the numbers and holds the list of models
+deliberately left off, so a new model file has to be one or the other.
+
 ## Scale
 
 **One tile is `TILE_VOXELS` (16) voxels and stands for 4 m.** Everything follows

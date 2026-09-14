@@ -77,6 +77,12 @@ export default defineModel({
   label: 'Changing Cabins',
   category: 'amenities',
   placement: { ground: 'beach' },
+  venue: {
+    role: 'service',
+    satisfies: [{ need: 'hygiene', amount: 0.3 }],
+    capacity: 2,
+    dwellSeconds: { min: 60, max: 180 },
+  },
   tiles: { x: 2, z: 1 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

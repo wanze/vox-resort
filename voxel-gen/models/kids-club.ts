@@ -51,6 +51,12 @@ export default defineModel({
   tiles: { x: 3, z: 3 },
   windows: WINDOW_GLASS,
   seats: [23, 27].map((x) => ({ x, y: BENCH_HIPS, z: BENCH.z + 1, facing: 2 as const })),
+  venue: {
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.9 }],
+    capacity: 20,
+    dwellSeconds: { min: 3600, max: 10_800 },
+  },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, foliage, grass, sand, stone, stucco, teak, terracotta } = PALETTE;

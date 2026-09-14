@@ -64,6 +64,15 @@ export default defineModel({
   label: 'Volleyball Court',
   category: 'leisure',
   placement: { ground: 'beach', perResort: { min: 1, max: 3 } },
+  venue: {
+    role: 'activity',
+    satisfies: [
+      { need: 'fun', amount: 0.8 },
+      { need: 'energy', amount: -0.4 },
+    ],
+    capacity: 12,
+    dwellSeconds: { min: 1200, max: 2700 },
+  },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

@@ -25,7 +25,10 @@
  * what stands anybody on one.
  */
 
-import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { blockedAt } from '../../crowd/domain/sandGrid';
+import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { terrainAt } from '../../layout/domain/shoreline';
 
 /** Voxels between two people in a line: a body and a little air. */
 const QUEUE_SPACING = 6;
@@ -104,6 +107,50 @@ export function queueLaneFor(
     at = to;
   }
   return spots;
+}
+
+/**
+ * Where the people waiting at a building on the beach stand: a straight line
+ * out from its sand door towards `towards`, front first, which is the way its
+ * visitors walk up. Never empty: slot 0 stands on the door.
+ *
+ * Straight, because on open sand there is nothing to stay on - the reason the
+ * paved lane follows the graph is that the grass beside a path is not
+ * somewhere to stand, and the sand beside a line is. It stops at the first spot
+ * something stands on, or that is off the beach band, which is 025's rule that
+ * a short lane is a short queue: a line that would run through a lounger is
+ * as long as the sand in front of the lounger.
+ *
+ * Everybody faces the door, which on a straight line is facing the person in
+ * front.
+ */
+export function sandLaneFor(
+  network: WalkNetwork,
+  door: { readonly x: number; readonly z: number },
+  towards: { readonly x: number; readonly z: number },
+): readonly QueueSpot[] {
+  const dx = towards.x - door.x;
+  const dz = towards.z - door.z;
+  const length = Math.hypot(dx, dz);
+  const heading = Math.atan2(-dx, -dz);
+  const spots: QueueSpot[] = [{ x: door.x, z: door.z, y: BEACH_SURFACE, heading }];
+  if (length === 0) return spots;
+  for (let slot = 1; slot < MAX_QUEUE_SHOWN; slot++) {
+    const x = door.x + (dx / length) * QUEUE_SPACING * slot;
+    const z = door.z + (dz / length) * QUEUE_SPACING * slot;
+    if (!openSandAt(network, x, z)) break;
+    spots.push({ x, z, y: BEACH_SURFACE, heading });
+  }
+  return spots;
+}
+
+/** Whether a point is on the beach band with nothing standing on it. */
+function openSandAt(network: WalkNetwork, x: number, z: number): boolean {
+  const { beach, sand } = network;
+  if (!beach || !sand || blockedAt(sand, x, z)) return false;
+  return (
+    terrainAt(beach.shore, Math.floor(x / TILE_VOXELS), Math.floor(z / TILE_VOXELS)) === 'beach'
+  );
 }
 
 /**

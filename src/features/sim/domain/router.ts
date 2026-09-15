@@ -49,10 +49,25 @@
  * hotel walk to the same door. See `night.ts` for when, and `lodgings.ts` for
  * why a lodging is never a venue.
  *
+ * ## A building on the beach is reached over the sand
+ *
+ * Nothing standing on sand is paved to, so a beach shower has no door node and
+ * no field could ever be swept from one. Its doors are points on the open sand
+ * instead - see `doors.ts` - and `sandRoute.ts` finds, once and lazily, a route
+ * over beach tiles from each gate that can reach one. The field is swept from
+ * those gates, so a guest walks the graph to a gate exactly as they walk to any
+ * door; at the gate the router walks them the sand leg a waypoint at a time,
+ * through `walkSandTo` and the crowd asking again with `ON_SAND` on arrival,
+ * and at the end of it they arrive as they would at a door - inside, or in a
+ * line laid straight out across the sand (`sandLaneFor`). The visit over, they
+ * walk the same route back and are let onto the graph at the gate they left it
+ * by. The crowd learns two calls and nothing about why.
+ *
  * ## Everything is thrown away when the graph is
  *
  * A node index means nothing across a rebuild, so {@link Router.rebuild} drops
- * the fields, the lanes, the goals, the occupancy and who is asleep together. A field kept across an edit
+ * the fields, the lanes, the sand routes, the goals, the occupancy and who is
+ * asleep together. A field kept across an edit
  * is the one bug this design can have, and it shows up as guests walking
  * confidently into a wall.
  */
@@ -60,17 +75,19 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   holdAt,
+  ON_SAND,
   releaseTo,
   rouseSunbathers,
   stepOntoSand,
+  walkSandTo,
   type Crowd,
 } from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
-import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, type Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { chooseVenue } from './chooseVenue';
-import { doorsFor, type VenueDoors } from './doors';
+import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import {
   clearAllGoals,
@@ -87,12 +104,14 @@ import { beachVenueFor, isBeach } from './beach';
 import {
   arriveAt,
   createOccupancy,
+  type ArrivalOutcome,
   leaveVenue,
   sweepOccupancy,
   VISIT,
   type Occupancy,
 } from './occupancy';
-import { MAX_QUEUE_SHOWN, queueLaneFor, type QueueSpot } from './queueLane';
+import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
+import { sandRoutesFor, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
 import type { Venue } from './venues';
 
@@ -110,6 +129,33 @@ const TICK_SECONDS = 60;
  * or "wander" - rather than the absence of one.
  */
 const BY_DAY = -2;
+
+/**
+ * How far over the beach a building standing on it is looked for from a gate,
+ * in tile steps. The furthest a beach building on the reference plot stands
+ * from its nearest gate is 448 voxels, 28 tiles in a straight line; forty
+ * leaves room for the way round whatever stands between.
+ */
+const SAND_ROUTE_TILES = 40;
+
+/**
+ * Who is walking a sand leg, and how far along it, one column each: the venue
+ * whose route it is or -1, which of its routes, the waypoint being walked to,
+ * and 1 on the way back to the gate rather than out to the door.
+ */
+interface Errands {
+  readonly venue: Int32Array;
+  readonly route: Int32Array;
+  readonly leg: Int32Array;
+  readonly back: Uint8Array;
+}
+
+const createErrands = (people: number): Errands => ({
+  venue: new Int32Array(people).fill(-1),
+  route: new Int32Array(people),
+  leg: new Int32Array(people),
+  back: new Uint8Array(people),
+});
 
 /** How many people are inside a venue and how many are in the line outside. */
 export interface VenueOccupancy {
@@ -141,6 +187,10 @@ export interface Router {
    * Called once per arrival per person, which is a handful of calls a frame
    * across the whole plot. Everything expensive - the fields - is memoised
    * behind it.
+   *
+   * `at` is `ON_SAND` rather than a node for somebody this router sent over the
+   * sand, who has reached the point they were sent to; they are sent on, stood
+   * still or let back onto the graph, and -1 comes back.
    */
   step(person: number, at: number): number;
   /**
@@ -222,6 +272,12 @@ export function createRouter(parts: {
   let fields: (FlowField | null)[] = venues.map(() => null);
   /** Each venue's queue lane, laid when its field is and dropped with it. */
   let lanes: (readonly QueueSpot[] | null)[] = venues.map(() => null);
+  /**
+   * Each venue's routes over the sand, laid when its field is and dropped with
+   * it: empty for everything but a building on the beach no paving reaches.
+   */
+  let sandRoutes: (readonly SandRoute[] | null)[] = venues.map(() => null);
+  let errands = createErrands(guests.count);
   /** One entry per lodging, filled in on the first guest who walks home to it. */
   let homeFields: (FlowField | null)[] = lodgings.map(() => null);
   let built = 0;
@@ -265,13 +321,12 @@ export function createRouter(parts: {
   let now = 0;
 
   /**
-   * One sweep out from a building's doors, venue or lodging alike, counted for
-   * the stats readout. The two caches differ only in where they keep the answer.
+   * One sweep of the graph, venue, lodging or beach alike, counted for the stats
+   * readout. The caches differ only in where they keep the answer.
    */
-  const sweepFrom = (footprint: Venue | Lodging): { doors: VenueDoors; field: FlowField } => {
-    const doors = doorsFor(footprint, index);
+  const sweep = (sources: readonly number[]): FlowField => {
     built++;
-    return { doors, field: flowFieldFor(network, doors.nodes) };
+    return flowFieldFor(network, sources);
   };
 
   const fieldFor = (venue: number): FlowField => {
@@ -281,23 +336,49 @@ export function createRouter(parts: {
     if (isBeach(declared)) {
       // Every gate is a way in, and nobody queues for sand: no lane is laid, so
       // the line holds the ceiling and is never joined.
-      built++;
-      const field = flowFieldFor(network, network.gates);
+      const field = sweep(network.gates);
       fields[venue] = field;
       return field;
     }
-    const { doors, field } = sweepFrom(declared);
+    const doors = doorsFor(declared, index, network);
+    // A building on the beach that no paving reaches is walked up to over the
+    // sand, from whichever gates can reach it, and those gates are its sources.
+    const overSand =
+      doors.nodes.length === 0 ? sandRoutesFor(network, doors.sand, SAND_ROUTE_TILES) : [];
+    sandRoutes[venue] = overSand;
+    const field = sweep(
+      overSand.length > 0
+        ? overSand.map((route) => route.gate).toSorted((a, b) => a - b)
+        : doors.nodes,
+    );
     fields[venue] = field;
-    lanes[venue] = longestLane(network, doors.nodes, declared);
+    lanes[venue] =
+      overSand.length > 0
+        ? longestSandLane(network, overSand)
+        : longestLane(network, doors.nodes, declared);
     return field;
   };
 
   const homeFieldFor = (lodging: number): FlowField => {
     const existing = homeFields[lodging];
     if (existing) return existing;
-    const { field } = sweepFrom(lodgings[lodging]!);
+    const field = sweep(doorsFor(lodgings[lodging]!, index).nodes);
     homeFields[lodging] = field;
     return field;
+  };
+
+  /**
+   * The rest of the way to a building on the beach from the gate a field leads
+   * to: the length of that gate's sand leg, or 0 for any other venue. Found by
+   * following the field to its source, which is as many steps as the hops the
+   * caller has just read.
+   */
+  const sandLegFrom = (venue: number, field: FlowField, at: number): number => {
+    const routes = sandRoutes[venue];
+    if (!routes || routes.length === 0) return 0;
+    let gate = at;
+    while (field.next[gate]! !== gate) gate = field.next[gate]!;
+    return routes.find((route) => route.gate === gate)?.length ?? 0;
   };
 
   /**
@@ -347,10 +428,22 @@ export function createRouter(parts: {
         return node ? Math.hypot(x - node.x, z - node.z) : Number.POSITIVE_INFINITY;
       }
       const hops = field.hops[at] ?? -1;
-      return hops < 0 ? Number.POSITIVE_INFINITY : hops * TILE_VOXELS;
+      if (hops < 0) return Number.POSITIVE_INFINITY;
+      return hops * TILE_VOXELS + sandLegFrom(venue, field, at);
     };
 
   const queueLength = (venue: number): number => occupancy.queues[venue]?.length ?? 0;
+
+  /**
+   * Somebody at a venue's door: in, in the line, or turned away. A line as long
+   * as the ground in front of the door holds is a full line, however far short
+   * of the ceiling `arriveAt` counts to.
+   */
+  const admitAt = (person: number, venue: number): ArrivalOutcome => {
+    if (queueLength(venue) >= queueLimit(venue)) return 'balked';
+    const declared = venues[venue]!;
+    return arriveAt(occupancy, person, venue, declared.capacity, dwellTicksFor(declared), now);
+  };
 
   /** Decides where this person goes next, and sets their party going with them. */
   const decide = (person: number, at: number): void => {
@@ -376,19 +469,21 @@ export function createRouter(parts: {
    * Inside is the middle of the footprint, so a guest having lunch is under the
    * roof rather than standing in the doorway; the height is the door node's,
    * because a venue knows where its middle is and not how high the ground is
-   * there. Heading is kept as it was, which is the way they walked up.
+   * there. Heading is kept as it was, which is the way they walked up. A
+   * building on the beach has no door node, and its middle is at the sand's
+   * height.
    */
   const stand = (person: number, venue: number, door: number, waiting: boolean): void => {
     const people = crowd();
-    const node = network.nodes[door]!;
     const lane = lanes[venue] ?? [];
+    const onSand = (sandRoutes[venue]?.length ?? 0) > 0;
     const spot =
       waiting && lane.length > 0
         ? lane[Math.min(occupancy.slot[person]!, lane.length - 1)]!
         : {
             x: venues[venue]!.x,
             z: venues[venue]!.z,
-            y: node.y,
+            y: onSand ? BEACH_SURFACE : network.nodes[door]!.y,
             heading: people.heading[person] ?? 0,
           };
     holdAt(people, person, spot.x, spot.y, spot.z, spot.heading);
@@ -409,13 +504,10 @@ export function createRouter(parts: {
     if (goal === NO_GOAL || goal >= venues.length) return false;
     const venue = venues[goal]!;
     if (fieldFor(goal).next[at] !== at) return false;
+    const overSand = sandRoutes[goal] ?? [];
+    if (overSand.length > 0) return setOffOverSand(person, goal, at, overSand);
 
-    // A line as long as the paving in front of the door is a full line, however
-    // far short of the ceiling `arriveAt` counts to.
-    const outcome =
-      queueLength(goal) >= queueLimit(goal)
-        ? 'balked'
-        : arriveAt(occupancy, person, goal, venue.capacity, dwellTicksFor(venue), now);
+    const outcome = admitAt(person, goal);
     if (outcome === 'balked') {
       // The line was already as long as anybody will join. Their goal goes and
       // they decide again on this same node - and `chooseVenue` is handed the
@@ -433,14 +525,104 @@ export function createRouter(parts: {
   };
 
   /**
+   * Somebody at a gate their venue on the beach is reached from, set off along
+   * that gate's sand leg; or, where its line is already full, turned away here
+   * rather than at the end of the walk. Hands back whether they were set off.
+   */
+  const setOffOverSand = (
+    person: number,
+    venue: number,
+    gate: number,
+    routes: readonly SandRoute[],
+  ): boolean => {
+    const route = routes.findIndex((each) => each.gate === gate);
+    if (route === -1 || queueLength(venue) >= queueLimit(venue)) {
+      clearPartyGoal(goals, guests, person);
+      return false;
+    }
+    errands.venue[person] = venue;
+    errands.route[person] = route;
+    errands.leg[person] = 0;
+    errands.back[person] = 0;
+    const first = routes[route]!.waypoints[0]!;
+    walkSandTo(crowd(), person, first.x, first.z);
+    return true;
+  };
+
+  /** The sand leg a person is walking, or undefined for anybody not on one. */
+  const errandOf = (person: number): SandRoute | undefined => {
+    const venue = errands.venue[person]!;
+    return venue < 0 ? undefined : sandRoutes[venue]?.[errands.route[person]!];
+  };
+
+  /**
+   * One step back along a sand leg: to the waypoint before, or off the last of
+   * them onto the graph at the gate. Somebody leaving a building is at its door
+   * or inside it, one step past the last waypoint, so the first step back is to
+   * the door.
+   */
+  const walkBack = (person: number, route: SandRoute): void => {
+    errands.back[person] = 1;
+    const leg = errands.leg[person]! - 1;
+    errands.leg[person] = leg;
+    const point = route.waypoints[leg];
+    if (point) {
+      walkSandTo(crowd(), person, point.x, point.z);
+      return;
+    }
+    errands.venue[person] = -1;
+    if (route.gate < network.nodes.length) releaseTo(crowd(), person, route.gate);
+  };
+
+  /**
+   * Somebody sent over the sand has reached the point they were sent to: on to
+   * the next, or at the last of them the door. Anybody this router did not send
+   * - it has been rebuilt since - is left alone, and the crowd turns them into a
+   * roamer. Always -1, which is `step`'s answer for somebody the crowd must not
+   * aim anywhere.
+   */
+  const alongTheSand = (person: number): number => {
+    const route = person >= 0 && person < goals.count ? errandOf(person) : undefined;
+    if (!route) return -1;
+    if (errands.back[person] === 1) {
+      walkBack(person, route);
+      return -1;
+    }
+    const leg = errands.leg[person]! + 1;
+    errands.leg[person] = leg;
+    const next = route.waypoints[leg];
+    if (next) walkSandTo(crowd(), person, next.x, next.z);
+    else reachSandDoor(person, route);
+    return -1;
+  };
+
+  /**
+   * At the door of a building on the beach: in, in the line on the sand, or
+   * turned away - and somebody turned away walks back to the gate, where they
+   * decide again on the graph.
+   */
+  const reachSandDoor = (person: number, route: SandRoute): void => {
+    const venue = errands.venue[person]!;
+    const outcome = admitAt(person, venue);
+    if (outcome !== 'balked') {
+      stand(person, venue, -1, outcome === 'waiting');
+      return;
+    }
+    clearPartyGoal(goals, guests, person);
+    walkBack(person, route);
+  };
+
+  /**
    * Somebody reaching a node is back on the paving, whatever brought them off
    * the sand: the end of their visit, their bedtime, or the crowd's own chance
    * of wandering back in. A visit to the beach still running ends here, with its
    * relief, rather than on a tick that would find them somewhere else entirely.
+   * So does a sand leg the crowd gave up on for them.
    */
   const backOffTheSand = (person: number): void => {
     if (person < 0 || person >= goals.count) return;
     calledIn[person] = 0;
+    errands.venue[person] = -1;
     if (occupancy.state[person] !== VISIT.inside) return;
     const venue = venues[occupancy.at[person]!];
     if (!venue || !isBeach(venue)) return;
@@ -463,10 +645,13 @@ export function createRouter(parts: {
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;
+    const overSand = errands.venue[person] === venue ? errandOf(person) : undefined;
     // Out on the sand rather than stood at a door: a straight line to the gate
     // they came in by could cross a bay, so they are called in and walk to the
     // nearest gate the way a roamer does. See `Router.offTheSand`.
     if (isBeach(venues[venue]!)) calledIn[person] = 1;
+    // Out of a building on the beach, back the way they came over the sand.
+    else if (overSand) walkBack(person, overSand);
     else if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
   };
 
@@ -551,6 +736,7 @@ export function createRouter(parts: {
 
   return {
     step(person, at) {
+      if (at === ON_SAND) return alongTheSand(person);
       backOffTheSand(person);
       const night = nightStep(person, at);
       if (night !== BY_DAY) return night;
@@ -611,6 +797,8 @@ export function createRouter(parts: {
       index = nodeIndexFor(nextNetwork);
       fields = venues.map(() => null);
       lanes = venues.map(() => null);
+      sandRoutes = venues.map(() => null);
+      errands = createErrands(guests.count);
       homeFields = nextLodgings.map(() => null);
       built = 0;
       findHomes();
@@ -692,6 +880,27 @@ export function createRouter(parts: {
 function withBeach(venues: readonly Venue[], network: WalkNetwork): readonly Venue[] {
   const beach = beachVenueFor(network);
   return beach ? [...venues, beach] : venues;
+}
+
+/**
+ * The longest line any sand door of a building on the beach can lay, each run
+ * out towards the way its nearest route walks up; of lines as long as each
+ * other, the one at the door of the nearest route.
+ *
+ * One line per venue for the reason {@link longestLane} gives.
+ */
+function longestSandLane(network: WalkNetwork, routes: readonly SandRoute[]): readonly QueueSpot[] {
+  let best: readonly QueueSpot[] = [];
+  const doors = new Set<string>();
+  for (const route of routes) {
+    const door = route.waypoints.at(-1)!;
+    const key = `${door.x},${door.z}`;
+    if (doors.has(key)) continue;
+    doors.add(key);
+    const lane = sandLaneFor(network, door, route.waypoints.at(-2) ?? network.nodes[route.gate]!);
+    if (lane.length > best.length) best = lane;
+  }
+  return best;
 }
 
 /**

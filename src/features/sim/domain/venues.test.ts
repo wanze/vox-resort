@@ -70,7 +70,7 @@ describe('venuesOn', () => {
   });
 
   it('gives a venue whose art declares no door an empty list rather than nothing', () => {
-    const venue = only([at('beach-shower#0', 'beach-shower')]);
+    const venue = only([at('volleyball#0', 'volleyball')]);
     expect(venue.doors).toEqual([]);
   });
 

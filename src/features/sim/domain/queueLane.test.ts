@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
-import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
-import { MAX_QUEUE_SHOWN, queueLaneFor, type QueueSpot } from './queueLane';
+import { blockedAt, type ObstacleBox } from '../../crowd/domain/sandGrid';
+import {
+  BEACH_SURFACE,
+  walkNetworkFor,
+  type PavedTile,
+  type WalkNetwork,
+} from '../../crowd/domain/walkNetwork';
+import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
+import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -124,6 +131,66 @@ describe('queueLaneFor', () => {
         1,
       );
       expect(Math.sin(spot.heading), `slot ${slot} faces west`).toBeCloseTo(-1);
+    }
+  });
+});
+
+describe('sandLaneFor', () => {
+  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const beachOf = (obstacles: ObstacleBox[]): WalkNetwork =>
+    walkNetworkFor({
+      paved: [{ tileX: 10, tileZ: 11, y: 0 }],
+      levelOf: FLAT,
+      shore,
+      tilesX: 20,
+      obstacles,
+    });
+  /** A shower on tile 4,13 and its door on the open tile east of it, the line running east. */
+  const shower: ObstacleBox = { x: 4 * TILE_VOXELS, z: 13 * TILE_VOXELS, width: 16, depth: 16 };
+  const door = { x: 5.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
+  const east = { x: 12.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
+
+  it('never stands anybody inside anything, or off the sand', () => {
+    const network = beachOf([shower]);
+    // From a tile two rows off the water and towards it: the band runs out
+    // before the ceiling does.
+    const nearWater = { x: door.x, z: 15.5 * TILE_VOXELS };
+    const lane = sandLaneFor(network, nearWater, { x: door.x, z: 30 * TILE_VOXELS });
+    expect(lane.length).toBeGreaterThan(1);
+    expect(lane.length).toBeLessThan(MAX_QUEUE_SHOWN);
+    for (const [slot, spot] of lane.entries()) {
+      expect(blockedAt(network.sand!, spot.x, spot.z), `slot ${slot}`).toBe(false);
+      const tile = terrainAt(
+        shore,
+        Math.floor(spot.x / TILE_VOXELS),
+        Math.floor(spot.z / TILE_VOXELS),
+      );
+      expect(tile, `slot ${slot}`).toBe('beach');
+      expect(spot.y).toBe(BEACH_SURFACE);
+    }
+    expect(sandLaneFor(network, door, east)).toHaveLength(MAX_QUEUE_SHOWN);
+  });
+
+  it('holds a line of two where a lounger stands two spots out', () => {
+    const lounger: ObstacleBox = { x: door.x + 11, z: door.z - 4, width: 8, depth: 8 };
+    expect(sandLaneFor(beachOf([shower, lounger]), door, east)).toHaveLength(2);
+  });
+
+  it('faces the whole line at the door', () => {
+    const lane = sandLaneFor(beachOf([shower]), door, east);
+    // The line runs east, so everybody in it faces west, which is -x.
+    for (const [slot, spot] of lane.entries()) {
+      expect(Math.sin(spot.heading), `slot ${slot} faces west`).toBeCloseTo(-1);
+      if (slot > 0) {
+        const ahead = lane[slot - 1]!;
+        expect(Math.cos(spot.heading - towards(spot, ahead)), `slot ${slot}`).toBeCloseTo(1);
+        expect(spot.x).toBeGreaterThan(ahead.x);
+      }
     }
   });
 });

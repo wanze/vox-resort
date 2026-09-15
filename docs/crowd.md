@@ -325,8 +325,8 @@ it, and `Router.tick` runs it once per simulated minute.
   placement (`layout/domain/doorStep.ts`), and the door node is a walkable node
   on the tile each door opens onto: the first tile outside the footprint,
   straight out along its facing. Models with no way in shown on the art - the
-  pool, the courts without a gate, the beach venues entered off the sand -
-  declare none.
+  pool, the courts without a gate - declare none. The buildings on the beach
+  declare the side they are walked up to over the sand; see the next section.
 
 - **The layout gives every door a way in.** The generator picks a turn before
   any paving exists, and its mixed districts stand whole rows with their backs
@@ -378,6 +378,63 @@ it, and `Router.tick` runs it once per simulated minute.
 The HUD's `Venues` row is everybody inside anything over everybody in a line. A
 waiting count that climbs and stays there is the resort saying it wants another
 of something.
+
+## Buildings on the sand
+
+Nothing standing on sand is paved to, and the beach is not in the walk graph, so
+a beach shower, a changing cabin or a beach club has no door node at all. Before
+plan 027 that was 20 venues on the reference plot nobody could visit. They are
+reached over the sand instead, and the beach stays unpaved.
+
+- **A sand door, not a door node.** `doorsFor` also answers `sand`: for a venue
+  whose anchor tile is beach band, the centre of the open tile each declared
+  door opens onto, or failing that every open tile of the ring round it. "Open"
+  is beach terrain with nothing on `network.sand` at the centre. Anything off the
+  beach gets `sand: []` and exactly the nodes it got before.
+
+- **A sand leg, found once per building.** `sim/domain/sandRoute.ts` sweeps
+  breadth-first over beach tiles from all of a building's sand doors at once,
+  each step only where `clearLine` between the two tile centres is clear, forty
+  tile steps at most. Every gate beside a reached tile gets a route: the tile it
+  steps off onto, then the path back to the door, string-pulled wherever the
+  next point can be walked to straight without the chord touching anything or
+  leaving the beach. Only beach tiles are ever waypoints, so no leg crosses a
+  bay. All 19 beach buildings on the reference plot take about 10 ms, 317 routes.
+
+- **The field is swept from the gates.** A building with no door nodes and a
+  route has its flow field seeded from the gates those routes leave by, so a
+  guest walks the graph to a gate as they would to any door. `chooseVenue`'s
+  distance is the hops to the gate plus that gate's route length.
+
+- **The crowd learns two calls and nothing else.** At the gate the router calls
+  `walkSandTo(crowd, person, x, z)`: off the graph, `LANE.sand`, a sentinel of
+  its own (`ERRAND`), a segment to the point at the sand's height. On arrival
+  the crowd asks `routeOf(person, ON_SAND)`, and the router sends them to the
+  next waypoint, holds them at the door, or `releaseTo`s the gate. If it does
+  none of those - it was rebuilt - they become an ordinary roamer with the
+  nearest gate as their way back. `releaseTo` from the sand keeps `LANE.sand`,
+  decided from the ground they stand on. Nothing on the errand draws from
+  `random`, so a crowd with no router replays exactly as before; `crowd.test.ts`
+  pins that over 2 000 steps. `crowd.ts` still knows nothing about venues.
+
+- **Queues stand on open sand.** `sandLaneFor` runs a straight line out from the
+  sand door towards the way the nearest route walks up, a person every six
+  voxels, and stops at the first spot something stands on or that is off the
+  beach band - a short lane is a short queue, as on the paving. Inside is the
+  building's middle, at the sand's height.
+
+- **The visit over, they walk the route back** and are let onto the graph at the
+  gate they left it by. A guest who finds the line full is turned away at the
+  gate, before the walk; one who finds it full at the door walks back and
+  decides again there.
+
+- **A rebuild forgets every route and every errand**, for the fields' reason:
+  routes name gate nodes. `reseatCrowd` leaves whoever is on an errand, or held
+  on the sand, out there as a roamer.
+
+- **One case is left.** A poolside bar the generator stands on a sand terrace
+  at level 3 is sand but not beach band, so neither a roamer nor a route reaches
+  it. Paving sand terraces or roaming them is a decision of its own.
 
 ## The night
 

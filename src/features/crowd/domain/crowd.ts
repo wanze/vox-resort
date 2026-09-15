@@ -234,6 +234,33 @@ const SEATED = -3;
 const HELD = -4;
 
 /**
+ * Walking over the sand to a point the simulation named: a leg of the way to a
+ * building on the beach, or back from one. See {@link walkSandTo}.
+ *
+ * A state of its own rather than {@link ROAMING}, and the two must not merge: a
+ * roamer drifts and rolls dice at every spot, and somebody on an errand is
+ * steered and draws nothing. Folding them together is how a crowd with no
+ * router stops replaying the afternoon it always has.
+ */
+const ERRAND = -5;
+
+/**
+ * What `routeOf` is asked with in place of a node, when somebody sent over the
+ * sand by {@link walkSandTo} reaches the point they were sent to. Never a node
+ * index, which is why it can be exported without anybody comparing it against
+ * the wrong column.
+ */
+export const ON_SAND = -1;
+
+/**
+ * How far off the beach's surface a person may stand and still be stood on sand,
+ * in voxels. Paving puts feet two voxels above the ground it is laid
+ * on, and the sand's surface is a fraction of a voxel up, so anything close is
+ * sand and nothing on a path is.
+ */
+const ON_SAND_TOLERANCE = 0.5;
+
+/**
  * How many spots on the sand a roamer considers before standing still for a
  * moment instead.
  *
@@ -289,7 +316,8 @@ export interface Crowd extends Walkers {
 
   /**
    * Node being walked to, or one of the sentinels above: out on the sand, on
-   * the way to a seat, sitting on one, or held still by the simulation.
+   * the way to a seat, sitting on one, held still by the simulation, or sent
+   * across the sand by it.
    */
   readonly node: Int32Array;
   /** Node walked in from, so a person does not turn straight back round. */
@@ -491,8 +519,11 @@ export function createCrowd(options: CrowdOptions): Crowd {
  * lounger, which hangs off no node. An edit does not move the beach, so where
  * they stand is still somewhere to stand, and snapping them to the nearest node
  * would march the whole beach back onto the boardwalk every time a flowerbed
- * went down. Everybody else is walked from where they are to the node nearest
- * them, and carries on from there.
+ * went down. So does anybody the simulation had out on the sand - on an errand
+ * over it, or held in a line on it - who carries on as a roamer: the router's
+ * record of where they were going is thrown away on a rebuild. Everybody else
+ * is walked from where they are to the node nearest them, and carries on from
+ * there.
  *
  * A network with no edges — every path taken up — hands back a crowd with
  * `count` 0. Nobody is drawn and nobody is stepped, and paving one tile brings
@@ -523,7 +554,7 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
     crowd.fromZ[i] = crowd.z[i]! + crowd.dirX[i]! * side;
     crowd.cameFrom[i] = -1;
 
-    if (canRoam && (crowd.node[i] === ROAMING || lounging)) {
+    if (canRoam && (lounging || outOnSand(crowd, i))) {
       crowd.gate[i] = network.gates[Math.floor(crowd.random() * network.gates.length)]!;
       crowd.node[i] = ROAMING;
       roamTo(reseated, i, lounging ? SEAT_CLEAR : 0);
@@ -619,6 +650,8 @@ function arrive(crowd: Crowd, i: number): void {
     sitDown(crowd, i);
   } else if (crowd.node[i] === SEATED) {
     standUp(crowd, i);
+  } else if (crowd.node[i] === ERRAND) {
+    runErrand(crowd, i);
   } else {
     arriveAtNode(crowd, i);
   }
@@ -707,10 +740,7 @@ export function stepOntoSand(crowd: Crowd, i: number, gate: number): void {
  * takes it rather than turning round and going home.
  */
 function roamOn(crowd: Crowd, i: number): void {
-  crowd.fromX[i] = crowd.toX[i]!;
-  crowd.fromY[i] = crowd.toY[i]!;
-  crowd.fromZ[i] = crowd.toZ[i]!;
-  standOnLine(crowd, i);
+  standAtTheEnd(crowd, i);
   if (crowd.offTheSand?.(i)) {
     leaveTheSand(crowd, i);
     return;
@@ -730,6 +760,18 @@ function roamOn(crowd: Crowd, i: number): void {
     return;
   }
   roamTo(crowd, i);
+}
+
+/**
+ * The end of the walk somebody has just finished on the sand, as the start of
+ * whatever they do next: a roamer reaching their spot, or somebody on an errand
+ * reaching the point they were sent to.
+ */
+function standAtTheEnd(crowd: Crowd, i: number): void {
+  crowd.fromX[i] = crowd.toX[i]!;
+  crowd.fromY[i] = crowd.toY[i]!;
+  crowd.fromZ[i] = crowd.toZ[i]!;
+  standOnLine(crowd, i);
 }
 
 /**
@@ -767,16 +809,10 @@ function leaveTheSand(crowd: Crowd, i: number): void {
   const { gates, nodes } = crowd.network;
   const reach = SEAT_COLUMNS * TILE_VOXELS;
   const x = crowd.fromX[i]!;
-  let nearest = -1;
-  let nearestDistance = Number.POSITIVE_INFINITY;
   let reachable = -1;
   let reachableDistance = Number.POSITIVE_INFINITY;
   for (const gate of gates) {
     const distance = Math.hypot(nodes[gate]!.x - x, nodes[gate]!.z - crowd.fromZ[i]!);
-    if (distance < nearestDistance) {
-      nearest = gate;
-      nearestDistance = distance;
-    }
     const inReach = Math.abs(nodes[gate]!.x - x) <= reach && distance < reachableDistance;
     if (inReach && clearTo(crowd, i, gate)) {
       reachable = gate;
@@ -789,6 +825,7 @@ function leaveTheSand(crowd: Crowd, i: number): void {
     crowd.lane[i] = LANE.sand;
     return;
   }
+  const nearest = nearestGate(crowd.network, x, crowd.fromZ[i]!);
   roamTo(crowd, i, 0, nearest >= 0 ? nodes[nearest]!.x : undefined);
 }
 
@@ -965,10 +1002,94 @@ export function holdAt(
  * they have been standing at a door, and the rule it exists for - do not turn
  * straight back round - is about a walk that was interrupted rather than one
  * that ended. `aim` puts them back in {@link LANE.paved} itself.
+ *
+ * **Somebody let go out on the sand walks to the node over sand**, and steps
+ * aside the way a roamer does, exactly as a roamer heading for their gate. That
+ * is decided here from where they stand - on an errand over the sand, or held
+ * at the sand's own height - rather than told: this file knows what the ground
+ * is, and nothing about why they were there.
  */
 export function releaseTo(crowd: Crowd, i: number, node: number): void {
+  const fromSand = crowd.node[i] === ERRAND || (crowd.node[i] === HELD && standsOnSand(crowd, i));
   crowd.cameFrom[i] = -1;
   aim(crowd, i, node);
+  if (fromSand) crowd.lane[i] = LANE.sand;
+}
+
+/**
+ * Sends somebody off the graph to a point on the sand, and has the crowd say so
+ * when they get there: `routeOf` is asked with {@link ON_SAND} rather than a
+ * node.
+ *
+ * The other half of {@link holdAt}, and as ignorant as it is: the caller is
+ * `sim/domain/router.ts` walking a guest over the beach to a building on it,
+ * one waypoint at a time, and what arrives here is a point. Whether the walk is
+ * clear is the caller's business too - see `sim/domain/sandRoute.ts`.
+ *
+ * On arrival the router may send them on to the next point, stand them still,
+ * or let them back onto the graph. **If it does none of those** - it was
+ * rebuilt and has forgotten them - they become an ordinary roamer, with the
+ * nearest gate as their way back in, rather than stand on the last point for
+ * ever.
+ *
+ * The walk starts where their segment does, which for every caller is where
+ * they are: the node they have just arrived at, the point they have just
+ * reached, or the spot they were held on. Does nothing on a plot with no beach.
+ */
+export function walkSandTo(crowd: Crowd, i: number, x: number, z: number): void {
+  if (!crowd.network.beach) return;
+  // A seat is claimed from the moment somebody sets off for it; see `holdAt`.
+  giveUpSeat(crowd, i);
+  crowd.node[i] = ERRAND;
+  crowd.lane[i] = LANE.sand;
+  segment(crowd, i, x, BEACH_SURFACE, z);
+}
+
+/**
+ * Reaching a point {@link walkSandTo} sent somebody to, and asking the router
+ * what next.
+ *
+ * Nothing is drawn from `random` unless the router has let go of them: a draw
+ * for somebody the router is steering would move everybody else's afternoon,
+ * which is the rule `nextNode` keeps for a held person. Whether it acted is
+ * read off `t` - every one of its answers starts a new segment, which starts
+ * `t` again, and nothing else does.
+ */
+function runErrand(crowd: Crowd, i: number): void {
+  standAtTheEnd(crowd, i);
+  crowd.routeOf?.(i, ON_SAND);
+  if (crowd.t[i]! < 1) return;
+  crowd.gate[i] = nearestGate(crowd.network, crowd.fromX[i]!, crowd.fromZ[i]!);
+  crowd.node[i] = ROAMING;
+  roamTo(crowd, i);
+}
+
+/** The gate nearest a point in a straight line, or -1 on a plot with none. */
+function nearestGate(network: WalkNetwork, x: number, z: number): number {
+  let nearest = -1;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const gate of network.gates) {
+    const distance = Math.hypot(network.nodes[gate]!.x - x, network.nodes[gate]!.z - z);
+    if (distance < nearestDistance) {
+      nearest = gate;
+      nearestDistance = distance;
+    }
+  }
+  return nearest;
+}
+
+/** Whether somebody is standing on the beach's own surface rather than on paving. */
+function standsOnSand(crowd: Crowd, i: number): boolean {
+  return crowd.network.beach !== null && Math.abs(crowd.y[i]! - BEACH_SURFACE) < ON_SAND_TOLERANCE;
+}
+
+/**
+ * Whether somebody is out on the sand in a way an edit should leave them there:
+ * roaming, on an errand, or held on the sand's surface. See `reseatCrowd`.
+ */
+function outOnSand(crowd: Crowd, i: number): boolean {
+  const node = crowd.node[i];
+  return node === ROAMING || node === ERRAND || (node === HELD && standsOnSand(crowd, i));
 }
 
 /** Whether this person is standing where the simulation put them. */
@@ -1149,8 +1270,10 @@ function nextNode(crowd: Crowd, i: number, at: number): number {
   // inside. They are placed already, so there is nothing to aim - and the
   // wander below must not be reached for them either, because a draw made for
   // somebody who is not walking would move everybody else's afternoon. The same
-  // goes for somebody the router has just sent out onto the sand.
-  if (crowd.node[i] === HELD || crowd.node[i] === ROAMING) return HELD;
+  // goes for somebody the router has just sent out onto the sand, roaming or on
+  // an errand. Before asking, `node` was the node they arrived at, so anything
+  // below zero now is one of those three.
+  if (crowd.node[i]! < 0) return HELD;
   if (routed >= 0 && routed !== at) return routed;
 
   return wanderFrom(crowd, i, node);

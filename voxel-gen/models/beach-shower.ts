@@ -65,6 +65,9 @@ export default defineModel({
     satisfies: [{ need: 'hygiene', amount: 0.6 }],
     capacity: 1,
     dwellSeconds: { min: 30, max: 90 },
+    // The front edge of the duckboard, on the side the arm reaches out over:
+    // walked up to over the sand. See `sim/domain/doors.ts`.
+    doors: [{ x: POST.x1, z: DECK.z1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

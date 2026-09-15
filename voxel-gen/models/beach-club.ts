@@ -178,6 +178,10 @@ export default defineModel({
     ],
     capacity: 25,
     dwellSeconds: { min: 1800, max: 5400 },
+    // At the foot of each flight down to the sand, walked out of towards the
+    // sea. Nothing paves to a club on the beach; a guest walks up over the sand
+    // to the tile in front of a flight. See `sim/domain/doors.ts`.
+    doors: FLIGHTS.map((x) => ({ x: x + FLIGHT_W / 2, z: BRINK + 4, facing: 0 as const })),
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

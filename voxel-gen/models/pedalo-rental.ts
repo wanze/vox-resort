@@ -69,6 +69,9 @@ export default defineModel({
     ],
     capacity: 8,
     dwellSeconds: { min: 1200, max: 2700 },
+    // At the counter, facing the boats and the water: walked up to over the
+    // sand, since nothing on the beach is paved to. See `sim/domain/doors.ts`.
+    doors: [{ x: HUT.x + 7, z: FRONT + 2, facing: 0 }],
   },
   tiles: { x: 2, z: 2 },
   windows: WINDOW_GLASS,

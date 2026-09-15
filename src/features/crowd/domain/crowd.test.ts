@@ -5,10 +5,12 @@ import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import {
   createCrowd,
   holdAt,
+  isRoaming,
   isSeated,
   isWaiting,
   MAX_STEP,
   MAX_SUBSTEPS,
+  ON_SAND,
   releaseTo,
   reseatCrowd,
   RESTING,
@@ -17,6 +19,7 @@ import {
   stepCrowd,
   stepOntoSand,
   WALK_SPEED,
+  walkSandTo,
   type Crowd,
 } from './crowd';
 import {
@@ -27,7 +30,7 @@ import {
   type WalkNetwork,
 } from './walkNetwork';
 import type { SeatSpot } from './seating';
-import { MAX_SIDE } from './avoidance';
+import { LANE, MAX_SIDE } from './avoidance';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -961,6 +964,168 @@ describe('the people the simulation holds still', () => {
     expect(isWaiting(reseated, 0)).toBe(false);
     run(reseated, 20);
     expect(Math.hypot(reseated.x[0]! - SPOT.x, reseated.z[0]! - SPOT.z)).toBeGreaterThan(1);
+  });
+});
+
+/** Steps until `person` has been asked about the sand `times` times, or a minute passes. */
+const until = (crowd: Crowd, asked: number[], person: number, times: number): void => {
+  for (let step = 0; step < 600; step++) {
+    if (asked.filter((each) => each === person).length >= times) return;
+    stepCrowd(crowd, MAX_STEP);
+  }
+};
+
+describe('an errand over the sand', () => {
+  // Water from z = 18; six rows of sand in front of it, and a boardwalk down to it.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const network = walkNetworkFor({ paved: boardwalk(8), levelOf: FLAT, shore, tilesX: 20 });
+  /** A point on the open sand west of the boardwalk, and another further along. */
+  const FIRST = { x: 6.5 * TILE_VOXELS, z: 14.5 * TILE_VOXELS };
+  const SECOND = { x: 3.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
+
+  /**
+   * A crowd whose router answers every arrival on the sand with `onSand`, and
+   * somebody stood at the first gate and sent to {@link FIRST}.
+   */
+  const errand = (onSand: (crowd: Crowd, person: number, asked: number) => void) => {
+    const asked: number[] = [];
+    let crowd: Crowd | null = null;
+    crowd = createCrowd({
+      network,
+      count: 6,
+      variants: 1,
+      seed: 42,
+      routeOf: (person, at) => {
+        if (at === ON_SAND) {
+          asked.push(person);
+          onSand(crowd!, person, asked.filter((each) => each === person).length);
+        }
+        return -1;
+      },
+    });
+    const person = [...Array(crowd.count).keys()].find((i) => crowd!.node[i]! >= 0)!;
+    const gate = network.nodes[network.gates[0]!]!;
+    holdAt(crowd, person, gate.x, gate.y, gate.z, 0);
+    walkSandTo(crowd, person, FIRST.x, FIRST.z);
+    return { crowd, person, asked };
+  };
+
+  it('walks them to the point and asks the router once when they get there', () => {
+    const { crowd, person, asked } = errand(() => undefined);
+    expect(isRoaming(crowd, person)).toBe(false);
+    expect(crowd.lane[person]).toBe(LANE.sand);
+    until(crowd, asked, person, 1);
+    expect(asked.filter((each) => each === person)).toHaveLength(1);
+    expect(Math.hypot(crowd.fromX[person]! - FIRST.x, crowd.fromZ[person]! - FIRST.z)).toBeLessThan(
+      1,
+    );
+    run(crowd, 30);
+    expect(asked.filter((each) => each === person)).toHaveLength(1);
+  });
+
+  it('chains a second leg when the router sends them on', () => {
+    const { crowd, person, asked } = errand((people, i, times) => {
+      if (times === 1) walkSandTo(people, i, SECOND.x, SECOND.z);
+    });
+    until(crowd, asked, person, 2);
+    expect(asked.filter((each) => each === person)).toHaveLength(2);
+    expect(
+      Math.hypot(crowd.fromX[person]! - SECOND.x, crowd.fromZ[person]! - SECOND.z),
+    ).toBeLessThan(1);
+  });
+
+  it('turns somebody the router forgot into a roamer rather than leaving them stood there', () => {
+    const { crowd, person, asked } = errand(() => undefined);
+    until(crowd, asked, person, 1);
+    stepCrowd(crowd, MAX_STEP);
+    expect(isRoaming(crowd, person)).toBe(true);
+    expect(network.gates).toContain(crowd.gate[person]);
+    const there = { x: crowd.x[person]!, z: crowd.z[person]! };
+    run(crowd, 20);
+    expect(Math.hypot(crowd.x[person]! - there.x, crowd.z[person]! - there.z)).toBeGreaterThan(1);
+  });
+
+  it('walks somebody let go from the sand back to the paving over sand', () => {
+    const gate = network.gates[0]!;
+    const { crowd, person, asked } = errand((people, i) => releaseTo(people, i, gate));
+    until(crowd, asked, person, 1);
+    expect(crowd.node[person]).toBe(gate);
+    expect(crowd.lane[person]).toBe(LANE.sand);
+
+    // Held on the sand's own surface is on the sand too; held on paving is not.
+    holdAt(crowd, person, FIRST.x, BEACH_SURFACE, FIRST.z, 0);
+    releaseTo(crowd, person, gate);
+    expect(crowd.lane[person]).toBe(LANE.sand);
+    const node = network.nodes[gate]!;
+    holdAt(crowd, person, node.x, node.y, node.z, 0);
+    releaseTo(crowd, person, gate);
+    expect(crowd.lane[person]).toBe(LANE.paved);
+  });
+
+  it('leaves an errand-runner on the sand, as a roamer, across a rebuild', () => {
+    const { crowd, person } = errand(() => undefined);
+    stepCrowd(crowd, MAX_STEP);
+    const rebuilt = walkNetworkFor({
+      paved: [...boardwalk(8), { tileX: 11, tileZ: 10, y: 0 }],
+      levelOf: FLAT,
+      shore,
+      tilesX: 20,
+    });
+    const reseated = reseatCrowd(crowd, rebuilt);
+    expect(isRoaming(reseated, person)).toBe(true);
+    expect(rebuilt.gates).toContain(reseated.gate[person]);
+  });
+
+  /**
+   * Every bench comparison since plan 017 depends on a crowd with no router
+   * replaying the afternoon it always has, and this plan added a state beside
+   * the roaming one. Pinned before `walkSandTo` existed, on a beach with a
+   * promenade, loungers, a bench and things standing on the sand, so the wander,
+   * the sand, the seats and the obstacles all draw.
+   */
+  it('replays a crowd with no router to the voxel over 2 000 steps', () => {
+    const paved = [
+      ...boardwalk(8),
+      ...Array.from({ length: 12 }, (_, tileX) => ({ tileX: tileX + 4, tileZ: 9, y: 0 })),
+    ];
+    const seats: SeatSpot[] = Array.from({ length: 6 }, (_, index) => ({
+      x: (3 + index * 2) * TILE_VOXELS + 8,
+      z: 14 * TILE_VOXELS + 8,
+      y: 3,
+      heading: 0,
+      pose: 'lie' as const,
+      tileX: 3 + index * 2,
+      tileZ: 14,
+    }));
+    seats.push({
+      x: 6 * TILE_VOXELS + 4,
+      z: 8 * TILE_VOXELS + 12,
+      y: walkingSurface(0) + 2,
+      heading: 0,
+      pose: 'lie',
+      tileX: 6,
+      tileZ: 8,
+    });
+    const obstacles = Array.from({ length: 8 }, (_, index) => ({
+      x: (2 + index * 2) * TILE_VOXELS + 4,
+      z: 15 * TILE_VOXELS + 4,
+      width: 8,
+      depth: 8,
+    }));
+    const furnished = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats, obstacles });
+    const crowd = createCrowd({ network: furnished, count: 40, variants: 4, seed: 27 });
+    for (let step = 0; step < 2000; step++) stepCrowd(crowd, MAX_STEP);
+    let hash = 2166136261;
+    for (const column of [crowd.x, crowd.z]) {
+      for (const byte of new Uint8Array(column.buffer, column.byteOffset, column.byteLength)) {
+        hash = Math.imul(hash ^ byte, 16777619) >>> 0;
+      }
+    }
+    expect(hash).toBe(2894628438);
   });
 });
 

@@ -3,6 +3,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import {
   createCrowd,
+  holdAt,
   isRoaming,
   isWaiting,
   MAX_STEP,
@@ -11,19 +12,26 @@ import {
   stepCrowd,
   type Crowd,
 } from '../../crowd/domain/crowd';
-import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { blockedAt } from '../../crowd/domain/sandGrid';
+import {
+  BEACH_SURFACE,
+  walkNetworkFor,
+  type PavedTile,
+  type WalkNetwork,
+} from '../../crowd/domain/walkNetwork';
 import { createGuests, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
-import { shoreFor } from '../../layout/domain/shoreline';
+import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createNeeds, decayNeeds, NEEDS, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
 import { lodgingFor, lodgingsOn, type Lodging } from './lodgings';
 import { bedtimeOf } from './night';
-import { MAX_QUEUE_SHOWN, queueLaneFor } from './queueLane';
+import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
+import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
 import { crowdScaleFor } from './crowdRate';
 import { createRouter } from './router';
@@ -546,6 +554,129 @@ describe('a visit to the beach', () => {
   });
 });
 
+describe('a building on the beach', () => {
+  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach,
+  // and a boardwalk down to the back of it whose last tile is the one gate.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+    tileX: 10,
+    tileZ: 4 + index,
+    y: 0,
+  }));
+
+  /** A beach shower on tile 4,14, with no door and nothing paved anywhere near it. */
+  const shower: Venue = {
+    ...bakery(4),
+    key: 'beach-shower#0',
+    id: 'beach-shower',
+    label: 'Beach shower',
+    role: 'service',
+    satisfies: [{ need: 'hygiene', amount: 0.6 }],
+    capacity: 1,
+    dwellSeconds: { min: 30, max: 90 },
+    tileZ: 14,
+    z: 14.5 * TILE_VOXELS,
+  };
+  const inShower = (crowd: Crowd, person: number): boolean =>
+    Math.abs(crowd.x[person]! - shower.x) < TILE_VOXELS / 2 &&
+    Math.abs(crowd.z[person]! - shower.z) < TILE_VOXELS / 2;
+  const network = walkNetworkFor({
+    paved,
+    levelOf: FLAT,
+    shore,
+    tilesX: 20,
+    obstacles: [{ x: 4 * TILE_VOXELS, z: 14 * TILE_VOXELS, width: 16, depth: 16 }],
+  });
+  const gate = network.gates[0]!;
+
+  /**
+   * Everybody named stood on the boardwalk and walking down it towards the sand:
+   * stood there first, since the crowd may have started them out on the beach.
+   */
+  const onTheBoardwalk = (needs: Needs, people: readonly number[]) => {
+    const { router, crowd } = routerOn(network, [shower], needs);
+    const start = network.nodes[nodeAt(network, 10, 8)]!;
+    for (const person of people) {
+      router.step(person, nodeAt(network, 10, 4));
+      holdAt(crowd, person, start.x, start.y, start.z, 0);
+      releaseTo(crowd, person, nodeAt(network, 10, 9));
+    }
+    return { router, crowd };
+  };
+
+  it('walks a grubby guest over the sand to it, holds them, and lets them back on at the gate', () => {
+    expect(network.gates).toHaveLength(1);
+    const needs = wanting(0, 'hygiene');
+    const { router, crowd } = onTheBoardwalk(needs, [0]);
+    expect(router.goalOf(0)?.key).toBe('beach-shower#0');
+
+    let onTheSand = false;
+    let heldInside = false;
+    let backAt = -1;
+    for (let step = 0; step < 4000 && backAt === -1; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
+      const visiting = router.visitOf(0) !== null;
+      if (!visiting && !isRoaming(crowd, 0) && crowd.z[0]! > 12 * TILE_VOXELS) onTheSand = true;
+      if (visiting && isWaiting(crowd, 0) && inShower(crowd, 0)) heldInside = true;
+      if (heldInside && !visiting && crowd.node[0]! >= 0) backAt = crowd.node[0]!;
+    }
+    expect(onTheSand, 'never walked out over the sand').toBe(true);
+    expect(heldInside, 'never stood in the shower').toBe(true);
+    expect(needs.level.hygiene[0]).toBeCloseTo(0.6);
+    expect(backAt, 'never came back onto the boardwalk').toBe(gate);
+  });
+
+  it('stands a second guest in a line on the sand, outside the shower', () => {
+    const needs = wanting(0, 'hygiene');
+    const second = [...Array(guests.count).keys()].find(
+      (person) => guests.party[person] !== guests.party[0],
+    )!;
+    needs.level.hygiene[second] = 0;
+    const { router, crowd } = onTheBoardwalk(needs, [0, second]);
+
+    let waiting = false;
+    // No ticks: whoever gets in first stays in, so the other has to wait.
+    for (let step = 0; step < 4000 && !waiting; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      waiting = [0, second].some((person) => router.visitOf(person)?.waiting === true);
+    }
+    expect(waiting, 'nobody ever had to wait').toBe(true);
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
+    const inLine = router.visitOf(0)?.waiting ? 0 : second;
+    expect(isWaiting(crowd, inLine)).toBe(true);
+    expect(inShower(crowd, inLine)).toBe(false);
+    expect(crowd.y[inLine]).toBeCloseTo(BEACH_SURFACE);
+    const tileX = Math.floor(crowd.x[inLine]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[inLine]! / TILE_VOXELS);
+    expect(terrainAt(shore, tileX, tileZ)).toBe('beach');
+    expect(blockedAt(network.sand!, crowd.x[inLine]!, crowd.z[inLine]!)).toBe(false);
+  });
+
+  it('leaves somebody on their way when the router is rebuilt mid-walk, roaming the sand', () => {
+    const { router, crowd } = onTheBoardwalk(wanting(0, 'hygiene'), [0]);
+    let out = false;
+    for (let step = 0; step < 4000 && !out; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      out = crowd.z[0]! > 12.5 * TILE_VOXELS;
+    }
+    expect(out, 'never got onto the sand').toBe(true);
+    expect(isRoaming(crowd, 0)).toBe(false);
+
+    // An edit somewhere else on the plot: the same graph, and every route forgotten.
+    router.rebuild([shower], [], network);
+    for (let step = 0; step < 1000 && !isRoaming(crowd, 0); step++) stepCrowd(crowd, MAX_STEP);
+    expect(isRoaming(crowd, 0)).toBe(true);
+    const there = { x: crowd.x[0]!, z: crowd.z[0]! };
+    for (let step = 0; step < 300; step++) stepCrowd(crowd, MAX_STEP);
+    expect(Math.hypot(crowd.x[0]! - there.x, crowd.z[0]! - there.z)).toBeGreaterThan(1);
+  });
+});
+
 describe('the night', () => {
   const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
   const homeless = [...Array(guests.count).keys()].find(
@@ -777,7 +908,11 @@ describe('on the generated plot', () => {
    * never fill them. A line forming at all is what the second run is for, and a
    * capacity of 1 is also where an off-by-one in the shuffle-up shows.
    */
-  const starving = (capacityOf: (venue: Venue) => number) => {
+  const starving = (
+    capacityOf: (venue: Venue) => number,
+    need: (typeof NEEDS)[number] = 'hunger',
+    walked: WalkNetwork = network,
+  ) => {
     const people = createGuests({
       count: 600,
       homes: [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 600 }],
@@ -788,8 +923,8 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     // The whole resort heads for food at once, which is the worst case a queue
     // can be put under and not a case the plot would reach on its own.
-    needs.level.hunger.fill(0);
-    const before = new Float32Array(needs.level.hunger);
+    needs.level[need].fill(0);
+    const before = new Float32Array(needs.level[need]);
     // The plot's own venues, with only the capacity moved: a loop rather than a
     // spread in a `map`, which the linter is right to dislike.
     const standing: Venue[] = [];
@@ -801,23 +936,23 @@ describe('on the generated plot', () => {
       needs,
       venues: standing,
       lodgings: [],
-      network,
+      network: walked,
       tickOfDay: () => NOON,
       crowd: () => crowd!,
       seed: 19,
     });
     crowd = createCrowd({
-      network,
+      network: walked,
       count: people.count,
       variants: 4,
       seed: 4,
       routeOf: (person, at) => router.step(person, at),
     });
 
-    const food = standing.filter((venue) =>
-      venue.satisfies.some((relief) => relief.need === 'hunger'),
-    );
-    expect(food.length, 'a generated plot with nothing to eat on it').toBeGreaterThan(0);
+    const food = standing.filter((venue) => venue.satisfies.some((relief) => relief.need === need));
+    expect(food.length, `a generated plot with nothing for ${need} on it`).toBeGreaterThan(0);
+    /** The ids of every venue anybody was ever inside. */
+    const served = new Set<string>();
 
     let queued = 0;
     let busiest = 0;
@@ -835,19 +970,20 @@ describe('on the generated plot', () => {
           over ??= `${venue.key} held ${here.inside} on tick ${tick}`;
         queued = Math.max(queued, here.waiting);
         busiest = Math.max(busiest, here.inside);
+        if (here.inside > 0) served.add(venue.id);
       }
     }
 
     let fed = 0;
     let confused: string | null = null;
     for (let person = 0; person < people.count; person++) {
-      if (needs.level.hunger[person]! > before[person]!) fed++;
+      if (needs.level[need][person]! > before[person]!) fed++;
       // Nobody is in two places at once: a visit names one venue, and a person
       // the router says nothing about is walking.
       const visit = router.visitOf(person);
       if (visit && !standing.includes(visit.venue)) confused ??= `person ${person}`;
     }
-    return { over, queued, busiest, fed, confused };
+    return { over, queued, busiest, fed, confused, served };
   };
 
   it('never lets a venue hold more people than it says it does', () => {
@@ -858,6 +994,104 @@ describe('on the generated plot', () => {
     // resort would pass and mean nothing.
     expect(run.busiest, 'nobody ever got inside anything').toBeGreaterThan(0);
     expect(run.fed, 'half a simulated day and nobody ate').toBeGreaterThan(0);
+  });
+
+  /**
+   * The same plot with everything standing on it painted onto the sand, as
+   * `showcase.ts` builds it: what a route over the beach has to find its way
+   * round. The network above leaves the sand open, and the runs measured for
+   * plans 018 and 026 were made on it.
+   */
+  const furnished = walkNetworkFor({
+    paved: layout.paths,
+    levelOf: (x, z) => levelAt(elevation, x, z),
+    shore: shoreFor(plan),
+    tilesX: plan.tilesX,
+    obstacles: layout.placements,
+  });
+  const furnishedIndex = nodeIndexFor(furnished);
+  /** `router.ts`'s own reach over the sand, in tile steps. */
+  const SAND_TILES = 40;
+
+  /**
+   * Plan 027's measure. Before it, 20 venues on this plot had no way in at all,
+   * and they were the beach: every shower, changing cabin and beach club. The
+   * one left is a poolside bar on a sand terrace at level 3, which is sand but
+   * not beach band - neither a roamer nor a route reaches it, and whether sand
+   * terraces are paved or roamed is the maintainer's call.
+   */
+  it('reaches every venue on the plot but the poolside bar on the sand terrace', () => {
+    const unreachable = venues
+      .filter((venue) => {
+        const doors = doorsFor(venue, furnishedIndex, furnished);
+        if (doors.nodes.length > 0) return false;
+        return sandRoutesFor(furnished, doors.sand, SAND_TILES).length === 0;
+      })
+      .map((venue) => `${venue.key} at ${venue.tileX},${venue.tileZ}`);
+    expect(unreachable).toEqual(['poolside-bar#6 at 102,69']);
+  });
+
+  it('keeps every line on the sand and every step over it on open beach', () => {
+    const shore = furnished.beach!.shore;
+    let points = 0;
+    let off: string | null = null;
+    const check = (what: string, point: { readonly x: number; readonly z: number }): void => {
+      points++;
+      const tile = terrainAt(
+        shore,
+        Math.floor(point.x / TILE_VOXELS),
+        Math.floor(point.z / TILE_VOXELS),
+      );
+      if (tile !== 'beach' || blockedAt(furnished.sand!, point.x, point.z)) {
+        off ??= `${what} at ${point.x},${point.z}`;
+      }
+    };
+    for (const venue of venues) {
+      const doors = doorsFor(venue, furnishedIndex, furnished);
+      if (doors.nodes.length > 0) continue;
+      for (const route of sandRoutesFor(furnished, doors.sand, SAND_TILES)) {
+        for (const [leg, point] of route.waypoints.entries()) {
+          check(`${venue.key} from gate ${route.gate}, waypoint ${leg}`, point);
+        }
+        const towards = route.waypoints.at(-2) ?? furnished.nodes[route.gate]!;
+        for (const [slot, spot] of sandLaneFor(
+          furnished,
+          route.waypoints.at(-1)!,
+          towards,
+        ).entries()) {
+          check(`${venue.key} line slot ${slot}`, spot);
+        }
+      }
+    }
+    expect(points, 'nothing on the sand to check').toBeGreaterThan(100);
+    expect(off).toBeNull();
+  });
+
+  it('paves nothing new for the doors the beach buildings declare', () => {
+    // Pinned before plan 027 gave `beach-club`, `pedalo-rental` and
+    // `beach-shower` doors: on this plot all three stand on the sand, which
+    // grows no spur, so declaring where they are entered changes no paving.
+    let hash = 2166136261;
+    const key = layout.paths
+      .map((tile) => `${tile.tileX},${tile.tileZ},${tile.y},${tile.id}`)
+      .join(';');
+    for (let at = 0; at < key.length; at++)
+      hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
+    expect(layout.paths).toHaveLength(2232);
+    expect(hash).toBe(4242512241);
+  });
+
+  it('sends grubby guests over the sand to wash on the beach', () => {
+    const run = starving((venue) => venue.capacity, 'hygiene', furnished);
+    expect(run.over).toBeNull();
+    expect(run.confused).toBeNull();
+    const onTheBeach = [...run.served].filter(
+      (id) => id === 'beach-shower' || id === 'changing-cabins',
+    );
+    expect(
+      onTheBeach,
+      `half a day and nobody washed on the beach: ${[...run.served].join(', ')}`,
+    ).not.toEqual([]);
   });
 
   it('grows a line at the door when every place holds one person', () => {

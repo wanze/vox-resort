@@ -28,10 +28,22 @@
  *
  * Which of the two came back is part of the answer, because the layout wants to
  * know how often the fallback fires. See {@link VenueDoors.declared}.
+ *
+ * ## A building on the beach is walked up to over the sand
+ *
+ * Nothing standing on sand is given paving, by design, so a beach shower has no
+ * door node at all. What it has instead is a point on the open sand in front of
+ * it - {@link VenueDoors.sand} - by the same two rules: the tile a declared door
+ * opens onto, and otherwise the open tiles of the ring. `sandRoute.ts` is what
+ * gets a guest from the paving to one.
  */
 
 import type { NodeIndex } from '../../crowd/domain/nearestNode';
+import { blockedAt } from '../../crowd/domain/sandGrid';
+import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { doorStepTile } from '../../layout/domain/doorStep';
+import { terrainAt } from '../../layout/domain/shoreline';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Venue } from './venues';
 
 export interface VenueDoors {
@@ -50,6 +62,15 @@ export interface VenueDoors {
   readonly nodes: readonly number[];
   /** Whether these are the doors the art declared, or the fallback ring. */
   readonly declared: boolean;
+  /**
+   * Where a venue standing on the beach band is walked up to, in world voxels;
+   * empty for anything else. A beach venue has no door nodes, so this is its
+   * only way in.
+   *
+   * Always the centre of an open beach tile, so a route over the sand can end
+   * on it and a line can start on it.
+   */
+  readonly sand: readonly { readonly x: number; readonly z: number }[];
 }
 
 /**
@@ -59,8 +80,21 @@ export interface VenueDoors {
  */
 type DoorFootprint = Pick<Venue, 'tileX' | 'tileZ' | 'tilesX' | 'tilesZ' | 'doors'>;
 
-/** The venue's doors as nodes: the declared ones where they reach paving, the ring where not. */
-export function doorsFor(venue: DoorFootprint, index: NodeIndex): VenueDoors {
+/** What says whether a tile is open sand: the beach band, and what stands on it. */
+type SandGround = Pick<WalkNetwork, 'beach' | 'sand'>;
+
+/**
+ * The venue's doors as nodes: the declared ones where they reach paving, the ring
+ * where not; and, for a venue on the beach, as points on the sand in front of it.
+ *
+ * `ground` is only read for the second half. Omit it and nothing is on the beach.
+ */
+export function doorsFor(
+  venue: DoorFootprint,
+  index: NodeIndex,
+  ground: SandGround | null = null,
+): VenueDoors {
+  const sand = sandDoorsFor(venue, ground);
   const found = new Set<number>();
   for (const door of venue.doors) {
     // The same tile the layout turned the building to open onto; see
@@ -68,8 +102,8 @@ export function doorsFor(venue: DoorFootprint, index: NodeIndex): VenueDoors {
     const tile = doorStepTile(venue, door);
     for (const node of index.at(tile.x, tile.z) ?? []) found.add(node);
   }
-  if (found.size > 0) return { nodes: sorted(found), declared: true };
-  return { nodes: ringNodes(venue, index), declared: false };
+  if (found.size > 0) return { nodes: sorted(found), declared: true, sand };
+  return { nodes: ringNodes(venue, index), declared: false, sand };
 }
 
 /**
@@ -93,3 +127,61 @@ function ringNodes(venue: DoorFootprint, index: NodeIndex): readonly number[] {
 
 const sorted = (nodes: ReadonlySet<number>): readonly number[] =>
   [...nodes].toSorted((a, b) => a - b);
+
+/**
+ * The open sand a venue on the beach is walked up to: in front of each declared
+ * door, or where none of those is open, every open tile of the ring.
+ *
+ * "On the beach" is the venue's anchor tile being beach band, which is what the
+ * generator stood it on. A venue on a sand terrace behind the band is not: the
+ * band is the only sand anybody walks, and a route could not reach it.
+ *
+ * A tile whose centre something stands on is passed over rather than walked
+ * into - a lounger laid right in front of the shower - which is the same
+ * generous fallback the ring is for the paving.
+ */
+function sandDoorsFor(
+  venue: DoorFootprint,
+  ground: SandGround | null,
+): readonly { readonly x: number; readonly z: number }[] {
+  const shore = ground?.beach?.shore ?? null;
+  if (!ground || terrainAt(shore, venue.tileX, venue.tileZ) !== 'beach') return [];
+  const open = (tile: { readonly x: number; readonly z: number }): boolean =>
+    terrainAt(shore, tile.x, tile.z) === 'beach' &&
+    !(ground.sand && blockedAt(ground.sand, centre(tile.x), centre(tile.z)));
+
+  const declared = uniqueTiles(venue.doors.map((door) => doorStepTile(venue, door))).filter(open);
+  const tiles = declared.length > 0 ? declared : ringTiles(venue).filter(open);
+  return tiles.map((tile) => ({ x: centre(tile.x), z: centre(tile.z) }));
+}
+
+/** The ring one tile out round a footprint, without the footprint itself. */
+function ringTiles(venue: DoorFootprint): { readonly x: number; readonly z: number }[] {
+  const tiles: { x: number; z: number }[] = [];
+  for (let x = venue.tileX - 1; x <= venue.tileX + venue.tilesX; x++) {
+    for (let z = venue.tileZ - 1; z <= venue.tileZ + venue.tilesZ; z++) {
+      const inside =
+        x >= venue.tileX &&
+        x < venue.tileX + venue.tilesX &&
+        z >= venue.tileZ &&
+        z < venue.tileZ + venue.tilesZ;
+      if (!inside) tiles.push({ x, z });
+    }
+  }
+  return tiles;
+}
+
+/** Each tile once, in the order first named: two doors can open onto one tile. */
+function uniqueTiles(
+  tiles: readonly { readonly x: number; readonly z: number }[],
+): { readonly x: number; readonly z: number }[] {
+  const seen = new Set<string>();
+  return tiles.filter((tile) => {
+    const key = `${tile.x},${tile.z}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const centre = (tile: number): number => (tile + 0.5) * TILE_VOXELS;

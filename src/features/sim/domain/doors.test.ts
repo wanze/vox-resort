@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
+import type { ObstacleBox } from '../../crowd/domain/sandGrid';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { shoreFor } from '../../layout/domain/shoreline';
 import { doorsFor } from './doors';
 import type { Venue } from './venues';
 
@@ -182,5 +184,64 @@ describe('doorsFor, with doors declared', () => {
     expect(doors.declared).toBe(false);
     // Every tile of the ring, which is the whole of the paving here.
     expect(doors.nodes).toHaveLength(12);
+  });
+});
+
+/** The centre of a tile, along either axis, in voxels. */
+const centre = (tile: number): number => (tile + 0.5) * TILE_VOXELS;
+
+describe('doorsFor, on the beach', () => {
+  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  /** A boardwalk down to the back of the sand, so the beach has a gate and no more. */
+  const boardwalk = flat([
+    [10, 9],
+    [10, 10],
+    [10, 11],
+  ]);
+  const beachOf = (obstacles: ObstacleBox[] = []): WalkNetwork =>
+    walkNetworkFor({ paved: boardwalk, levelOf: FLAT, shore, tilesX: 20, obstacles });
+
+  it('gives a shower on the sand with no doors the open tiles round it, and no nodes', () => {
+    const shower = venueAt(4, 14);
+    // A lounger on the tile east of it: that one is not open.
+    const lounger = { x: 5 * TILE_VOXELS + 4, z: 14 * TILE_VOXELS + 4, width: 8, depth: 8 };
+    const network = beachOf([
+      lounger,
+      { x: 4 * TILE_VOXELS, z: 14 * TILE_VOXELS, width: 16, depth: 16 },
+    ]);
+    const doors = doorsFor(shower, nodeIndexFor(network), network);
+    expect(doors.nodes).toEqual([]);
+    expect(doors.sand).toHaveLength(7);
+    expect(doors.sand).not.toContainEqual({ x: centre(5), z: centre(14) });
+    expect(doors.sand).toContainEqual({ x: centre(4), z: centre(15) });
+    expect(doors.sand).not.toContainEqual({ x: centre(4), z: centre(14) });
+  });
+
+  it('gives a beach club with a door down to the sand the tile in front of it', () => {
+    const club = { ...venueAt(4, 12, 3, 2) };
+    const door = { x: 5.5 * TILE_VOXELS, z: 14 * TILE_VOXELS - 1, facing: 0 as const };
+    const network = beachOf();
+    const doors = doorsFor({ ...club, doors: [door] }, nodeIndexFor(network), network);
+    expect(doors.sand).toEqual([{ x: centre(5), z: centre(14) }]);
+  });
+
+  it('gives a bakery on the grass no sand, and exactly what it gave before', () => {
+    const { network: inland, bakery } = ringed();
+    const coastal = walkNetworkFor({
+      paved: inland.nodes.map((node) => ({ tileX: node.tileX, tileZ: node.tileZ, y: 0 })),
+      levelOf: FLAT,
+      shore,
+      tilesX: 20,
+    });
+    const index = nodeIndexFor(coastal);
+    const doors = doorsFor(bakery, index, coastal);
+    expect(doors.sand).toEqual([]);
+    expect(doors.nodes).toEqual(doorsFor(bakery, index).nodes);
+    expect(doors.declared).toBe(false);
   });
 });

@@ -252,6 +252,26 @@ const contentNeeds = (guests: Guests): Needs => {
   return needs;
 };
 
+/** A crowd on a boardwalk down to six rows of sand, which somebody wanders off onto. */
+const beachCrowd = (): Crowd => {
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+    tileX: 10,
+    tileZ: 10 + index,
+    y: 0,
+  }));
+  return createCrowd({
+    network: walkNetworkFor({ paved, levelOf: () => 0, shore, tilesX: 20 }),
+    count: 40,
+    variants: 2,
+    seed: 21,
+  });
+};
+
 describe('activityLine', () => {
   const guests = guestsOf();
   const content = contentNeeds(guests);
@@ -324,23 +344,7 @@ describe('activityLine', () => {
     const lying = seatedStreet('lie');
     const lier = until(lying, (i) => restingOn(lying, i) === RESTING.lying);
 
-    // A boardwalk down to six rows of sand, which somebody wanders off onto.
-    const shore = shoreFor({
-      tilesX: 20,
-      tilesZ: 20,
-      shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
-    });
-    const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
-      tileX: 10,
-      tileZ: 10 + index,
-      y: 0,
-    }));
-    const beach = createCrowd({
-      network: walkNetworkFor({ paved, levelOf: () => 0, shore, tilesX: 20 }),
-      count: 40,
-      variants: 2,
-      seed: 21,
-    });
+    const beach = beachCrowd();
     const roamer = until(beach, (i) => isRoaming(beach, i));
 
     const lines = [
@@ -366,6 +370,13 @@ describe('a guest the simulation is holding still', () => {
     expect(doing(crowd, hungry, 0, { kind: 'waiting', at: 'Bakery', place: 2 })).toBe(
       'Hungry · Third in the line at the Bakery',
     );
+  });
+
+  it('says what a guest on a visit to the beach is doing on it, not that they are inside it', () => {
+    const beach = beachCrowd();
+    const roamer = until(beach, (i) => isRoaming(beach, i));
+    const line = doing(beach, content, roamer, { kind: 'inside', at: 'Beach' });
+    expect(line.startsWith('On the beach · tile ')).toBe(true);
   });
 
   it('says they are inside, and drops the tile there too', () => {

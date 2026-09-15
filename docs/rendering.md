@@ -258,7 +258,8 @@ With two layers the browser showed 50 fps zoomed out, 15–20 fps at mid zoom an
 60 close in, which is the draw column at ~14 µs a draw. The mid layer costs
 some culling (a region is drawn whole, so up to 20 % more triangles at mid
 zoom). `updateDetail` walks all four layers, 1–5 ms per moving frame; the crowd
-step is ~1.2 ms for 5 800 people. Doubling `CHUNK_VOXELS` is the next cut if
+step is ~1.2 ms for 5 800 people at real time, and runs that many times over per
+frame while the clock runs (see _Movement_ in [crowd.md](crowd.md)). Doubling `CHUNK_VOXELS` is the next cut if
 600 m is still slow.
 
 ### Shader builds
@@ -429,6 +430,13 @@ pnpm bench -- --shots ./shots      # a PNG per case
 The same knobs are URL parameters (`?bench=1&view=street&time=0.02&repeat=3&lod=0`).
 `?people=n` sets the crowd, with or without `bench`. A run only compares with the
 previous one if the scene has not changed.
+
+Everything that moves is stepped by `MAX_STEP` a frame under `bench` rather than
+by the frame's own delta, and the crowd is also pinned to a scale of 1, real
+time. Outside a benchmark it walks at a multiple of real time taken from the
+clock's speed (`crowdScaleFor`), which a bench run must not inherit: its clock is
+paused, and a crowd whose pace followed it would stand still and stop being
+measured.
 
 The resort generator goes up to 480 × 480 tiles (`PLOT_TILES`), nine times the
 area of the old maximum. At 100 % density that is ~60 000 placements, ~32 000

@@ -58,7 +58,13 @@
  */
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { holdAt, releaseTo, type Crowd } from '../../crowd/domain/crowd';
+import {
+  holdAt,
+  releaseTo,
+  rouseSunbathers,
+  stepOntoSand,
+  type Crowd,
+} from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, type Guests } from '../../guests/domain/guests';
@@ -77,7 +83,15 @@ import {
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
-import { arriveAt, createOccupancy, sweepOccupancy, VISIT, type Occupancy } from './occupancy';
+import { beachVenueFor, isBeach } from './beach';
+import {
+  arriveAt,
+  createOccupancy,
+  leaveVenue,
+  sweepOccupancy,
+  VISIT,
+  type Occupancy,
+} from './occupancy';
 import { MAX_QUEUE_SHOWN, queueLaneFor, type QueueSpot } from './queueLane';
 import { TICKS_PER_DAY } from './simClock';
 import type { Venue } from './venues';
@@ -129,6 +143,21 @@ export interface Router {
    * behind it.
    */
   step(person: number, at: number): number;
+  /**
+   * Whether the beach should give this person up: their visit to it is over,
+   * or it is their bedtime, they have a bed and they are not in it yet. The
+   * crowd's `offTheSand`.
+   *
+   * Needed beside {@link step} because `step` is asked at a node and the sand
+   * has none: without it a guest out on the beach never heard that it was night
+   * and roamed until morning.
+   *
+   * **Not a venue goal.** Calling in everybody whose party had an errand
+   * emptied the beach by the afternoon - 113 roamers at ten on the reference
+   * plot became 1 by four - because nearly every party has an errand going at
+   * any moment.
+   */
+  offTheSand(person: number): boolean;
   /**
    * One tick of every venue. Whoever is done is let go and sent on their way,
    * the front of each line goes in, and the rest of each line shuffles up a
@@ -185,7 +214,7 @@ export function createRouter(parts: {
   const goals: Goals = createGoals(guests.count);
   const random = createRandom(parts.seed);
 
-  let venues = parts.venues;
+  let venues = withBeach(parts.venues, parts.network);
   let lodgings = parts.lodgings;
   let network = parts.network;
   let index: NodeIndex = nodeIndexFor(network);
@@ -217,6 +246,11 @@ export function createRouter(parts: {
    * for the inspector's wording and nothing more.
    */
   let homeward = new Uint8Array(guests.count);
+  /**
+   * 1 for somebody whose visit to the beach is over and who is out on the sand
+   * making for a gate. Cleared the moment they reach a node.
+   */
+  let calledIn = new Uint8Array(guests.count);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -244,6 +278,14 @@ export function createRouter(parts: {
     const existing = fields[venue];
     if (existing) return existing;
     const declared = venues[venue]!;
+    if (isBeach(declared)) {
+      // Every gate is a way in, and nobody queues for sand: no lane is laid, so
+      // the line holds the ceiling and is never joined.
+      built++;
+      const field = flowFieldFor(network, network.gates);
+      fields[venue] = field;
+      return field;
+    }
     const { doors, field } = sweepFrom(declared);
     fields[venue] = field;
     lanes[venue] = longestLane(network, doors.nodes, declared);
@@ -295,7 +337,10 @@ export function createRouter(parts: {
   const walkingDistanceAt =
     (at: number) =>
     (venue: number): number => {
-      const field = fields[venue];
+      // The beach is swept on the first guest who considers it: its middle is
+      // the middle of a band, and a straight line to that says nothing about
+      // how far the nearest gate is.
+      const field = fields[venue] ?? (isBeach(venues[venue]!) ? fieldFor(venue) : null);
       if (!field) {
         const { x, z } = venues[venue]!;
         const node = network.nodes[at];
@@ -380,8 +425,29 @@ export function createRouter(parts: {
       return false;
     }
     doorOf[person] = at;
-    stand(person, goal, at, outcome === 'waiting');
+    // A visit to the beach is spent walking about on it rather than stood
+    // inside: see `beach.ts`.
+    if (isBeach(venue)) stepOntoSand(crowd(), person, at);
+    else stand(person, goal, at, outcome === 'waiting');
     return true;
+  };
+
+  /**
+   * Somebody reaching a node is back on the paving, whatever brought them off
+   * the sand: the end of their visit, their bedtime, or the crowd's own chance
+   * of wandering back in. A visit to the beach still running ends here, with its
+   * relief, rather than on a tick that would find them somewhere else entirely.
+   */
+  const backOffTheSand = (person: number): void => {
+    if (person < 0 || person >= goals.count) return;
+    calledIn[person] = 0;
+    if (occupancy.state[person] !== VISIT.inside) return;
+    const venue = venues[occupancy.at[person]!];
+    if (!venue || !isBeach(venue)) return;
+    leaveVenue(occupancy, person);
+    relieve(needs, person, venue.satisfies);
+    clearPartyGoal(goals, guests, person);
+    doorOf[person] = -1;
   };
 
   /**
@@ -397,7 +463,11 @@ export function createRouter(parts: {
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;
-    if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
+    // Out on the sand rather than stood at a door: a straight line to the gate
+    // they came in by could cross a bay, so they are called in and walk to the
+    // nearest gate the way a roamer does. See `Router.offTheSand`.
+    if (isBeach(venues[venue]!)) calledIn[person] = 1;
+    else if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
   };
 
   /**
@@ -481,6 +551,7 @@ export function createRouter(parts: {
 
   return {
     step(person, at) {
+      backOffTheSand(person);
       const night = nightStep(person, at);
       if (night !== BY_DAY) return night;
       if (arriveIfThere(person, at)) return -1;
@@ -497,6 +568,12 @@ export function createRouter(parts: {
         return -1;
       }
       return onward;
+    },
+
+    offTheSand(person) {
+      if (person < 0 || person >= goals.count || asleep[person] === 1) return false;
+      if (calledIn[person] === 1) return true;
+      return homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
     },
 
     tick(at) {
@@ -522,15 +599,18 @@ export function createRouter(parts: {
         stand(person, occupancy.at[person]!, doorOf[person]!, true);
       }
       if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
+      // Once a simulated minute, so a sunbather whose bedtime it is is not left
+      // lying on the beach in the dark until the lie is over.
+      rouseSunbathers(crowd());
     },
 
     rebuild(nextVenues, nextLodgings, nextNetwork) {
-      venues = nextVenues;
+      venues = withBeach(nextVenues, nextNetwork);
       lodgings = nextLodgings;
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
-      fields = nextVenues.map(() => null);
-      lanes = nextVenues.map(() => null);
+      fields = venues.map(() => null);
+      lanes = venues.map(() => null);
       homeFields = nextLodgings.map(() => null);
       built = 0;
       findHomes();
@@ -542,8 +622,9 @@ export function createRouter(parts: {
       homeward = new Uint8Array(guests.count);
       // A fresh one rather than an emptied one: the per-venue arrays are as long
       // as the venue list, and the list has just been replaced.
-      occupancy = createOccupancy(guests.count, nextVenues.length);
+      occupancy = createOccupancy(guests.count, venues.length);
       doorOf = new Int32Array(guests.count).fill(-1);
+      calledIn = new Uint8Array(guests.count);
       // Everybody, not only the parties whose venue went: a goal is an index
       // into the venue list that has just been replaced, over nodes that have
       // just been renumbered, so none of them means anything now.
@@ -602,6 +683,15 @@ export function createRouter(parts: {
       return { inside: occupancy.inside[venue] ?? 0, waiting: queueLength(venue) };
     },
   };
+}
+
+/**
+ * The venues the plot's art declares, and the beach after them when the plot has
+ * one to walk onto. Last, so every building keeps the index `venuesOn` gave it.
+ */
+function withBeach(venues: readonly Venue[], network: WalkNetwork): readonly Venue[] {
+  const beach = beachVenueFor(network);
+  return beach ? [...venues, beach] : venues;
 }
 
 /**

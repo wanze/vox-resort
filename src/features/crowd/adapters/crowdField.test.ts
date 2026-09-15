@@ -119,16 +119,16 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
     // A hundredth of a pixel per voxel: nobody is more than a speck.
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(0);
     for (const mesh of meshes(field.group)) expect(mesh.count, mesh.name).toBe(0);
 
     // Four pixels per voxel: everybody stands out again, and all are drawn.
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(400, 100) });
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(field.count);
     field.setView(null);
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     const drawn = meshes(field.group).reduce((total, mesh) => total + mesh.count, 0);
     expect(drawn).toBe(field.count);
     field.dispose();
@@ -138,7 +138,7 @@ describe('buildCrowdField', () => {
     const crowd = crowdOf(40);
     const field = buildCrowdField({ crowd, models: MODELS });
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(400, 100) });
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     for (const mesh of meshes(field.group)) {
       const pose = mesh.geometry.getAttribute('pose');
       const phases = new Set(Array.from({ length: mesh.count }, (_, slot) => pose.getW(slot)));
@@ -271,7 +271,7 @@ describe('buildCrowdField', () => {
     const [mesh] = meshes(field.group);
     const before = positionOf(mesh!, 0);
     const uploaded = mesh!.instanceMatrix.version;
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     expect(positionOf(mesh!, 0).distanceTo(before)).toBeGreaterThan(0);
     // The whole buffer goes up, because everybody moved.
     expect(mesh!.instanceMatrix.version).toBeGreaterThan(uploaded);
@@ -289,9 +289,41 @@ describe('buildCrowdField', () => {
     const crowd = crowdOf(30);
     const field = buildCrowdField({ crowd, models: MODELS });
     const before = [...crowd.x];
-    field.advance(0);
+    field.advance(0, 1);
     expect([...crowd.x]).toEqual(before);
     field.dispose();
+  });
+
+  it('still follows the camera on a frame that steps nobody, as a paused resort sends', () => {
+    const crowd = crowdOf(40);
+    const field = buildCrowdField({ crowd, models: MODELS });
+    const before = [...crowd.x];
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
+    field.advance(0, 1);
+    expect(field.drawnCount).toBe(0);
+    expect([...crowd.x]).toEqual(before);
+    field.dispose();
+  });
+
+  it('walks the crowd a scaled frame, as that many frames of real time would', () => {
+    const crowd = crowdOf(30);
+    const field = buildCrowdField({ crowd, models: MODELS });
+    const twin = crowdOf(30);
+    const twinField = buildCrowdField({ crowd: twin, models: MODELS });
+    // Two steps of `MAX_STEP` either way, which is what makes them the same walk.
+    field.advance(0.05, 4);
+    for (let frame = 0; frame < 2; frame++) twinField.advance(0.1, 1);
+    for (let i = 0; i < crowd.count; i++) expect(crowd.x[i]).toBeCloseTo(twin.x[i]!, 2);
+    // Clamped before it is scaled: a backgrounded tab at four times real time
+    // costs four steps, not four minutes.
+    const away = crowdOf(30);
+    const awayField = buildCrowdField({ crowd: away, models: MODELS });
+    const slow = crowdOf(30);
+    const slowField = buildCrowdField({ crowd: slow, models: MODELS });
+    awayField.advance(60, 4);
+    slowField.advance(0.1, 4);
+    expect([...away.x]).toEqual([...slow.x]);
+    for (const each of [field, twinField, awayField, slowField]) each.dispose();
   });
 
   it('will not teleport a crowd across the plot after a backgrounded tab', () => {
@@ -301,8 +333,8 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd, models: MODELS });
     const long = crowdOf(30);
     const longField = buildCrowdField({ crowd: long, models: MODELS });
-    field.advance(0.1);
-    longField.advance(3600);
+    field.advance(0.1, 1);
+    longField.advance(3600, 1);
     expect([...long.x]).toEqual([...crowd.x]);
     field.dispose();
     longField.dispose();
@@ -329,7 +361,7 @@ describe('buildCrowdField', () => {
     expect(field.drawCalls).toBe(0);
     expect(field.triangleCount).toBe(0);
     // And a frame costs nothing rather than throwing.
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     field.dispose();
   });
 
@@ -349,7 +381,7 @@ describe('buildCrowdField', () => {
     expect(field.count).toBe(40);
     expect(field.drawnCount).toBe(field.count);
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(0);
     field.dispose();
   });
@@ -360,7 +392,7 @@ describe('buildCrowdField', () => {
     expect(field.count).toBe(0);
     expect(field.drawnCount).toBe(0);
     for (const mesh of meshes(field.group)) expect(mesh.count, mesh.name).toBe(0);
-    expect(() => field.advance(1 / 60)).not.toThrow();
+    expect(() => field.advance(1 / 60, 1)).not.toThrow();
 
     field.relocate(networkOf(paved(4)));
     expect(field.count).toBe(40);
@@ -373,7 +405,7 @@ describe('buildCrowdField', () => {
     // resort with nobody in it: a relocate must not grow a buffer on the way.
     const field = buildCrowdField({ crowd: crowdOf(3 * UNIFORM_MATRICES, 40), models: MODELS });
     field.relocate(networkOf(paved(20)));
-    field.advance(1 / 60);
+    field.advance(1 / 60, 1);
     for (const mesh of meshes(field.group)) {
       expect(mesh.instanceMatrix.count, mesh.name).toBeGreaterThan(UNIFORM_MATRICES);
       expect(vertexBuffersOf(mesh), mesh.name).toBeLessThanOrEqual(MAX_VERTEX_BUFFERS);

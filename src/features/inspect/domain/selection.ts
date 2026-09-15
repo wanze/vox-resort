@@ -319,6 +319,17 @@ function errandWording(errand: NonNullable<Errand>): string {
   return `${placeWording(errand.place)} in the line at the ${errand.at}`;
 }
 
+/** What somebody not stood somewhere by the simulation is doing, in a word or a few. */
+function doingNow(crowd: Crowd, person: number, resting: number, errand: Errand): string {
+  if (resting === RESTING.sitting) return 'Sitting';
+  if (resting === RESTING.lying) return 'Lying down';
+  if (isRoaming(crowd, person)) return 'On the beach';
+  // Where they are going, when somebody is routing them: "Walking" on its own
+  // is what a guest with nowhere to be is doing, and it is the line plan 016
+  // wrote.
+  return errand === null ? 'Walking' : errandWording(errand);
+}
+
 /**
  * What a guest is doing this instant, in a few words: the one line of the panel
  * that is rewritten per frame.
@@ -352,24 +363,17 @@ export function activityLine(
   if (errand?.kind === 'asleep') return errandWording(errand);
   const wanted = strongestNeed(needs, guests, person);
   const mood = wanted === null ? '' : `${NEED_MOODS[wanted.need]} · `;
-  // Standing in a line or sitting in a bakery: where they are is the place, and
-  // saying the tile again every frame is noise rather than information.
-  if (errand !== null && errand.kind !== 'walking') return `${mood}${errandWording(errand)}`;
-
   const resting = restingOn(crowd, person);
-  const doing =
-    resting === RESTING.sitting
-      ? 'Sitting'
-      : resting === RESTING.lying
-        ? 'Lying down'
-        : isRoaming(crowd, person)
-          ? 'On the beach'
-          : // Where they are going, when somebody is routing them: "Walking" on
-            // its own is what a guest with nowhere to be is doing, and it is the
-            // line plan 016 wrote.
-            errand === null
-            ? 'Walking'
-            : errandWording(errand);
+  // Standing in a line or sitting in a bakery: where they are is the place, and
+  // saying the tile again every frame is noise rather than information. Out on
+  // the sand is the exception - a visit to the beach is walked about in, so
+  // what they are doing on it says more than "inside the Beach" would.
+  const outOnTheSand = isRoaming(crowd, person) || resting === RESTING.lying;
+  if (errand !== null && errand.kind !== 'walking' && !outOnTheSand) {
+    return `${mood}${errandWording(errand)}`;
+  }
+
+  const doing = doingNow(crowd, person, resting, errand);
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
   return `${mood}${doing} · tile ${tileX}, ${tileZ}`;

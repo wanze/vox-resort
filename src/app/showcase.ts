@@ -104,6 +104,7 @@ import { venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
+import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
 import { cellCount, gridByteSize } from '../features/lighting/domain/lightGrid';
@@ -1011,6 +1012,8 @@ function crowdFor(parts: {
   readonly population: number;
   /** Where somebody with somewhere to be walks next; see `sim/domain/router.ts`. */
   readonly routeOf: (person: number, at: number) => number;
+  /** Whether somebody has somewhere to be, so the beach gives them up. */
+  readonly offTheSand: (person: number) => boolean;
 }): CrowdField {
   return buildCrowdField({
     crowd: createCrowd({
@@ -1019,6 +1022,7 @@ function crowdFor(parts: {
       variants: parts.people.length,
       variantOf: (i) => parts.guests.variant[i] ?? 0,
       routeOf: parts.routeOf,
+      offTheSand: parts.offTheSand,
       seed: CROWD_SEED,
     }),
     models: parts.people,
@@ -1304,6 +1308,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     guests,
     population,
     routeOf: (person, at) => router.step(person, at),
+    offTheSand: (person) => router.offTheSand(person),
   });
   crowdField = crowd;
   const balloons = balloonsFor({
@@ -2212,6 +2217,15 @@ function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRe
   return { source, repeat: bench.repeat, view: bench.view };
 }
 
+/**
+ * The real seconds the crowd is stepped by this frame, before its scale: the
+ * bench's fixed step, nothing at all while the resort is paused, or the frame.
+ */
+function crowdStep(bench: boolean, speed: SimSpeed, elapsed: number): number {
+  if (bench) return MAX_STEP;
+  return speed === 'paused' ? 0 : elapsed;
+}
+
 /** Whether a page opens with the level of detail on: always, unless a bench run says not. */
 function detailFrom(bench: BenchConfig | null): boolean {
   return bench?.detail ?? true;
@@ -2588,8 +2602,20 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on
     // the same frame of each, and the frame's `dt` is exactly what differs
-    // between a fast machine and a slow one. See `crowd.ts`.
-    current().crowd.advance(bench ? MAX_STEP : elapsed);
+    // between a fast machine and a slow one. See `crowd.ts`. The scale is
+    // pinned to real time under one for the same reason, and the crowd walks
+    // there even though a benchmark's clock is paused, or the run stops
+    // measuring the crowd.
+    //
+    // Outside one the crowd walks at the clock's pace (`crowdRate.ts`), and a
+    // paused resort stands still: **this line is what stops it**, by handing
+    // over a frame of no time, and not `crowdScaleFor`, which is 1 while paused.
+    // A crowd that walked while the clock was stopped filled every queue on the
+    // plot and kept them full, since nobody is let out but on a tick.
+    current().crowd.advance(
+      crowdStep(bench !== null, clock.speed, elapsed),
+      bench ? 1 : crowdScaleFor(clock.speed),
+    );
     // Off the same fixed step as the crowd under a benchmark, and for the same
     // reason: two runs only compare if the scene is in the same place on the
     // same frame of each. See `crowd.ts`.

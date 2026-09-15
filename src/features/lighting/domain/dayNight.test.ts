@@ -71,17 +71,18 @@ describe('skyStateFor', () => {
     expect(skyStateFor(SUNSET_TIME).sunDirection.y).toBeCloseTo(0, 6);
   });
 
-  it('stands the sun highest at one in the afternoon, as summer time does', () => {
-    const noon = skyStateFor(at(13)).sunDirection.y;
-    expect(noon).toBeGreaterThan(skyStateFor(at(12)).sunDirection.y);
-    expect(noon).toBeGreaterThan(skyStateFor(at(14)).sunDirection.y);
+  it('stands the sun highest at a quarter to two in the afternoon, as summer time does', () => {
+    const noon = skyStateFor(at(13, 45)).sunDirection.y;
+    expect(noon).toBeGreaterThan(skyStateFor(at(12, 45)).sunDirection.y);
+    expect(noon).toBeGreaterThan(skyStateFor(at(14, 45)).sunDirection.y);
   });
 
-  it('is still full daylight at seven in the evening and dark by a quarter past eight', () => {
-    expect(skyStateFor(at(19)).lampFactor).toBe(0);
-    expect(skyStateFor(at(19)).sunIntensity).toBeGreaterThan(1.5);
-    expect(skyStateFor(at(20, 15)).sunIntensity).toBe(0);
-    expect(skyStateFor(at(20, 15)).ambientIntensity).toBeCloseTo(0.22, 2);
+  it('is still full daylight at half past eight in the evening and dark by a quarter to ten', () => {
+    // The walk home starts at seven and has to be seen: see `night.ts`.
+    expect(skyStateFor(at(20, 30)).lampFactor).toBe(0);
+    expect(skyStateFor(at(20, 30)).sunIntensity).toBeGreaterThan(1.5);
+    expect(skyStateFor(at(21, 45)).sunIntensity).toBe(0);
+    expect(skyStateFor(at(21, 45)).ambientIntensity).toBeCloseTo(0.22, 2);
   });
 
   it('moves the sun without a jump where the day and the night meet', () => {

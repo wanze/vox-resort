@@ -143,14 +143,17 @@ const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
  * has to follow the sun because it *is* the sun — since what decides this is
  * the hour people come down to the beach for it.
  *
- * It opens an hour before {@link SUNSET_TIME}, is fully up through the blue hour
- * and is over by about eleven.
+ * It opens an hour before {@link SUNSET_TIME}, is fully up for the blue hour
+ * after it, and has faded out by twenty to midnight. The fade has to be over
+ * before midnight rather than merely near it: the clock wraps to 0 there, and a
+ * band still fading at 23:59 would drop to nothing between one minute and the
+ * next.
  */
 export function releaseStrength(time: number): number {
   const clock = normalizeTime(time);
   return (
-    smoothstep(SUNSET_TIME - 0.04, SUNSET_TIME + 0.03, clock) *
-    (1 - smoothstep(SUNSET_TIME + 0.08, SUNSET_TIME + 0.13, clock))
+    smoothstep(SUNSET_TIME - 0.04, SUNSET_TIME + 0.02, clock) *
+    (1 - smoothstep(SUNSET_TIME + 0.05, SUNSET_TIME + 0.09, clock))
   );
 }
 

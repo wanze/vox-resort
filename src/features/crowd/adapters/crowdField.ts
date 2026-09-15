@@ -75,14 +75,23 @@ export interface CrowdField {
   /** Triangles it submits per frame, across everybody drawn. */
   readonly triangleCount: number;
   /**
-   * Steps the crowd by a frame's worth of seconds and writes where everybody
-   * ended up.
+   * Steps the crowd by a frame's worth of seconds, `scale` times over, and
+   * writes where everybody ended up.
    *
    * One call rather than two because the walk cycle and the walk have to be
-   * stepped by the *same* clamped `dt` — see {@link MAX_STEP} — and a caller
-   * holding both halves of that is a caller who can get it wrong.
+   * stepped by the *same* clamped, scaled `dt` — see {@link MAX_STEP} — and a
+   * caller holding both halves of that is a caller who can get it wrong.
+   *
+   * `scale` is how many times faster than real time the crowd walks, which is
+   * `sim/domain/crowdRate.ts`'s answer for the clock's speed. The frame is
+   * clamped first and scaled after, so a backgrounded tab costs at most
+   * `MAX_STEP` of real time at whatever the scale is.
+   *
+   * A frame of no time steps nobody and still writes: a paused resort has a
+   * camera moving over it, and who is too small on screen to draw follows the
+   * camera and not the clock.
    */
-  advance(dt: number): void;
+  advance(dt: number, scale: number): void;
   /**
    * The camera the next frames are drawn through, or null to draw everybody.
    * A person too small on screen to see is left out of the draw, not the walk.
@@ -293,15 +302,19 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     },
     drawCalls: parts.length,
     triangleCount: parts.reduce((total, part) => total + part.triangles * part.people.length, 0),
-    advance(dt) {
+    advance(dt, scale) {
       // Clamped once, here, and spent on both halves of the walk: a tab that was
       // in the background for a minute must not teleport the crowd across the
-      // plot, and must not spin its legs to catch up either.
-      const step = Math.min(Math.max(dt, 0), MAX_STEP);
-      if (step === 0) return;
-      stepCrowd(crowd, step);
-      clock += step;
-      walk.setClock(clock);
+      // plot, and must not spin its legs to catch up either. The legs swing at
+      // the same scale the crowd walks at, or a guest hurrying across the plot at
+      // `normal` would glide on a stroll's stride.
+      const step = Math.min(Math.max(dt, 0), MAX_STEP) * scale;
+      // `> 0` so a NaN from either factor is refused along with a paused frame.
+      if (step > 0) {
+        stepCrowd(crowd, step);
+        clock += step;
+        walk.setClock(clock);
+      }
       writeAll();
     },
     relocate(network) {

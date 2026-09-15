@@ -75,6 +75,7 @@ import {
   BEACH_SURFACE,
   beachPointAt,
   OFF_THE_GRAPH,
+  type BeachBand,
   type WalkNetwork,
   type WalkNode,
 } from './walkNetwork';
@@ -90,13 +91,40 @@ export const WALK_SPEED = 5.6;
 const SPEED_SPREAD = 0.25;
 
 /**
- * The longest step the simulation will take, in seconds.
+ * The longest step one integration takes, in seconds.
  *
- * A backgrounded tab reports the whole time it was away as one frame, and
- * without a clamp the entire crowd would arrive somewhere else at once. Also the
- * bench's fixed step: see the note at the top of the file.
+ * Small enough that everybody moves about a body's width in it, which is what
+ * `avoidance.ts`'s spatial hash is sized for and what lets the arrival branch
+ * carry at most one segment's leftover. Also the bench's fixed step: see the note
+ * at the top of the file.
+ *
+ * It is **not** the most time one call may advance. {@link stepCrowd} runs a
+ * longer step as several of these; see {@link MAX_SUBSTEPS}.
  */
 export const MAX_STEP = 0.1;
+
+/**
+ * The most steps of {@link MAX_STEP} one call to {@link stepCrowd} will run, and
+ * so the ceiling on how many times faster than real time the crowd may walk.
+ *
+ * The one number plan 026 trades against. A crowd walking at the simulation's
+ * pace runs `stepCrowd` this many times over at most, and each of those is a
+ * full avoidance pass: past it a guest's day fits the clock and the frame does
+ * not fit the budget. `sim/domain/crowdRate.ts` caps the crowd's speed-up here
+ * rather than at a number of its own, so the two can never disagree.
+ *
+ * It keeps `MAX_STEP`'s old job too: a backgrounded tab reports the whole time
+ * it was away as one frame, and the crowd moves at most this many steps on it
+ * rather than arriving somewhere else at once.
+ */
+export const MAX_SUBSTEPS = 32;
+
+/**
+ * How far short of a whole step the remainder may be and still not count as
+ * another one. Ten steps of `MAX_STEP` summed are a hair over a second in binary,
+ * and without this they would run an eleventh step of nothing.
+ */
+const SUBSTEP_EPSILON = 1e-9;
 
 /**
  * Chance per arrival at a gate that a person steps off onto the sand.
@@ -293,6 +321,11 @@ export interface Crowd extends Walkers {
    * it, and the router is rebuilt on the same graph the crowd is put back on.
    */
   readonly routeOf: ((person: number, at: number) => number) | undefined;
+  /**
+   * Whether somebody has somewhere to be and so no business on the sand, or
+   * undefined on a crowd nothing is routing. See {@link CrowdOptions.offTheSand}.
+   */
+  readonly offTheSand: ((person: number) => boolean) | undefined;
 }
 
 export interface CrowdOptions {
@@ -319,6 +352,18 @@ export interface CrowdOptions {
    * before there was one, which is what every fixture in `crowd.test.ts` wants.
    */
   readonly routeOf?: (person: number, at: number) => number;
+  /**
+   * Whether a person has somewhere to be, so the beach should give them up:
+   * they do not step off the paving onto it, a roamer heads for the nearest
+   * gate, and a sunbather gets up.
+   *
+   * The other half of {@link CrowdOptions.routeOf}, and needed for the reason
+   * that one cannot do the job: a router is asked at a node, and the sand has
+   * none, so somebody out on the beach was never asked anything - they roamed
+   * on all night. What counts as somewhere to be is the router's business; see
+   * `Router.offTheSand`. Omit it and the beach is roamed exactly as it was.
+   */
+  readonly offTheSand?: (person: number) => boolean;
 }
 
 /**
@@ -368,6 +413,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     ...proximityFor(capacity),
     random,
     routeOf: options.routeOf,
+    offTheSand: options.offTheSand,
   };
 
   const beach = network.beach;
@@ -503,11 +549,33 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
  * Getting past each other comes first, as one pass of its own: it decides how
  * far aside everybody is and how fast they are going, and the loop below then
  * spends both as a multiply and an offset. See `avoidance.ts`.
+ *
+ * ## A long step is several short ones
+ *
+ * `dt` may be many times {@link MAX_STEP} - the crowd walks faster than real
+ * time when the calendar does, see `sim/domain/crowdRate.ts` - and it is run as
+ * that many whole steps of `MAX_STEP`, then the remainder. Whole steps rather
+ * than an even split, so a crowd stepped once by `n * MAX_STEP` is the same crowd
+ * as one stepped `n` times by `MAX_STEP`.
+ *
+ * **Avoidance runs once per step, not once per call.** Steering once and then
+ * moving everybody several times looks like the free half of the saving and is
+ * not: a sidestep decided for where somebody was three steps ago is somebody
+ * walking through the person who has since arrived in front of them.
  */
 export function stepCrowd(crowd: Crowd, dt: number): void {
-  const step = Math.min(Math.max(dt, 0), MAX_STEP);
-  if (step === 0) return;
+  // `!(> 0)` rather than `<= 0`, so a NaN frame is refused along with a negative one.
+  if (!(dt > 0)) return;
+  let remaining = Math.min(dt, MAX_STEP * MAX_SUBSTEPS);
+  while (remaining > SUBSTEP_EPSILON) {
+    const step = Math.min(remaining, MAX_STEP);
+    integrate(crowd, step);
+    remaining -= step;
+  }
+}
 
+/** One step of at most {@link MAX_STEP}: steer, then move everybody along. */
+function integrate(crowd: Crowd, step: number): void {
   steerWalkers(crowd, step, crowd.network.sand);
   for (let i = 0; i < crowd.count; i++) {
     crowd.t[i]! += crowd.rate[i]! * crowd.pace[i]! * step;
@@ -578,7 +646,7 @@ function arriveAtNode(crowd: Crowd, i: number): void {
   crowd.fromZ[i] = node.z;
 
   const seat = node.seats.length > 0 ? freeSeat(crowd, node) : -1;
-  if (node.gate && crowd.network.beach && crowd.random() < ONTO_SAND) {
+  if (strollsOntoSand(crowd, i, node)) {
     crowd.gate[i] = arrived;
     crowd.node[i] = ROAMING;
     roamTo(crowd, i, GATE_CLEAR);
@@ -588,13 +656,46 @@ function arriveAtNode(crowd: Crowd, i: number): void {
     // The onward pick reads `cameFrom` to know what turning back would be, so
     // it has to happen before this arrival becomes the node walked in from.
     const onward = nextNode(crowd, i, arrived);
-    // Somebody the router stood still at this node is already placed, and has
-    // no way they came worth remembering: aiming them anywhere would walk them
-    // straight out of the queue they have just joined.
+    // Somebody the router stood still at this node, or sent out onto the sand,
+    // is already on their way, and has no way they came worth remembering:
+    // aiming them anywhere would walk them straight out of the queue they have
+    // just joined.
     if (onward === HELD) return;
     aim(crowd, i, onward);
   }
   crowd.cameFrom[i] = arrived;
+}
+
+/**
+ * Whether somebody arriving at a node steps off it onto the sand by chance.
+ *
+ * Only at a gate, and never for somebody with somewhere to be - who is asked
+ * first, so they cost no draw: the sand is not a choice they have.
+ */
+function strollsOntoSand(crowd: Crowd, i: number, node: WalkNode): boolean {
+  if (!node.gate || !crowd.network.beach || crowd.offTheSand?.(i)) return false;
+  return crowd.random() < ONTO_SAND;
+}
+
+/**
+ * Sends somebody at a gate out onto the sand, as a roamer who will go back in
+ * by that gate: the router's way of starting a visit to the beach.
+ *
+ * Called from inside `routeOf`, while the crowd is asking where they go next,
+ * which is why `nextNode` checks for a roamer after asking: they are already on
+ * their way, and aiming them at a node would walk them straight back off it.
+ * Does nothing at a node that is not a gate, or on a plot with no beach.
+ */
+export function stepOntoSand(crowd: Crowd, i: number, gate: number): void {
+  const node = crowd.network.nodes[gate];
+  if (!crowd.network.beach || !node?.gate) return;
+  giveUpSeat(crowd, i);
+  crowd.fromX[i] = node.x;
+  crowd.fromY[i] = node.y;
+  crowd.fromZ[i] = node.z;
+  crowd.gate[i] = gate;
+  crowd.node[i] = ROAMING;
+  roamTo(crowd, i, GATE_CLEAR);
 }
 
 /**
@@ -610,6 +711,10 @@ function roamOn(crowd: Crowd, i: number): void {
   crowd.fromY[i] = crowd.toY[i]!;
   crowd.fromZ[i] = crowd.toZ[i]!;
   standOnLine(crowd, i);
+  if (crowd.offTheSand?.(i)) {
+    leaveTheSand(crowd, i);
+    return;
+  }
   const lounger = crowd.network.beachSeats.length > 0 ? nearbyBeachSeat(crowd, i) : -1;
   if (lounger !== -1 && crowd.random() < ONTO_SEAT) {
     takeSeat(crowd, i, lounger);
@@ -644,6 +749,71 @@ function standOnLine(crowd: Crowd, i: number): void {
   crowd.side[i] = 0;
 }
 
+/**
+ * A roamer with somewhere to be, making for the paving: straight to the nearest
+ * gate within reach, or a hop along the sand towards the nearest gate of all.
+ *
+ * "Within reach" is {@link SEAT_COLUMNS}, and for the lounger's reason: the
+ * walk is a straight line and the coast wanders, so a gate picked from the whole
+ * beach could have a bay between it and the person walking to it. A roamer too
+ * far from any gate hops the ordinary way, but of the spots they could hop to
+ * takes the one nearest that gate, so a few hops bring one in reach.
+ *
+ * The gate they came out of is forgotten: somebody spawned on the sand was
+ * given one anywhere on the plot, and walking the length of the beach to it is
+ * no way to get home.
+ */
+function leaveTheSand(crowd: Crowd, i: number): void {
+  const { gates, nodes } = crowd.network;
+  const reach = SEAT_COLUMNS * TILE_VOXELS;
+  const x = crowd.fromX[i]!;
+  let nearest = -1;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  let reachable = -1;
+  let reachableDistance = Number.POSITIVE_INFINITY;
+  for (const gate of gates) {
+    const distance = Math.hypot(nodes[gate]!.x - x, nodes[gate]!.z - crowd.fromZ[i]!);
+    if (distance < nearestDistance) {
+      nearest = gate;
+      nearestDistance = distance;
+    }
+    const inReach = Math.abs(nodes[gate]!.x - x) <= reach && distance < reachableDistance;
+    if (inReach && clearTo(crowd, i, gate)) {
+      reachable = gate;
+      reachableDistance = distance;
+    }
+  }
+  if (reachable >= 0) {
+    crowd.gate[i] = reachable;
+    aim(crowd, i, reachable);
+    crowd.lane[i] = LANE.sand;
+    return;
+  }
+  roamTo(crowd, i, 0, nearest >= 0 ? nodes[nearest]!.x : undefined);
+}
+
+/**
+ * Gets up everybody lying on the sand who has somewhere to be.
+ *
+ * A sunbather is on no node and is not arriving anywhere, so nothing else would
+ * ask them until their lie was over - which at the clock's pace can be a couple
+ * of simulated hours of lying in the dark. Their rest is ended rather than cut
+ * short by hand: `t` at 1 is the ordinary arrival branch standing them up on the
+ * next step, onto the sand, where {@link leaveTheSand} takes them in.
+ *
+ * A scan of the loungers rather than of the crowd, because there are a few dozen
+ * of them. Called once a simulated minute by whatever runs the clock.
+ */
+export function rouseSunbathers(crowd: Crowd): void {
+  const wanted = crowd.offTheSand;
+  if (!wanted) return;
+  for (const seat of crowd.network.beachSeats) {
+    const person = crowd.seatBy[seat]!;
+    if (person < 0 || person >= crowd.count) continue;
+    if (crowd.node[person] === SEATED && wanted(person)) crowd.t[person] = 1;
+  }
+}
+
 /** Whether the straight walk from where a roamer stands to a node is clear. */
 function clearTo(crowd: Crowd, i: number, node: number): boolean {
   const sand = crowd.network.sand;
@@ -660,8 +830,12 @@ function clearTo(crowd: Crowd, i: number, node: number): boolean {
  * somebody getting up from a lounger is inside its box. A roamer with nowhere
  * clear to go stands still for {@link PAUSE_SECONDS} and tries again, which is a
  * zero-length segment like a sit and so costs the per-frame loop nothing.
+ *
+ * `towardX`, when given, is where they would rather be: every try is still
+ * drawn and checked as usual, and of the ones that are clear the one nearest it
+ * is taken. The draws are the same number either way.
  */
-function roamTo(crowd: Crowd, i: number, skipStart = 0): void {
+function roamTo(crowd: Crowd, i: number, skipStart = 0, towardX?: number): void {
   const beach = crowd.network.beach;
   if (!beach) {
     aim(crowd, i, crowd.gate[i]! >= 0 ? crowd.gate[i]! : crowd.cameFrom[i]!);
@@ -669,26 +843,59 @@ function roamTo(crowd: Crowd, i: number, skipStart = 0): void {
   }
   crowd.lane[i] = LANE.sand;
   standOnLine(crowd, i);
-  const sand = crowd.network.sand;
-  const fromX = crowd.fromX[i]!;
-  const fromZ = crowd.fromZ[i]!;
-  for (let tries = 0; tries < ROAM_TRIES; tries++) {
-    const point = beachPointAt(beach, crowd.random, fromX);
-    if (
-      sand &&
-      (blockedAt(sand, point.x, point.z) ||
-        !clearLine(sand, fromX, fromZ, point.x, point.z, skipStart))
-    ) {
-      continue;
-    }
-    segment(crowd, i, point.x, BEACH_SURFACE, point.z);
-    return;
-  }
-  crowd.toX[i] = fromX;
+  if (walkToSpot(crowd, i, beach, skipStart, towardX)) return;
+  crowd.toX[i] = crowd.fromX[i]!;
   crowd.toY[i] = crowd.fromY[i]!;
-  crowd.toZ[i] = fromZ;
+  crowd.toZ[i] = crowd.fromZ[i]!;
   crowd.rate[i] = 1 / PAUSE_SECONDS;
   crowd.t[i] = 0;
+}
+
+/**
+ * Draws up to {@link ROAM_TRIES} spots near a roamer and sets them walking to
+ * one that is clear: the first, or with `towardX` the one of them nearest it.
+ * Hands back whether any was.
+ */
+function walkToSpot(
+  crowd: Crowd,
+  i: number,
+  beach: BeachBand,
+  skipStart: number,
+  towardX: number | undefined,
+): boolean {
+  let bestX = 0;
+  let bestZ = 0;
+  let bestOff = Number.POSITIVE_INFINITY;
+  for (let tries = 0; tries < ROAM_TRIES; tries++) {
+    const point = beachPointAt(beach, crowd.random, crowd.fromX[i]!);
+    if (!spotIsClear(crowd, i, point, skipStart)) continue;
+    if (towardX === undefined) {
+      segment(crowd, i, point.x, BEACH_SURFACE, point.z);
+      return true;
+    }
+    const off = Math.abs(point.x - towardX);
+    if (off < bestOff) {
+      bestOff = off;
+      bestX = point.x;
+      bestZ = point.z;
+    }
+  }
+  if (bestOff === Number.POSITIVE_INFINITY) return false;
+  segment(crowd, i, bestX, BEACH_SURFACE, bestZ);
+  return true;
+}
+
+/** Whether a spot on the sand is free, and the straight walk to it from a roamer is too. */
+function spotIsClear(
+  crowd: Crowd,
+  i: number,
+  point: { readonly x: number; readonly z: number },
+  skipStart: number,
+): boolean {
+  const sand = crowd.network.sand;
+  if (!sand) return true;
+  if (blockedAt(sand, point.x, point.z)) return false;
+  return clearLine(sand, crowd.fromX[i]!, crowd.fromZ[i]!, point.x, point.z, skipStart);
 }
 
 /** Whether a person is resting on a seat rather than walking. */
@@ -941,8 +1148,9 @@ function nextNode(crowd: Crowd, i: number, at: number): number {
   // router takes a guest in hand at a venue's door and puts them in the line or
   // inside. They are placed already, so there is nothing to aim - and the
   // wander below must not be reached for them either, because a draw made for
-  // somebody who is not walking would move everybody else's afternoon.
-  if (crowd.node[i] === HELD) return HELD;
+  // somebody who is not walking would move everybody else's afternoon. The same
+  // goes for somebody the router has just sent out onto the sand.
+  if (crowd.node[i] === HELD || crowd.node[i] === ROAMING) return HELD;
   if (routed >= 0 && routed !== at) return routed;
 
   return wanderFrom(crowd, i, node);

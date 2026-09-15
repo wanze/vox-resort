@@ -24,7 +24,10 @@ import { doorsFor } from './doors';
 import { lodgingFor, lodgingsOn, type Lodging } from './lodgings';
 import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor } from './queueLane';
+import { ARCHETYPES } from './archetypes';
+import { crowdScaleFor } from './crowdRate';
 import { createRouter } from './router';
+import { advanceClock, createSimClock, withSpeed } from './simClock';
 import { venuesOn, type Venue } from './venues';
 
 const FLAT: LevelProvider = () => 0;
@@ -134,6 +137,17 @@ describe('createRouter', () => {
         nodeAt(network, tileX + 1),
       );
     }
+  });
+
+  it('leaves a guest on the sand by day, even with an errand to run', () => {
+    const network = networkOf(street(8));
+    const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
+    router.step(0, nodeAt(network, 0));
+    expect(router.goalOf(0)).not.toBeNull();
+    // An errand does not call anybody in: nearly every party has one going, and
+    // calling them in emptied the beach by the afternoon.
+    expect(router.offTheSand(0)).toBe(false);
+    expect(router.offTheSand(-1)).toBe(false);
   });
 
   it('leaves a content guest to wander', () => {
@@ -463,6 +477,75 @@ const hotel = (tileZ = -1): Lodging => ({
   doors: [],
 });
 
+describe('a visit to the beach', () => {
+  // Water from z = 18; six rows of sand in front of it, and a boardwalk down to it.
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+    tileX: 10,
+    tileZ: 10 + index,
+    y: 0,
+  }));
+  const network = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20 });
+  const gate = network.gates[0]!;
+
+  /** A bored guest at the top of the boardwalk, with nothing on the plot but sand. */
+  const bored = () => {
+    const needs = wanting(0, 'fun');
+    const { router, crowd } = routerOn(network, [], needs);
+    router.step(0, nodeAt(network, 10, 10));
+    return { needs, router, crowd };
+  };
+
+  it('is chosen for fun on a plot with a beach, and walked to at the nearest gate', () => {
+    const { router } = bored();
+    expect(router.goalOf(0)?.label).toBe('Beach');
+    expect(router.fieldCount).toBe(1);
+    expect(router.step(0, nodeAt(network, 10, 11))).not.toBe(-1);
+  });
+
+  it('turns a guest loose on the sand at the gate, rather than standing them anywhere', () => {
+    const { router, crowd } = bored();
+    expect(router.step(0, gate)).toBe(-1);
+    expect(isRoaming(crowd, 0)).toBe(true);
+    expect(isWaiting(crowd, 0)).toBe(false);
+    expect(router.visitOf(0)?.venue.label).toBe('Beach');
+    expect(router.offTheSand(0)).toBe(false);
+  });
+
+  it('calls them in when the visit is over, relieved, and lets them go at the next node', () => {
+    const { needs, router } = bored();
+    router.step(0, gate);
+    // Two hours of ticks, the longest a beach visit is drawn at.
+    for (let tick = 1; tick <= 121; tick++) router.tick(tick);
+    expect(router.visitOf(0)).toBeNull();
+    expect(needs.level.fun[0]).toBeGreaterThan(0.5);
+    expect(router.offTheSand(0)).toBe(true);
+    router.step(0, gate);
+    expect(router.offTheSand(0)).toBe(false);
+  });
+
+  it('ends the visit, relief and all, for a guest who wanders back in early', () => {
+    const { needs, router } = bored();
+    router.step(0, gate);
+    router.tick(1);
+    expect(router.visitOf(0)).not.toBeNull();
+    router.step(0, gate);
+    expect(router.visitOf(0)).toBeNull();
+    expect(needs.level.fun[0]).toBeGreaterThan(0.5);
+    expect(router.occupancyTotals.inside).toBe(0);
+  });
+
+  it('is not a venue on a plot with no beach', () => {
+    const { router } = routerOn(networkOf(street(8)), [], wanting(0, 'fun'));
+    router.step(0, 0);
+    expect(router.goalOf(0)).toBeNull();
+  });
+});
+
 describe('the night', () => {
   const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
   const homeless = [...Array(guests.count).keys()].find(
@@ -530,6 +613,16 @@ describe('the night', () => {
     const { network, router } = nightOn(housed, hotel(5));
     expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 5));
     expect(router.isAsleep(housed)).toBe(false);
+  });
+
+  it('wants a guest off the sand at bedtime only when they have a bed, and not once in it', () => {
+    const { network, router } = nightOn(housed);
+    expect(router.offTheSand(housed)).toBe(true);
+    // Hungry but undecided, and no bed: nothing yet says where to be.
+    expect(nightOn(homeless).router.offTheSand(homeless)).toBe(false);
+    router.step(housed, nodeAt(network, 1));
+    expect(router.isAsleep(housed)).toBe(true);
+    expect(router.offTheSand(housed)).toBe(false);
   });
 
   it('wakes everybody when the graph is rebuilt', () => {
@@ -828,6 +921,10 @@ describe('on the generated plot', () => {
     const housed = [...Array(people.count).keys()].filter((person) => homeOf(people, person));
     expect(housed.length).toBeLessThan(people.count);
     const wentToBedWith = new Float32Array(people.count).fill(-1);
+    // Read the tick they are let up rather than at nine: somebody up at seven
+    // has walked two hours of energy off by then, and with bedtime in the
+    // evening they turn in with plenty left to walk off.
+    const gotUpWith = new Float32Array(people.count).fill(-1);
     let strangerBed: string | null = null;
     let homelessAsleep: string | null = null;
     let atTwo = { onTheGraph: 0, bedward: 0 };
@@ -840,6 +937,9 @@ describe('on the generated plot', () => {
       decayNeeds(needs, people, 1);
       router.tick(ticks);
       for (const person of housed) {
+        if (wentToBedWith[person]! >= 0 && gotUpWith[person] === -1 && !router.isAsleep(person)) {
+          gotUpWith[person] = needs.level.energy[person]!;
+        }
         if (!router.isAsleep(person) || wentToBedWith[person] !== -1) continue;
         wentToBedWith[person] = needs.level.energy[person]!;
         const home = lodgings[lodgingFor(lodgings, homeOf(people, person)!.key)]!;
@@ -868,7 +968,106 @@ describe('on the generated plot', () => {
     const slept = housed.filter((person) => wentToBedWith[person]! >= 0);
     expect(slept.length, 'a whole night and nobody reached a bed').toBeGreaterThan(0);
     expect(router.asleepCount, 'somebody is still in bed at nine').toBe(0);
-    const tired = slept.find((person) => !(needs.level.energy[person]! > wentToBedWith[person]!));
+    const tired = slept.find((person) => !(gotUpWith[person]! > wentToBedWith[person]!));
     expect(tired, 'got up as tired as they went to bed').toBeUndefined();
+  });
+
+  /**
+   * The measurement `plans/026-a-guests-day.md` turns on, run the way the
+   * showcase runs a frame: the clock at `normal` on sixty frames a second, the
+   * needs decaying and the router ticking on the ticks it hands back, and the
+   * crowd walked at `crowdScaleFor`'s multiple of the same frames.
+   *
+   * A family, hungry, whose nearest food is near the edge of their reach -
+   * 313 voxels of their 320 - walking to wherever they choose, which is the
+   * restaurant 435 voxels off. Measured when this was written: 49 simulated
+   * minutes on the way, 0.30 hunger down to 0.14, and out again at 1. The same
+   * run with the crowd on real time took 529 minutes and they got there with
+   * none. What it asserts is that they come out better fed than they set off,
+   * which is `archetypes.ts`'s decay rates reaching a guest at all.
+   */
+  it('feeds a hungry family at the edge of its reach before the walk has eaten the meal', () => {
+    const people = createGuests({
+      count: 200,
+      homes: [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 200 }],
+      variants: 4,
+      childVariant: 3,
+      seed: 11,
+    });
+    const needs = createNeeds(people, 9);
+    for (const need of NEEDS) needs.level[need].fill(1);
+    const food = venues.filter((venue) => venue.satisfies.some((each) => each.need === 'hunger'));
+
+    let clock = withSpeed(createSimClock(0, 10 / 24), 'normal');
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings: [],
+      network,
+      tickOfDay: () => clock.ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      seed: 17,
+    });
+    crowd = createCrowd({
+      network,
+      count: people.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+    });
+
+    // Of the family members on the paving, the one whose nearest food is
+    // furthest off while still inside their reach.
+    const reach = ARCHETYPES.family.reach;
+    const nearestFood = (person: number): number =>
+      Math.min(
+        ...food.map((venue) =>
+          Math.hypot(venue.x - crowd!.x[person]!, venue.z - crowd!.z[person]!),
+        ),
+      );
+    const family = [...Array(people.count).keys()].filter(
+      (person) =>
+        people.parties[people.party[person]!]!.kind === 'family' &&
+        !isRoaming(crowd!, person) &&
+        nearestFood(person) <= reach,
+    );
+    const hungry = family.toSorted((a, b) => nearestFood(b) - nearestFood(a))[0]!;
+    expect(
+      nearestFood(hungry),
+      'nobody in a family starts near the edge of their reach',
+    ).toBeGreaterThan(reach / 2);
+    needs.level.hunger[hungry] = 0.3;
+
+    const scale = crowdScaleFor('normal');
+    let setOff: { tick: number; hunger: number } | null = null;
+    let arrived: { tick: number; hunger: number } | null = null;
+    let left: number | null = null;
+    const frame = 1 / 60;
+    // Six simulated hours at most, which at real time would not see them there.
+    const until = clock.ticks + 6 * 60;
+    while (left === null && clock.ticks < until) {
+      const advanced = advanceClock(clock, frame);
+      clock = advanced.clock;
+      if (advanced.ticks > 0) {
+        decayNeeds(needs, people, advanced.ticks);
+        for (let tick = advanced.ticks; tick > 0; tick--) router.tick(clock.ticks - tick + 1);
+      }
+      stepCrowd(crowd, frame * scale);
+
+      const hunger = needs.level.hunger[hungry]!;
+      if (!setOff && router.goalOf(hungry)) setOff = { tick: clock.ticks, hunger };
+      if (setOff && !arrived && router.visitOf(hungry)) arrived = { tick: clock.ticks, hunger };
+      if (arrived && !router.visitOf(hungry)) left = hunger;
+    }
+
+    expect(setOff, 'a hungry family chose nowhere to eat').not.toBeNull();
+    expect(arrived, 'six simulated hours and they never got there').not.toBeNull();
+    expect(left, 'they never came out again').not.toBeNull();
+    // Better fed than they set off, which is the whole question.
+    expect(left!).toBeGreaterThan(setOff!.hunger);
+    // And the walk itself took under an hour, not most of a day.
+    expect(arrived!.tick - setOff!.tick).toBeLessThan(60);
   });
 });

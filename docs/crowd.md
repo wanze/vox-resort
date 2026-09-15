@@ -28,6 +28,7 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | Walk network                           | `crowd/domain/walkNetwork.ts`                |
 | Crowd state and step                   | `crowd/domain/crowd.ts`                      |
 | Avoidance between people               | `crowd/domain/avoidance.ts`                  |
+| How fast the crowd walks at each speed | `sim/domain/crowdRate.ts`                    |
 | Obstacles on the sand                  | `crowd/domain/sandGrid.ts`                   |
 | Seats in world space                   | `crowd/domain/seating.ts`                    |
 | Putting people back on a rebuilt graph | `crowd/domain/nearestNode.ts`, `reseatCrowd` |
@@ -35,6 +36,7 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | One sweep of the graph                 | `sim/domain/flowField.ts`                    |
 | Where everybody is heading             | `sim/domain/goals.ts`                        |
 | Choosing, routing and arriving         | `sim/domain/router.ts`                       |
+| The beach as somewhere to go           | `sim/domain/beach.ts`                        |
 | Guest registry                         | `guests/domain/guests.ts`                    |
 | Parties and who is a child             | `guests/domain/parties.ts`                   |
 | Beds                                   | `guests/domain/homes.ts`                     |
@@ -69,6 +71,17 @@ after a hand edit.
   columns, a tile short of the water, walks straight to it, and leaves by a gate
   node with a small chance per arrival. On arrival they may take a free lounger
   within three columns.
+- **The beach is also a venue** (`sim/domain/beach.ts`): one for the whole band,
+  serving fun 0.6 and energy 0.2, for 45 to 120 simulated minutes, with no
+  capacity worth counting. Its flow field is swept from every gate. Arriving at
+  a gate on a visit steps the guest onto the sand (`stepOntoSand`) instead of
+  standing them anywhere, and they roam as a roamer does. When the visit ends,
+  or at their bedtime, `Router.offTheSand` says so: the crowd stops them
+  stepping onto the sand, walks a roamer to the nearest gate within three
+  columns (or hops towards the nearest one), and `rouseSunbathers` gets anybody
+  lying on a lounger up once a tick. Reaching any node ends a visit still
+  running, with its relief. The numbers live in `beach.ts` rather than on the
+  art, because sand has no model to put them on.
 
 The per-frame step never queries the terrain, the occupancy index or the layout.
 
@@ -88,6 +101,27 @@ The per-frame step never queries the terrain, the occupancy index or the layout.
   and scanned 3 × 3 around each walker. `side` offsets a walker to the right of
   their line (at most four voxels); `pace` slows them (never below 15%). At a
   crossing the higher index waits.
+- **At the clock's pace.** The crowd walks `crowdScaleFor(speed)` times faster
+  than real time (`sim/domain/crowdRate.ts`), so that crossing the reference plot
+  takes a tenth of a simulated day at every speed: 3.6× at slow, 10.7× at normal,
+  26.7× at fast. `stepCrowd` runs a long step as whole steps of `MAX_STEP` and a
+  remainder, with avoidance run once per step, so a sidestep is still decided
+  for about a body's width of walking and an arrival carries at most one
+  segment's leftover. A crowd stepped once by `n · MAX_STEP` is the crowd
+  stepped `n` times by `MAX_STEP`.
+- **Capped at `MAX_SUBSTEPS`, 32.** That is the most steps one call runs, so the
+  most avoidance passes a frame pays for, and the scale's ceiling comes from the
+  same constant. On the reference plot with 600 people a frame costs 0.08 ms at
+  real time and 2.6 ms at the cap, a ratio of 1.01 over the cap's own factor;
+  `resortWalk.test.ts` holds it under 1.15. `rush` wants 107× and gets 32, so
+  at rush guests fall behind the day, crossing the plot in eight simulated
+  hours. The frame's delta is clamped to `MAX_STEP` before it is scaled, so a
+  backgrounded tab still costs at most one clamped frame. The walk cycle is
+  stepped by the same scaled step.
+- **A paused resort stands still.** The animation loop hands the crowd a frame
+  of no time while paused. It still writes the instances, so the level of detail
+  follows the camera. `crowdScaleFor('paused')` is 1, so the scale is not what
+  stops it.
 - **Boats** look ahead six seconds plus their radius and turn away from piers and
   other craft, are pushed out of any overlap, and are clamped to the bay last.
   Rental boats ignore each other near their berths. All pairs are checked.
@@ -187,8 +221,9 @@ how many are inside against what it holds, and how long the line at its door is.
 ## Determinism
 
 The benchmark only compares runs if the scene is identical. So spawning and every
-choice use a seeded PRNG (`createRandom`), bench mode uses a fixed timestep, and
-outside bench mode the frame delta is clamped (`MAX_STEP`).
+choice use a seeded PRNG (`createRandom`), bench mode uses a fixed timestep and
+pins the crowd's scale to 1, and outside bench mode the frame delta is clamped
+(`MAX_STEP`) before it is scaled.
 
 ## The clock
 
@@ -210,8 +245,10 @@ of day are derived from it; `skyStateFor` still takes only the time of day.
 | Fast   | 120                  |
 | Rush   | 30                   |
 
-Needs are what runs on ticks; see below. The crowd, balloons and sea are
-animation and stay on the frame delta.
+Needs are what runs on ticks; see below. The crowd stays on the frame delta but
+walks at a multiple of it taken from the speed (see _Movement_), and stands
+still while paused. Balloons, the sea and the build site are scenery and stay on
+the frame delta at real time.
 
 ## What guests want
 
@@ -347,12 +384,17 @@ of something.
 `sim/domain/night.ts` says when a party goes to bed and gets up, and the router
 walks them there.
 
-- **Every party has its own bedtime.** Spread over three hours from 22:00, and a
-  wake time over two from 07:00, both worked out from the party index with an
-  integer hash. Nothing is stored and nothing is drawn: the same party goes to
-  bed at the same minute every night of its stay, and a save file has nothing
-  to hold about it. The window wraps midnight, which `isBedtime` handles and
-  its test checks both ways round.
+- **Every party has its own bedtime.** Spread over two and a half hours from
+  19:00, and a wake time over two from 07:00, both worked out from the party
+  index with an integer hash. Nothing is stored and nothing is drawn: the same
+  party goes to bed at the same minute every night of its stay, and a save file
+  has nothing to hold about it. Every window wraps midnight, which `isBedtime`
+  handles.
+
+- **Bedtime is timed against the sunset.** The sun sets at 21:30 (`SUNSET_TIME`
+  in `lighting/domain/dayNight.ts`) and it is dark ten minutes later, so every
+  party has set off before dark and the walk home can be watched. "Bedtime" is
+  when a party turns for home: at `normal` the walk takes most of an hour.
 
 - **Going home is a route, on a field per lodging.** At bedtime the router
   ignores venues and walks the guest down a flow field whose sources are their
@@ -374,11 +416,12 @@ walks them there.
   reaches, or whose lodging was bulldozed. They carry on as by day, venues and
   all - the state plan 020 turns into unhappiness.
 
-- **Most of the resort is still walking home at two.** At `normal`, a guest
-  walks about four tiles an hour, and a guest out on the sand is never asked
-  where to go until they step back onto the paving. On the reference plot at
-  two in the morning 1% of housed guests are in bed, and nearly everyone else
-  on the paving is walking home. The pace is plan 026's business.
+- **The resort walks home in the evening light.** On the reference plot with
+  600 guests, all housed, at `normal` and sixty frames a second: at 20:00, 147
+  are walking home; at sunset, 335 are walking home and 129 are asleep; by
+  23:00, 408 are asleep; at 02:00, 596. The beach is empty by 23:00 and has
+  people on it again from about 08:00. `router.test.ts`'s night test still
+  steps the crowd at real time.
 
 - **The windows light from the resort's share of beds slept in.** The share of
   lit panes after dark is `0.5 * asleep / beds`, one uniform on the window

@@ -8,11 +8,14 @@ import {
   isSeated,
   isWaiting,
   MAX_STEP,
+  MAX_SUBSTEPS,
   releaseTo,
   reseatCrowd,
   RESTING,
   restingOn,
+  rouseSunbathers,
   stepCrowd,
+  stepOntoSand,
   WALK_SPEED,
   type Crowd,
 } from './crowd';
@@ -141,7 +144,7 @@ describe('stepCrowd', () => {
     const one = createCrowd({ network: networkOf(street(60)), count: 5, variants: 1, seed: 8 });
     const other = createCrowd({ network: networkOf(street(60)), count: 5, variants: 1, seed: 8 });
     stepCrowd(one, 60);
-    stepCrowd(other, MAX_STEP);
+    stepCrowd(other, MAX_STEP * MAX_SUBSTEPS);
     expect(Array.from(one.x)).toEqual(Array.from(other.x));
   });
 
@@ -191,6 +194,104 @@ describe('stepCrowd', () => {
 /** The node standing on a tile of a street fixture. */
 const nodeAt = (network: WalkNetwork, tileX: number): number =>
   network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === 0);
+
+/**
+ * A step many times `MAX_STEP` long, which is how the crowd keeps up with a
+ * calendar running faster than real time. See `sim/domain/crowdRate.ts`.
+ */
+describe('a step longer than MAX_STEP', () => {
+  /** Two crowds off the same seed on a street with a junction and a spur. */
+  const twins = (): [Crowd, Crowd] => {
+    const paved = [...street(30), { tileX: 10, tileZ: 1, y: 0 }, { tileX: 10, tileZ: 2, y: 0 }];
+    const options = { network: networkOf(paved), count: 40, variants: 4, seed: 31 };
+    return [createCrowd(options), createCrowd(options)];
+  };
+
+  it('ends up where the same number of steps of MAX_STEP would, to the voxel', () => {
+    const [once, often] = twins();
+    const start = Array.from(once.x);
+    const n = 16;
+    for (let frame = 0; frame < 20; frame++) {
+      stepCrowd(once, n * MAX_STEP);
+      for (let step = 0; step < n; step++) stepCrowd(often, MAX_STEP);
+    }
+    let furthest = 0;
+    for (let i = 0; i < once.count; i++) {
+      furthest = Math.max(
+        furthest,
+        Math.hypot(once.x[i]! - often.x[i]!, once.y[i]! - often.y[i]!, once.z[i]! - often.z[i]!),
+      );
+    }
+    expect(furthest).toBeLessThan(1);
+    // The same choices at every node on the way, not merely the same distance.
+    expect(Array.from(once.node)).toEqual(Array.from(often.node));
+    // And people actually went somewhere, or a crowd that never moved would pass.
+    expect(start.filter((x, i) => Math.abs(x - once.x[i]!) > TILE_VOXELS).length).toBeGreaterThan(
+      once.count / 2,
+    );
+  });
+
+  it('clamps a step past the ceiling rather than running it', () => {
+    const [clamped, ceiling] = twins();
+    stepCrowd(clamped, MAX_STEP * MAX_SUBSTEPS * 50);
+    stepCrowd(ceiling, MAX_STEP * MAX_SUBSTEPS);
+    expect(Array.from(clamped.x)).toEqual(Array.from(ceiling.x));
+    expect(Array.from(clamped.z)).toEqual(Array.from(ceiling.z));
+  });
+
+  it('refuses a NaN step as it refuses a step of no time', () => {
+    const [crowd] = twins();
+    const before = [...crowd.x];
+    stepCrowd(crowd, Number.NaN);
+    expect([...crowd.x]).toEqual(before);
+  });
+
+  it('leaves a held person on their spot however many steps it runs', () => {
+    const [crowd] = twins();
+    holdAt(crowd, 0, 4.5 * TILE_VOXELS, walkingSurface(0), 2, 0.5);
+    for (let frame = 0; frame < 30; frame++) stepCrowd(crowd, MAX_STEP * MAX_SUBSTEPS);
+    expect(crowd.x[0]).toBeCloseTo(4.5 * TILE_VOXELS);
+    expect(crowd.z[0]).toBeCloseTo(2);
+    expect(isWaiting(crowd, 0)).toBe(true);
+  });
+
+  it('still gets two people walking at each other past each other at the ceiling', () => {
+    /** Two people at either end of a long street, sent towards each other. */
+    const headOn = (): Crowd => {
+      const network = networkOf(street(40));
+      const crowd = createCrowd({ network, count: 2, variants: 1, seed: 32 });
+      const ends = [nodeAt(network, 0), nodeAt(network, 39)] as const;
+      for (const [person, end] of ends.entries()) {
+        const node = network.nodes[end]!;
+        holdAt(crowd, person, node.x, node.y, node.z, 0);
+        releaseTo(crowd, person, ends[1 - person]!);
+      }
+      return crowd;
+    };
+    // A call at the ceiling cannot be watched inside, so its twin is stepped a
+    // `MAX_STEP` at a time and watched instead, and the two are held to agree at
+    // the end of every call: what the twin shows is what the call did.
+    const atCeiling = headOn();
+    const watched = headOn();
+    let closest = Infinity;
+    for (let frame = 0; frame < 30; frame++) {
+      stepCrowd(atCeiling, MAX_STEP * MAX_SUBSTEPS);
+      for (let step = 0; step < MAX_SUBSTEPS; step++) {
+        stepCrowd(watched, MAX_STEP);
+        closest = Math.min(
+          closest,
+          Math.hypot(watched.x[0]! - watched.x[1]!, watched.z[0]! - watched.z[1]!),
+        );
+      }
+      expect(Math.abs(atCeiling.x[0]! - watched.x[0]!)).toBeLessThan(1);
+      expect(Math.abs(atCeiling.z[1]! - watched.z[1]!)).toBeLessThan(1);
+    }
+    // Without avoidance they would meet dead centre, at zero apart.
+    expect(closest).toBeGreaterThan(3);
+    // And both got by, which a pair who stopped nose to nose would not have.
+    expect(atCeiling.x[0]!).toBeGreaterThan(atCeiling.x[1]!);
+  });
+});
 
 describe('being told where to go', () => {
   it('walks exactly as it always did when nothing is routing it', () => {
@@ -362,6 +463,83 @@ describe('roaming the beach', () => {
       for (let i = 0; i < crowd.count; i++) if (crowd.node[i] === -1) roaming++;
     }
     expect(roaming, 'nobody ever left the boardwalk').toBeGreaterThan(0);
+  });
+
+  it('lets a router send somebody arriving at a gate out onto the sand, and keeps them there', () => {
+    const sent: number[] = [];
+    let crowd: Crowd | null = null;
+    crowd = createCrowd({
+      network,
+      count: 20,
+      variants: 1,
+      seed: 40,
+      routeOf: (person, at) => {
+        if (!network.nodes[at]!.gate) return -1;
+        stepOntoSand(crowd!, person, at);
+        if (crowd!.node[person] === -1) sent.push(person);
+        return -1;
+      },
+    });
+    let aimedBack: string | null = null;
+    for (let frame = 0; frame < 60 * 60 && sent.length < 3; frame++) {
+      const before = sent.length;
+      stepCrowd(crowd, 1 / 60);
+      // Sent out during this very step: the crowd must not have aimed them at a
+      // node on the way out of asking.
+      for (const person of sent.slice(before)) {
+        if (crowd.node[person] !== -1) aimedBack ??= `person ${person}`;
+      }
+    }
+    expect(sent.length, 'nobody reached a gate').toBeGreaterThan(0);
+    expect(aimedBack).toBeNull();
+  });
+
+  it('sends nobody onto the sand from a node that is not a gate', () => {
+    const crowd = createCrowd({ network, count: 4, variants: 1, seed: 41 });
+    const inland = network.nodes.findIndex((node) => !node.gate);
+    const walking = [...Array(crowd.count).keys()].find((i) => crowd.node[i]! >= 0)!;
+    stepOntoSand(crowd, walking, inland);
+    expect(crowd.node[walking]).toBeGreaterThanOrEqual(0);
+  });
+
+  it('roams exactly as before for a crowd told nobody has anywhere to be', () => {
+    const told = createCrowd({
+      network,
+      count: 30,
+      variants: 4,
+      seed: 15,
+      offTheSand: () => false,
+    });
+    const untold = createCrowd({ network, count: 30, variants: 4, seed: 15 });
+    run(told, 60);
+    run(untold, 60);
+    expect(Array.from(told.x)).toEqual(Array.from(untold.x));
+    expect(Array.from(told.z)).toEqual(Array.from(untold.z));
+  });
+
+  it('brings everybody with somewhere to be off the sand, and lets nobody back on', () => {
+    const crowd = createCrowd({
+      network,
+      count: 30,
+      variants: 4,
+      seed: 15,
+      offTheSand: () => true,
+    });
+    const roaming = (i: number): boolean => crowd.node[i] === -1;
+    const startedOnSand = Array.from({ length: crowd.count }, (_, i) => roaming(i));
+    expect(startedOnSand.some(Boolean), 'nobody to bring in').toBe(true);
+    const cameOff = startedOnSand.map((on) => !on);
+    let wentBack: string | null = null;
+    for (let step = 0; step < 3000; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      for (let i = 0; i < crowd.count; i++) {
+        if (!roaming(i)) cameOff[i] = true;
+        else if (cameOff[i]) wentBack ??= `person ${i} at step ${step}`;
+      }
+    }
+    expect(wentBack).toBeNull();
+    const stillOut = cameOff.filter((off) => !off).length;
+    expect(stillOut, 'five minutes and still out on the beach').toBe(0);
   });
 
   it('keeps a roamer on the sand and out of the sea', () => {
@@ -634,6 +812,35 @@ describe('the people who lie down', () => {
     }
     expect(rose, 'the lounger was never given up').toBeGreaterThan(0);
     expect(onSand).toBe(rose);
+  });
+
+  it('gets a sunbather up and off the beach once they have somewhere to be', () => {
+    let called = false;
+    const crowd = createCrowd({
+      network: sandy(),
+      count: 40,
+      variants: 2,
+      seed: 21,
+      offTheSand: () => called,
+    });
+    let lying = -1;
+    for (let frame = 0; frame < 60 * 600 && lying < 0; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      for (let i = 0; i < crowd.count; i++) if (restingOn(crowd, i) === RESTING.lying) lying = i;
+    }
+    expect(lying, 'nobody ever lay on a lounger').toBeGreaterThanOrEqual(0);
+    // Uncalled, rousing is nothing at all.
+    rouseSunbathers(crowd);
+    stepCrowd(crowd, MAX_STEP);
+    expect(restingOn(crowd, lying)).toBe(RESTING.lying);
+
+    called = true;
+    rouseSunbathers(crowd);
+    stepCrowd(crowd, MAX_STEP);
+    expect(restingOn(crowd, lying), 'still lying down').toBe(RESTING.none);
+    expect(crowd.seat[lying]).toBe(-1);
+    for (let step = 0; step < 3000 && crowd.node[lying]! < 0; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.node[lying], 'never made it back to the boardwalk').toBeGreaterThanOrEqual(0);
   });
 
   it('keeps a lounger held while its sunbather walks over to it', () => {

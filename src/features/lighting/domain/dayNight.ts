@@ -73,21 +73,26 @@ const AMBIENT_DAY = 0xc3d9f5;
 const SUNRISE_TIME = 6 / 24;
 
 /**
- * The sun is on the horizon, going down, at 20:00: a summer evening on the
+ * The sun is on the horizon, going down, at 21:30: a late summer evening on the
  * coast. The light turns golden about half an hour before and the sky is dark
- * about ten minutes after, so the evening is still daylight at seven.
+ * about ten minutes after, so the evening is still daylight at half past eight.
+ *
+ * Late on purpose, and read together with `BEDTIME_HOUR` in `sim/domain/night.ts`:
+ * parties set off home between seven and half past nine, so the walk back to the
+ * lodgings happens in the evening light where it can be watched, rather than
+ * after dark.
  */
-export const SUNSET_TIME = 20 / 24;
+export const SUNSET_TIME = 21.5 / 24;
 
 /**
  * Where the sun is in its own arc, 0..1 with 0.25 rising and 0.75 setting, at a
  * time on the clock.
  *
  * The arc itself stays a plain sine; what moves is how fast the clock walks it.
- * The day, sunrise to sunset, is stretched over its fourteen hours and the night
- * squeezed into the other ten. The two pieces meet at the horizon, so nothing
- * jumps there, and solar noon falls at 13:00 rather than 12:00, which is also
- * what summer time does.
+ * The day, sunrise to sunset, is stretched over its fifteen and a half hours and
+ * the night squeezed into the other eight and a half. The two pieces meet at the
+ * horizon, so nothing jumps there, and solar noon falls at a quarter to two
+ * rather than at twelve, which is summer time and a westerly longitude together.
  */
 function solarTimeFor(clock: number): number {
   const dayLength = SUNSET_TIME - SUNRISE_TIME;

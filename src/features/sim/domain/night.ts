@@ -24,9 +24,15 @@ const TICKS_PER_HOUR = 60;
  * {@link BEDTIME_SPREAD_HOURS} from this, drawn from the party index so it is the
  * same every night of their stay - somebody who goes to bed late goes to bed late
  * all week, which is a small thing that reads as character.
+ *
+ * Seven to half past nine, ending on a sunset at half past nine (`SUNSET_TIME`
+ * in `lighting/domain/dayNight.ts`): every party has set off before dark, so
+ * the walk back to the lodgings is something that can be watched. "Bedtime" is
+ * when a party turns for home, not when the light goes out - at `normal` a walk
+ * home across the reference plot is most of an hour.
  */
-const BEDTIME_HOUR = 22;
-const BEDTIME_SPREAD_HOURS = 3;
+const BEDTIME_HOUR = 19;
+const BEDTIME_SPREAD_HOURS = 2.5;
 const WAKE_HOUR = 7;
 const WAKE_SPREAD_HOURS = 2;
 

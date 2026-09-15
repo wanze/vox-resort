@@ -15,7 +15,7 @@ import { clampParams, generateResort } from '../../layout/domain/resortGenerator
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { stairTilesFor } from '../../layout/domain/stairs';
-import { createCrowd, stepCrowd } from './crowd';
+import { createCrowd, MAX_STEP, MAX_SUBSTEPS, stepCrowd } from './crowd';
 import { walkingSurface, walkNetworkFor, type WalkNetwork } from './walkNetwork';
 
 const TYPES = OBJECT_TYPES.map((type) => ({
@@ -154,5 +154,54 @@ describe('a crowd on a generated resort', () => {
     expect(roaming()).toBeGreaterThan(100);
     for (let frame = 0; frame < 60 * 60 * 5; frame++) stepCrowd(crowd, 1 / 60);
     expect(roaming(), 'the beach drained').toBeGreaterThan(100);
+  });
+});
+
+describe('the cost of walking faster than real time', () => {
+  /**
+   * The ceiling on plan 026's trade, in the shape of `flowField.test.ts`'s: a
+   * crowd walking at the simulation's pace runs {@link MAX_SUBSTEPS} steps a
+   * frame at most, and the frame has to be able to afford them.
+   *
+   * What it holds the cap to is that it costs **no more than its own factor**
+   * over a frame at real time, plus 15% for the loop around the steps: anything
+   * worse is avoidance being run more often than once a step, or something in the
+   * loop allocating. A ratio rather than a number of milliseconds, so a slower
+   * machine slows both halves and does not turn this red.
+   *
+   * **Timed in this process's own CPU time, not on the wall clock.** The suite
+   * runs files side by side, and wall-clock time counts every moment a worker
+   * spent waiting its turn: measured that way the ratio came out anywhere from
+   * 1.01 alone to 1.23 under the rest of the suite, which is the machine's load
+   * and not the loop's.
+   *
+   * Per frame, each way: a simulated minute of the crowd's own time at real
+   * time - six hundred frames of `MAX_STEP` - and the frames at the cap that
+   * cover the same, after a warm-up of both so neither half pays for the other's
+   * compile, and the quicker of seven runs of each so one collection pause does
+   * not decide it.
+   */
+  it('costs no more than its factor over a frame at real time', () => {
+    const seconds = 60;
+    /** CPU microseconds a frame costs, at `scale` times real time. */
+    const perFrame = (scale: number): number => {
+      const crowd = createCrowd({ network, count: 600, variants: 4, seed: 7 });
+      const frames = Math.round(seconds / (MAX_STEP * scale));
+      const started = process.cpuUsage();
+      for (let frame = 0; frame < frames; frame++) stepCrowd(crowd, MAX_STEP * scale);
+      const spent = process.cpuUsage(started);
+      return (spent.user + spent.system) / frames;
+    };
+    perFrame(1);
+    perFrame(MAX_SUBSTEPS);
+    // Taken turn about rather than one half after the other, so a stretch of
+    // load from the rest of the suite lands on both halves and not on one.
+    let atOne = Infinity;
+    let atCap = Infinity;
+    for (let run = 0; run < 7; run++) {
+      atOne = Math.min(atOne, perFrame(1));
+      atCap = Math.min(atCap, perFrame(MAX_SUBSTEPS));
+    }
+    expect(atCap).toBeLessThan(MAX_SUBSTEPS * atOne * 1.15);
   });
 });

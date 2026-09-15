@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SUNSET_TIME } from '../../lighting/domain/dayNight';
 import {
   createBalloons,
   FLIGHT_SECONDS,
@@ -32,23 +33,27 @@ function run(
 
 describe('releaseStrength', () => {
   it('lets nothing go in broad daylight', () => {
-    for (const time of [0.1, 0.3, 0.5, 0.62, 0.75]) expect(releaseStrength(time)).toBe(0);
+    for (const time of [0.1, 0.3, 0.5, 0.62, 0.75, SUNSET_TIME - 0.05]) {
+      expect(releaseStrength(time)).toBe(0);
+    }
   });
 
   it('is fully up through the blue hour, just after sunset', () => {
-    expect(releaseStrength(0.875)).toBeCloseTo(1, 5);
-    expect(releaseStrength(0.9)).toBeGreaterThan(0.9);
+    expect(releaseStrength(SUNSET_TIME + 0.02)).toBeCloseTo(1, 5);
+    expect(releaseStrength(SUNSET_TIME + 0.05)).toBeCloseTo(1, 5);
   });
 
   it('is over before midnight, and does not come back', () => {
-    expect(releaseStrength(0.975)).toBe(0);
+    expect(releaseStrength(SUNSET_TIME + 0.09)).toBe(0);
+    expect(SUNSET_TIME + 0.09).toBeLessThan(1);
     expect(releaseStrength(0.99)).toBe(0);
     expect(releaseStrength(0)).toBe(0);
   });
 
   it('reads a clock that has run past midnight', () => {
-    expect(releaseStrength(1.875)).toBe(releaseStrength(0.875));
-    expect(releaseStrength(-0.125)).toBe(releaseStrength(0.875));
+    const dusk = SUNSET_TIME + 0.03;
+    expect(releaseStrength(dusk + 1)).toBeCloseTo(releaseStrength(dusk), 6);
+    expect(releaseStrength(dusk - 1)).toBeCloseTo(releaseStrength(dusk), 6);
   });
 });
 

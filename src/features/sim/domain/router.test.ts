@@ -12,15 +12,17 @@ import {
   type Crowd,
 } from '../../crowd/domain/crowd';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
-import { createGuests, partyOf, type Guests } from '../../guests/domain/guests';
-import type { Home } from '../../guests/domain/homes';
+import { createGuests, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
+import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { createNeeds, NEEDS, type Needs } from './needs';
+import { createNeeds, decayNeeds, NEEDS, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
+import { lodgingFor, lodgingsOn, type Lodging } from './lodgings';
+import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor } from './queueLane';
 import { createRouter } from './router';
 import { venuesOn, type Venue } from './venues';
@@ -36,6 +38,9 @@ const networkOf = (paved: PavedTile[]): WalkNetwork =>
 
 const nodeAt = (network: WalkNetwork, tileX: number, tileZ = 0): number =>
   network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === tileZ);
+
+/** Midday, when nobody on the plot is thinking about bed. */
+const NOON = 12 * 60;
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
 
@@ -88,13 +93,19 @@ const routerOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
   needs: Needs,
+  night: { readonly lodgings: readonly Lodging[]; readonly tickOfDay: () => number } = {
+    lodgings: [],
+    tickOfDay: () => NOON,
+  },
 ): { router: ReturnType<typeof createRouter>; crowd: Crowd } => {
   let crowd: Crowd | null = null;
   const router = createRouter({
     guests,
     needs,
     venues,
+    lodgings: night.lodgings,
     network,
+    tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
     seed: 13,
   });
@@ -203,7 +214,7 @@ describe('createRouter', () => {
     expect(router.goalOf(0)).not.toBeNull();
 
     const rebuilt = networkOf(street(10));
-    router.rebuild([bakery(9)], rebuilt);
+    router.rebuild([bakery(9)], [], rebuilt);
     expect(router.fieldCount).toBe(0);
     expect(router.goalOf(0)).toBeNull();
   });
@@ -395,7 +406,7 @@ describe('a venue that holds only as many as it says', () => {
 
     // The same corridor three tiles south, with the shower moved to match.
     const moved = networkOf(Array.from({ length: 8 }, (_, tileX) => ({ tileX, tileZ: 3, y: 0 })));
-    router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], moved);
+    router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], [], moved);
     for (const person of [0, 1]) releaseTo(crowd, person, nodeAt(moved, 0, 3));
     queue(moved);
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
@@ -427,12 +438,107 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyTotals).toEqual({ inside: 1, waiting: 2 });
 
     const rebuilt = networkOf(street(10));
-    router.rebuild([shower(9)], rebuilt);
+    router.rebuild([shower(9)], [], rebuilt);
     expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
     // The crowd is put back on the new graph by `reseatCrowd`, which walks a
     // held person like any other: the router deliberately re-aims nobody.
     const reseated = reseatCrowd(crowd, rebuilt);
     for (const person of [0, 1, 2]) expect(isWaiting(reseated, person)).toBe(false);
+  });
+});
+
+/** The fixture's one lodging, on the tile north of the corridor's west end. */
+const hotel = (tileZ = -1): Lodging => ({
+  key: 'hotel#0',
+  id: 'hotel',
+  label: 'Hotel',
+  beds: 40,
+  dwellSeconds: { min: 25_200, max: 32_400 },
+  tileX: 0,
+  tileZ,
+  tilesX: 1,
+  tilesZ: 1,
+  x: 0.5 * TILE_VOXELS,
+  z: (tileZ + 0.5) * TILE_VOXELS,
+  doors: [],
+});
+
+describe('the night', () => {
+  const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
+  const homeless = [...Array(guests.count).keys()].find(
+    (person) => guests.home[person] === NO_HOME,
+  )!;
+
+  /** A hungry guest on the corridor, with a bakery at one end and the hotel at the other. */
+  const nightOn = (person: number, lodging = hotel()) => {
+    const network = networkOf(street(8));
+    const needs = wanting(person, 'hunger');
+    const clock = { tick: bedtimeOf(guests.party[person]!).sleepAt };
+    const { router, crowd } = routerOn(network, [bakery(7)], needs, {
+      lodgings: [lodging],
+      tickOfDay: () => clock.tick,
+    });
+    return { network, needs, clock, router, crowd };
+  };
+
+  it('walks a guest home at bedtime, however hungry they are for the bakery', () => {
+    const { network, clock, router } = nightOn(housed);
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.homewardTo(housed)?.key).toBe('hotel#0');
+    clock.tick = NOON;
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.homewardTo(housed)).toBeNull();
+  });
+
+  it('puts a guest to bed inside their lodging when they reach its door', () => {
+    const { network, router, crowd } = nightOn(housed);
+    expect(router.step(housed, nodeAt(network, 1))).toBe(-1);
+    expect(router.isAsleep(housed)).toBe(true);
+    expect(router.asleepCount).toBe(1);
+    expect(isWaiting(crowd, housed)).toBe(true);
+    expect(crowd.x[housed]).toBeCloseTo(hotel().x);
+    expect(crowd.z[housed]).toBeCloseTo(hotel().z);
+    // Held: asking again changes nothing.
+    expect(router.step(housed, nodeAt(network, 1))).toBe(-1);
+    expect(router.asleepCount).toBe(1);
+  });
+
+  it('gets them up at their wake tick, rested, and out of the door', () => {
+    const { network, needs, router, crowd } = nightOn(housed);
+    router.step(housed, nodeAt(network, 1));
+    needs.level.energy[housed] = 0.2;
+    const { wakeAt } = bedtimeOf(guests.party[housed]!);
+
+    router.tick(TICKS_PER_DAY + wakeAt - 1);
+    expect(router.isAsleep(housed), 'up before their time').toBe(true);
+    router.tick(TICKS_PER_DAY + wakeAt);
+    expect(router.isAsleep(housed)).toBe(false);
+    expect(router.asleepCount).toBe(0);
+    expect(isWaiting(crowd, housed)).toBe(false);
+    expect(needs.level.energy[housed]).toBe(1);
+  });
+
+  it('never puts a guest with no bed to sleep, and routes them to venues all night', () => {
+    const { network, router } = nightOn(homeless);
+    expect(router.step(homeless, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.step(homeless, nodeAt(network, 1))).not.toBe(-1);
+    expect(router.isAsleep(homeless)).toBe(false);
+    expect(router.homewardTo(homeless)).toBeNull();
+  });
+
+  it('lets a guest whose lodging no paving reaches walk instead of sleeping', () => {
+    const { network, router } = nightOn(housed, hotel(5));
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.isAsleep(housed)).toBe(false);
+  });
+
+  it('wakes everybody when the graph is rebuilt', () => {
+    const { network, router } = nightOn(housed);
+    router.step(housed, nodeAt(network, 1));
+    expect(router.asleepCount).toBe(1);
+    router.rebuild([bakery(9)], [hotel()], networkOf(street(10)));
+    expect(router.asleepCount).toBe(0);
+    expect(router.isAsleep(housed)).toBe(false);
   });
 });
 
@@ -513,7 +619,9 @@ describe('on the generated plot', () => {
       guests: people,
       needs,
       venues,
+      lodgings: [],
       network,
+      tickOfDay: () => NOON,
       crowd: () => crowd!,
       seed: 17,
     });
@@ -599,7 +707,9 @@ describe('on the generated plot', () => {
       guests: people,
       needs,
       venues: standing,
+      lodgings: [],
       network,
+      tickOfDay: () => NOON,
       crowd: () => crowd!,
       seed: 19,
     });
@@ -666,5 +776,99 @@ describe('on the generated plot', () => {
     // And the lines moved: a queue that never shuffled up would feed the one
     // person who got in first and nobody else.
     expect(run.fed, 'a line formed and nothing ever came out of it').toBeGreaterThan(1);
+  });
+  /**
+   * A whole night over the plot laid by something that has never heard of bed:
+   * a field keyed to the wrong lodging, or a bedtime window that does not wrap,
+   * passes every corridor test above and shows up here.
+   *
+   * **What it does not assert is that most of the resort is asleep by two.** At
+   * two frames to the simulated minute a guest walks about four tiles an hour,
+   * so on a plot of 112 by 100 most of them are still on their way home at two
+   * and some are not in bed by the time they are due up - which is the pace
+   * plan 026 is about, not something the night can fix. And a guest out on the
+   * sand never reaches a node, so nothing asks the router about them until they
+   * step back onto the paving. So it asserts the decision instead: at two,
+   * everybody housed who is on the graph and not in the middle of a visit is in
+   * bed or walking to it.
+   */
+  it('sends the resort to bed at night and gets it up in the morning', () => {
+    const lodgings = lodgingsOn(layout.placements);
+    const people = createGuests({
+      // More than the plot sleeps, so some are left with no bed.
+      count: 800,
+      // Biggest first, as `showcase.ts`'s `homesOn` hands them to `assignHomes`.
+      homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+      variants: 4,
+      childVariant: 3,
+      seed: 21,
+    });
+    const needs = createNeeds(people, 23);
+    let ticks = 20 * 60;
+
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings,
+      network,
+      tickOfDay: () => ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      seed: 29,
+    });
+    crowd = createCrowd({
+      network,
+      count: people.count,
+      variants: 4,
+      seed: 5,
+      routeOf: (person, at) => router.step(person, at),
+    });
+
+    const housed = [...Array(people.count).keys()].filter((person) => homeOf(people, person));
+    expect(housed.length).toBeLessThan(people.count);
+    const wentToBedWith = new Float32Array(people.count).fill(-1);
+    let strangerBed: string | null = null;
+    let homelessAsleep: string | null = null;
+    let atTwo = { onTheGraph: 0, bedward: 0 };
+
+    // Thirteen simulated hours, to nine in the morning, when the last party is
+    // due up.
+    while (ticks < TICKS_PER_DAY + 9 * 60) {
+      for (let frame = 0; frame < TICKS_EVERY; frame++) stepCrowd(crowd, MAX_STEP);
+      ticks++;
+      decayNeeds(needs, people, 1);
+      router.tick(ticks);
+      for (const person of housed) {
+        if (!router.isAsleep(person) || wentToBedWith[person] !== -1) continue;
+        wentToBedWith[person] = needs.level.energy[person]!;
+        const home = lodgings[lodgingFor(lodgings, homeOf(people, person)!.key)]!;
+        const there =
+          Math.abs(crowd.x[person]! - home.x) < 1e-3 && Math.abs(crowd.z[person]! - home.z) < 1e-3;
+        if (!there) strangerBed ??= `person ${person} is not in ${home.key}`;
+      }
+      if (ticks !== TICKS_PER_DAY + 2 * 60) continue;
+      for (let person = 0; person < people.count; person++) {
+        if (people.home[person] === NO_HOME && router.isAsleep(person)) {
+          homelessAsleep ??= `person ${person}`;
+        }
+      }
+      const walking = housed.filter(
+        (person) => !isRoaming(crowd!, person) && router.visitOf(person) === null,
+      );
+      atTwo = {
+        onTheGraph: walking.length,
+        bedward: walking.filter((person) => router.homewardTo(person) !== null).length,
+      };
+    }
+
+    expect(strangerBed).toBeNull();
+    expect(homelessAsleep).toBeNull();
+    expect(atTwo.bedward).toBeGreaterThanOrEqual(0.7 * atTwo.onTheGraph);
+    const slept = housed.filter((person) => wentToBedWith[person]! >= 0);
+    expect(slept.length, 'a whole night and nobody reached a bed').toBeGreaterThan(0);
+    expect(router.asleepCount, 'somebody is still in bed at nine').toBe(0);
+    const tired = slept.find((person) => !(needs.level.energy[person]! > wentToBedWith[person]!));
+    expect(tired, 'got up as tired as they went to bed').toBeUndefined();
   });
 });

@@ -257,21 +257,65 @@ export function placeWording(slot: number): string {
  * telling apart on a glance at the panel.
  */
 export type Errand =
-  | { readonly kind: 'walking'; readonly to: string }
+  /** `home` for somebody walking to their own bed rather than to a venue. */
+  | { readonly kind: 'walking'; readonly to: string; readonly home: boolean }
   | { readonly kind: 'waiting'; readonly at: string; readonly place: number }
   | { readonly kind: 'inside'; readonly at: string }
+  | { readonly kind: 'asleep'; readonly at: string }
   | null;
+
+/** Something with a name the line can say: a venue or a lodging, as far as wording goes. */
+interface Named {
+  readonly label: string;
+}
+
+/**
+ * What the router knows about one guest, as the plain facts {@link errandOf}
+ * words. Shaped like the router's own answers so the caller hands them straight
+ * over, and typed structurally so this module still never imports the router.
+ */
+export interface ErrandFacts {
+  /** The venue they are inside or queueing at, or null. */
+  readonly visit: {
+    readonly venue: Named;
+    readonly waiting: boolean;
+    readonly place: number;
+  } | null;
+  /** The venue they are walking to, or null. */
+  readonly goal: Named | null;
+  /** The lodging they are asleep in or walking home to, or null. */
+  readonly home: Named | null;
+  readonly asleep: boolean;
+}
+
+/**
+ * Which errand the facts add up to, most settled first: asleep, then at a
+ * venue, then walking home, then walking anywhere else.
+ *
+ * Home is ahead of a goal because a guest turned for bed keeps whatever venue
+ * their party had been walking to until they next decide, and the line should
+ * say where they are actually going.
+ */
+export function errandOf(facts: ErrandFacts): Errand {
+  const { visit, goal, home } = facts;
+  if (facts.asleep && home) return { kind: 'asleep', at: home.label };
+  if (visit?.waiting) return { kind: 'waiting', at: visit.venue.label, place: visit.place };
+  if (visit) return { kind: 'inside', at: visit.venue.label };
+  if (home) return { kind: 'walking', to: home.label, home: true };
+  return goal ? { kind: 'walking', to: goal.label, home: false } : null;
+}
 
 /**
  * What somebody on an errand is doing, in the words the live line uses.
  *
- * The tile is left off the two standing-still cases by the caller: somebody who
+ * The tile is left off the standing-still cases by the caller: somebody who
  * is not moving does not need their coordinates restated sixty times a second,
  * and the line is shorter and easier to read for it.
  */
 function errandWording(errand: NonNullable<Errand>): string {
-  if (errand.kind === 'walking') return `Walking to the ${errand.to}`;
+  if (errand.kind === 'walking') return `Walking ${errand.home ? 'home ' : ''}to the ${errand.to}`;
   if (errand.kind === 'inside') return `Inside the ${errand.at}`;
+  if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
   return `${placeWording(errand.place)} in the line at the ${errand.at}`;
 }
 
@@ -303,6 +347,9 @@ export function activityLine(
 ): string {
   // A plot with its paving taken up walks nobody, though everybody still exists.
   if (person >= crowd.count) return 'Nowhere to walk';
+  // No mood and no tile: a sleeping guest is not hungry at anybody, and their
+  // coordinates are the inside of a building.
+  if (errand?.kind === 'asleep') return errandWording(errand);
   const wanted = strongestNeed(needs, guests, person);
   const mood = wanted === null ? '' : `${NEED_MOODS[wanted.need]} · `;
   // Standing in a line or sitting in a bakery: where they are is the place, and

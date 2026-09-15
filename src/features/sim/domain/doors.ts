@@ -52,8 +52,15 @@ export interface VenueDoors {
   readonly declared: boolean;
 }
 
+/**
+ * What a door is found from: the footprint and the declared doors, and nothing
+ * about what the building is for. A lodging has both, and is walked to by the
+ * same rule. See `lodgings.ts`.
+ */
+type DoorFootprint = Pick<Venue, 'tileX' | 'tileZ' | 'tilesX' | 'tilesZ' | 'doors'>;
+
 /** The venue's doors as nodes: the declared ones where they reach paving, the ring where not. */
-export function doorsFor(venue: Venue, index: NodeIndex): VenueDoors {
+export function doorsFor(venue: DoorFootprint, index: NodeIndex): VenueDoors {
   const found = new Set<number>();
   for (const door of venue.doors) {
     // The same tile the layout turned the building to open onto; see
@@ -74,7 +81,7 @@ export function doorsFor(venue: Venue, index: NodeIndex): VenueDoors {
  * entered from a courtyard tile it covers, a bakery entered off the path along
  * its front.
  */
-function ringNodes(venue: Venue, index: NodeIndex): readonly number[] {
+function ringNodes(venue: DoorFootprint, index: NodeIndex): readonly number[] {
   const found = new Set<number>();
   for (let tileX = venue.tileX - 1; tileX <= venue.tileX + venue.tilesX; tileX++) {
     for (let tileZ = venue.tileZ - 1; tileZ <= venue.tileZ + venue.tilesZ; tileZ++) {

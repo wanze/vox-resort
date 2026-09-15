@@ -18,6 +18,7 @@ import { createNeeds, NEEDS, type Needs } from '../../sim/domain/needs';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
   activityLine,
+  errandOf,
   guestView,
   namesPlacement,
   personOf,
@@ -258,7 +259,7 @@ describe('activityLine', () => {
     activityLine(crowd, needs, guests, person, errand);
 
   /** Walking to the bakery, which is what plan 017's routing hands in. */
-  const TO_BAKERY: Errand = { kind: 'walking', to: 'Bakery' };
+  const TO_BAKERY: Errand = { kind: 'walking', to: 'Bakery', home: false };
 
   it('says somebody on the paving is walking, and where', () => {
     const crowd = seatedStreet('sit');
@@ -405,5 +406,69 @@ describe('placeView with a venue that is being used', () => {
     const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
     expect(view.venue?.inside).toBe(0);
     expect(view.venue?.waiting).toBe(0);
+  });
+});
+
+describe('a guest at night', () => {
+  const guests = guestsOf();
+  const content = contentNeeds(guests);
+
+  it('says they are asleep, with no mood and no tile', () => {
+    const crowd = seatedStreet('sit');
+    const tired = contentNeeds(guests);
+    tired.level.energy[0] = 0;
+    const line = activityLine(crowd, tired, guests, 0, { kind: 'asleep', at: 'Bungalow' });
+    expect(line).toBe('Asleep at the Bungalow');
+    expect(line).not.toContain('tile');
+  });
+
+  it('says a guest heading for bed is walking home, not merely walking there', () => {
+    const crowd = seatedStreet('sit');
+    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
+    const bedward: Errand = { kind: 'walking', to: 'Bungalow', home: true };
+    expect(activityLine(crowd, content, guests, 0, bedward)).toBe(
+      `Walking home to the Bungalow · tile ${tileX}, ${tileZ}`,
+    );
+  });
+});
+
+describe('errandOf', () => {
+  const BAKERY = { label: 'Bakery' };
+  const BUNGALOW = { label: 'Bungalow' };
+  const none = { visit: null, goal: null, home: null, asleep: false };
+
+  it('is nothing for a guest with nowhere to be', () => {
+    expect(errandOf(none)).toBeNull();
+  });
+
+  it('words a walk to a venue, and a walk home ahead of it', () => {
+    expect(errandOf({ ...none, goal: BAKERY })).toEqual({
+      kind: 'walking',
+      to: 'Bakery',
+      home: false,
+    });
+    expect(errandOf({ ...none, goal: BAKERY, home: BUNGALOW })).toEqual({
+      kind: 'walking',
+      to: 'Bungalow',
+      home: true,
+    });
+  });
+
+  it('puts a visit ahead of a walk, and sleep ahead of everything', () => {
+    const visit = { venue: BAKERY, waiting: true, place: 1 };
+    expect(errandOf({ ...none, visit, goal: BAKERY })).toEqual({
+      kind: 'waiting',
+      at: 'Bakery',
+      place: 1,
+    });
+    expect(errandOf({ ...none, visit: { ...visit, waiting: false } })).toEqual({
+      kind: 'inside',
+      at: 'Bakery',
+    });
+    expect(errandOf({ ...none, home: BUNGALOW, asleep: true })).toEqual({
+      kind: 'asleep',
+      at: 'Bungalow',
+    });
   });
 });

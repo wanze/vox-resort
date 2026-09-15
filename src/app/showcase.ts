@@ -92,6 +92,7 @@ import {
   clockLabel,
   createSimClock,
   dayOf,
+  TICKS_PER_DAY,
   timeOf,
   withSpeed,
   withTime,
@@ -100,6 +101,8 @@ import {
 } from '../features/sim/domain/simClock';
 import { createNeeds, decayNeeds, type Needs } from '../features/sim/domain/needs';
 import { venuesOn, type Venue } from '../features/sim/domain/venues';
+import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
+import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
@@ -146,6 +149,7 @@ import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
 import {
   activityLine,
+  errandOf,
   guestView,
   namesPlacement,
   personOf,
@@ -362,6 +366,12 @@ export interface ShowcaseStats {
   readonly startupFrames: number;
   /** Beds on the plot, and guests who have one. */
   readonly beds: { readonly total: number; readonly taken: number };
+  /**
+   * Guests in bed right now. Against `beds.total` it is how many rooms are lit
+   * after dark; against `beds.taken`, how much of the resort got home. See
+   * `sim/domain/night.ts`.
+   */
+  readonly asleep: number;
   /**
    * Guests inside a venue right now, and guests standing in a line at one.
    * A waiting count that climbs and stays there is the resort saying it needs
@@ -883,11 +893,23 @@ interface Resort {
    * Derived from what is standing rather than kept in step with it: an edit
    * replaces the whole list, because a bakery may have just been built or
    * bulldozed and a list patched one placement at a time is a second thing to
-   * get wrong. **The one mutable field on a resort**, and it is mutable for
-   * exactly that — see the reanchor block, which replaces it and rebuilds the
+   * get wrong. **One of the two mutable fields on a resort**, with {@link lodgings},
+   * and it is mutable for exactly that — see the reanchor block, which replaces it and rebuilds the
    * router against it in the same breath.
    */
   venues: readonly Venue[];
+  /**
+   * Somewhere on this plot a guest goes to sleep: a list of its own rather than
+   * venues filtered again, and replaced alongside {@link venues} for the same
+   * reason. See `sim/domain/lodgings.ts`.
+   */
+  lodgings: readonly Lodging[];
+  /**
+   * Beds on the plot and guests who have one. Counted once when the resort is
+   * built, since neither changes until it is built again, and read by the
+   * stats and by the windows every tick.
+   */
+  readonly beds: { readonly total: number; readonly taken: number };
   /**
    * What turns {@link needs} into somewhere to walk, over {@link crowd}'s graph.
    *
@@ -1194,6 +1216,11 @@ function seaFor(parts: {
 
 /** The meshed catalogue a resort is built over, which outlives every resort. */
 interface ResortArt {
+  /**
+   * The tick of the day on the scene's clock, late-bound: every resort is built
+   * with a router that asks it, and the first is built before the clock is.
+   */
+  readonly tickOfDay: () => number;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
@@ -1253,6 +1280,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   // Off the layout's own placements for the same reason, and for `homesOn`'s: a
   // resort with nine times the bakeries is not the plot that is there.
   const venues = venuesOn(plot.layout.placements);
+  const lodgings = lodgingsOn(plot.layout.placements);
+  const beds = bedCount(guests);
   // The router reads where somebody is standing and the crowd is built with the
   // router, so one of the two is bound late — as `createClock` binds the resort.
   let crowdField: CrowdField | null = null;
@@ -1260,7 +1289,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     guests,
     needs,
     venues,
+    lodgings,
     network,
+    tickOfDay: parts.tickOfDay,
     // Asserted, and safe: the crowd is built on the very next statement, and
     // nothing calls into the router until a frame steps somebody somewhere.
     crowd: () => crowdField!.crowd,
@@ -1301,6 +1332,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     guests,
     needs,
     venues,
+    lodgings,
+    beds: { total: beds.beds, taken: beds.taken },
     router,
     balloons,
     sea,
@@ -1432,7 +1465,6 @@ function sceneStats(parts: {
   const { handle, scratch, catalogue } = parts;
   const { plot, world, shadows, construction, crowd, balloons, sea, lighting } = parts.resort;
   const totals = plotTotals(plot);
-  const beds = bedCount(parts.resort.guests);
   return {
     backend: handle.backend,
     typeCount: totals.types,
@@ -1474,11 +1506,26 @@ function sceneStats(parts: {
     dveMs: catalogue.dveMs,
     meshMs: catalogue.meshMs,
     meshedInWorker: catalogue.threaded,
-    beds: { total: beds.beds, taken: beds.taken },
+    beds: parts.resort.beds,
+    asleep: parts.resort.router.asleepCount,
     venues: parts.resort.router.occupancyTotals,
     routeFields: parts.resort.router.fieldCount,
     ...parts.startup,
   };
+}
+
+/**
+ * Lights as many rooms as the resort has beds slept in, and hands back the
+ * share it lit them from, for the next call to compare against.
+ *
+ * Written only on a change: a uniform is cheap, but this runs in the tick block
+ * and the share moves a few times a night rather than once a tick. `last` null
+ * writes whatever the share is, which is what a resort just built needs.
+ */
+function lightRooms(resort: Resort, last: number | null): number {
+  const share = occupiedShare(resort.beds.total, resort.router.asleepCount);
+  if (share !== last) resort.world.setOccupiedShare(share);
+  return share;
 }
 
 /**
@@ -1494,6 +1541,8 @@ interface Clock {
   readonly time: number;
   /** Whole days since the resort opened. */
   readonly day: number;
+  /** The tick of the current day, 0..1439: what a party's bedtime is compared against. */
+  readonly tickOfDay: number;
   /**
    * Whole simulated minutes since the resort opened: what a tick is numbered
    * by, and what the simulation stamps a visit's end with.
@@ -1557,6 +1606,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     get day() {
       return dayOf(clock);
     },
+    get tickOfDay() {
+      return clock.ticks % TICKS_PER_DAY;
+    },
     get ticks() {
       return clock.ticks;
     },
@@ -1577,6 +1629,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       // zero however far through the day the clock happens to be.
       applied = null;
       apply();
+      // And its windows, which would otherwise open on the share the previous
+      // plot's guests were sleeping at.
+      lightRooms(resort(), null);
     },
     advance(elapsedSeconds) {
       const advanced = advanceClock(clock, elapsedSeconds);
@@ -2184,6 +2239,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const slot = createResortSlot({
     prepared: first,
+    // Not called until a frame steps somebody, by which time the clock exists.
+    tickOfDay: () => clock.tickOfDay,
     geometries: catalogue.geometries,
     people: catalogue.people,
     sky: catalogue.sky,
@@ -2226,6 +2283,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let gpuMs: number | null = null;
   let running = true;
   let lastTimeMs: number | null = null;
+  /** The share of beds slept in that the windows were last lit from. */
+  let lastShare: number | null = null;
   const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
 
   if (bench) pinCamera(handle);
@@ -2387,15 +2446,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
    * The wording is `selection.ts`'s and the facts are the router's; this is the
    * one place the two meet, which is why neither of them imports the other.
    */
-  const errandOf = (person: number): Errand => {
+  const errandFor = (person: number): Errand => {
     const { router } = current();
-    const visit = router.visitOf(person);
-    if (visit === null) {
-      const goal = router.goalOf(person);
-      return goal ? { kind: 'walking', to: goal.label } : null;
-    }
-    if (visit.waiting) return { kind: 'waiting', at: visit.venue.label, place: visit.place };
-    return { kind: 'inside', at: visit.venue.label };
+    return errandOf({
+      visit: router.visitOf(person),
+      goal: router.goalOf(person),
+      home: router.homewardTo(person),
+      asleep: router.isAsleep(person),
+    });
   };
 
   /**
@@ -2409,7 +2467,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const person = personOf(selected);
     if (person === null) return null;
     const { crowd, needs, guests } = current();
-    return activityLine(crowd.crowd, needs, guests, person, errandOf(person));
+    return activityLine(crowd.crowd, needs, guests, person, errandFor(person));
   };
 
   const inspector = createInspectPointer({
@@ -2507,7 +2565,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       // The venues and the router go with the graph: a node index means nothing
       // across a rebuild, and a bakery may have just been built or bulldozed.
       resort.venues = venuesOn(plot.placements);
-      resort.router.rebuild(resort.venues, network);
+      resort.lodgings = lodgingsOn(plot.placements);
+      resort.router.rebuild(resort.venues, resort.lodgings, network);
       crowd.relocate(network);
     }
 
@@ -2524,6 +2583,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       // One at a time rather than all twelve at once: a venue that frees a place
       // on the first of them must let somebody in on the first, not on the last.
       for (let tick = ticks; tick > 0; tick--) current().router.tick(clock.ticks - tick + 1);
+      lastShare = lightRooms(current(), lastShare);
     }
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on

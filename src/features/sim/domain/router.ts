@@ -38,10 +38,21 @@
  * the third guest balks. The same length is what `chooseVenue` is handed, so a
  * guest never crosses the plot for a line that will refuse them.
  *
+ * ## At night everybody with a bed goes to it
+ *
+ * Bedtime comes before any venue: a guest whose party's bedtime it is walks
+ * home instead, on a field whose sources are their lodging's doors, and is held
+ * in the middle of it until their wake tick. `plans/README.md`'s decision 2
+ * called going home the case for a cached per-party route; a field memoised per
+ * *lodging* is that cache, shared by every party under the same roof rather
+ * than worked out per party, which is strictly less work - parties in the same
+ * hotel walk to the same door. See `night.ts` for when, and `lodgings.ts` for
+ * why a lodging is never a venue.
+ *
  * ## Everything is thrown away when the graph is
  *
  * A node index means nothing across a rebuild, so {@link Router.rebuild} drops
- * the fields, the lanes, the goals and the occupancy together. A field kept across an edit
+ * the fields, the lanes, the goals, the occupancy and who is asleep together. A field kept across an edit
  * is the one bug this design can have, and it shows up as guests walking
  * confidently into a wall.
  */
@@ -50,10 +61,10 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { holdAt, releaseTo, type Crowd } from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
-import type { Guests } from '../../guests/domain/guests';
+import { homeOf, type Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { chooseVenue } from './chooseVenue';
-import { doorsFor } from './doors';
+import { doorsFor, type VenueDoors } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import {
   clearAllGoals,
@@ -63,9 +74,12 @@ import {
   setPartyGoal,
   type Goals,
 } from './goals';
+import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, type Needs } from './needs';
+import { isBedtime, NIGHT_RELIEF } from './night';
 import { arriveAt, createOccupancy, sweepOccupancy, VISIT, type Occupancy } from './occupancy';
 import { MAX_QUEUE_SHOWN, queueLaneFor, type QueueSpot } from './queueLane';
+import { TICKS_PER_DAY } from './simClock';
 import type { Venue } from './venues';
 
 /**
@@ -75,6 +89,13 @@ import type { Venue } from './venues';
  * ticks is this module's arithmetic rather than the calendar's.
  */
 const TICK_SECONDS = 60;
+
+/**
+ * What the night answers when it has nothing to say about where somebody goes:
+ * decide as by day. Apart from -1, which is an answer - "stand where you are",
+ * or "wander" - rather than the absence of one.
+ */
+const BY_DAY = -2;
 
 /** How many people are inside a venue and how many are in the line outside. */
 export interface VenueOccupancy {
@@ -114,10 +135,21 @@ export interface Router {
    * place.
    */
   tick(now: number): void;
-  /** Throws away every field, every lane, every goal and every visit: the graph changed. */
-  rebuild(venues: readonly Venue[], network: WalkNetwork): void;
-  /** How many fields have actually been built, for the stats readout. */
+  /**
+   * Throws away every field, every lane, every goal, every visit and every
+   * night's sleep: the graph changed.
+   */
+  rebuild(venues: readonly Venue[], lodgings: readonly Lodging[], network: WalkNetwork): void;
+  /** How many fields have actually been built, venues and lodgings both, for the stats readout. */
   readonly fieldCount: number;
+  /** Everybody in bed right now: what the windows are lit from, and a stats row. */
+  readonly asleepCount: number;
+  isAsleep(person: number): boolean;
+  /**
+   * The lodging a person is asleep in or walking home to, or null while the
+   * night has nothing to do with where they are going. Read by the inspector.
+   */
+  homewardTo(person: number): Lodging | null;
   /** Everybody inside anything and everybody in a line, for the stats readout. */
   readonly occupancyTotals: VenueOccupancy;
   /** The venue a person is heading for, or null. Read by the inspector. */
@@ -132,7 +164,14 @@ export function createRouter(parts: {
   readonly guests: Guests;
   readonly needs: Needs;
   readonly venues: readonly Venue[];
+  /** Where everybody sleeps, as it stands on the plot; see `lodgings.ts`. */
+  readonly lodgings: readonly Lodging[];
   readonly network: WalkNetwork;
+  /**
+   * The tick of the day it is now, 0..1439, late-bound for the reason the crowd
+   * is: an arrival happens between ticks, and the clock is what knows the hour.
+   */
+  readonly tickOfDay: () => number;
   /**
    * The crowd as it stands, late-bound: the crowd is built with the router and
    * `relocate` replaces it, so a router holding one of its own would be moving
@@ -147,13 +186,37 @@ export function createRouter(parts: {
   const random = createRandom(parts.seed);
 
   let venues = parts.venues;
+  let lodgings = parts.lodgings;
   let network = parts.network;
   let index: NodeIndex = nodeIndexFor(network);
   /** One entry per venue, filled in on the first guest who walks to that one. */
   let fields: (FlowField | null)[] = venues.map(() => null);
   /** Each venue's queue lane, laid when its field is and dropped with it. */
   let lanes: (readonly QueueSpot[] | null)[] = venues.map(() => null);
+  /** One entry per lodging, filled in on the first guest who walks home to it. */
+  let homeFields: (FlowField | null)[] = lodgings.map(() => null);
   let built = 0;
+  /**
+   * Which lodging each person sleeps in, or -1: their `Home` looked up once
+   * rather than by key on every arrival, and again whenever the lodgings are
+   * replaced, since a bulldozed hotel is a home that is no longer standing.
+   */
+  let homeLodging = new Int32Array(guests.count);
+  const findHomes = (): void => {
+    for (let person = 0; person < guests.count; person++) {
+      const home = homeOf(guests, person);
+      homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
+    }
+  };
+  findHomes();
+  /** 1 for somebody held in bed until their wake tick. */
+  let asleep = new Uint8Array(guests.count);
+  let asleepCount = 0;
+  /**
+   * 1 for somebody whose last arrival sent them home rather than anywhere else,
+   * for the inspector's wording and nothing more.
+   */
+  let homeward = new Uint8Array(guests.count);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -167,15 +230,31 @@ export function createRouter(parts: {
    */
   let now = 0;
 
+  /**
+   * One sweep out from a building's doors, venue or lodging alike, counted for
+   * the stats readout. The two caches differ only in where they keep the answer.
+   */
+  const sweepFrom = (footprint: Venue | Lodging): { doors: VenueDoors; field: FlowField } => {
+    const doors = doorsFor(footprint, index);
+    built++;
+    return { doors, field: flowFieldFor(network, doors.nodes) };
+  };
+
   const fieldFor = (venue: number): FlowField => {
     const existing = fields[venue];
     if (existing) return existing;
     const declared = venues[venue]!;
-    const doors = doorsFor(declared, index).nodes;
-    const field = flowFieldFor(network, doors);
+    const { doors, field } = sweepFrom(declared);
     fields[venue] = field;
-    lanes[venue] = longestLane(network, doors, declared);
-    built++;
+    lanes[venue] = longestLane(network, doors.nodes, declared);
+    return field;
+  };
+
+  const homeFieldFor = (lodging: number): FlowField => {
+    const existing = homeFields[lodging];
+    if (existing) return existing;
+    const { field } = sweepFrom(lodgings[lodging]!);
+    homeFields[lodging] = field;
     return field;
   };
 
@@ -321,9 +400,89 @@ export function createRouter(parts: {
     if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
   };
 
+  /**
+   * Where somebody whose bedtime it is walks from here: the next node home, -1
+   * for somebody who has just reached their door and is now in bed, or
+   * {@link BY_DAY}.
+   *
+   * {@link BY_DAY} is somebody with no bed, or whose bed was bulldozed, and they
+   * walk all night: that is the state the resort should be able to show, and
+   * plan 020 is what makes them unhappy about it. Somebody whose lodging no
+   * paving reaches is the same guest by another route. Both carry on as they
+   * would by day, venues and all.
+   *
+   * A guest inside a venue or in its line when the clock strikes ten is never
+   * asked: this is only reached on an arrival, and they are held until their
+   * visit ends. Nobody walks out of a restaurant mid-meal because it is late.
+   */
+  const homewardStep = (person: number, at: number): number => {
+    const lodging = homeLodging[person]!;
+    if (lodging < 0) return BY_DAY;
+    const onward = homeFieldFor(lodging).next[at] ?? -1;
+    if (onward < 0) return BY_DAY;
+    homeward[person] = 1;
+    if (onward !== at) return onward;
+    fallAsleep(person, lodging, at);
+    return -1;
+  };
+
+  /**
+   * Puts somebody to bed: held in the middle of their lodging, where the walls
+   * hide them, until {@link wakeWhoeverIsUp} lets them go.
+   *
+   * Their party's goal goes, so the morning starts with a fresh decision rather
+   * than with last night's errand. The door is remembered in the column a visit
+   * uses, which nobody asleep is on, so they get up and walk out of the door
+   * they came in by.
+   */
+  const fallAsleep = (person: number, lodging: number, door: number): void => {
+    const people = crowd();
+    const { x, z } = lodgings[lodging]!;
+    holdAt(people, person, x, network.nodes[door]!.y, z, people.heading[person] ?? 0);
+    clearPartyGoal(goals, guests, person);
+    doorOf[person] = door;
+    asleep[person] = 1;
+    asleepCount++;
+  };
+
+  /**
+   * Gets up everybody whose night is over, rested.
+   *
+   * "Not bedtime any more" rather than "the tick is their wake tick": a clock
+   * dragged past the morning, or twelve ticks run in one frame, would otherwise
+   * step over the one tick that wakes somebody and leave them in bed a day.
+   */
+  const wakeWhoeverIsUp = (tickOfDay: number): void => {
+    for (let person = 0; person < guests.count && asleepCount > 0; person++) {
+      if (asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
+      asleep[person] = 0;
+      homeward[person] = 0;
+      asleepCount--;
+      relieve(needs, person, NIGHT_RELIEF);
+      const door = doorOf[person]!;
+      doorOf[person] = -1;
+      if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
+    }
+  };
+
+  /**
+   * What the night makes of this arrival, or {@link BY_DAY}. Asked before any
+   * venue, and the one place a person index nobody could have meant is turned
+   * away, since everything after it reads a column by it.
+   */
+  const nightStep = (person: number, at: number): number => {
+    if (person < 0 || person >= goals.count) return -1;
+    // Held in bed; the crowd does not ask again until they are let go.
+    if (asleep[person] === 1) return -1;
+    homeward[person] = 0;
+    if (!isBedtime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
+    return homewardStep(person, at);
+  };
+
   return {
     step(person, at) {
-      if (person < 0 || person >= goals.count) return -1;
+      const night = nightStep(person, at);
+      if (night !== BY_DAY) return night;
       if (arriveIfThere(person, at)) return -1;
       if (goals.venue[person] === NO_GOAL) decide(person, at);
 
@@ -362,15 +521,25 @@ export function createRouter(parts: {
       for (const person of swept.moved) {
         stand(person, occupancy.at[person]!, doorOf[person]!, true);
       }
+      if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
     },
 
-    rebuild(nextVenues, nextNetwork) {
+    rebuild(nextVenues, nextLodgings, nextNetwork) {
       venues = nextVenues;
+      lodgings = nextLodgings;
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       fields = nextVenues.map(() => null);
       lanes = nextVenues.map(() => null);
+      homeFields = nextLodgings.map(() => null);
       built = 0;
+      findHomes();
+      // Everybody is woken, with no night's relief: a guest left asleep across
+      // a rebuild is held for ever at a point that no longer means anything,
+      // and whoever it is still bedtime for walks home again on the new graph.
+      asleep = new Uint8Array(guests.count);
+      asleepCount = 0;
+      homeward = new Uint8Array(guests.count);
       // A fresh one rather than an emptied one: the per-venue arrays are as long
       // as the venue list, and the list has just been replaced.
       occupancy = createOccupancy(guests.count, nextVenues.length);
@@ -387,6 +556,19 @@ export function createRouter(parts: {
 
     get fieldCount() {
       return built;
+    },
+
+    get asleepCount() {
+      return asleepCount;
+    },
+
+    isAsleep(person) {
+      return asleep[person] === 1;
+    },
+
+    homewardTo(person) {
+      if (homeward[person] !== 1) return null;
+      return lodgings[homeLodging[person]!] ?? null;
     },
 
     get occupancyTotals() {

@@ -83,6 +83,9 @@ export function RenderStats({
       <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
         {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
       </StatRow>
+      <StatRow label="Asleep" note="in bed now, of the guests who have one">
+        {formatNumber(stats.asleep)} / {formatNumber(stats.beds.taken)}
+      </StatRow>
       <StatRow label="Venues" note="inside now, and queueing at a door">
         {formatNumber(stats.venues.inside)} / {formatNumber(stats.venues.waiting)}
       </StatRow>

@@ -342,6 +342,54 @@ The HUD's `Venues` row is everybody inside anything over everybody in a line. A
 waiting count that climbs and stays there is the resort saying it wants another
 of something.
 
+## The night
+
+`sim/domain/night.ts` says when a party goes to bed and gets up, and the router
+walks them there.
+
+- **Every party has its own bedtime.** Spread over three hours from 22:00, and a
+  wake time over two from 07:00, both worked out from the party index with an
+  integer hash. Nothing is stored and nothing is drawn: the same party goes to
+  bed at the same minute every night of its stay, and a save file has nothing
+  to hold about it. The window wraps midnight, which `isBedtime` handles and
+  its test checks both ways round.
+
+- **Going home is a route, on a field per lodging.** At bedtime the router
+  ignores venues and walks the guest down a flow field whose sources are their
+  lodging's doors, found by `doorsFor` exactly as a venue's are. The field is
+  memoised per lodging, which is the cached per-party route decision 2 asked
+  for, shared by every party under the same roof.
+
+- **Lodging is not a venue.** `lodgingsOn` is `venuesOn` with the filter turned
+  round, and the two lists are disjoint: a bungalow in the venue list would be
+  somewhere a bored guest could decide to walk into.
+
+- **Asleep is held.** Reaching the door holds the guest in the middle of the
+  lodging, where the walls hide them, until `Router.tick` finds their night
+  over. They get up with their energy filled and a share of hygiene back, and
+  walk out of the door they came in by. A guest inside a venue when bedtime
+  comes finishes their visit first. A rebuild wakes everybody.
+
+- **A guest with no bed walks all night.** So does one whose lodging no paving
+  reaches, or whose lodging was bulldozed. They carry on as by day, venues and
+  all - the state plan 020 turns into unhappiness.
+
+- **Most of the resort is still walking home at two.** At `normal`, a guest
+  walks about four tiles an hour, and a guest out on the sand is never asked
+  where to go until they step back onto the paving. On the reference plot at
+  two in the morning 1% of housed guests are in bed, and nearly everyone else
+  on the paving is walking home. The pace is plan 026's business.
+
+- **The windows light from the resort's share of beds slept in.** The share of
+  lit panes after dark is `0.5 * asleep / beds`, one uniform on the window
+  material, written when the share changes. **It is the resort's share and not
+  each building's**: a building is an instance, and the instance index is a
+  slot rather than a placement, so saying _which_ hotel is full needs a
+  per-instance buffer kept in step through every grow, push and swap. See the
+  note on `windowMaterial` in `instancedWorld.ts`.
+
+The HUD's `Asleep` row is guests in bed over guests with a bed.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`, so they

@@ -120,6 +120,12 @@ export interface InstancedWorld {
    * volume takes — see `lighting/domain/dayNight.ts`.
    */
   setLampFactor(factor: number): void;
+  /**
+   * Sets the share of the resort's beds slept in tonight, 0..1: how many of the
+   * rooms behind the windows are lit after dark. The resort's share and not a
+   * building's - see `sim/domain/night.ts`'s `occupiedShare`.
+   */
+  setOccupiedShare(share: number): void;
   /** Stands one more object on the plot. Throws if its key is already taken. */
   add(placement: Placement): void;
   /** Takes one object off the plot. False if nothing stood under that key. */
@@ -181,7 +187,8 @@ function glowMaterial(): MeshBasicNodeMaterial {
 }
 
 /**
- * How many of a building's windows have somebody behind them after dark.
+ * How many of a building's windows have somebody behind them after dark, when
+ * the resort is full.
  *
  * Half, which is what the resort's own evenings look like from the road, and
  * far more legible than either extreme: every window lit reads as a render with
@@ -189,8 +196,15 @@ function glowMaterial(): MeshBasicNodeMaterial {
  * empty hotel. It is a fraction rather than a count because the buildings run
  * from a bungalow's three windows to a hotel's forty, and half of each is a
  * bungalow with one or two lights on and a hotel with a full facade of them.
+ *
+ * Scaled by how full the resort actually is - see {@link
+ * InstancedWorld.setOccupiedShare}. A resort with half its beds empty lights
+ * half as many rooms, which is the cheapest honest way to show occupancy: the
+ * instance index is a slot and not a placement, so *which* building is full
+ * cannot be said without a per-instance buffer kept in step through every
+ * grow, push and swap. See the note on {@link windowMaterial}.
  */
-const LIT_WINDOW_FRACTION = 0.5;
+const FULL_LIT_WINDOW_FRACTION = 0.5;
 
 /** The warm interior a lit room throws onto its own glass. */
 const WINDOW_GLOW = 0xffc27a;
@@ -223,6 +237,8 @@ interface WindowMaterial {
   readonly material: MeshStandardNodeMaterial;
   /** 0 by day, 1 after dark; see {@link InstancedWorld.setLampFactor}. */
   setLampFactor(factor: number): void;
+  /** The share of beds slept in; see {@link InstancedWorld.setOccupiedShare}. */
+  setOccupiedShare(share: number): void;
 }
 
 /**
@@ -260,6 +276,7 @@ interface WindowMaterial {
  */
 function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
   const lampFactor = uniform(0);
+  const litFraction = uniform(FULL_LIT_WINDOW_FRACTION);
   const material = litMaterial(volume);
 
   // The pane, and the building it is in. The instance is folded in through the
@@ -275,9 +292,7 @@ function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
 
   const dusk = eager.mul(WINDOW_DUSK_SPREAD);
   const burning = vertexStage(
-    step(occupied, LIT_WINDOW_FRACTION).mul(
-      smoothstep(dusk, dusk.add(WINDOW_DUSK_RAMP), lampFactor),
-    ),
+    step(occupied, litFraction).mul(smoothstep(dusk, dusk.add(WINDOW_DUSK_RAMP), lampFactor)),
   );
 
   const [r, g, b] = linearRgbOf(WINDOW_GLOW);
@@ -290,6 +305,9 @@ function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
     material,
     setLampFactor(factor) {
       lampFactor.value = factor;
+    },
+    setOccupiedShare(share) {
+      litFraction.value = FULL_LIT_WINDOW_FRACTION * Math.min(1, Math.max(0, share));
     },
   };
 }
@@ -1034,6 +1052,9 @@ export function buildInstancedWorld(
     },
     setLampFactor(factor) {
       windows.setLampFactor(factor);
+    },
+    setOccupiedShare(share) {
+      windows.setOccupiedShare(share);
     },
     add,
     remove,

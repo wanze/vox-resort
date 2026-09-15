@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
-import { createCrowd, isRoaming, MAX_STEP, stepCrowd, type Crowd } from '../../crowd/domain/crowd';
+import {
+  createCrowd,
+  isRoaming,
+  isWaiting,
+  MAX_STEP,
+  reseatCrowd,
+  stepCrowd,
+  type Crowd,
+} from '../../crowd/domain/crowd';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { createGuests, partyOf, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
@@ -10,6 +18,7 @@ import { clampParams, generateResort } from '../../layout/domain/resortGenerator
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { createNeeds, NEEDS, type Needs } from './needs';
+import { MAX_QUEUE_SHOWN } from './queueSpot';
 import { createRouter } from './router';
 import { venuesOn, type Venue } from './venues';
 
@@ -62,26 +71,48 @@ const wanting = (person: number, need: (typeof NEEDS)[number] | null): Needs => 
   return needs;
 };
 
+/**
+ * The router and a crowd on the same graph, bound to each other the way
+ * `showcase.ts` binds them.
+ *
+ * A real crowd rather than a stub, because the router now stands people still
+ * and sends them on again - which are calls into `crowd.ts` and not readings
+ * off it. Everybody is put at the west end of the corridor first, which is far
+ * enough from the bakery that the straight line decides nothing on its own.
+ */
 const routerOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
   needs: Needs,
-): ReturnType<typeof createRouter> =>
-  createRouter({
+): { router: ReturnType<typeof createRouter>; crowd: Crowd } => {
+  let crowd: Crowd | null = null;
+  const router = createRouter({
     guests,
     needs,
     venues,
     network,
-    // Every fixture guest stands at the west end, which is far enough from the
-    // bakery that the straight line does not decide anything on its own.
-    positionOf: () => ({ x: 0, z: 0 }),
+    crowd: () => crowd!,
+    seed: 13,
   });
+  crowd = createCrowd({
+    network,
+    count: guests.count,
+    variants: 4,
+    seed: 3,
+    routeOf: (person, at) => router.step(person, at),
+  });
+  for (let person = 0; person < crowd.count; person++) {
+    crowd.x[person] = 0;
+    crowd.z[person] = 0;
+  }
+  return { router, crowd };
+};
 
 describe('createRouter', () => {
   it('walks a hungry guest towards the bakery from anywhere along the corridor', () => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'hunger');
-    const router = routerOn(network, [bakery(7)], needs);
+    const { router } = routerOn(network, [bakery(7)], needs);
     for (const tileX of [0, 2, 5]) {
       // The step from each node is the neighbour one tile nearer the bakery.
       expect(router.step(0, nodeAt(network, tileX)), `tile ${tileX}`).toBe(
@@ -92,31 +123,38 @@ describe('createRouter', () => {
 
   it('leaves a content guest to wander', () => {
     const network = networkOf(street(8));
-    const router = routerOn(network, [bakery(7)], wanting(0, null));
+    const { router } = routerOn(network, [bakery(7)], wanting(0, null));
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
   });
 
   it('leaves a guest to wander when nothing on the plot serves what they want', () => {
     const network = networkOf(street(8));
-    const router = routerOn(network, [bakery(7)], wanting(0, 'hygiene'));
+    const { router } = routerOn(network, [bakery(7)], wanting(0, 'hygiene'));
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
   });
 
-  it('sees to the need on arrival, and lets them decide afresh', () => {
+  it('holds a guest inside for the declared dwell, and feeds them on the way out', () => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'hunger');
-    const router = routerOn(network, [bakery(7)], needs);
+    const { router, crowd } = routerOn(network, [bakery(7)], needs);
     const door = nodeAt(network, 7);
     // They have to want it before they can arrive at it: the first step is what
     // sets the goal, and the field is what makes tile 7 the door.
     router.step(0, nodeAt(network, 0));
     expect(router.goalOf(0)?.key).toBe('bakery#0');
 
-    router.step(0, door);
+    expect(router.step(0, door)).toBe(-1);
+    expect(isWaiting(crowd, 0), 'walked straight through the bakery').toBe(true);
+    // Nothing yet: the visit has only started. This is the change plan 018
+    // makes to plan 017's instantaneous one.
+    expect(needs.level.hunger[0]).toBe(0);
+    expect(router.occupancyOf('bakery#0')).toEqual({ inside: 1, waiting: 0 });
+
+    // A bakery visit is four to eight ticks; run long enough for any draw.
+    for (let tick = 1; tick <= 8; tick++) router.tick(tick);
     expect(needs.level.hunger[0]).toBeCloseTo(0.5);
-    // Half-fed and still the loudest need, so they set off for it again; what
-    // matters is that the goal was let go and re-taken rather than held.
-    expect(needs.level.hunger[0]).toBeLessThan(1);
+    expect(isWaiting(crowd, 0)).toBe(false);
+    expect(router.occupancyOf('bakery#0')).toEqual({ inside: 0, waiting: 0 });
   });
 
   it('aims a party member who decided nothing at the venue their sibling chose', () => {
@@ -125,7 +163,7 @@ describe('createRouter', () => {
       (candidate) => partyOf(guests, candidate).length > 1,
     )!;
     const sibling = partyOf(guests, person).find((member) => member !== person)!;
-    const router = routerOn(network, [bakery(7)], wanting(person, 'hunger'));
+    const { router } = routerOn(network, [bakery(7)], wanting(person, 'hunger'));
 
     router.step(person, nodeAt(network, 0));
     expect(router.goalOf(sibling)?.key).toBe('bakery#0');
@@ -136,7 +174,7 @@ describe('createRouter', () => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'hunger');
     needs.level.hunger[1] = 0;
-    const router = routerOn(network, [bakery(7)], needs);
+    const { router } = routerOn(network, [bakery(7)], needs);
     expect(router.fieldCount).toBe(0);
     router.step(0, nodeAt(network, 0));
     expect(router.fieldCount).toBe(1);
@@ -148,14 +186,14 @@ describe('createRouter', () => {
     // A bakery in the middle of a lawn, four tiles off the corridor.
     const network = networkOf(street(8));
     const stranded = { ...bakery(3), tileZ: 5, z: 5.5 * TILE_VOXELS };
-    const router = routerOn(network, [stranded], wanting(0, 'hunger'));
+    const { router } = routerOn(network, [stranded], wanting(0, 'hunger'));
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
     expect(router.goalOf(0)).toBeNull();
   });
 
   it('throws away its fields and its goals when the graph is rebuilt', () => {
     const network = networkOf(street(8));
-    const router = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
+    const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
     router.step(0, nodeAt(network, 0));
     expect(router.fieldCount).toBe(1);
     expect(router.goalOf(0)).not.toBeNull();
@@ -164,6 +202,163 @@ describe('createRouter', () => {
     router.rebuild([bakery(9)], rebuilt);
     expect(router.fieldCount).toBe(0);
     expect(router.goalOf(0)).toBeNull();
+  });
+});
+
+/**
+ * Frames of `MAX_STEP` to one simulated minute, which is what `normal` speed
+ * works out at: 300 real seconds to a day of 1 440 ticks.
+ */
+const TICKS_EVERY = 2;
+
+/** Ticks in a simulated day, which `simClock.ts` keeps as one integer. */
+const TICKS_PER_DAY = 1440;
+
+describe('a venue that holds only as many as it says', () => {
+  /** A beach shower: one person inside, and a visit of half a tick. */
+  const shower = (tileX: number): Venue => ({
+    ...bakery(tileX),
+    key: 'beach-shower#0',
+    id: 'beach-shower',
+    label: 'Beach shower',
+    role: 'service',
+    satisfies: [{ need: 'hygiene', amount: 0.6 }],
+    capacity: 1,
+    dwellSeconds: { min: 30, max: 90 },
+  });
+
+  /** Two guests of different parties, so neither inherits the other's goal. */
+  const strangers = (): [number, number] => {
+    const first = 0;
+    const second = [...Array(guests.count).keys()].find(
+      (person) => guests.party[person] !== guests.party[first],
+    )!;
+    return [first, second];
+  };
+
+  /** Everybody grubby, so the whole fixture wants the one shower. */
+  const grubby = (): Needs => {
+    const needs = wanting(0, 'hygiene');
+    for (let person = 0; person < guests.count; person++) needs.level.hygiene[person] = 0;
+    return needs;
+  };
+
+  it('takes the first guest in and stands the second in the line outside', () => {
+    const network = networkOf(street(8));
+    const { router, crowd } = routerOn(network, [shower(7)], grubby());
+    const [first, second] = strangers();
+    const door = nodeAt(network, 7);
+    for (const person of [first, second]) router.step(person, nodeAt(network, 0));
+
+    expect(router.step(first, door)).toBe(-1);
+    expect(router.step(second, door)).toBe(-1);
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
+    expect(isWaiting(crowd, first)).toBe(true);
+    expect(isWaiting(crowd, second)).toBe(true);
+    // The one inside is under the roof; the one waiting is out on the door tile
+    // or behind it, which is a different place.
+    expect(crowd.x[first]).toBeCloseTo(shower(7).x);
+    expect(crowd.z[first]).toBeCloseTo(shower(7).z);
+    expect(crowd.z[second]).toBeGreaterThan(crowd.z[first]!);
+  });
+
+  it('leaves both of them standing for as long as the clock does not run', () => {
+    const network = networkOf(street(8));
+    const { router, crowd } = routerOn(network, [shower(7)], grubby());
+    const [first, second] = strangers();
+    const door = nodeAt(network, 7);
+    for (const person of [first, second]) router.step(person, nodeAt(network, 0));
+    router.step(first, door);
+    router.step(second, door);
+    const where = [crowd.x[first], crowd.z[first], crowd.x[second], crowd.z[second]];
+
+    // The rest of the fixture walks on and queues up behind them, which is the
+    // point; these two do not move a voxel until the clock says they may.
+    for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
+    expect([crowd.x[first], crowd.z[first], crowd.x[second], crowd.z[second]]).toEqual(where);
+    expect(router.occupancyOf('beach-shower#0')?.inside).toBe(1);
+  });
+
+  it('lets the first out with their need met and the second in, on the same tick', () => {
+    const network = networkOf(street(8));
+    const needs = grubby();
+    const { router, crowd } = routerOn(network, [shower(7)], needs);
+    const [first, second] = strangers();
+    const door = nodeAt(network, 7);
+    for (const person of [first, second]) router.step(person, nodeAt(network, 0));
+    router.step(first, door);
+    router.step(second, door);
+
+    // Half a tick rounded up to one, so one tick is the whole of a shower.
+    router.tick(1);
+    expect(needs.level.hygiene[first]).toBeCloseTo(0.6);
+    expect(isWaiting(crowd, first)).toBe(false);
+    expect(needs.level.hygiene[second]).toBe(0);
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 0 });
+    expect(crowd.x[second]).toBeCloseTo(shower(7).x);
+  });
+
+  it('sends a guest who finds a full line somewhere else entirely', () => {
+    const network = networkOf(street(8));
+    const needs = grubby();
+    // The near shower, which everybody chooses, and a far one that barely helps
+    // - so nobody goes there until the near one refuses them at the door.
+    const near = shower(2);
+    const far: Venue = {
+      ...shower(7),
+      key: 'beach-shower#1',
+      satisfies: [{ need: 'hygiene', amount: 0.01 }],
+    };
+    const { router } = routerOn(network, [near, far], needs);
+    const door = nodeAt(network, 2);
+    // One inside and a full line behind them, all at the near shower.
+    const queued = [...Array(guests.count).keys()].slice(0, MAX_QUEUE_SHOWN + 1);
+    for (const person of queued) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    expect(router.occupancyOf('beach-shower#0')).toEqual({
+      inside: 1,
+      waiting: MAX_QUEUE_SHOWN,
+    });
+
+    const late = guests.count - 1;
+    router.step(late, nodeAt(network, 0));
+    router.step(late, door);
+    expect(router.goalOf(late)?.key).toBe('beach-shower#1');
+    expect(router.occupancyOf('beach-shower#0')?.waiting).toBe(MAX_QUEUE_SHOWN);
+  });
+
+  it('counts everybody inside and everybody in a line for the stats readout', () => {
+    const network = networkOf(street(8));
+    const { router } = routerOn(network, [shower(7)], grubby());
+    expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
+    const door = nodeAt(network, 7);
+    for (const person of [0, 1, 2]) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    expect(router.occupancyTotals).toEqual({ inside: 1, waiting: 2 });
+    expect(router.occupancyOf('nothing#0')).toBeNull();
+  });
+
+  it('empties every venue when the graph is rebuilt under it', () => {
+    const network = networkOf(street(8));
+    const { router, crowd } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7);
+    for (const person of [0, 1, 2]) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    expect(router.occupancyTotals).toEqual({ inside: 1, waiting: 2 });
+
+    const rebuilt = networkOf(street(10));
+    router.rebuild([shower(9)], rebuilt);
+    expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
+    // The crowd is put back on the new graph by `reseatCrowd`, which walks a
+    // held person like any other: the router deliberately re-aims nobody.
+    const reseated = reseatCrowd(crowd, rebuilt);
+    for (const person of [0, 1, 2]) expect(isWaiting(reseated, person)).toBe(false);
   });
 });
 
@@ -224,7 +419,8 @@ describe('on the generated plot', () => {
       needs,
       venues,
       network,
-      positionOf: (person) => ({ x: crowd?.x[person] ?? 0, z: crowd?.z[person] ?? 0 }),
+      crowd: () => crowd!,
+      seed: 17,
     });
     crowd = createCrowd({
       network,
@@ -249,12 +445,15 @@ describe('on the generated plot', () => {
     const before = distanceTo();
 
     // A few simulated minutes at the fixed step the benchmark uses. The nearest
-    // they ever got is the measurement, not where they ended up: arriving sees
-    // to the need and they set off somewhere else on the very same arrival, so
-    // a guest who was fed is walking away again by the end of the run.
+    // they ever got is the measurement, not where they ended up: a visit ends
+    // and they set off somewhere else, so a guest who was fed is walking away
+    // again by the end of the run.
     let nearest = before;
     for (let step = 0; step < 2400; step++) {
       stepCrowd(crowd, MAX_STEP);
+      // Two frames to the simulated minute, which is about what `normal` speed
+      // works out at; without a tick nobody is ever let out of anywhere.
+      if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
       nearest = Math.min(nearest, distanceTo());
     }
 
@@ -267,5 +466,110 @@ describe('on the generated plot', () => {
     expect(crowd.z[hungry]).toBeGreaterThanOrEqual(0);
     expect(crowd.x[hungry]).toBeLessThanOrEqual(plan.tilesX * TILE_VOXELS);
     expect(crowd.z[hungry]).toBeLessThanOrEqual(plan.tilesZ * TILE_VOXELS);
+  });
+
+  /**
+   * The assertion the whole of plan 018 exists for, and the one no unit test can
+   * make: six hundred people over a plot laid by something that has never heard
+   * of a queue. A capacity that held only on a corridor of eight nodes would
+   * pass every test above and let a bakery for eight take two hundred here.
+   *
+   * Run twice. Once with the capacities the art declares, which is the resort as
+   * it is; and once with every one of them squeezed to a single person, because
+   * the declared ones do not bind on this plot - twelve places serving hunger
+   * hold 198 between them, and six hundred guests spread over a 112 by 100 plot
+   * never fill them. A line forming at all is what the second run is for, and a
+   * capacity of 1 is also where an off-by-one in the shuffle-up shows.
+   */
+  const starving = (capacityOf: (venue: Venue) => number) => {
+    const people = createGuests({
+      count: 600,
+      homes: [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 600 }],
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    // The whole resort heads for food at once, which is the worst case a queue
+    // can be put under and not a case the plot would reach on its own.
+    needs.level.hunger.fill(0);
+    const before = new Float32Array(needs.level.hunger);
+    // The plot's own venues, with only the capacity moved: a loop rather than a
+    // spread in a `map`, which the linter is right to dislike.
+    const standing: Venue[] = [];
+    for (const venue of venues) standing.push({ ...venue, capacity: capacityOf(venue) });
+
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues: standing,
+      network,
+      crowd: () => crowd!,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => router.step(person, at),
+    });
+
+    const food = standing.filter((venue) =>
+      venue.satisfies.some((relief) => relief.need === 'hunger'),
+    );
+    expect(food.length, 'a generated plot with nothing to eat on it').toBeGreaterThan(0);
+
+    let queued = 0;
+    let busiest = 0;
+    let over: string | null = null;
+    // Half a simulated day, at the fixed step the benchmark uses. An hour is
+    // not enough on a plot this size: at a walk of 5.6 voxels a second and two
+    // frames to the minute, an hour is four tiles of walking and nobody has
+    // reached anything yet, let alone had to wait for it.
+    for (let tick = 1; tick <= TICKS_PER_DAY / 2; tick++) {
+      for (let frame = 0; frame < TICKS_EVERY; frame++) stepCrowd(crowd, MAX_STEP);
+      router.tick(tick);
+      for (const venue of food) {
+        const here = router.occupancyOf(venue.key)!;
+        if (here.inside > venue.capacity)
+          over ??= `${venue.key} held ${here.inside} on tick ${tick}`;
+        queued = Math.max(queued, here.waiting);
+        busiest = Math.max(busiest, here.inside);
+      }
+    }
+
+    let fed = 0;
+    let confused: string | null = null;
+    for (let person = 0; person < people.count; person++) {
+      if (needs.level.hunger[person]! > before[person]!) fed++;
+      // Nobody is in two places at once: a visit names one venue, and a person
+      // the router says nothing about is walking.
+      const visit = router.visitOf(person);
+      if (visit && !standing.includes(visit.venue)) confused ??= `person ${person}`;
+    }
+    return { over, queued, busiest, fed, confused };
+  };
+
+  it('never lets a venue hold more people than it says it does', () => {
+    const run = starving((venue) => venue.capacity);
+    expect(run.over).toBeNull();
+    expect(run.confused).toBeNull();
+    // Somebody got in and somebody ate: a capacity assertion over an empty
+    // resort would pass and mean nothing.
+    expect(run.busiest, 'nobody ever got inside anything').toBeGreaterThan(0);
+    expect(run.fed, 'half a simulated day and nobody ate').toBeGreaterThan(0);
+  });
+
+  it('grows a line at the door when every place holds one person', () => {
+    const run = starving(() => 1);
+    expect(run.over).toBeNull();
+    expect(run.confused).toBeNull();
+    expect(run.busiest).toBe(1);
+    expect(run.queued, 'six hundred hungry guests and no line anywhere').toBeGreaterThan(0);
+    // And the lines moved: a queue that never shuffled up would feed the one
+    // person who got in first and nobody else.
+    expect(run.fed, 'a line formed and nothing ever came out of it').toBeGreaterThan(1);
   });
 });

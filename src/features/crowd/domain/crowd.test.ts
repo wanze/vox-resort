@@ -4,8 +4,11 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import {
   createCrowd,
+  holdAt,
   isSeated,
+  isWaiting,
   MAX_STEP,
+  releaseTo,
   reseatCrowd,
   RESTING,
   restingOn,
@@ -660,6 +663,99 @@ const positionsOf = (crowd: Crowd) => [
 /** A boardwalk running south from the middle of the plot down onto the beach. */
 const boardwalk = (length: number): PavedTile[] =>
   Array.from({ length }, (_, index) => ({ tileX: 10, tileZ: 10 + index, y: 0 }));
+
+describe('the people the simulation holds still', () => {
+  /** Where the crowd may be told to stand: the middle of the street, off-node. */
+  const SPOT = { x: 4.5 * TILE_VOXELS, y: walkingSurface(0), z: 2 };
+
+  it('draws a held person standing, not walking on the spot', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 4, variants: 2, seed: 26 });
+    expect(restingOn(crowd, 0)).toBe(RESTING.none);
+    holdAt(crowd, 0, SPOT.x, SPOT.y, SPOT.z, 0);
+    expect(restingOn(crowd, 0)).toBe(RESTING.standing);
+    releaseTo(crowd, 0, 8);
+    expect(restingOn(crowd, 0)).toBe(RESTING.none);
+  });
+
+  it('leaves somebody held exactly where they were put, however long it runs', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 4, variants: 2, seed: 21 });
+    holdAt(crowd, 0, SPOT.x, SPOT.y, SPOT.z, 1.25);
+    for (let step = 0; step < 100; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.x[0]).toBeCloseTo(SPOT.x);
+    expect(crowd.y[0]).toBeCloseTo(SPOT.y);
+    expect(crowd.z[0]).toBeCloseTo(SPOT.z);
+    expect(crowd.heading[0]).toBeCloseTo(1.25);
+    expect(isWaiting(crowd, 0)).toBe(true);
+    // Everybody else carried on, so this is a held person and not a dead crowd.
+    expect(crowd.x[1]).not.toBeCloseTo(crowd.fromX[1]!);
+  });
+
+  it('does not let a crush push a held person off their spot', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 10, variants: 2, seed: 22 });
+    // Everybody on the one point, which is the worst case avoidance can see.
+    for (let i = 0; i < crowd.count; i++) holdAt(crowd, i, SPOT.x, SPOT.y, SPOT.z, 0);
+    // Nine of them let go again, so the held one stands in a real crush.
+    for (let i = 1; i < crowd.count; i++) releaseTo(crowd, i, 0);
+    for (let step = 0; step < 120; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.side[0]).toBe(0);
+    expect(crowd.x[0]).toBeCloseTo(SPOT.x);
+    expect(crowd.z[0]).toBeCloseTo(SPOT.z);
+  });
+
+  it('frees the seat of anybody taken in hand on their way to one', () => {
+    /** A street with one bench beside its middle tile, so somebody sits. */
+    const network = walkNetworkFor({
+      paved: street(9),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 20,
+      seats: [
+        {
+          x: 4.25 * TILE_VOXELS,
+          z: TILE_VOXELS * 1.5,
+          y: walkingSurface(0) + 2,
+          heading: Math.PI,
+          pose: 'sit' as const,
+          tileX: 4,
+          tileZ: 1,
+        },
+      ],
+    });
+    const crowd = createCrowd({ network, count: 30, variants: 2, seed: 23 });
+    let person = -1;
+    for (let elapsed = 0; person < 0 && elapsed < 600; elapsed += 1 / 30) {
+      stepCrowd(crowd, 1 / 30);
+      person = crowd.seatBy[0]!;
+    }
+    expect(person, 'nobody ever went for the bench').toBeGreaterThanOrEqual(0);
+    holdAt(crowd, person, SPOT.x, SPOT.y, SPOT.z, 0);
+    expect(crowd.seat[person]).toBe(-1);
+    expect(crowd.seatBy[0]).toBe(-1);
+  });
+
+  it('puts a released person back on a segment, and they arrive', () => {
+    const network = networkOf(street(12));
+    const crowd = createCrowd({ network, count: 2, variants: 1, seed: 24 });
+    holdAt(crowd, 0, SPOT.x, SPOT.y, SPOT.z, 0);
+    releaseTo(crowd, 0, 8);
+    expect(isWaiting(crowd, 0)).toBe(false);
+    expect(crowd.node[0]).toBe(8);
+    expect(crowd.cameFrom[0]).toBe(-1);
+    run(crowd, 30);
+    // They walked: whatever the wander did with them afterwards, they left.
+    expect(Math.hypot(crowd.x[0]! - SPOT.x, crowd.z[0]! - SPOT.z)).toBeGreaterThan(TILE_VOXELS);
+  });
+
+  it('walks a held person again when the graph is rebuilt under them', () => {
+    const network = networkOf(street(12));
+    const crowd = createCrowd({ network, count: 4, variants: 2, seed: 25 });
+    holdAt(crowd, 0, SPOT.x, SPOT.y, SPOT.z, 0);
+    const reseated = reseatCrowd(crowd, networkOf(street(14)));
+    expect(isWaiting(reseated, 0)).toBe(false);
+    run(reseated, 20);
+    expect(Math.hypot(reseated.x[0]! - SPOT.x, reseated.z[0]! - SPOT.z)).toBeGreaterThan(1);
+  });
+});
 
 describe('reseatCrowd', () => {
   /** A street along z = 0 with a lane running north off its middle. */

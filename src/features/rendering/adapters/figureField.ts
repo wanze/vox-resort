@@ -184,7 +184,8 @@ export function figureGeometry(model: ModelGeometry, capacity: number): BufferGe
 /**
  * Floats per instance in a figure's `pose` attribute, and where each one sits:
  * which way the figure faces as `(sin, cos)` of its heading, what it is doing as
- * `RESTING` (0 walking, 1 sitting, 2 lying), and its walk phase in radians.
+ * `RESTING` (0 walking, 1 standing, 2 sitting, 3 lying), and its walk phase in
+ * radians.
  */
 export const POSE_STRIDE = 4;
 export const POSE_SIN = 0;
@@ -258,13 +259,17 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const thick = figure.z;
   const hip = figure.w;
 
-  // What the person is doing, taken apart with two multiplies rather than a
-  // branch: a shader has no cheap branch, and one of these is always zero.
-  // 0 walking, 1 sitting, 2 lying — see `RESTING` in `crowd/domain/crowd.ts`.
+  // What the person is doing, taken apart with arithmetic rather than a branch:
+  // a shader has no cheap branch, and all but one of these is always zero.
+  // 0 walking, 1 standing, 2 sitting, 3 lying — see `RESTING` in
+  // `crowd/domain/crowd.ts`, whose order this decomposition depends on.
+  //
+  // Standing is every weight at zero, which is the figure as it was modelled:
+  // upright, legs together, no bob. So it costs a number and not a pose.
   const doing = pose.z;
   const still = doing.min(1);
-  const lying = doing.sub(1).max(0);
-  const sitting = still.sub(lying);
+  const lying = doing.sub(2).max(0);
+  const sitting = doing.sub(1).max(0).min(1).sub(lying);
   const afoot = still.oneMinus();
 
   const wave = sin(clock.mul(CADENCE).add(pose.w));

@@ -6,6 +6,7 @@ import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { chooseVenue, type ChoiceOptions } from './chooseVenue';
 import { createNeeds, NEEDS, type Needs } from './needs';
+import { MAX_QUEUE_SHOWN } from './queueSpot';
 import type { Venue } from './venues';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -167,5 +168,61 @@ describe('chooseVenue with a real walking distance', () => {
       const needs = wanting(person, 'hunger');
       expect(walked(person, needs, venues, asTheLine)).toEqual(decide(person, needs, venues));
     }
+  });
+});
+
+describe('chooseVenue with a line at the door', () => {
+  const queued = (
+    person: number,
+    needs: Needs,
+    venues: readonly Venue[],
+    queueLength: (venue: number) => number,
+  ): ReturnType<typeof chooseVenue> =>
+    chooseVenue({ needs, guests, person, venues, x: 0, z: 0, queueLength });
+
+  it('answers exactly as plan 017 did when no queue is handed in', () => {
+    // The same fixture as "a short reach settles for the weak place nearby",
+    // which is the case the distance term is tuned on.
+    const venues = [
+      venue('snack#0', [{ need: 'hunger', amount: 0.3 }], 60),
+      venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 1400),
+    ];
+    for (const kind of ['family', 'friends'] as const) {
+      const person = someone(kind);
+      const needs = wanting(person, 'hunger');
+      expect(queued(person, needs, venues, () => 0)).toEqual(decide(person, needs, venues));
+    }
+  });
+
+  it('walks past the near bakery when the line outside it is long enough', () => {
+    const person = someone('couple');
+    const venues = [venue('bakery#0', HUNGER, 150), venue('bakery#1', HUNGER, 600)];
+    expect(decide(person, wanting(person, 'hunger'), venues)?.venue).toBe(0);
+    expect(
+      queued(person, wanting(person, 'hunger'), venues, (v) => (v === 0 ? 10 : 0))?.venue,
+    ).toBe(1);
+  });
+
+  it('will not choose a venue whose line is already as long as guests will join', () => {
+    const person = someone('couple');
+    // The only place on the plot that serves what they want, and full: they go
+    // nowhere rather than walk to be turned away.
+    const venues = [venue('bakery#0', HUNGER, 150)];
+    expect(queued(person, wanting(person, 'hunger'), venues, () => MAX_QUEUE_SHOWN)).toBeNull();
+    expect(
+      queued(person, wanting(person, 'hunger'), venues, () => MAX_QUEUE_SHOWN - 1)?.venue,
+    ).toBe(0);
+  });
+
+  it('lets a big place absorb a queue that would rule out a small one', () => {
+    const person = someone('couple');
+    // The same distance and the same relief; only the capacity differs, so the
+    // choice is the queue measured against what the place can get through.
+    const venues = [
+      { ...venue('kiosk#0', HUNGER, 300), capacity: 2 },
+      { ...venue('club#0', HUNGER, 300), capacity: 25 },
+    ];
+    expect(queued(person, wanting(person, 'hunger'), venues, () => 0)?.venue).toBe(0);
+    expect(queued(person, wanting(person, 'hunger'), venues, () => 6)?.venue).toBe(1);
   });
 });

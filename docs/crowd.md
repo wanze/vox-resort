@@ -156,8 +156,10 @@ is doing is the one per-frame line, written to a DOM node by `hudOverlay.ts`.
 A lodging lists who sleeps there, and a guest's panel shows their five need
 levels as bars and where they would go next. The live line names the
 destination once they are walking to one - `Hungry · Walking to the Bakery ·
-tile 12, 7`. Who is inside a venue is not tracked yet, and the panel says so
-rather than showing a zero.
+tile 12, 7` - and says what they are doing once they get there:
+`Hungry · Third in the line at the Bakery`, then `Inside the Bakery`. Somebody
+standing still gets no tile, since it does not change. A venue's own panel shows
+how many are inside against what it holds, and how long the line at its door is.
 
 ## Drawing
 
@@ -225,9 +227,9 @@ reads.
   content. It is the word in front of the inspector's live line - `Hungry ·
 Walking to the Bakery · tile 12, 7`.
 - `sim/domain/chooseVenue.ts` scores every venue that serves that need as
-  `relief / (1 + distance / reach)` and picks the best. The venues come off the
-  art through `sim/domain/venues.ts`; lodging is left out, being nowhere to walk
-  to in the daytime.
+  `relief / (1 + distance / reach) / (1 + queue / capacity)` and picks the best.
+  The venues come off the art through `sim/domain/venues.ts`; lodging is left
+  out, being nowhere to walk to in the daytime.
 
 ## Walking towards it
 
@@ -262,9 +264,49 @@ it is the only thing the crowd calls.
 
 - **A party goes together.** Whoever arrives somewhere and decides sets the goal
   for everybody in their party, so a family does not split up at the first
-  junction. Arriving relieves the need and lets the goal go on the same arrival,
-  so nobody stands in a doorway. **A visit takes no time yet**: capacity, the
-  queue and the dwell are plan 018, and `router.ts` says where they go.
+  junction.
+
+## Capacity, and the line at the door
+
+Arriving at a venue is the start of a visit rather than the whole of it.
+`sim/domain/occupancy.ts` holds who is inside each venue and who is waiting at
+it, and `Router.tick` runs it once per simulated minute.
+
+- **A visit takes the dwell the art declared.** `dwellSeconds` is drawn per
+  visitor off the router's own seeded generator, divided by the tick's sixty
+  simulated seconds, and never rounds to zero: a beach shower is 30 simulated
+  seconds and still takes a whole tick, because a zero-tick visit would admit
+  and release somebody in the same call and no line would ever form.
+
+- **The relief happens on the way out, not on the way in.** A guest who queues
+  twenty minutes is fed twenty minutes later, which is the number plan 020 turns
+  into unhappiness.
+
+- **A full venue grows a line at its door.** `queueSpotAt` puts the n-th person
+  six voxels further out along the direction from the venue's middle to the door
+  node, facing back at it. They are placed on their spot rather than walked to
+  it, which at the camera's distance reads the same and costs an `atan2`.
+
+- **Standing still is a segment with a rate of zero.** `holdAt` writes the same
+  point into `from` and `to` and puts the person in `LANE.none`, so the
+  per-frame loop is exactly as branchless as it was and avoidance leaves them
+  where they are. `releaseTo` puts them back on the graph. Nothing releases a
+  held person but the simulation - there is no timer on it.
+
+- **The sweep frees places before it fills them.** Whoever is done leaves, then
+  the front of each line goes in, then everybody behind them shuffles up one
+  place. The other order means a full venue never admits anybody on the tick
+  somebody leaves, which reads as a line that moves every other tick.
+
+- **A guest who finds twelve people already waiting goes somewhere else.**
+  `MAX_QUEUE_SHOWN` is both how long a line is drawn and when a guest refuses to
+  join one, so the player never sees a line longer than the one guests walk away
+  from. `chooseVenue` will not choose a venue that has reached it, and `arriveAt`
+  turns away anybody who gets there anyway.
+
+The HUD's `Venues` row is everybody inside anything over everybody in a line. A
+waiting count that climbs and stays there is the resort saying it wants another
+of something.
 
 ## Where the art lives
 

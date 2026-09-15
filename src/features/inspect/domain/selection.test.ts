@@ -22,6 +22,8 @@ import {
   namesPlacement,
   personOf,
   placeView,
+  placeWording,
+  type Errand,
   type GuestSpot,
   type InspectTarget,
 } from './selection';
@@ -172,7 +174,7 @@ describe('guestView', () => {
 describe('placeView', () => {
   it('lists exactly the guests who sleep in a bungalow', () => {
     const guests = guestsOf();
-    const view = placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests);
+    const view = placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null);
     const sleepers = Array.from({ length: guests.count }, (_, i) => i).filter(
       (i) => guests.home[i] === 1,
     );
@@ -185,13 +187,13 @@ describe('placeView', () => {
   });
 
   it('has nothing to say about a bench', () => {
-    const view = placeView(at('bench#2', 'bench'), 'Bench', guestsOf());
+    const view = placeView(at('bench#2', 'bench'), 'Bench', guestsOf(), null);
     expect(view.venue).toBeNull();
     expect(view.residents).toEqual([]);
   });
 
   it('says what a restaurant seats and serves, and houses nobody', () => {
-    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf());
+    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
     expect(view.venue?.role).toBe('food');
     expect(view.venue?.capacity).toBe(40);
     expect(view.venue?.serves).toEqual(['Hunger', 'Thirst']);
@@ -202,10 +204,10 @@ describe('placeView', () => {
     // The restaurant's half hour to an hour, and the bungalow's seven to nine
     // hours: the two units a stay is thought of in.
     const guests = guestsOf();
-    expect(placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guests).venue?.dwell).toBe(
-      '30 to 60 min',
-    );
-    expect(placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests).venue?.dwell).toBe(
+    expect(
+      placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guests, null).venue?.dwell,
+    ).toBe('30 to 60 min');
+    expect(placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null).venue?.dwell).toBe(
       '7 to 9 h',
     );
   });
@@ -252,29 +254,11 @@ const contentNeeds = (guests: Guests): Needs => {
 describe('activityLine', () => {
   const guests = guestsOf();
   const content = contentNeeds(guests);
-  const doing = (
-    crowd: Crowd,
-    needs: Needs,
-    person: number,
-    heading: Venue | null = null,
-  ): string => activityLine(crowd, needs, guests, person, heading);
+  const doing = (crowd: Crowd, needs: Needs, person: number, errand: Errand = null): string =>
+    activityLine(crowd, needs, guests, person, errand);
 
-  /** A bakery, as `venuesOn` would hand one back, for the heading wording. */
-  const BAKERY: Venue = {
-    key: 'bakery#0',
-    id: 'bakery',
-    label: 'Bakery',
-    role: 'food',
-    satisfies: [{ need: 'hunger', amount: 0.5 }],
-    capacity: 8,
-    dwellSeconds: { min: 240, max: 480 },
-    x: 0,
-    z: 0,
-    tileX: 0,
-    tileZ: 0,
-    tilesX: 1,
-    tilesZ: 1,
-  };
+  /** Walking to the bakery, which is what plan 017's routing hands in. */
+  const TO_BAKERY: Errand = { kind: 'walking', to: 'Bakery' };
 
   it('says somebody on the paving is walking, and where', () => {
     const crowd = seatedStreet('sit');
@@ -315,7 +299,7 @@ describe('activityLine', () => {
     hungry.level.hunger[0] = 0;
     const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
     const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
-    expect(doing(crowd, hungry, 0, BAKERY)).toBe(
+    expect(doing(crowd, hungry, 0, TO_BAKERY)).toBe(
       `Hungry · Walking to the Bakery · tile ${tileX}, ${tileZ}`,
     );
   });
@@ -330,7 +314,7 @@ describe('activityLine', () => {
     // And a guest who is sitting is sitting, whatever they may be heading for.
     const sitting = seatedStreet('sit');
     const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
-    expect(doing(sitting, content, sitter, BAKERY).split(' · ')[0]).toBe('Sitting');
+    expect(doing(sitting, content, sitter, TO_BAKERY).split(' · ')[0]).toBe('Sitting');
   });
 
   it('tells sitting, lying down and being on the beach apart', () => {
@@ -365,5 +349,61 @@ describe('activityLine', () => {
       doing(beach, content, roamer),
     ].map((line) => line.split(' · ')[0]);
     expect(lines).toEqual(['Walking', 'Sitting', 'Lying down', 'On the beach']);
+  });
+});
+
+describe('a guest the simulation is holding still', () => {
+  const guests = guestsOf();
+  const content = contentNeeds(guests);
+  const doing = (crowd: Crowd, needs: Needs, person: number, errand: Errand): string =>
+    activityLine(crowd, needs, guests, person, errand);
+
+  it('says which place in the line they are standing in, and drops the tile', () => {
+    const crowd = seatedStreet('sit');
+    const hungry = contentNeeds(guests);
+    hungry.level.hunger[0] = 0;
+    expect(doing(crowd, hungry, 0, { kind: 'waiting', at: 'Bakery', place: 2 })).toBe(
+      'Hungry · Third in the line at the Bakery',
+    );
+  });
+
+  it('says they are inside, and drops the tile there too', () => {
+    const crowd = seatedStreet('sit');
+    expect(doing(crowd, content, 0, { kind: 'inside', at: 'Bakery' })).toBe('Inside the Bakery');
+  });
+
+  it('says what they are doing rather than that they are sitting', () => {
+    // Somebody held inside a bakery is not walking and is not on a bench; the
+    // errand is what they are up to, whatever the crowd's own pose says.
+    const sitting = seatedStreet('sit');
+    const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
+    expect(doing(sitting, content, sitter, { kind: 'inside', at: 'Bakery' })).toBe(
+      'Inside the Bakery',
+    );
+  });
+});
+
+describe('placeWording', () => {
+  it('words the first few places and numbers the rest', () => {
+    expect([0, 1, 2, 3].map(placeWording)).toEqual(['First', 'Second', 'Third', 'Fourth']);
+    expect(placeWording(4)).toBe('5th');
+    expect(placeWording(11)).toBe('12th');
+  });
+});
+
+describe('placeView with a venue that is being used', () => {
+  it('reports who is inside and who is in the line', () => {
+    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), {
+      inside: 12,
+      waiting: 3,
+    });
+    expect(view.venue?.inside).toBe(12);
+    expect(view.venue?.waiting).toBe(3);
+  });
+
+  it('reports a venue nothing has counted yet as empty rather than as unknown', () => {
+    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
+    expect(view.venue?.inside).toBe(0);
+    expect(view.venue?.waiting).toBe(0);
   });
 });

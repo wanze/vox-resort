@@ -11,6 +11,7 @@
 import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { archetypeOf } from './archetypes';
+import { MAX_QUEUE_SHOWN } from './queueSpot';
 import { strongestNeed, type Needs } from './needs';
 import { reliefAt, type Venue } from './venues';
 
@@ -35,13 +36,20 @@ export interface ChoiceOptions {
    * distance is used, which is what a test fixture wants and what plan 016 had.
    */
   readonly walkingDistance?: (venue: number) => number;
+  /**
+   * How many are already waiting at each venue. A long line is a real cost and
+   * a guest weighs it exactly as they weigh the walk: worth it for the good
+   * place, not worth it for the near one. Omit it and nothing queues, which is
+   * what a fixture wants and what plan 016 had.
+   */
+  readonly queueLength?: (venue: number) => number;
 }
 
 /**
  * How good a venue is for a need, from where the guest is standing:
  *
  * ```
- * score = relief / (1 + distance / reach)
+ * score = relief / (1 + distance / reach) / (1 + queue / capacity)
  * ```
  *
  * At the archetype's own reach the score is halved, at twice it a third, and it
@@ -50,6 +58,12 @@ export interface ChoiceOptions {
  * the archetype table tunes: `reach` is where walking starts to cost more than
  * the visit is worth, and nothing else in the expression is a dial.
  *
+ * The queue term is the same shape again, and measured against the venue's own
+ * capacity rather than against a flat number of people: a line of eight outside
+ * a beach club for twenty-five is a few minutes, and outside a beach shower for
+ * one it is an afternoon. So a big place absorbs a queue that would send a guest
+ * straight past a small one.
+ *
  * The distance enters through this one expression and nothing else, which is
  * what let plan 017 hand in the real walking distance without touching anything
  * around it: `ChoiceOptions.walkingDistance` replaces the straight line where
@@ -57,8 +71,14 @@ export interface ChoiceOptions {
  * not. An unreachable venue arrives here as `Infinity` and scores zero, which is
  * the same thing as not being a candidate.
  */
-function scoreFor(relief: number, distance: number, reach: number): number {
-  return relief / (1 + distance / reach);
+function scoreFor(
+  relief: number,
+  distance: number,
+  reach: number,
+  queue: number,
+  capacity: number,
+): number {
+  return relief / (1 + distance / reach) / (1 + queue / Math.max(1, capacity));
 }
 
 /**
@@ -72,14 +92,15 @@ function scoreFor(relief: number, distance: number, reach: number): number {
  * - It does not build a flow field to find out how far anything is. The router
  *   hands in {@link ChoiceOptions.walkingDistance} for the venues it has already
  *   swept and leaves the rest on the straight line; see {@link scoreFor}.
- * - Queue length is not in the score, because nothing queues yet. Plan 018 adds
- *   capacity pressure as a second term of the same expression.
+ * - It does not count the queue for itself. The router hands in
+ *   {@link ChoiceOptions.queueLength}, which is the only thing that knows who
+ *   is standing where; see `occupancy.ts`.
  *
  * Ties break towards the lower venue index, so the answer does not depend on
  * iteration luck and a rebuilt plot chooses the same way.
  */
 export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
-  const { needs, guests, person, venues, x, z, walkingDistance } = options;
+  const { needs, guests, person, venues, x, z, walkingDistance, queueLength } = options;
   const wanted = strongestNeed(needs, guests, person);
   if (wanted === null) return null;
   const { reach } = archetypeOf(guests, person);
@@ -98,7 +119,13 @@ export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
     // Somewhere that cannot be walked to is not somewhere to go, however good it
     // would be: `Infinity` is how the router says a venue has no path to it.
     if (!Number.isFinite(distance)) continue;
-    const score = scoreFor(relief, distance, reach);
+    const queued = queueLength ? queueLength(index) : 0;
+    // The same threshold `arriveAt` turns somebody away at, imported from the
+    // one module that names it rather than written out twice: a guest who would
+    // be refused at the door is not a candidate here, or they would cross the
+    // plot to be sent straight back.
+    if (queued >= MAX_QUEUE_SHOWN) continue;
+    const score = scoreFor(relief, distance, reach, queued, venue.capacity);
     if (score > bestScore) {
       bestScore = score;
       best = { venue: index, need: wanted.need };

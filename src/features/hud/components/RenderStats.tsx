@@ -83,6 +83,9 @@ export function RenderStats({
       <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
         {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
       </StatRow>
+      <StatRow label="Venues" note="inside now, and queueing at a door">
+        {formatNumber(stats.venues.inside)} / {formatNumber(stats.venues.waiting)}
+      </StatRow>
       <StatRow label="Routes" note="flow fields built, one per venue walked to">
         {formatNumber(stats.routeFields)}
       </StatRow>

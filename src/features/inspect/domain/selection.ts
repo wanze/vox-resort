@@ -8,10 +8,12 @@
  * the guest is doing this instant - is not in here at all; it goes to a DOM node
  * through a ref, the way the frame rate does. See `hudOverlay.ts`.
  *
- * What a guest *wants* is now a real answer, read off `sim/domain/` - the need
- * pulling hardest and where they would go to see to it. Who is *inside* a place
- * still is not: nothing counts anybody through a door yet, and a made-up
- * occupancy is worse than none. That is plan 018.
+ * What a guest *wants* is a real answer, read off `sim/domain/` - the need
+ * pulling hardest and where they would go to see to it. So is who is *inside* a
+ * place and who is in the line outside it, which arrives here as a plain pair
+ * of numbers: the router is what counts people through doors, and a module that
+ * words a panel should not be able to reach the thing that decides where
+ * anybody goes. See `sim/domain/occupancy.ts`.
  */
 
 import {
@@ -83,6 +85,9 @@ export interface PlaceView {
     readonly serves: readonly string[];
     readonly dwell: string;
     readonly beds: number;
+    /** How many are inside now, and how many are in the line outside. */
+    readonly inside: number;
+    readonly waiting: number;
   } | null;
   /** Guests who sleep here. Empty for anything that is not a lodging. */
   readonly residents: readonly PartyMemberView[];
@@ -172,7 +177,24 @@ export function guestView(
   };
 }
 
-export function placeView(placement: Placement, label: string, guests: Guests): PlaceView {
+/**
+ * Who is inside a venue and who is waiting at it, as the router counted them.
+ *
+ * A plain pair rather than the router's own type, for the reason this module
+ * takes a {@link GuestSpot} rather than a crowd: what is shown about a place
+ * should not be able to reach what decides where anybody goes.
+ */
+export interface PlaceOccupancy {
+  readonly inside: number;
+  readonly waiting: number;
+}
+
+export function placeView(
+  placement: Placement,
+  label: string,
+  guests: Guests,
+  occupancy: PlaceOccupancy | null,
+): PlaceView {
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
   const residents: PartyMemberView[] = [];
@@ -194,6 +216,10 @@ export function placeView(placement: Placement, label: string, guests: Guests): 
           serves: (venue.satisfies ?? []).map((relief) => NEED_LABELS[relief.need]),
           dwell: dwellWording(venue.dwellSeconds),
           beds: venue.beds ?? 0,
+          // Nothing standing, nobody inside it: a venue the router has never
+          // heard of is one that has just been built, and empty is the truth.
+          inside: occupancy?.inside ?? 0,
+          waiting: occupancy?.waiting ?? 0,
         }
       : null,
     residents,
@@ -210,6 +236,46 @@ const NEED_MOODS: { readonly [need in GuestNeed]: string } = {
 };
 
 /**
+ * The first few places in a line, as the word somebody would use.
+ *
+ * Only as far as a person can take in at a glance; past that the number reads
+ * better than the word, and "twelfth" is a word nobody says about a queue.
+ */
+const PLACES: readonly string[] = ['First', 'Second', 'Third', 'Fourth'];
+
+/** Which place in a line, worded: `"Third"`, or `"12th"` past the fourth. */
+export function placeWording(slot: number): string {
+  return PLACES[slot] ?? `${slot + 1}th`;
+}
+
+/**
+ * What a guest is up to, as something already decided rather than a sentence.
+ *
+ * A small value rather than the bare string plan 017 passed, because the line
+ * now has to say *what* they are doing at a place and not only which place:
+ * standing in its line and being inside it read differently and are worth
+ * telling apart on a glance at the panel.
+ */
+export type Errand =
+  | { readonly kind: 'walking'; readonly to: string }
+  | { readonly kind: 'waiting'; readonly at: string; readonly place: number }
+  | { readonly kind: 'inside'; readonly at: string }
+  | null;
+
+/**
+ * What somebody on an errand is doing, in the words the live line uses.
+ *
+ * The tile is left off the two standing-still cases by the caller: somebody who
+ * is not moving does not need their coordinates restated sixty times a second,
+ * and the line is shorter and easier to read for it.
+ */
+function errandWording(errand: NonNullable<Errand>): string {
+  if (errand.kind === 'walking') return `Walking to the ${errand.to}`;
+  if (errand.kind === 'inside') return `Inside the ${errand.at}`;
+  return `${placeWording(errand.place)} in the line at the ${errand.at}`;
+}
+
+/**
  * What a guest is doing this instant, in a few words: the one line of the panel
  * that is rewritten per frame.
  *
@@ -219,10 +285,10 @@ const NEED_MOODS: { readonly [need in GuestNeed]: string } = {
  * you are watching `chooseVenue` decide. A content guest gets no word at all
  * rather than a cheerful one.
  *
- * `heading` is the venue they are actually walking to, or null when they have
- * nowhere to be. The venue rather than a router, for the reason this module
- * takes a spot rather than a crowd: what decides where anybody is going is not
- * something the wording of a line should be able to reach.
+ * `errand` is what the simulation has them doing, already decided. An
+ * {@link Errand} rather than a router, for the reason this module takes a spot
+ * rather than a crowd: what decides where anybody goes is not something the
+ * wording of a line should be able to reach.
  *
  * The one thing in this module that allocates per frame - a short string for
  * the one guest selected - and deliberately so: the overlay skips the DOM write
@@ -233,12 +299,16 @@ export function activityLine(
   needs: Needs,
   guests: Guests,
   person: number,
-  heading: Venue | null,
+  errand: Errand,
 ): string {
   // A plot with its paving taken up walks nobody, though everybody still exists.
   if (person >= crowd.count) return 'Nowhere to walk';
   const wanted = strongestNeed(needs, guests, person);
   const mood = wanted === null ? '' : `${NEED_MOODS[wanted.need]} · `;
+  // Standing in a line or sitting in a bakery: where they are is the place, and
+  // saying the tile again every frame is noise rather than information.
+  if (errand !== null && errand.kind !== 'walking') return `${mood}${errandWording(errand)}`;
+
   const resting = restingOn(crowd, person);
   const doing =
     resting === RESTING.sitting
@@ -250,9 +320,9 @@ export function activityLine(
           : // Where they are going, when somebody is routing them: "Walking" on
             // its own is what a guest with nowhere to be is doing, and it is the
             // line plan 016 wrote.
-            heading === null
+            errand === null
             ? 'Walking'
-            : `Walking to the ${heading.label}`;
+            : errandWording(errand);
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
   return `${mood}${doing} · tile ${tileX}, ${tileZ}`;

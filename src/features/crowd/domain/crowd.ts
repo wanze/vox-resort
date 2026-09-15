@@ -199,6 +199,13 @@ const TO_SEAT = -2;
 const SEATED = -3;
 
 /**
+ * Standing where the simulation put them: in a queue at a door, or inside
+ * somewhere. Held rather than timed, because what ends it is a place having
+ * room rather than a clock - see `sim/domain/occupancy.ts`.
+ */
+const HELD = -4;
+
+/**
  * How many spots on the sand a roamer considers before standing still for a
  * moment instead.
  *
@@ -252,7 +259,10 @@ export interface Crowd extends Walkers {
   readonly rate: Float32Array;
   readonly speed: Float32Array;
 
-  /** Node being walked to, or {@link ROAMING} while out on the sand. */
+  /**
+   * Node being walked to, or one of the sentinels above: out on the sand, on
+   * the way to a seat, sitting on one, or held still by the simulation.
+   */
   readonly node: Int32Array;
   /** Node walked in from, so a person does not turn straight back round. */
   readonly cameFrom: Int32Array;
@@ -474,6 +484,9 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
       continue;
     }
     crowd.gate[i] = -1;
+    // Somebody held in a queue or inside a venue is re-anchored like any other
+    // walker, with no branch of their own: the simulation's own record of who
+    // is where is thrown away on a rebuild too. See `sim/domain/router.ts`.
     aim(reseated, i, nearestNodeTo(network, index, crowd.x[i]!, crowd.z[i]!, TILE_VOXELS));
   }
   crowd.seat.fill(-1, count);
@@ -574,7 +587,12 @@ function arriveAtNode(crowd: Crowd, i: number): void {
   } else {
     // The onward pick reads `cameFrom` to know what turning back would be, so
     // it has to happen before this arrival becomes the node walked in from.
-    aim(crowd, i, nextNode(crowd, i, arrived));
+    const onward = nextNode(crowd, i, arrived);
+    // Somebody the router stood still at this node is already placed, and has
+    // no way they came worth remembering: aiming them anywhere would walk them
+    // straight out of the queue they have just joined.
+    if (onward === HELD) return;
+    aim(crowd, i, onward);
   }
   crowd.cameFrom[i] = arrived;
 }
@@ -689,17 +707,87 @@ export function isRoaming(crowd: Crowd, i: number): boolean {
 }
 
 /**
- * What a person is doing, as the thing that draws them needs it: 0 walking,
- * 1 sitting, 2 lying.
+ * Stands somebody still at a point until something lets them go.
  *
- * A number rather than a pair of flags because it is written straight into an
- * instanced buffer and the shader takes it apart with arithmetic — see
- * `crowdField.ts`. The pose is the *seat's*, not the person's: which is the
- * whole reason a person carries no pose of their own.
+ * The same segment trick sitting down uses, with a rate of zero: `t` never
+ * reaches 1, so the arrival branch never fires and nothing releases them but
+ * {@link releaseTo}. `LANE.none` keeps avoidance from sliding them off the
+ * spot, which is exactly what that lane is for - see `avoidance.ts`.
+ *
+ * Whatever this file knows about *why* somebody is standing there is nothing:
+ * the caller is `sim/domain/router.ts`, and a queue at a bakery door and a
+ * guest inside one arrive here as the same three numbers.
  */
-export const RESTING = { none: 0, sitting: 1, lying: 2 } as const;
+export function holdAt(
+  crowd: Crowd,
+  i: number,
+  x: number,
+  y: number,
+  z: number,
+  heading: number,
+): void {
+  // A seat is claimed from the moment somebody sets off for it, so anybody
+  // taken in hand on the way to one has to let go of it or nobody else ever
+  // sits there.
+  giveUpSeat(crowd, i);
+  crowd.fromX[i] = x;
+  crowd.fromY[i] = y;
+  crowd.fromZ[i] = z;
+  crowd.toX[i] = x;
+  crowd.toY[i] = y;
+  crowd.toZ[i] = z;
+  crowd.t[i] = 0;
+  crowd.rate[i] = 0;
+  crowd.side[i] = 0;
+  crowd.pace[i] = 1;
+  crowd.lane[i] = LANE.none;
+  crowd.heading[i] = heading;
+  crowd.node[i] = HELD;
+  // Where they are drawn, now rather than on the next frame's `place`: a person
+  // stood somewhere by the simulation is somewhere, and the caller reads it
+  // back to decide what to do about them.
+  crowd.x[i] = x;
+  crowd.y[i] = y;
+  crowd.z[i] = z;
+}
+
+/**
+ * Sends somebody who was held on their way to a node of the graph.
+ *
+ * `cameFrom` is cleared because a held person has no meaningful way they came:
+ * they have been standing at a door, and the rule it exists for - do not turn
+ * straight back round - is about a walk that was interrupted rather than one
+ * that ended. `aim` puts them back in {@link LANE.paved} itself.
+ */
+export function releaseTo(crowd: Crowd, i: number, node: number): void {
+  crowd.cameFrom[i] = -1;
+  aim(crowd, i, node);
+}
+
+/** Whether this person is standing where the simulation put them. */
+export function isWaiting(crowd: Crowd, i: number): boolean {
+  return i < crowd.count && crowd.node[i] === HELD;
+}
+
+/**
+ * What a person is doing, as the thing that draws them needs it: 0 walking,
+ * 1 standing, 2 sitting, 3 lying.
+ *
+ * A number rather than a set of flags because it is written straight into an
+ * instanced buffer and the shader takes it apart with arithmetic — see
+ * `crowdField.ts`. **The order is load-bearing**: `figureField.ts` separates the
+ * four with `min`, `max` and a subtraction rather than a branch, and walking has
+ * to be the only one below 1 and lying the only one above 2.
+ *
+ * Sitting and lying are the *seat's* pose, not the person's, which is the whole
+ * reason a person carries no pose of their own. Standing is the exception and
+ * has to be: somebody held in a queue is on no seat, and drawn as a walker they
+ * swing their legs on the spot for as long as they wait.
+ */
+export const RESTING = { none: 0, standing: 1, sitting: 2, lying: 3 } as const;
 
 export function restingOn(crowd: Crowd, i: number): number {
+  if (crowd.node[i] === HELD) return RESTING.standing;
   if (crowd.node[i] !== SEATED) return RESTING.none;
   return crowd.network.seats[crowd.seat[i]!]!.pose === 'lie' ? RESTING.lying : RESTING.sitting;
 }
@@ -793,10 +881,8 @@ function sitDown(crowd: Crowd, i: number): void {
  * brought them to it, run backwards.
  */
 function standUp(crowd: Crowd, i: number): void {
-  const seat = crowd.seat[i]!;
-  const spot = crowd.network.seats[seat]!;
-  crowd.seatBy[seat] = -1;
-  crowd.seat[i] = -1;
+  const spot = crowd.network.seats[crowd.seat[i]!]!;
+  giveUpSeat(crowd, i);
   crowd.fromX[i] = spot.x;
   crowd.fromY[i] = spot.y;
   crowd.fromZ[i] = spot.z;
@@ -811,12 +897,27 @@ function standUp(crowd: Crowd, i: number): void {
 }
 
 /**
- * Which node a person walks to next: where they are going, or a wander.
+ * Frees whatever seat a person is holding, if they hold one.
  *
- * The two are kept apart because they are two different rules and only one of
- * them was ever here. See {@link wanderFrom}, which is the rule this file had
- * before anything was routing anybody and which is what a crowd with no router
- * still does, to the voxel.
+ * A seat is claimed from the moment somebody sets off for it, so this is the
+ * one undo for both halves of that - getting up off a bench, and being taken in
+ * hand by a venue on the way to one.
+ */
+function giveUpSeat(crowd: Crowd, i: number): void {
+  const seat = crowd.seat[i]!;
+  if (seat < 0) return;
+  crowd.seatBy[seat] = -1;
+  crowd.seat[i] = -1;
+}
+
+/**
+ * Which node a person walks to next: where they are going, a wander, or
+ * {@link HELD} when the answer is that they are not walking anywhere at all.
+ *
+ * The first two are kept apart because they are two different rules and only
+ * one of them was ever here. See {@link wanderFrom}, which is the rule this
+ * file had before anything was routing anybody and which is what a crowd with
+ * no router still does, to the voxel.
  */
 function nextNode(crowd: Crowd, i: number, at: number): number {
   const node = crowd.network.nodes[at]!;
@@ -836,6 +937,12 @@ function nextNode(crowd: Crowd, i: number, at: number): number {
   // guard that is worth it is here: a router naming the node somebody is
   // standing on would pin them there for ever on a zero-length segment.
   const routed = crowd.routeOf?.(i, at) ?? -1;
+  // Asking where somebody goes next can be answered by standing them still: a
+  // router takes a guest in hand at a venue's door and puts them in the line or
+  // inside. They are placed already, so there is nothing to aim - and the
+  // wander below must not be reached for them either, because a draw made for
+  // somebody who is not walking would move everybody else's afternoon.
+  if (crowd.node[i] === HELD) return HELD;
   if (routed >= 0 && routed !== at) return routed;
 
   return wanderFrom(crowd, i, node);

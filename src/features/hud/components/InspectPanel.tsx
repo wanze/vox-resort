@@ -174,10 +174,11 @@ function VenueRows({ venue }: { readonly venue: Venue }) {
         <StatRow label="Serves">{venue.serves.join(', ') || '—'}</StatRow>
       )}
       <StatRow label="Typical stay">{venue.dwell}</StatRow>
-      {/* Nobody is inside anything until venues have queues; a zero here would
-          be a number that means nothing. */}
-      <StatRow label="Occupancy" note="arrives with queues">
-        not tracked yet
+      <StatRow label="Inside" note="of what it holds">
+        {venue.inside} / {venue.capacity}
+      </StatRow>
+      <StatRow label="Waiting" note="in the line at the door">
+        {venue.waiting === 0 ? 'Nobody' : venue.waiting}
       </StatRow>
     </dl>
   );

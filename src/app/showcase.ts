@@ -150,6 +150,7 @@ import {
   namesPlacement,
   personOf,
   placeView,
+  type Errand,
   type InspectTarget,
   type SelectionView,
 } from '../features/inspect/domain/selection';
@@ -277,6 +278,16 @@ const GUEST_SEED = 5;
 const NEEDS_SEED = 6;
 
 /**
+ * The seed every visit's length is drawn from.
+ *
+ * Its own, for {@link GUEST_SEED}'s reason, and seeded at all because
+ * `docs/rendering.md` requires a bench run to replay the same scene: a dwell off
+ * `Math.random` puts two runs' crowds in different places on the same frame, and
+ * the difference reads as noise in the frame times rather than as a bug.
+ */
+const DWELL_SEED = 7;
+
+/**
  * How far above a person's feet a click is tested against, in voxels: the hips
  * of the tallest figure, which is about half way up a body. The number the art
  * already names, rather than a second guess at it; see `pickPerson.ts`.
@@ -351,6 +362,12 @@ export interface ShowcaseStats {
   readonly startupFrames: number;
   /** Beds on the plot, and guests who have one. */
   readonly beds: { readonly total: number; readonly taken: number };
+  /**
+   * Guests inside a venue right now, and guests standing in a line at one.
+   * A waiting count that climbs and stays there is the resort saying it needs
+   * another of something. See `sim/domain/occupancy.ts`.
+   */
+  readonly venues: { readonly inside: number; readonly waiting: number };
   /**
    * Flow fields the router has actually built: one per venue somebody has
    * walked to, and none for the ones nobody has. The first number anybody
@@ -1244,10 +1261,10 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     needs,
     venues,
     network,
-    positionOf: (person) => {
-      const walkers = crowdField?.crowd;
-      return { x: walkers?.x[person] ?? 0, z: walkers?.z[person] ?? 0 };
-    },
+    // Asserted, and safe: the crowd is built on the very next statement, and
+    // nothing calls into the router until a frame steps somebody somewhere.
+    crowd: () => crowdField!.crowd,
+    seed: DWELL_SEED,
   });
   const crowd = crowdFor({
     network,
@@ -1458,6 +1475,7 @@ function sceneStats(parts: {
     meshMs: catalogue.meshMs,
     meshedInWorker: catalogue.threaded,
     beds: { total: beds.beds, taken: beds.taken },
+    venues: parts.resort.router.occupancyTotals,
     routeFields: parts.resort.router.fieldCount,
     ...parts.startup,
   };
@@ -1476,6 +1494,11 @@ interface Clock {
   readonly time: number;
   /** Whole days since the resort opened. */
   readonly day: number;
+  /**
+   * Whole simulated minutes since the resort opened: what a tick is numbered
+   * by, and what the simulation stamps a visit's end with.
+   */
+  readonly ticks: number;
   /** `"Day 3  14:20"`, for the HUD. */
   readonly label: string;
   readonly speed: SimSpeed;
@@ -1533,6 +1556,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     },
     get day() {
       return dayOf(clock);
+    },
+    get ticks() {
+      return clock.ticks;
     },
     get label() {
       return clockLabel(clock);
@@ -2341,8 +2367,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (!target) return null;
     if ('person' in target) return guestAt(target.person);
     const placement = build.placementOf(target.key);
-    const { guests } = current();
-    return placement ? placeView(placement, objectTypeById(placement.id).label, guests) : null;
+    if (!placement) return null;
+    const { guests, router } = current();
+    const label = objectTypeById(placement.id).label;
+    return placeView(placement, label, guests, router.occupancyOf(placement.key));
   };
 
   /** Selects something, or nothing, and tells the HUD what to show. */
@@ -2351,6 +2379,23 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     selected = view ? target : null;
     selectedOn = clock.day;
     options.onSelectionChange?.(view);
+  };
+
+  /**
+   * What the simulation has this guest doing, for the live line.
+   *
+   * The wording is `selection.ts`'s and the facts are the router's; this is the
+   * one place the two meet, which is why neither of them imports the other.
+   */
+  const errandOf = (person: number): Errand => {
+    const { router } = current();
+    const visit = router.visitOf(person);
+    if (visit === null) {
+      const goal = router.goalOf(person);
+      return goal ? { kind: 'walking', to: goal.label } : null;
+    }
+    if (visit.waiting) return { kind: 'waiting', at: visit.venue.label, place: visit.place };
+    return { kind: 'inside', at: visit.venue.label };
   };
 
   /**
@@ -2363,8 +2408,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (selected !== null && clock.day !== selectedOn) select(selected);
     const person = personOf(selected);
     if (person === null) return null;
-    const { crowd, needs, guests, router } = current();
-    return activityLine(crowd.crowd, needs, guests, person, router.goalOf(person));
+    const { crowd, needs, guests } = current();
+    return activityLine(crowd.crowd, needs, guests, person, errandOf(person));
   };
 
   const inspector = createInspectPointer({
@@ -2474,7 +2519,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Whole simulated minutes, at most MAX_TICKS_PER_ADVANCE of them, so a tab
     // that was in the background does not run a week of decay in one frame.
-    if (ticks > 0) decayNeeds(current().needs, current().guests, ticks);
+    if (ticks > 0) {
+      decayNeeds(current().needs, current().guests, ticks);
+      // One at a time rather than all twelve at once: a venue that frees a place
+      // on the first of them must let somebody in on the first, not on the last.
+      for (let tick = ticks; tick > 0; tick--) current().router.tick(clock.ticks - tick + 1);
+    }
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on
     // the same frame of each, and the frame's `dt` is exactly what differs

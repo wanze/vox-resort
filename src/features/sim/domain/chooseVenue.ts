@@ -29,6 +29,12 @@ export interface ChoiceOptions {
   /** Where the person is now, in world voxels. */
   readonly x: number;
   readonly z: number;
+  /**
+   * How far this person would actually have to walk to each venue, in voxels, or
+   * `Infinity` where it cannot be walked to at all. Omit it and the straight-line
+   * distance is used, which is what a test fixture wants and what plan 016 had.
+   */
+  readonly walkingDistance?: (venue: number) => number;
 }
 
 /**
@@ -44,10 +50,12 @@ export interface ChoiceOptions {
  * the archetype table tunes: `reach` is where walking starts to cost more than
  * the visit is worth, and nothing else in the expression is a dial.
  *
- * The distance is a **straight line**, not a walk, and deliberately enters
- * through this one expression: plan 017 builds flow fields that know the real
- * walking distance to every venue from every node, and replacing the line with
- * that number is meant to be this term and nothing else.
+ * The distance enters through this one expression and nothing else, which is
+ * what let plan 017 hand in the real walking distance without touching anything
+ * around it: `ChoiceOptions.walkingDistance` replaces the straight line where
+ * the caller has a flow field that knows it, and the line stands where it has
+ * not. An unreachable venue arrives here as `Infinity` and scores zero, which is
+ * the same thing as not being a candidate.
  */
 function scoreFor(relief: number, distance: number, reach: number): number {
   return relief / (1 + distance / reach);
@@ -61,7 +69,9 @@ function scoreFor(relief: number, distance: number, reach: number): number {
  *
  * - It considers only the single strongest need. Somebody both hungry and bored
  *   goes to eat, then re-decides, rather than planning a route round the resort.
- * - The distance is straight-line; see {@link scoreFor}. Plan 017 replaces it.
+ * - It does not build a flow field to find out how far anything is. The router
+ *   hands in {@link ChoiceOptions.walkingDistance} for the venues it has already
+ *   swept and leaves the rest on the straight line; see {@link scoreFor}.
  * - Queue length is not in the score, because nothing queues yet. Plan 018 adds
  *   capacity pressure as a second term of the same expression.
  *
@@ -69,7 +79,7 @@ function scoreFor(relief: number, distance: number, reach: number): number {
  * iteration luck and a rebuilt plot chooses the same way.
  */
 export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
-  const { needs, guests, person, venues, x, z } = options;
+  const { needs, guests, person, venues, x, z, walkingDistance } = options;
   const wanted = strongestNeed(needs, guests, person);
   if (wanted === null) return null;
   const { reach } = archetypeOf(guests, person);
@@ -82,7 +92,13 @@ export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
     // A place that does nothing for the need - or makes it worse - is not a
     // candidate at all, rather than a bad one.
     if (relief <= 0) continue;
-    const score = scoreFor(relief, Math.hypot(venue.x - x, venue.z - z), reach);
+    const distance = walkingDistance
+      ? walkingDistance(index)
+      : Math.hypot(venue.x - x, venue.z - z);
+    // Somewhere that cannot be walked to is not somewhere to go, however good it
+    // would be: `Infinity` is how the router says a venue has no path to it.
+    if (!Number.isFinite(distance)) continue;
+    const score = scoreFor(relief, distance, reach);
     if (score > bestScore) {
       bestScore = score;
       best = { venue: index, need: wanted.need };

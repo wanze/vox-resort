@@ -185,6 +185,106 @@ describe('stepCrowd', () => {
   });
 });
 
+/** The node standing on a tile of a street fixture. */
+const nodeAt = (network: WalkNetwork, tileX: number): number =>
+  network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === 0);
+
+describe('being told where to go', () => {
+  it('walks exactly as it always did when nothing is routing it', () => {
+    // The same fixture and seed as "prefers walking on to turning straight back
+    // round", pinned to the voxel: a crowd handed no router is the crowd there
+    // was before there were routers at all, and this is the number that says so.
+    const crowd = createCrowd({
+      network: networkOf(street(60)),
+      count: 1,
+      variants: 1,
+      seed: 10,
+    });
+    run(crowd, 30);
+    expect(crowd.x[0]).toBeCloseTo(239.3424, 3);
+  });
+
+  it('sends everybody the way the router says, wherever they came from', () => {
+    // West, always: on a street somebody walking east has to turn round for it,
+    // which is what wandering would never do.
+    const network = networkOf(street(20));
+    const crowd = createCrowd({
+      network,
+      count: 30,
+      variants: 1,
+      seed: 13,
+      routeOf: (_person, at) => {
+        const tileX = network.nodes[at]!.tileX;
+        return tileX === 0 ? -1 : nodeAt(network, tileX - 1);
+      },
+    });
+    run(crowd, 120);
+    for (let i = 0; i < crowd.count; i++) {
+      expect(crowd.x[i]!, `person ${i}`).toBeLessThan(3 * TILE_VOXELS);
+    }
+  });
+
+  it('wanders as usual for anybody the router has nothing to say about', () => {
+    const network = networkOf(street(60));
+    const routed = createCrowd({
+      network,
+      count: 1,
+      variants: 1,
+      seed: 10,
+      routeOf: () => -1,
+    });
+    const wandering = createCrowd({
+      network: networkOf(street(60)),
+      count: 1,
+      variants: 1,
+      seed: 10,
+    });
+    run(routed, 30);
+    run(wandering, 30);
+    expect(routed.x[0]).toBe(wandering.x[0]);
+  });
+
+  it('does not pin somebody to the node they are standing on', () => {
+    // A router naming the arrival itself would be a zero-length segment taken
+    // over and over. They fall back to wandering instead.
+    const network = networkOf(street(20));
+    const crowd = createCrowd({
+      network,
+      count: 4,
+      variants: 1,
+      seed: 14,
+      routeOf: (_person, at) => at,
+    });
+    const startX = [...crowd.x];
+    run(crowd, 60);
+    for (let i = 0; i < crowd.count; i++) {
+      expect(Math.abs(crowd.x[i]! - startX[i]!), `person ${i}`).toBeGreaterThan(TILE_VOXELS);
+    }
+  });
+
+  it('keeps its router across a rebuild of the graph', () => {
+    const network = networkOf(street(20));
+    let asked = 0;
+    const crowd = createCrowd({
+      network,
+      count: 10,
+      variants: 1,
+      seed: 15,
+      routeOf: () => {
+        asked++;
+        return -1;
+      },
+    });
+    run(crowd, 10);
+    const before = asked;
+    expect(before).toBeGreaterThan(0);
+    const reseated = reseatCrowd(crowd, networkOf(street(24)));
+    asked = 0;
+    run(reseated, 10);
+    expect(asked).toBeGreaterThan(0);
+  });
+});
+
 describe('walking a flight of stairs', () => {
   // A street running north over a single step: z = 0 and 1 are the upper
   // terrace, z = 2 and 3 the lower, so (0, 2) is the flight.

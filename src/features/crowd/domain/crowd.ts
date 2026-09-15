@@ -273,6 +273,16 @@ export interface Crowd extends Walkers {
 
   /** Every draw the crowd makes, so the same seed replays the same afternoon. */
   readonly random: () => number;
+  /**
+   * What decides where somebody with somewhere to be walks next, or undefined
+   * on a crowd nothing is routing. See {@link CrowdOptions.routeOf}.
+   *
+   * Beside `random` because it is the other thing injected from outside rather
+   * than derived from the graph, and like everything else that is not named
+   * after it, `reseatCrowd` carries it across an edit for free: the spread keeps
+   * it, and the router is rebuilt on the same graph the crowd is put back on.
+   */
+  readonly routeOf: ((person: number, at: number) => number) | undefined;
 }
 
 export interface CrowdOptions {
@@ -288,6 +298,17 @@ export interface CrowdOptions {
    * and the crowd draws its own at random, which is what a fixture wants.
    */
   readonly variantOf?: (index: number) => number;
+  /**
+   * Where a person should walk from the node they have just reached, when
+   * something above the crowd has an opinion: the node to aim at, or -1 to
+   * wander as usual.
+   *
+   * Injected for the reason {@link CrowdOptions.variantOf} is. What a guest
+   * wants and which bakery serves it are facts about the simulation, and this
+   * file is about walking; a crowd handed no router walks exactly as it did
+   * before there was one, which is what every fixture in `crowd.test.ts` wants.
+   */
+  readonly routeOf?: (person: number, at: number) => number;
 }
 
 /**
@@ -336,6 +357,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     lane: new Uint8Array(capacity),
     ...proximityFor(capacity),
     random,
+    routeOf: options.routeOf,
   };
 
   const beach = network.beach;
@@ -789,21 +811,46 @@ function standUp(crowd: Crowd, i: number): void {
 }
 
 /**
- * Which node a person walks to next.
+ * Which node a person walks to next: where they are going, or a wander.
+ *
+ * The two are kept apart because they are two different rules and only one of
+ * them was ever here. See {@link wanderFrom}, which is the rule this file had
+ * before anything was routing anybody and which is what a crowd with no router
+ * still does, to the voxel.
+ */
+function nextNode(crowd: Crowd, i: number, at: number): number {
+  const node = crowd.network.nodes[at]!;
+  // Every adjacency is stored in both directions, so a node somebody walked to
+  // always has at least the way back out of it. An isolated paved tile has none,
+  // and nobody can have arrived at one.
+  if (node.exits.length === 0) return at;
+
+  // Somewhere to be beats wandering, and doubling back towards it is correct
+  // where wandering would refuse to: a guest who has walked past the bakery
+  // turns round. The router hands back -1 for anybody with nowhere to be, which
+  // is everybody on a plot with no venues on it.
+  //
+  // What it hands back is not checked against `exits`. A flow field only ever
+  // names a neighbour, and a check here would be a scan of the exits on every
+  // arrival on the plot, to defend against a bug in another module. The one
+  // guard that is worth it is here: a router naming the node somebody is
+  // standing on would pin them there for ever on a zero-length segment.
+  const routed = crowd.routeOf?.(i, at) ?? -1;
+  if (routed >= 0 && routed !== at) return routed;
+
+  return wanderFrom(crowd, i, node);
+}
+
+/**
+ * Where somebody with nowhere to be goes from a node.
  *
  * Anything but straight back the way they came, unless that is the only way out
  * — which is a dead-end spur, and turning round is the only thing to do on one.
  * Counting the candidates and then taking the n-th keeps this allocation-free,
  * which matters because it runs on every arrival.
  */
-function nextNode(crowd: Crowd, i: number, at: number): number {
-  const node = crowd.network.nodes[at]!;
+function wanderFrom(crowd: Crowd, i: number, node: WalkNode): number {
   const back = crowd.cameFrom[i]!;
-  // Every adjacency is stored in both directions, so a node somebody walked to
-  // always has at least the way back out of it. An isolated paved tile has none,
-  // and nobody can have arrived at one.
-  if (node.exits.length === 0) return at;
-
   let onward = 0;
   for (const edge of node.exits) {
     if (crowd.network.edges[edge]!.to !== back) onward++;

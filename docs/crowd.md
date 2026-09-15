@@ -31,6 +31,10 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | Obstacles on the sand                  | `crowd/domain/sandGrid.ts`                   |
 | Seats in world space                   | `crowd/domain/seating.ts`                    |
 | Putting people back on a rebuilt graph | `crowd/domain/nearestNode.ts`, `reseatCrowd` |
+| A venue's doors                        | `sim/domain/doors.ts`                        |
+| One sweep of the graph                 | `sim/domain/flowField.ts`                    |
+| Where everybody is heading             | `sim/domain/goals.ts`                        |
+| Choosing, routing and arriving         | `sim/domain/router.ts`                       |
 | Guest registry                         | `guests/domain/guests.ts`                    |
 | Parties and who is a child             | `guests/domain/parties.ts`                   |
 | Beds                                   | `guests/domain/homes.ts`                     |
@@ -150,8 +154,10 @@ as do Escape, a regenerate and demolishing the selected object.
 React state, set once per click and re-worded once a simulated day. What a guest
 is doing is the one per-frame line, written to a DOM node by `hudOverlay.ts`.
 A lodging lists who sleeps there, and a guest's panel shows their five need
-levels as bars and where they would go next. Who is inside a venue is not
-tracked yet, and the panel says so rather than showing a zero.
+levels as bars and where they would go next. The live line names the
+destination once they are walking to one - `Hungry · Walking to the Bakery ·
+tile 12, 7`. Who is inside a venue is not tracked yet, and the panel says so
+rather than showing a zero.
 
 ## Drawing
 
@@ -217,16 +223,48 @@ reads.
   walk far; a group of friends gets bored fastest and will walk anywhere.
 - `strongestNeed` is the weighted loudest need, or nothing while a guest is
   content. It is the word in front of the inspector's live line - `Hungry ·
-Walking · tile 12, 7`.
+Walking to the Bakery · tile 12, 7`.
 - `sim/domain/chooseVenue.ts` scores every venue that serves that need as
   `relief / (1 + distance / reach)` and picks the best. The venues come off the
   art through `sim/domain/venues.ts`; lodging is left out, being nowhere to walk
   to in the daytime.
 
-**Nobody walks towards their choice yet.** The decision is computed and shown in
-the inspector, and the crowd still wanders the walk network as it always did.
-Routing is plan 017, and it replaces the straight-line distance with a flow
-field's own.
+## Walking towards it
+
+A guest who wants something walks to it, and a guest who wants nothing wanders
+exactly as the crowd always did. `sim/domain/router.ts` is the whole of it, and
+it is the only thing the crowd calls.
+
+- **One flow field per venue, not per need.** `doorNodesFor` takes a venue's own
+  tiles and the ring one tile around them and collects every walkable node on
+  them, sorted; `flowFieldFor` sweeps the graph breadth-first from those doors
+  and writes, per node, the neighbour that gets nearer. A guest arriving anywhere
+  then costs one array read.
+
+  The field is per venue rather than per need kind because `chooseVenue` weighs
+  a good venue further off against a weak one nearby, and a per-need field would
+  route everybody to the nearest one serving that need - computing that choice
+  and then ignoring it. `plans/README.md`'s decision 2 records the amendment.
+
+- **Built lazily, and thrown away on an edit.** A venue nobody walks to gets no
+  field at all; the HUD's `Routes` row is how many exist. One sweep of the
+  reference plot's 2 260 nodes measures **0.47 ms**, and eighty of them
+  **5.82 ms** - the ceiling `flowField.test.ts` holds it to. On a hand edit the
+  venues are re-derived, `Router.rebuild` drops every field and every goal, and
+  the crowd is put back on the new graph: a node index means nothing across a
+  rebuild.
+
+- **The crowd knows nothing about venues.** `createCrowd` takes one optional
+  `routeOf(person, at) -> node`, injected exactly as `variantOf` is. `nextNode`
+  consults it first and falls back to the wander when it hands back -1 or names
+  the node somebody is standing on. A crowd built without one walks to the voxel
+  as it did before there was a router, which `crowd.test.ts` pins.
+
+- **A party goes together.** Whoever arrives somewhere and decides sets the goal
+  for everybody in their party, so a family does not split up at the first
+  junction. Arriving relieves the need and lets the goal go on the same arrival,
+  so nobody stands in a doorway. **A visit takes no time yet**: capacity, the
+  queue and the dwell are plan 018, and `router.ts` says where they go.
 
 ## Where the art lives
 

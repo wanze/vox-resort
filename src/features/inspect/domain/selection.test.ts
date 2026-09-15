@@ -252,8 +252,29 @@ const contentNeeds = (guests: Guests): Needs => {
 describe('activityLine', () => {
   const guests = guestsOf();
   const content = contentNeeds(guests);
-  const doing = (crowd: Crowd, needs: Needs, person: number): string =>
-    activityLine(crowd, needs, guests, person);
+  const doing = (
+    crowd: Crowd,
+    needs: Needs,
+    person: number,
+    heading: Venue | null = null,
+  ): string => activityLine(crowd, needs, guests, person, heading);
+
+  /** A bakery, as `venuesOn` would hand one back, for the heading wording. */
+  const BAKERY: Venue = {
+    key: 'bakery#0',
+    id: 'bakery',
+    label: 'Bakery',
+    role: 'food',
+    satisfies: [{ need: 'hunger', amount: 0.5 }],
+    capacity: 8,
+    dwellSeconds: { min: 240, max: 480 },
+    x: 0,
+    z: 0,
+    tileX: 0,
+    tileZ: 0,
+    tilesX: 1,
+    tilesZ: 1,
+  };
 
   it('says somebody on the paving is walking, and where', () => {
     const crowd = seatedStreet('sit');
@@ -286,6 +307,30 @@ describe('activityLine', () => {
       return doing(crowd, needs, 0).split(' · ')[0];
     });
     expect(moods).toEqual(['Hungry', 'Thirsty', 'Tired', 'Bored', 'Grubby']);
+  });
+
+  it('says where they are heading, once something is routing them', () => {
+    const crowd = seatedStreet('sit');
+    const hungry = contentNeeds(guests);
+    hungry.level.hunger[0] = 0;
+    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
+    expect(doing(crowd, hungry, 0, BAKERY)).toBe(
+      `Hungry · Walking to the Bakery · tile ${tileX}, ${tileZ}`,
+    );
+  });
+
+  it('is the line plan 016 wrote, to the byte, for anybody with nowhere to be', () => {
+    const crowd = seatedStreet('sit');
+    const hungry = contentNeeds(guests);
+    hungry.level.hunger[0] = 0;
+    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
+    expect(doing(crowd, hungry, 0, null)).toBe(`Hungry · Walking · tile ${tileX}, ${tileZ}`);
+    // And a guest who is sitting is sitting, whatever they may be heading for.
+    const sitting = seatedStreet('sit');
+    const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
+    expect(doing(sitting, content, sitter, BAKERY).split(' · ')[0]).toBe('Sitting');
   });
 
   it('tells sitting, lying down and being on the beach apart', () => {

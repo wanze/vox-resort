@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
@@ -34,6 +35,10 @@ const venue = (key: string, satisfies: readonly NeedRelief[], x: number, z: numb
   dwellSeconds: { min: 240, max: 480 },
   x,
   z,
+  tileX: Math.floor(x / TILE_VOXELS),
+  tileZ: Math.floor(z / TILE_VOXELS),
+  tilesX: 1,
+  tilesZ: 1,
 });
 
 /** Everybody content but for the one need, which is run right down. */
@@ -120,5 +125,47 @@ describe('chooseVenue', () => {
   it('chooses nothing on a plot with no venues standing at all', () => {
     const person = someone('couple');
     expect(decide(person, wanting(person, 'hunger'), [])).toBeNull();
+  });
+});
+
+describe('chooseVenue with a real walking distance', () => {
+  const walked = (
+    person: number,
+    needs: Needs,
+    venues: readonly Venue[],
+    walkingDistance: (venue: number) => number,
+  ): ReturnType<typeof chooseVenue> =>
+    chooseVenue({ needs, guests, person, venues, x: 0, z: 0, walkingDistance });
+
+  it('prefers the one that is further as the crow flies but nearer on foot', () => {
+    // The near one is across a river with no bridge: a long way round. The far
+    // one is straight down the path. A straight line cannot tell them apart.
+    const person = someone('couple');
+    const venues = [venue('bakery#0', HUNGER, 100), venue('bakery#1', HUNGER, 500)];
+    expect(decide(person, wanting(person, 'hunger'), venues)?.venue).toBe(0);
+    expect(
+      walked(person, wanting(person, 'hunger'), venues, (v) => (v === 0 ? 2000 : 520))?.venue,
+    ).toBe(1);
+  });
+
+  it('never sends anybody somewhere there is no path to', () => {
+    const person = someone('couple');
+    const venues = [venue('bakery#0', HUNGER, 100)];
+    expect(walked(person, wanting(person, 'hunger'), venues, () => Infinity)).toBeNull();
+  });
+
+  it('answers exactly as it did without one when it is not given', () => {
+    // The same fixture as "a short reach settles for the weak place nearby",
+    // handed its own straight-line distances: the walk that is the line.
+    const venues = [
+      venue('snack#0', [{ need: 'hunger', amount: 0.3 }], 60),
+      venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 1400),
+    ];
+    const asTheLine = (index: number): number => Math.hypot(venues[index]!.x, venues[index]!.z);
+    for (const kind of ['family', 'friends'] as const) {
+      const person = someone(kind);
+      const needs = wanting(person, 'hunger');
+      expect(walked(person, needs, venues, asTheLine)).toEqual(decide(person, needs, venues));
+    }
   });
 });

@@ -42,6 +42,16 @@ describe('venuesOn', () => {
     expect(venue.z).toBe(6 * TILE_VOXELS + (3 * TILE_VOXELS) / 2);
   });
 
+  it('carries the footprint as tiles, which is what a door is found from', () => {
+    const venue = only([
+      { ...at('bakery#0', 'bakery', 4, 6), tilesX: 2, tilesZ: 3, width: 2 * TILE_VOXELS },
+    ]);
+    expect(venue.tileX).toBe(4);
+    expect(venue.tileZ).toBe(6);
+    expect(venue.tilesX).toBe(2);
+    expect(venue.tilesZ).toBe(3);
+  });
+
   it('finds nothing to do on a plot of palms and benches', () => {
     expect(venuesOn([at('palm#0', 'palm'), at('bench#0', 'bench', 2, 0)])).toEqual([]);
   });

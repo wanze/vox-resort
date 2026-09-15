@@ -219,11 +219,22 @@ const NEED_MOODS: { readonly [need in GuestNeed]: string } = {
  * you are watching `chooseVenue` decide. A content guest gets no word at all
  * rather than a cheerful one.
  *
+ * `heading` is the venue they are actually walking to, or null when they have
+ * nowhere to be. The venue rather than a router, for the reason this module
+ * takes a spot rather than a crowd: what decides where anybody is going is not
+ * something the wording of a line should be able to reach.
+ *
  * The one thing in this module that allocates per frame - a short string for
  * the one guest selected - and deliberately so: the overlay skips the DOM write
  * when it is unchanged, and a string per frame is not what a frame is short of.
  */
-export function activityLine(crowd: Crowd, needs: Needs, guests: Guests, person: number): string {
+export function activityLine(
+  crowd: Crowd,
+  needs: Needs,
+  guests: Guests,
+  person: number,
+  heading: Venue | null,
+): string {
   // A plot with its paving taken up walks nobody, though everybody still exists.
   if (person >= crowd.count) return 'Nowhere to walk';
   const wanted = strongestNeed(needs, guests, person);
@@ -236,7 +247,12 @@ export function activityLine(crowd: Crowd, needs: Needs, guests: Guests, person:
         ? 'Lying down'
         : isRoaming(crowd, person)
           ? 'On the beach'
-          : 'Walking';
+          : // Where they are going, when somebody is routing them: "Walking" on
+            // its own is what a guest with nowhere to be is doing, and it is the
+            // line plan 016 wrote.
+            heading === null
+            ? 'Walking'
+            : `Walking to the ${heading.label}`;
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
   return `${mood}${doing} · tile ${tileX}, ${tileZ}`;

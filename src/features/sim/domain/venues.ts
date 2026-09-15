@@ -29,6 +29,18 @@ export interface Venue {
   /** Centre of the footprint, in world voxels: what a distance is measured to. */
   readonly x: number;
   readonly z: number;
+  /**
+   * Tile the footprint starts on, and how many tiles it claims.
+   *
+   * Carried as well as the centre because a door is found from the tiles and
+   * not from the middle of the building: see `doors.ts`. Copied straight off
+   * the placement, which already holds them turned, so a rotated venue needs no
+   * handling here.
+   */
+  readonly tileX: number;
+  readonly tileZ: number;
+  readonly tilesX: number;
+  readonly tilesZ: number;
 }
 
 /**
@@ -60,6 +72,10 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
       // drawn from.
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
+      tileX: placement.tileX,
+      tileZ: placement.tileZ,
+      tilesX: placement.tilesX,
+      tilesZ: placement.tilesZ,
     });
   }
   return venues;

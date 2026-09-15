@@ -83,6 +83,9 @@ export function RenderStats({
       <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
         {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
       </StatRow>
+      <StatRow label="Routes" note="flow fields built, one per venue walked to">
+        {formatNumber(stats.routeFields)}
+      </StatRow>
       <StatRow label="Lamps">
         <span ref={activeLightsElement} className="hud-lights-active">
           0

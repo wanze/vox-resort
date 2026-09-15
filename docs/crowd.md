@@ -149,8 +149,9 @@ as do Escape, a regenerate and demolishing the selected object.
 `selection.ts` turns the pick into a flat, worded view that `App` holds as
 React state, set once per click and re-worded once a simulated day. What a guest
 is doing is the one per-frame line, written to a DOM node by `hudOverlay.ts`.
-A lodging lists who sleeps there. Who is inside a venue is not tracked yet, and
-the panel says so rather than showing a zero.
+A lodging lists who sleeps there, and a guest's panel shows their five need
+levels as bars and where they would go next. Who is inside a venue is not
+tracked yet, and the panel says so rather than showing a zero.
 
 ## Drawing
 
@@ -201,8 +202,31 @@ of day are derived from it; `skyStateFor` still takes only the time of day.
 | Fast   | 120                  |
 | Rush   | 30                   |
 
-Nothing runs on ticks yet. The crowd, balloons and sea are animation and stay on
-the frame delta.
+Needs are what runs on ticks; see below. The crowd, balloons and sea are
+animation and stay on the frame delta.
+
+## What guests want
+
+`sim/domain/needs.ts` holds five levels per guest - hunger, thirst, energy, fun,
+hygiene - in columns parallel to `Guests` and keyed by the same person index. 1
+is content and 0 is desperate, which is the way round the art's `amount` already
+reads.
+
+- `decayNeeds` runs on the clock's ticks, one simulated minute each, at the
+  rates in `sim/domain/archetypes.ts`. A family gets hungry fastest and will not
+  walk far; a group of friends gets bored fastest and will walk anywhere.
+- `strongestNeed` is the weighted loudest need, or nothing while a guest is
+  content. It is the word in front of the inspector's live line - `Hungry ·
+Walking · tile 12, 7`.
+- `sim/domain/chooseVenue.ts` scores every venue that serves that need as
+  `relief / (1 + distance / reach)` and picks the best. The venues come off the
+  art through `sim/domain/venues.ts`; lodging is left out, being nowhere to walk
+  to in the daytime.
+
+**Nobody walks towards their choice yet.** The decision is computed and shown in
+the inspector, and the crowd still wanders the walk network as it always did.
+Routing is plan 017, and it replaces the straight-line distance with a flow
+field's own.
 
 ## Where the art lives
 

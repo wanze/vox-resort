@@ -23,6 +23,29 @@ const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
   solo: 'On their own',
 };
 
+/**
+ * The five needs' display names. Four lines duplicated from `selection.ts`
+ * rather than exported from it: that one is the wording a *venue* serves, and a
+ * shared map would tie the panel's labels to the inspector's domain wording for
+ * nothing but the saving of four strings.
+ */
+const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
+  hunger: 'Hunger',
+  thirst: 'Thirst',
+  energy: 'Energy',
+  fun: 'Fun',
+  hygiene: 'Hygiene',
+};
+
+/** The mood a need is felt as, for the `Wants` row's note. */
+const NEED_MOODS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
+  hunger: 'hungry',
+  thirst: 'thirsty',
+  energy: 'tired',
+  fun: 'bored',
+  hygiene: 'grubby',
+};
+
 const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: string } = {
   lodging: 'Lodging',
   food: 'Food',
@@ -67,6 +90,41 @@ function MemberList({ label, members, selected, onSelectPerson }: MemberListProp
   );
 }
 
+/**
+ * How well each need is met, as five bars.
+ *
+ * The number goes in the bar's `aria-label` as well as in its width, so the
+ * readout says something without colour and to a screen reader - a bar that is
+ * only a length is a picture of a number nobody can read.
+ */
+function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
+  return (
+    <div className="hud-needs" role="group" aria-label="How they are doing">
+      {needs.map(({ need, level }) => (
+        <div key={need} className="hud-need">
+          <span className="hud-need-label">{NEED_LABELS[need]}</span>
+          <span
+            className="hud-need-track"
+            aria-label={`${NEED_LABELS[need]} ${Math.round(level * 100)}%`}
+          >
+            <span className="hud-need-fill" style={{ width: `${level * 100}%` }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Where they would go next, and what sends them: nothing at all when content. */
+function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
+  if (!wants) return <StatRow label="Wants">Nothing right now</StatRow>;
+  return (
+    <StatRow label="Wants" note={NEED_MOODS[wants.need]}>
+      {wants.label}
+    </StatRow>
+  );
+}
+
 function GuestDetails({
   guest,
   activityElement,
@@ -89,7 +147,9 @@ function GuestDetails({
           {guest.home ? guest.home.label : 'No bed on the plot'}
         </StatRow>
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
+        <WantsRow wants={guest.wants} />
       </dl>
+      <NeedBars needs={guest.needs} />
       <MemberList
         label="Their party"
         members={guest.members}

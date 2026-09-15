@@ -14,12 +14,15 @@ import { createGuests, fullNameOf, type Guests } from '../../guests/domain/guest
 import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { shoreFor } from '../../layout/domain/shoreline';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { createNeeds, NEEDS, type Needs } from '../../sim/domain/needs';
+import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
   activityLine,
   guestView,
   namesPlacement,
   personOf,
   placeView,
+  type GuestSpot,
   type InspectTarget,
 } from './selection';
 
@@ -49,6 +52,20 @@ const HOMES: readonly Home[] = [home('hotel#0', 'hotel', 40), home('bungalow#0',
 const guestsOf = (count = 80): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
+/** Needs as they were drawn, or with one person moved to a mood of their own. */
+const needsOf = (guests: Guests, level: number | null = null, person = 0): Needs => {
+  const needs = createNeeds(guests, 7);
+  if (level !== null) for (const need of NEEDS) needs.level[need][person] = level;
+  return needs;
+};
+
+const HERE: GuestSpot = { x: 0, z: 0 };
+
+const NO_VENUES: readonly Venue[] = [];
+
+/** Standing at a venue's own door, so the distance to it is nothing. */
+const doorOf = (venue: Venue): GuestSpot => ({ x: venue.x, z: venue.z });
+
 const at = (key: string, id: string, tileX = 3, tileZ = 7): Placement => ({
   key,
   id,
@@ -71,7 +88,7 @@ describe('guestView', () => {
     const person = Array.from({ length: guests.count }, (_, i) => i).find(
       (i) => guests.parties[guests.party[i]!]!.members.length > 2,
     )!;
-    const view = guestView(guests, person, 0);
+    const view = guestView(guests, needsOf(guests), NO_VENUES, person, 0, HERE);
     const party = guests.parties[guests.party[person]!]!;
     expect(view.kind).toBe('guest');
     expect(view.name).toBe(fullNameOf(guests, person));
@@ -89,9 +106,10 @@ describe('guestView', () => {
     const guests = guestsOf();
     const homeless = guests.home.indexOf(NO_HOME);
     expect(homeless, 'everybody had a bed').toBeGreaterThanOrEqual(0);
-    expect(guestView(guests, homeless, 0).home).toBeNull();
+    const needs = needsOf(guests);
+    expect(guestView(guests, needs, NO_VENUES, homeless, 0, HERE).home).toBeNull();
     const housed = guests.home.findIndex((index) => index !== NO_HOME);
-    const view = guestView(guests, housed, 0);
+    const view = guestView(guests, needs, NO_VENUES, housed, 0, HERE);
     expect(view.home).toEqual({
       key: guests.homes[guests.home[housed]!]!.key,
       label: guests.homes[guests.home[housed]!]!.label,
@@ -100,10 +118,54 @@ describe('guestView', () => {
 
   it('counts the nights left from the day it is, past zero once the stay is over', () => {
     const guests = guestsOf();
-    const { arrivedOn, nights } = guestView(guests, 0, 0);
-    expect(guestView(guests, 0, 0).nightsLeft).toBe(arrivedOn + nights);
-    expect(guestView(guests, 0, 4).nightsLeft).toBe(arrivedOn + nights - 4);
-    expect(guestView(guests, 0, arrivedOn + nights + 2).nightsLeft).toBe(-2);
+    const needs = needsOf(guests);
+    const view = (day: number) => guestView(guests, needs, NO_VENUES, 0, day, HERE);
+    const { arrivedOn, nights } = view(0);
+    expect(view(0).nightsLeft).toBe(arrivedOn + nights);
+    expect(view(4).nightsLeft).toBe(arrivedOn + nights - 4);
+    expect(view(arrivedOn + nights + 2).nightsLeft).toBe(-2);
+  });
+
+  it('carries all five need levels, in the order the HUD lists them', () => {
+    const guests = guestsOf();
+    const needs = needsOf(guests);
+    const view = guestView(guests, needs, NO_VENUES, 3, 0, HERE);
+    expect(view.needs.map((entry) => entry.need)).toEqual([...NEEDS]);
+    for (const entry of view.needs) {
+      expect(entry.level).toBeCloseTo(needs.level[entry.need][3]!, 5);
+    }
+  });
+
+  it('wants nothing from a guest who has everything', () => {
+    const guests = guestsOf();
+    const bakery = venuesOn([at('bakery#0', 'bakery')]);
+    expect(guestView(guests, needsOf(guests, 1, 3), bakery, 3, 0, HERE).wants).toBeNull();
+  });
+
+  it('names the bakery for a hungry guest, and nowhere when none is standing', () => {
+    const guests = guestsOf();
+    const needs = needsOf(guests, 0, 3);
+    const bakery = venuesOn([at('bakery#0', 'bakery')]);
+    expect(guestView(guests, needs, bakery, 3, 0, HERE).wants).toEqual({
+      need: 'hunger',
+      label: 'Bakery',
+    });
+    expect(guestView(guests, needs, NO_VENUES, 3, 0, HERE).wants).toBeNull();
+  });
+
+  it('chooses from where the guest is standing, not from the corner of the plot', () => {
+    const guests = guestsOf();
+    const needs = needsOf(guests, 0, 3);
+    // A bakery at one end of the plot and a restaurant at the other, both of
+    // them somewhere to eat: whoever is at the door wins.
+    const venues = venuesOn([
+      at('bakery#0', 'bakery', 1, 1),
+      at('restaurant#0', 'restaurant', 90, 1),
+    ]);
+    expect(guestView(guests, needs, venues, 3, 0, doorOf(venues[0]!)).wants?.label).toBe('Bakery');
+    expect(guestView(guests, needs, venues, 3, 0, doorOf(venues[1]!)).wants?.label).toBe(
+      'Restaurant',
+    );
   });
 });
 
@@ -180,13 +242,50 @@ const until = (crowd: Crowd, matches: (i: number) => boolean): number => {
   throw new Error('nobody ever did it');
 };
 
+/** Everybody content, so the wording under test is the doing and not the mood. */
+const contentNeeds = (guests: Guests): Needs => {
+  const needs = createNeeds(guests, 7);
+  for (const need of NEEDS) needs.level[need].fill(1);
+  return needs;
+};
+
 describe('activityLine', () => {
+  const guests = guestsOf();
+  const content = contentNeeds(guests);
+  const doing = (crowd: Crowd, needs: Needs, person: number): string =>
+    activityLine(crowd, needs, guests, person);
+
   it('says somebody on the paving is walking, and where', () => {
     const crowd = seatedStreet('sit');
-    const line = activityLine(crowd, 0);
+    const line = doing(crowd, content, 0);
     const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
     const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
     expect(line).toBe(`Walking · tile ${tileX}, ${tileZ}`);
+  });
+
+  it('has nowhere to walk for somebody the paving no longer carries', () => {
+    const crowd = seatedStreet('sit');
+    expect(doing(crowd, content, crowd.count)).toBe('Nowhere to walk');
+    expect(doing(crowd, content, crowd.count + 5)).toBe('Nowhere to walk');
+  });
+
+  it('puts the loudest need in front of what they are doing', () => {
+    const crowd = seatedStreet('sit');
+    const hungry = contentNeeds(guests);
+    hungry.level.hunger[0] = 0;
+    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
+    expect(doing(crowd, hungry, 0)).toBe(`Hungry · Walking · tile ${tileX}, ${tileZ}`);
+  });
+
+  it('words each need as the one thing it is felt as', () => {
+    const crowd = seatedStreet('sit');
+    const moods = NEEDS.map((need) => {
+      const needs = contentNeeds(guests);
+      needs.level[need][0] = 0;
+      return doing(crowd, needs, 0).split(' · ')[0];
+    });
+    expect(moods).toEqual(['Hungry', 'Thirsty', 'Tired', 'Bored', 'Grubby']);
   });
 
   it('tells sitting, lying down and being on the beach apart', () => {
@@ -215,10 +314,10 @@ describe('activityLine', () => {
     const roamer = until(beach, (i) => isRoaming(beach, i));
 
     const lines = [
-      activityLine(seatedStreet('sit'), 0),
-      activityLine(sitting, sitter),
-      activityLine(lying, lier),
-      activityLine(beach, roamer),
+      doing(seatedStreet('sit'), content, 0),
+      doing(sitting, content, sitter),
+      doing(lying, content, lier),
+      doing(beach, content, roamer),
     ].map((line) => line.split(' · ')[0]);
     expect(lines).toEqual(['Walking', 'Sitting', 'Lying down', 'On the beach']);
   });

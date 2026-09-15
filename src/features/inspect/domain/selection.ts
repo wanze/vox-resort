@@ -8,8 +8,10 @@
  * the guest is doing this instant - is not in here at all; it goes to a DOM node
  * through a ref, the way the frame rate does. See `hudOverlay.ts`.
  *
- * Nothing here says who is *inside* a place or what a guest *wants*: nothing
- * tracks either yet, and a made-up number is worse than none.
+ * What a guest *wants* is now a real answer, read off `sim/domain/` - the need
+ * pulling hardest and where they would go to see to it. Who is *inside* a place
+ * still is not: nothing counts anybody through a door yet, and a made-up
+ * occupancy is worse than none. That is plan 018.
  */
 
 import {
@@ -23,6 +25,9 @@ import { isRoaming, RESTING, restingOn, type Crowd } from '../../crowd/domain/cr
 import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { chooseVenue } from '../../sim/domain/chooseVenue';
+import { NEEDS, strongestNeed, type Needs } from '../../sim/domain/needs';
+import type { Venue } from '../../sim/domain/venues';
 
 /** What was clicked on, as the simulation names it: a person index or a placement key. */
 export type InspectTarget = { readonly person: number } | { readonly key: string } | null;
@@ -59,6 +64,10 @@ export interface GuestView {
   readonly nights: number;
   /** Nights left, given the day it is now; negative once they are overdue to go. */
   readonly nightsLeft: number;
+  /** How well each need is met, 0..1, in `NEEDS` order. Worded by the panel. */
+  readonly needs: readonly { readonly need: GuestNeed; readonly level: number }[];
+  /** Where they would go next, or null while they are content. */
+  readonly wants: { readonly need: GuestNeed; readonly label: string } | null;
 }
 
 export interface PlaceView {
@@ -107,7 +116,43 @@ function memberOf(guests: Guests, person: number): PartyMemberView {
   return { person, name: fullNameOf(guests, person), child: guests.child[person] === 1 };
 }
 
-export function guestView(guests: Guests, person: number, day: number): GuestView {
+/** Where a guest is standing, which `selection.ts` is never the one to know. */
+export interface GuestSpot {
+  readonly x: number;
+  readonly z: number;
+}
+
+/**
+ * Where this guest would go next, already worded, or null while they want
+ * nothing or nowhere on the plot serves what they want.
+ */
+function wantsOf(options: {
+  guests: Guests;
+  needs: Needs;
+  venues: readonly Venue[];
+  person: number;
+  at: GuestSpot;
+}): GuestView['wants'] {
+  const { guests, needs, venues, person, at } = options;
+  const choice = chooseVenue({ needs, guests, person, venues, x: at.x, z: at.z });
+  return choice === null ? null : { need: choice.need, label: venues[choice.venue]!.label };
+}
+
+/**
+ * Everything worth showing about one guest, worded once.
+ *
+ * Takes where they are as {@link GuestSpot} rather than reaching for the crowd:
+ * this module takes a `Crowd` only in {@link activityLine}, and a view that had
+ * to be built from one could not be built for somebody who is not walking.
+ */
+export function guestView(
+  guests: Guests,
+  needs: Needs,
+  venues: readonly Venue[],
+  person: number,
+  day: number,
+  at: GuestSpot,
+): GuestView {
   const party = guests.parties[guests.party[person]!]!;
   const home = homeOf(guests, person);
   const arrivedOn = guests.arrivedOn[person]!;
@@ -122,6 +167,8 @@ export function guestView(guests: Guests, person: number, day: number): GuestVie
     arrivedOn,
     nights,
     nightsLeft: arrivedOn + nights - day,
+    needs: NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
+    wants: wantsOf({ guests, needs, venues, person, at }),
   };
 }
 
@@ -153,17 +200,34 @@ export function placeView(placement: Placement, label: string, guests: Guests): 
   };
 }
 
+/** The one word a need is felt as, for the live line. */
+const NEED_MOODS: { readonly [need in GuestNeed]: string } = {
+  hunger: 'Hungry',
+  thirst: 'Thirsty',
+  energy: 'Tired',
+  fun: 'Bored',
+  hygiene: 'Grubby',
+};
+
 /**
  * What a guest is doing this instant, in a few words: the one line of the panel
  * that is rewritten per frame.
+ *
+ * The mood in front of it is the guest thought - one word for the need pulling
+ * hardest, in a line that was being written anyway - and it doubles as the
+ * debug view for the decision layer: watch it change as a guest runs down, and
+ * you are watching `chooseVenue` decide. A content guest gets no word at all
+ * rather than a cheerful one.
  *
  * The one thing in this module that allocates per frame - a short string for
  * the one guest selected - and deliberately so: the overlay skips the DOM write
  * when it is unchanged, and a string per frame is not what a frame is short of.
  */
-export function activityLine(crowd: Crowd, person: number): string {
+export function activityLine(crowd: Crowd, needs: Needs, guests: Guests, person: number): string {
   // A plot with its paving taken up walks nobody, though everybody still exists.
   if (person >= crowd.count) return 'Nowhere to walk';
+  const wanted = strongestNeed(needs, guests, person);
+  const mood = wanted === null ? '' : `${NEED_MOODS[wanted.need]} · `;
   const resting = restingOn(crowd, person);
   const doing =
     resting === RESTING.sitting
@@ -175,5 +239,5 @@ export function activityLine(crowd: Crowd, person: number): string {
           : 'Walking';
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
-  return `${doing} · tile ${tileX}, ${tileZ}`;
+  return `${mood}${doing} · tile ${tileX}, ${tileZ}`;
 }

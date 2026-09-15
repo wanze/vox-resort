@@ -720,6 +720,40 @@ input[type='checkbox'] {
   gap: var(--space-2);
 }
 
+/* The five needs as bars: a groove with the met share filled, so a guest can be
+   read at a glance and the number is in the label for anyone who cannot. */
+.hud-needs {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.hud-need {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-need-label {
+  color: var(--text-dim);
+  font-size: var(--size-small);
+}
+
+.hud-need-track {
+  height: 6px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+  overflow: hidden;
+}
+
+.hud-need-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, var(--stucco), var(--sand));
+}
+
 /* ===========================================================================
    The build palette
    ======================================================================== */

@@ -30,6 +30,10 @@ export default defineModel({
     satisfies: [{ need: 'hygiene', amount: 1 }],
     capacity: 4,
     dwellSeconds: { min: 60, max: 180 },
+    doors: [
+      { x: 9, z: FRONT, facing: 0 },
+      { x: 23, z: FRONT, facing: 0 },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 16 });

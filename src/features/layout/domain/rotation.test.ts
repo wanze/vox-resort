@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Matrix4, Vector3 } from 'three/webgpu';
-import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelDoor, ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import {
   normalizeRotation,
+  rotateDoors,
   rotateExtent,
   rotateLights,
   rotatePoint,
@@ -177,5 +178,38 @@ describe('rotateLights', () => {
 
   it('has nothing to turn on a model that declares no light', () => {
     expect(rotateLights([], WIDTH, DEPTH, 3)).toEqual([]);
+  });
+});
+
+describe('rotateDoors', () => {
+  /** A door in the middle of the north wall, walked out of northwards. */
+  const north: ModelDoor = { x: WIDTH / 2, z: 0, facing: 2 };
+
+  it('leaves a door on an unturned model where it was drawn', () => {
+    const doors = [north];
+    expect(rotateDoors(doors, WIDTH, DEPTH, 0)).toBe(doors);
+  });
+
+  it('puts the north door of a model turned once on its west wall, facing west', () => {
+    // North at z = 0 swings round to face west, which is `rotation.ts`'s own
+    // convention; and facing 3 is -x in the `+z, +x, -z, -x` sequence.
+    const [turned] = rotateDoors([north], WIDTH, DEPTH, 1);
+    expect(turned).toEqual({ x: 0, z: WIDTH / 2, facing: 3 });
+  });
+
+  it('brings a door back where it started, facing the same way, after four turns', () => {
+    const side: ModelDoor = { x: WIDTH, z: 7, facing: 1 };
+    let doors: readonly ModelDoor[] = [side];
+    for (let turn = 0; turn < 4; turn++) {
+      // The size before each turn, which swaps with every odd one.
+      const size = rotateExtent(WIDTH, DEPTH, normalizeRotation(turn));
+      doors = rotateDoors(doors, size.x, size.z, 1);
+    }
+    expect(doors).toEqual([side]);
+  });
+
+  it('hands a model with no doors its own empty list back', () => {
+    const none: readonly ModelDoor[] = [];
+    expect(rotateDoors(none, WIDTH, DEPTH, 3)).toBe(none);
   });
 });

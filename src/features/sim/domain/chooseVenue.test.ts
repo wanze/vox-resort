@@ -6,7 +6,7 @@ import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { chooseVenue, type ChoiceOptions } from './chooseVenue';
 import { createNeeds, NEEDS, type Needs } from './needs';
-import { MAX_QUEUE_SHOWN } from './queueSpot';
+import { MAX_QUEUE_SHOWN } from './queueLane';
 import type { Venue } from './venues';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -40,6 +40,7 @@ const venue = (key: string, satisfies: readonly NeedRelief[], x: number, z: numb
   tileZ: Math.floor(z / TILE_VOXELS),
   tilesX: 1,
   tilesZ: 1,
+  doors: [],
 });
 
 /** Everybody content but for the one need, which is run right down. */
@@ -212,6 +213,24 @@ describe('chooseVenue with a line at the door', () => {
     expect(
       queued(person, wanting(person, 'hunger'), venues, () => MAX_QUEUE_SHOWN - 1)?.venue,
     ).toBe(0);
+  });
+
+  it('will not choose a venue whose own short lane is full, however far below the ceiling', () => {
+    const person = someone('couple');
+    const venues = [venue('bakery#0', HUNGER, 150), venue('bakery#1', HUNGER, 600)];
+    const needs = wanting(person, 'hunger');
+    // Two waiting at the near bakery, which is at the end of a two-tile spur.
+    const options: ChoiceOptions = {
+      needs,
+      guests,
+      person,
+      venues,
+      x: 0,
+      z: 0,
+      queueLength: (v) => (v === 0 ? 2 : 0),
+    };
+    expect(chooseVenue(options)?.venue).toBe(0);
+    expect(chooseVenue({ ...options, queueLimit: (v) => (v === 0 ? 2 : 12) })?.venue).toBe(1);
   });
 
   it('lets a big place absorb a queue that would rule out a small one', () => {

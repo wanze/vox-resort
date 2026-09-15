@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { arriveAt, createOccupancy, leaveVenue, sweepOccupancy, VISIT } from './occupancy';
-import { MAX_QUEUE_SHOWN } from './queueSpot';
+import { MAX_QUEUE_SHOWN } from './queueLane';
 
 /** `beach-shower`'s own numbers: one person, and half a tick rounded up to one. */
 const SHOWER = { venue: 0, capacity: 1, dwell: 1 };

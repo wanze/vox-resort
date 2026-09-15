@@ -39,6 +39,9 @@ import {
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
 import { elevationFor, levelAt, levelHeight } from './elevation';
+import { doorStepTile, placedDoors } from './doorStep';
+import { clampParams, generateResort } from './resortGenerator';
+import { terrainFor } from './terrain';
 
 /** An item that exactly fills the tiles it claims. */
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
@@ -1101,5 +1104,147 @@ describe('placementCenter', () => {
     const narrow: LayoutItem = { id: 'hut', tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
     const { placements } = layoutResort([item(PATH_ID), narrow], tinyPlan);
     expect(placementCenter(placements[0]!)).toEqual({ x: TILE_VOXELS + 16, z: TILE_VOXELS + 16 });
+  });
+});
+
+const hutOf = (layout: ResortLayout) => layout.placements.find((each) => each.id === 'hut')!;
+
+/**
+ * Keys of the buildings standing on grass that declare doors and have none on
+ * paving. Grass only, because nothing standing on sand is paved to at all; see
+ * `growSpurs`.
+ */
+const shutOut = (layout: ResortLayout, plan: ResortPlan): string[] => {
+  const paved = new Set(layout.paths.map((tile) => tileKey(tile.tileX, tile.tileZ)));
+  const terrain = terrainFor(plan);
+  return layout.placements
+    .filter((placement) => {
+      const type = OBJECT_TYPES.find((each) => each.id === placement.id)!;
+      const declared = type.venue?.doors ?? [];
+      if (declared.length === 0) return false;
+      if (terrain.surfaceOf(placement.tileX, placement.tileZ) !== 'grass') return false;
+      const doors = placedDoors(placement, declared, type.model.width, type.model.depth);
+      return !doors.some((door) => {
+        const tile = doorStepTile(placement, door);
+        return paved.has(tileKey(tile.x, tile.z));
+      });
+    })
+    .map((placement) => placement.key);
+};
+
+/** What a placement claims on the grid and draws, without which way it faces. */
+const claimsOf = (layout: ResortLayout) =>
+  layout.placements.map(({ key, id, tileX, tileZ, tilesX, tilesZ, width, depth }) => ({
+    key,
+    id,
+    tileX,
+    tileZ,
+    area: tilesX * tilesZ,
+    footprint: [tilesX, tilesZ],
+    model: width * depth,
+  }));
+
+describe('turning a building to open its door onto paving', () => {
+  /** A 2x3 hut with one door in the middle of its own +z front. */
+  const hut: LayoutItem = { ...item('hut', 2, 3), doors: [{ x: 15, z: 46, facing: 0 }] };
+  /** The hut at 1,1 on a 5x5 plot, with one street along the side named. */
+  const streetAlong = (side: 'north' | 'east', rotation: 0 | 1 | 2 | 3 = 0): ResortPlan => ({
+    tilesX: 5,
+    tilesZ: 5,
+    plots: [{ id: 'hut', tileX: 1, tileZ: 1, rotation }],
+    nodes:
+      side === 'north' ? [node('a', 0, 0), node('b', 4, 0)] : [node('a', 3, 0), node('b', 3, 4)],
+    edges: [{ from: 'a', to: 'b' }],
+    plazas: [],
+  });
+  it('gives a building whose back is to the only street a half turn', () => {
+    const placed = hutOf(layoutResort([item(PATH_ID), hut], streetAlong('north')));
+    expect(placed.rotation).toBe(2);
+    expect([placed.tileX, placed.tileZ, placed.tilesX, placed.tilesZ]).toEqual([1, 1, 2, 3]);
+  });
+
+  it('paves a spur to the door of a building whose flank is on the only street', () => {
+    // Only a quarter turn could face the east flank, and a quarter turn makes a
+    // 2x3 hut a 3x2 one - so the hut keeps its tiles and grows a way to its door.
+    const layout = layoutResort([item(PATH_ID), hut], streetAlong('east'));
+    const placed = hutOf(layout);
+    expect([placed.tileX, placed.tileZ, placed.tilesX, placed.tilesZ]).toEqual([1, 1, 2, 3]);
+    const [door] = placedDoors(placed, hut.doors!, hut.width, hut.depth);
+    const step = doorStepTile(placed, door!);
+    expect(layout.paths.map((tile) => tileKey(tile.tileX, tile.tileZ))).toContain(
+      tileKey(step.x, step.z),
+    );
+    expect(
+      isPathNetworkConnected(layout.paths.map((tile) => ({ x: tile.tileX, z: tile.tileZ }))),
+    ).toBe(true);
+  });
+
+  it('falls back to the nearest side when something stands in front of every door', () => {
+    // A post on the tile in front of the door either way round the hut stands.
+    const post: LayoutItem = { ...item('post'), category: 'grounds' };
+    const plan: ResortPlan = {
+      ...streetAlong('east'),
+      plots: [
+        { id: 'hut', tileX: 1, tileZ: 1, rotation: 0 },
+        { id: 'post', tileX: 1, tileZ: 4 },
+        { id: 'post', tileX: 2, tileZ: 0 },
+      ],
+    };
+    const layout = layoutResort([item(PATH_ID), hut, post], plan);
+    expect(hutOf(layout).rotation).toBe(0);
+    // Still reached, from the street along its flank.
+    expect(plotsWithoutPathAccess([item(PATH_ID), hut, post], plan)).toEqual([]);
+  });
+
+  it('leaves a building with no doors declared at the turn the plan gave it', () => {
+    const bare = item('hut', 2, 3);
+    expect(hutOf(layoutResort([item(PATH_ID), bare], streetAlong('north'))).rotation).toBe(0);
+  });
+
+  describe('on the generated plot', () => {
+    const TYPES = OBJECT_TYPES.map((type) => ({
+      id: type.id,
+      tilesX: type.model.tiles.x,
+      tilesZ: type.model.tiles.z,
+      category: type.category,
+      placement: type.model.placement,
+    }));
+    const withDoors: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+      id: type.id,
+      tilesX: type.model.tiles.x,
+      tilesZ: type.model.tiles.z,
+      width: type.model.width,
+      depth: type.model.depth,
+      category: type.category,
+      doors: type.venue?.doors ?? [],
+    }));
+    /** The same catalogue with the doors left off, which is the layout before them. */
+    const without: LayoutItem[] = withDoors.map(({ doors: _doors, ...rest }) => rest);
+    const planFor = (seed: number): ResortPlan =>
+      generateResort(TYPES, clampParams({ tilesX: 112, tilesZ: 100, seed, density: 0.7 }));
+    const plan = planFor(3);
+
+    it('opens every door-declaring building on the grass onto paving', () => {
+      // Without the doors the plan stands most of them with their backs to the
+      // street; with them, not one is left shut out on the reference plot.
+      expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);
+      expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual([]);
+    });
+
+    it('lays every plot it laid before, however the doors turn it', () => {
+      for (const seed of [1, 3, 7, 11]) {
+        expect(() => layoutResort(withDoors, planFor(seed)), `seed ${seed}`).not.toThrow();
+      }
+    });
+
+    it('turns nothing onto different tiles, and keeps the paving in one piece', () => {
+      const before = layoutResort(without, plan);
+      const after = layoutResort(withDoors, plan);
+      expect(claimsOf(after)).toEqual(claimsOf(before));
+      const tiles = after.paths.map((tile) => ({ x: tile.tileX, z: tile.tileZ }));
+      expect(isPathNetworkConnected(tiles)).toBe(
+        isPathNetworkConnected(before.paths.map((tile) => ({ x: tile.tileX, z: tile.tileZ }))),
+      );
+    });
   });
 });

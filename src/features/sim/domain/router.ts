@@ -30,10 +30,18 @@
  * later. A guest who queued twenty minutes is fed twenty minutes later, which
  * is the number plan 020 turns into unhappiness.
  *
+ * ## The line runs back along the paving, and is only as long as the paving
+ *
+ * Each venue's queue lane is laid beside its flow field, from the same doors and
+ * at the same moment - see `queueLane.ts`. A lane that runs out of graph is a
+ * shorter queue: a venue at the end of a two-tile spur takes a line of two, and
+ * the third guest balks. The same length is what `chooseVenue` is handed, so a
+ * guest never crosses the plot for a line that will refuse them.
+ *
  * ## Everything is thrown away when the graph is
  *
  * A node index means nothing across a rebuild, so {@link Router.rebuild} drops
- * the fields, the goals and the occupancy together. A field kept across an edit
+ * the fields, the lanes, the goals and the occupancy together. A field kept across an edit
  * is the one bug this design can have, and it shows up as guests walking
  * confidently into a wall.
  */
@@ -45,7 +53,7 @@ import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { chooseVenue } from './chooseVenue';
-import { doorNodesFor } from './doors';
+import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import {
   clearAllGoals,
@@ -57,7 +65,7 @@ import {
 } from './goals';
 import { relieve, type Needs } from './needs';
 import { arriveAt, createOccupancy, sweepOccupancy, VISIT, type Occupancy } from './occupancy';
-import { queueSpotAt } from './queueSpot';
+import { MAX_QUEUE_SHOWN, queueLaneFor, type QueueSpot } from './queueLane';
 import type { Venue } from './venues';
 
 /**
@@ -106,7 +114,7 @@ export interface Router {
    * place.
    */
   tick(now: number): void;
-  /** Throws away every field, every goal and every visit: the graph changed. */
+  /** Throws away every field, every lane, every goal and every visit: the graph changed. */
   rebuild(venues: readonly Venue[], network: WalkNetwork): void;
   /** How many fields have actually been built, for the stats readout. */
   readonly fieldCount: number;
@@ -143,6 +151,8 @@ export function createRouter(parts: {
   let index: NodeIndex = nodeIndexFor(network);
   /** One entry per venue, filled in on the first guest who walks to that one. */
   let fields: (FlowField | null)[] = venues.map(() => null);
+  /** Each venue's queue lane, laid when its field is and dropped with it. */
+  let lanes: (readonly QueueSpot[] | null)[] = venues.map(() => null);
   let built = 0;
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
@@ -160,11 +170,21 @@ export function createRouter(parts: {
   const fieldFor = (venue: number): FlowField => {
     const existing = fields[venue];
     if (existing) return existing;
-    const field = flowFieldFor(network, doorNodesFor(venues[venue]!, index));
+    const declared = venues[venue]!;
+    const doors = doorsFor(declared, index).nodes;
+    const field = flowFieldFor(network, doors);
     fields[venue] = field;
+    lanes[venue] = longestLane(network, doors, declared);
     built++;
     return field;
   };
+
+  /**
+   * How many may wait at a venue: its own lane's length, or the ceiling where no
+   * guest has walked there yet and so no lane is laid. Nobody can be waiting at
+   * such a venue, so the ceiling is never the wrong answer there.
+   */
+  const queueLimit = (venue: number): number => lanes[venue]?.length ?? MAX_QUEUE_SHOWN;
 
   /**
    * How long one visit here lasts, in whole ticks, drawn afresh per visitor.
@@ -220,6 +240,7 @@ export function createRouter(parts: {
       z: people.z[person] ?? 0,
       walkingDistance: walkingDistanceAt(at),
       queueLength,
+      queueLimit,
     });
     if (choice) setPartyGoal(goals, guests, person, choice);
   };
@@ -233,12 +254,19 @@ export function createRouter(parts: {
    * because a venue knows where its middle is and not how high the ground is
    * there. Heading is kept as it was, which is the way they walked up.
    */
-  const stand = (person: number, venue: Venue, door: number, waiting: boolean): void => {
+  const stand = (person: number, venue: number, door: number, waiting: boolean): void => {
     const people = crowd();
     const node = network.nodes[door]!;
-    const spot = waiting
-      ? queueSpotAt(node, venue, occupancy.slot[person]!)
-      : { x: venue.x, z: venue.z, y: node.y, heading: people.heading[person] ?? 0 };
+    const lane = lanes[venue] ?? [];
+    const spot =
+      waiting && lane.length > 0
+        ? lane[Math.min(occupancy.slot[person]!, lane.length - 1)]!
+        : {
+            x: venues[venue]!.x,
+            z: venues[venue]!.z,
+            y: node.y,
+            heading: people.heading[person] ?? 0,
+          };
     holdAt(people, person, spot.x, spot.y, spot.z, spot.heading);
   };
 
@@ -258,7 +286,12 @@ export function createRouter(parts: {
     const venue = venues[goal]!;
     if (fieldFor(goal).next[at] !== at) return false;
 
-    const outcome = arriveAt(occupancy, person, goal, venue.capacity, dwellTicksFor(venue), now);
+    // A line as long as the paving in front of the door is a full line, however
+    // far short of the ceiling `arriveAt` counts to.
+    const outcome =
+      queueLength(goal) >= queueLimit(goal)
+        ? 'balked'
+        : arriveAt(occupancy, person, goal, venue.capacity, dwellTicksFor(venue), now);
     if (outcome === 'balked') {
       // The line was already as long as anybody will join. Their goal goes and
       // they decide again on this same node - and `chooseVenue` is handed the
@@ -268,7 +301,7 @@ export function createRouter(parts: {
       return false;
     }
     doorOf[person] = at;
-    stand(person, venue, at, outcome === 'waiting');
+    stand(person, goal, at, outcome === 'waiting');
     return true;
   };
 
@@ -324,10 +357,10 @@ export function createRouter(parts: {
       // The people the sweep let in and the people it shuffled up are both
       // already held; they are only stood somewhere else.
       for (const person of swept.admitted) {
-        stand(person, venues[occupancy.at[person]!]!, doorOf[person]!, false);
+        stand(person, occupancy.at[person]!, doorOf[person]!, false);
       }
       for (const person of swept.moved) {
-        stand(person, venues[occupancy.at[person]!]!, doorOf[person]!, true);
+        stand(person, occupancy.at[person]!, doorOf[person]!, true);
       }
     },
 
@@ -336,6 +369,7 @@ export function createRouter(parts: {
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       fields = nextVenues.map(() => null);
+      lanes = nextVenues.map(() => null);
       built = 0;
       // A fresh one rather than an emptied one: the per-venue arrays are as long
       // as the venue list, and the list has just been replaced.
@@ -386,4 +420,37 @@ export function createRouter(parts: {
       return { inside: occupancy.inside[venue] ?? 0, waiting: queueLength(venue) };
     },
   };
+}
+
+/**
+ * The longest lane any of a venue's doors can lay; of lanes as long as each
+ * other, the one from the door nearest the venue's middle, and then the lower
+ * node.
+ *
+ * One lane per venue rather than one per door, because a venue has one queue:
+ * a line split between two doors would stand slot 3 at one of them with slots 0
+ * to 2 at the other. With a declared door there is almost always one node to
+ * choose from; the choice only matters on the fallback ring, where the door
+ * with the most paving in front of it is the one that can hold the line, and a
+ * ring corner the line merely passes is not where it should start.
+ *
+ * Empty for a venue with no doors at all, which nobody can reach to wait at.
+ */
+function longestLane(
+  network: WalkNetwork,
+  doors: readonly number[],
+  venue: Venue,
+): readonly QueueSpot[] {
+  let best: readonly QueueSpot[] = [];
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const door of doors) {
+    const lane = queueLaneFor(network, door, venue);
+    const { x, z } = network.nodes[door]!;
+    const distance = Math.hypot(x - venue.x, z - venue.z);
+    if (lane.length < best.length) continue;
+    if (lane.length === best.length && distance >= bestDistance) continue;
+    best = lane;
+    bestDistance = distance;
+  }
+  return best;
 }

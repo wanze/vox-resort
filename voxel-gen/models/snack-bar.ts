@@ -16,6 +16,7 @@ export default defineModel({
     satisfies: [{ need: 'hunger', amount: 0.6 }],
     capacity: 10,
     dwellSeconds: { min: 300, max: 720 },
+    doors: [{ x: 15, z: 12, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

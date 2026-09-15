@@ -61,6 +61,7 @@ export default defineModel({
     capacity: 4,
     beds: 4,
     dwellSeconds: { min: 25_200, max: 32_400 },
+    doors: [{ x: HUT.x + 18, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const sand = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });

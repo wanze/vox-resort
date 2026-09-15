@@ -11,9 +11,15 @@
  * plot for no gain at the rate anybody asks for it.
  */
 
-import type { GuestNeed, NeedRelief, VenueRole } from '../../../../voxel-gen/voxelgen.ts';
+import type {
+  GuestNeed,
+  ModelDoor,
+  NeedRelief,
+  VenueRole,
+} from '../../../../voxel-gen/voxelgen.ts';
 import { objectTypeById, venueOf } from '../../catalog/domain/objectTypes';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { placedDoors } from '../../layout/domain/doorStep';
 
 export interface Venue {
   /** The placement's key, e.g. `"bakery#2"`; unique on the plot. */
@@ -41,6 +47,11 @@ export interface Venue {
   readonly tileZ: number;
   readonly tilesX: number;
   readonly tilesZ: number;
+  /**
+   * Ways in, in world voxels, already turned with the placement. Empty where
+   * the art declares none, which `doors.ts` reads as "any side will do".
+   */
+  readonly doors: readonly ModelDoor[];
 }
 
 /**
@@ -59,10 +70,11 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
   for (const placement of placements) {
     const venue = venueOf(placement.id);
     if (!venue || venue.role === 'lodging') continue;
+    const type = objectTypeById(placement.id);
     venues.push({
       key: placement.key,
       id: placement.id,
-      label: objectTypeById(placement.id).label,
+      label: type.label,
       role: venue.role,
       satisfies: venue.satisfies ?? [],
       capacity: venue.capacity,
@@ -76,6 +88,9 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
       tileZ: placement.tileZ,
       tilesX: placement.tilesX,
       tilesZ: placement.tilesZ,
+      // Off the model rather than the placement, whose size is already turned;
+      // see `placedDoors`.
+      doors: placedDoors(placement, venue.doors ?? [], type.model.width, type.model.depth),
     });
   }
   return venues;

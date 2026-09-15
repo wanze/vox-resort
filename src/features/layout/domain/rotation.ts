@@ -23,7 +23,7 @@
  * that translation on its own, and {@link rotatePoint} is it applied.
  */
 
-import type { ModelLight, ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelDoor, ModelLight, ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
 
 /** Quarter turns an object stands at. */
 export type Rotation = 0 | 1 | 2 | 3;
@@ -158,5 +158,28 @@ export function rotateSeats(
     ...seat,
     ...rotatePoint(seat, width, depth, rotation),
     facing: normalizeRotation(seat.facing + rotation),
+  }));
+}
+
+/**
+ * A model's doors, moved to where a turned model puts them.
+ *
+ * The same two halves as {@link rotateSeats}, for the same reason: where the
+ * door is turns as a lamp does, and **which way somebody walks out of it** gains
+ * the model's own turn. Miss the second half and a bakery turned to face its
+ * street queues people out of its back wall on three quarters of the plot.
+ *
+ * An unturned model hands its own list straight back.
+ */
+export function rotateDoors(
+  doors: readonly ModelDoor[],
+  width: number,
+  depth: number,
+  rotation: Rotation,
+): readonly ModelDoor[] {
+  if (rotation === 0 || doors.length === 0) return doors;
+  return doors.map((door) => ({
+    ...rotatePoint(door, width, depth, rotation),
+    facing: normalizeRotation(door.facing + rotation),
   }));
 }

@@ -232,6 +232,12 @@ describe('layoutItemFor', () => {
       // The shelf rides along because the layout asks one question of it:
       // whether the object is dressing, which grows no spur to it.
       category: cottage.category,
+      // And the doors, so the layout can turn the cottage to open onto its path.
+      doors: cottage.venue!.doors,
     });
+  });
+
+  it('leaves the doors off a type that declares none', () => {
+    expect(layoutItemFor(objectTypeById('palm'))).not.toHaveProperty('doors');
   });
 });

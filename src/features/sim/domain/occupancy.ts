@@ -33,7 +33,7 @@
  * leaving, which is the whole change this module exists to make.
  */
 
-import { MAX_QUEUE_SHOWN } from './queueSpot';
+import { MAX_QUEUE_SHOWN } from './queueLane';
 
 /** What a person is doing about a venue. */
 export const VISIT = { away: 0, waiting: 1, inside: 2 } as const;

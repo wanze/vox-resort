@@ -51,7 +51,7 @@ describe('flowFieldFor', () => {
     expect(field.next[nodeAt(network, 3)]).toBe(east);
     // Tile 2 is two hops from either end. The sources are seeded in the order
     // they were given, so the sweep reaches it from the first one - which is
-    // why `doorNodesFor` sorts.
+    // why `doorsFor` sorts.
     expect(field.hops[nodeAt(network, 2)]).toBe(2);
     expect(field.next[nodeAt(network, 2)]).toBe(nodeAt(network, 1));
   });

@@ -6,6 +6,7 @@ import {
   isRoaming,
   isWaiting,
   MAX_STEP,
+  releaseTo,
   reseatCrowd,
   stepCrowd,
   type Crowd,
@@ -18,7 +19,9 @@ import { clampParams, generateResort } from '../../layout/domain/resortGenerator
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { createNeeds, NEEDS, type Needs } from './needs';
-import { MAX_QUEUE_SHOWN } from './queueSpot';
+import { nodeIndexFor } from '../../crowd/domain/nearestNode';
+import { doorsFor } from './doors';
+import { MAX_QUEUE_SHOWN, queueLaneFor } from './queueLane';
 import { createRouter } from './router';
 import { venuesOn, type Venue } from './venues';
 
@@ -59,6 +62,7 @@ const bakery = (tileX: number): Venue => ({
   tileZ: -1,
   tilesX: 1,
   tilesZ: 1,
+  doors: [],
 });
 
 /** Everybody content but for the one need, which is run right down. */
@@ -299,7 +303,9 @@ describe('a venue that holds only as many as it says', () => {
   });
 
   it('sends a guest who finds a full line somewhere else entirely', () => {
-    const network = networkOf(street(8));
+    // Long enough for a lane of the full ceiling to run east from the near
+    // shower: on a shorter street the paving, not the ceiling, is what is full.
+    const network = networkOf(street(20));
     const needs = grubby();
     // The near shower, which everybody chooses, and a far one that barely helps
     // - so nobody goes there until the near one refuses them at the door.
@@ -327,6 +333,74 @@ describe('a venue that holds only as many as it says', () => {
     router.step(late, door);
     expect(router.goalOf(late)?.key).toBe('beach-shower#1');
     expect(router.occupancyOf('beach-shower#0')?.waiting).toBe(MAX_QUEUE_SHOWN);
+  });
+
+  it('stands the line back along the paving, not out along a ray from the venue', () => {
+    const network = networkOf(street(8));
+    const { router, crowd } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7);
+    const people = [0, 1, 2];
+    for (const person of people) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 2 });
+    const [, front, behind] = people as [number, number, number];
+    const node = network.nodes[door]!;
+    // The front of the line is on the door node.
+    expect(crowd.x[front]).toBeCloseTo(node.x);
+    expect(crowd.z[front]).toBeCloseTo(node.z);
+    // The shower stands north of the corridor, so a ray from its middle through
+    // the door runs south onto the grass. The line runs west along the paving.
+    expect(crowd.z[behind]).toBeCloseTo(node.z);
+    expect(crowd.x[behind]).toBeLessThan(node.x);
+  });
+
+  it('balks the guest who finds the lane down a short spur already full', () => {
+    // Two tiles of paving and nothing else, running south from the shower's
+    // door: a lane of 16 voxels holds three people six voxels apart.
+    const network = networkOf([
+      { tileX: 7, tileZ: 0, y: 0 },
+      { tileX: 7, tileZ: 1, y: 0 },
+    ]);
+    const { router } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7, 0);
+    const start = nodeAt(network, 7, 1);
+    const arrive = (person: number): void => {
+      router.step(person, start);
+      router.step(person, door);
+    };
+    // One inside and three waiting, which is all the spur holds.
+    for (const person of [0, 1, 2, 3]) arrive(person);
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 3 });
+
+    const late = 4;
+    arrive(late);
+    expect(router.occupancyOf('beach-shower#0')?.waiting).toBe(3);
+    expect(router.visitOf(late)).toBeNull();
+    // And they did not decide on it again: `chooseVenue` was handed the lane.
+    expect(router.goalOf(late)).toBeNull();
+  });
+
+  it('throws the lanes away with the fields, and lays new ones on the new graph', () => {
+    const { router, crowd } = routerOn(networkOf(street(8)), [shower(7)], grubby());
+    const queue = (network: WalkNetwork): void => {
+      for (const person of [0, 1]) {
+        router.step(person, nodeAt(network, 0, network.nodes[0]!.tileZ));
+        router.step(person, nodeAt(network, 7, network.nodes[0]!.tileZ));
+      }
+    };
+    queue(networkOf(street(8)));
+    expect(crowd.z[1]).toBeCloseTo(TILE_VOXELS / 2);
+
+    // The same corridor three tiles south, with the shower moved to match.
+    const moved = networkOf(Array.from({ length: 8 }, (_, tileX) => ({ tileX, tileZ: 3, y: 0 })));
+    router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], moved);
+    for (const person of [0, 1]) releaseTo(crowd, person, nodeAt(moved, 0, 3));
+    queue(moved);
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
+    // On the new corridor's door node, not on the one before the edit.
+    expect(crowd.z[1]).toBeCloseTo(3.5 * TILE_VOXELS);
   });
 
   it('counts everybody inside and everybody in a line for the stats readout', () => {
@@ -377,6 +451,7 @@ describe('on the generated plot', () => {
     width: type.model.width,
     depth: type.model.depth,
     category: type.category,
+    doors: type.venue?.doors ?? [],
   }));
   const plan = generateResort(
     TYPES,
@@ -391,6 +466,26 @@ describe('on the generated plot', () => {
     tilesX: plan.tilesX,
   });
   const venues = venuesOn(layout.placements);
+
+  it('stands every place in every line on a paved tile', () => {
+    const paved = new Set(layout.paths.map((tile) => `${tile.tileX},${tile.tileZ}`));
+    const index = nodeIndexFor(network);
+    let spots = 0;
+    let off: string | null = null;
+    for (const venue of venues) {
+      // Every door's lane, not only the one the router keeps: whichever it
+      // picks has to be on the paving, so all of them do.
+      for (const door of doorsFor(venue, index).nodes) {
+        for (const [slot, spot] of queueLaneFor(network, door, venue).entries()) {
+          spots++;
+          const tile = `${Math.floor(spot.x / TILE_VOXELS)},${Math.floor(spot.z / TILE_VOXELS)}`;
+          if (!paved.has(tile)) off ??= `${venue.key} door ${door} slot ${slot} on ${tile}`;
+        }
+      }
+    }
+    expect(spots, 'no lanes laid at all').toBeGreaterThan(venues.length);
+    expect(off).toBeNull();
+  });
 
   /**
    * The test the unit tests above cannot be: a `next` array built backwards, or

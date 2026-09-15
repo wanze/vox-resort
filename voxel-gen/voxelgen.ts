@@ -180,6 +180,31 @@ export interface ModelSeat {
 }
 
 /**
+ * A way in, in the model's own voxels.
+ *
+ * Here for {@link ModelSeat}'s reason and with the same shape: which side of a
+ * building people go in by is a fact the person who drew it settled when they
+ * drew it, and a table of doors in `src/` would be a second place to change it.
+ *
+ * `x` and `z` are a column in the doorway - its middle, so a turn cannot push
+ * it over a tile boundary - and need not be on the footprint's edge: the queue
+ * starts on the first tile outside the footprint in the `facing` direction, so
+ * a door at the back of a forecourt is the same door as one at its front.
+ *
+ * `facing` is the quarter turns from the model's own +z that somebody **walks
+ * out** in, in the sequence `+z, +x, -z, -x` a seat's is declared in - so a door
+ * in the middle of the north wall, at z = 0, faces 2. It is the direction the
+ * queue runs in, which is why it is declared rather than worked out from where
+ * the door sits on the footprint: a corner door is ambiguous and the drawing is
+ * not.
+ */
+export interface ModelDoor {
+  readonly x: number;
+  readonly z: number;
+  readonly facing: QuarterTurns;
+}
+
+/**
  * A thing a guest wants seen to, which drives everything they do.
  *
  * Declared here rather than in `src/` because the other half of the pair is:
@@ -242,6 +267,15 @@ export interface ModelVenue {
    * resort can hold at all is the sum of these over what is standing.
    */
   readonly beds?: number;
+  /**
+   * Where guests go in, and which way the queue runs from there.
+   *
+   * Optional, and the fallback is deliberate: a venue with none declared is
+   * entered from any walkable tile touching it, which is what every venue did
+   * before this existed. So a new model works before it is measured, and gets
+   * better when it is. See `sim/domain/doors.ts`.
+   */
+  readonly doors?: readonly ModelDoor[];
 }
 
 export interface VoxelModelSource {

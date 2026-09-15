@@ -78,6 +78,7 @@ export default defineModel({
     role: 'service',
     capacity: 12,
     dwellSeconds: { min: 120, max: 480 },
+    doors: [{ x: 31, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

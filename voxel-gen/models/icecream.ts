@@ -18,6 +18,7 @@ export default defineModel({
     ],
     capacity: 4,
     dwellSeconds: { min: 120, max: 300 },
+    doors: [{ x: 8, z: 12, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

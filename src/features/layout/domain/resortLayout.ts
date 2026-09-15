@@ -52,6 +52,7 @@
 import {
   TILE_VOXELS,
   type ModelCategory,
+  type ModelDoor,
   type PlacementGround,
 } from '../../../../voxel-gen/voxelgen.ts';
 import {
@@ -85,7 +86,8 @@ import { levelHeight, straddledTile, type LevelProvider } from './elevation';
 import { stairTilesFor } from './stairs';
 import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
-import { rotateExtent, type Extent, type Rotation } from './rotation';
+import { doorStepTile, placedDoors } from './doorStep';
+import { rotateExtent, ROTATIONS, type Extent, type Rotation } from './rotation';
 
 /** Tiles between one street lamp and the next, measured on the longer axis. */
 const LAMP_SPACING = 5;
@@ -129,6 +131,13 @@ export interface LayoutItem {
    * the kind. See `placementGround.ts`.
    */
   readonly ground?: PlacementGround;
+  /**
+   * The ways in the model declares, in its own voxels, when the caller has them
+   * to hand. The layout turns a building so they open onto paving where a turn
+   * that keeps its footprint allows it, and grows its spur from a door. See
+   * {@link growSpurs}.
+   */
+  readonly doors?: readonly ModelDoor[];
 }
 
 export interface Placement {
@@ -558,7 +567,21 @@ function borderTiles(plot: ResortPlot, item: LayoutItem, plan: ResortPlan): Tile
 /**
  * Grows the shortest one-tile spur from each object to the network, in plan
  * order, so a later object may attach to an earlier object's spur. Mutates
- * `paved`. Throws if an object is walled in with no way out.
+ * `paved`, and hands back the turn each plot stands at. Throws if an object is
+ * walled in with no way out.
+ *
+ * **A building with doors is reached at a door.** Of the turns that claim the
+ * same tiles, it stands the way whose door is on paving already, or else the
+ * way whose door the shortest spur can be grown from - and the spur is grown
+ * from the tile in front of that door, not from whichever side of the building
+ * is nearest a street. Only where no door can be reached any way round - the
+ * tile in front of every one of them built on or walled in - does it fall back
+ * to the shortest spur from any side, and the simulation to entering it from
+ * any side. See {@link doorSpur}.
+ *
+ * It has to be decided here, plot by plot, rather than once the paving is done:
+ * a later building may attach to an earlier one's spur, so which way the earlier
+ * one faces changes what the later one can reach.
  *
  * **Nothing on the grounds shelf grows one.** A palm, a flowerbed, a hedge and a
  * sun lounger are dressing rather than destinations: nobody walks *to* a palm,
@@ -584,7 +607,7 @@ function growSpurs(
   plan: ResortPlan,
   occupied: ReadonlyMap<string, string>,
   paved: Map<string, Tile>,
-): void {
+): Rotation[] {
   const { byId, keys, terrain } = spurContext(items, plan);
   // Sand is not routed *through* either, for the same reason nothing standing on
   // it grows a spur: a walk laid across the beach to reach a building on the
@@ -601,15 +624,82 @@ function growSpurs(
   const touchesPath = (x: number, z: number): boolean =>
     NEIGHBOURS.some(([dx, dz]) => paved.has(tileKey(x + dx, z + dz)));
 
+  const pave = (route: readonly Tile[]): void => {
+    for (const tile of route) paved.set(tileKey(tile.x, tile.z), tile);
+  };
+  const isPaved = (tile: Tile): boolean => paved.has(tileKey(tile.x, tile.z));
+  const turns = plan.plots.map((plot): Rotation => plot.rotation ?? 0);
+
   plan.plots.forEach((plot, index) => {
     const item = byId.get(plot.id)!;
     if (!needsPaving(item, plot, terrain)) return;
+    const toDoor = doorSpur(item, plot, { isPaved, isFree, touchesPath });
+    if (toDoor) {
+      turns[index] = toDoor.rotation;
+      pave(toDoor.route);
+      return;
+    }
     const border = borderTiles(plot, item, plan);
-    if (border.some((tile) => paved.has(tileKey(tile.x, tile.z)))) return;
+    if (border.some(isPaved)) return;
 
     const route = spurRoute(border, isFree, touchesPath);
     if (!route) throw new Error(`"${keys[index]}" cannot be reached from the path network`);
-    for (const tile of route) paved.set(tileKey(tile.x, tile.z), tile);
+    pave(route);
+  });
+  return turns;
+}
+
+/** What {@link doorSpur} asks of the paving as it stands so far. */
+interface SpurGround {
+  readonly isPaved: (tile: Tile) => boolean;
+  readonly isFree: (x: number, z: number) => boolean;
+  readonly touchesPath: (x: number, z: number) => boolean;
+}
+
+/**
+ * The turn that reaches one of a building's doors with the least new paving, and
+ * that paving; or null for a building with no doors, or none that any turn can
+ * reach.
+ *
+ * Only turns that claim the plan's own tiles are candidates - a half turn
+ * always, a quarter turn only for a square footprint - which is what makes it
+ * safe to change the turn this late: the occupancy and every fit check the plan
+ * already passed stand as they were. A door already on paving costs nothing;
+ * otherwise the cost is the length of the spur grown from the free tiles in
+ * front of the doors. Ties keep the plan's turn, so a building that is fine as
+ * planned is laid as planned.
+ */
+function doorSpur(
+  item: LayoutItem,
+  plot: ResortPlot,
+  ground: SpurGround,
+): { readonly rotation: Rotation; readonly route: readonly Tile[] } | null {
+  const doors = item.doors ?? [];
+  if (doors.length === 0) return null;
+  let best: { rotation: Rotation; route: readonly Tile[] } | null = null;
+  for (const rotation of sameFootprintTurns(item, plot.rotation ?? 0)) {
+    const standing = place(item, '', plot.tileX, plot.tileZ, rotation);
+    const steps = placedDoors(standing, doors, item.width, item.depth).map((door) =>
+      doorStepTile(standing, door),
+    );
+    if (steps.some(ground.isPaved)) return { rotation, route: [] };
+    const route = spurRoute(steps, ground.isFree, ground.touchesPath);
+    if (route && route.length < (best?.route.length ?? Number.POSITIVE_INFINITY)) {
+      best = { rotation, route };
+    }
+  }
+  return best;
+}
+
+/**
+ * The turns an item can stand at on the tiles `planned` claims, `planned` first:
+ * a half turn always, a quarter turn only for a square footprint.
+ */
+function sameFootprintTurns(item: LayoutItem, planned: Rotation): Rotation[] {
+  const claimed = rotateExtent(item.tilesX, item.tilesZ, planned);
+  return [planned, ...ROTATIONS.filter((each) => each !== planned)].filter((rotation) => {
+    const footprint = rotateExtent(item.tilesX, item.tilesZ, rotation);
+    return footprint.x === claimed.x && footprint.z === claimed.z;
   });
 }
 
@@ -695,14 +785,26 @@ function walkBack(from: Tile, parents: ReadonlyMap<string, Tile | null>): Tile[]
 
 /** The streets and spurs minus whatever stands on them: the tiles that get paved. */
 export function pathTilesFor(items: readonly LayoutItem[], plan: ResortPlan): Tile[] {
+  return pavingOf(items, plan).tiles;
+}
+
+/**
+ * The paved tiles, and the turn every plot stands at once its doors have been
+ * given a way in. One answer, because the two are settled together; see
+ * {@link growSpurs}.
+ */
+function pavingOf(
+  items: readonly LayoutItem[],
+  plan: ResortPlan,
+): { readonly tiles: Tile[]; readonly turns: readonly Rotation[] } {
   const occupied = occupiedTiles(items, plan);
   const paved = new Map<string, Tile>();
   for (const tile of streetTiles(plan)) {
     const key = tileKey(tile.x, tile.z);
     if (!occupied.has(key)) paved.set(key, tile);
   }
-  growSpurs(items, plan, occupied, paved);
-  return [...paved.values()].toSorted((a, b) => a.z - b.z || a.x - b.x);
+  const turns = growSpurs(items, plan, occupied, paved);
+  return { tiles: [...paved.values()].toSorted((a, b) => a.z - b.z || a.x - b.x), turns };
 }
 
 /** True when the paved tiles form a single piece under 4-way adjacency. */
@@ -1137,7 +1239,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
   };
 
   // occupiedTiles does the overlap, bounds and footprint checks for us.
-  const paved = pathTilesFor(items, plan);
+  const { tiles: paved, turns } = pavingOf(items, plan);
   const stairs = byId.get(STAIRS_ID);
   const flights = new Map(
     stairTilesFor(paved, levelOf).map((flight) => [
@@ -1177,7 +1279,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
       keys[index]!,
       plot.tileX,
       plot.tileZ,
-      plot.rotation ?? 0,
+      turns[index]!,
       levelOf(plot.tileX, plot.tileZ),
     ),
   );

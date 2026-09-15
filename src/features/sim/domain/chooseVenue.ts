@@ -11,7 +11,7 @@
 import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { archetypeOf } from './archetypes';
-import { MAX_QUEUE_SHOWN } from './queueSpot';
+import { MAX_QUEUE_SHOWN } from './queueLane';
 import { strongestNeed, type Needs } from './needs';
 import { reliefAt, type Venue } from './venues';
 
@@ -43,6 +43,12 @@ export interface ChoiceOptions {
    * what a fixture wants and what plan 016 had.
    */
   readonly queueLength?: (venue: number) => number;
+  /**
+   * How long a line each venue can hold: its own queue lane, which is shorter
+   * than {@link MAX_QUEUE_SHOWN} wherever the paving in front of the door runs
+   * out. Omit it and every venue holds the ceiling, which is what plan 018 had.
+   */
+  readonly queueLimit?: (venue: number) => number;
 }
 
 /**
@@ -81,6 +87,9 @@ function scoreFor(
   return relief / (1 + distance / reach) / (1 + queue / Math.max(1, capacity));
 }
 
+/** Every venue's line holding the ceiling, where the caller has no lanes to say otherwise. */
+const atCeiling = (): number => MAX_QUEUE_SHOWN;
+
 /**
  * Where this person would go, or null when they want nothing or nowhere serves
  * what they want.
@@ -101,6 +110,7 @@ function scoreFor(
  */
 export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
   const { needs, guests, person, venues, x, z, walkingDistance, queueLength } = options;
+  const queueLimit = options.queueLimit ?? atCeiling;
   const wanted = strongestNeed(needs, guests, person);
   if (wanted === null) return null;
   const { reach } = archetypeOf(guests, person);
@@ -120,11 +130,11 @@ export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
     // would be: `Infinity` is how the router says a venue has no path to it.
     if (!Number.isFinite(distance)) continue;
     const queued = queueLength ? queueLength(index) : 0;
-    // The same threshold `arriveAt` turns somebody away at, imported from the
-    // one module that names it rather than written out twice: a guest who would
-    // be refused at the door is not a candidate here, or they would cross the
-    // plot to be sent straight back.
-    if (queued >= MAX_QUEUE_SHOWN) continue;
+    // The same threshold the router turns somebody away at - the venue's own
+    // lane, or the ceiling `arriveAt` counts to - rather than one written out
+    // twice: a guest who would be refused at the door is not a candidate here,
+    // or they would cross the plot to be sent straight back.
+    if (queued >= queueLimit(index)) continue;
     const score = scoreFor(relief, distance, reach, queued, venue.capacity);
     if (score > bestScore) {
       bestScore = score;

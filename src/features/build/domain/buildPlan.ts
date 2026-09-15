@@ -174,5 +174,6 @@ export function layoutItemFor(type: ObjectTypeDefinition): LayoutItem {
     depth: type.model.depth,
     category: type.category,
     ...(type.model.placement.ground ? { ground: type.model.placement.ground } : {}),
+    ...(type.venue?.doors ? { doors: type.venue.doors } : {}),
   };
 }

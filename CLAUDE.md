@@ -13,7 +13,9 @@ Engine, React 19 for the HUD, TypeScript, Vite, pnpm.
   it stays testable without a browser.
 - Voxel models are art, authored outside `src/`; the app derives everything from
   the model registry, so adding an object should not require app changes.
-- Do not start a browser to verify visually, I will test myself.
+- Do not start a browser to verify visually, I will test myself. `pnpm bench` is
+  allowed for measuring performance, even though it drives Chrome; just do not
+  open any other browser instance to check how something looks.
 
 ## Commands
 

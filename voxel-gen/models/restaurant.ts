@@ -152,6 +152,7 @@ export default defineModel({
     ],
     capacity: 40,
     dwellSeconds: { min: 1800, max: 3600 },
+    doors: [{ x: FLIGHT.x + FLIGHT.w / 2 - 1, z: APRON.z, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

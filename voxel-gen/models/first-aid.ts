@@ -44,6 +44,7 @@ export default defineModel({
     role: 'service',
     capacity: 4,
     dwellSeconds: { min: 300, max: 900 },
+    doors: [{ x: 8, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 32 });

@@ -52,6 +52,28 @@ describe('venuesOn', () => {
     expect(venue.tilesZ).toBe(3);
   });
 
+  it('puts the bakery door in world voxels, on the shopfront it was drawn in', () => {
+    // The door is declared a column into the doorway on the +z front, and an
+    // unturned bakery is the model's own voxels plus the placement's corner.
+    const venue = only([at('bakery#0', 'bakery', 4, 6, 2)]);
+    expect(venue.doors).toEqual([{ x: 4 * TILE_VOXELS + 8, z: 6 * TILE_VOXELS + 18, facing: 0 }]);
+  });
+
+  it('turns the door with the bakery, onto the side the shopfront now faces', () => {
+    const venue = only([{ ...at('bakery#0', 'bakery', 4, 6, 2), rotation: 1 }]);
+    const [door] = venue.doors;
+    // A quarter turn swings +z round to +x: the door is on the east half of
+    // the footprint now, and walked out of eastwards.
+    expect(door!.facing).toBe(1);
+    expect(door!.x - 4 * TILE_VOXELS).toBeGreaterThan(TILE_VOXELS);
+    expect(door).toEqual({ x: 4 * TILE_VOXELS + 18, z: 6 * TILE_VOXELS + 32 - 8, facing: 1 });
+  });
+
+  it('gives a venue whose art declares no door an empty list rather than nothing', () => {
+    const venue = only([at('beach-shower#0', 'beach-shower')]);
+    expect(venue.doors).toEqual([]);
+  });
+
   it('finds nothing to do on a plot of palms and benches', () => {
     expect(venuesOn([at('palm#0', 'palm'), at('bench#0', 'bench', 2, 0)])).toEqual([]);
   });

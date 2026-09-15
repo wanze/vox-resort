@@ -237,9 +237,9 @@ A guest who wants something walks to it, and a guest who wants nothing wanders
 exactly as the crowd always did. `sim/domain/router.ts` is the whole of it, and
 it is the only thing the crowd calls.
 
-- **One flow field per venue, not per need.** `doorNodesFor` takes a venue's own
-  tiles and the ring one tile around them and collects every walkable node on
-  them, sorted; `flowFieldFor` sweeps the graph breadth-first from those doors
+- **One flow field per venue, not per need.** `doorsFor` collects the walkable
+  nodes a venue is entered from, sorted - its declared doors, or the ring round
+  it where it has none (see the next section); `flowFieldFor` sweeps the graph breadth-first from those doors
   and writes, per node, the neighbour that gets nearer. A guest arriving anywhere
   then costs one array read.
 
@@ -282,10 +282,44 @@ it, and `Router.tick` runs it once per simulated minute.
   twenty minutes is fed twenty minutes later, which is the number plan 020 turns
   into unhappiness.
 
-- **A full venue grows a line at its door.** `queueSpotAt` puts the n-th person
-  six voxels further out along the direction from the venue's middle to the door
-  node, facing back at it. They are placed on their spot rather than walked to
-  it, which at the camera's distance reads the same and costs an `atan2`.
+- **A door is declared on the art and turned with the building.** `ModelVenue`
+  carries `doors`, a column in the doorway and the quarter turn somebody walks
+  out in, exactly as a seat carries its `facing`. `venuesOn` turns them with the
+  placement (`layout/domain/doorStep.ts`), and the door node is a walkable node
+  on the tile each door opens onto: the first tile outside the footprint,
+  straight out along its facing. Models with no way in shown on the art - the
+  pool, the courts without a gate, the beach venues entered off the sand -
+  declare none.
+
+- **The layout gives every door a way in.** The generator picks a turn before
+  any paving exists, and its mixed districts stand whole rows with their backs
+  to the street. `growSpurs` settles it plot by plot, in plan order: of the turns
+  that claim exactly the same tiles - a half turn always, a quarter turn only on
+  a square footprint - it takes one whose door already opens onto paving, and
+  otherwise the one whose door the shortest spur can be grown from, and grows
+  that spur from the tile in front of the door. Only where every door is built
+  against does it fall back to the shortest spur from any side. On the reference
+  plot every building on the grass that declares a door opens onto paving; the
+  bench scene gained 25 path tiles and 87 props for it.
+
+- **A venue whose door nobody paved is entered from any side.** Where no
+  declared door opens onto a walkable node, `doorsFor` falls back to every node
+  on the footprint and the ring round it, which is what every venue did before
+  doors existed, and says so in `declared`. That fallback is the safety rail: a
+  building nobody can visit would show nowhere in the HUD.
+
+- **A full venue grows a line back along the paving.** `queueLaneFor` walks the
+  graph from the door node, always on to the neighbour furthest from the venue,
+  and lays a person every six voxels along the edges it crosses - height
+  included, so a queue down a flight of steps stands on the steps - each facing
+  the person in front. The lane is laid with the venue's flow field and thrown
+  away with it. People are placed on their spot rather than walked to it, which
+  at the camera's distance reads the same and costs nothing per frame.
+
+- **A short lane is a short queue.** A lane that runs out of graph - a two-tile
+  spur - holds only as many as it has spots, and the guest after that balks.
+  `chooseVenue` is handed the same length as `queueLimit`, so nobody crosses the
+  plot for a line that will refuse them.
 
 - **Standing still is a segment with a rate of zero.** `holdAt` writes the same
   point into `from` and `to` and puts the person in `LANE.none`, so the
@@ -299,9 +333,9 @@ it, and `Router.tick` runs it once per simulated minute.
   somebody leaves, which reads as a line that moves every other tick.
 
 - **A guest who finds twelve people already waiting goes somewhere else.**
-  `MAX_QUEUE_SHOWN` is both how long a line is drawn and when a guest refuses to
-  join one, so the player never sees a line longer than the one guests walk away
-  from. `chooseVenue` will not choose a venue that has reached it, and `arriveAt`
+  `MAX_QUEUE_SHOWN` is the ceiling on any line, and a venue's own lane is the
+  real length wherever it is shorter, so the player never sees a line longer
+  than the one guests walk away from. `chooseVenue` will not choose a venue that has reached it, and `arriveAt`
   turns away anybody who gets there anyway.
 
 The HUD's `Venues` row is everybody inside anything over everybody in a line. A

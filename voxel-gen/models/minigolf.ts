@@ -177,6 +177,12 @@ export default defineModel({
     satisfies: [{ need: 'fun', amount: 0.7 }],
     capacity: 16,
     dwellSeconds: { min: 1800, max: 3600 },
+    doors: [
+      { x: CROSS.x + 1, z: 0, facing: 2 },
+      { x: CROSS.x + 1, z: Z, facing: 0 },
+      { x: 0, z: CROSS.z + 1, facing: 3 },
+      { x: X, z: CROSS.z + 1, facing: 1 },
+    ],
   },
   tiles: { x: 9, z: 7 },
   emissive: [LANTERN],

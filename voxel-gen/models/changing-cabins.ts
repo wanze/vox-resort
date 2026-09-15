@@ -82,6 +82,10 @@ export default defineModel({
     satisfies: [{ need: 'hygiene', amount: 0.3 }],
     capacity: 2,
     dwellSeconds: { min: 60, max: 180 },
+    doors: [
+      { x: 8, z: FRONT, facing: 0 },
+      { x: 23, z: FRONT, facing: 0 },
+    ],
   },
   tiles: { x: 2, z: 1 },
   build: (b: VoxelBuilder) => {

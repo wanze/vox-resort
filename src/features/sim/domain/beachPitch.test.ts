@@ -57,12 +57,14 @@ const tileOf = (point: { readonly x: number; readonly z: number }) => ({
 });
 
 describe('pitchFor', () => {
-  it('pitches on the tile in front of the gate on an open beach, a spot of sand each', () => {
+  it('pitches out of the walkway on an open beach, a spot of sand each', () => {
     const network = beachOf();
     expect(network.gates).toHaveLength(1);
     const pitch = pitchFor(inputOn(network))!;
-    expect(tileOf(pitch)).toEqual({ tileX: 10, tileZ: 12 });
-    expect(pitch.tile).toBe(12 * 20 + 10);
+    // Not on the tile in front of the gate, which is where everybody coming onto
+    // the beach walks through; two steps out, still in the same column.
+    expect(tileOf(pitch)).toEqual({ tileX: 10, tileZ: 14 });
+    expect(pitch.tile).toBe(14 * 20 + 10);
     expect(pitch.spots).toHaveLength(3);
     expect(pitch.spots.map((spot) => spot.pose)).toEqual([
       RESTING.lying,
@@ -115,8 +117,10 @@ describe('pitchFor', () => {
     const first = pitchFor(inputOn(network))!;
     const second = pitchFor(inputOn(network, { taken: new Set([first.tile]) }))!;
     expect(second.tile).not.toBe(first.tile);
+    // The next nearest that is still clear of the gate's own walkway.
     const { tileX, tileZ } = tileOf(second);
-    expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBe(1);
+    expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeGreaterThanOrEqual(2);
+    expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeLessThanOrEqual(3);
   });
 
   it('gives nothing when the beach within reach of the gate is all in use', () => {

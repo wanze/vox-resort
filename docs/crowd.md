@@ -77,7 +77,7 @@ after a hand edit.
   onto it, and a stray - somebody an edit or a forgotten errand leaves out there -
   walks straight back to the nearest gate.
 - **The beach is also a venue** (`sim/domain/beach.ts`): one for the whole band,
-  serving fun 0.6 and energy 0.2, for 45 to 120 simulated minutes, with no
+  serving fun 0.7 and energy 0.3, for 45 to 120 simulated minutes, with no
   capacity worth counting. Its flow field is swept from every gate. Arriving at a
   gate on a visit is the start of a stay at a pitch; see "Staying on the beach".
   The numbers live in `beach.ts` rather than on the art, because sand has no model
@@ -445,12 +445,18 @@ its towels down together and stays there. Plan 028.
 - **A pitch per party.** The first member to reach a gate on a visit chooses it
   (`sim/domain/beachPitch.ts`): breadth-first over beach tiles from the gate,
   each step only where the line between tile centres is clear, twelve tile steps
-  at most, skipping paved tiles and tiles another party has pitched on. The
-  first tile with a free lounger - on it or a 4-neighbour, walkable straight from
-  its middle, not promised to another pitch - for every adult wins; failing that,
-  the first tile whose sand spots are all clear, lying on whatever loungers it
-  has. The router keeps it per party until the last member leaves, with its tile
-  and its loungers claimed.
+  at most, skipping paved tiles and tiles another party has pitched on. Of the
+  tiles it reaches, the nearest is taken in this order: a free lounger for every
+  adult, then any free lounger, then open sand two steps clear of the gate, then
+  open sand at all. The router keeps the pitch per party until the last member
+  leaves, with its tile and its loungers claimed.
+- **A lounger counts from the whole square of nine around a tile**, and the last
+  step onto one is not asked whether it is clear, because it ends inside the
+  lounger's own box. The beach is laid in sets of lounger, parasol, lounger, so
+  a tile's four direct neighbours are rarely two free loungers: counting only
+  those, 2 of the reference plot's 27 gates could seat a couple on loungers and
+  every other party lay on the sand in front of the gate. With the diagonals it
+  is every gate.
 - **A spot per member.** Adults first take the loungers; everybody else gets a
   spot on the sand in rows of three across the tile, five voxels apart, a second
   row five voxels further from the sea. On a lounger they lie as it lies; on the
@@ -464,18 +470,36 @@ its towels down together and stays there. Plan 028.
   reached from gets a pitch of their own there; with none either, the visit ends
   at the gate with its relief and they decide again. On the reference plot at
   `normal`'s pace that happened to none of 353 arrivals.
+- **A day on the sand, not an hour.** Once a tick, a guest settled on a pitch
+  whose loudest need the beach does not serve - and pulls at 0.4, twice the
+  "content" line - gets up and walks over the sand to whatever does:
+  `chooseVenue` over the buildings on the beach alone, everything off it scored
+  at `Infinity`, and a route from `sandFieldFor`, which is one building's sweep
+  of the beach kept for exactly this. Their pitch, their spot and their lounger
+  stay theirs; they come out of the beach's own count while they are away and go
+  back into it with the time their stay had left. Nothing on the sand for them,
+  or no route to it, and they look again a quarter of an hour later.
+  `resortGenerator.ts` stands snack bars and ice-cream carts on the back of the
+  beach beside the bars and clubs, so there is food out there to walk to.
 - **The visit over, they walk back** along the route and are let onto the graph
   at the gate. So at bedtime: once a tick, while anybody is on the beach, a guest
-  with a bed whose bedtime it is has the stay ended early, with its relief.
+  with a bed whose bedtime it is has the stay ended early, with its relief. A
+  stay that runs out, or a bedtime that comes, while they are at a kiosk ends
+  there: the beach's relief, and a walk off the sand by that building's own gate.
   Somebody turned back part-way along a walk turns from where they have got to.
 - **The inspector** says `Walking to the beach`, `Lying on the beach` /
   `Sitting on the beach` (no tile) and `Walking back from the beach`, from
   `Router.stayOf`.
 - **A rebuild forgets every pitch** with the routes. The crowd leaves somebody
   settled on the sand out there as a stray, who walks back to the paving.
-- **Deferred:** choosing a beach venue straight from the pitch without first
-  walking back to a gate, swimming, and standing up mid-stay to walk to the water.
-  Parties walking to the beach together is plan 029.
+- **What it measures.** Ten simulated hours of the default resort, 570 guests:
+  the beach is the most visited thing on the plot (678 visits), 34 to 65 people
+  are resting on the sand through the afternoon and 10 to 20 of them on loungers,
+  and the bars, showers and kiosks on the sand are busy with guests walking up
+  from their towels. Before any of it: 28 beach visits, 9 resting, 4 loungers
+  ever used.
+- **Deferred:** swimming, and standing up mid-stay to walk to the water. Parties
+  walking to the beach together is plan 029.
 
 ## The night
 

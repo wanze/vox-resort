@@ -10,7 +10,7 @@ import { clampParams, generateResort } from '../../layout/domain/resortGenerator
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor, terrainAt, type Shore } from '../../layout/domain/shoreline';
 import { doorsFor } from './doors';
-import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
+import { sandFieldFor, sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
 import { venuesOn } from './venues';
 
 const FLAT: LevelProvider = () => 0;
@@ -37,6 +37,12 @@ const centreOf = (tileX: number, tileZ: number): SandPoint => ({
   x: (tileX + 0.5) * TILE_VOXELS,
   z: (tileZ + 0.5) * TILE_VOXELS,
 });
+
+/** A point's tile, as `terrainAt` takes it. */
+const tileOf = (point: SandPoint): [number, number] => [
+  Math.floor(point.x / TILE_VOXELS),
+  Math.floor(point.z / TILE_VOXELS),
+];
 
 /** Every leg of a route, the step off the gate first. */
 const legsOf = (network: WalkNetwork, route: SandRoute): [SandPoint, SandPoint][] => {
@@ -148,6 +154,31 @@ describe('sandRoutesFor', () => {
     expect(network.nodes[routes[0]!.gate]!.tileX).toBe(15);
     expect(network.nodes[routes[1]!.gate]!.tileX).toBe(3);
     expect(routes[0]!.length).toBeLessThan(routes[1]!.length);
+  });
+
+  it('walks somebody already out on the sand to the door, from their own tile', () => {
+    const network = beachOf(pathDown(10));
+    const door = centreOf(4, 14);
+    const field = sandFieldFor(network, [door], 40);
+    const from = { x: 16.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
+    const route = field.routeFrom(from)!;
+    expect(route, 'nowhere to walk from a tile of open sand').not.toBeNull();
+    // Their own tile first, however far off its middle they were lying, and the
+    // door last.
+    expect(route[0]).toEqual(centreOf(16, 13));
+    expect(route.at(-1)).toEqual(door);
+    for (const point of route) {
+      expect(terrainAt(straightShore, ...tileOf(point))).toBe('beach');
+    }
+    // The same sweep answers every point on the beach, which is why it is kept.
+    expect(field.routeFrom(centreOf(8, 15))).not.toBeNull();
+    expect(field.routeFrom({ x: 4.5 * TILE_VOXELS, z: 4.5 * TILE_VOXELS })).toBeNull();
+  });
+
+  it('has nothing to say on a plot with no beach or for doors off the sand', () => {
+    const inland = walkNetworkFor({ paved: pathDown(3), levelOf: FLAT, shore: null, tilesX: 20 });
+    expect(sandFieldFor(inland, [centreOf(3, 14)], 40).routeFrom(centreOf(3, 14))).toBeNull();
+    expect(sandFieldFor(beachOf(pathDown(3)), [], 40).routeFrom(centreOf(3, 14))).toBeNull();
   });
 
   it('gives nothing on a plot with no beach, or for a door off the sand', () => {

@@ -13,10 +13,19 @@
  *
  * The search is breadth-first over beach tiles from the gate, each step only
  * where the straight line between the two tile centres is clear, as
- * `sandRoute.ts` sweeps - so a pitch is somewhere a route can reach. The first
- * tile with a free lounger for every adult wins; failing that anywhere within
- * {@link PITCH_TILES}, the first tile whose sand spots are all clear, lying on
- * whatever loungers it does have.
+ * `sandRoute.ts` sweeps - so a pitch is somewhere a route can reach. Of the
+ * tiles it reaches, the nearest is taken in this order: a free lounger for every
+ * adult, then any free lounger at all, then open sand set back from the gate,
+ * then open sand anywhere. See {@link Tier}.
+ *
+ * **A lounger counts from anywhere in the tile's own square of nine**, and the
+ * walk up to it is not asked whether it is clear. The beach is laid in sets of
+ * lounger, parasol, lounger with a clear column between sets, so a lounger's
+ * four direct neighbours are a parasol and the next set's lounger as often as
+ * not: counting only those, 2 of the reference plot's 27 gates could seat a
+ * couple on loungers, and everybody else lay on the sand in front of the gate.
+ * With the diagonals it is every gate. The last step onto a lounger is a step
+ * into its own box, which is what a lounger is for.
  *
  * Pure and deterministic: the same beach, gate and loungers give the same pitch.
  * Nothing here walks anybody - the router routes each member to their spot.
@@ -74,11 +83,15 @@ const SPOT_SPACING = 5;
 const ROW_LENGTH = 3;
 
 /**
- * Voxels at the lounger end of the walk up to one that are not asked about
- * obstacles: the walk ends inside the lounger's own box. The crowd's own
- * `SEAT_CLEAR`, for the crowd's reason.
+ * Tile steps from the gate a party will not put their towels down inside, when
+ * they are putting them on the sand rather than on loungers.
+ *
+ * The tile in front of a gate is where everybody coming onto the beach walks
+ * through, and a party lying across it reads as a picnic in a doorway. It is a
+ * preference and not a rule: a beach with nothing further out free still takes
+ * them here rather than turning them away.
  */
-const SEAT_CLEAR = 8;
+const SAND_SET_BACK = 2;
 
 /** Voxels at the gate end of the step off the paving that are not asked about obstacles. */
 const GATE_CLEAR = TILE_VOXELS / 2 + 2;
@@ -90,6 +103,16 @@ const NEIGHBOURS = [
   [0, -1],
   [-1, 0],
 ] as const;
+
+/** A tile's own square of nine: where its loungers are looked for. */
+const AROUND = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dz) => [dx, dz] as const));
+
+/**
+ * How good a pitch is, best first: everybody who wants a lounger on one, then
+ * somebody on one, then sand out of the way of the gate, then sand at all.
+ */
+const TIER = { loungers: 0, someLoungers: 1, sand: 2, atTheGate: 3 } as const;
+type Tier = (typeof TIER)[keyof typeof TIER];
 
 /** A tile the sweep reached. */
 interface Tile {
@@ -110,15 +133,27 @@ export function pitchFor(input: PitchInput): Pitch | null {
 
   const context = contextFor(input, beach.shore, beach.tilesX);
   const adults = members.filter((member) => !member.child).length;
-  let fallback: Pitch | null = null;
+  const best = new Map<Tier, Pitch>();
   for (const tile of sweepFrom(context, node)) {
     const pitch = pitchOn(context, tile, members);
     if (!pitch) continue;
-    const onLoungers = pitch.spots.filter((spot) => spot.seat >= 0).length;
-    if (onLoungers >= adults && adults > 0) return pitch;
-    fallback ??= pitch;
+    const tier = tierOf(pitch, tile, adults);
+    if (tier === TIER.loungers) return pitch;
+    if (!best.has(tier)) best.set(tier, pitch);
   }
-  return fallback;
+  for (const tier of [TIER.someLoungers, TIER.sand, TIER.atTheGate] as const) {
+    const pitch = best.get(tier);
+    if (pitch) return pitch;
+  }
+  return null;
+}
+
+/** How good this pitch is; see {@link TIER}. */
+function tierOf(pitch: Pitch, tile: Tile, adults: number): Tier {
+  const onLoungers = pitch.spots.filter((spot) => spot.seat >= 0).length;
+  if (onLoungers >= adults && adults > 0) return TIER.loungers;
+  if (onLoungers > 0) return TIER.someLoungers;
+  return tile.depth >= SAND_SET_BACK ? TIER.sand : TIER.atTheGate;
 }
 
 /** What one search reads over and over, worked out once. */
@@ -237,8 +272,9 @@ function sandSpot(
 }
 
 /**
- * The free loungers on a tile or its four neighbours that can be walked up to
- * straight from its middle, nearest first and ties to the lower seat.
+ * The free loungers in a tile's own square of nine, nearest its middle first and
+ * ties to the lower seat. See the note at the top of the file on why the walk up
+ * to one is not asked about obstacles.
  */
 function freeLoungersBeside(
   context: Context,
@@ -246,15 +282,11 @@ function freeLoungersBeside(
   centre: { readonly x: number; readonly z: number },
 ): number[] {
   const { network, loungerFree } = context.input;
-  const sand = network.sand;
   const found: number[] = [];
-  for (const [dx, dz] of [[0, 0] as const, ...NEIGHBOURS]) {
+  for (const [dx, dz] of AROUND) {
     for (const seat of context.loungers.get(keyIn(context, tile.tileX + dx, tile.tileZ + dz)) ??
       []) {
-      const spot = network.seats[seat]!;
-      if (!loungerFree(seat)) continue;
-      if (sand && !clearLine(sand, centre.x, centre.z, spot.x, spot.z, 0, SEAT_CLEAR)) continue;
-      found.push(seat);
+      if (loungerFree(seat)) found.push(seat);
     }
   }
   const distance = (seat: number): number =>

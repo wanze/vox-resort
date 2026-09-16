@@ -563,12 +563,13 @@ describe('a visit to the beach', () => {
     options: {
       readonly walked?: WalkNetwork;
       readonly night?: Parameters<typeof routerOn>[3];
+      readonly venues?: readonly Venue[];
     } = {},
   ) => {
     const walked = options.walked ?? network;
     const needs = wanting(people[0]!, 'fun');
     for (const person of people) needs.level.fun[person] = 0;
-    const { router, crowd } = routerOn(walked, [], needs, options.night, false);
+    const { router, crowd } = routerOn(walked, options.venues ?? [], needs, options.night, false);
     const above = walked.nodes[nodeAt(walked, 10, 11)]!;
     for (const person of people) {
       router.step(person, nodeAt(walked, 10, 10));
@@ -623,8 +624,11 @@ describe('a visit to the beach', () => {
     expect(needs.level.fun[0]).toBeGreaterThan(0.5);
     expect(backAt, 'never came back onto the boardwalk').toBe(setOffFrom);
     expect(network.gates).toContain(backAt);
-    // Walked, never put: nobody crosses more than a step's worth of sand at once.
-    expect(jumped).toBeLessThan(MAX_STEP * 2 * 5.6 * 1.25 + 1);
+    // Walked, never put: nobody crosses the sand in one frame. Half a tile
+    // rather than a step's worth, because the frame after a hold also carries
+    // the sidestep avoidance gives somebody walking a lane - about four voxels
+    // where a turn reverses which side of the line they keep to.
+    expect(jumped).toBeLessThan(TILE_VOXELS / 2);
   });
 
   it('settles a family together, the adults lying down and the children sitting', () => {
@@ -696,6 +700,92 @@ describe('a visit to the beach', () => {
     expect(isWaiting(crowd, housed), 'still lying on the sand at bedtime').toBe(false);
     expect(router.stayOf(housed)).toBe('leaving');
     expect(needs.level.fun[housed]).toBeGreaterThan(0.5);
+  });
+
+  /** A drinks kiosk out on the sand, three tiles east of the boardwalk. */
+  const kiosk: Venue = {
+    ...bakery(13),
+    key: 'poolside-bar#0',
+    id: 'poolside-bar',
+    label: 'Poolside Bar',
+    role: 'drink',
+    satisfies: [{ need: 'thirst', amount: 1 }],
+    capacity: 4,
+    dwellSeconds: { min: 60, max: 120 },
+    tileZ: 14,
+    z: 14.5 * TILE_VOXELS,
+  };
+
+  /** Steps and ticks the resort on, and hands back whether `until` came true. */
+  const until = (
+    crowd: Crowd,
+    router: ReturnType<typeof createRouter>,
+    done: () => boolean,
+    steps = 4000,
+  ): boolean => {
+    for (let step = 0; step < steps; step++) {
+      if (done()) return true;
+      stepCrowd(crowd, MAX_STEP);
+      if (step % SAND_TICKS_EVERY === 0) router.tick(step / SAND_TICKS_EVERY);
+    }
+    return done();
+  };
+
+  it('gets a thirsty guest up off their towel for a drink, and settles them again after', () => {
+    const { needs, router, crowd } = onTheBeach([0], { venues: [kiosk] });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    const spot = { x: crowd.x[0]!, z: crowd.z[0]!, seat: crowd.seat[0]! };
+    // A tick's worth of thirst, the way an afternoon on the sand brings it on.
+    needs.level.fun[0] = 1;
+    needs.level.thirst[0] = 0;
+
+    expect(
+      until(crowd, router, () => router.visitOf(0)?.venue.key === kiosk.key),
+      'never went for a drink',
+    ).toBe(true);
+    expect(router.goalOf(0)?.key, 'the party was moved on, not one guest').toBe(kiosk.key);
+    expect(
+      until(crowd, router, () => needs.level.thirst[0]! > 0.5),
+      'never got the drink',
+    ).toBe(true);
+
+    expect(
+      until(crowd, router, () => router.stayOf(0) === 'resting'),
+      'never came back to the pitch',
+    ).toBe(true);
+    expect(router.visitOf(0)?.venue.label).toBe('Beach');
+    expect(resting(crowd, 0)).toBe(true);
+    // Their own spot, and their own lounger: the pitch was theirs all along.
+    expect(crowd.x[0]).toBeCloseTo(spot.x);
+    expect(crowd.z[0]).toBeCloseTo(spot.z);
+    expect(crowd.seat[0]).toBe(spot.seat);
+  });
+
+  it('walks a guest off the beach from the kiosk when their stay is over', () => {
+    const clock = { tick: NOON };
+    const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
+    const { needs, router, crowd } = onTheBeach([housed], {
+      venues: [kiosk],
+      night: { lodgings: [hotel()], tickOfDay: () => clock.tick },
+    });
+    expect(untilSettled(crowd, [housed])).toBe(true);
+    needs.level.fun[housed] = 1;
+    needs.level.thirst[housed] = 0;
+    expect(
+      until(crowd, router, () => router.visitOf(housed)?.venue.key === kiosk.key),
+      'never went for a drink',
+    ).toBe(true);
+
+    // Their bedtime, while they are standing at the kiosk: the stay is over and
+    // they walk off the beach rather than back to their towel.
+    clock.tick = bedtimeOf(guests.party[housed]!).sleepAt;
+    expect(
+      until(crowd, router, () => crowd.node[housed]! >= 0),
+      'never came back onto the boardwalk',
+    ).toBe(true);
+    expect(network.gates).toContain(crowd.node[housed]);
+    expect(router.stayOf(housed)).toBeNull();
+    expect(needs.level.fun[housed], 'the stay gave nothing back').toBeGreaterThan(0.5);
   });
 
   it('brings a guest on a stay back onto the graph when it is rebuilt, rather than roaming', () => {
@@ -1208,12 +1298,16 @@ describe('on the generated plot', () => {
 
   /**
    * Plan 027's measure. Before it, 20 venues on this plot had no way in at all,
-   * and they were the beach: every shower, changing cabin and beach club. The
-   * one left is a poolside bar on a sand terrace at level 3, which is sand but
-   * not beach band - neither a roamer nor a route reaches it, and whether sand
-   * terraces are paved or roamed is the maintainer's call.
+   * and they were the beach: every shower, changing cabin and beach club.
+   *
+   * One was left over: a poolside bar the generator stood on a sand terrace at
+   * level 3, which is sand but not beach band. Putting the snack bar and the
+   * ice-cream cart on the back of the beach moved what the generator stands
+   * where, and that bar is not on this plot any more - so every venue it does
+   * stand can now be reached. A sand terrace is still not routable, and whether
+   * those are paved or roamed is still the maintainer's call.
    */
-  it('reaches every venue on the plot but the poolside bar on the sand terrace', () => {
+  it('reaches every venue on the plot', () => {
     const unreachable = venues
       .filter((venue) => {
         const doors = doorsFor(venue, furnishedIndex, furnished);
@@ -1221,7 +1315,7 @@ describe('on the generated plot', () => {
         return sandRoutesFor(furnished, doors.sand, SAND_TILES).length === 0;
       })
       .map((venue) => `${venue.key} at ${venue.tileX},${venue.tileZ}`);
-    expect(unreachable).toEqual(['poolside-bar#6 at 102,69']);
+    expect(unreachable).toEqual([]);
   });
 
   it('keeps every line on the sand and every step over it on open beach', () => {
@@ -1264,14 +1358,20 @@ describe('on the generated plot', () => {
     // Pinned before plan 027 gave `beach-club`, `pedalo-rental` and
     // `beach-shower` doors: on this plot all three stand on the sand, which
     // grows no spur, so declaring where they are entered changes no paving.
+    //
+    // Re-pinned when the snack bar and the ice-cream cart joined the back of the
+    // beach: standing them on the sand satisfies the generator's "every type
+    // somewhere" pass, so it no longer has to find them a plot inland, and the
+    // spurs that would have served those plots are not grown. 2 232 tiles became
+    // 2 240 - different tiles, not more paving on the sand.
     let hash = 2166136261;
     const key = layout.paths
       .map((tile) => `${tile.tileX},${tile.tileZ},${tile.y},${tile.id}`)
       .join(';');
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2232);
-    expect(hash).toBe(4242512241);
+    expect(layout.paths).toHaveLength(2240);
+    expect(hash).toBe(2140810103);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -1580,12 +1680,23 @@ describe('on the generated plot', () => {
       if (arrived && !router.visitOf(hungry)) left = hunger;
     }
 
+    console.log(
+      'family goal',
+      router.goalOf(hungry)?.key,
+      router.visitOf(hungry)?.venue.key,
+      setOff,
+      arrived,
+    );
     expect(setOff, 'a hungry family chose nowhere to eat').not.toBeNull();
     expect(arrived, 'six simulated hours and they never got there').not.toBeNull();
     expect(left, 'they never came out again').not.toBeNull();
     // Better fed than they set off, which is the whole question.
     expect(left!).toBeGreaterThan(setOff!.hunger);
-    // And the walk itself took under an hour, not most of a day.
-    expect(arrived!.tick - setOff!.tick).toBeLessThan(60);
+    // And the walk itself took an hour and a half, not most of a day. It was 49
+    // simulated minutes to a restaurant 435 voxels off until the snack bar and
+    // the ice-cream cart joined the back of the beach: that moved what the
+    // generator stands where, and the nearest restaurant this family would
+    // choose is now 630 voxels away, which is 90 minutes of walking.
+    expect(arrived!.tick - setOff!.tick).toBeLessThan(120);
   });
 });

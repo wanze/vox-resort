@@ -110,7 +110,7 @@ import {
   type Goals,
 } from './goals';
 import { lodgingFor, type Lodging } from './lodgings';
-import { relieve, type Needs } from './needs';
+import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
 import { beachVenueFor, isBeach } from './beach';
 import { pitchFor, type Pitch } from './beachPitch';
@@ -124,9 +124,9 @@ import {
   type Occupancy,
 } from './occupancy';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
-import { sandRoutesFor, type SandRoute } from './sandRoute';
+import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
-import type { Venue } from './venues';
+import { reliefAt, type Venue } from './venues';
 
 /**
  * Simulated seconds one tick covers: a tick is a simulated minute, which is
@@ -150,6 +150,26 @@ const BY_DAY = -2;
  * leaves room for the way round whatever stands between.
  */
 const SAND_ROUTE_TILES = 40;
+
+/**
+ * How loudly a need has to pull before somebody settled on the beach gets up to
+ * see to it at a bar, a kiosk or a shower on the sand.
+ *
+ * Twice `needs.ts`'s "content" line. Below it a guest on a stay stays put: an
+ * afternoon on the sand is worth a little thirst, and a beach where everybody
+ * jumps up every few minutes is a beach nobody is lying on.
+ */
+const FETCH_URGENCY = 0.4;
+
+/**
+ * Simulated minutes before somebody who found nothing on the sand worth getting
+ * up for looks again.
+ *
+ * The look costs a `chooseVenue` pass over the venue list, so it is cheap; what
+ * it guards against is the guest whose nearest kiosk cannot be routed to, who
+ * would otherwise pay for a sweep of the beach every tick for the whole stay.
+ */
+const LOOK_AGAIN_TICKS = 15;
 
 /**
  * Who is walking a sand leg, and how far along it, one column each: the venue
@@ -343,6 +363,23 @@ export function createRouter(parts: {
   /** Beach tiles pitched on, and loungers promised to a pitch, so no two parties share either. */
   let pitched = new Set<number>();
   let promised = new Set<number>();
+  /**
+   * The venue on the sand each person has got up from their pitch for, or -1.
+   * See {@link sendOnErrands}.
+   */
+  let fetching = new Int32Array(guests.count).fill(-1);
+  /** The tick their stay was to have ended on, and the walk back to their gate, while they are. */
+  let stayUntil = new Int32Array(guests.count);
+  let stayRoutes: (SandRoute | null)[] = Array.from({ length: guests.count }, () => null);
+  /** The earliest tick each person looks for something on the sand again. */
+  let lookAgainAt = new Int32Array(guests.count);
+  /**
+   * Each building on the sand as a sweep of the beach, kept for the guests who
+   * walk to it from a pitch rather than from a gate; and whether each venue is
+   * one at all, which is a question about its doors, asked once.
+   */
+  let sandFields: (SandField | null)[] = venues.map(() => null);
+  let standsOnSand = new Int8Array(venues.length).fill(-1);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -392,6 +429,34 @@ export function createRouter(parts: {
       overSand.length > 0
         ? longestSandLane(network, overSand)
         : longestLane(network, doors.nodes, declared);
+    return field;
+  };
+
+  /**
+   * Whether a venue is a building standing on the sand: no door any paving
+   * reaches, and a way in off the beach. Asked of the doors once per venue,
+   * because a stay looks for somewhere to go every quarter of an hour.
+   */
+  const isOnSand = (venue: number): boolean => {
+    const known = standsOnSand[venue]!;
+    if (known >= 0) return known === 1;
+    const declared = venues[venue]!;
+    const doors = isBeach(declared) ? null : doorsFor(declared, index, network);
+    const answer = doors !== null && doors.nodes.length === 0 && doors.sand.length > 0;
+    standsOnSand[venue] = answer ? 1 : 0;
+    return answer;
+  };
+
+  /** A building on the sand as a sweep of the beach, kept: see {@link SandField}. */
+  const sandFieldOf = (venue: number): SandField => {
+    const existing = sandFields[venue];
+    if (existing) return existing;
+    const field = sandFieldFor(
+      network,
+      doorsFor(venues[venue]!, index, network).sand,
+      SAND_ROUTE_TILES,
+    );
+    sandFields[venue] = field;
     return field;
   };
 
@@ -512,7 +577,7 @@ export function createRouter(parts: {
   const stand = (person: number, venue: number, door: number, waiting: boolean): void => {
     const people = crowd();
     const lane = lanes[venue] ?? [];
-    const onSand = (sandRoutes[venue]?.length ?? 0) > 0;
+    const onSand = door < 0 || (sandRoutes[venue]?.length ?? 0) > 0;
     const spot =
       waiting && lane.length > 0
         ? lane[Math.min(occupancy.slot[person]!, lane.length - 1)]!
@@ -667,6 +732,166 @@ export function createRouter(parts: {
   };
 
   /**
+   * Gets up whoever has been lying on the sand long enough to want something
+   * the beach itself does not give them, and sends them over it to whatever
+   * does: a bar, a kiosk, a shower, a club.
+   *
+   * This is what makes a beach a place to spend a day rather than an hour. A
+   * guest who had to walk back to the paving and decide again from there was a
+   * guest who did not come back, and the sand emptied every time anybody got
+   * thirsty. Their pitch, their spot and their lounger stay theirs while they
+   * are gone, and the visit picks up where it left off.
+   *
+   * Only while somebody is on the beach at all, and only every
+   * {@link LOOK_AGAIN_TICKS} per guest once they have found nothing.
+   */
+  const sendOnErrands = (): void => {
+    const beach = beachIndex();
+    if (beach < 0 || !(occupancy.inside[beach]! > 0)) return;
+    const people = crowd();
+    for (let person = 0; person < guests.count; person++) {
+      if (!dueAnotherLook(person, beach, people)) continue;
+      const wanted = strongestNeed(needs, guests, person);
+      if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
+      // What they came to the beach for is what the beach is giving them.
+      if (reliefAt(venues[beach]!, wanted.need) > 0) continue;
+      lookAgainAt[person] = now + LOOK_AGAIN_TICKS;
+      fetchOverTheSand(person, people);
+    }
+  };
+
+  /**
+   * Whether this person is settled on their pitch on the beach right now, and
+   * has not looked round for something within the last {@link LOOK_AGAIN_TICKS}.
+   */
+  const dueAnotherLook = (person: number, beach: number, people: Crowd): boolean => {
+    if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) return false;
+    return isWaiting(people, person) && now >= lookAgainAt[person]!;
+  };
+
+  /**
+   * Sends one guest from their pitch to the best thing on the sand for what they
+   * want, if anything on it serves them and a walk over the beach reaches it.
+   *
+   * Scored by {@link chooseVenue} like any other choice, with everything off the
+   * sand at `Infinity`: what is being chosen is where to go *without leaving the
+   * beach*, and a restaurant up in the town is a different decision, taken when
+   * the stay ends. The party's goal is untouched, because this is one guest
+   * fetching an ice cream and not the family moving on.
+   */
+  const fetchOverTheSand = (person: number, people: Crowd): void => {
+    const claim = stays[person];
+    if (!claim) return;
+    const choice = chooseVenue({
+      needs,
+      guests,
+      person,
+      venues,
+      x: people.x[person] ?? 0,
+      z: people.z[person] ?? 0,
+      walkingDistance: acrossTheSandFrom(people.x[person] ?? 0, people.z[person] ?? 0),
+      queueLength,
+      queueLimit,
+    });
+    if (!choice) return;
+    // Its lane and its own routes off the beach, which the walk home will want.
+    fieldFor(choice.venue);
+    const waypoints = sandFieldOf(choice.venue).routeFrom(claim.pitch);
+    if (!waypoints) return;
+    stayUntil[person] = occupancy.until[person]!;
+    stayRoutes[person] = errands.route[person] ?? null;
+    // Out of the beach's own count while they are away, or the sweep would end
+    // a stay for somebody standing at a bar; {@link backToThePitch} puts them
+    // back in it with the time they had left.
+    leaveVenue(occupancy, person);
+    fetching[person] = choice.venue;
+    setOffAlong(person, choice.venue, { gate: -1, waypoints, length: 0 });
+  };
+
+  /** How far each venue is over the sand alone: a straight line, or `Infinity` off the beach. */
+  const acrossTheSandFrom =
+    (x: number, z: number) =>
+    (venue: number): number =>
+      isOnSand(venue)
+        ? Math.hypot(venues[venue]!.x - x, venues[venue]!.z - z)
+        : Number.POSITIVE_INFINITY;
+
+  /**
+   * Back at the pitch with whatever they went for: into the beach's count again
+   * for the time the stay had left, and out to their own spot.
+   *
+   * At least a tick of it, even where the stay ran out while they queued: the
+   * sweep then ends it on the next tick, from the spot, so they walk back to
+   * the gate the way anybody leaving the beach does rather than from a bar.
+   */
+  const backToThePitch = (person: number): void => {
+    fetching[person] = -1;
+    const beach = beachIndex();
+    const route = stayRoutes[person];
+    const claim = stays[person];
+    if (beach < 0 || !route || !claim) return;
+    arriveAt(
+      occupancy,
+      person,
+      beach,
+      venues[beach]!.capacity,
+      Math.max(1, stayUntil[person]! - now),
+      now,
+    );
+    errands.venue[person] = beach;
+    errands.route[person] = route;
+    errands.back[person] = 0;
+    errands.leg[person] = route.waypoints.length - 1;
+    const spot = route.waypoints.at(-1)!;
+    walkSandTo(crowd(), person, spot.x, spot.z);
+  };
+
+  /**
+   * The end of a visit somebody made from their pitch: back to it with the rest
+   * of their stay, or - where the stay has run out or it is their bedtime - off
+   * the beach by the gate the building's own routes come from.
+   */
+  const leaveErrand = (person: number, venue: number): void => {
+    relieve(needs, person, venues[venue]!.satisfies);
+    const route = errandOf(person);
+    const staying = stays[person] !== null && now < stayUntil[person]! && !dueInBed(person);
+    if (route && staying) {
+      walkBack(person, route);
+      return;
+    }
+    endStayFromErrand(person, venue);
+  };
+
+  /** Their day on the sand ends here: the beach's relief, the pitch given up, and a walk to a gate. */
+  const endStayFromErrand = (person: number, venue: number): void => {
+    const beach = beachIndex();
+    if (beach >= 0) relieve(needs, person, venues[beach]!.satisfies);
+    leaveStay(person);
+    fetching[person] = -1;
+    stayRoutes[person] = null;
+    clearPartyGoal(goals, guests, person);
+    const home = sandRoutes[venue]?.[0];
+    if (!home) {
+      errands.venue[person] = -1;
+      return;
+    }
+    errands.venue[person] = venue;
+    errands.route[person] = home;
+    errands.leg[person] = home.waypoints.length;
+    walkBack(person, home);
+  };
+
+  /** Whether this person has a bed and it is their party's bedtime. */
+  const dueInBed = (person: number): boolean =>
+    homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
+
+  /** Which venue the beach is, or -1 on a plot with none. */
+  const beachIndex = (): number => {
+    const last = venues.length - 1;
+    return last >= 0 && isBeach(venues[last]!) ? last : -1;
+  };
+
+  /**
    * Somebody at a gate their venue on the beach is reached from, set off along
    * that gate's sand leg; or, where its line is already full, turned away here
    * rather than at the end of the walk. Hands back whether they were set off.
@@ -716,7 +941,15 @@ export function createRouter(parts: {
       return;
     }
     errands.venue[person] = -1;
-    if (route.gate < network.nodes.length) releaseTo(crowd(), person, route.gate);
+    // The far end of an errand from a pitch is the pitch, not a gate: a walk
+    // over the sand that started on it never touched the graph.
+    if (fetching[person]! >= 0) {
+      backToThePitch(person);
+      return;
+    }
+    if (route.gate >= 0 && route.gate < network.nodes.length) {
+      releaseTo(crowd(), person, route.gate);
+    }
   };
 
   /**
@@ -738,6 +971,8 @@ export function createRouter(parts: {
     const next = route.waypoints[leg];
     const stay = stays[person];
     if (next) walkSandTo(crowd(), person, next.x, next.z);
+    // At a door, whether they walked from a gate or up off their own towel.
+    else if (fetching[person]! >= 0) reachSandDoor(person, route);
     else if (stay) restAtSpot(person, stay);
     else reachSandDoor(person, route);
     return -1;
@@ -755,7 +990,9 @@ export function createRouter(parts: {
       stand(person, venue, -1, outcome === 'waiting');
       return;
     }
-    clearPartyGoal(goals, guests, person);
+    // Somebody who walked up from their own pitch keeps their party's goal: the
+    // beach is where they still are, and the line is all they were refused.
+    if (fetching[person]! < 0) clearPartyGoal(goals, guests, person);
     walkBack(person, route);
   };
 
@@ -795,6 +1032,10 @@ export function createRouter(parts: {
    * 017's instantaneous one.
    */
   const leave = (person: number, venue: number): void => {
+    if (fetching[person] === venue) {
+      leaveErrand(person, venue);
+      return;
+    }
     relieve(needs, person, venues[venue]!.satisfies);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
@@ -937,6 +1178,7 @@ export function createRouter(parts: {
       }
       if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
       callInForBed(at % TICKS_PER_DAY);
+      sendOnErrands();
     },
 
     rebuild(nextVenues, nextLodgings, nextNetwork) {
@@ -968,6 +1210,12 @@ export function createRouter(parts: {
       spotOf = new Int32Array(guests.count);
       pitched = new Set();
       promised = new Set();
+      fetching = new Int32Array(guests.count).fill(-1);
+      stayUntil = new Int32Array(guests.count);
+      stayRoutes = Array.from({ length: guests.count }, () => null);
+      lookAgainAt = new Int32Array(guests.count);
+      sandFields = venues.map(() => null);
+      standsOnSand = new Int8Array(venues.length).fill(-1);
       // Everybody, not only the parties whose venue went: a goal is an index
       // into the venue list that has just been replaced, over nodes that have
       // just been renumbered, so none of them means anything now.
@@ -1007,6 +1255,9 @@ export function createRouter(parts: {
 
     goalOf(person) {
       if (person < 0 || person >= goals.count) return null;
+      // What they are walking to right now, which for somebody who has got up
+      // off their towel for an ice cream is not their party's goal.
+      if (fetching[person]! >= 0) return venues[fetching[person]!] ?? null;
       const goal = goals.venue[person]!;
       return goal === NO_GOAL ? null : (venues[goal] ?? null);
     },
@@ -1022,6 +1273,9 @@ export function createRouter(parts: {
 
     stayOf(person) {
       if (person < 0 || person >= goals.count) return null;
+      // On an errand off their pitch: walking back to it is walking to the
+      // beach, and walking to the bar is the bar's own line.
+      if (fetching[person]! >= 0) return errands.back[person] === 1 ? 'arriving' : null;
       const venue = venues[errands.venue[person]!];
       if (!venue || !isBeach(venue)) return null;
       if (errands.back[person] === 1) return 'leaving';

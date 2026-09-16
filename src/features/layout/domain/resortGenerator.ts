@@ -831,10 +831,15 @@ const LIFEGUARD_ID = 'lifeguard-tower';
  * What stands on the sand behind the lines.
  *
  * Weighted by repetition rather than by a table of numbers: the back of a beach
- * is mostly palms and torches with a club, a rinse or a row of huts here and
- * there, and the shortest way to say that is to write the palms down more often.
- * The list is also the whole of the rule that a beach club does not end up on
- * the tideline.
+ * is mostly palms and torches with a club, a bar, a kiosk, a rinse or a row of
+ * huts here and there, and the shortest way to say that is to write the palms
+ * down more often. The list is also the whole of the rule that a beach club does
+ * not end up on the tideline.
+ *
+ * The snack bar and the ice-cream cart are here so that a day on the sand can be
+ * spent there: a guest on a pitch walks over the beach to whatever serves what
+ * they want and back again, and without food on the sand the only errands to run
+ * were for a drink. See `sim/domain/router.ts`.
  *
  * The volleyball court and the pedalo rental are not here: a resort holds both
  * to a number (`placement.perResort`), which a weighted draw cannot be asked for,
@@ -844,6 +849,9 @@ const BEACH_BACK: readonly string[] = [
   'beach-club',
   'poolside-bar',
   'poolside-bar',
+  'snack-bar',
+  'snack-bar',
+  'icecream',
   'changing-cabins',
   'beach-shower',
   'beach-shower',

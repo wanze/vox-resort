@@ -80,6 +80,61 @@ interface Reached {
 }
 
 /**
+ * One building's sweep, kept: the way to its doors from anywhere on the sand
+ * that can reach them.
+ *
+ * The sweep is the expensive half of a route and it is the same sweep for every
+ * starting point, so a guest on a pitch who wants an ice cream asks this rather
+ * than sweeping the beach again. {@link sandRoutesFor} is the gates asked of one
+ * of these; a stay on the sand asks it of wherever the party settled.
+ */
+export interface SandField {
+  /**
+   * The walk from a point on the sand to the nearest door, its own tile first
+   * and the door last, or null where the sweep never reached that tile.
+   *
+   * The first waypoint is the centre of the caller's own tile rather than the
+   * point itself: somebody lying on a lounger is inside its box, and the way out
+   * of one is the way in.
+   */
+  routeFrom(from: SandPoint): readonly SandPoint[] | null;
+}
+
+/**
+ * The sweep over the beach from a building's doors, as something to ask for
+ * routes. Empty of answers on a plot with no beach, or for doors on no beach
+ * tile.
+ */
+export function sandFieldFor(
+  network: WalkNetwork,
+  doors: readonly SandPoint[],
+  maxTiles: number,
+): SandField {
+  if (!network.beach || doors.length === 0) return { routeFrom: () => null };
+  const beach = bandOf(network.beach);
+  const reached = sweepBeach(network, beach, doors, maxTiles);
+  const byTile = tileIndexOf(beach, reached);
+  return {
+    routeFrom(from) {
+      const tileX = Math.floor(from.x / TILE_VOXELS);
+      const tileZ = Math.floor(from.z / TILE_VOXELS);
+      const start = byTile.get(tileKey(beach, tileX, tileZ));
+      if (start === undefined) return null;
+      return pulled(network, beach, pathFrom(reached, start));
+    },
+  };
+}
+
+/** Where each reached tile is in the sweep, by its tile key. */
+function tileIndexOf(beach: Band, reached: readonly Reached[]): Map<number, number> {
+  const byTile = new Map<number, number>();
+  for (const [index, tile] of reached.entries()) {
+    byTile.set(tileKey(beach, tile.tileX, tile.tileZ), index);
+  }
+  return byTile;
+}
+
+/**
  * Every gate that can reach one of `doors` within `maxTiles` steps over the
  * beach, each with its route, nearest first and ties to the lower gate.
  *
@@ -100,11 +155,7 @@ export function sandRoutesFor(
   const reached = sweepBeach(network, beach, doors, maxTiles);
   if (reached.length === 0) return [];
 
-  const byTile = new Map<number, number>();
-  for (const [index, tile] of reached.entries()) {
-    byTile.set(tileKey(beach, tile.tileX, tile.tileZ), index);
-  }
-
+  const byTile = tileIndexOf(beach, reached);
   const routes: SandRoute[] = [];
   for (const gate of network.gates) {
     const node = network.nodes[gate]!;

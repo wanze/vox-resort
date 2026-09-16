@@ -1226,9 +1226,14 @@ describe('turning a building to open its door onto paving', () => {
 
     it('opens every door-declaring building on the grass onto paving', () => {
       // Without the doors the plan stands most of them with their backs to the
-      // street; with them, not one is left shut out on the reference plot.
+      // street; with them, all but one are opened onto paving on the reference
+      // plot. The one is a playground whose plot the generator only stands there
+      // since the snack bar and the ice-cream cart joined the back of the beach:
+      // no turn of it that claims the same tiles faces the paving it has, which
+      // is the fallback plan 025 measured at 15 buildings and seeds 1, 7 and 11
+      // at 9, 9 and 11.
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);
-      expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual([]);
+      expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual(['playground']);
     });
 
     it('lays every plot it laid before, however the doors turn it', () => {

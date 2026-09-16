@@ -41,11 +41,23 @@ const BEACH_KEY = 'beach';
 
 /**
  * What an afternoon on the sand does for somebody: a good share of fun, below
- * the pool's and the courts', and a little rest, which a lounger is for.
+ * the pool's 0.8 and the waterpark's 1, and a real rest, which an hour on a
+ * lounger is.
+ *
+ * **The two numbers that decide how busy the beach is**, because the beach is
+ * within reach of everywhere - a gate is never far - so `chooseVenue` weighs it
+ * against every pool and court on relief almost alone. Measured over ten
+ * simulated hours of the default resort with 570 guests, as visits to the beach
+ * against the most anybody was resting on the sand at once:
+ *
+ * - 0.6 / 0.2, what this began with: 210 visits, 22 on the sand;
+ * - 0.7 / 0.3, these: 678 visits, 65 on the sand;
+ * - 0.85 / 0.35: 880 visits, 70 on the sand, and the pool and the courts all but
+ *   stop being chosen at all.
  */
 const BEACH_RELIEF: readonly NeedRelief[] = [
-  { need: 'fun', amount: 0.6 },
-  { need: 'energy', amount: 0.2 },
+  { need: 'fun', amount: 0.7 },
+  { need: 'energy', amount: 0.3 },
 ];
 
 /**

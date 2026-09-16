@@ -262,7 +262,19 @@ export type Errand =
   | { readonly kind: 'waiting'; readonly at: string; readonly place: number }
   | { readonly kind: 'inside'; readonly at: string }
   | { readonly kind: 'asleep'; readonly at: string }
+  /** A stay on the beach: on the way out to their spot, settled on it, or on the way back. */
+  | { readonly kind: 'beach'; readonly stage: BeachStage }
   | null;
+
+/** Where a guest is in a stay on the beach, as the router says. */
+type BeachStage = 'arriving' | 'resting' | 'leaving';
+
+/** A walk to or from a spot on the beach, worded; settled on it is worded by the pose. */
+const BEACH_WALKS: { readonly [stage in BeachStage]: string } = {
+  arriving: 'Walking to the beach',
+  resting: 'On the beach',
+  leaving: 'Walking back from the beach',
+};
 
 /** Something with a name the line can say: a venue or a lodging, as far as wording goes. */
 interface Named {
@@ -286,19 +298,25 @@ export interface ErrandFacts {
   /** The lodging they are asleep in or walking home to, or null. */
   readonly home: Named | null;
   readonly asleep: boolean;
+  /** Where they are in a stay on the beach, or null while they are on none. */
+  readonly beach: BeachStage | null;
 }
 
 /**
- * Which errand the facts add up to, most settled first: asleep, then at a
- * venue, then walking home, then walking anywhere else.
+ * Which errand the facts add up to, most settled first: asleep, then on the
+ * beach, then at a venue, then walking home, then walking anywhere else.
  *
- * Home is ahead of a goal because a guest turned for bed keeps whatever venue
- * their party had been walking to until they next decide, and the line should
- * say where they are actually going.
+ * The beach is ahead of a visit because a stay on it is one - the router counts
+ * them inside the Beach - and the line should say what they are doing out
+ * there rather than that they are inside it. Home is ahead of a goal because a
+ * guest turned for bed keeps whatever venue their party had been walking to
+ * until they next decide, and the line should say where they are actually
+ * going.
  */
 export function errandOf(facts: ErrandFacts): Errand {
   const { visit, goal, home } = facts;
   if (facts.asleep && home) return { kind: 'asleep', at: home.label };
+  if (facts.beach) return { kind: 'beach', stage: facts.beach };
   if (visit?.waiting) return { kind: 'waiting', at: visit.venue.label, place: visit.place };
   if (visit) return { kind: 'inside', at: visit.venue.label };
   if (home) return { kind: 'walking', to: home.label, home: true };
@@ -316,7 +334,32 @@ function errandWording(errand: NonNullable<Errand>): string {
   if (errand.kind === 'walking') return `Walking ${errand.home ? 'home ' : ''}to the ${errand.to}`;
   if (errand.kind === 'inside') return `Inside the ${errand.at}`;
   if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
+  if (errand.kind === 'beach') return BEACH_WALKS[errand.stage];
   return `${placeWording(errand.place)} in the line at the ${errand.at}`;
+}
+
+/**
+ * What somebody the simulation has put somewhere is doing there, with no tile,
+ * or null for anybody on the move - whose line carries the tile.
+ *
+ * Settled on the beach reads as the pose they are in. A roamer, or somebody
+ * lying on a lounger, on a visit to the beach they wander about in rather than
+ * settle on, is on the move for this purpose: what they are doing says more
+ * than "inside the Beach" would.
+ */
+function stillWording(
+  crowd: Crowd,
+  person: number,
+  resting: number,
+  errand: Errand,
+): string | null {
+  if (errand === null || errand.kind === 'walking') return null;
+  if (errand.kind === 'beach') {
+    if (errand.stage !== 'resting') return null;
+    return `${resting === RESTING.sitting ? 'Sitting' : 'Lying'} on the beach`;
+  }
+  if (isRoaming(crowd, person) || resting === RESTING.lying) return null;
+  return errandWording(errand);
 }
 
 /** What somebody not stood somewhere by the simulation is doing, in a word or a few. */
@@ -364,14 +407,11 @@ export function activityLine(
   const wanted = strongestNeed(needs, guests, person);
   const mood = wanted === null ? '' : `${NEED_MOODS[wanted.need]} · `;
   const resting = restingOn(crowd, person);
-  // Standing in a line or sitting in a bakery: where they are is the place, and
-  // saying the tile again every frame is noise rather than information. Out on
-  // the sand is the exception - a visit to the beach is walked about in, so
-  // what they are doing on it says more than "inside the Beach" would.
-  const outOnTheSand = isRoaming(crowd, person) || resting === RESTING.lying;
-  if (errand !== null && errand.kind !== 'walking' && !outOnTheSand) {
-    return `${mood}${errandWording(errand)}`;
-  }
+  // Standing in a line, sitting in a bakery or lying on the sand: where they
+  // are is the place, and saying the tile again every frame is noise rather
+  // than information.
+  const still = stillWording(crowd, person, resting, errand);
+  if (still !== null) return `${mood}${still}`;
 
   const doing = doingNow(crowd, person, resting, errand);
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);

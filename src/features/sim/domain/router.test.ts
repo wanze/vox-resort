@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { seatSiteOf } from '../../catalog/domain/placementFacts';
+import { seatSpotsFor } from '../../crowd/domain/seating';
 import {
   createCrowd,
   holdAt,
@@ -9,10 +11,14 @@ import {
   MAX_STEP,
   releaseTo,
   reseatCrowd,
+  RESTING,
+  restingOn,
+  seatIsFree,
   stepCrowd,
   type Crowd,
 } from '../../crowd/domain/crowd';
 import { blockedAt } from '../../crowd/domain/sandGrid';
+import type { SeatSpot } from '../../crowd/domain/seating';
 import {
   BEACH_SURFACE,
   walkNetworkFor,
@@ -33,9 +39,10 @@ import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
+import { isBeach } from './beach';
 import { crowdScaleFor } from './crowdRate';
-import { createRouter } from './router';
-import { advanceClock, createSimClock, withSpeed } from './simClock';
+import { createRouter, type Router } from './router';
+import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { venuesOn, type Venue } from './venues';
 
 const FLAT: LevelProvider = () => 0;
@@ -108,6 +115,7 @@ const routerOn = (
     lodgings: [],
     tickOfDay: () => NOON,
   },
+  roamsBeach = true,
 ): { router: ReturnType<typeof createRouter>; crowd: Crowd } => {
   let crowd: Crowd | null = null;
   const router = createRouter({
@@ -126,6 +134,7 @@ const routerOn = (
     variants: 4,
     seed: 3,
     routeOf: (person, at) => router.step(person, at),
+    roamsBeach,
   });
   for (let person = 0; person < crowd.count; person++) {
     crowd.x[person] = 0;
@@ -485,6 +494,19 @@ const hotel = (tileZ = -1): Lodging => ({
   doors: [],
 });
 
+/** Steps with no clock until everybody named is settled, and says whether they were. */
+const untilSettled = (crowd: Crowd, people: readonly number[]): boolean => {
+  for (let step = 0; step < 600; step++) {
+    if (people.every((person) => isWaiting(crowd, person))) return true;
+    stepCrowd(crowd, MAX_STEP);
+  }
+  return false;
+};
+
+/** Whether somebody is lying or sitting down, rather than walking or stood. */
+const resting = (crowd: Crowd, person: number): boolean =>
+  [RESTING.sitting, RESTING.lying].includes(restingOn(crowd, person) as 2 | 3);
+
 describe('a visit to the beach', () => {
   // Water from z = 18; six rows of sand in front of it, and a boardwalk down to it.
   const shore = shoreFor({
@@ -498,7 +520,6 @@ describe('a visit to the beach', () => {
     y: 0,
   }));
   const network = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20 });
-  const gate = network.gates[0]!;
 
   /** A bored guest at the top of the boardwalk, with nothing on the plot but sand. */
   const bored = () => {
@@ -515,36 +536,179 @@ describe('a visit to the beach', () => {
     expect(router.step(0, nodeAt(network, 10, 11))).not.toBe(-1);
   });
 
-  it('turns a guest loose on the sand at the gate, rather than standing them anywhere', () => {
-    const { router, crowd } = bored();
-    expect(router.step(0, gate)).toBe(-1);
-    expect(isRoaming(crowd, 0)).toBe(true);
-    expect(isWaiting(crowd, 0)).toBe(false);
-    expect(router.visitOf(0)?.venue.label).toBe('Beach');
-    expect(router.offTheSand(0)).toBe(false);
+  /**
+   * Two free loungers either side of 12,12, on 13,12 and 12,13: clear of the
+   * boardwalk, or they would hang off its nodes rather than stand on the beach.
+   */
+  const loungers: SeatSpot[] = [
+    [13, 12],
+    [12, 13],
+  ].map(([tileX, tileZ]) => ({
+    x: (tileX! + 0.5) * TILE_VOXELS,
+    z: (tileZ! + 0.5) * TILE_VOXELS,
+    y: BEACH_SURFACE + 5,
+    heading: 0,
+    pose: 'lie' as const,
+    tileX: tileX!,
+    tileZ: tileZ!,
+  }));
+
+  /**
+   * Everybody named bored, deciding on the beach at the top of the boardwalk,
+   * and walked down it to the gate, in a crowd that does not roam - as
+   * `showcase.ts` builds it.
+   */
+  const onTheBeach = (
+    people: readonly number[],
+    options: {
+      readonly walked?: WalkNetwork;
+      readonly night?: Parameters<typeof routerOn>[3];
+    } = {},
+  ) => {
+    const walked = options.walked ?? network;
+    const needs = wanting(people[0]!, 'fun');
+    for (const person of people) needs.level.fun[person] = 0;
+    const { router, crowd } = routerOn(walked, [], needs, options.night, false);
+    const above = walked.nodes[nodeAt(walked, 10, 11)]!;
+    for (const person of people) {
+      router.step(person, nodeAt(walked, 10, 10));
+      holdAt(crowd, person, above.x, above.y, above.z, 0);
+      releaseTo(crowd, person, walked.gates[0]!);
+    }
+    return { needs, router, crowd };
+  };
+
+  /** A family of the fixture with a child in it, adults first. */
+  const family = guests.parties.find(
+    (party) => party.kind === 'family' && party.members.some((m) => guests.child[m] === 1),
+  )!.members;
+
+  /**
+   * Frames to the simulated minute on the sand: the crowd's pace at `normal`,
+   * about ten times real time, rather than {@link TICKS_EVERY}'s real time, at
+   * which a visit of three quarters of an hour is over before a guest has
+   * walked four tiles to a party's pitch.
+   */
+  const SAND_TICKS_EVERY = 10;
+
+  it('settles a bored guest on the sand for the visit, and walks them back to the gate after', () => {
+    const { needs, router, crowd } = onTheBeach([0]);
+    let roamed = false;
+    let rested: { x: number; z: number; stay: string | null } | null = null;
+    let setOffFrom = -1;
+    let backAt = -1;
+    let jumped = 0;
+    for (let step = 0; step < 4000 && backAt === -1; step++) {
+      const was = { x: crowd.x[0]!, z: crowd.z[0]! };
+      if (crowd.node[0]! >= 0) setOffFrom = crowd.node[0]!;
+      stepCrowd(crowd, MAX_STEP);
+      if (step % SAND_TICKS_EVERY === 0) router.tick(step / SAND_TICKS_EVERY);
+      jumped = Math.max(jumped, Math.hypot(crowd.x[0]! - was.x, crowd.z[0]! - was.z));
+      roamed ||= isRoaming(crowd, 0);
+      if (!rested && isWaiting(crowd, 0)) {
+        expect(resting(crowd, 0), 'held standing on the sand').toBe(true);
+        rested = { x: crowd.x[0]!, z: crowd.z[0]!, stay: router.stayOf(0) };
+      }
+      if (rested && router.visitOf(0) === null && crowd.node[0]! >= 0) backAt = crowd.node[0]!;
+    }
+    expect(rested, 'never settled anywhere').not.toBeNull();
+    expect(rested!.stay).toBe('resting');
+    const tileX = Math.floor(rested!.x / TILE_VOXELS);
+    const tileZ = Math.floor(rested!.z / TILE_VOXELS);
+    expect(terrainAt(shore, tileX, tileZ)).toBe('beach');
+    // Near the gate, if not in front of it: their party shares their goal and
+    // may have reached another gate down the boardwalk first and pitched there.
+    expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeLessThanOrEqual(12);
+    expect(roamed, 'wandered the beach').toBe(false);
+    expect(needs.level.fun[0]).toBeGreaterThan(0.5);
+    expect(backAt, 'never came back onto the boardwalk').toBe(setOffFrom);
+    expect(network.gates).toContain(backAt);
+    // Walked, never put: nobody crosses more than a step's worth of sand at once.
+    expect(jumped).toBeLessThan(MAX_STEP * 2 * 5.6 * 1.25 + 1);
   });
 
-  it('calls them in when the visit is over, relieved, and lets them go at the next node', () => {
-    const { needs, router } = bored();
-    router.step(0, gate);
-    // Two hours of ticks, the longest a beach visit is drawn at.
-    for (let tick = 1; tick <= 121; tick++) router.tick(tick);
-    expect(router.visitOf(0)).toBeNull();
-    expect(needs.level.fun[0]).toBeGreaterThan(0.5);
-    expect(router.offTheSand(0)).toBe(true);
-    router.step(0, gate);
-    expect(router.offTheSand(0)).toBe(false);
+  it('settles a family together, the adults lying down and the children sitting', () => {
+    const { router, crowd } = onTheBeach(family);
+    expect(untilSettled(crowd, family), 'the family never all settled').toBe(true);
+    for (const person of family) {
+      expect(router.stayOf(person)).toBe('resting');
+      const child = guests.child[person] === 1;
+      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.lying);
+      for (const other of family) {
+        const apart = Math.hypot(
+          crowd.x[person]! - crowd.x[other]!,
+          crowd.z[person]! - crowd.z[other]!,
+        );
+        expect(apart).toBeLessThanOrEqual(2 * TILE_VOXELS);
+      }
+    }
   });
 
-  it('ends the visit, relief and all, for a guest who wanders back in early', () => {
-    const { needs, router } = bored();
-    router.step(0, gate);
-    router.tick(1);
-    expect(router.visitOf(0)).not.toBeNull();
-    router.step(0, gate);
-    expect(router.visitOf(0)).toBeNull();
-    expect(needs.level.fun[0]).toBeGreaterThan(0.5);
-    expect(router.occupancyTotals.inside).toBe(0);
+  it('lies the adults on the free loungers beside the pitch, and frees them after', () => {
+    const walked = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers });
+    expect(walked.beachSeats).toHaveLength(2);
+    const { router, crowd } = onTheBeach(family, { walked });
+    expect(untilSettled(crowd, family)).toBe(true);
+    const adults = family.filter((person) => guests.child[person] !== 1);
+    const held = adults.map((adult) => crowd.seat[adult]!);
+    for (const adult of adults) expect(restingOn(crowd, adult)).toBe(RESTING.lying);
+    expect(new Set(held)).toEqual(new Set(walked.beachSeats));
+
+    const freed = new Set<number>();
+    for (let tick = 1; tick <= 130 && freed.size < adults.length; tick++) {
+      router.tick(tick);
+      for (const [index, adult] of adults.entries()) {
+        if (router.visitOf(adult) === null && !freed.has(adult)) {
+          expect(seatIsFree(crowd, held[index]!), 'a lounger held after the stay').toBe(true);
+          freed.add(adult);
+        }
+      }
+    }
+    expect(freed.size, 'the stay never ended').toBe(adults.length);
+  });
+
+  it('pitches two parties at the same gate on different tiles', () => {
+    const second = [...Array(guests.count).keys()].find(
+      (person) => guests.party[person] !== guests.party[0],
+    )!;
+    const { crowd } = onTheBeach([0, second]);
+    expect(untilSettled(crowd, [0, second])).toBe(true);
+    const tileOf = (person: number): string =>
+      `${Math.floor(crowd.x[person]! / TILE_VOXELS)},${Math.floor(crowd.z[person]! / TILE_VOXELS)}`;
+    expect(tileOf(0)).not.toBe(tileOf(second));
+  });
+
+  it('ends the stay of a guest with a bed at their bedtime, and walks them back', () => {
+    const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
+    const { sleepAt } = bedtimeOf(guests.party[housed]!);
+    const { needs, router, crowd } = onTheBeach([housed], {
+      night: { lodgings: [hotel()], tickOfDay: () => NOON },
+    });
+    // Stamped a few minutes before bed, so the visit's own dwell is far from over.
+    router.tick(sleepAt - 3);
+    expect(untilSettled(crowd, [housed])).toBe(true);
+    expect(router.visitOf(housed)).not.toBeNull();
+    router.tick(sleepAt - 2);
+    expect(isWaiting(crowd, housed), 'called in before bed').toBe(true);
+
+    router.tick(sleepAt);
+    expect(router.visitOf(housed)).toBeNull();
+    expect(isWaiting(crowd, housed), 'still lying on the sand at bedtime').toBe(false);
+    expect(router.stayOf(housed)).toBe('leaving');
+    expect(needs.level.fun[housed]).toBeGreaterThan(0.5);
+  });
+
+  it('brings a guest on a stay back onto the graph when it is rebuilt, rather than roaming', () => {
+    const { router, crowd } = onTheBeach([0]);
+    expect(untilSettled(crowd, [0])).toBe(true);
+    router.rebuild([], [], network);
+    const reseated = reseatCrowd(crowd, network);
+    let back = false;
+    for (let step = 0; step < 600 && !back; step++) {
+      stepCrowd(reseated, MAX_STEP);
+      back = reseated.node[0]! >= 0;
+    }
+    expect(back, 'a simulated minute and still out on the sand').toBe(true);
   });
 
   it('is not a venue on a plot with no beach', () => {
@@ -766,6 +930,27 @@ describe('the night', () => {
   });
 });
 
+/** What a run over the generated plot is watched with, beyond its own counts. */
+interface Watch {
+  /** Passed to the crowd; see `CrowdOptions.roamsBeach`. */
+  readonly roamsBeach?: boolean;
+  /** Stands in for the crowd's call to the router, so what it does can be counted. */
+  readonly step?: (router: Router, person: number, at: number) => number;
+  /** Called after every tick. */
+  readonly tick?: (crowd: Crowd, people: Guests) => void;
+  /** Frames of `MAX_STEP` to the tick; `TICKS_EVERY`, the crowd at real time, when omitted. */
+  readonly framesPerTick?: number;
+}
+
+/**
+ * Frames of `MAX_STEP` to the simulated minute with the crowd at `normal`'s
+ * pace, as `showcase.ts` walks it: a day of `SPEED_DAY_SECONDS.normal` real
+ * seconds, and the crowd `crowdScaleFor('normal')` times faster than that.
+ */
+const NORMAL_FRAMES_PER_TICK = Math.round(
+  (crowdScaleFor('normal') * SPEED_DAY_SECONDS.normal) / TICKS_PER_DAY / MAX_STEP,
+);
+
 describe('on the generated plot', () => {
   const TYPES = OBJECT_TYPES.map((type) => ({
     id: type.id,
@@ -912,6 +1097,7 @@ describe('on the generated plot', () => {
     capacityOf: (venue: Venue) => number,
     need: (typeof NEEDS)[number] = 'hunger',
     walked: WalkNetwork = network,
+    watch: Watch = {},
   ) => {
     const people = createGuests({
       count: 600,
@@ -946,7 +1132,9 @@ describe('on the generated plot', () => {
       count: people.count,
       variants: 4,
       seed: 4,
-      routeOf: (person, at) => router.step(person, at),
+      routeOf: (person, at) =>
+        watch.step ? watch.step(router, person, at) : router.step(person, at),
+      roamsBeach: watch.roamsBeach ?? true,
     });
 
     const food = standing.filter((venue) => venue.satisfies.some((relief) => relief.need === need));
@@ -962,8 +1150,10 @@ describe('on the generated plot', () => {
     // frames to the minute, an hour is four tiles of walking and nobody has
     // reached anything yet, let alone had to wait for it.
     for (let tick = 1; tick <= TICKS_PER_DAY / 2; tick++) {
-      for (let frame = 0; frame < TICKS_EVERY; frame++) stepCrowd(crowd, MAX_STEP);
+      const frames = watch.framesPerTick ?? TICKS_EVERY;
+      for (let frame = 0; frame < frames; frame++) stepCrowd(crowd, MAX_STEP);
       router.tick(tick);
+      watch.tick?.(crowd, people);
       for (const venue of food) {
         const here = router.occupancyOf(venue.key)!;
         if (here.inside > venue.capacity)
@@ -981,7 +1171,10 @@ describe('on the generated plot', () => {
       // Nobody is in two places at once: a visit names one venue, and a person
       // the router says nothing about is walking.
       const visit = router.visitOf(person);
-      if (visit && !standing.includes(visit.venue)) confused ??= `person ${person}`;
+      // The beach is the router's own venue, appended to the plot's.
+      if (visit && !standing.includes(visit.venue) && !isBeach(visit.venue)) {
+        confused ??= `person ${person}`;
+      }
     }
     return { over, queued, busiest, fed, confused, served };
   };
@@ -1092,6 +1285,97 @@ describe('on the generated plot', () => {
       onTheBeach,
       `half a day and nobody washed on the beach: ${[...run.served].join(', ')}`,
     ).not.toEqual([]);
+  });
+
+  /**
+   * Plan 028's measure: six hundred bored guests over half a day, in a crowd
+   * that does not roam, on the plot with its furniture and its seats, as
+   * `showcase.ts` builds it. Nobody walks the beach aimlessly, parties rest
+   * there, and they rest apart - a pitch overlapping another passes every
+   * corridor test above and shows up here.
+   *
+   * **Walked at `normal`'s pace, not at {@link TICKS_EVERY}'s real time.** The
+   * plan asked for the latter, and at it 23 guests of 600 ever chose the beach
+   * and 5 were resting on it at most: on a plot of 112 by 100 a guest at real
+   * time walks four tiles a simulated hour, so half a day sees few of them reach
+   * a gate, and a visit's dwell runs out on the walk to the pitch. At the pace
+   * the resort runs, measured when this was written: 353 arrivals at a gate for
+   * the beach, none turned back for want of a pitch or a route, 70 resting on
+   * the sand at once and 7 on loungers. The half day took 1.2 s, against 1.3 s
+   * for the same run of `starving` for hunger at the same pace.
+   */
+  it('settles bored guests on the beach in parties, and nobody roams it', () => {
+    const seated = walkNetworkFor({
+      paved: layout.paths,
+      levelOf: (x, z) => levelAt(elevation, x, z),
+      shore: shoreFor(plan),
+      tilesX: plan.tilesX,
+      obstacles: layout.placements,
+      seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
+    });
+    expect(seated.beachSeats.length, 'no loungers on the beach').toBeGreaterThan(0);
+    const shore = seated.beach!.shore;
+    const seen = { roamers: 0, peak: 0, onLoungers: 0, arrivals: 0, turnedBack: 0 };
+    const turnedBackAt = new Set<number>();
+    let off: string | null = null;
+    let overlap: string | null = null;
+
+    const run = starving((venue) => venue.capacity, 'fun', seated, {
+      roamsBeach: false,
+      framesPerTick: NORMAL_FRAMES_PER_TICK,
+      step: (router, person, at) => {
+        const toTheBeach =
+          seated.nodes[at]?.gate === true &&
+          router.visitOf(person) === null &&
+          router.goalOf(person)?.label === 'Beach';
+        const onward = router.step(person, at);
+        if (!toTheBeach) return onward;
+        seen.arrivals++;
+        if (router.stayOf(person) !== 'arriving') {
+          seen.turnedBack++;
+          turnedBackAt.add(at);
+        }
+        return onward;
+      },
+      tick: (crowd, people) => {
+        const lying: number[] = [];
+        let onLoungers = 0;
+        for (let person = 0; person < crowd.count; person++) {
+          if (isRoaming(crowd, person)) seen.roamers++;
+          if (!isWaiting(crowd, person) || !resting(crowd, person)) continue;
+          lying.push(person);
+          if (crowd.seat[person]! >= 0) onLoungers++;
+          const { x, y, z } = { x: crowd.x[person]!, y: crowd.y[person]!, z: crowd.z[person]! };
+          if (y >= 2) continue;
+          const tile = terrainAt(shore, Math.floor(x / TILE_VOXELS), Math.floor(z / TILE_VOXELS));
+          if (tile !== 'beach' || blockedAt(seated.sand!, x, z))
+            off ??= `person ${person} at ${x},${z}`;
+        }
+        const onSand = lying.filter((person) => crowd.y[person]! < 2).length;
+        seen.peak = Math.max(seen.peak, onSand);
+        seen.onLoungers = Math.max(seen.onLoungers, onLoungers);
+        for (const [index, a] of lying.entries()) {
+          for (const b of lying.slice(index + 1)) {
+            if (people.party[a] === people.party[b]) continue;
+            if (Math.hypot(crowd.x[a]! - crowd.x[b]!, crowd.z[a]! - crowd.z[b]!) < 3) {
+              overlap ??= `people ${a} and ${b}`;
+            }
+          }
+        }
+      },
+    });
+
+    expect(run.over).toBeNull();
+    expect(run.confused).toBeNull();
+    expect(seen.roamers, 'somebody roamed the beach').toBe(0);
+    expect(seen.peak, `the most ever resting on the sand at once`).toBeGreaterThanOrEqual(20);
+    expect(seen.onLoungers, 'nobody lay on a lounger').toBeGreaterThan(0);
+    expect(off).toBeNull();
+    expect(overlap).toBeNull();
+    expect(
+      seen.turnedBack,
+      `${seen.turnedBack} of ${seen.arrivals} turned back at gates ${[...turnedBackAt].join(', ')}`,
+    ).toBeLessThanOrEqual(0.1 * seen.arrivals);
   });
 
   it('grows a line at the door when every place holds one person', () => {

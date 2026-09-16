@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   createCrowd,
+  holdAt,
   isRoaming,
   RESTING,
   restingOn,
@@ -447,7 +448,7 @@ describe('a guest at night', () => {
 describe('errandOf', () => {
   const BAKERY = { label: 'Bakery' };
   const BUNGALOW = { label: 'Bungalow' };
-  const none = { visit: null, goal: null, home: null, asleep: false };
+  const none = { visit: null, goal: null, home: null, asleep: false, beach: null };
 
   it('is nothing for a guest with nowhere to be', () => {
     expect(errandOf(none)).toBeNull();
@@ -481,5 +482,58 @@ describe('errandOf', () => {
       kind: 'asleep',
       at: 'Bungalow',
     });
+  });
+
+  it('puts a stay on the beach ahead of the visit to the Beach it is counted as', () => {
+    const visit = { venue: { label: 'Beach' }, waiting: false, place: -1 };
+    expect(errandOf({ ...none, visit, beach: 'resting' })).toEqual({
+      kind: 'beach',
+      stage: 'resting',
+    });
+    expect(errandOf({ ...none, beach: 'leaving', goal: BAKERY })).toEqual({
+      kind: 'beach',
+      stage: 'leaving',
+    });
+    expect(errandOf({ ...none, home: BUNGALOW, asleep: true, beach: 'arriving' })?.kind).toBe(
+      'asleep',
+    );
+  });
+});
+
+describe('a guest staying on the beach', () => {
+  const guests = guestsOf();
+  const content = contentNeeds(guests);
+  const SAND = { x: 6.5 * TILE_VOXELS, z: 14.5 * TILE_VOXELS };
+
+  /** Somebody held on the sand in a pose, and the line for them on a stay. */
+  const lineFor = (pose: number, needs: Needs = content): string => {
+    const crowd = beachCrowd();
+    holdAt(crowd, 0, SAND.x, 0.3, SAND.z, 0, pose);
+    return activityLine(crowd, needs, guests, 0, { kind: 'beach', stage: 'resting' });
+  };
+
+  it('says they are lying on the beach, with no tile', () => {
+    expect(lineFor(RESTING.lying)).toBe('Lying on the beach');
+  });
+
+  it('says a child is sitting on the beach, with their mood in front', () => {
+    const bored = contentNeeds(guests);
+    bored.level.fun[0] = 0;
+    expect(lineFor(RESTING.sitting, bored)).toBe('Bored · Sitting on the beach');
+  });
+
+  it('says they are walking to the beach, and where they have got to', () => {
+    const crowd = seatedStreet('sit');
+    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
+    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
+    expect(activityLine(crowd, content, guests, 0, { kind: 'beach', stage: 'arriving' })).toBe(
+      `Walking to the beach · tile ${tileX}, ${tileZ}`,
+    );
+  });
+
+  it('says they are walking back from the beach, and where they have got to', () => {
+    const crowd = seatedStreet('sit');
+    const line = activityLine(crowd, content, guests, 0, { kind: 'beach', stage: 'leaving' });
+    expect(line.startsWith('Walking back from the beach · tile ')).toBe(true);
   });
 });

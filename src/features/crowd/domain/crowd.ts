@@ -284,6 +284,34 @@ const PAUSE_SECONDS = 1.5;
 const SEAT_CLEAR = 8;
 const GATE_CLEAR = TILE_VOXELS / 2 + 2;
 
+/**
+ * What a person is doing, as the thing that draws them needs it: 0 walking,
+ * 1 standing, 2 sitting, 3 lying.
+ *
+ * A number rather than a set of flags because it is written straight into an
+ * instanced buffer and the shader takes it apart with arithmetic — see
+ * `crowdField.ts`. **The order is load-bearing**: `figureField.ts` separates the
+ * four with `min`, `max` and a subtraction rather than a branch, and walking has
+ * to be the only one below 1 and lying the only one above 2.
+ *
+ * On a seat, sitting and lying are the *seat's* pose, not the person's. Somebody
+ * the simulation holds still carries a pose of their own instead - standing in
+ * a queue, or sitting and lying on the sand - because they are on no seat to
+ * read one off. See {@link Crowd.holdPose}.
+ */
+export const RESTING = { none: 0, standing: 1, sitting: 2, lying: 3 } as const;
+
+/**
+ * How far above the ground somebody sitting on it has their hips, in voxels.
+ *
+ * The sitting figure swings its legs forward and down by half a leg - see
+ * `SIT_RISE` in `figureField.ts` - so hips on the ground would bury the feet;
+ * this keeps an adult's feet on the surface rather than in it. Exported for
+ * whatever stands somebody sitting on open ground, and read here to know that
+ * the ground under a sitter is where their feet are, not their hips.
+ */
+export const GROUND_SIT_RISE = 1.5;
+
 export interface Crowd extends Walkers {
   readonly network: WalkNetwork;
   /** People the arrays hold room for. */
@@ -336,6 +364,12 @@ export interface Crowd extends Walkers {
    * changes every time somebody stands up.
    */
   readonly seatBy: Int32Array;
+  /**
+   * The pose somebody the simulation holds still is drawn in, one of
+   * {@link RESTING}; read only while they are held. Standing for a queue or a
+   * bed, sitting or lying for somebody settled on the sand.
+   */
+  readonly holdPose: Uint8Array;
 
   /** Every draw the crowd makes, so the same seed replays the same afternoon. */
   readonly random: () => number;
@@ -354,6 +388,8 @@ export interface Crowd extends Walkers {
    * undefined on a crowd nothing is routing. See {@link CrowdOptions.offTheSand}.
    */
   readonly offTheSand: ((person: number) => boolean) | undefined;
+  /** Whether people wander the beach on their own. See {@link CrowdOptions.roamsBeach}. */
+  readonly roamsBeach: boolean;
 }
 
 export interface CrowdOptions {
@@ -392,6 +428,14 @@ export interface CrowdOptions {
    * `Router.offTheSand`. Omit it and the beach is roamed exactly as it was.
    */
   readonly offTheSand?: (person: number) => boolean;
+  /**
+   * Whether people wander the beach on their own: spawned on it, stepping onto
+   * it by chance at a gate, and roaming spot to spot. Omit it and they do, which
+   * is every fixture and the replay the benchmark depends on. A crowd whose
+   * simulation sends people to the beach on purpose passes false, and anybody
+   * who still finds themselves roaming walks back to the paving.
+   */
+  readonly roamsBeach?: boolean;
 }
 
 /**
@@ -433,6 +477,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     gate: new Int32Array(capacity),
     seat: new Int32Array(capacity).fill(-1),
     seatBy: new Int32Array(network.seats.length).fill(-1),
+    holdPose: new Uint8Array(capacity),
     dirX: new Float32Array(capacity),
     dirZ: new Float32Array(capacity),
     side: new Float32Array(capacity),
@@ -442,10 +487,14 @@ export function createCrowd(options: CrowdOptions): Crowd {
     random,
     routeOf: options.routeOf,
     offTheSand: options.offTheSand,
+    roamsBeach: options.roamsBeach ?? true,
   };
 
   const beach = network.beach;
-  const onSand = beach && network.gates.length > 0 ? Math.round(capacity * ON_SAND_AT_START) : 0;
+  const onSand =
+    crowd.roamsBeach && beach && network.gates.length > 0
+      ? Math.round(capacity * ON_SAND_AT_START)
+      : 0;
 
   for (let i = 0; i < capacity; i++) {
     // The draw happens either way, even when it is thrown away: the generator is
@@ -706,13 +755,16 @@ function arriveAtNode(crowd: Crowd, i: number): void {
  * first, so they cost no draw: the sand is not a choice they have.
  */
 function strollsOntoSand(crowd: Crowd, i: number, node: WalkNode): boolean {
-  if (!node.gate || !crowd.network.beach || crowd.offTheSand?.(i)) return false;
+  if (!crowd.roamsBeach || !node.gate || !crowd.network.beach || crowd.offTheSand?.(i)) {
+    return false;
+  }
   return crowd.random() < ONTO_SAND;
 }
 
 /**
  * Sends somebody at a gate out onto the sand, as a roamer who will go back in
- * by that gate: the router's way of starting a visit to the beach.
+ * by that gate: a router's way of turning somebody loose on the beach. The
+ * resort's own router settles people on it instead - see `sim/domain/router.ts`.
  *
  * Called from inside `routeOf`, while the crowd is asking where they go next,
  * which is why `nextNode` checks for a roamer after asking: they are already on
@@ -741,7 +793,7 @@ export function stepOntoSand(crowd: Crowd, i: number, gate: number): void {
  */
 function roamOn(crowd: Crowd, i: number): void {
   standAtTheEnd(crowd, i);
-  if (crowd.offTheSand?.(i)) {
+  if (makesForThePaving(crowd, i)) {
     leaveTheSand(crowd, i);
     return;
   }
@@ -760,6 +812,18 @@ function roamOn(crowd: Crowd, i: number): void {
     return;
   }
   roamTo(crowd, i);
+}
+
+/**
+ * Whether a roamer heads back to the paving now rather than roaming on.
+ *
+ * A crowd that does not roam the beach has only strays out there - somebody an
+ * edit or a forgotten errand left on the sand - and they make for the paving at
+ * once, before anything is drawn for them. In one that does, a roamer with
+ * somewhere to be does.
+ */
+function makesForThePaving(crowd: Crowd, i: number): boolean {
+  return !crowd.roamsBeach || crowd.offTheSand?.(i) === true;
 }
 
 /**
@@ -969,11 +1033,54 @@ export function holdAt(
   y: number,
   z: number,
   heading: number,
+  pose: number = RESTING.standing,
 ): void {
   // A seat is claimed from the moment somebody sets off for it, so anybody
   // taken in hand on the way to one has to let go of it or nobody else ever
   // sits there.
   giveUpSeat(crowd, i);
+  standStill(crowd, i, x, y, z, heading, pose);
+}
+
+/**
+ * Lies somebody on a lounger - or sits them on whatever seat it is - until the
+ * simulation lets them go: the venue-free way to settle a guest on the beach's
+ * furniture rather than beside it.
+ *
+ * The seat is claimed as a roamer's is, so nobody else sets off for it, and it
+ * stays claimed for as long as they are held. {@link releaseTo},
+ * {@link walkSandTo} and {@link holdAt} each give it up.
+ *
+ * Refuses, changing nothing, for a seat the network does not have or one
+ * somebody else holds; hands back whether they are on it.
+ */
+export function holdOnSeat(crowd: Crowd, i: number, seat: number): boolean {
+  const spot = crowd.network.seats[seat];
+  if (!spot || (crowd.seatBy[seat] !== -1 && crowd.seatBy[seat] !== i)) return false;
+  if (crowd.seat[i] !== seat) giveUpSeat(crowd, i);
+  crowd.seat[i] = seat;
+  crowd.seatBy[seat] = i;
+  const pose = spot.pose === 'lie' ? RESTING.lying : RESTING.sitting;
+  standStill(crowd, i, spot.x, spot.y, spot.z, spot.heading, pose);
+  return true;
+}
+
+/** Whether nobody holds a seat of the network, or is on their way to it. */
+export function seatIsFree(crowd: Crowd, seat: number): boolean {
+  return crowd.seatBy[seat] === -1;
+}
+
+/** The hold itself, for {@link holdAt} and {@link holdOnSeat}: a segment of rate zero. */
+function standStill(
+  crowd: Crowd,
+  i: number,
+  x: number,
+  y: number,
+  z: number,
+  heading: number,
+  pose: number,
+): void {
+  crowd.holdPose[i] = pose;
   crowd.fromX[i] = x;
   crowd.fromY[i] = y;
   crowd.fromZ[i] = z;
@@ -1010,7 +1117,10 @@ export function holdAt(
  * is, and nothing about why they were there.
  */
 export function releaseTo(crowd: Crowd, i: number, node: number): void {
+  // Somebody held on a lounger holds it; nobody else on the way out does.
+  giveUpSeat(crowd, i);
   const fromSand = crowd.node[i] === ERRAND || (crowd.node[i] === HELD && standsOnSand(crowd, i));
+  stopPartWay(crowd, i);
   crowd.cameFrom[i] = -1;
   aim(crowd, i, node);
   if (fromSand) crowd.lane[i] = LANE.sand;
@@ -1040,9 +1150,28 @@ export function walkSandTo(crowd: Crowd, i: number, x: number, z: number): void 
   if (!crowd.network.beach) return;
   // A seat is claimed from the moment somebody sets off for it; see `holdAt`.
   giveUpSeat(crowd, i);
+  stopPartWay(crowd, i);
   crowd.node[i] = ERRAND;
   crowd.lane[i] = LANE.sand;
   segment(crowd, i, x, BEACH_SURFACE, z);
+}
+
+/**
+ * Makes the point somebody has got to on their line the start of whatever they
+ * are sent on to, when they are sent part-way along a walk.
+ *
+ * Every other caller sends people on from the end of a segment - a node, a
+ * waypoint, the spot they were held on - where `from` is already right. Turned
+ * back half-way across the sand, `from` is where the walk began, and the new
+ * segment starting there is a jump back across the beach.
+ */
+function stopPartWay(crowd: Crowd, i: number): void {
+  const t = crowd.t[i]!;
+  if (!(crowd.rate[i]! > 0) || !(t > 0 && t < 1)) return;
+  crowd.fromX[i]! += (crowd.toX[i]! - crowd.fromX[i]!) * t;
+  crowd.fromY[i]! += (crowd.toY[i]! - crowd.fromY[i]!) * t;
+  crowd.fromZ[i]! += (crowd.toZ[i]! - crowd.fromZ[i]!) * t;
+  crowd.t[i] = 0;
 }
 
 /**
@@ -1078,9 +1207,15 @@ function nearestGate(network: WalkNetwork, x: number, z: number): number {
   return nearest;
 }
 
-/** Whether somebody is standing on the beach's own surface rather than on paving. */
+/**
+ * Whether somebody is standing on the beach's own surface rather than on paving:
+ * their feet, which for somebody held sitting on the ground are a sitter's rise
+ * below their hips.
+ */
 function standsOnSand(crowd: Crowd, i: number): boolean {
-  return crowd.network.beach !== null && Math.abs(crowd.y[i]! - BEACH_SURFACE) < ON_SAND_TOLERANCE;
+  const sitting = crowd.node[i] === HELD && crowd.holdPose[i] === RESTING.sitting;
+  const feet = crowd.y[i]! - (sitting ? GROUND_SIT_RISE : 0);
+  return crowd.network.beach !== null && Math.abs(feet - BEACH_SURFACE) < ON_SAND_TOLERANCE;
 }
 
 /**
@@ -1098,24 +1233,12 @@ export function isWaiting(crowd: Crowd, i: number): boolean {
 }
 
 /**
- * What a person is doing, as the thing that draws them needs it: 0 walking,
- * 1 standing, 2 sitting, 3 lying.
- *
- * A number rather than a set of flags because it is written straight into an
- * instanced buffer and the shader takes it apart with arithmetic — see
- * `crowdField.ts`. **The order is load-bearing**: `figureField.ts` separates the
- * four with `min`, `max` and a subtraction rather than a branch, and walking has
- * to be the only one below 1 and lying the only one above 2.
- *
- * Sitting and lying are the *seat's* pose, not the person's, which is the whole
- * reason a person carries no pose of their own. Standing is the exception and
- * has to be: somebody held in a queue is on no seat, and drawn as a walker they
- * swing their legs on the spot for as long as they wait.
+ * What a person is doing, as {@link RESTING} numbers it: the seat's pose for
+ * somebody on a seat, the pose they were held in for somebody the simulation
+ * holds still, and walking otherwise.
  */
-export const RESTING = { none: 0, standing: 1, sitting: 2, lying: 3 } as const;
-
 export function restingOn(crowd: Crowd, i: number): number {
-  if (crowd.node[i] === HELD) return RESTING.standing;
+  if (crowd.node[i] === HELD) return crowd.holdPose[i]!;
   if (crowd.node[i] !== SEATED) return RESTING.none;
   return crowd.network.seats[crowd.seat[i]!]!.pose === 'lie' ? RESTING.lying : RESTING.sitting;
 }

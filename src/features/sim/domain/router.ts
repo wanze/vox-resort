@@ -63,6 +63,16 @@
  * walk the same route back and are let onto the graph at the gate they left it
  * by. The crowd learns two calls and nothing about why.
  *
+ * ## A visit to the beach is a stay at a pitch
+ *
+ * The same walk takes a guest on a visit to the beach itself out to a spot on
+ * the sand. The first of a party to reach a gate chooses the party's pitch -
+ * see `beachPitch.ts` - and every member who follows is routed to their own
+ * spot at it and held there, on a lounger or lying or sitting on the sand, for
+ * the whole visit. The visit over, or their bedtime come, they walk back and
+ * are let onto the graph at the gate. Nobody roams: the crowd is told not to,
+ * through `CrowdOptions.roamsBeach`, by whatever builds it.
+ *
  * ## Everything is thrown away when the graph is
  *
  * A node index means nothing across a rebuild, so {@link Router.rebuild} drops
@@ -75,16 +85,18 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   holdAt,
+  holdOnSeat,
+  isWaiting,
   ON_SAND,
   releaseTo,
-  rouseSunbathers,
-  stepOntoSand,
+  RESTING,
+  seatIsFree,
   walkSandTo,
   type Crowd,
 } from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
-import { homeOf, type Guests } from '../../guests/domain/guests';
+import { homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { chooseVenue } from './chooseVenue';
 import { doorsFor } from './doors';
@@ -101,6 +113,7 @@ import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
 import { beachVenueFor, isBeach } from './beach';
+import { pitchFor, type Pitch } from './beachPitch';
 import {
   arriveAt,
   createOccupancy,
@@ -140,22 +153,40 @@ const SAND_ROUTE_TILES = 40;
 
 /**
  * Who is walking a sand leg, and how far along it, one column each: the venue
- * whose route it is or -1, which of its routes, the waypoint being walked to,
- * and 1 on the way back to the gate rather than out to the door.
+ * it is for or -1, the route itself, the waypoint being walked to, and 1 on the
+ * way back to the gate rather than out to the door.
+ *
+ * The route is the person's own rather than an index into a venue's list,
+ * because a stay on the beach walks each member of a party to a spot of their
+ * own; a building's routes are shared by everybody walking to it all the same.
  */
 interface Errands {
   readonly venue: Int32Array;
-  readonly route: Int32Array;
+  readonly route: (SandRoute | null)[];
   readonly leg: Int32Array;
   readonly back: Uint8Array;
 }
 
 const createErrands = (people: number): Errands => ({
   venue: new Int32Array(people).fill(-1),
-  route: new Int32Array(people),
+  route: Array.from({ length: people }, () => null),
   leg: new Int32Array(people),
   back: new Uint8Array(people),
 });
+
+/**
+ * A pitch as the router holds it: the routes over the sand to its middle from
+ * every gate that can reach it, and how many are stopping at it. Freed when
+ * the last of them leaves.
+ */
+interface Claim {
+  readonly pitch: Pitch;
+  readonly routes: readonly SandRoute[];
+  holders: number;
+}
+
+/** Where a guest on a stay at the beach is in it: on the way out, settled, or on the way back. */
+export type BeachStay = 'arriving' | 'resting' | 'leaving';
 
 /** How many people are inside a venue and how many are in the line outside. */
 export interface VenueOccupancy {
@@ -194,13 +225,13 @@ export interface Router {
    */
   step(person: number, at: number): number;
   /**
-   * Whether the beach should give this person up: their visit to it is over,
-   * or it is their bedtime, they have a bed and they are not in it yet. The
-   * crowd's `offTheSand`.
+   * Whether the beach should give this person up: it is their bedtime, they
+   * have a bed and they are not in it yet. The crowd's `offTheSand`.
    *
-   * Needed beside {@link step} because `step` is asked at a node and the sand
-   * has none: without it a guest out on the beach never heard that it was night
-   * and roamed until morning.
+   * Only ever read of a roamer, who is on no stay and so on nothing this router
+   * can end: a crowd built to roam, or a stray. Needed beside {@link step}
+   * because `step` is asked at a node and the sand has none: without it a guest
+   * out on the beach never heard that it was night and roamed until morning.
    *
    * **Not a venue goal.** Calling in everybody whose party had an errand
    * emptied the beach by the afternoon - 113 roamers at ten on the reference
@@ -237,6 +268,8 @@ export interface Router {
   occupancyOf(venueKey: string): VenueOccupancy | null;
   /** What one person is doing about a venue, or null while they are walking. */
   visitOf(person: number): Visit | null;
+  /** Where one person is in a stay at the beach, or null while they are on none. */
+  stayOf(person: number): BeachStay | null;
 }
 
 export function createRouter(parts: {
@@ -302,11 +335,14 @@ export function createRouter(parts: {
    * for the inspector's wording and nothing more.
    */
   let homeward = new Uint8Array(guests.count);
-  /**
-   * 1 for somebody whose visit to the beach is over and who is out on the sand
-   * making for a gate. Cleared the moment they reach a node.
-   */
-  let calledIn = new Uint8Array(guests.count);
+  /** Each party's pitch on the beach, or null while none of them is stopping there. */
+  let partyPitches: (Claim | null)[] = guests.parties.map(() => null);
+  /** The pitch each person is stopping at, and which of its spots is theirs. */
+  let stays: (Claim | null)[] = Array.from({ length: guests.count }, () => null);
+  let spotOf = new Int32Array(guests.count);
+  /** Beach tiles pitched on, and loungers promised to a pitch, so no two parties share either. */
+  let pitched = new Set<number>();
+  let promised = new Set<number>();
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -517,11 +553,117 @@ export function createRouter(parts: {
       return false;
     }
     doorOf[person] = at;
-    // A visit to the beach is spent walking about on it rather than stood
-    // inside: see `beach.ts`.
-    if (isBeach(venue)) stepOntoSand(crowd(), person, at);
-    else stand(person, goal, at, outcome === 'waiting');
+    if (!isBeach(venue)) {
+      stand(person, goal, at, outcome === 'waiting');
+      return true;
+    }
+    if (settleOnSand(person, at)) return true;
+    // Nowhere near this gate to put a towel down. The visit ends here, relief
+    // and all, rather than being walked about in: they decide again on the
+    // graph, and the relief keeps them from choosing the same gate again.
+    endVisitAtTheGate(person, venue);
+    return false;
+  };
+
+  /** A visit that ends where it began, with its relief. */
+  const endVisitAtTheGate = (person: number, venue: Venue): void => {
+    leaveVenue(occupancy, person);
+    relieve(needs, person, venue.satisfies);
+    clearPartyGoal(goals, guests, person);
+    doorOf[person] = -1;
+  };
+
+  /**
+   * Somebody on a visit to the beach at a gate, set off over the sand to their
+   * spot at their party's pitch - chosen now by the first of them to get here -
+   * or, where this gate cannot reach it, at a pitch of their own. Hands back
+   * whether they were set off at all.
+   */
+  const settleOnSand = (person: number, gate: number): boolean => {
+    const party = guests.party[person]!;
+    const members = partyOf(guests, person);
+    partyPitches[party] ??= claimPitch(gate, members);
+    const shared = partyPitches[party];
+    if (shared && stayAt(person, shared, members.indexOf(person), gate)) return true;
+    if (shared) dropIfEmpty(shared, party);
+    const own = claimPitch(gate, [person]);
+    if (own && stayAt(person, own, 0, gate)) return true;
+    if (own) dropIfEmpty(own, party);
+    return false;
+  };
+
+  /** A pitch for these people near this gate, claimed so the next party pitches elsewhere. */
+  const claimPitch = (gate: number, members: readonly number[]): Claim | null => {
+    const people = crowd();
+    const pitch = pitchFor({
+      network,
+      gate,
+      members: members.map((member) => ({ child: guests.child[member] === 1 })),
+      taken: pitched,
+      loungerFree: (seat) => !promised.has(seat) && seatIsFree(people, seat),
+    });
+    if (!pitch) return null;
+    pitched.add(pitch.tile);
+    for (const spot of pitch.spots) if (spot.seat >= 0) promised.add(spot.seat);
+    return { pitch, routes: sandRoutesFor(network, [pitch], SAND_ROUTE_TILES), holders: 0 };
+  };
+
+  /** Frees a pitch nobody is stopping at any more: its tile, its loungers, and the party's hold on it. */
+  const dropIfEmpty = (claim: Claim, party: number): void => {
+    if (claim.holders > 0) return;
+    pitched.delete(claim.pitch.tile);
+    for (const spot of claim.pitch.spots) promised.delete(spot.seat);
+    if (partyPitches[party] === claim) partyPitches[party] = null;
+  };
+
+  /**
+   * Sets somebody off from a gate to one spot of a pitch: the route to the
+   * pitch's middle, then the step to their spot. False where the gate has no
+   * route to it.
+   */
+  const stayAt = (person: number, claim: Claim, member: number, gate: number): boolean => {
+    const route = claim.routes.find((each) => each.gate === gate);
+    const spot = claim.pitch.spots[member];
+    if (!route || !spot) return false;
+    claim.holders++;
+    stays[person] = claim;
+    spotOf[person] = member;
+    const last = route.waypoints.at(-1)!;
+    const onward = Math.hypot(spot.x - last.x, spot.z - last.z);
+    const toSpot: SandRoute =
+      onward > 0
+        ? { ...route, waypoints: [...route.waypoints, spot], length: route.length + onward }
+        : route;
+    setOffAlong(person, venues.length - 1, toSpot);
     return true;
+  };
+
+  /** Whoever was stopping at a pitch is not any more; the pitch goes with the last of them. */
+  const leaveStay = (person: number): void => {
+    const claim = stays[person];
+    if (!claim) return;
+    stays[person] = null;
+    claim.holders--;
+    dropIfEmpty(claim, guests.party[person]!);
+  };
+
+  /**
+   * At their spot: on its lounger, or lying or sitting on the sand. A lounger
+   * somebody got to first - a roamer, in a crowd that roams - leaves them lying
+   * on the sand in the middle of the pitch instead.
+   */
+  const restAtSpot = (person: number, claim: Claim): void => {
+    // The spot is the last waypoint and they are on it, so the walk back starts
+    // with the one before.
+    errands.leg[person]! -= 1;
+    const people = crowd();
+    const spot = claim.pitch.spots[spotOf[person]!]!;
+    if (spot.seat >= 0 && holdOnSeat(people, person, spot.seat)) return;
+    if (spot.seat >= 0) {
+      holdAt(people, person, claim.pitch.x, BEACH_SURFACE, claim.pitch.z, 0, RESTING.lying);
+      return;
+    }
+    holdAt(people, person, spot.x, spot.y, spot.z, spot.heading, spot.pose);
   };
 
   /**
@@ -535,25 +677,28 @@ export function createRouter(parts: {
     gate: number,
     routes: readonly SandRoute[],
   ): boolean => {
-    const route = routes.findIndex((each) => each.gate === gate);
-    if (route === -1 || queueLength(venue) >= queueLimit(venue)) {
+    const route = routes.find((each) => each.gate === gate);
+    if (!route || queueLength(venue) >= queueLimit(venue)) {
       clearPartyGoal(goals, guests, person);
       return false;
     }
+    setOffAlong(person, venue, route);
+    return true;
+  };
+
+  /** Starts somebody at a gate along a sand leg, to its first waypoint. */
+  const setOffAlong = (person: number, venue: number, route: SandRoute): void => {
     errands.venue[person] = venue;
     errands.route[person] = route;
     errands.leg[person] = 0;
     errands.back[person] = 0;
-    const first = routes[route]!.waypoints[0]!;
+    const first = route.waypoints[0]!;
     walkSandTo(crowd(), person, first.x, first.z);
-    return true;
   };
 
   /** The sand leg a person is walking, or undefined for anybody not on one. */
-  const errandOf = (person: number): SandRoute | undefined => {
-    const venue = errands.venue[person]!;
-    return venue < 0 ? undefined : sandRoutes[venue]?.[errands.route[person]!];
-  };
+  const errandOf = (person: number): SandRoute | undefined =>
+    errands.venue[person]! < 0 ? undefined : (errands.route[person] ?? undefined);
 
   /**
    * One step back along a sand leg: to the waypoint before, or off the last of
@@ -591,7 +736,9 @@ export function createRouter(parts: {
     const leg = errands.leg[person]! + 1;
     errands.leg[person] = leg;
     const next = route.waypoints[leg];
+    const stay = stays[person];
     if (next) walkSandTo(crowd(), person, next.x, next.z);
+    else if (stay) restAtSpot(person, stay);
     else reachSandDoor(person, route);
     return -1;
   };
@@ -613,23 +760,30 @@ export function createRouter(parts: {
   };
 
   /**
-   * Somebody reaching a node is back on the paving, whatever brought them off
-   * the sand: the end of their visit, their bedtime, or the crowd's own chance
-   * of wandering back in. A visit to the beach still running ends here, with its
-   * relief, rather than on a tick that would find them somewhere else entirely.
-   * So does a sand leg the crowd gave up on for them.
+   * Somebody reaching a node is back on the paving, so whatever sand leg they
+   * were on is over - the walk back from a door or a pitch ends at the gate, and
+   * one the crowd gave up on for them ends wherever they came in.
    */
   const backOffTheSand = (person: number): void => {
     if (person < 0 || person >= goals.count) return;
-    calledIn[person] = 0;
     errands.venue[person] = -1;
-    if (occupancy.state[person] !== VISIT.inside) return;
-    const venue = venues[occupancy.at[person]!];
-    if (!venue || !isBeach(venue)) return;
-    leaveVenue(occupancy, person);
-    relieve(needs, person, venue.satisfies);
-    clearPartyGoal(goals, guests, person);
-    doorOf[person] = -1;
+  };
+
+  /**
+   * Ends the stay of everybody on the beach whose bedtime it is and who has a
+   * bed to go to, with the relief of the visit, and walks them back: nobody
+   * lies on the sand in the dark. Only looked for while somebody is on it.
+   */
+  const callInForBed = (tickOfDay: number): void => {
+    const beach = venues.length - 1;
+    const venue = venues[beach];
+    if (!venue || !isBeach(venue) || !(occupancy.inside[beach]! > 0)) return;
+    for (let person = 0; person < guests.count; person++) {
+      if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) continue;
+      if (homeLodging[person]! < 0 || !isBedtime(guests.party[person]!, tickOfDay)) continue;
+      leaveVenue(occupancy, person);
+      leave(person, beach);
+    }
   };
 
   /**
@@ -646,12 +800,10 @@ export function createRouter(parts: {
     const door = doorOf[person]!;
     doorOf[person] = -1;
     const overSand = errands.venue[person] === venue ? errandOf(person) : undefined;
-    // Out on the sand rather than stood at a door: a straight line to the gate
-    // they came in by could cross a bay, so they are called in and walk to the
-    // nearest gate the way a roamer does. See `Router.offTheSand`.
-    if (isBeach(venues[venue]!)) calledIn[person] = 1;
-    // Out of a building on the beach, back the way they came over the sand.
-    else if (overSand) walkBack(person, overSand);
+    leaveStay(person);
+    // Out of a building on the beach, or up off their pitch, back the way they
+    // came over the sand.
+    if (overSand) walkBack(person, overSand);
     else if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
   };
 
@@ -758,7 +910,6 @@ export function createRouter(parts: {
 
     offTheSand(person) {
       if (person < 0 || person >= goals.count || asleep[person] === 1) return false;
-      if (calledIn[person] === 1) return true;
       return homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
     },
 
@@ -785,9 +936,7 @@ export function createRouter(parts: {
         stand(person, occupancy.at[person]!, doorOf[person]!, true);
       }
       if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
-      // Once a simulated minute, so a sunbather whose bedtime it is is not left
-      // lying on the beach in the dark until the lie is over.
-      rouseSunbathers(crowd());
+      callInForBed(at % TICKS_PER_DAY);
     },
 
     rebuild(nextVenues, nextLodgings, nextNetwork) {
@@ -812,7 +961,13 @@ export function createRouter(parts: {
       // as the venue list, and the list has just been replaced.
       occupancy = createOccupancy(guests.count, venues.length);
       doorOf = new Int32Array(guests.count).fill(-1);
-      calledIn = new Uint8Array(guests.count);
+      // Every pitch too: its routes name gate nodes, and its loungers seats, of
+      // the graph that has just gone.
+      partyPitches = guests.parties.map(() => null);
+      stays = Array.from({ length: guests.count }, () => null);
+      spotOf = new Int32Array(guests.count);
+      pitched = new Set();
+      promised = new Set();
       // Everybody, not only the parties whose venue went: a goal is an index
       // into the venue list that has just been replaced, over nodes that have
       // just been renumbered, so none of them means anything now.
@@ -863,6 +1018,14 @@ export function createRouter(parts: {
       const venue = venues[occupancy.at[person]!];
       if (!venue) return null;
       return { venue, waiting: state === VISIT.waiting, place: occupancy.slot[person]! };
+    },
+
+    stayOf(person) {
+      if (person < 0 || person >= goals.count) return null;
+      const venue = venues[errands.venue[person]!];
+      if (!venue || !isBeach(venue)) return null;
+      if (errands.back[person] === 1) return 'leaving';
+      return isWaiting(crowd(), person) ? 'resting' : 'arriving';
     },
 
     occupancyOf(venueKey) {

@@ -1023,6 +1023,8 @@ function crowdFor(parts: {
       variantOf: (i) => parts.guests.variant[i] ?? 0,
       routeOf: parts.routeOf,
       offTheSand: parts.offTheSand,
+      // The router settles people on the beach; see `CrowdOptions.roamsBeach`.
+      roamsBeach: false,
       seed: CROWD_SEED,
     }),
     models: parts.people,
@@ -2467,6 +2469,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       goal: router.goalOf(person),
       home: router.homewardTo(person),
       asleep: router.isAsleep(person),
+      beach: router.stayOf(person),
     });
   };
 

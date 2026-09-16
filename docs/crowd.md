@@ -37,6 +37,7 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | Where everybody is heading             | `sim/domain/goals.ts`                        |
 | Choosing, routing and arriving         | `sim/domain/router.ts`                       |
 | The beach as somewhere to go           | `sim/domain/beach.ts`                        |
+| Where a party settles on the beach     | `sim/domain/beachPitch.ts`                   |
 | Guest registry                         | `guests/domain/guests.ts`                    |
 | Parties and who is a child             | `guests/domain/parties.ts`                   |
 | Beds                                   | `guests/domain/homes.ts`                     |
@@ -65,23 +66,22 @@ after a hand edit.
   `seating.ts` (the object's turn is added to the seat's facing), and hung off
   the nearest paved node on the seat's tile or a neighbour within half a level.
   Seats with no paving in reach are dropped. Seats are not nodes.
-- **Beach seats** — seats on sand go into `network.beachSeats` and are reached by
-  roamers instead.
-- **The beach is a region.** A roamer picks a point on the sand within a few
-  columns, a tile short of the water, walks straight to it, and leaves by a gate
-  node with a small chance per arrival. On arrival they may take a free lounger
-  within three columns.
+- **Beach seats** — seats on sand go into `network.beachSeats`: loungers a party
+  settles on, or that a roamer takes.
+- **The beach is a region.** In a crowd that roams it (`roamsBeach` omitted,
+  which is every fixture and the no-router replay), a roamer picks a point on the
+  sand within a few columns, a tile short of the water, walks straight to it, and
+  leaves by a gate node with a small chance per arrival; on arrival they may take
+  a free lounger within three columns. **The resort's crowd does not roam**
+  (`roamsBeach: false` in `showcase.ts`): nobody is spawned on the sand or strolls
+  onto it, and a stray - somebody an edit or a forgotten errand leaves out there -
+  walks straight back to the nearest gate.
 - **The beach is also a venue** (`sim/domain/beach.ts`): one for the whole band,
   serving fun 0.6 and energy 0.2, for 45 to 120 simulated minutes, with no
-  capacity worth counting. Its flow field is swept from every gate. Arriving at
-  a gate on a visit steps the guest onto the sand (`stepOntoSand`) instead of
-  standing them anywhere, and they roam as a roamer does. When the visit ends,
-  or at their bedtime, `Router.offTheSand` says so: the crowd stops them
-  stepping onto the sand, walks a roamer to the nearest gate within three
-  columns (or hops towards the nearest one), and `rouseSunbathers` gets anybody
-  lying on a lounger up once a tick. Reaching any node ends a visit still
-  running, with its relief. The numbers live in `beach.ts` rather than on the
-  art, because sand has no model to put them on.
+  capacity worth counting. Its flow field is swept from every gate. Arriving at a
+  gate on a visit is the start of a stay at a pitch; see "Staying on the beach".
+  The numbers live in `beach.ts` rather than on the art, because sand has no model
+  to put them on.
 
 The per-frame step never queries the terrain, the occupancy index or the layout.
 
@@ -430,11 +430,52 @@ reached over the sand instead, and the beach stays unpaved.
 
 - **A rebuild forgets every route and every errand**, for the fields' reason:
   routes name gate nodes. `reseatCrowd` leaves whoever is on an errand, or held
-  on the sand, out there as a roamer.
+  on the sand, out there as a roamer - who, in a crowd that does not roam, walks
+  straight back to the paving.
 
 - **One case is left.** A poolside bar the generator stands on a sand terrace
   at level 3 is sand but not beach band, so neither a roamer nor a route reaches
   it. Paving sand terraces or roaming them is a decision of its own.
+
+## Staying on the beach
+
+A visit to the beach is a stay in one place, not a walk about on it: a party puts
+its towels down together and stays there. Plan 028.
+
+- **A pitch per party.** The first member to reach a gate on a visit chooses it
+  (`sim/domain/beachPitch.ts`): breadth-first over beach tiles from the gate,
+  each step only where the line between tile centres is clear, twelve tile steps
+  at most, skipping paved tiles and tiles another party has pitched on. The
+  first tile with a free lounger - on it or a 4-neighbour, walkable straight from
+  its middle, not promised to another pitch - for every adult wins; failing that,
+  the first tile whose sand spots are all clear, lying on whatever loungers it
+  has. The router keeps it per party until the last member leaves, with its tile
+  and its loungers claimed.
+- **A spot per member.** Adults first take the loungers; everybody else gets a
+  spot on the sand in rows of three across the tile, five voxels apart, a second
+  row five voxels further from the sea. On a lounger they lie as it lies; on the
+  sand adults lie and children sit, facing the sea. A sitter's hips are
+  `GROUND_SIT_RISE` (1.5 voxels) above the sand, so an adult's feet are on it.
+- **The walk there and back is plan 027's.** One route per pitch, from
+  `sandRoutesFor` to its middle, with the member's spot appended as a last
+  waypoint. At the spot the router holds them: `holdOnSeat` for a lounger (the
+  seat stays theirs until they are let go), otherwise `holdAt` with a pose, which
+  `restingOn` reports. A member who reaches a gate the party's pitch cannot be
+  reached from gets a pitch of their own there; with none either, the visit ends
+  at the gate with its relief and they decide again. On the reference plot at
+  `normal`'s pace that happened to none of 353 arrivals.
+- **The visit over, they walk back** along the route and are let onto the graph
+  at the gate. So at bedtime: once a tick, while anybody is on the beach, a guest
+  with a bed whose bedtime it is has the stay ended early, with its relief.
+  Somebody turned back part-way along a walk turns from where they have got to.
+- **The inspector** says `Walking to the beach`, `Lying on the beach` /
+  `Sitting on the beach` (no tile) and `Walking back from the beach`, from
+  `Router.stayOf`.
+- **A rebuild forgets every pitch** with the routes. The crowd leaves somebody
+  settled on the sand out there as a stray, who walks back to the paving.
+- **Deferred:** choosing a beach venue straight from the pitch without first
+  walking back to a gate, swimming, and standing up mid-stay to walk to the water.
+  Parties walking to the beach together is plan 029.
 
 ## The night
 

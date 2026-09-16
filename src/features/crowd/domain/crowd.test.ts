@@ -5,6 +5,7 @@ import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import {
   createCrowd,
   holdAt,
+  holdOnSeat,
   isRoaming,
   isSeated,
   isWaiting,
@@ -16,6 +17,7 @@ import {
   RESTING,
   restingOn,
   rouseSunbathers,
+  seatIsFree,
   stepCrowd,
   stepOntoSand,
   WALK_SPEED,
@@ -520,6 +522,52 @@ describe('roaming the beach', () => {
     expect(Array.from(told.z)).toEqual(Array.from(untold.z));
   });
 
+  it('roams exactly as before for a crowd told in so many words that it roams', () => {
+    const told = createCrowd({ network, count: 30, variants: 4, seed: 15, roamsBeach: true });
+    const untold = createCrowd({ network, count: 30, variants: 4, seed: 15 });
+    run(told, 60);
+    run(untold, 60);
+    expect(Array.from(told.x)).toEqual(Array.from(untold.x));
+    expect(Array.from(told.z)).toEqual(Array.from(untold.z));
+  });
+
+  it('puts nobody on the sand, and lets nobody stroll onto it, in a crowd that does not roam', () => {
+    const crowd = createCrowd({ network, count: 30, variants: 4, seed: 15, roamsBeach: false });
+    const roamers = (): number =>
+      Array.from({ length: crowd.count }, (_, i) => isRoaming(crowd, i)).filter(Boolean).length;
+    expect(roamers()).toBe(0);
+    let ever = 0;
+    for (let frame = 0; frame < 6000; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      ever = Math.max(ever, roamers());
+    }
+    expect(ever, 'somebody wandered off the boardwalk').toBe(0);
+  });
+
+  it('walks a stray back to the paving in a crowd that does not roam', () => {
+    const crowd = createCrowd({
+      network,
+      count: 6,
+      variants: 1,
+      seed: 42,
+      roamsBeach: false,
+      // A router that has forgotten everybody, as one rebuilt mid-errand has.
+      routeOf: () => -1,
+    });
+    const gate = network.nodes[network.gates[0]!]!;
+    holdAt(crowd, 0, gate.x, gate.y, gate.z, 0);
+    walkSandTo(crowd, 0, 6.5 * TILE_VOXELS, 14.5 * TILE_VOXELS);
+    let strayed = false;
+    let back = false;
+    for (let step = 0; step < 600 && !back; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      strayed ||= isRoaming(crowd, 0);
+      back = strayed && crowd.node[0]! >= 0;
+    }
+    expect(strayed, 'the forgotten errand never became a stray').toBe(true);
+    expect(back, 'a minute and still out on the sand').toBe(true);
+  });
+
   it('brings everybody with somewhere to be off the sand, and lets nobody back on', () => {
     const crowd = createCrowd({
       network,
@@ -967,6 +1015,59 @@ describe('the people the simulation holds still', () => {
   });
 });
 
+describe('resting where the simulation puts them', () => {
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const network = walkNetworkFor({
+    paved: boardwalk(8),
+    levelOf: FLAT,
+    shore,
+    tilesX: 20,
+    seats: loungers(2),
+  });
+
+  it('draws somebody held sitting on the sand as sitting, and leaves them there', () => {
+    const crowd = createCrowd({ network, count: 6, variants: 2, seed: 30 });
+    const spot = { x: 6.5 * TILE_VOXELS, y: BEACH_SURFACE + 1.5, z: 14.5 * TILE_VOXELS };
+    holdAt(crowd, 0, spot.x, spot.y, spot.z, 0, RESTING.sitting);
+    expect(restingOn(crowd, 0)).toBe(RESTING.sitting);
+    for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
+    expect(restingOn(crowd, 0)).toBe(RESTING.sitting);
+    expect([crowd.x[0], crowd.y[0], crowd.z[0]]).toEqual([
+      Math.fround(spot.x),
+      Math.fround(spot.y),
+      Math.fround(spot.z),
+    ]);
+  });
+
+  it('lies somebody on a free lounger, keeps it theirs, and frees it when they are let go', () => {
+    const crowd = createCrowd({ network, count: 6, variants: 2, seed: 31 });
+    const [lounger] = network.beachSeats as [number];
+    const seat = network.seats[lounger]!;
+    expect(seatIsFree(crowd, lounger)).toBe(true);
+    expect(holdOnSeat(crowd, 0, lounger)).toBe(true);
+    expect(restingOn(crowd, 0)).toBe(RESTING.lying);
+    expect(isWaiting(crowd, 0)).toBe(true);
+    expect(crowd.seat[0]).toBe(lounger);
+    expect(seatIsFree(crowd, lounger)).toBe(false);
+    expect(crowd.heading[0]).toBeCloseTo(seat.heading);
+    // Held, not timed: a lie on a lounger that ran out would stand them up.
+    for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
+    expect(restingOn(crowd, 0)).toBe(RESTING.lying);
+
+    expect(holdOnSeat(crowd, 1, lounger), 'two people on one lounger').toBe(false);
+    expect(isWaiting(crowd, 1)).toBe(false);
+    expect(holdOnSeat(crowd, 1, network.seats.length)).toBe(false);
+
+    releaseTo(crowd, 0, network.gates[0]!);
+    expect(crowd.seat[0]).toBe(-1);
+    expect(seatIsFree(crowd, lounger)).toBe(true);
+  });
+});
+
 /** Steps until `person` has been asked about the sand `times` times, or a minute passes. */
 const until = (crowd: Crowd, asked: number[], person: number, times: number): void => {
   for (let step = 0; step < 600; step++) {
@@ -1047,6 +1148,24 @@ describe('an errand over the sand', () => {
     const there = { x: crowd.x[person]!, z: crowd.z[person]! };
     run(crowd, 20);
     expect(Math.hypot(crowd.x[person]! - there.x, crowd.z[person]! - there.z)).toBeGreaterThan(1);
+  });
+
+  it('turns somebody back from where they have got to, not from where they set off', () => {
+    const { crowd, person } = errand(() => undefined);
+    for (let step = 0; step < 30; step++) stepCrowd(crowd, MAX_STEP);
+    const there = { x: crowd.x[person]!, z: crowd.z[person]! };
+    const gate = network.gates[0]!;
+    expect(
+      Math.hypot(there.x - crowd.fromX[person]!, there.z - crowd.fromZ[person]!),
+    ).toBeGreaterThan(TILE_VOXELS / 2);
+    walkSandTo(crowd, person, SECOND.x, SECOND.z);
+    stepCrowd(crowd, MAX_STEP);
+    expect(Math.hypot(crowd.x[person]! - there.x, crowd.z[person]! - there.z)).toBeLessThan(2);
+    for (let step = 0; step < 10; step++) stepCrowd(crowd, MAX_STEP);
+    const later = { x: crowd.x[person]!, z: crowd.z[person]! };
+    releaseTo(crowd, person, gate);
+    stepCrowd(crowd, MAX_STEP);
+    expect(Math.hypot(crowd.x[person]! - later.x, crowd.z[person]! - later.z)).toBeLessThan(2);
   });
 
   it('walks somebody let go from the sand back to the paving over sand', () => {

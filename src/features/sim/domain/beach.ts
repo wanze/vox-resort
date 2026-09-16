@@ -23,12 +23,13 @@
  * one function that turns them into a `Venue`, which is as near to "on the art"
  * as sand gets.
  *
- * ## A visit is walked, not held
+ * ## A visit is a stay at a pitch
  *
  * Arriving at a building stands a guest still inside it. Arriving at the beach
- * lets them loose on the sand for the visit instead, roaming and lying on
- * loungers as the crowd always has; see `Router.offTheSand` for how they are
- * called back in.
+ * walks them out over the sand to a spot at their party's pitch - on a lounger,
+ * or lying or sitting on the sand - and holds them there for the visit, then
+ * walks them back to the gate. See `beachPitch.ts` for where a party settles,
+ * and `router.ts` for the walk.
  */
 
 import type { NeedRelief } from '../../../../voxel-gen/voxelgen.ts';

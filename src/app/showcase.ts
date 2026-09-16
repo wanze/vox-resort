@@ -100,6 +100,16 @@ import {
   type SimSpeed,
 } from '../features/sim/domain/simClock';
 import { createNeeds, decayNeeds, type Needs } from '../features/sim/domain/needs';
+import {
+  ageHappiness,
+  createHappiness,
+  meanHappiness,
+  type Happiness,
+} from '../features/sim/domain/happiness';
+import { ratingFor, type Rating } from '../features/sim/domain/rating';
+import { checkInDue, runCheckIn } from '../features/sim/domain/checkIn';
+import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
+import { createRandom } from '../features/layout/domain/random';
 import { venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
@@ -139,11 +149,17 @@ import {
   revealHeightOf,
   type ConstructionSite,
 } from '../features/construction/domain/construction';
-import { createCrowd, MAX_STEP } from '../features/crowd/domain/crowd';
+import { createCrowd, MAX_STEP, takeOffPlot } from '../features/crowd/domain/crowd';
 import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
 import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
-import { bedCount, createGuests, type Guests } from '../features/guests/domain/guests';
+import {
+  bedCount,
+  checkOutParty,
+  createGuests,
+  presentCount,
+  type Guests,
+} from '../features/guests/domain/guests';
 import type { Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
@@ -293,6 +309,17 @@ const NEEDS_SEED = 6;
 const DWELL_SEED = 7;
 
 /**
+ * The seed every morning's arrivals are drawn from: who checks in, how long they
+ * are staying and what they are called.
+ *
+ * Its own, for {@link DWELL_SEED}'s reason, and seeded at all for the same one:
+ * `docs/rendering.md` requires a bench run to replay the same scene, and a
+ * benchmark's clock is paused so no coach ever comes in - which only stays true
+ * of a draw that is deterministic either way.
+ */
+const ARRIVALS_SEED = 8;
+
+/**
  * How far above a person's feet a click is tested against, in voxels: the hips
  * of the tallest figure, which is about half way up a body. The number the art
  * already names, rather than a second guess at it; see `pickPerson.ts`.
@@ -386,6 +413,17 @@ export interface ShowcaseStats {
    * `sim/domain/router.ts`.
    */
   readonly routeFields: number;
+  /**
+   * Guests on the plot now, of the bodies it was built for.
+   *
+   * The two numbers differ because a person index is a body and the person
+   * inside it changes: check-out empties one and check-in deals somebody new
+   * into it. A present count that sits well below the capacity is a resort
+   * nobody is coming back to. See `sim/domain/checkIn.ts`.
+   */
+  readonly guests: { readonly present: number; readonly capacity: number };
+  /** What the resort is worth out of five; see `sim/domain/rating.ts`. */
+  readonly rating: number;
 }
 
 /**
@@ -889,6 +927,15 @@ interface Resort {
    */
   readonly needs: Needs;
   /**
+   * What sort of time the people in {@link guests} are having, keyed by the same
+   * person index.
+   *
+   * Beside {@link needs} and for its reason: it is rewritten every tick, and it
+   * follows the needs rather than being a sixth one. What the rating is read
+   * off. See `sim/domain/happiness.ts`.
+   */
+  readonly happiness: Happiness;
+  /**
    * Somewhere on this plot a guest could decide to go.
    *
    * Derived from what is standing rather than kept in step with it: an edit
@@ -906,11 +953,38 @@ interface Resort {
    */
   lodgings: readonly Lodging[];
   /**
-   * Beds on the plot and guests who have one. Counted once when the resort is
-   * built, since neither changes until it is built again, and read by the
-   * stats and by the windows every tick.
+   * The ways on and off this plot: a list of its own for {@link lodgings}'s
+   * reason, and replaced alongside it, because a gate can be bulldozed like
+   * anything else. See `sim/domain/gateways.ts`.
    */
-  readonly beds: { readonly total: number; readonly taken: number };
+  gateways: readonly Gateway[];
+  /**
+   * What the resort is worth out of five, and what made it that.
+   *
+   * Worked out once a day rather than per tick - it is a mean over every guest
+   * on the plot, and it moves at the pace happiness does - and read by the
+   * morning's check-in and by the HUD. Mutable for that: see the tick block.
+   */
+  rating: Rating;
+  /**
+   * What every morning's arrivals are drawn from: who checks in, how long they
+   * stay and what they are called.
+   *
+   * Part of the resort because it advances with it - two plots must not share a
+   * sequence - and seeded for the reason every other draw on the plot is. See
+   * {@link ARRIVALS_SEED}.
+   */
+  readonly arrivals: () => number;
+  /**
+   * Beds on the plot and guests who have one.
+   *
+   * Recounted once a day rather than once when the resort is built: a party
+   * checking out gives its beds back and the coach in the morning takes some of
+   * them again, and the windows are lit from the share of them slept in. Read by
+   * the stats and by the windows every tick, which is why it is counted a day at
+   * a time and not asked for per frame.
+   */
+  beds: { readonly total: number; readonly taken: number };
   /**
    * What turns {@link needs} into somewhere to walk, over {@link crowd}'s graph.
    *
@@ -1264,6 +1338,10 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     seed: GUEST_SEED,
   });
   const needs = createNeeds(guests, NEEDS_SEED);
+  const happiness = createHappiness(population);
+  // Its own generator, for the reason every other draw on the plot has one; see
+  // {@link ARRIVALS_SEED}.
+  const arrivals = createRandom(ARRIVALS_SEED);
   // Every question about the ground is asked once, here — which tiles are paved,
   // how high each one stands, where the sand is, what can be sat on — and
   // answered into the one graph the crowd walks and the router routes over. See
@@ -1287,6 +1365,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   // resort with nine times the bakeries is not the plot that is there.
   const venues = venuesOn(plot.layout.placements);
   const lodgings = lodgingsOn(plot.layout.placements);
+  const gateways = gatewaysOn(plot.layout.placements);
   const beds = bedCount(guests);
   // The router reads where somebody is standing and the crowd is built with the
   // router, so one of the two is bound late — as `createClock` binds the resort.
@@ -1296,7 +1375,23 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     needs,
     venues,
     lodgings,
+    gateways,
     network,
+    // Out of the gate and off the plot: the party's beds and bodies go back into
+    // the pool the morning's coach is dealt from, and the crowd stops drawing
+    // them. The router knows where they walked and nothing about who they were;
+    // joining the two up is this file's job. See `guests.ts` and `crowd.ts`.
+    onLeave: (person) => {
+      const left = checkOutParty(guests, guests.party[person]!);
+      const people = crowdField!.crowd;
+      for (const member of left) {
+        // Every member, not only the one at the gate: somebody who was having
+        // lunch when their family left is taken off the plot where they sit, and
+        // a visit left standing would walk an empty body out of the door.
+        router.forget(member);
+        takeOffPlot(people, member, people.x[member]!, people.y[member]!, people.z[member]!);
+      }
+    },
     tickOfDay: parts.tickOfDay,
     // Asserted, and safe: the crowd is built on the very next statement, and
     // nothing calls into the router until a frame steps somebody somewhere.
@@ -1338,10 +1433,14 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     crowd,
     guests,
     needs,
+    happiness,
     venues,
     lodgings,
+    gateways,
+    rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     beds: { total: beds.beds, taken: beds.taken },
     router,
+    arrivals,
     balloons,
     sea,
     shore,
@@ -1517,6 +1616,8 @@ function sceneStats(parts: {
     asleep: parts.resort.router.asleepCount,
     venues: parts.resort.router.occupancyTotals,
     routeFields: parts.resort.router.fieldCount,
+    guests: { present: presentCount(parts.resort.guests), capacity: parts.resort.guests.count },
+    rating: parts.resort.rating.stars,
     ...parts.startup,
   };
 }
@@ -1533,6 +1634,100 @@ function lightRooms(resort: Resort, last: number | null): number {
   const share = occupiedShare(resort.beds.total, resort.router.asleepCount);
   if (share !== last) resort.world.setOccupiedShare(share);
   return share;
+}
+
+/**
+ * Everything the simulation does with the whole simulated minutes the clock just
+ * produced, and the share of the rooms that are lit afterwards.
+ *
+ * One function rather than five statements in the animation loop, because that
+ * loop is already the longest thing in this file and none of this is about
+ * frames: a tick is a simulated minute however many frames went into it. See
+ * `simClock.ts`.
+ */
+function runTicks(resort: Resort, clock: Clock, ticks: number, lastShare: number | null): number {
+  decayNeeds(resort.needs, resort.guests, ticks);
+  // One at a time rather than all twelve at once: a venue that frees a place
+  // on the first of them must let somebody in on the first, not on the last.
+  for (let tick = ticks; tick > 0; tick--) resort.router.tick(clock.ticks - tick + 1);
+  // After the ticks, so a guest who spent them in a line is charged for the line
+  // they were actually in rather than the one they had just joined.
+  ageHappiness(
+    resort.happiness,
+    resort.needs,
+    resort.guests,
+    (person) => resort.router.isWaitingAt(person),
+    ticks,
+  );
+  // The coaches, once a day, over the run of ticks the clock just produced
+  // rather than on one of them: twelve ticks in a frame must not step over
+  // eleven o'clock. See `checkIn.ts`.
+  if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) runDay(resort, clock.day);
+  return lightRooms(resort, lastShare);
+}
+
+/**
+ * One turn of the game's loop, run once a simulated day at the check-in hour.
+ *
+ * What the resort is worth is worked out **first**, off the plot as it stands
+ * overnight, so the morning's coach is sized by the resort the guests who are
+ * here actually experienced rather than by one that has already changed. Then
+ * the arrivals, then the departures, and the beds are counted again at the end
+ * because both halves moved them.
+ *
+ * See `sim/domain/rating.ts` and `sim/domain/checkIn.ts`; nothing here decides
+ * anything, it only joins the registry, the router and the crowd up.
+ */
+function runDay(resort: Resort, day: number): void {
+  const beds = bedCount(resort.guests);
+  resort.rating = ratingFor({
+    happiness: meanHappiness(resort.happiness, resort.guests),
+    present: presentCount(resort.guests),
+    housed: beds.taken,
+  });
+  admitArrivals(resort, day);
+  sendDepartures(resort, day);
+  const after = bedCount(resort.guests);
+  resort.beds = { total: after.beds, taken: after.taken };
+}
+
+/**
+ * The morning's coach: as many parties as the rating and the free beds allow,
+ * stood on the paving at a gate and left to walk.
+ *
+ * A plot with no gate standing - or none any paving reaches - takes nobody, and
+ * that is a real state rather than an error: the HUD's `Guests` row is what says
+ * the resort is closed to arrivals.
+ */
+function admitArrivals(resort: Resort, day: number): void {
+  const at = resort.router.arrivalNode;
+  if (at < 0) return;
+  const arrived = runCheckIn({
+    guests: resort.guests,
+    needs: resort.needs,
+    happiness: resort.happiness,
+    rating: resort.rating,
+    day,
+    random: resort.arrivals,
+  });
+  for (const person of arrived) resort.router.admit(person, at);
+}
+
+/**
+ * Everybody whose nights are up, sent for the gate.
+ *
+ * Walked once a day rather than once a tick: six hundred comparisons a day is
+ * nothing and six hundred a tick is six hundred a tick. Asking twice about the
+ * same person is free, which is what lets a guest who could not reach a gate
+ * yesterday be asked again today. See `Router.sendHome`.
+ */
+function sendDepartures(resort: Resort, day: number): void {
+  const { guests } = resort;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1) continue;
+    if (guests.arrivedOn[person]! + guests.nights[person]! >= day) continue;
+    resort.router.sendHome(person);
+  }
 }
 
 /**
@@ -2433,9 +2628,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   /** One guest, worded from where they are standing. */
   const guestAt = (person: number): SelectionView => {
-    const { guests, needs, venues, crowd } = current();
+    const { guests, needs, happiness, venues, crowd } = current();
     const at = { x: crowd.crowd.x[person] ?? 0, z: crowd.crowd.z[person] ?? 0 };
-    return guestView(guests, needs, venues, person, clock.day, at);
+    return guestView(guests, needs, happiness, venues, person, clock.day, at);
   };
 
   const viewOf = (target: InspectTarget): SelectionView | null => {
@@ -2583,7 +2778,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       // across a rebuild, and a bakery may have just been built or bulldozed.
       resort.venues = venuesOn(plot.placements);
       resort.lodgings = lodgingsOn(plot.placements);
-      resort.router.rebuild(resort.venues, resort.lodgings, network);
+      resort.gateways = gatewaysOn(plot.placements);
+      resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
       crowd.relocate(network);
     }
 
@@ -2595,13 +2791,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Whole simulated minutes, at most MAX_TICKS_PER_ADVANCE of them, so a tab
     // that was in the background does not run a week of decay in one frame.
-    if (ticks > 0) {
-      decayNeeds(current().needs, current().guests, ticks);
-      // One at a time rather than all twelve at once: a venue that frees a place
-      // on the first of them must let somebody in on the first, not on the last.
-      for (let tick = ticks; tick > 0; tick--) current().router.tick(clock.ticks - tick + 1);
-      lastShare = lightRooms(current(), lastShare);
-    }
+    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare);
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on
     // the same frame of each, and the frame's `dt` is exactly what differs

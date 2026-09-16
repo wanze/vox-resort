@@ -80,6 +80,12 @@ export function RenderStats({
       <StatRow label="Voxels" note={`${formatNumber(stats.meshedVoxelCount)} meshed`}>
         {formatNumber(stats.sceneVoxelCount)}
       </StatRow>
+      <StatRow label="Guests" note="on the plot now, of the bodies it was built for">
+        {formatNumber(stats.guests.present)} / {formatNumber(stats.guests.capacity)}
+      </StatRow>
+      <StatRow label="Rating" note="out of five, from how happy they are and how many have a bed">
+        {stats.rating.toFixed(1)}
+      </StatRow>
       <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
         {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
       </StatRow>

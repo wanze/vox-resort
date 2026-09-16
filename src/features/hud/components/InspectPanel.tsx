@@ -147,6 +147,9 @@ function GuestDetails({
           {guest.home ? guest.home.label : 'No bed on the plot'}
         </StatRow>
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
+        <StatRow label="Mood" note="how good a time they are having">
+          {Math.round(guest.happiness * 100)}%
+        </StatRow>
         <WantsRow wants={guest.wants} />
       </dl>
       <NeedBars needs={guest.needs} />

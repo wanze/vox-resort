@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assignHomes, NO_HOME, type Home } from './homes';
+import { assignHomes, homeWithRoom, NO_HOME, type Home } from './homes';
 import type { Party } from './parties';
 
 let nextPerson = 0;
@@ -67,5 +67,26 @@ describe('assignHomes', () => {
     const b = assignHomes(parties, homes);
     expect(Array.from(a.byParty)).toEqual(Array.from(b.byParty));
     expect(Array.from(a.freeBeds)).toEqual(Array.from(b.freeBeds));
+  });
+});
+
+describe('homeWithRoom', () => {
+  it('picks the same home the greedy pass does, and says so when none fits', () => {
+    const homes = [home('villa', 8), home('cottage', 4), home('bungalow', 4)];
+    const parties = [partyOfSize(5), partyOfSize(4), partyOfSize(3), partyOfSize(2)];
+    const { byParty, freeBeds } = assignHomes(parties, homes);
+
+    // The greedy pass asks the same question party by party, so replaying it
+    // against a fresh bed count has to give the same answer at every step.
+    const beds = Int32Array.from(homes, (each) => each.beds);
+    const order = [0, 1, 2, 3];
+    for (const party of order) {
+      const chosen = homeWithRoom(beds, parties[party]!.members.length);
+      expect(chosen).toBe(byParty[party]);
+      if (chosen !== NO_HOME) beds[chosen] = beds[chosen]! - parties[party]!.members.length;
+    }
+    expect(Array.from(beds)).toEqual(Array.from(freeBeds));
+    expect(homeWithRoom(beds, 99)).toBe(NO_HOME);
+    expect(homeWithRoom(new Int32Array(0), 1)).toBe(NO_HOME);
   });
 });

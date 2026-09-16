@@ -370,6 +370,16 @@ export interface Crowd extends Walkers {
    * bed, sitting or lying for somebody settled on the sand.
    */
   readonly holdPose: Uint8Array;
+  /**
+   * 1 for somebody who is not on the plot at all: they are held still, they are
+   * not drawn, and nothing asks them anything. What a guest between check-out
+   * and the next check-in is; see `sim/domain/checkIn.ts`.
+   *
+   * A column rather than a shrunken `count`, because a person index is a body
+   * and the mesh that draws it was sized for that body when the crowd was built.
+   * See `crowdField.ts`.
+   */
+  readonly offPlot: Uint8Array;
 
   /** Every draw the crowd makes, so the same seed replays the same afternoon. */
   readonly random: () => number;
@@ -478,6 +488,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     seat: new Int32Array(capacity).fill(-1),
     seatBy: new Int32Array(network.seats.length).fill(-1),
     holdPose: new Uint8Array(capacity),
+    offPlot: new Uint8Array(capacity),
     dirX: new Float32Array(capacity),
     dirZ: new Float32Array(capacity),
     side: new Float32Array(capacity),
@@ -574,6 +585,10 @@ export function createCrowd(options: CrowdOptions): Crowd {
  * is walked from where they are to the node nearest them, and carries on from
  * there.
  *
+ * **Whoever is off the plot stays off it**, untouched: they are a body waiting
+ * for whoever checks in next, and the point they are held at means nothing to
+ * anybody. See {@link Crowd.offPlot}.
+ *
  * A network with no edges — every path taken up — hands back a crowd with
  * `count` 0. Nobody is drawn and nobody is stepped, and paving one tile brings
  * everybody back, because capacity and every column were kept.
@@ -591,6 +606,11 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
   const canRoam = network.beach !== null && network.gates.length > 0;
 
   for (let i = 0; i < count; i++) {
+    // Off the plot stays off it. Every column below is about where somebody is
+    // walking, and a body waiting for whoever checks in next is walking nowhere:
+    // re-anchoring them would stand every checked-out guest back on the paving,
+    // in the middle of the promenade, the first time anything was built.
+    if (crowd.offPlot[i] === 1) continue;
     const seat = crowd.seat[i]!;
     const lounging = seat >= 0 && previous.seats[seat]?.node === OFF_THE_GRAPH;
     crowd.seat[i] = -1;
@@ -1040,6 +1060,41 @@ export function holdAt(
   // sits there.
   giveUpSeat(crowd, i);
   standStill(crowd, i, x, y, z, heading, pose);
+}
+
+/**
+ * Takes somebody off the plot: stood still where they are, and not drawn.
+ *
+ * Their columns are kept, because the body is going to be used again by whoever
+ * checks in next. See {@link Crowd.offPlot}.
+ *
+ * As ignorant as {@link holdAt} of *why*: the caller is `sim/domain/router.ts`
+ * walking a guest out of the gate at the end of a stay, and what arrives here is
+ * a person index and a point.
+ */
+export function takeOffPlot(crowd: Crowd, i: number, x: number, y: number, z: number): void {
+  if (i < 0 || i >= crowd.capacity) return;
+  holdAt(crowd, i, x, y, z, crowd.heading[i] ?? 0);
+  crowd.offPlot[i] = 1;
+}
+
+/**
+ * Puts somebody back on the plot at a node, walking from it as anybody released
+ * from a visit does.
+ *
+ * The flag is cleared **first**: {@link releaseTo} decides from where they are
+ * standing whether they are coming off the sand, and a body that is still off
+ * the plot has no business being asked anything.
+ */
+export function putOnPlot(crowd: Crowd, i: number, node: number): void {
+  if (i < 0 || i >= crowd.capacity) return;
+  crowd.offPlot[i] = 0;
+  releaseTo(crowd, i, node);
+}
+
+/** Whether this body is holding nobody: see {@link Crowd.offPlot}. */
+export function isOffPlot(crowd: Crowd, i: number): boolean {
+  return crowd.offPlot[i] === 1;
 }
 
 /**

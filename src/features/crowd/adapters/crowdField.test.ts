@@ -9,7 +9,7 @@ import {
 import { ADULT_VOXELS, CHILD_VOXELS, hipHeight } from '../../../../voxel-gen/people/figure.ts';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { orthographicLens } from '../../rendering/domain/levelOfDetail';
-import { createCrowd, type Crowd } from '../domain/crowd';
+import { createCrowd, putOnPlot, takeOffPlot, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
 
@@ -131,6 +131,27 @@ describe('buildCrowdField', () => {
     field.advance(1 / 60, 1);
     const drawn = meshes(field.group).reduce((total, mesh) => total + mesh.count, 0);
     expect(drawn).toBe(field.count);
+    field.dispose();
+  });
+
+  it('draws nobody who is off the plot, and keeps drawing everybody after them', () => {
+    const crowd = crowdOf(6);
+    const field = buildCrowdField({ crowd, models: MODELS });
+    field.advance(1 / 60, 1);
+    expect(field.drawnCount).toBe(6);
+
+    // Two bodies emptied, one of them not the last: a `break` in the write loop
+    // would drop everybody behind it and the plot would look deserted.
+    takeOffPlot(crowd, 1, crowd.x[1]!, crowd.y[1]!, crowd.z[1]!);
+    takeOffPlot(crowd, 4, crowd.x[4]!, crowd.y[4]!, crowd.z[4]!);
+    field.advance(1 / 60, 1);
+    expect(field.drawnCount).toBe(4);
+    const drawn = meshes(field.group).reduce((total, mesh) => total + mesh.count, 0);
+    expect(drawn).toBe(4);
+
+    putOnPlot(crowd, 1, 0);
+    field.advance(1 / 60, 1);
+    expect(field.drawnCount).toBe(5);
     field.dispose();
   });
 

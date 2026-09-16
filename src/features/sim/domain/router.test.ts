@@ -6,6 +6,7 @@ import { seatSpotsFor } from '../../crowd/domain/seating';
 import {
   createCrowd,
   holdAt,
+  isOffPlot,
   isRoaming,
   isWaiting,
   MAX_STEP,
@@ -15,6 +16,7 @@ import {
   restingOn,
   seatIsFree,
   stepCrowd,
+  takeOffPlot,
   type Crowd,
 } from '../../crowd/domain/crowd';
 import { blockedAt } from '../../crowd/domain/sandGrid';
@@ -25,7 +27,16 @@ import {
   type PavedTile,
   type WalkNetwork,
 } from '../../crowd/domain/walkNetwork';
-import { createGuests, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
+import {
+  bedCount,
+  checkOutParty,
+  createGuests,
+  homeOf,
+  partyOf,
+  presentCount,
+  type Guests,
+} from '../../guests/domain/guests';
+import { createRandom } from '../../layout/domain/random';
 import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
@@ -34,6 +45,7 @@ import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createNeeds, decayNeeds, NEEDS, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
+import { gatewaysOn, type Gateway } from './gateways';
 import { lodgingFor, lodgingsOn, type Lodging } from './lodgings';
 import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
@@ -41,6 +53,9 @@ import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
 import { isBeach } from './beach';
 import { crowdScaleFor } from './crowdRate';
+import { checkInDue, runCheckIn } from './checkIn';
+import { createHappiness, meanHappiness } from './happiness';
+import { ratingFor } from './rating';
 import { createRouter, type Router } from './router';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { venuesOn, type Venue } from './venues';
@@ -111,7 +126,13 @@ const routerOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
   needs: Needs,
-  night: { readonly lodgings: readonly Lodging[]; readonly tickOfDay: () => number } = {
+  night: {
+    readonly lodgings: readonly Lodging[];
+    readonly tickOfDay: () => number;
+    /** The ways off the plot, for the stays that end; see plan 020. */
+    readonly gateways?: readonly Gateway[];
+    readonly onLeave?: (person: number) => void;
+  } = {
     lodgings: [],
     tickOfDay: () => NOON,
   },
@@ -123,6 +144,8 @@ const routerOn = (
     needs,
     venues,
     lodgings: night.lodgings,
+    gateways: night.gateways ?? [],
+    onLeave: night.onLeave ?? (() => {}),
     network,
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
@@ -245,7 +268,7 @@ describe('createRouter', () => {
     expect(router.goalOf(0)).not.toBeNull();
 
     const rebuilt = networkOf(street(10));
-    router.rebuild([bakery(9)], [], rebuilt);
+    router.rebuild([bakery(9)], [], [], rebuilt);
     expect(router.fieldCount).toBe(0);
     expect(router.goalOf(0)).toBeNull();
   });
@@ -255,6 +278,92 @@ describe('createRouter', () => {
  * Frames of `MAX_STEP` to one simulated minute, which is what `normal` speed
  * works out at: 300 real seconds to a day of 1 440 ticks.
  */
+/** A gate standing on the tile north of the corridor's `tileX`. */
+const gateway = (tileX: number): Gateway => ({
+  key: 'entrance#0',
+  tileX,
+  tileZ: -1,
+  tilesX: 1,
+  tilesZ: 1,
+  x: (tileX + 0.5) * TILE_VOXELS,
+  z: -0.5 * TILE_VOXELS,
+  doors: [],
+});
+
+describe('a stay that is over', () => {
+  /** The corridor, a bakery at its east end and the gate at its west. */
+  const leavingOn = (onLeave?: (person: number) => void) => {
+    const network = networkOf(street(8));
+    const needs = wanting(0, 'hunger');
+    const { router, crowd } = routerOn(network, [bakery(7)], needs, {
+      lodgings: [],
+      tickOfDay: () => NOON,
+      gateways: [gateway(0)],
+      ...(onLeave ? { onLeave } : {}),
+    });
+    return { network, needs, router, crowd };
+  };
+
+  it('walks a guest whose stay is over towards the gate from anywhere on the corridor', () => {
+    const { network, router } = leavingOn();
+    // Hungry, with the bakery the other way: a stay that is over beats it.
+    router.sendHome(0);
+    for (const tileX of [6, 4, 2]) {
+      expect(router.step(0, nodeAt(network, tileX)), `tile ${tileX}`).toBe(
+        nodeAt(network, tileX - 1),
+      );
+    }
+    expect(router.arrivalNode, 'no way onto the plot either').toBeGreaterThanOrEqual(0);
+  });
+
+  it('hands somebody who reaches the gate over once, and only once', () => {
+    const left: number[] = [];
+    const { network, router } = leavingOn((person) => left.push(person));
+    router.sendHome(0);
+    // Asking twice changes nothing: the day's pass asks everybody every day.
+    router.sendHome(0);
+    expect(left).toEqual([]);
+
+    expect(router.step(0, nodeAt(network, 1)), 'the crowd must not aim them anywhere').toBe(-1);
+    expect(left).toEqual([0]);
+    router.step(0, nodeAt(network, 1));
+    expect(left, 'handed over twice').toEqual([0]);
+  });
+
+  it('does not drag a guest out of a venue, and walks them out when the visit ends', () => {
+    const left: number[] = [];
+    const { network, needs, router, crowd } = leavingOn((person) => left.push(person));
+    router.step(0, nodeAt(network, 0));
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    expect(isWaiting(crowd, 0)).toBe(true);
+
+    router.sendHome(0);
+    expect(isWaiting(crowd, 0), 'dragged out of the bakery to catch a coach').toBe(true);
+    expect(left).toEqual([]);
+    expect(router.occupancyOf('bakery#0')).toEqual({ inside: 1, waiting: 0 });
+
+    // A bakery visit is four to eight ticks; run long enough for any draw.
+    for (let tick = 1; tick <= 8; tick++) router.tick(tick);
+    expect(isWaiting(crowd, 0)).toBe(false);
+    expect(needs.level.hunger[0], 'they were fed on the way out all the same').toBeCloseTo(0.5);
+    // And now they walk out rather than deciding again.
+    expect(router.step(0, nodeAt(network, 6))).toBe(nodeAt(network, 5));
+  });
+
+  it('puts somebody who checks in back on the plot, walking like anybody else', () => {
+    const { network, router, crowd } = leavingOn();
+    takeOffPlot(crowd, 0, 0, 0, 0);
+    router.sendHome(0);
+
+    router.admit(0, nodeAt(network, 0));
+    expect(isOffPlot(crowd, 0)).toBe(false);
+    expect(crowd.node[0]).toBe(nodeAt(network, 0));
+    // Hungry again, and nothing left of the walk to the gate.
+    expect(router.step(0, nodeAt(network, 2))).toBe(nodeAt(network, 3));
+    expect(router.goalOf(0)?.key).toBe('bakery#0');
+  });
+});
+
 const TICKS_EVERY = 2;
 
 /** Ticks in a simulated day, which `simClock.ts` keeps as one integer. */
@@ -437,7 +546,7 @@ describe('a venue that holds only as many as it says', () => {
 
     // The same corridor three tiles south, with the shower moved to match.
     const moved = networkOf(Array.from({ length: 8 }, (_, tileX) => ({ tileX, tileZ: 3, y: 0 })));
-    router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], [], moved);
+    router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], [], [], moved);
     for (const person of [0, 1]) releaseTo(crowd, person, nodeAt(moved, 0, 3));
     queue(moved);
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
@@ -469,7 +578,7 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyTotals).toEqual({ inside: 1, waiting: 2 });
 
     const rebuilt = networkOf(street(10));
-    router.rebuild([shower(9)], [], rebuilt);
+    router.rebuild([shower(9)], [], [], rebuilt);
     expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
     // The crowd is put back on the new graph by `reseatCrowd`, which walks a
     // held person like any other: the router deliberately re-aims nobody.
@@ -791,7 +900,7 @@ describe('a visit to the beach', () => {
   it('brings a guest on a stay back onto the graph when it is rebuilt, rather than roaming', () => {
     const { router, crowd } = onTheBeach([0]);
     expect(untilSettled(crowd, [0])).toBe(true);
-    router.rebuild([], [], network);
+    router.rebuild([], [], [], network);
     const reseated = reseatCrowd(crowd, network);
     let back = false;
     for (let step = 0; step < 600 && !back; step++) {
@@ -922,7 +1031,7 @@ describe('a building on the beach', () => {
     expect(isRoaming(crowd, 0)).toBe(false);
 
     // An edit somewhere else on the plot: the same graph, and every route forgotten.
-    router.rebuild([shower], [], network);
+    router.rebuild([shower], [], [], network);
     for (let step = 0; step < 1000 && !isRoaming(crowd, 0); step++) stepCrowd(crowd, MAX_STEP);
     expect(isRoaming(crowd, 0)).toBe(true);
     const there = { x: crowd.x[0]!, z: crowd.z[0]! };
@@ -1014,7 +1123,7 @@ describe('the night', () => {
     const { network, router } = nightOn(housed);
     router.step(housed, nodeAt(network, 1));
     expect(router.asleepCount).toBe(1);
-    router.rebuild([bakery(9)], [hotel()], networkOf(street(10)));
+    router.rebuild([bakery(9)], [hotel()], [], networkOf(street(10)));
     expect(router.asleepCount).toBe(0);
     expect(router.isAsleep(housed)).toBe(false);
   });
@@ -1119,6 +1228,8 @@ describe('on the generated plot', () => {
       needs,
       venues,
       lodgings: [],
+      gateways: [],
+      onLeave: () => {},
       network,
       tickOfDay: () => NOON,
       crowd: () => crowd!,
@@ -1212,6 +1323,8 @@ describe('on the generated plot', () => {
       needs,
       venues: standing,
       lodgings: [],
+      gateways: [],
+      onLeave: () => {},
       network: walked,
       tickOfDay: () => NOON,
       crowd: () => crowd!,
@@ -1523,6 +1636,8 @@ describe('on the generated plot', () => {
       needs,
       venues,
       lodgings,
+      gateways: [],
+      onLeave: () => {},
       network,
       tickOfDay: () => ticks % TICKS_PER_DAY,
       crowd: () => crowd!,
@@ -1623,6 +1738,8 @@ describe('on the generated plot', () => {
       needs,
       venues,
       lodgings: [],
+      gateways: [],
+      onLeave: () => {},
       network,
       tickOfDay: () => clock.ticks % TICKS_PER_DAY,
       crowd: () => crowd!,
@@ -1698,5 +1815,145 @@ describe('on the generated plot', () => {
     // generator stands where, and the nearest restaurant this family would
     // choose is now 630 voxels away, which is 90 minutes of walking.
     expect(arrived!.tick - setOff!.tick).toBeLessThan(120);
+  });
+
+  /**
+   * Three simulated days of the whole loop on the plot the generator lays: stays
+   * running out, guests walking to a gate, and coaches filling the beds they
+   * gave back. The unit tests above each hold one end of that; this is the one
+   * that can tell whether the two ends meet.
+   *
+   * At `normal`'s pace, because at `TICKS_EVERY`'s real time a guest walks four
+   * tiles a simulated hour and nobody ever reaches the far end of the promenade,
+   * let alone a gate. See `docs/crowd.md` and plan 026.
+   */
+  /** The day the run opens on; see the loop below. */
+  const OPENS_ON = 2;
+
+  it('lets stays end and coaches fill the beds they gave back', () => {
+    const homes = lodgingsOn(layout.placements).map((lodging) => ({
+      key: lodging.key,
+      id: lodging.id,
+      label: lodging.label,
+      beds: lodging.beds,
+    }));
+    const people = createGuests({
+      count: 400,
+      homes: homes.toSorted((a, b) => b.beds - a.beds),
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    const happiness = createHappiness(people.count);
+    const gateways = gatewaysOn(layout.placements);
+    expect(gateways.length, 'the generator stands no gate at all').toBeGreaterThan(0);
+
+    let crowd: Crowd | null = null;
+    const arrivals = createRandom(41);
+    let checkedOut = 0;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings: lodgingsOn(layout.placements),
+      gateways,
+      onLeave: (person) => {
+        const left = checkOutParty(people, people.party[person]!);
+        checkedOut += left.length;
+        for (const member of left) {
+          router.forget(member);
+          takeOffPlot(crowd!, member, crowd!.x[member]!, crowd!.y[member]!, crowd!.z[member]!);
+        }
+      },
+      network,
+      tickOfDay: () => tick % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => router.step(person, at),
+      offTheSand: (person) => router.offTheSand(person),
+      roamsBeach: false,
+    });
+
+    const beds = bedCount(people).beds;
+    let tick = OPENS_ON * TICKS_PER_DAY;
+    let checkedIn = 0;
+    let moved: string | null = null;
+    let overCapacity: string | null = null;
+    let overBeds: string | null = null;
+    /** Where everybody off the plot was standing when they were put away. */
+    const parked = new Map<number, string>();
+
+    // Three simulated days, **opened on day 2 rather than day 0**: `createGuests`
+    // spreads everybody's arrival over their own stay, and the earliest that can
+    // put a stay behind them is the second morning. Started at day 0 the run
+    // would be two days of nothing and one of departures, and no coach would
+    // ever find a free body to deal anybody into.
+    for (tick = OPENS_ON * TICKS_PER_DAY; tick <= (OPENS_ON + 3) * TICKS_PER_DAY; tick++) {
+      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
+      decayNeeds(needs, people, 1);
+      router.tick(tick);
+      if (checkInDue(tick, tick)) {
+        const day = Math.floor(tick / TICKS_PER_DAY);
+        const rating = ratingFor({
+          happiness: meanHappiness(happiness, people),
+          present: presentCount(people),
+          housed: bedCount(people).taken,
+        });
+        const arrived = runCheckIn({
+          guests: people,
+          needs,
+          happiness,
+          rating,
+          day,
+          random: arrivals,
+        });
+        checkedIn += arrived.length;
+        for (const person of arrived) router.admit(person, router.arrivalNode);
+        for (let person = 0; person < people.count; person++) {
+          if (people.present[person] !== 1) continue;
+          if (people.arrivedOn[person]! + people.nights[person]! >= day) continue;
+          router.sendHome(person);
+        }
+      }
+      // Nobody off the plot ever moves, and nobody is ever counted twice.
+      for (let person = 0; person < people.count; person++) {
+        const here = `${crowd.x[person]},${crowd.y[person]},${crowd.z[person]}`;
+        if (!isOffPlot(crowd, person)) {
+          parked.delete(person);
+          continue;
+        }
+        const was = parked.get(person);
+        if (was === undefined) parked.set(person, here);
+        else if (was !== here) moved ??= `person ${person} moved from ${was} to ${here}`;
+      }
+      if (presentCount(people) > people.count) overCapacity ??= `on tick ${tick}`;
+      if (bedCount(people).taken > beds) overBeds ??= `on tick ${tick}`;
+    }
+
+    // Nobody sent for a gate on the last coach but one is still standing about:
+    // a guest who cannot reach a gate stays on the plot and is asked again, and
+    // this is what says how often that happens. On the reference plot it is
+    // nobody. The day after is not counted - their coach never ran.
+    const sentBy = Math.floor((tick - 1) / TICKS_PER_DAY) - 1;
+    let stranded = 0;
+    for (let person = 0; person < people.count; person++) {
+      if (people.present[person] !== 1) continue;
+      if (people.arrivedOn[person]! + people.nights[person]! < sentBy) stranded++;
+    }
+    expect(stranded, 'somebody was sent for a gate and never reached one').toBe(0);
+    expect(checkedOut, 'three days and nobody left').toBeGreaterThan(0);
+    expect(checkedIn, 'three days and nobody arrived').toBeGreaterThan(0);
+    expect(moved, 'somebody off the plot was walked about').toBeNull();
+    expect(overCapacity, 'more guests than the plot has bodies').toBeNull();
+    expect(overBeds, 'more beds taken than the plot has').toBeNull();
+    // Everybody who is here has somewhere to sleep, which is what check-in caps on.
+    expect(presentCount(people)).toBe(bedCount(people).taken);
   });
 });

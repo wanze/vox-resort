@@ -86,6 +86,20 @@ export function createNeeds(guests: Guests, seed: number): Needs {
 }
 
 /**
+ * Draws one person's needs afresh, in {@link NEEDS} order: somebody has just
+ * checked in, and the body they were dealt was somebody else's a moment ago.
+ *
+ * Here rather than in `checkIn.ts` so {@link START_LEVEL} has one reader and the
+ * draw order stays this module's own - it is the same order {@link createNeeds}
+ * uses, and the note there about it being load-bearing applies to both.
+ */
+export function resetNeeds(needs: Needs, person: number, random: () => number): void {
+  if (person < 0 || person >= needs.count) return;
+  const span = START_LEVEL.max - START_LEVEL.min;
+  for (const need of NEEDS) needs.level[need][person] = START_LEVEL.min + random() * span;
+}
+
+/**
  * Runs `ticks` whole simulated minutes of decay over everybody.
  *
  * Allocates nothing: it runs up to `MAX_TICKS_PER_ADVANCE` times a frame over

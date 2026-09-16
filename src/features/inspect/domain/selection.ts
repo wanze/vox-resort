@@ -28,6 +28,7 @@ import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/gu
 import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
+import type { Happiness } from '../../sim/domain/happiness';
 import { NEEDS, strongestNeed, type Needs } from '../../sim/domain/needs';
 import type { Venue } from '../../sim/domain/venues';
 
@@ -70,6 +71,13 @@ export interface GuestView {
   readonly needs: readonly { readonly need: GuestNeed; readonly level: number }[];
   /** Where they would go next, or null while they are content. */
   readonly wants: { readonly need: GuestNeed; readonly label: string } | null;
+  /**
+   * What sort of time they are having, 0..1. 1 is delighted.
+   *
+   * Not a sixth need, and shown apart from the five for that reason: it follows
+   * them rather than being one of them. See `sim/domain/happiness.ts`.
+   */
+  readonly happiness: number;
 }
 
 export interface PlaceView {
@@ -153,6 +161,7 @@ function wantsOf(options: {
 export function guestView(
   guests: Guests,
   needs: Needs,
+  happiness: Happiness,
   venues: readonly Venue[],
   person: number,
   day: number,
@@ -174,6 +183,7 @@ export function guestView(
     nightsLeft: arrivedOn + nights - day,
     needs: NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
     wants: wantsOf({ guests, needs, venues, person, at }),
+    happiness: happiness.level[person] ?? 0,
   };
 }
 

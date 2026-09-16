@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   bedCount,
+  checkInParty,
+  checkOutParty,
   createGuests,
+  freeBodiesOf,
   fullNameOf,
   homeOf,
   partyOf,
+  presentCount,
   STAY_NIGHTS,
+  type FreeBodies,
   type GuestOptions,
   type Guests,
 } from './guests';
 import { NO_HOME, type Home } from './homes';
+import { createRandom } from '../../layout/domain/random';
 
 const home = (key: string, beds: number): Home => ({ key, id: key, label: key, beds });
 
@@ -150,5 +156,125 @@ describe('bedCount', () => {
       expect(taken).toBeLessThanOrEqual(beds);
     }
     expect(bedCount(guestsWith({ homes: [] }))).toEqual({ beds: 0, taken: 0 });
+  });
+});
+
+/** A seeded generator of the shape `createGuests` holds, for the arrivals draw. */
+const drawOf = (seed: number) => createRandom(seed);
+
+/** The party with the most people in it, which is the one worth moving about. */
+const biggestParty = (guests: Guests): number => {
+  let best = 0;
+  for (let party = 1; party < guests.parties.length; party++) {
+    const bigger = guests.parties[party]!.members.length > guests.parties[best]!.members.length;
+    if (bigger) best = party;
+  }
+  return best;
+};
+
+describe('checking out and checking in', () => {
+  it('frees the beds and the bodies of a party that leaves', () => {
+    const guests = guestsWith();
+    const party = biggestParty(guests);
+    const members = guests.parties[party]!.members;
+    const lodging = guests.home[members[0]!]!;
+    const freeBefore = guests.freeBeds[lodging]!;
+    const before = bedCount(guests).taken;
+
+    const left = checkOutParty(guests, party);
+
+    expect(left).toEqual([...members]);
+    expect(guests.freeBeds[lodging]).toBe(freeBefore + members.length);
+    expect(bedCount(guests).taken).toBe(before - members.length);
+    for (const person of members) {
+      expect(guests.present[person]).toBe(0);
+      expect(homeOf(guests, person)).toBeNull();
+    }
+    expect(freeBodiesOf(guests).adults.length + freeBodiesOf(guests).children.length).toBe(
+      members.length,
+    );
+    // Asking twice takes nothing more back: the beds are already theirs again.
+    expect(checkOutParty(guests, party)).toEqual([]);
+    expect(guests.freeBeds[lodging]).toBe(freeBefore + members.length);
+  });
+
+  it('fills free bodies and never rewrites what a body is drawn as', () => {
+    const guests = guestsWith();
+    const child = Array.from(guests.child);
+    const variant = Array.from(guests.variant);
+    checkOutParty(guests, biggestParty(guests));
+
+    const free = freeBodiesOf(guests);
+    const party = checkInParty(guests, { random: drawOf(1), day: 6, free });
+
+    expect(party).not.toBeNull();
+    for (const person of party!.members) {
+      expect(guests.present[person]).toBe(1);
+      expect(guests.child[person], 'a body may never be redrawn').toBe(child[person]);
+      expect(guests.variant[person]).toBe(variant[person]);
+      expect(fullNameOf(guests, person).endsWith(party!.family)).toBe(true);
+    }
+    expect(Array.from(guests.child)).toEqual(child);
+    expect(Array.from(guests.variant)).toEqual(variant);
+  });
+
+  it('cuts a party down to the bodies it can actually be given', () => {
+    const guests = guestsWith();
+    // Everybody away but one adult body and one child body.
+    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
+    const free = freeBodiesOf(guests);
+    const one: FreeBodies = { adults: [free.adults[0]!], children: [free.children[0]!] };
+
+    const party = checkInParty(guests, { random: drawOf(2), day: 3, free: one });
+
+    expect(party!.members.length).toBeLessThanOrEqual(2);
+    expect(guests.child[party!.members[0]!], 'adults come first').toBe(0);
+    expect(one.adults).toEqual([]);
+  });
+
+  it('creates no party at all when no adult body is free', () => {
+    const guests = guestsWith();
+    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
+    const free = freeBodiesOf(guests);
+    const childrenOnly: FreeBodies = { adults: [], children: [...free.children] };
+    const before = guests.parties.length;
+
+    expect(checkInParty(guests, { random: drawOf(3), day: 1, free: childrenOnly })).toBeNull();
+    expect(guests.parties.length, 'no party is pushed either').toBe(before);
+    expect(childrenOnly.children.length, 'the child bodies go back').toBe(free.children.length);
+  });
+
+  it('keeps the present count and the beds taken agreeing over a round trip', () => {
+    const guests = guestsWith();
+    const before = { present: presentCount(guests), beds: bedCount(guests) };
+    const party = biggestParty(guests);
+    const size = guests.parties[party]!.members.length;
+
+    checkOutParty(guests, party);
+    expect(presentCount(guests)).toBe(before.present - size);
+    expect(bedCount(guests).taken).toBe(before.beds.taken - size);
+
+    const free = freeBodiesOf(guests);
+    const arrived = checkInParty(guests, { random: drawOf(4), day: 9, free })!;
+    expect(presentCount(guests)).toBe(before.present - size + arrived.members.length);
+    expect(bedCount(guests)).toEqual({
+      beds: before.beds.beds,
+      taken: before.beds.taken - size + arrived.members.length,
+    });
+  });
+
+  it('stamps an arriving party with the day it checked in and a stay of its own', () => {
+    const guests = guestsWith();
+    checkOutParty(guests, biggestParty(guests));
+    const free = freeBodiesOf(guests);
+    const party = checkInParty(guests, { random: drawOf(5), day: 12, free })!;
+
+    const nights = guests.nights[party.members[0]!]!;
+    expect(nights).toBeGreaterThanOrEqual(STAY_NIGHTS.min);
+    expect(nights).toBeLessThanOrEqual(STAY_NIGHTS.max);
+    for (const person of party.members) {
+      expect(guests.arrivedOn[person]).toBe(12);
+      expect(guests.nights[person], 'one stay per party').toBe(nights);
+    }
   });
 });

@@ -301,6 +301,21 @@ export interface VoxelModelSource {
    */
   readonly groundDecides?: boolean;
   /**
+   * Whether this object is a way in and out of the resort: where guests check in
+   * and where they walk out at the end of a stay.
+   *
+   * Declared on the art for {@link ModelVenue}'s reason - the gate is the gate
+   * because of what it is, and a list of ids in `src/` would be a second place
+   * to change it. A plot with nothing declaring it is a plot nobody can arrive
+   * at or leave, which is a real state the HUD says out loud rather than an
+   * error.
+   *
+   * Not a `venue`: a gate is not somewhere a guest decides to go, and one in the
+   * venue list would have a bored family queueing at it. See
+   * `sim/domain/gateways.ts`.
+   */
+  readonly gateway?: boolean;
+  /**
    * Colours that glow: they are drawn unlit at full brightness instead of being
    * shaded, so a flame or a lamp head still reads as lit after dark.
    */
@@ -371,6 +386,8 @@ export interface VoxelModel {
   readonly tiles: TileFootprint;
   /** Whether the ground decides where this goes; see {@link VoxelModelSource}. */
   readonly groundDecides: boolean;
+  /** Whether guests arrive and leave here; see {@link VoxelModelSource}. */
+  readonly gateway: boolean;
   /** Bounding box of the painted voxels, in voxels. */
   readonly width: number;
   readonly height: number;
@@ -492,6 +509,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     category: source.category,
     tiles: source.tiles,
     groundDecides: source.groundDecides ?? false,
+    gateway: source.gateway ?? false,
     width: maxX - minX + 1,
     height: maxY - minY + 1,
     depth: maxZ - minZ + 1,

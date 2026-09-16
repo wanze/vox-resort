@@ -15,6 +15,7 @@ import { createGuests, fullNameOf, type Guests } from '../../guests/domain/guest
 import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { shoreFor } from '../../layout/domain/shoreline';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { createHappiness } from '../../sim/domain/happiness';
 import { createNeeds, NEEDS, type Needs } from '../../sim/domain/needs';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
@@ -85,6 +86,9 @@ const at = (key: string, id: string, tileX = 3, tileZ = 7): Placement => ({
   depth: TILE_VOXELS,
 });
 
+/** A mood column for a registry: everybody at the start level, which is what a fresh plot has. */
+const moodOf = (guests: Guests) => createHappiness(guests.count);
+
 describe('guestView', () => {
   it('names the guest and lists their whole party, themselves included, in party order', () => {
     const guests = guestsOf();
@@ -92,7 +96,7 @@ describe('guestView', () => {
     const person = Array.from({ length: guests.count }, (_, i) => i).find(
       (i) => guests.parties[guests.party[i]!]!.members.length > 2,
     )!;
-    const view = guestView(guests, needsOf(guests), NO_VENUES, person, 0, HERE);
+    const view = guestView(guests, needsOf(guests), moodOf(guests), NO_VENUES, person, 0, HERE);
     const party = guests.parties[guests.party[person]!]!;
     expect(view.kind).toBe('guest');
     expect(view.name).toBe(fullNameOf(guests, person));
@@ -111,9 +115,9 @@ describe('guestView', () => {
     const homeless = guests.home.indexOf(NO_HOME);
     expect(homeless, 'everybody had a bed').toBeGreaterThanOrEqual(0);
     const needs = needsOf(guests);
-    expect(guestView(guests, needs, NO_VENUES, homeless, 0, HERE).home).toBeNull();
+    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, homeless, 0, HERE).home).toBeNull();
     const housed = guests.home.findIndex((index) => index !== NO_HOME);
-    const view = guestView(guests, needs, NO_VENUES, housed, 0, HERE);
+    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, housed, 0, HERE);
     expect(view.home).toEqual({
       key: guests.homes[guests.home[housed]!]!.key,
       label: guests.homes[guests.home[housed]!]!.label,
@@ -123,7 +127,7 @@ describe('guestView', () => {
   it('counts the nights left from the day it is, past zero once the stay is over', () => {
     const guests = guestsOf();
     const needs = needsOf(guests);
-    const view = (day: number) => guestView(guests, needs, NO_VENUES, 0, day, HERE);
+    const view = (day: number) => guestView(guests, needs, moodOf(guests), NO_VENUES, 0, day, HERE);
     const { arrivedOn, nights } = view(0);
     expect(view(0).nightsLeft).toBe(arrivedOn + nights);
     expect(view(4).nightsLeft).toBe(arrivedOn + nights - 4);
@@ -133,7 +137,7 @@ describe('guestView', () => {
   it('carries all five need levels, in the order the HUD lists them', () => {
     const guests = guestsOf();
     const needs = needsOf(guests);
-    const view = guestView(guests, needs, NO_VENUES, 3, 0, HERE);
+    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE);
     expect(view.needs.map((entry) => entry.need)).toEqual([...NEEDS]);
     for (const entry of view.needs) {
       expect(entry.level).toBeCloseTo(needs.level[entry.need][3]!, 5);
@@ -143,18 +147,20 @@ describe('guestView', () => {
   it('wants nothing from a guest who has everything', () => {
     const guests = guestsOf();
     const bakery = venuesOn([at('bakery#0', 'bakery')]);
-    expect(guestView(guests, needsOf(guests, 1, 3), bakery, 3, 0, HERE).wants).toBeNull();
+    expect(
+      guestView(guests, needsOf(guests, 1, 3), moodOf(guests), bakery, 3, 0, HERE).wants,
+    ).toBeNull();
   });
 
   it('names the bakery for a hungry guest, and nowhere when none is standing', () => {
     const guests = guestsOf();
     const needs = needsOf(guests, 0, 3);
     const bakery = venuesOn([at('bakery#0', 'bakery')]);
-    expect(guestView(guests, needs, bakery, 3, 0, HERE).wants).toEqual({
+    expect(guestView(guests, needs, moodOf(guests), bakery, 3, 0, HERE).wants).toEqual({
       need: 'hunger',
       label: 'Bakery',
     });
-    expect(guestView(guests, needs, NO_VENUES, 3, 0, HERE).wants).toBeNull();
+    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE).wants).toBeNull();
   });
 
   it('chooses from where the guest is standing, not from the corner of the plot', () => {
@@ -166,10 +172,12 @@ describe('guestView', () => {
       at('bakery#0', 'bakery', 1, 1),
       at('restaurant#0', 'restaurant', 90, 1),
     ]);
-    expect(guestView(guests, needs, venues, 3, 0, doorOf(venues[0]!)).wants?.label).toBe('Bakery');
-    expect(guestView(guests, needs, venues, 3, 0, doorOf(venues[1]!)).wants?.label).toBe(
-      'Restaurant',
-    );
+    expect(
+      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[0]!)).wants?.label,
+    ).toBe('Bakery');
+    expect(
+      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[1]!)).wants?.label,
+    ).toBe('Restaurant');
   });
 });
 

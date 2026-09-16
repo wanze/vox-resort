@@ -6,12 +6,14 @@ import {
   createCrowd,
   holdAt,
   holdOnSeat,
+  isOffPlot,
   isRoaming,
   isSeated,
   isWaiting,
   MAX_STEP,
   MAX_SUBSTEPS,
   ON_SAND,
+  putOnPlot,
   releaseTo,
   reseatCrowd,
   RESTING,
@@ -20,6 +22,7 @@ import {
   seatIsFree,
   stepCrowd,
   stepOntoSand,
+  takeOffPlot,
   WALK_SPEED,
   walkSandTo,
   type Crowd,
@@ -1012,6 +1015,46 @@ describe('the people the simulation holds still', () => {
     expect(isWaiting(reseated, 0)).toBe(false);
     run(reseated, 20);
     expect(Math.hypot(reseated.x[0]! - SPOT.x, reseated.z[0]! - SPOT.z)).toBeGreaterThan(1);
+  });
+});
+
+describe('the people who are not on the plot at all', () => {
+  /** Where somebody is stood down: the middle of the street, off-node. */
+  const SPOT = { x: 4.5 * TILE_VOXELS, y: walkingSurface(0), z: 2 };
+
+  it('stands somebody taken off the plot still, and never steps them', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 4, variants: 2, seed: 51 });
+    expect(isOffPlot(crowd, 0)).toBe(false);
+    takeOffPlot(crowd, 0, SPOT.x, SPOT.y, SPOT.z);
+    expect(isOffPlot(crowd, 0)).toBe(true);
+    for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.x[0]).toBeCloseTo(SPOT.x);
+    expect(crowd.y[0]).toBeCloseTo(SPOT.y);
+    expect(crowd.z[0]).toBeCloseTo(SPOT.z);
+    // Everybody else carried on, so this is one body put away and not a dead crowd.
+    expect(crowd.x[1]).not.toBeCloseTo(crowd.fromX[1]!);
+  });
+
+  it('walks somebody put back on the plot again, from the node they were put back at', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 2, variants: 1, seed: 52 });
+    takeOffPlot(crowd, 0, SPOT.x, SPOT.y, SPOT.z);
+    putOnPlot(crowd, 0, 8);
+    expect(isOffPlot(crowd, 0)).toBe(false);
+    expect(crowd.node[0]).toBe(8);
+    run(crowd, 30);
+    expect(Math.hypot(crowd.x[0]! - SPOT.x, crowd.z[0]! - SPOT.z)).toBeGreaterThan(TILE_VOXELS);
+  });
+
+  it('leaves them off the plot, and where they stand, when the graph is rebuilt', () => {
+    const crowd = createCrowd({ network: networkOf(street(12)), count: 4, variants: 2, seed: 53 });
+    takeOffPlot(crowd, 0, SPOT.x, SPOT.y, SPOT.z);
+    const reseated = reseatCrowd(crowd, networkOf(street(14)));
+    expect(isOffPlot(reseated, 0)).toBe(true);
+    run(reseated, 20);
+    expect(reseated.x[0]).toBeCloseTo(SPOT.x);
+    expect(reseated.z[0]).toBeCloseTo(SPOT.z);
+    // Somebody who was walking was re-anchored, so the reseat did run.
+    expect(isWaiting(reseated, 1)).toBe(false);
   });
 });
 

@@ -88,6 +88,7 @@ import {
   holdOnSeat,
   isWaiting,
   ON_SAND,
+  putOnPlot,
   releaseTo,
   RESTING,
   seatIsFree,
@@ -109,6 +110,7 @@ import {
   setPartyGoal,
   type Goals,
 } from './goals';
+import { type Gateway } from './gateways';
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
@@ -269,12 +271,63 @@ export interface Router {
    * Throws away every field, every lane, every goal, every visit and every
    * night's sleep: the graph changed.
    */
-  rebuild(venues: readonly Venue[], lodgings: readonly Lodging[], network: WalkNetwork): void;
+  rebuild(
+    venues: readonly Venue[],
+    lodgings: readonly Lodging[],
+    gateways: readonly Gateway[],
+    network: WalkNetwork,
+  ): void;
+  /**
+   * Sends this person for the gate: their stay is over.
+   *
+   * Their party's goal is cleared and anybody asleep is got up. Anybody inside a
+   * venue or in a line is left alone - nobody is dragged out of a restaurant to
+   * catch a coach - and they walk out when the visit ends.
+   *
+   * Asked once a day of everybody whose nights are up, so asking twice about the
+   * same person is free and changes nothing.
+   */
+  sendHome(person: number): void;
+  /**
+   * Puts somebody who has just checked in onto the plot at a node, walking from
+   * it. Whatever the body was doing before it was emptied is forgotten.
+   */
+  admit(person: number, node: number): void;
+  /**
+   * Forgets everything this router holds about one person: their visit, their
+   * place in a line, their bed, their pitch on the sand and their goal.
+   *
+   * Called for **every** member of a party that has just checked out, and not
+   * only for the one who reached the gate: a guest who was having lunch when
+   * their family left is taken off the plot where they sit, and a visit left
+   * standing would end a few ticks later and walk an empty body out of the
+   * restaurant door. Same for a bed, a queue and a towel on the sand.
+   *
+   * Safe to call twice, and safe to call about somebody the router has nothing
+   * on.
+   */
+  forget(person: number): void;
+  /**
+   * A node at one of the gates, for {@link admit} to put an arriving guest on,
+   * or -1 on a plot with no gate standing or none the paving reaches.
+   *
+   * On the router because the gates are: `showcase.ts` should no more know which
+   * node an entrance stands on than it knows which node a bakery does.
+   */
+  readonly arrivalNode: number;
   /** How many fields have actually been built, venues and lodgings both, for the stats readout. */
   readonly fieldCount: number;
   /** Everybody in bed right now: what the windows are lit from, and a stats row. */
   readonly asleepCount: number;
   isAsleep(person: number): boolean;
+  /**
+   * Whether this person is standing in a line right now.
+   *
+   * Read per tick for every guest on the plot - it is what `happiness.ts` costs
+   * a queue by - so it is one array lookup and no object, unlike
+   * {@link visitOf}, which is the inspector's reader for the same fact.
+   */
+  isWaitingAt(person: number): boolean;
   /**
    * The lodging a person is asleep in or walking home to, or null while the
    * night has nothing to do with where they are going. Read by the inspector.
@@ -298,7 +351,18 @@ export function createRouter(parts: {
   readonly venues: readonly Venue[];
   /** Where everybody sleeps, as it stands on the plot; see `lodgings.ts`. */
   readonly lodgings: readonly Lodging[];
+  /** The ways off the plot, as they stand on it; see `gateways.ts`. */
+  readonly gateways: readonly Gateway[];
   readonly network: WalkNetwork;
+  /**
+   * What to do about somebody who has just walked out of the gate.
+   *
+   * A callback rather than a call into `guests.ts`, because this module knows
+   * where people walk and not who they are: check-out frees a bed, a body and a
+   * name, and none of the three is a thing a flow field has an opinion about.
+   * See `showcase.ts`, which wires it to `checkOutParty` and `takeOffPlot`.
+   */
+  readonly onLeave: (person: number) => void;
   /**
    * The tick of the day it is now, 0..1439, late-bound for the reason the crowd
    * is: an arrival happens between ticks, and the clock is what knows the hour.
@@ -319,6 +383,7 @@ export function createRouter(parts: {
 
   let venues = withBeach(parts.venues, parts.network);
   let lodgings = parts.lodgings;
+  let gateways = parts.gateways;
   let network = parts.network;
   let index: NodeIndex = nodeIndexFor(network);
   /** One entry per venue, filled in on the first guest who walks to that one. */
@@ -333,6 +398,19 @@ export function createRouter(parts: {
   let errands = createErrands(guests.count);
   /** One entry per lodging, filled in on the first guest who walks home to it. */
   let homeFields: (FlowField | null)[] = lodgings.map(() => null);
+  /**
+   * The way out, swept from every gate's doors at once; built on the first guest
+   * to leave.
+   *
+   * One field for the whole plot rather than one per gate, because a guest goes
+   * home by whichever gate is nearest and a multi-source sweep is what says
+   * which that is - exactly as the beach is one venue entered at any gate.
+   */
+  let leavingField: FlowField | null = null;
+  /** The gates' own nodes, found once: the field's sources, and where an arrival is put on. */
+  let gateNodes: readonly number[] | null = null;
+  /** 1 for somebody whose stay is over and who is walking out; see {@link Router.sendHome}. */
+  let leaving = new Uint8Array(guests.count);
   let built = 0;
   /**
    * Which lodging each person sleeps in, or -1: their `Home` looked up once
@@ -458,6 +536,33 @@ export function createRouter(parts: {
     );
     sandFields[venue] = field;
     return field;
+  };
+
+  /**
+   * The way out, swept once from every gate's doors together. Null on a plot
+   * with no gate standing, or none any paving reaches - which is a plot nobody
+   * can leave, and a real state the HUD shows rather than an error.
+   */
+  const leavingFieldOf = (): FlowField | null => {
+    if (leavingField) return leavingField;
+    const sources = gateNodesOf();
+    if (sources.length === 0) return null;
+    leavingField = sweep(sources);
+    return leavingField;
+  };
+
+  /**
+   * Every node any gate is entered by, sorted and without duplicates: the
+   * sweep's sources, and where {@link Router.admit} stands an arriving guest.
+   */
+  const gateNodesOf = (): readonly number[] => {
+    if (gateNodes) return gateNodes;
+    const found = new Set<number>();
+    for (const gateway of gateways) {
+      for (const node of doorsFor(gateway, index).nodes) found.add(node);
+    }
+    gateNodes = [...found].toSorted((a, b) => a - b);
+    return gateNodes;
   };
 
   const homeFieldFor = (lodging: number): FlowField => {
@@ -1101,16 +1206,109 @@ export function createRouter(parts: {
    * step over the one tick that wakes somebody and leave them in bed a day.
    */
   const wakeWhoeverIsUp = (tickOfDay: number): void => {
-    for (let person = 0; person < guests.count && asleepCount > 0; person++) {
+    for (let person = 0; person < guests.count; person++) {
+      // Nobody left in bed: the rest of the registry is not worth walking.
+      if (asleepCount === 0) break;
       if (asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
-      asleep[person] = 0;
-      homeward[person] = 0;
-      asleepCount--;
       relieve(needs, person, NIGHT_RELIEF);
-      const door = doorOf[person]!;
-      doorOf[person] = -1;
-      if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
+      getUp(person);
     }
+  };
+
+  /**
+   * Out of bed and out of the door they came in by, with no relief of its own:
+   * the morning applies the night's, and a stay that ended overnight applies
+   * nothing at all.
+   */
+  const getUp = (person: number): void => {
+    asleep[person] = 0;
+    homeward[person] = 0;
+    asleepCount--;
+    const door = doorOf[person]!;
+    doorOf[person] = -1;
+    if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
+  };
+
+  /**
+   * Where somebody whose stay is over walks from here: the next node towards the
+   * nearest gate, -1 for somebody who has just reached one and is now off the
+   * plot, or {@link BY_DAY}.
+   *
+   * {@link BY_DAY} is somebody the gates cannot be reached from, or a plot with
+   * no gate standing at all. They carry on as any other guest would, venues and
+   * all, and are asked again on the next arrival: a guest who cannot reach a
+   * gate stays on the plot, which the HUD's guest count is what shows. There is
+   * no teleport.
+   *
+   * Asked **before** the night, so a guest whose last night is over walks out of
+   * the gate rather than back to a bed that is no longer theirs.
+   */
+  const leavingStep = (person: number, at: number): number => {
+    if (person < 0 || person >= goals.count || leaving[person] !== 1) return BY_DAY;
+    const field = leavingFieldOf();
+    const onward = field?.next[at] ?? -1;
+    if (onward < 0) return BY_DAY;
+    if (onward !== at) return onward;
+    leaveThePlot(person);
+    return -1;
+  };
+
+  /**
+   * At the gate, and out of it: their goal goes, their pitch goes, and whoever
+   * handed in {@link createRouter}'s `onLeave` takes them off the plot.
+   *
+   * The callback is the whole of what happens to them here. This module does not
+   * know what a check-out is, and `crowd.ts` does not know what a guest is; both
+   * of those are `showcase.ts`'s to join up.
+   */
+  const leaveThePlot = (person: number): void => {
+    forgetPerson(person);
+    parts.onLeave(person);
+  };
+
+  /** Everything this router holds about one person, let go; see {@link Router.forget}. */
+  const forgetPerson = (person: number): void => {
+    if (person < 0 || person >= goals.count) return;
+    leaving[person] = 0;
+    homeward[person] = 0;
+    if (asleep[person] === 1) {
+      asleep[person] = 0;
+      asleepCount--;
+    }
+    leaveVenue(occupancy, person);
+    leaveStay(person);
+    clearPartyGoal(goals, guests, person);
+    errands.venue[person] = -1;
+    errands.route[person] = null;
+    errands.back[person] = 0;
+    fetching[person] = -1;
+    stayRoutes[person] = null;
+    doorOf[person] = -1;
+  };
+
+  /**
+   * Where somebody with nothing else on walks from here: on to whatever they
+   * chose, or -1 to be left to wander.
+   *
+   * The whole of `step` that is about wanting something, split out for the
+   * reason `nightStep` and `leavingStep` are - `step` is four questions asked in
+   * order, and a reader should be able to see that it is.
+   */
+  const dayStep = (person: number, at: number): number => {
+    if (arriveIfThere(person, at)) return -1;
+    if (goals.venue[person] === NO_GOAL) decide(person, at);
+
+    const chosen = goals.venue[person]!;
+    if (chosen === NO_GOAL || chosen >= venues.length) return -1;
+    const onward = fieldFor(chosen).next[at] ?? -1;
+    // Unreachable from here, or a venue with no door at all. Forget it rather
+    // than ask again at every arrival: they wander on and decide afresh at the
+    // next node, which may well be one the venue can be reached from.
+    if (onward < 0) {
+      clearPartyGoal(goals, guests, person);
+      return -1;
+    }
+    return onward;
   };
 
   /**
@@ -1131,27 +1329,40 @@ export function createRouter(parts: {
     step(person, at) {
       if (at === ON_SAND) return alongTheSand(person);
       backOffTheSand(person);
+      const away = leavingStep(person, at);
+      if (away !== BY_DAY) return away;
       const night = nightStep(person, at);
       if (night !== BY_DAY) return night;
-      if (arriveIfThere(person, at)) return -1;
-      if (goals.venue[person] === NO_GOAL) decide(person, at);
-
-      const chosen = goals.venue[person]!;
-      if (chosen === NO_GOAL || chosen >= venues.length) return -1;
-      const onward = fieldFor(chosen).next[at] ?? -1;
-      // Unreachable from here, or a venue with no door at all. Forget it rather
-      // than ask again at every arrival: they wander on and decide afresh at the
-      // next node, which may well be one the venue can be reached from.
-      if (onward < 0) {
-        clearPartyGoal(goals, guests, person);
-        return -1;
-      }
-      return onward;
+      return dayStep(person, at);
     },
 
     offTheSand(person) {
       if (person < 0 || person >= goals.count || asleep[person] === 1) return false;
       return homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
+    },
+
+    sendHome(person) {
+      if (person < 0 || person >= goals.count || leaving[person] === 1) return;
+      leaving[person] = 1;
+      clearPartyGoal(goals, guests, person);
+      // Somebody in bed is got up, with no night's relief: their last night is
+      // behind them. Somebody inside a venue or in a line is left where they
+      // are, and `leavingStep` catches them when the visit lets them go.
+      if (asleep[person] === 1) getUp(person);
+    },
+
+    admit(person, node) {
+      if (person < 0 || person >= goals.count) return;
+      forgetPerson(person);
+      putOnPlot(crowd(), person, node);
+    },
+
+    forget(person) {
+      forgetPerson(person);
+    },
+
+    get arrivalNode() {
+      return gateNodesOf()[0] ?? -1;
     },
 
     tick(at) {
@@ -1181,9 +1392,10 @@ export function createRouter(parts: {
       sendOnErrands();
     },
 
-    rebuild(nextVenues, nextLodgings, nextNetwork) {
+    rebuild(nextVenues, nextLodgings, nextGateways, nextNetwork) {
       venues = withBeach(nextVenues, nextNetwork);
       lodgings = nextLodgings;
+      gateways = nextGateways;
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       fields = venues.map(() => null);
@@ -1191,6 +1403,14 @@ export function createRouter(parts: {
       sandRoutes = venues.map(() => null);
       errands = createErrands(guests.count);
       homeFields = nextLodgings.map(() => null);
+      leavingField = null;
+      gateNodes = null;
+      // Whoever was walking out when the plot was edited is simply asked again:
+      // `showcase.ts` re-sends everybody whose stay is over on the next day's
+      // pass, because their stay is still over. Nothing is lost but a few steps
+      // of the walk, and the alternative is a column of node indices that mean
+      // nothing on the graph that has just replaced them.
+      leaving = new Uint8Array(guests.count);
       built = 0;
       findHomes();
       // Everybody is woken, with no night's relief: a guest left asleep across
@@ -1236,6 +1456,10 @@ export function createRouter(parts: {
 
     isAsleep(person) {
       return asleep[person] === 1;
+    },
+
+    isWaitingAt(person) {
+      return occupancy.state[person] === VISIT.waiting;
     },
 
     homewardTo(person) {

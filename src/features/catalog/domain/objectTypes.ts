@@ -183,6 +183,14 @@ export function bedsOf(id: string): number {
 }
 
 /**
+ * Whether a type is a way in and out of the resort. Off the model, for
+ * {@link venueOf}'s reason - see `gateway` in `voxel-gen/voxelgen.ts`.
+ */
+export function isGateway(id: string): boolean {
+  return OBJECT_TYPES.find((type) => type.id === id)?.model.gateway ?? false;
+}
+
+/**
  * Every material the scene can paint with: one per distinct colour across
  * everything the app draws. Each becomes one DVE voxel and one DVE rendered
  * material.

@@ -555,6 +555,77 @@ walks them there.
 
 The HUD's `Asleep` row is guests in bed over guests with a bed.
 
+## Arriving and leaving
+
+`sim/domain/rating.ts` says what the resort is worth, `sim/domain/checkIn.ts`
+says who turns up because of it, and the router walks whoever is finished to a
+gate. This is the half of the loop that makes what you build change _how many_
+people there are rather than only what they do.
+
+- **A slot is a body, and the person inside it changes.** `crowdField.ts`
+  decides once, when the crowd is built, which person indices each
+  `InstancedMesh` draws, off `crowd.variant` - so nobody may ever be redrawn as
+  somebody else. The registry therefore keeps its capacity and gains a `present`
+  column: check-out empties a body, check-in deals a new party into free bodies
+  of the right shape. A family wanting three children with one child body free
+  arrives as a family of three, and a party with no adult body free does not
+  arrive at all. `crowd.offPlot` is the same fact where the crowd can read it:
+  held still, not drawn, never asked anything, and left alone by `reseatCrowd`.
+
+- **Check-out is a walk, not a disappearance.** Once a simulated day every
+  present guest whose `arrivedOn + nights` is behind the calendar is sent for the
+  gate. The way out is one flow field swept from every gate's doors at once, so a
+  guest leaves by whichever is nearest, exactly as the beach is one venue entered
+  at any gate. Leaving is asked **before** bedtime, so nobody whose last night is
+  over goes back to a bed that is not theirs; and nobody is dragged out of a
+  restaurant to catch a coach - they walk out when the visit ends.
+
+- **The gate is declared on the art.** `gateway: true` on `VoxelModelSource`,
+  read back through `isGateway` and collected by `gatewaysOn`, for
+  `ModelVenue`'s reason: a list of ids in `src/` would be a second place to
+  change it. A gate is deliberately **not** a venue - one in the venue list would
+  have a bored family queueing at it. A plot with no gate standing takes nobody
+  and lets nobody go, which the HUD's `Guests` row is what shows.
+
+- **Happiness follows the needs.** `happiness.ts` is a column beside `needs.ts`,
+  aged on the same ticks. It drifts towards the plain mean of a guest's five need
+  levels at 0.15 an hour, and standing in a line costs 0.3 an hour on top. It is
+  not weighted by `archetypes.ts`: those weights say what a guest will walk
+  _for_, which is a different question from whether they had a good week. It is
+  slow on purpose, so a rating says something about how the resort is built
+  rather than about the last ten minutes.
+
+- **The rating has two terms and no more.** Mean happiness carries three
+  quarters and the share of present guests with a bed carries the last quarter -
+  the one thing happiness cannot see, because a guest with nowhere to sleep
+  simply walks all night and their energy says so a day later. A resort with
+  nobody on it rates 3 stars, the benefit of the doubt, or an empty plot could
+  never fill. Money is **not** a term and must not become one; that is plan 024.
+
+- **Arrivals follow the rating, capped by the beds.** At eleven in the morning
+  the coaches come in: none at all at zero stars, and at five stars a quarter of
+  the beds standing free. Never more than the free beds, because a guest with
+  nowhere to sleep would be unhappy about it and drag the rating down - the
+  resort turns them away at the gate instead. `checkInDue` is asked with the
+  whole run of ticks the clock produced, so twelve ticks in one frame cannot step
+  over eleven o'clock. Every arrival gets needs and a mood drawn afresh: the body
+  they were dealt was somebody else's a week ago.
+
+- **A party that checks out is forgotten whole.** `Router.forget` is called for
+  every member and not only for the one at the gate: somebody who was having
+  lunch when their family left is taken off the plot where they sit, and a visit,
+  a bed, a queue or a towel on the sand left standing would end a few ticks later
+  and walk an empty body out of a door.
+
+- **What it does on the reference plot.** Seed 3, 112 by 100: 682 beds, 3 gates,
+  400 bodies. Three simulated days at `normal`, opened on day 2 - which is the
+  earliest a stay can be behind anybody, since `createGuests` spreads arrivals
+  over their own stays - gives 200 check-outs and 131 check-ins, ending with 331
+  guests on the plot and every one of them in a bed. `router.test.ts` runs it.
+
+The HUD's `Guests` row is guests on the plot over the bodies it was built for,
+and `Rating` is the stars. The inspector's `Mood` row is one guest's happiness.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`, so they
@@ -585,3 +656,4 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 | —       | Avoidance on the sand, between people, and for boats              | Landed             |
 | —       | People in the boats                                               | Landed             |
 | 7       | Measure: `?people=n`, a HUD count, a bench case, real costs above | `?people=n` landed |
+| —       | Stays that end, a rating, and the coaches that follow from it     | Landed             |

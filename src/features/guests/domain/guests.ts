@@ -26,9 +26,9 @@
  */
 
 import { createRandom } from '../../layout/domain/random';
-import { assignHomes, NO_HOME, type Home } from './homes';
+import { assignHomes, homeWithRoom, NO_HOME, type Home } from './homes';
 import { givenName } from './names';
-import { partiesFor, type Party } from './parties';
+import { partiesFor, partyShapeFor, type Party } from './parties';
 
 /** What a guest is called. Read only when somebody is looked at. */
 export interface GuestRecord {
@@ -59,9 +59,49 @@ export interface Guests {
    * that a child is drawn as a child.
    */
   readonly variant: Int32Array;
+  /**
+   * 1 for somebody who is on the plot right now; 0 for a body waiting to be
+   * filled.
+   *
+   * A column rather than a shorter registry, because a person index is a body
+   * the crowd's meshes were built around and may never be redrawn: check-out
+   * empties a body and check-in deals somebody new into it. See
+   * `crowd/domain/crowdField.ts`, and `Crowd.offPlot`, which is the same fact
+   * where the crowd can read it.
+   */
+  readonly present: Uint8Array;
+  /**
+   * Beds still free in each of {@link homes}, kept in step by check-in and
+   * check-out.
+   *
+   * Kept rather than recounted, because {@link homeWithRoom} is asked of it once
+   * per arriving party every morning and a recount is a pass over every guest.
+   */
+  readonly freeBeds: Int32Array;
   readonly people: readonly GuestRecord[];
+  /**
+   * Every party that has ever been on the plot, in the order they arrived.
+   *
+   * A departed party's entry stays where it is and a new one is pushed, so a
+   * party index means the same thing for as long as the resort stands: the
+   * router keys pitches, goals and bedtimes on it. See `sim/domain/night.ts`.
+   */
   readonly parties: readonly Party[];
   readonly homes: readonly Home[];
+}
+
+/**
+ * Free bodies to deal an arriving party into, by shape.
+ *
+ * Built once per check-in pass and spent as parties are dealt, because the
+ * question - which slots are empty - is the same for every party arriving on
+ * one morning, and answering it per party is a pass over the registry per
+ * coach. See {@link checkInParty}.
+ */
+export interface FreeBodies {
+  /** Person indices of empty adult bodies, and of empty child ones. */
+  readonly adults: number[];
+  readonly children: number[];
 }
 
 export interface GuestOptions {
@@ -102,6 +142,22 @@ function adultVariant(random: () => number, variants: number, childVariant: numb
   return excludes && drawn >= childVariant ? drawn + 1 : drawn;
 }
 
+/**
+ * How long one stay runs, drawn from {@link STAY_NIGHTS}.
+ *
+ * One rule for the parties who opened the plot and for everybody who checks in
+ * afterwards, so a guest arriving on day six stays the way the first ones did.
+ */
+function stayNights(random: () => number): number {
+  return (
+    STAY_NIGHTS.min +
+    Math.min(
+      STAY_NIGHTS.max - STAY_NIGHTS.min,
+      Math.floor(random() * (STAY_NIGHTS.max - STAY_NIGHTS.min + 1)),
+    )
+  );
+}
+
 export function createGuests(options: GuestOptions): Guests {
   const count = Math.max(0, Math.floor(options.count));
   const { homes, variants, childVariant } = options;
@@ -110,7 +166,7 @@ export function createGuests(options: GuestOptions): Guests {
   // Drawn in a fixed order - parties, then names, then stays - so that changing
   // how one of them is drawn does not reshuffle the others more than it must.
   const { parties, party, child } = partiesFor({ count, random });
-  const { byParty } = assignHomes(parties, homes);
+  const { byParty, freeBeds } = assignHomes(parties, homes);
 
   const variant = new Int32Array(count);
   const people: GuestRecord[] = [];
@@ -127,12 +183,7 @@ export function createGuests(options: GuestOptions): Guests {
   const nights = new Int32Array(count);
   for (let p = 0; p < parties.length; p++) {
     // One stay per party: they came together and they leave together.
-    const stay =
-      STAY_NIGHTS.min +
-      Math.min(
-        STAY_NIGHTS.max - STAY_NIGHTS.min,
-        Math.floor(random() * (STAY_NIGHTS.max - STAY_NIGHTS.min + 1)),
-      );
+    const stay = stayNights(random);
     const arrived = -Math.floor(random() * stay);
     for (const person of parties[p]!.members) {
       home[person] = byParty[p]!;
@@ -141,7 +192,126 @@ export function createGuests(options: GuestOptions): Guests {
     }
   }
 
-  return { count, party, home, arrivedOn, nights, child, variant, people, parties, homes };
+  return {
+    count,
+    party,
+    home,
+    arrivedOn,
+    nights,
+    child,
+    variant,
+    // Everybody starts present, exactly as before this was a column: the opening
+    // scene, the seeded draws and the benchmark's replay are all untouched on
+    // frame one, and the plot only begins to change once a stay runs out.
+    present: new Uint8Array(count).fill(1),
+    freeBeds,
+    people,
+    // Copied into an array of this module's own: a departed party's entry stays
+    // where it is and an arriving one is pushed, so `partiesFor`'s result is not
+    // the list that grows. See {@link Guests.parties}.
+    parties: [...parties],
+    homes,
+  };
+}
+
+/**
+ * Takes a party off the plot: their beds go back, their slots go into the free
+ * pool, and their names stay until somebody else is dealt into the same bodies.
+ *
+ * Hands back the person indices that just left, so the caller can stand them
+ * down and the crowd can stop drawing them.
+ *
+ * Their home **is** cleared, unlike the rest of their biography: a bed handed
+ * back and still pointed at is two answers to one question, and it is the one
+ * everything else reads - `homeOf`, the router's `findHomes`, and the resident
+ * list the inspector shows for a lodging.
+ */
+export function checkOutParty(guests: Guests, party: number): readonly number[] {
+  const members = guests.parties[party]?.members ?? [];
+  const left: number[] = [];
+  for (const person of members) {
+    if (guests.present[person] !== 1) continue;
+    guests.present[person] = 0;
+    const home = guests.home[person]!;
+    if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! + 1;
+    guests.home[person] = NO_HOME;
+    left.push(person);
+  }
+  return left;
+}
+
+/** Every empty body on the plot, adults and children apart. See {@link FreeBodies}. */
+export function freeBodiesOf(guests: Guests): FreeBodies {
+  const free: FreeBodies = { adults: [], children: [] };
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1) continue;
+    (guests.child[person] === 1 ? free.children : free.adults).push(person);
+  }
+  return free;
+}
+
+/**
+ * Deals a new party into free slots, and gives it a home if one has room.
+ *
+ * The draw asks for a shape the way the opening resort's parties were drawn -
+ * see `partyShapeFor`. **The bodies decide what it gets**: a family wanting two
+ * adults and three children with only one child body free arrives as a family of
+ * three. A party that cannot be given even one adult body is not created at all
+ * and null comes back, because a body is a mesh slot and nobody may be redrawn
+ * as somebody else - see "A slot's body never changes" and `crowdField.ts`.
+ *
+ * `child` and `variant` are never written: they are the body's, and they are
+ * what chose the slot.
+ */
+export function checkInParty(
+  guests: Guests,
+  options: {
+    readonly random: () => number;
+    readonly day: number;
+    readonly free: FreeBodies;
+  },
+): Party | null {
+  const { random, day, free } = options;
+  const shape = partyShapeFor(random);
+  // Adults first, so `Party.members` is adults first and a party cut to one
+  // person is one adult - never a child on holiday alone, as `partiesFor` puts it.
+  const members = [
+    ...free.adults.splice(0, Math.min(shape.adults, free.adults.length)),
+    ...free.children.splice(0, Math.min(shape.children, free.children.length)),
+  ];
+  // No adult body free, so there is nobody to bring the children: whatever was
+  // taken goes back where it came from and the coach arrives without them.
+  if (members.length === 0 || guests.child[members[0]!] === 1) {
+    free.children.unshift(...members);
+    return null;
+  }
+  const party: Party = { kind: shape.kind, family: shape.family, members };
+  const index = guests.parties.length;
+  (guests.parties as Party[]).push(party);
+
+  const home = homeWithRoom(guests.freeBeds, members.length);
+  if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! - members.length;
+  const nights = stayNights(random);
+  const people = guests.people as GuestRecord[];
+  for (const person of members) {
+    guests.party[person] = index;
+    guests.home[person] = home;
+    guests.arrivedOn[person] = day;
+    guests.nights[person] = nights;
+    guests.present[person] = 1;
+    people[person] = {
+      given: givenName(random, guests.child[person] === 1),
+      family: shape.family,
+    };
+  }
+  return party;
+}
+
+/** How many of the bodies the plot was built for are holding a guest right now. */
+export function presentCount(guests: Guests): number {
+  let present = 0;
+  for (let person = 0; person < guests.count; person++) present += guests.present[person]!;
+  return present;
 }
 
 /** `"Elena Marchetti"`, for the HUD. */
@@ -165,6 +335,8 @@ export function homeOf(guests: Guests, person: number): Home | null {
 export function bedCount(guests: Guests): { readonly beds: number; readonly taken: number } {
   const beds = guests.homes.reduce((sum, home) => sum + home.beds, 0);
   let taken = 0;
-  for (let i = 0; i < guests.count; i++) if (guests.home[i] !== NO_HOME) taken++;
+  for (let i = 0; i < guests.count; i++) {
+    if (guests.present[i] === 1 && guests.home[i] !== NO_HOME) taken++;
+  }
   return { beds, taken };
 }

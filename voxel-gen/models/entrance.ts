@@ -105,6 +105,9 @@ export default defineModel({
   label: 'Entrance',
   category: 'amenities',
   tiles: { x: 4, z: 1 },
+  // The way in and out of the resort: guests check in here and walk out through
+  // it when their stay is over. See `gateway` in `voxelgen.ts`.
+  gateway: true,
   emissive: [LANTERN],
   lights: [
     // The two beacons on the cornice, which are what lights the approach.

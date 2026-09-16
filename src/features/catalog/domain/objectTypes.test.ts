@@ -7,6 +7,7 @@ import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
   allMaterials,
   bedsOf,
+  isGateway,
   emissiveByModelId,
   materialColorsById,
   OBJECT_TYPES,
@@ -250,6 +251,17 @@ describe('venues', () => {
     const types = venueTypes();
     expect(types.length).toBeGreaterThan(0);
     for (const type of types) expect(type.venue, type.id).not.toBeNull();
+  });
+
+  it('says which types are a way in and out of the resort, and how many there are', () => {
+    expect(isGateway('entrance')).toBe(true);
+    expect(isGateway('bungalow')).toBe(false);
+    expect(isGateway('not-a-model'), 'an unknown id is not a gate').toBe(false);
+    // A gate is never a venue: one in the venue list would have a bored family
+    // queueing at it. See `sim/domain/gateways.ts`.
+    for (const type of venueTypes()) expect(isGateway(type.id), type.id).toBe(false);
+    const gates = OBJECT_TYPES.filter((type) => isGateway(type.id));
+    expect(gates.length, 'a plot nobody can arrive at').toBeGreaterThan(0);
   });
 
   it('always has somewhere to put people', () => {

@@ -222,6 +222,10 @@ function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null)
   for (let index = 0; index < part.people.length; index++) {
     const person = part.people[index]!;
     if (person >= crowd.count) break;
+    // Off the plot: checked out, and their body is waiting for whoever checks in
+    // next. A `continue` and not a `break` - the people of a mesh are in person
+    // order, and slot 7 being empty says nothing about slot 8.
+    if (crowd.offPlot[person] === 1) continue;
     if (view) {
       const dx = crowd.x[person]! - view.x;
       const dy = crowd.y[person]! + middle - view.y;

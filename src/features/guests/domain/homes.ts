@@ -55,13 +55,29 @@ export function assignHomes(
 
   for (const index of order) {
     const size = parties[index]!.members.length;
-    for (let home = 0; home < homes.length; home++) {
-      if (freeBeds[home]! < size) continue;
-      byParty[index] = home;
-      freeBeds[home] = freeBeds[home]! - size;
-      break;
-    }
+    const home = homeWithRoom(freeBeds, size);
+    if (home === NO_HOME) continue;
+    byParty[index] = home;
+    freeBeds[home] = freeBeds[home]! - size;
   }
 
   return { byParty, freeBeds };
+}
+
+/**
+ * The first home with room for a party of this size, or {@link NO_HOME}.
+ *
+ * {@link assignHomes}'s inner loop, lifted out so an arriving party can ask the
+ * same question of the beds that are free now. Homes are sorted biggest first,
+ * so the first that fits is the same greedy choice the opening assignment makes
+ * - one rule and not two, which is what keeps a guest who checks in on day six
+ * housed the way the guests who opened the plot were.
+ *
+ * A party of nobody fits anywhere, and takes the first home; nothing asks.
+ */
+export function homeWithRoom(freeBeds: Int32Array, size: number): number {
+  for (let home = 0; home < freeBeds.length; home++) {
+    if (freeBeds[home]! >= size) return home;
+  }
+  return NO_HOME;
 }

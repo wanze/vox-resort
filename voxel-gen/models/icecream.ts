@@ -11,6 +11,8 @@ export default defineModel({
   category: 'amenities',
   tiles: { x: 1, z: 1 },
   venue: {
+    // a cart with a parasol, served standing in the open.
+    shelter: 'open',
     role: 'food',
     satisfies: [
       { need: 'hunger', amount: 0.25 },

@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import { StatRow } from './StatRow';
 import type { ShowcaseStats } from '../../../app/showcase';
+import type { Weather } from '../../sim/domain/weather';
 
 export interface RenderStatsProps {
   readonly stats: ShowcaseStats | null;
@@ -20,6 +21,28 @@ export interface FrameCostElements {
 }
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
+
+/**
+ * What each kind of day is called, and what it does, in the panel's own words.
+ *
+ * Here rather than in `sim/domain/weather.ts` for the reason `InspectPanel.tsx`
+ * keeps its own `NEED_LABELS`: the domain should not have to be edited to change
+ * a phrase.
+ */
+const WEATHER_LABELS: { readonly [kind in Weather]: string } = {
+  clear: 'Clear',
+  rain: 'Rain',
+  storm: 'Storm',
+  heatwave: 'Heatwave',
+};
+
+/** What today's weather is doing to the resort, for the row's note. */
+const WEATHER_NOTES: { readonly [kind in Weather]: string } = {
+  clear: 'everywhere open',
+  rain: 'everything without a roof is shut',
+  storm: 'everything without a roof is shut, and it is tiring',
+  heatwave: 'everywhere open, and everybody is thirsty',
+};
 
 const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
@@ -82,6 +105,9 @@ export function RenderStats({
       </StatRow>
       <StatRow label="Guests" note="on the plot now, of the bodies it was built for">
         {formatNumber(stats.guests.present)} / {formatNumber(stats.guests.capacity)}
+      </StatRow>
+      <StatRow label="Weather" note={WEATHER_NOTES[stats.weather]}>
+        {WEATHER_LABELS[stats.weather]}
       </StatRow>
       <StatRow label="Rating" note="out of five, from how happy they are and how many have a bed">
         {stats.rating.toFixed(1)}

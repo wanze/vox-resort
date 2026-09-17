@@ -121,6 +121,8 @@ export default defineModel({
    */
   lights: [{ x: 15, y: 12, z: 14, color: LANTERN, intensity: 100, distance: 52 }],
   venue: {
+    // a palapa over the servery, and the stools out on the terrace.
+    shelter: 'open',
     role: 'drink',
     satisfies: [
       { need: 'thirst', amount: 1 },

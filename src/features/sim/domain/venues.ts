@@ -15,6 +15,7 @@ import type {
   GuestNeed,
   ModelDoor,
   NeedRelief,
+  Shelter,
   VenueRole,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { objectTypeById, venueOf } from '../../catalog/domain/objectTypes';
@@ -32,6 +33,17 @@ export interface Venue {
   readonly satisfies: readonly NeedRelief[];
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };
+  /**
+   * Whether guests here are under cover, which is what decides whether the
+   * place is open in the rain. See `weather.ts`.
+   *
+   * Optional here as it is on the art, and read through {@link shelterOf}:
+   * omit it and the venue is `'covered'`, so a fixture written before there was
+   * any weather behaves exactly as it did. `venuesOn` always sets it, so a
+   * venue standing on the plot has carried the model's declaration since it was
+   * built.
+   */
+  readonly shelter?: Shelter;
   /** Centre of the footprint, in world voxels: what a distance is measured to. */
   readonly x: number;
   readonly z: number;
@@ -79,6 +91,7 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
       satisfies: venue.satisfies ?? [],
       capacity: venue.capacity,
       dwellSeconds: venue.dwellSeconds,
+      shelter: venue.shelter ?? 'covered',
       // The placement's own corner plus half its extent: a distance is measured
       // to the middle of a building rather than to whichever corner it was
       // drawn from.
@@ -94,6 +107,18 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
     });
   }
   return venues;
+}
+
+/**
+ * Whether guests at this venue are under cover.
+ *
+ * The one place the `'covered'` fallback lives, so a venue that declares
+ * nothing - a fixture, or a model nobody has looked at yet - reads the same way
+ * everywhere and the default is written out once. See `ModelVenue.shelter` for
+ * why `'covered'` is the safe direction.
+ */
+export function shelterOf(venue: Venue): Shelter {
+  return venue.shelter ?? 'covered';
 }
 
 /**

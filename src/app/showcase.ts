@@ -88,7 +88,7 @@ import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
 import { levelHeight } from '../features/layout/domain/elevation';
 import type { WorldBounds } from '../features/layout/domain/worldBounds';
-import { skyStateFor } from '../features/lighting/domain/dayNight';
+import { overcastSky, skyStateFor } from '../features/lighting/domain/dayNight';
 import {
   advanceClock,
   clockLabel,
@@ -119,10 +119,11 @@ import {
 import { checkInDue, runCheckIn } from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom } from '../features/layout/domain/random';
-import { venuesOn, type Venue } from '../features/sim/domain/venues';
+import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
+import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
 import {
   adviceFor,
   unreachableOn,
@@ -348,6 +349,24 @@ const ARRIVALS_SEED = 8;
 const STAFF_SEED = 9;
 
 /**
+ * The seed the week's weather is drawn from.
+ *
+ * Its own, for {@link DWELL_SEED}'s reason: retuning how often it rains must not
+ * move anybody's bedtime or the crowd's replay. It is half of the whole of the
+ * weather's state - the other half is the day number - and it is fixed, so two
+ * runs of the same plot get the same week. See `sim/domain/weather.ts`.
+ *
+ * **13 rather than the next number along, and chosen for its first week**: the
+ * hash is what it is, and at 10 day 0 came out `rain`, so every new resort - and
+ * every benchmark run, which opens at {@link INITIAL_TIME} on day 0 - opened on
+ * a grey sky with the beach shut. 13 opens clear, clear, clear, then rain and a
+ * storm on the fourth and fifth days, which is a settled resort first and
+ * weather inside the first week. Over 400 days it draws 70% clear, which is the
+ * table's own shape.
+ */
+const WEATHER_SEED = 13;
+
+/**
  * How far above a person's feet a click is tested against, in voxels: the hips
  * of the tallest figure, which is about half way up a body. The number the art
  * already names, rather than a second guess at it; see `pickPerson.ts`.
@@ -464,6 +483,8 @@ export interface ShowcaseStats {
   readonly cleanliness: number;
   /** What the resort is worth out of five; see `sim/domain/rating.ts`. */
   readonly rating: number;
+  /** What kind of day it is; see `sim/domain/weather.ts`. */
+  readonly weather: Weather;
 }
 
 /**
@@ -1463,6 +1484,12 @@ interface ResortArt {
    * with a router that asks it, and the first is built before the clock is.
    */
   readonly tickOfDay: () => number;
+  /**
+   * What kind of day it is on the scene's clock, late-bound for
+   * {@link ResortArt.tickOfDay}'s reason and asked of it for the same one: the
+   * day turns over between ticks and the weather turns over with it.
+   */
+  readonly weather: () => Weather;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly staff: readonly ModelGeometry[];
@@ -1559,6 +1586,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
       }
     },
     tickOfDay: parts.tickOfDay,
+    // Late bound, exactly as the tick is: the clock is what knows the day, and
+    // a day is what the weather is a function of. See `weather.ts`.
+    weather: parts.weather,
     // Asserted, and safe: the crowd is built on the very next statement, and
     // nothing calls into the router until a frame steps somebody somewhere.
     crowd: () => crowdField!.crowd,
@@ -1591,6 +1621,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     network,
     upkeep: () => resort.upkeep,
     crowd: () => staffField!.crowd,
+    // So nobody is sent to mop a pool the rain has shut; see `staffRouter.ts`.
+    weather: parts.weather,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1770,6 +1802,7 @@ function sceneStats(parts: {
   readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
   readonly startup: StartupCost;
+  readonly weather: Weather;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, sea, lighting } =
@@ -1829,6 +1862,7 @@ function sceneStats(parts: {
     },
     cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
+    weather: parts.weather,
     ...parts.startup,
   };
 }
@@ -1863,7 +1897,9 @@ function runTicks(
   lastShare: number | null,
   advise: () => void,
 ): number {
-  decayNeeds(resort.needs, resort.guests, ticks);
+  // Once for the whole frame's worth of ticks, not once each: the weather is one
+  // fact about the day, and `decayNeeds` runs the ticks in one pass anyway.
+  decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather));
   // One at a time rather than all twelve at once: a venue that frees a place
   // on the first of them must let somebody in on the first, not on the last.
   for (let tick = ticks; tick > 0; tick--) {
@@ -1937,8 +1973,9 @@ function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
  * in it is one something else already counted: nothing here decides anything or
  * changes anything. See `sim/domain/advice.ts`, which is emphatic about that.
  */
-function factsNow(resort: Resort): ResortFacts {
+function factsNow(resort: Resort, weather: Weather): ResortFacts {
   const { guests, router } = resort;
+  const effect = weatherEffect(weather);
   return {
     venues: resort.venues,
     lodgings: resort.lodgings,
@@ -1955,6 +1992,13 @@ function factsNow(resort: Resort): ResortFacts {
     // a list the next edit replaces.
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
+    ),
+    // By key, for the cleanliness map's reason. The same `isOpenIn` the router
+    // turns somebody away at, so the panel and the door agree about what is shut.
+    closed: new Set(
+      resort.venues
+        .filter((venue) => !isOpenIn(shelterOf(venue), effect))
+        .map((venue) => venue.key),
     ),
   };
 }
@@ -2039,6 +2083,12 @@ interface Clock {
   readonly time: number;
   /** Whole days since the resort opened. */
   readonly day: number;
+  /**
+   * What kind of day it is: a pure function of {@link Clock.day} and
+   * {@link WEATHER_SEED}, so nothing about it is stored. See
+   * `sim/domain/weather.ts`.
+   */
+  readonly weather: Weather;
   /** The tick of the current day, 0..1439: what a party's bedtime is compared against. */
   readonly tickOfDay: number;
   /**
@@ -2076,13 +2126,21 @@ interface Clock {
 function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
   let clock: SimClock = createSimClock(0, startTime);
   let time = timeOf(clock);
-  let sky = skyStateFor(time);
+  /** How grey the sky is under today's weather; see `weather.ts`. */
+  const overcastNow = (): number => weatherEffect(weatherOn(dayOf(clock), WEATHER_SEED)).overcast;
+  let sky = overcastSky(skyStateFor(time), overcastNow());
   let applied: number | null = null;
+  let appliedOvercast: number | null = null;
 
   const apply = (): void => {
     time = timeOf(clock);
-    if (time === applied) return;
-    sky = skyStateFor(time);
+    const overcast = overcastNow();
+    // The cloud is in the guard as well as the hour: the weather turns over at
+    // midnight without the *time* moving at all at `paused`, and a guard on the
+    // time alone would leave a storm's sky waiting for the next simulated
+    // minute that never comes.
+    if (time === applied && overcast === appliedOvercast) return;
+    sky = overcastSky(skyStateFor(time), overcast);
     handle.applySky(sky);
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
     // The windows light from the same number, but not out of the same volume:
@@ -2094,6 +2152,7 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     // shader, so they have to be told about the sunset too.
     resort().world.setSky(sky.skyColor);
     applied = time;
+    appliedOvercast = overcast;
   };
   apply();
 
@@ -2103,6 +2162,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     },
     get day() {
       return dayOf(clock);
+    },
+    get weather() {
+      return weatherOn(dayOf(clock), WEATHER_SEED);
     },
     get tickOfDay() {
       return clock.ticks % TICKS_PER_DAY;
@@ -2126,6 +2188,7 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       // A new resort is a new volume and a new set of blobs, and both start at
       // zero however far through the day the clock happens to be.
       applied = null;
+      appliedOvercast = null;
       apply();
       // And its windows, which would otherwise open on the share the previous
       // plot's guests were sleeping at.
@@ -2159,6 +2222,8 @@ function createStatsReader(parts: {
   readonly catalogue: MeshedCatalogue;
   readonly startup: StartupTracker;
   readonly mountStarted: number;
+  /** What kind of day it is, read afresh: the day turns over under the HUD. */
+  readonly weather: () => Weather;
 }): () => ShowcaseStats {
   // Everything is built by this point; the next thing that happens is a frame.
   const startup: StartupCost = {
@@ -2166,7 +2231,7 @@ function createStatsReader(parts: {
     startupFrames: parts.startup.frames(),
   };
   parts.startup.stop();
-  return () => sceneStats({ ...parts, resort: parts.resort(), startup });
+  return () => sceneStats({ ...parts, resort: parts.resort(), weather: parts.weather(), startup });
 }
 
 interface BenchRecorder {
@@ -2748,6 +2813,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     prepared: first,
     // Not called until a frame steps somebody, by which time the clock exists.
     tickOfDay: () => clock.tickOfDay,
+    weather: () => clock.weather,
     geometries: catalogue.geometries,
     people: catalogue.people,
     staff: catalogue.staff,
@@ -2861,6 +2927,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     catalogue,
     startup,
     mountStarted,
+    weather: () => clock.weather,
   });
 
   /**
@@ -3025,7 +3092,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
    * Once a simulated day out of the tick block, and on an edit that has settled;
    * see {@link factsNow}, which is emphatic about it not being a per-frame call.
    */
-  const advise = (): void => options.onAdviceChange?.(adviceFor(factsNow(current())));
+  const advise = (): void =>
+    options.onAdviceChange?.(adviceFor(factsNow(current(), clock.weather)));
 
   /** Tells everything above the renderer that the resort underneath it changed. */
   const rebuilt = (): void => {
@@ -3224,7 +3292,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return statsNow();
     },
     get advice() {
-      return adviceFor(factsNow(current()));
+      return adviceFor(factsNow(current(), clock.weather));
     },
     get params() {
       return params;

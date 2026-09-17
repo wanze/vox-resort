@@ -171,6 +171,8 @@ export default defineModel({
    */
   lights: [{ x: 25, y: 15, z: 12, color: LANTERN, intensity: 90, distance: 52 }],
   venue: {
+    // a bar at the back of an open deck, the daybeds under parasols.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.7 },

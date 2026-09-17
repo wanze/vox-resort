@@ -65,6 +65,8 @@ export default defineModel({
   category: 'leisure',
   placement: { ground: 'beach', perResort: { min: 1, max: 3 } },
   venue: {
+    // raked sand under the sky.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },

@@ -62,6 +62,8 @@ export default defineModel({
   category: 'leisure',
   placement: { ground: 'shore', perResort: { min: 1, max: 1 } },
   venue: {
+    // the counter faces the water and the visit is out on it.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },

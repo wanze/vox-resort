@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { Shelter } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
@@ -58,7 +59,8 @@ import { createHappiness, meanHappiness } from './happiness';
 import { ratingFor } from './rating';
 import { createRouter, type Router } from './router';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
-import { venuesOn, type Venue } from './venues';
+import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
+import { isOpenIn, weatherEffect, type Weather } from './weather';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import { staffFor } from './staff';
 import { createStaffRouter, meanCleanliness } from './staffRouter';
@@ -149,6 +151,8 @@ const routerOn = (
     tickOfDay: () => NOON,
   },
   roamsBeach = true,
+  /** What kind of day it is. Omit it and it is clear, as every fixture above assumes. */
+  weather: Weather = 'clear',
 ): { router: ReturnType<typeof createRouter>; crowd: Crowd; upkeep: Upkeep } => {
   let crowd: Crowd | null = null;
   const upkeep = createUpkeep(venues.length);
@@ -163,6 +167,7 @@ const routerOn = (
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
     upkeep: () => upkeep,
+    weather: () => weather,
     seed: 13,
   });
   crowd = createCrowd({
@@ -2499,5 +2504,288 @@ describe('on the generated plot', () => {
         `${need}: ${most.key} took ${most.share.toFixed(2)} of ${most.of}`,
       ).toBeLessThanOrEqual(BUSIEST_SHARE);
     }
+  });
+
+  /**
+   * The assertion the whole of plan 023 exists for, and the one no unit test can
+   * make: a storm over a plot laid by something that has never heard of weather.
+   * A closure that worked on a corridor of eight nodes and quietly emptied the
+   * resort here would pass every test above it.
+   *
+   * An eighth of a simulated day, run twice over the same plot from the same
+   * seeds - once clear and once storm - so the only difference between the two
+   * runs is the sky. Half the plot's usual six hundred, and an eighth of a day
+   * rather than the quarter the other runs here take: this is two runs and not
+   * one, and what it measures - nothing without a roof takes a visit - is as
+   * plain after three hours as after six.
+   */
+  it('empties what has no roof in a storm, and fills what has one', () => {
+    const lodgings = lodgingsOn(layout.placements);
+    const visitsUnder = (weather: Weather): ReadonlyMap<string, number> => {
+      const people = createGuests({
+        count: 300,
+        homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+        variants: 4,
+        childVariant: 3,
+        seed: 12,
+      });
+      const needs = createNeeds(people, 13);
+      const upkeep = createUpkeep(venues.length);
+      let ticks = OPENS_AT;
+      let crowd: Crowd | null = null;
+      const router = createRouter({
+        guests: people,
+        needs,
+        venues,
+        lodgings,
+        gateways: [],
+        onLeave: () => {},
+        network,
+        tickOfDay: () => ticks % TICKS_PER_DAY,
+        crowd: () => crowd!,
+        upkeep: () => upkeep,
+        weather: () => weather,
+        seed: 19,
+      });
+      crowd = createCrowd({
+        network,
+        count: people.count,
+        variants: 4,
+        seed: 4,
+        routeOf: (person, at) => router.step(person, at),
+        roamsBeach: false,
+      });
+      for (let tick = 0; tick < TICKS_PER_DAY / 8; tick++) {
+        for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
+        ticks++;
+        decayNeeds(needs, people, 1, weatherEffect(weather));
+        router.tick(ticks);
+      }
+      return router.dayVisits();
+    };
+
+    const clear = visitsUnder('clear');
+    const storm = visitsUnder('storm');
+    // The beach is the router's own venue and takes visits like any other, so it
+    // belongs in the tally: it is the open venue within reach of everywhere.
+    const standing = [...venues, beachVenueFor(network)!];
+    const tally = (visits: ReadonlyMap<string, number>, shelter: Shelter): number =>
+      standing
+        .filter((venue) => shelterOf(venue) === shelter)
+        .reduce((sum, venue) => sum + (visits.get(venue.key) ?? 0), 0);
+
+    expect(tally(clear, 'open'), 'nothing open was visited on a clear day').toBeGreaterThan(0);
+    // Not "fewer": nothing without a roof may take a single visit.
+    expect(tally(storm, 'open')).toBe(0);
+    expect(tally(storm, 'covered')).toBeGreaterThanOrEqual(tally(clear, 'covered'));
+    // And the plot does not simply stop: the guests go somewhere else.
+    expect(tally(storm, 'covered')).toBeGreaterThan(0);
+  });
+
+  /**
+   * The STOP condition plan 023 carries: a storm that leaves guests wandering
+   * with nothing open to choose is a finding about the *art*, not a number to
+   * fudge. What it checks is that the covered venues standing on the reference
+   * plot between them serve every need a guest can have.
+   */
+  it('leaves something open for every need a storm could make somebody want', () => {
+    const closed = weatherEffect('storm');
+    const open = [...venues, beachVenueFor(network)!].filter((venue) =>
+      isOpenIn(shelterOf(venue), closed),
+    );
+    const unserved = NEEDS.filter((need) => !open.some((venue) => reliefAt(venue, need) > 0));
+    // Energy is the one nothing on the plot *fills* - a night's sleep is what
+    // fills it, see `night.ts` - and that is as true on a clear day as in a
+    // storm, so it is not a finding about the weather.
+    const clearUnserved = NEEDS.filter(
+      (need) => ![...venues].some((venue) => reliefAt(venue, need) > 0),
+    );
+    expect(unserved, `a storm leaves ${unserved.join(', ')} unserved`).toEqual(clearUnserved);
+  });
+});
+
+describe('a venue the weather has shut', () => {
+  /** An open-air pool at the corridor's far end: the thing a storm closes. */
+  const pool = (tileX: number): Venue => ({
+    ...bakery(tileX),
+    key: 'swimming-pool#0',
+    id: 'swimming-pool',
+    label: 'Pool',
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.8 }],
+    // Half an hour to an hour, as a real pool declares: long enough that a visit
+    // cut short by the weather would be unmistakable.
+    dwellSeconds: { min: 30 * 60, max: 60 * 60 },
+    shelter: 'open',
+  });
+
+  /** A games hall on the same tile, which has a roof over it. */
+  const hall = (tileX: number): Venue => ({
+    ...pool(tileX),
+    key: 'game-hall#0',
+    id: 'game-hall',
+    label: 'Games Hall',
+    shelter: 'covered',
+  });
+
+  it('turns a guest away at the door, and lets them decide again on the spot', () => {
+    const network = networkOf(street(8));
+    const needs = wanting(0, 'fun');
+    // The goal is set on a clear day, so somebody is genuinely walking to it;
+    // the storm is what they find when they arrive.
+    let weather: Weather = 'clear';
+    let crowd: Crowd | null = null;
+    const upkeep = createUpkeep(1);
+    const venues = [pool(7)];
+    const router = createRouter({
+      guests,
+      needs,
+      venues,
+      lodgings: [],
+      gateways: [],
+      onLeave: () => {},
+      network,
+      tickOfDay: () => NOON,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      weather: () => weather,
+      seed: 13,
+    });
+    crowd = createCrowd({
+      network,
+      count: guests.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+    });
+    router.step(0, nodeAt(network, 0));
+    expect(router.goalOf(0)?.key).toBe('swimming-pool#0');
+
+    weather = 'storm';
+    const door = nodeAt(network, 7);
+    // Not taken in and not stood in a line: they are handed back to the crowd,
+    // which is what `-1` from `step` and a cleared goal mean together.
+    expect(router.step(0, door)).toBe(-1);
+    expect(router.visitOf(0)).toBeNull();
+    expect(router.goalOf(0), 'sent straight back to the pool that just shut').toBeNull();
+    expect(needs.level.fun[0], 'relieved by a pool that was closed').toBe(0);
+  });
+
+  it('sends them to the covered one instead, where the plot has one', () => {
+    const network = networkOf(street(8));
+    const venues = [pool(7), hall(6)];
+    expect(routerOn(network, venues, wanting(0, 'fun')).router.step(0, nodeAt(network, 0)));
+    const clear = routerOn(network, venues, wanting(0, 'fun'));
+    clear.router.step(0, nodeAt(network, 0));
+    expect(clear.router.goalOf(0)?.key, 'the pool is the better visit in the dry').toBe(
+      'swimming-pool#0',
+    );
+    const storm = routerOn(network, venues, wanting(0, 'fun'), undefined, true, 'storm');
+    storm.router.step(0, nodeAt(network, 0));
+    expect(storm.router.goalOf(0)?.key).toBe('game-hall#0');
+  });
+
+  it('leaves a guest to wander when the storm shut the only thing serving them', () => {
+    const network = networkOf(street(8));
+    const { router } = routerOn(network, [pool(7)], wanting(0, 'fun'), undefined, true, 'storm');
+    expect(router.step(0, nodeAt(network, 0))).toBe(-1);
+    expect(router.goalOf(0)).toBeNull();
+  });
+
+  it('does not throw out somebody who is already inside when the sky turns', () => {
+    const network = networkOf(street(8));
+    const needs = wanting(0, 'fun');
+    let weather: Weather = 'clear';
+    let crowd: Crowd | null = null;
+    const upkeep = createUpkeep(1);
+    const venues = [pool(7)];
+    const router = createRouter({
+      guests,
+      needs,
+      venues,
+      lodgings: [],
+      gateways: [],
+      onLeave: () => {},
+      network,
+      tickOfDay: () => NOON,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      weather: () => weather,
+      seed: 13,
+    });
+    crowd = createCrowd({
+      network,
+      count: guests.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+    });
+    router.step(0, nodeAt(network, 0));
+    router.step(0, nodeAt(network, 7));
+    expect(router.visitOf(0)?.waiting).toBe(false);
+    expect(router.occupancyOf('swimming-pool#0')).toEqual({ inside: 1, waiting: 0 });
+
+    // The weather turns while they are in the water. A swim that ended with the
+    // guest put out of the pool would be a closure reaching back through time;
+    // what a closure does is stop the *next* person coming in.
+    weather = 'storm';
+    // A pool visit is 30 to 90 ticks. Run it out, and the visit must last the
+    // whole of it rather than ending on the tick the sky turned.
+    let inside = 0;
+    for (let tick = 1; tick <= 90; tick++) {
+      if (router.visitOf(0) !== null) inside = tick;
+      router.tick(tick);
+    }
+    // Against the same visit on a day that never turned: the dwell is drawn from
+    // the same seeded generator, so the two must agree to the tick.
+    const dry = routerOn(network, venues, wanting(0, 'fun'));
+    dry.router.step(0, nodeAt(network, 0));
+    dry.router.step(0, nodeAt(network, 7));
+    let dryInside = 0;
+    for (let tick = 1; tick <= 90; tick++) {
+      if (dry.router.visitOf(0) !== null) dryInside = tick;
+      dry.router.tick(tick);
+    }
+    expect(inside, 'put out of the pool the moment it rained').toBe(dryInside);
+    expect(inside, 'a pool visit that took no time at all').toBeGreaterThan(29);
+    expect(router.visitOf(0), 'never let out again').toBeNull();
+    expect(needs.level.fun[0], 'the visit they were having was not paid out').toBeGreaterThan(0);
+  });
+
+  it('sends a heatwave guest to the bar a clear day sent them to the court', () => {
+    const network = networkOf(street(12));
+    const court: Venue = {
+      ...bakery(11),
+      key: 'tennis-court#0',
+      id: 'tennis-court',
+      label: 'Court',
+      role: 'activity',
+      satisfies: [{ need: 'fun', amount: 0.8 }],
+      shelter: 'open',
+    };
+    const bar: Venue = {
+      ...bakery(11),
+      key: 'resort-bar#0',
+      id: 'resort-bar',
+      label: 'Bar',
+      role: 'drink',
+      satisfies: [{ need: 'thirst', amount: 1 }],
+      // Covered, so the heatwave is what moves the choice rather than a closure.
+      shelter: 'covered',
+    };
+    const person = 0;
+    // Equally bored and equally thirsty, standing the same distance from both.
+    const needs = wanting(person, null);
+    needs.level.fun[person] = 0.3;
+    needs.level.thirst[person] = 0.3;
+
+    const clear = routerOn(network, [court, bar], needs, undefined, true, 'clear');
+    clear.router.step(person, nodeAt(network, 0));
+    const chosenClear = clear.router.goalOf(person)?.key;
+
+    const hot = routerOn(network, [court, bar], needs, undefined, true, 'heatwave');
+    hot.router.step(person, nodeAt(network, 0));
+    expect(hot.router.goalOf(person)?.key, `clear chose ${chosenClear}`).toBe('resort-bar#0');
+    expect(chosenClear).toBe('tennis-court#0');
   });
 });

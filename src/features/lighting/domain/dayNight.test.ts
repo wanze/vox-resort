@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { SUNSET_TIME, mixColor, normalizeTime, skyStateFor, smoothstep } from './dayNight';
+import {
+  SUNSET_TIME,
+  mixColor,
+  normalizeTime,
+  overcastSky,
+  skyStateFor,
+  smoothstep,
+} from './dayNight';
 
 /** A time on the clock, from hours and minutes. */
 const at = (hours: number, minutes = 0): number => (hours + minutes / 60) / 24;
@@ -113,5 +120,101 @@ describe('skyStateFor', () => {
 
   it('wraps, so the cycle can run past midnight without a seam', () => {
     expect(skyStateFor(1.25)).toEqual(skyStateFor(0.25));
+  });
+});
+
+/** The three channels of a packed colour. */
+const channels = (color: number): number[] => [
+  (color >> 16) & 0xff,
+  (color >> 8) & 0xff,
+  color & 0xff,
+];
+
+/** How bright a packed colour is, as the mean of its channels. */
+const brightness = (color: number): number =>
+  channels(color).reduce((sum, each) => sum + each, 0) / 3;
+
+/** Every hour of the day, as the clock hands it over. */
+const HOURS = Array.from({ length: 24 }, (_unused, hour) => hour / 24);
+
+describe('overcastSky', () => {
+  it('hands back the sky it was given on a clear day', () => {
+    for (const time of HOURS) {
+      const sky = skyStateFor(time);
+      expect(overcastSky(sky, 0)).toEqual(sky);
+    }
+  });
+
+  it('never brightens anything, at any hour', () => {
+    for (const time of HOURS) {
+      const sky = skyStateFor(time);
+      for (const cloud of [0.55, 0.85, 1]) {
+        const clouded = overcastSky(sky, cloud);
+        expect(brightness(clouded.skyColor), `sky at ${time}`).toBeLessThanOrEqual(
+          brightness(sky.skyColor),
+        );
+        expect(brightness(clouded.sunColor), `sun at ${time}`).toBeLessThanOrEqual(
+          brightness(sky.sunColor),
+        );
+        expect(brightness(clouded.ambientColor), `ambient at ${time}`).toBeLessThanOrEqual(
+          brightness(sky.ambientColor),
+        );
+        expect(clouded.sunIntensity).toBeLessThanOrEqual(sky.sunIntensity);
+        expect(clouded.ambientIntensity).toBeLessThanOrEqual(sky.ambientIntensity);
+      }
+    }
+  });
+
+  it('greys a midday sky on every channel', () => {
+    // Noon, where the sky is at its bluest and the claim is unambiguous.
+    const noon = skyStateFor(13.75 / 24);
+    const storm = overcastSky(noon, 1);
+    for (const [index, before] of channels(noon.skyColor).entries()) {
+      expect(channels(storm.skyColor)[index], `channel ${index}`).toBeLessThan(before);
+    }
+    // And greyer, not merely darker: the spread between the channels closes.
+    const spread = (color: number): number =>
+      Math.max(...channels(color)) - Math.min(...channels(color));
+    expect(spread(storm.skyColor)).toBeLessThan(spread(noon.skyColor));
+  });
+
+  it('leaves some light on at full cloud, so the plot stays readable', () => {
+    const noon = skyStateFor(13.75 / 24);
+    const storm = overcastSky(noon, 1);
+    expect(storm.sunIntensity).toBeGreaterThan(0);
+    expect(storm.ambientIntensity).toBeGreaterThan(0);
+    expect(storm.sunIntensity).toBeLessThan(noon.sunIntensity);
+  });
+
+  it('takes away daylight and leaves lamplight alone', () => {
+    // Cloud blocks the sun, and at midnight there is no sun to block: the lamps
+    // are what light the plot, and a storm that dimmed them would leave
+    // everything not standing under one unreadable.
+    const midnight = skyStateFor(0);
+    expect(midnight.lampFactor).toBe(1);
+    expect(overcastSky(midnight, 1).ambientIntensity).toBe(midnight.ambientIntensity);
+    // The sky itself still goes darker, so a stormy night reads as one.
+    expect(brightness(overcastSky(midnight, 1).skyColor)).toBeLessThan(
+      brightness(midnight.skyColor),
+    );
+  });
+
+  it('brings the lamps on earlier, and never past full', () => {
+    const noon = skyStateFor(13.75 / 24);
+    expect(noon.lampFactor).toBe(0);
+    expect(overcastSky(noon, 0.85).lampFactor).toBeGreaterThan(0);
+    for (const time of HOURS) {
+      for (const cloud of [0.55, 0.85, 1, 4]) {
+        const clouded = overcastSky(skyStateFor(time), cloud);
+        expect(clouded.lampFactor, `lamps at ${time}`).toBeLessThanOrEqual(1);
+        expect(clouded.lampFactor).toBeGreaterThanOrEqual(skyStateFor(time).lampFactor);
+      }
+    }
+  });
+
+  it('leaves the sun where the hour put it: cloud is not an eclipse', () => {
+    const afternoon = skyStateFor(0.7);
+    expect(overcastSky(afternoon, 1).sunDirection).toEqual(afternoon.sunDirection);
+    expect(overcastSky(afternoon, 1).time).toBe(afternoon.time);
   });
 });

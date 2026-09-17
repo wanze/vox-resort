@@ -225,6 +225,14 @@ export type GuestNeed = 'hunger' | 'thirst' | 'energy' | 'fun' | 'hygiene';
  */
 export type VenueRole = 'lodging' | 'food' | 'drink' | 'activity' | 'service';
 
+/**
+ * Whether guests are under cover at a venue.
+ *
+ * - `'open'`: the sky is the roof - a court, a pool, a terrace bar.
+ * - `'covered'`: indoors, or roofed enough to sit out a storm.
+ */
+export type Shelter = 'open' | 'covered';
+
 /** How much of one need a visit here sees to, on a 0..1 scale. */
 export interface NeedRelief {
   readonly need: GuestNeed;
@@ -276,6 +284,20 @@ export interface ModelVenue {
    * better when it is. See `sim/domain/doors.ts`.
    */
   readonly doors?: readonly ModelDoor[];
+  /**
+   * Whether guests are under cover here, which decides whether the place is
+   * open in the rain. See `sim/domain/weather.ts`.
+   *
+   * Declared on the art for {@link ModelVenue}'s reason: whether a place has a
+   * roof is something the person who drew it settled when they drew it, and a
+   * list in `src/` would be a second place to change it.
+   *
+   * Optional, and the fallback is `'covered'` - a model nobody has looked at
+   * keeps working exactly as it did, and gets better when somebody declares it.
+   * The safe direction, too: a venue wrongly left open in a storm is a resort
+   * that carries on, and one wrongly shut is a building that goes dark.
+   */
+  readonly shelter?: Shelter;
 }
 
 export interface VoxelModelSource {

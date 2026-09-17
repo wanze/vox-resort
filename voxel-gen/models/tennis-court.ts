@@ -210,6 +210,8 @@ export default defineModel({
     })),
   ],
   venue: {
+    // clay in the open, inside a hedge that is not a roof.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },

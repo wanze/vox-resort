@@ -148,6 +148,8 @@ export default defineModel({
     { x: 33, y: 12, z: 12, color: LANTERN, intensity: 90, distance: 52 },
   ],
   venue: {
+    // a thatched hut at the back of an open deck; the counter is outside.
+    shelter: 'open',
     role: 'drink',
     satisfies: [
       { need: 'thirst', amount: 1 },

@@ -7,6 +7,7 @@ import { createStaffRouter, meanCleanliness, type StaffRouter } from './staffRou
 import { staffFor } from './staff';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import type { Venue } from './venues';
+import type { Weather } from './weather';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -47,6 +48,8 @@ const staffOn = (
   venues: readonly Venue[],
   dirt: readonly number[],
   workers = 1,
+  /** What kind of day it is. Omit it and it is clear, as every fixture here assumes. */
+  weather: Weather = 'clear',
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
   for (let venue = 0; venue < dirt.length; venue++) upkeep.level[venue] = dirt[venue]!;
@@ -59,6 +62,7 @@ const staffOn = (
     network,
     upkeep: () => upkeep,
     crowd: () => crowd!,
+    weather: () => weather,
     seed: 11,
   });
   crowd = createCrowd({
@@ -167,5 +171,64 @@ describe('meanCleanliness', () => {
     expect(meanCleanliness(upkeep, 3)).toBeCloseTo(0.5);
     expect(meanCleanliness(upkeep, 0)).toBe(1);
     expect(meanCleanliness(createUpkeep(0), 0)).toBe(1);
+  });
+});
+
+describe('a cleaner and the weather', () => {
+  /** A pool at `tileX` with no roof over it, so the rain shuts it. */
+  const pool = (key: string, tileX: number): Venue => ({
+    ...shop(key, tileX),
+    role: 'activity',
+    shelter: 'open',
+  });
+
+  it('is not sent across the plot to mop a venue the rain has shut', () => {
+    const network = networkOf(street(8));
+    // The filthy one is the pool; the merely used one has a roof.
+    const venues = [pool('swimming-pool#0', 7), shop('bakery#0', 1)];
+    const clear = staffOn(network, venues, [0.1, 0.65]);
+    expect(clear.router.step(0, nodeAt(network, 0)), 'the pool is the dirtier').toBe(
+      nodeAt(network, 1),
+    );
+
+    const storm = staffOn(network, venues, [0.1, 0.65], 1, 'storm');
+    storm.router.step(0, nodeAt(network, 0));
+    // They work at the bakery instead: the pool is shut, and nobody is dirtying
+    // it either. It gets scrubbed when it reopens.
+    for (let tick = 1; tick <= 40; tick++) storm.router.tick(tick);
+    const worked = [...Array(40).keys()].map(() => storm.router.atWork(0)?.key);
+    expect(worked).not.toContain('swimming-pool#0');
+  });
+
+  it('claims the shut venue again the moment the sky clears', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 7), shop('bakery#0', 1)];
+    let weather: Weather = 'storm';
+    const upkeep = createUpkeep(venues.length);
+    upkeep.level[0] = 0.1;
+    upkeep.level[1] = 1;
+    const staff = staffFor(venues.length);
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff,
+      venues,
+      network,
+      upkeep: () => upkeep,
+      crowd: () => crowd!,
+      weather: () => weather,
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network,
+      count: staff.count,
+      variants: 1,
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+    });
+    // Nowhere to go: the only dirty thing on the plot is shut, and the bakery
+    // is spotless.
+    expect(router.step(0, nodeAt(network, 0))).toBe(-1);
+    weather = 'clear';
+    expect(router.step(0, nodeAt(network, 0))).toBe(nodeAt(network, 1));
   });
 });

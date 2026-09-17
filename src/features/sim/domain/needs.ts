@@ -26,6 +26,7 @@ import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { archetypeOf } from './archetypes';
+import { CLEAR_EFFECT, type WeatherEffect } from './weather';
 
 /** Every need, in the order the HUD lists them. */
 export const NEEDS: readonly GuestNeed[] = ['hunger', 'thirst', 'energy', 'fun', 'hygiene'];
@@ -61,6 +62,22 @@ export interface Needs {
 }
 
 const clamp = (level: number): number => (level < 0 ? 0 : level > 1 ? 1 : level);
+
+/**
+ * {@link decayNeeds}'s per-need rate for the call it is in the middle of.
+ *
+ * Module scope rather than a fresh object each time, so the header's "allocates
+ * nothing" stays true: it is written at the top of every call and read only
+ * inside it, which is safe because nothing here is re-entrant - a tick is run to
+ * the end before the next one starts.
+ */
+const scratchRate: { [need in GuestNeed]: number } = {
+  hunger: 0,
+  thirst: 0,
+  energy: 0,
+  fun: 0,
+  hygiene: 0,
+};
 
 /**
  * Everybody's starting mood, drawn from one seeded generator.
@@ -106,9 +123,23 @@ export function resetNeeds(needs: Needs, person: number, random: () => number): 
  * every guest on the plot, and it is the first thing the simulation does on a
  * tick, so everything else the tick grows queues up behind it.
  */
-export function decayNeeds(needs: Needs, guests: Guests, ticks: number): void {
+export function decayNeeds(
+  needs: Needs,
+  guests: Guests,
+  ticks: number,
+  /**
+   * What today's weather does to the rate each need runs down at. Omit it and
+   * it is a clear day, which is what a fixture wants and what plan 016 had.
+   */
+  effect: WeatherEffect = CLEAR_EFFECT,
+): void {
   if (ticks <= 0) return;
   const hours = ticks / TICKS_PER_HOUR;
+  // The weather's share of each rate, folded into the hours once rather than
+  // multiplied per person per need: this runs over every guest on the plot up
+  // to `MAX_TICKS_PER_ADVANCE` times a frame, and the weather is one fact about
+  // the whole day.
+  for (const need of NEEDS) scratchRate[need] = effect.decay[need] * hours;
   for (let person = 0; person < needs.count; person++) {
     const { decayPerHour } = archetypeOf(guests, person);
     for (const need of NEEDS) {
@@ -116,7 +147,7 @@ export function decayNeeds(needs: Needs, guests: Guests, ticks: number): void {
       // Clamped at 0 from below: a need cannot get worse than desperate, and an
       // unclamped level would let one starving guest's urgency grow without
       // limit and outweigh everything else for ever.
-      const dropped = column[person]! - decayPerHour[need] * hours;
+      const dropped = column[person]! - decayPerHour[need] * scratchRate[need];
       column[person] = dropped < 0 ? 0 : dropped;
     }
   }
@@ -152,11 +183,20 @@ export interface Urgency {
  * Ties break towards the earlier entry of {@link NEEDS}, so the answer does not
  * depend on object key order.
  */
-export function strongestNeed(needs: Needs, guests: Guests, person: number): Urgency | null {
+export function strongestNeed(
+  needs: Needs,
+  guests: Guests,
+  person: number,
+  /**
+   * What today's weather does to how loudly each need is felt. Omit it and it
+   * is a clear day, which is what a fixture wants and what plan 016 had.
+   */
+  effect: WeatherEffect = CLEAR_EFFECT,
+): Urgency | null {
   const { weight } = archetypeOf(guests, person);
   let strongest: Urgency | null = null;
   for (const need of NEEDS) {
-    const urgency = weight[need] * (1 - needs.level[need][person]!);
+    const urgency = weight[need] * effect.weight[need] * (1 - needs.level[need][person]!);
     if (urgency < CONTENT_URGENCY) continue;
     if (strongest === null || urgency > strongest.urgency) strongest = { need, urgency };
   }

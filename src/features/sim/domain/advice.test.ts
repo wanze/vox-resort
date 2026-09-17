@@ -8,6 +8,7 @@ import {
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
+  adviceWeatherClosed,
   unreachableOn,
   type ResortFacts,
 } from './advice';
@@ -391,5 +392,81 @@ describe('unreachableOn', () => {
   it('leaves a venue with a door node alone', () => {
     const bakery = venueOf({ key: 'bakery#0' });
     expect([...unreachableOn([bakery], () => doorsOf([4], []))]).toEqual([]);
+  });
+});
+
+describe('adviceWeatherClosed', () => {
+  /** A plot with a pool and a games hall, both of them fun, both of them wanted. */
+  const twoKindsOfFun = (): Partial<ResortFacts> => ({
+    venues: [
+      venueOf({ key: 'swimming-pool#0', label: 'Pool', satisfies: [{ need: 'fun', amount: 0.8 }] }),
+      venueOf({
+        key: 'game-hall#0',
+        label: 'Games Hall',
+        satisfies: [{ need: 'fun', amount: 0.8 }],
+      }),
+    ],
+    wanting: { ...NOTHING_WANTED, fun: 50 },
+    visits: new Map([
+      ['swimming-pool#0', 30],
+      ['game-hall#0', 30],
+    ]),
+  });
+
+  it('says nothing on a day that shut nothing', () => {
+    expect(adviceWeatherClosed(healthyFacts(twoKindsOfFun()))).toEqual([]);
+    expect(adviceWeatherClosed(healthyFacts({ ...twoKindsOfFun(), closed: new Set() }))).toEqual(
+      [],
+    );
+  });
+
+  it('says nothing while half of what serves a need is still standing', () => {
+    const facts = healthyFacts({ ...twoKindsOfFun(), closed: new Set(['swimming-pool#0']) });
+    expect(adviceWeatherClosed(facts)).toEqual([]);
+  });
+
+  it('names the need whose venues are mostly shut', () => {
+    const facts = healthyFacts({
+      ...twoKindsOfFun(),
+      closed: new Set(['swimming-pool#0', 'game-hall#0']),
+    });
+    expect(adviceWeatherClosed(facts)).toEqual([
+      {
+        kind: 'weather-closed',
+        // Half the plot wants it, and all of what serves it is shut.
+        weight: 0.5,
+        subject: 'fun',
+        count: 2,
+        at: null,
+        need: 'fun',
+      },
+    ]);
+  });
+
+  it('leaves a need nobody wants, and one nothing serves, to the rules that own them', () => {
+    // Nobody wants it: a shut pool on a plot where nobody is bored is not advice.
+    const unwanted = healthyFacts({
+      ...twoKindsOfFun(),
+      wanting: NOTHING_WANTED,
+      closed: new Set(['swimming-pool#0', 'game-hall#0']),
+    });
+    expect(adviceWeatherClosed(unwanted)).toEqual([]);
+    // Nothing serves it at all: `adviceUnservedNeeds` has already said so, and
+    // said it louder and permanently.
+    const unserved = healthyFacts({
+      venues: [],
+      wanting: { ...NOTHING_WANTED, fun: 50 },
+      visits: new Map(),
+      closed: new Set(),
+    });
+    expect(adviceWeatherClosed(unserved)).toEqual([]);
+  });
+
+  it('comes out on the list the panel reads', () => {
+    const facts = healthyFacts({
+      ...twoKindsOfFun(),
+      closed: new Set(['swimming-pool#0', 'game-hall#0']),
+    });
+    expect(adviceFor(facts).map((advice) => advice.kind)).toContain('weather-closed');
   });
 });

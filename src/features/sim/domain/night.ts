@@ -56,8 +56,11 @@ export const NIGHT_RELIEF: readonly NeedRelief[] = [
  * Mixed rather than taken modulo straight, because neighbouring party indices
  * would otherwise get neighbouring bedtimes, and parties are numbered in the
  * order they were drawn.
+ *
+ * Exported for `weather.ts`, which hashes a day number for the same reason and
+ * would otherwise hold a second copy of the same four lines.
  */
-function mix(value: number): number {
+export function mix(value: number): number {
   let hash = Math.imul(value ^ (value >>> 16), 0x85eb_ca6b);
   hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2_ae35);
   return (hash ^ (hash >>> 16)) >>> 0;

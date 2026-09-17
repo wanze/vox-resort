@@ -593,6 +593,101 @@ walks them there.
 
 The HUD's `Asleep` row is guests in bed over guests with a bed.
 
+## Weather
+
+`sim/domain/weather.ts` says what kind of day it is, and four things follow from
+it: how loudly each need is felt, how fast each runs down, whether a venue is
+open, and how grey the sky is. Nothing else.
+
+- **Nothing about the weather is stored.** `weatherOn(day, seed)` is an integer
+  hash of the day number and the plot's seed, worked out afresh every time it is
+  asked for, exactly as `night.ts` works out a bedtime - it imports `night.ts`'s
+  own `mix` rather than holding a second copy. A save file holds one integer
+  (`simClock.ts`'s tick count) and the plot's seed, and two runs of the same plot
+  get the same week.
+
+- **One kind of day, not one kind of hour.** A storm that arrives at two and
+  clears at four is a storm nobody notices on a plot whose day takes five real
+  minutes. A day that _is_ a storm is a day the player plans around.
+
+- **Four kinds, and most days are clear.** The draw is sixteen days in
+  twenty-four clear, four rain, two heatwave and two storm. Weather that happens
+  every other day stops being an event, and a plot whose beach is shut half the
+  week is a plot nobody builds a beach on.
+
+| Day        | Weights                | Decay                    | Closes  | Overcast |
+| ---------- | ---------------------- | ------------------------ | ------- | -------- |
+| `clear`    | all 1                  | all 1                    | nothing | 0        |
+| `rain`     | fun ×1.2, hygiene ×0.8 | all 1                    | `open`  | 0.55     |
+| `storm`    | fun ×1.2, hygiene ×0.8 | energy ×1.2              | `open`  | 0.85     |
+| `heatwave` | thirst ×1.6            | thirst ×1.8, energy ×1.3 | nothing | 0        |
+
+- **Every multiplier is inside 0.5..2**, which `weather.test.ts` holds the table
+  to. It multiplies `archetypes.ts`, it is not a row in it: weather is not a fact
+  about a party, and the two have to stay separable or neither can be tuned.
+  Outside those bounds a day's weather would outweigh the difference between a
+  family and a group of friends, and the weather would _become_ the tuning
+  surface.
+
+- **The weights reach `appeal.ts`, not only `strongestNeed`.** Since plan 030 the
+  loudest need is the content gate and `appealOf` decides where somebody goes, so
+  a weather that stopped at the gate would make a heatwave a day when people went
+  out more and went to exactly the same places.
+
+- **`shelter` is declared on the art.** `ModelVenue.shelter` is `'open'` or
+  `'covered'`, optional, and **the fallback is `'covered'`** - a model nobody has
+  looked at keeps working exactly as it did, and the safe direction is a venue
+  wrongly left open rather than a building that goes dark. Thirteen models
+  declare `'open'`: the pools, the waterpark, the four courts, the minigolf, the
+  playground, the two bars on open decks, the ice cream cart, the beach shower
+  and the pedalo rental. The beach declares its own in `beach.ts`, for the reason
+  its relief and dwell are declared there: it is terrain, and has no model.
+
+- **A closed venue is not a candidate, and its door balks.** `chooseVenue` takes
+  an `isOpen` predicate and skips a shut venue before it even measures the walk;
+  `admitAt` tests closure before the queue, so somebody already walking to a pool
+  when the sky turns is turned round and decides again on the spot, which
+  `arriveIfThere` already handled. **Nobody inside is put out mid-visit**: the
+  visit they are having is paid out in full, and the closure stops the next
+  person coming in. Cleaners are kept out of shut venues too, through
+  `dirtiest`'s `eligible` predicate.
+
+- **The sky is greyed by one pure function over the `SkyState`.**
+  `overcastSky(sky, overcast)` mixes the sun, ambient and sky colours towards a
+  slate, scales the intensities down to 0.35 at full cloud and brings the lamps
+  on early, capped at 1. **The dimming takes away daylight and leaves lamplight
+  alone**, tapering off as `lampFactor` rises: the lamps are what light the plot
+  after dark, and a storm at two in the morning that dimmed them would leave
+  everything not standing under one unreadable for the sake of a sky nobody can
+  see. A function over a `SkyState` and not a branch inside
+  `skyStateFor`, because the sun's position is astronomy and the cloud over it is
+  weather. The grey is itself scaled towards black by `lampFactor`, so a storm at
+  midnight is darker than a clear night rather than lighter. The sun's
+  _direction_ is untouched: cloud is not an eclipse. `createClock.apply`'s guard
+  compares the overcast as well as the time, or a storm's sky would wait for a
+  simulated minute that never comes while the clock is paused.
+
+- **Drawn rain is deliberately not here.** No particles, no puddles, no new pass,
+  no new material. `CLAUDE.md` forbids opening a browser to check how something
+  looks, and an effect whose only test is "does it look like rain" is not one
+  this could honestly deliver. What it does deliver is a storm that is grey, dark
+  and empties the beach, which is most of what a storm reads as from an isometric
+  camera and is testable as three pure functions. Drawn precipitation is a
+  rendering plan of its own; `features/balloons/` - a field of instanced things
+  moving under the sky - is the pattern it would start from, and its budget
+  should be measured with `pnpm bench` before it lands.
+
+- **What it costs on the reference plot.** Over an eighth of a simulated day at
+  `normal` with 300 guests, a storm run takes **no visits at all** to anything
+  declaring `shelter: 'open'`, the beach included, and no fewer to the covered
+  venues than the clear run took. Every need a guest can have is still served by
+  something with a roof - energy is the one nothing on the plot fills, and a
+  night's sleep is what fills it, which is as true on a clear day.
+
+The HUD's `Weather` row names the day and what it is doing; `advice.ts`'s
+`weather-closed` rule names a need whose venues are more than half shut, which is
+a reason to build a covered thing beside the open one.
+
 ## Arriving and leaving
 
 `sim/domain/rating.ts` says what the resort is worth, `sim/domain/checkIn.ts`
@@ -876,3 +971,4 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 | —       | Advice: what the resort is getting wrong, ranked                  | Landed             |
 | —       | Balance: no venue takes every visit                               | Landed             |
 | —       | Cleanliness, and cleaners as a second population                  | Landed             |
+| —       | Weather: needs, closures and the sky (no drawn rain)              | Landed             |

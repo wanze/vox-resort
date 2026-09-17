@@ -86,6 +86,8 @@ export default defineModel({
     distance: 90,
   })),
   venue: {
+    // a hard court in the open, floodlights and all.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },

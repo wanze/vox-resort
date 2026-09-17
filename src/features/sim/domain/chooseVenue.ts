@@ -22,6 +22,7 @@ import { archetypeOf } from './archetypes';
 import { MAX_QUEUE_SHOWN } from './queueLane';
 import { strongestNeed, type Needs } from './needs';
 import type { Venue } from './venues';
+import type { WeatherEffect } from './weather';
 
 export interface VenueChoice {
   /** Index into the `venues` that were offered. */
@@ -91,6 +92,24 @@ export interface ChoiceOptions {
    * spotless, which is what a fixture wants and what plan 018 had.
    */
   readonly cleanliness?: (venue: number) => number;
+  /**
+   * Whether each venue is open at all right now. Omit it and everything is
+   * open, which is what a fixture wants and what plan 018 had.
+   *
+   * The rain is what shuts a place; see `weather.ts`. It is a predicate rather
+   * than a `Weather` because nothing here should have to know what a storm is -
+   * the router knows the weather and the shelter, and hands down the answer.
+   */
+  readonly isOpen?: (venue: number) => boolean;
+  /**
+   * What today's weather does to how loudly each need is felt, for the
+   * {@link strongestNeed} that gates this whole decision. Omit it and it is a
+   * clear day, which is what a fixture wants and what plan 016 had.
+   *
+   * Handed down as well as {@link ChoiceOptions.isOpen} so a heatwave changes
+   * what is wanted and not only what is available.
+   */
+  readonly weather?: WeatherEffect;
 }
 
 /**
@@ -259,7 +278,7 @@ function weigh(
   // The distance before the worth, because the worth depends on it: how much
   // room a relief has to fill is how much room there will be once they have
   // walked there. See `appeal.ts`.
-  const gain = appealOf(venue, needs, guests, person, distance);
+  const gain = appealOf(venue, needs, guests, person, distance, options.weather);
   // A place that does nothing for this person - or leaves them worse off on
   // balance - is not a candidate at all, rather than a bad one.
   if (gain <= 0) return 0;
@@ -303,15 +322,24 @@ function weigh(
  */
 export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
   const { needs, guests, person, venues } = options;
-  const wanted = strongestNeed(needs, guests, person);
+  const wanted = options.weather
+    ? strongestNeed(needs, guests, person, options.weather)
+    : strongestNeed(needs, guests, person);
   if (wanted === null) return null;
   const { reach } = archetypeOf(guests, person);
   const justLeft = options.justLeft ?? -1;
   const queueLimit = options.queueLimit ?? atCeiling;
 
+  const isOpen = options.isOpen;
+
   let best = -1;
   let bestScore = 0;
   for (let index = 0; index < venues.length; index++) {
+    // A place the weather has shut is not a bad candidate, it is not a
+    // candidate - exactly as one that does nothing for them is not. Here rather
+    // than in `weigh` because a closed venue's walking distance is a field
+    // nobody needs swept, and because `weigh` is already at the complexity gate.
+    if (isOpen && !isOpen(index)) continue;
     const score = weigh(options, index, reach, queueLimit, justLeft);
     if (score <= bestScore) continue;
     bestScore = score;
@@ -322,6 +350,7 @@ export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
   // which visit is best, and asking it of every candidate would be four fifths
   // of the work thrown away.
   const walk = distanceTo(options, best);
-  const need = dominantNeedAt(venues[best]!, needs, guests, person, walk) ?? wanted.need;
+  const need =
+    dominantNeedAt(venues[best]!, needs, guests, person, walk, options.weather) ?? wanted.need;
   return { venue: best, need };
 }

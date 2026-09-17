@@ -3,7 +3,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { walkNetworkFor, type PavedTile } from '../../crowd/domain/walkNetwork';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { beachVenueFor, isBeach } from './beach';
-import type { Venue } from './venues';
+import { shelterOf, type Venue } from './venues';
 
 // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
 const shore = shoreFor({ tilesX: 20, tilesZ: 20, shore: { inset: 1, beach: 6, wave: 0, seed: 1 } });
@@ -51,5 +51,12 @@ describe('isBeach', () => {
     expect(isBeach(beach)).toBe(true);
     const club: Venue = { ...beach, key: 'beach-club#0', id: 'beach-club', label: 'Beach Club' };
     expect(isBeach(club)).toBe(false);
+  });
+});
+
+describe('the beach in the rain', () => {
+  it('has no roof, so it shuts with the courts and the pools', () => {
+    const network = walkNetworkFor({ paved: boardwalk(10), levelOf: () => 0, shore, tilesX: 20 });
+    expect(shelterOf(beachVenueFor(network)!)).toBe('open');
   });
 });

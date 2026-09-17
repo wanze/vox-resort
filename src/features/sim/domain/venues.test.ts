@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Placement } from '../../layout/domain/resortLayout';
-import { reliefAt, venuesOn, type Venue } from './venues';
+import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 
 const at = (key: string, id: string, tileX = 0, tileZ = 0, tiles = 1): Placement => ({
   key,
@@ -106,5 +106,25 @@ describe('reliefAt', () => {
     const court = only([at('basketball-court#0', 'basketball-court')]);
     expect(reliefAt(court, 'fun')).toBe(0.8);
     expect(reliefAt(court, 'energy')).toBe(-0.4);
+  });
+});
+
+describe('shelterOf', () => {
+  it("carries a roofless model's own declaration onto its venue", () => {
+    expect(shelterOf(only([at('swimming-pool', 'swimming-pool', 0, 0, 8)]))).toBe('open');
+    expect(shelterOf(only([at('tennis-court#0', 'tennis-court', 0, 0, 9)]))).toBe('open');
+  });
+
+  it('leaves a model that declares nothing under cover', () => {
+    expect(shelterOf(only([at('bakery#0', 'bakery', 0, 0, 2)]))).toBe('covered');
+    expect(shelterOf(only([at('restaurant#0', 'restaurant', 0, 0, 4)]))).toBe('covered');
+  });
+
+  it('reads a venue that was built before there was any weather as covered', () => {
+    // The fixtures every test above this was written with declare no shelter at
+    // all, and the fallback is what keeps them meaning what they meant.
+    const bare = { ...only([at('bakery#0', 'bakery', 0, 0, 2)]) } as Venue;
+    delete (bare as { shelter?: unknown }).shelter;
+    expect(shelterOf(bare)).toBe('covered');
   });
 });

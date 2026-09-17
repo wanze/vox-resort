@@ -9,6 +9,7 @@ import { chooseVenue, type ChoiceOptions } from './chooseVenue';
 import { createNeeds, NEEDS, type Needs } from './needs';
 import { MAX_QUEUE_SHOWN } from './queueLane';
 import type { Venue } from './venues';
+import { weatherEffect } from './weather';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
 
@@ -415,5 +416,80 @@ describe('chooseVenue against the dirt', () => {
     // neglected venue behave exactly like a demolished one.
     expect(chooseVenue(filthy)?.venue).toBe(1);
     expect(chooseVenue(filthy)?.need).toBe<GuestNeed>('hunger');
+  });
+});
+
+describe('a venue the weather has shut', () => {
+  it('is never chosen, however much better than everything else it is', () => {
+    const person = someone('couple');
+    const needs = wanting(person, 'hunger');
+    // Right beside them and twice as generous as the one across the plot.
+    const venues = [
+      venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 20),
+      venue('bakery#0', HUNGER, 900),
+    ];
+    expect(
+      chooseVenue({ needs, guests, person, venues, x: 0, z: 0 })?.venue,
+      'the near one wins on a clear day',
+    ).toBe(0);
+    expect(
+      chooseVenue({
+        needs,
+        guests,
+        person,
+        venues,
+        x: 0,
+        z: 0,
+        isOpen: (index) => index !== 0,
+      })?.venue,
+      'and is not a candidate at all once it is shut',
+    ).toBe(1);
+  });
+
+  it('leaves the guest nowhere to go when it was the only thing serving them', () => {
+    const person = someone('couple');
+    const needs = wanting(person, 'hunger');
+    const venues = [venue('bakery#0', HUNGER, 100)];
+    expect(
+      chooseVenue({ needs, guests, person, venues, x: 0, z: 0, isOpen: () => false }),
+    ).toBeNull();
+  });
+
+  it('chooses exactly as it always did when no closure is handed in', () => {
+    const person = someone('friends');
+    const needs = wanting(person, 'thirst');
+    const venues = [
+      venue('bar#0', THIRST, 400),
+      venue('bakery#0', HUNGER, 40),
+      venue('bar#1', THIRST, 120),
+    ];
+    const before = chooseVenue({ needs, guests, person, venues, x: 0, z: 0 });
+    const after = chooseVenue({ needs, guests, person, venues, x: 0, z: 0, isOpen: () => true });
+    expect(after).toEqual(before);
+  });
+
+  it('lets a heatwave decide what is wanted, not only what is open', () => {
+    const person = someone('family');
+    const needs = createNeeds(guests, 7);
+    for (const each of NEEDS) needs.level[each][person] = 1;
+    // A family weights hunger 1.4 over thirst 1.1, so a shade more hunger than
+    // thirst is a trip to the bakery on any ordinary day.
+    needs.level.hunger[person] = 0.55;
+    needs.level.thirst[person] = 0.5;
+    const venues = [venue('bakery#0', HUNGER, 100), venue('bar#0', THIRST, 100)];
+    expect(chooseVenue({ needs, guests, person, venues, x: 0, z: 0 })?.need).toBe<GuestNeed>(
+      'hunger',
+    );
+    expect(
+      chooseVenue({
+        needs,
+        guests,
+        person,
+        venues,
+        x: 0,
+        z: 0,
+        weather: weatherEffect('heatwave'),
+      })?.venue,
+    ).toBe(1);
   });
 });

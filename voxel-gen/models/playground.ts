@@ -116,6 +116,8 @@ export default defineModel({
       ] as const,
   ),
   venue: {
+    // only the play tower has a roof, and nobody sits in it.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.9 },

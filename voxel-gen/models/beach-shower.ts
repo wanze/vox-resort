@@ -61,6 +61,8 @@ export default defineModel({
   category: 'amenities',
   tiles: { x: 1, z: 1 },
   venue: {
+    // a post and an arm on a duckboard; there is nothing over it.
+    shelter: 'open',
     role: 'service',
     satisfies: [{ need: 'hygiene', amount: 0.6 }],
     capacity: 1,

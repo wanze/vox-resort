@@ -39,6 +39,15 @@
  * 0.4 of your energy is worth less than the same fun for free. Both fall out of
  * summing `satisfies` rather than reading one entry of it.
  *
+ * ## The weather is a multiplier on the archetype's weights, and nothing else
+ *
+ * A heatwave is everybody wanting a drink. Since plan 030 the loudest need is
+ * only the content gate and this module is what decides *where* somebody goes,
+ * so a weather that stopped at `strongestNeed` would make a heatwave a day when
+ * people went out more and went to exactly the same places. The effect
+ * multiplies `archetypes.ts`'s weights here for the same reason it multiplies
+ * them there, and by the same numbers. See `weather.ts`.
+ *
  * ## Nothing here knows what a bakery is
  *
  * Every number is the art's or `archetypes.ts`'s. There is no table in this
@@ -51,6 +60,7 @@ import { archetypeOf } from './archetypes';
 import { WALK_VOXELS_PER_SIM_HOUR } from './crowdRate';
 import { NEEDS, type Needs } from './needs';
 import type { Venue } from './venues';
+import { CLEAR_EFFECT, type WeatherEffect } from './weather';
 
 /**
  * How much of `amount` this person can actually use, given how met the need
@@ -101,6 +111,11 @@ export function appealOf(
   person: number,
   /** How far they would walk to it, in voxels. Omit it and they are at the door. */
   distance = 0,
+  /**
+   * What today's weather does to how loudly each need is felt. Omit it and it
+   * is a clear day, which is what a fixture wants and what plan 030 had.
+   */
+  effect: WeatherEffect = CLEAR_EFFECT,
 ): number {
   const { weight, decayPerHour } = archetypeOf(guests, person);
   const hours = distance / WALK_VOXELS_PER_SIM_HOUR;
@@ -111,7 +126,7 @@ export function appealOf(
       decayPerHour[relief.need],
       hours,
     );
-    gain += weight[relief.need] * usableGain(relief.amount, level);
+    gain += weight[relief.need] * effect.weight[relief.need] * usableGain(relief.amount, level);
   }
   return gain;
 }
@@ -133,6 +148,8 @@ export function dominantNeedAt(
   person: number,
   /** How far they would walk to it, in voxels; see {@link appealOf}. */
   distance = 0,
+  /** Today's weather; see {@link appealOf}. Omit it and it is a clear day. */
+  effect: WeatherEffect = CLEAR_EFFECT,
 ): GuestNeed | null {
   const { weight, decayPerHour } = archetypeOf(guests, person);
   const hours = distance / WALK_VOXELS_PER_SIM_HOUR;
@@ -144,7 +161,8 @@ export function dominantNeedAt(
       decayPerHour[relief.need],
       hours,
     );
-    const gain = weight[relief.need] * usableGain(relief.amount, level);
+    const gain =
+      weight[relief.need] * effect.weight[relief.need] * usableGain(relief.amount, level);
     if (gain <= 0) continue;
     const louder =
       best === null ||

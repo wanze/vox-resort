@@ -46,7 +46,8 @@ import {
   SCRUB_PER_SPELL,
   type Upkeep,
 } from './upkeep';
-import type { Venue } from './venues';
+import { shelterOf, type Venue } from './venues';
+import { isOpenIn, weatherEffect, type Weather } from './weather';
 
 /**
  * How long one spell of work lasts, in ticks, which are simulated minutes.
@@ -82,11 +83,22 @@ export function createStaffRouter(parts: {
   readonly upkeep: () => Upkeep;
   /** The staff crowd as it stands, late-bound: it is built with this router. */
   readonly crowd: () => Crowd;
+  /**
+   * What kind of day it is, late-bound for the upkeep's reason. A venue the
+   * rain has shut is not one to send a cleaner to: they would walk across the
+   * plot to stand in a locked doorway, and the guests who are not going there
+   * either are not making it any dirtier. It gets scrubbed when it reopens.
+   *
+   * Omit it and every day is clear, which is what a fixture wants and what this
+   * router did before there was any weather. See `weather.ts`.
+   */
+  readonly weather?: () => Weather;
   /** What the length of each spell is drawn from; see {@link SPELL_TICKS}. */
   readonly seed: number;
 }): StaffRouter {
   const { staff } = parts;
   const random = createRandom(parts.seed);
+  const weatherNow = parts.weather ?? ((): Weather => 'clear');
 
   let venues = parts.venues;
   let network = parts.network;
@@ -132,9 +144,13 @@ export function createStaffRouter(parts: {
   const pick = (worker: number, at: number): number => {
     const passedOver = new Set<number>();
     for (let attempt = 0; attempt < venues.length; attempt++) {
+      const effect = weatherEffect(weatherNow());
       const venue = dirtiest(
         parts.upkeep(),
-        (each) => claimedBy[each] === NOBODY && !passedOver.has(each),
+        (each) =>
+          claimedBy[each] === NOBODY &&
+          !passedOver.has(each) &&
+          isOpenIn(shelterOf(venues[each]!), effect),
         NEEDS_CLEANING,
       );
       if (venue < 0) return NOBODY;

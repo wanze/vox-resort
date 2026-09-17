@@ -65,6 +65,8 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'far-from-home': ({ subject, count, need }) =>
     `${subject} guests walk ${count} tiles for ${NEED_ERRANDS[need ?? ''] ?? 'something they need'}`,
   unvisited: ({ subject }) => `Nobody visited ${subject} today`,
+  'weather-closed': ({ subject, need }) =>
+    `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
 
 /** What the number on a line means, where the line does not already say. */
@@ -76,6 +78,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   dirty: ({ count }) => `${count}% clean`,
   'far-from-home': () => 'straight line, not walking distance',
   unvisited: ({ count }) => `room for ${count}`,
+  'weather-closed': ({ count }) => `${count} of them have no roof`,
 };
 
 /** What a line is labelled with, so the rows read as a list rather than a table. */
@@ -87,6 +90,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   dirty: 'Upkeep',
   'far-from-home': 'Distance',
   unvisited: 'Quiet',
+  'weather-closed': 'Weather',
 };
 
 /**

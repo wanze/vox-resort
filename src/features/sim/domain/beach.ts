@@ -106,6 +106,9 @@ export function beachVenueFor(network: WalkNetwork): Venue | null {
     satisfies: BEACH_RELIEF,
     capacity: BEACH_CAPACITY,
     dwellSeconds: BEACH_DWELL_SECONDS,
+    // The sand has no roof, so the beach shuts in the rain like every court and
+    // pool on the plot - which is the most legible thing weather does here.
+    shelter: 'open',
     x: x / gates.length,
     z: z / gates.length,
     tileX: first.tileX,

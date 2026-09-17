@@ -58,7 +58,8 @@ export type AdviceKind =
   | 'unreachable'
   | 'dirty'
   | 'far-from-home'
-  | 'unvisited';
+  | 'unvisited'
+  | 'weather-closed';
 
 export interface Advice {
   readonly kind: AdviceKind;
@@ -121,6 +122,13 @@ export interface ResortFacts {
    * spotless, which is what a venue built this morning is. See `upkeep.ts`.
    */
   readonly cleanliness: ReadonlyMap<string, number>;
+  /**
+   * Venue keys the weather has shut today; see `weather.ts`.
+   *
+   * Optional, and an absent one is a clear day - which is what a fixture wants
+   * and what every rule above this one was written against.
+   */
+  readonly closed?: ReadonlySet<string>;
 }
 
 /**
@@ -138,6 +146,9 @@ const KIND_ORDER: readonly AdviceKind[] = [
   'dirty',
   'far-from-home',
   'unvisited',
+  // Last, because it is the one line on the list the player cannot fix today -
+  // it is about what to build before the next storm.
+  'weather-closed',
 ];
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -479,6 +490,49 @@ function louderFirst(a: Advice, b: Advice): number {
 }
 
 /**
+ * A need whose venues the weather has mostly shut.
+ *
+ * Not "it is raining" - the player can see that, and a line that only reported
+ * the sky would be the panel telling them nothing they can build. What it
+ * reports is the *hole the rain leaves*: the needs whose relief is standing
+ * under the sky, so that more than half of what serves them is closed. That is
+ * a reason to build a covered thing beside the open one, which is the whole
+ * point of having weather at all.
+ *
+ * Silent on a clear day, silent about a need nothing serves at all -
+ * {@link adviceUnservedNeeds} has already said so, louder and permanently - and
+ * silent about a need nobody happens to want.
+ *
+ * One line per need, so the list this can add to is at most five long.
+ */
+export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
+  const closed = facts.closed;
+  if (!closed || closed.size === 0) return [];
+  const advice: Advice[] = [];
+  for (const need of NEEDS) {
+    const wanting = facts.wanting[need];
+    if (wanting <= 0) continue;
+    const serving = facts.venues.filter((venue) => reliefAt(venue, need) > 0);
+    if (serving.length === 0) continue;
+    const shut = serving.filter((venue) => closed.has(venue.key)).length;
+    if (shut * 2 <= serving.length) continue;
+    advice.push({
+      kind: 'weather-closed',
+      // The share of the plot that wants it, scaled by how much of what serves
+      // it is shut: a need whose every venue is closed is the loudest case, and
+      // one just over half is barely worth a line.
+      weight: clamp(wanting / facts.present) * clamp(shut / serving.length),
+      subject: need,
+      count: shut,
+      // Not about any one building: it is the plot that is short of a roof.
+      at: null,
+      need,
+    });
+  }
+  return advice;
+}
+
+/**
  * Everything worth saying about the plot, loudest first.
  *
  * A plot with nobody on it says nothing: every weight here is a share of the
@@ -495,6 +549,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceDirty(facts),
     adviceFarFromHome(facts),
     ...adviceUnvisited(facts),
+    ...adviceWeatherClosed(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);
   return found.toSorted(louderFirst);
 }

@@ -94,6 +94,8 @@ export default defineModel({
   ],
   // A negative amount is a need a visit makes worse: a swim spends energy.
   venue: {
+    // three basins on an open deck: the rain falls straight in.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },

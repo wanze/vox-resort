@@ -184,6 +184,8 @@ export default defineModel({
     { x: 40, y: 3, z: 18, color: FLOOD, intensity: 90, distance: 52 },
   ],
   venue: {
+    // the slides and the splash basin are all under the sky.
+    shelter: 'open',
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 1 },

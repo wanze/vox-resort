@@ -13,6 +13,7 @@ import {
   strongestNeed,
   type Needs,
 } from './needs';
+import { weatherEffect } from './weather';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
 
@@ -212,5 +213,58 @@ describe('strongestNeed', () => {
     needs.level.hunger[person] = 0.4;
     needs.level.thirst[person] = 0.4;
     expect(strongestNeed(needs, guests, person)?.need).toBe<GuestNeed>('hunger');
+  });
+});
+
+describe('the weather over the needs', () => {
+  it('makes thirst the loudest need in a heatwave where a clear day would not', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const person = someone(guests, 'family');
+    const { weight } = ARCHETYPES.family;
+    setAll(needs, person, 1);
+    // A family's hunger outweighs its thirst at the same level, so on a clear
+    // day a little more hunger than thirst is plainly a trip to the bakery.
+    needs.level.hunger[person] = 0.55;
+    needs.level.thirst[person] = 0.5;
+    expect(weight.hunger * 0.45).toBeGreaterThan(weight.thirst * 0.5);
+    expect(strongestNeed(needs, guests, person)?.need).toBe<GuestNeed>('hunger');
+    expect(strongestNeed(needs, guests, person, weatherEffect('heatwave'))?.need).toBe<GuestNeed>(
+      'thirst',
+    );
+  });
+
+  it('decays thirst faster in a heatwave over the very same ticks', () => {
+    const guests = guestsOf();
+    const clear = createNeeds(guests, 7);
+    const hot = createNeeds(guests, 7);
+    const person = someone(guests, 'couple');
+    decayNeeds(clear, guests, 120);
+    decayNeeds(hot, guests, 120, weatherEffect('heatwave'));
+    expect(hot.level.thirst[person]!).toBeLessThan(clear.level.thirst[person]!);
+    // And nothing it does not name: a heatwave is thirst and tiredness, not a
+    // blanket multiplier on being a person.
+    expect(hot.level.hunger[person]!).toBeCloseTo(clear.level.hunger[person]!, 6);
+    expect(hot.level.hygiene[person]!).toBeCloseTo(clear.level.hygiene[person]!, 6);
+  });
+
+  it('decays exactly as it always did when no weather is handed in', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const person = someone(guests, 'family');
+    setAll(needs, person, 1);
+    decayNeeds(needs, guests, 120);
+    // Two hours of a family's declared rates, pinned against the literals rather
+    // than against the table, so a change to either is a change to both.
+    expect(levelsOf(needs, person)).toEqual(
+      [1 - 0.2 * 2, 1 - 0.16 * 2, 1 - 0.14 * 2, 1 - 0.12 * 2, 1 - 0.18 * 2].map((level) =>
+        Math.fround(level),
+      ),
+    );
+    // And a clear day is the same thing said out loud.
+    const spelled = createNeeds(guests, 7);
+    setAll(spelled, person, 1);
+    decayNeeds(spelled, guests, 120, weatherEffect('clear'));
+    expect(levelsOf(spelled, person)).toEqual(levelsOf(needs, person));
   });
 });

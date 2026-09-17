@@ -130,7 +130,8 @@ import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './qu
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
-import { reliefAt, type Venue } from './venues';
+import { isOpenIn, weatherEffect, type Weather } from './weather';
+import { reliefAt, shelterOf, type Venue } from './venues';
 
 /**
  * Simulated seconds one tick covers: a tick is a simulated minute, which is
@@ -399,10 +400,21 @@ export function createRouter(parts: {
    * nothing this file knows about. See `upkeep.ts`.
    */
   readonly upkeep: () => Upkeep;
+  /**
+   * What kind of day it is, late-bound exactly as {@link tickOfDay} is and for
+   * the same reason: the clock is what knows the day, and the weather is a pure
+   * function of it. See `weather.ts`.
+   *
+   * Omit it and every day is clear - which is what a fixture wants, and what
+   * this router did before there was any weather at all.
+   */
+  readonly weather?: () => Weather;
   /** What the dwell of each visit is drawn from; see {@link dwellTicksFor}. */
   readonly seed: number;
 }): Router {
   const { guests, needs, crowd } = parts;
+  /** Today's weather, or a clear day where the caller keeps no clock. */
+  const weatherNow = parts.weather ?? ((): Weather => 'clear');
   const goals: Goals = createGoals(guests.count);
   const random = createRandom(parts.seed);
 
@@ -710,6 +722,21 @@ export function createRouter(parts: {
    */
   const cleanOf = (venue: number): number => cleanliness(parts.upkeep(), venue);
 
+  /**
+   * Whether each venue is open in today's weather, for `chooseVenue` and for the
+   * door.
+   *
+   * Asked of the clock every time rather than kept, for the reason every other
+   * late-bound part of this file is: the day turns over between ticks, and a
+   * router holding yesterday's sky would shut the beach on a morning that had
+   * cleared. The beach is a venue like any other here - it declares
+   * `shelter: 'open'`, so it shuts with the courts.
+   */
+  const isOpen = (venue: number): boolean => {
+    const declared = venues[venue];
+    return declared ? isOpenIn(shelterOf(declared), weatherEffect(weatherNow())) : false;
+  };
+
   /** How much this person likes each venue, for `chooseVenue`; see {@link salts}. */
   const affinityOf =
     (person: number) =>
@@ -722,6 +749,11 @@ export function createRouter(parts: {
    * of the ceiling `arriveAt` counts to.
    */
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
+    // Shut, before the line is even looked at: a guest at the door of a closed
+    // pool turns round and decides again, which `arriveIfThere` already handles
+    // and which needs no state of its own. A venue that shuts while somebody is
+    // inside is not emptied - they finish the visit they are having.
+    if (!isOpen(venue)) return 'balked';
     if (queueLength(venue) >= queueLimit(venue)) {
       balkCount[venue]!++;
       return 'balked';
@@ -748,6 +780,8 @@ export function createRouter(parts: {
       affinity: affinityOf(person),
       justLeft: justLeft[person]!,
       cleanliness: cleanOf,
+      isOpen,
+      weather: weatherEffect(weatherNow()),
     });
     if (choice) setPartyGoal(goals, guests, person, choice);
   };
@@ -941,7 +975,9 @@ export function createRouter(parts: {
     const people = crowd();
     for (let person = 0; person < guests.count; person++) {
       if (!dueAnotherLook(person, beach, people)) continue;
-      const wanted = strongestNeed(needs, guests, person);
+      // The day's weather too, or somebody lying on the sand in a heatwave is
+      // the one person on the plot who does not want a drink.
+      const wanted = strongestNeed(needs, guests, person, weatherEffect(weatherNow()));
       if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
       // What they came to the beach for is what the beach is giving them.
       if (reliefAt(venues[beach]!, wanted.need) > 0) continue;
@@ -986,6 +1022,8 @@ export function createRouter(parts: {
       affinity: affinityOf(person),
       justLeft: justLeft[person]!,
       cleanliness: cleanOf,
+      isOpen,
+      weather: weatherEffect(weatherNow()),
     });
     if (!choice) return;
     // Its lane and its own routes off the beach, which the walk home will want.

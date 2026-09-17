@@ -173,6 +173,8 @@ export default defineModel({
   category: 'leisure',
   placement: { perResort: { min: 1, max: 3 } },
   venue: {
+    // sixteen lanes on an open plinth.
+    shelter: 'open',
     role: 'activity',
     satisfies: [{ need: 'fun', amount: 0.7 }],
     capacity: 16,

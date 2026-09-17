@@ -85,6 +85,7 @@ import { createRailIndex } from '../features/build/domain/railIndex';
 import { createBuildPointer } from '../features/build/adapters/buildPointer';
 import type { PickGround } from '../features/build/domain/groundPick';
 import { createPlacementGhost } from '../features/build/adapters/placementGhost';
+import { levelHeight } from '../features/layout/domain/elevation';
 import type { WorldBounds } from '../features/layout/domain/worldBounds';
 import { skyStateFor } from '../features/lighting/domain/dayNight';
 import {
@@ -99,7 +100,7 @@ import {
   type SimClock,
   type SimSpeed,
 } from '../features/sim/domain/simClock';
-import { createNeeds, decayNeeds, type Needs } from '../features/sim/domain/needs';
+import { createNeeds, decayNeeds, strongestNeed, type Needs } from '../features/sim/domain/needs';
 import {
   ageHappiness,
   createHappiness,
@@ -114,6 +115,14 @@ import { venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
+import {
+  adviceFor,
+  unreachableOn,
+  type Advice,
+  type ResortFacts,
+} from '../features/sim/domain/advice';
+import { doorsFor } from '../features/sim/domain/doors';
+import { nodeIndexFor } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
@@ -160,7 +169,7 @@ import {
   presentCount,
   type Guests,
 } from '../features/guests/domain/guests';
-import type { Home } from '../features/guests/domain/homes';
+import { NO_HOME, type Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
@@ -175,6 +184,7 @@ import {
   type InspectTarget,
   type SelectionView,
 } from '../features/inspect/domain/selection';
+import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
 import { buildBalloonField } from '../features/balloons/adapters/balloonField';
@@ -481,6 +491,13 @@ export interface ShowcaseOptions {
    * frame: the panel's live line goes through `onFrame` instead.
    */
   readonly onSelectionChange?: (selection: SelectionView | null) => void;
+  /**
+   * Called with what the resort is getting wrong, ranked: once a simulated day
+   * at the check-in hour, and again whenever an edit has settled and the walk
+   * graph has been rebuilt under it. **Never per frame** - see {@link factsNow},
+   * which walks the guest list.
+   */
+  readonly onAdviceChange?: (advice: readonly Advice[]) => void;
 }
 
 /** Which camera the resort is being drawn through, and which way it faces. */
@@ -494,6 +511,14 @@ export interface CameraView {
 
 export interface Showcase {
   readonly stats: ShowcaseStats;
+  /**
+   * What the plot is getting wrong, ranked, as it stands right now.
+   *
+   * Read once when the HUD mounts, so the panel says something before the first
+   * check-in hour comes round; after that it arrives through
+   * {@link ShowcaseOptions.onAdviceChange}.
+   */
+  readonly advice: readonly Advice[];
   /** Populated once a `?bench=1` run has collected its frames. */
   readonly benchResult: BenchResult | null;
   /** The parameters the resort on screen was grown from. */
@@ -506,6 +531,15 @@ export interface Showcase {
   setDetail(enabled: boolean): void;
   /** Turns the isometric view a quarter; negative turns anticlockwise. */
   turnCamera(quarters: number): void;
+  /**
+   * Pans the camera to the middle of a tile, standing it on the ground there.
+   *
+   * A tile rather than a world point, because what asks is the advice panel and
+   * a piece of advice names a building by where it stands. Refused under a
+   * benchmark, for {@link setCameraMode}'s reason: a run is measured through one
+   * pinned view.
+   */
+  lookAtTile(tile: { readonly tileX: number; readonly tileZ: number }): void;
   /**
    * Grows a new resort from these parameters and puts it on screen once it is
    * ready; the one on screen keeps drawing until then. A later call wins.
@@ -959,6 +993,15 @@ interface Resort {
    */
   gateways: readonly Gateway[];
   /**
+   * Which of {@link venues} nothing can walk to at all, by key.
+   *
+   * Worked out when the graph is and replaced alongside the three lists above,
+   * rather than once a day with the rest of the advice: it is a question about
+   * the paving and the doors, so the only thing that can change the answer is
+   * the edit that has just rebuilt both. See `sim/domain/advice.ts`.
+   */
+  unreachable: ReadonlySet<string>;
+  /**
    * What the resort is worth out of five, and what made it that.
    *
    * Worked out once a day rather than per tick - it is a mean over every guest
@@ -1366,6 +1409,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const venues = venuesOn(plot.layout.placements);
   const lodgings = lodgingsOn(plot.layout.placements);
   const gateways = gatewaysOn(plot.layout.placements);
+  const unreachable = strandedOn(venues, network);
   const beds = bedCount(guests);
   // The router reads where somebody is standing and the crowd is built with the
   // router, so one of the two is bound late — as `createClock` binds the resort.
@@ -1437,6 +1481,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     venues,
     lodgings,
     gateways,
+    unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     beds: { total: beds.beds, taken: beds.taken },
     router,
@@ -1645,7 +1690,13 @@ function lightRooms(resort: Resort, last: number | null): number {
  * frames: a tick is a simulated minute however many frames went into it. See
  * `simClock.ts`.
  */
-function runTicks(resort: Resort, clock: Clock, ticks: number, lastShare: number | null): number {
+function runTicks(
+  resort: Resort,
+  clock: Clock,
+  ticks: number,
+  lastShare: number | null,
+  advise: () => void,
+): number {
   decayNeeds(resort.needs, resort.guests, ticks);
   // One at a time rather than all twelve at once: a venue that frees a place
   // on the first of them must let somebody in on the first, not on the last.
@@ -1662,8 +1713,73 @@ function runTicks(resort: Resort, clock: Clock, ticks: number, lastShare: number
   // The coaches, once a day, over the run of ticks the clock just produced
   // rather than on one of them: twelve ticks in a frame must not step over
   // eleven o'clock. See `checkIn.ts`.
-  if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) runDay(resort, clock.day);
+  if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
+    runDay(resort, clock.day);
+    // After the coaches, so the day's advice describes the plot as it now
+    // stands, and before the counters are wiped, since it is what reads them.
+    advise();
+    resort.router.forgetTheDay();
+  }
   return lightRooms(resort, lastShare);
+}
+
+/**
+ * The venues on this graph nothing can walk to, by key.
+ *
+ * One node index for the whole list rather than one per venue, which is the
+ * only reason this is a function here instead of a call at each of its two
+ * sites. The rule itself - and the beach building it must not strand - is
+ * `advice.ts`'s, with its test.
+ */
+function strandedOn(venues: readonly Venue[], network: WalkNetwork): ReadonlySet<string> {
+  const index = nodeIndexFor(network);
+  return unreachableOn(venues, (venue) => doorsFor(venue, index, network));
+}
+
+/** Guests on the plot right now with nowhere to sleep; see `homes.ts`. */
+function homelessOn(guests: Guests): number {
+  let homeless = 0;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1 && guests.home[person] === NO_HOME) homeless++;
+  }
+  return homeless;
+}
+
+/** What the guests on the plot want most, counted per need; see `strongestNeed`. */
+function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
+  const { guests, needs } = resort;
+  const counted = { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0 };
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1) continue;
+    const want = strongestNeed(needs, guests, person);
+    if (want) counted[want.need]++;
+  }
+  return counted;
+}
+
+/**
+ * Everything the advice reads, gathered off the resort as it stands.
+ *
+ * **Once a simulated day, and on an edit** - never per frame, and never per
+ * tick. It walks the guest list twice and the venue list once, and every number
+ * in it is one something else already counted: nothing here decides anything or
+ * changes anything. See `sim/domain/advice.ts`, which is emphatic about that.
+ */
+function factsNow(resort: Resort): ResortFacts {
+  const { guests, router } = resort;
+  return {
+    venues: resort.venues,
+    lodgings: resort.lodgings,
+    present: presentCount(guests),
+    homeless: homelessOn(guests),
+    // The registry's own tally, kept in step by check-in and check-out, rather
+    // than a third pass over the guests.
+    bedsFree: guests.freeBeds.reduce((free, home) => free + home, 0),
+    wanting: wantingOn(resort),
+    balks: router.dayBalks(),
+    visits: router.dayVisits(),
+    unreachable: resort.unreachable,
+  };
 }
 
 /**
@@ -2519,6 +2635,23 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     handle.setIsoDirection(direction);
   };
 
+  /**
+   * Pans to the middle of a tile, at the height the ground there stands.
+   *
+   * Off the live terrain rather than off the placement, so panning to a
+   * building on a terrace looks at the terrace and not through it, and so a
+   * tile whose ground has been dug since is still found.
+   */
+  const lookAtTile = (tile: { readonly tileX: number; readonly tileZ: number }): void => {
+    if (bench) return;
+    const { terrain } = current();
+    handle.lookAt({
+      x: (tile.tileX + 0.5) * TILE_VOXELS,
+      y: levelHeight(terrain.levelOf(tile.tileX, tile.tileZ)),
+      z: (tile.tileZ + 0.5) * TILE_VOXELS,
+    });
+  };
+
   const cameraKeys = createCameraKeys({
     mode: () => handle.cameraMode,
     onModeChange: (mode) => {
@@ -2693,10 +2826,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSelect: select,
   });
 
+  /**
+   * Tells the HUD what the plot is getting wrong, ranked.
+   *
+   * Once a simulated day out of the tick block, and on an edit that has settled;
+   * see {@link factsNow}, which is emphatic about it not being a per-frame call.
+   */
+  const advise = (): void => options.onAdviceChange?.(adviceFor(factsNow(current())));
+
   /** Tells everything above the renderer that the resort underneath it changed. */
   const rebuilt = (): void => {
     clock.relight();
     onSceneChange?.(statsNow());
+    advise();
   };
 
   /** How many resorts have been asked for; only the latest one is put on screen. */
@@ -2779,8 +2921,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.venues = venuesOn(plot.placements);
       resort.lodgings = lodgingsOn(plot.placements);
       resort.gateways = gatewaysOn(plot.placements);
+      resort.unreachable = strandedOn(resort.venues, network);
       resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
       crowd.relocate(network);
+      // Bulldozing the only restaurant should say so now rather than tomorrow
+      // morning. The day's counters are left alone: what happened at the doors
+      // this morning happened, and the venues that are still standing kept
+      // their keys.
+      advise();
     }
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
@@ -2791,7 +2939,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Whole simulated minutes, at most MAX_TICKS_PER_ADVANCE of them, so a tab
     // that was in the background does not run a week of decay in one frame.
-    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare);
+    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise);
     // A benchmark walks the crowd by a fixed step rather than by the frame's
     // own: two runs are only comparable if the scene is in the same place on
     // the same frame of each, and the frame's `dt` is exactly what differs
@@ -2868,6 +3016,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get stats() {
       return statsNow();
     },
+    get advice() {
+      return adviceFor(factsNow(current()));
+    },
     get params() {
       return params;
     },
@@ -2882,6 +3033,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       detail = enabled;
     },
     turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
+    lookAtTile,
     generate(next) {
       const asked = clampParams(next);
       return regrow(asked, { kind: 'generate', params: asked });

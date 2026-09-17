@@ -5,6 +5,7 @@ import { Hud } from '../features/hud/components/Hud';
 import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls } from './useClockControls';
+import { useAdvice } from './useAdvice';
 import { useInspector } from './useInspector';
 import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
@@ -31,12 +32,14 @@ export function App() {
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
+  const advice = useAdvice(showcaseRef);
   // Pulled out because the mount effect depends on them: the setters React hands
   // back are stable, the objects holding them are not, and depending on those
   // would tear the renderer down on every render.
   const { adopt: adoptParams } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
+  const { adopt: adoptAdvice } = advice;
 
   /** Arms the pointer with a tool, and keeps the palette showing which. */
   const selectTool = useCallback((next: BuildTool | null) => {
@@ -67,6 +70,8 @@ export function App() {
       onCameraChange: adoptCamera,
       // A click on the canvas; runs on a click, not on a frame.
       onSelectionChange: adoptSelection,
+      // Once a simulated day, and on an edit that has settled - never a frame.
+      onAdviceChange: adoptAdvice,
       onFrame: overlay.update,
     };
 
@@ -81,6 +86,8 @@ export function App() {
         showcaseRef.current = mounted;
         mounted.selectTool(toolRef.current);
         setStats(mounted.stats);
+        // So the panel says something before the first check-in hour comes round.
+        adoptAdvice(mounted.advice);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
       } catch (cause: unknown) {
@@ -97,7 +104,7 @@ export function App() {
       });
     };
     // All of them are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection]);
+  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection, adoptAdvice]);
 
   return (
     <div className="app">
@@ -117,6 +124,8 @@ export function App() {
         clock={clock}
         camera={camera}
         resort={resort}
+        advice={advice.advice}
+        onShowOnPlot={advice.showOnPlot}
         preview={previewUrl}
         tool={tool}
         onToolChange={selectTool}

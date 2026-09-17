@@ -46,6 +46,8 @@ and the bay still do not follow edits, and have nothing to lose by not doing.
 | What is selected, worded for the HUD   | `inspect/domain/selection.ts`                |
 | The inspector's click                  | `inspect/adapters/inspectPointer.ts`         |
 | The inspector panel                    | `hud/components/InspectPanel.tsx`            |
+| What the resort is getting wrong       | `sim/domain/advice.ts`                       |
+| The advice panel                       | `hud/components/AdvicePanel.tsx`             |
 | Drawing the crowd                      | `crowd/adapters/crowdField.ts`               |
 | Figure geometry and poses              | `rendering/adapters/figureField.ts`          |
 | Boats and piers                        | `sea/domain/piers.ts`, `stepFlotilla`        |
@@ -626,6 +628,101 @@ people there are rather than only what they do.
 The HUD's `Guests` row is guests on the plot over the bodies it was built for,
 and `Rating` is the stars. The inspector's `Mood` row is one guest's happiness.
 
+## Advice
+
+`sim/domain/advice.ts` ranks what the resort is getting wrong and
+`hud/components/AdvicePanel.tsx` shows the top four, behind the bar's `Advice`
+button. Everything needed to say "you need another bakery" was already measured
+and none of it was ever said.
+
+- **It computes nothing.** Every number is one something else counted: the
+  router's own tally of who it turned away and who it let in, `homes.ts`'s
+  parties with no roof, `doors.ts`'s buildings with no way in, `venuesOn` and
+  `reliefAt` for what the plot serves at all. **Advice observes, and must never
+  be the reason something else starts counting differently.** A rule that wants
+  a change in `chooseVenue.ts` or `occupancy.ts` is a bug found in the thing it
+  was observing, and worth more as a bug report than as a weighting.
+
+- **Six rules, six small functions, six tests.** A seventh - cleanliness,
+  weather - is a seventh function and never a branch in one of these. Each takes
+  a `ResortFacts` literal and returns advice or nothing, so every one of them is
+  tested without a plot under it.
+
+  | Rule            | What it reads                          | Weight                                      |
+  | --------------- | -------------------------------------- | ------------------------------------------- |
+  | `no-beds`       | guests with `NO_HOME`, beds free       | the share of the plot, undamped             |
+  | `unserved-need` | `venuesOn` × `reliefAt`, per need      | the share wanting it                        |
+  | `full-lines`    | the day's balks and visits per venue   | share refused × how many that was           |
+  | `unreachable`   | `doorsFor`: no nodes **and** no sand   | 0.9 flat, per venue                         |
+  | `far-from-home` | lodging → nearest venue serving a need | distance against `ARCHETYPES.friends.reach` |
+  | `unvisited`     | venues with no visitors all day        | 0.2 to 0.4, by the room that stood idle     |
+
+- **Straight line, not walking distance.** `far-from-home` measures the straight
+  line from a lodging's middle. A flow field per lodging per need is exactly the
+  eager sweep `router.ts` refuses to do, and the straight line is near enough to
+  point at a corner of the plot. It fires past `ARCHETYPES.family.reach`, the
+  smallest in the table: a lodging further than that from somewhere to eat is one
+  whose families stop eating.
+
+- **A beach building is not stranded.** A venue counts as unreachable only when
+  it has no door node **and** no sand in front of it, so the twenty showers and
+  cabins on the sand - which have no door node and are perfectly reachable - are
+  left alone. What it does not
+  ask is whether a route over the sand exists: that is a sweep of the beach per
+  building, and the answer is already right about every building the player can
+  do anything about.
+
+- **Once a simulated day, and on an edit.** Computed after the morning's coaches,
+  so the day's advice describes the plot as it now stands, and again when a hand
+  edit has settled and the walk graph has been rebuilt - bulldozing the only
+  restaurant should say so now rather than tomorrow. `Router.forgetTheDay` then
+  starts a fresh day's counting. Never per frame: it walks the guest list twice
+  and the venue list once. The venues nothing can reach are worked out with the
+  graph rather than with the advice, because the graph is what decides them.
+
+- **A label is not an address.** A plot stands nine Changing Cabins, so advice
+  about one building carries `at`, its tile, and the panel prints it the way the
+  inspector titles a building - `room for 40 · tile 101, 9`. Advice about one
+  need carries `need` for the same reason: "Bungalow guests walk 62 tiles for
+  something they need" names a number and no errand, where "for somewhere to
+  rest" is a thing to build. Both are `| null` for the rules they do not apply
+  to. Every line that carries a tile also carries a **Show** button, which pans
+  the camera to it: `SceneHandle.lookAt` keeps how far off and how high the
+  camera was standing, so arriving reads as having walked there rather than as a
+  cut to another scene, and both modes' remembered targets move together so
+  switching view afterwards finds the same place. The height comes off the live
+  terrain rather than off the placement, so a building on a terrace is looked at
+  and not through. A benchmark refuses it, for the reason it refuses a mode
+  change: a run is measured through one pinned view. Pointing at _which_ one
+  spatially, without being told, is still the heatmap's job, deferred below.
+
+- **An idle venue is ranked by the room that stood empty.** Flat 0.3 apiece was
+  the first cut, and running the resort showed it up: a quiet day leaves a dozen
+  of ninety venues unvisited, all tied, and which four reached the panel came
+  down to placement order. A forty-place restaurant nobody ate in is worse news
+  than a one-place shower nobody rinsed under, and the art declares the
+  difference. It stays a note: never louder than 0.4, where a stranded venue is
+  0.9.
+
+- **The wording is in the panel.** The domain hands back a kind, a weight, a
+  subject already named and the count that produced it; `AdvicePanel.tsx` turns
+  that into a sentence, for the reason `InspectPanel.tsx` keeps its own
+  `NEED_LABELS`. No line claims a cause the number does not support: "the Bakery
+  is too small" is a guess, "the Bakery turned 41 away at the door today" is what
+  happened.
+
+- **What it says about the reference plot.** Seed 3, 112 by 100, 600 guests, 91
+  venues and 121 lodgings: nothing unserved, nothing unreachable, nobody without
+  a bed, and the loudest thing on it a bungalow whose guests walk 62 tiles for
+  somewhere to rest, at tile 1, 70. Half the lodging-to-need pairs are over 20 tiles -
+  median 19, max 62 - which is the distance-as-a-design-constraint the panel
+  exists to surface. Gathering the facts and ranking them costs 2.4 ms.
+
+- **Deferred deliberately**: the heatmap overlays - footfall, need coverage,
+  queue pain - which answer the same question spatially and would name _which_
+  bungalow rather than the type. Everything gathered here would feed one; it is a
+  rendering plan of its own.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`, so they
@@ -657,3 +754,4 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 | —       | People in the boats                                               | Landed             |
 | 7       | Measure: `?people=n`, a HUD count, a bench case, real costs above | `?people=n` landed |
 | —       | Stays that end, a rating, and the coaches that follow from it     | Landed             |
+| —       | Advice: what the resort is getting wrong, ranked                  | Landed             |

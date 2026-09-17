@@ -339,6 +339,19 @@ export interface Router {
   goalOf(person: number): Venue | null;
   /** Who is inside and who is waiting at one venue, for the inspector. */
   occupancyOf(venueKey: string): VenueOccupancy | null;
+  /**
+   * Times each venue turned somebody away since the last {@link forgetTheDay},
+   * by key. A balk is a guest who walked all the way to a door and found the
+   * line already as long as the ground in front of it holds.
+   */
+  dayBalks(): ReadonlyMap<string, number>;
+  /** Visits each venue took over the same window, by key. */
+  dayVisits(): ReadonlyMap<string, number>;
+  /**
+   * Starts a fresh day's counting. Called once a simulated day by
+   * `showcase.ts`, after it has read the two maps.
+   */
+  forgetTheDay(): void;
   /** What one person is doing about a venue, or null while they are walking. */
   visitOf(person: number): Visit | null;
   /** Where one person is in a stay at the beach, or null while they are on none. */
@@ -458,6 +471,18 @@ export function createRouter(parts: {
    */
   let sandFields: (SandField | null)[] = venues.map(() => null);
   let standsOnSand = new Int8Array(venues.length).fill(-1);
+  /**
+   * What each venue did with the people who walked up to it today: turned away,
+   * and let in or stood in the line.
+   *
+   * Counted here rather than worked out from the occupancy, because both are
+   * things that *happened* and the occupancy is only ever what is true now: a
+   * bakery that filled and emptied four times over says nothing about it by
+   * teatime. The day's two numbers are what plan 021's advice panel ranks a
+   * venue by. Nothing about the decision above reads them.
+   */
+  let balkCount = new Int32Array(venues.length);
+  let visitCount = new Int32Array(venues.length);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -646,7 +671,11 @@ export function createRouter(parts: {
    * of the ceiling `arriveAt` counts to.
    */
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
-    if (queueLength(venue) >= queueLimit(venue)) return 'balked';
+    if (queueLength(venue) >= queueLimit(venue)) {
+      balkCount[venue]!++;
+      return 'balked';
+    }
+    visitCount[venue]!++;
     const declared = venues[venue]!;
     return arriveAt(occupancy, person, venue, declared.capacity, dwellTicksFor(declared), now);
   };
@@ -1436,6 +1465,11 @@ export function createRouter(parts: {
       lookAgainAt = new Int32Array(guests.count);
       sandFields = venues.map(() => null);
       standsOnSand = new Int8Array(venues.length).fill(-1);
+      // The day's tallies go with the venues they counted: the arrays are as
+      // long as the list that has just been replaced, and a bulldozed bakery's
+      // forty balks are not the new one's.
+      balkCount = new Int32Array(venues.length);
+      visitCount = new Int32Array(venues.length);
       // Everybody, not only the parties whose venue went: a goal is an index
       // into the venue list that has just been replaced, over nodes that have
       // just been renumbered, so none of them means anything now.
@@ -1511,7 +1545,39 @@ export function createRouter(parts: {
       if (venue === -1) return null;
       return { inside: occupancy.inside[venue] ?? 0, waiting: queueLength(venue) };
     },
+
+    // Both maps are built here rather than kept, because they are read once a
+    // simulated day and written on every arrival on the plot.
+    dayBalks() {
+      return tallyOf(venues, balkCount);
+    },
+
+    dayVisits() {
+      return tallyOf(venues, visitCount);
+    },
+
+    forgetTheDay() {
+      balkCount.fill(0);
+      visitCount.fill(0);
+    },
   };
+}
+
+/**
+ * A per-venue tally as a map keyed by what a caller outside this module knows a
+ * venue by, which is its key and never its index.
+ *
+ * Only the venues something happened at, so a plot of eighty buildings on a
+ * quiet morning is a map of four entries rather than eighty zeroes - and the
+ * beach falls out of it on its own, having no line to be turned away from.
+ */
+function tallyOf(venues: readonly Venue[], counts: Int32Array): ReadonlyMap<string, number> {
+  const tally = new Map<string, number>();
+  for (let venue = 0; venue < venues.length; venue++) {
+    const count = counts[venue] ?? 0;
+    if (count > 0) tally.set(venues[venue]!.key, count);
+  }
+  return tally;
 }
 
 /**

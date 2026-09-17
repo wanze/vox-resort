@@ -1,4 +1,5 @@
 import { useState, type RefObject } from 'react';
+import { AdvicePanel } from './AdvicePanel';
 import { CameraPanel } from './CameraPanel';
 import { HudPopover } from './HudPopover';
 import { HudReadout } from './HudReadout';
@@ -9,6 +10,7 @@ import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { ShowcaseStats } from '../../../app/showcase';
+import type { Advice } from '../../sim/domain/advice';
 
 export interface TopBarProps {
   readonly fps: number;
@@ -21,10 +23,14 @@ export interface TopBarProps {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
+  /** What the plot is getting wrong, ranked; see `sim/domain/advice.ts`. */
+  readonly advice: readonly Advice[];
+  /** Pans the camera to the building a piece of advice is about. */
+  readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
 }
 
 /** The tools the bar can open, named so only one is ever out at a time. */
-type Tool = 'details' | 'resort' | 'camera';
+type Tool = 'details' | 'resort' | 'camera' | 'advice';
 
 /**
  * The one bar the HUD reads from: what the scene is doing now, and the tools
@@ -46,6 +52,8 @@ export function TopBar(props: TopBarProps) {
     clock,
     camera,
     resort,
+    advice,
+    onShowOnPlot,
   } = props;
   const [tool, setTool] = useState<Tool | null>(null);
   const toggle = (next: Tool) => (): void => setTool((current) => (current === next ? null : next));
@@ -78,6 +86,10 @@ export function TopBar(props: TopBarProps) {
             drawnElement={drawnElement}
             frameCostElements={frameCostElements}
           />
+        </HudPopover>
+
+        <HudPopover label="Advice" open={tool === 'advice'} onToggle={toggle('advice')}>
+          <AdvicePanel advice={advice} onShowOnPlot={onShowOnPlot} />
         </HudPopover>
 
         <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>

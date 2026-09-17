@@ -190,6 +190,16 @@ export interface SceneHandle {
   /** Turns the isometric camera to another compass point, around what it is on. */
   setIsoDirection(direction: CompassDirection): void;
   /**
+   * Points the camera on screen at somewhere on the plot, in world voxels.
+   *
+   * **A pan, not a jump to a fixed view**: the camera keeps how far off and how
+   * high it was standing, so arriving somewhere looks like having walked there
+   * rather than like a cut to a different scene. Both modes' remembered targets
+   * move together, so switching view afterwards finds the same place rather
+   * than wherever that camera was left.
+   */
+  lookAt(spot: { readonly x: number; readonly y: number; readonly z: number }): void;
+  /**
    * Takes the left mouse button off the camera, or hands it back exactly as it
    * was.
    *
@@ -761,6 +771,18 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       controls.target.copy(targets[mode]);
       if (mode === 'isometric') standIsoCamera();
       applyMode();
+      controls.update();
+    },
+    lookAt(spot) {
+      const camera = cameraFor(mode);
+      // How the camera stood relative to what it was looking at, kept: the
+      // isometric one stands itself, having a fixed one to stand in.
+      const offset = new Vector3().subVectors(camera.position, controls.target);
+      controls.target.set(spot.x, spot.y, spot.z);
+      targets.perspective.copy(controls.target);
+      targets.isometric.copy(controls.target);
+      if (mode === 'isometric') standIsoCamera();
+      else camera.position.copy(controls.target).add(offset);
       controls.update();
     },
     setIsoDirection(next) {

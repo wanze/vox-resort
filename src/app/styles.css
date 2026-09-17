@@ -527,6 +527,24 @@ input[type='checkbox'] {
   font-weight: 600;
 }
 
+/* ---- Advice ----------------------------------------------------------- */
+
+/* The one panel whose rows are sentences rather than counts. `.hud-stats` holds
+   every line on one line, which is right for a number and would make this panel
+   as wide as its longest observation. */
+.hud-advice {
+  max-width: 34ch;
+  white-space: normal;
+}
+
+/* Sits at the end of the sentence it belongs to, so the line reads as one
+   thought and the button is where the eye already is. */
+.hud-advice-show {
+  margin-left: var(--space-2);
+  padding: 1px var(--space-2);
+  vertical-align: baseline;
+}
+
 /* ---- Camera ----------------------------------------------------------- */
 
 .hud-camera {

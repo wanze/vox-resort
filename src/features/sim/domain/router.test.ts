@@ -554,6 +554,58 @@ describe('a venue that holds only as many as it says', () => {
     expect(crowd.z[1]).toBeCloseTo(3.5 * TILE_VOXELS);
   });
 
+  /**
+   * What plan 021's advice panel ranks a venue by: not who is inside now, but
+   * what happened at the door today. Nothing about the decision reads these.
+   */
+  it('counts a guest it let in as a visit, and one it turned away as a balk', () => {
+    const network = networkOf([
+      { tileX: 7, tileZ: 0, y: 0 },
+      { tileX: 7, tileZ: 1, y: 0 },
+    ]);
+    const { router } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7, 0);
+    const start = nodeAt(network, 7, 1);
+    const arrive = (person: number): void => {
+      router.step(person, start);
+      router.step(person, door);
+    };
+    expect(router.dayVisits().size).toBe(0);
+    expect(router.dayBalks().size).toBe(0);
+
+    // One inside and three waiting is all this spur holds; the fifth balks.
+    for (const person of [0, 1, 2, 3]) arrive(person);
+    expect(router.dayVisits()).toEqual(new Map([['beach-shower#0', 4]]));
+    expect(router.dayBalks().size).toBe(0);
+
+    arrive(4);
+    expect(router.dayVisits().get('beach-shower#0')).toBe(4);
+    expect(router.dayBalks()).toEqual(new Map([['beach-shower#0', 1]]));
+  });
+
+  it('starts a fresh day on forgetTheDay, and on a rebuild', () => {
+    const network = networkOf(street(8));
+    const { router } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7);
+    for (const person of [0, 1, 2]) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    expect(router.dayVisits().get('beach-shower#0')).toBe(3);
+
+    router.forgetTheDay();
+    expect(router.dayVisits().size).toBe(0);
+    expect(router.dayBalks().size).toBe(0);
+    // And the venues are still standing: a day forgotten is not a plot cleared.
+    expect(router.occupancyOf('beach-shower#0')?.inside).toBe(1);
+
+    for (const person of [0, 1, 2]) router.step(person, door);
+    expect(router.dayVisits().size).toBeGreaterThan(0);
+    router.rebuild([shower(7)], [], [], networkOf(street(8)));
+    expect(router.dayVisits().size).toBe(0);
+    expect(router.dayBalks().size).toBe(0);
+  });
+
   it('counts everybody inside and everybody in a line for the stats readout', () => {
     const network = networkOf(street(8));
     const { router } = routerOn(network, [shower(7)], grubby());
@@ -1379,7 +1431,7 @@ describe('on the generated plot', () => {
         confused ??= `person ${person}`;
       }
     }
-    return { over, queued, busiest, fed, confused, served };
+    return { over, queued, busiest, fed, confused, served, router, food };
   };
 
   it('never lets a venue hold more people than it says it does', () => {
@@ -1601,6 +1653,27 @@ describe('on the generated plot', () => {
     // person who got in first and nobody else.
     expect(run.fed, 'a line formed and nothing ever came out of it').toBeGreaterThan(1);
   });
+  /**
+   * Plan 021's counters over the same plot: a balk is a guest who walked all the
+   * way to a door and was refused, and nothing but this counts them. Run with
+   * every capacity squeezed to 1, for the reason the queue test above is - the
+   * declared capacities do not bind on this plot, and with them nothing ever
+   * balks at all.
+   */
+  it('counts the doors that turned people away, and where most of it happened', () => {
+    const run = starving(() => 1);
+    const balks = run.router.dayBalks();
+    expect(balks.size, 'six hundred hungry guests and nobody ever refused').toBeGreaterThan(0);
+
+    const worst = [...balks.entries()].toSorted((a, b) => b[1] - a[1])[0]!;
+    // Somewhere guests actually chose: it serves the need they all had, and it
+    // also let people in, so the count is a line rather than a stranded door.
+    expect(run.food.map((venue) => venue.key)).toContain(worst[0]);
+    expect(run.router.dayVisits().get(worst[0])).toBeGreaterThan(0);
+    // And nothing was counted against a venue nobody walked to.
+    for (const key of balks.keys()) expect(run.router.dayVisits().has(key)).toBe(true);
+  });
+
   /**
    * A whole night over the plot laid by something that has never heard of bed:
    * a field keyed to the wrong lodging, or a bedtime window that does not wrap,

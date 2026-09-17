@@ -37,6 +37,8 @@ export function Hud(props: HudProps) {
         clock={props.clock}
         camera={props.camera}
         resort={props.resort}
+        advice={props.advice}
+        onShowOnPlot={props.onShowOnPlot}
       />
       <BuildPalette preview={props.preview} tool={props.tool} onToolChange={props.onToolChange} />
       <InspectPanel

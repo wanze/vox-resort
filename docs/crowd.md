@@ -265,10 +265,46 @@ reads.
 - `strongestNeed` is the weighted loudest need, or nothing while a guest is
   content. It is the word in front of the inspector's live line - `Hungry ·
 Walking to the Bakery · tile 12, 7`.
-- `sim/domain/chooseVenue.ts` scores every venue that serves that need as
-  `relief / (1 + distance / reach) / (1 + queue / capacity)` and picks the best.
+  **`strongestNeed` decides whether they go anywhere, not where.** Where is
+  `chooseVenue`'s, over every need a venue serves.
+- `sim/domain/chooseVenue.ts` scores every venue and picks the best:
+
+  ```
+  score = gain * taste * recency
+          ---------------------------------------------------------
+          (1 + distance / reach) * (1 + CROWDING * busy / capacity)
+  ```
+
   The venues come off the art through `sim/domain/venues.ts`; lodging is left
-  out, being nowhere to walk to in the daytime.
+  out, being nowhere to walk to in the daytime. Three things about the numerator
+  and the second denominator are worth saying out loud, because each of them was
+  a venue getting no visits at all before plan 030:
+
+  - **Only the usable part of a relief counts.** `sim/domain/appeal.ts` credits
+    `min(amount, 1 - level)`, so a Restaurant's 1.0 and a Snack Bar's 0.6 are the
+    same half meal to somebody half fed. Counting the declared amount in full is
+    what made the largest number on the plot win every decision however mildly
+    anybody wanted anything.
+  - **A venue is scored on every need it serves, the negative ones included.** A
+    Beachclub that is fun _and_ a drink beats a Pool Bar for somebody who is both;
+    a Basketball Court that takes 0.4 of your energy is worth less than the same
+    fun for free. The level is the one they will have **on arrival**, discounted
+    by what the walk will decay at `archetypes.ts`'s own rates and
+    `crowdRate.ts`'s own pace - without that a half-hungry family walks eighty
+    minutes for an ice cream and comes out hungrier than they set off. A need
+    that is completely met is not anticipated: the walk deepens a need somebody
+    has, it does not invent one.
+  - **How full a place is counts, where the line used to.** `busy` is everybody
+    inside plus everybody waiting. A line forms only once a venue is full, and on
+    the reference plot the big venues never do, so a term that read the line alone
+    read 1 all day.
+
+  Three dials, each with its argument beside it in `chooseVenue.ts` and nowhere
+  else: `CROWDING` (2), `TASTE_SPREAD` (0.3, a stable per-guest per-venue liking
+  hashed off the venue's **key** in `appeal.ts`, never a draw - the bench has to
+  replay and the inspector has to be able to explain a choice) and `REVISIT`
+  (0.5, for the one place they have just come out of). `archetypes.ts` is the
+  fourth tuning surface and the first one to reach for.
 
 ## Walking towards it
 
@@ -755,3 +791,4 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 | 7       | Measure: `?people=n`, a HUD count, a bench case, real costs above | `?people=n` landed |
 | —       | Stays that end, a rating, and the coaches that follow from it     | Landed             |
 | —       | Advice: what the resort is getting wrong, ranked                  | Landed             |
+| —       | Balance: no venue takes every visit                               | Landed             |

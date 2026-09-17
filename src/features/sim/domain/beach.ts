@@ -54,6 +54,13 @@ const BEACH_KEY = 'beach';
  * - 0.7 / 0.3, these: 678 visits, 65 on the sand;
  * - 0.85 / 0.35: 880 visits, 70 on the sand, and the pool and the courts all but
  *   stop being chosen at all.
+ *
+ * **That last line was a symptom, and plan 030 is what was done about it.** The
+ * pool and the courts stopped being chosen because `chooseVenue` scored a venue
+ * on one declared amount and nothing else could answer it, so the beach - near
+ * everything, and never crowded - won on relief alone. These two numbers are
+ * unchanged; what they are weighed against is not. See
+ * `plans/030-balance-the-choice.md`.
  */
 const BEACH_RELIEF: readonly NeedRelief[] = [
   { need: 'fun', amount: 0.7 },

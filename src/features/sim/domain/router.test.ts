@@ -51,7 +51,7 @@ import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
-import { isBeach } from './beach';
+import { beachVenueFor, isBeach } from './beach';
 import { crowdScaleFor } from './crowdRate';
 import { checkInDue, runCheckIn } from './checkIn';
 import { createHappiness, meanHappiness } from './happiness';
@@ -260,6 +260,110 @@ describe('createRouter', () => {
     expect(router.goalOf(0)).toBeNull();
   });
 
+  /** Three guests of three parties, so none of them inherits another's goal. */
+  const threeApart = (): [number, number, number] => {
+    const parties = new Set<number>();
+    const found: number[] = [];
+    for (let person = 0; person < guests.count && found.length < 3; person++) {
+      const party = guests.party[person]!;
+      if (parties.has(party)) continue;
+      parties.add(party);
+      found.push(person);
+    }
+    return found as [number, number, number];
+  };
+
+  /** Everybody hungry, so any of them will choose somewhere to eat. */
+  const famished = (): Needs => {
+    const needs = wanting(0, 'hunger');
+    for (let person = 0; person < guests.count; person++) needs.level.hunger[person] = 0;
+    return needs;
+  };
+
+  /**
+   * Plan 030's crowding term, which is the one thing about a venue a guest can
+   * see before a line has started to form.
+   *
+   * Two bakeries five tiles off and one thirty tiles off, each holding one
+   * person. Before this a venue read exactly the same whether it was empty or
+   * packed - a line only starts once a place is full - so the two near ones took
+   * everybody until they were full to the door and then turned people away.
+   */
+  it('walks a guest past the bakeries that are filling up, with no line at any of them', () => {
+    const network = networkOf(street(40));
+    const holdsOne = (tileX: number, key: string): Venue => ({
+      ...bakery(tileX),
+      key,
+      capacity: 1,
+    });
+    const near = [holdsOne(25, 'bakery#0'), holdsOne(35, 'bakery#1')];
+    const far = holdsOne(0, 'bakery#2');
+    const standing = [...near, far];
+    const [first, second, third] = threeApart();
+    const at = nodeAt(network, 30);
+
+    // Nobody inside anything: they choose one of the two near ones.
+    const quiet = routerOn(network, standing, famished());
+    quiet.router.step(third, at);
+    expect(near.map((venue) => venue.key)).toContain(quiet.router.goalOf(third)?.key);
+
+    // Now two guests are inside the two near ones - and the second of them went
+    // to the one the first did not, which is the term doing its job already.
+    const { router } = routerOn(network, standing, famished());
+    const walkIn = (person: number): void => {
+      router.step(person, at);
+      const goal = router.goalOf(person)!;
+      router.step(person, nodeAt(network, goal.tileX));
+    };
+    walkIn(first);
+    walkIn(second);
+    expect(router.visitOf(first)?.venue.key).not.toBe(router.visitOf(second)?.venue.key);
+    for (const venue of near)
+      expect(router.occupancyOf(venue.key)).toEqual({ inside: 1, waiting: 0 });
+
+    // Nobody is waiting anywhere, and the near ones are no longer the answer.
+    router.step(third, at);
+    expect(router.goalOf(third)?.key).toBe('bakery#2');
+  });
+
+  /**
+   * Plan 030's recency term. Two bakeries the same distance away, so the only
+   * thing that tells them apart is the taste this guest happens to have - and
+   * having just come out of one of them, the other is the better answer.
+   *
+   * It is a preference and not a ban, and it is thrown away on a rebuild:
+   * a venue index means nothing on a graph that has just replaced it.
+   */
+  it('sends a guest to the other bakery on the way out of one, and forgets it on a rebuild', () => {
+    const network = networkOf(street(40));
+    const east = { ...bakery(25), key: 'bakery#0' };
+    const west = { ...bakery(35), key: 'bakery#1' };
+    const standing = [east, west];
+    const needs = wanting(0, 'hunger');
+    const { router } = routerOn(network, standing, needs);
+    const at = nodeAt(network, 30);
+
+    router.step(0, at);
+    const chosen = router.goalOf(0)!;
+    const other = standing.find((venue) => venue.key !== chosen.key)!;
+    router.step(0, nodeAt(network, chosen.tileX));
+    expect(router.visitOf(0)?.venue.key).toBe(chosen.key);
+    for (let tick = 1; tick <= 12; tick++) router.tick(tick);
+    expect(router.visitOf(0)).toBeNull();
+
+    // Hungry again, standing at the door of the one they have just left.
+    needs.level.hunger[0] = 0;
+    router.step(0, nodeAt(network, chosen.tileX));
+    expect(router.goalOf(0)?.key, 'walked straight back into the one they left').toBe(other.key);
+
+    // A rebuild throws the memory away with the fields, and the taste that chose
+    // the first one is hashed off its key, so it chooses the same one again.
+    router.rebuild(standing, [], [], network);
+    needs.level.hunger[0] = 0;
+    router.step(0, at);
+    expect(router.goalOf(0)?.key).toBe(chosen.key);
+  });
+
   it('throws away its fields and its goals when the graph is rebuilt', () => {
     const network = networkOf(street(8));
     const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
@@ -368,6 +472,13 @@ const TICKS_EVERY = 2;
 
 /** Ticks in a simulated day, which `simClock.ts` keeps as one integer. */
 const TICKS_PER_DAY = 1440;
+
+/**
+ * Eight in the morning: where plan 030's measured day is opened, so the evening
+ * and the night are inside the twenty-four hours it runs rather than the run
+ * being only the hours everybody is out walking.
+ */
+const OPENS_AT = 8 * 60;
 
 describe('a venue that holds only as many as it says', () => {
   /** A beach shower: one person inside, and a visit of half a tick. */
@@ -1202,6 +1313,62 @@ const NORMAL_FRAMES_PER_TICK = Math.round(
   (crowdScaleFor('normal') * SPEED_DAY_SECONDS.normal) / TICKS_PER_DAY / MAX_STEP,
 );
 
+/** What one measured day did with the venues standing on the plot; see plan 030. */
+interface ShareOut {
+  /** Visits per venue key, most first. */
+  readonly ranked: readonly (readonly [string, number])[];
+  /** Per need, the share of the visits to venues serving it that the busiest one took. */
+  readonly busiest: ReadonlyMap<
+    string,
+    { readonly key: string; readonly share: number; readonly of: number }
+  >;
+  /**
+   * Venues a guest could have walked to that serve something, and nobody did.
+   *
+   * A venue that declares no relief at all - the reception, the first-aid post -
+   * is left out: `chooseVenue` can never pick one, by design, and counting them
+   * here would be counting the art doing what it says.
+   */
+  readonly ignored: readonly string[];
+}
+
+/**
+ * Reads plan 030's three tables out of a day's {@link Router.dayVisits}.
+ *
+ * The share is per need rather than per venue because that is the choice being
+ * made: a guest picks between the places serving the one thing they want, and a
+ * restaurant taking every meal on the plot is only visible against the other
+ * places that serve hunger.
+ */
+/** Whether a venue gives anything back at all; the reception and the first-aid post do not. */
+const serves = (venue: Venue): boolean => venue.satisfies.some((relief) => relief.amount > 0);
+
+const shareOutOf = (
+  standing: readonly Venue[],
+  visits: ReadonlyMap<string, number>,
+  reachable: (venue: Venue) => boolean,
+): ShareOut => {
+  const ranked = [...visits.entries()].toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const busiest = new Map<string, { key: string; share: number; of: number }>();
+  for (const need of NEEDS) {
+    const serving = standing.filter((venue) =>
+      venue.satisfies.some((relief) => relief.need === need && relief.amount > 0),
+    );
+    let of = 0;
+    let most = { key: 'nothing', visits: 0 };
+    for (const venue of serving) {
+      const went = visits.get(venue.key) ?? 0;
+      of += went;
+      if (went > most.visits) most = { key: venue.key, visits: went };
+    }
+    if (of > 0) busiest.set(need, { key: most.key, share: most.visits / of, of });
+  }
+  const ignored = standing
+    .filter((venue) => serves(venue) && reachable(venue) && !(visits.get(venue.key)! > 0))
+    .map((venue) => venue.key);
+  return { ranked, busiest, ignored };
+};
+
 describe('on the generated plot', () => {
   const TYPES = OBJECT_TYPES.map((type) => ({
     id: type.id,
@@ -1539,8 +1706,22 @@ describe('on the generated plot', () => {
     expect(hash).toBe(2140810103);
   });
 
+  /**
+   * **Walked at `normal`'s pace, not at {@link TICKS_EVERY}'s real time**, since
+   * plan 030 - the same adaptation plan 028's beach test carries, and for the
+   * same reason. A shower is 30 to 90 simulated seconds, which `arriveAt` clamps
+   * to a single tick, and the sweep lets that visit out on the next tick just
+   * before this samples who is inside; so a one-tick visit only ever shows up
+   * here when the showers are busy enough for two to overlap a sample. Visits to
+   * the beach showers over this half day, measured when plan 030 landed: 31
+   * before it and 21 after at real time, against 258 before and **319 after** at
+   * `normal`. They are chosen more, not less - real time is simply too slow for
+   * the sample to catch them, which is what plan 026 is about.
+   */
   it('sends grubby guests over the sand to wash on the beach', () => {
-    const run = starving((venue) => venue.capacity, 'hygiene', furnished);
+    const run = starving((venue) => venue.capacity, 'hygiene', furnished, {
+      framesPerTick: NORMAL_FRAMES_PER_TICK,
+    });
     expect(run.over).toBeNull();
     expect(run.confused).toBeNull();
     const onTheBeach = [...run.served].filter(
@@ -2028,5 +2209,142 @@ describe('on the generated plot', () => {
     expect(overBeds, 'more beds taken than the plot has').toBeNull();
     // Everybody who is here has somewhere to sleep, which is what check-in caps on.
     expect(presentCount(people)).toBe(bedCount(people).taken);
+  });
+  /**
+   * One whole simulated day of the plot as `showcase.ts` runs it, for plan 030's
+   * measurement: six hundred guests with the needs they were dealt rather than
+   * one need emptied, the plot's own furniture and seats under them, a crowd
+   * that does not roam the beach, and the clock opened at eight in the morning
+   * so the evening and the night are in the day rather than only the busy hours.
+   */
+  const aDayOnThePlot = () => {
+    const seated = walkNetworkFor({
+      paved: layout.paths,
+      levelOf: (x, z) => levelAt(elevation, x, z),
+      shore: shoreFor(plan),
+      tilesX: plan.tilesX,
+      obstacles: layout.placements,
+      seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
+    });
+    const lodgings = lodgingsOn(layout.placements);
+    const people = createGuests({
+      count: 600,
+      homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    let ticks = OPENS_AT;
+
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings,
+      gateways: [],
+      onLeave: () => {},
+      network: seated,
+      tickOfDay: () => ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network: seated,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => router.step(person, at),
+      roamsBeach: false,
+    });
+
+    for (let step = 0; step < TICKS_PER_DAY; step++) {
+      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
+      ticks++;
+      decayNeeds(needs, people, 1);
+      router.tick(ticks);
+    }
+
+    // The beach is the router's own venue and takes visits like any other, so
+    // the tables have to see it: leaving it out would hide the one thing on the
+    // plot that is within reach of everywhere.
+    const standing = [...venues, beachVenueFor(seated)!];
+    const index = nodeIndexFor(seated);
+    // The same rule as `reaches every venue on the plot` above: a door on the
+    // paving, or a route over the sand that actually starts at a gate. A sand
+    // door with no route to it is a building nobody can walk to, whatever the
+    // art declares.
+    const reachable = (venue: Venue): boolean => {
+      if (isBeach(venue)) return true;
+      const doors = doorsFor(venue, index, seated);
+      if (doors.nodes.length > 0) return true;
+      return sandRoutesFor(seated, doors.sand, SAND_TILES).length > 0;
+    };
+    return { router, venues: standing, reachable, people, needs };
+  };
+
+  /**
+   * Plan 030's measure, and its regression: how one whole day's visits were
+   * shared out over the plot, and what nobody went to at all.
+   *
+   * The one test here whose job is to be read as well as to pass, which is why
+   * it keeps its `console.log`. A formula that quietly sends everybody to the
+   * same door passes every corridor test above and shows up only in these three
+   * tables - the visits per venue, the share the busiest venue serving each need
+   * took of the visits to that need, and the venues a guest could have walked to
+   * and nobody did.
+   *
+   * What it measured before plan 030 and after it, on this plot:
+   *
+   * | | busiest share of a need | reachable venues with no visits |
+   * |---|---|---|
+   * | before | hunger .22, thirst .22, energy .46, fun .29, hygiene .26 | 23 |
+   * | after | hunger .13, thirst .15, energy .55, fun .18, hygiene .12 | 2 |
+   *
+   * **Energy is the one that went up, and it is not the fault the plan was
+   * about.** Only three things on the whole plot give energy back - the beach at
+   * 0.3, a coffee shop at 0.2 and a spa pavilion at 0.5 - so its "share" is a
+   * share of almost nothing, and the beach's own visits fell from 823 to 641
+   * over the same change. A need with three providers is `advice.ts`'s
+   * `unserved-need` to report, not this formula's to spread.
+   */
+  it("records how the day's visits were shared out, and shares them out", () => {
+    const run = aDayOnThePlot();
+    const visits = run.router.dayVisits();
+    const share = shareOutOf(run.venues, visits, run.reachable);
+    const total = [...visits.values()].reduce((sum, each) => sum + each, 0);
+
+    console.log(`visits, most first (${total} in the day):`);
+    for (const [key, went] of share.ranked) console.log(`  ${key}: ${went}`);
+    console.log("the busiest venue's share of the visits to each need:");
+    for (const [need, most] of share.busiest) {
+      console.log(`  ${need}: ${most.key} took ${most.share.toFixed(2)} of ${most.of}`);
+    }
+    console.log(`reachable venues nobody visited (${share.ignored.length}):`);
+    for (const key of share.ignored) console.log(`  ${key}`);
+
+    expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
+
+    // **The changing cabins, and nothing else.** Hygiene 0.3 at a capacity of 2
+    // is the weakest of the three things on this plot that serve hygiene, and
+    // both of them stand on the same sand as thirteen beach showers at 0.6 -
+    // there is no guest and no plot on which 0.3 two tiles further off is the
+    // better answer. That is an art declaration rather than a decision, which is
+    // plan 030's option F: a finding to re-measure on its own and not an edit to
+    // make here. They took no visits before this plan either.
+    const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
+    expect(quiet).toEqual(['changing-cabins']);
+
+    // Rounded up from the 0.55 measured when this landed, which is the beach's
+    // share of energy and explained in the doc comment above. The loudest of the
+    // other four is thirst at 0.15, against 0.22 before the plan.
+    const BUSIEST_SHARE = 0.6;
+    for (const [need, most] of share.busiest) {
+      expect(
+        most.share,
+        `${need}: ${most.key} took ${most.share.toFixed(2)} of ${most.of}`,
+      ).toBeLessThanOrEqual(BUSIEST_SHARE);
+    }
   });
 });

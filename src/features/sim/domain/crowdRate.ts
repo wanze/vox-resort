@@ -63,3 +63,19 @@ export function crowdScaleFor(speed: SimSpeed): number {
     PLOT_CROSSING_VOXELS / WALK_SPEED / (ERRAND_SHARE_OF_DAY * SPEED_DAY_SECONDS[speed]);
   return Math.min(MAX_SUBSTEPS, Math.max(1, wanted));
 }
+
+/**
+ * How far a guest walks in one **simulated** hour, in voxels.
+ *
+ * The same two numbers as {@link crowdScaleFor}, read the other way round:
+ * crossing the plot is {@link PLOT_CROSSING_VOXELS} and takes
+ * {@link ERRAND_SHARE_OF_DAY} of a day, so a simulated hour is that far. It is
+ * the same at `slow`, `normal` and `fast`, which is the whole point of scaling
+ * the crowd to the calendar rather than to the frame - at `rush` the cap bites
+ * and guests fall behind, which is meant.
+ *
+ * `appeal.ts` is what wants it: how hungry somebody will be **when they get
+ * there** is what a relief has room to fill, and that is a question about how
+ * long the walk takes in the guest's own day.
+ */
+export const WALK_VOXELS_PER_SIM_HOUR = PLOT_CROSSING_VOXELS / (ERRAND_SHARE_OF_DAY * 24);

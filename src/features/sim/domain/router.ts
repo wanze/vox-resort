@@ -99,7 +99,8 @@ import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
-import { chooseVenue } from './chooseVenue';
+import { saltFor, tasteFor } from './appeal';
+import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import {
@@ -483,6 +484,24 @@ export function createRouter(parts: {
    */
   let balkCount = new Int32Array(venues.length);
   let visitCount = new Int32Array(venues.length);
+  /**
+   * Each venue's own number, for the taste a guest is given for it; see
+   * `appeal.ts`'s `tasteFor`.
+   *
+   * Hashed from the **key** rather than taken from the index, so a plot rebuilt
+   * with one more bench on it does not reshuffle everybody's preferences: the
+   * array is laid out afresh and every entry in it is the same number it was.
+   */
+  let salts = saltsFor(venues);
+  /**
+   * The venue each person came out of most recently, or -1, for `chooseVenue`'s
+   * recency term.
+   *
+   * Cleared on a rebuild with everything else, and not carried: a venue index
+   * means nothing across a rebuild, and half-discounting whichever building
+   * happens to land on that index next is worse than forgetting.
+   */
+  let justLeft = new Int32Array(guests.count).fill(-1);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   /**
    * The node each person walked in by, so letting them out puts them back on
@@ -666,6 +685,18 @@ export function createRouter(parts: {
   const queueLength = (venue: number): number => occupancy.queues[venue]?.length ?? 0;
 
   /**
+   * How many are inside each venue right now, for `chooseVenue`'s crowding term.
+   * The same array the sweep keeps, read rather than counted.
+   */
+  const occupants = (venue: number): number => occupancy.inside[venue] ?? 0;
+
+  /** How much this person likes each venue, for `chooseVenue`; see {@link salts}. */
+  const affinityOf =
+    (person: number) =>
+    (venue: number): number =>
+      tasteFor(salts[venue] ?? 0, person, TASTE_SPREAD);
+
+  /**
    * Somebody at a venue's door: in, in the line, or turned away. A line as long
    * as the ground in front of the door holds is a full line, however far short
    * of the ceiling `arriveAt` counts to.
@@ -693,6 +724,9 @@ export function createRouter(parts: {
       walkingDistance: walkingDistanceAt(at),
       queueLength,
       queueLimit,
+      occupants,
+      affinity: affinityOf(person),
+      justLeft: justLeft[person]!,
     });
     if (choice) setPartyGoal(goals, guests, person, choice);
   };
@@ -760,13 +794,14 @@ export function createRouter(parts: {
     // Nowhere near this gate to put a towel down. The visit ends here, relief
     // and all, rather than being walked about in: they decide again on the
     // graph, and the relief keeps them from choosing the same gate again.
-    endVisitAtTheGate(person, venue);
+    endVisitAtTheGate(person, goal, venue);
     return false;
   };
 
   /** A visit that ends where it began, with its relief. */
-  const endVisitAtTheGate = (person: number, venue: Venue): void => {
+  const endVisitAtTheGate = (person: number, at: number, venue: Venue): void => {
     leaveVenue(occupancy, person);
+    justLeft[person] = at;
     relieve(needs, person, venue.satisfies);
     clearPartyGoal(goals, guests, person);
     doorOf[person] = -1;
@@ -926,6 +961,9 @@ export function createRouter(parts: {
       walkingDistance: acrossTheSandFrom(people.x[person] ?? 0, people.z[person] ?? 0),
       queueLength,
       queueLimit,
+      occupants,
+      affinity: affinityOf(person),
+      justLeft: justLeft[person]!,
     });
     if (!choice) return;
     // Its lane and its own routes off the beach, which the walk home will want.
@@ -1166,6 +1204,9 @@ export function createRouter(parts: {
    * 017's instantaneous one.
    */
   const leave = (person: number, venue: number): void => {
+    // Before the errand branch, so a drink fetched from a pitch counts as much
+    // as a meal does: they came out of that bar either way.
+    justLeft[person] = venue;
     if (fetching[person] === venue) {
       leaveErrand(person, venue);
       return;
@@ -1470,6 +1511,8 @@ export function createRouter(parts: {
       // forty balks are not the new one's.
       balkCount = new Int32Array(venues.length);
       visitCount = new Int32Array(venues.length);
+      salts = saltsFor(venues);
+      justLeft = new Int32Array(guests.count).fill(-1);
       // Everybody, not only the parties whose venue went: a goal is an index
       // into the venue list that has just been replaced, over nodes that have
       // just been renumbered, so none of them means anything now.
@@ -1641,4 +1684,11 @@ function longestLane(
     bestDistance = distance;
   }
   return best;
+}
+
+/** Every venue's taste salt, in venue order; see `appeal.ts`'s {@link saltFor}. */
+function saltsFor(venues: readonly Venue[]): Int32Array {
+  const salts = new Int32Array(venues.length);
+  for (const [index, venue] of venues.entries()) salts[index] = saltFor(venue.key);
+  return salts;
 }

@@ -14,8 +14,22 @@
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import child from './child.ts';
+import cleaner from './cleaner.ts';
 import guest_a from './guest-a.ts';
 import guest_b from './guest-b.ts';
 import guest_c from './guest-c.ts';
 
 export const PEOPLE_SOURCES: readonly VoxelModelSource[] = [guest_a, guest_b, guest_c, child];
+
+/**
+ * The people who work here, as art: a registry of its own and **not** four more
+ * entries in {@link PEOPLE_SOURCES}.
+ *
+ * Not tidiness. `createGuests` is handed `variants: PEOPLE_MODELS.length` and
+ * draws each adult's model out of it, so a cleaner appended to the people
+ * registry would be dealt to guests - and, worse, would move every seeded draw
+ * after it, which moves the crowd a benchmark replays. Staff are a second crowd
+ * drawn from a second list, exactly as the sky and the sea are. See
+ * `sim/domain/staff.ts`.
+ */
+export const STAFF_SOURCES: readonly VoxelModelSource[] = [cleaner];

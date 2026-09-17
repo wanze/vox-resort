@@ -183,6 +183,9 @@ function VenueRows({ venue }: { readonly venue: Venue }) {
       <StatRow label="Waiting" note="in the line at the door">
         {venue.waiting === 0 ? 'Nobody' : venue.waiting}
       </StatRow>
+      <StatRow label="Cleanliness" note="a dirty place is chosen less">
+        {Math.round(venue.cleanliness * 100)}%
+      </StatRow>
     </dl>
   );
 }

@@ -59,6 +59,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
+  dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
   // The need, not just the distance: "walks 76 tiles for something they need"
   // names a number and no errand, which is nothing the player can build.
   'far-from-home': ({ subject, count, need }) =>
@@ -72,6 +73,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
   unreachable: ({ count }) => `${count} places standing idle`,
+  dirty: ({ count }) => `${count}% clean`,
   'far-from-home': () => 'straight line, not walking distance',
   unvisited: ({ count }) => `room for ${count}`,
 };
@@ -82,6 +84,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'unserved-need': 'Missing',
   'full-lines': 'Queues',
   unreachable: 'Stranded',
+  dirty: 'Upkeep',
   'far-from-home': 'Distance',
   unvisited: 'Quiet',
 };

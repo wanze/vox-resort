@@ -3,12 +3,15 @@ import { arrivalsFor, EMPTY_STARS, MAX_ARRIVALS_SHARE, ratingFor } from './ratin
 
 describe('ratingFor', () => {
   it('gives five stars to a resort that is happy and housed', () => {
-    const rating = ratingFor({ happiness: 1, present: 600, housed: 600 });
-    expect(rating).toEqual({ stars: 5, happiness: 1, housed: 1 });
+    const rating = ratingFor({ happiness: 1, present: 600, housed: 600, cleanliness: 1 });
+    expect(rating).toEqual({ stars: 5, happiness: 1, housed: 1, cleanliness: 1 });
+    // Nothing handed in is a spotless plot, which is what one with nothing built
+    // on it is and what every fixture written before plan 022 assumed.
+    expect(ratingFor({ happiness: 1, present: 600, housed: 600 })).toEqual(rating);
   });
 
   it('gives a miserable resort next to nothing', () => {
-    const rating = ratingFor({ happiness: 0, present: 600, housed: 0 });
+    const rating = ratingFor({ happiness: 0, present: 600, housed: 0, cleanliness: 0 });
     expect(rating.stars).toBe(0);
     // Housing them all does not rescue it: happiness carries most of the weight.
     expect(ratingFor({ happiness: 0, present: 600, housed: 600 }).stars).toBeLessThan(2);
@@ -23,19 +26,39 @@ describe('ratingFor', () => {
     expect(rating.stars).toBe(EMPTY_STARS);
     expect(rating.happiness).toBe(0);
     expect(rating.housed).toBe(0);
+    // The dirt is reported as it stands either way: a plot can be filthy with
+    // nobody on it, and the stars of an empty one are not read off it.
+    expect(rating.cleanliness).toBe(1);
+    expect(ratingFor({ happiness: null, present: 0, housed: 0, cleanliness: 0.4 }).stars).toBe(
+      EMPTY_STARS,
+    );
     // Or it could never fill: arrivals follow the rating.
     expect(arrivalsFor(rating, 100)).toBeGreaterThan(0);
   });
 
-  it('keeps both terms on the way out, and both inside 0..1', () => {
-    const rating = ratingFor({ happiness: 1.4, present: 10, housed: 40 });
+  it('keeps all three terms on the way out, and every one inside 0..1', () => {
+    const rating = ratingFor({ happiness: 1.4, present: 10, housed: 40, cleanliness: 2 });
     expect(rating.happiness).toBe(1);
     expect(rating.housed).toBe(1);
-    expect(ratingFor({ happiness: -3, present: 10, housed: 4 })).toEqual({
-      stars: 0.5,
+    expect(rating.cleanliness).toBe(1);
+    expect(ratingFor({ happiness: -3, present: 10, housed: 4, cleanliness: -1 })).toEqual({
+      stars: 0.4,
       happiness: 0,
       housed: 0.4,
+      cleanliness: 0,
     });
+  });
+
+  it('rates a filthy resort below an identical clean one', () => {
+    const shared = { happiness: 0.8, present: 600, housed: 500 } as const;
+    const clean = ratingFor({ ...shared, cleanliness: 1 });
+    const filthy = ratingFor({ ...shared, cleanliness: 0 });
+    expect(filthy.stars).toBeLessThan(clean.stars);
+    // And the term is the smallest of the three: dirt already reaches the rating
+    // through the guests who walked further to get away from it, and counting it
+    // twice at full weight would charge the player twice for one venue.
+    const unhappy = ratingFor({ ...shared, happiness: 0, cleanliness: 1 });
+    expect(clean.stars - filthy.stars).toBeLessThan(clean.stars - unhappy.stars);
   });
 
   it('rounds the stars to the one decimal place the HUD shows', () => {
@@ -48,7 +71,7 @@ describe('ratingFor', () => {
 
 describe('arrivalsFor', () => {
   it('takes nobody at no stars and the whole cap at five', () => {
-    const none = ratingFor({ happiness: 0, present: 10, housed: 0 });
+    const none = ratingFor({ happiness: 0, present: 10, housed: 0, cleanliness: 0 });
     expect(none.stars).toBe(0);
     expect(arrivalsFor(none, 400)).toBe(0);
 
@@ -70,7 +93,7 @@ describe('arrivalsFor', () => {
 
   it('sends more people the better the resort is rated', () => {
     const stars = [0.5, 1, 2, 3, 4, 5].map((value) =>
-      arrivalsFor({ stars: value, happiness: 1, housed: 1 }, 400),
+      arrivalsFor({ stars: value, happiness: 1, housed: 1, cleanliness: 1 }, 400),
     );
     expect(stars).toEqual([...stars].toSorted((a, b) => a - b));
     expect(stars.at(-1)).toBeGreaterThan(stars[0]!);

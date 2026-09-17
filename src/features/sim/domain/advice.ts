@@ -19,12 +19,12 @@
  *
  * ## One small function per rule
  *
- * Six rules, each a function of {@link ResortFacts} alone, each testable on a
+ * Seven rules, each a function of {@link ResortFacts} alone, each testable on a
  * literal. That is not only house style: a rule that cannot be tested on a
  * literal is a rule reading more of the world than it should, and one big
- * `adviceFor` with six branches would hide exactly that. A seventh rule -
- * cleanliness, weather - is a seventh function and a seventh test, never a
- * branch in one of these.
+ * `adviceFor` with seven branches would hide exactly that. An eighth rule -
+ * plan 023's weather - is an eighth function and an eighth test, never a branch
+ * in one of these.
  *
  * ## It knows what a bakery is for, never what a bakery is
  *
@@ -47,6 +47,7 @@ import { ARCHETYPES } from './archetypes';
 import type { VenueDoors } from './doors';
 import type { Lodging } from './lodgings';
 import { NEEDS } from './needs';
+import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
 /** What one piece of advice is about. */
@@ -55,6 +56,7 @@ export type AdviceKind =
   | 'unserved-need'
   | 'full-lines'
   | 'unreachable'
+  | 'dirty'
   | 'far-from-home'
   | 'unvisited';
 
@@ -114,6 +116,11 @@ export interface ResortFacts {
   readonly visits: ReadonlyMap<string, number>;
   /** Venue keys nothing can walk to at all. */
   readonly unreachable: ReadonlySet<string>;
+  /**
+   * How clean each venue is, by key, 0..1. A key this has no entry for is
+   * spotless, which is what a venue built this morning is. See `upkeep.ts`.
+   */
+  readonly cleanliness: ReadonlyMap<string, number>;
 }
 
 /**
@@ -128,6 +135,7 @@ const KIND_ORDER: readonly AdviceKind[] = [
   'unserved-need',
   'full-lines',
   'unreachable',
+  'dirty',
   'far-from-home',
   'unvisited',
 ];
@@ -142,6 +150,16 @@ const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value)
  * there were. Fifty in a day is a place that is plainly too small.
  */
 const BALKS_LOUD = 50;
+
+/**
+ * The capacity at which a dirty venue is as loud as it gets.
+ *
+ * The same number {@link IDLE_ROOMY} uses and for the same reason - a swimming
+ * pool is where the plot's big venues start - named again here rather than
+ * shared, because the two rules would not have to move together if the art
+ * changed under one of them.
+ */
+const ROOMY = 40;
 
 /**
  * How far a lodging may stand from something before it is worth saying, and
@@ -234,6 +252,43 @@ export function adviceFullLines(facts: ResortFacts): Advice | null {
         weight,
         subject: venue.label,
         count: balks,
+        at: tileOf(venue),
+        need: null,
+      };
+    }
+  }
+  return worst;
+}
+
+/**
+ * The place the cleaners are furthest behind on.
+ *
+ * Weighed like {@link adviceFullLines}, and for the same reason: how far below
+ * {@link NEEDS_CLEANING} it has fallen, scaled by how big it is, so a beach
+ * shower for one that nobody has mopped is not the same news as a Restaurant
+ * for forty. One venue only - the worst - because the answer is the same
+ * whichever of them the player reads: there are not enough cleaners for what is
+ * standing, and plan 024 is what lets them hire one.
+ *
+ * Silent about anything above the threshold, which is the same line the cleaners
+ * themselves walk to: advice observes, and a rule that called a venue dirty
+ * while no cleaner would go to it would be advising about something the resort
+ * does not agree is a problem.
+ */
+export function adviceDirty(facts: ResortFacts): Advice | null {
+  let worst: Advice | null = null;
+  for (const venue of facts.venues) {
+    const clean = facts.cleanliness.get(venue.key) ?? 1;
+    if (clean >= NEEDS_CLEANING) continue;
+    const weight = clamp((NEEDS_CLEANING - clean) / NEEDS_CLEANING) * clamp(venue.capacity / ROOMY);
+    if (worst === null || weight > worst.weight) {
+      worst = {
+        kind: 'dirty',
+        weight,
+        subject: venue.label,
+        // The percentage the inspector shows, so the panel and the panel beside
+        // it say the same number about the same building.
+        count: Math.round(clean * 100),
         at: tileOf(venue),
         need: null,
       };
@@ -437,6 +492,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
+    adviceDirty(facts),
     adviceFarFromHome(facts),
     ...adviceUnvisited(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);

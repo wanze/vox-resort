@@ -59,6 +59,9 @@ import { ratingFor } from './rating';
 import { createRouter, type Router } from './router';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { venuesOn, type Venue } from './venues';
+import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
+import { staffFor } from './staff';
+import { createStaffRouter, meanCleanliness } from './staffRouter';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -114,6 +117,15 @@ const wanting = (person: number, need: (typeof NEEDS)[number] | null): Needs => 
 };
 
 /**
+ * A spotless plot, held for the router's lifetime: what every fixture written
+ * before plan 022 assumes, and what keeps their scores exactly as they were.
+ */
+const spotless = (venues: number): (() => Upkeep) => {
+  const upkeep = createUpkeep(venues);
+  return () => upkeep;
+};
+
+/**
  * The router and a crowd on the same graph, bound to each other the way
  * `showcase.ts` binds them.
  *
@@ -137,8 +149,9 @@ const routerOn = (
     tickOfDay: () => NOON,
   },
   roamsBeach = true,
-): { router: ReturnType<typeof createRouter>; crowd: Crowd } => {
+): { router: ReturnType<typeof createRouter>; crowd: Crowd; upkeep: Upkeep } => {
   let crowd: Crowd | null = null;
+  const upkeep = createUpkeep(venues.length);
   const router = createRouter({
     guests,
     needs,
@@ -149,6 +162,7 @@ const routerOn = (
     network,
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
+    upkeep: () => upkeep,
     seed: 13,
   });
   crowd = createCrowd({
@@ -163,7 +177,7 @@ const routerOn = (
     crowd.x[person] = 0;
     crowd.z[person] = 0;
   }
-  return { router, crowd };
+  return { router, crowd, upkeep };
 };
 
 describe('createRouter', () => {
@@ -224,6 +238,21 @@ describe('createRouter', () => {
     expect(needs.level.hunger[0]).toBeCloseTo(0.5);
     expect(isWaiting(crowd, 0)).toBe(false);
     expect(router.occupancyOf('bakery#0')).toEqual({ inside: 0, waiting: 0 });
+  });
+
+  it('wears the venue a visit was made to, on the way out with the relief', () => {
+    const network = networkOf(street(8));
+    const needs = wanting(0, 'hunger');
+    const { router, upkeep } = routerOn(network, [bakery(7)], needs);
+    router.step(0, nodeAt(network, 0));
+    router.step(0, nodeAt(network, 7));
+    // Nothing yet: a venue is worn by a visit that finished, not by one that
+    // started, exactly as the relief is given on the way out.
+    expect(cleanliness(upkeep, 0)).toBe(1);
+
+    for (let tick = 1; tick <= 8; tick++) router.tick(tick);
+    expect(needs.level.hunger[0]).toBeCloseTo(0.5);
+    expect(cleanliness(upkeep, 0)).toBeLessThan(1);
   });
 
   it('aims a party member who decided nothing at the venue their sibling chose', () => {
@@ -841,14 +870,20 @@ describe('a visit to the beach', () => {
     const walked = options.walked ?? network;
     const needs = wanting(people[0]!, 'fun');
     for (const person of people) needs.level.fun[person] = 0;
-    const { router, crowd } = routerOn(walked, options.venues ?? [], needs, options.night, false);
+    const { router, crowd, upkeep } = routerOn(
+      walked,
+      options.venues ?? [],
+      needs,
+      options.night,
+      false,
+    );
     const above = walked.nodes[nodeAt(walked, 10, 11)]!;
     for (const person of people) {
       router.step(person, nodeAt(walked, 10, 10));
       holdAt(crowd, person, above.x, above.y, above.z, 0);
       releaseTo(crowd, person, walked.gates[0]!);
     }
-    return { needs, router, crowd };
+    return { needs, router, crowd, upkeep };
   };
 
   /** A family of the fixture with a child in it, adults first. */
@@ -1031,6 +1066,20 @@ describe('a visit to the beach', () => {
     expect(crowd.x[0]).toBeCloseTo(spot.x);
     expect(crowd.z[0]).toBeCloseTo(spot.z);
     expect(crowd.seat[0]).toBe(spot.seat);
+  });
+
+  it('wears the kiosk an errand off a pitch was run to, the way any visit does', () => {
+    const { needs, router, crowd, upkeep } = onTheBeach([0], { venues: [kiosk] });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    needs.level.fun[0] = 1;
+    needs.level.thirst[0] = 0;
+    expect(
+      until(crowd, router, () => needs.level.thirst[0]! > 0.5),
+      'never got the drink',
+    ).toBe(true);
+    // That errand leaves by `leaveErrand` rather than by `leave`, and a beach
+    // kiosk nothing ever dirtied is what the early return would have cost.
+    expect(cleanliness(upkeep, 0)).toBeLessThan(1);
   });
 
   it('walks a guest off the beach from the kiosk when their stay is over', () => {
@@ -1452,6 +1501,7 @@ describe('on the generated plot', () => {
       network,
       tickOfDay: () => NOON,
       crowd: () => crowd!,
+      upkeep: spotless(venues.length),
       seed: 17,
     });
     crowd = createCrowd({
@@ -1547,6 +1597,7 @@ describe('on the generated plot', () => {
       network: walked,
       tickOfDay: () => NOON,
       crowd: () => crowd!,
+      upkeep: spotless(standing.length),
       seed: 19,
     });
     crowd = createCrowd({
@@ -1895,6 +1946,7 @@ describe('on the generated plot', () => {
       network,
       tickOfDay: () => ticks % TICKS_PER_DAY,
       crowd: () => crowd!,
+      upkeep: spotless(venues.length),
       seed: 29,
     });
     crowd = createCrowd({
@@ -1997,6 +2049,7 @@ describe('on the generated plot', () => {
       network,
       tickOfDay: () => clock.ticks % TICKS_PER_DAY,
       crowd: () => crowd!,
+      upkeep: spotless(venues.length),
       seed: 17,
     });
     crowd = createCrowd({
@@ -2123,6 +2176,7 @@ describe('on the generated plot', () => {
       network,
       tickOfDay: () => tick % TICKS_PER_DAY,
       crowd: () => crowd!,
+      upkeep: spotless(venues.length),
       seed: 19,
     });
     crowd = createCrowd({
@@ -2216,6 +2270,11 @@ describe('on the generated plot', () => {
    * one need emptied, the plot's own furniture and seats under them, a crowd
    * that does not roam the beach, and the clock opened at eight in the morning
    * so the evening and the night are in the day rather than only the busy hours.
+   *
+   * **With the cleaners on it**, because `showcase.ts` puts them there: a plot
+   * with venues always has staff, so a day measured without them is a day of a
+   * resort the app never builds - and the venues would only ever get dirtier,
+   * which would quietly move every share below. See `staffRouter.ts`.
    */
   const aDayOnThePlot = () => {
     const seated = walkNetworkFor({
@@ -2235,6 +2294,7 @@ describe('on the generated plot', () => {
       seed: 12,
     });
     const needs = createNeeds(people, 13);
+    const upkeep = createUpkeep(venues.length);
     let ticks = OPENS_AT;
 
     let crowd: Crowd | null = null;
@@ -2248,6 +2308,7 @@ describe('on the generated plot', () => {
       network: seated,
       tickOfDay: () => ticks % TICKS_PER_DAY,
       crowd: () => crowd!,
+      upkeep: () => upkeep,
       seed: 19,
     });
     crowd = createCrowd({
@@ -2259,11 +2320,56 @@ describe('on the generated plot', () => {
       roamsBeach: false,
     });
 
+    const employed = staffFor(venues.length);
+    let workers: Crowd | null = null;
+    const staffRouter = createStaffRouter({
+      staff: employed,
+      venues,
+      network: seated,
+      upkeep: () => upkeep,
+      crowd: () => workers!,
+      seed: 9,
+    });
+    workers = createCrowd({
+      network: seated,
+      count: employed.count,
+      variants: 1,
+      seed: 5,
+      routeOf: (worker, at) => staffRouter.step(worker, at),
+      roamsBeach: false,
+    });
+
+    // Which venue each cleaner held on each tick, so a claim taken twice is
+    // caught rather than merely unlikely; see the integration test below.
+    const doubled: string[] = [];
+    let dirtiestSeen = 1;
+    let scrubbedBack = false;
+    const wasDirty = new Set<number>();
+
     for (let step = 0; step < TICKS_PER_DAY; step++) {
-      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
+      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) {
+        stepCrowd(crowd, MAX_STEP);
+        stepCrowd(workers, MAX_STEP);
+      }
       ticks++;
       decayNeeds(needs, people, 1);
       router.tick(ticks);
+      staffRouter.tick(ticks);
+
+      const held = new Map<string, number>();
+      for (let worker = 0; worker < workers.count; worker++) {
+        const at = staffRouter.atWork(worker);
+        if (!at) continue;
+        const already = held.get(at.key);
+        if (already !== undefined) doubled.push(`${at.key}: ${already} and ${worker}`);
+        held.set(at.key, worker);
+      }
+      for (let venue = 0; venue < venues.length; venue++) {
+        const level = cleanliness(upkeep, venue);
+        dirtiestSeen = Math.min(dirtiestSeen, level);
+        if (level < NEEDS_CLEANING) wasDirty.add(venue);
+        else if (wasDirty.has(venue)) scrubbedBack = true;
+      }
     }
 
     // The beach is the router's own venue and takes visits like any other, so
@@ -2281,8 +2387,46 @@ describe('on the generated plot', () => {
       if (doors.nodes.length > 0) return true;
       return sandRoutesFor(seated, doors.sand, SAND_TILES).length > 0;
     };
-    return { router, venues: standing, reachable, people, needs };
+    return {
+      router,
+      venues: standing,
+      reachable,
+      people,
+      needs,
+      upkeep,
+      staff: { employed, router: staffRouter, doubled, dirtiestSeen, scrubbedBack },
+    };
   };
+
+  /**
+   * Plan 022's measure: a day of the plot wearing its venues out and the
+   * cleaners keeping up with them.
+   *
+   * The unit tests hold each end of this - a visit soils, a spell scrubs, two
+   * cleaners never take one venue - and this is the one that can say whether the
+   * three numbers in `upkeep.ts` are of a size with the day the resort actually
+   * has. A plot where nothing ever got dirty would pass every unit test above
+   * and leave the staff walking about with nothing to do.
+   */
+  it('wears the plot out over a day, and has the cleaners keep up with it', () => {
+    const run = aDayOnThePlot();
+    const { employed, doubled, dirtiestSeen, scrubbedBack } = run.staff;
+    console.log(
+      `${employed.count} cleaners over a day: dirtiest venue ${dirtiestSeen.toFixed(2)}, ` +
+        `mean ${meanCleanliness(run.upkeep, run.upkeep.venues).toFixed(2)}`,
+    );
+
+    expect(employed.count, 'a plot full of venues and nobody to clean them').toBeGreaterThan(0);
+    // Somewhere got dirty enough to be worth walking to.
+    expect(dirtiestSeen, 'a whole day and nothing on the plot got dirty').toBeLessThan(
+      NEEDS_CLEANING,
+    );
+    // And somebody walked to it: a venue that crossed the line and came back.
+    expect(scrubbedBack, 'nothing that got dirty was ever cleaned again').toBe(true);
+    // Two cleaners at one venue is a claim taken twice, which is the one thing
+    // the whole assignment exists to stop.
+    expect(doubled, `two cleaners took the same venue: ${doubled[0]}`).toEqual([]);
+  });
 
   /**
    * Plan 030's measure, and its regression: how one whole day's visits were
@@ -2333,8 +2477,17 @@ describe('on the generated plot', () => {
     // better answer. That is an art declaration rather than a decision, which is
     // plan 030's option F: a finding to re-measure on its own and not an edit to
     // make here. They took no visits before this plan either.
+    //
+    // **And the fourth playground, since plan 022.** The plot stands four; the
+    // other three took 36, 10 and 9 visits over the day, and the fourth took a
+    // couple before dirt was a term and none after it. That is the bottom of a
+    // long tail moving by one visit, not a venue the formula stopped being able
+    // to choose: a dirty venue is chosen *less*, and the three above it are the
+    // ones that show it. A fourth playground on a plot that barely fills three
+    // is `advice.ts`'s `unvisited` note to make, which is a note and not a
+    // problem.
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual(['changing-cabins']);
+    expect(quiet).toEqual(['changing-cabins', 'playground']);
 
     // Rounded up from the 0.55 measured when this landed, which is the beach's
     // share of energy and explained in the doc comment above. The loudest of the

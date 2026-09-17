@@ -92,6 +92,12 @@ export function RenderStats({
       <StatRow label="Asleep" note="in bed now, of the guests who have one">
         {formatNumber(stats.asleep)} / {formatNumber(stats.beds.taken)}
       </StatRow>
+      <StatRow label="Staff" note="cleaning now, of the staff on the plot">
+        {formatNumber(stats.staff.working)} / {formatNumber(stats.staff.total)}
+      </StatRow>
+      <StatRow label="Cleanliness" note="mean over the venues standing">
+        {Math.round(stats.cleanliness * 100)}%
+      </StatRow>
       <StatRow label="Venues" note="inside now, and queueing at a door">
         {formatNumber(stats.venues.inside)} / {formatNumber(stats.venues.waiting)}
       </StatRow>

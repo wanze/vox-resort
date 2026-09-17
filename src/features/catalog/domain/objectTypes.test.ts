@@ -18,6 +18,7 @@ import {
   PEOPLE_MODELS,
   SEA_MODELS,
   SKY_MODELS,
+  STAFF_MODELS,
   venueOf,
   venueTypes,
   windowsByModelId,
@@ -90,9 +91,13 @@ describe('model lights', () => {
 });
 
 describe('PAINTED_MODELS', () => {
-  it('is the catalogue, the crowd, the sky and the sea, and nothing twice', () => {
+  it('is the catalogue, the crowd, the staff, the sky and the sea, and nothing twice', () => {
     expect(PAINTED_MODELS).toHaveLength(
-      OBJECT_TYPES.length + PEOPLE_MODELS.length + SKY_MODELS.length + SEA_MODELS.length,
+      OBJECT_TYPES.length +
+        PEOPLE_MODELS.length +
+        STAFF_MODELS.length +
+        SKY_MODELS.length +
+        SEA_MODELS.length,
     );
     expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
   });
@@ -114,6 +119,19 @@ describe('PAINTED_MODELS', () => {
     for (const person of PEOPLE_MODELS) {
       expect(catalogue.has(person.id), `${person.id} is in the catalogue too`).toBe(false);
       expect(person.category).toBe('people');
+    }
+  });
+
+  it('keeps the staff out of the catalogue and out of the guests', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    const guests = new Set(PEOPLE_MODELS.map((model) => model.id));
+    expect(STAFF_MODELS.length).toBeGreaterThan(0);
+    for (const worker of STAFF_MODELS) {
+      expect(catalogue.has(worker.id), `${worker.id} is in the catalogue too`).toBe(false);
+      // The one that matters: a guest's `variant` indexes into `PEOPLE_MODELS`,
+      // so a staff model in that list would be dealt to somebody on holiday.
+      expect(guests.has(worker.id), `${worker.id} is dealt to guests too`).toBe(false);
+      expect(worker.category).toBe('people');
     }
   });
 

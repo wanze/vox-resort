@@ -96,6 +96,12 @@ export interface PlaceView {
     /** How many are inside now, and how many are in the line outside. */
     readonly inside: number;
     readonly waiting: number;
+    /**
+     * How clean it is, 0..1, as the staff have left it. 1 for anything the
+     * caller keeps no upkeep for, which is a venue just built. See
+     * `sim/domain/upkeep.ts`.
+     */
+    readonly cleanliness: number;
   } | null;
   /** Guests who sleep here. Empty for anything that is not a lodging. */
   readonly residents: readonly PartyMemberView[];
@@ -204,6 +210,12 @@ export function placeView(
   label: string,
   guests: Guests,
   occupancy: PlaceOccupancy | null,
+  /**
+   * How clean this place is, or null where the caller keeps no upkeep - a
+   * fixture, or a venue the router has never heard of because it was built a
+   * moment ago. Both are spotless, which is the truth about a new building.
+   */
+  cleanliness: number | null = null,
 ): PlaceView {
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
@@ -230,6 +242,7 @@ export function placeView(
           // heard of is one that has just been built, and empty is the truth.
           inside: occupancy?.inside ?? 0,
           waiting: occupancy?.waiting ?? 0,
+          cleanliness: cleanliness ?? 1,
         }
       : null,
     residents,

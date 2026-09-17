@@ -24,7 +24,9 @@ const guestsOf = (count = 40): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
 const FIVE_STARS: Rating = ratingFor({ happiness: 1, present: 10, housed: 10 });
-const NO_STARS: Rating = ratingFor({ happiness: 0, present: 10, housed: 0 });
+// Nothing out of five is every term at nothing, cleanliness included since
+// plan 022: a spotless plot rates half a star however miserable everybody is.
+const NO_STARS: Rating = ratingFor({ happiness: 0, present: 10, housed: 0, cleanliness: 0 });
 
 /** A resort everybody has gone home from: every bed and every body free. */
 const emptied = (guests: Guests): Guests => {

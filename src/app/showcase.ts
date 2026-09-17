@@ -24,6 +24,7 @@ import {
   PEOPLE_MODELS,
   SEA_MODELS,
   SKY_MODELS,
+  STAFF_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import {
@@ -108,6 +109,13 @@ import {
   type Happiness,
 } from '../features/sim/domain/happiness';
 import { ratingFor, type Rating } from '../features/sim/domain/rating';
+import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
+import { staffFor, STAFF_ROLES, type Staff } from '../features/sim/domain/staff';
+import {
+  createStaffRouter,
+  meanCleanliness,
+  type StaffRouter,
+} from '../features/sim/domain/staffRouter';
 import { checkInDue, runCheckIn } from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom } from '../features/layout/domain/random';
@@ -330,6 +338,16 @@ const DWELL_SEED = 7;
 const ARRIVALS_SEED = 8;
 
 /**
+ * The seed every cleaner's spell of work is drawn from.
+ *
+ * Its own, for {@link DWELL_SEED}'s reason, and seeded at all for the same one:
+ * `docs/rendering.md` requires a bench run to replay the same scene, and a
+ * second population walking off an unseeded draw puts two runs' staff in
+ * different places on the same frame.
+ */
+const STAFF_SEED = 9;
+
+/**
  * How far above a person's feet a click is tested against, in voxels: the hips
  * of the tallest figure, which is about half way up a body. The number the art
  * already names, rather than a second guess at it; see `pickPerson.ts`.
@@ -432,6 +450,18 @@ export interface ShowcaseStats {
    * nobody is coming back to. See `sim/domain/checkIn.ts`.
    */
   readonly guests: { readonly present: number; readonly capacity: number };
+  /**
+   * The staff on the plot, and how many of them are cleaning something right
+   * now rather than walking to the next thing.
+   *
+   * A second population, counted apart from the guests on purpose: they are not
+   * checked in, they have no beds and they never leave, so folding them into
+   * {@link guests} would make every other number about the resort a lie. See
+   * `sim/domain/staff.ts`.
+   */
+  readonly staff: { readonly total: number; readonly working: number };
+  /** The mean cleanliness of the venues standing, 0..1; see `sim/domain/upkeep.ts`. */
+  readonly cleanliness: number;
   /** What the resort is worth out of five; see `sim/domain/rating.ts`. */
   readonly rating: number;
 }
@@ -626,6 +656,12 @@ interface MeshedCatalogue {
    */
   readonly people: readonly ModelGeometry[];
   /**
+   * The staff's, kept apart from the crowd's as well as from the catalogue: they
+   * are a second crowd field of their own, drawn from a registry of their own.
+   * See `sim/domain/staff.ts`.
+   */
+  readonly staff: readonly ModelGeometry[];
+  /**
    * The sky's, kept apart for the reason the crowd's are: a balloon is not a
    * placement either, and the instanced world must never be able to stand one
    * on a tile. They belong to the balloon field — see `features/balloons/`.
@@ -655,6 +691,20 @@ if (CHILD_VARIANT < 0) {
   throw new Error('No person model has the id "child"; the guests have no child to draw.');
 }
 
+/**
+ * Ids the staff are drawn from, likewise, and kept apart from the crowd's for
+ * the reason `voxel-gen/people/index.ts` gives: a guest's `variant` indexes into
+ * `PEOPLE_MODELS`, so a staff model in that list would be dealt to a guest.
+ */
+const STAFF_IDS: ReadonlySet<string> = new Set(STAFF_MODELS.map((model) => model.id));
+
+// The staff crowd's `variant` is a role's place in `STAFF_ROLES`, and it indexes
+// the meshed staff list - which is `STAFF_SOURCES`'s order. Loudly, because the
+// quiet alternative draws a lifeguard as a cleaner the day one lands.
+if (STAFF_MODELS.length < STAFF_ROLES.length) {
+  throw new Error('Fewer staff models than staff roles; somebody would be drawn as nobody.');
+}
+
 /** Ids the sky is drawn from, likewise. */
 const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id));
 
@@ -682,10 +732,16 @@ async function meshModels(
   const geometries = buildModelGeometries(meshed.models);
   return {
     geometries: geometries.filter(
-      (model) => !PEOPLE_IDS.has(model.id) && !SKY_IDS.has(model.id) && !SEA_IDS.has(model.id),
+      (model) =>
+        !PEOPLE_IDS.has(model.id) &&
+        !STAFF_IDS.has(model.id) &&
+        !SKY_IDS.has(model.id) &&
+        !SEA_IDS.has(model.id),
     ),
     // In registry order, because a person's `variant` indexes into it.
     people: geometries.filter((model) => PEOPLE_IDS.has(model.id)),
+    // Likewise a worker's; see `STAFF_ROLES`.
+    staff: geometries.filter((model) => STAFF_IDS.has(model.id)),
     // Likewise a balloon's.
     sky: geometries.filter((model) => SKY_IDS.has(model.id)),
     // Likewise a boat's; see `BUOY_INDEX` in `voxel-gen/sea/index.ts`.
@@ -945,6 +1001,25 @@ interface Resort {
    */
   readonly crowd: CrowdField;
   /**
+   * The people who work this plot, walking the same graph as {@link crowd} and
+   * drawn from a field of their own.
+   *
+   * A second crowd rather than more people in the first, because a guest's
+   * `variant` indexes the guest models and a cleaner is not one of them - and
+   * because every count in the HUD, from the beds to the rating, is about
+   * guests. Part of the resort for {@link crowd}'s reason: they walk *this*
+   * plot's paving. See `sim/domain/staff.ts`.
+   */
+  readonly staff: CrowdField;
+  /**
+   * Where each of {@link staff} is walking and what they are cleaning.
+   *
+   * Rebuilt rather than rebuilt-into on an edit, for the reason {@link router}
+   * is: its flow fields are arrays indexed by node, and an edit renumbers every
+   * node there is. See `sim/domain/staffRouter.ts`.
+   */
+  readonly staffRouter: StaffRouter;
+  /**
    * Who the people in {@link crowd} are, keyed by the same person index.
    *
    * Built with the resort and left alone by an edit, which reseats the crowd
@@ -992,6 +1067,16 @@ interface Resort {
    * anything else. See `sim/domain/gateways.ts`.
    */
   gateways: readonly Gateway[];
+  /**
+   * How clean each of {@link venues} is, by the same index.
+   *
+   * Beside the venue list and replaced with it, because it is indexed by it:
+   * the dirt of whatever is still standing is carried across by key, so paving
+   * one tile does not scrub the whole plot. Written by the router, which wears a
+   * venue down with every visit, and by the staff router, which cleans it. See
+   * `sim/domain/upkeep.ts`.
+   */
+  upkeep: Upkeep;
   /**
    * Which of {@link venues} nothing can walk to at all, by key.
    *
@@ -1145,6 +1230,40 @@ function crowdFor(parts: {
       seed: CROWD_SEED,
     }),
     models: parts.people,
+    lightVolume: parts.lightVolume,
+  });
+}
+
+/**
+ * The staff this plot keeps, on the same graph the guests walk.
+ *
+ * `crowdFor`'s sibling rather than a branch in it: what differs is the registry
+ * the variants are dealt from, the count, the seed and the decision function,
+ * which is all of its arguments. They never roam the beach - no staff goes on
+ * the sand in this plan, which is what defers the lifeguards - and nothing calls
+ * them off it, so `offTheSand` is left out.
+ */
+function staffCrowdFor(parts: {
+  readonly network: WalkNetwork;
+  readonly models: readonly ModelGeometry[];
+  readonly lightVolume: BakedLightVolume | null;
+  readonly staff: Staff;
+  /** Where a worker with a venue to clean walks next; see `sim/domain/staffRouter.ts`. */
+  readonly routeOf: (worker: number, at: number) => number;
+}): CrowdField {
+  return buildCrowdField({
+    crowd: createCrowd({
+      network: parts.network,
+      count: parts.staff.count,
+      // Never zero: `createCrowd` deals a variant per body, and a plot whose art
+      // declared no staff model at all would divide by nothing.
+      variants: Math.max(1, parts.models.length),
+      variantOf: (worker) => parts.staff.variant[worker] ?? 0,
+      routeOf: parts.routeOf,
+      roamsBeach: false,
+      seed: STAFF_SEED,
+    }),
+    models: parts.models,
     lightVolume: parts.lightVolume,
   });
 }
@@ -1346,6 +1465,7 @@ interface ResortArt {
   readonly tickOfDay: () => number;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
+  readonly staff: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
 }
@@ -1410,6 +1530,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const lodgings = lodgingsOn(plot.layout.placements);
   const gateways = gatewaysOn(plot.layout.placements);
   const unreachable = strandedOn(venues, network);
+  // Everything spotless: a plot that has just been built has had nobody in it.
+  const upkeep = createUpkeep(venues.length);
   const beds = bedCount(guests);
   // The router reads where somebody is standing and the crowd is built with the
   // router, so one of the two is bound late — as `createClock` binds the resort.
@@ -1440,6 +1562,10 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     // Asserted, and safe: the crowd is built on the very next statement, and
     // nothing calls into the router until a frame steps somebody somewhere.
     crowd: () => crowdField!.crowd,
+    // Late-bound for the crowd's reason: a plot edit replaces the venue list,
+    // and the upkeep beside it, and a router holding the one from before the
+    // edit would be soiling venues that no longer stand. See the reanchor block.
+    upkeep: () => resort.upkeep,
     seed: DWELL_SEED,
   });
   const crowd = crowdFor({
@@ -1452,6 +1578,29 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     offTheSand: (person) => router.offTheSand(person),
   });
   crowdField = crowd;
+  // As many as the venues standing when the plot was built, and not recounted on
+  // an edit: a crowd's bodies are dealt once, exactly as the guests' are, and
+  // the count only moves when the whole resort is replaced. See `staffFor`.
+  const employed = staffFor(venues.length);
+  // Bound late to each other for the reason the guests' pair is: the router
+  // reads where somebody is standing and the crowd is built with the router.
+  let staffField: CrowdField | null = null;
+  const staffRouter = createStaffRouter({
+    staff: employed,
+    venues,
+    network,
+    upkeep: () => resort.upkeep,
+    crowd: () => staffField!.crowd,
+    seed: STAFF_SEED,
+  });
+  const staff = staffCrowdFor({
+    network,
+    models: parts.staff,
+    lightVolume: lighting.volume,
+    staff: employed,
+    routeOf: (worker, at) => staffRouter.step(worker, at),
+  });
+  staffField = staff;
   const balloons = balloonsFor({
     shore,
     sky: parts.sky,
@@ -1467,7 +1616,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     lightVolume: lighting.volume,
   });
 
-  return {
+  const resort: Resort = {
     plan,
     plot,
     lighting,
@@ -1475,12 +1624,15 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     shadows,
     construction,
     crowd,
+    staff,
+    staffRouter,
     guests,
     needs,
     happiness,
     venues,
     lodgings,
     gateways,
+    upkeep,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     beds: { total: beds.beds, taken: beds.taken },
@@ -1505,11 +1657,13 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
       shadows.dispose();
       construction.dispose();
       crowd.dispose();
+      staff.dispose();
       balloons.dispose();
       sea.dispose();
       lighting.volume?.dispose();
     },
   };
+  return resort;
 }
 
 /**
@@ -1549,12 +1703,16 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.construction.group);
       scene?.scene.remove(previous.crowd.group);
+      // The seventh pair, and the half that is easy to forget: without the
+      // remove, the previous plot's cleaners go on walking over the new one.
+      scene?.scene.remove(previous.staff.group);
       scene?.scene.remove(previous.balloons.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
       scene?.scene.add(resort.construction.group);
       scene?.scene.add(resort.crowd.group);
+      scene?.scene.add(resort.staff.group);
       scene?.scene.add(resort.balloons.group);
       scene?.scene.add(resort.sea.group);
       scene?.reframe(
@@ -1614,7 +1772,8 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
 }): ShowcaseStats {
   const { handle, scratch, catalogue } = parts;
-  const { plot, world, shadows, construction, crowd, balloons, sea, lighting } = parts.resort;
+  const { plot, world, shadows, construction, crowd, staff, balloons, sea, lighting } =
+    parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -1632,6 +1791,7 @@ function sceneStats(parts: {
       shadows.drawCalls +
       construction.drawCalls +
       crowd.drawCalls +
+      staff.drawCalls +
       balloons.drawCalls +
       sea.drawCalls,
     chunkCount: world.chunkCount,
@@ -1642,6 +1802,7 @@ function sceneStats(parts: {
       shadows.triangleCount +
       construction.triangleCount +
       crowd.triangleCount +
+      staff.triangleCount +
       balloons.triangleCount +
       sea.triangleCount,
     shadowCount: shadows.count,
@@ -1662,6 +1823,11 @@ function sceneStats(parts: {
     venues: parts.resort.router.occupancyTotals,
     routeFields: parts.resort.router.fieldCount,
     guests: { present: presentCount(parts.resort.guests), capacity: parts.resort.guests.count },
+    staff: {
+      total: parts.resort.staff.crowd.count,
+      working: parts.resort.staffRouter.workingCount,
+    },
+    cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
     ...parts.startup,
   };
@@ -1700,7 +1866,13 @@ function runTicks(
   decayNeeds(resort.needs, resort.guests, ticks);
   // One at a time rather than all twelve at once: a venue that frees a place
   // on the first of them must let somebody in on the first, not on the last.
-  for (let tick = ticks; tick > 0; tick--) resort.router.tick(clock.ticks - tick + 1);
+  for (let tick = ticks; tick > 0; tick--) {
+    resort.router.tick(clock.ticks - tick + 1);
+    // In the same loop and on the same tick as the guests', so a spell of work
+    // that ends on the first of twelve ends on the first: the venue is cleaner
+    // from that tick on, and whoever decides next sees it.
+    resort.staffRouter.tick(clock.ticks - tick + 1);
+  }
   // After the ticks, so a guest who spent them in a line is charged for the line
   // they were actually in rather than the one they had just joined.
   ageHappiness(
@@ -1779,6 +1951,11 @@ function factsNow(resort: Resort): ResortFacts {
     balks: router.dayBalks(),
     visits: router.dayVisits(),
     unreachable: resort.unreachable,
+    // By key, because a piece of advice names a building and not an index into
+    // a list the next edit replaces.
+    cleanliness: new Map(
+      resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
+    ),
   };
 }
 
@@ -1800,6 +1977,9 @@ function runDay(resort: Resort, day: number): void {
     happiness: meanHappiness(resort.happiness, resort.guests),
     present: presentCount(resort.guests),
     housed: beds.taken,
+    // The plot as it stands overnight, like the other two terms: a resort the
+    // player has let go rates like one, even on a day when everybody still ate.
+    cleanliness: meanCleanliness(resort.upkeep, resort.venues.length),
   });
   admitArrivals(resort, day);
   sendDepartures(resort, day);
@@ -2570,6 +2750,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     tickOfDay: () => clock.tickOfDay,
     geometries: catalogue.geometries,
     people: catalogue.people,
+    staff: catalogue.staff,
     sky: catalogue.sky,
     sea: catalogue.sea,
   });
@@ -2600,6 +2781,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().shadows.group);
   handle.scene.add(current().construction.group);
   handle.scene.add(current().crowd.group);
+  handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().sea.group);
   slot.attach(handle);
@@ -2771,9 +2953,20 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if ('person' in target) return guestAt(target.person);
     const placement = build.placementOf(target.key);
     if (!placement) return null;
-    const { guests, router } = current();
+    const resort = current();
+    const { guests, router } = resort;
     const label = objectTypeById(placement.id).label;
-    return placeView(placement, label, guests, router.occupancyOf(placement.key));
+    // By key rather than by index, because the inspector is handed a placement
+    // and the venue list is the router's numbering; -1 for anything that is not
+    // a venue at all, which `cleanliness` reads as spotless.
+    const venue = resort.venues.findIndex((candidate) => candidate.key === placement.key);
+    return placeView(
+      placement,
+      label,
+      guests,
+      router.occupancyOf(placement.key),
+      cleanliness(resort.upkeep, venue),
+    );
   };
 
   /** Selects something, or nothing, and tells the HUD what to show. */
@@ -2918,12 +3111,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       });
       // The venues and the router go with the graph: a node index means nothing
       // across a rebuild, and a bakery may have just been built or bulldozed.
+      const wasStanding = resort.venues;
       resort.venues = venuesOn(plot.placements);
       resort.lodgings = lodgingsOn(plot.placements);
       resort.gateways = gatewaysOn(plot.placements);
+      // By key rather than by index, because an index means nothing across a
+      // rebuild: whatever is still standing keeps the dirt it had, and anything
+      // just built starts clean. See `upkeep.ts`.
+      resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
       resort.unreachable = strandedOn(resort.venues, network);
       resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
+      resort.staffRouter.rebuild(resort.venues, network);
       crowd.relocate(network);
+      resort.staff.relocate(network);
       // Bulldozing the only restaurant should say so now rather than tomorrow
       // morning. The day's counters are left alone: what happened at the doors
       // this morning happened, and the venues that are still standing kept
@@ -2954,6 +3154,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // A crowd that walked while the clock was stopped filled every queue on the
     // plot and kept them full, since nobody is let out but on a tick.
     current().crowd.advance(
+      crowdStep(bench !== null, clock.speed, elapsed),
+      bench ? 1 : crowdScaleFor(clock.speed),
+    );
+    // The same step and the same scale as the guests': the staff walk the same
+    // graph at the same pace, and a second population off a different clock
+    // would be a second thing for a bench run to fail to replay.
+    current().staff.advance(
       crowdStep(bench !== null, clock.speed, elapsed),
       bench ? 1 : crowdScaleFor(clock.speed),
     );

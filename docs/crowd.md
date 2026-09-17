@@ -759,15 +759,98 @@ and none of it was ever said.
   bungalow rather than the type. Everything gathered here would feed one; it is a
   rendering plan of its own.
 
+## Staff and cleanliness
+
+Every venue on the plot used to be exactly as good on day thirty as on day one.
+It now wears out with use, and a second population walks the plot putting that
+right.
+
+**How dirt works.** `sim/domain/upkeep.ts` keeps one `Float32Array` per venue, 1
+spotless and 0 filthy — the way round `needs.ts` reads, so nothing compares
+backwards against the five columns beside it. Per venue and not per tile: dirt is
+a fact about a place people use rather than about the ground between places.
+
+- `WEAR_PER_VISIT` **0.02**, divided by the venue's capacity. A restaurant for
+  forty is not worn forty times as fast as a beach shower for one by being forty
+  times as busy — a capacity says how many the place is _built_ for. A venue for
+  ten takes about five hundred visits to go from spotless to filthy, which is a
+  few days of a busy plot.
+- `SCRUB_PER_SPELL` **0.35**. Three spells restore a ruined venue, so one cleaner
+  holds two or three places and no more. That gap is the mechanic: build a fourth
+  busy venue and the staff stop keeping up.
+- `NEEDS_CLEANING` **0.7**: below this a cleaner will walk to it, and below this
+  the advice panel says so.
+- **Nothing recovers on its own.** A venue nobody cleans stays dirty for ever.
+
+Wear happens where the relief does — on the way _out_ of a visit, on both paths:
+`leave` and `leaveErrand`, so a bakery served off a beach pitch gets dirty too.
+Dirt survives a plot edit by key (`carryUpkeep`), so paving one tile does not
+scrub the resort; anything newly built starts spotless.
+
+**What dirt costs.** `chooseVenue` gains a fourth optional function, weighed
+exactly as a long line is, with a floor of `DIRT_FLOOR` **0.25**: a filthy venue
+is a quarter as attractive, never worthless. A guest desperate for the only
+restrooms standing still goes, and a floor of zero would make one neglected venue
+behave exactly like a demolished one — which reads as the router failing.
+`rating.ts` gains a third term at a tenth of the weight, below happiness because
+dirt already reaches the rating through the guests who walked further to get away
+from it.
+
+**Staff are a second everything.** A second registry (`STAFF_SOURCES`, never
+appended to `PEOPLE_SOURCES` — a guest's `variant` indexes `PEOPLE_MODELS`, so a
+cleaner in that list would be dealt to somebody on holiday and would move every
+seeded draw after it), a second crowd field, and a second router. `staffFor`
+gives one cleaner per six venues, at least one on any plot with a venue, capped
+at 40 so a nine-times-tiled bench plot does not put a town on screen.
+
+`staffRouter.ts` is the whole of what makes them different: `dirtiest` for what
+to do, `flowFieldFor` and `doorsFor` for the way there, `holdAt` for standing
+still while working, `scrub` and `releaseTo` when the spell ends. A claim per
+venue (`claimedBy`) stops two cleaners taking one place. No needs, no queue, no
+night, no gate.
+
+**`crowd.ts` and `crowdField.ts` were not touched.** That was the claim this
+work existed to test — that `crowd.ts` is about walking and knows nothing about
+guests — and a second population with a different `routeOf` dropped straight
+onto it. `git diff --stat src/features/crowd/` is empty.
+
+**Measured**, one whole simulated day of the reference plot at `normal`'s pace,
+600 guests and 15 cleaners: the dirtiest venue reached 0.18 and the mean over the
+plot ended at 0.85. So the busiest places do fall behind and the staff do keep
+the plot as a whole in hand, which is the shape the numbers above were chosen
+for.
+
+**Three deliberate deferrals**:
+
+- **Lifeguards.** `lifeguard-tower` declares `placement: { ground: 'shore' }`, so
+  the post is out on the sand and the walk is a sand leg — which lives in
+  `router.ts` (`setOffOverSand`, `walkSandTo`, `sandRoutesFor`) and must be
+  shared rather than copied. The seam is `StaffRole` and `staffRouter.step`.
+- **Animators.** There is nothing for one to do until a venue can run an _event_,
+  which nobody has specified.
+- **Drawn litter.** `InstancedWorld.add`/`remove` could scatter it, but it is a
+  placement, a blob shadow and a bucket write per piece, churning continuously,
+  and none of it can be verified without a browser. The cleaner walking to the
+  dirtiest venue and working there is the legibility this bought.
+
+**Cost**, `pnpm bench` before and after on all four cases: one more draw call
+(277 → 278 overview, 421 → 422 street) and 1,456 more drawn triangles. CPU frame
+median unchanged at 8.30 ms on every case, p95 inside run-to-run noise
+(9.7–9.9 ms both), GPU median and p95 likewise. Well inside the 0.5 ms the plan
+would have stopped at.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`, so they
   are never on the build palette or placed by the generator. `figure.ts` holds the
   shared builder and `hipHeight`. Preview with `pnpm preview --people`.
 - Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`.
-- `PAINTED_MODELS` in `objectTypes.ts` is the union of catalogue and people; the
-  material set, emissive lookup and scratch layout read it. `dveEngine.test.ts`
-  meshes it.
+- Staff: `voxel-gen/people/cleaner.ts`, exported through `STAFF_SOURCES` — a
+  registry beside `PEOPLE_SOURCES` and never inside it. See "Staff and
+  cleanliness" for why.
+- `PAINTED_MODELS` in `objectTypes.ts` is the union of catalogue, people, staff,
+  sky and sea; the material set, emissive lookup and scratch layout read it.
+  `dveEngine.test.ts` meshes it.
 - People paint from `voxel-gen/palette.ts`; `skin` is the one family they add.
 - `voxel-gen/seats.test.ts` checks every seat has something solid under it and
   room for a body over it.
@@ -792,3 +875,4 @@ Not yet measured. `pnpm bench` does not isolate the crowd; that is step 7.
 | —       | Stays that end, a rating, and the coaches that follow from it     | Landed             |
 | —       | Advice: what the resort is getting wrong, ranked                  | Landed             |
 | —       | Balance: no venue takes every visit                               | Landed             |
+| —       | Cleanliness, and cleaners as a second population                  | Landed             |

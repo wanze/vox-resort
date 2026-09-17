@@ -16,7 +16,7 @@
  */
 
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
-import { PEOPLE_SOURCES } from '../../../../voxel-gen/people/index.ts';
+import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
 import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
 import {
@@ -85,6 +85,16 @@ export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = MODEL_SOURCES.map((
 export const PEOPLE_MODELS: readonly VoxelModel[] = PEOPLE_SOURCES.map(buildModel);
 
 /**
+ * The staff's art: one built model per kind of worker on the plot.
+ *
+ * Here for the reason {@link PEOPLE_MODELS} is, and a list of its own for the
+ * reason `voxel-gen/people/index.ts` gives: a guest's `variant` indexes into
+ * `PEOPLE_MODELS`, so a cleaner in that list would be dealt to a guest. See
+ * `sim/domain/staff.ts`.
+ */
+export const STAFF_MODELS: readonly VoxelModel[] = STAFF_SOURCES.map(buildModel);
+
+/**
  * The sky's art: one built model per balloon the beach can let go.
  *
  * Here for the reason {@link PEOPLE_MODELS} is: a balloon has no swatch, no
@@ -120,6 +130,7 @@ export const SEA_MODELS: readonly VoxelModel[] = SEA_SOURCES.map(buildModel);
 export const PAINTED_MODELS: readonly VoxelModel[] = [
   ...OBJECT_TYPES.map((type) => type.model),
   ...PEOPLE_MODELS,
+  ...STAFF_MODELS,
   ...SKY_MODELS,
   ...SEA_MODELS,
 ];

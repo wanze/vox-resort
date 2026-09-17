@@ -4,6 +4,7 @@ import {
   adviceFor,
   adviceFullLines,
   adviceNoBeds,
+  adviceDirty,
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
@@ -88,6 +89,7 @@ function healthyFacts(over: Partial<ResortFacts> = {}): ResortFacts {
     homeless: 0,
     bedsFree: 20,
     wanting: { ...NOTHING_WANTED, hunger: 40 },
+    cleanliness: new Map(),
     balks: new Map(),
     visits: new Map([['bakery#0', 30]]),
     unreachable: new Set(),
@@ -152,6 +154,46 @@ describe('the advice rules', () => {
     expect(advice?.subject).toBe('Restaurant');
     expect(advice?.count).toBe(60);
     expect(advice?.weight).toBeCloseTo(0.5, 5);
+  });
+
+  it('names the place the cleaners are furthest behind on, and is quiet below the line', () => {
+    const big = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 40 });
+    const small = venueOf({ key: 'shower#0', label: 'Beach Shower', capacity: 1 });
+    const venues = [big, small];
+
+    // Nothing over the line is nothing to say: the same threshold a cleaner
+    // walks to, so the panel never advises about what the resort is happy with.
+    expect(
+      adviceDirty(healthyFacts({ venues, cleanliness: new Map([['pool#0', 0.8]]) })),
+    ).toBeNull();
+    expect(adviceDirty(healthyFacts({ venues }))).toBeNull();
+
+    // The filthier one when they are the same size, and the bigger one when
+    // they are equally dirty.
+    const worst = adviceDirty(
+      healthyFacts({
+        venues,
+        cleanliness: new Map([
+          ['pool#0', 0.2],
+          ['shower#0', 0.5],
+        ]),
+      }),
+    );
+    expect(worst?.kind).toBe('dirty');
+    expect(worst?.subject).toBe('Swimming Pool');
+    expect(worst?.count).toBe(20);
+    expect(worst?.at).toEqual({ tileX: 0, tileZ: 0 });
+    const dirt = new Map([
+      ['pool#0', 0.3],
+      ['shower#0', 0.3],
+    ]);
+    const bigger = adviceDirty(healthyFacts({ venues, cleanliness: dirt }));
+    expect(bigger?.subject).toBe('Swimming Pool');
+    // And a beach shower for one left in the same state is a quieter line than
+    // a pool for forty, rather than the same one.
+    const alone = adviceDirty(healthyFacts({ venues: [small], cleanliness: dirt }));
+    expect(alone?.subject).toBe('Beach Shower');
+    expect(alone!.weight).toBeLessThan(bigger!.weight);
   });
 
   it('names every venue nothing can walk to, with the places standing idle in it', () => {

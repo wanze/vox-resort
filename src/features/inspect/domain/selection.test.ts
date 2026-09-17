@@ -427,6 +427,20 @@ describe('placeView with a venue that is being used', () => {
     expect(view.venue?.inside).toBe(0);
     expect(view.venue?.waiting).toBe(0);
   });
+
+  it('reports how clean it is, and calls a place nobody keeps upkeep for spotless', () => {
+    const grubby = placeView(
+      at('restaurant#0', 'restaurant'),
+      'Restaurant',
+      guestsOf(),
+      null,
+      0.42,
+    );
+    expect(grubby.venue?.cleanliness).toBeCloseTo(0.42);
+    // A venue built a moment ago, which nothing has had a chance to wear.
+    const fresh = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
+    expect(fresh.venue?.cleanliness).toBe(1);
+  });
 });
 
 describe('a guest at night', () => {

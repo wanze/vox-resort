@@ -129,6 +129,7 @@ import {
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
+import { cleanliness, soil, type Upkeep } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
 /**
@@ -388,6 +389,16 @@ export function createRouter(parts: {
    * the people from before the edit.
    */
   readonly crowd: () => Crowd;
+  /**
+   * How clean each venue is, late-bound for the crowd's reason: a plot edit
+   * replaces the venue list and the upkeep beside it, and a router holding the
+   * one from before the edit would be soiling venues that no longer stand.
+   *
+   * The router *writes* it - a visit is what wears a venue down - and reads it
+   * back for `chooseVenue`. Who scrubs it is `staffRouter.ts`'s business and
+   * nothing this file knows about. See `upkeep.ts`.
+   */
+  readonly upkeep: () => Upkeep;
   /** What the dwell of each visit is drawn from; see {@link dwellTicksFor}. */
   readonly seed: number;
 }): Router {
@@ -690,6 +701,15 @@ export function createRouter(parts: {
    */
   const occupants = (venue: number): number => occupancy.inside[venue] ?? 0;
 
+  /**
+   * How clean each venue is, for `chooseVenue`'s dirt term.
+   *
+   * The synthetic beach sits past the end of the upkeep's array and so comes
+   * back spotless, which is the right answer twice over: a band of sand is not
+   * a venue anybody mops, and nothing on this plot wears it.
+   */
+  const cleanOf = (venue: number): number => cleanliness(parts.upkeep(), venue);
+
   /** How much this person likes each venue, for `chooseVenue`; see {@link salts}. */
   const affinityOf =
     (person: number) =>
@@ -727,6 +747,7 @@ export function createRouter(parts: {
       occupants,
       affinity: affinityOf(person),
       justLeft: justLeft[person]!,
+      cleanliness: cleanOf,
     });
     if (choice) setPartyGoal(goals, guests, person, choice);
   };
@@ -964,6 +985,7 @@ export function createRouter(parts: {
       occupants,
       affinity: affinityOf(person),
       justLeft: justLeft[person]!,
+      cleanliness: cleanOf,
     });
     if (!choice) return;
     // Its lane and its own routes off the beach, which the walk home will want.
@@ -1025,6 +1047,8 @@ export function createRouter(parts: {
    */
   const leaveErrand = (person: number, venue: number): void => {
     relieve(needs, person, venues[venue]!.satisfies);
+    // The other way out of a visit; see the wear in {@link leave}.
+    soil(parts.upkeep(), venue, venues[venue]!.capacity);
     const route = errandOf(person);
     const staying = stays[person] !== null && now < stayUntil[person]! && !dueInBed(person);
     if (route && staying) {
@@ -1212,6 +1236,10 @@ export function createRouter(parts: {
       return;
     }
     relieve(needs, person, venues[venue]!.satisfies);
+    // A venue is worn by being used, so the wear goes where the relief does -
+    // and on both ways out of a visit, or a bakery served off a beach pitch
+    // would stay spotless for ever. See {@link leaveErrand}.
+    soil(parts.upkeep(), venue, venues[venue]!.capacity);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;

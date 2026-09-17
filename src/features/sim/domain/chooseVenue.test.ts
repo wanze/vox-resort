@@ -384,3 +384,36 @@ describe('chooseVenue with a taste and a memory', () => {
     expect(chooseVenue({ ...options, venues: [venues[0]!], justLeft: 0 })?.venue).toBe(0);
   });
 });
+
+describe('chooseVenue against the dirt', () => {
+  it('sends a guest to the clean one of two equal places', () => {
+    const person = someone('couple');
+    const venues = [venue('bakery#0', HUNGER, 200), venue('bakery#1', HUNGER, 200)];
+    const needs = wanting(person, 'hunger');
+    const options: ChoiceOptions = { needs, guests, person, venues, x: 0, z: 0 };
+    // Nothing handed in is everything spotless, and the tie breaks low.
+    expect(chooseVenue(options)?.venue).toBe(0);
+    expect(chooseVenue({ ...options, cleanliness: (v) => (v === 0 ? 0.1 : 1) })?.venue).toBe(1);
+    // And a plot everybody has let go equally decides on everything else again.
+    expect(chooseVenue({ ...options, cleanliness: () => 0.1 })?.venue).toBe(0);
+  });
+
+  it('still sends a desperate guest to the only filthy place standing', () => {
+    const person = someone('family');
+    const needs = wanting(person, 'hunger');
+    const venues = [venue('bar#0', THIRST, 20), venue('bakery#0', HUNGER, 400)];
+    const filthy: ChoiceOptions = {
+      needs,
+      guests,
+      person,
+      venues,
+      x: 0,
+      z: 0,
+      cleanliness: () => 0,
+    };
+    // A quarter as attractive is still attractive: a floor of zero would make a
+    // neglected venue behave exactly like a demolished one.
+    expect(chooseVenue(filthy)?.venue).toBe(1);
+    expect(chooseVenue(filthy)?.need).toBe<GuestNeed>('hunger');
+  });
+});

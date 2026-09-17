@@ -84,6 +84,13 @@ export interface ChoiceOptions {
    * nearest thing that serves them and so the best answer again.
    */
   readonly justLeft?: number;
+  /**
+   * How clean each venue is, 0..1. A dirty place is a worse place, weighed
+   * exactly as a long line is: worth it for the only restrooms standing, not
+   * worth it for the second-nearest ice cream. Omit it and everything is
+   * spotless, which is what a fixture wants and what plan 018 had.
+   */
+  readonly cleanliness?: (venue: number) => number;
 }
 
 /**
@@ -128,10 +135,26 @@ export const TASTE_SPREAD = 0.3;
 const REVISIT = 0.5;
 
 /**
+ * What a filthy venue is worth against a spotless one, as a multiplier.
+ *
+ * **A quarter, and deliberately not nothing.** A guest desperate for the only
+ * restrooms on the plot still goes to the dirty ones, which is what makes dirt
+ * a cost the player pays in ones and twos rather than a switch that turns a
+ * building off. A floor of zero would make one neglected venue behave exactly
+ * like a demolished one, and the symptom - a queue that empties and never
+ * refills - reads as the router failing rather than as the cleaners being
+ * behind.
+ *
+ * Of a size with {@link REVISIT} on purpose. Dirt is a preference, and the
+ * distance and crowding terms below it are what a guest actually decides on.
+ */
+const DIRT_FLOOR = 0.25;
+
+/**
  * How good a venue is for this person, from where they are standing:
  *
  * ```
- * score = gain * taste * recency
+ * score = gain * taste * recency * (DIRT_FLOOR + (1 - DIRT_FLOOR) * clean)
  *         ---------------------------------------------------------------
  *         (1 + distance / reach) * (1 + CROWDING * busy / capacity)
  * ```
@@ -158,6 +181,11 @@ const REVISIT = 0.5;
  * for one is a queue. So a big place absorbs a crowd that would send a guest
  * straight past a small one.
  *
+ * `clean` is `upkeep.ts`'s, 1 spotless and 0 filthy, and it multiplies the worth
+ * of the visit rather than dividing it: a dirty place is a slightly worse visit,
+ * not a further walk. Floored at {@link DIRT_FLOOR} so the worst venue on the
+ * plot is still a candidate; see there for why zero would be a bug.
+ *
  * `busy` is everybody at the venue - {@link ChoiceOptions.occupants} inside and
  * {@link ChoiceOptions.queueLength} waiting - and not only the line. A line
  * forms only once a place is full, so a term that counted the line alone said
@@ -174,12 +202,17 @@ const REVISIT = 0.5;
  */
 function scoreFor(
   desire: number,
+  clean: number,
   distance: number,
   reach: number,
   busy: number,
   capacity: number,
 ): number {
-  return desire / (1 + distance / reach) / (1 + (CROWDING * busy) / Math.max(1, capacity));
+  return (
+    (desire * (DIRT_FLOOR + (1 - DIRT_FLOOR) * clean)) /
+    (1 + distance / reach) /
+    (1 + (CROWDING * busy) / Math.max(1, capacity))
+  );
 }
 
 /** Every venue's line holding the ceiling, where the caller has no lanes to say otherwise. */
@@ -244,7 +277,10 @@ function weigh(
   // agree on, bent by how much they happen to like the place and halved for the
   // one they have only just come out of.
   const desire = gain * (affinity ? affinity(index) : 1) * (index === justLeft ? REVISIT : 1);
-  return scoreFor(desire, distance, reach, busy, venue.capacity);
+  // Everything spotless where the caller keeps no upkeep, which is what leaves
+  // every fixture written before plan 022 scoring exactly as it did.
+  const clean = options.cleanliness ? options.cleanliness(index) : 1;
+  return scoreFor(desire, clean, distance, reach, busy, venue.capacity);
 }
 
 /**

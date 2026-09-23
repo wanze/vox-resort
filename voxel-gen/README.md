@@ -1,38 +1,33 @@
 # voxel-gen
 
-Hand-authored voxel models: you describe an object in code (place coloured cubes
-on an integer grid) and get a real object in the resort plus an isometric preview
-PNG you can eyeball without opening a browser.
+Voxel models written in code: place coloured cubes on an integer grid and you
+get an object in the resort, plus an isometric PNG preview.
 
-The app imports these same files — `src/features/catalog/domain/objectTypes.ts`
-builds every model in `models/index.ts` — so there is exactly one copy of the
-art. The preview renderer is dependency-free: a small z-buffered rasteriser and a
-from-scratch PNG encoder, no three.js.
+The app imports these files directly (`src/features/catalog/domain/objectTypes.ts`
+builds every model in `models/index.ts`), so there is only one copy of the art.
+The preview renderer has no dependencies: a small z-buffered rasteriser and PNG
+encoder.
 
-Ported from the `costa-sole` project. The GLB exporter it also carried is gone:
-objects reach the screen through the voxel pipeline in `src/`, not as glTF files.
+## Previews
 
-## Run
-
-Needs Node 22.18+ (native TypeScript type stripping — no build step).
+Needs Node 22.18+ (runs TypeScript natively, no build step).
 
 ```bash
 pnpm preview                 # every model -> voxel-gen/out/<id>.png
-pnpm preview bungalow hotel  # just these
-pnpm preview --sheet         # one contact sheet of all models
-pnpm preview --audit         # size table: does each model fill its tiles?
-pnpm preview --people        # the crowd; --sky the balloons, --sea the bay
+pnpm preview bungalow hotel  # only these
+pnpm preview --sheet         # contact sheet of all models
+pnpm preview --audit         # how much of its footprint each model fills
+pnpm preview --people        # the crowd; --sky for balloons, --sea for boats
 pnpm preview --drafts        # models withheld from the app (DRAFT_SOURCES)
 pnpm preview --lineup        # models side by side at one scale, with a person
 ```
 
-Outputs land in `voxel-gen/out/` (git-ignored); `VOXELGEN_OUT` overrides it.
+Output goes to `voxel-gen/out/` (git-ignored), or `VOXELGEN_OUT` if set.
 
-## Add or change a model
+## Adding a model
 
-Copy a file in `models/` and edit it, then add it to `models/index.ts`. A
-building is a composition of parts from `parts/`, painting in colours from
-`palette.ts`, and it reads as a description rather than as arithmetic:
+Copy a file in `models/`, edit it and add it to `models/index.ts`. A building is
+composed from `parts/` and painted from `palette.ts`:
 
 ```ts
 import { PALETTE } from '../palette.ts';
@@ -48,11 +43,10 @@ const FRONT = BODY.z + BODY.d - 1;
 export default defineModel({
   id: 'my-asset',
   label: 'My Asset',
-  // Shelf of the build palette it is offered on: see MODEL_CATEGORIES.
-  category: 'amenities',
+  category: 'amenities', // build palette shelf, see MODEL_CATEGORIES
   tiles: { x: 2, z: 3 },
   build: (b: VoxelBuilder) => {
-    // Each part hands back the first free layer above it, so a building stacks.
+    // Each part returns the first free layer above it, so parts stack.
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 48 });
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
     gableRoof(b, { ...BODY, y: eaves, ridge: 'z' });
@@ -65,129 +59,81 @@ export default defineModel({
 });
 ```
 
-Anything the parts do not cover is still painted by hand on the builder:
+Anything the parts don't cover, paint by hand:
 
 ```ts
 b.set(x, y, z, PALETTE.teak.base); // one voxel
-b.box(x0, x1, y0, y1, z0, z1, PALETTE.stone.base); // an inclusive box
-b.del(x, y, z); // remove one, e.g. carving a recess
+b.box(x0, x1, y0, y1, z0, z1, PALETTE.stone.base); // inclusive box
+b.del(x, y, z); // remove one
 ```
 
-**Colours come from `palette.ts` and nothing else** — 14 materials, each a
-four-step ramp, and a unit test fails a model that paints anything outside it.
-`docs/art-direction.md` is what the palette and the parts are for, which
-reference each model is drawn from, and which models still have their style pass
-to come.
+**Only use colours from `palette.ts`.** A unit test fails any model that paints
+outside it. [docs/art-direction.md](../docs/art-direction.md) covers the palette,
+the parts and the references.
 
-`category` is what groups the object in the app's build palette — `grounds`,
-`lodging`, `amenities` or `leisure`, declared in `MODEL_CATEGORIES` in
-`voxelgen.ts`. It is a fact about the art, which is why it is declared with the
-art: a new model shows up on the right shelf without the app being touched.
+`category` is one of `grounds`, `lodging`, `amenities`, `leisure`
+(`MODEL_CATEGORIES` in `voxelgen.ts`) and decides which shelf of the build
+palette the model appears on. `placement` keeps a model on the `beach` or
+`shore` and caps how many a generated resort gets (`perResort`). `gateway: true`
+marks an entrance where guests arrive and leave.
 
-## Glowing, water and lighting
+To place it on the authored plot, add it to `RESORT_PLAN` in
+`src/features/layout/domain/resortPlan.ts`, otherwise the layout tests fail. It
+needs a free tile next to it for a path; the layout connects it to the nearest
+street.
 
-Three optional fields change how a model's colours are drawn. Two of them let it
-take part in the day/night cycle, and are in the model's own coordinates, so
-wherever the object is placed the light lands in the right spot.
+## Glow, lights and water
 
 ```ts
 const GLOW = 0xffe3a3;
 
 export default defineModel({
   id: 'my-lamp',
-  label: 'My Lamp',
-  category: 'grounds',
-  tiles: { x: 1, z: 1 },
-  // Colours drawn unlit at full brightness, so they still read after dark.
-  emissive: [GLOW],
-  // Lamps the night bake picks up, and the day/night cycle fades in.
+  // ...
+  emissive: [GLOW], // drawn unlit, so they read after dark
   lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],
-  build: (b: VoxelBuilder) => {
+  water: [PALETTE.water.base], // drawn with the water shader
+  build: (b) => {
     /* ... */
   },
 });
 ```
 
-`emissive` costs nothing — the glowing colours are split into a second geometry
-that shares one unlit material across the whole scene. `lights` no longer costs
-a frame either: there is not a real point light left in `src/`, and
-`lighting/domain/lightGrid.ts` bakes every anchor on the plot into one
-irradiance volume at load, which the shader reads in two texture fetches. All of
-them burn, none of them pop as the camera moves, and night renders in what day
-renders in — `pnpm bench` reports the same milliseconds for its day and night
-cases over 439 lamps.
+- `emissive` colours get their own unlit geometry. Free.
+- `lights` are baked into a light volume at load (`lighting/domain/lightGrid.ts`)
+  and cost nothing per frame, only bake time and memory. Use them for things that
+  actually light their surroundings (lamps, torches, pool floods), not every lit
+  window. A light doesn't need a voxel behind it.
+- `water` faces ripple and reflect like the sea. Paint them in one flat tone.
 
-What a lamp does cost is bake time and the volume's memory, both paid once, so
-declare one for something that genuinely lights its surroundings (a lamp, a
-torch, a pool flood) rather than for every lit window — that is now a rule about
-what the resort should look like after dark, not about a budget.
+Positions are in model coordinates, so they follow the object when it's placed.
 
-A light needs no voxel behind it — the swimming pool declares four submerged
-floods that nothing paints.
-
-The third field is `water`, and it is the same idea for a different shader:
+## Seats
 
 ```ts
-water: [PALETTE.water.base], // colours drawn with the sea's shader
-```
-
-Those faces are meshed apart and drawn rippling, glinting and reflecting the
-sky, exactly as the sea is. Paint them in one flat tone and let the shader do
-the movement; see _Water is a shader, not a colour_ in
-`docs/art-direction.md`.
-
-## Somewhere to sit
-
-A model with a seat in it says so, and the crowd does the rest:
-
-```ts
-// Three sitters on a bench plank, all looking out over its front.
+// Three people on a bench, facing out the front.
 seats: [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 })),
 
-// One sunbather on a lounger: head on the backrest, feet at the foot end.
+// One sunbather on a lounger.
 seats: [{ x: 7, y: 5, z: 8, facing: 0, pose: 'lie' }],
 ```
 
-`x` and `z` are the column the person's **hips** fill and `y` is the layer they
-rest on — the first free layer above the seat, the same "first free layer" the
-parts hand back. The hips rather than the feet, because a sitter's feet are off
-the ground and a lier's are off everything: what a seat fixes is where the body
-folds, and both poses are drawn about that point. A figure lying down runs four
-voxels back from it and three forward, so a 7-voxel mattress is declared round
-its middle.
+- `x`, `z` is the column the person's **hips** occupy; `y` is the first free
+  layer above the seat.
+- `facing` is quarter turns from the model's +z, in the direction the **legs**
+  point. `0` faces out the front.
+- `pose` is `'sit'` (default) or `'lie'`. A lying figure extends four voxels back
+  from the hips and three forward.
 
-`facing` is quarter turns from the model's own +z, which is the way a figure
-faces — and it is the direction the **legs** point, which is the half both poses
-agree on. A sitter looks where their legs point, so `0` looks out of the front of
-the model and `2` back into it; a lounger's seat faces the **foot** end of its
-mattress, and whoever is on it looks at the sky.
+The crowd uses seats automatically. A seat is only used if there is paving within
+one tile of it, except on the beach, where anyone walking on the sand can use it.
+`seats.test.ts` checks that every seat has something solid under it, room above
+it and space from the next.
 
-`pose` is `'sit'` unless it says otherwise. It belongs to the furniture rather
-than to the person: a bench is sat on, a lounger is lain on, and no model has
-both.
+## Venues
 
-The app needs nothing: `crowd/domain/seating.ts` turns the seats along with the
-object and hangs each one off the paving it can be reached from, and the crowd
-walks off the path, rests for a minute or a few and gets up again. Two rules are
-worth knowing when you draw one:
-
-- A seat with **no paving within a tile of it** is simply never used. Draw the
-  chairs where the paving will be, or accept that the ones at the back of a
-  terrace are scenery — a coffee shop the generator drops mid-district has a
-  terrace nobody crosses the grass to.
-- Unless it stands on the **beach**, which is the exception: no tile of a beach
-  is ever paved, so a seat on sand is reached by whoever is already walking
-  there. That is what makes a row of loungers on the sand worth drawing.
-
-`seats.test.ts` checks the art against the model's own voxels — something solid
-under every seat, room for a body over it, and nobody sitting shoulder to
-shoulder — so a cushion moved up a course fails a test rather than leaving
-somebody hovering. See `docs/crowd.md`, _Sitting down, and lying down_.
-
-## Somewhere to go
-
-A model a guest can visit declares a `venue`; dressing — a palm, a bench, a
-litter bin — declares none:
+A model guests can visit declares a `venue`. Decoration (palms, benches, bins)
+doesn't.
 
 ```ts
 venue: {
@@ -198,22 +144,23 @@ venue: {
 },
 ```
 
-| Field          | Meaning                                                                             |
-| -------------- | ----------------------------------------------------------------------------------- |
-| `role`         | `lodging`, `food`, `drink`, `activity` or `service`                                 |
-| `satisfies`    | needs a visit sees to — `hunger`, `thirst`, `energy`, `fun`, `hygiene` — each -1..1 |
-| `capacity`     | people inside at once; beyond it a queue forms                                      |
-| `dwellSeconds` | how long one visit lasts, in simulated seconds                                      |
-| `beds`         | lodging only, and equal to `capacity`: a bungalow that sleeps four holds four       |
+| Field          | Meaning                                                                           |
+| -------------- | --------------------------------------------------------------------------------- |
+| `role`         | `lodging`, `food`, `drink`, `activity` or `service`                               |
+| `satisfies`    | needs a visit serves (`hunger`, `thirst`, `energy`, `fun`, `hygiene`), each -1..1 |
+| `capacity`     | people inside at once; beyond that a queue forms                                  |
+| `dwellSeconds` | length of one visit, in simulated seconds                                         |
+| `beds`         | lodging only, equal to `capacity`                                                 |
+| `doors`        | where guests enter, turned with the building                                      |
+| `shelter`      | `'open'` closes in rain; default `'covered'`                                      |
 
-A negative `amount` is a need a visit makes worse: an hour of tennis spends
-energy. `venues.test.ts` checks the numbers and holds the list of models
-deliberately left off, so a new model file has to be one or the other.
+A negative `amount` makes a need worse (tennis costs energy). `venues.test.ts`
+lists the models deliberately without a venue, so every new model must be one or
+the other.
 
 ## Scale
 
-**One tile is `TILE_VOXELS` (16) voxels and stands for 4 m.** Everything follows
-from that:
+**One tile is 16 voxels (`TILE_VOXELS`) and 4 m.**
 
 | Real thing        | Voxels  |
 | ----------------- | ------- |
@@ -223,71 +170,43 @@ from that:
 | a tile (4 m)      | 16      |
 | a tennis court    | 95 x 44 |
 
-Pick a model's `tiles` from what the object really measures — a snack kiosk is
-8 x 4 m (2x1), a resort villa's plot is 16 x 16 m (4x4), a hotel block 40 x 20 m
-(10x5) — then draw it to fill that footprint edge to edge. Heights follow the same
-rule: a four-storey hotel is 4 x 12 voxels of wall, not whatever looks tall.
+Size `tiles` from the real object (a snack kiosk is 8 x 4 m, so 2x1; a hotel
+block 40 x 20 m, so 10x5) and fill the footprint edge to edge.
 
-Conventions:
+## Rules
 
-- **Y is up**; a voxel at `(x, y, z)` fills the unit cube `[x, x+1]^3`; colours
-  are packed `0xRRGGBB`; later writes to a cell win.
-- **Fill the footprint.** The model must fit inside the `tiles` it claims — a
-  unit test enforces that — and `--audit` reports how much of it the model
-  actually fills. A model well under 100% is drawn at a smaller scale than its
-  neighbours, which is what makes a resort look wrong once everything is placed.
-  Every model in the catalogue is currently at 100%, and new ones should be too;
-  the usual way to get there is to run the object's ground platform out to the
-  full footprint and let the structure sit on it.
-- **Keep bodies solid.** It is tempting to hollow a large building out to save
-  voxels, but the mesher only culls faces between two solid voxels: a cavity
-  gets its own inside surface, so hollowing roughly doubles a building's
-  triangles while saving voxels nobody has to draw. Solid is cheaper to render.
-- **Colours are flat and unlit.** The app shades them with its own lights, so
-  never bake highlights or shadows into a colour — a ramp's `shade` is for a part
-  that is a different material, not for a face that faces away from the sun.
-- **Never dither a pattern across a face.** The mesher merges coplanar faces of
-  one colour into rectangles, so a checkerboard wall costs more triangles than a
-  hotel. See `docs/art-direction.md`.
-- Every distinct colour in the catalogue becomes one DVE voxel and one rendered
-  material, so reusing a colour across models is free — and the catalogue may
-  hold **250 of them in total**, because DVE writes a submesh's material as a
-  byte. That ceiling is why the palette is enforced.
+- **Y is up.** A voxel at `(x, y, z)` fills `[x, x+1]^3`. Colours are `0xRRGGBB`.
+  Later writes win.
+- **Fill the footprint.** A test enforces that the model fits its `tiles`;
+  `--audit` shows how much it fills. Aim for 100%, usually by running the ground
+  platform to the edges. An underfilled model looks too small next to its
+  neighbours.
+- **Keep bodies solid.** Hollow buildings get inside faces and roughly double
+  their triangles.
+- **No lighting in colours.** The app lights the scene. A ramp's `shade` is for a
+  different material, not a shadow.
+- **No dithered patterns.** The mesher merges same-colour faces into rectangles,
+  so a checkerboard wall costs more than a hotel.
+- **At most 250 colours in the whole catalogue** (DVE stores materials as a
+  byte). This is why the palette is enforced.
 
-## Art that stands on nothing
+## Models that claim no tile
 
-Four registries feed the same pipeline, and `models/index.ts` is only the first
-of them. `people/`, `sky/` and `sea/` hold the art that claims no tile: a person
-walks in, a balloon is let go, and a boat is afloat on water the layout refuses
-to stand anything on. None of them is offered on the build palette, none is
-placed by the generator, and each declares a `category` of its own so the palette
-drops the empty shelf.
+Besides `models/`, three registries feed the same pipeline: `people/`, `sky/`
+(balloons) and `sea/` (boats, buoys). They aren't on the build palette and aren't
+placed by the generator. `PAINTED_MODELS` in `objectTypes.ts` joins all of them;
+`features/crowd/`, `features/balloons/` and `features/sea/` move them.
 
-They are meshed exactly as a cottage is — `PAINTED_MODELS` in
-`src/features/catalog/domain/objectTypes.ts` is where the four are joined, and it
-is the one place that has to know there is more than one. What differs is only
-what moves them: `features/crowd/`, `features/balloons/` and `features/sea/`.
+Their origin is where they're drawn from: people from their feet, balloons from
+the basket, sea models from their waterline (nothing below it is drawn).
 
-A model in one of those registries is drawn from the point its matrix carries:
-the people from their feet, the balloons from the foot of the basket, and
-everything in `sea/` from **its own waterline**, with nothing below it drawn at
-all. See `parts/boat.ts`.
+## Paving
 
-An object also needs somewhere to stand: add it to `RESORT_PLAN` in
-`src/features/layout/domain/resortPlan.ts`, or the layout tests will fail. It
-does not need a path drawn to it — the layout grows a spur from every object to
-the nearest street — but it does need a free tile for that spur to run through.
+Players only pick `path`. The ground decides what it becomes: `path` on grass,
+`boardwalk` on sand, `jetty` on water, `stairs` on a terrace step. Those three
+declare `groundDecides` so the palette hides them. All paving is two voxels tall
+(`PAVING_VOXELS`). A new kind of paving is a model file plus an entry in
+`PAVING_IDS`.
 
-A type may be placed as many times as you like; each placement becomes one more
-instance of the same geometry, which is nearly free.
-
-Paving is the one part of the catalogue you do not choose from. `path` is the
-tool; the ground decides what a tile of it comes out as — flagstones on grass,
-`boardwalk` on sand, `jetty` on water, `stairs` where it climbs a terrace step —
-and the three it becomes declare `groundDecides` so the build palette leaves them
-out. All four are authored two layers tall, `PAVING_VOXELS`, so they butt
-together wherever the ground changes under a street. A fifth kind of paving is a
-model file and an entry in `PAVING_IDS`, and nothing else.
-
-`model-prompts.md` holds the original text prompts each model was authored from,
-plus the dimension table they were specified against.
+`model-prompts.md` holds the original prompts and dimension table the models were
+written from.

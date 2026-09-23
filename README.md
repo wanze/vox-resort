@@ -1,22 +1,22 @@
 # Vox Resort
 
-A voxel resort-builder prototype: five hundred hand-authored voxel buildings
-laid out on streets across a 448 × 400 m plot, lit after dark by 608 baked lamps,
-drawn with instancing over a Three.js WebGPU renderer.
+A voxel resort-builder prototype. Hand-authored voxel buildings are laid out on a
+plot, meshed with Divine Voxel Engine and drawn instanced with the Three.js
+WebGPU renderer. Guests walk the paths, visit venues, sleep, check in and out.
 
 ## Stack
 
-| Concern         | Choice                                                           |
-| --------------- | ---------------------------------------------------------------- |
-| Package manager | pnpm                                                             |
-| Build / dev     | Vite 8                                                           |
-| Language        | TypeScript 7                                                     |
-| Lint / format   | oxlint + oxfmt (no ESLint, no Prettier)                          |
-| Renderer        | Three.js `WebGPURenderer` (`three/webgpu`), auto WebGL2 fallback |
-| Voxels          | Divine Voxel Engine (`@divinevoxel/vlox`)                        |
-| Models          | Hand-authored in `voxel-gen/`, previewed offline as PNGs         |
-| UI              | React 19, DOM overlay above the canvas                           |
-| Tests           | Vitest                                                           |
+| Concern         | Choice                                                      |
+| --------------- | ----------------------------------------------------------- |
+| Package manager | pnpm                                                        |
+| Build / dev     | Vite 8                                                      |
+| Language        | TypeScript 7                                                |
+| Lint / format   | oxlint + oxfmt                                              |
+| Renderer        | Three.js `WebGPURenderer` (`three/webgpu`), WebGL2 fallback |
+| Voxels          | Divine Voxel Engine (`@divinevoxel/vlox`)                   |
+| Models          | Authored in code in `voxel-gen/`                            |
+| UI              | React 19, DOM overlay above the canvas                      |
+| Tests           | Vitest                                                      |
 
 ## Getting started
 
@@ -37,28 +37,22 @@ pnpm dev        # http://localhost:5173
 | `pnpm fallow` / `pnpm fallow:audit` | dead code, duplication, boundaries      |
 | `pnpm bench`                        | measure the renderer (needs `pnpm dev`) |
 
-Controls, build tools and the terrain are described in
-[docs/rendering.md](docs/rendering.md).
-
 ## Structure
 
-Code under `src/features/` is grouped by feature, each split into `domain/`
-(pure functions, unit-tested), `adapters/` (engine, DOM and GPU) and
-`components/` (React). Dependencies point inwards — `domain/` may not import
-`adapters/` or `components/` — which `.fallowrc.json` enforces. `src/app/` orchestrates them. The voxel models are art,
-not app code, so they live in `voxel-gen/` outside `src/` — see
-[voxel-gen/README.md](voxel-gen/README.md) for the authoring API.
+`src/features/` is grouped by feature. Each feature has `domain/` (pure,
+unit-tested), `adapters/` (engine, DOM, GPU) and `components/` (React).
+`domain/` may not import the other two; `.fallowrc.json` enforces this.
+`src/app/` wires the features together.
 
-## Documentation
+The voxel models are art, not app code, and live in `voxel-gen/`. The app
+derives everything from the model registry, so adding a model needs no change in
+`src/`. See [voxel-gen/README.md](voxel-gen/README.md).
 
-[docs/rendering.md](docs/rendering.md) — the pipeline from models to frame, the
-layout and terrain rules, the build tools, lighting, benchmark numbers, how to add
-an object, and notes on the DVE integration.
+## Docs
 
-[docs/crowd.md](docs/crowd.md) — the people, boats and balloons: the walk network,
-how the crowd is stored and drawn, and the crowd's milestones.
-
-[docs/art-direction.md](docs/art-direction.md) — what the objects are meant to
-look like: the reference renders in [docs/references/](docs/references/), the
-shared palette every model paints from, the parts a building is composed of, and
-which models still have their style pass to come.
+- [docs/rendering.md](docs/rendering.md): pipeline, layout, terrain, building
+  tools, lighting, weather rendering, benchmarks.
+- [docs/crowd.md](docs/crowd.md): guests, staff, boats and the simulation behind
+  them.
+- [docs/art-direction.md](docs/art-direction.md): references, palette, parts and
+  modelling rules.

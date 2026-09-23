@@ -1,617 +1,303 @@
-# Rendering, lighting and measurement
+# Rendering
 
-Reference for the [README](../README.md): the pipeline, the layout and tool
-rules, lighting, what a frame costs, and how to add an object.
+How models get from `voxel-gen/` onto the screen, plus layout, terrain, building
+tools, lighting and benchmarks.
 
 ## Scale
 
-A voxel is 25 cm. In `voxel-gen/voxelgen.ts`: `TILE_VOXELS` 16 (a 4 m tile),
-`LEVEL_VOXELS` 8 (a 2 m level), `PAVING_VOXELS` 2 (top of a path slab),
-`BRIDGE_VOXELS` 6 (top of a bridge deck). A storey is `STOREY_VOXELS` 12
-(`voxel-gen/parts/wall.ts`); a render chunk is `CHUNK_VOXELS`, 16 tiles. The
-authored plan is 112 × 100 tiles, 448 × 400 m.
+A voxel is 25 cm. Constants in `voxel-gen/voxelgen.ts`: `TILE_VOXELS` 16 (4 m
+tile), `LEVEL_VOXELS` 8 (2 m terrain step), `PAVING_VOXELS` 2, `BRIDGE_VOXELS` 6.
+A storey is `STOREY_VOXELS` 12. A render chunk (`CHUNK_VOXELS`) is 16 tiles. The
+authored plan is 112 × 100 tiles (448 × 400 m).
 
-## What is on the plot
+## Pipeline
 
-Measured by `pnpm bench` on the authored plan (flat, no coast), which is the plot
-a `?bench=1` run loads:
+1. **Catalogue**: `OBJECT_TYPES` builds every model once and creates one material
+   per colour. `PAINTED_MODELS` adds people, staff, balloons and boats.
+2. **Layout**: `layoutResort` turns `RESORT_PLAN` (or a generated plan) into
+   placements, paving, props and rails.
+3. **Scratch regions**: `scratchLayoutFor` gives each model its own slice of the
+   voxel world, plus a second one for its coarse copy (`coarseVoxels.ts`).
+4. **DVE**: `dveEngine.ts` registers one voxel per colour, paints the regions and
+   runs DVE's mesher in a worker (`meshWorker.ts`), falling back to the main
+   thread.
+5. **Attributes**: `buildModelAttributes` groups submeshes per model, greedy-merges
+   coplanar faces of one colour (`greedyMesh.ts`) and splits out emissive and
+   water faces.
+6. **Geometry**: `buildModelGeometries` wraps the arrays in buffer geometries.
+7. **Instances**: `buildInstancedWorld` creates instanced buckets per model,
+   material and chunk (and per region and district for distant drawing), with
+   spare capacity so placing is a matrix write.
+8. **Lighting**: lamps baked into a light volume, sky visibility, blob shadows.
+9. **Frame**: three materials for the catalogue (lit, unlit, water), plus terrain,
+   sea, figures and moving objects.
 
-|                         |                                    |
-| ----------------------- | ---------------------------------- |
-| Instances               | 3 839                              |
-| Light volume            | 34.3 MB, baked in ~640 ms          |
-| Startup                 | ~2.2 s, of which ~1.2 s is meshing |
-| Models in the catalogue | 59 (`voxel-gen/models/index.ts`)   |
+Steps 2 and 8 and the terrain mesh run in a worker (see
+[Preparing a resort](#preparing-a-resort)).
 
-Lamps, draw calls and triangles are in _What a frame costs_. A generated plot adds
-a beach, a hill, a bay and a river; the crowd, balloons and boats are in
-[crowd.md](crowd.md).
+## Layout
 
-## The pipeline
+- **Streets** are L-shaped routes between plan nodes. Plazas are paved whole.
+  Tiles with objects on them are never paved.
+- **Spurs**: every object not touching a street gets the shortest path to one,
+  starting from its door where possible. Decoration (`grounds`) and objects on
+  sand get none. An unreachable object is a build error.
+- **Decoration**: street lamps beside paths, hedges along straight runs, a bench
+  every nine tiles (every four in parks, which get no hedges).
+- **An object stands on one level.** Authored plans throw, build mode shows red,
+  the generator avoids it (`straddledTile`).
 
-1. **Catalogue** — `OBJECT_TYPES` builds every model once at module load and
-   derives one material per distinct colour. `PAINTED_MODELS` is the catalogue
-   plus the people.
-2. **Layout** — `layoutResort` turns `RESORT_PLAN` (or a generated plan) into
-   placements, paving, props and rails. This, the plan, the bakes of step 8 and
-   the terrain mesh run in a worker; see _Preparing a resort off the main thread_.
-3. **Scratch regions** — `scratchLayoutFor` gives every model its own
-   section-aligned slice of the voxel world, padded by an empty section. Every
-   catalogue model gets a second region holding its coarse copy
-   (`coarseVoxels.ts`); see _Level of detail_.
-4. **DVE** — `dveEngine.ts` registers one voxel per colour, paints the scratch
-   regions and runs DVE's face-culling mesher, in a worker (`meshWorker.ts`).
-   `meshCatalogue.ts` falls back to the main thread if the worker will not start.
-5. **Attributes** — `buildModelAttributes` groups submeshes per model, merges
-   coplanar same-colour faces into rectangles (`greedyMesh.ts`), puts colour in a
-   vertex attribute, and splits emissive and water colours into sets of their own.
-   Plain typed arrays, transferred back from the worker.
-6. **Geometry** — `buildModelGeometries` wraps the arrays in buffer geometries
-   and hangs each coarse copy off its model, dropping any that save too little.
-7. **Instances** — `buildInstancedWorld` creates one instanced mesh per model,
-   material kind and chunk, with spare capacity so placements are a matrix write,
-   and again per region and per district for drawing further out; see _Level of
-   detail_ and _Shader
-   builds_.
-8. **Lighting** — lamps baked into an irradiance volume (`lightGrid.ts`), sky
-   visibility in its alpha channel (`skyVisibility.ts`), one blob-shadow quad per
-   object (`blobShadows.ts`). See _Lighting_.
-9. **Frame** — three materials for the whole catalogue (shaded, unlit, water),
-   plus the terrain, sea, figure and moving fields.
+### Paving
 
-## Layout rules
+Players only place `path`. The ground decides the actual paving (`paving.ts`):
 
-- **Streets** are routed as an orthogonal L between two plan nodes, thickened to
-  their width. Plazas are paved whole. A tile an object stands on is never paved.
-- **Spurs**: every object no street touches gets the shortest one-tile path to the
-  network. Dressing (the `grounds` category) and anything on sand get none. An
-  unreachable object is a build error.
-- **Dressing**: street lamps on free tiles beside paths at a minimum spacing,
-  hedges along the remaining straight runs, a bench every nine tiles — every
-  four inside a plan's `parks`, which get no hedges.
-- **Placements** carry a type `id`, a unique `key` (derived ones keyed by tile,
-  e.g. `path@12,7`), and the height of the ground they stand on.
-- **An object stands on one level.** `straddledTile` enforces it: authored plans
-  throw, build mode shows red, the generator avoids it.
-
-### Paving is decided by the ground
-
-`paving.ts` (hand-drawn) and the layout (generated) apply the same rule. Paving is
-never picked; `path` is the only paving on the palette, and the others declare
-`groundDecides`.
-
-| Ground under the tile                   | Paving                                           |
-| --------------------------------------- | ------------------------------------------------ |
-| grass                                   | `path`                                           |
-| sand                                    | `boardwalk`                                      |
-| sea (edge declares `overWater`)         | `jetty`                                          |
-| inland water                            | `bridge` / `bridge-ramp` (`spans.ts`)            |
-| lower tile of a step, higher tile paved | `stairs` (`stairs.ts`), turned to face the climb |
-
-A stroke drawn uphill re-lays the slab below as a flight once the tile above is
-paved. On an L-bend over a step, the first direction in compass order wins.
+| Ground                                  | Paving                                |
+| --------------------------------------- | ------------------------------------- |
+| grass                                   | `path`                                |
+| sand                                    | `boardwalk`                           |
+| sea (edge declared `overWater`)         | `jetty`                               |
+| inland water                            | `bridge` / `bridge-ramp` (`spans.ts`) |
+| lower tile of a step, higher tile paved | `stairs`, facing up the step          |
 
 ### Rails
 
-`railings.ts` places them; `handrails.ts` is the live diff for hand edits, which
-re-asks the edited tile and its four neighbours and diffs by key.
+`railings.ts` places them, `handrails.ts` updates them after hand edits.
 
-- A rail along every paved edge whose neighbour is lower and unpaved. Open water
-  counts as a drop.
-- A balustrade (`stair-railing`) up both flanks of every one-tile-wide flight.
-- A paved neighbour never gets a rail between it and here.
-- Over the sea the rail is `pier-railing`; on a crossing, `bridge-railing` and
-  `bridge-ramp-railing-left`/`-right`.
-- Rails claim no tile: they are not in the occupancy index, the blob shadows or
-  the sky-visibility bake. `placeOnEdge` stands them flush against their edge.
+- A rail goes along every paved edge next to a lower, unpaved tile (open water
+  counts).
+- One-tile-wide stairs get a balustrade on both sides.
+- Over the sea it's `pier-railing`; on bridges, `bridge-railing` and the ramp
+  variants.
+- Rails claim no tile and are left out of occupancy, blob shadows and sky
+  visibility.
 
-### The coast
+### Coast, districts and hills
 
-- `shoreline.ts` describes the coast per tile column: `waterStartZ(x)`.
-- Water is not buildable ground and no street crosses it, except an `overWater`
-  edge, which becomes a pier. `standsOn` in `paving.ts` says what the sea takes.
-- Sand is buildable; nothing is paved to or routed across it.
-- The generator lays loungers and parasols as a grid (three lines of
-  lounger–parasol–lounger sets, in bays of five), a band of clubs, bars and palms
-  behind them, and a lifeguard tower in the gap between bays (every 24 columns).
-- A model's `placement.ground` holds it to the `beach` (sand at sea level running
-  down to the sea) or the `shore` (the last three rows of it):
-  `placementGround.ts`, read by the generator and by `standsOn` in build mode.
-  `placement.perResort` caps how many a generated resort stands, from `min` on
-  the smallest plot to `max` at 200 tiles. Volleyball courts and the pedalo
-  rental (beside a pier) are stood that way.
-- Two sea lanes carry on over the hill, across the sand and out onto the water as
-  jetties.
-
-### Districts
-
-- Cross streets run along the north edge and the hill's foot, so every district
-  has a street on all four sides. Gates stand only on the plot's edges: the
-  promenade's north end and both ends of the plaza's cross street.
-- `districtLayouts.ts` lays some districts out by design: **parks** (a pond two
-  rows deep, a walk along each bank, a bridged path down the middle, trees on a
-  mirrored grid) and **blocks** of one lodging type in back-to-back rows facing
-  the streets, with lanes between pairs. They only take district area the rest of
-  the catalogue can spare. Houses on the hill line the bench walks.
-
-### Elevation
-
-- `elevation.ts` describes terraces per tile column: `stepStartZ(i, x)`. Level 0
-  is sea level.
-- Neighbouring tiles differ by at most one level. The beach is always level 0.
-- A step is anchored to `water` (follows the coast) or `plot` (a straight row).
-  The generator anchors the hill to the water, so cross streets and districts are
-  held north of it; the hill has its own bench walks and two switchbacks.
-- From the water inland the generated hill is: the beach (level 0), a sand dune
-  (1–2) onto a sand shelf (3) where the bungalows stand, grass benches up to a
-  crest (6) and back down, then the resort at level 0. `ground.ts` decides what
-  each tile is made of.
+- `shoreline.ts` defines the coast per column. Water isn't buildable except
+  `overWater` edges, which become piers. Sand is buildable but never paved.
+- The generator fills the beach with a grid of loungers and parasols, a band of
+  clubs, bars and palms behind, and lifeguard towers between bays.
+- `placement.ground` restricts a model to the `beach` or the `shore`
+  (`placementGround.ts`); `placement.perResort` caps how many a generated resort
+  gets.
+- Every district has streets on all four sides. Gates only stand on the plot
+  edge. `districtLayouts.ts` lays out **parks** (pond, bank walks, bridged path,
+  trees) and **blocks** of one lodging type.
+- `elevation.ts` defines terraces. Level 0 is sea level, neighbours differ by at
+  most one level, and the beach is always level 0. The generated hill runs from
+  the beach up a dune to a sand shelf with bungalows, grass benches to a crest,
+  and back down to the resort.
 
 ## Terrain
 
-- `terrain.ts` is a field: per-tile level and surface, with sparse overrides over
-  the procedural answer. Everything that reads the ground reads the field.
-- `river.ts` floods a two-tile channel at each tile's existing level, banked in
-  sand. It travels on the plan as terrain edits.
-- Inland water is flush with its banks.
-- `terrainSurface.ts` meshes one span per column. A tile with lower ground beside
-  it gets a ramp cut into its upper edge; rim heights take the lowest of the tiles
-  meeting there. An occupied tile keeps a square top and an upright wall.
-- Water takes a corner off sand, and sand off grass, never the reverse.
-- The terrain is rebuilt at most once per frame, on a dirty flag. Materials outlive
-  the meshes. `overlooksDrop` skips the rebuild for placements that change nothing.
-- The sea is a separate surface that reaches the horizon (`seaMaterial.ts`); pools
-  and rivers use `poolWaterMaterial.ts` and `riverMaterial.ts`, sharing
+- `terrain.ts` holds per-tile level and surface. Everything that reads the ground
+  reads this.
+- `river.ts` cuts a two-tile channel, banked in sand. Inland water is flush with
+  its banks.
+- `terrainSurface.ts` meshes the ground. Edges above lower tiles get a ramp;
+  occupied tiles keep a flat top and a vertical wall.
+- The terrain rebuilds at most once per frame, and a terrain edit rebuilds the
+  whole mesh on the main thread (about half a second on a 400-tile plot).
+- The sea is its own surface out to the horizon (`seaMaterial.ts`). Pools and
+  rivers use `poolWaterMaterial.ts` and `riverMaterial.ts`, sharing
   `waterSurface.ts`.
 
 ## Cameras
 
-Switched with `C` or the View panel; the mode survives regenerating the resort.
+Toggle with `C` or the View panel.
 
-- **Perspective** — `OrbitControls`, 55° vertical FOV, framed by
-  `cameraFramingFor`. Left orbits, right pans, wheel zooms.
-- **Isometric** — orthographic, over one of four corners at 45° azimuth and
-  35.26° elevation, framed by `isometricFramingFor`. `Q`/`E` turn a quarter, left
-  pans, wheel zooms continuously. Drawn without fog; both clip planes sit behind
-  the resort (`groundPick.test.ts` checks picking at every corner and zoom).
-- Benchmarks are perspective only; mode changes are refused during a bench run.
-- While a tool is armed, the left button is lent to the tool and the right button
-  takes over what left did (shift-right pans).
+- **Perspective**: `OrbitControls`, 55° FOV. Left orbits, right pans, wheel
+  zooms.
+- **Isometric**: orthographic from one of four corners. `Q`/`E` rotate, left
+  pans, wheel zooms. No fog.
+- With a build tool active, left belongs to the tool and right does what left
+  normally does (shift-right pans).
+- Benchmarks always use perspective.
 
 ## Level of detail
 
-Frustum culling skips what is off screen. The level of detail handles what is
-on screen but far away or tiny, and it is chosen every frame in
-`InstancedWorld.updateDetail` from `rendering/domain/levelOfDetail.ts`.
+**Draw calls are the bottleneck, not triangles.** Three.js spends about 14 µs of
+main thread per draw, so each placement goes into four layers of buckets and
+`InstancedWorld.updateDetail` picks one per frame (`levelOfDetail.ts`):
 
-**Draw calls are the cost, not triangles.** Three.js spends roughly 14 µs of
-main thread per draw (a 400-tile plot at 100 %: 16.7 ms for 1 168 draws in the
-browser). Every model in every 64 m chunk is a draw of its own — 12 500 near
-buckets on that plot — and swapping each for a coarser mesh changes none of
-that, so every placement is bucketed four times:
+| Layer    | Cell                   | Mesh                       | Used when                      |
+| -------- | ---------------------- | -------------------------- | ------------------------------ |
+| near     | chunk (16 tiles, 64 m) | full                       | a voxel covers ≥ 3 px          |
+| mid      | region (4 × 4 chunks)  | full                       | neither near nor far           |
+| far      | region                 | coarse copy, if it has one | a coarse voxel covers ≤ 1.5 px |
+| district | 4 × 4 regions (1 km)   | coarse copy, if it has one | a coarse voxel covers ≤ 1.5 px |
 
-| Layer    | Cell                     | Drawn with                            | Shown when                                              |
-| -------- | ------------------------ | ------------------------------------- | ------------------------------------------------------- |
-| near     | a chunk (16 tiles, 64 m) | the model as meshed                   | a voxel at its region's nearest point is ≥ 3 px         |
-| mid      | a region (4 × 4 chunks)  | the model as meshed                   | its region is neither near nor far                      |
-| far      | a region                 | the coarse copy, or the model if none | a coarse voxel at the region is ≤ 1.5 px                |
-| district | 4 × 4 regions (1 km)     | the coarse copy, or the model if none | a coarse voxel at the district's nearest point ≤ 1.5 px |
-
-A region is **far** once one coarse voxel at its nearest point covers no more
-than `COARSE_VOXEL_PIXELS` (1.5 px), so the swap cannot be seen; a whole
-district that far is drawn a district at a time. A region is **chunked**
-(`CHUNKED_VOXEL_PIXELS`, 3 px a voxel, about 130 m in perspective) only where
-the frustum can throw most of it away; past that it is one draw per model. In
-every layer a bucket is **hidden** once the model's largest extent covers less
-than `HIDDEN_PIXELS` (3 px). The rules are `regionLevelOf`, `isFar` and
-`isHidden` in `levelOfDetail.ts`.
-
-- **Pixels per voxel** is the one number both cameras answer: perspective falls
-  off with distance (`focalPx / distance`), orthographic follows the zoom. Drawing
-  buffer pixels, device pixel ratio included.
-- **Distance** is to the nearest point anything in the cell could reach: the cell
-  grown by the model's extent (the largest model's, for a region), from the ground
-  to the top of the highest terrace.
-- **Hysteresis** — an answer changes only once the number is 20 % past its
-  threshold.
-- **Coarse copies are derived, not authored.** `coarsenVoxels` turns each 2×2×2
-  block into one voxel: solid if anything in it is (a post stays a post), the
-  colour most of it is (never mixed, so emissive, water and windows still split by
-  colour). It is meshed by DVE in the same pass, in its own scratch region, and
-  scaled back up in `modelAttributes.ts`, so it lands in the full model's space.
-- **Kept only if worth it** — a coarse copy with more than 60 % of the full
-  model's triangles is dropped (`worthCoarsening`), and that model's far buckets
-  draw its own geometry. Trees come out at 14–19 %, buildings around 40–55 %, a
-  path slab at 14 %; the stairs, hedge, sign post, statue, bench, beach shower,
-  lifeguard tower and resort bar are the ones dropped.
-- **Both layers are kept current.** Placing or removing an object writes both;
-  every bucket stands at the origin, so no mesh transform is updated per frame.
-- **People** are not bucketed: `crowdField.ts` packs everybody at least 3 px
-  tall on screen into the front of the buffer and cuts `count`, walk phase
-  included. They keep walking while not drawn, and near ones stay drawn. They are
-  four draw calls either way.
-- **Not covered**: construction sites and the placement ghost draw full geometry;
-  the terrain, balloons and the bay are not levelled.
-- **Toggle** — _Level of detail_ in the Camera panel, or `?lod=0` on a bench run.
-  _Details_ shows what the last frame actually drew, the main-thread cost of the
-  frame (latest, the render submission's share, worst of the last second), the
-  GPU's own time from timestamp queries, buckets per layer and hidden, people
-  drawn, and how many shaders the renderer has built.
-
-### Draws per zoom
-
-Measured in Node (no GPU) on a generated 400 × 400 plot at 100 % (43 270
-placements, 16.7 M triangles in full), real meshed catalogue, perspective camera
-on the opening diagonal at 2880 × 1626, zooming in; draws counted after the
-level of detail and a frustum test on each bucket's bounding sphere.
-
-| camera distance | chunks and far regions only | four layers | triangles (four layers) |
-| --------------- | --------------------------- | ----------- | ----------------------- |
-| 2 400 m         | 2 532                       | 295         | 5.7 M                   |
-| 1 200 m         | 2 426                       | 303         | 6.1 M                   |
-| 600 m           | 3 307                       | 1 767       | 6.6 M                   |
-| 300 m           | 3 260                       | 1 279       | 5.4 M                   |
-| 150 m           | 2 725                       | 1 616       | 4.3 M                   |
-| 37 m            | 2 655                       | 1 246       | 4.0 M                   |
-
-With two layers the browser showed 50 fps zoomed out, 15–20 fps at mid zoom and
-60 close in, which is the draw column at ~14 µs a draw. The mid layer costs
-some culling (a region is drawn whole, so up to 20 % more triangles at mid
-zoom). `updateDetail` walks all four layers, 1–5 ms per moving frame; the crowd
-step is ~1.2 ms for 5 800 people at real time, and runs that many times over per
-frame while the clock runs (see _Movement_ in [crowd.md](crowd.md)). Doubling `CHUNK_VOXELS` is the next cut if
-600 m is still slow.
+- A bucket is hidden once the model is under 3 px on screen (`HIDDEN_PIXELS`).
+- Thresholds have 20% hysteresis.
+- **Coarse copies are generated**: `coarsenVoxels` turns every 2×2×2 block into
+  one voxel with the majority colour. A coarse copy with more than 60% of the
+  original's triangles is dropped (`worthCoarsening`).
+- **People** aren't bucketed. Anyone under 3 px is packed out of the draw.
+- Construction sites, the placement ghost, terrain, balloons and the bay aren't
+  levelled.
+- Toggle in the Camera panel or with `?lod=0`. _Details_ shows draws, frame
+  times, GPU time, buckets per layer and shader count.
 
 ### Shader builds
 
-Three.js's WebGPU renderer caches a built shader under a key that includes the
-uuid of every `InstancedMesh` (`RenderObject.getMaterialCacheKey`), so each one
-costs a full node build — TSL to WGSL, milliseconds of main thread — the first
-frame it is drawn. The world had one per bucket: 15 000 on the plot above, and
-zooming in turned thousands of near buckets visible for the first time within a
-few frames.
+Three.js's WebGPU renderer builds a shader per `InstancedMesh`, which cost
+milliseconds each for thousands of buckets. So a bucket is a plain `Mesh` over an
+`InstancedBufferGeometry` that shares the catalogue's attributes, with the
+instance matrix read in `positionNode` (`standOnInstances`). All buckets with the
+same material share one shader. The crowd, bay and balloons still use
+`InstancedMesh` (only a few per resort).
 
-A bucket is therefore a plain `Mesh` over an `InstancedBufferGeometry`: the
-catalogue's attributes and index shared, and the instance matrix as four
-columns of one interleaved instance buffer, which `standOnInstances` reads in
-the materials' `positionNode`. Every bucket with the same material and
-attribute layout shares one build, so the whole world is a handful. Disposing a
-bucket's geometry makes the renderer re-upload the shared catalogue attributes
-the next time another bucket draws them; that is a few buffers per model on an
-edit that empties or outgrows a bucket. The crowd, the bay and the balloons are
-still `InstancedMesh`es: a few per resort.
+## Preparing a resort
 
-## Preparing a resort off the main thread
+Generating, laying out and baking a large plot takes seconds.
+`resort-prep/domain/prepareResort.ts` does it as one pure function, and
+`resortPreparer.ts` runs it in a worker (`prepWorker.ts`) with a main-thread
+fallback.
 
-Growing, laying out and baking a plot is seconds of work on a large one
-(measured in Node on a 400 × 400 plot at 100 %: generate 1.1 s, layout 0.7 s,
-lamp bake 2.1 s, sky visibility 0.5 s, terrain mesh 0.5 s). None of it needs the
-renderer, so `resort-prep/domain/prepareResort.ts` does all of it as one pure
-function, and `resortPreparer.ts` runs it in a long-lived worker
-(`prepWorker.ts`) with a main-thread fallback.
-
-- **What crosses back**: the plan, the laid-out lists, the lamp anchors and
-  moorings, the baked volume (sky visibility already in its alpha) and the terrain
-  surfaces. The volume and the terrain buffers are transferred, not copied.
-- **What stays on the main thread**: instance buffers, textures, the walk network
-  and crowd, the occupancy and rail indexes, the fields that move. The live light
-  and sky grids adopt the finished bake rather than redoing it.
-- **Generate and Clear are asynchronous.** The resort on screen keeps drawing, and
-  taking edits, until the new one is swapped in; those edits go with it. A later
-  request wins over an earlier one still in flight.
-- **At load**, the catalogue is meshed and the first resort prepared at the same
-  time, each in its own worker.
-- **A terrain edit still meshes on the main thread**, over the whole plot: half a
-  second per brush stroke on a 400-tile plot.
+- The worker returns the plan, layout, lamp anchors, moorings, the baked light
+  volume and terrain meshes (buffers are transferred, not copied).
+- Instances, textures, the walk network, crowd and indexes stay on the main
+  thread.
+- Generate and Clear are async. The current resort keeps running and accepting
+  edits until the new one is swapped in. The newest request wins.
+- At load, meshing the catalogue and preparing the first resort run in parallel.
 
 ## Building
 
-All tools share `tileStroke.ts`: the pick, a Bresenham fill between pointer
-samples, pointer capture, Escape to put the tool down. Tiles are applied one at a
-time, in order. `BuildTool` holds exactly one armed tool.
+All tools share `tileStroke.ts`: picking, filling between pointer samples, and
+Escape to cancel.
 
-- **Picking** — `groundPick.ts` intersects the pointer ray with each level's
-  plane, top down, and keeps the first crossing that lands on a tile at that level.
-- **Occupancy** — `tileOccupancy.ts` maps tile → key of whatever covers it.
-- **Placing** — click places; drag keeps placing for one-tile objects (✎). The
-  ghost is the model's own geometry, unlit and translucent, green or red.
-- **Palette** — grouped by each model's `category`.
-- **Bulldozer** — `demolishAt` returns whatever claims a tile. Anything that
-  claims a tile can be removed, including paving; rails follow the paving
-  (`handrails.ts`), stairs revert via `unlaidBy` in `paving.ts`. Removal takes
-  down the instance, blob shadow, lamps and sky visibility.
-- **Terrain brushes** — raise, lower, grass, sand, water. The tile must be clear,
-  neighbours differ by at most one level, sea tiles may be raised (to sand) but
-  not painted, level 0 is the floor. Brushes reach the plot plus a plot's width
-  all round.
+- **Picking**: `groundPick.ts` tests the pointer ray against each level, top down.
+- **Placing**: click to place, drag for one-tile objects. The ghost is green or
+  red.
+- **Bulldozer**: removes anything on a tile, including paving. Rails and stairs
+  update accordingly.
+- **Terrain brushes**: raise, lower, grass, sand, water. The tile must be empty
+  and neighbours can differ by at most one level. Brushes reach one plot-width
+  beyond the plot.
 
-### Buildings take time to go up
+### Construction
 
-A building placed is a foundation that fills in over a few seconds, not a
-building. `construction/domain/construction.ts` owns the clock — `buildSeconds`
-derives a duration from the model's size, `revealHeightOf` says how far up the
-model the work has reached — and `constructionField.ts` draws what is there so
-far. `showcase.ts` holds the sites and ticks them from the one render loop.
+A new building starts as a foundation and grows over a few seconds.
+`construction.ts` owns the timing (`buildSeconds` from model size,
+`revealHeightOf`), `constructionField.ts` draws it, `showcase.ts` ticks it.
 
-- **The stages are computed, never authored.** The catalogue is meshed through
-  DVE once per page load and there is no runtime re-mesh path, so a stage cannot
-  be a geometry of its own. The finished geometry is drawn with a cut instead,
-  and a model added to `voxel-gen/` gets a construction animation by existing.
-- **The cut is per fragment**, on `maskNode`, against the interpolated
-  model-space height. The greedy merge makes a wall one quad many voxels tall,
-  so hiding vertices could only take the wall away entire; a fragment discard
-  cuts through the middle of a merged quad. The shadow pass honours `maskNode`
-  too, so a half-built wall throws a half-built shadow.
-- **Two hashes make it read as voxels.** One per voxel _column_ gives structure
-  — a corner post up while the wall beside it is knee high — and one per voxel
-  _cell_ gives grain, so single voxels appear along the frontier rather than a
-  clean stair edge. Both hold a column _behind_ the reveal, which is why the
-  reveal travels past the model's own top before a building is whole.
-- **A site is a plain `Mesh` per surface**, drawn with the catalogue's own
-  geometry and one of two shared materials; how high the cut stands rides on the
-  mesh's `userData`, which a reference node reads per render object. Four draw
-  calls for as long as the crane is up, against the resort's forty.
-- **Which objects** — `lodging` and `amenities` above 3 000 voxels. Paving is
-  painted by dragging, and `paving.ts` lifts and re-stands a slab under one key
-  as a path crosses a step, so a slab must never become a site.
-- **`stand` has two halves.** The tiles, the plot's list and the square ground
-  under the footprint are claimed at once; the instance, the blob shadow and the
-  lamps wait for `raise`, when the work is done. `lift` mirrors whichever half
-  ran, so bulldozing a site cancels it and frees the tile.
+- The stages aren't separate meshes. The finished geometry is cut per fragment on
+  `maskNode` (shadows too), so every model gets an animation for free.
+- Two hashes, per voxel column and per voxel, make it grow voxel by voxel rather
+  than as a flat cut.
+- Only `lodging` and `amenities` over 3 000 voxels get a site. Paving never does.
+- Tiles are claimed immediately; the instance, shadow and lamps appear when it's
+  finished. Bulldozing a site cancels it.
 
 ## Lighting
 
-A model declares its lights beside its voxels:
+- **Lamps**: `lightGrid.ts` bakes every lamp into a 3D texture at startup
+  (irradiance plus direction), read through `emissiveNode`. The volume budget is
+  48 MB up to a 160-tile plot, growing to 128 MB. `liveLightGrid.ts` re-bakes only
+  the affected block when a lamp is placed or removed.
+- **Sky visibility**: `skyVisibility.ts` bakes how much sky each cell sees into
+  the volume's alpha, used as ambient occlusion. Terrain isn't in it.
+- **Blob shadows**: `blobShadows.ts`, one quad per tall enough object, in one
+  mesh, updated when the sun moves.
+- **Day/night**: `skyStateFor(time)` returns sun, ambient, sky, fog and lamp
+  level.
 
-```ts
-export default defineModel({
-  id: 'street-lamp',
-  emissive: [GLOW], // drawn unlit, so they glow after dark
-  lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],
-  build: (b) => {
-    /* ... */
-  },
-});
-```
+## Weather
 
-- **Lamps** — `lightGrid.ts` bakes every lamp into a volume at startup:
-  irradiance and a weighted direction, as `RGBA8` 3D textures, sampled by
-  `bakedLightVolume.ts` through `emissiveNode`. `lightGridSpecFor` picks the finest
-  cell size inside `gridBudgetFor`: 48 MB up to a 160-tile plot, growing with the
-  area to `MAX_GRID_BUDGET_BYTES` (128 MB), so a 480-tile plot bakes ~8-voxel
-  cells rather than ~11.
-- **Kept live** — `liveLightGrid.ts` re-bakes only the block a placed or removed
-  lamp reaches and re-uploads those slices. The scale is frozen at the first bake,
-  and `lampReservationFor` sizes the grid so a lamp placed anywhere on the resort
-  lands inside it; a lamp placed beyond lights only the part of the grid it reaches.
-- **Sky visibility** — `skyVisibility.ts` bakes per cell how much sky the objects
-  above take away, into the alpha channel, applied via `aoNode` (ambient only).
-  Kept live by `createLiveSkyVisibility`. Terrain risers are not in it, and
-  terrain edits do not re-bake it.
-- **Blob shadows** — `blobShadows.ts`, one quad per object tall enough, swept away
-  from the sun, all in one mesh at paving level. Rewritten only when the sun
-  moves; faded out at sunset.
-- **Day/night** — `skyStateFor(time)` gives sun, ambient, sky, fog and the lamp
-  factor. Pure and tested.
+`sim/domain/weather.ts` decides the weather and its effect on guests (see
+[crowd.md](crowd.md#weather)). `features/weather/` draws it. They only share the
+`Weather` value.
 
-## Rain, lightning and a sky that can be pinned
+- **Rain** is one never-culled `InstancedMesh` of streaks (`rainField.ts`), up to
+  4 200 in a storm. A clear day hides the mesh and skips the per-frame update.
+- Drop size and speed are in **screen pixels**, so rain looks the same at every
+  zoom. The rain column covers what the camera sees and follows the camera.
+  Positions are computed from elapsed time, so it's frame-rate independent.
+- Streaks are faint (about 1.6 px wide, 0.15–0.22 alpha), unsorted, with no depth
+  write. Wind shears them.
+- **Lightning** (`lightning.ts`) is a pure function of time, so pausing doesn't
+  bank strikes and bench runs are reproducible. `flashSky` brightens ambient and
+  background only, not lamps or windows.
+- Balloons aren't launched on wet days.
+- The weather can be pinned from the bar or `?weather=`; it isn't saved.
 
-`sim/domain/weather.ts` says what kind of day it is and what that does to the
-people on the plot; `features/weather/` draws what a wet one looks like. The two
-meet at one `Weather` value and nowhere else, which is the whole of the
-boundary: a change to the streaks cannot move a guest, and a change to the need
-weights cannot move a drop. See the _Weather_ section of `docs/crowd.md` for the
-other half.
+## Benchmarks
 
-- **The rain is one never-culled `InstancedMesh` of streaks** — `rainField.ts`,
-  the pattern `movingField.ts` sets out: every instance moved this frame, so a
-  bounding sphere would have to be rebuilt this frame to reject anything. The
-  pool is allocated once at the storm's 4 200 drops and `mesh.count` is wound
-  down for a lighter day; a clear day is `visible = false` and no per-frame write
-  at all.
-- **It is sized in pixels, not in voxels.** Every number in `RAINFALL` — the
-  streak's length and width, how fast it falls, how far it falls — is a length
-  on the screen, turned into voxels by the view it is asked about. So a drop is
-  the same size and the same speed at every zoom, and a fixed few thousand of
-  them are the same rain from the overview as from among the cottages. That is
-  not physical and it is deliberate: rain a hundred metres off is a veil, and a
-  field that kept its drops the size of real ones would be invisible from above
-  and enormous from the ground. What has to be constant is what it looks like.
-- **The column is whatever the camera can see.** `columnFor` takes the drawing
-  buffer in voxels, stretches its height by the slant the ground is seen at
-  (`rise / distance`, clamped at about 20° so a near-horizontal camera cannot
-  ask for the horizon) and squares it off, because the isometric camera turns.
-  A fixed column was the first thing this got wrong: 640 voxels is a third of
-  the plot's width, and the rain was a visible square in the middle of a dry
-  resort. Overshooting only thins the rain, so it errs high.
-- **It follows the camera, not the plot.** A drop is a fixed point on an infinite
-  lattice with a phase, and `nearestTo` draws it at whichever image of itself is
-  nearest the camera's target — so it stands still in the world while the view
-  does, and only ever jumps by a whole column, half a column from the middle of
-  the screen. Nothing is stepped and nothing is respawned: where a drop is now is
-  arithmetic over the elapsed seconds, so the field is identical at any frame
-  rate.
-- **It is faint on purpose.** A streak is about 1.6 px across and 16–26 px long
-  at 0.15–0.22 alpha: rain is the texture a few thousand of them make together,
-  and a streak you can pick out one at a time is a stick. The colour stays a
-  pale near-white and the _opacity_ is what carries the subtlety — a hairline
-  dimmed by colour instead reads as dirt on the lens.
-- **The wind is a shear, not a rotation.** The instance matrix's Y column is
-  aimed along the fall, which tips the top of the streak downwind and leaves its
-  foot on the drop. Three numbers shared by the whole frame, rather than a
-  `Matrix4`, a sine and a cosine per drop.
-- **Not built from a voxel model**, unlike the balloons and the boats. A raindrop
-  is a streak the way a blob shadow is a disc, and `blobShadowField.ts` builds
-  its own geometry here for the same reason. Putting one in the sky registry
-  would also shift the index a balloon's `variant` counts along.
-- **Transparent and deliberately not sorted**, with `depthWrite` off. At this
-  opacity the order two streaks blend in is not a difference anybody can see,
-  which buys one draw call and no second pass.
-- **Lightning is a pure function of the elapsed seconds**, in `lightning.ts`, for
-  the reason nothing about the weather is stored: strike `n` goes off at a hashed
-  moment inside its own window, so a paused resort banks no strikes to let off at
-  once and two bench runs flash on the same frames. `flashSky(sky, flash)` is a
-  function over a `SkyState` exactly as `overcastSky` is — it lifts the ambient
-  and the background and leaves the sun, the shadows and `lampFactor` alone,
-  because a bolt lights the whole sky from no direction and a flash routed
-  through `lampFactor` would blink every lit window on the plot. `createClock`'s
-  guard compares the flash as well as the hour, or it would wait for a simulated
-  minute that never comes.
-- **Nobody lights a lantern in the rain.** `Clock.balloonReadiness` is zero on a
-  wet day; the flights already up finish, so a shower at dusk empties the sky
-  over a minute rather than blinking it out.
-- **The sky can be pinned, from the bar or from a URL.** A storm is four days in
-  twenty-four and lasts a whole simulated day, so `Clock.setWeather` forces one
-  and `null` hands it back to the week's own draw. Nothing about the pin is
-  saved: `weatherOn` stays a pure function of the day and the seed, and the save
-  file still holds one integer.
-
-## What a frame costs
-
-`pnpm bench`, WebGPU, 2880 × 1626 device pixels, M2 Pro, vsync on:
-
-| case           | lamps on | draw calls | triangles | fps | GPU median |
-| -------------- | -------- | ---------- | --------- | --- | ---------- |
-| day-overview   | 0        | 814        | 1.15 M    | 120 | 4.06 ms    |
-| day-street     | 0        | 420        | 637 k     | 120 | 1.90 ms    |
-| night-overview | 608      | 814        | 1.15 M    | 120 | 4.65 ms    |
-| night-street   | 608      | 420        | 637 k     | 120 | 3.87 ms    |
-
-`fps` is capped by the display, so the GPU column is the one that discriminates.
-
-These numbers predate the level of detail and the paving-scaled crowd; rerun
-`pnpm bench` and `pnpm bench -- --no-lod` to refresh them.
-
-### What the weather costs
-
-`day-overview`, same machine, `--no-vsync` so the main thread is not pinned to
-the refresh interval — a vsync-on run reports 120 fps for all four and says
-nothing:
-
-| day        | lamps on | draw calls | triangles | CPU median | GPU median |
-| ---------- | -------- | ---------- | --------- | ---------- | ---------- |
-| `clear`    | 0        | 278        | 1.142 M   | 1.50 ms    | 3.08 ms    |
-| `heatwave` | 0        | 278        | 1.142 M   | 1.50 ms    | 3.15 ms    |
-| `rain`     | 617      | 279        | 1.166 M   | 1.70 ms    | 3.34 ms    |
-| `storm`    | 617      | 279        | 1.192 M   | 1.70 ms    | 3.60 ms    |
-
-A storm is **one more draw call, 50 k more triangles, about 0.2 ms of main
-thread and half a millisecond of GPU** over a clear day. The main thread is the
-cost of writing 4 200 instance matrices; the GPU is fill, because the streaks
-are transparent and at the overview zoom they are spread over the whole frame
-rather than over a square in the middle of it.
-
-`heatwave` draws no rain and is the control: it is `clear` within the noise,
-which is what says the rest of the difference is the rain and the lamps. The
-baseline itself moves about 0.1 ms between runs, so read the GPU column as a
-range and not as a reading.
-
-The lamps in that column are not the rain's doing. `overcastSky` brings them on
-under cloud, so a storm at two in the afternoon lights all 617 of them; that is
-plan 023's behaviour and it is part of the difference too.
+`pnpm bench` drives Chrome against a running dev server using `?bench=1`, which
+pins the camera and clock. A run only compares with the previous one if the scene
+hasn't changed, so everything in a bench run must be deterministic.
 
 ```bash
-pnpm bench -- --weather storm --no-vsync    # or rain, heatwave, clear
-```
-
-## Measuring
-
-The script launches Chrome over the DevTools protocol against a running dev
-server and reads the result back from the page's `?bench=1` mode, which pins the
-camera and clock.
-
-```bash
-pnpm dev &                         # the script does not start the server
+pnpm dev &                         # bench doesn't start the server
 pnpm bench                         # all four cases
 pnpm bench -- --case night-street  # one case
-pnpm bench -- --repeat 1,2,3       # tile the plot, to price a larger resort
+pnpm bench -- --repeat 1,2,3       # tile the plot to test larger resorts
 pnpm bench -- --no-worker          # mesh on the main thread
-pnpm bench -- --no-lod             # everything in full, to price the level of detail
-pnpm bench -- --weather storm      # pin the sky, to price the rain
-pnpm bench -- --webgl              # the WebGL2 fallback
-pnpm bench -- --shots ./shots      # a PNG per case
+pnpm bench -- --no-lod             # disable level of detail
+pnpm bench -- --weather storm      # pin the weather
+pnpm bench -- --no-vsync           # uncapped frame rate
+pnpm bench -- --webgl              # WebGL2 fallback
+pnpm bench -- --shots ./shots      # screenshot per case
 ```
 
-The same knobs are URL parameters
-(`?bench=1&view=street&time=0.02&repeat=3&lod=0&weather=storm`).
-`?people=n` sets the crowd, with or without `bench`. A run only compares with the
-previous one if the scene has not changed.
+The same options work as URL parameters
+(`?bench=1&view=street&time=0.02&repeat=3&lod=0&weather=storm`). `?people=n` sets
+the crowd size.
 
-Everything that moves is stepped by `MAX_STEP` a frame under `bench` rather than
-by the frame's own delta, and the crowd is also pinned to a scale of 1, real
-time. Outside a benchmark it walks at a multiple of real time taken from the
-clock's speed (`crowdScaleFor`), which a bench run must not inherit: its clock is
-paused, and a crowd whose pace followed it would stand still and stop being
-measured.
+In a bench run everything moves by a fixed `MAX_STEP` per frame and the crowd
+walks at real time.
 
-The resort generator goes up to 480 × 480 tiles (`PLOT_TILES`), nine times the
-area of the old maximum. At 100 % density that is ~60 000 placements, ~32 000
-paved tiles and ~8 000 people. Generating, laying out and baking it runs in a
-worker, so the page keeps drawing while it does; see _Preparing a resort off the
-main thread_. Every terrain edit still rebuilds the whole terrain mesh on the main
-thread, which is the next cost a plot that size will show.
+Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 
-## Adding or changing an object
+| Weather | Draw calls | Triangles | CPU median | GPU median |
+| ------- | ---------- | --------- | ---------- | ---------- |
+| clear   | 278        | 1.14 M    | 1.50 ms    | 3.08 ms    |
+| storm   | 279        | 1.19 M    | 1.70 ms    | 3.60 ms    |
 
-1. Write the model under `voxel-gen/models/` and add it to
-   `voxel-gen/models/index.ts`. `voxel-gen/README.md` is the authoring API;
-   [art-direction.md](art-direction.md) is the palette, the parts and the rules.
-2. Declare its footprint in tiles and a `category` (which build-palette shelf it
-   appears on). Declare `emissive`, `water`, `lights` and seats if it has them,
-   and `placement` if it belongs only on the beach or the shore, or a resort
-   should only hold a few.
-3. Check it: `pnpm preview <id>` renders it, `pnpm preview --audit` reports
-   footprint fill. Every model fills 100% except `beach-umbrella` (a round
-   canopy) and the rails, which stand along an edge.
-4. Paint only from `voxel-gen/palette.ts`; `palette.test.ts` fails otherwise. The
-   catalogue may hold at most 250 colours (`objectTypes.test.ts`).
-5. To put it on the authored plot, add a plot to `RESORT_PLAN` in
-   `src/features/layout/domain/resortPlan.ts`. It needs room for a spur, not a
-   corridor. The tests fail if an object is unplaced, overlapping, off the plot or
-   walled in.
-6. Run `pnpm test` (`dveEngine.test.ts` meshes the whole catalogue) and, if the
-   object is mass-placed, `pnpm bench`.
+The storm difference includes the 617 lamps that come on under cloud.
 
-Nothing in `src/` needs to change: catalogue, materials, layout, meshing,
-instancing and the build palette all derive from the registry.
+The generator goes up to 480 × 480 tiles (`PLOT_TILES`): about 60 000
+placements and 8 000 people at full density.
 
-To make the scene bigger, add plots. `pnpm bench -- --repeat 3` prices a resort
-nine times the size without authoring it.
+## Adding an object
+
+1. Write the model in `voxel-gen/models/` and add it to `models/index.ts` (see
+   [voxel-gen/README.md](../voxel-gen/README.md)).
+2. Declare `tiles` and `category`, plus `emissive`, `water`, `lights`, `seats`,
+   `venue` and `placement` as needed.
+3. Check it with `pnpm preview <id>` and `pnpm preview --audit`.
+4. Use only palette colours (`palette.test.ts`).
+5. Add it to `RESORT_PLAN` in `src/features/layout/domain/resortPlan.ts`.
+6. Run `pnpm test` (`dveEngine.test.ts` meshes the whole catalogue), and
+   `pnpm bench` if it's placed a lot.
+
+Nothing in `src/` needs to change.
 
 ## DVE integration
 
-- Only DVE's data model and mesher are used, driven directly from our own worker;
-  its output is handed to Three.js.
-- **`dveEngine.ts` imports ten unversioned internal subpaths of
-  `@divinevoxel/vlox`, dynamically**, after `EngineSettings.syncSettings`, because
-  those modules snapshot settings at evaluation time. `tsc` cannot see a break in
-  them; `dveEngine.test.ts` is the only thing that will. Run it after any DVE
-  upgrade.
-- `@divinevoxel/vlox` and `@amodx/*` publish extensionless ESM specifiers;
-  `vite.config.ts` routes them through Vite's resolver for the app and the tests.
-- DVE's texture pipeline gets a single flat placeholder entry; colour comes from
-  materials.
-- DVE winds triangles clockwise (Babylon.js); Three.js expects counter-clockwise.
-  The greedy merge emits its own winding from the normal; `flipWinding` handles
-  the triangles it passes through.
-- DVE writes a submesh's material as a `Uint8` and registers six materials of its
-  own, hence the 250-colour ceiling. Colour 251 silently renders as `dve_solid`.
-- DVE keeps its world in module-level statics; scratch regions occupy roughly the
-  first 2 000 voxels of x. Park anything else a test paints well past them.
+- Only DVE's data model and mesher are used, from our own worker. The output goes
+  to Three.js.
+- `dveEngine.ts` dynamically imports ten unversioned internal subpaths of
+  `@divinevoxel/vlox` after `EngineSettings.syncSettings`. `tsc` won't catch
+  breakage there; only `dveEngine.test.ts` will. Run it after every DVE upgrade.
+- `vite.config.ts` resolves the extensionless ESM imports of `@divinevoxel/vlox`
+  and `@amodx/*`.
+- DVE gets a single placeholder texture; colour comes from materials.
+- DVE winds triangles clockwise; `flipWinding` fixes that for Three.js.
+- DVE stores submesh materials as `Uint8` and uses six itself, hence the
+  250-colour limit. Colour 251 silently renders as `dve_solid`.
+- DVE's world is module-level state. Scratch regions use roughly the first 2 000
+  voxels of x, so tests should paint well past that.
 
-## Out of scope
+## Not done
 
-- Occlusion culling, and fewer, bigger draws still (larger chunks, a
-  `BatchedMesh` per region, indirect draws). A far region is one draw per model;
-  merging models would be the next factor. See _Draws per zoom_.
-- Dynamic resolution. The drawing buffer is the device pixel ratio capped at 2,
-  with MSAA.
-- Chunked terrain: a terrain edit rebuilds the whole terrain mesh.
-- Texture atlases, or any texturing.
-- Shadow maps. Sun light is not occluded; lamps cast no shadows.
-- Physics and multiplayer.
-- Slopes under objects: an object stands only on level ground.
-- Undo, and persistence across a reload.
-- Live crowd, balloons and bay: they are built with the resort, so hand-laid
-  paving is not walked.
-- `decorationsFor` re-derives dressing over the whole plot on generate/clear.
+- Occlusion culling, bigger batches (`BatchedMesh`, indirect draws).
+- Dynamic resolution (pixel ratio is capped at 2, with MSAA).
+- Chunked terrain.
+- Textures.
+- Shadow maps. The sun isn't occluded and lamps cast no shadows.
+- Physics, multiplayer.
+- Objects on slopes.
+- Undo, and saving across reloads.
+- Balloons and the bay don't follow hand edits.

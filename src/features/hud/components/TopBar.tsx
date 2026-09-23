@@ -6,6 +6,7 @@ import { HudReadout } from './HudReadout';
 import { RenderStats, type FrameCostElements } from './RenderStats';
 import { ResortPanel } from './ResortPanel';
 import { TimeOfDay } from './TimeOfDay';
+import { WeatherControl } from './WeatherControl';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { ResortControls } from '../../../app/useResortControls';
@@ -66,6 +67,12 @@ export function TopBar(props: TopBarProps) {
         speed={clock.speed}
         onTimeChange={clock.setTime}
         onSpeedChange={clock.setSpeed}
+      />
+
+      <WeatherControl
+        weather={clock.weather}
+        forced={clock.forcedWeather}
+        onWeatherChange={clock.setWeather}
       />
 
       <div className="hud-bar-readouts">

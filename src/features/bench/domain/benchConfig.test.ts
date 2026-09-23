@@ -28,7 +28,16 @@ describe('parseBenchConfig', () => {
       forceWebGL: true,
       forceMainThreadMeshing: false,
       detail: true,
+      weather: null,
     });
+  });
+
+  it('can pin the weather, so a run can price the rain', () => {
+    expect(parseBenchConfig('?bench=1')?.weather).toBeNull();
+    expect(parseBenchConfig('?bench=1&weather=storm')?.weather).toBe('storm');
+    expect(parseBenchConfig('?bench=1&weather=heatwave')?.weather).toBe('heatwave');
+    // A day nobody has heard of measures the day the week drew, not nothing.
+    expect(parseBenchConfig('?bench=1&weather=hail')?.weather).toBeNull();
   });
 
   it('can turn the level of detail off, to price what it saves', () => {

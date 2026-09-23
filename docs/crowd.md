@@ -667,15 +667,11 @@ open, and how grey the sky is. Nothing else.
   compares the overcast as well as the time, or a storm's sky would wait for a
   simulated minute that never comes while the clock is paused.
 
-- **Drawn rain is deliberately not here.** No particles, no puddles, no new pass,
-  no new material. `CLAUDE.md` forbids opening a browser to check how something
-  looks, and an effect whose only test is "does it look like rain" is not one
-  this could honestly deliver. What it does deliver is a storm that is grey, dark
-  and empties the beach, which is most of what a storm reads as from an isometric
-  camera and is testable as three pure functions. Drawn precipitation is a
-  rendering plan of its own; `features/balloons/` - a field of instanced things
-  moving under the sky - is the pattern it would start from, and its budget
-  should be measured with `pnpm bench` before it lands.
+- **The rain is drawn, and it lives in `features/weather/`.** This module decides
+  what kind of day it is; that one draws what a wet one looks like, and the two
+  meet at the `Weather` value and nowhere else - see "Rain, lightning and a sky
+  that can be pinned" in `docs/rendering.md`. A change here cannot move a drop,
+  and a change there cannot move a guest.
 
 - **What it costs on the reference plot.** Over an eighth of a simulated day at
   `normal` with 300 guests, a storm run takes **no visits at all** to anything
@@ -686,7 +682,10 @@ open, and how grey the sky is. Nothing else.
 
 The HUD's `Weather` row names the day and what it is doing; `advice.ts`'s
 `weather-closed` rule names a need whose venues are more than half shut, which is
-a reason to build a covered thing beside the open one.
+a reason to build a covered thing beside the open one. The bar carries the same
+name beside the clock, with four buttons that pin the sky to one kind of day and
+an `Auto` that hands it back - a storm is four days in twenty-four and lasts a
+whole simulated day, so waiting for one is not a way to see what one does.
 
 ## Arriving and leaving
 

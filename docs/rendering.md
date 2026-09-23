@@ -394,6 +394,78 @@ export default defineModel({
 - **Day/night** — `skyStateFor(time)` gives sun, ambient, sky, fog and the lamp
   factor. Pure and tested.
 
+## Rain, lightning and a sky that can be pinned
+
+`sim/domain/weather.ts` says what kind of day it is and what that does to the
+people on the plot; `features/weather/` draws what a wet one looks like. The two
+meet at one `Weather` value and nowhere else, which is the whole of the
+boundary: a change to the streaks cannot move a guest, and a change to the need
+weights cannot move a drop. See the _Weather_ section of `docs/crowd.md` for the
+other half.
+
+- **The rain is one never-culled `InstancedMesh` of streaks** — `rainField.ts`,
+  the pattern `movingField.ts` sets out: every instance moved this frame, so a
+  bounding sphere would have to be rebuilt this frame to reject anything. The
+  pool is allocated once at the storm's 4 200 drops and `mesh.count` is wound
+  down for a lighter day; a clear day is `visible = false` and no per-frame write
+  at all.
+- **It is sized in pixels, not in voxels.** Every number in `RAINFALL` — the
+  streak's length and width, how fast it falls, how far it falls — is a length
+  on the screen, turned into voxels by the view it is asked about. So a drop is
+  the same size and the same speed at every zoom, and a fixed few thousand of
+  them are the same rain from the overview as from among the cottages. That is
+  not physical and it is deliberate: rain a hundred metres off is a veil, and a
+  field that kept its drops the size of real ones would be invisible from above
+  and enormous from the ground. What has to be constant is what it looks like.
+- **The column is whatever the camera can see.** `columnFor` takes the drawing
+  buffer in voxels, stretches its height by the slant the ground is seen at
+  (`rise / distance`, clamped at about 20° so a near-horizontal camera cannot
+  ask for the horizon) and squares it off, because the isometric camera turns.
+  A fixed column was the first thing this got wrong: 640 voxels is a third of
+  the plot's width, and the rain was a visible square in the middle of a dry
+  resort. Overshooting only thins the rain, so it errs high.
+- **It follows the camera, not the plot.** A drop is a fixed point on an infinite
+  lattice with a phase, and `nearestTo` draws it at whichever image of itself is
+  nearest the camera's target — so it stands still in the world while the view
+  does, and only ever jumps by a whole column, half a column from the middle of
+  the screen. Nothing is stepped and nothing is respawned: where a drop is now is
+  arithmetic over the elapsed seconds, so the field is identical at any frame
+  rate.
+- **It is faint on purpose.** A streak is about 1.6 px across and 16–26 px long
+  at 0.15–0.22 alpha: rain is the texture a few thousand of them make together,
+  and a streak you can pick out one at a time is a stick. The colour stays a
+  pale near-white and the _opacity_ is what carries the subtlety — a hairline
+  dimmed by colour instead reads as dirt on the lens.
+- **The wind is a shear, not a rotation.** The instance matrix's Y column is
+  aimed along the fall, which tips the top of the streak downwind and leaves its
+  foot on the drop. Three numbers shared by the whole frame, rather than a
+  `Matrix4`, a sine and a cosine per drop.
+- **Not built from a voxel model**, unlike the balloons and the boats. A raindrop
+  is a streak the way a blob shadow is a disc, and `blobShadowField.ts` builds
+  its own geometry here for the same reason. Putting one in the sky registry
+  would also shift the index a balloon's `variant` counts along.
+- **Transparent and deliberately not sorted**, with `depthWrite` off. At this
+  opacity the order two streaks blend in is not a difference anybody can see,
+  which buys one draw call and no second pass.
+- **Lightning is a pure function of the elapsed seconds**, in `lightning.ts`, for
+  the reason nothing about the weather is stored: strike `n` goes off at a hashed
+  moment inside its own window, so a paused resort banks no strikes to let off at
+  once and two bench runs flash on the same frames. `flashSky(sky, flash)` is a
+  function over a `SkyState` exactly as `overcastSky` is — it lifts the ambient
+  and the background and leaves the sun, the shadows and `lampFactor` alone,
+  because a bolt lights the whole sky from no direction and a flash routed
+  through `lampFactor` would blink every lit window on the plot. `createClock`'s
+  guard compares the flash as well as the hour, or it would wait for a simulated
+  minute that never comes.
+- **Nobody lights a lantern in the rain.** `Clock.balloonReadiness` is zero on a
+  wet day; the flights already up finish, so a shower at dusk empties the sky
+  over a minute rather than blinking it out.
+- **The sky can be pinned, from the bar or from a URL.** A storm is four days in
+  twenty-four and lasts a whole simulated day, so `Clock.setWeather` forces one
+  and `null` hands it back to the week's own draw. Nothing about the pin is
+  saved: `weatherOn` stays a pure function of the day and the seed, and the save
+  file still holds one integer.
+
 ## What a frame costs
 
 `pnpm bench`, WebGPU, 2880 × 1626 device pixels, M2 Pro, vsync on:
@@ -410,6 +482,38 @@ export default defineModel({
 These numbers predate the level of detail and the paving-scaled crowd; rerun
 `pnpm bench` and `pnpm bench -- --no-lod` to refresh them.
 
+### What the weather costs
+
+`day-overview`, same machine, `--no-vsync` so the main thread is not pinned to
+the refresh interval — a vsync-on run reports 120 fps for all four and says
+nothing:
+
+| day        | lamps on | draw calls | triangles | CPU median | GPU median |
+| ---------- | -------- | ---------- | --------- | ---------- | ---------- |
+| `clear`    | 0        | 278        | 1.142 M   | 1.50 ms    | 3.08 ms    |
+| `heatwave` | 0        | 278        | 1.142 M   | 1.50 ms    | 3.15 ms    |
+| `rain`     | 617      | 279        | 1.166 M   | 1.70 ms    | 3.34 ms    |
+| `storm`    | 617      | 279        | 1.192 M   | 1.70 ms    | 3.60 ms    |
+
+A storm is **one more draw call, 50 k more triangles, about 0.2 ms of main
+thread and half a millisecond of GPU** over a clear day. The main thread is the
+cost of writing 4 200 instance matrices; the GPU is fill, because the streaks
+are transparent and at the overview zoom they are spread over the whole frame
+rather than over a square in the middle of it.
+
+`heatwave` draws no rain and is the control: it is `clear` within the noise,
+which is what says the rest of the difference is the rain and the lamps. The
+baseline itself moves about 0.1 ms between runs, so read the GPU column as a
+range and not as a reading.
+
+The lamps in that column are not the rain's doing. `overcastSky` brings them on
+under cloud, so a storm at two in the afternoon lights all 617 of them; that is
+plan 023's behaviour and it is part of the difference too.
+
+```bash
+pnpm bench -- --weather storm --no-vsync    # or rain, heatwave, clear
+```
+
 ## Measuring
 
 The script launches Chrome over the DevTools protocol against a running dev
@@ -423,11 +527,13 @@ pnpm bench -- --case night-street  # one case
 pnpm bench -- --repeat 1,2,3       # tile the plot, to price a larger resort
 pnpm bench -- --no-worker          # mesh on the main thread
 pnpm bench -- --no-lod             # everything in full, to price the level of detail
+pnpm bench -- --weather storm      # pin the sky, to price the rain
 pnpm bench -- --webgl              # the WebGL2 fallback
 pnpm bench -- --shots ./shots      # a PNG per case
 ```
 
-The same knobs are URL parameters (`?bench=1&view=street&time=0.02&repeat=3&lod=0`).
+The same knobs are URL parameters
+(`?bench=1&view=street&time=0.02&repeat=3&lod=0&weather=storm`).
 `?people=n` sets the crowd, with or without `bench`. A run only compares with the
 previous one if the scene has not changed.
 

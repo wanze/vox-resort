@@ -174,6 +174,7 @@ body {
 .hud-popover-toggle,
 .hud-camera-mode,
 .hud-time-speed,
+.hud-weather-pick,
 .hud-camera-point,
 .hud-resort-roll,
 .hud-resort-go,
@@ -201,6 +202,7 @@ body {
 .hud-popover-toggle:hover,
 .hud-camera-mode:hover:not(:disabled),
 .hud-time-speed:hover:not(:disabled),
+.hud-weather-pick:hover:not(:disabled),
 .hud-camera-point:hover:not(:disabled),
 .hud-resort-roll:hover:not(:disabled),
 .hud-resort-go:hover:not(:disabled),
@@ -216,6 +218,7 @@ body {
 .hud-popover-toggle[aria-expanded='true'],
 .hud-camera-mode[aria-pressed='true'],
 .hud-time-speed[aria-pressed='true'],
+.hud-weather-pick[aria-pressed='true'],
 .hud-camera-point[aria-pressed='true'],
 .hud-resort-choice[aria-pressed='true'] {
   background-image: var(--sunken);
@@ -226,6 +229,7 @@ body {
 
 .hud-camera-point[aria-pressed='true'],
 .hud-camera-mode[aria-pressed='true'],
+.hud-weather-pick[aria-pressed='true'],
 .hud-time-speed[aria-pressed='true'] {
   color: var(--terracotta-lit);
 }
@@ -455,6 +459,30 @@ input[type='checkbox'] {
 
 .hud-time-speed {
   height: var(--control-h);
+  padding: 0 var(--space-2);
+}
+
+/* ---- Weather ---------------------------------------------------------- */
+
+.hud-weather {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Fixed width and no wrapping, so pinning a heatwave does not shove the rest of
+   the bar along - the same bargain `.hud-time-clock` strikes with the minutes. */
+.hud-weather-now {
+  min-width: 10ch;
+  margin-right: var(--space-2);
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  white-space: nowrap;
+  color: var(--sand);
+}
+
+.hud-weather-pick {
+  height: var(--control-h);
+  min-width: var(--control-h);
   padding: 0 var(--space-2);
 }
 

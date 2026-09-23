@@ -20,6 +20,7 @@
  *   pnpm bench -- --case night-street --json
  *   pnpm bench -- --repeat 1,2,3          # tile the plot, to price a larger resort
  *   pnpm bench -- --no-lod                # everything in full, to price the level of detail
+ *   pnpm bench -- --weather storm         # pin the sky, to price the rain
  *
  * `--no-vsync` unlocks the frame rate, though the GPU columns are the better
  * measure once a frame fits inside the refresh interval. `--webgl` disables
@@ -102,6 +103,12 @@ interface Cli {
   readonly mainThread: boolean;
   /** Draws everything in full, to price what the level of detail saves. */
   readonly noDetail: boolean;
+  /**
+   * Pins the sky to one kind of day, or empty for whichever the week drew -
+   * which is clear, and a clear day draws no rain. The only way to price the
+   * weather; see `BenchConfig.weather`.
+   */
+  readonly weather: string;
   readonly json: boolean;
   readonly label: string;
   readonly window: { readonly width: number; readonly height: number };
@@ -143,6 +150,7 @@ function parseCli(argv: readonly string[]): Cli {
     webgl: flags.get('webgl') !== undefined,
     mainThread: flags.get('no-worker') !== undefined,
     noDetail: flags.get('no-lod') !== undefined,
+    weather: flags.get('weather') ?? '',
     json: flags.get('json') !== undefined,
     label: flags.get('label') ?? '',
     window: {
@@ -319,6 +327,7 @@ async function runCase(
   if (cli.webgl) params.set('webgl', '1');
   if (cli.mainThread) params.set('worker', '0');
   if (cli.noDetail) params.set('lod', '0');
+  if (cli.weather) params.set('weather', cli.weather);
 
   await browser.navigate(`${cli.url}?${params.toString()}`);
 

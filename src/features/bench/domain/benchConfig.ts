@@ -19,6 +19,7 @@
  */
 
 import { normalizeTime } from '../../lighting/domain/dayNight';
+import { WEATHERS, type Weather } from '../../sim/domain/weather';
 import type { CameraFraming, WorldBounds } from '../../layout/domain/worldBounds';
 import { cameraFramingFor } from '../../layout/domain/worldBounds';
 
@@ -34,6 +35,8 @@ import { cameraFramingFor } from '../../layout/domain/worldBounds';
 export type BenchView = 'overview' | 'street';
 
 const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(['overview', 'street']);
+
+const BENCH_WEATHERS: ReadonlySet<string> = new Set<string>(WEATHERS);
 
 export interface BenchConfig {
   readonly view: BenchView;
@@ -64,6 +67,18 @@ export interface BenchConfig {
    * it is, which is the run that says what the level of detail saves.
    */
   readonly detail: boolean;
+  /**
+   * The kind of day to pin the run to, or null for whichever one the week
+   * draws - which is day 0's, and day 0 is clear.
+   *
+   * Here because the rain is the first thing that draws over the whole frame
+   * every frame, and a clear day never draws it: `?bench=1&weather=storm` is
+   * the only way to price it, and pricing it is the condition
+   * `plans/023-weather.md` set on it landing. It pins the weather the HUD's own
+   * buttons pin, through the same `setWeather`, so the run measures exactly
+   * what somebody watching the plot sees. See `features/weather/`.
+   */
+  readonly weather: Weather | null;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -75,6 +90,7 @@ export const DEFAULT_BENCH: BenchConfig = {
   forceWebGL: false,
   forceMainThreadMeshing: false,
   detail: true,
+  weather: null,
 };
 
 const integerParam = (raw: string | null, fallback: number, min: number): number => {
@@ -97,6 +113,12 @@ export function parseBenchConfig(search: string): BenchConfig | null {
   const parsedTime = rawTime === null ? Number.NaN : Number.parseFloat(rawTime);
   const time = Number.isFinite(parsedTime) ? normalizeTime(parsedTime) : DEFAULT_BENCH.time;
 
+  const rawWeather = params.get('weather');
+  const weather =
+    rawWeather !== null && BENCH_WEATHERS.has(rawWeather)
+      ? (rawWeather as Weather)
+      : DEFAULT_BENCH.weather;
+
   return {
     view,
     time,
@@ -106,6 +128,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     forceWebGL: params.get('webgl') === '1',
     forceMainThreadMeshing: params.get('worker') === '0',
     detail: params.get('lod') !== '0',
+    weather,
   };
 }
 

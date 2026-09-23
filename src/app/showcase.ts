@@ -124,6 +124,16 @@ import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
+import { flashAt, flashSky } from '../features/weather/domain/lightning';
+import {
+  createRaindrops,
+  isWet,
+  MAX_DROPS,
+  rainfallFor,
+} from '../features/weather/domain/rainfall';
+import { buildRainField, type RainField } from '../features/weather/adapters/rainField';
+import type { RainView } from '../features/weather/domain/rainfall';
+import { pixelsPerVoxel } from '../features/rendering/domain/levelOfDetail';
 import {
   adviceFor,
   unreachableOn,
@@ -367,6 +377,17 @@ const STAFF_SEED = 9;
 const WEATHER_SEED = 13;
 
 /**
+ * The seed the rain is scattered with; fixed, for {@link CROWD_SEED}'s reason.
+ *
+ * How *many* drops there are is not here: it is `MAX_DROPS`, which
+ * `weather/domain/rainfall.ts` takes from the wettest row of its own table,
+ * because the count and the streak it draws are one tuning decision and belong
+ * side by side. `pnpm bench -- --weather storm` prices the lot; the table is in
+ * `docs/rendering.md`.
+ */
+const RAIN_SEED = 4;
+
+/**
  * How far above a person's feet a click is tested against, in voxels: the hips
  * of the tallest figure, which is about half way up a body. The number the art
  * already names, rather than a second guess at it; see `pickPerson.ts`.
@@ -549,6 +570,13 @@ export interface ShowcaseOptions {
    * which walks the guest list.
    */
   readonly onAdviceChange?: (advice: readonly Advice[]) => void;
+  /**
+   * Called when the kind of day changes: at midnight as the week turns over,
+   * and at once when somebody pins it from the HUD. **Never per frame** - the
+   * loop compares and calls only on a change, which is at most once a simulated
+   * day.
+   */
+  readonly onWeatherChange?: (weather: Weather) => void;
 }
 
 /** Which camera the resort is being drawn through, and which way it faces. */
@@ -607,6 +635,15 @@ export interface Showcase {
   setTime(time: number): void;
   /** How fast the resort runs, pause included; see `sim/domain/simClock.ts`. */
   setSpeed(speed: SimSpeed): void;
+  /**
+   * Pins the weather to one kind of day so it can be looked at, or hands it
+   * back to the week's own draw with null.
+   *
+   * A storm is four days out of twenty-four and it lasts a whole simulated day,
+   * so waiting for one to come round is not a way to see whether the rain draws
+   * right. Nothing about it is saved; see {@link Clock.setWeather}.
+   */
+  setWeather(weather: Weather | null): void;
   /** Inspects a guest, as a click on them would; the party list uses it. */
   selectPerson(person: number): void;
   /** Closes the inspector, as a click on empty ground would. */
@@ -1803,8 +1840,14 @@ function sceneStats(parts: {
   readonly catalogue: MeshedCatalogue;
   readonly startup: StartupCost;
   readonly weather: Weather;
+  /**
+   * The rain, which belongs to the scene rather than to the resort: it falls
+   * over the camera and not over the plot, so it survives a rebuild. Counted
+   * here all the same, because it is one more draw the renderer is handed.
+   */
+  readonly rain: RainField;
 }): ShowcaseStats {
-  const { handle, scratch, catalogue } = parts;
+  const { handle, scratch, catalogue, rain } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, sea, lighting } =
     parts.resort;
   const totals = plotTotals(plot);
@@ -1826,7 +1869,8 @@ function sceneStats(parts: {
       crowd.drawCalls +
       staff.drawCalls +
       balloons.drawCalls +
-      sea.drawCalls,
+      sea.drawCalls +
+      rain.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
@@ -1837,7 +1881,8 @@ function sceneStats(parts: {
       crowd.triangleCount +
       staff.triangleCount +
       balloons.triangleCount +
-      sea.triangleCount,
+      sea.triangleCount +
+      rain.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -2085,10 +2130,16 @@ interface Clock {
   readonly day: number;
   /**
    * What kind of day it is: a pure function of {@link Clock.day} and
-   * {@link WEATHER_SEED}, so nothing about it is stored. See
+   * {@link WEATHER_SEED}, so nothing about it is stored - unless somebody has
+   * asked for a particular day with {@link Clock.setWeather}. See
    * `sim/domain/weather.ts`.
    */
   readonly weather: Weather;
+  /**
+   * The day somebody pinned the sky to, or null when the week is running as it
+   * was drawn. What the HUD's weather buttons show pressed in.
+   */
+  readonly forcedWeather: Weather | null;
   /** The tick of the current day, 0..1439: what a party's bedtime is compared against. */
   readonly tickOfDay: number;
   /**
@@ -2101,7 +2152,10 @@ interface Clock {
   readonly speed: SimSpeed;
   /** Lamps contributing right now: the bake lights all of them, or none. */
   readonly litLamps: number;
-  /** How freely the beach is letting balloons go; see `releaseStrength`. */
+  /**
+   * How freely the beach is letting balloons go; see `releaseStrength`. Zero on
+   * a wet day, whatever the hour: nobody lights a paper lantern in the rain.
+   */
   readonly balloonReadiness: number;
   /**
    * Moves the clock on by a frame's worth of real seconds and hands back the
@@ -2121,26 +2175,62 @@ interface Clock {
    */
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
+  /**
+   * Pins the weather to one kind of day, or hands it back to the week's own
+   * draw with null.
+   *
+   * Here rather than in `weather.ts` deliberately: `weatherOn` stays a pure
+   * function of the day and the seed, and what is stored is one nullable field
+   * on the clock - which is not saved, because it is a thing somebody did to
+   * look at something rather than a fact about the resort. So the save file
+   * still holds one integer, exactly as `simClock.ts` says.
+   */
+  setWeather(weather: Weather | null): void;
 }
 
 function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
   let clock: SimClock = createSimClock(0, startTime);
   let time = timeOf(clock);
+  /**
+   * The day somebody pinned the sky to, or null for the week as it was drawn.
+   *
+   * The one thing about the weather that is stored anywhere, and it is stored
+   * here rather than in `weather.ts` so that module stays a pure function of
+   * the day; see {@link Clock.setWeather}.
+   */
+  let forced: Weather | null = null;
+  const weatherNow = (): Weather => forced ?? weatherOn(dayOf(clock), WEATHER_SEED);
   /** How grey the sky is under today's weather; see `weather.ts`. */
-  const overcastNow = (): number => weatherEffect(weatherOn(dayOf(clock), WEATHER_SEED)).overcast;
-  let sky = overcastSky(skyStateFor(time), overcastNow());
+  const overcastNow = (): number => weatherEffect(weatherNow()).overcast;
+  /**
+   * Real seconds since the resort opened, which is what the lightning is a
+   * function of.
+   *
+   * Real rather than simulated, for the reason the balloons fly off elapsed
+   * seconds: the clock opens paused, and a storm whose flashes were a function
+   * of the simulated hour would be a storm that never flashed for anybody
+   * looking at a stopped plot. Off the same fixed step under a benchmark as
+   * everything else, since `advance` is handed one.
+   */
+  let running = 0;
+  const flashNow = (): number => (weatherNow() === 'storm' ? flashAt(running) : 0);
+  let sky = flashSky(overcastSky(skyStateFor(time), overcastNow()), flashNow());
   let applied: number | null = null;
   let appliedOvercast: number | null = null;
+  let appliedFlash = 0;
 
   const apply = (): void => {
     time = timeOf(clock);
     const overcast = overcastNow();
+    const flash = flashNow();
     // The cloud is in the guard as well as the hour: the weather turns over at
     // midnight without the *time* moving at all at `paused`, and a guard on the
     // time alone would leave a storm's sky waiting for the next simulated
-    // minute that never comes.
-    if (time === applied && overcast === appliedOvercast) return;
-    sky = overcastSky(skyStateFor(time), overcast);
+    // minute that never comes. The bolt is in it for the same reason and more
+    // often - a flash is over inside half a second, and it has to reach the
+    // scene on the frames it is actually alight rather than on the next minute.
+    if (time === applied && overcast === appliedOvercast && flash === appliedFlash) return;
+    sky = flashSky(overcastSky(skyStateFor(time), overcast), flash);
     handle.applySky(sky);
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
     // The windows light from the same number, but not out of the same volume:
@@ -2153,6 +2243,7 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     resort().world.setSky(sky.skyColor);
     applied = time;
     appliedOvercast = overcast;
+    appliedFlash = flash;
   };
   apply();
 
@@ -2164,7 +2255,10 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       return dayOf(clock);
     },
     get weather() {
-      return weatherOn(dayOf(clock), WEATHER_SEED);
+      return weatherNow();
+    },
+    get forcedWeather() {
+      return forced;
     },
     get tickOfDay() {
       return clock.ticks % TICKS_PER_DAY;
@@ -2182,7 +2276,11 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       return sky.lampFactor > 0 ? resort().lighting.litCount : 0;
     },
     get balloonReadiness() {
-      return releaseStrength(time);
+      // Nobody lights a paper lantern in the rain. The flights already in the
+      // air finish - `stepBalloons` only reads this when a gap runs out - so a
+      // shower that comes in at dusk empties the sky over the next minute
+      // rather than blinking it out.
+      return isWet(weatherNow()) ? 0 : releaseStrength(time);
     },
     relight() {
       // A new resort is a new volume and a new set of blobs, and both start at
@@ -2195,6 +2293,7 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       lightRooms(resort(), null);
     },
     advance(elapsedSeconds) {
+      running += elapsedSeconds;
       const advanced = advanceClock(clock, elapsedSeconds);
       clock = advanced.clock;
       apply();
@@ -2205,6 +2304,13 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     },
     setSpeed(next) {
       clock = withSpeed(clock, next);
+    },
+    setWeather(next) {
+      forced = next;
+      // The sky follows on this frame rather than the next simulated minute:
+      // pinning the weather while the resort is paused is exactly what the
+      // button is for, and `apply`'s own guard has the overcast in it.
+      apply();
     },
   };
 }
@@ -2224,6 +2330,8 @@ function createStatsReader(parts: {
   readonly mountStarted: number;
   /** What kind of day it is, read afresh: the day turns over under the HUD. */
   readonly weather: () => Weather;
+  /** The rain over the camera; see `sceneStats`. One field for the whole run. */
+  readonly rain: RainField;
 }): () => ShowcaseStats {
   // Everything is built by this point; the next thing that happens is a frame.
   const startup: StartupCost = {
@@ -2850,6 +2958,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().sea.group);
+  /**
+   * The weather over the camera, built once for the whole run.
+   *
+   * Not part of a `Resort` and not rebuilt with one, unlike every other group
+   * above: rain falls over wherever the camera is pointed rather than over
+   * anything on the plot, so there is nothing about it a new resort changes.
+   * See `features/weather/`.
+   */
+  const rain = buildRainField(createRaindrops(MAX_DROPS, RAIN_SEED));
+  handle.scene.add(rain.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -2861,8 +2979,75 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   /** The share of beds slept in that the windows were last lit from. */
   let lastShare: number | null = null;
   const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
+  /** The kind of day the HUD was last told about; see `onWeatherChange`. */
+  let lastWeather: Weather = clock.weather;
+
+  /**
+   * The drawing buffer, in pixels, kept rather than asked for every frame.
+   *
+   * `handle.drawingBufferSize()` allocates a vector per call, and the only
+   * thing that changes it is a resize - which has a handler of its own, below.
+   */
+  let buffer = handle.drawingBufferSize();
+
+  /**
+   * What the camera is doing, in the terms the rain is sized in.
+   *
+   * The elevation is not a constant anywhere: it is worked out from where the
+   * camera stands relative to what it is looking at, which is true of both
+   * cameras and survives the isometric one being turned or the perspective one
+   * being flown. `pixelsPerVoxel` wants a distance, and the distance that
+   * matters is the one to the ground the rain is falling on - the target - not
+   * the one to the nearest thing in frame.
+   */
+  const rainView = (): RainView => {
+    const view = handle.detailView();
+    const target = handle.controls.target;
+    const distance = Math.hypot(view.x - target.x, view.y - target.y, view.z - target.z);
+    return {
+      voxelsPerPixel: 1 / pixelsPerVoxel(view.lens, distance),
+      width: buffer.width,
+      height: buffer.height,
+      rise: view.y - target.y,
+      distance,
+    };
+  };
+
+  /**
+   * The weather's frame: the rain moved on, and the HUD told when the kind of
+   * day has changed.
+   *
+   * A step of its own rather than four more lines inside the render loop, which
+   * is already the most branching function in the file - `pnpm fallow:audit`
+   * measures it, and every branch added there is one added to the one place
+   * nothing can be tested.
+   *
+   * The rain is handed the camera's own view rather than anything about the
+   * plot: the column of air that is drawn is whatever the camera can see, and
+   * the streaks are sized in pixels, which is what lets a few thousand drops be
+   * the same rain at every zoom over a plot 450 metres across. A dry day
+   * hands over null and the field does nothing at all. See
+   * `weather/domain/rainfall.ts`.
+   *
+   * Off the fixed step under a benchmark like everything else that moves, and
+   * for the same reason: two runs only compare if the scene is in the same
+   * place on the same frame of each.
+   */
+  const advanceWeather = (elapsedSeconds: number): void => {
+    const target = handle.controls.target;
+    rain.advance(bench ? MAX_STEP : elapsedSeconds, rainfallFor(clock.weather, rainView()), target);
+    // Once a simulated day at midnight, and at once when somebody pins it from
+    // the bar: a compare per frame, and a call on neither.
+    if (clock.weather === lastWeather) return;
+    lastWeather = clock.weather;
+    options.onWeatherChange?.(lastWeather);
+  };
 
   if (bench) pinCamera(handle);
+  // A run only prices the rain if it is raining, and day 0 is clear: see
+  // `BenchConfig.weather`. Through the same door the HUD's buttons use, so the
+  // measured frame is the one somebody watching a storm actually gets.
+  if (bench?.weather) clock.setWeather(bench.weather);
 
   /** Whether the level of detail is on; a benchmark can turn it off with `?lod=0`. */
   let detail = detailFrom(bench);
@@ -2917,6 +3102,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       canvas.clientWidth || globalThis.innerWidth,
       canvas.clientHeight || globalThis.innerHeight,
     );
+    // The rain is sized in pixels, so a resized window is a different column of
+    // air; see `rainView`.
+    buffer = handle.drawingBufferSize();
   };
   globalThis.addEventListener('resize', resize);
 
@@ -2928,6 +3116,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     startup,
     mountStarted,
     weather: () => clock.weather,
+    rain,
   });
 
   /**
@@ -3239,6 +3428,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Likewise the bay, and for the third time the same reason: a run only
     // compares with the one before it if the boats are where they were.
     current().sea.advance(bench ? MAX_STEP : elapsed);
+    // And the weather, for the fourth.
+    advanceWeather(elapsed);
     // Off the same fixed step under a benchmark as everything else, and for the
     // same reason, even though a bench run places nothing and so never has a
     // site: the rule should not depend on that staying true.
@@ -3323,6 +3514,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     selectTool,
     setTime: clock.setTime,
     setSpeed: clock.setSpeed,
+    setWeather: clock.setWeather,
     selectPerson: (person) => select({ person }),
     clearSelection: () => select(null),
     dispose() {
@@ -3333,6 +3525,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       inspector.dispose();
       build.dispose();
       preparer.dispose();
+      rain.dispose();
       current().dispose();
       handle.dispose();
       // Last: everything above is built over these, so nothing may still be

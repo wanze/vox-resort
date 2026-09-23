@@ -40,6 +40,7 @@ export function App() {
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
+  const { adoptWeather } = clock;
 
   /** Arms the pointer with a tool, and keeps the palette showing which. */
   const selectTool = useCallback((next: BuildTool | null) => {
@@ -72,6 +73,8 @@ export function App() {
       onSelectionChange: adoptSelection,
       // Once a simulated day, and on an edit that has settled - never a frame.
       onAdviceChange: adoptAdvice,
+      // At midnight, and the moment the bar's buttons pin one - never a frame.
+      onWeatherChange: adoptWeather,
       onFrame: overlay.update,
     };
 
@@ -90,6 +93,8 @@ export function App() {
         adoptAdvice(mounted.advice);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
+        // So the bar says what kind of day it is before midnight comes round.
+        adoptWeather(mounted.stats.weather);
       } catch (cause: unknown) {
         console.error(cause);
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -104,7 +109,7 @@ export function App() {
       });
     };
     // All of them are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection, adoptAdvice]);
+  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection, adoptAdvice, adoptWeather]);
 
   return (
     <div className="app">

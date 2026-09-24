@@ -4,6 +4,7 @@ export default defineModel({
   id: 'statue',
   label: 'Statue',
   category: 'grounds',
+  scenery: 0.8,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

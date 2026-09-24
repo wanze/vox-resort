@@ -177,7 +177,7 @@ describe('guestView', () => {
 describe('placeView', () => {
   it('lists exactly the guests who sleep in a bungalow', () => {
     const guests = guestsOf();
-    const view = placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null);
+    const view = placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null, 0);
     const sleepers = Array.from({ length: guests.count }, (_, i) => i).filter(
       (i) => guests.home[i] === 1,
     );
@@ -190,13 +190,19 @@ describe('placeView', () => {
   });
 
   it('has nothing to say about a bench', () => {
-    const view = placeView(at('bench#2', 'bench'), 'Bench', guestsOf(), null);
+    const view = placeView(at('bench#2', 'bench'), 'Bench', guestsOf(), null, 0);
     expect(view.venue).toBeNull();
     expect(view.residents).toEqual([]);
   });
 
+  it('carries the setting it is given, dressing as much as a venue', () => {
+    expect(placeView(at('bench#2', 'bench'), 'Bench', guestsOf(), null, 0.3).setting).toBe(0.3);
+    const hotel = placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guestsOf(), null, 0.6);
+    expect(hotel.setting).toBe(0.6);
+  });
+
   it('says what a restaurant seats and serves, and houses nobody', () => {
-    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
+    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
     expect(view.venue?.role).toBe('food');
     expect(view.venue?.capacity).toBe(40);
     expect(view.venue?.serves).toEqual(['Hunger', 'Thirst']);
@@ -206,9 +212,9 @@ describe('placeView', () => {
   it('words a short visit in minutes and a night in hours', () => {
     const guests = guestsOf();
     expect(
-      placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guests, null).venue?.dwell,
+      placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guests, null, 0).venue?.dwell,
     ).toBe('30 to 60 min');
-    expect(placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null).venue?.dwell).toBe(
+    expect(placeView(at('bungalow#0', 'bungalow'), 'Bungalow', guests, null, 0).venue?.dwell).toBe(
       '7 to 9 h',
     );
   });
@@ -397,16 +403,22 @@ describe('placeWording', () => {
 
 describe('placeView with a venue that is being used', () => {
   it('reports who is inside and who is in the line', () => {
-    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), {
-      inside: 12,
-      waiting: 3,
-    });
+    const view = placeView(
+      at('restaurant#0', 'restaurant'),
+      'Restaurant',
+      guestsOf(),
+      {
+        inside: 12,
+        waiting: 3,
+      },
+      0,
+    );
     expect(view.venue?.inside).toBe(12);
     expect(view.venue?.waiting).toBe(3);
   });
 
   it('reports a venue nothing has counted yet as empty rather than as unknown', () => {
-    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
+    const view = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
     expect(view.venue?.inside).toBe(0);
     expect(view.venue?.waiting).toBe(0);
   });
@@ -417,10 +429,11 @@ describe('placeView with a venue that is being used', () => {
       'Restaurant',
       guestsOf(),
       null,
+      0,
       0.42,
     );
     expect(grubby.venue?.cleanliness).toBeCloseTo(0.42);
-    const fresh = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
+    const fresh = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
     expect(fresh.venue?.cleanliness).toBe(1);
   });
 });

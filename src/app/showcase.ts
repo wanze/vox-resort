@@ -11,6 +11,7 @@ import {
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  sceneryOf,
   SEA_MODELS,
   SKY_MODELS,
   STAFF_MODELS,
@@ -99,6 +100,13 @@ import {
 } from '../features/sim/domain/happiness';
 import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
 import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
+import {
+  sceneryAt,
+  sceneryFieldFor,
+  sceneryItemsOf,
+  sceneryOver,
+  type SceneryField,
+} from '../features/sim/domain/scenery';
 import {
   onDuty,
   rosterFor,
@@ -664,6 +672,8 @@ interface Resort {
   // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
   // plot.
   upkeep: Upkeep;
+  // Replaced on an edit rather than patched: a moved tree takes its reach with it.
+  scenery: SceneryField;
   unreachable: ReadonlySet<string>;
   rating: Rating;
   // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
@@ -919,6 +929,12 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const gateways = gatewaysOn(plot.layout.placements);
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
+  // Off the layout's lists, as the network is, and props too: the layout stands trees as either.
+  const scenery = sceneryFieldFor(
+    sceneryItemsOf([...plot.layout.placements, ...plot.layout.props], sceneryOf),
+    plan.tilesX,
+    plan.tilesZ,
+  );
   const beds = bedCount(guests);
   // The router reads crowd positions and the crowd is built with the router, so one is bound late.
   let crowdField: CrowdField | null = null;
@@ -1020,6 +1036,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     lodgings,
     gateways,
     upkeep,
+    scenery,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     // A plot with no paving is a building site; a generated one is a resort already running,
@@ -1206,6 +1223,15 @@ function lightRooms(resort: Resort, last: number | null): number {
   return share;
 }
 
+// Off the graph, a guest is on the sand, which the field does not cover.
+function sceneryUnder(resort: Resort, person: number): number {
+  const { node, network } = resort.crowd.crowd;
+  const at = node[person] ?? -1;
+  if (at < 0 || at >= network.nodes.length) return 0;
+  const standing = network.nodes[at]!;
+  return sceneryAt(resort.scenery, standing.tileX, standing.tileZ);
+}
+
 function runTicks(
   resort: Resort,
   clock: Clock,
@@ -1228,6 +1254,7 @@ function runTicks(
     resort.guests,
     (person) => resort.router.isWaitingAt(person),
     ticks,
+    (person) => sceneryUnder(resort, person),
   );
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
@@ -2112,6 +2139,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       label,
       guests,
       router.occupancyOf(placement.key),
+      sceneryOver(resort.scenery, placement),
       cleanliness(resort.upkeep, venue),
     );
   };
@@ -2230,6 +2258,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.beds = { total: beds.beds, taken: beds.taken };
       // By key: surviving venues keep their dirt, and new ones start clean.
       resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
+      resort.scenery = sceneryFieldFor(
+        sceneryItemsOf([...plot.placements, ...plot.props], sceneryOf),
+        plan.tilesX,
+        plan.tilesZ,
+      );
       resort.unreachable = strandedOn(resort.venues, network);
       resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
       resort.staffRouter.rebuild(resort.venues, network);

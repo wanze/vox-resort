@@ -377,6 +377,30 @@ there while they work. They use the same `crowd.ts` as guests.
 Not done: lifeguards (need the sand routing shared from `router.ts`), animators
 (need venue events), visible litter.
 
+## Scenery
+
+Dressing declares `scenery` on its `VoxelModelSource`, 0 to 1 (fountain 1, statue
+0.8, flowerbeds and blossom 0.5, trees 0.4, hedge 0.3); anything undeclared is 0.
+`sceneryOf` reads it, and there is no table of values in `src/`.
+
+`scenery.ts` turns what stands on the plot (placements and props) into a per-tile
+field, row-major and sized to the plan. An item gives
+`strength * (1 - d / (SCENERY_REACH + 1))` to every tile within `SCENERY_REACH`
+(4) of its footprint, `d` the Chebyshev distance (0 under it). A tile's sum is
+saturated to `sum / (sum + SATURATION)`, `SATURATION` 2, so a row of hedges never
+reads as a fountain and nothing reaches 1. On the reference plot the paved tiles
+average 0.29 and 12% of them are below 0.1. The field is built with the resort
+and rebuilt after every edit, never per frame.
+
+A guest's happiness target is their contentment plus `SURROUNDINGS_SHARE` (0.1)
+times the scenery of the tile their walk node stands on (0 off the graph, on the
+sand). `ageHappiness` only knows it as signed surroundings, so litter can
+subtract from the same term. Scenery never changes where anybody walks: choosing
+a venue, appeal and routing do not read it.
+
+The inspector shows a place's **Surroundings**, `sceneryOver`: the mean over its
+footprint and the ring around it.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.
@@ -387,3 +411,4 @@ Not done: lifeguards (need the sand routing shared from `router.ts`), animators
 - `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky and
   sea. `dveEngine.test.ts` meshes all of it.
 - People paint from the palette; `skin` is the only family they add.
+- How pleasant dressing is: `scenery` on the model's own source.

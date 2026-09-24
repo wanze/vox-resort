@@ -5,6 +5,7 @@ export default defineModel({
   id: 'oak',
   label: 'Oak',
   category: 'grounds',
+  scenery: 0.4,
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {
     const N = 31;

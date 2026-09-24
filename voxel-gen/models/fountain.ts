@@ -26,6 +26,7 @@ export default defineModel({
   id: 'fountain',
   label: 'Fountain',
   category: 'amenities',
+  scenery: 1,
   tiles: { x: 2, z: 2 },
   // One flat tone: dithering a second blue defeats the water merge. There is no
   // falling water, because the water shader only shades horizontal surfaces correctly.

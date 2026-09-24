@@ -16,6 +16,7 @@ import {
   objectTypeTop,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  sceneryOf,
   SEA_MODELS,
   SKY_MODELS,
   STAFF_MODELS,
@@ -349,5 +350,20 @@ describe('materials', () => {
 
   it('rejects a colour outside the 24-bit range', () => {
     expect(() => materialKeyFor(0x1000000)).toThrow(/24-bit/);
+  });
+});
+
+describe('sceneryOf', () => {
+  it('keeps every declared scenery above nothing and at most one', () => {
+    const dressed = OBJECT_TYPES.filter((type) => sceneryOf(type.id) !== 0);
+    expect(dressed.length).toBeGreaterThan(0);
+    for (const type of dressed) {
+      expect(sceneryOf(type.id), type.id).toBeGreaterThan(0);
+      expect(sceneryOf(type.id), type.id).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('answers 0 for an unknown id rather than throwing', () => {
+    expect(sceneryOf('not-a-model')).toBe(0);
   });
 });

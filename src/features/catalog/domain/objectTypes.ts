@@ -112,6 +112,10 @@ export function isGateway(id: string): boolean {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.gateway ?? false;
 }
 
+export function sceneryOf(id: string): number {
+  return OBJECT_TYPES.find((type) => type.id === id)?.model.scenery ?? 0;
+}
+
 export function allMaterials(): readonly MaterialDefinition[] {
   return materialsForColors(
     PAINTED_MODELS.flatMap((model) => model.voxels.map((voxel) => voxel.color)),

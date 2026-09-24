@@ -27,6 +27,7 @@ export default defineModel({
   id: 'flowerbed',
   label: 'Flower Bed',
   category: 'grounds',
+  scenery: 0.5,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

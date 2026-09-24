@@ -14,6 +14,9 @@ export const QUEUE_COST_PER_HOUR = 0.3;
 // Not 1, or a resort could only ever make people less happy than they arrived.
 export const ARRIVAL_MOOD = 0.7;
 
+// Small against the needs, or a player could make up for no restaurant with flowerbeds.
+export const SURROUNDINGS_SHARE = 0.1;
+
 export interface Happiness {
   readonly count: number;
   readonly level: Float32Array;
@@ -36,12 +39,14 @@ function contentmentOf(needs: Needs, person: number): number {
 
 // Allocates nothing: it runs up to MAX_TICKS_PER_ADVANCE times a frame. Absent people
 // are skipped, since their slot holds the previous guest's mood until check-in.
+// Surroundings are signed, -1 to 1; omit them and every place is neutral.
 export function ageHappiness(
   happiness: Happiness,
   needs: Needs,
   guests: Guests,
   waiting: (person: number) => boolean,
   ticks: number,
+  surroundings?: (person: number) => number,
 ): void {
   if (ticks <= 0) return;
   const hours = ticks / TICKS_PER_HOUR;
@@ -50,7 +55,8 @@ export function ageHappiness(
   for (let person = 0; person < happiness.count; person++) {
     if (guests.present[person] !== 1) continue;
     const level = happiness.level[person]!;
-    const towards = contentmentOf(needs, person) - level;
+    const around = surroundings ? SURROUNDINGS_SHARE * surroundings(person) : 0;
+    const towards = clamp(contentmentOf(needs, person) + around) - level;
     // Never past the target, so a long run of ticks settles instead of overshooting.
     const moved = towards < 0 ? Math.max(towards, -drift) : Math.min(towards, drift);
     happiness.level[person] = clamp(level + moved - (waiting(person) ? queued : 0));

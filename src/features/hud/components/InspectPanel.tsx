@@ -147,7 +147,15 @@ function GuestDetails({
 
 type Venue = NonNullable<PlaceView['venue']>;
 
-function VenueRows({ venue }: { readonly venue: Venue }) {
+function SurroundingsRow({ setting }: { readonly setting: number }) {
+  return (
+    <StatRow label="Surroundings" note="how pleasant it is around it">
+      {Math.round(setting * 100)}%
+    </StatRow>
+  );
+}
+
+function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
   return (
     <dl className="hud-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
@@ -167,6 +175,7 @@ function VenueRows({ venue }: { readonly venue: Venue }) {
       <StatRow label="Cleanliness" note="a dirty place is chosen less">
         {Math.round(venue.cleanliness * 100)}%
       </StatRow>
+      <SurroundingsRow setting={setting} />
     </dl>
   );
 }
@@ -198,11 +207,18 @@ function PlaceDetails({
   readonly onSelectPerson: (person: number) => void;
 }) {
   if (!place.venue) {
-    return <p className="hud-loading">Dressing: nothing here for a guest to do.</p>;
+    return (
+      <>
+        <p className="hud-loading">Dressing: nothing here for a guest to do.</p>
+        <dl className="hud-stats">
+          <SurroundingsRow setting={place.setting} />
+        </dl>
+      </>
+    );
   }
   return (
     <>
-      <VenueRows venue={place.venue} />
+      <VenueRows venue={place.venue} setting={place.setting} />
       <Residents place={place} onSelectPerson={onSelectPerson} />
     </>
   );

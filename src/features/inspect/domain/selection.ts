@@ -56,6 +56,8 @@ export interface PlaceView {
   readonly id: string;
   readonly label: string;
   readonly tile: { readonly x: number; readonly z: number };
+  // 0 to 1: how pleasant its surroundings are. A bench has a setting as much as a hotel.
+  readonly setting: number;
   readonly venue: {
     readonly role: VenueRole;
     readonly capacity: number;
@@ -149,6 +151,7 @@ export function placeView(
   label: string,
   guests: Guests,
   occupancy: PlaceOccupancy | null,
+  setting: number,
   // Null means spotless: a fixture, or a venue so new the router has not seen it.
   cleanliness: number | null = null,
 ): PlaceView {
@@ -166,6 +169,7 @@ export function placeView(
     id: placement.id,
     label,
     tile: { x: placement.tileX, z: placement.tileZ },
+    setting,
     venue: venue
       ? {
           role: venue.role,

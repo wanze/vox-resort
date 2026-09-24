@@ -18,6 +18,7 @@ export default defineModel({
   id: 'hedge',
   label: 'Hedge',
   category: 'grounds',
+  scenery: 0.3,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

@@ -5,6 +5,7 @@ export default defineModel({
   id: 'cypress',
   label: 'Cypress',
   category: 'grounds',
+  scenery: 0.4,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {
     const set = b.set.bind(b);

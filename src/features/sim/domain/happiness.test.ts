@@ -8,6 +8,7 @@ import {
   DRIFT_PER_HOUR,
   meanHappiness,
   QUEUE_COST_PER_HOUR,
+  SURROUNDINGS_SHARE,
   type Happiness,
 } from './happiness';
 import { createNeeds, NEEDS, type Needs } from './needs';
@@ -93,5 +94,40 @@ describe('ageHappiness', () => {
     expect(mean).toBeCloseTo(moodOf(happiness, 1));
     for (let person = 0; person < guests.count; person++) guests.present[person] = 0;
     expect(meanHappiness(happiness, guests), 'an empty plot has no mean').toBeNull();
+  });
+});
+
+describe('ageHappiness with surroundings', () => {
+  it('changes nothing at all when the surroundings are left out', () => {
+    const guests = guestsOf();
+    const needs = needsAt(guests, 0.4);
+    const omitted = createHappiness(guests.count);
+    const neutral = createHappiness(guests.count);
+    for (let step = 0; step < 5; step++) {
+      ageHappiness(omitted, needs, guests, (person) => person % 3 === 0, 7);
+      ageHappiness(
+        neutral,
+        needs,
+        guests,
+        (person) => person % 3 === 0,
+        7,
+        () => 0,
+      );
+    }
+    expect(Array.from(omitted.level)).toEqual(Array.from(neutral.level));
+  });
+
+  it('settles a guest with every need met in fine surroundings at 1, never past it', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needsAt(guests, 1), guests, NO_QUEUE, 100 * HOUR, () => 1);
+    expect(moodOf(happiness, 0)).toBe(1);
+  });
+
+  it('settles a guest in the worst surroundings the share below their contentment', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needsAt(guests, 0.5), guests, NO_QUEUE, 100 * HOUR, () => -1);
+    expect(moodOf(happiness, 0)).toBeCloseTo(0.5 - SURROUNDINGS_SHARE);
   });
 });

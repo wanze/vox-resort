@@ -6,8 +6,10 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
   allMaterials,
+  binReachOf,
   bedsOf,
   isGateway,
+  LITTER_MODELS,
   emissiveByModelId,
   materialColorsById,
   OBJECT_TYPES,
@@ -90,13 +92,14 @@ describe('model lights', () => {
 });
 
 describe('PAINTED_MODELS', () => {
-  it('is the catalogue, the crowd, the staff, the sky and the sea, and nothing twice', () => {
+  it('is the catalogue, the crowd, the staff, the sky, the sea and the litter, and nothing twice', () => {
     expect(PAINTED_MODELS).toHaveLength(
       OBJECT_TYPES.length +
         PEOPLE_MODELS.length +
         STAFF_MODELS.length +
         SKY_MODELS.length +
-        SEA_MODELS.length,
+        SEA_MODELS.length +
+        LITTER_MODELS.length,
     );
     expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
   });
@@ -108,6 +111,15 @@ describe('PAINTED_MODELS', () => {
       expect(catalogue.has(balloon.id), `${balloon.id} is in the catalogue too`).toBe(false);
       expect(balloon.category).toBe('sky');
       expect(balloon.emissive.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps the litter out of the catalogue, which is what it is apart from', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(LITTER_MODELS.length).toBeGreaterThan(0);
+    for (const piece of LITTER_MODELS) {
+      expect(catalogue.has(piece.id), `${piece.id} is in the catalogue too`).toBe(false);
+      expect(piece.category).toBe('litter');
     }
   });
 
@@ -365,5 +377,16 @@ describe('sceneryOf', () => {
 
   it('answers 0 for an unknown id rather than throwing', () => {
     expect(sceneryOf('not-a-model')).toBe(0);
+  });
+});
+
+describe('binReachOf', () => {
+  it('makes the litter bin a bin, and nothing that is not one', () => {
+    expect(binReachOf('litter-bin')).toBeGreaterThan(0);
+    expect(binReachOf('fountain')).toBe(0);
+  });
+
+  it('answers 0 for an unknown id rather than throwing', () => {
+    expect(binReachOf('not-a-model')).toBe(0);
   });
 });

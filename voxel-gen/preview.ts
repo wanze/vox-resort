@@ -2,6 +2,7 @@ import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
+import { LITTER_SOURCES } from './litter/index.ts';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
@@ -390,6 +391,7 @@ async function chooseSources(
     ...PEOPLE_SOURCES,
     ...SKY_SOURCES,
     ...SEA_SOURCES,
+    ...LITTER_SOURCES,
   ];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
@@ -417,6 +419,7 @@ const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
   ['--people', { sources: PEOPLE_SOURCES, sheet: 'crowd', sweeps: true }],
   ['--sky', { sources: SKY_SOURCES, sheet: 'sky', sweeps: true }],
   ['--sea', { sources: SEA_SOURCES, sheet: 'sea', sweeps: true }],
+  ['--litter', { sources: LITTER_SOURCES, sheet: 'litter', sweeps: true }],
   ['--drafts', { sources: DRAFT_SOURCES, sheet: 'drafts', sweeps: false }],
 ]);
 
@@ -426,7 +429,7 @@ const CATALOGUE: Registry = { sources: MODEL_SOURCES, sheet: 'contact-sheet', sw
 // Anything left in out/ ships in the bundle, so drafts and removed models are swept.
 function sweepStale(outDir: string): void {
   const known = new Set(
-    [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES].map(
+    [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES, ...LITTER_SOURCES].map(
       (source) => `${source.id}.png`,
     ),
   );

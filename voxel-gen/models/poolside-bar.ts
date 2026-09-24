@@ -55,6 +55,7 @@ export default defineModel({
     capacity: 12,
     dwellSeconds: { min: 600, max: 1800 },
     doors: [{ x: 15, z: COUNTER, facing: 0 }],
+    litter: 0.02,
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

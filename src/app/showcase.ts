@@ -1,6 +1,7 @@
 import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials';
 import {
   allMaterials,
+  binReachOf,
   emissiveByModelId,
   waterByModelId,
   windowsByModelId,
@@ -9,6 +10,7 @@ import {
   OBJECT_TYPES,
   objectTypeById,
   objectTypeTop,
+  LITTER_MODELS,
   PAINTED_MODELS,
   PEOPLE_MODELS,
   sceneryOf,
@@ -101,6 +103,21 @@ import {
 import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
 import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
 import {
+  binCoverFor,
+  createCarrying,
+  createLitter,
+  LITTER_WEIGHT,
+  litterAt,
+  litterSummary,
+  pickUp,
+  pruneLitter,
+  stepWith,
+  type BinSite,
+  type Carrying,
+  type Litter,
+} from '../features/sim/domain/litter';
+import { mix } from '../features/sim/domain/night';
+import {
   sceneryAt,
   sceneryFieldFor,
   sceneryItemsOf,
@@ -153,7 +170,7 @@ import {
   type ResortFacts,
 } from '../features/sim/domain/advice';
 import { doorsFor } from '../features/sim/domain/doors';
-import { nodeIndexFor } from '../features/crowd/domain/nearestNode';
+import { nodeIndexFor, type NodeIndex } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
@@ -231,6 +248,8 @@ import {
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
+import { buildLitterField, type LitterField } from '../features/litter/adapters/litterField';
+import { piecesFor } from '../features/litter/domain/litterPieces';
 import { buildBalloonField } from '../features/balloons/adapters/balloonField';
 import {
   createBalloons,
@@ -272,6 +291,9 @@ const CROWD_SEED = 1;
 const BALLOON_COUNT = 36;
 
 const BALLOON_SEED = 2;
+
+// Four pieces on 128 tiles is already a landfill, and the advice will have said so long before.
+const LITTER_PIECES = 512;
 
 const CRAFT_COUNT = 12;
 
@@ -447,6 +469,7 @@ interface MeshedCatalogue {
   readonly staff: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
+  readonly litter: readonly ModelGeometry[];
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
@@ -473,6 +496,16 @@ const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id)
 
 const SEA_IDS: ReadonlySet<string> = new Set(SEA_MODELS.map((model) => model.id));
 
+const LITTER_IDS: ReadonlySet<string> = new Set(LITTER_MODELS.map((model) => model.id));
+
+const KEPT_APART_IDS: ReadonlySet<string> = new Set([
+  ...PEOPLE_IDS,
+  ...STAFF_IDS,
+  ...SKY_IDS,
+  ...SEA_IDS,
+  ...LITTER_IDS,
+]);
+
 async function meshModels(
   scratch: ScratchLayout,
   bench: BenchConfig | null,
@@ -492,18 +525,13 @@ async function meshModels(
   );
   const geometries = buildModelGeometries(meshed.models);
   return {
-    geometries: geometries.filter(
-      (model) =>
-        !PEOPLE_IDS.has(model.id) &&
-        !STAFF_IDS.has(model.id) &&
-        !SKY_IDS.has(model.id) &&
-        !SEA_IDS.has(model.id),
-    ),
+    geometries: geometries.filter((model) => !KEPT_APART_IDS.has(model.id)),
     // In registry order: a person's variant indexes into it.
     people: geometries.filter((model) => PEOPLE_IDS.has(model.id)),
     staff: geometries.filter((model) => STAFF_IDS.has(model.id)),
     sky: geometries.filter((model) => SKY_IDS.has(model.id)),
     sea: geometries.filter((model) => SEA_IDS.has(model.id)),
+    litter: geometries.filter((model) => LITTER_IDS.has(model.id)),
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
@@ -674,6 +702,12 @@ interface Resort {
   upkeep: Upkeep;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
+  // Kept across an edit, pruned to what is still paved: planting a hedge does not sweep the plot.
+  readonly litter: Litter;
+  // Per guest body, never replaced: a wrapper in hand outlasts an edit.
+  readonly carrying: Carrying;
+  // Replaced on an edit, as the scenery is.
+  binCover: Uint8Array;
   unreachable: ReadonlySet<string>;
   rating: Rating;
   // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
@@ -689,6 +723,7 @@ interface Resort {
   // renumbers nodes.
   readonly router: Router;
   readonly balloons: BalloonField;
+  readonly litterField: LitterField;
   readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
   readonly plan: ResortPlan;
@@ -876,12 +911,14 @@ function seaFor(parts: {
 interface ResortArt {
   // Late-bound: the first resort is built before the clock is.
   readonly tickOfDay: () => number;
+  readonly ticks: () => number;
   readonly weather: () => Weather;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly staff: readonly ModelGeometry[];
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
+  readonly litter: readonly ModelGeometry[];
 }
 
 // The volume is wired up before the world, because the world's materials bind to it.
@@ -935,6 +972,13 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     plan.tilesX,
     plan.tilesZ,
   );
+  const litter = createLitter(plan.tilesX, plan.tilesZ);
+  const carrying = createCarrying(population);
+  const binCover = binCoverFor(
+    binsOn([...plot.layout.placements, ...plot.layout.props]),
+    plan.tilesX,
+    plan.tilesZ,
+  );
   const beds = bedCount(guests);
   // The router reads crowd positions and the crowd is built with the router, so one is bound late.
   let crowdField: CrowdField | null = null;
@@ -961,6 +1005,14 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     // Late-bound: an edit replaces the upkeep, and a stale one would soil venues that no longer
     // stand.
     upkeep: () => resort.upkeep,
+    // A hash, not the router's stream: a draw from it would move every seeded scene after it.
+    onVisited: (person, venue) =>
+      pickUp(
+        carrying,
+        person,
+        venue.litter ?? 0,
+        (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
+      ),
     seed: DWELL_SEED,
   });
   const crowd = crowdFor({
@@ -969,7 +1021,10 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     lightVolume: lighting.volume,
     guests,
     population,
-    routeOf: (person, at) => router.step(person, at),
+    routeOf: (person, at) => {
+      stepLitterAt(resort, person, at);
+      return router.step(person, at);
+    },
     offTheSand: (person) => router.offTheSand(person),
   });
   crowdField = crowd;
@@ -986,6 +1041,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     crowd: () => staffField!.crowd,
     weather: parts.weather,
     duty: () => resort.duty,
+    litter: () => resort.litter,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1004,6 +1060,11 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const balloons = balloonsFor({
     shore,
     sky: parts.sky,
+    lightVolume: lighting.volume,
+  });
+  const litterField = buildLitterField({
+    models: parts.litter,
+    capacity: LITTER_PIECES,
     lightVolume: lighting.volume,
   });
   const sea = seaFor({
@@ -1037,6 +1098,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     gateways,
     upkeep,
     scenery,
+    litter,
+    carrying,
+    binCover,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     // A plot with no paving is a building site; a generated one is a resort already running,
@@ -1048,6 +1112,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     router,
     arrivals,
     balloons,
+    litterField,
     sea,
     shore,
     terrain,
@@ -1064,6 +1129,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
       crowd.dispose();
       staff.dispose();
       balloons.dispose();
+      litterField.dispose();
       sea.dispose();
       lighting.volume?.dispose();
     },
@@ -1100,6 +1166,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       // Without this, the previous plot's cleaners keep walking over the new one.
       scene?.scene.remove(previous.staff.group);
       scene?.scene.remove(previous.balloons.group);
+      scene?.scene.remove(previous.litterField.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
@@ -1107,6 +1174,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.add(resort.crowd.group);
       scene?.scene.add(resort.staff.group);
       scene?.scene.add(resort.balloons.group);
+      scene?.scene.add(resort.litterField.group);
       scene?.scene.add(resort.sea.group);
       scene?.reframe(
         resort.bounds,
@@ -1154,7 +1222,7 @@ function sceneStats(parts: {
   readonly rain: RainField;
 }): ShowcaseStats {
   const { handle, scratch, catalogue, rain } = parts;
-  const { plot, world, shadows, construction, crowd, staff, balloons, sea, lighting } =
+  const { plot, world, shadows, construction, crowd, staff, balloons, litterField, sea, lighting } =
     parts.resort;
   const totals = plotTotals(plot);
   return {
@@ -1172,6 +1240,7 @@ function sceneStats(parts: {
       crowd.drawCalls +
       staff.drawCalls +
       balloons.drawCalls +
+      litterField.drawCalls +
       sea.drawCalls +
       rain.drawCalls,
     chunkCount: world.chunkCount,
@@ -1184,6 +1253,7 @@ function sceneStats(parts: {
       crowd.triangleCount +
       staff.triangleCount +
       balloons.triangleCount +
+      litterField.triangleCount +
       sea.triangleCount +
       rain.triangleCount,
     shadowCount: shadows.count,
@@ -1223,13 +1293,61 @@ function lightRooms(resort: Resort, last: number | null): number {
   return share;
 }
 
-// Off the graph, a guest is on the sand, which the field does not cover.
-function sceneryUnder(resort: Resort, person: number): number {
+// Off the graph, a guest is on the sand, which neither field covers.
+function surroundingsOf(resort: Resort, person: number): number {
   const { node, network } = resort.crowd.crowd;
   const at = node[person] ?? -1;
   if (at < 0 || at >= network.nodes.length) return 0;
-  const standing = network.nodes[at]!;
-  return sceneryAt(resort.scenery, standing.tileX, standing.tileZ);
+  const { tileX, tileZ } = network.nodes[at]!;
+  const around =
+    sceneryAt(resort.scenery, tileX, tileZ) - LITTER_WEIGHT * litterAt(resort.litter, tileX, tileZ);
+  return Math.min(1, Math.max(-1, around));
+}
+
+// Runs on every node every guest reaches, so it allocates nothing. The sand is off the graph
+// and never fouled, which keeps a cleaner off it.
+function stepLitterAt(resort: Resort, person: number, at: number): void {
+  const { nodes } = resort.crowd.crowd.network;
+  if (at < 0 || at >= nodes.length) return;
+  const { tileX, tileZ } = nodes[at]!;
+  stepWith(resort.litter, resort.carrying, resort.binCover, person, tileX, tileZ);
+}
+
+interface DrawnLitter {
+  readonly litter: Litter | null;
+  readonly version: number;
+}
+
+const pavingIndices = new WeakMap<WalkNetwork, NodeIndex>();
+
+// Only on a change: litter moves a few times an hour, and a write touches every slot. The grid
+// is compared too, so a new resort whose version happens to match is still drawn.
+function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
+  const { litter } = resort;
+  if (drawn.litter === litter && drawn.version === litter.version) return drawn;
+  const network = resort.crowd.crowd.network;
+  let index = pavingIndices.get(network);
+  if (!index) {
+    index = nodeIndexFor(network);
+    pavingIndices.set(network, index);
+  }
+  const nodeOnTile = (tileX: number, tileZ: number): { readonly y: number } | null => {
+    const node = index.at(tileX, tileZ)?.[0];
+    return node === undefined ? null : network.nodes[node]!;
+  };
+  resort.litterField.write(piecesFor(litter, nodeOnTile, LITTER_PIECES, LITTER_MODELS.length));
+  return { litter, version: litter.version };
+}
+
+function binsOn(placements: readonly Placement[]): BinSite[] {
+  const bins: BinSite[] = [];
+  for (const placement of placements) {
+    const reach = binReachOf(placement.id);
+    if (reach <= 0) continue;
+    const { tileX, tileZ, tilesX, tilesZ } = placement;
+    bins.push({ tileX, tileZ, tilesX, tilesZ, reach });
+  }
+  return bins;
 }
 
 function runTicks(
@@ -1254,7 +1372,7 @@ function runTicks(
     resort.guests,
     (person) => resort.router.isWaitingAt(person),
     ticks,
-    (person) => sceneryUnder(resort, person),
+    (person) => surroundingsOf(resort, person),
   );
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
@@ -1330,6 +1448,7 @@ function factsNow(resort: Resort, weather: Weather): ResortFacts {
     entrance: router.arrivalNode >= 0,
     reception: router.receptionReachable,
     bedsTotal: resort.beds.total,
+    litter: litterSummary(resort.litter),
     // By key: advice names a building, and indices change on the next edit.
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
@@ -1388,7 +1507,11 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     random: resort.arrivals,
     room,
   });
-  for (const person of arrived) resort.router.admit(person, resort.router.arrivalNode);
+  for (const person of arrived) {
+    // The body was somebody else's, and so was whatever it was holding.
+    resort.carrying.nodes[person] = 0;
+    resort.router.admit(person, resort.router.arrivalNode);
+  }
   resort.arrivalsAdmitted += arrived.length;
   const beds = bedCount(resort.guests);
   resort.beds = { total: beds.beds, taken: beds.taken };
@@ -1938,12 +2061,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     prepared: first,
     // Not called until a frame steps somebody, by which time the clock exists.
     tickOfDay: () => clock.tickOfDay,
+    ticks: () => clock.ticks,
     weather: () => clock.weather,
     geometries: catalogue.geometries,
     people: catalogue.people,
     staff: catalogue.staff,
     sky: catalogue.sky,
     sea: catalogue.sea,
+    litter: catalogue.litter,
   });
   const current = slot.current;
 
@@ -1969,6 +2094,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().crowd.group);
   handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
+  handle.scene.add(current().litterField.group);
   handle.scene.add(current().sea.group);
   // Not per resort: rain falls over the camera, not the plot.
   const rain = buildRainField(createRaindrops(MAX_DROPS, RAIN_SEED));
@@ -1982,6 +2108,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let running = true;
   let lastTimeMs: number | null = null;
   let lastShare: number | null = null;
+  let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
   let lastWeather: Weather = clock.weather;
 
@@ -2263,6 +2390,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         plan.tilesX,
         plan.tilesZ,
       );
+      resort.binCover = binCoverFor(
+        binsOn([...plot.placements, ...plot.props]),
+        plan.tilesX,
+        plan.tilesZ,
+      );
+      const paving = nodeIndexFor(network);
+      pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
       resort.unreachable = strandedOn(resort.venues, network);
       resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
       resort.staffRouter.rebuild(resort.venues, network);
@@ -2292,6 +2426,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       bench ? 1 : crowdScaleFor(clock.speed),
     );
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
+    drawnLitter = drawLitter(current(), drawnLitter);
     current().sea.advance(bench ? MAX_STEP : elapsed);
     advanceWeather(elapsed);
     build.advance(bench ? MAX_STEP : elapsed);

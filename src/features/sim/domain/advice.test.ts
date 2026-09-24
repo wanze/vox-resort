@@ -6,6 +6,7 @@ import {
   adviceNoBeds,
   adviceNobodyComes,
   adviceDirty,
+  adviceLittered,
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
@@ -14,6 +15,7 @@ import {
   type ResortFacts,
 } from './advice';
 import type { VenueDoors } from './doors';
+import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
 import type { Venue } from './venues';
 import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
@@ -461,5 +463,46 @@ describe('why nobody comes', () => {
       healthyFacts({ ...running, open: false, homeless: 100, bedsFree: 0 }),
     ).map((each) => each.kind);
     expect(shut).toEqual(['closed', 'no-beds']);
+  });
+});
+
+const fouled = (fouledTiles: number, worstLevel = 1): LitterSummary => ({
+  worst: { tileX: 7, tileZ: 3 },
+  worstLevel,
+  fouled: fouledTiles,
+});
+
+describe('adviceLittered', () => {
+  it('says nothing about clean paths, or about a plot that never reported any', () => {
+    expect(adviceLittered(healthyFacts())).toBeNull();
+    expect(adviceLittered(healthyFacts({ litter: fouled(0) }))).toBeNull();
+    expect(adviceFor(healthyFacts({ litter: fouled(0) })).map((each) => each.kind)).not.toContain(
+      'littered',
+    );
+  });
+
+  it('names the worst tile and counts the fouled ones', () => {
+    const advice = adviceLittered(healthyFacts({ litter: fouled(5, 0.75) }));
+    expect(advice?.kind).toBe('littered');
+    expect(advice?.count).toBe(5);
+    expect(advice?.at).toEqual({ tileX: 7, tileZ: 3 });
+    expect(advice!.weight).toBeLessThan(
+      adviceLittered(healthyFacts({ litter: fouled(40) }))!.weight,
+    );
+  });
+
+  it('ranks after a dirty venue of equal weight', () => {
+    const pool = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 40 });
+    const facts = healthyFacts({
+      venues: [pool],
+      visits: new Map([['pool#0', 30]]),
+      wanting: NOTHING_WANTED,
+      cleanliness: new Map([['pool#0', 0]]),
+      litter: fouled(40),
+    });
+    expect(adviceDirty(facts)!.weight).toBe(adviceLittered(facts)!.weight);
+    const kinds = adviceFor(facts).map((each) => each.kind);
+    expect(kinds.indexOf('dirty')).toBeGreaterThanOrEqual(0);
+    expect(kinds.indexOf('littered')).toBe(kinds.indexOf('dirty') + 1);
   });
 });

@@ -337,6 +337,7 @@ HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
 | `unserved-need`  | needs no venue serves                | share wanting it                     |
 | `full-lines`     | the day's turn-aways per venue       | share refused × count                |
 | `unreachable`    | venues with no door node and no sand | 0.9                                  |
+| `littered`       | tiles at or above `SWEEP_ABOVE`      | worst level × tiles / 20             |
 | `far-from-home`  | lodging to nearest venue per need    | distance vs. `reach` (straight line) |
 | `unvisited`      | venues nobody visited today          | 0.2–0.4 by capacity                  |
 | `weather-closed` | needs whose venues are mostly closed |                                      |
@@ -372,10 +373,60 @@ on duty enters at the first gate (node 0 with no gate yet; with no paving at all
 at the next edit that lays some). The staff router never sends anybody off duty,
 and a cleaner let go mid-spell finishes it so the venue's claim is released.
 `staffRouter.ts` walks each cleaner to the dirtiest unclaimed venue and holds them
-there while they work. They use the same `crowd.ts` as guests.
+there while they work. They use the same `crowd.ts` as guests. With no venue below
+`NEEDS_CLEANING`, a cleaner sweeps litter instead (see [Litter](#litter)).
 
 Not done: lifeguards (need the sand routing shared from `router.ts`), animators
-(need venue events), visible litter.
+(need venue events).
+
+## Litter
+
+Two declarations on the art, nothing in `src/`:
+
+- `venue.litter`, 0 to 1: the chance a visit sends the guest off holding
+  something to throw away. Ice cream 0.06, snack bar 0.05, bakery 0.035, coffee
+  shop and supermarket 0.03, poolside bar 0.02, resort bar 0.015; the restaurant
+  and everything else 0.
+- `binReach` on a model makes it a bin: the tiles it covers around its footprint
+  (Chebyshev, as scenery). The litter bin has 3. `binReachOf` reads it.
+
+`litter.ts` keeps a per-tile level, row-major and sized to the plan like the
+scenery field, and a per-guest count of nodes left to carry (`Carrying`).
+
+- The router calls `onVisited(person, venue)` once per visit that ran its course,
+  on both ways out (the ordinary one and an errand off a beach pitch), never for
+  a beach visit that found no room. `showcase.ts` answers with `pickUp`, drawing
+  from a hash of the person and the tick, not the router's seeded stream, so no
+  seeded scene moves.
+- The guest crowd's `routeOf` is wrapped, so every node a guest reaches is seen
+  without the crowd or the router knowing about litter. On a tile a bin covers
+  the guest bins it; otherwise the count goes down, and at `CARRY_NODES` (6)
+  without a bin they drop a `PIECE` (0.25) on that tile, clamped at 1.
+- The sand is off the graph, so nobody drops litter on it and no cleaner is ever
+  sent there. That is deliberate: it would foul for ever with nobody allowed to
+  sweep it.
+- A newly admitted guest starts empty-handed. After an edit the bin cover is
+  rebuilt and litter on a tile that is no longer paved is cleared
+  (`pruneLitter`); the rest survives.
+- Litter subtracts from the surroundings term scenery adds to: a guest's
+  surroundings are scenery minus `LITTER_WEIGHT` (1) times the litter under them,
+  clamped to -1..1. A fouled tile costs more than the prettiest tile gives.
+- Cleaners take venues first. With none to clean, `mostLittered` picks the worst
+  unclaimed paved tile at or above `SWEEP_ABOVE` (0.5, two pieces); the cleaner
+  walks there on a flow field from the tile's node (memoised, at most 64, cleared
+  on a rebuild), sweeps for 4 to 8 ticks and zeroes it. `atWork` answers null
+  while sweeping.
+- Advice `littered` counts the tiles at or above `SWEEP_ABOVE` and names the
+  worst: "Litter is piling up on n tiles", "no bin within reach".
+
+On the reference plot (4 bins, reaching 4 of the 35 venues that make litter) a
+first day with no cleaners drops 113 pieces, bins 13 and fouls 23 tiles; the
+test holds it between 5 and 40.
+
+Litter is drawn as small voxel models from `voxel-gen/litter/` (a cup and a
+wrapper), up to four per tile at hashed spots inside it, by `litterField.ts` on
+the balloons' moving-field path: 512 slots, two draw calls, rewritten only when
+the litter changes.
 
 ## Scenery
 
@@ -407,8 +458,11 @@ footprint and the ring around it.
   `figure.ts` has the shared builder and `hipHeight`. Preview with
   `pnpm preview --people`.
 - Staff: `voxel-gen/people/cleaner.ts`, via `STAFF_SOURCES`.
-- Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`.
-- `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky and
-  sea. `dveEngine.test.ts` meshes all of it.
+- Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`. Litter:
+  `voxel-gen/litter/`, preview with `pnpm preview --litter`.
+- `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky, sea
+  and litter. `dveEngine.test.ts` meshes all of it.
 - People paint from the palette; `skin` is the only family they add.
 - How pleasant dressing is: `scenery` on the model's own source.
+- How much litter a visit leaves, and what is a bin: `venue.litter` and
+  `binReach`.

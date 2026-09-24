@@ -2,6 +2,7 @@ import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { ARCHETYPES } from './archetypes';
 import type { VenueDoors } from './doors';
+import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
 import { NEEDS } from './needs';
 import { NEEDS_CLEANING } from './upkeep';
@@ -16,6 +17,7 @@ export type AdviceKind =
   | 'full-lines'
   | 'unreachable'
   | 'dirty'
+  | 'littered'
   | 'far-from-home'
   | 'unvisited'
   | 'weather-closed';
@@ -56,6 +58,8 @@ export interface ResortFacts {
   readonly entrance?: boolean;
   readonly reception?: boolean;
   readonly bedsTotal?: number;
+  // Absent means clean paths.
+  readonly litter?: LitterSummary;
 }
 
 // Declared so advice of equal weight comes out in the same order on every run.
@@ -69,6 +73,7 @@ const KIND_ORDER: readonly AdviceKind[] = [
   'full-lines',
   'unreachable',
   'dirty',
+  'littered',
   'far-from-home',
   'unvisited',
   // Last: the one line the player cannot fix today.
@@ -79,6 +84,9 @@ const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value)
 
 // Fifty balks in a day is a place plainly too small.
 const BALKS_LOUD = 50;
+
+// Twenty fouled tiles is a promenade, not a corner: past it the plot plainly needs bins.
+const LITTER_LOUD = 20;
 
 // Same value as `IDLE_ROOMY` but not shared: the two rules need not move together.
 const ROOMY = 40;
@@ -162,6 +170,19 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
     }
   }
   return worst;
+}
+
+export function adviceLittered(facts: ResortFacts): Advice | null {
+  const litter = facts.litter;
+  if (!litter || litter.fouled <= 0) return null;
+  return {
+    kind: 'littered',
+    weight: clamp(litter.worstLevel) * clamp(litter.fouled / LITTER_LOUD),
+    subject: 'litter',
+    count: litter.fouled,
+    at: litter.worst,
+    need: null,
+  };
 }
 
 export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
@@ -327,6 +348,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
     adviceDirty(facts),
+    adviceLittered(facts),
     adviceFarFromHome(facts),
     ...adviceUnvisited(facts),
     ...adviceWeatherClosed(facts),

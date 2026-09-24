@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Shelter } from '../../../../voxel-gen/voxelgen.ts';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { binReachOf, OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import {
@@ -48,7 +48,15 @@ import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
 import { gatewaysOn, type Gateway } from './gateways';
 import { lodgingFor, lodgingsOn, type Lodging } from './lodgings';
-import { bedtimeOf } from './night';
+import {
+  binCoverFor,
+  createCarrying,
+  createLitter,
+  litterSummary,
+  pickUp,
+  stepWith,
+} from './litter';
+import { bedtimeOf, mix } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
@@ -128,6 +136,7 @@ const routerOn = (
     readonly tickOfDay: () => number;
     readonly gateways?: readonly Gateway[];
     readonly onLeave?: (person: number) => void;
+    readonly onVisited?: (person: number, venue: Venue) => void;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -144,6 +153,7 @@ const routerOn = (
     lodgings: night.lodgings,
     gateways: night.gateways ?? [],
     onLeave: night.onLeave ?? (() => {}),
+    onVisited: night.onVisited ?? (() => {}),
     network,
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
@@ -229,6 +239,22 @@ describe('createRouter', () => {
     for (let tick = 1; tick <= 8; tick++) router.tick(tick);
     expect(needs.level.hunger[0]).toBeCloseTo(0.5);
     expect(cleanliness(upkeep, 0)).toBeLessThan(1);
+  });
+
+  it('reports a visit that ran its course once, with the venue it was made to', () => {
+    const network = networkOf(street(8));
+    const visited: [number, string][] = [];
+    const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'), {
+      lodgings: [],
+      tickOfDay: () => NOON,
+      onVisited: (person, venue) => visited.push([person, venue.key]),
+    });
+    router.step(0, nodeAt(network, 0));
+    router.step(0, nodeAt(network, 7));
+    expect(visited, 'reported on arrival').toEqual([]);
+
+    for (let tick = 1; tick <= 8; tick++) router.tick(tick);
+    expect(visited).toEqual([[0, 'bakery#0']]);
   });
 
   it('aims a party member who decided nothing at the venue their sibling chose', () => {
@@ -948,6 +974,28 @@ describe('a visit to the beach', () => {
       'never got the drink',
     ).toBe(true);
     expect(cleanliness(upkeep, 0)).toBeLessThan(1);
+  });
+
+  it('reports the kiosk an errand off a pitch was run to as a visit', () => {
+    const visited: string[] = [];
+    const { needs, router, crowd } = onTheBeach([0], {
+      venues: [kiosk],
+      night: {
+        lodgings: [],
+        tickOfDay: () => NOON,
+        onVisited: (person, venue) => {
+          if (person === 0) visited.push(venue.key);
+        },
+      },
+    });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    needs.level.fun[0] = 1;
+    needs.level.thirst[0] = 0;
+    expect(
+      until(crowd, router, () => needs.level.thirst[0]! > 0.5),
+      'never got the drink',
+    ).toBe(true);
+    expect(visited).toContain(kiosk.key);
   });
 
   it('walks a guest off the beach from the kiosk when their stay is over', () => {
@@ -2122,6 +2170,99 @@ describe('on the generated plot', () => {
       staff: { employed, router: staffRouter, doubled, dirtiestSeen, scrubbedBack },
     };
   };
+
+  // What showcase.ts wires, with no cleaners: the bins alone decide where it lands.
+  it('litters the plot over a day where no bin is in reach, but not into a landfill', () => {
+    const seated = walkNetworkFor({
+      paved: layout.paths,
+      levelOf: (x, z) => levelAt(elevation, x, z),
+      shore: shoreFor(plan),
+      tilesX: plan.tilesX,
+      obstacles: layout.placements,
+      seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
+    });
+    const lodgings = lodgingsOn(layout.placements);
+    const people = createGuests({
+      count: 600,
+      homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    const upkeep = createUpkeep(venues.length);
+    const bins = [...layout.placements, ...layout.props]
+      .filter((placement) => binReachOf(placement.id) > 0)
+      .map(({ tileX, tileZ, tilesX, tilesZ, id }) => ({
+        tileX,
+        tileZ,
+        tilesX,
+        tilesZ,
+        reach: binReachOf(id),
+      }));
+    const litter = createLitter(plan.tilesX, plan.tilesZ);
+    const carrying = createCarrying(people.count);
+    const cover = binCoverFor(bins, plan.tilesX, plan.tilesZ);
+    let ticks = OPENS_AT;
+    let dropped = 0;
+    let binned = 0;
+
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings,
+      gateways: [],
+      onLeave: () => {},
+      onVisited: (person, venue) =>
+        pickUp(
+          carrying,
+          person,
+          venue.litter ?? 0,
+          (mix(person * 2_654_435_761 + ticks) % 1024) / 1024,
+        ),
+      network: seated,
+      tickOfDay: () => ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network: seated,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => {
+        const node = seated.nodes[at];
+        if (node) {
+          const held = carrying.nodes[person]!;
+          const version = litter.version;
+          stepWith(litter, carrying, cover, person, node.tileX, node.tileZ);
+          if (litter.version !== version) dropped++;
+          else if (held > 0 && carrying.nodes[person] === 0) binned++;
+        }
+        return router.step(person, at);
+      },
+      roamsBeach: false,
+    });
+
+    for (let step = 0; step < TICKS_PER_DAY; step++) {
+      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
+      ticks++;
+      decayNeeds(needs, people, 1);
+      router.tick(ticks);
+    }
+
+    const { fouled } = litterSummary(litter);
+    const report = `${bins.length} bins; ${dropped} pieces dropped, ${binned} binned, ${fouled} tiles fouled`;
+    console.log(report);
+    expect(bins.length, 'the generator stood no litter bin').toBeGreaterThan(0);
+    expect(dropped, report).toBeGreaterThan(0);
+    expect(binned, report).toBeGreaterThan(0);
+    expect(fouled, report).toBeGreaterThanOrEqual(5);
+    expect(fouled, report).toBeLessThanOrEqual(40);
+  });
 
   it('wears the plot out over a day, and has the cleaners keep up with it', () => {
     const run = aDayOnThePlot();

@@ -149,6 +149,8 @@ export function createRouter(parts: {
   readonly network: WalkNetwork;
   // A callback because this module knows where people walk, not who they are.
   readonly onLeave: (person: number) => void;
+  // One call per visit that ran its course, whichever way out it took.
+  readonly onVisited?: (person: number, venue: Venue) => void;
   // Late-bound: an arrival happens between ticks, and the clock knows the hour.
   readonly tickOfDay: () => number;
   // Late-bound: `relocate` replaces the crowd, and a held one would move people from
@@ -160,6 +162,7 @@ export function createRouter(parts: {
   readonly seed: number;
 }): Router {
   const { guests, needs, crowd } = parts;
+  const onVisited = parts.onVisited ?? ((): void => {});
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
   const goals: Goals = createGoals(guests.count);
   const random = createRandom(parts.seed);
@@ -430,6 +433,7 @@ export function createRouter(parts: {
     return false;
   };
 
+  // No onVisited: the guest never settled, so there was no visit to have run its course.
   const endVisitAtTheGate = (person: number, at: number, venue: Venue): void => {
     leaveVenue(occupancy, person);
     justLeft[person] = at;
@@ -600,6 +604,7 @@ export function createRouter(parts: {
   const leaveErrand = (person: number, venue: number): void => {
     relieve(needs, person, venues[venue]!.satisfies);
     soil(parts.upkeep(), venue, venues[venue]!.capacity);
+    onVisited(person, venues[venue]!);
     const route = errandOf(person);
     const staying = stays[person] !== null && now < stayUntil[person]! && !dueInBed(person);
     if (route && staying) {
@@ -743,6 +748,7 @@ export function createRouter(parts: {
     relieve(needs, person, venues[venue]!.satisfies);
     // Worn on both ways out of a visit, or venues served from the beach would stay spotless.
     soil(parts.upkeep(), venue, venues[venue]!.capacity);
+    onVisited(person, venues[venue]!);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;

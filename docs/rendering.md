@@ -13,7 +13,7 @@ authored plan is 112 × 100 tiles (448 × 400 m).
 ## Pipeline
 
 1. **Catalogue**: `OBJECT_TYPES` builds every model once and creates one material
-   per colour. `PAINTED_MODELS` adds people, staff, balloons and boats.
+   per colour. `PAINTED_MODELS` adds people, staff, balloons, boats and litter.
 2. **Layout**: `layoutResort` turns `RESORT_PLAN` (or a generated plan) into
    placements, paving, props and rails.
 3. **Scratch regions**: `scratchLayoutFor` gives each model its own slice of the
@@ -30,7 +30,9 @@ authored plan is 112 × 100 tiles (448 × 400 m).
    spare capacity so placing is a matrix write.
 8. **Lighting**: lamps baked into a light volume, sky visibility, blob shadows.
 9. **Frame**: three materials for the catalogue (lit, unlit, water), plus terrain,
-   sea, figures and moving objects.
+   sea, figures and moving objects. Litter on the paths is a moving field too
+   (`litter/adapters/litterField.ts`): one instanced mesh per litter model,
+   rewritten only when the litter changes.
 
 Steps 2 and 8 and the terrain mesh run in a worker (see
 [Preparing a resort](#preparing-a-resort)).
@@ -133,8 +135,8 @@ main thread per draw, so each placement goes into four layers of buckets and
   one voxel with the majority colour. A coarse copy with more than 60% of the
   original's triangles is dropped (`worthCoarsening`).
 - **People** aren't bucketed. Anyone under 3 px is packed out of the draw.
-- Construction sites, the placement ghost, terrain, balloons and the bay aren't
-  levelled.
+- Construction sites, the placement ghost, terrain, balloons, litter and the bay
+  aren't levelled.
 - Toggle in the Camera panel or with `?lod=0`. _Details_ shows draws, frame
   times, GPU time, buckets per layer and shader count.
 
@@ -252,8 +254,11 @@ Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 
 | Weather | Draw calls | Triangles | CPU median | GPU median |
 | ------- | ---------- | --------- | ---------- | ---------- |
-| clear   | 278        | 1.14 M    | 1.50 ms    | 3.08 ms    |
-| storm   | 279        | 1.19 M    | 1.70 ms    | 3.60 ms    |
+| clear   | 280        | 1.16 M    | 1.50 ms    | 2.95 ms    |
+| storm   | 281        | 1.21 M    | 1.70 ms    | 3.08 ms    |
+
+The litter field adds 2 draw calls and about 22 000 triangles (278 and 1.14 M
+before it).
 
 The storm difference includes the 617 lamps that come on under cloud.
 

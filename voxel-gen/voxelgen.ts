@@ -27,9 +27,10 @@ export type ModelCategory =
   | 'leisure'
   | 'people'
   | 'sky'
-  | 'sea';
+  | 'sea'
+  | 'litter';
 
-// people, sky and sea never show: each lives in its own registry, so no
+// people, sky, sea and litter never show: each lives in its own registry, so no
 // OBJECT_TYPES entry carries them and the palette drops the empty shelves.
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
@@ -42,6 +43,7 @@ export const MODEL_CATEGORIES: readonly {
   { id: 'people', label: 'People' },
   { id: 'sky', label: 'Sky' },
   { id: 'sea', label: 'Sea' },
+  { id: 'litter', label: 'Litter' },
 ];
 
 export interface TileFootprint {
@@ -114,6 +116,8 @@ export interface ModelVenue {
   readonly shelter?: Shelter;
   // Arriving guests check in here before anything else.
   readonly receives?: boolean;
+  // The chance, 0 to 1, that a visit sends somebody off holding something to throw away.
+  readonly litter?: number;
 }
 
 export interface VoxelModelSource {
@@ -127,6 +131,8 @@ export interface VoxelModelSource {
   // 0 to 1: how much nicer this makes the tiles around it. The reach is the simulation's,
   // so a model states only how strong it is.
   readonly scenery?: number;
+  // Tiles a guest holding litter will look for this; 0 is not a bin.
+  readonly binReach?: number;
   readonly emissive?: readonly Color[];
   readonly water?: readonly Color[];
   // Declared rather than inferred from the palette: lanterns and shelters are
@@ -154,6 +160,7 @@ export interface VoxelModel {
   readonly groundDecides: boolean;
   readonly gateway: boolean;
   readonly scenery: number;
+  readonly binReach: number;
   readonly width: number;
   readonly height: number;
   readonly depth: number;
@@ -224,6 +231,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     groundDecides: source.groundDecides ?? false,
     gateway: source.gateway ?? false,
     scenery: source.scenery ?? 0,
+    binReach: source.binReach ?? 0,
     width: maxX - minX + 1,
     height: maxY - minY + 1,
     depth: maxZ - minZ + 1,

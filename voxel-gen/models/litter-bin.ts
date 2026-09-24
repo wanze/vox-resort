@@ -20,6 +20,7 @@ export default defineModel({
   label: 'Litter Bin',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
+  binReach: 3,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { metal, teak } = PALETTE;

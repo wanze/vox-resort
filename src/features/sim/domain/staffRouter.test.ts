@@ -4,6 +4,7 @@ import { createCrowd, isWaiting, type Crowd } from '../../crowd/domain/crowd';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { createStaffRouter, meanCleanliness, type StaffRouter } from './staffRouter';
+import { createLitter, litterAt, SWEEP_ABOVE, type Litter } from './litter';
 import { rosterFor, type Staff } from './staff';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import type { Venue } from './venues';
@@ -244,5 +245,95 @@ describe('a cleaner and the weather', () => {
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
     weather = 'clear';
     expect(router.step(0, nodeAt(network, 0))).toBe(nodeAt(network, 1));
+  });
+});
+
+const littered = (tiles: readonly (readonly [number, number])[]): Litter => {
+  const litter = createLitter(8, 1);
+  for (const [tileX, level] of tiles) litter.level[tileX] = level;
+  return litter;
+};
+
+describe('sweeping the paths', () => {
+  const sweepersOn = (
+    network: WalkNetwork,
+    venues: readonly Venue[],
+    dirt: readonly number[],
+    litter: Litter,
+    workers = 1,
+  ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
+    const upkeep = createUpkeep(venues.length);
+    for (let venue = 0; venue < dirt.length; venue++) upkeep.level[venue] = dirt[venue]!;
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff: cleaners(workers),
+      venues,
+      network,
+      upkeep: () => upkeep,
+      crowd: () => crowd!,
+      litter: () => litter,
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network,
+      count: workers,
+      variants: 1,
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+    });
+    return { router, crowd, upkeep };
+  };
+
+  it('walks a cleaner with no dirty venue to a littered tile, and sweeps it', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, 0.75]]);
+    const { router, crowd } = sweepersOn(network, [], [], litter);
+    expect(router.step(0, nodeAt(network, 2))).toBe(nodeAt(network, 3));
+    expect(router.step(0, nodeAt(network, 5))).toBe(nodeAt(network, 6));
+    expect(router.step(0, nodeAt(network, 6))).toBe(-1);
+    expect(isWaiting(crowd, 0), 'walked straight past the litter').toBe(true);
+    expect(router.atWork(0), 'a tile is not a venue').toBeNull();
+    expect(router.workingCount).toBe(1);
+    expect(litterAt(litter, 6, 0)).toBe(0.75);
+
+    for (let tick = 1; tick <= 10; tick++) router.tick(tick);
+    expect(litterAt(litter, 6, 0)).toBe(0);
+    expect(router.workingCount).toBe(0);
+    expect(isWaiting(crowd, 0), 'never let go of the tile').toBe(false);
+  });
+
+  it('takes a dirty venue before a littered tile', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, 1]]);
+    const { router } = sweepersOn(network, [shop('bakery#0', 1)], [0.2], litter);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('leaves a tile below the sweeping mark alone', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, SWEEP_ABOVE - 0.25]]);
+    const { router } = sweepersOn(network, [], [], litter);
+    expect(router.step(0, nodeAt(network, 2))).toBe(-1);
+  });
+
+  it('never lets two cleaners claim the same tile', () => {
+    const network = networkOf(street(8));
+    const litter = littered([
+      [1, 0.5],
+      [6, 1],
+    ]);
+    const { router } = sweepersOn(network, [], [], litter, 2);
+    expect(router.step(0, nodeAt(network, 4)), 'the worst tile first').toBe(nodeAt(network, 5));
+    expect(router.step(1, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('lets the claim go when a rebuild renumbers the graph', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, 1]]);
+    const { router } = sweepersOn(network, [], [], litter, 2);
+    router.step(0, nodeAt(network, 4));
+    expect(router.step(1, nodeAt(network, 4))).toBe(-1);
+    router.rebuild([], network);
+    expect(router.step(1, nodeAt(network, 4))).toBe(nodeAt(network, 5));
   });
 });

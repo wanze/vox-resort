@@ -1,3 +1,4 @@
+import { LITTER_SOURCES } from '../../../../voxel-gen/litter/index.ts';
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
 import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
@@ -61,6 +62,8 @@ export const SKY_MODELS: readonly VoxelModel[] = SKY_SOURCES.map(buildModel);
 
 export const SEA_MODELS: readonly VoxelModel[] = SEA_SOURCES.map(buildModel);
 
+export const LITTER_MODELS: readonly VoxelModel[] = LITTER_SOURCES.map(buildModel);
+
 // Materials must come from every registry: only people paint with skin, and
 // without it the mesher would be asked for a voxel DVE never registered.
 export const PAINTED_MODELS: readonly VoxelModel[] = [
@@ -69,6 +72,7 @@ export const PAINTED_MODELS: readonly VoxelModel[] = [
   ...STAFF_MODELS,
   ...SKY_MODELS,
   ...SEA_MODELS,
+  ...LITTER_MODELS,
 ];
 
 export interface ObjectTypeGroup {
@@ -114,6 +118,10 @@ export function isGateway(id: string): boolean {
 
 export function sceneryOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.scenery ?? 0;
+}
+
+export function binReachOf(id: string): number {
+  return OBJECT_TYPES.find((type) => type.id === id)?.model.binReach ?? 0;
 }
 
 export function allMaterials(): readonly MaterialDefinition[] {

@@ -24,8 +24,6 @@ describe('ARCHETYPES', () => {
       for (const rate of ratesOf(archetype)) {
         expect(rate).toBeGreaterThan(0);
         expect(rate).toBeLessThan(1);
-        // Below a fifth an hour is five simulated hours from content to
-        // desperate, which is a day with something happening in it.
         expect(rate).toBeLessThanOrEqual(0.2);
       }
     }

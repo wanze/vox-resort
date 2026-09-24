@@ -7,7 +7,6 @@ const SHORE = { inset: 10, beach: 6, wave: 0, seed: 1 };
 
 const shore = (): Shore => shoreFor({ tilesX: 40, tilesZ: 60, shore: SHORE })!;
 
-/** A hill anchored on the coast: sand up the dune, grass above it, back to zero. */
 const hill = (surface: 'sand' | 'grass'): Elevation =>
   elevationFor({
     tilesX: 40,
@@ -24,7 +23,6 @@ const hill = (surface: 'sand' | 'grass'): Elevation =>
     },
   })!;
 
-/** The first row behind the step onto terrace `index`, in column 0. */
 const behind = (elevation: Elevation, index: number): number => stepStartZ(elevation, index, 0) - 1;
 
 describe('groundAt', () => {
@@ -42,9 +40,7 @@ describe('groundAt', () => {
 
   it('carries the sand up a dune, which is the whole reason it exists', () => {
     const dune = hill('sand');
-    // The first bench is the dune: above sea level, and still sand.
     expect(groundAt(shore(), dune, 0, behind(dune, 0))).toBe('sand');
-    // The bench above it is not, and neither is the land back at sea level.
     expect(groundAt(shore(), dune, 0, behind(dune, 1))).toBe('grass');
     expect(groundAt(shore(), dune, 0, behind(dune, 2))).toBe('grass');
   });
@@ -61,8 +57,6 @@ describe('groundAt', () => {
   });
 
   it('keeps the beach in front of the first step level and sandy', () => {
-    // The invariant `elevationFor` enforces, seen from the ground: every tile of
-    // the sand band answers sand, terraces or no terraces.
     const dune = hill('sand');
     const coast = shore();
     for (let tileX = 0; tileX < 40; tileX++) {

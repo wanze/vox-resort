@@ -43,7 +43,6 @@ import { doorStepTile, placedDoors } from './doorStep';
 import { clampParams, generateResort } from './resortGenerator';
 import { terrainFor } from './terrain';
 
-/** An item that exactly fills the tiles it claims. */
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
   tilesX,
@@ -52,7 +51,6 @@ const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   depth: tilesZ * TILE_VOXELS,
 });
 
-/** A tiny plan: one 2x2 hut on a 4x4 plot, ringed by streets. */
 const tinyItems: LayoutItem[] = [item(PATH_ID), item('hut', 2, 2)];
 const tinyPlan: ResortPlan = {
   tilesX: 4,
@@ -105,8 +103,8 @@ describe('routeEdgeTiles', () => {
     const tiles = new Set(
       routeEdgeTiles(node('a', 0, 0), node('b', 2, 2)).map((t) => `${t.x},${t.z}`),
     );
-    expect(tiles.has('1,0')).toBe(true); // along x at the start z
-    expect(tiles.has('2,1')).toBe(true); // then down z at the end x
+    expect(tiles.has('1,0')).toBe(true);
+    expect(tiles.has('2,1')).toBe(true);
     expect(tiles.has('0,1')).toBe(false);
   });
 
@@ -122,7 +120,6 @@ describe('routeEdgeTiles', () => {
     const tiles = new Set(
       routeEdgeTiles(node('a', 0, 0), node('b', 4, 4), 2).map((t) => `${t.x},${t.z}`),
     );
-    // Both legs are two wide, and the corner carries the full width.
     expect(tiles.has('3,-1')).toBe(true);
     expect(tiles.has('4,-1')).toBe(true);
     expect(tiles.has('3,0')).toBe(true);
@@ -217,8 +214,6 @@ describe('place', () => {
   });
 
   it('still anchors a turned object on the tile it was placed on', () => {
-    // The turn is about the object, not about the plot: whichever way it faces,
-    // its footprint starts on the same north-west tile.
     const cottage: LayoutItem = { id: 'cottage', tilesX: 2, tilesZ: 3, width: 32, depth: 48 };
     for (const rotation of [0, 1, 2, 3] as const) {
       const placement = place(cottage, 'cottage', 4, 5, rotation);
@@ -248,22 +243,12 @@ describe('place', () => {
   });
 
   it('does not centre the height the way it centres the corner', () => {
-    // A model narrower than its footprint is centred in it; a model shorter than
-    // a storey still sits on the ground rather than floating in the middle of it.
     const narrow: LayoutItem = { id: 'post', tilesX: 2, tilesZ: 2, width: 4, depth: 4 };
     expect(place(narrow, 'post', 0, 0, 0, 2).y).toBe(2 * LEVEL_VOXELS);
   });
 });
 
 describe('a terraced plot', () => {
-  /**
-   * The tiny plan cut into two benches, with the step on its southern street:
-   * the hut and the northern street stand a level up, the southern street below.
-   *
-   * The step has to fall on a street rather than through the middle of the plot,
-   * because a hut laid across it is exactly what `layoutResort` now refuses —
-   * see the last case in this block.
-   */
   const terraced: ResortPlan = {
     ...tinyPlan,
     elevation: { terraces: [{ level: 1, inset: 0, wave: 0 }], seed: 1 },
@@ -297,8 +282,6 @@ describe('a terraced plot', () => {
   });
 
   it('refuses a plot laid across a step, naming the tile that straddles it', () => {
-    // A model is a box with a flat underside: across a step one end hangs in the
-    // air and the other is buried, and no height for it would be right.
     const across: ResortPlan = {
       ...tinyPlan,
       elevation: { terraces: [{ level: 1, inset: 1, wave: 0 }], seed: 1 },
@@ -307,8 +290,6 @@ describe('a terraced plot', () => {
   });
 
   it('accepts a one-tile object either side of a step', () => {
-    // The rule is about a footprint, not about being near a step: a path tile
-    // stands on whichever bench it is on, and there are plenty on both.
     const { paths } = layoutResort(tinyItems, terraced);
     expect(paths.filter((tile) => tile.y === 0).length).toBeGreaterThan(0);
     expect(paths.filter((tile) => tile.y === LEVEL_VOXELS).length).toBeGreaterThan(0);
@@ -316,7 +297,6 @@ describe('a terraced plot', () => {
 });
 
 describe('handrails', () => {
-  /** A rail is as long as its tile and two voxels deep: it lines an edge. */
   const railItem: LayoutItem = {
     id: RAILING_ID,
     tilesX: 1,
@@ -326,10 +306,6 @@ describe('handrails', () => {
   };
   const railItems: LayoutItem[] = [item(PATH_ID), railItem, item(STAIR_RAILING_ID)];
 
-  /**
-   * A bench across the northern half of a 5x5 plot, with a walk along the top of
-   * its step and a lane down off it at the western end.
-   */
   const bench: ResortPlan = {
     tilesX: 5,
     tilesZ: 5,
@@ -351,8 +327,6 @@ describe('handrails', () => {
   it('rails the walk along the top of the step, and nothing else', () => {
     const { rails } = layoutResort(railItems, bench);
     const edges = rails.filter((rail) => rail.id === RAILING_ID);
-    // Every tile of the walk but the one the lane comes down off, which is the
-    // way through rather than a fall.
     expect(edges.map((rail) => rail.tileX).toSorted()).toEqual([1, 2, 3, 4]);
     expect(edges.every((rail) => rail.tileZ === 1 && rail.rotation === 2)).toBe(true);
   });
@@ -360,8 +334,6 @@ describe('handrails', () => {
   it('stands an edge rail flush against the edge it guards', () => {
     const { rails } = layoutResort(railItems, bench);
     const rail = rails.find((standing) => standing.id === RAILING_ID)!;
-    // Turned to face south, so it hugs the southern edge of its own tile rather
-    // than being centred in it — the whole point of the placement.
     expect({ x: rail.x, z: rail.z, y: rail.y }).toEqual({
       x: rail.tileX * TILE_VOXELS,
       z: rail.tileZ * TILE_VOXELS + TILE_VOXELS - 2,
@@ -373,7 +345,6 @@ describe('handrails', () => {
     const { rails } = layoutResort(railItems, bench);
     const flight = rails.filter((rail) => rail.id === STAIR_RAILING_ID);
     expect(flight).toHaveLength(1);
-    // On the lower tile of the step, turned the way the flight climbs.
     expect(flight[0]).toMatchObject({ tileX: 0, tileZ: 2, rotation: 0, y: 0 });
   });
 
@@ -417,13 +388,13 @@ describe('layoutResort', () => {
   it('centres a model that does not fill its footprint', () => {
     const narrow: LayoutItem = { id: 'hut', tilesX: 2, tilesZ: 2, width: 20, depth: 32 };
     const { placements } = layoutResort([item(PATH_ID), narrow], tinyPlan);
-    expect(placements[0]?.x).toBe(TILE_VOXELS + 6); // (32 - 20) / 2
+    expect(placements[0]?.x).toBe(TILE_VOXELS + 6);
     expect(placements[0]?.z).toBe(TILE_VOXELS);
   });
 
   it('paves every street tile no object stands on', () => {
     const { paths } = layoutResort(tinyItems, tinyPlan);
-    expect(paths).toHaveLength(12); // the 4x4 ring
+    expect(paths).toHaveLength(12);
     expect(paths.every((placement) => placement.id === PATH_ID)).toBe(true);
     expect(paths.some((placement) => placement.tileX === 1 && placement.tileZ === 1)).toBe(false);
   });
@@ -454,7 +425,7 @@ describe('layoutResort', () => {
     const plan: ResortPlan = { ...tinyPlan, plots: [{ id: 'hut', tileX: 0, tileZ: 0 }] };
     const paved = pathTilesFor(tinyItems, plan);
     expect(paved.some((tile) => tile.x < 2 && tile.z < 2)).toBe(false);
-    expect(paved).toHaveLength(9); // the 12-tile ring, less the 3 the hut covers
+    expect(paved).toHaveLength(9);
   });
 
   it('rejects two objects on the same tile', () => {
@@ -492,7 +463,6 @@ describe('layoutResort', () => {
   });
 });
 
-/** Every key the layout gave itself rather than taking from the plan. */
 const derived = (layout: ResortLayout): Set<string> =>
   new Set([...layout.paths, ...layout.props].map((placement) => placement.key));
 
@@ -504,7 +474,6 @@ describe('derived keys under an edit', () => {
     width: type.model.width,
     depth: type.model.depth,
   }));
-  /** The real plan, plus one more cottage on a free tile beside the north-west hotel. */
   const edited: ResortPlan = {
     ...RESORT_PLAN,
     plots: [...RESORT_PLAN.plots, { id: 'cottage', tileX: 13, tileZ: 4 }],
@@ -525,10 +494,6 @@ describe('derived keys under an edit', () => {
     const added = [...now].filter((key) => !was.has(key));
     const removed = [...was].filter((key) => !now.has(key));
 
-    // One cottage costs one spur tile out of three and a half thousand derived
-    // placements. Numbered by array index, the same edit renamed every path
-    // tile after the insertion and no diff against the live scene meant
-    // anything.
     expect(was.size).toBeGreaterThan(3000);
     expect(added).toHaveLength(1);
     expect(removed).toEqual([]);
@@ -536,7 +501,6 @@ describe('derived keys under an edit', () => {
 });
 
 describe('spurs', () => {
-  /** A 7x7 plot with one street across the top and a hut two rows below it. */
   const plan: ResortPlan = {
     tilesX: 7,
     tilesZ: 7,
@@ -552,7 +516,6 @@ describe('spurs', () => {
   it('grows the shortest path from an object to the network', () => {
     const paved = pathTilesFor([item(PATH_ID), item('hut', 2, 2)], plan);
     const spur = paved.filter((tile) => tile.z > 0);
-    // Two tiles: the hut's border row at z = 2, then z = 1 to reach the street.
     expect(spur).toHaveLength(2);
     expect(spur.every((tile) => tile.x === 2 || tile.x === 3)).toBe(true);
     expect(isPathNetworkConnected(paved)).toBe(true);
@@ -564,7 +527,6 @@ describe('spurs', () => {
   });
 
   it('reports an object it cannot reach', () => {
-    // Four sheds box the hut in on every side; nothing is left to route through.
     const walled: ResortPlan = {
       tilesX: 3,
       tilesZ: 3,
@@ -585,7 +547,6 @@ describe('spurs', () => {
   });
 });
 
-/** The real catalogue, as the layout takes it. */
 const catalogueItems = (): LayoutItem[] =>
   OBJECT_TYPES.map((type) => ({
     id: type.id,
@@ -660,8 +621,6 @@ describe('decorationsFor', () => {
       pathTilesFor(catalogueItems(), RESORT_PLAN).map((tile) => `${tile.x},${tile.z}`),
     );
     expect(benches.length).toBeGreaterThan(10);
-    // A seat's own facing is 0, so the turn the tile carries *is* the direction
-    // the sitters look — and it has to be the direction the paving is in.
     const towards = [
       [0, 1],
       [1, 0],
@@ -798,8 +757,6 @@ describe('the resort plan', () => {
     expect(lamps.length).toBeGreaterThan(20);
     expect(hedges.length).toBeGreaterThan(50);
     expect(benches.length).toBeGreaterThan(10);
-    // The bench is the one prop that stands at a turn, and its footprint is a
-    // single tile, so the turn costs it nothing on the grid.
     expect(benches.some((bench) => bench.rotation !== 0)).toBe(true);
     for (const bench of benches) {
       expect(bench.tilesX).toBe(1);
@@ -819,7 +776,6 @@ describe('the resort plan', () => {
 });
 
 describe('a plot with a shore', () => {
-  /** A 12x12 plot whose southern end is sea, with one street across the top. */
   const items = [
     item(PATH_ID),
     item(BOARDWALK_ID),
@@ -840,7 +796,6 @@ describe('a plot with a shore', () => {
       { from: 'ne', to: 's', bend: 'z-first' },
     ],
     plazas: [],
-    // Water from row 9 down, with four rows of sand in front of it.
     shore: { inset: 2, beach: 4, wave: 0, seed: 1 },
     standsWholeCatalogue: false,
     ...over,
@@ -884,7 +839,6 @@ describe('a plot with a shore', () => {
   it('stops a street at the water rather than refusing the plan', () => {
     const shore = shoreFor(coastal())!;
     const tiles = streetTiles(coastal());
-    // The second edge runs down column 11 to row 11, and the sea takes its end.
     expect(tiles.some((tile) => tile.x === 11 && tile.z === 2)).toBe(true);
     expect(tiles.every((tile) => terrainAt(shore, tile.x, tile.z) !== 'water')).toBe(true);
     expect(Math.max(...tiles.filter((tile) => tile.x === 11).map((tile) => tile.z))).toBe(
@@ -904,16 +858,9 @@ describe('a plot with a shore', () => {
     ).toThrow(/stands in the water/);
   });
 
-  /**
-   * Terrain edits are the third description of the ground, and the layout reads
-   * the plot through them: a river the plan carries is ground like the bay is,
-   * so nothing may stand in it and a street crossing it is bridged.
-   */
   it('bridges a street where the plan carries a river under it', () => {
     const river = coastal({
       plots: [],
-      // The east-west street runs along row 2; a channel down column 5 crosses
-      // it, and the channel is not the sea, so the crossing is a bridge.
       terrain: [
         { tileX: 5, tileZ: 1, level: 0, surface: 'water' },
         { tileX: 5, tileZ: 2, level: 0, surface: 'water' },
@@ -922,22 +869,14 @@ describe('a plot with a shore', () => {
     });
     const laid = layoutResort(items, river);
     const crossing = laid.paths.find((path) => path.tileX === 5 && path.tileZ === 2);
-    // A channel one tile across: the single tile of it is both ends of the
-    // crossing at once, so it comes out as the ramp, facing the first bank in
-    // compass order — west, since the tile north of it is more channel. See
-    // `spans.ts`.
     expect({ id: crossing?.id, rotation: crossing?.rotation }).toEqual({
       id: BRIDGE_RAMP_ID,
       rotation: 1,
     });
-    // And the street either side of it is still flagstones.
     expect(laid.paths.find((path) => path.tileX === 4 && path.tileZ === 2)?.id).toBe(PATH_ID);
   });
 
   it('brings a crossing ashore at both ends, and levels the middle of it', () => {
-    // A channel three tiles across under the same street: a ramp off each bank
-    // and a level deck between them, which is the whole of what makes a bridge
-    // stand off the ground. See `spans.ts` and `voxel-gen/models/bridge.ts`.
     const river = coastal({
       plots: [],
       terrain: [4, 5, 6].flatMap((tileX) =>
@@ -949,8 +888,6 @@ describe('a plot with a shore', () => {
       laid.paths.find((path) => path.tileX === tileX && path.tileZ === 2),
     );
     expect(crossing.map((tile) => ({ id: tile?.id, rotation: tile?.rotation }))).toEqual([
-      // The ramps face their own bank — west at x = 4, east at x = 6 — and the
-      // deck between them is turned along the run.
       { id: BRIDGE_RAMP_ID, rotation: 1 },
       { id: BRIDGE_ID, rotation: 1 },
       { id: BRIDGE_RAMP_ID, rotation: 3 },
@@ -958,9 +895,6 @@ describe('a plot with a shore', () => {
   });
 
   it('rails a crossing with the bridge parapets, because its deck is a metre up', () => {
-    // A rail stands on the tile it guards at that tile's own height, which is
-    // the water here: an ordinary rail would stand inside the deck, so a
-    // crossing is railed with parapets that stand on trestles. See `railings.ts`.
     const railed = [
       ...items,
       item(RAILING_ID, 16, 2),
@@ -980,12 +914,10 @@ describe('a plot with a shore', () => {
       .map((rail) => ({ id: rail.id, x: rail.tileX, rotation: rail.rotation }))
       .toSorted((a, b) => a.x - b.x || a.rotation - b.rotation);
     expect(guarded).toEqual([
-      // The ramp off the west bank: north is on its left as you climb east.
       { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 4, rotation: 0 },
       { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 4, rotation: 2 },
       { id: BRIDGE_RAILING_ID, x: 5, rotation: 0 },
       { id: BRIDGE_RAILING_ID, x: 5, rotation: 2 },
-      // And off the east bank, climbing west, the other way round.
       { id: BRIDGE_RAMP_RAILING_RIGHT_ID, x: 6, rotation: 0 },
       { id: BRIDGE_RAMP_RAILING_LEFT_ID, x: 6, rotation: 2 },
     ]);
@@ -1003,14 +935,6 @@ describe('a plot with a shore', () => {
     ).toThrow(/stands in the water at tile 2,5/);
   });
 
-  /**
-   * The same plot, with its southern street declared a pier.
-   *
-   * `x-first`, so the run turns on row 2 and comes straight down column 5 to the
-   * node at row 11 — three tiles of it out past the tideline at row 9. The plot's
-   * own `z-first` would take the same edge down column 11 *through* the water and
-   * then west along row 11, which is a causeway rather than a pier.
-   */
   const withPier = (): ResortPlan =>
     coastal({
       edges: [
@@ -1023,7 +947,6 @@ describe('a plot with a shore', () => {
     const shore = shoreFor(withPier())!;
     const { paths } = layoutResort(items, withPier());
     const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
-    // Three rows of sea, from the tideline at row 9 to the node at row 11.
     expect(wet.map((tile) => tile.tileZ).toSorted((a, b) => a - b)).toEqual([9, 10, 11]);
     expect(wet.every((tile) => tile.id === JETTY_ID && tile.tileX === 5)).toBe(true);
   });
@@ -1035,12 +958,7 @@ describe('a plot with a shore', () => {
     ];
     const { rails } = layoutResort(railed, withPier());
     const head = rails.filter((rail) => rail.tileZ === 11);
-    // The sea is at the pier's own level, so only the water rule can put these
-    // there: west, south and east of the last tile, and nothing to the north
-    // where the pier carries on. See `railings.ts`.
     expect(head.map((rail) => rail.rotation).toSorted((a, b) => a - b)).toEqual([1, 2, 3]);
-    // And every wet tile of the pier is railed on both flanks, which is what a
-    // pier is: the two turns across its run, and nothing along it.
     for (const z of [9, 10]) {
       const along = rails.filter((rail) => rail.tileZ === z);
       expect({ z, turns: along.map((rail) => rail.rotation).toSorted((a, b) => a - b) }).toEqual({
@@ -1064,7 +982,6 @@ describe('a plot with a shore', () => {
     const stilted = withPier();
     for (const tile of pathTilesFor(items, stilted)) {
       if (terrainAt(shore, tile.x, tile.z) !== 'water') continue;
-      // Everything wet is the pier's own column and nothing else.
       expect({ x: tile.x, z: tile.z }).toEqual({ x: 5, z: tile.z });
     }
   });
@@ -1078,20 +995,16 @@ describe('a plot with a shore', () => {
   });
 
   it('grows no spur to anything standing on the sand', () => {
-    // Sand is walked on: a hut on the beach is reached across it, and paving a
-    // way to everything standing there is what turns a beach into a car park.
     const shore = shoreFor(coastal())!;
     const withHut = coastal({
       plots: [
         { id: 'hut', tileX: 0, tileZ: 4 },
-        // On the sand, two rows back from the water.
         { id: 'hut', tileX: 2, tileZ: 6 },
       ],
     });
     const bare = pathTilesFor(items, coastal());
     const withOne = pathTilesFor(items, withHut);
     expect(withOne.length).toBe(bare.length);
-    // Reachable all the same, so nothing counts it as walled in.
     expect(plotsWithoutPathAccess(items, withHut)).toEqual([]);
     expect(
       withOne.filter((tile) => terrainAt(shore, tile.x, tile.z) === 'beach' && tile.x === 2),
@@ -1109,11 +1022,6 @@ describe('placementCenter', () => {
 
 const hutOf = (layout: ResortLayout) => layout.placements.find((each) => each.id === 'hut')!;
 
-/**
- * Keys of the buildings standing on grass that declare doors and have none on
- * paving. Grass only, because nothing standing on sand is paved to at all; see
- * `growSpurs`.
- */
 const shutOut = (layout: ResortLayout, plan: ResortPlan): string[] => {
   const paved = new Set(layout.paths.map((tile) => tileKey(tile.tileX, tile.tileZ)));
   const terrain = terrainFor(plan);
@@ -1132,7 +1040,6 @@ const shutOut = (layout: ResortLayout, plan: ResortPlan): string[] => {
     .map((placement) => placement.key);
 };
 
-/** What a placement claims on the grid and draws, without which way it faces. */
 const claimsOf = (layout: ResortLayout) =>
   layout.placements.map(({ key, id, tileX, tileZ, tilesX, tilesZ, width, depth }) => ({
     key,
@@ -1145,9 +1052,7 @@ const claimsOf = (layout: ResortLayout) =>
   }));
 
 describe('turning a building to open its door onto paving', () => {
-  /** A 2x3 hut with one door in the middle of its own +z front. */
   const hut: LayoutItem = { ...item('hut', 2, 3), doors: [{ x: 15, z: 46, facing: 0 }] };
-  /** The hut at 1,1 on a 5x5 plot, with one street along the side named. */
   const streetAlong = (side: 'north' | 'east', rotation: 0 | 1 | 2 | 3 = 0): ResortPlan => ({
     tilesX: 5,
     tilesZ: 5,
@@ -1164,8 +1069,6 @@ describe('turning a building to open its door onto paving', () => {
   });
 
   it('paves a spur to the door of a building whose flank is on the only street', () => {
-    // Only a quarter turn could face the east flank, and a quarter turn makes a
-    // 2x3 hut a 3x2 one - so the hut keeps its tiles and grows a way to its door.
     const layout = layoutResort([item(PATH_ID), hut], streetAlong('east'));
     const placed = hutOf(layout);
     expect([placed.tileX, placed.tileZ, placed.tilesX, placed.tilesZ]).toEqual([1, 1, 2, 3]);
@@ -1180,7 +1083,6 @@ describe('turning a building to open its door onto paving', () => {
   });
 
   it('falls back to the nearest side when something stands in front of every door', () => {
-    // A post on the tile in front of the door either way round the hut stands.
     const post: LayoutItem = { ...item('post'), category: 'grounds' };
     const plan: ResortPlan = {
       ...streetAlong('east'),
@@ -1192,7 +1094,6 @@ describe('turning a building to open its door onto paving', () => {
     };
     const layout = layoutResort([item(PATH_ID), hut, post], plan);
     expect(hutOf(layout).rotation).toBe(0);
-    // Still reached, from the street along its flank.
     expect(plotsWithoutPathAccess([item(PATH_ID), hut, post], plan)).toEqual([]);
   });
 
@@ -1218,20 +1119,12 @@ describe('turning a building to open its door onto paving', () => {
       category: type.category,
       doors: type.venue?.doors ?? [],
     }));
-    /** The same catalogue with the doors left off, which is the layout before them. */
     const without: LayoutItem[] = withDoors.map(({ doors: _doors, ...rest }) => rest);
     const planFor = (seed: number): ResortPlan =>
       generateResort(TYPES, clampParams({ tilesX: 112, tilesZ: 100, seed, density: 0.7 }));
     const plan = planFor(3);
 
     it('opens every door-declaring building on the grass onto paving', () => {
-      // Without the doors the plan stands most of them with their backs to the
-      // street; with them, all but one are opened onto paving on the reference
-      // plot. The one is a playground whose plot the generator only stands there
-      // since the snack bar and the ice-cream cart joined the back of the beach:
-      // no turn of it that claims the same tiles faces the paving it has, which
-      // is the fallback plan 025 measured at 15 buildings and seeds 1, 7 and 11
-      // at 9, 9 and 11.
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);
       expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual(['playground']);
     });

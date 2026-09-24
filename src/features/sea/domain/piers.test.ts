@@ -10,7 +10,6 @@ const shore = shoreFor({
 })!;
 const water = waterStartZ(shore, 0);
 
-/** A lane down column `tileX`, from the sand out `pier` tiles over the water. */
 const lane = (tileX: number, pier: number) =>
   Array.from({ length: 4 + pier }, (_, index) => ({ tileX, tileZ: water - 4 + index }));
 

@@ -8,7 +8,6 @@ import {
   smoothstep,
 } from './dayNight';
 
-/** A time on the clock, from hours and minutes. */
 const at = (hours: number, minutes = 0): number => (hours + minutes / 60) / 24;
 
 describe('normalizeTime', () => {
@@ -56,7 +55,6 @@ describe('smoothstep', () => {
 
 describe('skyStateFor', () => {
   it('puts the sun overhead at solar noon and below the horizon at solar midnight', () => {
-    // An hour after the clock's, since sunset is two hours later than sunrise is early.
     expect(skyStateFor(at(13)).sunDirection.y).toBeGreaterThan(0.9);
     expect(skyStateFor(at(1)).sunDirection.y).toBeLessThan(-0.9);
   });
@@ -85,7 +83,6 @@ describe('skyStateFor', () => {
   });
 
   it('is still full daylight at half past eight in the evening and dark by a quarter to ten', () => {
-    // The walk home starts at seven and has to be seen: see `night.ts`.
     expect(skyStateFor(at(20, 30)).lampFactor).toBe(0);
     expect(skyStateFor(at(20, 30)).sunIntensity).toBeGreaterThan(1.5);
     expect(skyStateFor(at(21, 45)).sunIntensity).toBe(0);
@@ -123,18 +120,15 @@ describe('skyStateFor', () => {
   });
 });
 
-/** The three channels of a packed colour. */
 const channels = (color: number): number[] => [
   (color >> 16) & 0xff,
   (color >> 8) & 0xff,
   color & 0xff,
 ];
 
-/** How bright a packed colour is, as the mean of its channels. */
 const brightness = (color: number): number =>
   channels(color).reduce((sum, each) => sum + each, 0) / 3;
 
-/** Every hour of the day, as the clock hands it over. */
 const HOURS = Array.from({ length: 24 }, (_unused, hour) => hour / 24);
 
 describe('overcastSky', () => {
@@ -166,13 +160,11 @@ describe('overcastSky', () => {
   });
 
   it('greys a midday sky on every channel', () => {
-    // Noon, where the sky is at its bluest and the claim is unambiguous.
     const noon = skyStateFor(13.75 / 24);
     const storm = overcastSky(noon, 1);
     for (const [index, before] of channels(noon.skyColor).entries()) {
       expect(channels(storm.skyColor)[index], `channel ${index}`).toBeLessThan(before);
     }
-    // And greyer, not merely darker: the spread between the channels closes.
     const spread = (color: number): number =>
       Math.max(...channels(color)) - Math.min(...channels(color));
     expect(spread(storm.skyColor)).toBeLessThan(spread(noon.skyColor));
@@ -187,13 +179,9 @@ describe('overcastSky', () => {
   });
 
   it('takes away daylight and leaves lamplight alone', () => {
-    // Cloud blocks the sun, and at midnight there is no sun to block: the lamps
-    // are what light the plot, and a storm that dimmed them would leave
-    // everything not standing under one unreadable.
     const midnight = skyStateFor(0);
     expect(midnight.lampFactor).toBe(1);
     expect(overcastSky(midnight, 1).ambientIntensity).toBe(midnight.ambientIntensity);
-    // The sky itself still goes darker, so a stormy night reads as one.
     expect(brightness(overcastSky(midnight, 1).skyColor)).toBeLessThan(
       brightness(midnight.skyColor),
     );

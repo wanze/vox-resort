@@ -1,10 +1,4 @@
-/**
- * A guest in blue. 3x7x2 voxels, facing +z.
- *
- * The fair hair is `thatch.light` rather than a blonde of its own: the palette
- * has no hair family, on purpose, because every hair the resort needs is
- * already a step of a ramp the buildings use. See `figure.ts`.
- */
+// The palette has no hair family on purpose: every hair is a step of a building ramp.
 import { PALETTE } from '../palette.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 import { ADULT_VOXELS, figure } from './figure.ts';

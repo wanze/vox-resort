@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from './random';
 
-/** The first eight numbers a seed produces. */
 const draw = (seed: number): number[] => Array.from({ length: 8 }, createRandom(seed));
 
 describe('createRandom', () => {

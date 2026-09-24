@@ -2,24 +2,16 @@ import { useCallback, useState, type RefObject } from 'react';
 import type { CameraMode, CompassDirection } from '../features/layout/domain/worldBounds';
 import type { CameraView, Showcase } from './showcase';
 
-/**
- * The camera panel, as React state.
- *
- * A mirror rather than the source of truth: the scene owns which camera is on
- * screen, and `C`, `Q` and `E` move it from the canvas without React hearing
- * about it. So every change goes to the scene first and the state is read back
- * off it, and the showcase reports the keyboard's changes through `adopt`.
- */
+// A mirror: the scene owns the camera and keys move it without React, so state is read back from
+// the scene.
 export interface CameraControls {
   readonly view: CameraView;
-  /** Records what the scene says the camera is now doing. */
   adopt(view: CameraView): void;
   setMode(mode: CameraMode): void;
   setDirection(direction: CompassDirection): void;
   setDetail(enabled: boolean): void;
 }
 
-/** What the panel shows before a scene exists to ask. */
 const INITIAL_VIEW: CameraView = { mode: 'perspective', direction: 'southeast', detail: true };
 
 export function useCameraControls(showcase: RefObject<Showcase | null>): CameraControls {
@@ -30,8 +22,7 @@ export function useCameraControls(showcase: RefObject<Showcase | null>): CameraC
       const mounted = showcase.current;
       if (!mounted) return;
       change(mounted);
-      // Read back rather than assumed: the scene refuses a mode change while a
-      // benchmark is running, and the panel should say what is true.
+      // Read back: the scene refuses a mode change while a benchmark is running.
       setView(mounted.cameraView);
     },
     [showcase],

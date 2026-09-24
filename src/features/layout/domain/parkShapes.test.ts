@@ -90,7 +90,6 @@ describe('plantGrid', () => {
         }
       }
     }
-    // The tree whose mirror image is blocked is left out with it.
     expect(at.has(tileKey(16, 7))).toBe(false);
   });
 });

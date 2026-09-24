@@ -12,7 +12,6 @@ const FLAT: LevelProvider = () => 0;
 const networkOf = (paved: PavedTile[]): WalkNetwork =>
   walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 20 });
 
-/** The entrance is four tiles wide and one deep; the generator stands it across the promenade. */
 const gateAt = (key: string, tileX: number, tileZ: number): Placement => ({
   key,
   id: 'entrance',
@@ -66,8 +65,6 @@ describe('gatewaysOn', () => {
   });
 
   it('hands straight to doorsFor and comes back with the paving either side of it', () => {
-    // A promenade running north-south through x = 2..5, with the gate across it
-    // at z = 3: the paving is the row in front of it and the row behind.
     const paved: PavedTile[] = [];
     for (let tileX = 2; tileX <= 5; tileX++) {
       for (const tileZ of [2, 4]) paved.push({ tileX, tileZ, y: 0 });

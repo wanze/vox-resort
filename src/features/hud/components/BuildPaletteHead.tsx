@@ -1,21 +1,11 @@
 export interface BuildPaletteHeadProps {
-  /** How many objects the shelves below are currently offering. */
   readonly count: number;
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
-  /** Name of the type the pointer is holding, or null when it is empty. */
   readonly armed: string | null;
   readonly onDisarm: () => void;
 }
 
-/**
- * The palette's fixed top: what it is, how to narrow it, and what you are
- * holding.
- *
- * The armed chip only appears once something is armed, which is deliberate —
- * it is the one control that is about the pointer rather than the catalogue,
- * and a permanently empty slot for it would read as a fourth thing to fill in.
- */
 export function BuildPaletteHead({
   count,
   query,

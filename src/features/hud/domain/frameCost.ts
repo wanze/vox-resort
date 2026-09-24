@@ -1,20 +1,9 @@
-/**
- * What the main thread spends on a frame, and the worst of it lately.
- *
- * The frame rate averages a stall away: one frame of 900 ms among fifty of
- * 16 ms reads as a dip to twenty-something. The worst frame of the last second
- * is what says the page stalled, and the latest one is what a steady view
- * costs. Pure: the caller measures and owns the state.
- */
+// Tracks the worst frame of the last second, because the frame rate averages a stall away.
 
 export interface FrameCostState {
-  /** When the open window started, in milliseconds; null before the first frame. */
   readonly windowStartMs: number | null;
-  /** Worst frame so far in the open window. */
   readonly windowWorstMs: number;
-  /** Worst frame of the last window that closed: what is reported. */
   readonly worstMs: number;
-  /** The most recent frame's cost. */
   readonly latestMs: number;
 }
 
@@ -24,7 +13,6 @@ export function createFrameCostState(): FrameCostState {
   return { windowStartMs: null, windowWorstMs: 0, worstMs: 0, latestMs: 0 };
 }
 
-/** Folds one frame's measured cost, taken at `nowMs`, into the state. */
 export function sampleFrameCost(
   state: FrameCostState,
   nowMs: number,

@@ -5,7 +5,6 @@ export interface HudReadoutProps {
   readonly value: ReactNode;
 }
 
-/** One number in the bar, with the word that says what it counts. */
 export function HudReadout({ label, value }: HudReadoutProps) {
   return (
     <div className="hud-readout">

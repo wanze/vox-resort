@@ -5,30 +5,11 @@ import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import type { VoxelModelSource } from './voxelgen.ts';
 
-/**
- * What the catalogue declares a guest can do, checked across the whole registry.
- *
- * These are art tests rather than logic tests, and they exist because a venue is
- * a handful of numbers typed into sixty files by hand. A lodging with more
- * people than beds, a relief of zero or a bench that turned into a restaurant
- * would all compile, and nothing would notice until a simulation read them.
- *
- * The drafts are in here alongside the catalogue, so a draft is correct the day
- * it is promoted.
- */
 const SOURCES: readonly VoxelModelSource[] = [...MODEL_SOURCES, ...DRAFT_SOURCES];
 
 const venues = SOURCES.filter((source) => source.venue !== undefined);
 
-/**
- * The models that are deliberately not somewhere to go.
- *
- * A list rather than a rule, so that promoting one to a venue is an edit here
- * and not a silent change. `entrance` and `lifeguard-tower` are on it until the
- * plans that give them a meaning: the gate is where guests will arrive, and the
- * tower is where a lifeguard will be posted, and neither is a place a guest goes
- * for its own sake.
- */
+// A list rather than a rule, so promoting a model to a venue is a deliberate edit here.
 const NOT_VENUES: ReadonlySet<string> = new Set([
   'beach-umbrella',
   'bench',
@@ -124,8 +105,6 @@ describe('the venues the catalogue declares', () => {
   });
 
   it('has a decision made about every model', () => {
-    // A new model file is either a venue or on the list above; one that is
-    // neither fails here rather than slipping past unconsidered.
     const undecided = SOURCES.filter(
       (source) => source.venue === undefined && !NOT_VENUES.has(source.id),
     ).map((source) => source.id);

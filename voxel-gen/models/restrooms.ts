@@ -1,14 +1,5 @@
-/**
- * Small public restroom block: a rendered building with two doors under
- * pictogram plaques, a high slit window and a planter along the front, under a
- * flat roof with a parapet. 32x16 (8x4 m, 4.5 m tall), a 2x1 tile.
- * Doors face +z (toward the preview camera).
- *
- * Drawn from `docs/references/restrooms.jpg`. The reference tiles its walls in
- * a fine grid, which is the one thing here not copied: a pattern dithered
- * across a face defeats the coplanar merge and costs more triangles than the
- * whole building. See `docs/art-direction.md`.
- */
+// The reference tiles its walls in a fine grid, left out on purpose: a dithered face
+// defeats the coplanar merge and costs more triangles than the whole building.
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { flowerBox } from '../parts/props.ts';
@@ -42,8 +33,6 @@ export default defineModel({
 
     for (const along of [7, 21]) {
       doorway(b, { face: 'z+', at: FRONT, along, y: ground, w: 4, h: 8 });
-      // A plaque over each door: a pictogram at this scale is a mark, not a
-      // drawing, so it is drawn as one.
       b.box(along + 1, along + 2, ground + 9, ground + 9, FRONT, FRONT, PALETTE.glass.deep);
     }
     shutteredWindow(b, {

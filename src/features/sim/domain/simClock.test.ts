@@ -14,7 +14,6 @@ import {
   type SimClock,
 } from './simClock';
 
-/** A clock standing on exactly this tick, with nothing carried. */
 const atTick = (ticks: number): SimClock => ({ ticks, speed: 'paused', carry: 0 });
 
 describe('createSimClock', () => {

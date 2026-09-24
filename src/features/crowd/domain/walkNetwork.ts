@@ -1,93 +1,3 @@
-/**
- * Where a person may walk, worked out once per resort.
- *
- * The whole point of this module is what it takes *off* the frame. A crowd that
- * asked the ground where it was standing would call `groundAt`, `levelAt` and
- * `terraceAt` once per person per frame, and every one of those walks a list of
- * terraces and evaluates a meander — for a plot that is not changing. So the
- * questions are all asked here, at build time, and what comes out is a graph:
- * nodes on every paved tile, and edges between the pairs a person can actually
- * get between.
- *
- * A person is then never "somewhere on the plot". A person is **on an edge, at a
- * parameter between 0 and 1**, and a frame is one multiply-add and one lerp. See
- * `crowd.ts`, and `docs/crowd.md` for why that is the shape of the whole feature.
- *
- * Height comes along for free, which is the part worth pointing at: each node
- * carries the height of the paving it stands on, so lerping along the edge that
- * *is* a flight of stairs is the climb up it. Nothing walks up a step by knowing
- * that it is a step.
- *
- * Which is why a flight is the one tile that holds **two** nodes, at its foot and
- * at its head, rather than one at its centre. A flight's ramp runs from the
- * paving it continues to the paving above across the width of its own tile, so a
- * node in the middle of it is half a level under the treads — and a crowd walked
- * to it wades through the staircase up to the shoulders. See {@link standFor},
- * which is where that is put right and where the two rules it drags along —
- * nothing steps onto a flight sideways, and a flight is never a beach gate — are
- * written down.
- *
- * ## What makes an edge
- *
- * Two paved tiles, 4-neighbours, and one of:
- *
- * - **the same level**, which is every ordinary pair; or
- * - **one level apart**, and the lower tile is a flight of stairs *facing the
- *   higher one*.
- *
- * A crossing is the same shape of thing one storey down. A bridge's deck stands
- * `BRIDGE_VOXELS` above the water rather than `PAVING_VOXELS` — see
- * `voxel-gen/models/bridge.ts` — so a tile of one is a metre above the tiles of
- * path either side of it, and the tile that makes up the difference is the ramp
- * at each end. That is a flight in everything but its rise, so it is one here:
- * two nodes rather than one, and `spans.ts` is asked which tiles they are for
- * the same reason `stairs.ts` is asked about the steps.
- *
- * The second clause is the whole of the terrain handling, and it is deliberately
- * asked of `stairs.ts` rather than re-derived here. It is nearly true that any
- * paved pair a level apart is a flight — that is exactly what `climbAt` says —
- * but not quite: where a path turns *on* a step, the corner tile has higher
- * paved ground on two perpendicular sides and can only climb one of them. The
- * other pair looks walkable and is a wall. One rule, in one place, or the crowd
- * would walk up the side of a staircase.
- *
- * ## The beach is not in the graph
- *
- * Sand is the one place people should move freely, and a 112 x 14 field of tile
- * centres is a chessboard rather than a beach. So the sand band is kept as a
- * *region* — the two numbers per column that bound it — and a person on it picks
- * a point and walks to it. See {@link beachPointAt}.
- *
- * The two are joined by **gates**: paved nodes with open sand next to them, which
- * is exactly where a boardwalk runs out onto the beach. A person leaves the graph
- * at a gate and comes back through one.
- *
- * ## Seats hang off the graph, they are not in it
- *
- * A bench is not somewhere to walk *through*, so a seat is not a node: it is a
- * point hung off the one node a person can reach it from, and an edge is never
- * laid to it. What that buys is that nothing about the walk changes — the
- * onward pick at a junction counts exits, and a seat is not one, so a bench
- * beside a path does not bend the route past it.
- *
- * Which node a seat hangs off is the whole of the rule: the nearest paved node
- * on the seat's own tile or one of its four neighbours, no more than
- * {@link SEAT_RISE} above or below it. A seat with no such node is **dropped**,
- * and that is the design rather than a failure — a chair in the middle of a lawn
- * is a chair nobody crosses the grass to, exactly as a flight of stairs is never
- * a beach gate. It is what lets the coffee shop declare a terrace of six chairs
- * and have them used on the plots where paving runs past them.
- *
- * With one exception, and it is the sand again: a seat **standing on the beach**
- * hangs off no node at all, because the beach hangs off no node at all. A sun
- * lounger on the sand is reached the way everything on the sand is reached — by
- * somebody already out there walking to it — so those seats are collected
- * separately, in {@link WalkNetwork.beachSeats}, and a roamer picks one out of
- * the handful within a few columns of where they stand. Without this the rows of
- * loungers the beach is laid with would be furniture nobody could ever use: not
- * one tile of the beach is paved, by design.
- */
-
 import {
   BRIDGE_VOXELS,
   LEVEL_VOXELS,
@@ -104,172 +14,73 @@ import type { SeatPose } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSpot } from './seating';
 import { sandGridFor, type ObstacleBox, type SandGrid } from './sandGrid';
 
-/**
- * A paved tile, as the layout describes one.
- *
- * Deliberately narrower than `Placement`: what a person needs of a path is where
- * it is and how high it stands, and taking only that is what lets a test build a
- * network out of four tiles instead of out of four placements.
- */
 export interface PavedTile {
   readonly tileX: number;
   readonly tileZ: number;
-  /** Height of the ground under the slab, in voxels. */
   readonly y: number;
 }
 
-/**
- * One walkable spot: the centre of a paved tile, or one end of a flight.
- *
- * Nodes are **not** one per paved tile. Most tiles have exactly one, at their
- * centre; a flight has one at each end of its climb, and where two flights meet
- * they share the landing between them. See {@link standFor}.
- */
 export interface WalkNode {
-  /** Where a person stands, in world voxels. */
   readonly x: number;
   readonly z: number;
-  /** Top of the paving here, which is what a person's feet are on. */
   readonly y: number;
-  /** The tile this spot belongs to; a shared landing names one of the two. */
   readonly tileX: number;
   readonly tileZ: number;
-  /** Indices into {@link WalkNetwork.edges} of every edge leaving here. */
   readonly exits: readonly number[];
-  /** Whether open sand adjoins this tile, so a person may step off onto it. */
   readonly gate: boolean;
-  /**
-   * Indices into {@link WalkNetwork.seats} of every seat reachable from here.
-   *
-   * Empty for almost every node on the plot, which is what makes the check an
-   * arriving person does a length test on an array they were already holding.
-   */
   readonly seats: readonly number[];
 }
 
-/**
- * One direction of one adjacency.
- *
- * Directed, and stored in both directions, because a person walking an edge has
- * a direction and giving them one saves a flag and a branch. `length` is the
- * true 3-D distance, so a flight of stairs takes longer to climb than a slab
- * takes to cross — which it should, and which costs nothing to be right about.
- */
 export interface WalkEdge {
   readonly from: number;
   readonly to: number;
   readonly length: number;
 }
 
-/** The sand a person may roam over: level ground, bounded per column. */
 export interface BeachBand {
   readonly shore: Shore;
-  /** Columns the plot actually has, so a roamer cannot walk off the west end. */
   readonly tilesX: number;
 }
 
-/**
- * One seat a person can actually get to: where they sit, which way they look,
- * and the node they walk off to reach it.
- *
- * The heading comes from the art by way of `seating.ts` rather than from the
- * walk, and that is the point of carrying it: a person on a bench faces out over
- * its front however they arrived at it, where a heading worked out from the last
- * step they took would seat half of them looking into the back rail.
- */
+// The heading comes from the art, not the last step walked, or half the sitters would face
+// the back rail.
 export interface WalkSeat {
-  /** Where their hips are, in world voxels. */
   readonly x: number;
   readonly z: number;
-  /** The layer their hips rest on. */
   readonly y: number;
-  /** Which way their legs point, in radians about Y. */
   readonly heading: number;
-  /** Sitting up on it, or lain back along it; the art decides. */
   readonly pose: SeatPose;
-  /**
-   * The node a person leaves the graph at to sit here and returns to, or
-   * {@link OFF_THE_GRAPH} for a seat out on the sand, which is walked to from
-   * wherever the roamer happens to be.
-   */
   readonly node: number;
 }
 
-/** What a seat on the beach carries instead of a node; see {@link WalkSeat}. */
 export const OFF_THE_GRAPH = -1;
 
 export interface WalkNetwork {
   readonly nodes: readonly WalkNode[];
   readonly edges: readonly WalkEdge[];
-  /** Node indices with open sand beside them; empty on a plot with no coast. */
   readonly gates: readonly number[];
-  /** Null when the plan has no beach, which is every flat authored plan. */
   readonly beach: BeachBand | null;
-  /**
-   * Every reachable seat on the plot, each hung off the node it is reached
-   * from. Empty on a plot with nothing to sit on, which is a plot where nobody
-   * ever sits rather than one that has to be special-cased.
-   */
   readonly seats: readonly WalkSeat[];
-  /**
-   * The ones out on the sand, as indices into {@link seats}: the loungers, and
-   * whatever a beach club puts on its deck.
-   *
-   * A list of their own because they are found a different way — a roamer is
-   * not at a node, so there is no node's own list to read. It is short, and the
-   * scan over it is bounded by how far a roamer will walk; see `crowd.ts`.
-   */
   readonly beachSeats: readonly number[];
-  /**
-   * What stands on the sand, so a roamer picks a line that goes round it. Null
-   * with no beach. See `sandGrid.ts`.
-   */
   readonly sand: SandGrid | null;
 }
 
 const tileKey = (x: number, z: number): string => `${x},${z}`;
 
-/** The 4-neighbours, in the order `stairs.ts` resolves an ambiguous corner in. */
 const NEIGHBOURS = CLIMBS.map(({ dx, dz }) => [dx, dz] as const);
 
-/** Where a person's feet are on a paved tile standing on ground at `y`. */
 export const walkingSurface = (y: number): number => y + PAVING_VOXELS;
 
 export interface WalkNetworkInput {
-  /** Every paved tile of the plot: `layout.paths` satisfies this as it stands. */
   readonly paved: readonly PavedTile[];
-  /** How high the ground under a tile is; only the stair rule reads it. */
   readonly levelOf: LevelProvider;
-  /** Where the plot meets the sea. Null is a plot with no beach to roam. */
   readonly shore: Shore | null;
-  /** Columns the plot has, which bounds the beach. */
   readonly tilesX: number;
-  /**
-   * Every seat the objects on the plot offer; see `seating.ts`. Omit it and
-   * nobody sits, which is what a fixture built out of four paved tiles wants.
-   */
   readonly seats?: readonly SeatSpot[];
-  /**
-   * Whether a paved tile is water a bridge is *raised* over.
-   *
-   * Omit it and nothing is raised, which is every plot with no river on it — and
-   * the jetty, which is paving over water and stands at the sea's own height.
-   * See `spans.ts`.
-   */
   readonly bridged?: SpanProvider;
-  /**
-   * Every object standing on the plot, as the ground plane sees it: the ones on
-   * the sand are what a roamer walks round. Omit it and the beach is open.
-   */
   readonly obstacles?: readonly ObstacleBox[];
 }
 
-/**
- * The graph a crowd walks, from the resort as laid out.
- *
- * Built once when the resort is, and thrown away when it is regenerated: it is
- * derived from the paving, and the paving is what a regenerate changes.
- */
 export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   const { paved, levelOf, shore, tilesX } = input;
 
@@ -281,29 +92,18 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
 
   const nodes: WalkNode[] = [];
   const exits: number[][] = [];
-  /** Each node's own seat list, parallel to {@link nodes}; see `standAt`. */
   const seatsOf: number[][] = [];
   const edges: WalkEdge[] = [];
   const gates: number[] = [];
-  /** Nodes by the point they stand on, which is what lets two flights share one. */
   const standing = new Map<string, number>();
 
-  /**
-   * The node standing at a point, made on first use.
-   *
-   * Shared by position rather than owned by a tile, because two flights that
-   * meet meet *at a point*: the top of one and the foot of the next are the same
-   * landing, and two nodes there would be a zero-length edge between two places
-   * that are one place.
-   */
+  // Shared by position: the top of one flight and the foot of the next are one landing.
   const standAt = (x: number, y: number, z: number, tile: PavedTile, gate = false): number => {
     const key = `${x},${y},${z}`;
     const existing = standing.get(key);
     if (existing !== undefined) return existing;
     const index = nodes.length;
-    // The node's own lists, held on to here so a link and a seat can push to
-    // them: what a node can be walked to, and what can be sat on from it, are
-    // only known once every node exists.
+    // Exits and seats are only known once every node exists, so they are pushed later.
     const own: number[] = [];
     const sittable: number[] = [];
     nodes.push({
@@ -323,7 +123,6 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     return index;
   };
 
-  /** Joins two nodes, one way. Their own positions are what say how far it is. */
   const link = (from: number, to: number): void => {
     if (from === to) return;
     const a = nodes[from]!;
@@ -333,7 +132,6 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   };
 
   const stands = paved.map((tile) => standFor(tile, climbs, spans, shore, indexOf, standAt));
-  // The climb itself, walked in both directions like every other adjacency.
   for (const stand of stands) {
     if (stand.kind !== 'flight') continue;
     link(stand.low, stand.high);
@@ -363,7 +161,6 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   };
 }
 
-/** What stands on the plot's sand, or null on a plot with none. */
 function sandOf(input: WalkNetworkInput): SandGrid | null {
   if (!input.shore) return null;
   return sandGridFor({
@@ -373,26 +170,10 @@ function sandOf(input: WalkNetworkInput): SandGrid | null {
   });
 }
 
-/**
- * How far above or below a seat its paving may be, in voxels.
- *
- * A metre, which is half a terrace. It is a generous bound on purpose: a seat
- * names the layer a sitter's *hips* are at, so a bench beside a path is already
- * two voxels up on the paving next to it, and a chair on a plinth three courses
- * high is four. What it excludes is the thing worth excluding — paving a whole
- * terrace above or below the seat, which is a bench on the roof of the terrace
- * wall as far as anybody walking the lower path is concerned.
- */
+// Half a terrace: a seat names hip height, so it sits a few voxels above its paving, but
+// paving a whole terrace away is out of reach.
 const SEAT_RISE = LEVEL_VOXELS / 2;
 
-/**
- * Hangs every reachable seat off the node it is reached from, and drops the
- * rest.
- *
- * The search is the seat's own tile and its four neighbours, which is a fixed
- * five tiles per seat however big the plot is — the reason the nodes are indexed
- * by tile first. See {@link nodeFor}.
- */
 function seatsAmong(
   spots: readonly SeatSpot[],
   nodes: readonly WalkNode[],
@@ -407,8 +188,6 @@ function seatsAmong(
   for (const spot of spots) {
     const node = nodeFor(spot, nodes, byTile);
     const sand = node === OFF_THE_GRAPH && onOpenSand(spot, shore);
-    // A seat with neither paving nor sand within reach is simply never used;
-    // see the note at the top of the file.
     if (node === OFF_THE_GRAPH && !sand) continue;
     if (sand) beachSeats.push(seats.length);
     else seatsOf[node]!.push(seats.length);
@@ -424,19 +203,10 @@ function seatsAmong(
   return { seats, beachSeats };
 }
 
-/**
- * Whether a seat stands on the open beach, which is what makes it reachable
- * without a node.
- *
- * Asked of `shoreline.ts` rather than of the paving, so it is the same question
- * a gate asks — and asked of the seat's own tile, because a lounger laid in a
- * line down the sand stands on sand.
- */
 function onOpenSand(spot: SeatSpot, shore: Shore | null): boolean {
   return shore !== null && terrainAt(shore, spot.tileX, spot.tileZ) === 'beach';
 }
 
-/** The nodes standing on each tile: one, or the two ends of a flight. */
 function nodesByTile(nodes: readonly WalkNode[]): ReadonlyMap<string, number[]> {
   const byTile = new Map<string, number[]>();
   for (const [index, node] of nodes.entries()) {
@@ -448,15 +218,9 @@ function nodesByTile(nodes: readonly WalkNode[]): ReadonlyMap<string, number[]> 
   return byTile;
 }
 
-/** The tiles a seat looks for its paving on: its own, and its four neighbours. */
 const SEAT_TILES = [[0, 0] as const, ...NEIGHBOURS];
 
-/**
- * The node a seat is reached from, or -1 when there is none.
- *
- * Nearest wins, measured on the ground plane only, because the vertical part of
- * the distance is the rise {@link SEAT_RISE} has already had its say about.
- */
+// Measured on the ground plane: the vertical part is what SEAT_RISE already bounds.
 function nodeFor(
   spot: SeatSpot,
   nodes: readonly WalkNode[],
@@ -477,12 +241,6 @@ function nodeFor(
   return nearest;
 }
 
-/**
- * Where a person may stand on one paved tile.
- *
- * An ordinary tile is one place — its centre. A flight is **two**: the foot and
- * the head of the climb, at the tile's own two edges. See {@link standFor}.
- */
 type TileStand =
   | { readonly kind: 'centre'; readonly node: number }
   | {
@@ -492,38 +250,11 @@ type TileStand =
       readonly high: number;
     };
 
-/** How far a tile's edge is from its centre. */
 const HALF_TILE = TILE_VOXELS / 2;
 
-/**
- * The places one paved tile offers to stand on.
- *
- * A flight gets one at each end of the climb rather than one in the middle, and
- * that is the whole of why this function exists. A flight's ramp runs from the
- * paving it continues at one tile edge to the paving above at the other, so a
- * node at the tile *centre* — carrying, as every node does, the height of the
- * ground under its own tile — sits half a level under the treads. Walking to it
- * buried a person to the shoulders for the length of the flight, which is what
- * looking at the resort said before anything here changed.
- *
- * Two nodes at the tile's edges make the polyline the true surface: flat from
- * the neighbour's centre to the foot of the flight, the climb across the tile,
- * flat on to the next centre. Nothing is approximated and nothing per frame
- * changes — a person still lerps between two node heights.
- *
- * A flight is entered at its foot and left at its head, and {@link facing} is
- * where that is decided. A neighbour *beside* a flight reaches its foot too, and
- * that one is not tidiness but necessity: `stairs.ts` turns a tile into a flight
- * wherever paved ground stands a level above it, corridor tiles included, so on
- * a real plot a path sometimes runs straight through a flight at right angles to
- * the climb. Refusing that pair strands the whole corridor behind it — 46 nodes
- * of one generated plot. Sending it through the foot instead is a dogleg round
- * the bottom of the staircase, at the height the path is already at, which is
- * what a person would do with the same obstacle.
- *
- * A flight is never a beach gate: you step onto the sand off the paving, not off
- * a staircase.
- */
+// A flight gets a node at each end: a centre node at its tile's ground height sits half a
+// level under the treads. Sideways neighbours reach the foot because stairs.ts also makes
+// flights across corridors, and refusing them would strand the corridor.
 function standFor(
   tile: PavedTile,
   climbs: ReadonlyMap<string, { dx: number; dz: number }>,
@@ -537,15 +268,10 @@ function standFor(
   const foot = walkingSurface(tile.y);
   const key = tileKey(tile.tileX, tile.tileZ);
   const span = spans.get(key);
-  // The level middle of a crossing: one place to stand, like any ordinary tile,
-  // but on the deck rather than on the water it is carried over. It is never a
-  // beach gate for the reason a flight is not — you step onto the sand off the
-  // paving, and this is a metre above it.
+  // Never a beach gate: the deck stands a metre above the sand.
   if (span?.kind === 'deck') {
     return { kind: 'centre', node: standAt(x, tile.y + BRIDGE_VOXELS, z, tile) };
   }
-  // A ramp, and a flight: the same two-node shape at two different rises. See
-  // the note above on why a flight cannot be one node at the tile's centre.
   const rise = span ? BRIDGE_VOXELS - PAVING_VOXELS : LEVEL_VOXELS;
   const climb = span ? span.climb : climbs.get(key);
   if (!climb) {
@@ -556,45 +282,22 @@ function standFor(
     kind: 'flight',
     climb,
     low: standAt(x - climb.dx * HALF_TILE, foot, z - climb.dz * HALF_TILE, tile),
-    // The head of the climb is flush with what it hands over to: the paving on
-    // the terrace above for a flight, which is what `stairs.ts` authors the
-    // topmost tread to be, and the bridge's own deck for a ramp.
     high: standAt(x + climb.dx * HALF_TILE, foot + rise, z + climb.dz * HALF_TILE, tile),
   };
 }
 
-/**
- * The node a tile offers to a neighbour that way.
- *
- * The head of a flight faces the ground it climbs to and nothing else; every
- * other way in — from below, and from either side — arrives at its foot. See
- * {@link standFor} for why the sideways case has to be allowed at all.
- */
 function facing(stand: TileStand, dx: number, dz: number): number {
   if (stand.kind === 'centre') return stand.node;
   return stand.climb.dx === dx && stand.climb.dz === dz ? stand.high : stand.low;
 }
 
-/**
- * A tile of a crossing, as the walk needs it: which kind, and — for a ramp — the
- * way it climbs *away* from the bank.
- *
- * The direction is flipped from the one `spans.ts` hands back, which names a
- * ramp by the shore it comes off. What a stand wants is the way the surface
- * rises, so that a ramp and a flight are the same two-node shape.
- */
+// Flipped from spans.ts, which names a ramp by its shore: a stand wants the way the surface rises.
 interface Span {
   readonly kind: SpanKind;
   readonly climb: { readonly dx: number; readonly dz: number };
 }
 
-/**
- * Which paved tiles are a crossing, and what each one of them is.
- *
- * Asked of `spans.ts` rather than re-derived, for the reason the flights are
- * asked of `stairs.ts`: a crossing that came ashore in one module and not in the
- * other is a crowd walking into the side of a bridge.
- */
+// Asked of spans.ts so a crossing cannot come ashore in one module and not the other.
 function spansAmong(
   paved: readonly PavedTile[],
   bridged: SpanProvider | undefined,
@@ -613,12 +316,8 @@ function spansAmong(
   return spans;
 }
 
-/**
- * Which paved tiles are flights, and which way each one climbs.
- *
- * Asked of `stairs.ts` rather than re-derived; see the note at the top of the
- * file for the corner case that makes the difference.
- */
+// Asked of stairs.ts: where a path turns on a step, the corner tile has higher paving on two
+// sides but can only climb one; the other pair looks walkable and is a wall.
 function climbsAmong(
   paved: readonly PavedTile[],
   levelOf: LevelProvider,
@@ -632,16 +331,7 @@ function climbsAmong(
   return climbs;
 }
 
-/**
- * Whether a person can get from a paved tile to the paved neighbour `rise`
- * voxels above it.
- *
- * Flat is always yes. A climb is yes only if this tile is the flight and the
- * flight faces that way — see the note at the top of the file on why the second
- * half of that matters. A *drop* is the same question asked from the other side,
- * and it is answered by the edge in the other direction: every adjacency is
- * visited from both ends, so the pair either both exist or neither does.
- */
+// A drop is answered by the edge in the other direction: every adjacency is visited from both ends.
 function walkable(
   tile: PavedTile,
   step: { readonly dx: number; readonly dz: number },
@@ -663,7 +353,6 @@ function walkable(
   return climb.dx === towardsX && climb.dz === towardsZ;
 }
 
-/** Whether unpaved sand adjoins a tile, which is what makes its node a gate. */
 function adjoinsOpenSand(
   tile: PavedTile,
   shore: Shore | null,
@@ -678,47 +367,16 @@ function adjoinsOpenSand(
   });
 }
 
-/** Where a person roaming the sand stands: the top of the beach surface. */
 export const BEACH_SURFACE = SAND_LEVEL;
 
-/**
- * How far along the beach a roamer will pick their next spot, in tile columns.
- *
- * A roamer walks a **straight line** to whatever they pick, and the coast
- * wanders — so two points that are both on sand can have sea between them, and a
- * target picked anywhere on the beach sent people wading. Keeping the chord to a
- * few columns keeps it on the sand, because the coast's own meander moves well
- * under a tile over that distance.
- *
- * It is the better behaviour anyway: somebody on a beach mills about where they
- * are, rather than setting off on a four-hundred-metre walk to the far end of it.
- */
+// A roamer walks a straight line and the coast wanders, so a far target can have sea in
+// between; a few columns keeps the chord on the sand.
 const ROAM_COLUMNS = 3;
 
-/**
- * How far back from the water's edge a roamer will go, in tiles.
- *
- * The other half of keeping the chord dry, and it is also just what a beach
- * looks like: the last row of sand is where the sea washes over it.
- */
+// Keeps the chord dry on the seaward side too.
 const WATER_MARGIN = 1;
 
-/**
- * A point on the open sand, drawn from `random`.
- *
- * No query and no search: a column is picked, `waterStartZ` says where its water
- * begins, and the band of sand is the fixed depth in front of that. The beach is
- * level 0 by an invariant `elevation.ts` enforces, so the height is a constant
- * rather than a lookup — which is the reason the beach can be a region at all.
- *
- * The point is continuous rather than a tile centre, because a beach walked on
- * tile centres is a chessboard.
- *
- * `fromX` is where the person picking it is standing, in voxels, and the point
- * comes back within {@link ROAM_COLUMNS} of it — see the note there for why that
- * is a correctness rule and not only a nicer walk. Omit it to draw from the
- * whole beach, which is what spawning somebody onto it does.
- */
+// The beach is level 0 by an invariant elevation.ts enforces, so the height is a constant.
 export function beachPointAt(
   beach: BeachBand,
   random: () => number,
@@ -726,8 +384,6 @@ export function beachPointAt(
 ): { readonly x: number; readonly z: number } {
   const column = nearbyColumn(beach, random, fromX);
   const water = waterStartZ(beach.shore, column);
-  // The sand runs from the row against the grass down to the row at the water's
-  // edge; `beach` is that depth, and it is at least one by construction.
   const back = water - beach.shore.spec.beach;
   const front = Math.max(back, water - 1 - WATER_MARGIN);
   return {
@@ -736,7 +392,6 @@ export function beachPointAt(
   };
 }
 
-/** A column of the plot, near `fromX` when there is one to be near. */
 function nearbyColumn(beach: BeachBand, random: () => number, fromX?: number): number {
   const last = beach.tilesX - 1;
   if (fromX === undefined) return Math.min(last, Math.floor(random() * beach.tilesX));

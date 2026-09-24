@@ -1,13 +1,5 @@
-/**
- * Pure conversion of DVE's interleaved voxel vertex format into the flat,
- * per-attribute arrays Three.js buffer geometries expect.
- *
- * DVE packs one vertex into 24 floats:
- *   0..2  position    4..6  normal    8..10 texture indices (u32)
- *   12,13 uv          14..16 colour   18..21 voxel data (u32)
- * Only position and normal are needed here — placeholder colour comes from the
- * submesh's material, not from the vertex stream.
- */
+// DVE vertex floats: 0-2 position, 4-6 normal, 8-10 texture indices (u32), 12-13 uv,
+// 14-16 colour, 18-21 voxel data (u32).
 
 export const VERTEX_FLOAT_STRIDE = 24;
 export const POSITION_OFFSET = 0;
@@ -20,7 +12,6 @@ export interface VertexAttributes {
   readonly uvs: Float32Array;
 }
 
-/** Splits the interleaved stream into position, normal and uv arrays. */
 export function deinterleaveVertices(
   vertices: Float32Array,
   vertexCount: number,
@@ -48,14 +39,7 @@ export function deinterleaveVertices(
   return { positions, normals, uvs };
 }
 
-/**
- * Reverses every triangle's winding.
- *
- * DVE winds its faces for Babylon.js, which treats clockwise triangles as
- * front-facing; Three.js treats counter-clockwise as front-facing. Left as-is,
- * the renderer culls exactly the faces that should be visible and keeps the
- * ones pointing away, so a model is seen through from the near side.
- */
+// DVE winds faces clockwise for Babylon.js; Three.js treats counter-clockwise as front-facing.
 export function flipWinding(indices: Uint32Array): Uint32Array {
   if (indices.length % 3 !== 0) {
     throw new Error(`Index buffer holds ${indices.length} indices, not whole triangles`);
@@ -69,7 +53,6 @@ export function flipWinding(indices: Uint32Array): Uint32Array {
   return flipped;
 }
 
-/** Widest index in the buffer, used to pick a 16- or 32-bit index attribute. */
 export function needsThirtyTwoBitIndices(indices: Uint32Array): boolean {
   for (const index of indices) {
     if (index > 0xffff) return true;

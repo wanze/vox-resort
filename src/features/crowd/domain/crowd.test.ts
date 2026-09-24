@@ -39,17 +39,14 @@ import { LANE, MAX_SIDE } from './avoidance';
 
 const FLAT: LevelProvider = () => 0;
 
-/** Two terraces with a step between them, so z = 2 is a flight of stairs. */
 const STEP_AT_Z2: LevelProvider = (_x, z) => (z <= 1 ? 1 : 0);
 
-/** A paved street `length` tiles long, running east. */
 const street = (length: number): PavedTile[] =>
   Array.from({ length }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 }));
 
 const networkOf = (paved: PavedTile[], levelOf: LevelProvider = FLAT): WalkNetwork =>
   walkNetworkFor({ paved, levelOf, shore: null, tilesX: 20 });
 
-/** Runs the crowd for `seconds`, a frame at a time. */
 const run = (crowd: Crowd, seconds: number, frame = 1 / 60): void => {
   for (let elapsed = 0; elapsed < seconds; elapsed += frame) stepCrowd(crowd, frame);
 };
@@ -63,7 +60,6 @@ describe('createCrowd', () => {
       expect(crowd.x[i]!, 'off the east end').toBeLessThanOrEqual(10 * TILE_VOXELS);
       expect(crowd.y[i]).toBe(walkingSurface(0));
     }
-    // Nobody is standing on a tile centre with everybody else.
     expect(new Set(Array.from(crowd.x.slice(0, crowd.count))).size).toBeGreaterThan(20);
   });
 
@@ -81,9 +77,7 @@ describe('createCrowd', () => {
     const drawn = createCrowd(options);
     const chosen = createCrowd({ ...options, variantOf: () => 2 });
     expect(Array.from(chosen.variant)).toEqual(Array(12).fill(2));
-    // The default draw is pinned, so a change to the draw order is caught here.
     expect(Array.from(drawn.variant)).toEqual([0, 1, 0, 1, 3, 2, 2, 3, 0, 1, 1, 0]);
-    // The draw is made either way, so choosing the variants changes nothing else.
     expect(Array.from(chosen.x)).toEqual(Array.from(drawn.x));
     expect(Array.from(chosen.phase)).toEqual(Array.from(drawn.phase));
   });
@@ -116,8 +110,6 @@ describe('createCrowd', () => {
 
 describe('stepCrowd', () => {
   it('walks people at the pace they were given', () => {
-    // One long street, so nobody turns and the distance covered is the distance
-    // walked rather than the distance between two turns.
     const crowd = createCrowd({ network: networkOf(street(60)), count: 1, variants: 1, seed: 5 });
     const startX = crowd.x[0]!;
     const seconds = 3;
@@ -133,7 +125,6 @@ describe('stepCrowd', () => {
     for (let i = 0; i < crowd.count; i++) {
       expect(crowd.x[i]!).toBeGreaterThanOrEqual(-MAX_SIDE);
       expect(crowd.x[i]!).toBeLessThanOrEqual(30 * TILE_VOXELS + MAX_SIDE);
-      // Aside of the middle of the path to get past people, never off it.
       expect(Math.abs(crowd.z[i]! - 0.5 * TILE_VOXELS)).toBeLessThanOrEqual(MAX_SIDE + 0.01);
       expect(Number.isFinite(crowd.x[i]!)).toBe(true);
     }
@@ -143,7 +134,6 @@ describe('stepCrowd', () => {
     const crowd = createCrowd({ network: networkOf(street(40)), count: 20, variants: 1, seed: 7 });
     stepCrowd(crowd, 1 / 60);
     for (let i = 0; i < crowd.count; i++) {
-      // The models face +z, so a walk along x is a quarter turn either way.
       expect(Math.abs(crowd.heading[i]!)).toBeCloseTo(Math.PI / 2);
     }
   });
@@ -164,9 +154,6 @@ describe('stepCrowd', () => {
   });
 
   it('prefers walking on to turning straight back round', () => {
-    // On a straight street the only choice at each tile is carry on or reverse,
-    // so net displacement against distance walked is exactly the measurement:
-    // somebody who reversed at random would end up near where they started.
     const crowd = createCrowd({ network: networkOf(street(60)), count: 1, variants: 1, seed: 10 });
     const startX = crowd.x[0]!;
     const seconds = 30;
@@ -185,8 +172,6 @@ describe('stepCrowd', () => {
   });
 
   it('allocates nothing per frame', () => {
-    // Not measurable directly, so this asserts the shape that makes it true: the
-    // arrays are the same objects after a long run as before it.
     const crowd = createCrowd({
       network: networkOf(street(20)),
       count: 100,
@@ -199,16 +184,10 @@ describe('stepCrowd', () => {
   });
 });
 
-/** The node standing on a tile of a street fixture. */
 const nodeAt = (network: WalkNetwork, tileX: number): number =>
   network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === 0);
 
-/**
- * A step many times `MAX_STEP` long, which is how the crowd keeps up with a
- * calendar running faster than real time. See `sim/domain/crowdRate.ts`.
- */
 describe('a step longer than MAX_STEP', () => {
-  /** Two crowds off the same seed on a street with a junction and a spur. */
   const twins = (): [Crowd, Crowd] => {
     const paved = [...street(30), { tileX: 10, tileZ: 1, y: 0 }, { tileX: 10, tileZ: 2, y: 0 }];
     const options = { network: networkOf(paved), count: 40, variants: 4, seed: 31 };
@@ -231,9 +210,7 @@ describe('a step longer than MAX_STEP', () => {
       );
     }
     expect(furthest).toBeLessThan(1);
-    // The same choices at every node on the way, not merely the same distance.
     expect(Array.from(once.node)).toEqual(Array.from(often.node));
-    // And people actually went somewhere, or a crowd that never moved would pass.
     expect(start.filter((x, i) => Math.abs(x - once.x[i]!) > TILE_VOXELS).length).toBeGreaterThan(
       once.count / 2,
     );
@@ -264,7 +241,6 @@ describe('a step longer than MAX_STEP', () => {
   });
 
   it('still gets two people walking at each other past each other at the ceiling', () => {
-    /** Two people at either end of a long street, sent towards each other. */
     const headOn = (): Crowd => {
       const network = networkOf(street(40));
       const crowd = createCrowd({ network, count: 2, variants: 1, seed: 32 });
@@ -276,9 +252,6 @@ describe('a step longer than MAX_STEP', () => {
       }
       return crowd;
     };
-    // A call at the ceiling cannot be watched inside, so its twin is stepped a
-    // `MAX_STEP` at a time and watched instead, and the two are held to agree at
-    // the end of every call: what the twin shows is what the call did.
     const atCeiling = headOn();
     const watched = headOn();
     let closest = Infinity;
@@ -294,18 +267,13 @@ describe('a step longer than MAX_STEP', () => {
       expect(Math.abs(atCeiling.x[0]! - watched.x[0]!)).toBeLessThan(1);
       expect(Math.abs(atCeiling.z[1]! - watched.z[1]!)).toBeLessThan(1);
     }
-    // Without avoidance they would meet dead centre, at zero apart.
     expect(closest).toBeGreaterThan(3);
-    // And both got by, which a pair who stopped nose to nose would not have.
     expect(atCeiling.x[0]!).toBeGreaterThan(atCeiling.x[1]!);
   });
 });
 
 describe('being told where to go', () => {
   it('walks exactly as it always did when nothing is routing it', () => {
-    // The same fixture and seed as "prefers walking on to turning straight back
-    // round", pinned to the voxel: a crowd handed no router is the crowd there
-    // was before there were routers at all, and this is the number that says so.
     const crowd = createCrowd({
       network: networkOf(street(60)),
       count: 1,
@@ -317,8 +285,6 @@ describe('being told where to go', () => {
   });
 
   it('sends everybody the way the router says, wherever they came from', () => {
-    // West, always: on a street somebody walking east has to turn round for it,
-    // which is what wandering would never do.
     const network = networkOf(street(20));
     const crowd = createCrowd({
       network,
@@ -357,8 +323,6 @@ describe('being told where to go', () => {
   });
 
   it('does not pin somebody to the node they are standing on', () => {
-    // A router naming the arrival itself would be a zero-length segment taken
-    // over and over. They fall back to wandering instead.
     const network = networkOf(street(20));
     const crowd = createCrowd({
       network,
@@ -398,8 +362,6 @@ describe('being told where to go', () => {
 });
 
 describe('walking a flight of stairs', () => {
-  // A street running north over a single step: z = 0 and 1 are the upper
-  // terrace, z = 2 and 3 the lower, so (0, 2) is the flight.
   const levelOf = STEP_AT_Z2;
   const paved: PavedTile[] = [
     { tileX: 0, tileZ: 0, y: LEVEL_VOXELS },
@@ -420,8 +382,6 @@ describe('walking a flight of stairs', () => {
       stepCrowd(crowd, 1 / 60);
       for (let i = 0; i < crowd.count; i++) heights.add(Math.round(crowd.y[i]!));
     }
-    // Both terraces are reached, and so is the ground in between: a lerp across
-    // the flight, not a jump between two levels.
     expect(heights.has(walkingSurface(0))).toBe(true);
     expect(heights.has(walkingSurface(LEVEL_VOXELS))).toBe(true);
     expect(heights.size).toBeGreaterThan(4);
@@ -445,13 +405,11 @@ describe('walking a flight of stairs', () => {
 });
 
 describe('roaming the beach', () => {
-  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
     shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
   });
-  // A boardwalk down the middle of the plot and out onto the sand.
   const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
     tileX: 10,
     tileZ: 10 + index,
@@ -492,8 +450,6 @@ describe('roaming the beach', () => {
     for (let frame = 0; frame < 60 * 60 && sent.length < 3; frame++) {
       const before = sent.length;
       stepCrowd(crowd, 1 / 60);
-      // Sent out during this very step: the crowd must not have aimed them at a
-      // node on the way out of asking.
       for (const person of sent.slice(before)) {
         if (crowd.node[person] !== -1) aimedBack ??= `person ${person}`;
       }
@@ -554,7 +510,6 @@ describe('roaming the beach', () => {
       variants: 1,
       seed: 42,
       roamsBeach: false,
-      // A router that has forgotten everybody, as one rebuilt mid-errand has.
       routeOf: () => -1,
     });
     const gate = network.nodes[network.gates[0]!]!;
@@ -611,8 +566,6 @@ describe('roaming the beach', () => {
   });
 
   it('walks round what stands on the sand rather than through it', () => {
-    // Two rows of parasol-sized boxes across the beach either side of the
-    // boardwalk, a tile apart: plenty of sand, and plenty in the way.
     const boxes = Array.from({ length: 16 }, (_, index) => ({
       x: (index < 8 ? 2 + index : 12 + index - 8) * TILE_VOXELS + 4,
       z: (index % 2 === 0 ? 13 : 15) * TILE_VOXELS + 4,
@@ -623,8 +576,6 @@ describe('roaming the beach', () => {
     const crowd = createCrowd({ network: furnished, count: 40, variants: 2, seed: 18 });
     const startX = Float32Array.from(crowd.x);
     let travelled = 0;
-    // Collected and asserted once: a check per person per box per sample is a
-    // lot of expects for a test whose answer is one list.
     const intruders: string[] = [];
     for (let frame = 0; frame < 60 * 180; frame++) {
       stepCrowd(crowd, 1 / 60);
@@ -643,14 +594,10 @@ describe('roaming the beach', () => {
     }
     expect(intruders).toEqual([]);
     for (let i = 0; i < crowd.count; i++) travelled += Math.abs(crowd.x[i]! - startX[i]!);
-    // And the beach is still walked, rather than everybody stood still boxed in.
     expect(travelled / crowd.count).toBeGreaterThan(TILE_VOXELS);
   });
 
   it('brings people back onto the paving again', () => {
-    // Watched over the run rather than sampled at the end of it: what has to be
-    // true is that the sand is somewhere people leave, not that anybody in
-    // particular is off it at one moment.
     const crowd = createCrowd({ network, count: 30, variants: 4, seed: 17 });
     const wasRoaming = new Uint8Array(crowd.count);
     let returned = 0;
@@ -666,23 +613,16 @@ describe('roaming the beach', () => {
   });
 });
 
-/**
- * Comfortably longer than the longest sit, so a test that waits this out is
- * waiting for somebody to get up rather than racing them.
- */
 const SIT_LIMIT = 400;
 
-/** Who is sitting on each seat, as the crowd's own claims report it. */
 const sitters = (crowd: Crowd): number[] => Array.from(crowd.seatBy);
 
-/** The first person actually sitting down, or -1 while they are all walking. */
 const anyoneSeated = (crowd: Crowd): number => {
   for (let i = 0; i < crowd.count; i++) if (isSeated(crowd, i)) return i;
   return -1;
 };
 
 describe('the people who sit down', () => {
-  /** A street with one three-seat bench beside its middle tile. */
   const benched = (length: number, seats = 3): WalkNetwork =>
     walkNetworkFor({
       paved: street(length),
@@ -707,7 +647,6 @@ describe('the people who sit down', () => {
     expect(sitters(crowd).filter((person) => person >= 0).length).toBeGreaterThan(0);
   });
 
-  /** Runs until somebody is sitting down, and hands them back. */
   const untilSeated = (crowd: Crowd, seconds = 600): number => {
     for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 30) {
       stepCrowd(crowd, 1 / 30);
@@ -724,8 +663,6 @@ describe('the people who sit down', () => {
     expect(crowd.x[person]).toBeCloseTo(spot.x);
     expect(crowd.y[person]).toBeCloseTo(spot.y);
     expect(crowd.z[person]).toBeCloseTo(spot.z);
-    // The seat's own heading, not the one the last step they took would give
-    // them: a person on a bench faces out over its front however they arrived.
     expect(crowd.heading[person]).toBeCloseTo(spot.heading);
   });
 
@@ -735,8 +672,6 @@ describe('the people who sit down', () => {
       stepCrowd(crowd, 1 / 30);
       const held = Array.from(crowd.seat).filter((seat) => seat >= 0);
       expect(new Set(held).size, 'two people on one seat').toBe(held.length);
-      // And the two halves of the claim agree: the seat a person holds is the
-      // seat that says it is held by them.
       for (let i = 0; i < crowd.count; i++) {
         if (crowd.seat[i]! >= 0) expect(crowd.seatBy[crowd.seat[i]!]).toBe(i);
       }
@@ -746,10 +681,6 @@ describe('the people who sit down', () => {
   it('gets people up again, and back onto the paving', () => {
     const crowd = createCrowd({ network: benched(9), count: 30, variants: 2, seed: 14 });
     const first = untilSeated(crowd);
-    // Long enough that the longest sit is over several times: whoever was found
-    // sitting is up and walking again at some point, which is the only thing
-    // asserted here — watched rather than sampled at the end, because somebody
-    // who got up is free to sit down again before the run is over.
     let walkedOn = false;
     for (let elapsed = 0; elapsed < SIT_LIMIT && !walkedOn; elapsed += 1 / 30) {
       stepCrowd(crowd, 1 / 30);
@@ -770,9 +701,6 @@ describe('the people who sit down', () => {
     const crowd = createCrowd({ network: benched(9), count: 40, variants: 2, seed: 16 });
     const person = untilSeated(crowd);
     const where = [crowd.x[person]!, crowd.y[person]!, crowd.z[person]!];
-    // Five seconds against a sit of at least thirty, so they are certainly
-    // still on it: the point is that a lerp between a point and itself is that
-    // point, however many frames it is run for.
     run(crowd, 5);
     expect(isSeated(crowd, person)).toBe(true);
     expect([crowd.x[person]!, crowd.y[person]!, crowd.z[person]!]).toEqual(where);
@@ -786,12 +714,6 @@ describe('the people who sit down', () => {
   });
 });
 
-/**
- * A row of loungers on the sand, two columns clear of the boardwalk in the
- * fixture below, so not one of them is within reach of a paved tile: every seat
- * here is a beach seat, which is the point of it. A lounger laid against the
- * boardwalk hangs off its node instead — that is `walkNetwork.test.ts`'s case.
- */
 const loungers = (count: number): SeatSpot[] =>
   Array.from({ length: count }, (_, index) => ({
     x: (12 + index) * TILE_VOXELS + 8,
@@ -804,8 +726,6 @@ const loungers = (count: number): SeatSpot[] =>
   }));
 
 describe('the people who lie down', () => {
-  // Water from z = 18, six rows of sand in front of it, a boardwalk down to it
-  // and a row of loungers on the sand beside the boardwalk's foot.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
@@ -833,15 +753,11 @@ describe('the people who lie down', () => {
 
   it('reports lying rather than sitting, off the seat rather than the person', () => {
     const crowd = createCrowd({ network: sandy(), count: 40, variants: 2, seed: 22 });
-    // Sampled once a second rather than every frame: what is being checked is a
-    // state, not a transition, and 36 000 frames of it is 1.4 million
-    // assertions for the same answer.
     const seen = new Set<number>();
     for (let frame = 0; frame < 60 * 600; frame++) {
       stepCrowd(crowd, 1 / 60);
       if (frame % 60 !== 0) continue;
       for (let i = 0; i < crowd.count; i++) {
-        // Every seat on this plot is a lounger, so everybody resting is lying.
         const pose = restingOn(crowd, i);
         expect(pose).toBe(isSeated(crowd, i) ? RESTING.lying : RESTING.none);
         seen.add(pose);
@@ -857,8 +773,6 @@ describe('the people who lie down', () => {
     for (let frame = 0; frame < 60 * 900; frame++) {
       const before = crowd.seatBy[0]!;
       stepCrowd(crowd, 1 / 60);
-      // The frame the one lounger is given up: whoever was on it is roaming,
-      // not walking to a node, and is out on the beach rather than on paving.
       if (before >= 0 && crowd.seatBy[0] === -1) {
         rose++;
         if (crowd.node[before] === -1) onSand++;
@@ -883,7 +797,6 @@ describe('the people who lie down', () => {
       for (let i = 0; i < crowd.count; i++) if (restingOn(crowd, i) === RESTING.lying) lying = i;
     }
     expect(lying, 'nobody ever lay on a lounger').toBeGreaterThanOrEqual(0);
-    // Uncalled, rousing is nothing at all.
     rouseSunbathers(crowd);
     stepCrowd(crowd, MAX_STEP);
     expect(restingOn(crowd, lying)).toBe(RESTING.lying);
@@ -907,7 +820,6 @@ describe('the people who lie down', () => {
   });
 });
 
-/** Every column that is about the person rather than about the graph. */
 const personOf = (crowd: Crowd) => ({
   variant: Array.from(crowd.variant),
   speed: Array.from(crowd.speed),
@@ -921,12 +833,10 @@ const positionsOf = (crowd: Crowd) => [
   Array.from(crowd.z),
 ];
 
-/** A boardwalk running south from the middle of the plot down onto the beach. */
 const boardwalk = (length: number): PavedTile[] =>
   Array.from({ length }, (_, index) => ({ tileX: 10, tileZ: 10 + index, y: 0 }));
 
 describe('the people the simulation holds still', () => {
-  /** Where the crowd may be told to stand: the middle of the street, off-node. */
   const SPOT = { x: 4.5 * TILE_VOXELS, y: walkingSurface(0), z: 2 };
 
   it('draws a held person standing, not walking on the spot', () => {
@@ -947,15 +857,12 @@ describe('the people the simulation holds still', () => {
     expect(crowd.z[0]).toBeCloseTo(SPOT.z);
     expect(crowd.heading[0]).toBeCloseTo(1.25);
     expect(isWaiting(crowd, 0)).toBe(true);
-    // Everybody else carried on, so this is a held person and not a dead crowd.
     expect(crowd.x[1]).not.toBeCloseTo(crowd.fromX[1]!);
   });
 
   it('does not let a crush push a held person off their spot', () => {
     const crowd = createCrowd({ network: networkOf(street(12)), count: 10, variants: 2, seed: 22 });
-    // Everybody on the one point, which is the worst case avoidance can see.
     for (let i = 0; i < crowd.count; i++) holdAt(crowd, i, SPOT.x, SPOT.y, SPOT.z, 0);
-    // Nine of them let go again, so the held one stands in a real crush.
     for (let i = 1; i < crowd.count; i++) releaseTo(crowd, i, 0);
     for (let step = 0; step < 120; step++) stepCrowd(crowd, MAX_STEP);
     expect(crowd.side[0]).toBe(0);
@@ -964,7 +871,6 @@ describe('the people the simulation holds still', () => {
   });
 
   it('frees the seat of anybody taken in hand on their way to one', () => {
-    /** A street with one bench beside its middle tile, so somebody sits. */
     const network = walkNetworkFor({
       paved: street(9),
       levelOf: FLAT,
@@ -1003,7 +909,6 @@ describe('the people the simulation holds still', () => {
     expect(crowd.node[0]).toBe(8);
     expect(crowd.cameFrom[0]).toBe(-1);
     run(crowd, 30);
-    // They walked: whatever the wander did with them afterwards, they left.
     expect(Math.hypot(crowd.x[0]! - SPOT.x, crowd.z[0]! - SPOT.z)).toBeGreaterThan(TILE_VOXELS);
   });
 
@@ -1019,7 +924,6 @@ describe('the people the simulation holds still', () => {
 });
 
 describe('the people who are not on the plot at all', () => {
-  /** Where somebody is stood down: the middle of the street, off-node. */
   const SPOT = { x: 4.5 * TILE_VOXELS, y: walkingSurface(0), z: 2 };
 
   it('stands somebody taken off the plot still, and never steps them', () => {
@@ -1031,7 +935,6 @@ describe('the people who are not on the plot at all', () => {
     expect(crowd.x[0]).toBeCloseTo(SPOT.x);
     expect(crowd.y[0]).toBeCloseTo(SPOT.y);
     expect(crowd.z[0]).toBeCloseTo(SPOT.z);
-    // Everybody else carried on, so this is one body put away and not a dead crowd.
     expect(crowd.x[1]).not.toBeCloseTo(crowd.fromX[1]!);
   });
 
@@ -1053,7 +956,6 @@ describe('the people who are not on the plot at all', () => {
     run(reseated, 20);
     expect(reseated.x[0]).toBeCloseTo(SPOT.x);
     expect(reseated.z[0]).toBeCloseTo(SPOT.z);
-    // Somebody who was walking was re-anchored, so the reseat did run.
     expect(isWaiting(reseated, 1)).toBe(false);
   });
 });
@@ -1097,7 +999,6 @@ describe('resting where the simulation puts them', () => {
     expect(crowd.seat[0]).toBe(lounger);
     expect(seatIsFree(crowd, lounger)).toBe(false);
     expect(crowd.heading[0]).toBeCloseTo(seat.heading);
-    // Held, not timed: a lie on a lounger that ran out would stand them up.
     for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
     expect(restingOn(crowd, 0)).toBe(RESTING.lying);
 
@@ -1111,7 +1012,6 @@ describe('resting where the simulation puts them', () => {
   });
 });
 
-/** Steps until `person` has been asked about the sand `times` times, or a minute passes. */
 const until = (crowd: Crowd, asked: number[], person: number, times: number): void => {
   for (let step = 0; step < 600; step++) {
     if (asked.filter((each) => each === person).length >= times) return;
@@ -1120,21 +1020,15 @@ const until = (crowd: Crowd, asked: number[], person: number, times: number): vo
 };
 
 describe('an errand over the sand', () => {
-  // Water from z = 18; six rows of sand in front of it, and a boardwalk down to it.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
     shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
   });
   const network = walkNetworkFor({ paved: boardwalk(8), levelOf: FLAT, shore, tilesX: 20 });
-  /** A point on the open sand west of the boardwalk, and another further along. */
   const FIRST = { x: 6.5 * TILE_VOXELS, z: 14.5 * TILE_VOXELS };
   const SECOND = { x: 3.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
 
-  /**
-   * A crowd whose router answers every arrival on the sand with `onSand`, and
-   * somebody stood at the first gate and sent to {@link FIRST}.
-   */
   const errand = (onSand: (crowd: Crowd, person: number, asked: number) => void) => {
     const asked: number[] = [];
     let crowd: Crowd | null = null;
@@ -1218,7 +1112,6 @@ describe('an errand over the sand', () => {
     expect(crowd.node[person]).toBe(gate);
     expect(crowd.lane[person]).toBe(LANE.sand);
 
-    // Held on the sand's own surface is on the sand too; held on paving is not.
     holdAt(crowd, person, FIRST.x, BEACH_SURFACE, FIRST.z, 0);
     releaseTo(crowd, person, gate);
     expect(crowd.lane[person]).toBe(LANE.sand);
@@ -1242,13 +1135,7 @@ describe('an errand over the sand', () => {
     expect(rebuilt.gates).toContain(reseated.gate[person]);
   });
 
-  /**
-   * Every bench comparison since plan 017 depends on a crowd with no router
-   * replaying the afternoon it always has, and this plan added a state beside
-   * the roaming one. Pinned before `walkSandTo` existed, on a beach with a
-   * promenade, loungers, a bench and things standing on the sand, so the wander,
-   * the sand, the seats and the obstacles all draw.
-   */
+  // Pinned: every bench comparison relies on a router-less crowd replaying the same afternoon.
   it('replays a crowd with no router to the voxel over 2 000 steps', () => {
     const paved = [
       ...boardwalk(8),
@@ -1292,7 +1179,6 @@ describe('an errand over the sand', () => {
 });
 
 describe('reseatCrowd', () => {
-  /** A street along z = 0 with a lane running north off its middle. */
   const crossroads = (length: number): PavedTile[] => [
     ...street(length),
     ...Array.from({ length: 6 }, (_, index) => ({
@@ -1302,7 +1188,6 @@ describe('reseatCrowd', () => {
     })),
   ];
 
-  /** A crowd that has been walking a while, so nobody is where they started. */
   const walked = (network: WalkNetwork, seed: number, count = 40): Crowd => {
     const crowd = createCrowd({ network, count, variants: 4, seed });
     run(crowd, 30);
@@ -1373,7 +1258,6 @@ describe('reseatCrowd', () => {
 
   it('walks a person to the node beside them, not to the first node there is', () => {
     const crowd = walked(networkOf(street(40)), 35);
-    // Laid east to west, so node 0 is at the far east end of the street.
     const network = networkOf(street(40).toReversed());
     expect(network.nodes[0]!.tileX).toBe(39);
     const reseated = reseatCrowd(crowd, network);
@@ -1412,9 +1296,6 @@ describe('reseatCrowd', () => {
     const crowd = walked(networkOf(crossroads(30)), 38);
     const network = networkOf(street(10));
     const reseated = reseatCrowd(crowd, network);
-    // Long enough for everybody to have walked in off wherever the old graph
-    // left them: the far end of the old street is twenty tiles past the new one,
-    // which is a minute's walk.
     run(reseated, 120);
     for (let frame = 0; frame < 600; frame++) {
       stepCrowd(reseated, 1 / 60);

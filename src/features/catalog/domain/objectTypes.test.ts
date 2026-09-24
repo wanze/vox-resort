@@ -46,8 +46,6 @@ describe('windowsByModelId', () => {
   });
 
   it('never calls a colour both a window and a glow', () => {
-    // They are two different geometries, and the split reads the emissive set
-    // first — so a colour in both would silently never be a window.
     const emissive = emissiveByModelId();
     for (const [id, colors] of windowsByModelId()) {
       for (const color of colors) {
@@ -108,7 +106,6 @@ describe('PAINTED_MODELS', () => {
     for (const balloon of SKY_MODELS) {
       expect(catalogue.has(balloon.id), `${balloon.id} is in the catalogue too`).toBe(false);
       expect(balloon.category).toBe('sky');
-      // A balloon is a lit paper envelope, and it is nothing if it does not glow.
       expect(balloon.emissive.length).toBeGreaterThan(0);
     }
   });
@@ -128,8 +125,6 @@ describe('PAINTED_MODELS', () => {
     expect(STAFF_MODELS.length).toBeGreaterThan(0);
     for (const worker of STAFF_MODELS) {
       expect(catalogue.has(worker.id), `${worker.id} is in the catalogue too`).toBe(false);
-      // The one that matters: a guest's `variant` indexes into `PEOPLE_MODELS`,
-      // so a staff model in that list would be dealt to somebody on holiday.
       expect(guests.has(worker.id), `${worker.id} is dealt to guests too`).toBe(false);
       expect(worker.category).toBe('people');
     }
@@ -142,8 +137,6 @@ describe('PAINTED_MODELS', () => {
       expect(catalogue.has(afloat.id), `${afloat.id} is in the catalogue too`).toBe(false);
       expect(afloat.category).toBe('sea');
     }
-    // The flotilla draws a buoy at every mooring and a craft for everything
-    // else, and it tells the two apart by this index. See `voxel-gen/sea/`.
     expect(SEA_MODELS[BUOY_INDEX]?.id).toBe('buoy');
   });
 });
@@ -156,9 +149,6 @@ describe('emissiveByModelId', () => {
   });
 
   it('only names colours the model actually paints with', () => {
-    // Looked up in `PAINTED_MODELS` rather than in the catalogue, because that
-    // is what the lookup is now derived from: a glowing person would otherwise
-    // throw here rather than fail.
     for (const [id, colors] of emissiveByModelId()) {
       const model = PAINTED_MODELS.find((candidate) => candidate.id === id);
       const painted = new Set(model!.voxels.map((voxel) => voxel.color));
@@ -186,8 +176,7 @@ describe('OBJECT_TYPES', () => {
   });
 
   it('starts every model at its own corner', () => {
-    // Reduced rather than spread: the largest models paint hundreds of
-    // thousands of voxels, which overflows the stack as Math.min arguments.
+    // Reduced rather than spread: hundreds of thousands of Math.min arguments overflow the stack.
     for (const type of OBJECT_TYPES) {
       const model = type.model;
       expect(model.voxels.length).toBeGreaterThan(0);
@@ -214,9 +203,7 @@ describe('OBJECT_TYPES', () => {
   });
 
   it('paints only 24-bit colours', () => {
-    // Collected rather than asserted per voxel: the catalogue is three quarters
-    // of a million of them, and an expectation each took this test to the far
-    // side of the runner's timeout on its own.
+    // Collected rather than asserted per voxel: an expectation each exceeds the runner timeout.
     const outside = new Set<number>();
     for (const type of OBJECT_TYPES) {
       for (const voxel of type.model.voxels) {
@@ -275,8 +262,6 @@ describe('venues', () => {
     expect(isGateway('entrance')).toBe(true);
     expect(isGateway('bungalow')).toBe(false);
     expect(isGateway('not-a-model'), 'an unknown id is not a gate').toBe(false);
-    // A gate is never a venue: one in the venue list would have a bored family
-    // queueing at it. See `sim/domain/gateways.ts`.
     for (const type of venueTypes()) expect(isGateway(type.id), type.id).toBe(false);
     const gates = OBJECT_TYPES.filter((type) => isGateway(type.id));
     expect(gates.length, 'a plot nobody can arrive at').toBeGreaterThan(0);
@@ -290,7 +275,6 @@ describe('venues', () => {
   });
 });
 
-/** Every type the palette puts on a shelf, in the order it shows them. */
 const offered = (): string[] =>
   objectTypeGroups().flatMap((group) => group.types.map((type) => type.id));
 
@@ -303,10 +287,6 @@ describe('objectTypeGroups', () => {
   });
 
   it('offers one paving tool, not the four kinds of paving it lays', () => {
-    // Picked by hand, a flight is a staircase up the middle of a lawn, decking
-    // is a jetty over grass, and a jetty is decking over a lawn. A path is what
-    // you draw; the ground decides which of the four it comes out as. See
-    // `paving.ts`.
     expect(offered()).toContain('path');
     expect(offered()).not.toContain('stairs');
     expect(offered()).not.toContain('boardwalk');
@@ -335,10 +315,6 @@ describe('materials', () => {
   });
 
   it('registers the skin the crowd is painted in, which nothing else paints', () => {
-    // The one family no building uses, and the reason the material set is
-    // derived from both registries rather than from the catalogue: without it
-    // the scratch writes ask the mesher for a voxel that was never registered,
-    // and a person comes out miscoloured or not at all. See `docs/crowd.md`.
     const registered = new Set(allMaterials().map((material) => material.key));
     for (const tone of Object.values(PALETTE.skin)) {
       expect(registered.has(materialKeyFor(tone)), `skin #${tone.toString(16)}`).toBe(true);
@@ -350,15 +326,8 @@ describe('materials', () => {
   });
 
   it('stays under the material ceiling the mesher encodes in a byte', () => {
-    // DVE writes a submesh's material as a Uint8 and registers six materials of
-    // its own ahead of ours, so the 251st colour in the catalogue wraps back
-    // onto `dve_solid` and the mesher hands its faces back under a material
-    // nothing here has ever heard of. Probed by registering colours until that
-    // happened: 250 is ours, 251 came back as `dve_solid`.
-    //
-    // The palette is what keeps this in hand — see `voxel-gen/palette.ts`. It
-    // was 234 before the palette existed, and every model that has its style
-    // pass gives colours back.
+    // DVE writes a submesh material as a Uint8 and registers six of its own first, so the
+    // 251st colour wraps onto `dve_solid`.
     expect(allMaterials().length).toBeLessThanOrEqual(250);
   });
 

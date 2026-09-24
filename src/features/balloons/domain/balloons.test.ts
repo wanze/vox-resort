@@ -19,7 +19,6 @@ const SITES: ReleaseSite[] = [
 const balloonsOf = (count = 12, seed = 7) =>
   createBalloons({ sites: SITES, count, variants: 3, seed });
 
-/** Runs the sky forward at a steady frame rate. */
 function run(
   balloons: ReturnType<typeof balloonsOf>,
   seconds: number,
@@ -115,15 +114,12 @@ describe('stepBalloons', () => {
     run(balloons, 120, 1);
     const flying = flyingCount(balloons);
     expect(flying).toBeGreaterThan(0);
-    // The clock has moved past the band; nothing new goes up, and what is up
-    // keeps climbing rather than vanishing.
     stepBalloons(balloons, 0.1, 0, SITES);
     expect(flyingCount(balloons)).toBe(flying);
   });
 
   it('ignores a frame longer than a whole flight', () => {
-    // The field clamps the step; this pins what the domain does if it is not,
-    // which is to land everything rather than to lose it.
+    // The field clamps the step; this pins that the domain lands everything rather than losing it.
     const balloons = balloonsOf();
     run(balloons, 120, 1);
     stepBalloons(balloons, FLIGHT_SECONDS * 2, 1, SITES);

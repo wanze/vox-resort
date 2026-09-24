@@ -11,8 +11,6 @@ describe('armedRemove', () => {
   });
 });
 
-// One left mouse button between three pointers: each must see nothing armed
-// while another tool is held, or two of them would both take the button.
 describe('the bulldozer disarms the other two', () => {
   it('leaves no object armed', () => {
     expect(armedObject(REMOVE)).toBeNull();

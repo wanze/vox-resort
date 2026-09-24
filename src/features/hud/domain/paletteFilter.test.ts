@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { countTypes, filterGroups, footprintLabel, isDrawable } from './paletteFilter';
 import type { ObjectTypeDefinition, ObjectTypeGroup } from '../../catalog/domain/objectTypes';
 
-/** Only the fields the palette reads; the rest of a type is art. */
 const type = (id: string, label: string, x = 1, z = 1): ObjectTypeDefinition =>
   ({
     id,

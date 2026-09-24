@@ -9,7 +9,6 @@ import { flowFieldFor } from './flowField';
 
 const FLAT: LevelProvider = () => 0;
 
-/** A paved street `length` tiles long, running east, as `crowd.test.ts` builds one. */
 const street = (length: number): PavedTile[] =>
   Array.from({ length }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 }));
 
@@ -28,7 +27,6 @@ describe('flowFieldFor', () => {
     for (let tileX = 0; tileX < 5; tileX++) {
       expect(field.hops[nodeAt(network, tileX)], `tile ${tileX}`).toBe(tileX);
     }
-    // Following `next` from the far end walks the whole street in four steps.
     let at = nodeAt(network, 4);
     let steps = 0;
     while (field.next[at]! !== at) {
@@ -49,9 +47,6 @@ describe('flowFieldFor', () => {
     expect(field.hops[nodeAt(network, 3)]).toBe(1);
     expect(field.next[nodeAt(network, 1)]).toBe(west);
     expect(field.next[nodeAt(network, 3)]).toBe(east);
-    // Tile 2 is two hops from either end. The sources are seeded in the order
-    // they were given, so the sweep reaches it from the first one - which is
-    // why `doorsFor` sorts.
     expect(field.hops[nodeAt(network, 2)]).toBe(2);
     expect(field.next[nodeAt(network, 2)]).toBe(nodeAt(network, 1));
   });
@@ -113,17 +108,8 @@ describe('the cost of a field on the generated plot', () => {
     tilesX: plan.tilesX,
   });
 
-  /**
-   * The one wall-clock assertion this feature carries, and it is a **ceiling**
-   * rather than a benchmark: `plans/017-goal-directed-routing.md` rests its whole
-   * design on one field per venue being cheap enough to build lazily, and a
-   * reader who wants to change that should have to move a number here first.
-   *
-   * Measured at 0.47 ms for one field and 5.82 ms for eighty, over 2 260 nodes.
-   * The budgets below are roughly forty and seventy times those, so a loaded
-   * machine does not turn this red: they are a ceiling on the design, not a
-   * benchmark of the machine.
-   */
+  // A ceiling on the lazy per-venue field design, not a benchmark: the budgets are
+  // roughly 40-70x the measured cost so a loaded machine does not turn this red.
   it('sweeps the whole graph well inside the budget the design rests on', () => {
     expect(network.nodes.length).toBeGreaterThan(1000);
     const doors = [0, 1, 2];

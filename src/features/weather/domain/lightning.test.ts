@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { flashAt, flashSky } from './lightning';
 import { skyStateFor } from '../../lighting/domain/dayNight';
 
-/** Every flash over a stretch of storm, sampled finely enough to catch one. */
 function sample(seconds: number, step = 0.01): number[] {
   const seen: number[] = [];
   for (let at = 0; at < seconds; at += step) seen.push(flashAt(at));
@@ -25,7 +24,6 @@ describe('flashAt', () => {
   });
 
   it('strikes several times over a couple of minutes', () => {
-    // A strike is a run of lit samples; count the runs rather than the samples.
     const seen = sample(120);
     let strikes = 0;
     for (let at = 0; at < seen.length; at++) {

@@ -1,46 +1,3 @@
-/**
- * What the resort is getting wrong, ranked, in the plot's own words.
- *
- * Everything needed to say "you need another bakery" was already measured and
- * none of it was ever said. The router knows which lines it turned people away
- * from; `doors.ts` knows which buildings nothing can walk to; `homes.ts` knows
- * which parties got no bed; `venuesOn` knows which of the five needs nothing on
- * the plot serves. A player saw a queue if they happened to be looking at it,
- * and nothing else.
- *
- * ## It computes nothing
- *
- * Every number here is one somebody else counted. This module ranks facts; it
- * does not gather them, and it must never be the reason something else in
- * `sim/` starts counting differently. **Advice observes.** If a rule seems to
- * want a change in `chooseVenue.ts` or `occupancy.ts`, the rule is wrong: what
- * has been found is a bug in the thing being observed, and it is worth more as
- * a bug report than as a weighting.
- *
- * ## One small function per rule
- *
- * Seven rules, each a function of {@link ResortFacts} alone, each testable on a
- * literal. That is not only house style: a rule that cannot be tested on a
- * literal is a rule reading more of the world than it should, and one big
- * `adviceFor` with seven branches would hide exactly that. An eighth rule -
- * plan 023's weather - is an eighth function and an eighth test, never a branch
- * in one of these.
- *
- * ## It knows what a bakery is for, never what a bakery is
- *
- * Every rule reads the art's own declarations - what a venue satisfies, how many
- * it holds, where its doors are - so a model that serves a new need produces new
- * advice with no change here. There is no list of ids in this file and there
- * must not be one.
- *
- * ## The wording is not here
- *
- * A rule hands back a kind, a weight, a subject already named and the count that
- * produced it. Turning that into a sentence is `AdvicePanel.tsx`'s job, for the
- * reason `InspectPanel.tsx` keeps its own `NEED_LABELS`: the domain should not
- * have to be edited to change a phrase.
- */
-
 import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { ARCHETYPES } from './archetypes';
@@ -50,7 +7,6 @@ import { NEEDS } from './needs';
 import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
-/** What one piece of advice is about. */
 export type AdviceKind =
   | 'no-beds'
   | 'unserved-need'
@@ -63,81 +19,38 @@ export type AdviceKind =
 
 export interface Advice {
   readonly kind: AdviceKind;
-  /**
-   * How badly it wants saying, 0..1. What the list is sorted by, and the only
-   * number the panel needs to decide what to show.
-   */
   readonly weight: number;
-  /** What it is about - a venue's label, a lodging's, a need's - already named. */
   readonly subject: string;
-  /** The count that produced it: guests, balks, tiles. Worded by the panel. */
   readonly count: number;
-  /**
-   * Which one of them, in tiles, where the advice is about one building; null
-   * where it is about the whole plot.
-   *
-   * A label is not an address. A plot stands nine Changing Cabins and four
-   * Bungalows, so "Nobody visited Changing Cabins today" twice over is two
-   * lines the player cannot act on and cannot tell apart. The tile is what the
-   * inspector already titles a building with - `Bakery, tile 12, 7` - so it is
-   * vocabulary the HUD has taught already, and it points at somewhere the
-   * player can go and look.
-   */
+  // A label is not an address: a plot stands many Changing Cabins, and the tile tells them apart.
   readonly at: { readonly tileX: number; readonly tileZ: number } | null;
-  /**
-   * The need the advice is about, where it is about one; null otherwise.
-   *
-   * `far-from-home` is the reason it exists: "Bungalow guests walk 76 tiles for
-   * something they need" names no need and so says almost nothing, where
-   * "76 tiles for somewhere to rest" is a thing to build. Declared `| null`
-   * rather than optional, which `exactOptionalPropertyTypes` requires.
-   */
   readonly need: GuestNeed | null;
 }
 
-/** Where a building stands, as a piece of advice carries it. */
 const tileOf = (place: { readonly tileX: number; readonly tileZ: number }) => ({
   tileX: place.tileX,
   tileZ: place.tileZ,
 });
 
-/** Everything the rules read, gathered once by the caller. */
+// Advice only ranks facts others counted. A rule that seems to need a change in
+// `chooseVenue.ts` or `occupancy.ts` has found a bug there instead.
 export interface ResortFacts {
   readonly venues: readonly Venue[];
   readonly lodgings: readonly Lodging[];
-  /** Guests on the plot now, and how many of them have no bed. */
   readonly present: number;
   readonly homeless: number;
   readonly bedsFree: number;
-  /** What each present guest wants most, counted per need; see `strongestNeed`. */
   readonly wanting: { readonly [need in GuestNeed]: number };
-  /** Times each venue turned somebody away today, by venue key. */
   readonly balks: ReadonlyMap<string, number>;
-  /** Visits each venue took today, by venue key. */
   readonly visits: ReadonlyMap<string, number>;
-  /** Venue keys nothing can walk to at all. */
   readonly unreachable: ReadonlySet<string>;
-  /**
-   * How clean each venue is, by key, 0..1. A key this has no entry for is
-   * spotless, which is what a venue built this morning is. See `upkeep.ts`.
-   */
+  // A key with no entry is spotless.
   readonly cleanliness: ReadonlyMap<string, number>;
-  /**
-   * Venue keys the weather has shut today; see `weather.ts`.
-   *
-   * Optional, and an absent one is a clear day - which is what a fixture wants
-   * and what every rule above this one was written against.
-   */
+  // Absent means a clear day.
   readonly closed?: ReadonlySet<string>;
 }
 
-/**
- * The order two pieces of advice of equal weight come out in.
- *
- * Declared rather than left to whichever rule ran first, so the panel shows the
- * same three lines on two runs of the same plot. Loudest kind first, which is
- * also roughly the order a player can do something about them.
- */
+// Declared so advice of equal weight comes out in the same order on every run.
 const KIND_ORDER: readonly AdviceKind[] = [
   'no-beds',
   'unserved-need',
@@ -146,58 +59,24 @@ const KIND_ORDER: readonly AdviceKind[] = [
   'dirty',
   'far-from-home',
   'unvisited',
-  // Last, because it is the one line on the list the player cannot fix today -
-  // it is about what to build before the next storm.
+  // Last: the one line the player cannot fix today.
   'weather-closed',
 ];
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
-/**
- * How many balks make a full line the loudest thing on the plot.
- *
- * One balk at a beach shower is not news and four hundred at the only
- * restaurant is, so the share of arrivals turned away is scaled by how many
- * there were. Fifty in a day is a place that is plainly too small.
- */
+// Fifty balks in a day is a place plainly too small.
 const BALKS_LOUD = 50;
 
-/**
- * The capacity at which a dirty venue is as loud as it gets.
- *
- * The same number {@link IDLE_ROOMY} uses and for the same reason - a swimming
- * pool is where the plot's big venues start - named again here rather than
- * shared, because the two rules would not have to move together if the art
- * changed under one of them.
- */
+// Same value as `IDLE_ROOMY` but not shared: the two rules need not move together.
 const ROOMY = 40;
 
-/**
- * How far a lodging may stand from something before it is worth saying, and
- * what the distance is weighed against.
- *
- * A family will not be walked further than {@link ARCHETYPES}`.family.reach`,
- * which is the smallest reach in the table, so a lodging further than that from
- * somewhere to eat is one whose families stop eating - that is the point at
- * which this is a fact about the plot rather than about the walk. The weight is
- * scaled against the *widest* reach, `friends.reach`, so a distance nobody at
- * all will walk comes out at 1.
- */
+// The smallest reach in the table: past it, families stop eating. The weight is
+// scaled against the widest reach so a distance nobody walks comes out at 1.
 const TOO_FAR = ARCHETYPES.family.reach;
 const REACH_SCALE = ARCHETYPES.friends.reach;
 
-/**
- * Nobody can sleep.
- *
- * The loudest thing there is: a guest with no bed walks all night, their energy
- * is on the floor by morning and a day later it reads as a resort with too few
- * benches. So the share of the plot it happens to *is* the weight, undamped.
- *
- * Softened where beds are standing free, which is the same shortage in a milder
- * form - the player has the capacity and only the rooming is wrong, a party of
- * five in front of a row of double bungalows - and is a plot a bed at a time
- * cannot fix.
- */
+// Softened where beds stand free: the capacity is there and only the rooming is wrong.
 export function adviceNoBeds(facts: ResortFacts): Advice | null {
   if (facts.homeless <= 0) return null;
   const share = clamp(facts.homeless / facts.present);
@@ -206,23 +85,12 @@ export function adviceNoBeds(facts: ResortFacts): Advice | null {
     weight: facts.bedsFree > 0 ? share * 0.6 : share,
     subject: 'beds',
     count: facts.homeless,
-    // Not about any one building: it is the plot that is short of beds.
     at: null,
     need: null,
   };
 }
 
-/**
- * A need nothing on the plot relieves at all.
- *
- * A permanent drag rather than a busy afternoon: the guests who want it will
- * want it for the whole of their stay, so the weight is simply the share of the
- * plot wanting it. One piece of advice per such need - there are five needs, so
- * the list this can add to is short.
- *
- * Silent about a need nobody happens to want yet, which is a new plot rather
- * than a badly built one. It starts saying so the moment anybody does.
- */
+// Silent about a need nobody wants yet: that is a new plot, not a badly built one.
 export function adviceUnservedNeeds(facts: ResortFacts): readonly Advice[] {
   const advice: Advice[] = [];
   for (const need of NEEDS) {
@@ -241,15 +109,6 @@ export function adviceUnservedNeeds(facts: ResortFacts): readonly Advice[] {
   return advice;
 }
 
-/**
- * The place turning most people away.
- *
- * The share of everybody who walked up to it and was refused, scaled by how many
- * that was: a venue nobody much goes to can turn away everybody who does and
- * still be nothing to worry about. One venue only - the worst - because a plot
- * where three places are full is a plot where the player builds one more of the
- * worst and looks again tomorrow.
- */
 export function adviceFullLines(facts: ResortFacts): Advice | null {
   let worst: Advice | null = null;
   for (const venue of facts.venues) {
@@ -271,21 +130,7 @@ export function adviceFullLines(facts: ResortFacts): Advice | null {
   return worst;
 }
 
-/**
- * The place the cleaners are furthest behind on.
- *
- * Weighed like {@link adviceFullLines}, and for the same reason: how far below
- * {@link NEEDS_CLEANING} it has fallen, scaled by how big it is, so a beach
- * shower for one that nobody has mopped is not the same news as a Restaurant
- * for forty. One venue only - the worst - because the answer is the same
- * whichever of them the player reads: there are not enough cleaners for what is
- * standing, and plan 024 is what lets them hire one.
- *
- * Silent about anything above the threshold, which is the same line the cleaners
- * themselves walk to: advice observes, and a rule that called a venue dirty
- * while no cleaner would go to it would be advising about something the resort
- * does not agree is a problem.
- */
+// Silent above `NEEDS_CLEANING`, the same line the cleaners walk to: advice observes.
 export function adviceDirty(facts: ResortFacts): Advice | null {
   let worst: Advice | null = null;
   for (const venue of facts.venues) {
@@ -297,8 +142,7 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
         kind: 'dirty',
         weight,
         subject: venue.label,
-        // The percentage the inspector shows, so the panel and the panel beside
-        // it say the same number about the same building.
+        // The percentage the inspector shows, so the two panels agree.
         count: Math.round(clean * 100),
         at: tileOf(venue),
         need: null,
@@ -308,14 +152,6 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
   return worst;
 }
 
-/**
- * A building nothing can walk to.
- *
- * Flat, and high: this is not a matter of degree. Whatever it cost is standing
- * there doing nothing, and nothing about how the resort is used will ever change
- * that until the player paves to it. The count is how many places are standing
- * idle inside it.
- */
 export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
   return facts.venues
     .filter((venue) => facts.unreachable.has(venue.key))
@@ -329,18 +165,8 @@ export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
     }));
 }
 
-/**
- * The lodging furthest from anything serving one of the five needs.
- *
- * **Straight line, and deliberately not walking distance.** A flow field per
- * lodging per need is exactly the eager sweep `router.ts` refuses to do, and
- * would build a field for every venue on the plot once a day to answer a
- * question about a corner of it. The straight line is near enough to point at
- * the corner, which is all this has to do.
- *
- * A need nothing serves is not measured here - there is nothing to measure to,
- * and {@link adviceUnservedNeeds} has already said so, louder.
- */
+// Straight line on purpose: a flow field per lodging per need is the eager sweep
+// `router.ts` refuses to do.
 export function adviceFarFromHome(facts: ResortFacts): Advice | null {
   let furthest = 0;
   let worst: { readonly lodging: Lodging; readonly need: GuestNeed } | null = null;
@@ -352,10 +178,8 @@ export function adviceFarFromHome(facts: ResortFacts): Advice | null {
       worst = { lodging, need };
     }
   }
-  // Ranked on the distance and not on the weight, which is clamped: on the
-  // reference plot a dozen lodgings are further from something than anybody
-  // will walk, every one of them weighs 1, and the first of them is not the one
-  // worth pointing at.
+  // Ranked on distance, not the clamped weight: on the reference plot a dozen
+  // lodgings all weigh 1.
   if (!worst) return null;
   return {
     kind: 'far-from-home',
@@ -363,13 +187,10 @@ export function adviceFarFromHome(facts: ResortFacts): Advice | null {
     subject: worst.lodging.label,
     count: Math.round(furthest / TILE_VOXELS),
     at: tileOf(worst.lodging),
-    // Which walk it is. Without it the line names a distance and no errand,
-    // which is a number the player cannot build anything about.
     need: worst.need,
   };
 }
 
-/** How far the nearest venue serving `need` stands, in voxels, or null if none does. */
 function nearestServing(
   venues: readonly Venue[],
   need: GuestNeed,
@@ -384,41 +205,16 @@ function nearestServing(
   return nearest;
 }
 
-/**
- * How loud a venue nobody went to is: 0.2 for the smallest, {@link IDLE_LOUDEST}
- * for anything the size of a swimming pool.
- *
- * Flat 0.3 for every one of them was the first cut, and running the resort is
- * what showed it up: a plot stands ninety venues, a quiet day leaves a dozen
- * unvisited, they all weighed the same, and which four reached the panel came
- * down to placement order. A thirty-place pool nobody swam in is worse news
- * than a one-place beach shower nobody rinsed under, and that is a difference
- * the art already declares.
- *
- * Kept below {@link adviceUnreachable}'s 0.9 at both ends, deliberately: this
- * is still a note rather than a problem.
- */
+// Scaled by size rather than flat, or which idle venues reach the panel comes down
+// to placement order. Kept below `adviceUnreachable`'s 0.9.
 const IDLE_LOUDEST = 0.4;
 const IDLE_ROOMY = 40;
 
 const idleWeight = (capacity: number): number =>
   0.2 + (IDLE_LOUDEST - 0.2) * clamp(capacity / IDLE_ROOMY);
 
-/**
- * Somewhere nobody went all day.
- *
- * A note rather than a problem: a tennis court nobody used is a court in the
- * wrong place, or one the plot has two of, and either is the player's business
- * rather than the resort's. Silent about a venue nothing can reach, which
- * {@link adviceUnreachable} has already said better - saying both about one
- * building is two lines about one fact.
- *
- * Silent about the whole plot until somebody has been somewhere. "Nobody
- * visited the Bakery today" is only true of a day that happened, and a resort
- * that has just been generated - or one the player has just rebuilt - has a
- * day's counters of nothing at all, which would otherwise read as every
- * building on the plot standing idle.
- */
+// Silent until somebody has been somewhere: a fresh plot's empty counters would
+// read as every building standing idle.
 export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
   if (facts.visits.size === 0) return [];
   return facts.venues
@@ -435,24 +231,8 @@ export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
     }));
 }
 
-/**
- * The venues nothing can walk to at all, for {@link ResortFacts.unreachable}.
- *
- * **Both halves of the answer, and that is the whole of the rule.** A building
- * on the beach has no door node either and is perfectly reachable - the sand in
- * front of it is how - so a set built from `nodes` alone would tell the player
- * that every beach shower on the plot was stranded. See `doors.ts`.
- *
- * What it does not ask is whether a route over the sand actually reaches those
- * points: that is `sandRoutesFor`, a sweep of the beach per building, and 27 ms
- * of them once a day to sharpen an answer that is already right about every
- * building the player can do anything about. A shower with sand in front of it
- * and no way over the sand is plan 027's terrace case, and the maintainer's
- * call rather than this panel's.
- *
- * Takes the lookup rather than the graph, so the rule can be read - and tested -
- * without a plot under it.
- */
+// Both halves: a beach building has no door node but is reachable over the sand.
+// Sand routes are not swept per building; that costs too much for too little.
 export function unreachableOn(
   venues: readonly Venue[],
   doorsOf: (venue: Venue) => VenueDoors,
@@ -465,21 +245,12 @@ export function unreachableOn(
   return stranded;
 }
 
-/** Where advice about the whole plot is treated as standing, for the order below. */
 const NOWHERE = { tileX: 0, tileZ: 0 } as const;
 
 const spotOf = (advice: Advice): { readonly tileX: number; readonly tileZ: number } =>
   advice.at ?? NOWHERE;
 
-/**
- * The order the panel reads in: loudest first, then by kind, then by where it
- * stands.
- *
- * A **total** order, and it has to be. Two Restaurants of equal size that
- * nobody visited weigh exactly the same, and a comparator that called them
- * equal would leave which of them reached the panel to the sort's own
- * tie-breaking - so the same plot could advise differently on two runs.
- */
+// A total order, or equal weights would leave the panel to the sort's tie-breaking.
 function louderFirst(a: Advice, b: Advice): number {
   return (
     b.weight - a.weight ||
@@ -489,22 +260,7 @@ function louderFirst(a: Advice, b: Advice): number {
   );
 }
 
-/**
- * A need whose venues the weather has mostly shut.
- *
- * Not "it is raining" - the player can see that, and a line that only reported
- * the sky would be the panel telling them nothing they can build. What it
- * reports is the *hole the rain leaves*: the needs whose relief is standing
- * under the sky, so that more than half of what serves them is closed. That is
- * a reason to build a covered thing beside the open one, which is the whole
- * point of having weather at all.
- *
- * Silent on a clear day, silent about a need nothing serves at all -
- * {@link adviceUnservedNeeds} has already said so, louder and permanently - and
- * silent about a need nobody happens to want.
- *
- * One line per need, so the list this can add to is at most five long.
- */
+// Reports the hole the rain leaves, not the rain: needs with over half their relief shut.
 export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
   const closed = facts.closed;
   if (!closed || closed.size === 0) return [];
@@ -518,13 +274,9 @@ export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
     if (shut * 2 <= serving.length) continue;
     advice.push({
       kind: 'weather-closed',
-      // The share of the plot that wants it, scaled by how much of what serves
-      // it is shut: a need whose every venue is closed is the loudest case, and
-      // one just over half is barely worth a line.
       weight: clamp(wanting / facts.present) * clamp(shut / serving.length),
       subject: need,
       count: shut,
-      // Not about any one building: it is the plot that is short of a roof.
       at: null,
       need,
     });
@@ -532,13 +284,7 @@ export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
   return advice;
 }
 
-/**
- * Everything worth saying about the plot, loudest first.
- *
- * A plot with nobody on it says nothing: every weight here is a share of the
- * guests, and a resort nobody has arrived at yet has not got anything wrong
- * yet. It is also what keeps the divisions above out of trouble.
- */
+// A plot with nobody on it says nothing, which also keeps the divisions above safe.
 export function adviceFor(facts: ResortFacts): readonly Advice[] {
   if (facts.present <= 0) return [];
   const found = [

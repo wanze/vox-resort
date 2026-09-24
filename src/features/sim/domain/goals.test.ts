@@ -14,7 +14,6 @@ const guests: Guests = createGuests({
   seed: 5,
 });
 
-/** Somebody who came with other people, so a party goal has more than one member. */
 const inAParty = (): number => {
   for (let person = 0; person < guests.count; person++) {
     if (partyOf(guests, person).length > 1) return person;

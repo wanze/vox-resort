@@ -1,24 +1,7 @@
-/**
- * Boardwalk tile: the paving the resort uses where a path crosses sand — a slab
- * of weathered decking boards running east to west over two joists.
- * 16x16 footprint, fits a 1x1 ground tile.
- *
- * Exactly as tall as `path.ts`, so the two butt together without a step where a
- * street runs off the grass and onto the beach.
- *
- * Nobody picks it: the palette offers `path`, and a path laid on sand comes out
- * as this — decking on a lawn would be a jetty over grass. See `groundDecides`
- * below, and `stairs.ts`, which is the other paving the ground chooses.
- *
- * The board pitch is chosen the same way the flagstones were, and for the same
- * reason: this is a tile the layout repeats a few hundred times along a shore,
- * and a plank every two voxels is the pattern the greedy mesher cannot merge.
- * Four-voxel boards with a one-voxel gap read as decking from the height the
- * ground is ever seen at and cost a quarter of what one-voxel planking would.
- */
+// Exactly as tall as path.ts, so the two butt together without a step.
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** Board pitch in voxels, the dark gap between two boards included. */
+// Four-voxel boards: a plank every two voxels is a pattern the greedy mesher cannot merge.
 const BOARD_DEPTH = 4;
 
 export default defineModel({
@@ -26,8 +9,6 @@ export default defineModel({
   label: 'Boardwalk',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
-  // Never picked: decking is what a path becomes on sand, so the palette leaves
-  // it out and the paving lays it. See `groundDecides`.
   groundDecides: true,
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -42,10 +23,8 @@ export default defineModel({
 
     const N = 15;
 
-    // the joists under the deck, spanning the full tile so tiles butt together
     box(0, N, 0, 0, 0, N, C.joist);
 
-    // decking on top: boards along x, a dark gap between each pair
     for (let z = 0; z <= N; z++) {
       if (z % BOARD_DEPTH === 0) {
         box(0, N, 1, 1, z, z, C.joist);

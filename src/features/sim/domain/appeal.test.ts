@@ -42,7 +42,6 @@ const venue = (key: string, satisfies: readonly NeedRelief[]): Venue => ({
   doors: [],
 });
 
-/** Everybody content, with the named needs set where the case wants them. */
 const levels = (person: number, at: Partial<Record<GuestNeed, number>>): Needs => {
   const needs = createNeeds(guests, 7);
   for (const each of NEEDS) needs.level[each][person] = 1;
@@ -56,16 +55,11 @@ describe('usableGain', () => {
   });
 
   it('credits only the room left when the need is nearly met', () => {
-    // The Restaurant's 1.0 and the Snack Bar's 0.6 are the same half meal to
-    // somebody who is half fed: a level is clamped at 1 and the rest goes
-    // nowhere. This is the whole of plan 030's fault 4.
     expect(usableGain(1, 0.5)).toBeCloseTo(0.5);
     expect(usableGain(0.6, 0.5)).toBeCloseTo(0.5);
   });
 
   it('bounds a declared cost by what there is to take', () => {
-    // An hour of basketball takes 0.4 of your energy, or all of it if you had
-    // less than that.
     expect(usableGain(-0.4, 1)).toBeCloseTo(-0.4);
     expect(usableGain(-0.4, 0.1)).toBeCloseTo(-0.1);
     expect(usableGain(-0.4, 0)).toBeCloseTo(0);
@@ -89,8 +83,6 @@ describe('appealOf', () => {
   it('subtracts a declared cost, and can come back negative', () => {
     const person = someone('friends');
     const { weight } = ARCHETYPES.friends;
-    // Bored, and only a little tired: the court is fun and it is tiring, and to
-    // somebody with nothing left to be bored about it is only the tiring half.
     const court = venue('basketball-court#0', [
       { need: 'fun', amount: 0.8 },
       { need: 'energy', amount: -0.4 },
@@ -115,9 +107,6 @@ describe('appealOf', () => {
   });
 
   it('beats a bigger relief once the guest has no room for it', () => {
-    // Plan 030's reported case, as arithmetic: at hunger 0.5 the Snack Bar and
-    // the Restaurant are worth exactly the same, so the layout decides. At 0.05
-    // the Restaurant is worth more, rightly.
     const person = someone('couple');
     const snack = venue('snack-bar#0', [{ need: 'hunger', amount: 0.6 }]);
     const restaurant = venue('restaurant#0', [{ need: 'hunger', amount: 1 }]);
@@ -137,10 +126,6 @@ describe('appealOf over a walk', () => {
     const person = someone('couple');
     const restaurant = venue('restaurant#0', [{ need: 'hunger', amount: 1 }]);
     const half = levels(person, { hunger: 0.5 });
-    // A guest half fed has room for half a meal standing at the door. The far
-    // side of the reference plot is 1 792 voxels, which `crowdRate.ts` walks in
-    // 2.4 simulated hours - so a couple losing 0.13 an hour arrives at 0.188 and
-    // four fifths of the meal fits rather than half of it.
     const atTheDoor = appealOf(restaurant, half, guests, person, 0);
     const acrossThePlot = appealOf(restaurant, half, guests, person, 112 * 16);
     const { weight, decayPerHour } = ARCHETYPES.couple;
@@ -149,9 +134,6 @@ describe('appealOf over a walk', () => {
   });
 
   it('leaves a small relief small however far the walk', () => {
-    // The other half of the same case, and the one that matters: an Ice Cream
-    // Stand's 0.25 is 0.25 whether you are beside it or eighty minutes away, so
-    // walking a long way for one is never the better answer.
     const person = someone('couple');
     const stand = venue('icecream#0', [{ need: 'hunger', amount: 0.25 }]);
     const half = levels(person, { hunger: 0.5 });
@@ -161,9 +143,6 @@ describe('appealOf over a walk', () => {
   });
 
   it('does not invent a need out of one that is completely met', () => {
-    // The walk deepens a need somebody already has; it does not give them one.
-    // Without this, a guest who wants nothing but a sandwich would be pulled
-    // across the plot to a bar by the thirst they are going to have on arrival.
     const person = someone('couple');
     const bar = venue('bar#0', [{ need: 'thirst', amount: 1 }]);
     expect(appealOf(bar, levels(person, {}), guests, person, 112 * 16)).toBe(0);
@@ -188,8 +167,6 @@ describe('appealOf over a walk', () => {
 describe('dominantNeedAt', () => {
   it('names the need that contributed most, not the largest declared amount', () => {
     const person = someone('friends');
-    // Thirst 1.0 against fun 0.2, and they are barely thirsty: the visit is
-    // mostly about the fun, however the art ranks the two amounts.
     const bar = venue('poolside-bar#0', [
       { need: 'thirst', amount: 1 },
       { need: 'fun', amount: 0.2 },
@@ -214,8 +191,6 @@ describe('dominantNeedAt', () => {
       { need: 'hunger', amount: 0.5 },
     ];
     const needs = levels(person, { hunger: 0, fun: 0 });
-    // The same two reliefs, listed each way round. `hunger` is earlier in
-    // `NEEDS`, and a couple weighs the two the same.
     expect(dominantNeedAt(venue('a#0', amounts), needs, guests, person)).toBe<GuestNeed>('hunger');
     expect(
       dominantNeedAt(venue('a#0', amounts.toReversed()), needs, guests, person),
@@ -229,8 +204,6 @@ describe('the taste hash', () => {
   it('gives the same person the same taste for the same venue every time', () => {
     const salt = saltFor('poolside-bar#3');
     expect(tasteFor(salt, 17, SPREAD)).toBe(tasteFor(salt, 17, SPREAD));
-    // And the salt is the key's, so a plot rebuilt with the venue at another
-    // index hands back the same number.
     expect(saltFor('poolside-bar#3')).toBe(salt);
   });
 

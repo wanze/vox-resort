@@ -15,32 +15,25 @@ import {
 } from './walkNetwork';
 import type { SeatSpot } from './seating';
 
-/** A flat run of paved tiles along z, all at sea level. */
 const flat = (tiles: readonly (readonly [number, number])[]): PavedTile[] =>
   tiles.map(([tileX, tileZ]) => ({ tileX, tileZ, y: 0 }));
 
-/** Everything at sea level. */
 const FLAT: LevelProvider = () => 0;
 
-/** One terrace behind z = 0, so a step runs across the plot at z = 1. */
 const STEP_AT_Z1: LevelProvider = (_x, z) => (z <= 0 ? 1 : 0);
 
-/** Higher ground both north and west, which is a path turning on a step. */
 const CORNER: LevelProvider = (x, z) => (z <= 0 || x <= 0 ? 1 : 0);
 
-/** Two levels in one step, which no flight could climb. */
 const CLIFF_AT_Z1: LevelProvider = (_x, z) => (z <= 0 ? 2 : 0);
 
 const nodeAt = (network: WalkNetwork, x: number, z: number): number =>
   network.nodes.findIndex((node) => node.tileX === x && node.tileZ === z);
 
-/** Every node a tile holds, lowest first: one, or the two ends of a flight. */
 const standsOn = (network: WalkNetwork, x: number, z: number): WalkNode[] =>
   network.nodes
     .filter((node) => node.tileX === x && node.tileZ === z)
     .toSorted((a, b) => a.y - b.y);
 
-/** The tiles a node can be walked to from here. */
 const reachable = (network: WalkNetwork, from: number): string[] =>
   network.nodes[from]!.exits.map((edge) => {
     const to = network.nodes[network.edges[edge]!.to]!;
@@ -49,7 +42,6 @@ const reachable = (network: WalkNetwork, from: number): string[] =>
 
 describe('walkNetworkFor', () => {
   it('joins paved neighbours and leaves the diagonals alone', () => {
-    // A plus: the centre reaches all four arms, and no arm reaches another.
     const network = walkNetworkFor({
       paved: flat([
         [1, 1],
@@ -97,8 +89,6 @@ describe('walkNetworkFor', () => {
   });
 
   describe('a step between two terraces', () => {
-    // z = 0 is the upper terrace and z = 1 the lower, so the flight sits on
-    // (0, 1) and climbs north — which is what `stairs.ts` decides for it.
     const levelOf = STEP_AT_Z1;
     const paved = [
       { tileX: 0, tileZ: 0, y: LEVEL_VOXELS },
@@ -106,11 +96,6 @@ describe('walkNetworkFor', () => {
     ];
 
     it('stands a node at each end of the flight, not one in the middle of it', () => {
-      // The ramp runs the width of the tile, from the paving it continues to the
-      // paving above. A single node at the tile's centre would carry the height
-      // of the ground *under* the flight, half a level below the treads there —
-      // and a crowd walking to it wades through the staircase to the shoulders,
-      // which is exactly what looking at the resort showed. See `standFor`.
       const [foot, head] = standsOn(
         walkNetworkFor({ paved, levelOf, shore: null, tilesX: 4 }),
         0,
@@ -118,8 +103,6 @@ describe('walkNetworkFor', () => {
       );
       expect(foot!.y).toBe(walkingSurface(0));
       expect(head!.y).toBe(walkingSurface(LEVEL_VOXELS));
-      // On the tile's own two edges, a full tile apart: the segment between them
-      // is the flight, so lerping it *is* the climb.
       expect([foot!.x, foot!.z]).toEqual([0.5 * TILE_VOXELS, 2 * TILE_VOXELS]);
       expect([head!.x, head!.z]).toEqual([0.5 * TILE_VOXELS, 1 * TILE_VOXELS]);
     });
@@ -128,15 +111,12 @@ describe('walkNetworkFor', () => {
       const network = walkNetworkFor({ paved, levelOf, shore: null, tilesX: 4 });
       const [, head] = standsOn(network, 0, 1);
       const above = network.nodes[nodeAt(network, 0, 0)]!;
-      // Flush, so a person steps off the top tread onto the slab without a jump,
-      // and the last stretch to the tile centre is flat.
       expect(head!.y).toBe(above.y);
       expect(Math.abs(above.z - head!.z)).toBe(TILE_VOXELS / 2);
     });
 
     it('lets a person climb the flight, in both directions', () => {
       const network = walkNetworkFor({ paved, levelOf, shore: null, tilesX: 4 });
-      // The climb and the flat run onto the terrace above, both ways round.
       expect(network.edges).toHaveLength(4);
       for (const edge of network.edges) {
         const back = network.edges.find(
@@ -154,7 +134,6 @@ describe('walkNetworkFor', () => {
     it('measures the climb rather than the tile, so stairs take longer', () => {
       const network = walkNetworkFor({ paved, levelOf, shore: null, tilesX: 4 });
       const lengths = network.edges.map((edge) => edge.length).toSorted((a, b) => a - b);
-      // Two halves of a tile onto the terrace above, and the flight itself.
       expect(lengths[0]).toBeCloseTo(TILE_VOXELS / 2);
       expect(lengths.at(-1)).toBeCloseTo(Math.hypot(TILE_VOXELS, LEVEL_VOXELS));
     });
@@ -170,10 +149,6 @@ describe('walkNetworkFor', () => {
   });
 
   it('sends a path that runs into the side of a flight round its foot', () => {
-    // `stairs.ts` makes a flight of any paved tile with paved ground a level
-    // above it, corridor tiles included — so a path sometimes crosses a flight
-    // at right angles to the climb. Refusing that pair strands the corridor
-    // behind it; the foot is where a person would go round. See `standFor`.
     const network = walkNetworkFor({
       paved: [
         { tileX: 1, tileZ: 1, y: 0 },
@@ -191,15 +166,11 @@ describe('walkNetworkFor', () => {
         (edge) => network.nodes[network.edges[edge]!.to],
       );
       expect(across, `${beside} lost its way across`).toContain(foot);
-      // At the height it was already walking at, rather than up the side wall.
       expect(foot!.y).toBe(network.nodes[beside]!.y);
     }
   });
 
   it('refuses the side of a staircase, where a path turns on a step', () => {
-    // The corner (1, 1) is low with higher paved ground both north and west, so
-    // one tile would have to climb two ways. `stairs.ts` gives it the first by
-    // compass order — north — and the pair to the west is then a wall.
     const network = walkNetworkFor({
       paved: [
         { tileX: 1, tileZ: 1, y: 0 },
@@ -210,10 +181,7 @@ describe('walkNetworkFor', () => {
       shore: null,
       tilesX: 4,
     });
-    // The flight's head reaches the ground it climbs to, and the terrace to the
-    // west is walled off: nothing on the corner tile reaches it at all.
     const [, head] = standsOn(network, 1, 1);
-    // Its own foot, back down the flight, and the terrace it climbs to.
     expect(reachable(network, network.nodes.indexOf(head!))).toEqual(['1,0', '1,1']);
     expect(reachable(network, nodeAt(network, 0, 1))).toEqual([]);
     for (const node of standsOn(network, 1, 1)) {
@@ -239,15 +207,11 @@ describe('walkNetworkFor', () => {
   });
 });
 
-/** Inland water two tiles wide, which a crossing of it stands a metre above. */
 const RIVER = (_x: number, tileZ: number): boolean => tileZ === 2 || tileZ === 3;
 
-/** The same channel a tile wider, so a crossing of it has a level middle. */
 const WIDE_RIVER = (_x: number, tileZ: number): boolean => tileZ >= 2 && tileZ <= 4;
 
 describe('a crossing over a river', () => {
-  // A channel two tiles wide at z = 2 and z = 3, with the street running over
-  // it: two ramps meeting at their heads, and a bank either side.
   const paved = flat([
     [0, 1],
     [0, 2],
@@ -258,13 +222,9 @@ describe('a crossing over a river', () => {
     walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 4, bridged: RIVER });
 
   it('stands a node at each end of a ramp, as it does on a flight', () => {
-    // The same reason: the surface runs from the paving it continues to the deck
-    // above across the width of the tile, so one node at the centre would leave
-    // a person walking through the planking. See `standFor`.
     const [foot, head] = standsOn(network(), 0, 2);
     expect(foot!.y).toBe(walkingSurface(0));
     expect(head!.y).toBe(BRIDGE_VOXELS);
-    // The foot at the bank edge of the tile and the head at the far one.
     expect(foot!.z).toBe(2 * TILE_VOXELS);
     expect(head!.z).toBe(3 * TILE_VOXELS);
   });
@@ -273,8 +233,6 @@ describe('a crossing over a river', () => {
     const crossing = network();
     const [, head] = standsOn(crossing, 0, 2);
     const far = standsOn(crossing, 0, 3);
-    // The crown is one place, so the second ramp hangs its head on the same
-    // node and there is no zero-length edge between two points that are one.
     expect(far.map((node) => node.y)).toEqual([walkingSurface(0)]);
     expect(head!.z).toBe(3 * TILE_VOXELS);
   });
@@ -285,7 +243,6 @@ describe('a crossing over a river', () => {
       const back = crossing.edges.find((other) => other.from === edge.to && other.to === edge.from);
       expect(back, `${edge.from} -> ${edge.to} has no way back`).toBeDefined();
     }
-    // Every node is reachable from the near bank.
     const seen = new Set([nodeAt(crossing, 0, 1)]);
     for (let more = true; more;) {
       more = false;
@@ -313,22 +270,18 @@ describe('a crossing over a river', () => {
       tilesX: 4,
       bridged: WIDE_RIVER,
     });
-    // One node, at the middle tile's centre, a metre above the water it spans.
     const middle = standsOn(deck, 0, 3);
     expect(middle.map((node) => node.y)).toEqual([BRIDGE_VOXELS]);
     expect(middle[0]!.z).toBe(3.5 * TILE_VOXELS);
   });
 
   it('leaves a pier flat, because nothing told it the paving was raised', () => {
-    // The same four tiles with no `bridged` at all, which is a jetty out over
-    // the bay and every plot with no river on it.
     const pier = walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 4 });
     for (const node of pier.nodes) expect(node.y).toBe(walkingSurface(0));
   });
 });
 
 describe('the gates onto the beach', () => {
-  // Water from z = 8, four rows of sand in front of it: z = 4..7 is beach.
   const shore = shoreFor({
     tilesX: 10,
     tilesZ: 10,
@@ -348,7 +301,6 @@ describe('the gates onto the beach', () => {
 
   it('opens a gate where paving has open sand beside it', () => {
     const network = walkNetworkFor({
-      // A boardwalk running down into the sand, and one tile up on the grass.
       paved: flat([
         [5, 3],
         [5, 4],
@@ -358,10 +310,7 @@ describe('the gates onto the beach', () => {
       shore,
       tilesX: 10,
     });
-    // (5, 3) is on grass but touches the first row of sand at (5, 4)... which is
-    // paved, so it is not open. Its neighbours (4, 3) and (6, 3) are grass.
     expect(network.nodes[nodeAt(network, 5, 3)]!.gate).toBe(false);
-    // The two on the sand have open sand either side of them.
     expect(network.nodes[nodeAt(network, 5, 4)]!.gate).toBe(true);
     expect(network.nodes[nodeAt(network, 5, 5)]!.gate).toBe(true);
     expect(network.gates).toHaveLength(2);
@@ -384,8 +333,6 @@ describe('beachPointAt', () => {
       const tileZ = Math.floor(point.z / TILE_VOXELS);
       expect(tileX, 'off the west or east end of the plot').toBeGreaterThanOrEqual(0);
       expect(tileX, 'off the west or east end of the plot').toBeLessThan(40);
-      // Asked of the shore itself rather than of our own arithmetic: the whole
-      // point is that a roamer never has to.
       expect(terrainAt(shore, tileX, tileZ), `${tileX},${tileZ}`).toBe('beach');
     }
   });
@@ -409,7 +356,6 @@ describe('beachPointAt', () => {
   });
 });
 
-/** A seat standing in the middle of a tile, at the height of its paving. */
 const seatOn = (tileX: number, tileZ: number, y = walkingSurface(0)): SeatSpot => ({
   x: (tileX + 0.5) * TILE_VOXELS,
   z: (tileZ + 0.5) * TILE_VOXELS,
@@ -439,7 +385,6 @@ describe('the seats a network hangs off its nodes', () => {
   });
 
   it('reaches a seat on an unpaved tile from the paving beside it', () => {
-    // The bench the layout actually stands: on the grass, against a path.
     const network = walkNetworkFor({
       paved: flat([[0, 0]]),
       levelOf: FLAT,
@@ -460,7 +405,6 @@ describe('the seats a network hangs off its nodes', () => {
       levelOf: FLAT,
       shore: null,
       tilesX: 6,
-      // On the tile next to the first, and three tiles from the second.
       seats: [seatOn(1, 0)],
     });
     expect(network.seats[0]!.node).toBe(nodeAt(network, 0, 0));
@@ -479,9 +423,6 @@ describe('the seats a network hangs off its nodes', () => {
   });
 
   it('drops a seat a whole terrace above its paving', () => {
-    // A bench on the terrace above a path is not something to walk up to; the
-    // flight is, and it is somewhere else. Half a level is allowed, because a
-    // seat names the layer a sitter's hips are at.
     const network = walkNetworkFor({
       paved: flat([[0, 0]]),
       levelOf: FLAT,
@@ -513,14 +454,12 @@ describe('the seats a network hangs off its nodes', () => {
 });
 
 describe('the seats out on the sand', () => {
-  // Water from z = 8, four rows of sand in front of it: z = 4..7 is beach.
   const shore = shoreFor({
     tilesX: 10,
     tilesZ: 10,
     shore: { inset: 1, beach: 4, wave: 0, seed: 1 },
   });
 
-  /** A lounger's worth of seat, on the sand at this tile. */
   const lounger = (tileX: number, tileZ: number): SeatSpot => ({
     ...seatOn(tileX, tileZ, BEACH_SURFACE + 5),
     pose: 'lie',
@@ -534,7 +473,6 @@ describe('the seats out on the sand', () => {
       tilesX: 10,
       seats: [lounger(5, 6)],
     });
-    // Nowhere near the one paved tile, and kept anyway: the sand is walked on.
     expect(network.seats).toHaveLength(1);
     expect(network.seats[0]!.node).toBe(OFF_THE_GRAPH);
     expect(network.beachSeats).toEqual([0]);
@@ -543,7 +481,6 @@ describe('the seats out on the sand', () => {
 
   it('still prefers the paving where a seat has both', () => {
     const network = walkNetworkFor({
-      // A boardwalk tile out on the sand, with a seat on the tile beside it.
       paved: [{ tileX: 5, tileZ: 6, y: 0 }],
       levelOf: FLAT,
       shore,
@@ -559,7 +496,6 @@ describe('the seats out on the sand', () => {
       paved: flat([[0, 0]]),
       levelOf: FLAT,
       shore,
-      // On the grass behind the beach, four tiles from the only paving there is.
       seats: [seatOn(5, 2)],
       tilesX: 10,
     });

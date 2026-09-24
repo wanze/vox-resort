@@ -6,7 +6,6 @@ import { gableRoof, hipRoof, thatchRoof } from './roof.ts';
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
 
-/** The inclusive span a layer covers on one axis, or null if it is empty. */
 const span = (b: VoxelBuilder, y: number, axis: 'x' | 'z'): [number, number] | null => {
   let lo = Infinity;
   let hi = -Infinity;
@@ -35,14 +34,12 @@ describe('gableRoof', () => {
     expect(span(b, 0, 'x')).toEqual([0, 15]);
     expect(span(b, 1, 'x')).toEqual([2, 13]);
     expect(span(b, 2, 'x')).toEqual([4, 11]);
-    // The gable ends never move: the ridge runs the length of the building.
     expect(span(b, 2, 'z')).toEqual([0, 7]);
   });
 
   it('caps the ridge a voxel in from the last course, and says where it ends', () => {
     const b = new VoxelBuilder();
     const free = gableRoof(b, { x: 0, z: 0, w: 16, d: 8, y: 0, ridge: 'z', overhang: 0 });
-    // 16 wide closes after four courses, the last of them four voxels across.
     expect(span(b, 3, 'x')).toEqual([6, 9]);
     expect(span(b, 4, 'x')).toEqual([7, 8]);
     expect(at(b, 7, 4, 3)).toBe(PALETTE.terracotta.light);
@@ -80,7 +77,6 @@ describe('hipRoof', () => {
   it('leaves a ridge where the plan is longer than it is wide', () => {
     const b = new VoxelBuilder();
     hipRoof(b, { x: 0, z: 0, w: 20, d: 8, y: 0, overhang: 0 });
-    // The short axis closes first; the cap is what is left of the long one.
     expect(span(b, 2, 'z')).toEqual([3, 4]);
     expect(span(b, 2, 'x')).toEqual([3, 16]);
   });
@@ -114,7 +110,6 @@ describe('thatchRoof', () => {
   it('lashes a pole over the ridge, overrunning it a voxel at either end', () => {
     const b = new VoxelBuilder();
     const free = thatchRoof(b, { x: 0, z: 0, w: 16, d: 8, y: 0, overhang: 0 });
-    // The short side closes first, so the ridge is what is left of the long one.
     expect(span(b, 3, 'z')).toEqual([3, 4]);
     expect(span(b, 3, 'x')).toEqual([3, 12]);
     expect(at(b, 3, 4, 3)).toBe(PALETTE.thatch.light);

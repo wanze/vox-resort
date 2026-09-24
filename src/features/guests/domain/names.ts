@@ -1,17 +1,3 @@
-/**
- * What the guests are called.
- *
- * Two lists and a draw, and that is the whole module - but the lists are worth
- * some care, because a name is the first thing anybody will read about a guest
- * and a resort of Smiths and Joneses reads as placeholder text. The resort is
- * Mediterranean: `docs/art-direction.md` builds it out of tavernas, whitewash,
- * olives and cypresses, so the names are drawn from the same coast.
- *
- * Family names and given names are drawn separately, so a party of five is one
- * surname and five given names rather than five unrelated people.
- */
-
-/** Given names an adult guest may have. */
 export const GIVEN_NAMES: readonly string[] = [
   'Elena',
   'Marco',
@@ -81,7 +67,6 @@ export const GIVEN_NAMES: readonly string[] = [
   'Cem',
 ];
 
-/** Given names a child guest may have; a shorter list, deliberately. */
 export const CHILD_NAMES: readonly string[] = [
   'Nico',
   'Martina',
@@ -117,7 +102,6 @@ export const CHILD_NAMES: readonly string[] = [
   'Rui',
 ];
 
-/** Family names a party may share. */
 export const FAMILY_NAMES: readonly string[] = [
   'Marchetti',
   'Papadopoulos',
@@ -177,7 +161,6 @@ export const FAMILY_NAMES: readonly string[] = [
 const pick = (random: () => number, list: readonly string[]): string =>
   list[Math.min(list.length - 1, Math.floor(random() * list.length))]!;
 
-/** One given name, drawn from the list for the age band. */
 export function givenName(random: () => number, child: boolean): string {
   return pick(random, child ? CHILD_NAMES : GIVEN_NAMES);
 }

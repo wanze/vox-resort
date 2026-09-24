@@ -11,7 +11,7 @@ import {
 
 const PARAMS = { tilesX: 48, tilesZ: 48, density: 0.6, seed: 5 };
 
-/** Grown once and shared: a pure function of its request, and the bake is not free. */
+// Shared because the bake is not free.
 const generated: PreparedResort = prepareResort({
   source: { kind: 'generate', params: PARAMS },
   repeat: 1,
@@ -31,7 +31,6 @@ describe('prepareResort', () => {
   it('bakes the lamps and the sky visibility into one volume', () => {
     const lighting = generated.lighting!;
     expect(lighting.grid.litCells).toBeGreaterThan(0);
-    // Something on the plot takes sky away, so some interior cell is below open.
     const { direction, spec } = lighting.grid;
     const interior = gridInterior(spec);
     let shaded = false;
@@ -46,7 +45,6 @@ describe('prepareResort', () => {
   });
 
   it('meshes the terrain around where the camera is framed', () => {
-    // A generated plot always has a coast, so there is a sea to mesh.
     expect(generated.surfaces.sea).not.toBeNull();
     expect(generated.framing.target.x).toBeGreaterThan(0);
   });
@@ -65,16 +63,14 @@ describe('prepareResort', () => {
     const tiled = prepareResort({ source: { kind: 'authored' }, repeat: 2, view: 'street' });
     expect(tiled.plan).toBe(RESORT_PLAN);
     expect(tiled.plot.placements).toHaveLength(tiled.plot.layout.placements.length * 4);
-    // The street preset stands at lamp height, not above the plot.
     expect(tiled.framing.position.y).toBeLessThan(20);
   });
 });
 
 describe('crossing to the main thread', () => {
   it('survives a structured clone, which is how a worker hands it over', () => {
-    // A function, a class instance or a symbol anywhere in it would throw here
-    // rather than in the browser, where the only symptom is a resort that never
-    // arrives.
+    // A function, class instance or symbol would throw here rather than in the browser, where the only
+    // symptom is a resort that never arrives.
     const cloned = structuredClone(generated);
     expect(cloned.plot.placements).toEqual(generated.plot.placements);
     expect(cloned.plan).toEqual(generated.plan);

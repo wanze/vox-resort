@@ -1,12 +1,4 @@
-/**
- * The catalogue-meshing job: what it is asked to do, how that crosses a worker
- * boundary, and how to run it on whichever thread is calling.
- *
- * This sits between `meshCatalogue.ts`, which owns the worker, and
- * `meshWorker.ts`, which is the far side of it. Both need the same request
- * shape, the same wire encoding and the same work; keeping all three here is
- * what stops the two halves importing each other in a circle.
- */
+// Shared by meshCatalogue.ts and meshWorker.ts so the two halves do not import each other in a circle.
 
 import type { MaterialDefinition } from '../../catalog/domain/materials';
 import type { ModelAttributes } from '../../rendering/domain/modelAttributes';
@@ -16,7 +8,6 @@ import { buildSectionMeshes } from './dveEngine';
 
 export interface MeshCatalogueRequest {
   readonly materials: readonly MaterialDefinition[];
-  /** Packed from the moment they are laid out, on both sides of the worker. */
   readonly writes: PackedVoxelWrites;
   readonly regions: readonly ScratchRegion[];
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
@@ -27,16 +18,10 @@ export interface MeshCatalogueRequest {
 
 export interface MeshCatalogueResult {
   readonly models: readonly ModelAttributes[];
-  /** Milliseconds the voxel mesher itself took, wherever it ran. */
   readonly dveMs: number;
-  /** Whether the work happened off the main thread. */
   readonly threaded: boolean;
 }
 
-/**
- * The wire form of a request. `Map` survives structured cloning, but a `Set`
- * inside a `Map` value is clearer written out, and the catalogue is small.
- */
 export interface WireRequest {
   readonly materials: readonly MaterialDefinition[];
   readonly writes: PackedVoxelWrites;
@@ -57,10 +42,8 @@ export function toWire(request: MeshCatalogueRequest): WireRequest {
   const { positions, voxelIds, palette } = request.writes;
   return {
     materials: request.materials,
-    // Copied, not handed over: the worker takes these buffers by transfer, which
-    // empties them on this side, and the main-thread fallback still has to read
-    // the request if the worker fails after the post. Ten megabytes of memcpy is
-    // nothing against the object per voxel this used to be packed from.
+    // Copied, not transferred: the main-thread fallback still reads the request if the
+    // worker fails after the post.
     writes: { positions: positions.slice(), voxelIds: voxelIds.slice(), palette },
     regions: request.regions,
     colors: [...request.colorsByMaterialId],
@@ -82,7 +65,6 @@ export function fromWire(wire: WireRequest): MeshCatalogueRequest {
   };
 }
 
-/** Meshes the catalogue on whichever thread is calling. */
 export async function meshOnThisThread(
   request: MeshCatalogueRequest,
 ): Promise<{ models: ModelAttributes[]; dveMs: number }> {

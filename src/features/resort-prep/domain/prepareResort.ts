@@ -1,17 +1,4 @@
-/**
- * Everything a new resort needs before anything is drawn, as one pure function.
- *
- * Growing a plot, laying it out, baking its lamps and its sky visibility and
- * meshing its terrain is seconds of work on a large plot — five on a 400-tile
- * one — and none of it touches the renderer. So it is gathered here, where it
- * can run in a worker (`adapters/prepWorker.ts`) while the resort already on
- * screen keeps drawing, and what comes back is plain objects and typed arrays
- * the main thread only has to wrap: instance buffers, textures, meshes.
- *
- * Which lamps an object carries and what box it takes sky away with are read
- * from `catalog/domain/placementFacts.ts`, as the main thread's edits read them,
- * so the bake and the edits that keep it current can never disagree about them.
- */
+// Pure and renderer-free so it can run in a worker while the current resort keeps drawing.
 
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { benchFraming, type BenchView } from '../../bench/domain/benchConfig';
@@ -72,7 +59,6 @@ import {
 import { buoyLampSites } from '../../sea/domain/buoyLamps';
 import { swimAreaMoorings, type Mooring, type Rental } from '../../sea/domain/swimArea';
 
-/** The catalogue as the generator needs to see it: footprints and shelves. */
 const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
   id: type.id,
   category: type.category,
@@ -81,90 +67,56 @@ const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
   placement: type.model.placement,
 }));
 
-/** Every light the catalogue declares, whether or not one is standing yet. */
 const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
 
-/** Where a new resort comes from. */
 export type ResortSource =
   | { readonly kind: 'generate'; readonly params: ResortParams }
-  /** Bare ground of this size — a coast, a hill and a river off it. See `emptyResortPlan`. */
   | { readonly kind: 'clear'; readonly params: ResortParams }
-  /** The hand-authored plan, which is the one a benchmark measures. */
   | { readonly kind: 'authored' };
 
 export interface PrepRequest {
   readonly source: ResortSource;
-  /** Tiles the plot this many times a side, to price a larger resort; see `plotRepeat.ts`. */
   readonly repeat: number;
-  /** The benchmark preset the camera is pinned to, or null to frame the plot. */
   readonly view: BenchView | null;
 }
 
 export interface Plot {
   readonly layout: ResortLayout;
-  /** Authored objects: what the generator laid out, and what the pointer adds. */
   readonly placements: Placement[];
-  /** Lamps and hedges the layout scattered along the paths. */
   readonly props: Placement[];
-  /** One placement per paved tile. */
   readonly paths: Placement[];
-  /** Handrails, standing on the paving they guard rather than on ground of their own. */
   readonly rails: Placement[];
 }
 
 export interface PreparedLighting {
-  /**
-   * The lamps baked into three channels of the grid, and the sky visibility
-   * into the fourth: `direction`'s alpha already holds it.
-   */
   readonly grid: BakedLightGrid;
-  /** Milliseconds both bakes took together. */
   readonly bakeMs: number;
-  /** Milliseconds the sky-visibility pass took, of `bakeMs`. */
   readonly skyBakeMs: number;
 }
 
 export interface PreparedResort {
   readonly plan: ResortPlan;
   readonly plot: Plot;
-  /** Where the bay's buoys are moored, which their lamps were baked at. */
   readonly moorings: readonly Mooring[];
-  /** Every lamp the bake lit: the plot's, the rails' and the buoys'. */
   readonly anchors: readonly LightAnchor[];
-  /** The baked volume, or null when nothing in the catalogue casts light. */
   readonly lighting: PreparedLighting | null;
   readonly bounds: WorldBounds;
   readonly framing: CameraFraming;
-  /** The terrain meshed for this plot as it was grown, framed where the camera is. */
   readonly surfaces: TerrainSurfaces;
-  /** Milliseconds all of this took, wherever it ran. */
   readonly prepMs: number;
 }
 
-/** Objects, scattered props, path tiles and rails: everything the scene draws. */
 export function everythingOn(plot: Plot): Placement[] {
   return [...plot.placements, ...plot.props, ...plot.paths, ...plot.rails];
 }
 
-/**
- * Everything that claims a tile of the plot.
- *
- * Everything the scene draws, less the handrails: a rail stands on the paving it
- * guards, so the tile under it is the slab's, and the three things that ask what
- * is standing on a tile — the occupancy index, the shadows and the sky-visibility
- * bake — would all get the wrong answer from it.
- */
+// Rails are left out: a rail stands on the paving it guards, so the tile is the slab's.
 export function claimingOn(
   plot: Pick<Plot, 'placements' | 'props' | 'paths'> | ResortLayout,
 ): Placement[] {
   return [...plot.placements, ...plot.props, ...plot.paths];
 }
 
-/**
- * The hire hut the bay lets boats out from: the middle of its whole footprint,
- * which is the column its boats come in on. Null on a plot with no sea or no
- * hut — the generator stands exactly one, and only on sand.
- */
 export function rentalOf(shore: Shore | null, placements: readonly Placement[]): Rental | null {
   if (!shore) return null;
   const hut = placements.find((placement) => placement.id === PEDALO_RENTAL_ID);
@@ -175,7 +127,6 @@ export function rentalOf(shore: Shore | null, placements: readonly Placement[]):
   };
 }
 
-/** The plan a source grows. */
 function planOf(source: ResortSource): ResortPlan {
   if (source.kind === 'authored') return RESORT_PLAN;
   const { tilesX, tilesZ, seed } = source.params;
@@ -184,7 +135,6 @@ function planOf(source: ResortSource): ResortPlan {
     : generateResort(GENERATOR_TYPES, source.params);
 }
 
-/** Lays a plan out, and tiles it when a benchmark asks for a bigger one. */
 function layOut(plan: ResortPlan, repeat: number): Plot {
   const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan);
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
@@ -198,10 +148,7 @@ function layOut(plan: ResortPlan, repeat: number): Plot {
   };
 }
 
-/**
- * Where the bay's buoys are moored. The paving is passed in so no buoy is moored
- * in a pier: the sea lanes run six tiles of jetty out through the line.
- */
+// Paving is passed in so no buoy is moored in a pier: the sea lanes run jetty out through the line.
 function mooringsFor(shore: Shore | null, layout: ResortLayout): Mooring[] {
   const paved = new Set(layout.paths.map((placement) => tileKey(placement.tileX, placement.tileZ)));
   return swimAreaMoorings({
@@ -211,27 +158,16 @@ function mooringsFor(shore: Shore | null, layout: ResortLayout): Mooring[] {
   });
 }
 
-/**
- * The lamps on the buoys' masts, baked at their moorings: a buoy does not leave
- * its mooring, so its lamp is as static as a street lamp's.
- */
+// A buoy never leaves its mooring, so its lamp can be baked like a street lamp's.
 function buoyLampsAt(moorings: readonly Mooring[]): LightAnchor[] {
   const buoy = SEA_MODELS[BUOY_INDEX]!;
   return buoyLampSites(moorings, buoy, SEA_LEVEL).flatMap((site) => anchorsFor(site, buoy.lights));
 }
 
-/**
- * The ground a lamp could be stood on: the plan's own extent, in voxels — which
- * the grid is sized from, so it covers the tiles nothing stands on yet.
- */
 function groundOf(plan: ResortPlan): Ground {
   return { minX: 0, maxX: plan.tilesX * TILE_VOXELS, minZ: 0, maxZ: plan.tilesZ * TILE_VOXELS };
 }
 
-/**
- * Bakes every lamp into a volume sized for the whole plot, then the sky
- * visibility into its fourth channel. See `lighting/domain/lightGrid.ts`.
- */
 function bakeLighting(
   anchors: readonly LightAnchor[],
   claiming: readonly Placement[],
@@ -257,10 +193,6 @@ function bakeLighting(
   };
 }
 
-/**
- * How much ground the resort covers, measured from what is standing — except on
- * a bare plot, where the plan's own extent is the only answer.
- */
 function boundsOf(plan: ResortPlan, everything: readonly Placement[]): WorldBounds {
   if (everything.length === 0) return { ...groundOf(plan), height: 0 };
   return worldBoundsFor(everything, objectTypeTop);
@@ -282,10 +214,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const framing = request.view
     ? benchFraming(request.view, bounds, CAMERA_FOV_DEGREES)
     : cameraFramingFor(bounds, CAMERA_FOV_DEGREES);
-  // Framed and reached exactly as the scene frames and reaches it, so the mesh
-  // made here is the mesh the scene would have made; see `threeScene.ts`. What
-  // stands on the ground is asked of the layout's own lists: the terrain is the
-  // plan's, and a benchmark's tiled copies share their original's tiles.
+  // Framed exactly as the scene frames it, so this mesh matches the one the scene would build.
   const occupancy = createTileOccupancy(claimingOn(plot.layout));
   const surfaces = terrainSurfacesFor({
     terrain: terrainFor(plan),
@@ -308,7 +237,6 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   };
 }
 
-/** Every typed array a surface holds. */
 function surfaceBuffers(surface: SurfaceGeometry | null): ArrayBufferLike[] {
   if (!surface) return [];
   return [
@@ -321,11 +249,7 @@ function surfaceBuffers(surface: SurfaceGeometry | null): ArrayBufferLike[] {
   ];
 }
 
-/**
- * Every buffer a prepared resort can hand over rather than copy: tens of
- * megabytes of baked volume and terrain. Each named once, since a buffer listed
- * twice is an error to transfer.
- */
+// Each buffer only once: transferring the same buffer twice throws.
 export function preparedTransferables(prepared: PreparedResort): ArrayBuffer[] {
   const { surfaces, lighting } = prepared;
   const buffers = new Set<ArrayBufferLike>([

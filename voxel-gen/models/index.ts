@@ -1,7 +1,4 @@
-/**
- * The model registry: every hand-authored object, in the order the showcase
- * lays them out — props first, then the small structures, then the buildings.
- */
+// Registry order is the showcase layout order: props, small structures, buildings.
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import bakery from './bakery.ts';
@@ -135,12 +132,5 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   minigolf,
 ];
 
-/**
- * Models that are authored but withheld from the app: kept compiling, tested
- * against the palette and renderable with `pnpm preview --drafts`, but not in
- * the catalogue, so neither the build palette nor the generator offers them.
- * A draft moves up into `MODEL_SOURCES` once its pass is done.
- *
- * `waterpark` is here because it does not fit the resort yet and needs work.
- */
+// Drafts compile and are tested but stay out of the catalogue; waterpark does not fit the resort yet.
 export const DRAFT_SOURCES: readonly VoxelModelSource[] = [waterpark];

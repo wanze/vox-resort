@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { meanderAt } from './wander';
 
-/** The meander sampled across a plot's worth of columns. */
 const across = (seed: number, salt: number, amplitude: number, step = 1): number[] => {
   const line: number[] = [];
   for (let at = 0; at < 120; at += step) line.push(meanderAt(seed, salt, at, amplitude));
@@ -25,16 +24,12 @@ describe('meanderAt', () => {
   });
 
   it('gives a different line to a neighbouring seed', () => {
-    // The phases are scattered off the seed rather than scaled by it, so seed 7
-    // and seed 8 are not near-identical coastlines that round to the same tiles.
     const seven = across(7, 1, 3).map(Math.round);
     const eight = across(8, 1, 3).map(Math.round);
     expect(seven).not.toEqual(eight);
   });
 
   it('gives a different line to another salt on the same seed', () => {
-    // This is what keeps a terrace step from wandering in step with the coast
-    // it is measured off.
     expect(across(4, 1, 3)).not.toEqual(across(4, 3, 3));
   });
 
@@ -50,8 +45,6 @@ describe('meanderAt', () => {
   });
 
   it('does not repeat within a plot', () => {
-    // Two sines at wavelengths that do not divide each other: the line at the
-    // far side of a 120-tile plot is not the line at the near side.
     const line = across(2, 1, 3);
     const near = line.slice(0, 40).map(Math.round);
     const far = line.slice(80).map(Math.round);

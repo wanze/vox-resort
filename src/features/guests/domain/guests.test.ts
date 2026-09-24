@@ -52,7 +52,6 @@ describe('createGuests', () => {
   });
 
   it('draws every child with the child model and no adult with it', () => {
-    // A child variant that is not the last, so the shift past it is exercised.
     for (const childVariant of [3, 1, 0]) {
       const guests = guestsWith({ childVariant, count: 400 });
       for (const i of everybody(guests)) {
@@ -136,7 +135,6 @@ describe('partyOf', () => {
 
 describe('homeOf', () => {
   it('is null exactly for the people with nowhere to sleep', () => {
-    // Fewer beds than people, so both cases occur.
     const guests = guestsWith({ count: 200 });
     const homeless = everybody(guests).filter((i) => guests.home[i] === NO_HOME);
     expect(homeless.length).toBeGreaterThan(0);
@@ -159,10 +157,8 @@ describe('bedCount', () => {
   });
 });
 
-/** A seeded generator of the shape `createGuests` holds, for the arrivals draw. */
 const drawOf = (seed: number) => createRandom(seed);
 
-/** The party with the most people in it, which is the one worth moving about. */
 const biggestParty = (guests: Guests): number => {
   let best = 0;
   for (let party = 1; party < guests.parties.length; party++) {
@@ -193,7 +189,6 @@ describe('checking out and checking in', () => {
     expect(freeBodiesOf(guests).adults.length + freeBodiesOf(guests).children.length).toBe(
       members.length,
     );
-    // Asking twice takes nothing more back: the beds are already theirs again.
     expect(checkOutParty(guests, party)).toEqual([]);
     expect(guests.freeBeds[lodging]).toBe(freeBefore + members.length);
   });
@@ -220,7 +215,6 @@ describe('checking out and checking in', () => {
 
   it('cuts a party down to the bodies it can actually be given', () => {
     const guests = guestsWith();
-    // Everybody away but one adult body and one child body.
     for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
     const free = freeBodiesOf(guests);
     const one: FreeBodies = { adults: [free.adults[0]!], children: [free.children[0]!] };

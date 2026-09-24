@@ -13,7 +13,6 @@ import {
   type ConstructionSite,
 } from './construction';
 
-/** A placement standing on one tile; only its key is ever read here. */
 const standing = (key: string): Placement => ({
   key,
   id: 'hotel',
@@ -29,7 +28,7 @@ const standing = (key: string): Placement => ({
   depth: 16,
 });
 
-/** The catalogue's real numbers, so the tuning is pinned to real models. */
+// The catalogue's real numbers, so the tuning is pinned to real models.
 const HOTEL: BuildModel = { category: 'lodging', height: 57, voxelCount: 221678 };
 const COTTAGE: BuildModel = { category: 'lodging', height: 25, voxelCount: 23537 };
 const CABINS: BuildModel = { category: 'amenities', height: 16, voxelCount: 3876 };
@@ -45,10 +44,8 @@ describe('buildSeconds', () => {
     expect(buildSeconds(HOTEL)).toBeGreaterThan(0);
     expect(buildSeconds(COTTAGE)).toBeGreaterThan(0);
     expect(buildSeconds(CABINS)).toBeGreaterThan(0);
-    // Paving is painted by dragging, and a pool is a hole rather than a wall.
     expect(buildSeconds(PATH)).toBe(0);
     expect(buildSeconds(POOL)).toBe(0);
-    // Small enough that appearing is the only thing that would not read as a bug.
     expect(buildSeconds(SHOWER)).toBe(0);
   });
 
@@ -62,7 +59,6 @@ describe('buildSeconds', () => {
       expect(buildSeconds(model)).toBeGreaterThan(3);
       expect(buildSeconds(model)).toBeLessThanOrEqual(24);
     }
-    // However absurd the model, nobody waits longer than the cap.
     expect(buildSeconds({ category: 'lodging', height: 400, voxelCount: 40_000_000 })).toBe(24);
   });
 
@@ -142,7 +138,6 @@ describe('revealHeightOf', () => {
     const top = revealHeightOf(1, 57);
     expect(revealHeightOf(0.25, 57)).toBeLessThan(top * 0.25);
     expect(revealHeightOf(0.75, 57)).toBeGreaterThan(top * 0.75);
-    // The midpoint is the one place smoothstep and a straight line agree.
     expect(revealHeightOf(0.5, 57)).toBeCloseTo(top * 0.5);
   });
 

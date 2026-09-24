@@ -6,11 +6,6 @@ import { PICK_PIXELS, pickPerson, type PickablePeople } from './pickPerson';
 const VIEWPORT = { width: 800, height: 400 };
 const AIM = 6;
 
-/**
- * A perspective camera standing up and back from the origin and looking down at
- * it at 45 degrees - the high angle the plot is drawn from, which is what puts
- * the ground under a click behind the person clicked on.
- */
 const camera = (): PerspectiveCamera => {
   const eye = new PerspectiveCamera(50, VIEWPORT.width / VIEWPORT.height, 1, 2000);
   eye.position.set(0, 100, 100);
@@ -23,7 +18,6 @@ const camera = (): PerspectiveCamera => {
 const viewProjectionOf = (eye: PerspectiveCamera): Matrix4 =>
   new Matrix4().multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse);
 
-/** Where a point lands on the canvas, worked out by Three.js rather than by the module. */
 const screenOf = (eye: PerspectiveCamera, x: number, y: number, z: number) => {
   const ndc = new Vector3(x, y, z).project(eye);
   return { x: ((ndc.x + 1) / 2) * VIEWPORT.width, y: ((1 - ndc.y) / 2) * VIEWPORT.height };
@@ -54,19 +48,14 @@ describe('pickPerson', () => {
   it('picks the person in front, not the one standing where the ground ray lands', () => {
     const front: [number, number, number] = [0, 0, 20];
     const pointer = screenOf(eye, front[0], front[1] + AIM, front[2]);
-    // Where a pick of the ground under this click would land: past the front
-    // person's feet, and so exactly where somebody behind them is standing.
     const ground = groundPointAt(pointer, VIEWPORT, viewProjectionOf(eye).invert().elements);
     expect(ground).not.toBeNull();
     expect(ground!.z).toBeLessThan(front[2] - 4);
-    // The one behind is listed first, so a tie would have gone to them.
     const people = peopleAt([ground!.x, 0, ground!.z], front);
     expect(pickPerson(pointer, VIEWPORT, matrix, people, AIM)).toBe(1);
   });
 
   it('never picks somebody behind the camera', () => {
-    // On the camera's own axis, behind it: the divide would put them in the
-    // middle of the screen.
     const people = peopleAt([0, 150 - AIM, 150]);
     const centre = { x: VIEWPORT.width / 2, y: VIEWPORT.height / 2 };
     expect(pickPerson(centre, VIEWPORT, matrix, people, AIM, 1000)).toBe(-1);
@@ -79,7 +68,6 @@ describe('pickPerson', () => {
   it('hits just inside the reach and misses just outside it', () => {
     const people = peopleAt([0, 0, 0]);
     const on = screenOf(eye, 0, AIM, 0);
-    // A reach passed in, across and down.
     const reach = 10;
     expect(
       pickPerson({ x: on.x + reach - 0.5, y: on.y }, VIEWPORT, matrix, people, AIM, reach),
@@ -87,7 +75,6 @@ describe('pickPerson', () => {
     expect(
       pickPerson({ x: on.x, y: on.y - reach - 0.5 }, VIEWPORT, matrix, people, AIM, reach),
     ).toBe(-1);
-    // And the default one.
     expect(
       pickPerson({ x: on.x + PICK_PIXELS - 0.5, y: on.y }, VIEWPORT, matrix, people, AIM),
     ).toBe(0);

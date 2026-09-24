@@ -1,17 +1,5 @@
-/**
- * Beach umbrella: a striped parasol open over a slim pole. 16x16x15, a 1x1 tile
- * — it stands beside the sun loungers rather than over them, so a row of the two
- * reads as a beach rather than as a furniture showroom.
- *
- * The canopy is a cone drawn as a height field: each cell's height falls with
- * its distance from the pole, and the stripe it takes comes from its angle round
- * it. Two voxels thick rather than one, because the cone steps down a voxel at a
- * time and a single-thickness shell would be see-through along every one of
- * those steps.
- */
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** Canopy geometry, in voxels: how far it reaches and how steeply it falls. */
 const CANOPY = { radius: 7.4, peak: 13, slope: 0.78, wedges: 6 } as const;
 
 export default defineModel({
@@ -32,7 +20,6 @@ export default defineModel({
       finial: 0xb8433d,
     };
 
-    // Middle of the tile, on the corner between the four central voxels.
     const middle = 8;
 
     box(middle - 1, middle, 0, CANOPY.peak, middle - 1, middle, C.pole);
@@ -47,9 +34,8 @@ export default defineModel({
         const top = CANOPY.peak - Math.round(reach * CANOPY.slope);
         const wedge = Math.floor(((Math.atan2(dz, dx) + Math.PI) / (Math.PI * 2)) * CANOPY.wedges);
         const stripe = wedge % 2 === 0 ? C.canopyA : C.canopyB;
-        // The outermost ring takes the rim colour, which is what gives the
-        // canopy an edge instead of letting the stripes run off it.
         const color = reach > CANOPY.radius - 1 ? C.rim : stripe;
+        // Two voxels thick: a one-voxel cone shell is see-through along every step.
         set(x, top, z, color);
         set(x, top - 1, z, color);
       }

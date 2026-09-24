@@ -1,23 +1,11 @@
-/**
- * Two districts made one by dropping the lane between them: how a large plot
- * grows a park bigger than the street grid would otherwise allow.
- *
- * Pure geometry over district rectangles. Which lanes may be dropped is the
- * generator's to say; this finds the pairs a lane separates and the pieces of a
- * lane left once some of its length is gone.
- */
-
 import type { TileRect } from './parkShapes';
 
-/** A stretch of a north-south lane given over to the district either side of it. */
 export interface LaneCut {
-  /** The lane's column. */
   readonly at: number;
   readonly z0: number;
   readonly z1: number;
 }
 
-/** Two neighbouring districts, the lane between them, and the one district they make. */
 export interface DistrictPair {
   readonly west: number;
   readonly east: number;
@@ -25,10 +13,6 @@ export interface DistrictPair {
   readonly merged: TileRect;
 }
 
-/**
- * Every pair of districts side by side in the same row with a lane one tile
- * wide between them that `droppable` allows, west to east and north to south.
- */
 export function neighbourPairs(
   districts: readonly TileRect[],
   droppable: (column: number) => boolean,
@@ -54,10 +38,6 @@ export function neighbourPairs(
   return pairs;
 }
 
-/**
- * Picks up to `count` pairs spread evenly along the list, never two that share a
- * district, so no district is merged twice.
- */
 export function spreadPairs(pairs: readonly DistrictPair[], count: number): DistrictPair[] {
   const chosen: DistrictPair[] = [];
   const used = new Set<number>();
@@ -72,7 +52,6 @@ export function spreadPairs(pairs: readonly DistrictPair[], count: number): Dist
   return chosen;
 }
 
-/** The runs of a column from `from` to `to` left once its cuts are taken out, in order. */
 export function uncutRuns(
   at: number,
   from: number,

@@ -11,18 +11,14 @@ import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import type { BuildTool } from '../features/build/domain/buildTool';
 
-/**
- * Mount and dispose are serialised through this chain so React 19's StrictMode
- * double-invoked effect can never put two renderers on the same canvas.
- */
+// Serialised so StrictMode's double-invoked effect never puts two renderers on the same canvas.
 let lifecycle: Promise<void> = Promise.resolve();
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  /** Mirrors the palette selection, so a tool picked while the catalogue is
-   * still being meshed is armed as soon as the scene exists. */
+  // So a tool picked while the catalogue is still meshing is armed once the scene exists.
   const toolRef = useRef<BuildTool | null>(null);
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
@@ -33,16 +29,14 @@ export function App() {
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
-  // Pulled out because the mount effect depends on them: the setters React hands
-  // back are stable, the objects holding them are not, and depending on those
-  // would tear the renderer down on every render.
+  // The setters are stable but the objects holding them are not; depending on those would tear the
+  // renderer down on every render.
   const { adopt: adoptParams } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
   const { adoptWeather } = clock;
 
-  /** Arms the pointer with a tool, and keeps the palette showing which. */
   const selectTool = useCallback((next: BuildTool | null) => {
     toolRef.current = next;
     setTool(next);
@@ -55,25 +49,16 @@ export function App() {
 
     let disposed = false;
 
-    // Everything the render loop writes to the DOM directly goes through the
-    // overlay; React is left with the state that actually changes rarely.
+    // The render loop writes to the DOM through the overlay; React only holds state that changes rarely.
     const overlay = createHudOverlay({ ...hudNodes, onFpsChange: setFps });
 
     const options = {
       canvas,
-      // The scene is mutable, so the panel is re-rendered when something is
-      // placed. This runs on an edit, not on a frame.
       onSceneChange: setStats,
-      // Escape puts the pointer down from the canvas; the palette follows.
-      // Arming it again with what it just put down costs nothing.
       onToolChange: selectTool,
-      // C, Q and E move the camera from the canvas; the panel follows.
       onCameraChange: adoptCamera,
-      // A click on the canvas; runs on a click, not on a frame.
       onSelectionChange: adoptSelection,
-      // Once a simulated day, and on an edit that has settled - never a frame.
       onAdviceChange: adoptAdvice,
-      // At midnight, and the moment the bar's buttons pin one - never a frame.
       onWeatherChange: adoptWeather,
       onFrame: overlay.update,
     };

@@ -15,7 +15,6 @@ const anchor = (overrides: Partial<LightAnchor> = {}): LightAnchor => ({
   ...overrides,
 });
 
-/** A plot with a lamp at each end and room in the middle to build one more. */
 const west = anchor({ key: 'west', x: -120, z: 0 });
 const east = anchor({ key: 'east', x: 120, z: 0 });
 const standing = [west, east];
@@ -24,7 +23,6 @@ const spec = gridSpecAt(standing, 4)!;
 const liveGrid = (anchors: readonly LightAnchor[] = standing, at: LightGridSpec = spec) =>
   createLiveLightGrid(bakeLightGrid(anchors, at), anchors);
 
-/** The cell a world position falls in. */
 function cellFor(at: LightGridSpec, x: number, y: number, z: number): [number, number, number] {
   return [
     Math.floor((x - at.origin.x) / at.cellSize),
@@ -33,7 +31,6 @@ function cellFor(at: LightGridSpec, x: number, y: number, z: number): [number, n
   ];
 }
 
-/** One cell's four irradiance bytes. */
 function bytesAt(
   irradiance: Uint8Array,
   at: LightGridSpec,
@@ -43,7 +40,6 @@ function bytesAt(
   return irradiance.slice(cell, cell + 4);
 }
 
-/** Whether a cell lies inside a range. */
 function inRange(range: CellRange, ix: number, iy: number, iz: number): boolean {
   return (
     ix >= range.lowX &&
@@ -78,9 +74,6 @@ describe('createLiveLightGrid', () => {
     });
 
     it('writes exactly what a full re-bake at the same scale would have written', () => {
-      // The claim the whole design rests on: the block re-bake is not an
-      // approximation of the bake it replaces, it is the same arithmetic over
-      // fewer cells.
       const extra = anchor({ key: 'middle', x: 0, z: 0 });
       const grid = liveGrid();
       grid.add(extra);
@@ -116,7 +109,6 @@ describe('createLiveLightGrid', () => {
       const grid = liveGrid();
       const { region } = grid.add(anchor({ key: 'middle', x: 0, z: 0, distance: 40 }));
       const dims = rangeDims(region!);
-      // Forty voxels each way at four voxels to the cell, plus a cell of rounding.
       expect(dims.x).toBeLessThanOrEqual(2 * (40 / 4) + 2);
       expect(dims.z).toBeLessThanOrEqual(2 * (40 / 4) + 2);
       expect(rangeCells(region!)).toBeLessThan(cellCount(spec) / 3);
@@ -147,8 +139,7 @@ describe('createLiveLightGrid', () => {
     });
 
     it('keeps the outermost shell dark when it spills in from the edge', () => {
-      // The shell is what the sampler clamps against: a lit edge cell would
-      // smear its light across every metre of ground beyond the grid.
+      // The sampler clamps against the shell: a lit edge cell would smear light beyond the grid.
       const grid = liveGrid();
       const edge = spec.origin.x + 2 * spec.cellSize;
       grid.add(anchor({ key: 'edge', x: edge, z: 0, distance: 70 }));
@@ -178,8 +169,6 @@ describe('createLiveLightGrid', () => {
     });
 
     it('leaves the lamps it overlapped burning', () => {
-      // Removal re-bakes the block from the lamps that remain rather than
-      // subtracting the one that went, so an overlapping neighbour is untouched.
       const grid = liveGrid();
       const beside = cellFor(spec, -100, 18, 0);
       const before = bytesAt(grid.irradiance, spec, beside);
@@ -219,9 +208,7 @@ describe('createLiveLightGrid', () => {
     });
 
     it('is set by the first lamp on a grid that had none', () => {
-      // A plot with the room reserved but nothing burning yet has no scale to
-      // encode against; the first lamp can safely pick one, because every cell
-      // it is not re-encoding is zero and encodes to zero against any scale.
+      // Any scale is safe for the first lamp: every cell it does not re-encode is zero.
       const dark = [anchor({ key: 'placeholder', intensity: 0 })];
       const grid = liveGrid(dark, gridSpecAt(dark, 4)!);
       expect(grid.scale).toBe(0);

@@ -76,8 +76,7 @@ describe('homeWithRoom', () => {
     const parties = [partyOfSize(5), partyOfSize(4), partyOfSize(3), partyOfSize(2)];
     const { byParty, freeBeds } = assignHomes(parties, homes);
 
-    // The greedy pass asks the same question party by party, so replaying it
-    // against a fresh bed count has to give the same answer at every step.
+    // Replays the greedy pass against a fresh bed count, so every step must agree.
     const beds = Int32Array.from(homes, (each) => each.beds);
     const order = [0, 1, 2, 3];
     for (const party of order) {

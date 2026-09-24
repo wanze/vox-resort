@@ -14,10 +14,6 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import { createTerrain } from '../../layout/domain/terrain';
 import { shoreFor } from '../../layout/domain/shoreline';
 
-/**
- * The sea, as `paving.ts` hands it over: everything from row 7 down refuses
- * everything. Nothing here knows that is what water means.
- */
 const dry = ({ z }: Tile): boolean => z < 7;
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
@@ -47,7 +43,6 @@ describe('isPaintable', () => {
   });
 });
 
-/** Land that rises one level north of `z`, so a step runs along x there. */
 const stepAt =
   (z: number): LevelProvider =>
   (_tileX, tileZ) =>
@@ -77,11 +72,8 @@ describe('planAt', () => {
   });
 
   it('is blocked when its footprint straddles a step', () => {
-    // The cottage is 2x3, so a step anywhere inside those six tiles refuses it
-    // even though every one of them is empty.
     const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, stepAt(6));
     expect(plan.blocked).toBe(true);
-    // Still planned, so the preview can paint the footprint red where it fell.
     expect(plan.placement.tileX).toBe(3);
   });
 
@@ -91,8 +83,6 @@ describe('planAt', () => {
   });
 
   it('asks about the tiles the turned footprint covers, not the ones it would not', () => {
-    // A step running along x refuses the cottage standing tall and accepts it
-    // turned, because a turn changes which six tiles it needs.
     const upright = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, stepAt(7));
     const turned = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 1, stepAt(7));
     expect({ upright: upright.blocked, turned: turned.blocked }).toEqual({
@@ -113,8 +103,6 @@ describe('planAt', () => {
   });
 
   it('asks about the tiles the turned object would claim, not the ones it would not', () => {
-    // A 2x3 cottage turned a quarter is 3x2, so a tile two rows down is suddenly
-    // free and one two columns across is suddenly not.
     const belowIt = createTileOccupancy([place(PATH, 'path@3,7', 3, 7)]);
     expect(planAt(COTTAGE, { x: 3, z: 5 }, belowIt).blocked).toBe(true);
     expect(planAt(COTTAGE, { x: 3, z: 5 }, belowIt, 1).blocked).toBe(false);
@@ -134,10 +122,6 @@ describe('planAt', () => {
   });
 
   it('builds on an island out in the bay, past the plot itself', () => {
-    // Placement was never bounded by the plot — what bounded an island was the
-    // ground, and `terrain.ts` now lets a brush raise one anywhere in the apron.
-    // So this is the rule read from the far side: sea refuses everything, and
-    // the moment the same tile is land it refuses nothing. See `paving.ts`.
     const coast = shoreFor({
       tilesX: 20,
       tilesZ: 20,
@@ -155,12 +139,9 @@ describe('planAt', () => {
   });
 
   it('asks the ground about every tile of the footprint, not only its corner', () => {
-    // A 2x3 cottage anchored on row 5 reaches row 7, which is the tile that
-    // refuses it — exactly as the level rule reaches it.
     expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
       true,
     );
-    // Turned, it is 3x2 and stops one row short of the water.
     expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 1, undefined, dry).blocked).toBe(
       false,
     );
@@ -229,10 +210,7 @@ describe('layoutItemFor', () => {
       tilesZ: cottage.model.tiles.z,
       width: cottage.model.width,
       depth: cottage.model.depth,
-      // The shelf rides along because the layout asks one question of it:
-      // whether the object is dressing, which grows no spur to it.
       category: cottage.category,
-      // And the doors, so the layout can turn the cottage to open onto its path.
       doors: cottage.venue!.doors,
     });
   });

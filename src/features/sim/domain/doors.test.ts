@@ -8,7 +8,6 @@ import { shoreFor } from '../../layout/domain/shoreline';
 import { doorsFor } from './doors';
 import type { Venue } from './venues';
 
-/** Everything at sea level, as `walkNetwork.test.ts` builds its fixtures. */
 const FLAT: LevelProvider = () => 0;
 
 const flat = (tiles: readonly (readonly [number, number])[]): PavedTile[] =>
@@ -17,7 +16,6 @@ const flat = (tiles: readonly (readonly [number, number])[]): PavedTile[] =>
 const networkOf = (paved: PavedTile[]): WalkNetwork =>
   walkNetworkFor({ paved, levelOf: FLAT, shore: null, tilesX: 20 });
 
-/** The tile each node of the network stands on, for readable assertions. */
 const tilesOf = (network: WalkNetwork, nodes: readonly number[]): string[] =>
   nodes.map((node) => `${network.nodes[node]!.tileX},${network.nodes[node]!.tileZ}`);
 
@@ -40,7 +38,6 @@ const venueAt = (tileX: number, tileZ: number, tilesX = 1, tilesZ = 1): Venue =>
 
 describe('doorsFor, with no door declared', () => {
   it('finds the path running past a one-tile venue', () => {
-    // A street along z = 1, with the bakery standing on the tile above it.
     const network = networkOf(
       flat([
         [0, 1],
@@ -53,14 +50,12 @@ describe('doorsFor, with no door declared', () => {
   });
 
   it('finds nodes along every edge of a footprint that covers several tiles', () => {
-    // A ring of paving right round a 2 x 3 building standing at 1,1.
     const paved: (readonly [number, number])[] = [];
     for (let x = 0; x <= 3; x++) for (let z = 0; z <= 4; z++) paved.push([x, z]);
     const network = networkOf(
       flat(paved.filter(([x, z]) => x === 0 || x === 3 || z === 0 || z === 4)),
     );
     const doors = tilesOf(network, doorsFor(venueAt(1, 1, 2, 3), nodeIndexFor(network)).nodes);
-    // Every tile of the ring: the corners as well as the four sides.
     expect(doors).toContain('0,0');
     expect(doors).toContain('3,4');
     expect(doors).toContain('0,2');
@@ -79,8 +74,6 @@ describe('doorsFor, with no door declared', () => {
   });
 
   it('returns each node once, sorted, however many tiles reach it', () => {
-    // A corner tile of the ring is inside the two loops' overlap; a flight would
-    // put two nodes on one tile. Neither may show up twice or out of order.
     const network = networkOf(
       flat([
         [0, 0],
@@ -100,8 +93,6 @@ describe('doorsFor, with no door declared', () => {
   });
 
   it('leaves out a paved tile nobody can walk away from', () => {
-    // `nodeIndexFor` drops a node with no exits, and so must a door: a venue
-    // reached only by an isolated slab is a venue nobody reaches.
     const network = networkOf(
       flat([
         [1, 0],
@@ -113,14 +104,12 @@ describe('doorsFor, with no door declared', () => {
   });
 });
 
-/** A door in the middle of a venue's +z side, walked out of southwards. */
 const southDoor = (venue: Venue): Venue['doors'][number] => ({
   x: venue.x,
   z: (venue.tileZ + venue.tilesZ) * TILE_VOXELS - 2,
   facing: 0,
 });
 
-/** A 2 x 2 bakery at 2,2 with paving right round it, one tile out. */
 const ringed = (): { network: WalkNetwork; bakery: Venue } => {
   const paved: (readonly [number, number])[] = [];
   for (let x = 1; x <= 4; x++) {
@@ -133,14 +122,12 @@ describe('doorsFor, with doors declared', () => {
   it('gives only the tile the door faces into', () => {
     const { network, bakery } = ringed();
     const doors = doorsFor({ ...bakery, doors: [southDoor(bakery)] }, nodeIndexFor(network));
-    // The door is on the east half of the south side, at x = 3.
     expect(doors.declared).toBe(true);
     expect(tilesOf(network, doors.nodes)).toEqual(['3,4']);
   });
 
   it('falls back to the ring when nothing is paved where the door faces', () => {
     const { bakery } = ringed();
-    // The same ring with the tile in front of the door taken up.
     const paved = flat([
       [1, 1],
       [2, 1],
@@ -168,7 +155,6 @@ describe('doorsFor, with doors declared', () => {
       z: bakery.z,
       facing: 3,
     };
-    // The south door twice over, as two doors on one tile would be.
     const doors = doorsFor(
       { ...bakery, doors: [southDoor(bakery), west, southDoor(bakery)] },
       nodeIndexFor(network),
@@ -182,22 +168,18 @@ describe('doorsFor, with doors declared', () => {
     const { network, bakery } = ringed();
     const doors = doorsFor(bakery, nodeIndexFor(network));
     expect(doors.declared).toBe(false);
-    // Every tile of the ring, which is the whole of the paving here.
     expect(doors.nodes).toHaveLength(12);
   });
 });
 
-/** The centre of a tile, along either axis, in voxels. */
 const centre = (tile: number): number => (tile + 0.5) * TILE_VOXELS;
 
 describe('doorsFor, on the beach', () => {
-  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
     shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
   });
-  /** A boardwalk down to the back of the sand, so the beach has a gate and no more. */
   const boardwalk = flat([
     [10, 9],
     [10, 10],
@@ -208,7 +190,6 @@ describe('doorsFor, on the beach', () => {
 
   it('gives a shower on the sand with no doors the open tiles round it, and no nodes', () => {
     const shower = venueAt(4, 14);
-    // A lounger on the tile east of it: that one is not open.
     const lounger = { x: 5 * TILE_VOXELS + 4, z: 14 * TILE_VOXELS + 4, width: 8, depth: 8 };
     const network = beachOf([
       lounger,

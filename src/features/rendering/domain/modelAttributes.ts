@@ -1,17 +1,5 @@
-/**
- * Turns the mesher's output into the flat attribute arrays a buffer geometry is
- * made of — and nothing else.
- *
- * The split matters: everything here is plain typed arrays over plain numbers,
- * with no reference to Three.js or the DOM, which is what lets the whole of it
- * run in a worker and be transferred back rather than blocking the page for a
- * second and a half while the catalogue is meshed. `voxelMeshBuilder.ts` is the
- * thin main-thread half that wraps the result in geometries.
- *
- * Colours are converted with `lightGrid`'s own sRGB curve rather than through a
- * `Color`, for the same reason, and it is the same curve: see the test that
- * pins the two together.
- */
+// Plain typed arrays only, so this runs in a worker. Colours use lightGrid's sRGB curve
+// rather than Color for the same reason; a test pins the two together.
 
 import { srgbToLinear } from '../../lighting/domain/lightGrid';
 import type { ScratchRegion } from '../../voxel-world/domain/modelScratch';
@@ -19,38 +7,19 @@ import { regionOwning } from '../../voxel-world/domain/modelScratch';
 import { greedyMesh, quadCorners, quadNormal } from './greedyMesh';
 import { deinterleaveVertices, needsThirtyTwoBitIndices } from './vertexBuffer';
 
-/** Magenta is the deliberate "material was never registered" colour. */
 export const MISSING_COLOR = 0xff00ff;
 
-/** One geometry's worth of attributes, ready to be handed to a renderer. */
 export interface MeshAttributes {
   readonly positions: Float32Array;
   readonly normals: Float32Array;
   readonly colors: Float32Array;
   readonly indices: Uint32Array | Uint16Array;
   readonly triangleCount: number;
-  /**
-   * One seed per vertex, equal across the four corners of a window pane, or
-   * null for the surfaces that are not windows. See {@link paneSeed}.
-   */
   readonly panes: Float32Array | null;
 }
 
-/**
- * A window's own number, drawn from where the pane is on the model.
- *
- * This is half of what decides whether a light is burning behind it; the other
- * half is which building it is, which only the GPU knows, because a building is
- * an instance rather than a geometry. See `rendering/adapters/instancedWorld.ts`.
- *
- * It is hashed rather than counted for the same reason the light anchors are
- * keyed within their placement: a count would renumber every window behind the
- * one an edit added, and the numbering has to stay put — a room whose light
- * moved to the flat next door every time the model was touched is a room nobody
- * can author against. A pane's position in the model does not move.
- *
- * Deterministic, and spread evenly over 0..1: what reads it is a threshold.
- */
+// Hashed from the pane position, not counted, so an edit does not renumber every window
+// behind it and move whose light is on.
 export function paneSeed(x: number, y: number, z: number): number {
   let hash = Math.imul(Math.round(x) | 0, 0x27d4eb2d);
   hash = Math.imul(hash ^ (Math.round(y) | 0), 0x165667b1);
@@ -61,35 +30,19 @@ export function paneSeed(x: number, y: number, z: number): number {
   return (hash >>> 0) / 4294967296;
 }
 
-/**
- * The four ways a model's faces can be shaded, which is the four geometries a
- * model is split into.
- *
- * The split is by colour: a model declares which of the colours it paints glow,
- * which are water and which are window glass, and everything else is shaded
- * normally. It happens here rather than in the renderer because a submesh
- * already comes back one material at a time, so sorting the faces costs nothing
- * at the point they are turned into vertices — and because the split is what
- * lets the whole scene share four materials instead of one per model.
- */
+// Split by colour here, where it is free, so the whole scene shares four materials.
 type SurfaceKind = 'lit' | 'emissive' | 'water' | 'window';
 
 export interface ModelAttributes {
   readonly id: string;
-  /** Shaded geometry: everything that is neither emissive nor water. */
   readonly lit: MeshAttributes | null;
-  /** Unlit geometry: the model's glowing colours. */
   readonly emissive: MeshAttributes | null;
-  /** The model's water, drawn with the sea's shader. */
   readonly water: MeshAttributes | null;
-  /** The model's window glass, which lights up from inside after dark. */
   readonly window: MeshAttributes | null;
   readonly triangleCount: number;
-  /** Triangles the mesher produced, before the greedy pass merged them. */
   readonly unmergedTriangleCount: number;
 }
 
-/** The section submesh shape this module needs; `dveEngine` produces it. */
 export interface SectionMesh {
   readonly materialId: string;
   readonly origin: { readonly x: number; readonly y: number; readonly z: number };
@@ -101,17 +54,12 @@ export interface SectionMesh {
 export interface ModelAttributeInput {
   readonly sections: readonly SectionMesh[];
   readonly regions: readonly ScratchRegion[];
-  /** Flat colour per DVE material id. */
   readonly colorsByMaterialId: ReadonlyMap<string, number>;
-  /** Colours each model draws unlit, by model id. */
   readonly emissiveByModelId: ReadonlyMap<string, ReadonlySet<number>>;
-  /** Colours each model draws as water, by model id. */
   readonly waterByModelId: ReadonlyMap<string, ReadonlySet<number>>;
-  /** Colours each model glazes its windows with, by model id. */
   readonly windowsByModelId: ReadonlyMap<string, ReadonlySet<number>>;
 }
 
-/** Splits a packed `0xRRGGBB` into the linear RGB the shader works in. */
 function linearColorOf(color: number): [number, number, number] {
   return [
     srgbToLinear(((color >> 16) & 0xff) / 255),
@@ -120,7 +68,6 @@ function linearColorOf(color: number): [number, number, number] {
   ];
 }
 
-/** Accumulates merged quads into flat attribute arrays. */
 class AttributeBatch {
   private readonly positions: number[] = [];
   private readonly normals: number[] = [];
@@ -130,11 +77,6 @@ class AttributeBatch {
   private vertexCount = 0;
   private sourceTriangles = 0;
 
-  /**
-   * `tracksPanes` is only true of the window batch, which is the one surface
-   * whose faces have to be told apart from each other rather than merely from
-   * the faces of another material.
-   */
   constructor(tracksPanes: boolean) {
     this.panes = tracksPanes ? [] : null;
   }
@@ -151,13 +93,6 @@ class AttributeBatch {
     return this.indices.length === 0;
   }
 
-  /**
-   * Appends one submesh, rebasing it from section-local onto model-local space.
-   *
-   * A submesh is one section and one material, so every face in it is the same
-   * flat colour — which is exactly the condition under which coplanar faces can
-   * be merged without anyone being able to tell.
-   */
   add(
     section: SectionMesh,
     positions: Float32Array,
@@ -172,12 +107,9 @@ class AttributeBatch {
     for (const quad of merged.quads) {
       const [nx, ny, nz] = quadNormal(quad);
       const base = this.vertexCount;
-      // The merged corners are already wound counter-clockwise as seen from the
-      // side the face points at, which is the winding Three.js treats as front.
+      // Already counter-clockwise from the side the face points at, which Three.js treats as front.
       const corners = quadCorners(quad);
-      // One seed for the whole quad, off the corner the merge started at. Equal
-      // across the four vertices, so it survives interpolation as itself and the
-      // shader reads the same number everywhere on the pane.
+      // Equal across the four vertices so the seed survives interpolation unchanged.
       const [sx, sy, sz] = corners[0]!;
       const seed = paneSeed(sx + offset.x, sy + offset.y, sz + offset.z);
       for (const [x, y, z] of corners) {
@@ -190,8 +122,7 @@ class AttributeBatch {
       this.vertexCount += 4;
     }
 
-    // Anything the merge did not recognise as a voxel face is copied across as
-    // it came, with the winding flip DVE's Babylon-wound output needs.
+    // Non-voxel triangles need a winding flip: DVE output is wound for Babylon.
     for (const triangle of merged.passthrough) {
       const base = this.vertexCount;
       for (const vertex of [
@@ -225,8 +156,7 @@ class AttributeBatch {
       positions: Float32Array.from(this.positions),
       normals: Float32Array.from(this.normals),
       colors: Float32Array.from(this.colors),
-      // Sixteen bits index 65 536 vertices, and the merge keeps most models well
-      // inside that; halving the index buffer is worth the check.
+      // Halving the index buffer is worth the check; most models stay under 65 536 vertices.
       indices: needsThirtyTwoBitIndices(indices) ? indices : Uint16Array.from(indices),
       triangleCount: this.triangleCount,
       panes: this.panes ? Float32Array.from(this.panes) : null,
@@ -234,10 +164,6 @@ class AttributeBatch {
   }
 }
 
-/**
- * Groups the mesher's output into one set of attributes per model and surface
- * kind, in scratch-region order.
- */
 export function buildModelAttributes(input: ModelAttributeInput): ModelAttributes[] {
   const {
     sections,
@@ -268,7 +194,6 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
     });
   }
 
-  /** Which of the four geometries a colour this model paints belongs in. */
   const kindOf = (modelId: string, color: number): SurfaceKind => {
     if (emissiveByModelId.get(modelId)?.has(color) === true) return 'emissive';
     if (waterByModelId.get(modelId)?.has(color) === true) return 'water';
@@ -287,9 +212,7 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
       y: section.origin.y,
       z: section.origin.z,
     };
-    // A coarse copy is painted at its own small scale and grown back here, so
-    // it stands in exactly the space the full model does; its surfaces are the
-    // ones the full model declared. See `voxel-world/domain/coarseVoxels.ts`.
+    // A coarse copy is painted small and grown back here, so it fills the full model's space.
     batch[kindOf(region.source ?? region.id, raw)].add(
       section,
       positions,
@@ -315,7 +238,6 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
   });
 }
 
-/** Every typed array in a model's attributes, for a worker to transfer. */
 export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer[] {
   const buffers: ArrayBuffer[] = [];
   for (const model of models) {

@@ -3,10 +3,8 @@ import { TILE_VOXELS, type ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
 import { rotationRadians, type Rotation } from '../../layout/domain/rotation';
 import { seatSpotsFor, type SeatSite } from './seating';
 
-/** A bench-shaped model: one tile, three seats in a row facing its own +z. */
 const BENCH: readonly ModelSeat[] = [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 }));
 
-/** A lounger-shaped one: a single seat somebody lies on. */
 const LOUNGER: readonly ModelSeat[] = [{ x: 7, y: 5, z: 8, facing: 0, pose: 'lie' }];
 
 const benchAt = (tileX: number, tileZ: number, rotation: Rotation = 0): SeatSite => ({
@@ -23,7 +21,6 @@ describe('seatSpotsFor', () => {
   it('puts an unturned model’s seats where the art declared them', () => {
     const [first, second, third] = seatSpotsFor([benchAt(2, 3)]);
     expect(first).toEqual({
-      // Half a voxel on, because a person stands in the middle of a column.
       x: 2 * TILE_VOXELS + 4.5,
       z: 3 * TILE_VOXELS + 7.5,
       y: 4,
@@ -42,8 +39,6 @@ describe('seatSpotsFor', () => {
   });
 
   it('turns where the sitter looks along with where they sit', () => {
-    // A quarter turn swings the model's +z round to +x, so the bench runs down
-    // z and everybody on it looks east.
     const spots = seatSpotsFor([benchAt(0, 0, 1)]);
     expect(spots.map((spot) => spot.heading)).toEqual(([1, 1, 1] as const).map(rotationRadians));
     expect(spots.map((spot) => spot.z)).toEqual([12.5, 8.5, 4.5]);
@@ -67,7 +62,6 @@ describe('seatSpotsFor', () => {
   it('turns a lounger without turning what somebody on it is doing', () => {
     const spots = seatSpotsFor([{ ...benchAt(4, 4, 3), seats: LOUNGER }]);
     expect(spots[0]!.pose).toBe('lie');
-    // Three quarter turns take the foot end of the mattress round to -x.
     expect(spots[0]!.heading).toBeCloseTo(rotationRadians(3));
   });
 

@@ -25,7 +25,6 @@ const terrace = (over: Partial<TerraceSpec> = {}): TerraceSpec => ({
   ...over,
 });
 
-/** Two terraces climbing away from the water, the shape the resort is cut to. */
 const bench: ElevationSpec = {
   terraces: [terrace({ level: 1, inset: 20 }), terrace({ level: 2, inset: 32 })],
   seed: 1,
@@ -48,7 +47,6 @@ const plan = (over: Partial<ElevationPlan> = {}): ElevationPlan => ({
 
 const built = (over: Partial<ElevationPlan> = {}): Elevation => elevationFor(plan(over))!;
 
-/** Every row the first step lands on, across a plot's worth of columns. */
 const stepRows = (slope: Elevation): Set<number> =>
   new Set(Array.from({ length: 60 }, (_, tileX) => stepStartZ(slope, 0, tileX)));
 
@@ -90,8 +88,6 @@ describe('elevationFor', () => {
   });
 
   it('refuses terraces listed out of order', () => {
-    // Caught by the same per-column pass that catches two steps meeting, which
-    // is the only check that can compare terraces on different anchors at all.
     const backwards = {
       terraces: [terrace({ level: 1, inset: 32 }), terrace({ level: 2, inset: 20 })],
       seed: 1,
@@ -100,8 +96,7 @@ describe('elevationFor', () => {
   });
 
   it('measures a plot-anchored step from the plot edge, not from the water', () => {
-    // The water starts 10 tiles in, so a water-anchored step 20 in from it lands
-    // at z = 49 and a plot-anchored one at z = 59.
+    // The water starts 10 tiles in, so a step 20 in lands at z = 49 (water) or z = 59 (plot).
     const spec = (anchor: 'water' | 'plot') => ({
       terraces: [terrace({ level: 1, inset: 20, anchor })],
       seed: 1,
@@ -113,8 +108,6 @@ describe('elevationFor', () => {
   });
 
   it('holds a plot-anchored step to one row in every column, so it can sit on a street', () => {
-    // The whole point of the anchor: a step that ignores the coast falls on the
-    // same row everywhere, and a step on a street crosses nothing but paving.
     const straight = built({
       shore: shoreSpec({ wave: 4 }),
       elevation: { terraces: [terrace({ level: 1, inset: 20, anchor: 'plot' })], seed: 1 },
@@ -146,8 +139,6 @@ describe('elevationFor', () => {
   });
 
   it('refuses two steps that only meet in one column, once their wobble is rounded', () => {
-    // Four tiles apart on paper, and three tiles of wander on each: a spec that
-    // reads as fine and crosses itself somewhere across sixty columns.
     const wobbly = {
       terraces: [
         terrace({ level: 1, inset: 20, wave: 3 }),
@@ -159,8 +150,7 @@ describe('elevationFor', () => {
   });
 
   it('refuses a first step that cuts into the sand', () => {
-    // The sand is six tiles deep, so a step only four tiles in from the water
-    // lands on it: the first terrace has to clear the whole band.
+    // The sand is six tiles deep, so a step four tiles in from the water lands on it.
     const onSand = { terraces: [terrace({ level: 1, inset: 4 })], seed: 1 };
     expect(() => elevationFor(plan({ shore: shoreSpec(), elevation: onSand }))).toThrow(
       /steps onto the beach/,
@@ -235,8 +225,7 @@ describe('levelAt', () => {
   });
 
   it('climbs one level per step, walking inland', () => {
-    // No shore, so the terraces are measured off the last row: 79 - 20 = 59 and
-    // 79 - 32 = 47.
+    // No shore, so the terraces are measured off the last row: 79 - 20 = 59 and 79 - 32 = 47.
     const slope = built();
     expect(levelAt(slope, 0, 70)).toBe(0);
     expect(levelAt(slope, 0, 59)).toBe(0);
@@ -306,10 +295,8 @@ describe('maxLevelOf', () => {
   });
 });
 
-/** Land that rises one level north of z = 6. */
 const step: LevelProvider = (_tileX, tileZ) => (tileZ < 6 ? 1 : 0);
 
-/** Land with no terraces on it at all. */
 const flat: LevelProvider = () => 0;
 
 describe('straddledTile', () => {
@@ -319,8 +306,6 @@ describe('straddledTile', () => {
   });
 
   it('names the first tile off the anchor bench', () => {
-    // Anchored at z = 4, one level up, and reaching down to z = 7: the first
-    // tile that disagrees is the one just over the step.
     expect(straddledTile(step, { tileX: 2, tileZ: 4, tilesX: 1, tilesZ: 4 })).toEqual({
       x: 2,
       z: 6,
@@ -328,9 +313,6 @@ describe('straddledTile', () => {
   });
 
   it('compares against the anchor rather than against the lowest tile', () => {
-    // Anchored at z = 5, on the upper bench, and reaching down over the step:
-    // the anchor's own tile agrees with itself, so the first mismatch is the
-    // tile past the step, not the one the footprint starts on.
     expect(straddledTile(step, { tileX: 0, tileZ: 5, tilesX: 1, tilesZ: 3 })).toEqual({
       x: 0,
       z: 6,

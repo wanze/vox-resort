@@ -4,7 +4,6 @@ import { groupBySection, originsFor, type VolumeSize } from './sectionGrid';
 const SECTION: VolumeSize = { x: 16, y: 16, z: 16 };
 const SECTOR: VolumeSize = { x: 16, y: 256, z: 16 };
 
-/** Packs x, y, z triples the way the scratch layout does. */
 const positionsOf = (...writes: readonly (readonly [number, number, number])[]): Int32Array =>
   Int32Array.from(writes.flat());
 

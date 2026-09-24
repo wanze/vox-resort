@@ -118,7 +118,6 @@ describe('awning', () => {
     const b = new VoxelBuilder();
     wall(b);
     awning(b, { face: 'z+', at: 7, along: 2, w: 3, y: 9, reach: 4, drop: 2 });
-    // The wall itself is untouched: the canopy starts a voxel out from it.
     expect(at(b, 2, 9, 7)).toBe(PALETTE.stucco.base);
     for (let out = 1; out <= 4; out++) expect(at(b, 2, 9, 7 + out)).toBe(PALETTE.bloom.base);
     expect(at(b, 2, 9, 12)).toBeUndefined();
@@ -130,7 +129,6 @@ describe('awning', () => {
     expect(at(b, 3, 8, 11)).toBe(PALETTE.bloom.shade);
     expect(at(b, 3, 7, 11)).toBe(PALETTE.bloom.shade);
     expect(at(b, 3, 6, 11)).toBeUndefined();
-    // And nowhere else: a valance under the whole canopy would be a soffit.
     expect(at(b, 3, 8, 10)).toBeUndefined();
   });
 

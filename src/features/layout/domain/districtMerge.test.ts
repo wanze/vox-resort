@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { neighbourPairs, spreadPairs, uncutRuns } from './districtMerge';
 
-/** Three districts in a row, split by lanes at columns 10 and 21, and one below. */
 const DISTRICTS = [
   { x0: 0, x1: 9, z0: 3, z1: 12 },
   { x0: 11, x1: 20, z0: 3, z1: 12 },

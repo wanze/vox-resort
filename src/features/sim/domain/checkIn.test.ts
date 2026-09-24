@@ -24,11 +24,8 @@ const guestsOf = (count = 40): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
 const FIVE_STARS: Rating = ratingFor({ happiness: 1, present: 10, housed: 10 });
-// Nothing out of five is every term at nothing, cleanliness included since
-// plan 022: a spotless plot rates half a star however miserable everybody is.
 const NO_STARS: Rating = ratingFor({ happiness: 0, present: 10, housed: 0, cleanliness: 0 });
 
-/** A resort everybody has gone home from: every bed and every body free. */
 const emptied = (guests: Guests): Guests => {
   for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
   return guests;
@@ -37,8 +34,7 @@ const emptied = (guests: Guests): Guests => {
 const dayOf = (guests: Guests, rating: Rating, day = 4) => {
   const needs = createNeeds(guests, 7);
   const happiness = createHappiness(guests.count);
-  // Everybody is dropped to nothing first, so a start level read back is a
-  // level that was actually written for the arrival rather than a leftover.
+  // Zeroed first so a level read back was really written on arrival, not left over.
   for (const need of NEEDS) needs.level[need].fill(0);
   happiness.level.fill(0);
   const arrived = runCheckIn({
@@ -54,22 +50,18 @@ const dayOf = (guests: Guests, rating: Rating, day = 4) => {
 
 describe('checkInDue', () => {
   it('fires once over a run of ticks that steps across the hour', () => {
-    // Twelve ticks at a time, right across eleven o'clock on the first day.
     let fired = 0;
     for (let from = 0; from < TICKS_PER_DAY; from += 12)
       fired += checkInDue(from, from + 11) ? 1 : 0;
     expect(fired).toBe(1);
 
-    // And on the exact tick, however the run is cut.
     expect(checkInDue(CHECK_IN_TICK, CHECK_IN_TICK)).toBe(true);
     expect(checkInDue(CHECK_IN_TICK - 1, CHECK_IN_TICK - 1)).toBe(false);
     expect(checkInDue(CHECK_IN_TICK + 1, CHECK_IN_TICK + 1)).toBe(false);
-    // A run of no ticks at all is never due.
     expect(checkInDue(CHECK_IN_TICK, CHECK_IN_TICK - 1)).toBe(false);
   });
 
   it('fires once a day, and cannot be stepped over by a long run', () => {
-    // A whole day in one frame: exactly one coach, not none and not two.
     expect(checkInDue(0, TICKS_PER_DAY - 1)).toBe(true);
     expect(checkInDue(TICKS_PER_DAY, 2 * TICKS_PER_DAY - 1)).toBe(true);
     let fired = 0;
@@ -102,7 +94,6 @@ describe('runCheckIn', () => {
       expect(taken).toBeLessThanOrEqual(beds);
       expect(presentCount(guests)).toBe(taken);
     }
-    // A good resort fills, and then takes nobody more.
     expect(bedCount(guests).taken).toBeGreaterThan(beds / 2);
     expect(dayOf(guests, FIVE_STARS, 41).arrived.length).toBeLessThanOrEqual(2);
   });
@@ -122,7 +113,6 @@ describe('runCheckIn', () => {
       expect(guests.arrivedOn[person]).toBe(9);
       expect(guests.present[person]).toBe(1);
     }
-    // Nobody who did not arrive was touched, and no body was redrawn.
     const missed = Array.from({ length: guests.count }, (_, i) => i).find(
       (i) => !arrived.includes(i),
     )!;

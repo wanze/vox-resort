@@ -1,64 +1,18 @@
-/**
- * Who is inside each venue, who is in the line outside it, and when either
- * changes.
- *
- * This is what makes a capacity mean something. Before it a guest touching a
- * door had their need seen to on the instant and walked off again, so six
- * hundred people could be inside a bakery for eight at the same moment and the
- * `capacity` every model has declared since plan 011 was read only to be
- * printed. A capacity nobody can exceed is what makes one bakery not enough,
- * which is what makes a player build a second one.
- *
- * ## Columns, and one small array per venue
- *
- * Per person it is four columns, keyed by the same index as `Guests` and
- * `Needs`, for their reason: the state is rewritten every tick and identity is
- * written once. Per venue it is a count and a queue, and the queue is a plain
- * array because it is at most {@link MAX_QUEUE_SHOWN} long and is pushed and
- * spliced at either end - a typed ring for twelve numbers would be arithmetic
- * in place of an array method for no measurable gain.
- *
- * ## Leave, then admit
- *
- * {@link sweepOccupancy} frees places before it fills them, in that order and
- * never the other. Admitting first means a venue at capacity never takes
- * anybody on the tick somebody leaves, which shows up on screen as a line that
- * moves once every two ticks - half the throughput, from one swapped pass.
- *
- * ## Nothing here knows what a need is
- *
- * A visit's *effect* is the router's business: this says who went in and who
- * came out, and `relieve` is applied to the people who came out. Keeping the
- * two apart is what lets a visit take time at all - the relief happens on
- * leaving, which is the whole change this module exists to make.
- */
-
 import { MAX_QUEUE_SHOWN } from './queueLane';
 
-/** What a person is doing about a venue. */
 export const VISIT = { away: 0, waiting: 1, inside: 2 } as const;
 
 export interface Occupancy {
   readonly people: number;
   readonly venues: number;
-  /** One of {@link VISIT}, per person. */
   readonly state: Uint8Array;
-  /** The venue each person is at, or -1. */
   readonly at: Int32Array;
-  /** The tick each person inside is done at; meaningless otherwise. */
   readonly until: Float64Array;
-  /** Where in the line each person waiting stands; -1 otherwise. */
   readonly slot: Int32Array;
-  /** How many are inside each venue. */
   readonly inside: Int32Array;
-  /** The people waiting at each venue, front first. */
   readonly queues: readonly number[][];
-  /**
-   * The sweep's own answer, refilled in place rather than allocated afresh:
-   * {@link sweepOccupancy} runs up to twelve times a frame and would otherwise
-   * hand the collector three arrays on every one of them. Read what comes back
-   * before the next call and do not keep it.
-   */
+  // Refilled in place: the sweep runs up to twelve times a frame. Read the result
+  // before the next call and do not keep it.
   readonly swept: {
     readonly left: number[];
     readonly leftFrom: number[];
@@ -83,19 +37,8 @@ export function createOccupancy(people: number, venues: number): Occupancy {
 
 export type ArrivalOutcome = 'inside' | 'waiting' | 'balked';
 
-/**
- * Somebody has reached a venue's door. They go in if there is room, join the
- * back of the line if there is not, and give up if the line is already too
- * long.
- *
- * `'balked'` changes nothing at all, which is what lets the caller simply send
- * them somewhere else: there is no half-joined state to undo.
- *
- * An index nobody could have meant - a person or a venue out of range - is
- * `'balked'` too rather than a throw. The venue list is rebuilt whenever the
- * plot is edited, and a router mid-frame is exactly where a stale index would
- * arrive from.
- */
+// Out-of-range indices balk rather than throw: the venue list is rebuilt on every
+// edit, so a stale index can arrive mid-frame.
 export function arriveAt(
   occupancy: Occupancy,
   person: number,
@@ -120,15 +63,8 @@ export function arriveAt(
   return 'waiting';
 }
 
-/**
- * Puts one person inside, for at least one whole tick.
- *
- * The clamp is here rather than trusted to the caller because a zero-tick visit
- * would admit and release somebody in the same call: the queue behind them
- * would never form and a capacity of one would behave like a capacity of
- * hundreds. `beach-shower` is 30 simulated seconds, which is half a tick, so
- * this is not a theoretical case.
- */
+// At least one tick: a zero-tick visit would admit and release in one call, so no
+// queue would ever form (`beach-shower` is half a tick).
 function admit(
   occupancy: Occupancy,
   person: number,
@@ -143,30 +79,15 @@ function admit(
 }
 
 export interface SweepResult {
-  /** People whose visit has ended this tick. */
   readonly left: readonly number[];
-  /**
-   * The venue each of {@link left} has just come out of, in the same order.
-   *
-   * Parallel arrays rather than pairs, so a tick allocates nothing - and
-   * carried at all because leaving clears where somebody was, and the caller
-   * still has to know what the visit was for.
-   */
+  // Carried because leaving clears `at`, and the caller still needs the venue.
   readonly leftFrom: readonly number[];
-  /** People who have just got in, and must be sent inside. */
   readonly admitted: readonly number[];
-  /** People still waiting whose slot has changed, and must be moved up. */
   readonly moved: readonly number[];
 }
 
-/**
- * One tick of every venue: whoever is done leaves, the front of each line goes
- * in to fill the room, and everybody behind them shuffles up.
- *
- * Venues in index order and each queue front first, so the same tick run twice
- * on the same plot admits the same people - which is what `docs/rendering.md`
- * asks of anything in the animation loop.
- */
+// Leaves before admitting: the other order stalls a full venue's line every other
+// tick. Index order, so the same tick always admits the same people.
 export function sweepOccupancy(
   occupancy: Occupancy,
   capacityOf: (venue: number) => number,
@@ -193,15 +114,6 @@ export function sweepOccupancy(
   return occupancy.swept;
 }
 
-/**
- * Takes as many off the front of one venue's queue as it now has room for, and
- * renumbers whoever is left.
- *
- * Only the people whose slot actually moved go in `moved`. Renumbering the
- * whole line every tick would have the caller re-place a hundred people who are
- * standing exactly where they already were, which is the one way a queue this
- * cheap could stop being cheap.
- */
 function fillFrom(
   occupancy: Occupancy,
   venue: number,
@@ -227,20 +139,9 @@ function fillFrom(
   }
 }
 
-/**
- * Takes somebody out of wherever they are, inside or in a line.
- *
- * There is deliberately no "forget everybody" beside this. A rebuilt plot has a
- * new venue list of its own length, so the router builds a fresh
- * {@link Occupancy} rather than emptying one whose per-venue arrays are the
- * wrong size - which is the same rule `flowField` and `Goals` are thrown away
- * by.
- *
- * Somebody in the middle of a line leaving it shuffles everybody behind them
- * up, exactly as the front of the line going in does. Their new slots are
- * written but not reported: the one caller that needs to know - the sweep -
- * only ever leaves people who were *inside*, where nobody is behind anybody.
- */
+// There is no "forget everybody": a rebuilt plot gets a fresh Occupancy, since the
+// per-venue arrays would be the wrong size. Shuffled slots are not reported, as the
+// sweep only removes people who were inside.
 export function leaveVenue(occupancy: Occupancy, person: number): void {
   if (person < 0 || person >= occupancy.people) return;
   const state = occupancy.state[person];

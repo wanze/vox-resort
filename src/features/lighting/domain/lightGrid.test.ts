@@ -36,13 +36,10 @@ const anchor = (overrides: Partial<LightAnchor> = {}): LightAnchor => ({
   ...overrides,
 });
 
-/** Undoes the bake's square-root encoding of one channel. */
 const decodeChannel = (byte: number, scale: number): number => (byte / 255) ** 2 * scale;
 
-/** Maps an encoded direction byte back onto -1..1. */
 const decodeAxis = (byte: number): number => (byte / 255) * 2 - 1;
 
-/** Decodes one cell's irradiance back to the linear RGB the bake was given. */
 function irradianceAt(
   grid: ReturnType<typeof bakeLightGrid>,
   ix: number,
@@ -58,7 +55,6 @@ function irradianceAt(
   ];
 }
 
-/** One cell's four raw irradiance bytes, before any decoding. */
 function bytesAt(
   grid: ReturnType<typeof bakeLightGrid>,
   [ix, iy, iz]: readonly [number, number, number],
@@ -179,7 +175,6 @@ describe('gridSpecAt', () => {
   });
 });
 
-/** A reservation `span` voxels a side. */
 const square = (span: number) => ({ minX: 0, minY: 0, minZ: 0, maxX: span, maxY: 100, maxZ: span });
 
 describe('gridBudgetFor', () => {
@@ -201,7 +196,6 @@ describe('gridBudgetFor', () => {
 });
 
 describe('lightGridSpecFor', () => {
-  /** A plot of `span` voxels a side, lit on a regular grid of street lamps. */
   const plotOf = (span: number): LightAnchor[] => {
     const lamps: LightAnchor[] = [];
     for (let x = 0; x < span; x += 80) {
@@ -269,7 +263,6 @@ describe('bakeLightGrid', () => {
     const anchors = [anchor({ x: 0, y: 20, z: 0, distance: 40 })];
     const spec = gridSpecAt(anchors, 4)!;
     const grid = bakeLightGrid(anchors, spec);
-    // 43 voxels out is still inside the grid, and past the lamp's 40.
     expect(irradianceAt(grid, ...cellFor(spec, 0, 20, 43))).toEqual([0, 0, 0]);
   });
 
@@ -292,7 +285,6 @@ describe('bakeLightGrid', () => {
     const brighter = bakeLightGrid(both, spec);
     const cell = cellFor(spec, 0, 20, 0);
     expect(brighter.scale).toBeGreaterThan(0);
-    // Compare in absolute terms: the two bakes normalise against their own peak.
     expect(irradianceAt(brighter, ...cell)[0]).toBeGreaterThan(irradianceAt(lit, ...cell)[0] * 1.5);
   });
 
@@ -318,7 +310,6 @@ describe('bakeLightGrid', () => {
       const spec = gridSpecAt(anchors, 4)!;
       const grid = bakeLightGrid(anchors, spec);
       const { direction, agreement } = readDirection(grid, cellFor(spec, 0, 4, 0));
-      // The lamp is straight up from this cell.
       expect(direction[1]).toBeGreaterThan(0.9);
       expect(Math.abs(direction[0])).toBeLessThan(0.15);
       expect(agreement).toBeGreaterThan(0.95);
@@ -337,7 +328,6 @@ describe('bakeLightGrid', () => {
   });
 
   describe('the encoding scale', () => {
-    /** A dim lamp and, far enough away not to reach it, a much brighter one. */
     const west = anchor({ key: 'west', x: -100, y: 20, z: 0, distance: 40, intensity: 100 });
     const east = anchor({ key: 'east', x: 100, y: 20, z: 0, distance: 40, intensity: 400 });
     const spec = gridSpecAt([west, east], 4)!;
@@ -345,7 +335,6 @@ describe('bakeLightGrid', () => {
 
     it('leaves room above the brightest cell', () => {
       const grid = bakeLightGrid([west], spec);
-      // Colour only: the fourth byte is the agreement term, not irradiance.
       let brightest = 0;
       for (let cell = 0; cell < cellCount(spec); cell++) {
         for (let channel = 0; channel < 3; channel++) {
@@ -356,9 +345,6 @@ describe('bakeLightGrid', () => {
     });
 
     it('re-encodes the whole grid when each bake measures its own scale', () => {
-      // The behaviour that made incremental baking impossible: the west lamp has
-      // not changed, and its bytes move anyway, because a brighter lamp arrived
-      // somewhere else entirely.
       const alone = bakeLightGrid([west], spec);
       const measured = bakeLightGrid([west, east], spec);
       expect(measured.scale).toBeGreaterThan(alone.scale);
@@ -371,13 +357,11 @@ describe('bakeLightGrid', () => {
 
       expect(fixed.scale).toBe(alone.scale);
       expect(bytesAt(fixed, westCell)).toEqual(bytesAt(alone, westCell));
-      // Not just the one cell: everything the west lamp lit encodes as before.
       for (let cell = 0; cell < cellCount(spec); cell++) {
         const at = cell * 4;
         if (alone.irradiance[at] === 0 && alone.irradiance[at + 1] === 0) continue;
         expect(alone.irradiance.slice(at, at + 4)).toEqual(fixed.irradiance.slice(at, at + 4));
       }
-      // And the east lamp did light its own cells.
       expect(fixed.litCells).toBeGreaterThan(alone.litCells);
     });
 
@@ -397,8 +381,7 @@ describe('bakeLightGrid', () => {
   });
 
   it("bakes this resort's worth of lamps in well under a second", () => {
-    // 85 anchors is what the current plot yields; the bake must stay a load-time
-    // cost, not a reason to add a loading screen.
+    // 85 anchors is what the current plot yields; the bake must stay a load-time cost.
     const anchors = Array.from({ length: 85 }, (_, index) =>
       anchor({
         key: `lamp-${index}`,
@@ -435,8 +418,6 @@ describe('cell ranges', () => {
     expect(interior.highX).toBe(spec.dims.x - 2);
     expect(interior.highZ).toBe(spec.dims.z - 2);
     expect(interior.highY).toBe(spec.dims.y - 2);
-    // Except the floor: nothing samples below the ground, and the lamps
-    // standing at load light that layer too.
     expect(interior.lowY).toBe(0);
   });
 });
@@ -447,7 +428,6 @@ describe('reachOf', () => {
   it("spans the lamp's falloff and no more", () => {
     const range = reachOf(anchor({ x: 0, y: 20, z: 0, distance: 40 }), spec, wholeGrid(spec));
     const dims = rangeDims(range);
-    // Eighty voxels across at four to the cell, plus a cell of rounding at each end.
     expect(dims.x).toBeLessThanOrEqual(80 / 4 + 2);
     expect(dims.z).toBeLessThanOrEqual(80 / 4 + 2);
   });
@@ -494,7 +474,6 @@ describe('rebakeRegion', () => {
   const east = anchor({ key: 'east', x: 60, y: 20, z: 0, distance: 40 });
   const spec = gridSpecAt([west, east], 4)!;
 
-  /** A grid holding only the west lamp, with the east lamp's block re-baked in. */
   const rebakeInto = (grid: ReturnType<typeof bakeLightGrid>, anchors: readonly LightAnchor[]) =>
     rebakeRegion({
       anchors,
@@ -561,13 +540,7 @@ describe('rebakeRegion', () => {
   });
 });
 
-/**
- * The bake as it was written first: one pass over every cell in the grid.
- *
- * Kept here rather than in the module because it is not how the bake runs any
- * more — it is what the scoped bake has to agree with, byte for byte, and a
- * reference you can read in twenty lines is worth more than a golden blob.
- */
+// Reference implementation the scoped bake has to match byte for byte.
 function referenceBake(anchors: readonly LightAnchor[], spec: LightGridSpec, scale = 0) {
   const count = cellCount(spec);
   const irradiance = new Uint8Array(count * 4);
@@ -579,7 +552,6 @@ function referenceBake(anchors: readonly LightAnchor[], spec: LightGridSpec, sca
 }
 
 describe('bakeLightGrid against a bake of every cell', () => {
-  /** A grid wide enough that lamps at its far ends leave most of it untouched. */
   const spec = gridSpecAt([], 4, {
     minX: -120,
     maxX: 120,
@@ -611,8 +583,6 @@ describe('bakeLightGrid against a bake of every cell', () => {
   });
 
   it('agrees for lamps whose reach overlaps', () => {
-    // Different intensities, so a scale measured per block would differ from the
-    // global one in every block but the brightest.
     expectSameBake([
       anchor({ key: 'a', x: -12, y: 16, z: 0, distance: 30, intensity: 60, color: 0xffcc88 }),
       anchor({ key: 'b', x: 6, y: 20, z: 8, distance: 36, intensity: 240, color: 0x88ccff }),

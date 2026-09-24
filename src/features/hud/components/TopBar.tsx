@@ -24,23 +24,12 @@ export interface TopBarProps {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
-  /** What the plot is getting wrong, ranked; see `sim/domain/advice.ts`. */
   readonly advice: readonly Advice[];
-  /** Pans the camera to the building a piece of advice is about. */
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
 }
 
-/** The tools the bar can open, named so only one is ever out at a time. */
 type Tool = 'details' | 'resort' | 'camera' | 'advice';
 
-/**
- * The one bar the HUD reads from: what the scene is doing now, and the tools
- * that change it folded away behind their names.
- *
- * Only one tool is open at a time, because they all hang off the same edge and
- * two of them out at once would be two panels fighting for the same strip of
- * screen.
- */
 export function TopBar(props: TopBarProps) {
   const {
     fps,
@@ -83,8 +72,6 @@ export function TopBar(props: TopBarProps) {
         <HudReadout label="FPS" value={fps} />
       </div>
 
-      {/* Pushed to the far edge, so the bar reads as what the scene is doing on
-          one side and what you can do to it on the other. */}
       <div className="hud-bar-tools">
         <HudPopover label="Details" open={tool === 'details'} onToggle={toggle('details')}>
           <RenderStats

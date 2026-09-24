@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { arriveAt, createOccupancy, leaveVenue, sweepOccupancy, VISIT } from './occupancy';
 import { MAX_QUEUE_SHOWN } from './queueLane';
 
-/** `beach-shower`'s own numbers: one person, and half a tick rounded up to one. */
 const SHOWER = { venue: 0, capacity: 1, dwell: 1 };
-/** `bakery`'s: eight inside, and a visit of six simulated minutes. */
 const BAKERY = { venue: 1, capacity: 8, dwell: 6 };
 
 const both = [SHOWER, BAKERY];
@@ -23,7 +21,6 @@ const arrive = (
 const sweep = (occupancy: ReturnType<typeof occupancyFor>, tick: number) =>
   sweepOccupancy(occupancy, capacityOf, dwellTicksOf, tick);
 
-/** Everything a sweep could have changed, as one comparable value. */
 const snapshotOf = (occupancy: ReturnType<typeof occupancyFor>) =>
   JSON.stringify({
     state: [...occupancy.state],
@@ -47,8 +44,6 @@ describe('arriveAt', () => {
     const occupancy = occupancyFor();
     arrive(occupancy, 0, SHOWER);
     expect(arrive(occupancy, 1, SHOWER)).toBe('waiting');
-    // The first of the line, which is where they stand; not the second person
-    // to have turned up.
     expect(occupancy.slot[1]).toBe(0);
     expect(occupancy.queues[SHOWER.venue]).toEqual([1]);
   });
@@ -84,7 +79,6 @@ describe('arriveAt', () => {
 
   it('never lets a visit be over on the tick it started', () => {
     const occupancy = occupancyFor();
-    // Half a tick, which is `beach-shower`'s 30 simulated seconds rounded down.
     arriveAt(occupancy, 0, SHOWER.venue, SHOWER.capacity, 0, 4);
     expect(occupancy.until[0]).toBeGreaterThan(4);
     expect(sweep(occupancy, 4).left).toEqual([]);
@@ -126,11 +120,8 @@ describe('sweepOccupancy', () => {
       for (const person of sweep(occupancy, tick).admitted) {
         visits.set(person, (visits.get(person) ?? 0) + 1);
       }
-      // The assertion the whole module exists for.
       expect(occupancy.inside[SHOWER.venue], `tick ${tick}`).toBeLessThanOrEqual(SHOWER.capacity);
     }
-    // Person 0 walked straight in and so was never admitted by a sweep; the
-    // four behind them each got in exactly once, in the order they turned up.
     expect([...visits.keys()]).toEqual([1, 2, 3, 4]);
     expect([...visits.values()]).toEqual([1, 1, 1, 1]);
   });

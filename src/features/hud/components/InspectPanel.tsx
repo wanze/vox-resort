@@ -9,9 +9,8 @@ import { StatRow } from './StatRow';
 
 export interface InspectPanelProps {
   readonly selection: SelectionView | null;
-  /** The live line, written per frame; see `hudOverlay.ts`. */
+  // Written per frame by the overlay, so the panel never re-renders as the resort ticks.
   readonly activityElement: RefObject<HTMLSpanElement | null>;
-  /** Selects somebody else - a member of the same party, from the list. */
   readonly onSelectPerson: (person: number) => void;
   readonly onClose: () => void;
 }
@@ -23,12 +22,7 @@ const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
   solo: 'On their own',
 };
 
-/**
- * The five needs' display names. Four lines duplicated from `selection.ts`
- * rather than exported from it: that one is the wording a *venue* serves, and a
- * shared map would tie the panel's labels to the inspector's domain wording for
- * nothing but the saving of four strings.
- */
+// Duplicated from selection.ts on purpose: that wording is what a venue serves.
 const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
   hunger: 'Hunger',
   thirst: 'Thirst',
@@ -37,7 +31,6 @@ const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: stri
   hygiene: 'Hygiene',
 };
 
-/** The mood a need is felt as, for the `Wants` row's note. */
 const NEED_MOODS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
   hunger: 'hungry',
   thirst: 'thirsty',
@@ -56,7 +49,6 @@ const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: strin
 
 const nightsOf = (count: number): string => `${count} ${count === 1 ? 'night' : 'nights'}`;
 
-/** How far through their stay a guest is, or how far past it. */
 function stayLine({ nights, nightsLeft }: GuestView): string {
   if (nightsLeft < 0) return `${nightsOf(nights)}, ${nightsOf(-nightsLeft)} overdue`;
   return `${nightsLeft} of ${nightsOf(nights)} left`;
@@ -65,12 +57,10 @@ function stayLine({ nights, nightsLeft }: GuestView): string {
 interface MemberListProps {
   readonly label: string;
   readonly members: readonly PartyMemberView[];
-  /** Who is on screen now, if they are in the list. */
   readonly selected: number | null;
   readonly onSelectPerson: (person: number) => void;
 }
 
-/** People as buttons, so a family can be walked through one member at a time. */
 function MemberList({ label, members, selected, onSelectPerson }: MemberListProps) {
   return (
     <div className="hud-inspect-members" role="group" aria-label={label}>
@@ -90,13 +80,6 @@ function MemberList({ label, members, selected, onSelectPerson }: MemberListProp
   );
 }
 
-/**
- * How well each need is met, as five bars.
- *
- * The number goes in the bar's `aria-label` as well as in its width, so the
- * readout says something without colour and to a screen reader - a bar that is
- * only a length is a picture of a number nobody can read.
- */
 function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
   return (
     <div className="hud-needs" role="group" aria-label="How they are doing">
@@ -115,7 +98,6 @@ function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
   );
 }
 
-/** Where they would go next, and what sends them: nothing at all when content. */
 function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
   if (!wants) return <StatRow label="Wants">Nothing right now</StatRow>;
   return (
@@ -165,7 +147,6 @@ function GuestDetails({
 
 type Venue = NonNullable<PlaceView['venue']>;
 
-/** What a venue is and what it does, as rows. */
 function VenueRows({ venue }: { readonly venue: Venue }) {
   return (
     <dl className="hud-stats">
@@ -190,7 +171,6 @@ function VenueRows({ venue }: { readonly venue: Venue }) {
   );
 }
 
-/** Who sleeps under a lodging's roof; nothing at all for anything else. */
 function Residents({
   place,
   onSelectPerson,
@@ -228,7 +208,6 @@ function PlaceDetails({
   );
 }
 
-/** The panel's heading: who somebody is, or what stands where. */
 function titleOf(selection: SelectionView): string {
   if (selection.kind === 'place') {
     return `${selection.label}, tile ${selection.tile.x}, ${selection.tile.z}`;
@@ -236,13 +215,6 @@ function titleOf(selection: SelectionView): string {
   return selection.child ? `${selection.name} (child)` : selection.name;
 }
 
-/**
- * Who or what was clicked on.
- *
- * Presentational only: the facts arrive as `selection`, set once per click, and
- * the one line that changes per frame is a node the overlay writes into. So the
- * panel re-renders when the selection changes and never when the resort ticks.
- */
 export function InspectPanel({
   selection,
   activityElement,

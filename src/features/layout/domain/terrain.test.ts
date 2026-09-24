@@ -12,7 +12,6 @@ import {
 
 const SHORE = { inset: 10, beach: 6, wave: 2, seed: 7 };
 
-/** A wandering coast with a hill on it: sand up the dune, grass over the crest. */
 const plan = (over: Partial<TerrainPlan> = {}): TerrainPlan => ({
   tilesX: 40,
   tilesZ: 60,
@@ -36,11 +35,6 @@ describe('createTerrain', () => {
     expect(terrain.maxLevel).toBe(0);
   });
 
-  /**
-   * The invariant the whole design rests on: an untouched tile answers exactly
-   * what the procedural pair answers, so every caller moved from `groundAt` and
-   * `levelAt` over to the terrain reads the same plot it always did.
-   */
   it('agrees with groundAt and levelAt on every tile of an unedited plot', () => {
     const shaped = plan();
     const shore = shoreFor(shaped);
@@ -79,10 +73,6 @@ describe('createTerrain', () => {
     expect(terrain.maxLevel).toBe(6);
   });
 
-  /**
-   * A ceiling that fell would have the pick miss the one tile that was highest
-   * for a frame; one that stays put costs a crossing that lands on nothing.
-   */
   it('does not lower its ceiling when the highest tile is taken away again', () => {
     const terrain = createTerrain({ shore: null, elevation: null, tilesX: 8, tilesZ: 8 });
     terrain.set(1, 1, { level: 4, surface: 'grass' });
@@ -110,9 +100,6 @@ describe('Terrain.set', () => {
   });
 
   it('takes an edit out in the apron, which is ground somebody can dig', () => {
-    // An island belongs out in the bay rather than off the end of the beach, so
-    // the ground an edit may touch runs a plot's width past the plot itself —
-    // and reads back at the coordinates it was made at, negatives and all.
     const terrain = terrainFor(plan());
     terrain.set(-8, 70, { level: 1, surface: 'sand' });
     expect(terrain.edits).toEqual([{ tileX: -8, tileZ: 70, level: 1, surface: 'sand' }]);

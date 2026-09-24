@@ -14,7 +14,6 @@ import {
   type Rotation,
 } from './rotation';
 
-/** A model two tiles wide and three deep, so a swapped axis is visible. */
 const WIDTH = 32;
 const DEPTH = 44;
 
@@ -56,22 +55,13 @@ describe('rotateExtent', () => {
   });
 });
 
-/**
- * The matrix an instance is actually drawn with: the turn, then the offset that
- * brings the turned box back into its own footprint.
- */
 function instanceMatrix(width: number, depth: number, rotation: Rotation): Matrix4 {
   const turned = rotateExtent(width, depth, rotation);
   const origin = turnedOrigin(turned.x, turned.z, rotation);
   return new Matrix4().makeRotationY(rotationRadians(rotation)).setPosition(origin.x, 0, origin.z);
 }
 
-/**
- * Where the matrix sends a corner of the model's box, to the nearest voxel.
- *
- * Rounded because the turn goes through a cosine, and adding zero because the
- * negative zero that comes out of it is a different value to `toEqual`.
- */
+// Rounded because the turn goes through a cosine; + 0 turns -0 into 0 for toEqual.
 const send = (matrix: Matrix4, x: number, z: number): { x: number; z: number } => {
   const point = new Vector3(x, 0, z).applyMatrix4(matrix);
   return { x: Math.round(point.x) + 0, z: Math.round(point.z) + 0 };
@@ -83,9 +73,6 @@ describe('turnedOrigin', () => {
   });
 
   it('keeps the turned model inside its own footprint, whichever way it turns', () => {
-    // The property that matters: after the turn plus the offset, the model's
-    // box is exactly [0, turned width] x [0, turned depth] — never behind the
-    // corner it was placed on, and never past the footprint it claimed.
     for (const rotation of ROTATIONS) {
       const turned = rotateExtent(WIDTH, DEPTH, rotation);
       const matrix = instanceMatrix(WIDTH, DEPTH, rotation);
@@ -112,15 +99,11 @@ describe('rotatePoint', () => {
   });
 
   it("swings the model's north face round to face west", () => {
-    // The convention, stated as something checkable: the north-west corner of an
-    // unturned model ends up at the north-east of the turned one.
     expect(rotatePoint({ x: 0, z: 0 }, WIDTH, DEPTH, 1)).toEqual({ x: 0, z: WIDTH });
     expect(rotatePoint({ x: WIDTH, z: 0 }, WIDTH, DEPTH, 1)).toEqual({ x: 0, z: 0 });
   });
 
   it('agrees with the matrix the instance is drawn with', () => {
-    // The one thing that must not drift: a lamp is turned by this and the
-    // lantern around it by the matrix, so the two have to be the same mapping.
     for (const rotation of ROTATIONS) {
       const matrix = instanceMatrix(WIDTH, DEPTH, rotation);
       for (const point of [
@@ -182,7 +165,6 @@ describe('rotateLights', () => {
 });
 
 describe('rotateDoors', () => {
-  /** A door in the middle of the north wall, walked out of northwards. */
   const north: ModelDoor = { x: WIDTH / 2, z: 0, facing: 2 };
 
   it('leaves a door on an unturned model where it was drawn', () => {
@@ -191,8 +173,6 @@ describe('rotateDoors', () => {
   });
 
   it('puts the north door of a model turned once on its west wall, facing west', () => {
-    // North at z = 0 swings round to face west, which is `rotation.ts`'s own
-    // convention; and facing 3 is -x in the `+z, +x, -z, -x` sequence.
     const [turned] = rotateDoors([north], WIDTH, DEPTH, 1);
     expect(turned).toEqual({ x: 0, z: WIDTH / 2, facing: 3 });
   });
@@ -201,7 +181,6 @@ describe('rotateDoors', () => {
     const side: ModelDoor = { x: WIDTH, z: 7, facing: 1 };
     let doors: readonly ModelDoor[] = [side];
     for (let turn = 0; turn < 4; turn++) {
-      // The size before each turn, which swaps with every odd one.
       const size = rotateExtent(WIDTH, DEPTH, normalizeRotation(turn));
       doors = rotateDoors(doors, size.x, size.z, 1);
     }

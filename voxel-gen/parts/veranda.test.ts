@@ -6,7 +6,6 @@ import { arcade, balustrade } from './veranda.ts';
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
 
-/** The inclusive span a layer covers on one axis, or null if it is empty. */
 const span = (b: VoxelBuilder, y: number, axis: 'x' | 'z'): [number, number] | null => {
   let lo = Infinity;
   let hi = -Infinity;
@@ -20,22 +19,19 @@ const span = (b: VoxelBuilder, y: number, axis: 'x' | 'z'): [number, number] | n
   return lo === Infinity ? null : [lo, hi];
 };
 
-/** Which columns of a layer are clear along the run, as `.` and `#`. */
 const columns = (b: VoxelBuilder, y: number, from: number, to: number, z: number): string => {
   let row = '';
   for (let x = from; x <= to; x++) row += at(b, x, y, z) === undefined ? '.' : '#';
   return row;
 };
 
-/** Three bays of five, on piers of three: the villa's veranda. */
 const veranda = (b: VoxelBuilder): number =>
   arcade(b, { x: 0, z: 0, w: 27, d: 2, y: 0, along: 'x', bays: 3, pier: 3, height: 6 });
 
 describe('arcade', () => {
   it('leaves every pier the width it was asked for, remainder and all', () => {
     const b = new VoxelBuilder();
-    // 26 does not divide by three, so the bays absorb the odd voxel: a bay a
-    // voxel wider than its neighbour does not show, a thin pier would.
+    // 26 does not divide by three, so the bays have to absorb the odd voxel.
     arcade(b, { x: 0, z: 0, w: 26, d: 2, y: 0, along: 'x', bays: 3, pier: 3, height: 6 });
     expect(columns(b, 0, 0, 25, 0)).toBe('###.....###....###.....###');
   });
@@ -51,7 +47,6 @@ describe('arcade', () => {
   it('narrows the arch head as it rises, and closes it under a solid crown', () => {
     const b = new VoxelBuilder();
     const free = veranda(b);
-    // Five clear, then three, then the course the cornice sits on.
     expect(columns(b, 6, 0, 26, 0)).toBe('###.....###.....###.....###');
     expect(columns(b, 7, 0, 26, 0)).toBe('####...#####...#####...####');
     expect(columns(b, 8, 0, 26, 0)).toBe('###########################');
@@ -66,7 +61,6 @@ describe('arcade', () => {
     expect(at(b, 1, 1, 0)).toBe(PALETTE.stone.base);
     expect(at(b, 1, 2, 0)).toBe(PALETTE.stucco.base);
     expect(at(b, 1, 5, 0)).toBe(PALETTE.stone.light);
-    // The bays take both bands away with them.
     expect(at(b, 5, 0, 0)).toBeUndefined();
     expect(at(b, 5, 5, 0)).toBeUndefined();
   });
@@ -93,7 +87,6 @@ describe('arcade', () => {
   it('puts a bay on the centre line when it is given an odd count', () => {
     const b = new VoxelBuilder();
     veranda(b);
-    // 27 long: the middle bay is columns 11..15, centred on 13.
     expect(at(b, 13, 0, 0)).toBeUndefined();
     expect(at(b, 13, 8, 0)).toBe(PALETTE.stucco.base);
   });

@@ -4,7 +4,6 @@ import type { Placement } from '../../layout/domain/resortLayout';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { buildConstructionField } from './constructionField';
 
-/** A geometry of `triangles` degenerate faces, enough to count and to bound. */
 function geometryOf(triangles: number): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(new Float32Array(triangles * 9), 3));
@@ -13,7 +12,6 @@ function geometryOf(triangles: number): BufferGeometry {
   return geometry;
 }
 
-/** A model meshed into shaded geometry, and optionally a glowing sign as well. */
 function model(id: string, triangles: number, glowing = false): ModelGeometry {
   return {
     id,
@@ -83,10 +81,8 @@ describe('buildConstructionField', () => {
   });
 
   it('leaves the catalogue geometry it was handed alone', () => {
-    // The geometries are the meshed catalogue's, shared with the instanced
-    // world that is still drawing them; Three.js frees a geometry's buffers by
-    // the identity of its attributes, so disposing one here would pull the model
-    // out from under every finished building of the same type.
+    // Three.js frees buffers by attribute identity, so disposing this shared geometry would pull it out
+    // from under every finished building of the same type.
     const catalogue = model('cottage', 4);
     const field = buildConstructionField([catalogue], null);
     field.show(at('cottage#1', 'cottage'), 25, 3);

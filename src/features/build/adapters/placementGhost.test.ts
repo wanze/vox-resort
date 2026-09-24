@@ -4,7 +4,6 @@ import { place, type LayoutItem } from '../../layout/domain/resortLayout';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { createPlacementGhost } from './placementGhost';
 
-/** A geometry with one triangle, which is all the ghost ever asks of it. */
 function geometry(): BufferGeometry {
   const buffer = new BufferGeometry();
   buffer.setAttribute('position', new BufferAttribute(new Float32Array(9), 3));
@@ -27,7 +26,6 @@ function model(id: string, lit: BufferGeometry | null): ModelGeometry {
 const COTTAGE: LayoutItem = { id: 'cottage', tilesX: 2, tilesZ: 3, width: 32, depth: 44 };
 const TORCH: LayoutItem = { id: 'tikitorch', tilesX: 1, tilesZ: 1, width: 16, depth: 16 };
 
-/** The two meshes the ghost keeps: the footprint patch, then the object. */
 const meshes = (ghost: { group: { children: readonly unknown[] } }) =>
   ghost.group.children as [Mesh, Mesh];
 
@@ -43,7 +41,6 @@ describe('createPlacementGhost', () => {
     expect(object.geometry).toBe(lit);
     expect(object.position.x).toBe(placement.x);
     expect(object.position.z).toBe(placement.z);
-    // The patch covers the whole footprint, centred on it.
     expect(pad.scale.x).toBe(2);
     expect(pad.scale.z).toBe(3);
     expect(pad.position.x).toBe((4 + 1) * 16);
@@ -58,11 +55,8 @@ describe('createPlacementGhost', () => {
 
     const [pad, object] = meshes(ghost);
     expect(object.rotation.y).toBeCloseTo(Math.PI / 2);
-    // The turned model is brought back onto the footprint it claims, rather than
-    // hanging off the corner a rotation about the origin would leave it behind.
     expect(object.position.x).toBe(placement.x);
     expect(object.position.z).toBe(placement.z + placement.depth);
-    // And the patch under it is the swapped footprint: 2x3 stood on end is 3x2.
     expect([pad.scale.x, pad.scale.z]).toEqual([3, 2]);
     ghost.dispose();
   });
@@ -100,7 +94,6 @@ describe('createPlacementGhost', () => {
     expect(object.visible).toBe(false);
     expect(ghost.group.visible).toBe(true);
     expect([pad.scale.x, pad.scale.z]).toEqual([2, 3]);
-    // Its own patch, because the refused one hides under the cottage it marks.
     expect(pad.material).not.toBe(refused);
     expect((pad.material as { depthTest: boolean }).depthTest).toBe(false);
     ghost.dispose();
@@ -120,8 +113,7 @@ describe('createPlacementGhost', () => {
     const ghost = createPlacementGhost([model('cottage', lit)]);
     ghost.show(place(COTTAGE, 'cottage@0,0', 0, 0), false);
     ghost.dispose();
-    // Disposing a geometry Three.js still holds elsewhere would strip the model
-    // out of the scene the moment the pointer was put down.
+    // Disposing geometry Three.js still holds would strip the model from the scene.
     expect(lit.getAttribute('position')).toBeDefined();
   });
 });

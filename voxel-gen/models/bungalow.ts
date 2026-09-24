@@ -1,28 +1,6 @@
-/**
- * Beach bungalow: a timber hut on stilts under a deep hipped thatch, with a
- * boarded deck across the front and a flight down to the sand.
- * 48x32 (12x8 m plot, a 9x3.5 m hut and a 1.5 m deck, 8.5 m to the ridge
- * pole), a 3x2 tile. Deck faces +z.
- *
- * It was a 6x3 m hut on 2x2 tiles: eighteen square metres, which is a garden
- * shed. A beach bungalow is 30 m² and more, so the hut is half again as long and
- * a little deeper, with a lounger either side of the flight down.
- *
- * Wider rather than deeper, and not by taste: the generator stands bungalows in
- * a row along the shelf on top of the dune, and that shelf is a sidewalk with a
- * few rows of sand either side of it. A plot three tiles deep does not fit there,
- * and a bungalow that cannot stand on the dune is not a beach bungalow.
- *
- * Drawn from `docs/references/beach-bungalow.jpg`. The reference weaves its
- * walls and combs its thatch at a resolution this grid cannot reach, and the
- * previous pass tried anyway: checkerboarding both surfaces made a hut of 6 070
- * voxels cost 5 440 triangles, against the hotel's 246 147 voxels for 2 706,
- * because a dithered face defeats the mesher's merge completely. So the walls
- * and the roof are flat here, and the variation the reference gets from texture
- * comes from geometry instead: a sill course and a wall plate round the walls,
- * two courses of cut ends at the eaves, a pole over the ridge. See
- * `docs/art-direction.md`.
- */
+// Wider rather than deeper so it fits the shelf on top of the dune. Walls and
+// thatch are flat: dithering them defeated the mesher's merge (6 070 voxels cost
+// 5 440 triangles), so variation comes from geometry instead.
 import { PALETTE } from '../palette.ts';
 import { plinth, steps } from '../parts/ground.ts';
 import { parasol, pottedPlant } from '../parts/props.ts';
@@ -31,22 +9,15 @@ import { balustrade } from '../parts/veranda.ts';
 import { doorway, shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
-/** The hut itself. */
 const HUT = { x: 6, z: 3, w: 36, d: 14 } as const;
 const FRONT = HUT.z + HUT.d - 1;
 const LEFT = HUT.x;
 const RIGHT = HUT.x + HUT.w - 1;
 
-/**
- * The deck, which the thatch is carried out over on two posts. The hut is drawn
- * wide and shallow on purpose: a hipped roof only has a ridge where the plan is
- * longer than it is wide, and on a square plan the pole the reference finishes
- * on would have nowhere to run.
- */
+// The hut is wide and shallow so the hipped roof has a ridge for the pole to run on.
 const DECK = { z: FRONT + 1, d: 6 } as const;
 const BRINK = DECK.z + DECK.d - 1;
 
-/** Layers of stilt between the sand and the deck. Three is 75 cm of clearance. */
 const STILTS = 3;
 
 export default defineModel({
@@ -55,7 +26,6 @@ export default defineModel({
   category: 'lodging',
   tiles: { x: 3, z: 2 },
   windows: WINDOW_GLASS,
-  // A lodging holds as many people as it has beds, and no more.
   venue: {
     role: 'lodging',
     capacity: 4,
@@ -66,8 +36,6 @@ export default defineModel({
   build: (b: VoxelBuilder) => {
     const sand = plinth(b, { x: 0, z: 0, w: 48, d: 32, height: 2, stone: PALETTE.sand });
 
-    // Stilts under each corner of the hut, under the middle of its long sides,
-    // and under the two deck posts.
     const floor = sand + STILTS;
     for (const x of [HUT.x, HUT.x + 17, RIGHT - 1]) {
       for (const z of [HUT.z, FRONT - 1, BRINK - 1]) {
@@ -75,16 +43,12 @@ export default defineModel({
       }
     }
 
-    // One boarded plane for the hut floor and the deck together, lipped along
-    // the three edges that stand in the open.
     b.box(HUT.x, RIGHT, floor, floor, HUT.z, BRINK, PALETTE.teak.base);
     b.box(HUT.x, RIGHT, floor, floor, BRINK, BRINK, PALETTE.teak.shade);
     for (const x of [HUT.x, RIGHT]) {
       b.box(x, x, floor, floor, DECK.z, BRINK, PALETTE.teak.shade);
     }
 
-    // The walls are timber, so they take the palette's teak rather than stucco,
-    // and the part's quoins and cornice become corner posts and a wall plate.
     const plate = stuccoWall(b, {
       ...HUT,
       y: floor + 1,
@@ -93,14 +57,9 @@ export default defineModel({
       trim: PALETTE.teak,
       skirting: 0,
     });
-    // The thatch is drawn over the deck as well as the hut, because on this
-    // reference the roof is the building: it comes out past the posts and the
-    // hut sits under it rather than wearing it.
     thatchRoof(b, { ...HUT, d: HUT.d + DECK.d, y: plate });
 
-    // A sill course right round the hut, which is the answer to the reference's
-    // boarding: one horizontal plane costs two quads a face, where boards
-    // painted voxel by voxel would cost one per board.
+    // One plane rather than boards: two quads a face instead of one per board.
     const sill = floor + 4;
     b.box(HUT.x, RIGHT, sill, sill, HUT.z, FRONT, PALETTE.teak.light);
 
@@ -149,9 +108,7 @@ export default defineModel({
       });
     }
 
-    // The deck: a rail either side of the way down, and the two posts that
-    // carry the thatch out over it. The posts go on last so the rail stops
-    // against them rather than painting over them.
+    // The posts go on last so the rail stops against them rather than painting over them.
     const rail = floor + 1;
     for (const x of [HUT.x, RIGHT - 14]) {
       balustrade(b, { x, z: BRINK, y: rail, w: 15, along: 'x', rail: PALETTE.teak });
@@ -171,9 +128,6 @@ export default defineModel({
       stone: PALETTE.teak,
     });
 
-    // In front of the deck: two loungers on the sand either side of the way
-    // down, a parasol by one of them, and a pot at the foot of the flight. The
-    // loungers are drawn as the beach club's are, head to the hut.
     const { amber, stucco, teak } = PALETTE;
     const head = BRINK + 3;
     for (const x of [HUT.x + 3, RIGHT - 6]) {

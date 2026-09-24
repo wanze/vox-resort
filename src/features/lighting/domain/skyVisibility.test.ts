@@ -32,15 +32,12 @@ const box = (overrides: Partial<Occluder> = {}): Occluder => ({
   ...overrides,
 });
 
-/** A grid over a fixed block of world, so cells map to voxels predictably. */
 const specOver = (cellSize = 4): LightGridSpec =>
   gridSpecAt([], cellSize, { minX: -64, maxX: 128, minY: 0, maxY: 96, minZ: -64, maxZ: 128 })!;
 
-/** A direction volume with every cell open to the sky. */
 const blank = (spec: LightGridSpec): Uint8Array =>
   new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
 
-/** Reads a cell's baked visibility back off the alpha channel. */
 function visibilityAt(
   direction: Uint8Array,
   spec: LightGridSpec,
@@ -56,7 +53,6 @@ function visibilityAt(
   return direction[(ix + spec.dims.x * (iy + spec.dims.y * iz)) * 4 + 3]! / 255;
 }
 
-/** The first bake as it was written: one pass over every interior cell. */
 function referenceSkyBake(spec: LightGridSpec, occluders: readonly Occluder[]): Uint8Array {
   const direction = new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
   const standing = occluders.filter(occludes);
@@ -64,7 +60,6 @@ function referenceSkyBake(spec: LightGridSpec, occluders: readonly Occluder[]): 
   return direction;
 }
 
-/** Bakes `occluders` the way the app does, and holds it to the reference byte for byte. */
 function expectSameBake(occluders: readonly Occluder[]): Uint8Array {
   const spec = specOver();
   const direction = new Uint8Array(spec.dims.x * spec.dims.y * spec.dims.z * 4).fill(255);
@@ -158,7 +153,6 @@ describe('occluderRange', () => {
   it('collapses for a box that shades nothing', () => {
     const spec = specOver();
     const range = occluderRange(box({ maxY: 2 }), spec, gridInterior(spec));
-    // Reach zero: the block is the box's own cells and no more.
     expect(range.highY - range.lowY).toBeLessThanOrEqual(1);
   });
 });
@@ -221,7 +215,6 @@ describe('a bake and the lamp bake sharing one volume', () => {
     const shaded = visibilityAt(grid.direction, spec, 70, 2, 32);
     expect(shaded).toBeLessThan(0.9);
 
-    // The lamp bake owns the other three channels and must not touch this one.
     bakeLightGrid([], spec);
     expect(visibilityAt(grid.direction, spec, 70, 2, 32)).toBe(shaded);
   });
@@ -236,7 +229,6 @@ describe('createLiveSkyVisibility', () => {
     const live = createLiveSkyVisibility(spec, adopted, occluders, true);
     expect(adopted).toEqual(baked);
     expect(live.occluderCount).toBe(1);
-    // Kept, not redone: a volume handed over as baked is left exactly as it came.
     const untouched = new Uint8Array(baked.length).fill(255);
     createLiveSkyVisibility(spec, untouched, occluders, true);
     expect(visibilityAt(untouched, spec, 70, 2, 32)).toBe(1);

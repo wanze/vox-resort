@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { BufferAttribute, BufferGeometry, MeshBasicNodeMaterial } from 'three/webgpu';
 import { fieldMeshesFor, slotsFor } from './movingField';
 
-/** A geometry filling one axis-aligned box, which is all the hang ever reads. */
 const boxAt = (min: readonly [number, number, number], max: readonly [number, number, number]) => {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(new Float32Array([...min, ...max]), 3));
@@ -12,7 +11,6 @@ const boxAt = (min: readonly [number, number, number], max: readonly [number, nu
 
 const material = new MeshBasicNodeMaterial();
 
-/** The box a built mesh's geometry ended up in. */
 function boxOf(geometry: BufferGeometry): { min: number[]; max: number[] } {
   geometry.computeBoundingBox();
   const box = geometry.boundingBox!;
@@ -21,8 +19,6 @@ function boxOf(geometry: BufferGeometry): { min: number[]; max: number[] } {
 
 describe('fieldMeshesFor', () => {
   it('hangs every surface of a model on the box they share', () => {
-    // A balloon's shape: a narrow basket on the ground and a wide envelope over
-    // it, with nothing of the one inside the other.
     const [glow, lit] = fieldMeshesFor({
       name: 'balloon',
       members: Int32Array.from([0]),
@@ -32,8 +28,6 @@ describe('fieldMeshesFor', () => {
       ],
     });
 
-    // Hung one box at a time, the envelope would have come down onto the foot of
-    // its own box and swallowed the basket whole.
     expect(boxOf(lit!.geometry)).toEqual({ min: [-2, 0, -2], max: [2, 4, 2] });
     expect(boxOf(glow!.geometry)).toEqual({ min: [-4, 4, -4], max: [4, 16, 4] });
   });

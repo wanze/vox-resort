@@ -2,13 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { MAX_SNAP_TILES, nearestNodeTo, nodeIndexFor } from './nearestNode';
 import type { WalkNetwork, WalkNode } from './walkNetwork';
 
-/** A round number, so the positions below read as tiles. */
 const TILE = 10;
 
-/**
- * A node at the centre of a tile, with one exit so it is somewhere a person can
- * walk away from. Only the fields the search reads mean anything.
- */
 const nodeAt = (tileX: number, tileZ: number): WalkNode => ({
   x: (tileX + 0.5) * TILE,
   z: (tileZ + 0.5) * TILE,
@@ -48,18 +43,14 @@ describe('nearestNodeTo', () => {
   });
 
   it('prefers a closer node further out to one at the corner of a nearer ring', () => {
-    // Standing at the south-east corner of tile (0, 0). The node at (-1, 1) is in
-    // ring 1 but diagonally across the tile, about 2.05 tiles off; the one at
-    // (2, 0) is in ring 2 and about 1.61 tiles off. A search that stopped at the
-    // first ring with something in it would take the wrong one.
+    // (-1, 1) is in ring 1 but farther than (2, 0) in ring 2: stopping at the first
+    // non-empty ring would pick the wrong one.
     const nodes = [nodeAt(-1, 1), nodeAt(2, 0)];
     expect(nearest(nodes, 9.5, 0.5)).toBe(1);
   });
 
   it('prefers a closer node two rings out to one at the corner of an earlier ring', () => {
-    // The same trap further out, where searching one ring past the first
-    // non-empty one is not enough either: the far corner of ring 3, about 4.95
-    // tiles off, against the middle of ring 5, about 4.53.
+    // The same trap where searching one ring past the first non-empty one is not enough.
     const nodes = [nodeAt(-3, 3), nodeAt(5, 0)];
     expect(nearest(nodes, 9.99, 0.01)).toBe(1);
   });
@@ -71,8 +62,6 @@ describe('nearestNodeTo', () => {
   });
 
   it('prefers a nearer node past the last ring to a farther one inside it', () => {
-    // Both are off the ring search's corner: the first diagonally inside the
-    // last ring, the second straight across just beyond it and nearer.
     const edge = MAX_SNAP_TILES;
     const nodes = [nodeAt(edge, edge), nodeAt(edge + 1, 0)];
     expect(nearest(nodes, 5, 5)).toBe(1);

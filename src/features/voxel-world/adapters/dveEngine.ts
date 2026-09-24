@@ -1,43 +1,27 @@
-/**
- * Adapter around the Divine Voxel Engine.
- *
- * DVE normally runs split across web workers behind a Babylon.js renderer. This
- * milestone only needs its data model and mesher, so the engine is driven
- * directly on the main thread: register voxels, paint sectors, mesh sections and
- * hand the raw buffers back for Three.js to turn into geometry.
- *
- * Several DVE modules snapshot engine settings when they are first evaluated, so
- * every import below is deliberately dynamic and ordered after `syncSettings`.
- */
+// Several DVE modules snapshot engine settings when first evaluated, so every DVE
+// import is dynamic and ordered after syncSettings.
 
 import type { MaterialDefinition } from '../../catalog/domain/materials';
 import { materialIdFor, voxelIdFor } from '../../catalog/domain/materials';
 import { groupBySection, originsFor, type VolumeSize } from '../domain/sectionGrid';
 import type { PackedVoxelWrites } from '../domain/modelScratch';
 
-/** Power-of-two exponents DVE uses to size sectors and sections. */
 export interface WorldScale {
   readonly sectorPower2: VolumeSize;
   readonly sectionPower2: VolumeSize;
-  /** Maximum world height in voxels. */
   readonly maxHeight: number;
-  /** Horizontal half-extent of the world in voxels. */
   readonly horizontalExtent: number;
 }
 
 export interface RawSectionMesh {
-  /** DVE material id of this submesh; maps back to a palette colour. */
   readonly materialId: string;
-  /** World-space offset of the section the mesh came from. */
   readonly origin: { readonly x: number; readonly y: number; readonly z: number };
-  /** Interleaved DVE vertex stream. */
   readonly vertices: Float32Array;
   readonly vertexCount: number;
   readonly indices: Uint32Array;
 }
 
 const DIMENSION = 0;
-/** A single shared placeholder texture; colour comes from the material instead. */
 const PLACEHOLDER_TEXTURE = 'resort_placeholder';
 
 const sizeFromPower2 = (power2: VolumeSize): VolumeSize => ({
@@ -64,30 +48,23 @@ export function sectionSizeOf(scale: WorldScale): VolumeSize {
 
 let initialized = false;
 
-/**
- * Boots DVE's data model and mesher for the given materials. Safe to call once
- * per page load; the engine keeps its registries in module-level statics.
- */
+// Call once per page load: DVE keeps its registries in module-level statics.
 async function initializeEngine(
   materials: readonly MaterialDefinition[],
   scale: WorldScale,
 ): Promise<void> {
   if (initialized) return;
 
-  // WorldSpaces installs the listener that turns settings into sector/section
-  // maths, so it has to be loaded before the settings are pushed.
+  // WorldSpaces installs the listener that applies settings, so it must load before they are pushed.
   await import('@divinevoxel/vlox/World/WorldSpaces');
   const { EngineSettings } = await import('@divinevoxel/vlox/Settings/EngineSettings');
 
   EngineSettings.syncSettings({
-    // SharedArrayBuffer would require cross-origin isolation; this build is
-    // single-threaded so plain ArrayBuffers are enough.
+    // SharedArrayBuffer would need cross-origin isolation; single-threaded, plain buffers suffice.
     memoryAndCPU: { useSharedMemory: false },
-    // Lighting and AO come from the Three.js scene, not from DVE's shader data.
+    // Lighting and AO come from the Three.js scene.
     mesher: { doSunLight: false, doAO: false, doColors: false },
     updating: { dirtyMechanism: false, autoRebuild: false },
-    // Only the mesher's vertex layout depends on this; geometry is identical
-    // either way, and the Three.js material does the shading.
     rendererSettings: {
       mode: 'webgl',
       cpuBound: false,
@@ -108,8 +85,7 @@ async function initializeEngine(
     },
   });
 
-  // DVE resolves every model's texture argument through a compiled texture set.
-  // The showcase has no art yet, so one flat entry keeps that lookup happy.
+  // DVE resolves every texture argument through a compiled set; one flat entry satisfies it.
   const { TextureManager } = await import('@divinevoxel/vlox/Textures/TextureManager');
   const { CompiledTexture } = await import('@divinevoxel/vlox/Textures/Classes/CompiledTexture');
   const placeholder = new CompiledTexture('dve_voxel');
@@ -122,8 +98,6 @@ async function initializeEngine(
 
   InitDataGenerator({
     threads: { nexus: false },
-    // One rendered material per palette entry: DVE emits a submesh per material,
-    // which is exactly the granularity the flat colours need.
     materials: materials.map((material) => ({ id: materialIdFor(material.key), properties: {} })),
     substances: [],
     voxels: materials.map((material) => ({
@@ -145,10 +119,6 @@ async function initializeEngine(
   initialized = true;
 }
 
-/**
- * Registers the materials, paints the writes into a fresh voxel world and runs
- * the face-culling mesher over every touched section.
- */
 export async function buildSectionMeshes(
   materials: readonly MaterialDefinition[],
   writes: PackedVoxelWrites,
@@ -164,10 +134,8 @@ export async function buildSectionMeshes(
     await import('@divinevoxel/vlox/Mesher/Voxels/Geometry/CompactedSectionVoxelMesh');
   const { VoxelLUT } = await import('@divinevoxel/vlox/Voxels/Data/VoxelLUT');
 
-  // Resolved once per palette entry rather than once per voxel: `setStringId` is
-  // exactly this lookup followed by `setId`, and the catalogue asks it three
-  // quarters of a million times for a couple of hundred answers. An id the
-  // registry never heard of would otherwise paint air, silently.
+  // Resolved once per palette entry: setStringId is this lookup plus setId and would run
+  // ~750k times. An unknown id would otherwise silently paint air.
   const engineIds = palette.map((id) => {
     if (!VoxelLUT.voxelIds.isRegistered(id)) {
       throw new Error(`Voxel id ${id} was never registered with the engine`);

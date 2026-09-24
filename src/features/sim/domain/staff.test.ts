@@ -12,8 +12,6 @@ describe('staffFor', () => {
   it('follows the venue count, and never leaves a plot with venues unstaffed', () => {
     const counts = [1, 3, 6, 12, 30, 60].map((venues) => staffFor(venues).count);
     expect(counts).toEqual([...counts].toSorted((a, b) => a - b));
-    // A plot with anything on it has somebody, or it would simply degrade for
-    // ever with nothing the player could read as the reason.
     expect(staffFor(1).count).toBe(1);
     expect(staffFor(6).count).toBe(1);
     expect(staffFor(30).count).toBeGreaterThan(staffFor(6).count);

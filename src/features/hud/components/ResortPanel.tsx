@@ -9,18 +9,14 @@ import { sameConfig } from '../../layout/domain/resortConfig';
 import { ResortAdvanced } from './ResortAdvanced';
 
 export interface ResortPanelProps {
-  /** What the resort on screen was grown from. */
   readonly params: ResortParams;
   readonly onGenerate: (params: ResortParams) => void;
   readonly onClear: (params: ResortParams) => void;
-  /** True while a resort is being laid out and baked; the panel says so. */
   readonly busy: boolean;
 }
 
-/** A whole new plot to grow, in the range the seed field accepts. */
 const rollSeed = (): number => Math.floor(Math.random() * 0xffffffff);
 
-/** Whether the controls have been moved since the resort on screen was grown. */
 function isStaged(draft: ResortParams, grown: ResortParams): boolean {
   const moved = (['tilesX', 'tilesZ', 'density', 'seed'] as const).some(
     (key) => draft[key] !== grown[key],
@@ -28,28 +24,17 @@ function isStaged(draft: ResortParams, grown: ResortParams): boolean {
   return moved || !sameConfig(draft.config, grown.config);
 }
 
-/** What the button offers: the work, a different resort, or the same one again. */
 function goLabel(busy: boolean, staged: boolean): string {
   if (busy) return 'Building…';
   return staged ? 'Generate' : 'Generate again';
 }
 
-/**
- * The controls that grow a resort.
- *
- * The sliders stage rather than apply: laying a plot out, baking a few hundred
- * lamps and uploading the meshes is most of a second, and a slider that spent
- * that on every tick would be unusable. So the panel holds an edit until it is
- * asked for, which also makes the seed and the size one gesture rather than
- * three resorts.
- */
+// Sliders stage rather than apply: growing a resort takes most of a second.
 export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelProps) {
   const [draft, setDraft] = useState<ResortParams>(params);
   const change = (patch: Partial<ResortParams>): void => setDraft({ ...draft, ...patch });
   const staged = isStaged(draft, params);
-  // Committing shows back what was actually used: a seed typed outside the range
-  // the generator works in is pulled into it, and the field should say so rather
-  // than leaving the panel claiming an edit nobody can apply.
+  // Show back the clamped params, so the panel does not claim an edit nobody can apply.
   const commit = (run: (params: ResortParams) => void) => (): void => {
     const asked = clampParams(draft);
     setDraft(asked);

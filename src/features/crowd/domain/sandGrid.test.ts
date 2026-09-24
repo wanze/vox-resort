@@ -3,14 +3,13 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { blockedAt, clearLine, sandGridFor } from './sandGrid';
 
-// Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
+// Water from z = 18, so z = 12..17 is beach.
 const shore = shoreFor({
   tilesX: 20,
   tilesZ: 20,
   shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
 })!;
 
-/** A lounger-sized box in the middle of the sand. */
 const BOX = { x: 5 * TILE_VOXELS, z: 14 * TILE_VOXELS, width: 8, depth: 4 };
 
 const grid = sandGridFor({ shore, tilesX: 20, obstacles: [BOX] });

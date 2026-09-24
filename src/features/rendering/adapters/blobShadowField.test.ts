@@ -16,12 +16,6 @@ const blobAt = (key: string, x: number, z = 0): BlobShadow => ({
 
 const meshOf = (field: BlobShadowField) => field.group.children[0] as InstancedMesh;
 
-/**
- * Where each drawn shadow is centred along X, in slot order.
- *
- * Read before any sky is applied, so the sun casts no run and a quad stands
- * exactly on its blob.
- */
 function drawnX(field: BlobShadowField): number[] {
   const mesh = meshOf(field);
   const matrix = new Matrix4();
@@ -74,7 +68,6 @@ describe('buildBlobShadowField', () => {
     const field = buildBlobShadowField([blobAt('a', 0), blobAt('b', 10), blobAt('c', 20)]);
     field.remove('b');
     expect(drawnX(field)).toEqual([0, 20]);
-    // A slot table that had not followed the move would lose one of these.
     expect(field.remove('c')).toBe(true);
     expect(field.remove('a')).toBe(true);
     expect(field.count).toBe(0);
@@ -83,7 +76,6 @@ describe('buildBlobShadowField', () => {
   });
 
   it('keeps one shadow for a tile that is lifted and laid again, however often', () => {
-    // A bridge drawn back and forth along a bank re-lays the same tile each pass.
     const field = buildBlobShadowField([blobAt('bank', 0), blobAt('deck', 10)]);
     for (let pass = 0; pass < 4; pass++) {
       field.remove('bank');
@@ -95,9 +87,8 @@ describe('buildBlobShadowField', () => {
   });
 
   it('uploads both the moved shadow and the added one when they land in the same frame', () => {
-    // Three.js keeps an instance matrix's ranges until they are replaced, so a
-    // range covering only the add would leave the removed quad drawn where the
-    // moved one should be.
+    // Three.js keeps an instance matrix's update ranges until replaced, so a range
+    // covering only the add would leave the removed quad drawn.
     const field = buildBlobShadowField([blobAt('a', 0), blobAt('b', 10), blobAt('c', 20)]);
     field.remove('a');
     field.add(blobAt('a', 0));

@@ -13,7 +13,6 @@ import {
 
 const CENTRE: DropPose = { x: 900, y: 40, z: 700 };
 
-/** The view the app opens on: the whole plot, seen down an isometric slant. */
 const OVERVIEW: RainView = {
   voxelsPerPixel: 1.1,
   width: 2880,
@@ -22,7 +21,6 @@ const OVERVIEW: RainView = {
   distance: 1600,
 };
 
-/** Standing among the cottages, close in. */
 const CLOSE: RainView = {
   voxelsPerPixel: 0.15,
   width: 2880,
@@ -64,7 +62,6 @@ describe('rainfallFor', () => {
   it('keeps a streak the same size on screen however far the camera is out', () => {
     const near = rainfallFor('storm', CLOSE)!;
     const far = rainfallFor('storm', OVERVIEW)!;
-    // The same pixels, so the same ratio as the view's own scale.
     const zoom = OVERVIEW.voxelsPerPixel / CLOSE.voxelsPerPixel;
     expect(far.length / near.length).toBeCloseTo(zoom, 6);
     expect(far.width / near.width).toBeCloseTo(zoom, 6);
@@ -91,8 +88,6 @@ describe('rainfallFor', () => {
 
 describe('columnFor', () => {
   it('covers the whole of what an overview can see', () => {
-    // The plot is 1792 voxels across; a column narrower than the view is the
-    // square of rain in the middle of a dry plot this exists to prevent.
     expect(columnFor(OVERVIEW)).toBeGreaterThan(OVERVIEW.width * OVERVIEW.voxelsPerPixel);
   });
 
@@ -150,7 +145,6 @@ describe('nearestTo', () => {
   it('brings a distant point to the image nearest the camera', () => {
     const near = nearestTo(10, 10_000, 640);
     expect(Math.abs(near - 10_000)).toBeLessThanOrEqual(320);
-    // Still the same point on the lattice, and not merely somewhere close by.
     expect(Math.abs(near - 10) % 640).toBeCloseTo(0, 6);
   });
 });
@@ -196,7 +190,6 @@ describe('dropAt', () => {
     const here = dropAt(drops, 0, 3, look, CENTRE);
     const away = dropAt(drops, 0, 3, look, { ...CENTRE, x: CENTRE.x + look.column });
     expect(away.x - here.x).toBeCloseTo(look.column, 4);
-    // And nothing but the wrap has moved: it is the same drop at the same moment.
     expect(away.y).toBeCloseTo(here.y, 6);
     expect(away.z).toBeCloseTo(here.z, 6);
   });
@@ -204,8 +197,6 @@ describe('dropAt', () => {
   it('carries a drop downwind as it falls', () => {
     const drops = dropsOf(1);
     const look = rainfallFor('storm', OVERVIEW)!;
-    // The one drop, followed from the top of its fall rather than across the
-    // wrap: a drift is only a drift while it is the same fall.
     const top = dropAt(drops, 0, 0, look, CENTRE);
     const lower = dropAt(drops, 0, 0.1, look, CENTRE);
     expect(lower.y).toBeLessThan(top.y);

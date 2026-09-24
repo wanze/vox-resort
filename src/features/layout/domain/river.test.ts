@@ -6,7 +6,6 @@ import { createTerrain, type TerrainEdit } from './terrain';
 
 const SHORE: ShoreSpec = { inset: 10, beach: 6, wave: 2, seed: 5 };
 
-/** A hill on the coast, so the river has terraces to fall down. */
 const HILL: ElevationSpec = {
   terraces: [
     { level: 1, inset: 6, anchor: 'water', wave: 0, surface: 'sand' },
@@ -29,7 +28,6 @@ const parts = (over: Partial<RiverParts> = {}): RiverParts => {
   };
 };
 
-/** The edits as a terrain, which is how everything downstream reads them. */
 const flooded = (edits: readonly TerrainEdit[], made: RiverParts) =>
   createTerrain({
     shore: made.shore,
@@ -57,7 +55,6 @@ describe('riverEditsFor', () => {
     const channel = channelOf(riverEditsFor(made));
     const rows = new Set(channel.map((tile) => tile.tileZ));
     expect(rows.has(0)).toBe(true);
-    // The mouth: the last row of channel touches the sand in front of the sea.
     const mouth = Math.max(...rows);
     const terrain = createTerrain({ ...made, edits: [] });
     expect(terrain.isSea(channel[channel.length - 1]!.tileX, mouth + 1)).toBe(true);
@@ -77,11 +74,6 @@ describe('riverEditsFor', () => {
     }
   });
 
-  /**
-   * The point of flooding each tile at the level it already stands: the river
-   * moves no ground, so it cannot break the one-level-per-step invariant the
-   * flights of stairs rest on. See `elevation.ts`.
-   */
   it('moves no ground: every tile keeps the level it stood at', () => {
     const made = parts();
     const bare = createTerrain({ ...made, edits: [] });
@@ -93,8 +85,6 @@ describe('riverEditsFor', () => {
   it('falls down the hill rather than cutting through it', () => {
     const channel = channelOf(riverEditsFor(parts()));
     const levels = new Set(channel.map((edit) => edit.level));
-    // The hill climbs to two and back down, so the river reaches more than one
-    // level on its way to the sea.
     expect(levels.size).toBeGreaterThan(1);
   });
 

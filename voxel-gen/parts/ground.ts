@@ -1,34 +1,16 @@
-/**
- * The ground an object stands on, and the way up onto it.
- *
- * Every model owns its own patch of ground: it is what makes an object read as
- * a plot rather than as a building dropped on a lawn, and it is also how a model
- * fills the footprint it claims (see `--audit`). These two parts are the ones
- * every model in the catalogue starts with.
- */
-
 import { PALETTE, type Ramp } from '../palette.ts';
 import type { VoxelBuilder } from '../voxelgen.ts';
 
 export interface PlinthOptions {
-  /** Corner of the slab, which is normally the model's own origin. */
   readonly x: number;
   readonly z: number;
   readonly w: number;
   readonly d: number;
-  /** Lowest layer. Defaults to the ground, which is where a model starts. */
   readonly y?: number;
-  /** Layers. Three is 75 cm, the height the catalogue stands its objects on. */
   readonly height?: number;
   readonly stone?: Ramp;
 }
 
-/**
- * The slab an object stands on, with a darker lip around its top edge so the
- * plot has an outline of its own from every side.
- *
- * Returns the first free layer above it, which is where the building goes.
- */
 export function plinth(b: VoxelBuilder, o: PlinthOptions): number {
   const height = o.height ?? 3;
   if (o.w < 3 || o.d < 3) throw new Error('A plinth is at least 3 voxels a side');
@@ -52,31 +34,19 @@ export function plinth(b: VoxelBuilder, o: PlinthOptions): number {
   return top + 1;
 }
 
-/** Which way a flight of steps descends. */
 export type Descent = 'x-' | 'x+' | 'z-' | 'z+';
 
 export interface StepsOptions {
-  /** Corner of the top tread, the end of the flight nearest the building. */
   readonly x: number;
   readonly z: number;
-  /** Width across the flight. */
   readonly w: number;
-  /** Layer the top tread's surface sits on. */
   readonly y: number;
-  /** Treads, each one layer down and two voxels out. Two is a doorstep. */
   readonly treads?: number;
-  /** The direction the flight descends, away from the door it serves. */
   readonly descends: Descent;
   readonly stone?: Ramp;
 }
 
-/**
- * A short flight down from a threshold, drawn on top of whatever it stands on.
- *
- * One voxel of rise to two of going, the same 25 by 50 cm tread the terraces
- * and the `stairs` model climb, so a doorstep and a terrace step are the same
- * step. Draw it after the ground it rests on: it paints over, it does not carve.
- */
+// The same 1:2 rise to going as the terraces and stairs. Paints over rather than carves, so draw it after the ground.
 export function steps(b: VoxelBuilder, o: StepsOptions): void {
   const treads = o.treads ?? 2;
   if (treads < 1) throw new Error('A flight has at least one tread');

@@ -1,29 +1,8 @@
-/**
- * The HUD's design system, and the overlay cut from it.
- *
- * One idea holds the whole file together: the resort is built out of stone, so
- * the panel you build it from is too. Every surface is a slab — a dark granite
- * ground, a grain over it, a lit top edge and a shadowed bottom one — and every
- * control is either a block sitting proud of its slab or a groove cut into it.
- * The accents are not invented: they are the art's own palette, read straight
- * off `voxel-gen/palette.ts`, so a terracotta highlight in the HUD is the same
- * terracotta as the roof tiles under it.
- *
- * The tokens below are the system, and everything after them only spends them.
- * A component that needs a surface takes `--slab`; one that needs an edge takes
- * `--bevel`. Nothing past the token block should introduce a colour, a radius or
- * a shadow of its own — if a part seems to need one, the system is missing a
- * token and that is where to add it.
- */
+/* Only the token block introduces colours, radii and shadows; everything after it spends them. */
 
 :root {
   color-scheme: dark;
 
-  /* ---- Stone ------------------------------------------------------------
-     The chrome itself: a warm basalt, dark enough to sit over a bright noon
-     beach without either of them washing the other out. It runs dark only —
-     everything light enough to read as text is taken from the resort's own
-     palette below, which is what keeps the two ends of the HUD related. */
   --stone-950: #101316;
   --stone-900: #171b1f;
   --stone-850: #1d2226;
@@ -34,19 +13,12 @@
   --stone-400: #626b73;
   --stone-300: #8d959c;
 
-  /* ---- The resort's own colours ----------------------------------------
-     Straight from `PALETTE` in the art. Used for anything that means something
-     rather than anything that is merely chrome. */
   --sand: #dcbe95;
   --stucco: #e8dcc6;
   --terracotta: #c46a42;
   --terracotta-lit: #d78f6a;
   --foliage: #7d9a3c;
 
-  /* ---- Surfaces ---------------------------------------------------------
-     `--slab` and `--slab-blend` travel together: the grain is blended into the
-     stone rather than laid over it, so a surface never looks like a texture
-     stuck onto a colour. */
   --grain: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
   --slab: var(--grain), linear-gradient(180deg, var(--stone-700) 0%, var(--stone-850) 100%);
   --slab-blend: soft-light, normal;
@@ -56,10 +28,6 @@
      scrolling under it. */
   --tray: var(--stone-900);
 
-  /* ---- Edges -----------------------------------------------------------
-     A block is lit along the top and dark along the bottom; a groove is the
-     other way round. That one inversion is what makes the HUD read as carved
-     rather than drawn. */
   --edge: rgb(0 0 0 / 55%);
   --edge-lit: rgb(255 255 255 / 9%);
   --bevel: inset 0 1px 0 var(--edge-lit), inset 0 -1px 0 rgb(0 0 0 / 40%);
@@ -67,20 +35,15 @@
   --shadow-slab: 0 1px 0 rgb(0 0 0 / 50%), 0 10px 26px rgb(0 0 0 / 40%);
   --shadow-lift: 0 4px 14px rgb(0 0 0 / 45%);
   --shadow-plate: 0 1px 2px rgb(0 0 0 / 80%);
-  /* The knob a slider is dragged by: sunlit stucco, rimmed and dropped. The rim
-     rides in the shadow rather than in a border, so both engines' thumbs are
-     short enough to stop reading as the same rule written twice. */
   --knob-size: 13px;
   --knob-face: linear-gradient(180deg, var(--stucco), var(--sand));
   --knob-shadow: 0 0 0 1px rgb(0 0 0 / 60%), 0 1px 3px rgb(0 0 0 / 60%);
 
-  /* ---- Text ------------------------------------------------------------- */
   --text: #e7e4de;
   --text-dim: var(--stone-300);
   --text-faint: var(--stone-400);
   --text-on-accent: #1b1207;
 
-  /* ---- Type ------------------------------------------------------------- */
   --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-num: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
   --size-label: 9.5px;
@@ -89,7 +52,6 @@
   --size-lead: 15px;
   --track-label: 0.12em;
 
-  /* ---- Metrics ---------------------------------------------------------- */
   --space-1: 3px;
   --space-2: 6px;
   --space-3: 10px;
@@ -103,7 +65,6 @@
   --palette-w: 304px;
   --tile-min: 80px;
 
-  /* ---- Motion ----------------------------------------------------------- */
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
   --quick: 120ms var(--ease);
 }
@@ -145,21 +106,12 @@ body {
   touch-action: none;
 }
 
-/* The HUD is a plain DOM overlay; nothing here touches the render context. */
 .hud {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-/* ===========================================================================
-   Shared shapes
-   Three selectors carry most of the HUD: a slab, a block and a groove. Written
-   as selector lists rather than as extra class names on the components, so the
-   markup stays about what a thing is and this file stays about how it looks.
-   ======================================================================== */
-
-/* A surface. */
 .hud-bar,
 .hud-popover-panel,
 .hud-palette,
@@ -170,7 +122,6 @@ body {
   color: var(--text);
 }
 
-/* A block sitting proud of one. */
 .hud-popover-toggle,
 .hud-camera-mode,
 .hud-time-speed,
@@ -214,7 +165,6 @@ body {
   color: var(--stucco);
 }
 
-/* Pressed in, which is what "on" looks like in stone. */
 .hud-popover-toggle[aria-expanded='true'],
 .hud-camera-mode[aria-pressed='true'],
 .hud-time-speed[aria-pressed='true'],
@@ -246,11 +196,8 @@ input:disabled {
   cursor: default;
 }
 
-/* A groove cut into one.
-   The two engines' pseudo-elements cannot share a selector — an unrecognised
-   vendor pseudo voids the whole rule it appears in — so what they have in
-   common is hoisted into the tokens above and into `--track`, and each rule is
-   left with only the part its engine actually needs. */
+/* Engine pseudo-elements cannot share a selector: an unrecognised vendor pseudo
+   voids the whole rule. */
 input[type='range'] {
   appearance: none;
   height: 14px;
@@ -259,13 +206,9 @@ input[type='range'] {
   cursor: ew-resize;
 }
 
-/* What the groove is filled with, defaulted in the `var()` rather than declared
-   on the input: a custom property set on the element itself would beat the one
-   a slider that means something inherits from its wrapper. See `.hud-time`.
-
-   The two track rules really are the same rule twice over. They have to be:
-   putting both pseudo-elements in one selector list voids it in both engines,
-   and painting the groove on the input instead would leave a 6px hit target. */
+/* Defaulted in var() rather than set on the input, so a value inherited from a
+   wrapper wins. The track rules are duplicated for the same pseudo-element reason,
+   and painting the groove on the input would leave a 6px hit target. */
 input[type='range']::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 3px;
@@ -325,7 +268,6 @@ input[type='checkbox'] {
   accent-color: var(--terracotta);
 }
 
-/* The one type treatment the whole HUD shares: a small carved caption. */
 .hud-readout-label,
 .hud-palette-title,
 .build-group-label,
@@ -338,7 +280,6 @@ input[type='checkbox'] {
   color: var(--text-dim);
 }
 
-/* Scrollbars, so a panel's overflow is part of the stone rather than the OS. */
 .hud-popover-panel,
 .hud-palette-shelves,
 .hud-inspect {
@@ -361,10 +302,6 @@ input[type='checkbox'] {
   background-clip: content-box;
 }
 
-/* ===========================================================================
-   The top bar: one lintel across the scene
-   ======================================================================== */
-
 .hud-bar {
   position: absolute;
   top: 0;
@@ -381,7 +318,6 @@ input[type='checkbox'] {
 }
 
 .hud-bar::after {
-  /* The lit chamfer along the top of the lintel, where the sun would catch it. */
   content: '';
   position: absolute;
   inset: 0;
@@ -413,8 +349,6 @@ input[type='checkbox'] {
   color: var(--sand);
 }
 
-/* ---- Time of day ------------------------------------------------------ */
-
 .hud-time {
   display: flex;
   align-items: center;
@@ -425,9 +359,6 @@ input[type='checkbox'] {
   width: 168px;
 }
 
-/* The groove for the sun runs through the day it sets: night, dawn, noon, dusk,
-   night. It is the one control whose track means something, and it says so by
-   filling the groove every other slider leaves plain. */
 .hud-time {
   --track: linear-gradient(
     90deg,
@@ -442,8 +373,7 @@ input[type='checkbox'] {
   );
 }
 
-/* Fixed width and tabular figures, so the bar does not shift as the minutes and
-   the days tick over. */
+/* Fixed width and tabular figures, so the bar does not shift as the minutes tick over. */
 .hud-time-clock {
   min-width: 11ch;
   font: 600 var(--size-small) / 1 var(--font-num);
@@ -462,16 +392,13 @@ input[type='checkbox'] {
   padding: 0 var(--space-2);
 }
 
-/* ---- Weather ---------------------------------------------------------- */
-
 .hud-weather {
   display: flex;
   align-items: center;
   gap: var(--space-1);
 }
 
-/* Fixed width and no wrapping, so pinning a heatwave does not shove the rest of
-   the bar along - the same bargain `.hud-time-clock` strikes with the minutes. */
+/* Fixed width and no wrapping, so the weather label does not shove the rest of the bar along. */
 .hud-weather-now {
   min-width: 10ch;
   margin-right: var(--space-2);
@@ -485,8 +412,6 @@ input[type='checkbox'] {
   min-width: var(--control-h);
   padding: 0 var(--space-2);
 }
-
-/* ---- Popovers --------------------------------------------------------- */
 
 .hud-popover {
   position: relative;
@@ -511,13 +436,10 @@ input[type='checkbox'] {
   box-shadow: var(--shadow-slab), var(--bevel);
 }
 
-/* The tools sit at the right edge, so their panels hang from it too. */
 .hud-bar-tools .hud-popover-panel {
   left: auto;
   right: 0;
 }
-
-/* ---- Render stats ----------------------------------------------------- */
 
 .hud-loading {
   margin: 0;
@@ -555,25 +477,18 @@ input[type='checkbox'] {
   font-weight: 600;
 }
 
-/* ---- Advice ----------------------------------------------------------- */
-
-/* The one panel whose rows are sentences rather than counts. `.hud-stats` holds
-   every line on one line, which is right for a number and would make this panel
-   as wide as its longest observation. */
+/* Rows are sentences here; .hud-stats keeps every line on one line, which would
+   make the panel too wide. */
 .hud-advice {
   max-width: 34ch;
   white-space: normal;
 }
 
-/* Sits at the end of the sentence it belongs to, so the line reads as one
-   thought and the button is where the eye already is. */
 .hud-advice-show {
   margin-left: var(--space-2);
   padding: 1px var(--space-2);
   vertical-align: baseline;
 }
-
-/* ---- Camera ----------------------------------------------------------- */
 
 .hud-camera {
   display: flex;
@@ -602,8 +517,6 @@ input[type='checkbox'] {
   font-family: var(--font-num);
   letter-spacing: var(--track-label);
 }
-
-/* ---- Resort ----------------------------------------------------------- */
 
 .hud-resort {
   display: flex;
@@ -641,7 +554,6 @@ input[type='checkbox'] {
   font-size: var(--size-body);
 }
 
-/* Folded away by default: the settings most resorts never need touched. */
 .hud-resort-advanced > summary {
   cursor: pointer;
   font-size: var(--size-label);
@@ -703,7 +615,6 @@ input[type='checkbox'] {
   height: 30px;
 }
 
-/* The one button that makes a resort: terracotta, like the roofs it lays. */
 .hud-resort-go {
   border-color: rgb(0 0 0 / 65%);
   background-image: var(--grain), linear-gradient(180deg, var(--terracotta-lit), var(--terracotta));
@@ -716,11 +627,6 @@ input[type='checkbox'] {
   background-color: rgb(255 255 255 / 12%);
   color: var(--text-on-accent);
 }
-
-/* ===========================================================================
-   The inspector: hangs off the left edge, opposite the build palette, so the
-   two never overlap
-   ======================================================================== */
 
 .hud-inspect {
   position: absolute;
@@ -766,8 +672,6 @@ input[type='checkbox'] {
   gap: var(--space-2);
 }
 
-/* The five needs as bars: a groove with the met share filled, so a guest can be
-   read at a glance and the number is in the label for anyone who cannot. */
 .hud-needs {
   display: grid;
   gap: var(--space-1);
@@ -800,17 +704,11 @@ input[type='checkbox'] {
   background: linear-gradient(180deg, var(--stucco), var(--sand));
 }
 
-/* ===========================================================================
-   The build palette
-   ======================================================================== */
-
 .hud-palette {
   position: absolute;
   top: calc(var(--bar-h) + var(--space-3));
   right: var(--space-3);
   width: var(--palette-w);
-  /* As tall as it needs to be and no taller, so folding every shelf away leaves
-     a chip at the corner rather than an empty column down the screen. */
   max-height: calc(100% - var(--bar-h) - var(--space-3) * 2);
   display: flex;
   flex-direction: column;
@@ -844,7 +742,6 @@ input[type='checkbox'] {
   width: 100%;
 }
 
-/* What the pointer is holding, and the way to put it down. */
 .hud-palette-armed {
   display: flex;
   align-items: center;
@@ -877,12 +774,7 @@ input[type='checkbox'] {
   color: var(--text-on-accent);
 }
 
-/* A tray recessed into the slab, so the shelves read as objects set into the
-   panel rather than printed on it — and so a sticky heading has one flat colour
-   to sit on while the tiles scroll under it. */
 .hud-palette-shelves {
-  /* Shrinks to its shelves, and only starts scrolling once they outgrow the
-     height the panel is allowed. */
   flex: 0 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -897,15 +789,13 @@ input[type='checkbox'] {
   color: var(--text-faint);
 }
 
-/* ---- Shelves ---------------------------------------------------------- */
-
 .build-group-head {
   position: sticky;
   top: 0;
   z-index: 1;
   margin: 0;
-  /* Its own padding rather than the tray's, so the heading covers the gap above
-     the tiles instead of letting them slide out from under it. */
+  /* Its own padding rather than the tray's, so the sticky heading covers the gap
+     above the tiles. */
   padding: var(--space-2) 0;
   background: var(--tray);
 }
@@ -946,8 +836,6 @@ input[type='checkbox'] {
   padding-bottom: var(--space-2);
 }
 
-/* ---- One object ------------------------------------------------------- */
-
 .build-tile {
   position: relative;
   display: block;
@@ -977,14 +865,11 @@ input[type='checkbox'] {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* The previews centre the object in a square; lifting it clears the name
-     plate without cropping anything that is actually drawn. The zoom is a token
-     so the hover state can lean on it without reaching through the tile. */
+  /* Lifted to clear the name plate; the zoom is a token so the hover state can lean on it. */
   transform: translateY(-7%) scale(var(--art-zoom));
   transition: transform var(--quick);
 }
 
-/* No preview rendered yet: the type's own dominant colour stands in. */
 .build-tile-swatch {
   position: absolute;
   inset: 22%;
@@ -1023,11 +908,6 @@ input[type='checkbox'] {
   color: var(--foliage);
 }
 
-/* ---- One brush -------------------------------------------------------- */
-
-/* A brush has no model and so no preview: the tile is a glyph on the resort's
-   own stone instead of a picture, which is also what tells the ground apart from
-   the catalogue at a glance. */
 .terrain-tile {
   background: linear-gradient(160deg, var(--stone-700), var(--stone-950));
 }
@@ -1038,7 +918,6 @@ input[type='checkbox'] {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Lifted off the name plate the same way a preview is. */
   padding-bottom: 18%;
   font-size: 26px;
   line-height: 1;
@@ -1062,8 +941,6 @@ input[type='checkbox'] {
   --art-zoom: 1.1;
 }
 
-/* Armed: lit from the resort's own terracotta, so the tile you are holding is
-   the only warm thing on the shelf. */
 .build-tile[aria-pressed='true'] {
   border-color: var(--terracotta);
   box-shadow:
@@ -1076,10 +953,6 @@ input[type='checkbox'] {
   background: linear-gradient(180deg, rgb(122 58 30 / 0%), rgb(122 58 30 / 92%) 55%);
   color: #fff3e6;
 }
-
-/* ===========================================================================
-   The one thing on the overlay that means nothing else on it is true
-   ======================================================================== */
 
 .hud-error {
   position: absolute;

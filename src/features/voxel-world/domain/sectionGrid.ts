@@ -1,16 +1,3 @@
-/**
- * Pure voxel-space arithmetic mirroring DVE's sector/section subdivision.
- *
- * DVE stores voxels in sectors, which are subdivided into cubic sections; the
- * mesher runs per section. These helpers work out which sectors have to exist
- * and which sections have to be meshed, without touching the engine.
- *
- * Both walk the packed positions of three quarters of a million writes, so
- * neither builds anything per write: a volume is named by a number rather than
- * an origin object and a string key, and a section's writes are a view of
- * indices rather than an array of objects.
- */
-
 export interface VolumeSize {
   readonly x: number;
   readonly y: number;
@@ -25,19 +12,12 @@ export interface VoxelOrigin {
 
 export interface SectionBucket {
   readonly origin: VoxelOrigin;
-  /** Indices of the writes this section owns, in the order they were written. */
   readonly indices: Int32Array;
 }
 
 const floorDiv = (value: number, size: number): number => Math.floor(value / size);
 
-/**
- * How far from zero a volume index may be before it cannot be named by one
- * number. Each axis is offset by this and given 17 bits, so the three together
- * take 51 and stay exact in a double. At DVE's smallest section that is a world
- * a million voxels across, which is a hundred times the one the scratch layout
- * paints into.
- */
+// Each axis is offset by 2^16 and given 17 bits, so the 51-bit key stays exact in a double.
 const KEY_OFFSET = 1 << 16;
 const KEY_SPAN = 2 ** 17;
 
@@ -56,10 +36,7 @@ function assertPositive(size: VolumeSize): void {
   }
 }
 
-/**
- * Walks packed x, y, z positions, handing each write's index to `visit` along
- * with the key of the volume that holds it and that volume's index on each axis.
- */
+// Allocates nothing per write: this walks about three quarters of a million of them.
 function forEachVolume(
   positions: Int32Array,
   size: VolumeSize,
@@ -74,7 +51,6 @@ function forEachVolume(
   }
 }
 
-/** Distinct volume origins touched by the given positions, in first-touch order. */
 export function originsFor(positions: Int32Array, size: VolumeSize): readonly VoxelOrigin[] {
   const seen = new Set<number>();
   const origins: VoxelOrigin[] = [];
@@ -86,14 +62,7 @@ export function originsFor(positions: Int32Array, size: VolumeSize): readonly Vo
   return origins;
 }
 
-/**
- * Groups writes by the section that owns them, so each section is loaded once.
- *
- * A counting sort: one pass finds each write's section and how many writes each
- * section holds, the second drops every index into its section's slot of one
- * shared array. Sections come out in first-touch order and the writes inside
- * each in the order they were made, which is the order they are painted in.
- */
+// A counting sort, so the writes inside each section keep the order they are painted in.
 export function groupBySection(
   positions: Int32Array,
   sectionSize: VolumeSize,

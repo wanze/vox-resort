@@ -1,8 +1,3 @@
-/**
- * Oak: the big broadleaf shade tree. A heavy trunk, four boughs, and one round
- * crown lumpy enough to read as leaves rather than as a ball. 32x32 footprint, a
- * 2x2 tile, about 12 m tall.
- */
 import { bed, BARK, crown, LEAF, limb, plinth } from './foliage.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
@@ -21,8 +16,6 @@ export default defineModel({
 
     limb(b, [15, 2, 16], [16, 21, 15], 3.0, 2.0, bark);
 
-    // Boughs that carry the crown out past the trunk, so the canopy has an
-    // underside to stand in rather than sitting on the trunk like a hat.
     for (const [dx, dy, dz] of [
       [-9, 30, -5],
       [9, 29, -7],
@@ -32,7 +25,6 @@ export default defineModel({
       limb(b, [16, 19, 15], [16 + dx, dy, 15 + dz], 1.8, 0.9, bark);
     }
 
-    // One broad dome, then four lumps that break its outline.
     crown(b, 16, 34, 15, 14, 10, 14, { palette: FOLIAGE, limit: N, floor: 22, gap: 0.08, salt: 2 });
     crown(b, 8, 36, 11, 8, 7, 8, { palette: FOLIAGE, limit: N, floor: 24, gap: 0.12, salt: 13 });
     crown(b, 24, 34, 19, 8, 7, 8, { palette: FOLIAGE, limit: N, floor: 24, gap: 0.12, salt: 31 });

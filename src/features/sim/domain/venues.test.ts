@@ -53,8 +53,6 @@ describe('venuesOn', () => {
   });
 
   it('puts the bakery door in world voxels, on the shopfront it was drawn in', () => {
-    // The door is declared a column into the doorway on the +z front, and an
-    // unturned bakery is the model's own voxels plus the placement's corner.
     const venue = only([at('bakery#0', 'bakery', 4, 6, 2)]);
     expect(venue.doors).toEqual([{ x: 4 * TILE_VOXELS + 8, z: 6 * TILE_VOXELS + 18, facing: 0 }]);
   });
@@ -62,8 +60,6 @@ describe('venuesOn', () => {
   it('turns the door with the bakery, onto the side the shopfront now faces', () => {
     const venue = only([{ ...at('bakery#0', 'bakery', 4, 6, 2), rotation: 1 }]);
     const [door] = venue.doors;
-    // A quarter turn swings +z round to +x: the door is on the east half of
-    // the footprint now, and walked out of eastwards.
     expect(door!.facing).toBe(1);
     expect(door!.x - 4 * TILE_VOXELS).toBeGreaterThan(TILE_VOXELS);
     expect(door).toEqual({ x: 4 * TILE_VOXELS + 18, z: 6 * TILE_VOXELS + 32 - 8, facing: 1 });
@@ -121,8 +117,6 @@ describe('shelterOf', () => {
   });
 
   it('reads a venue that was built before there was any weather as covered', () => {
-    // The fixtures every test above this was written with declare no shelter at
-    // all, and the fallback is what keeps them meaning what they meant.
     const bare = { ...only([at('bakery#0', 'bakery', 0, 0, 2)]) } as Venue;
     delete (bare as { shelter?: unknown }).shelter;
     expect(shelterOf(bare)).toBe('covered');

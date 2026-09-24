@@ -4,10 +4,6 @@ import { LANE, MAX_SIDE, proximityFor, steerWalkers, type Walkers } from './avoi
 import { sandGridFor } from './sandGrid';
 import { shoreFor } from '../../layout/domain/shoreline';
 
-/**
- * A handful of walkers on straight lines, moved by hand the way `crowd.ts`
- * moves them: along their line at `speed · pace`, stood `side` to the right.
- */
 interface Line {
   readonly x: number;
   readonly z: number;
@@ -32,7 +28,6 @@ function walkersOn(lines: readonly Line[], lane: number = LANE.paved) {
     ...proximityFor(count),
   };
   const along = new Float32Array(count);
-  /** Steps everybody on by `dt`, and reports the closest two people came. */
   const step = (dt: number): number => {
     steerWalkers(walkers, dt, null);
     for (let i = 0; i < count; i++) {
@@ -55,7 +50,6 @@ function walkersOn(lines: readonly Line[], lane: number = LANE.paved) {
   return { walkers, along, step };
 }
 
-/** Runs for `seconds` at sixty frames and hands back the closest approach. */
 const closestOver = (step: (dt: number) => number, seconds: number): number => {
   let closest = Infinity;
   for (let frame = 0; frame < seconds * 60; frame++) closest = Math.min(closest, step(1 / 60));
@@ -80,9 +74,7 @@ describe('steerWalkers', () => {
       { x: 0, z: 8, dirX: 1, dirZ: 0, speed: 5.6 },
       { x: 60, z: 8, dirX: -1, dirZ: 0, speed: 5.6 },
     ]);
-    // Without avoidance they would meet dead centre, at zero apart.
     expect(closestOver(step, 12)).toBeGreaterThan(3);
-    // And both got by: each is past where the other started from.
     expect(walkers.x[0]!).toBeGreaterThan(60);
     expect(walkers.x[1]!).toBeLessThan(0);
   });
@@ -93,7 +85,6 @@ describe('steerWalkers', () => {
       { x: 10, z: 8, dirX: 1, dirZ: 0, speed: 4 },
     ]);
     expect(closestOver(step, 20)).toBeGreaterThan(3);
-    // Overtaken, not merely followed: there was room to step aside.
     expect(along[0]!).toBeGreaterThan(along[1]! + 10);
   });
 
@@ -144,8 +135,6 @@ describe('steerWalkers', () => {
       tilesZ: 20,
       shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
     })!;
-    // Walking east along z = 200, with a wall of loungers along both sides of
-    // the line, and somebody coming the other way.
     const z = 13 * TILE_VOXELS;
     const sand = sandGridFor({
       shore,
@@ -169,7 +158,6 @@ describe('steerWalkers', () => {
       ...proximityFor(2),
     };
     for (let frame = 0; frame < 60; frame++) steerWalkers(walkers, 1 / 60, sand);
-    // Blocked either side, so nobody moved off the line: they slow instead.
     expect(Array.from(walkers.side)).toEqual([0, 0]);
     expect(walkers.pace[0]!).toBeLessThan(1);
   });

@@ -1,11 +1,3 @@
-/**
- * Blossom tree: a small ornamental with a slender forked trunk under a cloud of
- * pink flower, and petals fallen on the earth around it. 16x16 footprint, a 1x1
- * tile, about 6 m tall.
- *
- * The pink is the flower bed's, plus a lighter and a deeper tone for depth: the
- * point of the tree is the one splash of colour in a street of green.
- */
 import { bed, BARK, crown, LEAF, limb, noise, plinth } from './foliage.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
@@ -33,7 +25,6 @@ export default defineModel({
     ] as const;
     for (const [fx, fy, fz] of boughs) limb(b, [7, 10, 8], [fx, fy, fz], 1.0, 0.6, bark);
 
-    // A cloud of blossom, gappy enough to see the branches through it.
     for (const [cx, cy, cz, salt] of [
       [3, 18, 6, 4],
       [12, 17, 7, 14],
@@ -44,7 +35,6 @@ export default defineModel({
       crown(b, cx, cy, cz, 5, 4, 5, { palette: PETAL, limit: N, floor: 11, gap: 0.2, salt });
     }
 
-    // A few green leaves buried in the flower, so it is a tree and not candy.
     for (let y = 13; y <= 22; y++) {
       for (let z = 1; z <= 14; z++) {
         for (let x = 1; x <= 14; x++) {
@@ -55,7 +45,6 @@ export default defineModel({
       }
     }
 
-    // Petals on the ground under the canopy.
     for (let z = 2; z <= 13; z++) {
       for (let x = 2; x <= 13; x++) {
         if (noise(x, 0, z, 83) > 0.16) continue;

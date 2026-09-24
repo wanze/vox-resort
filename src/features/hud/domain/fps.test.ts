@@ -58,8 +58,7 @@ describe('sampleFrame', () => {
   });
 
   it('ignores a frame with no timestamp', () => {
-    // Three.js calls the animation loop once with `undefined` before the first
-    // real frame; that must not poison the running average.
+    // Three.js calls the animation loop once with `undefined` before the first real frame.
     const first = sampleFrame(createFpsState(), undefined as unknown as number);
     expect(first.state.lastFrameMs).toBeNull();
     const timestamps = Array.from({ length: 61 }, (_, index) => index * (1000 / 60));

@@ -8,7 +8,6 @@ const MOORINGS: Mooring[] = [
   { x: 168, z: 520 },
 ];
 
-/** A bay with a coast that bulges, so the landward limit is never a straight line. */
 const GROUND: SailingGround = {
   westX: 0,
   eastX: 400,
@@ -18,7 +17,6 @@ const GROUND: SailingGround = {
 
 const WATERLINE = 0.1;
 
-/** The hire hut, standing on the sand behind the bay's western end. */
 const RENTAL: Rental = { x: 120, z: 500 };
 
 const bay = (craft = 8, seed = 11): Flotilla =>
@@ -32,7 +30,6 @@ const bay = (craft = 8, seed = 11): Flotilla =>
     seed,
   });
 
-/** A bay with a hire trade on it: the same craft, plus the rental's pedalos. */
 const hiring = (hire = 4, craft = 4, seed = 11): Flotilla =>
   createFlotilla({
     moorings: MOORINGS,
@@ -45,16 +42,13 @@ const hiring = (hire = 4, craft = 4, seed = 11): Flotilla =>
     seed,
   });
 
-/** The indices of the rental's own boats, which come last. */
 const hireSlots = (flotilla: Flotilla): number[] =>
   Array.from({ length: flotilla.count }, (_, index) => index).filter(
     (index) => flotilla.hired[index] === 1,
   );
 
-/** Runs the bay forward at a steady frame rate. */
 function run(flotilla: Flotilla, seconds: number, step = 0.05): void {
-  // Counted rather than accumulated, so two runs at different frame rates cover
-  // the same span of seconds and the comparison below is about the code.
+  // Counted rather than accumulated, so runs at different frame rates cover the same span.
   const ticks = Math.round(seconds / step);
   for (let tick = 0; tick < ticks; tick++) stepFlotilla(flotilla, step, GROUND);
 }
@@ -128,8 +122,6 @@ describe('stepFlotilla', () => {
       const x = flotilla.x[index]!;
       expect(x).toBeGreaterThanOrEqual(GROUND.westX);
       expect(x).toBeLessThanOrEqual(GROUND.eastX);
-      // The landward limit is the line of buoys, so this is also the check that
-      // nothing is sailing through the swimming area.
       expect(flotilla.z[index]).toBeGreaterThanOrEqual(GROUND.landwardZ(x));
       expect(flotilla.z[index]).toBeLessThanOrEqual(GROUND.seawardZ);
     }
@@ -159,9 +151,7 @@ describe('stepFlotilla', () => {
 });
 
 describe('steering round things', () => {
-  /** A pier out from the coast, reaching well past the landward limit. */
   const PIER = { minX: 184, maxX: 200, minZ: 480, maxZ: 620 };
-  /** Buoys, rowing boats and sailing boats, at roughly their real sizes. */
   const RADII = [1.5, 8, 10];
 
   const crowded = (craft: number, seed: number): Flotilla =>
@@ -205,10 +195,7 @@ describe('steering round things', () => {
 
   it('keeps craft off the buoys and off each other', () => {
     const flotilla = crowded(30, 3);
-    // A few seconds to sort out craft that were dropped on top of each other.
     run(flotilla, 5);
-    // The worst overlap over the run, as a share of how far apart the two should
-    // be: asserted once, because 6 000 ticks of every pair is a lot of expects.
     let worst = Infinity;
     for (let tick = 0; tick < 6000; tick++) {
       stepFlotilla(flotilla, 0.1, GROUND);
@@ -232,8 +219,7 @@ describe('steering round things', () => {
       const x = flotilla.x[index]!;
       expect(x).toBeGreaterThanOrEqual(GROUND.westX);
       expect(x).toBeLessThanOrEqual(GROUND.eastX);
-      // A craft clamped onto the limit is stored as a 32-bit float, which can
-      // round it a hair to landward of the 64-bit limit it was clamped to.
+      // Stored as a 32-bit float, which can round a hair landward of the 64-bit limit.
       expect(flotilla.z[index]).toBeGreaterThanOrEqual(GROUND.landwardZ(x) - 1e-3);
       expect(flotilla.z[index]).toBeLessThanOrEqual(GROUND.seawardZ);
     }
@@ -276,8 +262,6 @@ describe('poseOf', () => {
   });
 
   it('is the same swell at any frame rate', () => {
-    // Read off an accumulated clock rather than integrated, so a slow machine
-    // and a fast one see the same water.
     const coarse = bay();
     const fine = bay();
     run(coarse, 6, 0.1);
@@ -300,7 +284,6 @@ describe('the rental’s own boats', () => {
     const hire = hireSlots(flotilla);
     expect(hire).toHaveLength(4);
     for (const index of hire) expect(flotilla.variant[index]).toBe(3);
-    // Nothing the rental does not own goes home.
     for (let index = 0; index < MOORINGS.length; index++) expect(flotilla.hired[index]).toBe(0);
   });
 
@@ -308,14 +291,11 @@ describe('the rental’s own boats', () => {
     const flotilla = hiring(4, 0);
     const hire = hireSlots(flotilla);
     const columns = hire.map((index) => flotilla.berthX[index]!);
-    // Centred on the hut and evenly spaced.
     expect((Math.min(...columns) + Math.max(...columns)) / 2).toBeCloseTo(RENTAL.x, 5);
     const steps = new Set(columns.slice(1).map((x, index) => Math.round(x - columns[index]!)));
     expect(steps.size).toBe(1);
     for (const index of hire) {
-      // Seaward of the limit at its own column, so a moored boat is legally afloat.
       expect(flotilla.berthZ[index]).toBeGreaterThan(GROUND.landwardZ(flotilla.berthX[index]!));
-      // And lying bow to the hut, which is bow to the beach.
       expect(Math.abs(flotilla.berthHeading[index]!)).toBeGreaterThan(Math.PI / 2);
     }
   });
@@ -334,7 +314,6 @@ describe('the rental’s own boats', () => {
 });
 
 describe('a hire boat’s round trip', () => {
-  /** Runs the bay and reports, per hire boat, how far out it got and whether it tied up. */
   const trips = (
     flotilla: Flotilla,
     seconds: number,
@@ -365,16 +344,12 @@ describe('a hire boat’s round trip', () => {
 
   it('takes every boat out and brings every one of them home again', () => {
     for (const trip of trips(hiring(6, 0, 5), 600)) {
-      // Out: it gets well clear of the hut.
       expect(trip.away).toBeGreaterThan(60);
-      // And home: it lay at its berth at the end of a hire, more than once.
       expect(trip.ties).toBeGreaterThanOrEqual(2);
     }
   });
 
   it('keeps its boats in sight of the hut rather than letting them cross the bay', () => {
-    // The reach is what makes a rental read as a rental: a cluster of pedalos
-    // off the hire beach, not six boats scattered over a kilometre of water.
     for (const trip of trips(hiring(6, 0, 5), 900)) {
       expect(trip.away).toBeLessThan(220);
     }
@@ -388,7 +363,6 @@ describe('a hire boat’s round trip', () => {
       stepFlotilla(flotilla, 0.1, GROUND);
       const age = flotilla.age[boat!]!;
       if (age < 0) {
-        // Tied up: exactly on its berth, and not drifting off it.
         expect(flotilla.x[boat!]).toBe(flotilla.berthX[boat!]);
         expect(flotilla.z[boat!]).toBe(flotilla.berthZ[boat!]);
         expect(flotilla.heading[boat!]).toBe(flotilla.berthHeading[boat!]);
@@ -396,7 +370,6 @@ describe('a hire boat’s round trip', () => {
       } else if (age < 100) seen.add('out');
       else seen.add('home');
     }
-    // The whole cycle, more than once over ten minutes.
     expect([...seen].toSorted()).toEqual(['home', 'out', 'tied']);
   });
 

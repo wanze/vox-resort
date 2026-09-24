@@ -5,15 +5,11 @@ import type { Weather } from '../../sim/domain/weather';
 
 export interface RenderStatsProps {
   readonly stats: ShowcaseStats | null;
-  /** Filled with the node the render loop writes the live lamp count to. */
   readonly activeLightsElement: RefObject<HTMLSpanElement | null>;
-  /** Filled with the node the render loop writes what it actually drew to. */
   readonly drawnElement: RefObject<HTMLSpanElement | null>;
-  /** Filled with the nodes the render loop writes what the frame cost to. */
   readonly frameCostElements: FrameCostElements;
 }
 
-/** The nodes the render loop writes a frame's cost to; see `hudOverlay.ts`. */
 export interface FrameCostElements {
   readonly cpu: RefObject<HTMLSpanElement | null>;
   readonly detail: RefObject<HTMLSpanElement | null>;
@@ -22,13 +18,6 @@ export interface FrameCostElements {
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
-/**
- * What each kind of day is called, and what it does, in the panel's own words.
- *
- * Here rather than in `sim/domain/weather.ts` for the reason `InspectPanel.tsx`
- * keeps its own `NEED_LABELS`: the domain should not have to be edited to change
- * a phrase.
- */
 const WEATHER_LABELS: { readonly [kind in Weather]: string } = {
   clear: 'Clear',
   rain: 'Rain',
@@ -36,7 +25,6 @@ const WEATHER_LABELS: { readonly [kind in Weather]: string } = {
   heatwave: 'Heatwave',
 };
 
-/** What today's weather is doing to the resort, for the row's note. */
 const WEATHER_NOTES: { readonly [kind in Weather]: string } = {
   clear: 'everywhere open',
   rain: 'everything without a roof is shut',
@@ -46,20 +34,13 @@ const WEATHER_NOTES: { readonly [kind in Weather]: string } = {
 
 const formatMegabytes = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-/**
- * The lamp row's tail: how many lamps could burn, and how many cannot.
- *
- * A lamp built beyond the ground the light grid was sized to cover has nowhere
- * in the volume to go, so it stays dark. It is worth saying out loud rather than
- * leaving the reader to wonder why the total stopped moving.
- */
+// A lamp beyond the ground the light grid covers stays dark; say so rather than let the total silently stop.
 function lampTotals(stats: ShowcaseStats): string {
   const outside = stats.lightCount - stats.litLightCount;
   const note = outside > 0 ? ` (${formatNumber(outside)} outside the grid)` : '';
   return ` of ${formatNumber(stats.litLightCount)}${note}`;
 }
 
-/** Everything the renderer knows about the frame it just drew. */
 export function RenderStats({
   stats,
   activeLightsElement,

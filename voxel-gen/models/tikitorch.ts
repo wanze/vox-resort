@@ -1,9 +1,3 @@
-/**
- * Single bamboo tiki torch: a thin vertical bamboo pole with a lit flame on top
- * and a small round stone base, on a low base. 16x16x10 (a 2 m torch on a 4 m
- * tile), a 1x1 tile.
- * Radially symmetric.
- */
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
@@ -11,7 +5,7 @@ export default defineModel({
   label: 'Tiki Torch',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
-  // The flame is drawn unlit so it still burns after dark, and throws a light.
+  // Drawn unlit so the flame still burns after dark.
   emissive: [0xf2c33c, 0xef7a2f, 0xe0473f],
   lights: [{ x: 7, y: 8, z: 7, color: 0xff9a3c, intensity: 40, distance: 30 }],
   build: (b: VoxelBuilder) => {
@@ -33,7 +27,6 @@ export default defineModel({
 
     const N = 15;
 
-    // low base + darker lip
     box(0, N, 0, 1, 0, N, C.base);
     for (let x = 0; x <= N; x++) {
       set(x, 1, 0, C.baseDark);
@@ -44,7 +37,6 @@ export default defineModel({
       set(N, 1, z, C.baseDark);
     }
 
-    // small round stone base
     const cx = 7;
     const cz = 7;
     for (let x = 4; x <= 11; x++)
@@ -53,11 +45,9 @@ export default defineModel({
         if (d <= 3.6) box(x, x, 2, 3, z, z, d > 2.6 ? C.stoneDark : C.stone);
       }
 
-    // bamboo pole with a segment ring (a garden torch stands 1.5-2 m, not 3)
     box(cx, cx + 1, 4, 5, cz, cz + 1, C.bamboo);
     box(cx, cx + 1, 5, 5, cz, cz + 1, C.bambooDark);
 
-    // bowl + flame on top
     box(cx - 1, cx + 2, 6, 6, cz - 1, cz + 2, C.bowl);
     box(cx, cx + 1, 7, 7, cz, cz + 1, C.flameC);
     box(cx, cx + 1, 8, 8, cz, cz + 1, C.flameB);

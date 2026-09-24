@@ -6,7 +6,6 @@ import { hull, pedalo, PEDALO_BEAM, PEDALO_LENGTH } from './boat.ts';
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
 
-/** The voxels painted in one layer, as a set of "x,z". */
 const layer = (b: VoxelBuilder, y: number): Set<string> => {
   const cells = new Set<string>();
   for (const key of b.voxels.keys()) {
@@ -20,11 +19,9 @@ describe('hull', () => {
   it('builds an open boat: a wet bottom, a floor, two sides and a gunwale', () => {
     const b = new VoxelBuilder();
     expect(hull(b, { x: 0, z: 0, y: 0, length: 16, beam: 3 })).toBe(4);
-    // Amidships, across the keel: bottom, floor and open water above the floor.
     expect(at(b, 0, 0, 8)).toBe(PALETTE.teak.deep);
     expect(at(b, 0, 1, 8)).toBe(PALETTE.teak.shade);
     expect(at(b, 0, 2, 8)).toBeUndefined();
-    // The sides, capped a lighter tone so the rim reads from above.
     expect(at(b, 3, 2, 8)).toBe(PALETTE.teak.base);
     expect(at(b, 3, 3, 8)).toBe(PALETTE.teak.light);
     expect(at(b, 4, 1, 8)).toBeUndefined();
@@ -33,8 +30,6 @@ describe('hull', () => {
   it('closes the transom and the stem across their whole width', () => {
     const b = new VoxelBuilder();
     hull(b, { x: 0, z: 0, y: 0, length: 16, beam: 3 });
-    // A hull open at the ends is two planks; the first and last stations are
-    // filled right across.
     expect(at(b, 0, 2, 0)).toBe(PALETTE.teak.base);
     expect(at(b, 0, 2, 15)).toBe(PALETTE.teak.base);
   });
@@ -68,7 +63,6 @@ describe('pedalo', () => {
     for (const side of [-1, 1]) {
       expect(at(b, side * PEDALO_BEAM, 2, 4)).toBe(PALETTE.stucco.light);
     }
-    // The well between the floats sits a course lower than their decks.
     expect(at(b, 0, 1, 5)).toBe(PALETTE.stucco.light);
     expect(at(b, 0, 2, 5)).toBeUndefined();
   });

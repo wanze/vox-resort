@@ -75,8 +75,6 @@ describe('parasol', () => {
   });
 
   it('keeps the canopy one plane however far it reaches', () => {
-    // The whole reason this is a part: a dome of stepped rings is a shape
-    // nobody reads from above and a pattern the mesher cannot merge.
     const b = new VoxelBuilder();
     parasol(b, { x: 20, z: 20, y: 0, height: 5, reach: 4 });
     expect(at(b, 16, 5, 16)).toBe(PALETTE.amber.base);

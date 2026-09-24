@@ -5,17 +5,13 @@ describe('ratingFor', () => {
   it('gives five stars to a resort that is happy and housed', () => {
     const rating = ratingFor({ happiness: 1, present: 600, housed: 600, cleanliness: 1 });
     expect(rating).toEqual({ stars: 5, happiness: 1, housed: 1, cleanliness: 1 });
-    // Nothing handed in is a spotless plot, which is what one with nothing built
-    // on it is and what every fixture written before plan 022 assumed.
     expect(ratingFor({ happiness: 1, present: 600, housed: 600 })).toEqual(rating);
   });
 
   it('gives a miserable resort next to nothing', () => {
     const rating = ratingFor({ happiness: 0, present: 600, housed: 0, cleanliness: 0 });
     expect(rating.stars).toBe(0);
-    // Housing them all does not rescue it: happiness carries most of the weight.
     expect(ratingFor({ happiness: 0, present: 600, housed: 600 }).stars).toBeLessThan(2);
-    // Nor does pleasing them all rescue a resort with nowhere to sleep.
     const homeless = ratingFor({ happiness: 1, present: 600, housed: 0 });
     expect(homeless.stars).toBeLessThan(5);
     expect(homeless.stars).toBeGreaterThan(3);
@@ -26,13 +22,10 @@ describe('ratingFor', () => {
     expect(rating.stars).toBe(EMPTY_STARS);
     expect(rating.happiness).toBe(0);
     expect(rating.housed).toBe(0);
-    // The dirt is reported as it stands either way: a plot can be filthy with
-    // nobody on it, and the stars of an empty one are not read off it.
     expect(rating.cleanliness).toBe(1);
     expect(ratingFor({ happiness: null, present: 0, housed: 0, cleanliness: 0.4 }).stars).toBe(
       EMPTY_STARS,
     );
-    // Or it could never fill: arrivals follow the rating.
     expect(arrivalsFor(rating, 100)).toBeGreaterThan(0);
   });
 
@@ -54,9 +47,6 @@ describe('ratingFor', () => {
     const clean = ratingFor({ ...shared, cleanliness: 1 });
     const filthy = ratingFor({ ...shared, cleanliness: 0 });
     expect(filthy.stars).toBeLessThan(clean.stars);
-    // And the term is the smallest of the three: dirt already reaches the rating
-    // through the guests who walked further to get away from it, and counting it
-    // twice at full weight would charge the player twice for one venue.
     const unhappy = ratingFor({ ...shared, happiness: 0, cleanliness: 1 });
     expect(clean.stars - filthy.stars).toBeLessThan(clean.stars - unhappy.stars);
   });
@@ -87,7 +77,6 @@ describe('arrivalsFor', () => {
     }
     expect(arrivalsFor(best, 0)).toBe(0);
     expect(arrivalsFor(best, -5)).toBe(0);
-    // A plot down to its last few beds still sees a coach.
     expect(arrivalsFor(best, 3)).toBe(1);
   });
 

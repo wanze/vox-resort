@@ -1,24 +1,6 @@
-/**
- * Meshes the catalogue, in a worker when the browser allows one.
- *
- * The catalogue is meshed exactly once, however large the resort is — that is
- * what makes instancing pay — but "once" still costs about 1.2 seconds of DVE
- * and a further 0.2 running the greedy merge over its output, and on the main
- * thread that is 1.4 seconds in which the page does not respond, does not paint
- * and does not answer a click.
- *
- * None of that work touches the DOM or the renderer: it reads plain numbers and
- * writes typed arrays. So it runs in a worker and the arrays are transferred
- * back, leaving the main thread free to show a loading state that actually
- * animates. The main-thread path is kept as a fallback, because a worker can
- * fail to start for reasons that have nothing to do with this code, and a resort
- * that renders late is better than one that does not render.
- */
-
 import type { MeshCatalogueRequest, MeshCatalogueResult, WireResponse } from './meshJob';
 import { meshOnThisThread, toWire } from './meshJob';
 
-/** How long to wait for the worker before giving up and meshing here instead. */
 const WORKER_TIMEOUT_MS = 30_000;
 
 function runInWorker(request: MeshCatalogueRequest): Promise<MeshCatalogueResult> {
@@ -54,10 +36,8 @@ function runInWorker(request: MeshCatalogueRequest): Promise<MeshCatalogueResult
   });
 }
 
-/**
- * Meshes the catalogue off the main thread, falling back to the main thread if
- * the worker cannot be started or does not answer.
- */
+// Meshing takes about 1.4 s, so it runs in a worker to keep the page responsive.
+// The main-thread fallback exists because a worker can fail to start.
 export async function meshCatalogue(
   request: MeshCatalogueRequest,
   options: { readonly forceMainThread?: boolean } = {},

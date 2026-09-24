@@ -1,20 +1,9 @@
-/**
- * Where a building's declared doors are on the plot, and which tile each one
- * opens onto.
- *
- * Two questions with one answer, asked from two sides: the layout wants to know
- * whether a door will open onto paving before it settles which way a building
- * stands, and the simulation wants the walk-graph nodes on that same tile to
- * queue people at. A rule written twice would be a door the layout turned to
- * face a path and the simulation then looked for somewhere else.
- *
- * See `ModelDoor` in `voxel-gen/voxelgen.ts` for what the art declares.
- */
+// Shared by the layout and the simulation, so the door the layout turned to face a
+// path is the same one the simulation queues people at.
 
 import { TILE_VOXELS, type ModelDoor } from '../../../../voxel-gen/voxelgen.ts';
 import { rotateDoors, type Rotation } from './rotation';
 
-/** The tiles something claims on the grid, already turned. */
 interface Footprint {
   readonly tileX: number;
   readonly tileZ: number;
@@ -22,7 +11,7 @@ interface Footprint {
   readonly tilesZ: number;
 }
 
-/** One step on the tile grid per facing, in the `+z, +x, -z, -x` sequence. */
+// Indexed by facing: +z, +x, -z, -x.
 const STEP = [
   [0, 1],
   [1, 0],
@@ -30,14 +19,8 @@ const STEP = [
   [-1, 0],
 ] as const;
 
-/**
- * A model's declared doors in world voxels, turned the way the placement is.
- *
- * `width` and `depth` are the model's size **before** the turn, because that is
- * what `rotatePoint` measures a point against - and a placement's own `width`
- * and `depth` are already turned. Hand those in instead and every door on an
- * odd turn of a building that is not square lands in the wrong corner.
- */
+// width and depth are the size before the turn; a placement's own are already
+// turned and would put doors in the wrong corner on odd turns.
 export function placedDoors(
   placement: { readonly x: number; readonly z: number; readonly rotation: Rotation },
   declared: readonly ModelDoor[],
@@ -51,14 +34,8 @@ export function placedDoors(
   }));
 }
 
-/**
- * The first tile outside the footprint, straight out from a door in world voxels.
- *
- * The door's own column is clamped onto the footprint first, so a door declared
- * a voxel over the edge - or anywhere across a deep forecourt - comes out on
- * the same tile. What decides the tile is which side the door is on and how far
- * along that side, and nothing else.
- */
+// The door's column is clamped onto the footprint first, so a door past the edge
+// or across a deep forecourt lands on the same tile.
 export function doorStepTile(
   footprint: Footprint,
   door: ModelDoor,
@@ -73,7 +50,6 @@ export function doorStepTile(
   };
 }
 
-/** The row or column just past the footprint on the side a step points to. */
 const outside = (step: number, start: number, length: number): number =>
   step > 0 ? start + length : start - 1;
 

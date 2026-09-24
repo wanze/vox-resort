@@ -7,7 +7,6 @@ import { poolWater } from './pool.ts';
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
 
-/** A deck four layers deep, which is what the swimming pool sinks its basins into. */
 const deckOf = (w = 16, d = 16): VoxelBuilder => {
   const b = new VoxelBuilder();
   plinth(b, { x: 0, z: 0, w, d, height: 4 });
@@ -21,21 +20,16 @@ describe('poolWater', () => {
     expect(surface).toBe(2);
     expect(at(b, 7, 2, 7)).toBe(PALETTE.water.base);
     expect(at(b, 7, 1, 7)).toBe(PALETTE.water.base);
-    // The recess: the deck's own top layer is gone over the water.
     expect(at(b, 7, 3, 7)).toBeUndefined();
-    // And the ground under the basin is still there to hold it.
     expect(at(b, 7, 0, 7)).toBe(PALETTE.stone.base);
   });
 
   it('holds the water in with a rim of coping, a ring either side of the edge', () => {
     const b = deckOf();
     poolWater(b, { x: 4, z: 4, w: 8, d: 8, deck: 3 });
-    // The basin's own last ring is solid to the top of the deck.
     expect(at(b, 4, 3, 7)).toBe(PALETTE.stone.light);
     expect(at(b, 4, 1, 7)).toBe(PALETTE.stone.light);
-    // The first ring of deck outside it is capped to match.
     expect(at(b, 3, 3, 7)).toBe(PALETTE.stone.light);
-    // Two rings and no more: the third is the deck as it was laid.
     expect(at(b, 2, 3, 7)).toBe(PALETTE.stone.base);
   });
 
@@ -49,7 +43,6 @@ describe('poolWater', () => {
   it('rounds a basin into the rectangle it is given', () => {
     const b = deckOf(24, 24);
     poolWater(b, { x: 4, z: 4, w: 16, d: 16, shape: 'round', deck: 3 });
-    // The middle of each side is water, the corners of the rectangle are not.
     expect(at(b, 11, 2, 6)).toBe(PALETTE.water.base);
     expect(at(b, 6, 2, 11)).toBe(PALETTE.water.base);
     expect(at(b, 4, 3, 4)).toBe(PALETTE.stone.base);

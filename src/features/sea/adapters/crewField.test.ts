@@ -16,7 +16,6 @@ import { buildCrewField } from './crewField';
 
 const GROUND: SailingGround = { westX: 0, eastX: 400, seawardZ: 700, landwardZ: () => 560 };
 
-/** The two berths the test's one boat model offers: a rower and a passenger. */
 const BOAT = 1;
 const HIRE = 2;
 const BERTHS: readonly (readonly Berth[])[] = [
@@ -28,13 +27,6 @@ const BERTHS: readonly (readonly Berth[])[] = [
   [{ x: -1, y: 3, z: -1, heading: 0 }],
 ];
 
-/**
- * A figure's worth of geometry: the eight corners of a `3 x height x 2` box,
- * which is the extent a person model comes out of the mesher at.
- *
- * The same stand-in `crowdField.test.ts` uses, and for the same reason: the
- * corners are all the field reads of a figure.
- */
 function personGeometry(id: string, height: number): ModelGeometry {
   const corners: number[] = [];
   for (const x of [0, 3]) {
@@ -66,7 +58,6 @@ const MODELS: readonly ModelGeometry[] = [
   personGeometry('child', CHILD_VOXELS),
 ];
 
-/** A bay of private boats and, if asked, the rental's own. */
 const bay = (craft: number, hire = 0): Flotilla =>
   createFlotilla({
     moorings: [{ x: 40, z: 520 }],
@@ -91,17 +82,14 @@ const fieldFor = (
 const meshes = (group: { children: unknown[] }): InstancedMesh[] =>
   group.children as InstancedMesh[];
 
-/** The world up axis a mesh's slot was turned to: the figure's own up. */
 const upIn = (matrix: Matrix4): Vector3 =>
   new Vector3(matrix.elements[4]!, matrix.elements[5]!, matrix.elements[6]!);
 
-/** The translation written into one slot of a mesh. */
 function positionIn(mesh: InstancedMesh, slot: number): Vector3 {
   const matrix = new Matrix4().fromArray(mesh.instanceMatrix.array, slot * 16);
   return new Vector3().setFromMatrixPosition(matrix);
 }
 
-/** Which passengers a model's mesh may draw, in the slot order it hands out. */
 const membersOf = (passengers: Passengers, variant: number): number[] =>
   Array.from({ length: passengers.count }, (_, index) => index).filter(
     (index) => passengers.variant[index] === variant,
@@ -120,7 +108,6 @@ describe('buildCrewField', () => {
 
   it('gives a mesh only to a model somebody is actually drawn in', () => {
     const flotilla = bay(20);
-    // Everybody in the first model, so the second is never asked for.
     const field = fieldFor(flotilla, crewOf(flotilla, 1));
     expect(field.drawCalls).toBe(1);
   });
@@ -148,8 +135,6 @@ describe('buildCrewField', () => {
       const facing = mesh.geometry.getAttribute('pose');
       for (const [slot, person] of membersOf(passengers, variant).entries()) {
         const pose = poseAboard(flotilla, passengers, person);
-        // The berth's own turn included, which is what puts a rower's legs
-        // towards the stern rather than the bow.
         expect(facing.getX(slot)).toBeCloseTo(Math.sin(pose.heading));
         expect(facing.getY(slot)).toBeCloseTo(Math.cos(pose.heading));
       }
@@ -177,7 +162,7 @@ describe('buildCrewField', () => {
     const upright = meshes(field.group).find((mesh) => mesh.count > 0)!;
     const level = new Matrix4().fromArray(upright.instanceMatrix.array, 0);
 
-    // A quarter of the roll's period on, which is where the heel is largest.
+    // A quarter of the roll period on, where the heel is largest.
     flotilla.clock = Math.PI / 2 / 0.83;
     field.write();
     const heeled = new Matrix4().fromArray(upright.instanceMatrix.array, 0);
@@ -192,8 +177,6 @@ describe('buildCrewField', () => {
     const field = fieldFor(flotilla, passengers);
     expect(passengers.count).toBe(4);
 
-    // Every boat tied up: the whole crew is off the water and undrawn, and the
-    // draw calls go with them, because a zero-instance mesh is not drawn.
     for (let index = 0; index < flotilla.count; index++) flotilla.age[index] = -1;
     field.write();
     expect(field.count).toBe(0);
@@ -201,7 +184,6 @@ describe('buildCrewField', () => {
     expect(field.drawCalls).toBe(0);
     for (const mesh of meshes(field.group)) expect(mesh.count).toBe(0);
 
-    // And every boat out again: everybody back, and the draw back with them.
     for (let index = 0; index < flotilla.count; index++) flotilla.age[index] = 1;
     field.write();
     expect(field.count).toBe(4);
@@ -210,9 +192,7 @@ describe('buildCrewField', () => {
   });
 
   it('writes whoever is left into the front of the buffer', () => {
-    // The compaction, which is the one thing a shortened draw depends on: with
-    // the first of a mesh's passengers ashore, the second has to be in slot 0
-    // or the draw of one instance would draw an empty berth.
+    // With the first passenger ashore, compaction must move the second into slot 0.
     const flotilla = bay(0, 6);
     const passengers = crewOf(flotilla, 1);
     const field = fieldFor(flotilla, passengers);

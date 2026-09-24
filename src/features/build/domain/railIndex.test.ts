@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { createRailIndex } from './railIndex';
 
-/** A rail on one tile; only the key and the tile matter to the index. */
 const rail = (key: string, tileX: number, tileZ: number): Placement => ({
   key,
   id: 'railing',
@@ -35,7 +34,6 @@ describe('createRailIndex', () => {
   });
 
   it('finds every rail on a tile that carries more than one', () => {
-    // A tile at the end of a flight is railed along two edges — see `railPlacementsFor`.
     const index = createRailIndex([rail('west', 4, 4), rail('east', 4, 4)]);
     expect(keysOf(index.at(4, 4))).toEqual(['west', 'east']);
   });
@@ -65,7 +63,6 @@ describe('createRailIndex', () => {
   });
 
   it('keeps nothing extra for a rail re-stood over and over', () => {
-    // A drag along a terrace edge takes the same rail down and puts it back each pass.
     const rails = [rail('keep', 0, 0)];
     const index = createRailIndex(rails);
     for (let pass = 0; pass < 5; pass++) {
@@ -85,8 +82,6 @@ describe('createRailIndex', () => {
   });
 
   it('can still find and remove the rail moved into a hole', () => {
-    // The last rail fills the gap a removal leaves; a position table that had not
-    // followed it would take down the wrong one, or nothing.
     const rails = [rail('a', 0, 0), rail('b', 1, 0), rail('c', 2, 0)];
     const index = createRailIndex(rails);
     index.remove(rail('a', 0, 0));

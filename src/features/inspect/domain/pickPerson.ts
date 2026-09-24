@@ -1,32 +1,11 @@
-/**
- * Which person the pointer is on.
- *
- * **Not** the ground pick with a radius round it, and the difference matters:
- * the plot is drawn from a high angle, so a click on somebody's head lands the
- * ground ray a tile or two past their feet, and picking by distance on the
- * ground would select whoever is standing behind them. So this goes the other
- * way - every person is projected forward onto the screen and the nearest one in
- * **pixels** wins, which is the question a click actually asks.
- *
- * The forward projection is the same matrix the ground pick inverts, so the
- * camera is already handing both out. See `build/domain/groundPick.ts`.
- *
- * ## A pass over everybody, on a click
- *
- * Six hundred projections is a few microseconds and it happens when a button
- * goes down, not when the pointer moves. There is no spatial index here on
- * purpose: one would have to be rebuilt every frame for a crowd that walks, which
- * is exactly the cost `crowdField.ts` refuses to pay for the draw.
- *
- * Matrices arrive column-major, the layout Three.js uses in `Matrix4.elements`.
- */
+// Picks by screen pixels, not ground distance: from a high angle a click on a head
+// lands the ground ray past their feet. No spatial index, because a walking crowd
+// would need it rebuilt every frame.
 
 import type { PointerPosition, Viewport } from '../../build/domain/groundPick';
 
-/** How far from a person, in CSS pixels, a click still counts as on them. */
 export const PICK_PIXELS = 24;
 
-/** Where the people are: the crowd's own columns, and nothing else. */
 export interface PickablePeople {
   readonly count: number;
   readonly x: Float32Array;
@@ -34,16 +13,6 @@ export interface PickablePeople {
   readonly z: Float32Array;
 }
 
-/**
- * The person under the pointer, or -1.
- *
- * `aimHeight` is how far above a person's feet to aim, in voxels: about half a
- * figure, so a click anywhere on a body is close to the point being tested
- * rather than to the ground under it.
- *
- * Ties go to the lower index, so the same click on the same frame always picks
- * the same person.
- */
 export function pickPerson(
   pointer: PointerPosition,
   viewport: Viewport,
@@ -67,8 +36,7 @@ export function pickPerson(
     if (w <= 0) continue;
     const ndcX = (m[0]! * x + m[4]! * y + m[8]! * z + m[12]!) / w;
     const ndcY = (m[1]! * x + m[5]! * y + m[9]! * z + m[13]!) / w;
-    // The inverse of the mapping `groundPointAt` makes, so both picks agree
-    // about where the pointer is.
+    // The inverse of the groundPointAt mapping, so both picks agree about the pointer.
     const dx = ((ndcX + 1) / 2) * viewport.width - pointer.x;
     const dy = ((1 - ndcY) / 2) * viewport.height - pointer.y;
     const squared = dx * dx + dy * dy;

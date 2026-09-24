@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gateSquare, GATE_SQUARE_DEPTH } from './gateSquares';
 
-/** A street two tiles wide down columns 10 and 11, and one along rows 1 and 2. */
 const isStreet = (x: number, z: number) => x === 10 || x === 11 || z === 1 || z === 2;
 
 describe('gateSquare', () => {

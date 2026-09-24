@@ -20,7 +20,6 @@ const rect = (x0: number, z0: number, width: number, depth: number): TileRect =>
   z1: z0 + depth - 1,
 });
 
-/** The distinct columns a block's houses start in. */
 const columnsOf = (block: HousingBlock) => [...new Set(block.lots.map((lot) => lot.tileX))];
 
 describe('housingBlock', () => {
@@ -84,7 +83,6 @@ describe('housingBlock', () => {
         roles.filter((role) => role === 'accent').length,
       );
     }
-    // Every lot of a row is as deep as its deepest, so the rows stay in line.
     expect(new Set(block.lots.map((lot) => lot.depth))).toEqual(new Set([4]));
   });
 
@@ -191,7 +189,6 @@ describe('parkLayout', () => {
   });
 });
 
-/** Every paved tile of a park: its runs and its plaza. */
 const pavedOf = (park: ParkLayout) =>
   new Set(
     [...park.runs.flatMap(runTiles), ...(park.plaza ? rectTiles(park.plaza) : [])].map((tile) =>
@@ -205,7 +202,6 @@ const inPlaza = (plaza: TileRect, tile: { x: number; z: number }) =>
 const keysOf = (tiles: readonly { x: number; z: number }[]) =>
   new Set(tiles.map((tile) => tileKey(tile.x, tile.z)));
 
-/** What each run crosses on its way: `W` for water and `-` for land, in order. */
 const crossingOf = (park: ParkLayout, run: ParkLayout['runs'][number]) => {
   const water = keysOf(park.water);
   return runTiles(run)
@@ -253,7 +249,6 @@ describe('park designs', () => {
             taken.set(key, what);
           }
         };
-        // Water may lie under a path, which is a bridge; nothing else may.
         for (const tile of park.water) taken.set(tileKey(tile.x, tile.z), 'water');
         claim(
           park.trees.map((tree) => tree.tile),
@@ -298,7 +293,6 @@ describe('park designs', () => {
           expect({ run, crossing, ends: /^-.*-$|^-+$/.test(crossing) }).toMatchObject({
             ends: true,
           });
-          // A bridge is at least a ramp off each bank.
           expect({ run, crossing, short: /-W-/.test(crossing) }).toMatchObject({ short: false });
         }
       });
@@ -369,7 +363,6 @@ describe('park designs', () => {
     const { x, z } = park.centrepiece!;
     expect(x - plaza.x0).toBe(plaza.x1 - (x + 1));
     expect(z - plaza.z0).toBe(plaza.z1 - (z + 1));
-    // Paths in from the south corners that step rather than run straight.
     const stepped = park.runs.filter((run) => run.from.z !== run.to.z && run.from.x !== park.axis);
     expect(stepped.length).toBeGreaterThanOrEqual(2);
   });

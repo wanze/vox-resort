@@ -5,10 +5,8 @@ import { shoreFor } from '../../layout/domain/shoreline';
 import { beachVenueFor, isBeach } from './beach';
 import { shelterOf, type Venue } from './venues';
 
-// Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach.
 const shore = shoreFor({ tilesX: 20, tilesZ: 20, shore: { inset: 1, beach: 6, wave: 0, seed: 1 } });
 
-/** A boardwalk running south down the plot and out onto the sand, at column `tileX`. */
 const boardwalk = (tileX: number): PavedTile[] =>
   Array.from({ length: 8 }, (_, index) => ({ tileX, tileZ: 10 + index, y: 0 }));
 
@@ -38,7 +36,6 @@ describe('beachVenueFor', () => {
     expect(beach.satisfies.map((relief) => relief.need).toSorted()).toEqual(['energy', 'fun']);
     expect(beach.capacity).toBeGreaterThan(10_000);
     expect(beach.dwellSeconds.min).toBeGreaterThanOrEqual(30 * 60);
-    // Between the two boardwalks: the middle of the gates, not of either one.
     expect(beach.x).toBeGreaterThan(4 * TILE_VOXELS);
     expect(beach.x).toBeLessThan(15 * TILE_VOXELS);
   });

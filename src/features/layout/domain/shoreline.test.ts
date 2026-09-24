@@ -50,8 +50,6 @@ describe('waterEdgeZ', () => {
 
   it('crosses every column boundary without a step in it', () => {
     const coast = shore({ wave: 3 });
-    // The rounded edge jumps a whole tile between columns; the curve may not,
-    // which is what the sea's colour gradient is drawn against.
     let biggest = 0;
     for (let tileX = 0; tileX < 40; tileX += 0.05) {
       const step = Math.abs(waterEdgeZ(coast, tileX + 0.05) - waterEdgeZ(coast, tileX));
@@ -68,7 +66,6 @@ describe('waterEdgeZ', () => {
 
 describe('waterStartZ', () => {
   it('cuts the water in from the south edge of the plot', () => {
-    // 40 deep with an inset of 20: the water starts on row 19.
     const coast = shore();
     expect(waterStartZ(coast, 0)).toBe(19);
     expect(waterStartZ(coast, 20)).toBe(19);

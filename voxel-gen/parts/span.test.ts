@@ -19,14 +19,12 @@ const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefine
 
 const N = TILE_VOXELS - 1;
 
-/** One run of deck at the height the bridge lays its planks. */
 const deckOf = (y = 5): VoxelBuilder => {
   const b = new VoxelBuilder();
   spanDeck(b, { y, z0: 0, z1: N });
   return b;
 };
 
-/** A parapet along the north edge, guarding planks laid level at `planks`. */
 const parapetOf = (planks = 5): VoxelBuilder => {
   const b = new VoxelBuilder();
   spanParapet(b, { planksAt: () => planks });
@@ -38,7 +36,6 @@ describe('spanDeck', () => {
     const b = deckOf();
     expect(at(b, 1, 5, 8)).toBe(PALETTE.teak.base);
     expect(at(b, 1, 4, 8)).toBe(PALETTE.teak.deep);
-    // Boards four wide in two tones, with the dark joint on every fourth.
     expect(at(b, 5, 5, 8)).toBe(PALETTE.teak.shade);
     expect(at(b, 4, 5, 8)).toBe(PALETTE.teak.deep);
   });
@@ -81,7 +78,6 @@ describe('spanPiles', () => {
       .map((key) => key.split(',').map(Number) as [number, number, number])
       .filter(([, y]) => y < 4);
     expect(piles.some(([, y]) => y === 0)).toBe(true);
-    // Never in a column a railing's trestle stands in, along any of the four edges.
     for (const [x, , z] of piles) {
       expect({ x, z, clear: Math.min(x, z, N - x, N - z) >= FLANK }).toEqual({
         x,
@@ -113,8 +109,6 @@ describe('spanParapet', () => {
   });
 
   it('carries its trestle from the bed up to the beam, and paints neither beam nor planks', () => {
-    // The layers the deck paints stay empty, so a railing and the deck it guards
-    // never draw the same voxel.
     const b = parapetOf();
     for (const z of [0, FLANK - 1]) {
       expect({ z, bed: at(b, 8, 0, z), top: at(b, 8, 3, z) }).toEqual({
@@ -153,8 +147,6 @@ describe('spanLantern', () => {
     const spot = { x: 7, rail: 9 };
     spanLantern(b, spot);
     const light = lanternLight(spot);
-    // The light sits on the corner the four glass voxels share, so each of them
-    // is one of the voxels around it.
     expect(at(b, light.x, light.y, light.z)).toBe(LANTERN);
     expect(at(b, light.x - 1, light.y - 1, light.z - 1)).toBe(LANTERN);
     expect(light.color).toBe(LANTERN);

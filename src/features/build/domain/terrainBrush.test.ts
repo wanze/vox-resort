@@ -10,11 +10,9 @@ import {
 
 const SHORE = { inset: 8, beach: 5, wave: 0, seed: 1 };
 
-/** A flat inland plot: the simplest ground a brush can be asked about. */
 const flat = (tiles = 12): Terrain =>
   createTerrain({ shore: null, elevation: null, tilesX: tiles, tilesZ: tiles });
 
-/** A plot with a coast, so the sea and the sand are both somewhere to point at. */
 const coastal = (): Terrain =>
   createTerrain({
     shore: shoreFor({ tilesX: 20, tilesZ: 20, shore: SHORE }),
@@ -31,7 +29,6 @@ const rules = (terrain: Terrain, taken: readonly string[] = []): TerrainRules =>
 const change = (brush: TerrainBrush, terrain: Terrain, x: number, z: number, taken?: string[]) =>
   terrainChangeAt(brush, { x, z }, rules(terrain, taken));
 
-/** Feathers a tile up to a level by raising it and its neighbourhood in rings. */
 function raiseTo(terrain: Terrain, x: number, z: number, level: number): void {
   for (let step = 1; step <= level; step++) {
     for (let dz = -(level - step); dz <= level - step; dz++) {
@@ -45,9 +42,6 @@ function raiseTo(terrain: Terrain, x: number, z: number, level: number): void {
 
 describe('terrainChangeAt', () => {
   it('digs an apron of ground all round the plot, and nothing past it', () => {
-    // The apron: an island raised at the edge of the plot is a sandbank off the
-    // end of the beach, so the ground a brush may touch reaches well past the
-    // ground anything may be built on. See `layout/domain/terrain.ts`.
     expect(change('raise', flat(), -1, 4).blocked).toBe(false);
     expect(change('raise', flat(), 4, 20).blocked).toBe(false);
     expect(change('raise', flat(), -13, 4).blocked).toBe(true);
@@ -81,11 +75,6 @@ describe('raise and lower', () => {
     expect(change('raise', terrain, crest, crest).blocked).toBe(true);
   });
 
-  /**
-   * The invariant every flight of stairs on the plot rests on; see
-   * `elevation.ts`. It is what makes the tool feather ground rather than pull it
-   * into a tower.
-   */
   it('refuses a raise that would leave a two-level step', () => {
     const terrain = flat();
     terrain.set(5, 5, { level: 1, surface: 'grass' });
@@ -96,7 +85,6 @@ describe('raise and lower', () => {
     const terrain = flat();
     terrain.set(5, 5, { level: 1, surface: 'grass' });
     terrain.set(5, 4, { level: 1, surface: 'grass' });
-    // Still refused: the other three neighbours are at sea level.
     expect(change('raise', terrain, 5, 5).blocked).toBe(true);
     for (const [x, z] of [
       [4, 5],
@@ -112,11 +100,8 @@ describe('raise and lower', () => {
     const terrain = flat();
     raiseTo(terrain, 5, 5, 2);
     expect(terrain.levelOf(5, 5)).toBe(2);
-    // The bench in front of the crest: dropping it a level is fine, because the
-    // crest behind it would then be one step up rather than two.
     const bench = change('lower', terrain, 5, 6);
     expect(bench.blocked).toBe(true);
-    // And the crest itself comes down a level at a time, never two.
     const crest = change('lower', terrain, 5, 5);
     expect(crest.next).toEqual({ level: 1, surface: 'grass' });
   });

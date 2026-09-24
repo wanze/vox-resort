@@ -42,7 +42,6 @@ describe('createTileOccupancy', () => {
 
   it('refuses a footprint that overlaps one tile of another', () => {
     const occupancy = createTileOccupancy([place(COTTAGE, 'cottage', 4, 4)]);
-    // The lamp misses five of the cottage's six tiles and still cannot stand.
     expect(occupancy.isFree(place(item('street-lamp'), 'lamp', 5, 6))).toBe(false);
     expect(occupancy.isFree(place(item('street-lamp'), 'lamp', 6, 6))).toBe(true);
   });
@@ -54,7 +53,6 @@ describe('createTileOccupancy', () => {
 
   it('leaves nothing claimed when a claim is refused', () => {
     const occupancy = createTileOccupancy([place(PATH, 'path@1,0', 1, 0)]);
-    // The cottage would take 0,0 before it reached the path's tile at 1,0.
     expect(() => occupancy.claim(place(COTTAGE, 'cottage', 0, 0), 'cottage')).toThrow();
     expect(occupancy.keyAt({ x: 0, z: 0 })).toBeUndefined();
     expect(occupancy.size).toBe(1);
@@ -83,10 +81,6 @@ describe('createTileOccupancy', () => {
 });
 
 describe('ground nothing is standing on', () => {
-  // The sea used to be seeded in here so the pointer refused it by the ordinary
-  // rule. A pier put a stop to that: what a tile of water will take is a fact
-  // about the object, which lives in `paving.ts` — see `standsOn` — so an index
-  // of tiles now holds only what is actually standing.
   it('is free, whatever the ground under it happens to be', () => {
     const occupancy = createTileOccupancy();
     expect(occupancy.isFree({ tileX: 3, tileZ: 4, tilesX: 1, tilesZ: 1 })).toBe(true);

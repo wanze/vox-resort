@@ -12,7 +12,6 @@ import {
 import { planeAxes, type FaceAxis } from './greedyMesh';
 import { VERTEX_FLOAT_STRIDE } from './vertexBuffer';
 
-/** Builds a DVE-shaped interleaved vertex stream for one axis-aligned face. */
 function sectionOf(
   materialId: string,
   origin: { x: number; y: number; z: number },
@@ -78,7 +77,6 @@ describe('buildModelAttributes', () => {
       waterByModelId: new Map(),
       windowsByModelId: new Map(),
     });
-    // The region starts at x = 64, so the face lands at the model's own origin.
     expect(Array.from(models[1]!.lit!.positions.slice(0, 3))).toEqual([0, 0, 0]);
     expect(models[0]!.lit).toBeNull();
   });
@@ -97,7 +95,6 @@ describe('buildModelAttributes', () => {
     });
     const coarse = models[1]!;
     expect(coarse.lit).toBeNull();
-    // The quad's corners, at (1..2, 2, 1..2) in coarse voxels, doubled.
     const positions = [...coarse.emissive!.positions];
     expect(Math.min(...positions.filter((_, at) => at % 3 === 0))).toBe(2);
     expect(Math.max(...positions.filter((_, at) => at % 3 === 0))).toBe(4);
@@ -154,7 +151,6 @@ describe('buildModelAttributes', () => {
     });
     expect(models[0]!.water).not.toBeNull();
     expect(models[0]!.emissive).toBeNull();
-    // Two faces of stone and three of water, each pair merged into one quad.
     expect(models[0]!.lit!.triangleCount).toBe(2);
     expect(models[0]!.water!.triangleCount).toBe(2);
     expect(models[0]!.triangleCount).toBe(4);
@@ -185,7 +181,7 @@ describe('buildModelAttributes', () => {
     const models = buildModelAttributes({
       sections: [
         sectionOf('stucco', { x: 0, y: 0, z: 0 }, flat(1)),
-        // Two panes a voxel apart, so the merge cannot join them into one quad.
+        // A voxel apart, so the merge cannot join them into one quad.
         sectionOf('glass', { x: 0, y: 4, z: 0 }, [
           { axis: 1, slice: 0, u: 0, v: 0 },
           { axis: 1, slice: 0, u: 2, v: 0 },
@@ -203,11 +199,8 @@ describe('buildModelAttributes', () => {
     expect(models[0]!.lit!.panes).toBeNull();
     const panes = models[0]!.window!.panes!;
     expect(panes).toHaveLength(8);
-    // Equal across each quad's four corners, so it survives interpolation.
     expect(new Set(panes.slice(0, 4)).size).toBe(1);
     expect(new Set(panes.slice(4, 8)).size).toBe(1);
-    // And different between the two panes, which is what lights one and not
-    // the other.
     expect(panes[0]).not.toBe(panes[4]);
     expect([...panes].every((seed) => seed >= 0 && seed < 1)).toBe(true);
   });
@@ -218,7 +211,6 @@ describe('buildModelAttributes', () => {
       regions,
       colorsByMaterialId: new Map([['pool', 0x53b9c8]]),
       emissiveByModelId: new Map(),
-      // The water is another model's; this one merely paints the same blue.
       waterByModelId: new Map([['lamp', new Set([0x53b9c8])]]),
       windowsByModelId: new Map(),
     });
@@ -256,9 +248,7 @@ describe('buildModelAttributes', () => {
   });
 
   it('writes the same linear colour Three.js would', () => {
-    // The whole reason this module can run in a worker is that it converts
-    // colours itself rather than through a `Color`. If the two ever part
-    // company the resort changes shade, so they are pinned together here.
+    // The module converts colours itself so it can run in a worker; pinned to Color here.
     for (const hex of [0x000000, 0x0a0a0a, 0x808080, 0xc3b189, 0xff00ff, 0xffffff]) {
       const three = new Color(hex);
       expect(srgbToLinear(((hex >> 16) & 0xff) / 255)).toBeCloseTo(three.r, 6);
@@ -284,7 +274,6 @@ describe('transferablesOf', () => {
       waterByModelId: new Map(),
       windowsByModelId: new Map(),
     });
-    // Two geometries, four attributes each.
     expect(transferablesOf(models)).toHaveLength(8);
     expect(new Set(transferablesOf(models)).size).toBe(8);
   });
@@ -298,7 +287,6 @@ describe('transferablesOf', () => {
       waterByModelId: new Map(),
       windowsByModelId: new Map([['path', new Set([0x8fb8c4])]]),
     });
-    // The usual four, and the seeds, which no other surface carries.
     expect(transferablesOf(models)).toHaveLength(5);
   });
 
@@ -313,8 +301,7 @@ describe('paneSeed', () => {
   });
 
   it('gives neighbouring panes unrelated numbers', () => {
-    // Windows on one elevation are a few voxels apart along one axis, which is
-    // exactly the case a weaker hash would light or leave dark in stripes.
+    // A few voxels apart along one axis: the case a weak hash lights in stripes.
     const along = Array.from({ length: 16 }, (_, index) => paneSeed(2 + index * 5, 12, 0));
     expect(new Set(along).size).toBe(16);
     const lit = along.filter((seed) => seed < 0.5).length;

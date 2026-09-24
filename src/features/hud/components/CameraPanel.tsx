@@ -6,7 +6,6 @@ export interface CameraPanelProps {
   readonly direction: CompassDirection;
   readonly onModeChange: (mode: CameraMode) => void;
   readonly onDirectionChange: (direction: CompassDirection) => void;
-  /** Whether far and small things are drawn coarse or left out. */
   readonly detail: boolean;
   readonly onDetailChange: (enabled: boolean) => void;
 }
@@ -16,7 +15,6 @@ const MODES: readonly { readonly mode: CameraMode; readonly label: string }[] = 
   { mode: 'isometric', label: 'Isometric' },
 ];
 
-/** How each corner reads on a button and in a sentence. */
 const CORNERS: Readonly<Record<CompassDirection, { initials: string; label: string }>> = {
   northeast: { initials: 'NE', label: 'north-east' },
   southeast: { initials: 'SE', label: 'south-east' },
@@ -24,15 +22,8 @@ const CORNERS: Readonly<Record<CompassDirection, { initials: string; label: stri
   northwest: { initials: 'NW', label: 'north-west' },
 };
 
-/**
- * Which view the resort is drawn through, and which corner the isometric one
- * stands over.
- *
- * The compass row stays in both modes rather than appearing with the isometric
- * view, so the panel does not change height under the pointer; it is simply
- * disabled, which is also what says the four corners belong to that mode and
- * not to the other one.
- */
+// The compass row stays in both modes, disabled outside isometric, so the panel
+// does not change height under the pointer.
 export function CameraPanel({
   mode,
   direction,
@@ -75,8 +66,7 @@ export function CameraPanel({
         ))}
       </div>
 
-      {/* A toggle rather than a setting, because what it is for is comparing:
-          the frame rate and the drawn count in Details, with it and without. */}
+      {/* A toggle, because it exists to compare frame rate with it and without. */}
       <div className="hud-camera-modes" role="group" aria-label="Level of detail">
         <button
           type="button"

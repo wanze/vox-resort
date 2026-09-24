@@ -18,7 +18,7 @@ import {
 describe('lenses', () => {
   it('gives a perspective camera half the buffer per voxel at the distance a 90° view spans', () => {
     const lens = perspectiveLens(1000, 90);
-    // tan(45°) = 1, so one voxel at 500 voxels away covers one pixel.
+    // tan(45 deg) = 1, so one voxel at 500 voxels away covers one pixel.
     expect(pixelsPerVoxel(lens, 500)).toBeCloseTo(1, 6);
     expect(pixelsPerVoxel(lens, 1000)).toBeCloseTo(0.5, 6);
   });
@@ -49,7 +49,6 @@ describe('distanceToBox', () => {
   });
 });
 
-/** Pixels per voxel at which a coarse voxel covers exactly the threshold. */
 const FAR_CUT = COARSE_VOXEL_PIXELS / 2;
 
 describe('isFar', () => {

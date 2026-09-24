@@ -38,19 +38,16 @@ const BRIDGE = item(BRIDGE_ID);
 const BRIDGE_RAMP = item(BRIDGE_RAMP_ID);
 const COTTAGE = item('cottage', 2, 3);
 
-/** A plot where everything north of `z` stands one level up. */
 const benchAt =
   (z: number): LevelProvider =>
   (_x, tileZ) =>
     tileZ < z ? 1 : 0;
 
-/** Paving laid on the listed tiles, everything else bare ground. */
 const paved =
   (table: Record<string, LayoutItem>): PavedGround =>
   (tileX, tileZ) =>
     table[`${tileX},${tileZ}`] ?? null;
 
-/** Grass at sea level with nothing paved on it, and the whole catalogue to hand. */
 const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   pavedWith: () => null,
   levelOf: () => 0,
@@ -103,7 +100,6 @@ describe('pavedGroundOf', () => {
   });
 
   it('reports a building as unpaved, so no flight ever climbs towards one', () => {
-    // Every tile of the cottage, not just the one it is keyed on.
     expect(ground()(4, 4)).toBeNull();
     expect(ground()(5, 6)).toBeNull();
   });
@@ -115,8 +111,6 @@ describe('pavingAt', () => {
   });
 
   it('lays a flight where the tile climbs to paving one level up', () => {
-    // Drawing downhill: the tile above the step is already paved, so this tile
-    // is the lower one and comes out as the flight, facing north at it.
     const laid = pavingAt(
       PATH,
       { x: 0, z: 1 },
@@ -156,7 +150,6 @@ describe('pavingAt', () => {
   });
 
   it('lays a slab where there is nothing above the step to climb to', () => {
-    // The higher ground is a lawn: a flight ending in one reads as a mistake.
     const laid = pavingAt(PATH, { x: 0, z: 1 }, 0, rules({ levelOf: benchAt(1) }));
     expect(laid).toEqual({ item: PATH, rotation: 0 });
   });
@@ -175,9 +168,6 @@ describe('pavingAt', () => {
   });
 
   it('lays a flight rather than decking where a step reaches the sand', () => {
-    // A terrace anchored at the sand edge puts the lower tile of its step on the
-    // landward-most row of sand: there you climb off the beach, you do not walk
-    // up decking laid flat against a step.
     const laid = pavingAt(
       PATH,
       { x: 0, z: 1 },
@@ -193,8 +183,6 @@ describe('pavingAt', () => {
   });
 
   it('lays a slab unturned, whatever the R key was left at', () => {
-    // A slab has no front, so its turn is the ground's to give — and only a
-    // flight's climb has anything to say about it.
     expect(pavingAt(PATH, { x: 2, z: 2 }, 3, rules()).rotation).toBe(0);
     expect(pavingAt(PATH, { x: 2, z: 9 }, 3, rules({ isSand: () => true }))).toEqual({
       item: BOARDWALK,
@@ -203,8 +191,6 @@ describe('pavingAt', () => {
   });
 
   it('stands a building on a step as picked, turn and all, so only paving climbs', () => {
-    // A cottage next to higher paved ground is a cottage, refused or not by the
-    // rule that an object stands on one level; it is not a staircase.
     const laid = pavingAt(
       COTTAGE,
       { x: 0, z: 1 },
@@ -236,8 +222,6 @@ describe('relaidBy', () => {
   });
 
   it('turns the slab below a step into the flight up it', () => {
-    // Drawing uphill: the slab at 0,1 went down before there was anything above
-    // it to climb to, and paving 0,0 is what makes it a flight.
     const relaid = relaidBy(
       { x: 0, z: 0 },
       rules({ pavedWith: paved({ '0,0': PATH, '0,1': PATH }), levelOf: benchAt(1) }),
@@ -259,8 +243,6 @@ describe('relaidBy', () => {
   });
 
   it('leaves the slab above a step alone, and the tile just paved with it', () => {
-    // Paving the lower tile of a step re-lays nothing: the tile itself is
-    // `pavingAt`'s answer, and a flight never goes on the upper tile.
     const relaid = relaidBy(
       { x: 0, z: 1 },
       rules({ pavedWith: paved({ '0,0': PATH, '0,1': PATH }), levelOf: benchAt(1) }),
@@ -269,7 +251,6 @@ describe('relaidBy', () => {
   });
 
   it('leaves a tile that is already a flight as it stands', () => {
-    // Re-facing one would only move the fudge an L-bend was resolved with.
     const relaid = relaidBy(
       { x: 1, z: 1 },
       rules({
@@ -281,7 +262,6 @@ describe('relaidBy', () => {
   });
 
   it('re-lays every slab the new tile is now the top of', () => {
-    // A tile on the bench with paving below it on two sides: both climb to it.
     const relaid = relaidBy(
       { x: 1, z: 1 },
       rules({
@@ -292,8 +272,6 @@ describe('relaidBy', () => {
     expect(
       relaid.map((one) => ({ tile: { x: one.placement.tileX, z: one.placement.tileZ } })),
     ).toEqual([{ tile: { x: 1, z: 2 } }, { tile: { x: 2, z: 1 } }]);
-    // Each faces the tile that was just paved: north from the south, west from
-    // the east.
     expect(relaid.map((one) => one.placement.rotation)).toEqual([0, 1]);
   });
 
@@ -319,7 +297,6 @@ describe('relaidBy', () => {
   });
 });
 
-/** What was laid, in the terms the assertions are written in. */
 const laidOf = (relaid: readonly Relaid[]) =>
   relaid.map(({ placement }) => ({
     id: placement.id,
@@ -330,7 +307,6 @@ const laidOf = (relaid: readonly Relaid[]) =>
 
 describe('unlaidBy', () => {
   it('lays a flight flat again once the tile it climbed to is taken up', () => {
-    // The flight at 0,1 climbed to 0,0, and 0,0 is gone.
     const relaid = unlaidBy(
       { x: 0, z: 0 },
       rules({ pavedWith: paved({ '0,1': STAIRS }), levelOf: benchAt(1) }),
@@ -348,8 +324,6 @@ describe('unlaidBy', () => {
   });
 
   it('turns a flight to the paving it still climbs to', () => {
-    // An L-bend: the flight at 1,1 had paving above it to the north and to the
-    // west. The northern tile is taken up, so it faces west now.
     const relaid = unlaidBy(
       { x: 1, z: 0 },
       rules({
@@ -374,7 +348,6 @@ describe('unlaidBy', () => {
   });
 
   it('takes a crossing back off a bank that has been taken up', () => {
-    // The ramp at 2,5 came ashore at 2,4; with the bank gone it is deck again.
     const river = rules({
       isWater: (_x, tileZ) => tileZ === 5,
       isSea: () => false,
@@ -386,8 +359,6 @@ describe('unlaidBy', () => {
   });
 
   it('takes back exactly what paving the tile made', () => {
-    // Pave the top of a step, then take it up again: the flight it made goes
-    // back to the slab it was.
     const levelOf = benchAt(1);
     const made = relaidBy(
       { x: 0, z: 0 },
@@ -413,8 +384,6 @@ describe('pavingAt, over water', () => {
   });
 
   it('lays a jetty flat, because the sea has no step to climb', () => {
-    // Paving one level up beside it would be a flight anywhere else; out on the
-    // water there is nothing to climb and the pier answer comes first.
     const climbing = rules({
       isWater: (_x, tileZ) => tileZ >= 5,
       pavedWith: (tileX, tileZ) => (tileX === 2 && tileZ === 4 ? PATH : null),
@@ -430,10 +399,8 @@ describe('pavingAt, over water', () => {
 });
 
 describe('pavingAt, over a river', () => {
-  /** Water the sea does not own: a channel cut through the middle of the plot. */
   const river = rules({ isWater: (_x, tileZ) => tileZ === 5, isSea: () => false });
 
-  /** A channel two rows across, with the street either side of it already laid. */
   const crossing = rules({
     isWater: (_x, tileZ) => tileZ === 5 || tileZ === 6,
     isSea: () => false,
@@ -445,14 +412,10 @@ describe('pavingAt, over a river', () => {
   });
 
   it('lays the deck unturned where the crossing has no shape yet', () => {
-    // Nothing paved around it: a tile of water on its own is the middle of a
-    // span that has not been drawn, and nothing says which way it runs.
     expect(pavingAt(PATH, { x: 2, z: 5 }, 0, river)).toEqual({ item: BRIDGE, rotation: 0 });
   });
 
   it('brings the tile beside a bank ashore, turned to face it', () => {
-    // Unturned a ramp comes ashore to the north, so the tile at z = 5 with the
-    // street at z = 4 is laid unturned and the one at z = 6 is turned about.
     expect(pavingAt(PATH, { x: 2, z: 5 }, 0, crossing)).toEqual({
       item: BRIDGE_RAMP,
       rotation: 0,
@@ -479,11 +442,6 @@ describe('pavingAt, over a river', () => {
   });
 
   it('brings a span ashore when the bank beside it is paved', () => {
-    // A tile of water drawn before the bank it adjoins goes down as a deck —
-    // there is nothing yet to come ashore at. Paving the bank is what turns it
-    // into the ramp, and `relaidBy` is what takes the deck back up. That is the
-    // ordinary case and not an odd one: a stroke crossing a river paves the far
-    // bank *after* the last tile of water. See `paving.ts`.
     const banked = rules({
       isWater: (_x, tileZ) => tileZ === 5,
       isSea: () => false,
@@ -498,8 +456,6 @@ describe('pavingAt, over a river', () => {
   });
 
   it('re-lays nothing beside a crossing when what went down is not paving', () => {
-    // A hedge or a cottage changes neither answer, so a placement that is not
-    // paving never disturbs the span next to it.
     const banked = rules({
       isWater: (_x, tileZ) => tileZ === 5,
       isSea: () => false,
@@ -537,7 +493,6 @@ describe('standsOn', () => {
   });
 
   it('holds an object that declares its ground to it', () => {
-    // Grass to row 1, sand from row 2, the sea from row 5.
     const beach = rules({
       isWater: (_x, tileZ) => tileZ >= 5,
       isSea: (_x, tileZ) => tileZ >= 5,

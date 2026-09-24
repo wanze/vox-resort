@@ -1,7 +1,3 @@
-/**
- * The red lucky balloon: the one most of the beach lets go. 8x14x8, and it
- * stands on nothing — see `index.ts`.
- */
 import { PALETTE } from '../palette.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 import { lantern, lanternGlow } from './lantern.ts';

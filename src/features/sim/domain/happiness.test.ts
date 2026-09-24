@@ -17,14 +17,12 @@ const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', b
 const guestsOf = (count = 40): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
-/** Everybody's needs at one level, so the target a mood drifts to is that level. */
 const needsAt = (guests: Guests, level: number): Needs => {
   const needs = createNeeds(guests, 7);
   for (const need of NEEDS) needs.level[need].fill(level);
   return needs;
 };
 
-/** Nobody is ever in a line, and everybody always is. */
 const NO_QUEUE = (): boolean => false;
 const ALL_QUEUED = (): boolean => true;
 
@@ -40,7 +38,6 @@ describe('ageHappiness', () => {
     ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR);
     expect(moodOf(happiness, 0)).toBeCloseTo(ARRIVAL_MOOD + DRIFT_PER_HOUR);
 
-    // And keeps going, without overshooting: a mood settles at contentment.
     ageHappiness(happiness, needs, guests, NO_QUEUE, 24 * HOUR);
     expect(moodOf(happiness, 0)).toBe(1);
   });
@@ -51,7 +48,6 @@ describe('ageHappiness', () => {
     const needs = needsAt(guests, 0);
     ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR);
     expect(moodOf(happiness, 0)).toBeCloseTo(ARRIVAL_MOOD - DRIFT_PER_HOUR);
-    // A day of it takes a guest who arrived pleased to nearly nothing.
     ageHappiness(happiness, needs, guests, NO_QUEUE, 24 * HOUR);
     expect(moodOf(happiness, 0)).toBe(0);
   });
@@ -66,7 +62,6 @@ describe('ageHappiness', () => {
 
     expect(moodOf(queueing, 0)).toBeLessThan(moodOf(walking, 0));
     expect(moodOf(walking, 0) - moodOf(queueing, 0)).toBeCloseTo(QUEUE_COST_PER_HOUR);
-    // Only the one in the line paid for it.
     expect(moodOf(queueing, 1)).toBeCloseTo(moodOf(walking, 1));
   });
 
@@ -81,7 +76,6 @@ describe('ageHappiness', () => {
       expect(level).toBeGreaterThanOrEqual(0);
       expect(level).toBeLessThanOrEqual(1);
     }
-    // A run of no ticks is not a run at all.
     ageHappiness(happiness, needsAt(guests, 0), guests, NO_QUEUE, 0);
     expect(moodOf(happiness, 0)).toBe(1);
   });

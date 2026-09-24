@@ -7,12 +7,10 @@ import { MIN_CAST_HEIGHT } from '../../rendering/domain/blobShadows';
 import { OBJECT_TYPES, objectTypeById, type ObjectTypeDefinition } from './objectTypes';
 import { blobOf, casterOf, lightsOf, occluderOf, seatSiteOf } from './placementFacts';
 
-/** A type standing at tile (3, 5) on the first terrace, turned as asked. */
 function standing(type: ObjectTypeDefinition, rotation: Rotation = 0): Placement {
   return place(layoutItemFor(type), `${type.id}#1`, 3, 5, rotation, 1);
 }
 
-/** The first catalogue type that matches, so a fixture follows the art. */
 function typeWhere(predicate: (type: ObjectTypeDefinition) => boolean): ObjectTypeDefinition {
   const found = OBJECT_TYPES.find(predicate);
   if (!found) throw new Error('no catalogue type fits this fixture');
@@ -21,10 +19,6 @@ function typeWhere(predicate: (type: ObjectTypeDefinition) => boolean): ObjectTy
 
 const oblong = (type: ObjectTypeDefinition) => type.model.width !== type.model.depth;
 
-/**
- * A lit model that is not square, and whose lights land somewhere else when
- * turned against its turned extents — the only kind that tells the two apart.
- */
 const LIT = typeWhere((type) => {
   const { lights, width, depth } = type.model;
   if (lights.length === 0 || !oblong(type)) return false;
@@ -41,7 +35,6 @@ describe('lightsOf', () => {
   it("turns lights against the model's own size, not the placement's", () => {
     const { lights, width, depth } = LIT.model;
     const turned = standing(LIT, 1);
-    // The placement's extents are already turned, which is what makes the two differ.
     expect([turned.width, turned.depth]).toEqual([depth, width]);
     expect(lightsOf(turned)).toEqual(rotateLights(lights, width, depth, 1));
     expect(lightsOf(turned)).not.toEqual(rotateLights(lights, turned.width, turned.depth, 1));
@@ -80,7 +73,6 @@ describe('occluderOf', () => {
     const type = typeWhere((candidate) => oblong(candidate) && candidate.model.height > 0);
     const turned = standing(type, 1);
     const occluder = occluderOf(turned);
-    // Across the ground: the placement, turn included.
     expect(occluder).toMatchObject({
       key: turned.key,
       minX: turned.x,
@@ -89,7 +81,6 @@ describe('occluderOf', () => {
       maxZ: turned.z + turned.depth,
     });
     expect(occluder.maxX - occluder.minX).toBe(type.model.depth);
-    // Upwards: the model's height, standing on the terrace.
     expect(turned.y).toBeGreaterThan(0);
     expect(occluder.minY).toBe(turned.y);
     expect(occluder.maxY).toBe(turned.y + type.model.height);
@@ -104,8 +95,6 @@ describe('occluderOf', () => {
   });
 
   it('refuses an id the catalogue does not know', () => {
-    // So the density fallback is never what an unknown id gets: the height
-    // lookup throws first.
     const stray = { ...standing(LIT), id: 'no-such-object' };
     expect(() => occluderOf(stray)).toThrow('no-such-object');
   });

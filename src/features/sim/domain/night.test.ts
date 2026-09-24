@@ -4,7 +4,6 @@ import { bedtimeOf, isBedtime, occupiedShare } from './night';
 const HOUR = 60;
 const PARTIES = Array.from({ length: 50 }, (_, party) => party);
 
-/** Whether a party's window runs over midnight. */
 const wraps = (party: number): boolean => bedtimeOf(party).sleepAt > bedtimeOf(party).wakeAt;
 
 describe('bedtimeOf', () => {
@@ -25,7 +24,6 @@ describe('bedtimeOf', () => {
   it('spreads the parties out rather than sending them all to bed at once', () => {
     const distinct = new Set(PARTIES.map((party) => bedtimeOf(party).sleepAt));
     expect(distinct.size).toBeGreaterThanOrEqual(3);
-    // Every bedtime is in the evening now, so every night runs over midnight.
     expect(PARTIES.every(wraps)).toBe(true);
   });
 });

@@ -51,7 +51,6 @@ const ITEMS = OBJECT_TYPES.map(layoutItemFor);
 
 const BY_ID = new Map(TYPES.map((type) => [type.id, type]));
 
-/** The tiles a plot claims, which is not its type's footprint once it is turned. */
 const footprintOf = (plot: { id: string; rotation?: 0 | 1 | 2 | 3 }) => {
   const type = BY_ID.get(plot.id)!;
   return rotateExtent(type.tilesX, type.tilesZ, plot.rotation ?? 0);
@@ -65,15 +64,12 @@ const params = (overrides: Partial<ResortParams> = {}): ResortParams => ({
   ...overrides,
 });
 
-/** How many of a type a plan stands. */
 const count = (plan: ReturnType<typeof generateResort>, id: string) =>
   plan.plots.filter((plot) => plot.id === id).length;
 
-/** Whether a tile is inside a rectangle of the plot. */
 const inside = (rect: Plaza, x: number, z: number) =>
   x >= rect.x0 && x <= rect.x1 && z >= rect.z0 && z <= rect.z1;
 
-/** Every seed and size the suite sweeps, as one list of parameter sets. */
 const SWEEP: ResortParams[] = [
   ...Array.from({ length: 12 }, (_, seed) => params({ seed })),
   ...[PLOT_TILES.min, 56, 80, 112, 140, 160].flatMap((size) => [
@@ -84,17 +80,10 @@ const SWEEP: ResortParams[] = [
       seed: size + 1,
     }),
   ]),
-  // The stress-test sizes, once each: every rule has to hold out there too.
   ...[320, 480].map((size) => params({ tilesX: size, tilesZ: size, density: 1, seed: size })),
   ...[0.2, 0.4, 1].map((density) => params({ density, seed: 99 })),
 ];
 
-/**
- * The plan a sweep entry grows, generated once however many rules read it.
- *
- * `generateResort` is a pure function of its parameters, so sharing the answer
- * changes nothing a rule can see — and the largest plots take over a second each.
- */
 const plans = new Map<ResortParams, ReturnType<typeof generateResort>>();
 function planOf(set: ResortParams): ReturnType<typeof generateResort> {
   let plan = plans.get(set);
@@ -105,8 +94,7 @@ function planOf(set: ResortParams): ReturnType<typeof generateResort> {
   return plan;
 }
 
-// Grown up front, under a timeout of their own, so that no single rule is left
-// paying for the whole sweep inside the default one.
+// Grown up front under their own timeout; the largest plots take over a second each.
 beforeAll(() => {
   for (const set of SWEEP) planOf(set);
 }, 120_000);
@@ -151,9 +139,7 @@ describe('generateResort', () => {
   it('builds more on a denser plot', () => {
     const sparse = generateResort(TYPES, params({ density: PLOT_DENSITY.min }));
     const packed = generateResort(TYPES, params({ density: PLOT_DENSITY.max }));
-    // A quarter more rather than half as much again: the beach and the hill are
-    // filled on their own terms and the density slider does not reach them, so
-    // what it moves is the districts behind them.
+    // Only a quarter more: the beach and the hill ignore the density slider.
     expect(packed.plots.length).toBeGreaterThan(sparse.plots.length * 1.25);
   });
 
@@ -212,8 +198,6 @@ describe('generateResort', () => {
   });
 
   it('does not stand the whole resort facing one way', () => {
-    // The point of the feature: a plot on which every turn is the same one is a
-    // housing estate, whatever else it gets right.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const turns = new Set(plan.plots.map((plot) => plot.rotation ?? 0));
@@ -222,8 +206,6 @@ describe('generateResort', () => {
   });
 
   it('keeps most objects square to the row they stand in', () => {
-    // A quarter turn is the exception: it is what stops a row reading as a line
-    // of clones, and a plot where it were the rule would read as a scrapyard.
     for (const set of SWEEP) {
       const plots = planOf(set).plots;
       const square = plots.filter((plot) => (plot.rotation ?? 0) % 2 === 0).length;
@@ -235,8 +217,6 @@ describe('generateResort', () => {
     for (const set of SWEEP) {
       const plan = planOf(set);
       const gates = plan.plots.filter((plot) => plot.id === 'entrance');
-      // One where the promenade meets the north edge, one at each end of the
-      // plaza's cross street: every one of them on an edge, turned to face in.
       expect({ set, gates }).toMatchObject({
         set,
         gates: [
@@ -257,10 +237,6 @@ describe('generateResort', () => {
   });
 
   it('produces a plan the layout accepts, at every size, seed and density', () => {
-    // The one that matters: `layoutResort` throws on an overlap, an object off
-    // the plot, an unknown type, or an object it cannot grow a spur from. A
-    // generator that satisfies it has satisfied every invariant the hand-written
-    // plan is held to.
     for (const set of SWEEP) {
       const plan = planOf(set);
       expect(() => layoutResort(ITEMS, plan)).not.toThrow();
@@ -276,7 +252,6 @@ describe('generateResort', () => {
 });
 
 describe('the advanced settings', () => {
-  /** Every setting pushed away from its default, at sizes that exercise each. */
   const CONFIGS: ResortParams[] = [
     params({ config: { gatePlazas: true, streetTrees: true } }),
     params({ seed: 4, config: { housing: 'mixed', villaShare: 0.3, beach: 'packed' } }),
@@ -398,10 +373,7 @@ describe('the shore a generated plot gets', () => {
           )
           .map((plot) => beachDepthAt(shore, plot.tileX, plot.tileZ)),
       );
-      // Three depths into the sand and no others: a line is a line however the
-      // coast in front of it wanders, because a depth follows the water.
       expect({ set, lines: depths.size }).toEqual({ set, lines: 3 });
-      // With clear sand between them, which is what makes them read as three.
       const sorted = [...depths].toSorted((a, b) => a - b);
       for (const [index, depth] of sorted.slice(1).entries()) {
         expect({ set, apart: depth - sorted[index]! >= 2 }).toEqual({ set, apart: true });
@@ -417,13 +389,8 @@ describe('the shore a generated plot gets', () => {
       const onSand = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'beach');
       const perRow = new Map<number, number>();
       for (const tile of onSand) perRow.set(tile.tileZ, (perRow.get(tile.tileZ) ?? 0) + 1);
-      // A walk along the beach would pave a whole row of it. What crosses the
-      // sand now is a couple of lanes, so no row of sand carries more than a
-      // handful of tiles — and no lounger grows a spur, because sand is walked
-      // on. See `growSpurs`.
       const widest = Math.max(0, ...perRow.values());
       expect({ set, sparse: widest <= 4 }).toEqual({ set, sparse: true });
-      // And they do reach the water, rather than stopping at the dune.
       expect({
         set,
         reaches: onSand.some((tile) => beachDepthAt(shore, tile.tileX, tile.tileZ) === 0),
@@ -432,8 +399,6 @@ describe('the shore a generated plot gets', () => {
   });
 
   it('stands nothing anybody sleeps in on the beach itself', () => {
-    // The lodgings moved up onto the shelf on top of the dune. A bungalow in the
-    // middle of the sand read as a building somebody had left there.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const shore = shoreFor(plan)!;
@@ -458,8 +423,6 @@ describe('the shore a generated plot gets', () => {
         for (let z = plot.tileZ; z < plot.tileZ + footprint.z; z++) covered.add(`${x},${z}`);
       }
     }
-    // The wet strip at the water and the lane against the grass: the two depths
-    // `fillBeach` never builds on, so a boardwalk can always be walked in.
     const reserved = beachTilesOf(shore).filter((tile) => {
       const depth = beachDepthAt(shore, tile.x, tile.z);
       return depth === 0 || depth === shore.spec.beach - 1;
@@ -481,8 +444,6 @@ describe('the shore a generated plot gets', () => {
     expect(paths.some((tile) => tile.id === JETTY_ID)).toBe(true);
 
     for (const tile of paths) {
-      // Taken from what a flight *is* rather than from the classifier: a paved
-      // tile with paved ground one level above it on any side.
       const level = levelAt(elevation, tile.tileX, tile.tileZ);
       const climbs = [
         [0, -1],
@@ -494,10 +455,7 @@ describe('the shore a generated plot gets', () => {
           paved.has(`${tile.tileX + dx!},${tile.tileZ + dz!}`) &&
           levelAt(elevation, tile.tileX + dx!, tile.tileZ + dz!) === level + 1,
       );
-      // Sand rather than beach: the sidewalk along the shelf on top of the dune
-      // is decking for the same reason the pier out to the water is.
       const ground = groundAt(shore, elevation, tile.tileX, tile.tileZ);
-      // A park's pond is water the sea is not, and a path crosses it on a bridge.
       const inland = terrain.surfaceOf(tile.tileX, tile.tileZ) === 'water' && ground !== 'water';
       const wanted = inland
         ? tile.id === BRIDGE_RAMP_ID
@@ -520,9 +478,6 @@ describe('the shore a generated plot gets', () => {
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const wet = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'water');
-      // Every wet tile is a jetty, and they stand in at most two columns: the
-      // two sea lanes and nothing else. A plot narrow enough that both lanes
-      // land on the same street gets one. See `SEA_LANES`.
       expect({ set, other: wet.filter((tile) => tile.id !== JETTY_ID) }).toEqual({
         set,
         other: [],
@@ -540,8 +495,6 @@ describe('the shore a generated plot gets', () => {
       const { paths } = layoutResort(ITEMS, plan);
       const wet = paths.filter((tile) => tile.id === JETTY_ID);
       for (const tile of wet) {
-        // Measured off the water rather than off the plot's own edge, so the
-        // same pier comes out on a shallow plot as on a deep one.
         const out = tile.tileZ - waterStartZ(shore, tile.tileX);
         expect({ set, x: tile.tileX, out }).toEqual({ set, x: tile.tileX, out });
         expect(out).toBeGreaterThanOrEqual(0);
@@ -637,9 +590,6 @@ describe('the shore a generated plot gets', () => {
   });
 
   it('lays no flight anywhere on the beach but the row it climbs off', () => {
-    // The beach is all one level, so the only step it can host is the one at the
-    // very back of it — the first of the dune's, whose lower tile is the last row
-    // of sand. You climb off the beach; you never climb on it.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const shore = shoreFor(plan)!;
@@ -672,8 +622,6 @@ describe('the districts a generated plot lays out by design', () => {
         (plot) =>
           BY_ID.get(plot.id)!.category === 'grounds' && inside(park, plot.tileX, plot.tileZ),
       );
-      // Every crossing comes ashore at both ends, so a park lays ramps in pairs;
-      // a park round a fountain may lay none.
       expect({ park, ramps: ramps.length % 2 }).toEqual({ park, ramps: 0 });
       expect({ park, benches: benches.length > 0 }).toEqual({ park, benches: true });
       expect({ park, trees: trees.length > 0 }).toEqual({ park, trees: true });
@@ -698,7 +646,6 @@ describe('the districts a generated plot lays out by design', () => {
       );
     });
     expect(decks).toBe(true);
-    // Different shapes of water: not every park's pond is the same size.
     const ponds = new Set(
       grown.flatMap((plan) =>
         (plan.parks ?? []).map(
@@ -719,8 +666,6 @@ describe('the districts a generated plot lays out by design', () => {
       const houses = plan.plots.filter(
         (plot) => plot.id !== 'villa' && BY_ID.get(plot.id)!.category === 'lodging',
       );
-      // Near enough to read as on the same street, which a thinned walk spreads
-      // out to a lot or two apart.
       const lonely = villas.filter(
         (villa) =>
           !houses.some(
@@ -728,8 +673,6 @@ describe('the districts a generated plot lays out by design', () => {
               Math.abs(house.tileX - villa.tileX) <= 16 && Math.abs(house.tileZ - villa.tileZ) <= 8,
           ),
       );
-      // A plot too small for a block of houses stands the one villa the
-      // catalogue owes wherever a district has room for it.
       const owed = set.tilesX < 80 && villas.length === 1 ? 1 : 0;
       expect({ set, lonely: lonely.length <= owed }).toEqual({ set, lonely: true });
     }
@@ -761,7 +704,6 @@ describe('the districts a generated plot lays out by design', () => {
             );
           }),
       );
-      // One can still stand where the catalogue owed it before the beach had any.
       expect({ set, inland: inland.length <= 1 }).toEqual({ set, inland: true });
     }
   });
@@ -782,8 +724,6 @@ describe('the districts a generated plot lays out by design', () => {
           BY_ID.get(plot.id)!.category === 'lodging' &&
           levelAt(elevation, plot.tileX, plot.tileZ) === 0,
       );
-      // Blocks stand every house square to the street; only a lodging type the
-      // blocks could not stand is left to a mixed district to turn.
       const square = flat.filter((plot) => (plot.rotation ?? 0) % 2 === 0);
       expect({ set, square: square.length >= flat.length * 0.9 }).toEqual({ set, square: true });
     }
@@ -815,9 +755,6 @@ describe('emptyResortPlan', () => {
 
 describe('the hill a generated plot gets', () => {
   it('raises a hill behind the beach and comes back down to sea level behind it', () => {
-    // Sand at sea level, a dune off the back of it, a crest, and the resort
-    // behind that back at zero: the levels climb and fall by one at a time and
-    // end where they started, which is what makes it a hill rather than a cliff.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const elevation = elevationFor(plan);
@@ -835,15 +772,11 @@ describe('the hill a generated plot gets', () => {
   });
 
   it('carries the beach up the dune and turns to grass above it', () => {
-    // The first three benches are the dune, which is sand — the beach going on
-    // up behind itself — and everything above them is lawn.
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const elevation = elevationFor(plan)!;
     const surfaces = elevation.spec.terraces.map((terrace) => terrace.surface);
     expect(surfaces.slice(0, 3)).toEqual(['sand', 'sand', 'sand']);
     expect(surfaces.slice(3).every((surface) => surface === 'grass')).toBe(true);
-    // And the ground agrees: the shelf on top of the dune is sand you can build
-    // on, well above sea level.
     const shore = shoreFor(plan);
     const shelf = raisedTilesOf(elevation).filter(
       (tile) => groundAt(shore, elevation, tile.x, tile.z) === 'sand',
@@ -852,8 +785,6 @@ describe('the hill a generated plot gets', () => {
   });
 
   it('leaves the plot too shallow for a hill flat rather than half-terraced', () => {
-    // The hill loses a level at a time until it fits behind the beach with room
-    // for a resort; a plot that cannot hold even the shortest one is left flat.
     const plan = generateResort(TYPES, params({ tilesX: 40, tilesZ: 40 }));
     expect(plan.elevation).toBeUndefined();
     expect(layoutResort(ITEMS, plan).paths.some((tile) => tile.id === STAIRS_ID)).toBe(false);
@@ -864,7 +795,6 @@ describe('the hill a generated plot gets', () => {
     const { placements } = layoutResort(ITEMS, plan);
     const raised = placements.filter((placement) => placement.y > 0);
     expect(raised.length).toBeGreaterThan(20);
-    // And it is a mixed neighbourhood, not one repeated type.
     expect(new Set(raised.map((placement) => placement.id)).size).toBeGreaterThan(3);
   });
 
@@ -876,21 +806,10 @@ describe('the hill a generated plot gets', () => {
       plan.plots.filter(
         (plot) => plot.id === id && groundAt(shore, elevation, plot.tileX, plot.tileZ) === surface,
       ).length;
-    // A neighbourhood on each surface, not a token few. These are floors on
-    // "enough to read as a neighbourhood" rather than measurements: the exact
-    // count is a by-product of how the generator packs the plot, so it moves
-    // whenever a large type's footprint changes — over the twelve seeds the
-    // suite sweeps it ranges from 3 to 14 — and it is only pinned here because
-    // this case fixes the seed. Widening `waterpark` from 5x5 to 6x6 tiles for
-    // its three flumes moved this seed's houses-on-grass from 12 to 10, and
-    // adding `changing-cabins` and `beach-shower` to the catalogue moved it from
-    // 10 to 9 — a district draws from every type there is, so two more types is
-    // two fewer draws for the rest. Withdrawing `waterpark` to the drafts moved
-    // it again, from 9 to 8. All of it is packing, not a regression in where the
-    // generator puts a house.
+    // Floors, not measurements: the count is a by-product of packing and moves whenever the
+    // catalogue changes.
     expect(on('bungalow', 'sand')).toBeGreaterThanOrEqual(10);
     expect(on('house', 'grass')).toBeGreaterThanOrEqual(8);
-    // Houses at four heights or more: a hillside, not a terrace.
     const heights = new Set(
       plan.plots
         .filter((plot) => plot.id === 'house')
@@ -900,8 +819,6 @@ describe('the hill a generated plot gets', () => {
   });
 
   it('stands every bungalow on the shelf facing the sea', () => {
-    // The model's veranda faces +z, which is the water on every generated plot,
-    // so the row south of the sidewalk stands with its back to the walk.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const elevation = elevationFor(plan);
@@ -917,11 +834,6 @@ describe('the hill a generated plot gets', () => {
   });
 
   it('never turns a whole cross street into one long staircase', () => {
-    // The failure the landward step is placed to avoid. Laid *on* a two-wide
-    // cross street it splits the street lengthwise, and every column of it
-    // becomes a flight — a stair wall the full width of the plot. Laid just past
-    // it, the flights are only where north-south paths come down off the bench,
-    // which is a dozen or so spread along that street rather than all of it.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const { paths } = layoutResort(ITEMS, plan);
@@ -931,18 +843,12 @@ describe('the hill a generated plot gets', () => {
         perRow.set(tile.tileZ, (perRow.get(tile.tileZ) ?? 0) + 1);
       }
       const widest = Math.max(0, ...perRow.values());
-      // A quarter of the width is far above what the lanes crossing a street can
-      // account for, and far below the every-column wall a split street gives.
+      // Far above what lanes crossing a street account for, far below the wall a split street gives.
       expect({ set, widest: widest < plan.tilesX / 4 }).toEqual({ set, widest: true });
     }
   });
 
   it('keeps every east-west street off the hill entirely', () => {
-    // The other half of the same answer. A cross street is straight and the
-    // hill's benches are not — they follow the coast — so a street laid across
-    // one would drift on and off a step for its whole length. They are held
-    // north of the hill instead, which is why every tile of every one of them is
-    // at sea level.
     for (const set of SWEEP) {
       const plan = planOf(set);
       const elevation = elevationFor(plan);
@@ -960,8 +866,6 @@ describe('the hill a generated plot gets', () => {
   });
 
   it('climbs the hill from both sides', () => {
-    // Flights up the seaward face and flights down the landward one: the two
-    // face opposite ways, which is what a hill between them means.
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const { paths } = layoutResort(ITEMS, plan);
     const turns = new Set(
@@ -975,10 +879,6 @@ describe('the hill a generated plot gets', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const elevation = elevationFor(plan)!;
     const { paths } = layoutResort(ITEMS, plan);
-    // Paving per height it stands at. A walk down the middle of a bench is about
-    // as many tiles as the plot is wide — spread over a few rows, because it
-    // follows the coast rather than a line — where a lane climbing the hill head
-    // on leaves a handful at each height it passes through.
     const perLevel = new Map<number, number>();
     for (const tile of paths) {
       const level = levelAt(elevation, tile.tileX, tile.tileZ);
@@ -987,8 +887,6 @@ describe('the hill a generated plot gets', () => {
     const walked = [...perLevel.entries()].filter(
       ([level, tiles]) => level > 0 && tiles > plan.tilesX * 0.6,
     );
-    // The shelf on top of the dune and the grass benches above it: a hill you
-    // can walk along at four heights rather than only climb.
     expect(walked.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -999,21 +897,16 @@ describe('the hill a generated plot gets', () => {
 
     expect(rails.some((rail) => rail.id === RAILING_ID)).toBe(true);
     expect(rails.some((rail) => rail.id === STAIR_RAILING_ID)).toBe(true);
-    // A rail stands on the paving it guards rather than on ground of its own.
     for (const rail of rails) {
       expect({ key: rail.key, on: paved.has(tileKey(rail.tileX, rail.tileZ)) }).toEqual({
         key: rail.key,
         on: true,
       });
     }
-    // And they are the exception, like the flights: a hill with a handrail down
-    // every path on it would be a fire escape.
     expect(rails.length).toBeLessThan(paths.length / 8);
   });
 
   it('lays a flight where a path crosses a step and nowhere else', () => {
-    // Stairs are the exception, not the paving: a dozen or two on a plot that
-    // lays a few thousand slabs.
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const { paths } = layoutResort(ITEMS, plan);
     const stairs = paths.filter((tile) => tile.id === STAIRS_ID).length;

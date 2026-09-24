@@ -2,16 +2,13 @@ import type { RefObject } from 'react';
 import { SIM_SPEEDS, SPEED_LABELS, type SimSpeed } from '../../sim/domain/simClock';
 
 export interface TimeOfDayProps {
-  /** Written straight by the render loop while the resort runs; see `useHudNodes`. */
   readonly timeElement: RefObject<HTMLInputElement | null>;
-  /** The day and the hour, written the same way. */
   readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly speed: SimSpeed;
   readonly onTimeChange: (time: number) => void;
   readonly onSpeedChange: (speed: SimSpeed) => void;
 }
 
-/** Where the sun stands, which day it is, and how fast the resort is running. */
 export function TimeOfDay({
   timeElement,
   clockElement,

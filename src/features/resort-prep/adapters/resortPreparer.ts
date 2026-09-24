@@ -1,13 +1,5 @@
-/**
- * Prepares resorts in a worker when the browser allows one, so the page keeps
- * drawing — and answering — while a large plot is grown and baked.
- *
- * The main-thread path is kept as a fallback, as `meshCatalogue.ts` keeps one:
- * a worker can fail to start for reasons that have nothing to do with this code,
- * and a resort that arrives with the page frozen is better than none. A job that
- * fails *inside* the worker is not retried here, though: the same plan would
- * fail the same way on this thread, only with the page frozen while it did.
- */
+// The main-thread fallback covers a worker that cannot start. A job that fails inside the worker
+// is not retried here: it would fail the same way, only with the page frozen.
 
 import { prepareResort, type PrepRequest, type PreparedResort } from '../domain/prepareResort';
 import type { PrepAnswer, PrepMessage } from './prepWorker';
@@ -22,7 +14,6 @@ interface Pending {
   readonly reject: (cause: Error) => void;
 }
 
-/** A worker that could not be started or died, as against a job that failed in it. */
 class WorkerUnavailable extends Error {}
 
 export function createResortPreparer(

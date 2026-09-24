@@ -42,7 +42,6 @@ describe('summarizeFrames', () => {
   });
 
   it('separates the average from the tail on a spiky stream', () => {
-    // Half the frames at 120 fps, half at 30: the average hides both.
     const durations = Array.from({ length: 100 }, (_, index) =>
       index % 2 === 0 ? 1000 / 120 : 1000 / 30,
     );
@@ -59,7 +58,6 @@ describe('summarizeFrames', () => {
   });
 
   it('counts fps over the measured span, not over the median', () => {
-    // One long frame among short ones drags the throughput but not the median.
     const stats = summarizeFrames([...Array.from({ length: 9 }, () => 10), 910]);
     expect(stats.medianMs).toBe(10);
     expect(stats.fps).toBeCloseTo(10, 6);

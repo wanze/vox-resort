@@ -49,7 +49,6 @@ describe('instancesByType', () => {
   });
 });
 
-/** A geometry of `triangles` degenerate faces, enough to count and to bound. */
 function geometryOf(triangles: number): BufferGeometry {
   const geometry = new BufferGeometry();
   const positions = new Float32Array(triangles * 9);
@@ -72,7 +71,6 @@ function model(id: string, triangles: number, glowing = false): ModelGeometry {
   };
 }
 
-/** A model with water in it, which is a third geometry and a third material. */
 function wetModel(id: string, triangles: number): ModelGeometry {
   return {
     id,
@@ -85,7 +83,6 @@ function wetModel(id: string, triangles: number): ModelGeometry {
   };
 }
 
-/** A chunk small enough that a test can put two placements either side of it. */
 const CHUNK = 100;
 
 const build = (models: readonly ModelGeometry[], placements: readonly Placement[]) =>
@@ -97,20 +94,16 @@ const meshNamed = (world: { group: { children: readonly unknown[] } }, name: str
 const instancesOf = (mesh: Mesh): InstancedBufferGeometry =>
   mesh.geometry as InstancedBufferGeometry;
 
-/** Instances a bucket draws. */
 const countOf = (mesh: Mesh): number => instancesOf(mesh).instanceCount;
 
-/** Instances a bucket's buffer has room for. */
 const capacityOf = (mesh: Mesh): number =>
   (instancesOf(mesh).getAttribute('instanceColumn0') as InterleavedBufferAttribute).data.count;
 
-/** The matrix written into one slot of a bucket. */
 function matrixAt(mesh: Mesh, slot: number): Matrix4 {
   const column = instancesOf(mesh).getAttribute('instanceColumn0') as InterleavedBufferAttribute;
   return new Matrix4().fromArray(column.data.array, slot * 16);
 }
 
-/** Where each live instance of a mesh stands, in the order its slots hold them. */
 function positionsOf(mesh: Mesh): { x: number; z: number }[] {
   return Array.from({ length: countOf(mesh) }, (_, slot) => {
     const matrix = matrixAt(mesh, slot);
@@ -120,10 +113,6 @@ function positionsOf(mesh: Mesh): { x: number; z: number }[] {
 
 describe('buildInstancedWorld', () => {
   it('draws a turned placement with the turn folded into its instance matrix', () => {
-    // A quarter turn about the origin would leave the model behind the corner it
-    // was placed on, so the matrix carries the offset that brings it back — and
-    // it is still one geometry in one bucket, which is the whole point of
-    // turning an instance rather than meshing a second model.
     const turned: Placement = { ...at('a', 'hut', 64, 32), rotation: 1, width: 44, depth: 30 };
     const world = build([model('hut', 2)], [turned]);
     const matrix = matrixAt(meshNamed(world, 'hut@0,0')!, 0);
@@ -131,7 +120,6 @@ describe('buildInstancedWorld', () => {
     const corners = [new Vector3(0, 0, 0), new Vector3(30, 0, 44)].map((corner) =>
       corner.applyMatrix4(matrix),
     );
-    // The model's own box, turned, lands exactly on the placement's footprint.
     expect(corners.map((corner) => [Math.round(corner.x), Math.round(corner.z)])).toEqual([
       [64, 32 + 30],
       [64 + 44, 32],
@@ -146,7 +134,6 @@ describe('buildInstancedWorld', () => {
     expect(world.chunkCount).toBe(0);
     expect(world.instanceCount).toBe(0);
     expect(world.drawnTriangleCount).toBe(0);
-    // No hut stands, so its geometry is not counted as uploaded either.
     expect(world.uniqueTriangleCount).toBe(0);
     world.dispose();
   });
@@ -156,7 +143,6 @@ describe('buildInstancedWorld', () => {
       [model('hut', 2), model('lamp', 3, true)],
       [at('a', 'hut', 0), at('b', 'hut', 150), at('c', 'lamp', 10)],
     );
-    // hut in two chunks, lamp in one — and the lamp's glow is a mesh of its own.
     expect(world.drawCalls).toBe(4);
     expect(world.chunkCount).toBe(2);
     expect(world.instanceCount).toBe(3);
@@ -210,19 +196,14 @@ describe('buildInstancedWorld', () => {
       0,
       ...Array.from({ length: capacity + 1 }, (_, index) => index),
     ]);
-    // Still one mesh a layer in the group: the old one was taken out, not left
-    // behind. The other three are the region, far region and district the same
-    // hut is drawn in.
     expect(world.drawCalls).toBe(1);
     expect(world.group.children).toHaveLength(4);
     world.dispose();
   });
 
   it('lets every bucket of a material share one shader', () => {
-    // Three.js's WebGPU renderer keys an `InstancedMesh`'s built shader on the
-    // mesh's own uuid, so fifteen thousand of them were fifteen thousand node
-    // builds, paid the first frame each was drawn. A plain mesh over an
-    // instanced geometry is keyed on its material and attribute layout alone.
+    // Three.js WebGPU keys an InstancedMesh's shader on its uuid, so every one costs its own
+    // node build; a plain mesh over instanced geometry is keyed on material and layout only.
     const world = build(
       [model('hut', 2), model('lamp', 3, true)],
       [at('a', 'hut', 0), at('b', 'hut', 150), at('c', 'lamp', 10)],
@@ -233,7 +214,6 @@ describe('buildInstancedWorld', () => {
       expect(mesh.count ?? 1, mesh.name).toBeLessThanOrEqual(1);
       expect((mesh.geometry as InstancedBufferGeometry).isInstancedBufferGeometry).toBe(true);
     }
-    // And the catalogue's attributes are shared, not copied per bucket.
     const [first, second] = ['hut@0,0', 'hut@1,0'].map((name) => meshNamed(world, name)!);
     expect(first!.geometry.getAttribute('position')).toBe(
       second!.geometry.getAttribute('position'),
@@ -285,8 +265,6 @@ describe('buildInstancedWorld', () => {
     const world = build([wetModel('pool', 4)], [at('a', 'pool', 0)]);
     expect(world.drawCalls).toBe(2);
     expect(world.drawnTriangleCount).toBe(6);
-    // The two meshes share a name and differ in material, which is what the
-    // bucket key is for; both go when the pool does.
     expect(world.remove('a')).toBe(true);
     expect(world.drawCalls).toBe(0);
     world.dispose();
@@ -326,7 +304,6 @@ describe('buildInstancedWorld', () => {
     const untouched = meshNamed(world, 'hut@0,0')!;
     world.setPlacements([at('a', 'hut', 0), at('b', 'hut', 10), at('d', 'hut', 20)]);
     expect(world.instanceCount).toBe(3);
-    // The chunk that lost its only instance is gone; the other kept its mesh.
     expect(meshNamed(world, 'hut@1,0')).toBeUndefined();
     expect(meshNamed(world, 'hut@0,0')).toBe(untouched);
     expect(
@@ -372,8 +349,8 @@ describe('buildInstancedWorld', () => {
   });
 
   it('keeps the geometries for the world that replaces it', () => {
-    // A regenerate builds the new world over the same catalogue before the old
-    // one is let go, so the old one's dispose must not reach the new one's meshes.
+    // A regenerate builds the new world before the old one is disposed, so the old
+    // dispose must not reach the new meshes.
     const models = [model('hut', 2), model('lamp', 3, true)];
     const disposed = countDisposals(models);
     const previous = build(models, [at('a', 'hut', 0)]);
@@ -386,7 +363,6 @@ describe('buildInstancedWorld', () => {
   });
 });
 
-/** A model `size` voxels across, so the level of detail has something to judge. */
 function sizedModel(id: string, size: number, coarse: boolean): ModelGeometry {
   const sized = (triangles: number): BufferGeometry => {
     const geometry = geometryOf(triangles);
@@ -400,16 +376,11 @@ function sizedModel(id: string, size: number, coarse: boolean): ModelGeometry {
   };
 }
 
-/** Everything drawn at half a pixel per voxel, wherever it stands: far, and not small. */
 const FAR = { x: 0, y: 0, z: 0, lens: orthographicLens(1, 2) };
-/** Everything drawn at two pixels per voxel: close, but not close enough to chunk. */
 const MID = { x: 0, y: 0, z: 0, lens: orthographicLens(4, 2) };
-/** Everything drawn at eight pixels per voxel: near enough to draw a chunk at a time. */
 const NEAR = { x: 0, y: 0, z: 0, lens: orthographicLens(16, 2) };
-/** Everything drawn at a hundredth of a pixel per voxel: too small to see. */
 const SPECK = { x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) };
 
-/** The meshes a pass left visible, by name. */
 const visibleNames = (world: { group: { children: readonly Mesh[] } }): string[] =>
   world.group.children
     .filter((child) => child.visible)
@@ -418,10 +389,6 @@ const visibleNames = (world: { group: { children: readonly Mesh[] } }): string[]
 
 describe('level of detail', () => {
   it('draws each part of the plot at the level its distance calls for', () => {
-    // Chunks are 100 voxels, regions 400 and districts 1 600. The camera stands
-    // in region 7, a hundred pixels a voxel falling off with distance: region 7
-    // is chunked, region 8 next door is whole, region 4 across the district is
-    // coarse, and district 0 beyond it is one coarse draw altogether.
     const world = build(
       [sizedModel('hut', 64, true)],
       [at('a', 'hut', 0), at('b', 'hut', 1700), at('c', 'hut', 3300), at('d', 'hut', 3000)],
@@ -438,7 +405,6 @@ describe('level of detail', () => {
   });
 
   it('draws a far district as one coarse draw per model, whatever regions it spans', () => {
-    // Two regions of the far layer, one district.
     const models = [sizedModel('hut', 64, true)];
     const world = build(models, [at('a', 'hut', 0), at('b', 'hut', 500)]);
     world.updateDetail(FAR);
@@ -492,8 +458,6 @@ describe('level of detail', () => {
   });
 
   it('draws nothing far away for a surface the coarse copy lost', () => {
-    // A lamp whose glow the coarse copy painted over: its glass is not drawn
-    // from that far, rather than drawn in full beside a coarse post.
     const lamp = { ...sizedModel('lamp', 64, true), emissive: geometryOf(1) };
     const world = build([lamp], [at('a', 'lamp', 0)]);
     world.updateDetail(FAR);
@@ -524,12 +488,10 @@ describe('level of detail', () => {
   });
 });
 
-/** Whether a bucket draws this catalogue geometry: shares its index and positions. */
 const drawsGeometry = (mesh: Mesh, geometry: BufferGeometry): boolean =>
   mesh.geometry.getIndex() === geometry.getIndex() &&
   mesh.geometry.getAttribute('position') === geometry.getAttribute('position');
 
-/** Counts `dispose` events on every geometry of `models`, read through the returned function. */
 function countDisposals(models: readonly ModelGeometry[]): () => number {
   let disposed = 0;
   for (const entry of models) {

@@ -12,14 +12,12 @@ import {
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { pitchFor, type PitchInput } from './beachPitch';
 
-/** Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach. */
 const shore = shoreFor({
   tilesX: 20,
   tilesZ: 20,
   shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
 })!;
 
-/** A path down column 10 to the back of the sand, so its last tile, 10,11, is the one gate. */
 const path: PavedTile[] = Array.from({ length: 6 }, (_, index) => ({
   tileX: 10,
   tileZ: 6 + index,
@@ -29,7 +27,6 @@ const path: PavedTile[] = Array.from({ length: 6 }, (_, index) => ({
 const beachOf = (seats: SeatSpot[] = [], obstacles: ObstacleBox[] = []): WalkNetwork =>
   walkNetworkFor({ paved: path, levelOf: () => 0, shore, tilesX: 20, seats, obstacles });
 
-/** A lounger lying down the middle of a tile. */
 const lounger = (tileX: number, tileZ: number): SeatSpot => ({
   x: (tileX + 0.5) * TILE_VOXELS,
   z: (tileZ + 0.5) * TILE_VOXELS,
@@ -61,8 +58,6 @@ describe('pitchFor', () => {
     const network = beachOf();
     expect(network.gates).toHaveLength(1);
     const pitch = pitchFor(inputOn(network))!;
-    // Not on the tile in front of the gate, which is where everybody coming onto
-    // the beach walks through; two steps out, still in the same column.
     expect(tileOf(pitch)).toEqual({ tileX: 10, tileZ: 14 });
     expect(pitch.tile).toBe(14 * 20 + 10);
     expect(pitch.spots).toHaveLength(3);
@@ -80,7 +75,6 @@ describe('pitchFor', () => {
       expect(blockedAt(network.sand!, spot.x, spot.z)).toBe(false);
       expect(spot.heading).toBe(0);
     }
-    // Nobody lies on top of anybody.
     const xs = pitch.spots.map((spot) => `${spot.x},${spot.z}`);
     expect(new Set(xs).size).toBe(3);
   });
@@ -106,8 +100,6 @@ describe('pitchFor', () => {
     const [held] = network.beachSeats as [number];
     const pitch = pitchFor(inputOn(network, { loungerFree: (seat) => seat !== held }))!;
     expect(pitch.spots.map((spot) => spot.seat)).not.toContain(held);
-    // One free lounger is not one for every adult, so the nearest tile wins and
-    // lies whoever it can on what it has.
     expect(tileOf(pitch)).toEqual({ tileX: 10, tileZ: 12 });
     expect(pitch.spots.filter((spot) => spot.seat >= 0)).toHaveLength(1);
   });
@@ -117,14 +109,12 @@ describe('pitchFor', () => {
     const first = pitchFor(inputOn(network))!;
     const second = pitchFor(inputOn(network, { taken: new Set([first.tile]) }))!;
     expect(second.tile).not.toBe(first.tile);
-    // The next nearest that is still clear of the gate's own walkway.
     const { tileX, tileZ } = tileOf(second);
     expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeGreaterThanOrEqual(2);
     expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeLessThanOrEqual(3);
   });
 
   it('gives nothing when the beach within reach of the gate is all in use', () => {
-    // One box over the whole band of sand.
     const covered = beachOf(
       [],
       [{ x: 0, z: 12 * TILE_VOXELS, width: 20 * TILE_VOXELS, depth: 96 }],

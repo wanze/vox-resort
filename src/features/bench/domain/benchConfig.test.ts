@@ -36,7 +36,6 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1')?.weather).toBeNull();
     expect(parseBenchConfig('?bench=1&weather=storm')?.weather).toBe('storm');
     expect(parseBenchConfig('?bench=1&weather=heatwave')?.weather).toBe('heatwave');
-    // A day nobody has heard of measures the day the week drew, not nothing.
     expect(parseBenchConfig('?bench=1&weather=hail')?.weather).toBeNull();
   });
 

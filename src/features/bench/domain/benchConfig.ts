@@ -1,37 +1,11 @@
-/**
- * The benchmark harness's configuration, parsed from the page URL.
- *
- * Adding `?bench=1` to the dev server URL pins the camera, freezes the clock and
- * measures a fixed number of frames, so two builds can be compared on the same
- * pixels rather than on whatever the mouse happened to be doing. Without the
- * flag none of this costs anything: the showcase never leaves its normal path.
- *
- * The camera presets are derived from the plot's bounds, so they survive the
- * resort growing — which it is meant to.
- *
- * **Both presets are perspective framings, and a run stays in that mode.** The
- * numbers in `docs/rendering.md` were all measured through that lens, and an
- * orthographic camera does not draw the same pixels — it culls differently and
- * has no horizon for the fog to run out to — so a mixed set of runs would not be
- * comparable with each other or with what is written down. The showcase refuses
- * a mode change while a bench is on for the same reason; pricing the isometric
- * view means a preset of its own, not a flag on these.
- */
-
 import { normalizeTime } from '../../lighting/domain/dayNight';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 import type { CameraFraming, WorldBounds } from '../../layout/domain/worldBounds';
 import { cameraFramingFor } from '../../layout/domain/worldBounds';
 
-/**
- * `overview` is the framing the app opens on: the whole plot at a slant, so the
- * measurement covers every instance and every draw call.
- *
- * `street` drops the camera to lamp height in the middle of the plot. That is
- * the view the night cost actually shows up in — a point light overhead fills
- * far more of the screen from down there than it does from the overview, and
- * point-light cost is paid per lit fragment.
- */
+// Both are perspective only: docs/rendering.md was measured through that lens, and
+// an orthographic camera culls and fogs differently. `street` exists because
+// point-light cost is paid per lit fragment, which dominates at lamp height.
 export type BenchView = 'overview' | 'street';
 
 const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(['overview', 'street']);
@@ -40,44 +14,13 @@ const BENCH_WEATHERS: ReadonlySet<string> = new Set<string>(WEATHERS);
 
 export interface BenchConfig {
   readonly view: BenchView;
-  /** Normalised time of day the clock is frozen at, 0..1. */
   readonly time: number;
-  /** Frames rendered and thrown away before measuring, so caches and shaders settle. */
   readonly warmupFrames: number;
-  /** Frames the report is computed from. */
   readonly measureFrames: number;
-  /**
-   * Tiles the plot this many times on each axis, so a resort several times the
-   * authored size can actually be measured rather than argued about.
-   */
   readonly repeat: number;
-  /**
-   * Forces the renderer onto its WebGL2 backend. Both backends have to keep
-   * working, and the only way to know is to render the resort on each.
-   */
   readonly forceWebGL: boolean;
-  /**
-   * Meshes the catalogue on the main thread instead of in a worker. The
-   * fallback path has to keep working, and the contrast is what shows what the
-   * worker is worth.
-   */
   readonly forceMainThreadMeshing: boolean;
-  /**
-   * Whether the level of detail is on. Off draws every object in full wherever
-   * it is, which is the run that says what the level of detail saves.
-   */
   readonly detail: boolean;
-  /**
-   * The kind of day to pin the run to, or null for whichever one the week
-   * draws - which is day 0's, and day 0 is clear.
-   *
-   * Here because the rain is the first thing that draws over the whole frame
-   * every frame, and a clear day never draws it: `?bench=1&weather=storm` is
-   * the only way to price it, and pricing it is the condition
-   * `plans/023-weather.md` set on it landing. It pins the weather the HUD's own
-   * buttons pin, through the same `setWeather`, so the run measures exactly
-   * what somebody watching the plot sees. See `features/weather/`.
-   */
   readonly weather: Weather | null;
 }
 
@@ -99,7 +42,6 @@ const integerParam = (raw: string | null, fallback: number, min: number): number
   return Number.isFinite(value) && value >= min ? value : fallback;
 };
 
-/** Reads a bench config out of a query string; `null` when `bench` is absent. */
 export function parseBenchConfig(search: string): BenchConfig | null {
   const params = new URLSearchParams(search);
   const flag = params.get('bench');
@@ -132,13 +74,8 @@ export function parseBenchConfig(search: string): BenchConfig | null {
   };
 }
 
-/** How high above the ground the `street` camera stands, in voxels. */
 const STREET_EYE_HEIGHT = 14;
 
-/**
- * Where the camera stands for a preset. Both presets are pure functions of the
- * plot, so a bigger resort is still framed the same way.
- */
 export function benchFraming(
   view: BenchView,
   bounds: WorldBounds,
@@ -150,8 +87,6 @@ export function benchFraming(
   const centerZ = bounds.minZ + (bounds.maxZ - bounds.minZ) / 2;
   const depth = bounds.maxZ - bounds.minZ;
   return {
-    // Standing a quarter of the plot south of the middle, looking north across
-    // it: buildings fill the frame and the lamps are at eye level.
     position: { x: centerX, y: STREET_EYE_HEIGHT, z: centerZ + depth * 0.25 },
     target: { x: centerX, y: STREET_EYE_HEIGHT * 0.6, z: centerZ - depth * 0.25 },
   };

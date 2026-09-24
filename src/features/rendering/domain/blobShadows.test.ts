@@ -23,7 +23,6 @@ const caster = (overrides: Partial<ShadowCaster> = {}): ShadowCaster => ({
   ...overrides,
 });
 
-/** Noon: straight overhead, so nothing is swept anywhere. */
 const OVERHEAD = { x: 0, y: 1, z: 0 };
 
 describe('blobShadowFor', () => {
@@ -133,13 +132,10 @@ describe('shadowQuadFor', () => {
 
   it('runs the quad out of the object rather than clear of it', () => {
     const blob = blobShadowFor(caster({ height: 40 }))!;
-    // Sun to the west, so the shadow runs east and the arithmetic reads forwards.
     const cast = shadowCastFor({ x: -0.7, y: 0.7, z: 0 });
     expect(cast.runX).toBeGreaterThan(0);
     const quad = shadowQuadFor(blob, cast);
-    // The near edge is still under the footprint the object claims.
     expect(quad.x - quad.halfWidth).toBeLessThan(blob.x);
-    // And the far edge has reached the ground beyond it.
     expect(quad.x + quad.halfWidth).toBeGreaterThan(blob.x + blob.halfWidth);
   });
 

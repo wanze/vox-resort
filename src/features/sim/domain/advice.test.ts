@@ -70,11 +70,6 @@ const NOTHING_WANTED: { readonly [need in GuestNeed]: number } = {
   hygiene: 0,
 };
 
-/**
- * A plot with nothing wrong with it: everything served, everything visited,
- * everybody in a bed, nothing turned away and the one lodging next door to the
- * one venue. Every test below is this with one fact moved.
- */
 function healthyFacts(over: Partial<ResortFacts> = {}): ResortFacts {
   const everything: readonly NeedRelief[] = [
     { need: 'hunger', amount: 0.5 },
@@ -106,7 +101,6 @@ describe('the advice rules', () => {
       weight: 0.25,
       subject: 'beds',
       count: 25,
-      // Nowhere in particular and no one need: it is the plot that is short.
       at: null,
       need: null,
     });
@@ -124,7 +118,6 @@ describe('the advice rules', () => {
     const advice = adviceUnservedNeeds(
       healthyFacts({ venues: [bar], wanting: { ...NOTHING_WANTED, hunger: 30, fun: 0 } }),
     );
-    // Thirst is served, fun is not but nobody wants it, hunger is neither.
     expect(advice).toEqual([
       {
         kind: 'unserved-need',
@@ -143,8 +136,6 @@ describe('the advice rules', () => {
     const advice = adviceFullLines(
       healthyFacts({
         venues: [quiet, busy],
-        // The shower refused everybody who came; the restaurant refused half of
-        // a great many. The restaurant is the one worth saying.
         balks: new Map([
           ['shower#0', 2],
           ['restaurant#0', 60],
@@ -162,15 +153,11 @@ describe('the advice rules', () => {
     const small = venueOf({ key: 'shower#0', label: 'Beach Shower', capacity: 1 });
     const venues = [big, small];
 
-    // Nothing over the line is nothing to say: the same threshold a cleaner
-    // walks to, so the panel never advises about what the resort is happy with.
     expect(
       adviceDirty(healthyFacts({ venues, cleanliness: new Map([['pool#0', 0.8]]) })),
     ).toBeNull();
     expect(adviceDirty(healthyFacts({ venues }))).toBeNull();
 
-    // The filthier one when they are the same size, and the bigger one when
-    // they are equally dirty.
     const worst = adviceDirty(
       healthyFacts({
         venues,
@@ -190,8 +177,6 @@ describe('the advice rules', () => {
     ]);
     const bigger = adviceDirty(healthyFacts({ venues, cleanliness: dirt }));
     expect(bigger?.subject).toBe('Swimming Pool');
-    // And a beach shower for one left in the same state is a quieter line than
-    // a pool for forty, rather than the same one.
     const alone = adviceDirty(healthyFacts({ venues: [small], cleanliness: dirt }));
     expect(alone?.subject).toBe('Beach Shower');
     expect(alone!.weight).toBeLessThan(bigger!.weight);
@@ -208,7 +193,6 @@ describe('the advice rules', () => {
         weight: 0.9,
         subject: 'Poolside Bar',
         count: 12,
-        // Which one of them: a plot stands nine of these.
         at: { tileX: 0, tileZ: 0 },
         need: null,
       },
@@ -233,17 +217,10 @@ describe('the advice rules', () => {
     expect(advice?.subject).toBe('Hotel');
     expect(advice?.count).toBe(40);
     expect(advice?.weight).toBeCloseTo(640 / 900, 5);
-    // Which walk it is, and which hotel: a distance on its own is nothing to
-    // build about.
     expect(advice?.need).toBe('hunger');
     expect(advice?.at).toEqual({ tileX: 40, tileZ: 0 });
   });
 
-  /**
-   * The rule the straight line exists for: a bar on the doorstep is no use to
-   * somebody who wants their dinner, so the distance is measured to the nearest
-   * venue **serving the need** and not to the nearest venue.
-   */
   it('measures to the nearest venue serving the need, not to the nearest venue', () => {
     const bar = venueOf({
       key: 'bar#0',
@@ -263,7 +240,6 @@ describe('the advice rules', () => {
         lodgings: [lodgingOf({ key: 'hotel#0', label: 'Hotel', x: 656, z: 0 })],
       }),
     );
-    // Sixteen voxels from a drink and 656 from a meal: it is the meal that is far.
     expect(advice?.count).toBe(41);
     expect(advice?.need).toBe('hunger');
   });
@@ -284,20 +260,12 @@ describe('the advice rules', () => {
       kind: 'unvisited',
       subject: 'Tennis Court',
       count: 4,
-      // Which one of them: a plot stands nine Changing Cabins.
       at: { tileX: 0, tileZ: 0 },
       need: null,
     });
-    // 0.2 at the smallest, 0.4 at forty places: room for four is 0.22.
     expect(advice[0]!.weight).toBeCloseTo(0.22, 5);
   });
 
-  /**
-   * Flat 0.3 apiece was the first cut, and a plot of ninety venues on a quiet
-   * day left a dozen of them tied - which four reached the panel came down to
-   * placement order. A thirty-place pool nobody swam in is worse news than a
-   * one-place shower nobody rinsed under.
-   */
   it('ranks an idle venue by how much room stood empty in it', () => {
     const pool = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 30, x: 16 });
     const shower = venueOf({ key: 'shower#0', label: 'Beach Shower', capacity: 1, x: 32 });
@@ -306,17 +274,10 @@ describe('the advice rules', () => {
       healthyFacts({ venues: [shower, pool, busy], visits: new Map([['bakery#0', 3]]) }),
     );
     expect(advice.map((each) => each.subject)).toEqual(['Beach Shower', 'Swimming Pool']);
-    // The order out is the venues' own; the ranking is `adviceFor`'s job.
     expect(advice[1]!.weight).toBeGreaterThan(advice[0]!.weight);
-    // And still a note rather than a problem: never as loud as a stranded venue.
     expect(advice[1]!.weight).toBeLessThan(0.9);
   });
 
-  /**
-   * A resort that has just been generated has a day's counters of nothing at
-   * all, and "nobody visited it today" about every building on the plot is not
-   * advice, it is the day not having happened yet.
-   */
   it('says nothing about a day on which nobody went anywhere at all', () => {
     const advice = adviceUnvisited(healthyFacts({ visits: new Map() }));
     expect(advice).toEqual([]);
@@ -360,7 +321,6 @@ describe('adviceFor', () => {
     const advice = adviceFor(
       healthyFacts({
         venues: [one, two],
-        // One venue nothing can reach, at 0.9, and one nobody went to, at 0.3.
         unreachable: new Set(['a#0']),
         visits: new Map([['somewhere-else#0', 4]]),
         wanting: NOTHING_WANTED,
@@ -383,7 +343,6 @@ describe('unreachableOn', () => {
     expect([...unreachableOn([bar], () => doorsOf([], []))]).toEqual(['bar#0']);
   });
 
-  /** A beach shower has no door node either, and is walked up to over the sand. */
   it('leaves a venue with sand in front of it alone, though it has no door node', () => {
     const shower = venueOf({ key: 'beach-shower#0' });
     expect([...unreachableOn([shower], () => doorsOf([], [{ x: 8, z: 8 }]))]).toEqual([]);
@@ -396,7 +355,6 @@ describe('unreachableOn', () => {
 });
 
 describe('adviceWeatherClosed', () => {
-  /** A plot with a pool and a games hall, both of them fun, both of them wanted. */
   const twoKindsOfFun = (): Partial<ResortFacts> => ({
     venues: [
       venueOf({ key: 'swimming-pool#0', label: 'Pool', satisfies: [{ need: 'fun', amount: 0.8 }] }),
@@ -433,7 +391,6 @@ describe('adviceWeatherClosed', () => {
     expect(adviceWeatherClosed(facts)).toEqual([
       {
         kind: 'weather-closed',
-        // Half the plot wants it, and all of what serves it is shut.
         weight: 0.5,
         subject: 'fun',
         count: 2,
@@ -444,15 +401,12 @@ describe('adviceWeatherClosed', () => {
   });
 
   it('leaves a need nobody wants, and one nothing serves, to the rules that own them', () => {
-    // Nobody wants it: a shut pool on a plot where nobody is bored is not advice.
     const unwanted = healthyFacts({
       ...twoKindsOfFun(),
       wanting: NOTHING_WANTED,
       closed: new Set(['swimming-pool#0', 'game-hall#0']),
     });
     expect(adviceWeatherClosed(unwanted)).toEqual([]);
-    // Nothing serves it at all: `adviceUnservedNeeds` has already said so, and
-    // said it louder and permanently.
     const unserved = healthyFacts({
       venues: [],
       wanting: { ...NOTHING_WANTED, fun: 50 },

@@ -10,12 +10,8 @@ import {
   type TriangleSoup,
 } from './greedyMesh';
 
-/**
- * Builds the triangle soup a voxel mesher would emit for a set of unit faces.
- * Winding is deliberately the *wrong* way round for half the faces, because the
- * merge is supposed to read orientation off the normal rather than off the
- * winding it happens to be handed.
- */
+// Half the faces are wound the wrong way on purpose: the merge must read
+// orientation off the normal, not the winding.
 function soupOf(
   faces: readonly { axis: FaceAxis; positive: boolean; slice: number; u: number; v: number }[],
 ): TriangleSoup {
@@ -47,7 +43,6 @@ function soupOf(
   };
 }
 
-/** Every unit cell a set of merged quads covers, as sortable keys. */
 function coveredCells(quads: readonly MergedQuad[]): string[] {
   const cells: string[] = [];
   for (const quad of quads) {
@@ -99,7 +94,6 @@ describe('greedyMesh', () => {
   });
 
   it('collapses a flat 16x16 face to one rectangle', () => {
-    // This is the path tile's underside, and the whole reason the pass exists.
     const mesh = greedyMesh(soupOf(grid(1, false, 0, 16, 16)));
     expect(mesh.quads).toHaveLength(1);
     expect(mesh.quads[0]).toMatchObject({ width: 16, height: 16 });
@@ -181,8 +175,6 @@ describe('greedyMesh', () => {
   });
 
   it("more than halves a running-bond path tile's top face", () => {
-    // The path model's top layer: grout on every even row, and every fourth
-    // column of the odd rows, with three-wide pavers between.
     const faces = [];
     for (let z = 0; z < 16; z++) {
       for (let x = 0; x < 16; x++) {
@@ -191,9 +183,6 @@ describe('greedyMesh', () => {
       }
     }
     const mesh = greedyMesh(soupOf(faces));
-    // The greedy scan is not the minimal cover — a run growing down into the
-    // next row fragments it — but it is a large win for a small pass, and the
-    // flat undersides it also collapses are where most of the saving is.
     expect(mesh.quads.length).toBeLessThan(faces.length / 2);
     expect(coveredCells(mesh.quads)).toHaveLength(faces.length);
   });
@@ -248,7 +237,6 @@ describe('quadCorners', () => {
       width: 5,
       height: 6,
     });
-    // A y-facing quad spans u along z and v along x — see `planeAxes`.
     const xs = corners.map((corner) => corner[0]);
     const zs = corners.map((corner) => corner[2]);
     expect(corners.every((corner) => corner[1] === 2)).toBe(true);

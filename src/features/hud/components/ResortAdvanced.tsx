@@ -12,7 +12,6 @@ export interface ResortAdvancedProps {
   readonly onChange: (config: ResortConfig) => void;
 }
 
-/** A row of pressed-or-not buttons choosing one of a few words. */
 function Choice<T extends string>(props: {
   readonly label: string;
   readonly options: readonly T[];
@@ -39,7 +38,6 @@ function Choice<T extends string>(props: {
   );
 }
 
-/** A share slider, shown as a percentage. */
 function Share(props: {
   readonly label: string;
   readonly range: { readonly min: number; readonly max: number };
@@ -64,12 +62,6 @@ function Share(props: {
   );
 }
 
-/**
- * The generator settings beyond size, density and seed, folded away by default.
- *
- * Staged like the rest of the panel: nothing here grows a resort until the
- * panel's own button is pressed.
- */
 export function ResortAdvanced({ config, onChange }: ResortAdvancedProps) {
   const current = clampConfig(config);
   const change = (patch: Partial<ResortConfig>): void => onChange({ ...current, ...patch });

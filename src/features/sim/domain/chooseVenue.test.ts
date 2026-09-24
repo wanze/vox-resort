@@ -45,7 +45,6 @@ const venue = (key: string, satisfies: readonly NeedRelief[], x: number, z: numb
   doors: [],
 });
 
-/** Everybody content but for the one need, which is run right down. */
 const wanting = (person: number, need: GuestNeed | null): Needs => {
   const needs = createNeeds(guests, 7);
   for (const each of NEEDS) needs.level[each][person] = 1;
@@ -103,7 +102,6 @@ describe('chooseVenue', () => {
   });
 
   it('lets a short reach settle for the weak place nearby and a long one cross the plot', () => {
-    // The same case twice: a snack at the door, a proper meal a long way off.
     const venues = [
       venue('snack#0', [{ need: 'hunger', amount: 0.3 }], 60),
       venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 1400),
@@ -159,8 +157,6 @@ describe('chooseVenue with a real walking distance', () => {
   });
 
   it('answers exactly as it did without one when it is not given', () => {
-    // The same fixture as "a short reach settles for the weak place nearby",
-    // handed its own straight-line distances: the walk that is the line.
     const venues = [
       venue('snack#0', [{ need: 'hunger', amount: 0.3 }], 60),
       venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 1400),
@@ -184,8 +180,6 @@ describe('chooseVenue with a line at the door', () => {
     chooseVenue({ needs, guests, person, venues, x: 0, z: 0, queueLength });
 
   it('answers exactly as plan 017 did when no queue is handed in', () => {
-    // The same fixture as "a short reach settles for the weak place nearby",
-    // which is the case the distance term is tuned on.
     const venues = [
       venue('snack#0', [{ need: 'hunger', amount: 0.3 }], 60),
       venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 1400),
@@ -208,8 +202,6 @@ describe('chooseVenue with a line at the door', () => {
 
   it('will not choose a venue whose line is already as long as guests will join', () => {
     const person = someone('couple');
-    // The only place on the plot that serves what they want, and full: they go
-    // nowhere rather than walk to be turned away.
     const venues = [venue('bakery#0', HUNGER, 150)];
     expect(queued(person, wanting(person, 'hunger'), venues, () => MAX_QUEUE_SHOWN)).toBeNull();
     expect(
@@ -221,7 +213,6 @@ describe('chooseVenue with a line at the door', () => {
     const person = someone('couple');
     const venues = [venue('bakery#0', HUNGER, 150), venue('bakery#1', HUNGER, 600)];
     const needs = wanting(person, 'hunger');
-    // Two waiting at the near bakery, which is at the end of a two-tile spur.
     const options: ChoiceOptions = {
       needs,
       guests,
@@ -237,8 +228,6 @@ describe('chooseVenue with a line at the door', () => {
 
   it('lets a big place absorb a queue that would rule out a small one', () => {
     const person = someone('couple');
-    // The same distance and the same relief; only the capacity differs, so the
-    // choice is the queue measured against what the place can get through.
     const venues = [
       { ...venue('kiosk#0', HUNGER, 300), capacity: 2 },
       { ...venue('club#0', HUNGER, 300), capacity: 25 },
@@ -260,7 +249,6 @@ describe('chooseVenue on the whole visit, not one need', () => {
     { need: 'thirst', amount: 0.4 },
   ];
 
-  /** Content but for the needs named, each set where the case wants it. */
   const at = (person: number, levels: Partial<Record<GuestNeed, number>>): Needs => {
     const needs = createNeeds(guests, 7);
     for (const each of NEEDS) needs.level[each][person] = 1;
@@ -271,9 +259,6 @@ describe('chooseVenue on the whole visit, not one need', () => {
   };
 
   it('sends a mildly hungry guest to the near snack bar and a starving one to the restaurant', () => {
-    // Plan 030's reported case, as a unit test. Both the same distance, so only
-    // what the visit is worth decides - and at half hunger the two are worth the
-    // same 0.5, which is what lets the layout have a say at all.
     const person = someone('couple');
     const venues = [venue('snack#0', SNACK, 200), venue('restaurant#0', MEAL, 220)];
     expect(decide(person, at(person, { hunger: 0.5 }), venues)?.venue).toBe(0);
@@ -281,8 +266,6 @@ describe('chooseVenue on the whole visit, not one need', () => {
   });
 
   it('sends a bored-and-thirsty guest to the beachclub and a purely thirsty one to the bar', () => {
-    // The other reported case. The bar's thirst 1.0 beat the club's 0.4 at any
-    // distance and any queue before this; now the club's second need counts.
     const person = someone('friends');
     const venues = [venue('bar#0', BAR, 200), venue('club#0', CLUB, 200)];
     expect(decide(person, at(person, { thirst: 0.5, fun: 0.5 }), venues)?.venue).toBe(1);
@@ -291,18 +274,12 @@ describe('chooseVenue on the whole visit, not one need', () => {
 
   it('names the need most of the visit was for, not the one that sent them out', () => {
     const person = someone('friends');
-    // Barely thirsty and thoroughly bored: the bar is chosen, and it is chosen
-    // for the fun, though thirst is the louder need and the bigger amount.
     const choice = decide(person, at(person, { thirst: 0.95, fun: 0 }), [venue('bar#0', BAR, 200)]);
     expect(choice?.need).toBe<GuestNeed>('fun');
   });
 
   it('will not walk somebody to a place whose cost outweighs what it gives them', () => {
     const person = someone('friends');
-    // Bored, and a game that barely helps: an hour of it takes 0.4 of an energy
-    // they have plenty of, which a friends party weighs at 0.8, against 0.05 of
-    // fun weighed at 1.5. A venue that leaves somebody worse off on balance is
-    // not a bad candidate, it is not a candidate.
     const court = venue(
       'court#0',
       [
@@ -326,9 +303,6 @@ describe('chooseVenue with the place filling up', () => {
 
   it('sends a guest past a half-full venue to an empty one, with nobody queueing at all', () => {
     const person = someone('couple');
-    // The same relief, the same capacity, and the far one is the further away -
-    // which used to be the whole story, since a line only forms once a place is
-    // full and neither of these is.
     const venues = [venue('bakery#0', HUNGER, 200), venue('bakery#1', HUNGER, 260)];
     expect(occupied(person, wanting(person, 'hunger'), venues, () => 0)?.venue).toBe(0);
     expect(
@@ -351,9 +325,6 @@ describe('chooseVenue with the place filling up', () => {
 
 describe('chooseVenue with a taste and a memory', () => {
   it('sends two guests of the same archetype in the same spot to different places', () => {
-    // Same kind, same needs, same distances: the only thing left to tell them
-    // apart is which of the two they happen to prefer, and that is the point -
-    // a venue a little behind on the formula is still somebody's first choice.
     const venues = [venue('bakery#0', HUNGER, 200), venue('bakery#1', HUNGER, 200)];
     const taste = (person: number) => (v: number) => tasteFor(saltFor(venues[v]!.key), person, 0.3);
     const chosen = new Set<number>();
@@ -381,7 +352,6 @@ describe('chooseVenue with a taste and a memory', () => {
     const options: ChoiceOptions = { needs, guests, person, venues, x: 0, z: 0 };
     expect(chooseVenue(options)?.venue).toBe(0);
     expect(chooseVenue({ ...options, justLeft: 0 })?.venue).toBe(1);
-    // A preference and not a ban: the only place on the plot still wins.
     expect(chooseVenue({ ...options, venues: [venues[0]!], justLeft: 0 })?.venue).toBe(0);
   });
 });
@@ -392,10 +362,8 @@ describe('chooseVenue against the dirt', () => {
     const venues = [venue('bakery#0', HUNGER, 200), venue('bakery#1', HUNGER, 200)];
     const needs = wanting(person, 'hunger');
     const options: ChoiceOptions = { needs, guests, person, venues, x: 0, z: 0 };
-    // Nothing handed in is everything spotless, and the tie breaks low.
     expect(chooseVenue(options)?.venue).toBe(0);
     expect(chooseVenue({ ...options, cleanliness: (v) => (v === 0 ? 0.1 : 1) })?.venue).toBe(1);
-    // And a plot everybody has let go equally decides on everything else again.
     expect(chooseVenue({ ...options, cleanliness: () => 0.1 })?.venue).toBe(0);
   });
 
@@ -412,8 +380,6 @@ describe('chooseVenue against the dirt', () => {
       z: 0,
       cleanliness: () => 0,
     };
-    // A quarter as attractive is still attractive: a floor of zero would make a
-    // neglected venue behave exactly like a demolished one.
     expect(chooseVenue(filthy)?.venue).toBe(1);
     expect(chooseVenue(filthy)?.need).toBe<GuestNeed>('hunger');
   });
@@ -423,7 +389,6 @@ describe('a venue the weather has shut', () => {
   it('is never chosen, however much better than everything else it is', () => {
     const person = someone('couple');
     const needs = wanting(person, 'hunger');
-    // Right beside them and twice as generous as the one across the plot.
     const venues = [
       venue('restaurant#0', [{ need: 'hunger', amount: 1 }], 20),
       venue('bakery#0', HUNGER, 900),
@@ -472,8 +437,6 @@ describe('a venue the weather has shut', () => {
     const person = someone('family');
     const needs = createNeeds(guests, 7);
     for (const each of NEEDS) needs.level[each][person] = 1;
-    // A family weights hunger 1.4 over thirst 1.1, so a shade more hunger than
-    // thirst is a trip to the bakery on any ordinary day.
     needs.level.hunger[person] = 0.55;
     needs.level.thirst[person] = 0.5;
     const venues = [venue('bakery#0', HUNGER, 100), venue('bar#0', THIRST, 100)];

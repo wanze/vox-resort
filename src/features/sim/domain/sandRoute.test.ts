@@ -15,14 +15,12 @@ import { venuesOn } from './venues';
 
 const FLAT: LevelProvider = () => 0;
 
-/** Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach. */
 const straightShore = shoreFor({
   tilesX: 20,
   tilesZ: 20,
   shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
 })!;
 
-/** A path running south down column `tileX` to the back of the sand, so its last tile is a gate. */
 const pathDown = (tileX: number, to = 11): PavedTile[] =>
   Array.from({ length: to - 5 }, (_, index) => ({ tileX, tileZ: 6 + index, y: 0 }));
 
@@ -38,13 +36,11 @@ const centreOf = (tileX: number, tileZ: number): SandPoint => ({
   z: (tileZ + 0.5) * TILE_VOXELS,
 });
 
-/** A point's tile, as `terrainAt` takes it. */
 const tileOf = (point: SandPoint): [number, number] => [
   Math.floor(point.x / TILE_VOXELS),
   Math.floor(point.z / TILE_VOXELS),
 ];
 
-/** Every leg of a route, the step off the gate first. */
 const legsOf = (network: WalkNetwork, route: SandRoute): [SandPoint, SandPoint][] => {
   const gate = network.nodes[route.gate]!;
   const points = [{ x: gate.x, z: gate.z }, ...route.waypoints];
@@ -60,7 +56,6 @@ describe('sandRoutesFor', () => {
     expect(routes).toHaveLength(1);
     const [route] = routes as [SandRoute];
     expect(route.gate).toBe(network.gates[0]);
-    // Off the paving onto the tile in front of the gate, then straight to the door.
     expect(route.waypoints).toHaveLength(2);
     expect(route.waypoints.at(-1)).toEqual(door);
     const gate = network.nodes[route.gate]!;
@@ -72,8 +67,6 @@ describe('sandRoutesFor', () => {
   });
 
   it('walks round a lounger standing between the door and the gate', () => {
-    // A long windbreak across the sand between column 4 and the gate at 10,
-    // from the back of the beach down to row 15: the way round is by the water.
     const windbreak: ObstacleBox = {
       x: 7 * TILE_VOXELS + 4,
       z: 12 * TILE_VOXELS,
@@ -92,7 +85,6 @@ describe('sandRoutesFor', () => {
         true,
       );
     }
-    // And it went round the end of it, not through it.
     expect(Math.max(...route.waypoints.map((point) => point.z))).toBeGreaterThan(16 * TILE_VOXELS);
   });
 
@@ -102,7 +94,6 @@ describe('sandRoutesFor', () => {
       tilesZ: 40,
       shore: { inset: 8, beach: 3, wave: 4, seed: 5 },
     })!;
-    // A path down column 2 to the last row of grass there.
     const back = (tileX: number): number => {
       let tileZ = 0;
       while (terrainAt(shore, tileX, tileZ + 1) === 'land') tileZ++;
@@ -110,7 +101,6 @@ describe('sandRoutesFor', () => {
     };
     const paved = Array.from({ length: back(2) + 1 }, (_, tileZ) => ({ tileX: 2, tileZ, y: 0 }));
     const network = beachOf(paved, [], shore, 60);
-    // The furthest beach tile east that the sweep can still reach.
     let door: SandPoint | null = null;
     for (let tileX = 58; tileX > 30 && !door; tileX--) {
       for (let tileZ = 0; tileZ < 40 && !door; tileZ++) {
@@ -123,7 +113,6 @@ describe('sandRoutesFor', () => {
     const [route] = sandRoutesFor(network, [door!], 120) as [SandRoute];
     const gate = network.nodes[route.gate]!;
 
-    // The straight line would have waded: that is what makes this a bay.
     const wades = (from: SandPoint, to: SandPoint): boolean => {
       const samples = Math.ceil(Math.hypot(to.x - from.x, to.z - from.z));
       for (let sample = 0; sample <= samples; sample++) {
@@ -163,14 +152,11 @@ describe('sandRoutesFor', () => {
     const from = { x: 16.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
     const route = field.routeFrom(from)!;
     expect(route, 'nowhere to walk from a tile of open sand').not.toBeNull();
-    // Their own tile first, however far off its middle they were lying, and the
-    // door last.
     expect(route[0]).toEqual(centreOf(16, 13));
     expect(route.at(-1)).toEqual(door);
     for (const point of route) {
       expect(terrainAt(straightShore, ...tileOf(point))).toBe('beach');
     }
-    // The same sweep answers every point on the beach, which is why it is kept.
     expect(field.routeFrom(centreOf(8, 15))).not.toBeNull();
     expect(field.routeFrom({ x: 4.5 * TILE_VOXELS, z: 4.5 * TILE_VOXELS })).toBeNull();
   });
@@ -187,20 +173,8 @@ describe('sandRoutesFor', () => {
     expect(sandRoutesFor(beachOf(pathDown(3)), [centreOf(3, 4)], 40)).toEqual([]);
   });
 
-  /**
-   * A ceiling on the design rather than a benchmark of the machine, as
-   * `flowField.test.ts`'s is: a route per beach building is built lazily, on
-   * the first guest who walks there, and that guest is mid-frame.
-   *
-   * Measured at 10 ms for all 19 beach buildings on the reference plot together,
-   * 317 routes, and the ceiling is four times that. Timed after a first call:
-   * that one, in a fresh test worker, measured 45 ms, most of it compiling
-   * `clearLine` and `blockedAt` - which in the running resort every roamer on
-   * the beach has long since compiled, and a route is built one building at a
-   * time rather than nineteen at once anyway. Timed in the process's CPU time and
-   * the best of five, as `resortWalk.test.ts` is, because on the wall clock the
-   * rest of the suite running beside it measured 52 ms.
-   */
+  // Timed in CPU time, best of five, after a warm-up call: the first call mostly
+  // compiles clearLine and blockedAt, and wall clock is noisy beside the suite.
   it('routes every building on the reference plot’s beach in well under a frame', () => {
     const plan = generateResort(
       OBJECT_TYPES.map((type) => ({
@@ -236,7 +210,6 @@ describe('sandRoutesFor', () => {
       .filter((doors) => doors.nodes.length === 0 && doors.sand.length > 0);
     expect(onSand.length).toBeGreaterThanOrEqual(19);
 
-    // Once to compile it and once to time it; see the note above.
     const routes = onSand.map((doors) => sandRoutesFor(network, doors.sand, 40));
     let best = Infinity;
     for (let run = 0; run < 5; run++) {

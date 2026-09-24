@@ -51,7 +51,6 @@ describe('steps', () => {
   it('drops one layer for every two voxels it goes out', () => {
     const b = new VoxelBuilder();
     steps(b, { x: 0, z: 10, w: 2, y: 5, treads: 3, descends: 'z+' });
-    // Top tread at the level asked for, each one after it a layer lower.
     expect(at(b, 0, 5, 10)).toBe(PALETTE.stone.base);
     expect(at(b, 0, 5, 11)).toBe(PALETTE.stone.base);
     expect(at(b, 0, 5, 12)).toBeUndefined();

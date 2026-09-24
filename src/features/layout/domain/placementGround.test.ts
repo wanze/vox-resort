@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BEACH_REACH, groundTakes, SHORE_REACH, type PlacementGroundView } from './placementGround';
 
-/** A column of ground read off a string, north to south: g grass, s sand, d dune, w sea. */
 function column(cells: string): PlacementGroundView {
   const at = (tileZ: number): string => cells[tileZ] ?? 'w';
   return {

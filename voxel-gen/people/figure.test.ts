@@ -15,7 +15,6 @@ const DRESS = {
   legs: PALETTE.slate.shade,
 } as const;
 
-/** One figure, drawn at whatever height the case is about. */
 const drawn = (height: number = ADULT_VOXELS): VoxelBuilder => {
   const b = new VoxelBuilder();
   figure(b, { ...DRESS, height });
@@ -25,7 +24,6 @@ const drawn = (height: number = ADULT_VOXELS): VoxelBuilder => {
 describe('figure', () => {
   it('narrows the head to one voxel over shoulders three across', () => {
     const b = drawn();
-    // The whole of what makes this read as a person; see the file's own note.
     for (const z of [0, 1]) {
       expect(at(b, 1, ADULT_VOXELS - 1, z)).toBe(DRESS.hair);
       expect(at(b, 1, ADULT_VOXELS - 2, z)).toBe(DRESS.skin);
@@ -63,7 +61,6 @@ describe('figure', () => {
     const child = drawn(CHILD_VOXELS);
     expect(at(child, 1, CHILD_VOXELS - 1, 0)).toBe(DRESS.hair);
     expect(at(child, 1, CHILD_VOXELS - 2, 0)).toBe(DRESS.skin);
-    // Two layers of shirt, as an adult has, over one fewer layer of leg.
     expect(at(child, 0, CHILD_VOXELS - 3, 0)).toBe(DRESS.shirt);
     expect(at(child, 0, CHILD_VOXELS - 4, 0)).toBe(DRESS.shirt);
     expect(at(child, 0, 1, 0)).toBe(DRESS.legs);
@@ -96,10 +93,8 @@ describe('PEOPLE_SOURCES', () => {
   });
 
   it('dresses the crowd out of the palette the buildings are painted from', () => {
-    // The claim is that the crowd invents no colours of its own — not that every
-    // building happens to paint with each of these today. Most of the catalogue
-    // is still exempt from the palette (see `palette.test.ts`), so what can be
-    // checked is that a wardrobe entry *is* one of the shared ramps.
+    // Most buildings are still exempt from the palette, so this only checks that
+    // each wardrobe entry is one of the shared ramps.
     const shared = new Set(Object.values(PALETTE));
     for (const ramp of WARDROBE) expect(shared.has(ramp)).toBe(true);
     expect(shared.has(PALETTE.skin), 'skin is a complexion, not something to wear').toBe(true);
@@ -111,8 +106,6 @@ describe('PEOPLE_SOURCES', () => {
     const allowed = new Set([
       ...WARDROBE.flatMap((ramp) => Object.values(ramp)),
       ...Object.values(PALETTE.skin),
-      // Hair. No family of its own on purpose: every hair the resort needs is
-      // already a step of a ramp the buildings use.
       ...Object.values(PALETTE.thatch),
       ...Object.values(PALETTE.metal),
     ]);

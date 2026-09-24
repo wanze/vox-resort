@@ -3,24 +3,10 @@ import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBr
 export interface TerrainShelfProps {
   readonly open: boolean;
   readonly onToggle: () => void;
-  /** The brush armed, or null when an object is armed or nothing is. */
   readonly selected: TerrainBrush | null;
   readonly onSelect: (brush: TerrainBrush | null) => void;
 }
 
-/**
- * The shelf that changes the ground rather than what stands on it.
- *
- * Above the catalogue, and not inside it, because a brush is not an object: it
- * has no model, no preview, no footprint and no turn, and every one of those is
- * something a catalogue tile prints. What it shares with one is the only thing
- * that matters here — it is the thing the pointer is holding, so it is armed and
- * disarmed by clicking it, and exactly one tile on the whole palette is lit.
- *
- * The brushes themselves come from `terrainBrush.ts`, which is the same rule the
- * catalogue's shelves follow: adding one is a line where the rule lives rather
- * than an edit here.
- */
 export function TerrainShelf({ open, onToggle, selected, onSelect }: TerrainShelfProps) {
   return (
     <section className="build-group">
@@ -45,7 +31,6 @@ export function TerrainShelf({ open, onToggle, selected, onSelect }: TerrainShel
               className="build-tile terrain-tile"
               aria-pressed={selected === brush.id}
               title={`${brush.label} — ${brush.hint}, drag to work a run`}
-              // Clicking the armed brush again puts the pointer down.
               onClick={() => onSelect(selected === brush.id ? null : brush.id)}
             >
               <span className="build-tile-art">

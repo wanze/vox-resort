@@ -67,7 +67,6 @@ import { createStaffRouter, meanCleanliness } from './staffRouter';
 
 const FLAT: LevelProvider = () => 0;
 
-/** A paved corridor `length` tiles long, running east. */
 const street = (length: number): PavedTile[] =>
   Array.from({ length }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 }));
 
@@ -77,7 +76,6 @@ const networkOf = (paved: PavedTile[]): WalkNetwork =>
 const nodeAt = (network: WalkNetwork, tileX: number, tileZ = 0): number =>
   network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === tileZ);
 
-/** Midday, when nobody on the plot is thinking about bed. */
 const NOON = 12 * 60;
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -90,7 +88,6 @@ const guests: Guests = createGuests({
   seed: 5,
 });
 
-/** A bakery standing on the tile north of the corridor's far end. */
 const bakery = (tileX: number): Venue => ({
   key: 'bakery#0',
   id: 'bakery',
@@ -108,7 +105,6 @@ const bakery = (tileX: number): Venue => ({
   doors: [],
 });
 
-/** Everybody content but for the one need, which is run right down. */
 const wanting = (person: number, need: (typeof NEEDS)[number] | null): Needs => {
   const needs = createNeeds(guests, 7);
   for (let other = 0; other < guests.count; other++) {
@@ -118,24 +114,11 @@ const wanting = (person: number, need: (typeof NEEDS)[number] | null): Needs => 
   return needs;
 };
 
-/**
- * A spotless plot, held for the router's lifetime: what every fixture written
- * before plan 022 assumes, and what keeps their scores exactly as they were.
- */
 const spotless = (venues: number): (() => Upkeep) => {
   const upkeep = createUpkeep(venues);
   return () => upkeep;
 };
 
-/**
- * The router and a crowd on the same graph, bound to each other the way
- * `showcase.ts` binds them.
- *
- * A real crowd rather than a stub, because the router now stands people still
- * and sends them on again - which are calls into `crowd.ts` and not readings
- * off it. Everybody is put at the west end of the corridor first, which is far
- * enough from the bakery that the straight line decides nothing on its own.
- */
 const routerOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
@@ -143,7 +126,6 @@ const routerOn = (
   night: {
     readonly lodgings: readonly Lodging[];
     readonly tickOfDay: () => number;
-    /** The ways off the plot, for the stays that end; see plan 020. */
     readonly gateways?: readonly Gateway[];
     readonly onLeave?: (person: number) => void;
   } = {
@@ -151,7 +133,6 @@ const routerOn = (
     tickOfDay: () => NOON,
   },
   roamsBeach = true,
-  /** What kind of day it is. Omit it and it is clear, as every fixture above assumes. */
   weather: Weather = 'clear',
 ): { router: ReturnType<typeof createRouter>; crowd: Crowd; upkeep: Upkeep } => {
   let crowd: Crowd | null = null;
@@ -191,7 +172,6 @@ describe('createRouter', () => {
     const needs = wanting(0, 'hunger');
     const { router } = routerOn(network, [bakery(7)], needs);
     for (const tileX of [0, 2, 5]) {
-      // The step from each node is the neighbour one tile nearer the bakery.
       expect(router.step(0, nodeAt(network, tileX)), `tile ${tileX}`).toBe(
         nodeAt(network, tileX + 1),
       );
@@ -203,8 +183,6 @@ describe('createRouter', () => {
     const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
     router.step(0, nodeAt(network, 0));
     expect(router.goalOf(0)).not.toBeNull();
-    // An errand does not call anybody in: nearly every party has one going, and
-    // calling them in emptied the beach by the afternoon.
     expect(router.offTheSand(0)).toBe(false);
     expect(router.offTheSand(-1)).toBe(false);
   });
@@ -226,19 +204,14 @@ describe('createRouter', () => {
     const needs = wanting(0, 'hunger');
     const { router, crowd } = routerOn(network, [bakery(7)], needs);
     const door = nodeAt(network, 7);
-    // They have to want it before they can arrive at it: the first step is what
-    // sets the goal, and the field is what makes tile 7 the door.
     router.step(0, nodeAt(network, 0));
     expect(router.goalOf(0)?.key).toBe('bakery#0');
 
     expect(router.step(0, door)).toBe(-1);
     expect(isWaiting(crowd, 0), 'walked straight through the bakery').toBe(true);
-    // Nothing yet: the visit has only started. This is the change plan 018
-    // makes to plan 017's instantaneous one.
     expect(needs.level.hunger[0]).toBe(0);
     expect(router.occupancyOf('bakery#0')).toEqual({ inside: 1, waiting: 0 });
 
-    // A bakery visit is four to eight ticks; run long enough for any draw.
     for (let tick = 1; tick <= 8; tick++) router.tick(tick);
     expect(needs.level.hunger[0]).toBeCloseTo(0.5);
     expect(isWaiting(crowd, 0)).toBe(false);
@@ -251,8 +224,6 @@ describe('createRouter', () => {
     const { router, upkeep } = routerOn(network, [bakery(7)], needs);
     router.step(0, nodeAt(network, 0));
     router.step(0, nodeAt(network, 7));
-    // Nothing yet: a venue is worn by a visit that finished, not by one that
-    // started, exactly as the relief is given on the way out.
     expect(cleanliness(upkeep, 0)).toBe(1);
 
     for (let tick = 1; tick <= 8; tick++) router.tick(tick);
@@ -286,7 +257,6 @@ describe('createRouter', () => {
   });
 
   it('leaves a guest to wander towards a venue with no door at all', () => {
-    // A bakery in the middle of a lawn, four tiles off the corridor.
     const network = networkOf(street(8));
     const stranded = { ...bakery(3), tileZ: 5, z: 5.5 * TILE_VOXELS };
     const { router } = routerOn(network, [stranded], wanting(0, 'hunger'));
@@ -294,7 +264,6 @@ describe('createRouter', () => {
     expect(router.goalOf(0)).toBeNull();
   });
 
-  /** Three guests of three parties, so none of them inherits another's goal. */
   const threeApart = (): [number, number, number] => {
     const parties = new Set<number>();
     const found: number[] = [];
@@ -307,22 +276,12 @@ describe('createRouter', () => {
     return found as [number, number, number];
   };
 
-  /** Everybody hungry, so any of them will choose somewhere to eat. */
   const famished = (): Needs => {
     const needs = wanting(0, 'hunger');
     for (let person = 0; person < guests.count; person++) needs.level.hunger[person] = 0;
     return needs;
   };
 
-  /**
-   * Plan 030's crowding term, which is the one thing about a venue a guest can
-   * see before a line has started to form.
-   *
-   * Two bakeries five tiles off and one thirty tiles off, each holding one
-   * person. Before this a venue read exactly the same whether it was empty or
-   * packed - a line only starts once a place is full - so the two near ones took
-   * everybody until they were full to the door and then turned people away.
-   */
   it('walks a guest past the bakeries that are filling up, with no line at any of them', () => {
     const network = networkOf(street(40));
     const holdsOne = (tileX: number, key: string): Venue => ({
@@ -336,13 +295,10 @@ describe('createRouter', () => {
     const [first, second, third] = threeApart();
     const at = nodeAt(network, 30);
 
-    // Nobody inside anything: they choose one of the two near ones.
     const quiet = routerOn(network, standing, famished());
     quiet.router.step(third, at);
     expect(near.map((venue) => venue.key)).toContain(quiet.router.goalOf(third)?.key);
 
-    // Now two guests are inside the two near ones - and the second of them went
-    // to the one the first did not, which is the term doing its job already.
     const { router } = routerOn(network, standing, famished());
     const walkIn = (person: number): void => {
       router.step(person, at);
@@ -355,19 +311,10 @@ describe('createRouter', () => {
     for (const venue of near)
       expect(router.occupancyOf(venue.key)).toEqual({ inside: 1, waiting: 0 });
 
-    // Nobody is waiting anywhere, and the near ones are no longer the answer.
     router.step(third, at);
     expect(router.goalOf(third)?.key).toBe('bakery#2');
   });
 
-  /**
-   * Plan 030's recency term. Two bakeries the same distance away, so the only
-   * thing that tells them apart is the taste this guest happens to have - and
-   * having just come out of one of them, the other is the better answer.
-   *
-   * It is a preference and not a ban, and it is thrown away on a rebuild:
-   * a venue index means nothing on a graph that has just replaced it.
-   */
   it('sends a guest to the other bakery on the way out of one, and forgets it on a rebuild', () => {
     const network = networkOf(street(40));
     const east = { ...bakery(25), key: 'bakery#0' };
@@ -385,13 +332,10 @@ describe('createRouter', () => {
     for (let tick = 1; tick <= 12; tick++) router.tick(tick);
     expect(router.visitOf(0)).toBeNull();
 
-    // Hungry again, standing at the door of the one they have just left.
     needs.level.hunger[0] = 0;
     router.step(0, nodeAt(network, chosen.tileX));
     expect(router.goalOf(0)?.key, 'walked straight back into the one they left').toBe(other.key);
 
-    // A rebuild throws the memory away with the fields, and the taste that chose
-    // the first one is hashed off its key, so it chooses the same one again.
     router.rebuild(standing, [], [], network);
     needs.level.hunger[0] = 0;
     router.step(0, at);
@@ -412,11 +356,6 @@ describe('createRouter', () => {
   });
 });
 
-/**
- * Frames of `MAX_STEP` to one simulated minute, which is what `normal` speed
- * works out at: 300 real seconds to a day of 1 440 ticks.
- */
-/** A gate standing on the tile north of the corridor's `tileX`. */
 const gateway = (tileX: number): Gateway => ({
   key: 'entrance#0',
   tileX,
@@ -429,7 +368,6 @@ const gateway = (tileX: number): Gateway => ({
 });
 
 describe('a stay that is over', () => {
-  /** The corridor, a bakery at its east end and the gate at its west. */
   const leavingOn = (onLeave?: (person: number) => void) => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'hunger');
@@ -444,7 +382,6 @@ describe('a stay that is over', () => {
 
   it('walks a guest whose stay is over towards the gate from anywhere on the corridor', () => {
     const { network, router } = leavingOn();
-    // Hungry, with the bakery the other way: a stay that is over beats it.
     router.sendHome(0);
     for (const tileX of [6, 4, 2]) {
       expect(router.step(0, nodeAt(network, tileX)), `tile ${tileX}`).toBe(
@@ -458,7 +395,6 @@ describe('a stay that is over', () => {
     const left: number[] = [];
     const { network, router } = leavingOn((person) => left.push(person));
     router.sendHome(0);
-    // Asking twice changes nothing: the day's pass asks everybody every day.
     router.sendHome(0);
     expect(left).toEqual([]);
 
@@ -480,11 +416,9 @@ describe('a stay that is over', () => {
     expect(left).toEqual([]);
     expect(router.occupancyOf('bakery#0')).toEqual({ inside: 1, waiting: 0 });
 
-    // A bakery visit is four to eight ticks; run long enough for any draw.
     for (let tick = 1; tick <= 8; tick++) router.tick(tick);
     expect(isWaiting(crowd, 0)).toBe(false);
     expect(needs.level.hunger[0], 'they were fed on the way out all the same').toBeCloseTo(0.5);
-    // And now they walk out rather than deciding again.
     expect(router.step(0, nodeAt(network, 6))).toBe(nodeAt(network, 5));
   });
 
@@ -496,7 +430,6 @@ describe('a stay that is over', () => {
     router.admit(0, nodeAt(network, 0));
     expect(isOffPlot(crowd, 0)).toBe(false);
     expect(crowd.node[0]).toBe(nodeAt(network, 0));
-    // Hungry again, and nothing left of the walk to the gate.
     expect(router.step(0, nodeAt(network, 2))).toBe(nodeAt(network, 3));
     expect(router.goalOf(0)?.key).toBe('bakery#0');
   });
@@ -504,18 +437,11 @@ describe('a stay that is over', () => {
 
 const TICKS_EVERY = 2;
 
-/** Ticks in a simulated day, which `simClock.ts` keeps as one integer. */
 const TICKS_PER_DAY = 1440;
 
-/**
- * Eight in the morning: where plan 030's measured day is opened, so the evening
- * and the night are inside the twenty-four hours it runs rather than the run
- * being only the hours everybody is out walking.
- */
 const OPENS_AT = 8 * 60;
 
 describe('a venue that holds only as many as it says', () => {
-  /** A beach shower: one person inside, and a visit of half a tick. */
   const shower = (tileX: number): Venue => ({
     ...bakery(tileX),
     key: 'beach-shower#0',
@@ -527,7 +453,6 @@ describe('a venue that holds only as many as it says', () => {
     dwellSeconds: { min: 30, max: 90 },
   });
 
-  /** Two guests of different parties, so neither inherits the other's goal. */
   const strangers = (): [number, number] => {
     const first = 0;
     const second = [...Array(guests.count).keys()].find(
@@ -536,7 +461,6 @@ describe('a venue that holds only as many as it says', () => {
     return [first, second];
   };
 
-  /** Everybody grubby, so the whole fixture wants the one shower. */
   const grubby = (): Needs => {
     const needs = wanting(0, 'hygiene');
     for (let person = 0; person < guests.count; person++) needs.level.hygiene[person] = 0;
@@ -555,8 +479,6 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
     expect(isWaiting(crowd, first)).toBe(true);
     expect(isWaiting(crowd, second)).toBe(true);
-    // The one inside is under the roof; the one waiting is out on the door tile
-    // or behind it, which is a different place.
     expect(crowd.x[first]).toBeCloseTo(shower(7).x);
     expect(crowd.z[first]).toBeCloseTo(shower(7).z);
     expect(crowd.z[second]).toBeGreaterThan(crowd.z[first]!);
@@ -572,8 +494,6 @@ describe('a venue that holds only as many as it says', () => {
     router.step(second, door);
     const where = [crowd.x[first], crowd.z[first], crowd.x[second], crowd.z[second]];
 
-    // The rest of the fixture walks on and queues up behind them, which is the
-    // point; these two do not move a voxel until the clock says they may.
     for (let step = 0; step < 200; step++) stepCrowd(crowd, MAX_STEP);
     expect([crowd.x[first], crowd.z[first], crowd.x[second], crowd.z[second]]).toEqual(where);
     expect(router.occupancyOf('beach-shower#0')?.inside).toBe(1);
@@ -589,7 +509,6 @@ describe('a venue that holds only as many as it says', () => {
     router.step(first, door);
     router.step(second, door);
 
-    // Half a tick rounded up to one, so one tick is the whole of a shower.
     router.tick(1);
     expect(needs.level.hygiene[first]).toBeCloseTo(0.6);
     expect(isWaiting(crowd, first)).toBe(false);
@@ -599,12 +518,8 @@ describe('a venue that holds only as many as it says', () => {
   });
 
   it('sends a guest who finds a full line somewhere else entirely', () => {
-    // Long enough for a lane of the full ceiling to run east from the near
-    // shower: on a shorter street the paving, not the ceiling, is what is full.
     const network = networkOf(street(20));
     const needs = grubby();
-    // The near shower, which everybody chooses, and a far one that barely helps
-    // - so nobody goes there until the near one refuses them at the door.
     const near = shower(2);
     const far: Venue = {
       ...shower(7),
@@ -613,7 +528,6 @@ describe('a venue that holds only as many as it says', () => {
     };
     const { router } = routerOn(network, [near, far], needs);
     const door = nodeAt(network, 2);
-    // One inside and a full line behind them, all at the near shower.
     const queued = [...Array(guests.count).keys()].slice(0, MAX_QUEUE_SHOWN + 1);
     for (const person of queued) {
       router.step(person, nodeAt(network, 0));
@@ -643,18 +557,13 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 2 });
     const [, front, behind] = people as [number, number, number];
     const node = network.nodes[door]!;
-    // The front of the line is on the door node.
     expect(crowd.x[front]).toBeCloseTo(node.x);
     expect(crowd.z[front]).toBeCloseTo(node.z);
-    // The shower stands north of the corridor, so a ray from its middle through
-    // the door runs south onto the grass. The line runs west along the paving.
     expect(crowd.z[behind]).toBeCloseTo(node.z);
     expect(crowd.x[behind]).toBeLessThan(node.x);
   });
 
   it('balks the guest who finds the lane down a short spur already full', () => {
-    // Two tiles of paving and nothing else, running south from the shower's
-    // door: a lane of 16 voxels holds three people six voxels apart.
     const network = networkOf([
       { tileX: 7, tileZ: 0, y: 0 },
       { tileX: 7, tileZ: 1, y: 0 },
@@ -666,7 +575,6 @@ describe('a venue that holds only as many as it says', () => {
       router.step(person, start);
       router.step(person, door);
     };
-    // One inside and three waiting, which is all the spur holds.
     for (const person of [0, 1, 2, 3]) arrive(person);
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 3 });
 
@@ -674,7 +582,6 @@ describe('a venue that holds only as many as it says', () => {
     arrive(late);
     expect(router.occupancyOf('beach-shower#0')?.waiting).toBe(3);
     expect(router.visitOf(late)).toBeNull();
-    // And they did not decide on it again: `chooseVenue` was handed the lane.
     expect(router.goalOf(late)).toBeNull();
   });
 
@@ -689,20 +596,14 @@ describe('a venue that holds only as many as it says', () => {
     queue(networkOf(street(8)));
     expect(crowd.z[1]).toBeCloseTo(TILE_VOXELS / 2);
 
-    // The same corridor three tiles south, with the shower moved to match.
     const moved = networkOf(Array.from({ length: 8 }, (_, tileX) => ({ tileX, tileZ: 3, y: 0 })));
     router.rebuild([{ ...shower(7), tileZ: 2, z: 2.5 * TILE_VOXELS }], [], [], moved);
     for (const person of [0, 1]) releaseTo(crowd, person, nodeAt(moved, 0, 3));
     queue(moved);
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
-    // On the new corridor's door node, not on the one before the edit.
     expect(crowd.z[1]).toBeCloseTo(3.5 * TILE_VOXELS);
   });
 
-  /**
-   * What plan 021's advice panel ranks a venue by: not who is inside now, but
-   * what happened at the door today. Nothing about the decision reads these.
-   */
   it('counts a guest it let in as a visit, and one it turned away as a balk', () => {
     const network = networkOf([
       { tileX: 7, tileZ: 0, y: 0 },
@@ -718,7 +619,6 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.dayVisits().size).toBe(0);
     expect(router.dayBalks().size).toBe(0);
 
-    // One inside and three waiting is all this spur holds; the fifth balks.
     for (const person of [0, 1, 2, 3]) arrive(person);
     expect(router.dayVisits()).toEqual(new Map([['beach-shower#0', 4]]));
     expect(router.dayBalks().size).toBe(0);
@@ -741,7 +641,6 @@ describe('a venue that holds only as many as it says', () => {
     router.forgetTheDay();
     expect(router.dayVisits().size).toBe(0);
     expect(router.dayBalks().size).toBe(0);
-    // And the venues are still standing: a day forgotten is not a plot cleared.
     expect(router.occupancyOf('beach-shower#0')?.inside).toBe(1);
 
     for (const person of [0, 1, 2]) router.step(person, door);
@@ -777,14 +676,11 @@ describe('a venue that holds only as many as it says', () => {
     const rebuilt = networkOf(street(10));
     router.rebuild([shower(9)], [], [], rebuilt);
     expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
-    // The crowd is put back on the new graph by `reseatCrowd`, which walks a
-    // held person like any other: the router deliberately re-aims nobody.
     const reseated = reseatCrowd(crowd, rebuilt);
     for (const person of [0, 1, 2]) expect(isWaiting(reseated, person)).toBe(false);
   });
 });
 
-/** The fixture's one lodging, on the tile north of the corridor's west end. */
 const hotel = (tileZ = -1): Lodging => ({
   key: 'hotel#0',
   id: 'hotel',
@@ -800,7 +696,6 @@ const hotel = (tileZ = -1): Lodging => ({
   doors: [],
 });
 
-/** Steps with no clock until everybody named is settled, and says whether they were. */
 const untilSettled = (crowd: Crowd, people: readonly number[]): boolean => {
   for (let step = 0; step < 600; step++) {
     if (people.every((person) => isWaiting(crowd, person))) return true;
@@ -809,12 +704,10 @@ const untilSettled = (crowd: Crowd, people: readonly number[]): boolean => {
   return false;
 };
 
-/** Whether somebody is lying or sitting down, rather than walking or stood. */
 const resting = (crowd: Crowd, person: number): boolean =>
   [RESTING.sitting, RESTING.lying].includes(restingOn(crowd, person) as 2 | 3);
 
 describe('a visit to the beach', () => {
-  // Water from z = 18; six rows of sand in front of it, and a boardwalk down to it.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
@@ -827,7 +720,6 @@ describe('a visit to the beach', () => {
   }));
   const network = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20 });
 
-  /** A bored guest at the top of the boardwalk, with nothing on the plot but sand. */
   const bored = () => {
     const needs = wanting(0, 'fun');
     const { router, crowd } = routerOn(network, [], needs);
@@ -842,10 +734,6 @@ describe('a visit to the beach', () => {
     expect(router.step(0, nodeAt(network, 10, 11))).not.toBe(-1);
   });
 
-  /**
-   * Two free loungers either side of 12,12, on 13,12 and 12,13: clear of the
-   * boardwalk, or they would hang off its nodes rather than stand on the beach.
-   */
   const loungers: SeatSpot[] = [
     [13, 12],
     [12, 13],
@@ -859,11 +747,6 @@ describe('a visit to the beach', () => {
     tileZ: tileZ!,
   }));
 
-  /**
-   * Everybody named bored, deciding on the beach at the top of the boardwalk,
-   * and walked down it to the gate, in a crowd that does not roam - as
-   * `showcase.ts` builds it.
-   */
   const onTheBeach = (
     people: readonly number[],
     options: {
@@ -891,17 +774,10 @@ describe('a visit to the beach', () => {
     return { needs, router, crowd, upkeep };
   };
 
-  /** A family of the fixture with a child in it, adults first. */
   const family = guests.parties.find(
     (party) => party.kind === 'family' && party.members.some((m) => guests.child[m] === 1),
   )!.members;
 
-  /**
-   * Frames to the simulated minute on the sand: the crowd's pace at `normal`,
-   * about ten times real time, rather than {@link TICKS_EVERY}'s real time, at
-   * which a visit of three quarters of an hour is over before a guest has
-   * walked four tiles to a party's pitch.
-   */
   const SAND_TICKS_EVERY = 10;
 
   it('settles a bored guest on the sand for the visit, and walks them back to the gate after', () => {
@@ -929,17 +805,11 @@ describe('a visit to the beach', () => {
     const tileX = Math.floor(rested!.x / TILE_VOXELS);
     const tileZ = Math.floor(rested!.z / TILE_VOXELS);
     expect(terrainAt(shore, tileX, tileZ)).toBe('beach');
-    // Near the gate, if not in front of it: their party shares their goal and
-    // may have reached another gate down the boardwalk first and pitched there.
     expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeLessThanOrEqual(12);
     expect(roamed, 'wandered the beach').toBe(false);
     expect(needs.level.fun[0]).toBeGreaterThan(0.5);
     expect(backAt, 'never came back onto the boardwalk').toBe(setOffFrom);
     expect(network.gates).toContain(backAt);
-    // Walked, never put: nobody crosses the sand in one frame. Half a tile
-    // rather than a step's worth, because the frame after a hold also carries
-    // the sidestep avoidance gives somebody walking a lane - about four voxels
-    // where a turn reverses which side of the line they keep to.
     expect(jumped).toBeLessThan(TILE_VOXELS / 2);
   });
 
@@ -1000,7 +870,6 @@ describe('a visit to the beach', () => {
     const { needs, router, crowd } = onTheBeach([housed], {
       night: { lodgings: [hotel()], tickOfDay: () => NOON },
     });
-    // Stamped a few minutes before bed, so the visit's own dwell is far from over.
     router.tick(sleepAt - 3);
     expect(untilSettled(crowd, [housed])).toBe(true);
     expect(router.visitOf(housed)).not.toBeNull();
@@ -1014,7 +883,6 @@ describe('a visit to the beach', () => {
     expect(needs.level.fun[housed]).toBeGreaterThan(0.5);
   });
 
-  /** A drinks kiosk out on the sand, three tiles east of the boardwalk. */
   const kiosk: Venue = {
     ...bakery(13),
     key: 'poolside-bar#0',
@@ -1028,7 +896,6 @@ describe('a visit to the beach', () => {
     z: 14.5 * TILE_VOXELS,
   };
 
-  /** Steps and ticks the resort on, and hands back whether `until` came true. */
   const until = (
     crowd: Crowd,
     router: ReturnType<typeof createRouter>,
@@ -1047,7 +914,6 @@ describe('a visit to the beach', () => {
     const { needs, router, crowd } = onTheBeach([0], { venues: [kiosk] });
     expect(untilSettled(crowd, [0])).toBe(true);
     const spot = { x: crowd.x[0]!, z: crowd.z[0]!, seat: crowd.seat[0]! };
-    // A tick's worth of thirst, the way an afternoon on the sand brings it on.
     needs.level.fun[0] = 1;
     needs.level.thirst[0] = 0;
 
@@ -1067,7 +933,6 @@ describe('a visit to the beach', () => {
     ).toBe(true);
     expect(router.visitOf(0)?.venue.label).toBe('Beach');
     expect(resting(crowd, 0)).toBe(true);
-    // Their own spot, and their own lounger: the pitch was theirs all along.
     expect(crowd.x[0]).toBeCloseTo(spot.x);
     expect(crowd.z[0]).toBeCloseTo(spot.z);
     expect(crowd.seat[0]).toBe(spot.seat);
@@ -1082,8 +947,6 @@ describe('a visit to the beach', () => {
       until(crowd, router, () => needs.level.thirst[0]! > 0.5),
       'never got the drink',
     ).toBe(true);
-    // That errand leaves by `leaveErrand` rather than by `leave`, and a beach
-    // kiosk nothing ever dirtied is what the early return would have cost.
     expect(cleanliness(upkeep, 0)).toBeLessThan(1);
   });
 
@@ -1102,8 +965,6 @@ describe('a visit to the beach', () => {
       'never went for a drink',
     ).toBe(true);
 
-    // Their bedtime, while they are standing at the kiosk: the stay is over and
-    // they walk off the beach rather than back to their towel.
     clock.tick = bedtimeOf(guests.party[housed]!).sleepAt;
     expect(
       until(crowd, router, () => crowd.node[housed]! >= 0),
@@ -1135,8 +996,6 @@ describe('a visit to the beach', () => {
 });
 
 describe('a building on the beach', () => {
-  // Water from z = 18; six rows of sand in front of it, so z = 12..17 is beach,
-  // and a boardwalk down to the back of it whose last tile is the one gate.
   const shore = shoreFor({
     tilesX: 20,
     tilesZ: 20,
@@ -1148,7 +1007,6 @@ describe('a building on the beach', () => {
     y: 0,
   }));
 
-  /** A beach shower on tile 4,14, with no door and nothing paved anywhere near it. */
   const shower: Venue = {
     ...bakery(4),
     key: 'beach-shower#0',
@@ -1173,10 +1031,6 @@ describe('a building on the beach', () => {
   });
   const gate = network.gates[0]!;
 
-  /**
-   * Everybody named stood on the boardwalk and walking down it towards the sand:
-   * stood there first, since the crowd may have started them out on the beach.
-   */
   const onTheBoardwalk = (needs: Needs, people: readonly number[]) => {
     const { router, crowd } = routerOn(network, [shower], needs);
     const start = network.nodes[nodeAt(network, 10, 8)]!;
@@ -1220,7 +1074,6 @@ describe('a building on the beach', () => {
     const { router, crowd } = onTheBoardwalk(needs, [0, second]);
 
     let waiting = false;
-    // No ticks: whoever gets in first stays in, so the other has to wait.
     for (let step = 0; step < 4000 && !waiting; step++) {
       stepCrowd(crowd, MAX_STEP);
       waiting = [0, second].some((person) => router.visitOf(person)?.waiting === true);
@@ -1247,7 +1100,6 @@ describe('a building on the beach', () => {
     expect(out, 'never got onto the sand').toBe(true);
     expect(isRoaming(crowd, 0)).toBe(false);
 
-    // An edit somewhere else on the plot: the same graph, and every route forgotten.
     router.rebuild([shower], [], [], network);
     for (let step = 0; step < 1000 && !isRoaming(crowd, 0); step++) stepCrowd(crowd, MAX_STEP);
     expect(isRoaming(crowd, 0)).toBe(true);
@@ -1263,7 +1115,6 @@ describe('the night', () => {
     (person) => guests.home[person] === NO_HOME,
   )!;
 
-  /** A hungry guest on the corridor, with a bakery at one end and the hotel at the other. */
   const nightOn = (person: number, lodging = hotel()) => {
     const network = networkOf(street(8));
     const needs = wanting(person, 'hunger');
@@ -1292,7 +1143,6 @@ describe('the night', () => {
     expect(isWaiting(crowd, housed)).toBe(true);
     expect(crowd.x[housed]).toBeCloseTo(hotel().x);
     expect(crowd.z[housed]).toBeCloseTo(hotel().z);
-    // Held: asking again changes nothing.
     expect(router.step(housed, nodeAt(network, 1))).toBe(-1);
     expect(router.asleepCount).toBe(1);
   });
@@ -1329,7 +1179,6 @@ describe('the night', () => {
   it('wants a guest off the sand at bedtime only when they have a bed, and not once in it', () => {
     const { network, router } = nightOn(housed);
     expect(router.offTheSand(housed)).toBe(true);
-    // Hungry but undecided, and no bed: nothing yet says where to be.
     expect(nightOn(homeless).router.offTheSand(homeless)).toBe(false);
     router.step(housed, nodeAt(network, 1));
     expect(router.isAsleep(housed)).toBe(true);
@@ -1346,55 +1195,26 @@ describe('the night', () => {
   });
 });
 
-/** What a run over the generated plot is watched with, beyond its own counts. */
 interface Watch {
-  /** Passed to the crowd; see `CrowdOptions.roamsBeach`. */
   readonly roamsBeach?: boolean;
-  /** Stands in for the crowd's call to the router, so what it does can be counted. */
   readonly step?: (router: Router, person: number, at: number) => number;
-  /** Called after every tick. */
   readonly tick?: (crowd: Crowd, people: Guests) => void;
-  /** Frames of `MAX_STEP` to the tick; `TICKS_EVERY`, the crowd at real time, when omitted. */
   readonly framesPerTick?: number;
 }
 
-/**
- * Frames of `MAX_STEP` to the simulated minute with the crowd at `normal`'s
- * pace, as `showcase.ts` walks it: a day of `SPEED_DAY_SECONDS.normal` real
- * seconds, and the crowd `crowdScaleFor('normal')` times faster than that.
- */
 const NORMAL_FRAMES_PER_TICK = Math.round(
   (crowdScaleFor('normal') * SPEED_DAY_SECONDS.normal) / TICKS_PER_DAY / MAX_STEP,
 );
 
-/** What one measured day did with the venues standing on the plot; see plan 030. */
 interface ShareOut {
-  /** Visits per venue key, most first. */
   readonly ranked: readonly (readonly [string, number])[];
-  /** Per need, the share of the visits to venues serving it that the busiest one took. */
   readonly busiest: ReadonlyMap<
     string,
     { readonly key: string; readonly share: number; readonly of: number }
   >;
-  /**
-   * Venues a guest could have walked to that serve something, and nobody did.
-   *
-   * A venue that declares no relief at all - the reception, the first-aid post -
-   * is left out: `chooseVenue` can never pick one, by design, and counting them
-   * here would be counting the art doing what it says.
-   */
   readonly ignored: readonly string[];
 }
 
-/**
- * Reads plan 030's three tables out of a day's {@link Router.dayVisits}.
- *
- * The share is per need rather than per venue because that is the choice being
- * made: a guest picks between the places serving the one thing they want, and a
- * restaurant taking every meal on the plot is only visible against the other
- * places that serve hunger.
- */
-/** Whether a venue gives anything back at all; the reception and the first-aid post do not. */
 const serves = (venue: Venue): boolean => venue.satisfies.some((relief) => relief.amount > 0);
 
 const shareOutOf = (
@@ -1460,8 +1280,6 @@ describe('on the generated plot', () => {
     let spots = 0;
     let off: string | null = null;
     for (const venue of venues) {
-      // Every door's lane, not only the one the router keeps: whichever it
-      // picks has to be on the paving, so all of them do.
       for (const door of doorsFor(venue, index).nodes) {
         for (const [slot, spot] of queueLaneFor(network, door, venue).entries()) {
           spots++;
@@ -1474,13 +1292,6 @@ describe('on the generated plot', () => {
     expect(off).toBeNull();
   });
 
-  /**
-   * The test the unit tests above cannot be: a `next` array built backwards, or
-   * a sign error in the sweep, passes every one of them on a straight corridor
-   * and sends the whole resort the wrong way here. What it asserts is only that
-   * walking towards somewhere gets you nearer to it, over a plot laid by
-   * something that has never heard of routing.
-   */
   it('walks a starving guest nearer the place they chose', () => {
     expect(venues.length).toBeGreaterThan(0);
     const people = createGuests({
@@ -1492,9 +1303,6 @@ describe('on the generated plot', () => {
     });
     const needs = createNeeds(people, 9);
 
-    // The crowd is what the router reads positions from, and the router is what
-    // the crowd is built with, so one of the two is bound late - exactly as
-    // `showcase.ts` binds it.
     let crowd: Crowd | null = null;
     const router = createRouter({
       guests: people,
@@ -1517,13 +1325,9 @@ describe('on the generated plot', () => {
       routeOf: (person, at) => router.step(person, at),
     });
 
-    // Somebody walking the graph rather than out on the sand: a roamer never
-    // reaches a node, so nothing ever asks the router about them.
     const hungry = [...Array(people.count).keys()].find((person) => !isRoaming(crowd!, person))!;
     needs.level.hunger[hungry] = 0;
 
-    // One arrival is needed before there is a goal to measure against, so the
-    // walk runs a little before the distance is taken.
     for (let step = 0; step < 60; step++) stepCrowd(crowd, MAX_STEP);
     const goal = router.goalOf(hungry);
     expect(goal, 'a hungry guest on a plot with food chose nowhere').not.toBeNull();
@@ -1531,23 +1335,14 @@ describe('on the generated plot', () => {
       Math.hypot(goal!.x - crowd!.x[hungry]!, goal!.z - crowd!.z[hungry]!);
     const before = distanceTo();
 
-    // A few simulated minutes at the fixed step the benchmark uses. The nearest
-    // they ever got is the measurement, not where they ended up: a visit ends
-    // and they set off somewhere else, so a guest who was fed is walking away
-    // again by the end of the run.
     let nearest = before;
     for (let step = 0; step < 2400; step++) {
       stepCrowd(crowd, MAX_STEP);
-      // Two frames to the simulated minute, which is about what `normal` speed
-      // works out at; without a tick nobody is ever let out of anywhere.
       if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
       nearest = Math.min(nearest, distanceTo());
     }
 
     expect(nearest).toBeLessThan(before);
-    // And they got there: nothing decays in this test, so a hunger above zero
-    // is a visit that happened. A field built backwards would walk them away
-    // from every door on the plot and leave this at zero for ever.
     expect(needs.level.hunger[hungry]).toBeGreaterThan(0);
     expect(crowd.x[hungry]).toBeGreaterThanOrEqual(0);
     expect(crowd.z[hungry]).toBeGreaterThanOrEqual(0);
@@ -1555,19 +1350,6 @@ describe('on the generated plot', () => {
     expect(crowd.z[hungry]).toBeLessThanOrEqual(plan.tilesZ * TILE_VOXELS);
   });
 
-  /**
-   * The assertion the whole of plan 018 exists for, and the one no unit test can
-   * make: six hundred people over a plot laid by something that has never heard
-   * of a queue. A capacity that held only on a corridor of eight nodes would
-   * pass every test above and let a bakery for eight take two hundred here.
-   *
-   * Run twice. Once with the capacities the art declares, which is the resort as
-   * it is; and once with every one of them squeezed to a single person, because
-   * the declared ones do not bind on this plot - twelve places serving hunger
-   * hold 198 between them, and six hundred guests spread over a 112 by 100 plot
-   * never fill them. A line forming at all is what the second run is for, and a
-   * capacity of 1 is also where an off-by-one in the shuffle-up shows.
-   */
   const starving = (
     capacityOf: (venue: Venue) => number,
     need: (typeof NEEDS)[number] = 'hunger',
@@ -1582,12 +1364,8 @@ describe('on the generated plot', () => {
       seed: 12,
     });
     const needs = createNeeds(people, 13);
-    // The whole resort heads for food at once, which is the worst case a queue
-    // can be put under and not a case the plot would reach on its own.
     needs.level[need].fill(0);
     const before = new Float32Array(needs.level[need]);
-    // The plot's own venues, with only the capacity moved: a loop rather than a
-    // spread in a `map`, which the linter is right to dislike.
     const standing: Venue[] = [];
     for (const venue of venues) standing.push({ ...venue, capacity: capacityOf(venue) });
 
@@ -1617,16 +1395,11 @@ describe('on the generated plot', () => {
 
     const food = standing.filter((venue) => venue.satisfies.some((relief) => relief.need === need));
     expect(food.length, `a generated plot with nothing for ${need} on it`).toBeGreaterThan(0);
-    /** The ids of every venue anybody was ever inside. */
     const served = new Set<string>();
 
     let queued = 0;
     let busiest = 0;
     let over: string | null = null;
-    // Half a simulated day, at the fixed step the benchmark uses. An hour is
-    // not enough on a plot this size: at a walk of 5.6 voxels a second and two
-    // frames to the minute, an hour is four tiles of walking and nobody has
-    // reached anything yet, let alone had to wait for it.
     for (let tick = 1; tick <= TICKS_PER_DAY / 2; tick++) {
       const frames = watch.framesPerTick ?? TICKS_EVERY;
       for (let frame = 0; frame < frames; frame++) stepCrowd(crowd, MAX_STEP);
@@ -1646,10 +1419,7 @@ describe('on the generated plot', () => {
     let confused: string | null = null;
     for (let person = 0; person < people.count; person++) {
       if (needs.level[need][person]! > before[person]!) fed++;
-      // Nobody is in two places at once: a visit names one venue, and a person
-      // the router says nothing about is walking.
       const visit = router.visitOf(person);
-      // The beach is the router's own venue, appended to the plot's.
       if (visit && !standing.includes(visit.venue) && !isBeach(visit.venue)) {
         confused ??= `person ${person}`;
       }
@@ -1661,18 +1431,10 @@ describe('on the generated plot', () => {
     const run = starving((venue) => venue.capacity);
     expect(run.over).toBeNull();
     expect(run.confused).toBeNull();
-    // Somebody got in and somebody ate: a capacity assertion over an empty
-    // resort would pass and mean nothing.
     expect(run.busiest, 'nobody ever got inside anything').toBeGreaterThan(0);
     expect(run.fed, 'half a simulated day and nobody ate').toBeGreaterThan(0);
   });
 
-  /**
-   * The same plot with everything standing on it painted onto the sand, as
-   * `showcase.ts` builds it: what a route over the beach has to find its way
-   * round. The network above leaves the sand open, and the runs measured for
-   * plans 018 and 026 were made on it.
-   */
   const furnished = walkNetworkFor({
     paved: layout.paths,
     levelOf: (x, z) => levelAt(elevation, x, z),
@@ -1681,20 +1443,8 @@ describe('on the generated plot', () => {
     obstacles: layout.placements,
   });
   const furnishedIndex = nodeIndexFor(furnished);
-  /** `router.ts`'s own reach over the sand, in tile steps. */
   const SAND_TILES = 40;
 
-  /**
-   * Plan 027's measure. Before it, 20 venues on this plot had no way in at all,
-   * and they were the beach: every shower, changing cabin and beach club.
-   *
-   * One was left over: a poolside bar the generator stood on a sand terrace at
-   * level 3, which is sand but not beach band. Putting the snack bar and the
-   * ice-cream cart on the back of the beach moved what the generator stands
-   * where, and that bar is not on this plot any more - so every venue it does
-   * stand can now be reached. A sand terrace is still not routable, and whether
-   * those are paved or roamed is still the maintainer's call.
-   */
   it('reaches every venue on the plot', () => {
     const unreachable = venues
       .filter((venue) => {
@@ -1743,15 +1493,6 @@ describe('on the generated plot', () => {
   });
 
   it('paves nothing new for the doors the beach buildings declare', () => {
-    // Pinned before plan 027 gave `beach-club`, `pedalo-rental` and
-    // `beach-shower` doors: on this plot all three stand on the sand, which
-    // grows no spur, so declaring where they are entered changes no paving.
-    //
-    // Re-pinned when the snack bar and the ice-cream cart joined the back of the
-    // beach: standing them on the sand satisfies the generator's "every type
-    // somewhere" pass, so it no longer has to find them a plot inland, and the
-    // spurs that would have served those plots are not grown. 2 232 tiles became
-    // 2 240 - different tiles, not more paving on the sand.
     let hash = 2166136261;
     const key = layout.paths
       .map((tile) => `${tile.tileX},${tile.tileZ},${tile.y},${tile.id}`)
@@ -1762,18 +1503,6 @@ describe('on the generated plot', () => {
     expect(hash).toBe(2140810103);
   });
 
-  /**
-   * **Walked at `normal`'s pace, not at {@link TICKS_EVERY}'s real time**, since
-   * plan 030 - the same adaptation plan 028's beach test carries, and for the
-   * same reason. A shower is 30 to 90 simulated seconds, which `arriveAt` clamps
-   * to a single tick, and the sweep lets that visit out on the next tick just
-   * before this samples who is inside; so a one-tick visit only ever shows up
-   * here when the showers are busy enough for two to overlap a sample. Visits to
-   * the beach showers over this half day, measured when plan 030 landed: 31
-   * before it and 21 after at real time, against 258 before and **319 after** at
-   * `normal`. They are chosen more, not less - real time is simply too slow for
-   * the sample to catch them, which is what plan 026 is about.
-   */
   it('sends grubby guests over the sand to wash on the beach', () => {
     const run = starving((venue) => venue.capacity, 'hygiene', furnished, {
       framesPerTick: NORMAL_FRAMES_PER_TICK,
@@ -1789,23 +1518,6 @@ describe('on the generated plot', () => {
     ).not.toEqual([]);
   });
 
-  /**
-   * Plan 028's measure: six hundred bored guests over half a day, in a crowd
-   * that does not roam, on the plot with its furniture and its seats, as
-   * `showcase.ts` builds it. Nobody walks the beach aimlessly, parties rest
-   * there, and they rest apart - a pitch overlapping another passes every
-   * corridor test above and shows up here.
-   *
-   * **Walked at `normal`'s pace, not at {@link TICKS_EVERY}'s real time.** The
-   * plan asked for the latter, and at it 23 guests of 600 ever chose the beach
-   * and 5 were resting on it at most: on a plot of 112 by 100 a guest at real
-   * time walks four tiles a simulated hour, so half a day sees few of them reach
-   * a gate, and a visit's dwell runs out on the walk to the pitch. At the pace
-   * the resort runs, measured when this was written: 353 arrivals at a gate for
-   * the beach, none turned back for want of a pitch or a route, 70 resting on
-   * the sand at once and 7 on loungers. The half day took 1.2 s, against 1.3 s
-   * for the same run of `starving` for hunger at the same pace.
-   */
   it('settles bored guests on the beach in parties, and nobody roams it', () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
@@ -1880,58 +1592,30 @@ describe('on the generated plot', () => {
     ).toBeLessThanOrEqual(0.1 * seen.arrivals);
   });
 
+  // The declared capacities never bind on this plot, so a line only forms at capacity 1.
   it('grows a line at the door when every place holds one person', () => {
     const run = starving(() => 1);
     expect(run.over).toBeNull();
     expect(run.confused).toBeNull();
     expect(run.busiest).toBe(1);
     expect(run.queued, 'six hundred hungry guests and no line anywhere').toBeGreaterThan(0);
-    // And the lines moved: a queue that never shuffled up would feed the one
-    // person who got in first and nobody else.
     expect(run.fed, 'a line formed and nothing ever came out of it').toBeGreaterThan(1);
   });
-  /**
-   * Plan 021's counters over the same plot: a balk is a guest who walked all the
-   * way to a door and was refused, and nothing but this counts them. Run with
-   * every capacity squeezed to 1, for the reason the queue test above is - the
-   * declared capacities do not bind on this plot, and with them nothing ever
-   * balks at all.
-   */
   it('counts the doors that turned people away, and where most of it happened', () => {
     const run = starving(() => 1);
     const balks = run.router.dayBalks();
     expect(balks.size, 'six hundred hungry guests and nobody ever refused').toBeGreaterThan(0);
 
     const worst = [...balks.entries()].toSorted((a, b) => b[1] - a[1])[0]!;
-    // Somewhere guests actually chose: it serves the need they all had, and it
-    // also let people in, so the count is a line rather than a stranded door.
     expect(run.food.map((venue) => venue.key)).toContain(worst[0]);
     expect(run.router.dayVisits().get(worst[0])).toBeGreaterThan(0);
-    // And nothing was counted against a venue nobody walked to.
     for (const key of balks.keys()) expect(run.router.dayVisits().has(key)).toBe(true);
   });
 
-  /**
-   * A whole night over the plot laid by something that has never heard of bed:
-   * a field keyed to the wrong lodging, or a bedtime window that does not wrap,
-   * passes every corridor test above and shows up here.
-   *
-   * **What it does not assert is that most of the resort is asleep by two.** At
-   * two frames to the simulated minute a guest walks about four tiles an hour,
-   * so on a plot of 112 by 100 most of them are still on their way home at two
-   * and some are not in bed by the time they are due up - which is the pace
-   * plan 026 is about, not something the night can fix. And a guest out on the
-   * sand never reaches a node, so nothing asks the router about them until they
-   * step back onto the paving. So it asserts the decision instead: at two,
-   * everybody housed who is on the graph and not in the middle of a visit is in
-   * bed or walking to it.
-   */
   it('sends the resort to bed at night and gets it up in the morning', () => {
     const lodgings = lodgingsOn(layout.placements);
     const people = createGuests({
-      // More than the plot sleeps, so some are left with no bed.
       count: 800,
-      // Biggest first, as `showcase.ts`'s `homesOn` hands them to `assignHomes`.
       homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
       variants: 4,
       childVariant: 3,
@@ -1965,16 +1649,11 @@ describe('on the generated plot', () => {
     const housed = [...Array(people.count).keys()].filter((person) => homeOf(people, person));
     expect(housed.length).toBeLessThan(people.count);
     const wentToBedWith = new Float32Array(people.count).fill(-1);
-    // Read the tick they are let up rather than at nine: somebody up at seven
-    // has walked two hours of energy off by then, and with bedtime in the
-    // evening they turn in with plenty left to walk off.
     const gotUpWith = new Float32Array(people.count).fill(-1);
     let strangerBed: string | null = null;
     let homelessAsleep: string | null = null;
     let atTwo = { onTheGraph: 0, bedward: 0 };
 
-    // Thirteen simulated hours, to nine in the morning, when the last party is
-    // due up.
     while (ticks < TICKS_PER_DAY + 9 * 60) {
       for (let frame = 0; frame < TICKS_EVERY; frame++) stepCrowd(crowd, MAX_STEP);
       ticks++;
@@ -2016,20 +1695,6 @@ describe('on the generated plot', () => {
     expect(tired, 'got up as tired as they went to bed').toBeUndefined();
   });
 
-  /**
-   * The measurement `plans/026-a-guests-day.md` turns on, run the way the
-   * showcase runs a frame: the clock at `normal` on sixty frames a second, the
-   * needs decaying and the router ticking on the ticks it hands back, and the
-   * crowd walked at `crowdScaleFor`'s multiple of the same frames.
-   *
-   * A family, hungry, whose nearest food is near the edge of their reach -
-   * 313 voxels of their 320 - walking to wherever they choose, which is the
-   * restaurant 435 voxels off. Measured when this was written: 49 simulated
-   * minutes on the way, 0.30 hunger down to 0.14, and out again at 1. The same
-   * run with the crowd on real time took 529 minutes and they got there with
-   * none. What it asserts is that they come out better fed than they set off,
-   * which is `archetypes.ts`'s decay rates reaching a guest at all.
-   */
   it('feeds a hungry family at the edge of its reach before the walk has eaten the meal', () => {
     const people = createGuests({
       count: 200,
@@ -2065,8 +1730,6 @@ describe('on the generated plot', () => {
       routeOf: (person, at) => router.step(person, at),
     });
 
-    // Of the family members on the paving, the one whose nearest food is
-    // furthest off while still inside their reach.
     const reach = ARCHETYPES.family.reach;
     const nearestFood = (person: number): number =>
       Math.min(
@@ -2092,7 +1755,6 @@ describe('on the generated plot', () => {
     let arrived: { tick: number; hunger: number } | null = null;
     let left: number | null = null;
     const frame = 1 / 60;
-    // Six simulated hours at most, which at real time would not see them there.
     const until = clock.ticks + 6 * 60;
     while (left === null && clock.ticks < until) {
       const advanced = advanceClock(clock, frame);
@@ -2119,29 +1781,13 @@ describe('on the generated plot', () => {
     expect(setOff, 'a hungry family chose nowhere to eat').not.toBeNull();
     expect(arrived, 'six simulated hours and they never got there').not.toBeNull();
     expect(left, 'they never came out again').not.toBeNull();
-    // Better fed than they set off, which is the whole question.
     expect(left!).toBeGreaterThan(setOff!.hunger);
-    // And the walk itself took an hour and a half, not most of a day. It was 49
-    // simulated minutes to a restaurant 435 voxels off until the snack bar and
-    // the ice-cream cart joined the back of the beach: that moved what the
-    // generator stands where, and the nearest restaurant this family would
-    // choose is now 630 voxels away, which is 90 minutes of walking.
     expect(arrived!.tick - setOff!.tick).toBeLessThan(120);
   });
 
-  /**
-   * Three simulated days of the whole loop on the plot the generator lays: stays
-   * running out, guests walking to a gate, and coaches filling the beds they
-   * gave back. The unit tests above each hold one end of that; this is the one
-   * that can tell whether the two ends meet.
-   *
-   * At `normal`'s pace, because at `TICKS_EVERY`'s real time a guest walks four
-   * tiles a simulated hour and nobody ever reaches the far end of the promenade,
-   * let alone a gate. See `docs/crowd.md` and plan 026.
-   */
-  /** The day the run opens on; see the loop below. */
   const OPENS_ON = 2;
 
+  // At `normal`'s pace: at real time nobody reaches a gate in three days.
   it('lets stays end and coaches fill the beds they gave back', () => {
     const homes = lodgingsOn(layout.placements).map((lodging) => ({
       key: lodging.key,
@@ -2200,14 +1846,10 @@ describe('on the generated plot', () => {
     let moved: string | null = null;
     let overCapacity: string | null = null;
     let overBeds: string | null = null;
-    /** Where everybody off the plot was standing when they were put away. */
     const parked = new Map<number, string>();
 
-    // Three simulated days, **opened on day 2 rather than day 0**: `createGuests`
-    // spreads everybody's arrival over their own stay, and the earliest that can
-    // put a stay behind them is the second morning. Started at day 0 the run
-    // would be two days of nothing and one of departures, and no coach would
-    // ever find a free body to deal anybody into.
+    // Opened on day 2: `createGuests` spreads arrivals over each stay, so nobody
+    // leaves before the second morning and day 0 would be two days of nothing.
     for (tick = OPENS_ON * TICKS_PER_DAY; tick <= (OPENS_ON + 3) * TICKS_PER_DAY; tick++) {
       for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
       decayNeeds(needs, people, 1);
@@ -2235,7 +1877,6 @@ describe('on the generated plot', () => {
           router.sendHome(person);
         }
       }
-      // Nobody off the plot ever moves, and nobody is ever counted twice.
       for (let person = 0; person < people.count; person++) {
         const here = `${crowd.x[person]},${crowd.y[person]},${crowd.z[person]}`;
         if (!isOffPlot(crowd, person)) {
@@ -2250,10 +1891,6 @@ describe('on the generated plot', () => {
       if (bedCount(people).taken > beds) overBeds ??= `on tick ${tick}`;
     }
 
-    // Nobody sent for a gate on the last coach but one is still standing about:
-    // a guest who cannot reach a gate stays on the plot and is asked again, and
-    // this is what says how often that happens. On the reference plot it is
-    // nobody. The day after is not counted - their coach never ran.
     const sentBy = Math.floor((tick - 1) / TICKS_PER_DAY) - 1;
     let stranded = 0;
     for (let person = 0; person < people.count; person++) {
@@ -2266,21 +1903,8 @@ describe('on the generated plot', () => {
     expect(moved, 'somebody off the plot was walked about').toBeNull();
     expect(overCapacity, 'more guests than the plot has bodies').toBeNull();
     expect(overBeds, 'more beds taken than the plot has').toBeNull();
-    // Everybody who is here has somewhere to sleep, which is what check-in caps on.
     expect(presentCount(people)).toBe(bedCount(people).taken);
   });
-  /**
-   * One whole simulated day of the plot as `showcase.ts` runs it, for plan 030's
-   * measurement: six hundred guests with the needs they were dealt rather than
-   * one need emptied, the plot's own furniture and seats under them, a crowd
-   * that does not roam the beach, and the clock opened at eight in the morning
-   * so the evening and the night are in the day rather than only the busy hours.
-   *
-   * **With the cleaners on it**, because `showcase.ts` puts them there: a plot
-   * with venues always has staff, so a day measured without them is a day of a
-   * resort the app never builds - and the venues would only ever get dirtier,
-   * which would quietly move every share below. See `staffRouter.ts`.
-   */
   const aDayOnThePlot = () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
@@ -2344,8 +1968,6 @@ describe('on the generated plot', () => {
       roamsBeach: false,
     });
 
-    // Which venue each cleaner held on each tick, so a claim taken twice is
-    // caught rather than merely unlikely; see the integration test below.
     const doubled: string[] = [];
     let dirtiestSeen = 1;
     let scrubbedBack = false;
@@ -2377,15 +1999,8 @@ describe('on the generated plot', () => {
       }
     }
 
-    // The beach is the router's own venue and takes visits like any other, so
-    // the tables have to see it: leaving it out would hide the one thing on the
-    // plot that is within reach of everywhere.
     const standing = [...venues, beachVenueFor(seated)!];
     const index = nodeIndexFor(seated);
-    // The same rule as `reaches every venue on the plot` above: a door on the
-    // paving, or a route over the sand that actually starts at a gate. A sand
-    // door with no route to it is a building nobody can walk to, whatever the
-    // art declares.
     const reachable = (venue: Venue): boolean => {
       if (isBeach(venue)) return true;
       const doors = doorsFor(venue, index, seated);
@@ -2403,16 +2018,6 @@ describe('on the generated plot', () => {
     };
   };
 
-  /**
-   * Plan 022's measure: a day of the plot wearing its venues out and the
-   * cleaners keeping up with them.
-   *
-   * The unit tests hold each end of this - a visit soils, a spell scrubs, two
-   * cleaners never take one venue - and this is the one that can say whether the
-   * three numbers in `upkeep.ts` are of a size with the day the resort actually
-   * has. A plot where nothing ever got dirty would pass every unit test above
-   * and leave the staff walking about with nothing to do.
-   */
   it('wears the plot out over a day, and has the cleaners keep up with it', () => {
     const run = aDayOnThePlot();
     const { employed, doubled, dirtiestSeen, scrubbedBack } = run.staff;
@@ -2422,42 +2027,13 @@ describe('on the generated plot', () => {
     );
 
     expect(employed.count, 'a plot full of venues and nobody to clean them').toBeGreaterThan(0);
-    // Somewhere got dirty enough to be worth walking to.
     expect(dirtiestSeen, 'a whole day and nothing on the plot got dirty').toBeLessThan(
       NEEDS_CLEANING,
     );
-    // And somebody walked to it: a venue that crossed the line and came back.
     expect(scrubbedBack, 'nothing that got dirty was ever cleaned again').toBe(true);
-    // Two cleaners at one venue is a claim taken twice, which is the one thing
-    // the whole assignment exists to stop.
     expect(doubled, `two cleaners took the same venue: ${doubled[0]}`).toEqual([]);
   });
 
-  /**
-   * Plan 030's measure, and its regression: how one whole day's visits were
-   * shared out over the plot, and what nobody went to at all.
-   *
-   * The one test here whose job is to be read as well as to pass, which is why
-   * it keeps its `console.log`. A formula that quietly sends everybody to the
-   * same door passes every corridor test above and shows up only in these three
-   * tables - the visits per venue, the share the busiest venue serving each need
-   * took of the visits to that need, and the venues a guest could have walked to
-   * and nobody did.
-   *
-   * What it measured before plan 030 and after it, on this plot:
-   *
-   * | | busiest share of a need | reachable venues with no visits |
-   * |---|---|---|
-   * | before | hunger .22, thirst .22, energy .46, fun .29, hygiene .26 | 23 |
-   * | after | hunger .13, thirst .15, energy .55, fun .18, hygiene .12 | 2 |
-   *
-   * **Energy is the one that went up, and it is not the fault the plan was
-   * about.** Only three things on the whole plot give energy back - the beach at
-   * 0.3, a coffee shop at 0.2 and a spa pavilion at 0.5 - so its "share" is a
-   * share of almost nothing, and the beach's own visits fell from 823 to 641
-   * over the same change. A need with three providers is `advice.ts`'s
-   * `unserved-need` to report, not this formula's to spread.
-   */
   it("records how the day's visits were shared out, and shares them out", () => {
     const run = aDayOnThePlot();
     const visits = run.router.dayVisits();
@@ -2475,28 +2051,9 @@ describe('on the generated plot', () => {
 
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
-    // **The changing cabins, and nothing else.** Hygiene 0.3 at a capacity of 2
-    // is the weakest of the three things on this plot that serve hygiene, and
-    // both of them stand on the same sand as thirteen beach showers at 0.6 -
-    // there is no guest and no plot on which 0.3 two tiles further off is the
-    // better answer. That is an art declaration rather than a decision, which is
-    // plan 030's option F: a finding to re-measure on its own and not an edit to
-    // make here. They took no visits before this plan either.
-    //
-    // **And the fourth playground, since plan 022.** The plot stands four; the
-    // other three took 36, 10 and 9 visits over the day, and the fourth took a
-    // couple before dirt was a term and none after it. That is the bottom of a
-    // long tail moving by one visit, not a venue the formula stopped being able
-    // to choose: a dirty venue is chosen *less*, and the three above it are the
-    // ones that show it. A fourth playground on a plot that barely fills three
-    // is `advice.ts`'s `unvisited` note to make, which is a note and not a
-    // problem.
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
     expect(quiet).toEqual(['changing-cabins', 'playground']);
 
-    // Rounded up from the 0.55 measured when this landed, which is the beach's
-    // share of energy and explained in the doc comment above. The loudest of the
-    // other four is thirst at 0.15, against 0.22 before the plan.
     const BUSIEST_SHARE = 0.6;
     for (const [need, most] of share.busiest) {
       expect(
@@ -2506,19 +2063,6 @@ describe('on the generated plot', () => {
     }
   });
 
-  /**
-   * The assertion the whole of plan 023 exists for, and the one no unit test can
-   * make: a storm over a plot laid by something that has never heard of weather.
-   * A closure that worked on a corridor of eight nodes and quietly emptied the
-   * resort here would pass every test above it.
-   *
-   * An eighth of a simulated day, run twice over the same plot from the same
-   * seeds - once clear and once storm - so the only difference between the two
-   * runs is the sky. Half the plot's usual six hundred, and an eighth of a day
-   * rather than the quarter the other runs here take: this is two runs and not
-   * one, and what it measures - nothing without a roof takes a visit - is as
-   * plain after three hours as after six.
-   */
   it('empties what has no roof in a storm, and fills what has one', () => {
     const lodgings = lodgingsOn(layout.placements);
     const visitsUnder = (weather: Weather): ReadonlyMap<string, number> => {
@@ -2566,8 +2110,6 @@ describe('on the generated plot', () => {
 
     const clear = visitsUnder('clear');
     const storm = visitsUnder('storm');
-    // The beach is the router's own venue and takes visits like any other, so it
-    // belongs in the tally: it is the open venue within reach of everywhere.
     const standing = [...venues, beachVenueFor(network)!];
     const tally = (visits: ReadonlyMap<string, number>, shelter: Shelter): number =>
       standing
@@ -2575,28 +2117,17 @@ describe('on the generated plot', () => {
         .reduce((sum, venue) => sum + (visits.get(venue.key) ?? 0), 0);
 
     expect(tally(clear, 'open'), 'nothing open was visited on a clear day').toBeGreaterThan(0);
-    // Not "fewer": nothing without a roof may take a single visit.
     expect(tally(storm, 'open')).toBe(0);
     expect(tally(storm, 'covered')).toBeGreaterThanOrEqual(tally(clear, 'covered'));
-    // And the plot does not simply stop: the guests go somewhere else.
     expect(tally(storm, 'covered')).toBeGreaterThan(0);
   });
 
-  /**
-   * The STOP condition plan 023 carries: a storm that leaves guests wandering
-   * with nothing open to choose is a finding about the *art*, not a number to
-   * fudge. What it checks is that the covered venues standing on the reference
-   * plot between them serve every need a guest can have.
-   */
   it('leaves something open for every need a storm could make somebody want', () => {
     const closed = weatherEffect('storm');
     const open = [...venues, beachVenueFor(network)!].filter((venue) =>
       isOpenIn(shelterOf(venue), closed),
     );
     const unserved = NEEDS.filter((need) => !open.some((venue) => reliefAt(venue, need) > 0));
-    // Energy is the one nothing on the plot *fills* - a night's sleep is what
-    // fills it, see `night.ts` - and that is as true on a clear day as in a
-    // storm, so it is not a finding about the weather.
     const clearUnserved = NEEDS.filter(
       (need) => ![...venues].some((venue) => reliefAt(venue, need) > 0),
     );
@@ -2605,7 +2136,6 @@ describe('on the generated plot', () => {
 });
 
 describe('a venue the weather has shut', () => {
-  /** An open-air pool at the corridor's far end: the thing a storm closes. */
   const pool = (tileX: number): Venue => ({
     ...bakery(tileX),
     key: 'swimming-pool#0',
@@ -2613,13 +2143,10 @@ describe('a venue the weather has shut', () => {
     label: 'Pool',
     role: 'activity',
     satisfies: [{ need: 'fun', amount: 0.8 }],
-    // Half an hour to an hour, as a real pool declares: long enough that a visit
-    // cut short by the weather would be unmistakable.
     dwellSeconds: { min: 30 * 60, max: 60 * 60 },
     shelter: 'open',
   });
 
-  /** A games hall on the same tile, which has a roof over it. */
   const hall = (tileX: number): Venue => ({
     ...pool(tileX),
     key: 'game-hall#0',
@@ -2631,8 +2158,6 @@ describe('a venue the weather has shut', () => {
   it('turns a guest away at the door, and lets them decide again on the spot', () => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'fun');
-    // The goal is set on a clear day, so somebody is genuinely walking to it;
-    // the storm is what they find when they arrive.
     let weather: Weather = 'clear';
     let crowd: Crowd | null = null;
     const upkeep = createUpkeep(1);
@@ -2663,8 +2188,6 @@ describe('a venue the weather has shut', () => {
 
     weather = 'storm';
     const door = nodeAt(network, 7);
-    // Not taken in and not stood in a line: they are handed back to the crowd,
-    // which is what `-1` from `step` and a cleared goal mean together.
     expect(router.step(0, door)).toBe(-1);
     expect(router.visitOf(0)).toBeNull();
     expect(router.goalOf(0), 'sent straight back to the pool that just shut').toBeNull();
@@ -2725,19 +2248,12 @@ describe('a venue the weather has shut', () => {
     expect(router.visitOf(0)?.waiting).toBe(false);
     expect(router.occupancyOf('swimming-pool#0')).toEqual({ inside: 1, waiting: 0 });
 
-    // The weather turns while they are in the water. A swim that ended with the
-    // guest put out of the pool would be a closure reaching back through time;
-    // what a closure does is stop the *next* person coming in.
     weather = 'storm';
-    // A pool visit is 30 to 90 ticks. Run it out, and the visit must last the
-    // whole of it rather than ending on the tick the sky turned.
     let inside = 0;
     for (let tick = 1; tick <= 90; tick++) {
       if (router.visitOf(0) !== null) inside = tick;
       router.tick(tick);
     }
-    // Against the same visit on a day that never turned: the dwell is drawn from
-    // the same seeded generator, so the two must agree to the tick.
     const dry = routerOn(network, venues, wanting(0, 'fun'));
     dry.router.step(0, nodeAt(network, 0));
     dry.router.step(0, nodeAt(network, 7));
@@ -2770,11 +2286,9 @@ describe('a venue the weather has shut', () => {
       label: 'Bar',
       role: 'drink',
       satisfies: [{ need: 'thirst', amount: 1 }],
-      // Covered, so the heatwave is what moves the choice rather than a closure.
       shelter: 'covered',
     };
     const person = 0;
-    // Equally bored and equally thirsty, standing the same distance from both.
     const needs = wanting(person, null);
     needs.level.fun[person] = 0.3;
     needs.level.thirst[person] = 0.3;

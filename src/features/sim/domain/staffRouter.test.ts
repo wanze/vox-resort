@@ -11,7 +11,6 @@ import type { Weather } from './weather';
 
 const FLAT: LevelProvider = () => 0;
 
-/** A paved corridor `length` tiles long, running east; `router.test.ts`'s own. */
 const street = (length: number): PavedTile[] =>
   Array.from({ length }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 }));
 
@@ -21,7 +20,6 @@ const networkOf = (paved: PavedTile[]): WalkNetwork =>
 const nodeAt = (network: WalkNetwork, tileX: number, tileZ = 0): number =>
   network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === tileZ);
 
-/** A venue standing on the tile north of the corridor, at `tileX`. */
 const shop = (key: string, tileX: number): Venue => ({
   key,
   id: key.split('#')[0]!,
@@ -39,16 +37,11 @@ const shop = (key: string, tileX: number): Venue => ({
   doors: [],
 });
 
-/**
- * A staff router and the crowd it walks, bound to each other the way
- * `showcase.ts` binds them, on a corridor with the venues given.
- */
 const staffOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
   dirt: readonly number[],
   workers = 1,
-  /** What kind of day it is. Omit it and it is clear, as every fixture here assumes. */
   weather: Weather = 'clear',
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
@@ -79,8 +72,6 @@ describe('createStaffRouter', () => {
   it('walks a cleaner towards the dirtiest venue that wants cleaning', () => {
     const network = networkOf(street(8));
     const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
-    // The far one is filthy and the near one is merely used: a cleaner crosses
-    // the plot for the worse of the two.
     const { router } = staffOn(network, venues, [0.65, 0.1]);
     for (const tileX of [0, 2, 5]) {
       expect(router.step(0, nodeAt(network, tileX)), `tile ${tileX}`).toBe(
@@ -93,8 +84,6 @@ describe('createStaffRouter', () => {
     const network = networkOf(street(8));
     const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
     const { router } = staffOn(network, venues, [0.2, 0.3], 2);
-    // The first takes the filthiest; the second is left the other one, and
-    // walks the other way down the corridor for it.
     expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
     expect(router.step(1, nodeAt(network, 4))).toBe(nodeAt(network, 5));
   });
@@ -108,7 +97,6 @@ describe('createStaffRouter', () => {
     expect(isWaiting(crowd, 0), 'walked straight past the venue').toBe(true);
     expect(router.atWork(0)?.key).toBe('bakery#0');
     expect(router.workingCount).toBe(1);
-    // A spell that has started has cleaned nothing: the work is the dwell.
     expect(cleanliness(upkeep, 0)).toBeCloseTo(0.2);
     for (let tick = 1; tick <= 10; tick++) router.tick(tick);
     expect(cleanliness(upkeep, 0)).toBeCloseTo(0.2);
@@ -127,7 +115,6 @@ describe('createStaffRouter', () => {
     expect(router.workingCount).toBe(0);
     expect(router.atWork(0)).toBeNull();
     expect(isWaiting(crowd, 0), 'never let go of the venue').toBe(false);
-    // And they are free to be sent somewhere again.
     expect(cleanliness(upkeep, 0)).toBeLessThan(NEEDS_CLEANING);
     expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
   });
@@ -138,7 +125,6 @@ describe('createStaffRouter', () => {
     const { router } = staffOn(network, venues, [1, 0.9]);
     expect(router.step(0, nodeAt(network, 4))).toBe(-1);
     expect(router.atWork(0)).toBeNull();
-    // Nor is there anything to do on a plot with no venues at all.
     expect(staffOn(networkOf(street(8)), [], []).router.step(0, nodeAt(network, 4))).toBe(-1);
   });
 
@@ -151,15 +137,11 @@ describe('createStaffRouter', () => {
     expect(router.step(0, nodeAt(network, 1))).toBe(-1);
     expect(router.workingCount).toBe(1);
 
-    // The bakery was bulldozed and the corridor is longer: nobody is at work,
-    // nobody holds a claim, and the one venue left is taken afresh.
     const rebuilt = networkOf(street(12));
     router.rebuild([shop('bar#0', 7)], rebuilt);
     expect(router.workingCount).toBe(0);
     expect(router.atWork(0)).toBeNull();
     expect(router.step(0, nodeAt(rebuilt, 11))).toBe(nodeAt(rebuilt, 10));
-    // And the claim went with it, so the second cleaner is not left the venue
-    // the first was already holding before the edit.
     expect(router.step(1, nodeAt(rebuilt, 11))).toBe(-1);
   });
 });
@@ -175,7 +157,6 @@ describe('meanCleanliness', () => {
 });
 
 describe('a cleaner and the weather', () => {
-  /** A pool at `tileX` with no roof over it, so the rain shuts it. */
   const pool = (key: string, tileX: number): Venue => ({
     ...shop(key, tileX),
     role: 'activity',
@@ -184,7 +165,6 @@ describe('a cleaner and the weather', () => {
 
   it('is not sent across the plot to mop a venue the rain has shut', () => {
     const network = networkOf(street(8));
-    // The filthy one is the pool; the merely used one has a roof.
     const venues = [pool('swimming-pool#0', 7), shop('bakery#0', 1)];
     const clear = staffOn(network, venues, [0.1, 0.65]);
     expect(clear.router.step(0, nodeAt(network, 0)), 'the pool is the dirtier').toBe(
@@ -193,8 +173,6 @@ describe('a cleaner and the weather', () => {
 
     const storm = staffOn(network, venues, [0.1, 0.65], 1, 'storm');
     storm.router.step(0, nodeAt(network, 0));
-    // They work at the bakery instead: the pool is shut, and nobody is dirtying
-    // it either. It gets scrubbed when it reopens.
     for (let tick = 1; tick <= 40; tick++) storm.router.tick(tick);
     const worked = [...Array(40).keys()].map(() => storm.router.atWork(0)?.key);
     expect(worked).not.toContain('swimming-pool#0');
@@ -225,8 +203,6 @@ describe('a cleaner and the weather', () => {
       seed: 3,
       routeOf: (worker, at) => router.step(worker, at),
     });
-    // Nowhere to go: the only dirty thing on the plot is shut, and the bakery
-    // is spotless.
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
     weather = 'clear';
     expect(router.step(0, nodeAt(network, 0))).toBe(nodeAt(network, 1));

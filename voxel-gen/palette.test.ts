@@ -6,15 +6,6 @@ import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import { buildModel, type Color } from './voxelgen.ts';
 
-/**
- * Everything that is painted, all four registries. The people, the balloons and
- * the bay's craft are drawn from the same palette as the buildings on purpose —
- * a crowd in colours the resort never uses is a crowd that looks pasted on, and
- * so is a sky and so is a sea — so they are checked here rather than needing a
- * rule of their own. None of them is exempt: the palette was already in place
- * when they were drawn. Drafts are held to it too, so one can be promoted
- * without a palette pass of its own.
- */
 const PAINTED = [
   ...MODEL_SOURCES,
   ...DRAFT_SOURCES,
@@ -31,7 +22,6 @@ const tones = (): [string, Color][] =>
     ramp.map(([tone, color]): [string, Color] => [`${family}.${tone}`, color]),
   );
 
-/** How far apart two colours are, summed over the channels. */
 const distance = (a: Color, b: Color): number =>
   Math.abs((a >> 16) - (b >> 16)) +
   Math.abs(((a >> 8) & 0xff) - ((b >> 8) & 0xff)) +
@@ -42,11 +32,7 @@ const luminance = (color: Color): number =>
 
 const hex = (color: Color): string => `#${color.toString(16).padStart(6, '0')}`;
 
-/**
- * Models drawn before the palette existed, exempt until they have had their
- * style pass. Take an id off this list as its pass lands; the list only ever
- * shrinks, and a model added from now on is checked from its first commit.
- */
+// Exempt until their style pass lands; this list only ever shrinks.
 const LEGACY = new Set([
   'path',
   'boardwalk',
@@ -95,9 +81,6 @@ describe('PALETTE', () => {
   });
 
   it('keeps two materials from becoming the same colour twice', () => {
-    // The bug this palette replaced: 137 pairs of colours within 12 of each
-    // other, so no two buildings agreed on what cream or terracotta is. Within
-    // a ramp closeness is the point; across two materials it is the defect.
     const all = families();
     for (let i = 0; i < all.length; i++) {
       for (let j = i + 1; j < all.length; j++) {

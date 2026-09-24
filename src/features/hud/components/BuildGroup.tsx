@@ -11,13 +11,8 @@ export interface BuildGroupProps {
   readonly onSelect: (typeId: string | null) => void;
 }
 
-/**
- * One shelf of the catalogue: its name, its count, and its objects as a grid.
- *
- * Shelves stack rather than take turns — all of them are open until somebody
- * folds one away — because the thing being picked is a picture, and a picture
- * you have to open a drawer to see is no faster to find than a word.
- */
+// Shelves stack open rather than take turns: what is picked is a picture, and one
+// hidden in a drawer is no faster to find than a word.
 export function BuildGroup({
   group,
   preview,

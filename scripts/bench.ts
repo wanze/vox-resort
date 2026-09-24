@@ -1,31 +1,5 @@
-/**
- * Drives the showcase in a real browser and reports what a frame actually costs.
- *
- * Frame rate read off the HUD by hand is not a measurement: the camera is never
- * twice in the same place, the clock has moved on, and the number shown is a
- * half-second average that hides the tail. So the app grows a `?bench=1` mode
- * (see `features/bench/domain/benchConfig.ts`) that pins the camera and the
- * clock, and this script launches Chrome on it over the DevTools protocol and
- * reads the result back out of the page.
- *
- * It talks CDP directly rather than pulling in Puppeteer: one WebSocket and four
- * commands is less code than the dependency would be, and it keeps the browser
- * the user's own Chrome, on the user's own GPU, at the user's own pixel ratio —
- * which is the whole point, given that the numbers this replaces came from a
- * headless machine that rendered a quarter of the pixels.
- *
- * Usage:
- *   pnpm dev &                       # the script does not start the dev server
- *   pnpm bench                       # every case in SUITE
- *   pnpm bench -- --case night-street --json
- *   pnpm bench -- --repeat 1,2,3          # tile the plot, to price a larger resort
- *   pnpm bench -- --no-lod                # everything in full, to price the level of detail
- *   pnpm bench -- --weather storm         # pin the sky, to price the rain
- *
- * `--no-vsync` unlocks the frame rate, though the GPU columns are the better
- * measure once a frame fits inside the refresh interval. `--webgl` disables
- * WebGPU so the run exercises the WebGL2 fallback instead.
- */
+// Talks CDP directly rather than via Puppeteer, to drive the user's own Chrome on their own GPU.
+// Expects `pnpm dev` to be running already.
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -35,10 +9,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-/** Default window size; `--width`/`--height` override it, and pixel count matters. */
 const DEFAULT_WINDOW = { width: 1440, height: 900 };
 
-/** Device pixel ratio to force, matching the Retina display the app is used on. */
+// Matches the Retina display the app is used on.
 const DEVICE_SCALE = 2;
 
 interface BenchCase {
@@ -48,10 +21,6 @@ interface BenchCase {
   readonly note: string;
 }
 
-/**
- * The four corners of the problem: day and night, seen from above and from the
- * ground. `night-street` is the case the whole exercise is about.
- */
 const SUITE: readonly BenchCase[] = [
   { name: 'day-overview', view: 'overview', time: 0.62, note: 'the view the app opens on' },
   { name: 'day-street', view: 'street', time: 0.62, note: 'daylight, camera at eye level' },
@@ -97,22 +66,13 @@ interface Cli {
   readonly warmup: number;
   readonly frames: number;
   readonly vsync: boolean;
-  /** Turns WebGPU off, so the renderer falls back to its WebGL2 backend. */
   readonly webgl: boolean;
-  /** Pins meshing to the main thread, to price what the worker saves. */
   readonly mainThread: boolean;
-  /** Draws everything in full, to price what the level of detail saves. */
   readonly noDetail: boolean;
-  /**
-   * Pins the sky to one kind of day, or empty for whichever the week drew -
-   * which is clear, and a clear day draws no rain. The only way to price the
-   * weather; see `BenchConfig.weather`.
-   */
   readonly weather: string;
   readonly json: boolean;
   readonly label: string;
   readonly window: { readonly width: number; readonly height: number };
-  /** Where to write one PNG per case, so a change in cost can be checked against a change in looks. */
   readonly shotDir: string | null;
 }
 
@@ -161,11 +121,9 @@ function parseCli(argv: readonly string[]): Cli {
   };
 }
 
-/** One CDP session against a freshly launched Chrome. */
 interface Browser {
   evaluate<T>(expression: string): Promise<T>;
   navigate(url: string): Promise<void>;
-  /** Base64 PNG of the viewport as it stands. */
   screenshot(): Promise<string>;
   close(): Promise<void>;
 }
@@ -202,8 +160,7 @@ async function launch(cli: Cli): Promise<Browser> {
     '--window-position=0,0',
     'about:blank',
   ];
-  // Unlocking the frame rate is the only way to see past the display's refresh;
-  // with it left on, anything faster than 120 fps reads as exactly 120.
+  // With vsync on, anything faster than the refresh rate reads as exactly the refresh rate.
   if (!cli.vsync) args.splice(1, 0, '--disable-gpu-vsync', '--disable-frame-rate-limit');
 
   const child: ChildProcess = spawn(CHROME, args, { stdio: 'ignore' });
@@ -240,8 +197,8 @@ async function launch(cli: Cli): Promise<Browser> {
     else entry.resolve(message.result);
   });
 
-  // Browser-level and page-level commands are the same frame; only the page's
-  // carries a sessionId, and JSON.stringify drops it when there is none.
+  // Browser- and page-level commands share a frame; only the page's carries a sessionId, which
+  // JSON.stringify drops when undefined.
   const senderFor =
     (sessionId?: string) =>
     <T>(method: string, params: Record<string, unknown> = {}): Promise<T> => {
@@ -253,7 +210,6 @@ async function launch(cli: Cli): Promise<Browser> {
     };
   const send = senderFor();
 
-  // Attach to the one tab Chrome opened, and drive it through its own session.
   const { targetInfos } = await send<{ targetInfos: { targetId: string; type: string }[] }>(
     'Target.getTargets',
   );
@@ -300,14 +256,13 @@ async function launch(cli: Cli): Promise<Browser> {
           await rm(userDataDir, { recursive: true, force: true });
           return;
         } catch {
-          // Still writing. Try again, and give up quietly: it is a temp dir.
+          // Still writing; give up quietly, it is a temp dir.
         }
       }
     },
   };
 }
 
-/** How long one case may take before the run is declared broken. */
 const CASE_TIMEOUT_MS = 180_000;
 
 async function runCase(

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { NEEDS } from './needs';
 import { isOpenIn, MAX_EFFECT, weatherEffect, weatherOn, WEATHERS, type Weather } from './weather';
 
-/** A week of a plot, as the clock would ask for it. */
 const week = (seed: number, days: number): Weather[] =>
   Array.from({ length: days }, (_unused, day) => weatherOn(day, seed));
 
@@ -14,15 +13,10 @@ describe('weatherOn', () => {
   });
 
   it('gives two plots different weeks', () => {
-    // Not that every day differs - two seeds will agree on some of them - but
-    // that the seed reaches the answer at all.
     expect(week(10, 30)).not.toEqual(week(11, 30));
   });
 
   it('does not run the kinds round in order, day after day', () => {
-    // What a raw modulo would do: clear, rain, storm, heatwave, clear, for ever.
-    // The hash is what stops it, so neighbouring days have to disagree about
-    // their pattern rather than merely about their value.
     const days = week(3, 40);
     const gaps = new Set(days.map((kind, day) => `${day % 4}:${kind}`));
     expect(gaps.size).toBeGreaterThan(4);
@@ -36,7 +30,6 @@ describe('weatherOn', () => {
       if (kind === 'clear') continue;
       expect(count('clear'), `${kind} is as common as a clear day`).toBeGreaterThan(count(kind));
     }
-    // Weather that happened every other day would stop being an event.
     expect(count('clear') / days.length).toBeGreaterThan(0.5);
   });
 });
@@ -76,7 +69,6 @@ describe('weatherEffect', () => {
   it('makes a heatwave about thirst and a storm about grey', () => {
     expect(weatherEffect('heatwave').weight.thirst).toBeGreaterThan(1);
     expect(weatherEffect('heatwave').decay.thirst).toBeGreaterThan(1);
-    // A heatwave is not a grey day, whatever else it is.
     expect(weatherEffect('heatwave').overcast).toBe(0);
     expect(weatherEffect('storm').overcast).toBeGreaterThan(weatherEffect('rain').overcast);
   });

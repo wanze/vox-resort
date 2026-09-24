@@ -53,11 +53,9 @@ const home = (key: string, id: string, beds: number): Home => ({ key, id, label:
 
 const HOMES: readonly Home[] = [home('hotel#0', 'hotel', 40), home('bungalow#0', 'bungalow', 4)];
 
-/** More people than beds, so somebody is certainly left without one. */
 const guestsOf = (count = 80): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
-/** Needs as they were drawn, or with one person moved to a mood of their own. */
 const needsOf = (guests: Guests, level: number | null = null, person = 0): Needs => {
   const needs = createNeeds(guests, 7);
   if (level !== null) for (const need of NEEDS) needs.level[need][person] = level;
@@ -68,7 +66,6 @@ const HERE: GuestSpot = { x: 0, z: 0 };
 
 const NO_VENUES: readonly Venue[] = [];
 
-/** Standing at a venue's own door, so the distance to it is nothing. */
 const doorOf = (venue: Venue): GuestSpot => ({ x: venue.x, z: venue.z });
 
 const at = (key: string, id: string, tileX = 3, tileZ = 7): Placement => ({
@@ -86,13 +83,11 @@ const at = (key: string, id: string, tileX = 3, tileZ = 7): Placement => ({
   depth: TILE_VOXELS,
 });
 
-/** A mood column for a registry: everybody at the start level, which is what a fresh plot has. */
 const moodOf = (guests: Guests) => createHappiness(guests.count);
 
 describe('guestView', () => {
   it('names the guest and lists their whole party, themselves included, in party order', () => {
     const guests = guestsOf();
-    // Somebody in a party of more than one, so the order is worth checking.
     const person = Array.from({ length: guests.count }, (_, i) => i).find(
       (i) => guests.parties[guests.party[i]!]!.members.length > 2,
     )!;
@@ -166,8 +161,6 @@ describe('guestView', () => {
   it('chooses from where the guest is standing, not from the corner of the plot', () => {
     const guests = guestsOf();
     const needs = needsOf(guests, 0, 3);
-    // A bakery at one end of the plot and a restaurant at the other, both of
-    // them somewhere to eat: whoever is at the door wins.
     const venues = venuesOn([
       at('bakery#0', 'bakery', 1, 1),
       at('restaurant#0', 'restaurant', 90, 1),
@@ -211,8 +204,6 @@ describe('placeView', () => {
   });
 
   it('words a short visit in minutes and a night in hours', () => {
-    // The restaurant's half hour to an hour, and the bungalow's seven to nine
-    // hours: the two units a stay is thought of in.
     const guests = guestsOf();
     expect(
       placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guests, null).venue?.dwell,
@@ -223,7 +214,6 @@ describe('placeView', () => {
   });
 });
 
-/** A street running east, with one seat of the given pose beside its middle tile. */
 const seatedStreet = (pose: SeatSpot['pose']): Crowd => {
   const paved: PavedTile[] = Array.from({ length: 9 }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 }));
   const seat: SeatSpot = {
@@ -245,7 +235,6 @@ const seatedStreet = (pose: SeatSpot['pose']): Crowd => {
   return createCrowd({ network, count: 30, variants: 2, seed: 12 });
 };
 
-/** Steps the crowd until somebody matches, and hands them back. */
 const until = (crowd: Crowd, matches: (i: number) => boolean): number => {
   for (let elapsed = 0; elapsed < 900; elapsed += 1 / 10) {
     stepCrowd(crowd, 1 / 10);
@@ -254,14 +243,12 @@ const until = (crowd: Crowd, matches: (i: number) => boolean): number => {
   throw new Error('nobody ever did it');
 };
 
-/** Everybody content, so the wording under test is the doing and not the mood. */
 const contentNeeds = (guests: Guests): Needs => {
   const needs = createNeeds(guests, 7);
   for (const need of NEEDS) needs.level[need].fill(1);
   return needs;
 };
 
-/** A crowd on a boardwalk down to six rows of sand, which somebody wanders off onto. */
 const beachCrowd = (): Crowd => {
   const shore = shoreFor({
     tilesX: 20,
@@ -287,7 +274,6 @@ describe('activityLine', () => {
   const doing = (crowd: Crowd, needs: Needs, person: number, errand: Errand = null): string =>
     activityLine(crowd, needs, guests, person, errand);
 
-  /** Walking to the bakery, which is what plan 017's routing hands in. */
   const TO_BAKERY: Errand = { kind: 'walking', to: 'Bakery', home: false };
 
   it('says somebody on the paving is walking, and where', () => {
@@ -341,7 +327,6 @@ describe('activityLine', () => {
     const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
     const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
     expect(doing(crowd, hungry, 0, null)).toBe(`Hungry · Walking · tile ${tileX}, ${tileZ}`);
-    // And a guest who is sitting is sitting, whatever they may be heading for.
     const sitting = seatedStreet('sit');
     const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
     expect(doing(sitting, content, sitter, TO_BAKERY).split(' · ')[0]).toBe('Sitting');
@@ -394,8 +379,6 @@ describe('a guest the simulation is holding still', () => {
   });
 
   it('says what they are doing rather than that they are sitting', () => {
-    // Somebody held inside a bakery is not walking and is not on a bench; the
-    // errand is what they are up to, whatever the crowd's own pose says.
     const sitting = seatedStreet('sit');
     const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
     expect(doing(sitting, content, sitter, { kind: 'inside', at: 'Bakery' })).toBe(
@@ -437,7 +420,6 @@ describe('placeView with a venue that is being used', () => {
       0.42,
     );
     expect(grubby.venue?.cleanliness).toBeCloseTo(0.42);
-    // A venue built a moment ago, which nothing has had a chance to wear.
     const fresh = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null);
     expect(fresh.venue?.cleanliness).toBe(1);
   });
@@ -527,7 +509,6 @@ describe('a guest staying on the beach', () => {
   const content = contentNeeds(guests);
   const SAND = { x: 6.5 * TILE_VOXELS, z: 14.5 * TILE_VOXELS };
 
-  /** Somebody held on the sand in a pose, and the line for them on a stay. */
   const lineFor = (pose: number, needs: Needs = content): string => {
     const crowd = beachCrowd();
     holdAt(crowd, 0, SAND.x, 0.3, SAND.z, 0, pose);

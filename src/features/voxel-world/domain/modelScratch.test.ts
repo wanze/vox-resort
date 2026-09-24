@@ -16,7 +16,6 @@ const model = (id: string, width: number, voxels: number): ScratchModel => ({
   })),
 });
 
-/** The packed x of every write. */
 const xsOf = (positions: Int32Array): number[] => [...positions].filter((_, at) => at % 3 === 0);
 
 describe('scratchLayoutFor', () => {

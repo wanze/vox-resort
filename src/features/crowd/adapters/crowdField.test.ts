@@ -13,21 +13,12 @@ import { createCrowd, putOnPlot, takeOffPlot, type Crowd } from '../domain/crowd
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
 
-/** A short run of paving to walk up and down, all at sea level. */
 const paved = (count: number): PavedTile[] =>
   Array.from({ length: count }, (_, tileZ) => ({ tileX: 0, tileZ, y: 0 }));
 
 const networkOf = (tiles: readonly PavedTile[]): ReturnType<typeof walkNetworkFor> =>
   walkNetworkFor({ paved: tiles, levelOf: () => 0, shore: null, tilesX: 1 });
 
-/**
- * A figure's worth of geometry: the eight corners of a `3 x height x 2` box,
- * which is the extent a person model comes out of the mesher at.
- *
- * The corners are what the field reads — it centres the model on them and
- * weights each vertex by how far below the hip it sits — so a box says
- * everything about a figure that this file needs to ask.
- */
 function personGeometry(id: string, height: number): ModelGeometry {
   const corners: number[] = [];
   for (const x of [0, 3]) {
@@ -59,19 +50,13 @@ const MODELS: readonly ModelGeometry[] = [
   personGeometry('child', CHILD_VOXELS),
 ];
 
-/** WebGPU's default `maxVertexBuffers`, which Three.js does not raise. */
+// WebGPU's default `maxVertexBuffers`, which Three.js does not raise.
 const MAX_VERTEX_BUFFERS = 8;
 
-/** Matrices a default 64 KiB uniform buffer holds, which is where Three.js stops using one. */
+// Past this many instances Three.js moves the matrices from a uniform buffer into a vertex buffer.
 const UNIFORM_MATRICES = 65_536 / 64;
 
-/**
- * Vertex buffers a mesh binds in the pipeline: one per distinct buffer behind
- * its attributes, plus one for the instance matrices once there are too many
- * of them for a uniform buffer. The normal and the colour are counted too,
- * because the catalogue's person models carry them even where this stand-in
- * does not.
- */
+// Normal and colour are counted because the real person models carry them, even where this stand-in does not.
 function vertexBuffersOf(mesh: InstancedMesh): number {
   const buffers = new Set<unknown>();
   for (const attribute of Object.values(mesh.geometry.attributes)) {
@@ -90,7 +75,6 @@ const crowdOf = (count: number, tiles = 6): Crowd =>
 const meshes = (group: { children: unknown[] }): InstancedMesh[] =>
   group.children as InstancedMesh[];
 
-/** Where one instance of one mesh has been put, in world voxels. */
 function positionOf(mesh: InstancedMesh, slot: number): Vector3 {
   const matrix = new Matrix4();
   mesh.getMatrixAt(slot, matrix);
@@ -105,11 +89,8 @@ describe('buildCrowdField', () => {
       expect(mesh.frustumCulled, mesh.name).toBe(false);
       expect(mesh.count).toBeGreaterThan(0);
     }
-    // Everybody is drawn exactly once, whichever model they walk in.
     const drawn = meshes(field.group).reduce((total, mesh) => total + mesh.count, 0);
     expect(drawn).toBe(field.count);
-    // One draw call each, and the triangles of everybody standing in them: the
-    // HUD and a bench report both read these back off the renderer.
     expect(field.drawCalls).toBe(MODELS.length);
     expect(field.triangleCount).toBe(field.count * 8);
     field.dispose();
@@ -117,13 +98,11 @@ describe('buildCrowdField', () => {
 
   it('leaves out of the draw, not the walk, everybody too small to see', () => {
     const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
-    // A hundredth of a pixel per voxel: nobody is more than a speck.
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
     field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(0);
     for (const mesh of meshes(field.group)) expect(mesh.count, mesh.name).toBe(0);
 
-    // Four pixels per voxel: everybody stands out again, and all are drawn.
     field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(400, 100) });
     field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(field.count);
@@ -140,8 +119,6 @@ describe('buildCrowdField', () => {
     field.advance(1 / 60, 1);
     expect(field.drawnCount).toBe(6);
 
-    // Two bodies emptied, one of them not the last: a `break` in the write loop
-    // would drop everybody behind it and the plot would look deserted.
     takeOffPlot(crowd, 1, crowd.x[1]!, crowd.y[1]!, crowd.z[1]!);
     takeOffPlot(crowd, 4, crowd.x[4]!, crowd.y[4]!, crowd.z[4]!);
     field.advance(1 / 60, 1);
@@ -175,8 +152,6 @@ describe('buildCrowdField', () => {
   });
 
   it('gives a mesh only to a model somebody actually walks in', () => {
-    // One person, so at most one of the two models is ever instanced — and an
-    // empty mesh is a draw call for nothing.
     const field = buildCrowdField({ crowd: crowdOf(1), models: MODELS });
     expect(meshes(field.group)).toHaveLength(1);
     field.dispose();
@@ -202,14 +177,9 @@ describe('buildCrowdField', () => {
     const crowd = crowdOf(20);
     const field = buildCrowdField({ crowd, models: MODELS });
     const [mesh] = meshes(field.group);
-    // Whoever the first mesh draws first: the models are filled in registry
-    // order, so that is the first person walking in the first of them.
     const person = [...crowd.variant].indexOf(0);
     const matrix = new Matrix4();
     mesh!.getMatrixAt(0, matrix);
-    // The figure is authored facing +z, so its local +z has to come out along
-    // the heading `crowd.ts` worked out with `atan2(dx, dz)`. Compared as a
-    // direction rather than as an angle, since -pi and pi are the same way.
     const facing = new Vector3(0, 0, 1).transformDirection(matrix);
     const heading = crowd.heading[person]!;
     expect(facing.x).toBeCloseTo(Math.sin(heading), 5);
@@ -218,8 +188,6 @@ describe('buildCrowdField', () => {
   });
 
   it('hands the shader the direction each person is walking', () => {
-    // The legs swing along it, and past the instance matrix there is no local
-    // +z left for them to swing along — see `walkMaterial`.
     const crowd = crowdOf(20);
     const field = buildCrowdField({ crowd, models: MODELS });
     for (const mesh of meshes(field.group)) {
@@ -246,8 +214,6 @@ describe('buildCrowdField', () => {
     const bounds = mesh!.geometry.boundingBox!;
     expect(bounds.min.x).toBeCloseTo(-bounds.max.x, 5);
     expect(bounds.min.z).toBeCloseTo(-bounds.max.z, 5);
-    // Feet on the ground, not the middle of the figure: the crowd's `y` is the
-    // paving they are standing on.
     expect(bounds.min.y).toBeCloseTo(0, 5);
     field.dispose();
   });
@@ -294,7 +260,6 @@ describe('buildCrowdField', () => {
     const uploaded = mesh!.instanceMatrix.version;
     field.advance(1 / 60, 1);
     expect(positionOf(mesh!, 0).distanceTo(before)).toBeGreaterThan(0);
-    // The whole buffer goes up, because everybody moved.
     expect(mesh!.instanceMatrix.version).toBeGreaterThan(uploaded);
     for (let slot = 0; slot < mesh!.count; slot++) {
       const at = positionOf(mesh!, slot);
@@ -331,12 +296,9 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd, models: MODELS });
     const twin = crowdOf(30);
     const twinField = buildCrowdField({ crowd: twin, models: MODELS });
-    // Two steps of `MAX_STEP` either way, which is what makes them the same walk.
     field.advance(0.05, 4);
     for (let frame = 0; frame < 2; frame++) twinField.advance(0.1, 1);
     for (let i = 0; i < crowd.count; i++) expect(crowd.x[i]).toBeCloseTo(twin.x[i]!, 2);
-    // Clamped before it is scaled: a backgrounded tab at four times real time
-    // costs four steps, not four minutes.
     const away = crowdOf(30);
     const awayField = buildCrowdField({ crowd: away, models: MODELS });
     const slow = crowdOf(30);
@@ -348,8 +310,6 @@ describe('buildCrowdField', () => {
   });
 
   it('will not teleport a crowd across the plot after a backgrounded tab', () => {
-    // A tab that was away for a minute reports the whole minute as one frame.
-    // Clamped, an hour away costs the same step a slow frame does.
     const crowd = crowdOf(30);
     const field = buildCrowdField({ crowd, models: MODELS });
     const long = crowdOf(30);
@@ -362,11 +322,8 @@ describe('buildCrowdField', () => {
   });
 
   it('fits WebGPU’s vertex buffers however many people walk in one model', () => {
-    // Past `UNIFORM_MATRICES` people, Three.js stops handing the instance
-    // matrices over in a uniform buffer and makes them a vertex buffer of their
-    // own (`nodes/accessors/Instance.js`). A crowd laid out one attribute per
-    // number took nine buffers there, WebGPU refused the pipeline, and a large
-    // resort drew nobody while a small one drew everybody.
+    // Three.js moves instance matrices into their own vertex buffer here
+    // (`nodes/accessors/Instance.js`), which once pushed a crowd past WebGPU's limit.
     const field = buildCrowdField({ crowd: crowdOf(3 * UNIFORM_MATRICES, 40), models: MODELS });
     for (const mesh of meshes(field.group)) {
       expect(mesh.instanceMatrix.count, mesh.name).toBeGreaterThan(UNIFORM_MATRICES);
@@ -381,7 +338,6 @@ describe('buildCrowdField', () => {
     expect(meshes(field.group)).toHaveLength(0);
     expect(field.drawCalls).toBe(0);
     expect(field.triangleCount).toBe(0);
-    // And a frame costs nothing rather than throwing.
     field.advance(1 / 60, 1);
     field.dispose();
   });
@@ -422,8 +378,6 @@ describe('buildCrowdField', () => {
   });
 
   it('still fits WebGPU’s vertex buffers after a relocate', () => {
-    // The same guard as above, which exists because nine buffers drew a big
-    // resort with nobody in it: a relocate must not grow a buffer on the way.
     const field = buildCrowdField({ crowd: crowdOf(3 * UNIFORM_MATRICES, 40), models: MODELS });
     field.relocate(networkOf(paved(20)));
     field.advance(1 / 60, 1);

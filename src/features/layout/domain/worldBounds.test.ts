@@ -45,8 +45,6 @@ describe('worldBoundsFor', () => {
   });
 
   it('counts the terrace an object stands on towards the height', () => {
-    // A short object on a high bench reaches further up than a tall one at sea
-    // level, and it is the cameras that have to be framed on the taller of them.
     const raised = [at('hut', 0, 0, 16, 16, 40)];
     expect(worldBoundsFor(raised, () => 12).height).toBe(52);
   });
@@ -116,7 +114,6 @@ describe('turnDirection', () => {
   });
 });
 
-/** The unit vector from the camera towards what it is looking at. */
 const forwardOf = (framing: OrthographicFraming) => {
   const dx = framing.target.x - framing.position.x;
   const dy = framing.target.y - framing.position.y;
@@ -125,7 +122,6 @@ const forwardOf = (framing: OrthographicFraming) => {
   return { x: dx / length, y: dy / length, z: dz / length };
 };
 
-/** Every corner of the plot, which is what the clip planes have to contain. */
 const cornersOf = (box: WorldBounds) =>
   [box.minX, box.maxX].flatMap((x) =>
     [0, box.height].flatMap((y) => [box.minZ, box.maxZ].map((z) => ({ x, y, z }))),
@@ -143,7 +139,6 @@ describe('isometricFramingFor', () => {
   });
 
   it('stands the camera over the corner it is named for', () => {
-    // North is -z and east is +x, the compass the plan is laid out on.
     const corners = {
       northeast: { x: 1, z: -1 },
       southeast: { x: 1, z: 1 },
@@ -158,8 +153,6 @@ describe('isometricFramingFor', () => {
   });
 
   it('stands over a corner, not a side, which is what makes it isometric', () => {
-    // Both horizontal axes at the same angle: a building shows two faces rather
-    // than one flat elevation.
     for (const direction of COMPASS_DIRECTIONS) {
       const { target, position } = isometricFramingFor(bounds, direction);
       expect(Math.abs(position.x - target.x)).toBeCloseTo(Math.abs(position.z - target.z));
@@ -178,8 +171,6 @@ describe('isometricFramingFor', () => {
   });
 
   it('covers the plot it is framing', () => {
-    // Across the screen runs the plot's diagonal, foreshortened by the 45 degree
-    // turn; up it runs the rest of that diagonal plus what stands on the plot.
     const width = bounds.maxX - bounds.minX;
     const depth = bounds.maxZ - bounds.minZ;
     for (const direction of COMPASS_DIRECTIONS) {
@@ -190,7 +181,6 @@ describe('isometricFramingFor', () => {
   });
 
   it('frames the plot the same way from every corner', () => {
-    // The whole point of a corner azimuth: turning the plot does not resize it.
     const framings = COMPASS_DIRECTIONS.map((direction) => isometricFramingFor(bounds, direction));
     for (const framing of framings) {
       expect(framing.viewWidth).toBeCloseTo(framings[0]!.viewWidth);
@@ -214,9 +204,6 @@ describe('isometricFramingFor', () => {
   });
 
   it('puts the near plane behind the camera, not in front of it', () => {
-    // Orthographic depth is linear, so cropping the range buys nothing — and a
-    // near plane in front of the camera drops below the ground as soon as the
-    // view is zoomed out far enough, which would take `groundPointAt` with it.
     for (const direction of COMPASS_DIRECTIONS) {
       const framing = isometricFramingFor(bounds, direction);
       expect(framing.near).toBeLessThan(0);

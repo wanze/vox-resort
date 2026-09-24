@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS, type ModelDoor } from '../../../../voxel-gen/voxelgen.ts';
 import { doorStepTile, placedDoors } from './doorStep';
 
-/** A cottage-shaped model: two tiles wide and three deep, so a swap shows. */
 const WIDTH = 32;
 const DEPTH = 48;
 
-/** Its door, a column into the doorway in the middle of the +z front. */
 const FRONT: ModelDoor = { x: 15, z: DEPTH - 2, facing: 0 };
 
 describe('placedDoors', () => {
@@ -16,8 +14,6 @@ describe('placedDoors', () => {
   });
 
   it('turns an odd-turned door against the model size before the turn', () => {
-    // Turned once the cottage is 48 wide and 32 deep, and its front faces +x:
-    // the door is on the far x edge, in the upper half of the depth.
     const [door] = placedDoors({ x: 0, z: 0, rotation: 1 }, [FRONT], WIDTH, DEPTH);
     expect(door).toEqual({ x: DEPTH - 2, z: WIDTH - 15, facing: 1 });
   });

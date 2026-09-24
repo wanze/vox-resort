@@ -24,8 +24,7 @@ describe('listOf', () => {
   });
 
   it('never has one id in two of the sets', () => {
-    // Otherwise it is filed by whichever check runs first, and a rail that was
-    // also a prop would be indexed, shadowed and baked as though it stood there.
+    // Otherwise it is filed by whichever check runs first, and a rail that was also a prop would be baked as one.
     const sets = [RAIL_IDS, PROP_IDS, PAVING_IDS];
     const seen = new Set<string>();
     let total = 0;

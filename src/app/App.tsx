@@ -31,7 +31,7 @@ export function App() {
   const advice = useAdvice(showcaseRef);
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
-  const { adopt: adoptParams } = resort;
+  const { adopt: adoptParams, adoptOpen } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
@@ -60,6 +60,7 @@ export function App() {
       onSelectionChange: adoptSelection,
       onAdviceChange: adoptAdvice,
       onWeatherChange: adoptWeather,
+      onOpenChange: adoptOpen,
       onFrame: overlay.update,
     };
 
@@ -78,6 +79,7 @@ export function App() {
         adoptAdvice(mounted.advice);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
+        adoptOpen(mounted.open);
         // So the bar says what kind of day it is before midnight comes round.
         adoptWeather(mounted.stats.weather);
       } catch (cause: unknown) {
@@ -94,7 +96,16 @@ export function App() {
       });
     };
     // All of them are stable, so the renderer is mounted exactly once.
-  }, [hudNodes, selectTool, adoptParams, adoptCamera, adoptSelection, adoptAdvice, adoptWeather]);
+  }, [
+    hudNodes,
+    selectTool,
+    adoptParams,
+    adoptOpen,
+    adoptCamera,
+    adoptSelection,
+    adoptAdvice,
+    adoptWeather,
+  ]);
 
   return (
     <div className="app">

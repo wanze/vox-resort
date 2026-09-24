@@ -488,6 +488,19 @@ describe('errandOf', () => {
     });
   });
 
+  it('words the walk to the desk and the line at it as checking in, but not a walk home', () => {
+    const RECEPTION = { label: 'Reception' };
+    const arriving = { ...none, checkingIn: true };
+    expect(errandOf({ ...arriving, goal: RECEPTION })).toEqual({
+      kind: 'checking-in',
+      at: 'Reception',
+    });
+    const visit = { venue: RECEPTION, waiting: true, place: 2 };
+    expect(errandOf({ ...arriving, visit, goal: RECEPTION })?.kind).toBe('checking-in');
+    expect(errandOf({ ...arriving, goal: RECEPTION, home: BUNGALOW })?.kind).toBe('walking');
+    expect(errandOf(arriving)).toBeNull();
+  });
+
   it('puts a stay on the beach ahead of the visit to the Beach it is counted as', () => {
     const visit = { venue: { label: 'Beach' }, waiting: false, place: -1 };
     expect(errandOf({ ...none, visit, beach: 'resting' })).toEqual({

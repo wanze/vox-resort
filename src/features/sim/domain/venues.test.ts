@@ -98,6 +98,11 @@ describe('reliefAt', () => {
     expect(reliefAt(only([at('bakery#0', 'bakery')]), 'fun')).toBe(0);
   });
 
+  it('carries the check-in desk of the reception off the art, and nobody else', () => {
+    expect(only([at('reception#0', 'reception', 0, 0, 4)]).receives).toBe(true);
+    expect(only([at('bakery#0', 'bakery')]).receives).toBe(false);
+  });
+
   it("keeps basketball's negative energy, because an hour of it is tiring", () => {
     const court = only([at('basketball-court#0', 'basketball-court')]);
     expect(reliefAt(court, 'fun')).toBe(0.8);

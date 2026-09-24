@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { crowdOverrideFrom, crowdSizeFor, MAX_CROWD } from './crowdSize';
+import { crowdOverrideFrom, crowdSizeFor, crowdSizeForArea, MAX_CROWD } from './crowdSize';
 
 describe('crowdSizeFor', () => {
   it('keeps the authored resort the crowd it was designed around', () => {
@@ -19,6 +19,20 @@ describe('crowdSizeFor', () => {
   it('takes an override over the paving', () => {
     expect(crowdSizeFor(2398, 25)).toBe(25);
     expect(crowdSizeFor(2398, 0)).toBe(0);
+  });
+});
+
+describe('crowdSizeForArea', () => {
+  it('deals a plot built by hand what a generated plot of its size holds', () => {
+    expect(crowdSizeForArea(112, 100)).toBe(560);
+  });
+
+  it('stops at the ceiling', () => {
+    expect(crowdSizeForArea(480, 480)).toBe(MAX_CROWD);
+  });
+
+  it('takes an override over the area', () => {
+    expect(crowdSizeForArea(112, 100, 25)).toBe(25);
   });
 });
 

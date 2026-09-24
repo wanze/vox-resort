@@ -97,15 +97,30 @@ import {
   meanHappiness,
   type Happiness,
 } from '../features/sim/domain/happiness';
-import { ratingFor, type Rating } from '../features/sim/domain/rating';
+import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
 import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
-import { staffFor, STAFF_ROLES, type Staff } from '../features/sim/domain/staff';
+import {
+  onDuty,
+  rosterFor,
+  shiftChange,
+  STAFF_ROLES,
+  staffPool,
+  type Roster,
+  type Staff,
+  type Workplaces,
+} from '../features/sim/domain/staff';
 import {
   createStaffRouter,
   meanCleanliness,
   type StaffRouter,
 } from '../features/sim/domain/staffRouter';
-import { checkInDue, runCheckIn } from '../features/sim/domain/checkIn';
+import {
+  arrivalsDueBy,
+  checkInDue,
+  freeBedsOn,
+  runCheckIn,
+  wavesDue,
+} from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom } from '../features/layout/domain/random';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
@@ -166,18 +181,31 @@ import {
   revealHeightOf,
   type ConstructionSite,
 } from '../features/construction/domain/construction';
-import { createCrowd, MAX_STEP, takeOffPlot } from '../features/crowd/domain/crowd';
-import { crowdOverrideFrom, crowdSizeFor } from '../features/crowd/domain/crowdSize';
+import {
+  createCrowd,
+  holdAt,
+  MAX_STEP,
+  putOnPlot,
+  takeOffPlot,
+  type Crowd,
+} from '../features/crowd/domain/crowd';
+import {
+  crowdOverrideFrom,
+  crowdSizeFor,
+  crowdSizeForArea,
+} from '../features/crowd/domain/crowdSize';
 import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
   bedCount,
   checkOutParty,
   createGuests,
+  homelessCount,
   presentCount,
+  rehome,
   type Guests,
 } from '../features/guests/domain/guests';
-import { NO_HOME, type Home } from '../features/guests/domain/homes';
+import type { Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
@@ -300,7 +328,7 @@ export interface ShowcaseStats {
   readonly venues: { readonly inside: number; readonly waiting: number };
   readonly routeFields: number;
   readonly guests: { readonly present: number; readonly capacity: number };
-  readonly staff: { readonly total: number; readonly working: number };
+  readonly staff: { readonly total: number; readonly working: number; readonly roster: Roster };
   readonly cleanliness: number;
   readonly rating: number;
   readonly weather: Weather;
@@ -334,6 +362,7 @@ export interface ShowcaseOptions {
   readonly onSelectionChange?: (selection: SelectionView | null) => void;
   readonly onAdviceChange?: (advice: readonly Advice[]) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
+  readonly onOpenChange?: (open: boolean) => void;
 }
 
 export interface CameraView {
@@ -348,6 +377,8 @@ export interface Showcase {
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
   readonly cameraView: CameraView;
+  readonly open: boolean;
+  setOpen(open: boolean): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
   setDetail(enabled: boolean): void;
@@ -619,6 +650,10 @@ interface Resort {
   // Rebuilt rather than updated on an edit: its flow fields are indexed by node, and an edit
   // renumbers nodes.
   readonly staffRouter: StaffRouter;
+  readonly staffPool: Staff;
+  roster: Roster;
+  // Read late by the staff router, so an edit swaps it rather than writing into it.
+  duty: Uint8Array;
   readonly guests: Guests;
   readonly needs: Needs;
   readonly happiness: Happiness;
@@ -631,6 +666,12 @@ interface Resort {
   upkeep: Upkeep;
   unreachable: ReadonlySet<string>;
   rating: Rating;
+  // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
+  open: boolean;
+  // Sized once a day by the rating and let in over the waves. A wave nobody could come in is
+  // counted as admitted, so its share is not carried into the next one.
+  arrivalsPlanned: number;
+  arrivalsAdmitted: number;
   // Per resort: two plots must not share a sequence.
   readonly arrivals: () => number;
   beds: { readonly total: number; readonly taken: number };
@@ -846,13 +887,19 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const construction = buildConstructionField(parts.geometries, lighting.volume);
   const terrain = terrainFor(plan);
-  const population = crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
+  // Only a plot with no paving is sized by its area and starts away: a generated plot's opening
+  // scene and the benchmark stay as they were.
+  const building = plot.layout.paths.length === 0;
+  const population = building
+    ? crowdSizeForArea(plan.tilesX, plan.tilesZ, CROWD_OVERRIDE)
+    : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
   const guests = createGuests({
     count: population,
     homes: homesOn(plot.layout.placements),
     variants: parts.people.length,
     childVariant: CHILD_VARIANT,
     seed: GUEST_SEED,
+    away: building,
   });
   const needs = createNeeds(guests, NEEDS_SEED);
   const happiness = createHappiness(population);
@@ -910,8 +957,10 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     offTheSand: (person) => router.offTheSand(person),
   });
   crowdField = crowd;
-  // Not recounted on an edit: bodies are dealt once per resort.
-  const employed = staffFor(venues.length);
+  // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
+  const employed = staffPool();
+  const roster = rosterFor({ venues: venues.length });
+  const duty = onDuty(employed, roster);
   let staffField: CrowdField | null = null;
   const staffRouter = createStaffRouter({
     staff: employed,
@@ -920,6 +969,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     upkeep: () => resort.upkeep,
     crowd: () => staffField!.crowd,
     weather: parts.weather,
+    duty: () => resort.duty,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -930,6 +980,11 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     routeOf: (worker, at) => staffRouter.step(worker, at),
   });
   staffField = staff;
+  const workers = staff.crowd;
+  for (let worker = 0; worker < employed.count; worker++) {
+    if (duty[worker] === 1) continue;
+    takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+  }
   const balloons = balloonsFor({
     shore,
     sky: parts.sky,
@@ -955,6 +1010,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     crowd,
     staff,
     staffRouter,
+    staffPool: employed,
+    roster,
+    duty,
     guests,
     needs,
     happiness,
@@ -964,6 +1022,11 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     upkeep,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
+    // A plot with no paving is a building site; a generated one is a resort already running,
+    // and the benchmark must see it running.
+    open: !building,
+    arrivalsPlanned: 0,
+    arrivalsAdmitted: 0,
     beds: { total: beds.beds, taken: beds.taken },
     router,
     arrivals,
@@ -1125,8 +1188,9 @@ function sceneStats(parts: {
     routeFields: parts.resort.router.fieldCount,
     guests: { present: presentCount(parts.resort.guests), capacity: parts.resort.guests.count },
     staff: {
-      total: parts.resort.staff.crowd.count,
+      total: parts.resort.duty.reduce((sum, each) => sum + each, 0),
       working: parts.resort.staffRouter.workingCount,
+      roster: parts.resort.roster,
     },
     cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
@@ -1172,20 +1236,42 @@ function runTicks(
     advise();
     resort.router.forgetTheDay();
   }
+  admitLaterWaves(resort, clock, ticks);
   return lightRooms(resort, lastShare);
+}
+
+function workplacesOn(resort: Resort): Workplaces {
+  return { venues: resort.venues.length };
+}
+
+// Stood at the node first, or a body dealt on an empty plot walks in from the origin.
+function enterAt(crowd: Crowd, i: number, node: number): void {
+  const at = crowd.network.nodes[node];
+  if (at) holdAt(crowd, i, at.x, at.y, at.z, crowd.heading[i] ?? 0);
+  putOnPlot(crowd, i, node);
+}
+
+// After the relocate, so the arrival node is on the graph the staff crowd now walks. With no
+// entrance yet they start at node 0: anywhere on the paving beats waiting for a gate.
+function staffTheResort(resort: Resort): void {
+  const roster = rosterFor(workplacesOn(resort));
+  const duty = onDuty(resort.staffPool, roster);
+  const workers = resort.staff.crowd;
+  const shift = shiftChange(duty, workers.offPlot);
+  for (const worker of shift.leaving) {
+    takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+  }
+  const arrival = Math.max(0, resort.router.arrivalNode);
+  // No paving yet: they are owed their shift at the next edit that lays some.
+  const paved = workers.network.edges.length > 0;
+  if (paved) for (const worker of shift.starting) enterAt(workers, worker, arrival);
+  resort.roster = roster;
+  resort.duty = duty;
 }
 
 function strandedOn(venues: readonly Venue[], network: WalkNetwork): ReadonlySet<string> {
   const index = nodeIndexFor(network);
   return unreachableOn(venues, (venue) => doorsFor(venue, index, network));
-}
-
-function homelessOn(guests: Guests): number {
-  let homeless = 0;
-  for (let person = 0; person < guests.count; person++) {
-    if (guests.present[person] === 1 && guests.home[person] === NO_HOME) homeless++;
-  }
-  return homeless;
 }
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
@@ -1207,12 +1293,16 @@ function factsNow(resort: Resort, weather: Weather): ResortFacts {
     venues: resort.venues,
     lodgings: resort.lodgings,
     present: presentCount(guests),
-    homeless: homelessOn(guests),
+    homeless: homelessCount(guests),
     bedsFree: guests.freeBeds.reduce((free, home) => free + home, 0),
     wanting: wantingOn(resort),
     balks: router.dayBalks(),
     visits: router.dayVisits(),
     unreachable: resort.unreachable,
+    open: resort.open,
+    entrance: router.arrivalNode >= 0,
+    reception: router.receptionReachable,
+    bedsTotal: resort.beds.total,
     // By key: advice names a building, and indices change on the next edit.
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
@@ -1236,16 +1326,32 @@ function runDay(resort: Resort, day: number): void {
     housed: beds.taken,
     cleanliness: meanCleanliness(resort.upkeep, resort.venues.length),
   });
-  admitArrivals(resort, day);
+  resort.arrivalsPlanned = arrivalsFor(resort.rating, freeBedsOn(resort.guests));
+  resort.arrivalsAdmitted = 0;
+  admitWave(resort, day, 0);
   sendDepartures(resort, day);
   const after = bedCount(resort.guests);
   resort.beds = { total: after.beds, taken: after.taken };
 }
 
-// No reachable gate means no arrivals, which is a real state rather than an error.
-function admitArrivals(resort: Resort, day: number): void {
-  const at = resort.router.arrivalNode;
-  if (at < 0) return;
+// The first wave is the day's own check-in, run by runDay with the rating it is sized by.
+function admitLaterWaves(resort: Resort, clock: Clock, ticks: number): void {
+  for (const wave of wavesDue(clock.ticks - ticks + 1, clock.ticks)) {
+    if (wave > 0) admitWave(resort, clock.day, wave);
+  }
+}
+
+// No reachable gate or desk means no arrivals, which is a real state the advice reports.
+const canArrive = (resort: Resort): boolean =>
+  resort.open && resort.router.arrivalNode >= 0 && resort.router.receptionReachable;
+
+function admitWave(resort: Resort, day: number, wave: number): void {
+  const due = arrivalsDueBy(resort.arrivalsPlanned, wave);
+  const room = due - resort.arrivalsAdmitted;
+  if (!canArrive(resort) || room <= 0) {
+    resort.arrivalsAdmitted = Math.max(resort.arrivalsAdmitted, due);
+    return;
+  }
   const arrived = runCheckIn({
     guests: resort.guests,
     needs: resort.needs,
@@ -1253,8 +1359,12 @@ function admitArrivals(resort: Resort, day: number): void {
     rating: resort.rating,
     day,
     random: resort.arrivals,
+    room,
   });
-  for (const person of arrived) resort.router.admit(person, at);
+  for (const person of arrived) resort.router.admit(person, resort.router.arrivalNode);
+  resort.arrivalsAdmitted += arrived.length;
+  const beds = bedCount(resort.guests);
+  resort.beds = { total: beds.beds, taken: beds.taken };
 }
 
 // Once a day, not per tick; asking twice is free, so a guest who could not reach a gate is asked
@@ -2022,6 +2132,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       home: router.homewardTo(person),
       asleep: router.isAsleep(person),
       beach: router.stayOf(person),
+      checkingIn: router.isArriving(person),
     });
   };
 
@@ -2067,6 +2178,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     walkStaleAt = null;
     slot.replace(prepared);
     rebuilt();
+    options.onOpenChange?.(current().open);
   };
 
   const recorder = bench
@@ -2112,6 +2224,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.venues = venuesOn(plot.placements);
       resort.lodgings = lodgingsOn(plot.placements);
       resort.gateways = gatewaysOn(plot.placements);
+      // Before the router's rebuild, whose findHomes maps the new home indices.
+      rehome(resort.guests, homesOn(plot.placements));
+      const beds = bedCount(resort.guests);
+      resort.beds = { total: beds.beds, taken: beds.taken };
       // By key: surviving venues keep their dirt, and new ones start clean.
       resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
       resort.unreachable = strandedOn(resort.venues, network);
@@ -2119,6 +2235,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.staffRouter.rebuild(resort.venues, network);
       crowd.relocate(network);
       resort.staff.relocate(network);
+      staffTheResort(resort);
       // Said now rather than tomorrow; the day's counters are left alone.
       advise();
     }
@@ -2200,6 +2317,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     get cameraView() {
       return cameraView();
+    },
+    get open() {
+      return current().open;
+    },
+    setOpen(open) {
+      const resort = current();
+      if (resort.open === open) return;
+      resort.open = open;
+      options.onOpenChange?.(open);
+      advise();
     },
     setCameraMode,
     setIsoDirection,

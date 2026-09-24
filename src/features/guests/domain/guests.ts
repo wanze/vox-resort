@@ -24,11 +24,12 @@ export interface Guests {
   // redrawn, so check-out empties a body and check-in refills it.
   readonly present: Uint8Array;
   // Kept rather than recounted: asked once per arriving party, and a recount is a pass over every guest.
-  readonly freeBeds: Int32Array;
+  // Replaced, with homes, by `rehome` when lodgings are built or demolished.
+  freeBeds: Int32Array;
   readonly people: readonly GuestRecord[];
   // Entries are never removed, so a party index stays stable; the router keys on it.
   readonly parties: readonly Party[];
-  readonly homes: readonly Home[];
+  homes: readonly Home[];
 }
 
 // Built once per check-in pass: the free slots are the same for every party arriving that morning.
@@ -44,6 +45,8 @@ export interface GuestOptions {
   // Passed in because which people model is the child is a fact about the art in voxel-gen/.
   readonly childVariant: number;
   readonly seed: number;
+  // Nobody has checked in yet: a plot built by hand opens empty.
+  readonly away?: boolean;
 }
 
 export const STAY_NIGHTS = { min: 3, max: 14 } as const;
@@ -73,7 +76,10 @@ export function createGuests(options: GuestOptions): Guests {
 
   // Drawn in a fixed order so changing one draw does not reshuffle the others.
   const { parties, party, child } = partiesFor({ count, random });
-  const { byParty, freeBeds } = assignHomes(parties, homes);
+  const away = options.away === true;
+  const assigned = assignHomes(parties, homes);
+  const byParty = away ? new Int32Array(parties.length).fill(NO_HOME) : assigned.byParty;
+  const freeBeds = away ? Int32Array.from(homes, (home) => home.beds) : assigned.freeBeds;
 
   const variant = new Int32Array(count);
   const people: GuestRecord[] = [];
@@ -109,7 +115,7 @@ export function createGuests(options: GuestOptions): Guests {
     variant,
     // Everybody starts present, so the opening scene, the seeded draws and the bench replay are
     // unchanged on frame one.
-    present: new Uint8Array(count).fill(1),
+    present: new Uint8Array(count).fill(away ? 0 : 1),
     freeBeds,
     people,
     // Copied: this list grows, and partiesFor's result must not.
@@ -184,6 +190,53 @@ export function checkInParty(
     };
   }
   return party;
+}
+
+// Keyed, so an edit that leaves the lodgings alone leaves everybody where they sleep. Parties
+// are re-housed in index order, so two runs agree. Answers how many present guests have no bed.
+export function rehome(guests: Guests, homes: readonly Home[]): number {
+  const freeBeds = Int32Array.from(homes, (home) => home.beds);
+  const evicted = keepHomesByKey(guests, homes, freeBeds);
+  for (const party of [...evicted].toSorted((a, b) => a - b)) rehouse(guests, party, freeBeds);
+  guests.homes = homes;
+  guests.freeBeds = freeBeds;
+  return homelessCount(guests);
+}
+
+// Answers the parties whose home is gone.
+function keepHomesByKey(
+  guests: Guests,
+  homes: readonly Home[],
+  freeBeds: Int32Array,
+): ReadonlySet<number> {
+  const byKey = new Map(homes.map((home, index) => [home.key, index]));
+  const evicted = new Set<number>();
+  for (let person = 0; person < guests.count; person++) {
+    const old = guests.home[person]!;
+    if (guests.present[person] !== 1 || old === NO_HOME) continue;
+    const next = byKey.get(guests.homes[old]!.key) ?? NO_HOME;
+    guests.home[person] = next;
+    if (next === NO_HOME) evicted.add(guests.party[person]!);
+    else freeBeds[next] = freeBeds[next]! - 1;
+  }
+  return evicted;
+}
+
+function rehouse(guests: Guests, party: number, freeBeds: Int32Array): void {
+  const members = guests.parties[party]!.members.filter(
+    (person) => guests.present[person] === 1 && guests.party[person] === party,
+  );
+  const home = homeWithRoom(freeBeds, members.length);
+  if (home !== NO_HOME) freeBeds[home] = freeBeds[home]! - members.length;
+  for (const person of members) guests.home[person] = home;
+}
+
+export function homelessCount(guests: Guests): number {
+  let homeless = 0;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1 && guests.home[person] === NO_HOME) homeless++;
+  }
+  return homeless;
 }
 
 export function presentCount(guests: Guests): number {

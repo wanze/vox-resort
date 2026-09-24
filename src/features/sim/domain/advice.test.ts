@@ -4,6 +4,7 @@ import {
   adviceFor,
   adviceFullLines,
   adviceNoBeds,
+  adviceNobodyComes,
   adviceDirty,
   adviceUnreachable,
   adviceUnservedNeeds,
@@ -422,5 +423,43 @@ describe('adviceWeatherClosed', () => {
       closed: new Set(['swimming-pool#0', 'game-hall#0']),
     });
     expect(adviceFor(facts).map((advice) => advice.kind)).toContain('weather-closed');
+  });
+});
+
+describe('why nobody comes', () => {
+  const newPlot = (over: Partial<ResortFacts>): ResortFacts =>
+    healthyFacts({
+      present: 0,
+      homeless: 0,
+      wanting: NOTHING_WANTED,
+      visits: new Map(),
+      ...over,
+    });
+
+  it('says the resort is closed once it has a bed, and not on a bare plot', () => {
+    expect(adviceFor(newPlot({ open: false, bedsTotal: 4 })).map((each) => each.kind)).toEqual([
+      'closed',
+    ]);
+    expect(adviceFor(newPlot({ open: false, bedsTotal: 0 }))).toEqual([]);
+  });
+
+  it('says there is no entrance on an empty resort that is open', () => {
+    const advice = adviceFor(newPlot({ open: true, entrance: false, reception: false }));
+    expect(advice.map((each) => each.kind)).toEqual(['no-entrance']);
+  });
+
+  it('says no reception is reachable on an empty resort that is open', () => {
+    const advice = adviceFor(newPlot({ open: true, entrance: true, reception: false }));
+    expect(advice.map((each) => each.kind)).toEqual(['no-reception']);
+  });
+
+  it('is silent on a running resort, and puts itself first when it is not', () => {
+    const running = { open: true, entrance: true, reception: true, bedsTotal: 40 };
+    expect(adviceNobodyComes(healthyFacts(running))).toBeNull();
+    expect(adviceFor(healthyFacts(running))).toEqual([]);
+    const shut = adviceFor(
+      healthyFacts({ ...running, open: false, homeless: 100, bedsFree: 0 }),
+    ).map((each) => each.kind);
+    expect(shut).toEqual(['closed', 'no-beds']);
   });
 });

@@ -7,15 +7,44 @@ import { TICKS_PER_DAY } from './simClock';
 
 export const CHECK_IN_TICK = 11 * 60;
 
-const coachesBy = (tick: number): number => Math.floor((tick - CHECK_IN_TICK) / TICKS_PER_DAY) + 1;
+// The first wave is the day's check-in, and the largest: a morning line at reception has the
+// afternoon to clear, so a single desk is not flooded at once.
+export const ARRIVAL_WAVES: readonly { readonly tick: number; readonly share: number }[] = [
+  { tick: CHECK_IN_TICK, share: 0.5 },
+  { tick: 14 * 60, share: 0.3 },
+  { tick: 17 * 60, share: 0.2 },
+];
+
+// Float sums like 0.5 + 0.3 land a hair past the share, which ceil would round up a whole guest.
+const SHARE_EPSILON = 1e-9;
+
+const timesBy = (at: number, tick: number): number => Math.floor((tick - at) / TICKS_PER_DAY) + 1;
+
+const dueIn = (at: number, from: number, to: number): boolean =>
+  to >= from && timesBy(at, to) > timesBy(at, from - 1);
 
 // Asked with up to MAX_TICKS_PER_ADVANCE ticks at once, so an `=== CHECK_IN_TICK` test would step over it.
 export function checkInDue(from: number, to: number): boolean {
-  if (to < from) return false;
-  return coachesBy(to) > coachesBy(from - 1);
+  return dueIn(CHECK_IN_TICK, from, to);
 }
 
-function freeBedsOn(guests: Guests): number {
+export function wavesDue(from: number, to: number): readonly number[] {
+  const due: number[] = [];
+  for (const [wave, { tick }] of ARRIVAL_WAVES.entries()) {
+    if (dueIn(tick, from, to)) due.push(wave);
+  }
+  return due;
+}
+
+export function arrivalsDueBy(planned: number, wave: number): number {
+  let share = 0;
+  for (let each = 0; each <= wave && each < ARRIVAL_WAVES.length; each++) {
+    share += ARRIVAL_WAVES[each]!.share;
+  }
+  return Math.min(planned, Math.max(0, Math.ceil(planned * share - SHARE_EPSILON)));
+}
+
+export function freeBedsOn(guests: Guests): number {
   let free = 0;
   for (let home = 0; home < guests.freeBeds.length; home++) free += guests.freeBeds[home]!;
   return free;
@@ -31,10 +60,12 @@ export function runCheckIn(parts: {
   readonly rating: Rating;
   readonly day: number;
   readonly random: () => number;
+  // A wave's share of the day's arrivals; omitted, the whole day arrives at once.
+  readonly room?: number;
 }): readonly number[] {
   const { guests, needs, happiness, rating, day, random } = parts;
   const free = freeBodiesOf(guests);
-  let room = arrivalsFor(rating, freeBedsOn(guests));
+  let room = parts.room ?? arrivalsFor(rating, freeBedsOn(guests));
   const arrived: number[] = [];
 
   while (room > 0) {

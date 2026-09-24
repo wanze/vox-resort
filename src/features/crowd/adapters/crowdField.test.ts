@@ -335,10 +335,23 @@ describe('buildCrowdField', () => {
   it('draws nothing on a plot with no paving to walk on', () => {
     const field = buildCrowdField({ crowd: crowdOf(600, 0), models: MODELS });
     expect(field.count).toBe(0);
-    expect(meshes(field.group)).toHaveLength(0);
+    expect(field.drawnCount).toBe(0);
+    const sized = meshes(field.group).reduce((total, mesh) => total + mesh.instanceMatrix.count, 0);
+    expect(sized).toBe(600);
     expect(field.drawCalls).toBe(0);
     expect(field.triangleCount).toBe(0);
     field.advance(1 / 60, 1);
+    field.dispose();
+  });
+
+  it('draws somebody from an empty plot once there is paving and they are put on it', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40, 0), models: MODELS });
+    field.relocate(networkOf(paved(4)));
+    expect(field.drawnCount).toBe(0);
+    putOnPlot(field.crowd, 5, 0);
+    field.advance(1 / 60, 1);
+    expect(field.drawnCount).toBe(1);
+    expect(field.drawCalls).toBeGreaterThan(0);
     field.dispose();
   });
 

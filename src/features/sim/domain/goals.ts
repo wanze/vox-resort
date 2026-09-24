@@ -37,6 +37,15 @@ export function setPartyGoal(
   }
 }
 
+// For an errand no need explains, such as checking in.
+export function setPartyVenue(goals: Goals, guests: Guests, person: number, venue: number): void {
+  if (person < 0 || person >= goals.count) return;
+  for (const member of partyOf(guests, person)) {
+    if (member >= goals.count) continue;
+    goals.venue[member] = venue;
+  }
+}
+
 export function clearPartyGoal(goals: Goals, guests: Guests, person: number): void {
   if (person < 0 || person >= goals.count) return;
   for (const member of partyOf(guests, person)) {

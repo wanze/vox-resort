@@ -8,7 +8,14 @@ import {
 } from '../../guests/domain/guests';
 import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { createRandom } from '../../layout/domain/random';
-import { CHECK_IN_TICK, checkInDue, runCheckIn } from './checkIn';
+import {
+  ARRIVAL_WAVES,
+  arrivalsDueBy,
+  CHECK_IN_TICK,
+  checkInDue,
+  runCheckIn,
+  wavesDue,
+} from './checkIn';
 import { ARRIVAL_MOOD, createHappiness } from './happiness';
 import { createNeeds, NEEDS, START_LEVEL } from './needs';
 import { ratingFor, type Rating } from './rating';
@@ -71,6 +78,34 @@ describe('checkInDue', () => {
       }
     }
     expect(fired).toBe(5);
+  });
+});
+
+describe('wavesDue', () => {
+  const DAY = 3 * TICKS_PER_DAY;
+
+  it('finds a wave inside a run of ticks that steps across it', () => {
+    expect(wavesDue(DAY + 14 * 60 - 5, DAY + 14 * 60 + 6)).toEqual([1]);
+    expect(wavesDue(DAY + CHECK_IN_TICK, DAY + CHECK_IN_TICK)).toEqual([0]);
+  });
+
+  it('finds every wave in a long run, and none between them', () => {
+    expect(wavesDue(DAY + 10 * 60, DAY + 18 * 60)).toEqual([0, 1, 2]);
+    expect(wavesDue(DAY + 12 * 60, DAY + 13 * 60)).toEqual([]);
+    expect(wavesDue(DAY + 18 * 60, DAY + TICKS_PER_DAY + 10 * 60)).toEqual([]);
+  });
+
+  it('shares out the whole day, the first wave the largest', () => {
+    const shares = ARRIVAL_WAVES.map((wave) => wave.share);
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeCloseTo(1);
+    expect(Math.max(...shares)).toBe(shares[0]);
+    expect(ARRIVAL_WAVES[0]!.tick).toBe(CHECK_IN_TICK);
+  });
+
+  it('counts the arrivals due by each wave, and all of them by the last', () => {
+    expect([0, 1, 2].map((wave) => arrivalsDueBy(100, wave))).toEqual([50, 80, 100]);
+    expect(arrivalsDueBy(7, 2)).toBe(7);
+    expect(arrivalsDueBy(0, 1)).toBe(0);
   });
 });
 

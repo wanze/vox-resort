@@ -60,7 +60,8 @@ function buildPersonMesh(
   variant: number,
 ): PersonMesh | null {
   const people: number[] = [];
-  for (let i = 0; i < crowd.count; i++) if (crowd.variant[i] === variant) people.push(i);
+  // Capacity, not count: the mesh is sized once, for every body the crowd will ever hold.
+  for (let i = 0; i < crowd.capacity; i++) if (crowd.variant[i] === variant) people.push(i);
   if (people.length === 0) return null;
 
   const geometry = figureGeometry(model, people.length);
@@ -146,6 +147,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     group.add(part.mesh);
   }
 
+  const triangles = parts.reduce((total, part) => total + part.triangles * part.people.length, 0);
   let clock = 0;
   let view: DetailView | null = null;
   let drawnCount = 0;
@@ -169,8 +171,13 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     setView(next) {
       view = next;
     },
-    drawCalls: parts.length,
-    triangleCount: parts.reduce((total, part) => total + part.triangles * part.people.length, 0),
+    // Empty meshes are skipped by the renderer, so the HUD must not count them either.
+    get drawCalls() {
+      return drawnCount === 0 ? 0 : parts.length;
+    },
+    get triangleCount() {
+      return drawnCount === 0 ? 0 : triangles;
+    },
     advance(dt, scale) {
       // Clamped so a backgrounded tab neither teleports the crowd nor spins its legs; legs swing at the same
       // scale or a hurrying guest would glide on a stroll's stride.

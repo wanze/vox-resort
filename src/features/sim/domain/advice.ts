@@ -8,6 +8,9 @@ import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
 export type AdviceKind =
+  | 'closed'
+  | 'no-entrance'
+  | 'no-reception'
   | 'no-beds'
   | 'unserved-need'
   | 'full-lines'
@@ -48,10 +51,19 @@ export interface ResortFacts {
   readonly cleanliness: ReadonlyMap<string, number>;
   // Absent means a clear day.
   readonly closed?: ReadonlySet<string>;
+  // Absent means the resort is open, reachable and checking guests in.
+  readonly open?: boolean;
+  readonly entrance?: boolean;
+  readonly reception?: boolean;
+  readonly bedsTotal?: number;
 }
 
 // Declared so advice of equal weight comes out in the same order on every run.
 const KIND_ORDER: readonly AdviceKind[] = [
+  // First: nothing else matters while nobody can come.
+  'closed',
+  'no-entrance',
+  'no-reception',
   'no-beds',
   'unserved-need',
   'full-lines',
@@ -284,10 +296,32 @@ export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
   return advice;
 }
 
-// A plot with nobody on it says nothing, which also keeps the divisions above safe.
+const nobodyComes = (kind: AdviceKind, subject: string): Advice => ({
+  kind,
+  weight: 1,
+  subject,
+  count: 0,
+  at: null,
+  need: null,
+});
+
+// Closed says nothing until there is a bed to come to: a bare plot is not ready to open.
+export function adviceNobodyComes(facts: ResortFacts): Advice | null {
+  if (facts.open === false) {
+    return (facts.bedsTotal ?? 0) > 0 ? nobodyComes('closed', 'resort') : null;
+  }
+  if (facts.entrance === false) return nobodyComes('no-entrance', 'entrance');
+  if (facts.reception === false) return nobodyComes('no-reception', 'reception');
+  return null;
+}
+
+// Why nobody comes is asked first, as a new plot never has anybody present. Otherwise a plot
+// with nobody on it says nothing, which also keeps the divisions below safe.
 export function adviceFor(facts: ResortFacts): readonly Advice[] {
-  if (facts.present <= 0) return [];
+  const gate = adviceNobodyComes(facts);
+  if (facts.present <= 0) return gate ? [gate] : [];
   const found = [
+    gate,
     adviceNoBeds(facts),
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),

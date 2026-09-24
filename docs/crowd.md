@@ -84,6 +84,12 @@ Int32Array    cellHead (4 096), cellNext     // spatial hash
 
 `node` is `-1` on the sand. New attributes are new columns.
 
+A crowd keeps its capacity on a graph with no edges: `count` is 0 and every body
+waits off the plot (`offPlot`), with its variant, phase and speed drawn as on a
+paved plot. The first paving brings `count` up to capacity, and `putOnPlot` lets
+bodies in one at a time. The field's meshes are sized by capacity, so they exist
+from the start; `drawCalls` and `triangleCount` read 0 while nobody is drawn.
+
 ## Guests
 
 `createGuests` builds a registry parallel to the crowd: guest `i` is the walker
@@ -100,6 +106,16 @@ Guests come in parties (`PARTY_MIX`):
 
 Children use the `child` model. Beds come from the art (`bedsOf`); the biggest
 parties get the biggest lodgings first. A party without room gets `NO_HOME`.
+
+Homes follow the plot. After an edit, `rehome` rebuilds the free beds from the
+lodgings standing and remaps each guest's home **by key**, so an edit that leaves
+the lodgings alone leaves everybody where they sleep. A party whose lodging was
+demolished is re-housed whole (`homeWithRoom`, parties in index order), or left
+`NO_HOME` if nothing fits; the advice's `no-beds` then says so.
+
+A plot with no paving is dealt its guests by area instead (`crowdSizeForArea`:
+the 20% of tiles a generated plot paves, at the usual 0.25 a tile) and starts
+`away`: nobody present, every bed free. The draws are the same as a full start.
 
 ## Inspector
 
@@ -283,8 +299,23 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   an hour, minus 0.3 an hour while queuing.
 - **Rating** (`rating.ts`) is three quarters mean happiness, one quarter share of
   guests with a bed, plus a small cleanliness term. An empty resort rates 3 stars.
-- **Arrivals** come at 11:00: none at 0 stars, up to a quarter of free beds at 5
-  stars, never more than the free beds.
+- **Arrivals** are sized at 11:00: none at 0 stars, up to a quarter of free beds
+  at 5 stars, never more than the free beds. They come in three waves
+  (`ARRIVAL_WAVES`): half at 11:00, 30% at 14:00, 20% at 17:00, so one desk is
+  not flooded at once. A wave nobody could come in is not carried over.
+- **Open and closed.** A resort gates arrivals only; a closed one still rates its
+  guests and sends them home. A plot with no paving starts closed (a building
+  site), a generated one open. The Resort panel switches it.
+- **Check-in at reception.** An arriving party appears at the first gate and
+  walks to the nearest reachable venue that `receives` (declared on the art:
+  `reception.ts`). They queue there like anywhere; a balk sends them back to it
+  at the next node, so a full desk makes a crowd around it. The first member out
+  of the desk checks the party in. With no desk reachable from the gate nobody is
+  admitted, and one reachable from the gate but not from where a guest stands lets
+  that guest go on unchecked. The bed is taken at arrival, not at the desk, and
+  check-out does not pass it. The reference plot's one desk (capacity 12) sees a
+  five-star opening day of 171 arrivals through by 21:00, with a line of 12 at
+  worst (`router.test.ts`).
 
 HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
 `Weather`. The inspector's `Mood` is one guest's happiness.
@@ -299,6 +330,9 @@ HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
 
 | Rule             | Reads                                | Weight                               |
 | ---------------- | ------------------------------------ | ------------------------------------ |
+| `closed`         | closed, with at least one bed        | 1                                    |
+| `no-entrance`    | open, no gate                        | 1                                    |
+| `no-reception`   | open, no desk the gate reaches       | 1                                    |
 | `no-beds`        | guests with `NO_HOME`                | share of guests                      |
 | `unserved-need`  | needs no venue serves                | share wanting it                     |
 | `full-lines`     | the day's turn-aways per venue       | share refused × count                |
@@ -307,7 +341,9 @@ HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
 | `unvisited`      | venues nobody visited today          | 0.2–0.4 by capacity                  |
 | `weather-closed` | needs whose venues are mostly closed |                                      |
 
-- Recomputed once a day after arrivals, and after an edit.
+- The first three are asked even with nobody present, since a new plot never has
+  anybody; every other rule stays silent on an empty resort.
+- Recomputed once a day after arrivals, after an edit, and on opening or closing.
 - Advice about a building includes its tile and a **Show** button that pans the
   camera there. Wording lives in `AdvicePanel.tsx` and only states what was
   measured.
@@ -328,9 +364,15 @@ HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
 
 **Staff** are a second population: their own registry (`STAFF_SOURCES`, kept out
 of `PEOPLE_SOURCES` so guest variants and seeded draws don't shift), crowd field
-and router. `staffFor` gives one cleaner per six venues, at least one, at most 40.
+and router. A resort meshes a standing pool (`staffPool`, `STAFF_CAPS`: 40
+cleaners) once; the roster (`rosterFor`) follows the plot, one cleaner per six
+venues, at least one wherever anything stands. After an edit the roster is
+recounted: a body going off duty is taken off the plot where it stands, one coming
+on duty enters at the first gate (node 0 with no gate yet; with no paving at all,
+at the next edit that lays some). The staff router never sends anybody off duty,
+and a cleaner let go mid-spell finishes it so the venue's claim is released.
 `staffRouter.ts` walks each cleaner to the dirtiest unclaimed venue and holds them
-there while they work. They use the same `crowd.ts` as guests, unchanged.
+there while they work. They use the same `crowd.ts` as guests.
 
 Not done: lifeguards (need the sand routing shared from `router.ts`), animators
 (need venue events), visible litter.

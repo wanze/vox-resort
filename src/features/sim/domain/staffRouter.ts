@@ -38,12 +38,15 @@ export function createStaffRouter(parts: {
   readonly crowd: () => Crowd;
   // A venue the rain has shut gets no cleaner; it is scrubbed when it reopens.
   readonly weather?: () => Weather;
+  // Late-bound: the roster follows the plot. Omitted, everybody is on duty.
+  readonly duty?: () => Uint8Array;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
   const { staff } = parts;
   const random = createRandom(parts.seed);
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
+  const isOnDuty = (worker: number): boolean => (parts.duty?.()[worker] ?? 1) === 1;
 
   let venues = parts.venues;
   let network = parts.network;
@@ -120,7 +123,7 @@ export function createStaffRouter(parts: {
   return {
     step(worker, at) {
       // A rebuild can let go of anybody at any moment, hence the guard.
-      if (working[worker] === 1 || at < 0) return -1;
+      if (working[worker] === 1 || at < 0 || !isOnDuty(worker)) return -1;
       const venue = assigned[worker]! >= 0 ? assigned[worker]! : pick(worker, at);
       if (venue < 0) return -1;
       const onward = fieldFor(venue).next[at] ?? -1;
@@ -137,7 +140,9 @@ export function createStaffRouter(parts: {
       now = at;
       if (workingCount === 0) return;
       for (let worker = 0; worker < staff.count; worker++) {
-        if (working[worker] === 1 && now >= until[worker]!) finish(worker);
+        // Let off duty mid-spell, they finish it: a half-scrubbed venue would keep its claim for ever.
+        const done = now >= until[worker]! || !isOnDuty(worker);
+        if (working[worker] === 1 && done) finish(worker);
       }
     },
 

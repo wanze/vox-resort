@@ -18,6 +18,7 @@ export interface Venue {
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };
   readonly shelter?: Shelter;
+  readonly receives?: boolean;
   readonly x: number;
   readonly z: number;
   readonly tileX: number;
@@ -44,6 +45,7 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
       capacity: venue.capacity,
       dwellSeconds: venue.dwellSeconds,
       shelter: venue.shelter ?? 'covered',
+      receives: venue.receives ?? false,
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
       tileX: placement.tileX,

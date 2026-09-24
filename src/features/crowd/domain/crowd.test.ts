@@ -94,7 +94,21 @@ describe('createCrowd', () => {
   it('leaves a plot with no paving on it empty rather than throwing', () => {
     const crowd = createCrowd({ network: networkOf([]), count: 100, variants: 4, seed: 4 });
     expect(crowd.count).toBe(0);
+    expect(crowd.capacity).toBe(100);
+    expect(Array.from(crowd.offPlot).every((off) => off === 1)).toBe(true);
     expect(() => stepCrowd(crowd, 1 / 60)).not.toThrow();
+  });
+
+  it('keeps the bodies of an empty plot waiting off it until they are put on new paving', () => {
+    const crowd = reseatCrowd(
+      createCrowd({ network: networkOf([]), count: 20, variants: 4, seed: 4 }),
+      networkOf(street(6)),
+    );
+    expect(crowd.count).toBe(crowd.capacity);
+    expect(Array.from(crowd.offPlot).every((off) => off === 1)).toBe(true);
+    putOnPlot(crowd, 3, 0);
+    expect(isOffPlot(crowd, 3)).toBe(false);
+    expect(isOffPlot(crowd, 4)).toBe(true);
   });
 
   it('replays the same crowd for the same seed, and a different one otherwise', () => {

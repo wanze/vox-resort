@@ -144,13 +144,16 @@ export interface CrowdOptions {
 
 export function createCrowd(options: CrowdOptions): Crowd {
   const { network, variants, seed } = options;
-  const capacity = network.edges.length === 0 ? 0 : Math.max(0, Math.floor(options.count));
+  // A plot cleared to build on still needs bodies to deal arrivals into once it is paved,
+  // so they are kept, off the plot, until then.
+  const capacity = Math.max(0, Math.floor(options.count));
+  const empty = network.edges.length === 0;
   const random = createRandom(seed);
 
   const crowd: Crowd = {
     network,
     capacity,
-    count: capacity,
+    count: empty ? 0 : capacity,
     x: new Float32Array(capacity),
     y: new Float32Array(capacity),
     z: new Float32Array(capacity),
@@ -192,15 +195,12 @@ export function createCrowd(options: CrowdOptions): Crowd {
       : 0;
 
   for (let i = 0; i < capacity; i++) {
-    // Drawn even when discarded, so the seeded sequence and the benchmark stay the same.
-    const drawn = Math.min(variants - 1, Math.floor(random() * variants));
-    crowd.variant[i] = options.variantOf
-      ? Math.min(variants - 1, Math.max(0, Math.floor(options.variantOf(i))))
-      : drawn;
-    crowd.phase[i] = random() * Math.PI * 2;
-    crowd.speed[i] = WALK_SPEED * (1 + (random() * 2 - 1) * SPEED_SPREAD);
-    crowd.cameFrom[i] = -1;
-    crowd.gate[i] = -1;
+    drawBody(crowd, i, variants, options.variantOf);
+
+    if (empty) {
+      crowd.offPlot[i] = 1;
+      continue;
+    }
 
     if (beach && i < onSand) {
       let start = beachPointAt(beach, random);
@@ -229,6 +229,26 @@ export function createCrowd(options: CrowdOptions): Crowd {
   }
 
   return crowd;
+}
+
+// Drawn in the same order for a body on the plot and one waiting off it, so the draws that
+// place people line up either way.
+function drawBody(
+  crowd: Crowd,
+  i: number,
+  variants: number,
+  variantOf: ((index: number) => number) | undefined,
+): void {
+  const { random } = crowd;
+  // Drawn even when discarded, so the seeded sequence and the benchmark stay the same.
+  const drawn = Math.min(variants - 1, Math.floor(random() * variants));
+  crowd.variant[i] = variantOf
+    ? Math.min(variants - 1, Math.max(0, Math.floor(variantOf(i))))
+    : drawn;
+  crowd.phase[i] = random() * Math.PI * 2;
+  crowd.speed[i] = WALK_SPEED * (1 + (random() * 2 - 1) * SPEED_SPREAD);
+  crowd.cameFrom[i] = -1;
+  crowd.gate[i] = -1;
 }
 
 // Node indices (node, cameFrom, gate, seat, seatBy) are stale after a rebuild;

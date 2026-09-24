@@ -28,6 +28,9 @@ const guests = (count: number): string => (count === 1 ? 'guest has' : 'guests h
 
 // Each line states what happened, never a cause the number does not support.
 const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
+  closed: () => 'The resort is closed',
+  'no-entrance': () => 'Nobody can arrive: there is no entrance',
+  'no-reception': () => 'Nobody can check in: no reception is reachable from the entrance',
   'no-beds': ({ count }) => `${count} ${guests(count)} nowhere to sleep`,
   'unserved-need': ({ subject, need }) =>
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
@@ -42,6 +45,9 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
 };
 
 const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null } = {
+  closed: () => 'open it from the Resort panel',
+  'no-entrance': () => null,
+  'no-reception': () => null,
   'no-beds': () => null,
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
@@ -53,6 +59,9 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
 };
 
 const LABELS: { readonly [kind in AdviceKind]: string } = {
+  closed: 'Closed',
+  'no-entrance': 'Entrance',
+  'no-reception': 'Reception',
   'no-beds': 'Beds',
   'unserved-need': 'Missing',
   'full-lines': 'Queues',

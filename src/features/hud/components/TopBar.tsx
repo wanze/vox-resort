@@ -69,6 +69,7 @@ export function TopBar(props: TopBarProps) {
           label="Objects"
           value={stats ? stats.objectCount.toLocaleString('en-US') : '—'}
         />
+        <HudReadout label="Resort" value={resort.open ? 'Open' : 'Closed'} />
         <HudReadout label="FPS" value={fps} />
       </div>
 
@@ -93,6 +94,8 @@ export function TopBar(props: TopBarProps) {
               onGenerate={resort.generate}
               onClear={resort.clear}
               busy={resort.building}
+              open={resort.open}
+              onOpenChange={resort.setOpen}
             />
           ) : null}
         </HudPopover>

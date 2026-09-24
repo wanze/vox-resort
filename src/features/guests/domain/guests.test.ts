@@ -7,8 +7,10 @@ import {
   freeBodiesOf,
   fullNameOf,
   homeOf,
+  homelessCount,
   partyOf,
   presentCount,
+  rehome,
   STAY_NIGHTS,
   type FreeBodies,
   type GuestOptions,
@@ -270,5 +272,94 @@ describe('checking out and checking in', () => {
       expect(guests.arrivedOn[person]).toBe(12);
       expect(guests.nights[person], 'one stay per party').toBe(nights);
     }
+  });
+});
+
+describe('a resort that opens empty', () => {
+  it('has nobody present and every bed free', () => {
+    const guests = guestsWith({ away: true });
+    expect(presentCount(guests)).toBe(0);
+    expect(Array.from(guests.home).every((lodging) => lodging === NO_HOME)).toBe(true);
+    expect(Array.from(guests.freeBeds)).toEqual(HOMES.map((lodging) => lodging.beds));
+    expect(bedCount(guests)).toEqual({ beds: 62, taken: 0 });
+  });
+
+  it('draws the same parties, names and bodies as a resort that opens full', () => {
+    const away = guestsWith({ away: true });
+    const full = guestsWith();
+    expect(Array.from(away.party)).toEqual(Array.from(full.party));
+    expect(Array.from(away.variant)).toEqual(Array.from(full.variant));
+    expect(Array.from(away.child)).toEqual(Array.from(full.child));
+    expect(away.people).toEqual(full.people);
+  });
+
+  it('checks a party into the empty registry', () => {
+    const guests = guestsWith({ away: true });
+    const party = checkInParty(guests, { random: drawOf(6), day: 0, free: freeBodiesOf(guests) })!;
+    expect(party).not.toBeNull();
+    expect(presentCount(guests)).toBe(party.members.length);
+    expect(bedCount(guests).taken).toBe(party.members.length);
+  });
+});
+
+describe('rehome', () => {
+  const homeKeys = (guests: Guests): (string | null)[] =>
+    everybody(guests).map((person) => homeOf(guests, person)?.key ?? null);
+
+  it('adds the beds of a new lodging', () => {
+    const guests = guestsWith();
+    const before = Array.from(guests.freeBeds);
+    const homeless = everybody(guests).filter((person) => guests.home[person] === NO_HOME).length;
+    expect(rehome(guests, [...HOMES, home('villa#1', 8)])).toBe(homeless);
+    expect(Array.from(guests.freeBeds)).toEqual([...before, 8]);
+  });
+
+  it('leaves the guests of a lodging that still stands in their beds', () => {
+    const guests = guestsWith();
+    const keys = homeKeys(guests);
+    const free = Array.from(guests.freeBeds);
+    rehome(guests, [home('bungalow#9', 4), ...HOMES]);
+    expect(homeKeys(guests)).toEqual(keys);
+    expect(Array.from(guests.freeBeds)).toEqual([4, ...free]);
+  });
+
+  it('moves a party out of a demolished lodging into a free one that fits', () => {
+    const guests = guestsWith({ count: 20 });
+    const moved = everybody(guests).filter((person) => homeOf(guests, person)?.key === 'hotel#0');
+    expect(moved.length).toBeGreaterThan(0);
+    const spare = home('hotel#1', 40);
+    expect(rehome(guests, [spare, ...HOMES.slice(1)])).toBe(0);
+    for (const person of moved) expect(homeOf(guests, person)?.key).toBe('hotel#1');
+  });
+
+  it('leaves a party with nowhere to go without a home, and counts it', () => {
+    const guests = guestsWith({ count: 20 });
+    expect(everybody(guests).every((person) => homeOf(guests, person)?.key === 'hotel#0')).toBe(
+      true,
+    );
+    const homeless = rehome(guests, [home('bungalow#0', 4)]);
+    const housed = everybody(guests).filter((person) => guests.home[person] !== NO_HOME);
+    expect(homeless).toBe(20 - housed.length);
+    expect(housed.length).toBeGreaterThan(0);
+    expect(housed.length).toBeLessThanOrEqual(4);
+    expect(new Set(housed.map((person) => guests.party[person])).size).toBe(1);
+  });
+
+  it('counts only guests who are here and have no bed', () => {
+    const guests = guestsWith({ count: 20 });
+    expect(homelessCount(guests)).toBe(0);
+    rehome(guests, []);
+    expect(homelessCount(guests)).toBe(20);
+    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
+    expect(homelessCount(guests)).toBe(0);
+  });
+
+  it('houses everybody the same way on two runs', () => {
+    const run = (): (string | null)[] => {
+      const guests = guestsWith();
+      rehome(guests, [home('villa#7', 8), ...HOMES.slice(1)]);
+      return homeKeys(guests);
+    };
+    expect(run()).toEqual(run());
   });
 });

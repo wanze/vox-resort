@@ -13,6 +13,8 @@ export interface ResortPanelProps {
   readonly onGenerate: (params: ResortParams) => void;
   readonly onClear: (params: ResortParams) => void;
   readonly busy: boolean;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }
 
 const rollSeed = (): number => Math.floor(Math.random() * 0xffffffff);
@@ -30,7 +32,14 @@ function goLabel(busy: boolean, staged: boolean): string {
 }
 
 // Sliders stage rather than apply: growing a resort takes most of a second.
-export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelProps) {
+export function ResortPanel({
+  params,
+  onGenerate,
+  onClear,
+  busy,
+  open,
+  onOpenChange,
+}: ResortPanelProps) {
   const [draft, setDraft] = useState<ResortParams>(params);
   const change = (patch: Partial<ResortParams>): void => setDraft({ ...draft, ...patch });
   const staged = isStaged(draft, params);
@@ -43,6 +52,28 @@ export function ResortPanel({ params, onGenerate, onClear, busy }: ResortPanelPr
 
   return (
     <div className="hud-resort">
+      <div className="hud-resort-row">
+        <span>Gates</span>
+        <div className="hud-time-speeds" role="group" aria-label="Whether new guests may arrive">
+          <button
+            type="button"
+            className="hud-time-speed"
+            aria-pressed={open}
+            onClick={() => onOpenChange(true)}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            className="hud-time-speed"
+            aria-pressed={!open}
+            onClick={() => onOpenChange(false)}
+          >
+            Closed
+          </button>
+        </div>
+      </div>
+
       <label className="hud-resort-row">
         <span>Width</span>
         <input

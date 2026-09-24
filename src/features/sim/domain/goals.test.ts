@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { createGuests, partyOf, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
-import { clearAllGoals, clearPartyGoal, createGoals, NO_GOAL, setPartyGoal } from './goals';
+import {
+  clearAllGoals,
+  clearPartyGoal,
+  createGoals,
+  NO_GOAL,
+  setPartyGoal,
+  setPartyVenue,
+} from './goals';
 import { NEEDS } from './needs';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -26,6 +33,19 @@ describe('createGoals', () => {
     const goals = createGoals(10);
     expect(goals.count).toBe(10);
     expect([...goals.venue]).toEqual(Array.from({ length: 10 }, () => NO_GOAL));
+  });
+});
+
+describe('setPartyVenue', () => {
+  it('sends the whole party without a need behind it, and nobody else', () => {
+    const goals = createGoals(guests.count);
+    const person = inAParty();
+    const party = new Set(partyOf(guests, person));
+    setPartyVenue(goals, guests, person, 5);
+    for (let other = 0; other < guests.count; other++) {
+      expect(goals.venue[other], `person ${other}`).toBe(party.has(other) ? 5 : NO_GOAL);
+      expect(goals.need[other]).toBe(0);
+    }
   });
 });
 

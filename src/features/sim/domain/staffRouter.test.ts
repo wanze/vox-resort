@@ -4,7 +4,7 @@ import { createCrowd, isWaiting, type Crowd } from '../../crowd/domain/crowd';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { createStaffRouter, meanCleanliness, type StaffRouter } from './staffRouter';
-import { staffFor } from './staff';
+import { rosterFor, type Staff } from './staff';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import type { Venue } from './venues';
 import type { Weather } from './weather';
@@ -37,25 +37,32 @@ const shop = (key: string, tileX: number): Venue => ({
   doors: [],
 });
 
+const cleaners = (count: number): Staff => ({
+  count,
+  role: Array.from({ length: count }, () => 'cleaner'),
+  variant: new Int32Array(count),
+});
+
 const staffOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
   dirt: readonly number[],
   workers = 1,
   weather: Weather = 'clear',
+  duty?: () => Uint8Array,
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
   for (let venue = 0; venue < dirt.length; venue++) upkeep.level[venue] = dirt[venue]!;
-  const staff = staffFor(venues.length);
-  const count = Math.max(workers, staff.count);
+  const count = Math.max(workers, rosterFor({ venues: venues.length }).cleaner);
   let crowd: Crowd | null = null;
   const router = createStaffRouter({
-    staff: { ...staff, count, variant: new Int32Array(count) },
+    staff: cleaners(count),
     venues,
     network,
     upkeep: () => upkeep,
     crowd: () => crowd!,
     weather: () => weather,
+    ...(duty ? { duty } : {}),
     seed: 11,
   });
   crowd = createCrowd({
@@ -128,6 +135,37 @@ describe('createStaffRouter', () => {
     expect(staffOn(networkOf(street(8)), [], []).router.step(0, nodeAt(network, 4))).toBe(-1);
   });
 
+  it('never sends anybody off duty anywhere', () => {
+    const network = networkOf(street(8));
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const duty = Uint8Array.from([0, 1]);
+    const { router } = staffOn(network, venues, [0.2, 0.3], 2, 'clear', () => duty);
+    expect(router.step(0, nodeAt(network, 4))).toBe(-1);
+    expect(router.step(0, nodeAt(network, 1))).toBe(-1);
+    expect(router.atWork(0)).toBeNull();
+    expect(router.step(1, nodeAt(network, 4)), 'the one on duty takes the dirtiest').toBe(
+      nodeAt(network, 3),
+    );
+  });
+
+  it('lets a cleaner taken off duty mid-spell finish it and free the venue', () => {
+    const network = networkOf(street(8));
+    const venues = [shop('bakery#0', 1)];
+    const duty = Uint8Array.from([1, 1]);
+    const { router, upkeep } = staffOn(network, venues, [0.2], 2, 'clear', () => duty);
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 1));
+    expect(router.workingCount).toBe(1);
+    duty[0] = 0;
+    router.tick(1);
+    expect(router.workingCount).toBe(0);
+    expect(router.atWork(0)).toBeNull();
+    expect(cleanliness(upkeep, 0)).toBeGreaterThan(0.2);
+    expect(router.step(1, nodeAt(network, 4)), 'the venue was left claimed').toBe(
+      nodeAt(network, 3),
+    );
+  });
+
   it('throws away every field and every claim when the graph is rebuilt', () => {
     const network = networkOf(street(8));
     const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
@@ -185,7 +223,7 @@ describe('a cleaner and the weather', () => {
     const upkeep = createUpkeep(venues.length);
     upkeep.level[0] = 0.1;
     upkeep.level[1] = 1;
-    const staff = staffFor(venues.length);
+    const staff = cleaners(rosterFor({ venues: venues.length }).cleaner);
     let crowd: Crowd | null = null;
     const router = createStaffRouter({
       staff,

@@ -112,6 +112,8 @@ export interface ModelVenue {
   // Defaults to 'covered': a venue wrongly left open in a storm carries on,
   // one wrongly shut goes dark.
   readonly shelter?: Shelter;
+  // Arriving guests check in here before anything else.
+  readonly receives?: boolean;
 }
 
 export interface VoxelModelSource {

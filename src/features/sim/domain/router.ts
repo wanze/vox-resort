@@ -25,6 +25,7 @@ import {
   createGoals,
   NO_GOAL,
   setPartyGoal,
+  setPartyVenue,
   type Goals,
 } from './goals';
 import { type Gateway } from './gateways';
@@ -120,6 +121,9 @@ export interface Router {
   // walk an empty body out of the door.
   forget(person: number): void;
   readonly arrivalNode: number;
+  // False with no entrance, or no reception the entrance reaches.
+  readonly receptionReachable: boolean;
+  isArriving(person: number): boolean;
   readonly fieldCount: number;
   readonly asleepCount: number;
   isAsleep(person: number): boolean;
@@ -208,6 +212,8 @@ export function createRouter(parts: {
   let justLeft = new Int32Array(guests.count).fill(-1);
   let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
   let doorOf = new Int32Array(guests.count).fill(-1);
+  // Kept across a rebuild: it is a fact about the guest, not about the graph.
+  const arriving = new Uint8Array(guests.count);
   let now = 0;
 
   const sweep = (sources: readonly number[]): FlowField => {
@@ -725,6 +731,9 @@ export function createRouter(parts: {
 
   // The relief is applied here, at the end of the visit, not on arrival.
   const leave = (person: number, venue: number): void => {
+    // The whole party: a sibling still arriving would have its goal overwritten by whoever
+    // checked in first and decides for them all, and so never reach the desk.
+    if (venues[venue]?.receives) for (const member of partyOf(guests, person)) arriving[member] = 0;
     // Before the errand branch, so a drink fetched from a pitch counts too.
     justLeft[person] = venue;
     if (fetching[person] === venue) {
@@ -821,11 +830,47 @@ export function createRouter(parts: {
     fetching[person] = -1;
     stayRoutes[person] = null;
     doorOf[person] = -1;
+    arriving[person] = 0;
+  };
+
+  // Least hops, ties to the lower index; only fields for receiving venues are swept.
+  const nearestReception = (at: number): number => {
+    let best = -1;
+    let bestHops = Number.POSITIVE_INFINITY;
+    for (let venue = 0; venue < venues.length; venue++) {
+      if (!venues[venue]!.receives) continue;
+      const hops = fieldFor(venue).hops[at] ?? -1;
+      if (hops < 0 || hops >= bestHops) continue;
+      best = venue;
+      bestHops = hops;
+    }
+    return best;
+  };
+
+  // A guest who cannot reach a desk was already let in, and must not stand still for ever.
+  const sendToDesk = (person: number, at: number): boolean => {
+    if (arriving[person] !== 1) return false;
+    const reception = nearestReception(at);
+    if (reception < 0) {
+      arriving[person] = 0;
+      return false;
+    }
+    setPartyVenue(goals, guests, person, reception);
+    return true;
+  };
+
+  // Answers whether they went in on the spot. Tried at once only if they were not just turned
+  // away, which would count a balk twice.
+  const setGoal = (person: number, at: number, turnedAway: boolean): boolean => {
+    if (sendToDesk(person, at)) return !turnedAway && arriveIfThere(person, at);
+    decide(person, at);
+    return false;
   };
 
   const dayStep = (person: number, at: number): number => {
+    const hadGoal = goals.venue[person] !== NO_GOAL;
     if (arriveIfThere(person, at)) return -1;
-    if (goals.venue[person] === NO_GOAL) decide(person, at);
+    if (goals.venue[person] === NO_GOAL && setGoal(person, at, hadGoal)) return -1;
 
     const chosen = goals.venue[person]!;
     if (chosen === NO_GOAL || chosen >= venues.length) return -1;
@@ -873,7 +918,15 @@ export function createRouter(parts: {
     admit(person, node) {
       if (person < 0 || person >= goals.count) return;
       forgetPerson(person);
-      putOnPlot(crowd(), person, node);
+      arriving[person] = 1;
+      // The body was somebody else's, or nobody's, so the bed it walked to is not theirs.
+      const home = homeOf(guests, person);
+      homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
+      const people = crowd();
+      const gate = network.nodes[node];
+      // Stood at the gate first, or a body dealt on an empty plot walks in from the origin.
+      if (gate) holdAt(people, person, gate.x, gate.y, gate.z, people.heading[person] ?? 0);
+      putOnPlot(people, person, node);
     },
 
     forget(person) {
@@ -882,6 +935,15 @@ export function createRouter(parts: {
 
     get arrivalNode() {
       return gateNodesOf()[0] ?? -1;
+    },
+
+    get receptionReachable() {
+      const gate = gateNodesOf()[0];
+      return gate !== undefined && nearestReception(gate) >= 0;
+    },
+
+    isArriving(person) {
+      return arriving[person] === 1;
     },
 
     tick(at) {

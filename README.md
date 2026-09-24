@@ -20,6 +20,16 @@ WebGPU renderer. Guests walk the paths, visit venues, sleep, check in and out.
 
 ## Getting started
 
+The Node version is pinned in `.nvmrc`, which CI reads too. With
+[nvm](https://github.com/nvm-sh/nvm), run this in the repo root:
+
+```bash
+nvm install     # first time, or after .nvmrc changes
+nvm use         # every new shell
+```
+
+pnpm is pinned by `packageManager` in `package.json`.
+
 ```bash
 pnpm install
 pnpm preview    # render model thumbnails for the build palette

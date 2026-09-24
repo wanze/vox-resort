@@ -1,8 +1,5 @@
 # CLAUDE.md
 
-Voxel resort-builder prototype: Three.js WebGPU renderer over Divine Voxel
-Engine, React 19 for the HUD, TypeScript, Vite, pnpm.
-
 ## Conventions
 
 - Code is grouped by feature. Inside a feature: `domain/` is pure functions with
@@ -23,8 +20,5 @@ Engine, React 19 for the HUD, TypeScript, Vite, pnpm.
   open any other browser instance to check how something looks.
 
 ## Commands
-
-`pnpm dev`, `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm format`,
-`pnpm build`, `pnpm bench`, `pnpm fallow`, `pnpm fallow:audit`.
 
 Run `typecheck`, `lint`, `test`, `format` and `fallow:audit` before considering a change done.

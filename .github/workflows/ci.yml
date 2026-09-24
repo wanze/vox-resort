@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fallow compares against the base branch, which needs its history.
+          fetch-depth: 0
+
+      # Reads the pnpm version from packageManager in package.json.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test
+
+      # Not `pnpm build`: its preview render takes ~30 s and only feeds catalogue
+      # thumbnails, which the app treats as optional.
+      - name: Bundle
+        run: pnpm exec vite build
+
+      - name: Architecture boundaries
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          pnpm exec fallow audit --base "origin/${{ github.base_ref }}"

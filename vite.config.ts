@@ -18,6 +18,8 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'voxel-gen/**/*.test.ts'],
     environment: 'node',
+    // The generator and sim tests run whole plots and days; 2-3 s here is 5 s+ on a CI runner.
+    testTimeout: 30_000,
     server: {
       deps: {
         // Node's ESM resolver rejects the extensionless specifiers these packages ship.

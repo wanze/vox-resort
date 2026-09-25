@@ -15,6 +15,7 @@ import type { Placement } from '../../layout/domain/resortLayout';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
 import type { Happiness } from '../../sim/domain/happiness';
 import { NEEDS, strongestNeed, type Needs } from '../../sim/domain/needs';
+import type { ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
 
 export type InspectTarget = { readonly person: number } | { readonly key: string } | null;
@@ -48,6 +49,7 @@ export interface GuestView {
   readonly needs: readonly { readonly need: GuestNeed; readonly level: number }[];
   readonly wants: { readonly need: GuestNeed; readonly label: string } | null;
   readonly happiness: number;
+  readonly thought: { readonly kind: ThoughtKind; readonly subject: string | null } | null;
 }
 
 export interface PlaceView {
@@ -120,6 +122,7 @@ export function guestView(
   person: number,
   day: number,
   at: GuestSpot,
+  thought: GuestView['thought'],
 ): GuestView {
   const party = guests.parties[guests.party[person]!]!;
   const home = homeOf(guests, person);
@@ -138,6 +141,7 @@ export function guestView(
     needs: NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
     wants: wantsOf({ guests, needs, venues, person, at }),
     happiness: happiness.level[person] ?? 0,
+    thought,
   };
 }
 

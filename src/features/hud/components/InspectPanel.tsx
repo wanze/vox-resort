@@ -6,6 +6,7 @@ import type {
   SelectionView,
 } from '../../inspect/domain/selection';
 import { StatRow } from './StatRow';
+import { thoughtLine } from './thoughtWords';
 
 export interface InspectPanelProps {
   readonly selection: SelectionView | null;
@@ -107,6 +108,16 @@ function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
   );
 }
 
+function ThinksRow({ thought }: { readonly thought: GuestView['thought'] }) {
+  return (
+    <dl className="hud-stats hud-advice">
+      <StatRow label="Thinks">
+        {thought ? `“${thoughtLine(thought.kind, thought.subject)}”` : 'Nothing yet'}
+      </StatRow>
+    </dl>
+  );
+}
+
 function GuestDetails({
   guest,
   activityElement,
@@ -135,6 +146,7 @@ function GuestDetails({
         <WantsRow wants={guest.wants} />
       </dl>
       <NeedBars needs={guest.needs} />
+      <ThinksRow thought={guest.thought} />
       <MemberList
         label="Their party"
         members={guest.members}

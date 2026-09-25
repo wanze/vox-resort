@@ -151,6 +151,12 @@ export function createRouter(parts: {
   readonly onLeave: (person: number) => void;
   // One call per visit that ran its course, whichever way out it took.
   readonly onVisited?: (person: number, venue: Venue) => void;
+  // Told what the router already decided, never asked: nothing here reads a thought back.
+  readonly onThought?: (
+    person: number,
+    kind: 'queue-too-long' | 'closed' | 'nothing-for' | 'no-bed',
+    subject: string | null,
+  ) => void;
   // Late-bound: an arrival happens between ticks, and the clock knows the hour.
   readonly tickOfDay: () => number;
   // Late-bound: `relocate` replaces the crowd, and a held one would move people from
@@ -163,6 +169,7 @@ export function createRouter(parts: {
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
+  const onThought = parts.onThought ?? ((): void => {});
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
   const goals: Goals = createGoals(guests.count);
   const random = createRandom(parts.seed);
@@ -357,9 +364,13 @@ export function createRouter(parts: {
 
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
     // A venue that shuts while somebody is inside is not emptied.
-    if (!isOpen(venue)) return 'balked';
+    if (!isOpen(venue)) {
+      onThought(person, 'closed', venues[venue]?.label ?? null);
+      return 'balked';
+    }
     if (queueLength(venue) >= queueLimit(venue)) {
       balkCount[venue]!++;
+      onThought(person, 'queue-too-long', venues[venue]!.label);
       return 'balked';
     }
     visitCount[venue]!++;
@@ -369,6 +380,7 @@ export function createRouter(parts: {
 
   const decide = (person: number, at: number): void => {
     const people = crowd();
+    const weather = weatherEffect(weatherNow());
     const choice = chooseVenue({
       needs,
       guests,
@@ -384,9 +396,15 @@ export function createRouter(parts: {
       justLeft: justLeft[person]!,
       cleanliness: cleanOf,
       isOpen,
-      weather: weatherEffect(weatherNow()),
+      weather,
     });
-    if (choice) setPartyGoal(goals, guests, person, choice);
+    if (choice) {
+      setPartyGoal(goals, guests, person, choice);
+      return;
+    }
+    // Only here: chooseVenue's null also means content, which is no complaint.
+    const wanted = strongestNeed(needs, guests, person, weather);
+    if (wanted) onThought(person, 'nothing-for', wanted.need);
   };
 
   // The height is the door node's: a venue knows its middle, not the ground height there.
@@ -762,9 +780,11 @@ export function createRouter(parts: {
   // should show it. Guests inside a venue at bedtime are never asked; this runs on arrival.
   const homewardStep = (person: number, at: number): number => {
     const lodging = homeLodging[person]!;
-    if (lodging < 0) return BY_DAY;
-    const onward = homeFieldFor(lodging).next[at] ?? -1;
-    if (onward < 0) return BY_DAY;
+    const onward = lodging < 0 ? -1 : (homeFieldFor(lodging).next[at] ?? -1);
+    if (onward < 0) {
+      onThought(person, 'no-bed', null);
+      return BY_DAY;
+    }
     homeward[person] = 1;
     if (onward !== at) return onward;
     fallAsleep(person, lodging, at);

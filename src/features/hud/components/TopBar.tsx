@@ -1,6 +1,7 @@
 import { useState, type RefObject } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { CameraPanel } from './CameraPanel';
+import { GuestsPanel } from './GuestsPanel';
 import { HudPopover } from './HudPopover';
 import { HudReadout } from './HudReadout';
 import { RenderStats, type FrameCostElements } from './RenderStats';
@@ -10,7 +11,7 @@ import { WeatherControl } from './WeatherControl';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { ResortControls } from '../../../app/useResortControls';
-import type { ShowcaseStats } from '../../../app/showcase';
+import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
 import type { Advice } from '../../sim/domain/advice';
 
 export interface TopBarProps {
@@ -25,10 +26,11 @@ export interface TopBarProps {
   readonly camera: CameraControls;
   readonly resort: ResortControls;
   readonly advice: readonly Advice[];
+  readonly voices: VoicesView;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
 }
 
-type Tool = 'details' | 'resort' | 'camera' | 'advice';
+type Tool = 'details' | 'resort' | 'camera' | 'advice' | 'guests';
 
 export function TopBar(props: TopBarProps) {
   const {
@@ -43,6 +45,7 @@ export function TopBar(props: TopBarProps) {
     camera,
     resort,
     advice,
+    voices,
     onShowOnPlot,
   } = props;
   const [tool, setTool] = useState<Tool | null>(null);
@@ -85,6 +88,10 @@ export function TopBar(props: TopBarProps) {
 
         <HudPopover label="Advice" open={tool === 'advice'} onToggle={toggle('advice')}>
           <AdvicePanel advice={advice} onShowOnPlot={onShowOnPlot} />
+        </HudPopover>
+
+        <HudPopover label="Guests" open={tool === 'guests'} onToggle={toggle('guests')}>
+          <GuestsPanel voices={voices} />
         </HudPopover>
 
         <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>

@@ -350,6 +350,42 @@ HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
   measured.
 - Not done: heatmap overlays for footfall, coverage and queues.
 
+## Thoughts and reviews
+
+`thoughts.ts` remembers what each guest last thought, and counts a stay's worth
+per kind; `reviews.ts` turns a party's stay into one line on check-out.
+
+- **It only listens.** A thought reports something the simulation already
+  decided. Nothing in `chooseVenue`, needs, happiness or the rating reads one
+  back. The router emits through an optional `onThought` and imports nothing
+  from `thoughts.ts`.
+
+| Kind             | Heard where                                                  | Subject     |
+| ---------------- | ------------------------------------------------------------ | ----------- |
+| `queue-too-long` | `admitAt`, a full line                                       | venue label |
+| `closed`         | `admitAt`, a door the weather shut (the beach too)           | venue label |
+| `nothing-for`    | `decide`, `chooseVenue` found nothing but a need is pressing | need        |
+| `no-bed`         | `homewardStep`, at night with no reachable bed               | none        |
+| `filthy`         | end of a visit, venue below 0.4 clean                        | venue label |
+| `enjoyed`        | end of a visit to an activity at or above 0.8 clean          | venue label |
+| `lovely`         | hourly, surroundings above 0.6                               | none        |
+| `littered`       | hourly, surroundings below -0.3                              | none        |
+
+- The same person, kind and subject within `REPEAT_TICKS` (120, two simulated
+  hours) is ignored. That window is per kind, so a homeless guest who also has
+  nothing to do still says `no-bed` once, not once per node.
+- The day's tally is cleared at check-in, with the router's counters. The Guests
+  panel shows its five loudest and is pushed at most once a simulated hour.
+- A body's memory is forgotten when a new guest checks into it.
+- **The review** is written in `onLeave`, before `checkOutParty` clears the
+  party. Stars are `round(5 × mean happiness)`, at least 1. The complaint is
+  the one the party thought most (ties to the earlier kind), its subject from
+  the spokesperson (first adult) or else the first member who had it; the
+  praise is `enjoyed` or `lovely`, whichever came up more. `REVIEWS_KEPT` (12)
+  are kept, newest first.
+- Wording lives in `hud/components/thoughtWords.ts`; the domain only owns kinds
+  and counts.
+
 ## Cleanliness and staff
 
 `upkeep.ts` keeps a cleanliness value per venue, 1 spotless to 0 filthy.

@@ -91,7 +91,16 @@ describe('guestView', () => {
     const person = Array.from({ length: guests.count }, (_, i) => i).find(
       (i) => guests.parties[guests.party[i]!]!.members.length > 2,
     )!;
-    const view = guestView(guests, needsOf(guests), moodOf(guests), NO_VENUES, person, 0, HERE);
+    const view = guestView(
+      guests,
+      needsOf(guests),
+      moodOf(guests),
+      NO_VENUES,
+      person,
+      0,
+      HERE,
+      null,
+    );
     const party = guests.parties[guests.party[person]!]!;
     expect(view.kind).toBe('guest');
     expect(view.name).toBe(fullNameOf(guests, person));
@@ -110,9 +119,11 @@ describe('guestView', () => {
     const homeless = guests.home.indexOf(NO_HOME);
     expect(homeless, 'everybody had a bed').toBeGreaterThanOrEqual(0);
     const needs = needsOf(guests);
-    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, homeless, 0, HERE).home).toBeNull();
+    expect(
+      guestView(guests, needs, moodOf(guests), NO_VENUES, homeless, 0, HERE, null).home,
+    ).toBeNull();
     const housed = guests.home.findIndex((index) => index !== NO_HOME);
-    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, housed, 0, HERE);
+    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, housed, 0, HERE, null);
     expect(view.home).toEqual({
       key: guests.homes[guests.home[housed]!]!.key,
       label: guests.homes[guests.home[housed]!]!.label,
@@ -122,7 +133,8 @@ describe('guestView', () => {
   it('counts the nights left from the day it is, past zero once the stay is over', () => {
     const guests = guestsOf();
     const needs = needsOf(guests);
-    const view = (day: number) => guestView(guests, needs, moodOf(guests), NO_VENUES, 0, day, HERE);
+    const view = (day: number) =>
+      guestView(guests, needs, moodOf(guests), NO_VENUES, 0, day, HERE, null);
     const { arrivedOn, nights } = view(0);
     expect(view(0).nightsLeft).toBe(arrivedOn + nights);
     expect(view(4).nightsLeft).toBe(arrivedOn + nights - 4);
@@ -132,7 +144,7 @@ describe('guestView', () => {
   it('carries all five need levels, in the order the HUD lists them', () => {
     const guests = guestsOf();
     const needs = needsOf(guests);
-    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE);
+    const view = guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE, null);
     expect(view.needs.map((entry) => entry.need)).toEqual([...NEEDS]);
     for (const entry of view.needs) {
       expect(entry.level).toBeCloseTo(needs.level[entry.need][3]!, 5);
@@ -143,7 +155,7 @@ describe('guestView', () => {
     const guests = guestsOf();
     const bakery = venuesOn([at('bakery#0', 'bakery')]);
     expect(
-      guestView(guests, needsOf(guests, 1, 3), moodOf(guests), bakery, 3, 0, HERE).wants,
+      guestView(guests, needsOf(guests, 1, 3), moodOf(guests), bakery, 3, 0, HERE, null).wants,
     ).toBeNull();
   });
 
@@ -151,11 +163,11 @@ describe('guestView', () => {
     const guests = guestsOf();
     const needs = needsOf(guests, 0, 3);
     const bakery = venuesOn([at('bakery#0', 'bakery')]);
-    expect(guestView(guests, needs, moodOf(guests), bakery, 3, 0, HERE).wants).toEqual({
+    expect(guestView(guests, needs, moodOf(guests), bakery, 3, 0, HERE, null).wants).toEqual({
       need: 'hunger',
       label: 'Bakery',
     });
-    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE).wants).toBeNull();
+    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE, null).wants).toBeNull();
   });
 
   it('chooses from where the guest is standing, not from the corner of the plot', () => {
@@ -166,11 +178,23 @@ describe('guestView', () => {
       at('restaurant#0', 'restaurant', 90, 1),
     ]);
     expect(
-      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[0]!)).wants?.label,
+      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[0]!), null).wants?.label,
     ).toBe('Bakery');
     expect(
-      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[1]!)).wants?.label,
+      guestView(guests, needs, moodOf(guests), venues, 3, 0, doorOf(venues[1]!), null).wants?.label,
     ).toBe('Restaurant');
+  });
+
+  it('carries what the guest last thought, and nothing for a guest who has thought nothing', () => {
+    const guests = guestsOf();
+    const needs = needsOf(guests);
+    const thought = { kind: 'queue-too-long', subject: 'Bakery' } as const;
+    expect(
+      guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE, thought).thought,
+    ).toEqual(thought);
+    expect(
+      guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE, null).thought,
+    ).toBeNull();
   });
 });
 

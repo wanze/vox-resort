@@ -127,6 +127,13 @@ const spotless = (venues: number): (() => Upkeep) => {
   return () => upkeep;
 };
 
+type Heard = NonNullable<Parameters<typeof createRouter>[0]['onThought']>;
+
+const hearing = (): { heard: [number, string, string | null][]; onThought: Heard } => {
+  const heard: [number, string, string | null][] = [];
+  return { heard, onThought: (person, kind, subject) => heard.push([person, kind, subject]) };
+};
+
 const routerOn = (
   network: WalkNetwork,
   venues: readonly Venue[],
@@ -137,6 +144,7 @@ const routerOn = (
     readonly gateways?: readonly Gateway[];
     readonly onLeave?: (person: number) => void;
     readonly onVisited?: (person: number, venue: Venue) => void;
+    readonly onThought?: Heard;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -154,6 +162,7 @@ const routerOn = (
     gateways: night.gateways ?? [],
     onLeave: night.onLeave ?? (() => {}),
     onVisited: night.onVisited ?? (() => {}),
+    ...(night.onThought ? { onThought: night.onThought } : {}),
     network,
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
@@ -207,6 +216,16 @@ describe('createRouter', () => {
     const network = networkOf(street(8));
     const { router } = routerOn(network, [bakery(7)], wanting(0, 'hygiene'));
     expect(router.step(0, nodeAt(network, 0))).toBe(-1);
+  });
+
+  it('hears a hungry guest on a plot with nothing to eat say so, and a content one say nothing', () => {
+    const network = networkOf(street(8));
+    const { heard, onThought } = hearing();
+    const night = { lodgings: [], tickOfDay: () => NOON, onThought };
+    const shut = { ...bakery(7), satisfies: [{ need: 'fun' as const, amount: 0.5 }] };
+    routerOn(network, [shut], wanting(0, 'hunger'), night).router.step(0, nodeAt(network, 0));
+    routerOn(network, [shut], wanting(1, null), night).router.step(1, nodeAt(network, 0));
+    expect(heard).toEqual([[0, 'nothing-for', 'hunger']]);
   });
 
   it('holds a guest inside for the declared dwell, and feeds them on the way out', () => {
@@ -609,6 +628,28 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyOf('beach-shower#0')?.waiting).toBe(3);
     expect(router.visitOf(late)).toBeNull();
     expect(router.goalOf(late)).toBeNull();
+  });
+
+  it('hears the guest turned away from a full line say so, naming the place', () => {
+    const network = networkOf([
+      { tileX: 7, tileZ: 0, y: 0 },
+      { tileX: 7, tileZ: 1, y: 0 },
+    ]);
+    const { heard, onThought } = hearing();
+    const { router } = routerOn(network, [shower(7)], grubby(), {
+      lodgings: [],
+      tickOfDay: () => NOON,
+      onThought,
+    });
+    for (const person of [0, 1, 2, 3, 4]) {
+      router.step(person, nodeAt(network, 7, 1));
+      router.step(person, nodeAt(network, 7, 0));
+    }
+    expect(heard[0]).toEqual([4, 'queue-too-long', 'Beach shower']);
+    expect(
+      heard.every(([person]) => person === 4),
+      'somebody let in complained',
+    ).toBe(true);
   });
 
   it('throws the lanes away with the fields, and lays new ones on the new graph', () => {
@@ -1216,6 +1257,26 @@ describe('the night', () => {
     expect(router.step(homeless, nodeAt(network, 1))).not.toBe(-1);
     expect(router.isAsleep(homeless)).toBe(false);
     expect(router.homewardTo(homeless)).toBeNull();
+  });
+
+  it('hears a guest with no bed at night say so, and a guest with one say nothing', () => {
+    const network = networkOf(street(8));
+    const { heard, onThought } = hearing();
+    const clock = { tick: bedtimeOf(guests.party[homeless]!).sleepAt };
+    const { router } = routerOn(network, [bakery(7)], wanting(homeless, 'hunger'), {
+      lodgings: [hotel()],
+      tickOfDay: () => clock.tick,
+      onThought,
+    });
+    router.step(homeless, nodeAt(network, 4));
+    router.step(homeless, nodeAt(network, 5));
+    expect(heard.filter(([person]) => person === homeless).length).toBeGreaterThan(0);
+    expect(heard.every(([person, kind]) => person === homeless && kind === 'no-bed')).toBe(true);
+
+    clock.tick = bedtimeOf(guests.party[housed]!).sleepAt;
+    heard.length = 0;
+    router.step(housed, nodeAt(network, 4));
+    expect(heard).toEqual([]);
   });
 
   it('lets a guest whose lodging no paving reaches walk instead of sleeping', () => {
@@ -2440,6 +2501,43 @@ describe('a venue the weather has shut', () => {
     expect(router.visitOf(0)).toBeNull();
     expect(router.goalOf(0), 'sent straight back to the pool that just shut').toBeNull();
     expect(needs.level.fun[0], 'relieved by a pool that was closed').toBe(0);
+  });
+
+  it('hears a guest who reaches a door the weather shut on the way say so', () => {
+    const network = networkOf(street(8));
+    const needs = wanting(0, 'fun');
+    const { heard, onThought } = hearing();
+    let weather: Weather = 'clear';
+    let crowd: Crowd | null = null;
+    const upkeep = createUpkeep(1);
+    const router = createRouter({
+      guests,
+      needs,
+      venues: [pool(7)],
+      lodgings: [],
+      gateways: [],
+      onLeave: () => {},
+      onThought,
+      network,
+      tickOfDay: () => NOON,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      weather: () => weather,
+      seed: 13,
+    });
+    crowd = createCrowd({
+      network,
+      count: guests.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+    });
+    router.step(0, nodeAt(network, 0));
+    expect(heard).toEqual([]);
+
+    weather = 'rain';
+    router.step(0, nodeAt(network, 7));
+    expect(heard[0]).toEqual([0, 'closed', 'Pool']);
   });
 
   it('sends them to the covered one instead, where the plot has one', () => {

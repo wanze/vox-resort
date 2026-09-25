@@ -32,6 +32,7 @@ export function Hud(props: HudProps) {
         camera={props.camera}
         resort={props.resort}
         advice={props.advice}
+        voices={props.voices}
         onShowOnPlot={props.onShowOnPlot}
       />
       <BuildPalette preview={props.preview} tool={props.tool} onToolChange={props.onToolChange} />

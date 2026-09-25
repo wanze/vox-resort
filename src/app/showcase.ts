@@ -117,6 +117,21 @@ import {
   type Litter,
 } from '../features/sim/domain/litter';
 import { mix } from '../features/sim/domain/night';
+import { keepReview, reviewFor, type Review } from '../features/sim/domain/reviews';
+import {
+  createDay,
+  createThoughts,
+  forgetStay,
+  latestOf,
+  loudest,
+  surroundingsThought,
+  tallyInto,
+  think,
+  visitThought,
+  type ThoughtKind,
+  type ThoughtTally,
+  type Thoughts,
+} from '../features/sim/domain/thoughts';
 import {
   sceneryAt,
   sceneryFieldFor,
@@ -225,6 +240,7 @@ import {
   bedCount,
   checkOutParty,
   createGuests,
+  fullNameOf,
   homelessCount,
   presentCount,
   rehome,
@@ -324,6 +340,10 @@ const AIM_HEIGHT = hipHeight(Math.max(...PEOPLE_MODELS.map((model) => model.heig
 // Late afternoon, so day 0 opens in daylight.
 const INITIAL_TIME = 0.62;
 
+const LOUDEST_SHOWN = 5;
+
+const TICKS_PER_HOUR = 60;
+
 export interface ShowcaseStats {
   readonly backend: 'webgpu' | 'webgl2';
   readonly typeCount: number;
@@ -383,6 +403,11 @@ export interface BenchResult {
 
 export type { FrameUpdate };
 
+export interface VoicesView {
+  readonly loudest: readonly ThoughtTally[];
+  readonly reviews: readonly Review[];
+}
+
 export interface ShowcaseOptions {
   readonly canvas: HTMLCanvasElement;
   readonly onFrame: (update: FrameUpdate) => void;
@@ -391,6 +416,8 @@ export interface ShowcaseOptions {
   readonly onCameraChange?: (view: CameraView) => void;
   readonly onSelectionChange?: (selection: SelectionView | null) => void;
   readonly onAdviceChange?: (advice: readonly Advice[]) => void;
+  // At most once a simulated hour: thoughts are heard per step, and React must not be.
+  readonly onThoughtsChange?: (view: VoicesView) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
 }
@@ -404,6 +431,7 @@ export interface CameraView {
 export interface Showcase {
   readonly stats: ShowcaseStats;
   readonly advice: readonly Advice[];
+  readonly voices: VoicesView;
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
   readonly cameraView: CameraView;
@@ -706,6 +734,11 @@ interface Resort {
   readonly litter: Litter;
   // Per guest body, never replaced: a wrapper in hand outlasts an edit.
   readonly carrying: Carrying;
+  // Per guest body too, and forgotten at check-in, when the body becomes somebody else.
+  readonly thoughts: Thoughts;
+  // Cleared each morning with the router's counters, so the panel speaks for today.
+  readonly thoughtDay: Map<string, ThoughtTally>;
+  reviews: readonly Review[];
   // Replaced on an edit, as the scenery is.
   binCover: Uint8Array;
   unreachable: ReadonlySet<string>;
@@ -990,7 +1023,11 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     gateways,
     network,
     onLeave: (person) => {
-      const left = checkOutParty(guests, guests.party[person]!);
+      const party = guests.party[person]!;
+      // Before check-out, which clears who was here.
+      const review = reviewOfParty(resort, party);
+      if (review) resort.reviews = keepReview(resort.reviews, review);
+      const left = checkOutParty(guests, party);
       const people = crowdField!.crowd;
       for (const member of left) {
         // Every member: a visit left standing would walk an empty body out of the door.
@@ -1006,13 +1043,16 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     // stand.
     upkeep: () => resort.upkeep,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
-    onVisited: (person, venue) =>
+    onVisited: (person, venue) => {
       pickUp(
         carrying,
         person,
         venue.litter ?? 0,
         (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
-      ),
+      );
+      judgeVisit(resort, parts.ticks(), person, venue);
+    },
+    onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
     seed: DWELL_SEED,
   });
   const crowd = crowdFor({
@@ -1100,6 +1140,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     scenery,
     litter,
     carrying,
+    thoughts: createThoughts(population),
+    thoughtDay: createDay(),
+    reviews: [],
     binCover,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
@@ -1304,6 +1347,81 @@ function surroundingsOf(resort: Resort, person: number): number {
   return Math.min(1, Math.max(-1, around));
 }
 
+function hear(
+  resort: Resort,
+  tick: number,
+  person: number,
+  kind: ThoughtKind,
+  subject: string | null,
+): void {
+  if (think(resort.thoughts, person, kind, subject, tick)) {
+    tallyInto(resort.thoughtDay, kind, subject);
+  }
+}
+
+// Built once per venue list, which an edit replaces whole, so a visit costs no scan.
+const venueIndices = new WeakMap<readonly Venue[], ReadonlyMap<string, number>>();
+
+// A key the list lacks is the router's synthetic beach, which reads as spotless at -1.
+function venueIndexOf(venues: readonly Venue[], key: string): number {
+  let index = venueIndices.get(venues);
+  if (!index) {
+    index = new Map(venues.map((venue, at) => [venue.key, at]));
+    venueIndices.set(venues, index);
+  }
+  return index.get(key) ?? -1;
+}
+
+// After the visit wore it, so the last guest out of a dirty bar is the one who notices.
+function judgeVisit(resort: Resort, tick: number, person: number, venue: Venue): void {
+  const clean = cleanliness(resort.upkeep, venueIndexOf(resort.venues, venue.key));
+  const thought = visitThought(venue.role, clean);
+  if (thought) hear(resort, tick, person, thought, venue.label);
+}
+
+function hearSurroundings(resort: Resort, tick: number): void {
+  for (let person = 0; person < resort.guests.count; person++) {
+    const thought = lookAround(resort, person);
+    if (thought) hear(resort, tick, person, thought, null);
+  }
+}
+
+// Asleep guests are skipped: a bed is not a view.
+function lookAround(resort: Resort, person: number): ThoughtKind | null {
+  if (resort.guests.present[person] !== 1 || resort.router.isAsleep(person)) return null;
+  return surroundingsThought(surroundingsOf(resort, person));
+}
+
+// Only members still here and still of this party: a body is reused by later parties.
+function reviewOfParty(resort: Resort, party: number): Review | null {
+  const { guests, happiness } = resort;
+  const { kind, family, members: listed } = guests.parties[party]!;
+  const members = listed.filter(
+    (member) => guests.present[member] === 1 && guests.party[member] === party,
+  );
+  const spokesperson = members.find((member) => guests.child[member] !== 1) ?? members[0];
+  if (spokesperson === undefined) return null;
+  return reviewFor({
+    thoughts: resort.thoughts,
+    members,
+    spokesperson,
+    party,
+    family,
+    partyKind: kind,
+    name: fullNameOf(guests, spokesperson),
+    nights: guests.nights[spokesperson]!,
+    happiness: (member) => happiness.level[member] ?? 0,
+  });
+}
+
+function voicesOf(resort: Resort): VoicesView {
+  return { loudest: loudest(resort.thoughtDay, LOUDEST_SHOWN), reviews: resort.reviews };
+}
+
+// The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
+const hourTurned = (from: number, to: number): boolean =>
+  Math.floor(to / TICKS_PER_HOUR) > Math.floor((from - 1) / TICKS_PER_HOUR);
+
 // Runs on every node every guest reaches, so it allocates nothing. The sand is off the graph
 // and never fouled, which keeps a cleaner off it.
 function stepLitterAt(resort: Resort, person: number, at: number): void {
@@ -1356,6 +1474,7 @@ function runTicks(
   ticks: number,
   lastShare: number | null,
   advise: () => void,
+  speak: () => void,
 ): number {
   decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather));
   // One tick at a time: a place freed on the first tick must let somebody in on the first.
@@ -1380,6 +1499,12 @@ function runTicks(
     // After the coaches and before the counters are wiped, which the advice reads.
     advise();
     resort.router.forgetTheDay();
+    resort.thoughtDay.clear();
+  }
+  // After the morning's wipe, so the first hour of a day is heard in that day.
+  if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
+    hearSurroundings(resort, clock.ticks);
+    speak();
   }
   admitLaterWaves(resort, clock, ticks);
   return lightRooms(resort, lastShare);
@@ -1508,8 +1633,9 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     room,
   });
   for (const person of arrived) {
-    // The body was somebody else's, and so was whatever it was holding.
+    // The body was somebody else's, and so was whatever it was holding and thinking.
     resort.carrying.nodes[person] = 0;
+    forgetStay(resort.thoughts, person);
     resort.router.admit(person, resort.router.arrivalNode);
   }
   resort.arrivalsAdmitted += arrived.length;
@@ -2246,9 +2372,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let selectedOn = clock.day;
 
   const guestAt = (person: number): SelectionView => {
-    const { guests, needs, happiness, venues, crowd } = current();
+    const { guests, needs, happiness, venues, crowd, thoughts } = current();
     const at = { x: crowd.crowd.x[person] ?? 0, z: crowd.crowd.z[person] ?? 0 };
-    return guestView(guests, needs, happiness, venues, person, clock.day, at);
+    const thought = latestOf(thoughts, person);
+    return guestView(guests, needs, happiness, venues, person, clock.day, at, thought);
   };
 
   const viewOf = (target: InspectTarget): SelectionView | null => {
@@ -2313,10 +2440,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const advise = (): void =>
     options.onAdviceChange?.(adviceFor(factsNow(current(), clock.weather)));
 
+  const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
+
   const rebuilt = (): void => {
     clock.relight();
     onSceneChange?.(statsNow());
     advise();
+    speak();
   };
 
   let requested = 0;
@@ -2405,6 +2535,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       staffTheResort(resort);
       // Said now rather than tomorrow; the day's counters are left alone.
       advise();
+      speak();
     }
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
@@ -2413,7 +2544,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // of two runs.
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
-    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise);
+    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise, speak);
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
     // crowdScaleFor is 1 while paused.
@@ -2479,6 +2610,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     get advice() {
       return adviceFor(factsNow(current(), clock.weather));
+    },
+    get voices() {
+      return voicesOf(current());
     },
     get params() {
       return params;

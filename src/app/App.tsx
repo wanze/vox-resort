@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { previewUrl } from '../features/catalog/adapters/previews';
 import { createHudOverlay } from '../features/hud/adapters/hudOverlay';
 import { Hud } from '../features/hud/components/Hud';
@@ -6,6 +6,7 @@ import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
+import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
 import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
@@ -14,34 +15,43 @@ import type { BuildTool } from '../features/build/domain/buildTool';
 // Serialised so StrictMode's double-invoked effect never puts two renderers on the same canvas.
 let lifecycle: Promise<void> = Promise.resolve();
 
+function useBuildTool(showcase: RefObject<Showcase | null>) {
+  // So a tool picked while the catalogue is still meshing is armed once the scene exists.
+  const pending = useRef<BuildTool | null>(null);
+  const [tool, setTool] = useState<BuildTool | null>(null);
+  const select = useCallback(
+    (next: BuildTool | null) => {
+      pending.current = next;
+      setTool(next);
+      showcase.current?.selectTool(next);
+    },
+    [showcase],
+  );
+  return { tool, select, pending };
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  // So a tool picked while the catalogue is still meshing is armed once the scene exists.
-  const toolRef = useRef<BuildTool | null>(null);
   const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
-  const [tool, setTool] = useState<BuildTool | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { tool, select: selectTool, pending: toolRef } = useBuildTool(showcaseRef);
   const resort = useResortControls(showcaseRef);
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
+  const thoughts = useThoughts();
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
   const { adopt: adoptParams, adoptOpen } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
+  const { adopt: adoptVoices } = thoughts;
   const { adoptWeather } = clock;
-
-  const selectTool = useCallback((next: BuildTool | null) => {
-    toolRef.current = next;
-    setTool(next);
-    showcaseRef.current?.selectTool(next);
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -59,6 +69,7 @@ export function App() {
       onCameraChange: adoptCamera,
       onSelectionChange: adoptSelection,
       onAdviceChange: adoptAdvice,
+      onThoughtsChange: adoptVoices,
       onWeatherChange: adoptWeather,
       onOpenChange: adoptOpen,
       onFrame: overlay.update,
@@ -77,6 +88,7 @@ export function App() {
         setStats(mounted.stats);
         // So the panel says something before the first check-in hour comes round.
         adoptAdvice(mounted.advice);
+        adoptVoices(mounted.voices);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
         adoptOpen(mounted.open);
@@ -99,11 +111,13 @@ export function App() {
   }, [
     hudNodes,
     selectTool,
+    toolRef,
     adoptParams,
     adoptOpen,
     adoptCamera,
     adoptSelection,
     adoptAdvice,
+    adoptVoices,
     adoptWeather,
   ]);
 
@@ -126,6 +140,7 @@ export function App() {
         camera={camera}
         resort={resort}
         advice={advice.advice}
+        voices={thoughts.voices}
         onShowOnPlot={advice.showOnPlot}
         preview={previewUrl}
         tool={tool}

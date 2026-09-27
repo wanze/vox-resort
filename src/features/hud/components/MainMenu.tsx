@@ -9,9 +9,10 @@ export interface MainMenuProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly windows: WindowControls;
+  readonly onFind: () => void;
 }
 
-export function MainMenu({ open, onOpenChange, windows }: MainMenuProps) {
+export function MainMenu({ open, onOpenChange, windows, onFind }: MainMenuProps) {
   const run = (action: () => void) => (): void => {
     action();
     onOpenChange(false);
@@ -54,6 +55,12 @@ export function MainMenu({ open, onOpenChange, windows }: MainMenuProps) {
       ))}
 
       <p className="hud-menu-heading">Options</p>
+      <HudOption
+        label="Find an action…"
+        note="search every switch, window and thing to build"
+        shortcut="/"
+        onSelect={onFind}
+      />
       <HudOption
         icon="debug"
         label="Debug info"

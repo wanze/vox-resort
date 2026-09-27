@@ -1,0 +1,297 @@
+import { speedNote, WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
+import { TOOLBAR_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
+import type { IconName } from './pixelIcons';
+import type { PreviewLookup } from './BuildPalette';
+import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
+import { OVERLAY_KINDS } from '../../overlays/domain/overlays';
+import { objectTypeGroups } from '../../catalog/domain/objectTypes';
+import { buildCostOf } from '../../catalog/domain/prices';
+import {
+  armedBrush,
+  armedObject,
+  armedRemove,
+  BULLDOZER,
+  type BuildTool,
+} from '../../build/domain/buildTool';
+import { TERRAIN_BRUSHES } from '../../build/domain/terrainBrush';
+import { COMPASS_DIRECTIONS, type CompassDirection } from '../../layout/domain/worldBounds';
+import { SIM_SPEEDS, SPEED_LABELS } from '../../sim/domain/simClock';
+import { WEATHERS } from '../../sim/domain/weather';
+import { canAfford, type Ledger } from '../../sim/domain/ledger';
+import { footprintLabel } from '../domain/paletteFilter';
+import { isOpen } from '../domain/windowLayout';
+import type { Searchable } from '../domain/commandSearch';
+import type { CameraControls } from '../../../app/useCameraControls';
+import type { ClockControls } from '../../../app/useClockControls';
+import type { OverlayControls } from '../../../app/useOverlay';
+import type { ResortControls } from '../../../app/useResortControls';
+import type { WindowControls } from '../../../app/useWindows';
+
+export type CommandArt =
+  | { readonly icon: IconName }
+  | { readonly picture: string }
+  | { readonly glyph: string };
+
+export interface Command extends Searchable {
+  readonly id: string;
+  readonly note?: string;
+  readonly art?: CommandArt | undefined;
+  readonly shortcut?: string | undefined;
+  readonly checked?: boolean;
+  readonly run: () => void;
+}
+
+export interface CommandContext {
+  readonly clock: ClockControls;
+  readonly camera: CameraControls;
+  readonly resort: ResortControls;
+  readonly overlay: OverlayControls;
+  readonly windows: WindowControls;
+  readonly tool: BuildTool | null;
+  readonly onToolChange: (tool: BuildTool | null) => void;
+  readonly ledger: Ledger | null;
+  readonly preview: PreviewLookup;
+}
+
+const CORNER_NAMES: { readonly [direction in CompassDirection]: string } = {
+  northeast: 'north-east',
+  southeast: 'south-east',
+  southwest: 'south-west',
+  northwest: 'north-west',
+};
+
+function speedCommands({ clock }: CommandContext): Command[] {
+  return SIM_SPEEDS.map((speed) => ({
+    id: `speed:${speed}`,
+    label: SPEED_LABELS[speed],
+    group: 'Speed',
+    keywords: 'game time clock',
+    note: speedNote(speed),
+    art: { icon: speed },
+    shortcut: speed === 'paused' ? 'Space' : undefined,
+    checked: clock.speed === speed,
+    run: () => clock.setSpeed(speed),
+  }));
+}
+
+function weatherCommands({ clock }: CommandContext): Command[] {
+  const forecast: Command = {
+    id: 'weather:forecast',
+    label: 'Forecast',
+    group: 'Weather',
+    note: "let the week's own weather run",
+    art: { icon: 'forecast' },
+    checked: clock.forcedWeather === null,
+    run: () => clock.setWeather(null),
+  };
+  return [
+    forecast,
+    ...WEATHERS.map((weather) => ({
+      id: `weather:${weather}`,
+      label: WEATHER_NAMES[weather],
+      group: 'Weather',
+      keywords: 'pin',
+      note: WEATHER_NOTES[weather],
+      art: { icon: weather },
+      checked: clock.forcedWeather === weather,
+      run: () => clock.setWeather(weather),
+    })),
+  ];
+}
+
+function overlayCommands({ overlay }: CommandContext): Command[] {
+  const off: Command = {
+    id: 'overlay:off',
+    label: 'Off',
+    group: 'Map view',
+    keywords: 'overlay none',
+    note: 'show the resort as it is',
+    art: { icon: 'overlay' },
+    checked: overlay.kind === null,
+    run: () => overlay.setOverlay(null),
+  };
+  return [
+    off,
+    ...OVERLAY_KINDS.map((kind) => ({
+      id: `overlay:${kind}`,
+      label: OVERLAY_NAMES[kind],
+      group: 'Map view',
+      keywords: `overlay heatmap ${kind}`,
+      note: OVERLAY_QUESTIONS[kind],
+      art: { icon: 'overlay' as const },
+      checked: overlay.kind === kind,
+      run: () => overlay.setOverlay(kind),
+    })),
+  ];
+}
+
+// A corner also switches into isometric, where the panel would first make the player do it by hand.
+function cameraCommands({ camera }: CommandContext): Command[] {
+  const { view } = camera;
+  const isometric = view.mode === 'isometric';
+  return [
+    {
+      id: 'camera:perspective',
+      label: 'Perspective',
+      group: 'Camera',
+      keywords: 'view fly',
+      art: { icon: 'camera' },
+      shortcut: 'C',
+      checked: !isometric,
+      run: () => camera.setMode('perspective'),
+    },
+    ...COMPASS_DIRECTIONS.map((direction) => ({
+      id: `camera:${direction}`,
+      label: `Isometric from the ${CORNER_NAMES[direction]}`,
+      group: 'Camera',
+      keywords: `view corner turn ${direction}`,
+      art: { icon: 'camera' as const },
+      checked: isometric && view.direction === direction,
+      run: () => {
+        camera.setMode('isometric');
+        camera.setDirection(direction);
+      },
+    })),
+    {
+      id: 'camera:detail',
+      label: 'Level of detail',
+      group: 'Camera',
+      keywords: 'lod performance',
+      note: 'draw far objects coarse and leave out ones too small to see',
+      checked: view.detail,
+      run: () => camera.setDetail(!view.detail),
+    },
+  ];
+}
+
+function resortCommands({ resort, windows }: CommandContext): Command[] {
+  return [
+    {
+      id: 'resort:gates',
+      label: resort.open ? 'Close the gates' : 'Open the gates',
+      group: 'Resort',
+      keywords: 'open closed guests entrance',
+      note: resort.open ? 'turn new guests away' : 'let new guests in',
+      art: { icon: 'guests' },
+      run: () => resort.setOpen(!resort.open),
+    },
+    {
+      id: 'resort:new',
+      label: 'New resort…',
+      group: 'Resort',
+      keywords: 'generate clear start game',
+      note: 'grow one, or start from bare ground',
+      art: { icon: 'resort' },
+      run: () => windows.show('resort', true),
+    },
+  ];
+}
+
+function windowCommands({ windows }: CommandContext): Command[] {
+  return [
+    ...TOOLBAR_WINDOWS.map((id) => ({
+      id: `window:${id}`,
+      label: WINDOW_TITLES[id],
+      group: 'Windows',
+      keywords: 'window panel show hide',
+      art: { icon: WINDOW_ICONS[id] },
+      shortcut: WINDOW_KEYS[id],
+      checked: isOpen(windows.layout, id),
+      run: () => windows.toggle(id),
+    })),
+    {
+      id: 'window:debug',
+      label: 'Debug info',
+      group: 'Windows',
+      keywords: 'window stats fps frame rate performance',
+      note: 'frame rate, frame cost and what is drawn',
+      art: { icon: 'debug' },
+      shortcut: 'F3',
+      checked: isOpen(windows.layout, 'debug'),
+      run: () => windows.toggle('debug'),
+    },
+    {
+      id: 'window:reset',
+      label: 'Reset window positions',
+      group: 'Windows',
+      note: 'put every window back where it started',
+      run: windows.resetPlaces,
+    },
+  ];
+}
+
+function priceNote(cost: number, ledger: Ledger | null): string {
+  const price = `costs ${cost.toLocaleString('en-US')}`;
+  return ledger !== null && !canAfford(ledger, cost) ? `${price}, more than the bank holds` : price;
+}
+
+function toolCommands({ tool, onToolChange }: CommandContext): Command[] {
+  const brush = armedBrush(tool);
+  const brushes: Command[] = TERRAIN_BRUSHES.map((entry) => ({
+    id: `terrain:${entry.id}`,
+    label: entry.label,
+    group: 'Build',
+    keywords: 'terrain ground brush',
+    note: entry.hint,
+    art: { glyph: entry.glyph },
+    checked: brush === entry.id,
+    run: () => onToolChange({ kind: 'terrain', brush: entry.id }),
+  }));
+  const bulldozer: Command = {
+    id: 'tool:remove',
+    label: BULLDOZER.label,
+    group: 'Build',
+    keywords: 'remove delete demolish clear',
+    note: BULLDOZER.hint,
+    art: { glyph: BULLDOZER.glyph },
+    checked: armedRemove(tool),
+    run: () => onToolChange({ kind: 'remove' }),
+  };
+  const disarm: Command[] =
+    tool === null
+      ? []
+      : [
+          {
+            id: 'tool:none',
+            label: 'Stop building',
+            group: 'Build',
+            keywords: 'cancel disarm put down',
+            shortcut: 'Esc',
+            run: () => onToolChange(null),
+          },
+        ];
+  return [...disarm, bulldozer, ...brushes];
+}
+
+function objectCommands({ tool, onToolChange, ledger, preview }: CommandContext): Command[] {
+  const armed = armedObject(tool);
+  return objectTypeGroups().flatMap((group) =>
+    group.types.map((type) => {
+      const picture = preview(type.id);
+      return {
+        id: `object:${type.id}`,
+        label: type.label,
+        group: 'Build',
+        keywords: `${group.label} ${type.id} place`,
+        note: `${group.label}, ${footprintLabel(type)} tiles, ${priceNote(buildCostOf(type.id), ledger)}`,
+        art: picture ? { picture } : undefined,
+        checked: armed === type.id,
+        run: () => onToolChange({ kind: 'object', id: type.id }),
+      };
+    }),
+  );
+}
+
+// Controls first and the catalogue last, so an empty box opens on the handful of switches.
+export function listCommands(context: CommandContext): readonly Command[] {
+  return [
+    ...speedCommands(context),
+    ...weatherCommands(context),
+    ...overlayCommands(context),
+    ...cameraCommands(context),
+    ...resortCommands(context),
+    ...windowCommands(context),
+    ...toolCommands(context),
+    ...objectCommands(context),
+  ];
+}

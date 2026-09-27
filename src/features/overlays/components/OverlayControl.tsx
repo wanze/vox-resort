@@ -1,6 +1,7 @@
 import { HudDropdown } from '../../hud/components/HudDropdown';
 import { HudOption } from '../../hud/components/HudOption';
 import { PixelIcon } from '../../hud/components/PixelIcon';
+import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from './overlayNames';
 import { OVERLAY_KINDS, type OverlayKind } from '../domain/overlays';
 import { rampInto } from '../domain/ramp';
 
@@ -10,27 +11,6 @@ export interface OverlayControlProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }
-
-// Kept here rather than in the domain so a phrase can change without touching it.
-const OVERLAY_NAMES: { readonly [kind in OverlayKind]: string } = {
-  footfall: 'Footfall',
-  mood: 'Mood',
-  'reach-food': 'Food',
-  'reach-drink': 'Drink',
-  'reach-wash': 'Wash',
-  scenery: 'Scenery',
-  litter: 'Litter',
-};
-
-const OVERLAY_QUESTIONS: { readonly [kind in OverlayKind]: string } = {
-  footfall: 'Where guests walk',
-  mood: 'Where guests are unhappy',
-  'reach-food': 'How far to something to eat',
-  'reach-drink': 'How far to something to drink',
-  'reach-wash': 'How far to somewhere to wash',
-  scenery: 'Where the walk is plain',
-  litter: 'Where litter lies',
-};
 
 // Both ends of the one ramp, worded for the layer; the high end is always the bad one.
 const OVERLAY_ENDS: { readonly [kind in OverlayKind]: readonly [string, string] } = {

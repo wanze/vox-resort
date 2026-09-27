@@ -1,6 +1,7 @@
 import { HudDropdown } from './HudDropdown';
 import { HudOption } from './HudOption';
 import { PixelIcon } from './PixelIcon';
+import { WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 
 export interface WeatherControlProps {
@@ -10,21 +11,6 @@ export interface WeatherControlProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }
-
-// Kept here rather than in the domain so a phrase can change without touching it.
-const WEATHER_NAMES: { readonly [kind in Weather]: string } = {
-  clear: 'Sunny',
-  rain: 'Rain',
-  storm: 'Storm',
-  heatwave: 'Heatwave',
-};
-
-const WEATHER_NOTES: { readonly [kind in Weather]: string } = {
-  clear: 'everywhere open',
-  rain: 'everything without a roof shuts',
-  storm: 'no roof, no business, and tiring',
-  heatwave: 'everywhere open, everybody thirsty',
-};
 
 // Forecast is its own row: pinned-to-sunny and running-and-sunny look identical
 // but behave differently at midnight.

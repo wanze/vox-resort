@@ -1,6 +1,8 @@
 import type { ReactNode, RefObject } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
+import { CommandPalette } from './CommandPalette';
+import { listCommands } from './commands';
 import { CameraPanel } from './CameraPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
@@ -47,6 +49,8 @@ export interface HudProps {
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
+  readonly palette: boolean;
+  readonly onPaletteChange: (open: boolean) => void;
   readonly error: string | null;
   readonly refusal: string | null;
 }
@@ -140,6 +144,14 @@ function Windows(props: HudProps) {
   );
 }
 
+// Built only while open, and afresh each time, so every tick and check mark reads the current state.
+function Palette(props: HudProps) {
+  if (!props.palette) return null;
+  return (
+    <CommandPalette commands={listCommands(props)} onClose={() => props.onPaletteChange(false)} />
+  );
+}
+
 export function Hud(props: HudProps) {
   return (
     <div className="hud">
@@ -154,8 +166,10 @@ export function Hud(props: HudProps) {
         windows={props.windows}
         menu={props.menu}
         onMenuChange={props.onMenuChange}
+        onFind={() => props.onPaletteChange(true)}
       />
       <Windows {...props} />
+      <Palette {...props} />
       {props.error ? <HudError message={props.error} /> : null}
       {!props.error && props.refusal ? (
         <HudError title="Not enough money" message={props.refusal} />

@@ -26,6 +26,7 @@ export interface TopBarProps {
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
+  readonly onFind: () => void;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -73,7 +74,12 @@ export function TopBar(props: TopBarProps) {
   return (
     <header className="hud-bar">
       <div className="hud-plate">
-        <MainMenu open={menu === 'main'} onOpenChange={opener('main')} windows={windows} />
+        <MainMenu
+          open={menu === 'main'}
+          onOpenChange={opener('main')}
+          windows={windows}
+          onFind={props.onFind}
+        />
       </div>
 
       <div className="hud-plate">

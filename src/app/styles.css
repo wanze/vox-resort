@@ -180,6 +180,7 @@ input[type='number'] {
 
 .hud-plate,
 .hud-dropdown-panel,
+.hud-command,
 .hud-window,
 .hud-overlay-legend,
 .hud-error {
@@ -358,6 +359,7 @@ input[type='checkbox'] {
 }
 
 .hud-dropdown-panel,
+.hud-command-list,
 .hud-window-body,
 .hud-palette-shelves {
   scrollbar-width: thin;
@@ -365,12 +367,14 @@ input[type='checkbox'] {
 }
 
 .hud-dropdown-panel::-webkit-scrollbar,
+.hud-command-list::-webkit-scrollbar,
 .hud-window-body::-webkit-scrollbar,
 .hud-palette-shelves::-webkit-scrollbar {
   width: 10px;
 }
 
 .hud-dropdown-panel::-webkit-scrollbar-thumb,
+.hud-command-list::-webkit-scrollbar-thumb,
 .hud-window-body::-webkit-scrollbar-thumb,
 .hud-palette-shelves::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
@@ -499,7 +503,8 @@ input[type='checkbox'] {
   transform-origin: top left;
 }
 
-.hud-option {
+.hud-option,
+.hud-command-item {
   appearance: none;
   display: grid;
   grid-template-columns: 24px 1fr auto auto;
@@ -522,7 +527,8 @@ input[type='checkbox'] {
   background-color: rgb(255 255 255 / 45%);
 }
 
-.hud-option[aria-checked='true'] .hud-option-label {
+.hud-option[aria-checked='true'] .hud-option-label,
+.hud-command-item[aria-checked='true'] .hud-option-label {
   color: var(--terracotta-deep);
 }
 
@@ -572,6 +578,89 @@ input[type='checkbox'] {
 
 .hud-menu .hud-dropdown-panel {
   min-width: 290px;
+}
+
+/* Above the bar and every window: it takes the keyboard, so nothing may sit over it. */
+.hud-command-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--space-4) var(--space-4);
+  pointer-events: auto;
+}
+
+.hud-command-scrim {
+  background: rgb(47 39 27 / 28%);
+}
+
+.hud-command {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(560px, 100%);
+  max-height: min(560px, 76vh);
+  padding: var(--space-2);
+  border-radius: var(--radius-stone);
+  animation: hud-pop var(--pop);
+}
+
+.hud-command-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) 0;
+}
+
+.hud-command-search input {
+  flex: 1;
+  height: 38px;
+  font-size: var(--size-lead);
+}
+
+.hud-command-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--space-1);
+}
+
+.hud-command-item {
+  min-height: 34px;
+  cursor: var(--cursor-hand);
+}
+
+.hud-command-group + .hud-command-group {
+  margin-top: var(--space-2);
+}
+
+.hud-command-item[aria-selected='true'] {
+  border-color: var(--edge-soft);
+  background-color: rgb(255 255 255 / 55%);
+  box-shadow: inset 3px 0 0 var(--terracotta);
+}
+
+.hud-command-picture {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.hud-command-glyph {
+  display: block;
+  font-size: var(--size-lead);
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.hud-command-empty {
+  margin: var(--space-4) var(--space-3);
+  color: var(--text-faint);
 }
 
 .hud-time {

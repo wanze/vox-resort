@@ -46,7 +46,11 @@ export function App() {
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
   const thoughts = useThoughts();
-  const { windows, menu, setMenu } = useHudChrome(clock, tool, inspector.selection);
+  const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
+    clock,
+    tool,
+    inspector.selection,
+  );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
   const { adopt: adoptParams, adoptOpen, money } = resort;
@@ -158,6 +162,8 @@ export function App() {
         windows={windows}
         menu={menu}
         onMenuChange={setMenu}
+        palette={palette}
+        onPaletteChange={setPalette}
       />
     </div>
   );

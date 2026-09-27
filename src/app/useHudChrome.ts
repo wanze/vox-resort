@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useHotkeys } from './useHotkeys';
 import { useWindows, type WindowControls } from './useWindows';
 import type { ClockControls } from './useClockControls';
@@ -12,6 +12,8 @@ export interface HudChrome {
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
   readonly setMenu: (menu: MenuId | null) => void;
+  readonly palette: boolean;
+  readonly setPalette: (open: boolean) => void;
 }
 
 const always = (action: () => void) => (): boolean => {
@@ -26,10 +28,18 @@ export function useHudChrome(
 ): HudChrome {
   const windows = useWindows();
   const [menu, setMenu] = useState<MenuId | null>(null);
+  const [palette, showPalette] = useState(false);
+  // One thing on top at a time, so the palette never opens under a dropdown still listening for Escape.
+  const setPalette = useCallback((open: boolean) => {
+    if (open) setMenu(null);
+    showPalette(open);
+  }, []);
   // An armed tool or an open inspector takes Escape first, so it only reaches the menu when idle.
   const idle = tool === null && selection === null;
 
   const hotkeys: readonly Hotkey[] = [
+    { key: 'k', chord: true, run: always(() => setPalette(!palette)) },
+    { key: '/', run: always(() => setPalette(true)) },
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },
     { key: 'f3', run: always(() => windows.toggle('debug')) },
@@ -45,5 +55,5 @@ export function useHudChrome(
   ];
   useHotkeys(hotkeys);
 
-  return { windows, menu, setMenu };
+  return { windows, menu, setMenu, palette, setPalette };
 }

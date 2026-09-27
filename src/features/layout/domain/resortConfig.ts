@@ -1,10 +1,10 @@
-export type HousingStyle = 'blocks' | 'mixed';
+export const HOUSING_STYLES = ['blocks', 'mixed'] as const;
 
-export const HOUSING_STYLES: readonly HousingStyle[] = ['blocks', 'mixed'];
+export type HousingStyle = (typeof HOUSING_STYLES)[number];
 
-export type BeachPreset = 'auto' | 'quiet' | 'busy' | 'packed';
+export const BEACH_PRESETS = ['auto', 'quiet', 'busy', 'packed'] as const;
 
-export const BEACH_PRESETS: readonly BeachPreset[] = ['auto', 'quiet', 'busy', 'packed'];
+export type BeachPreset = (typeof BEACH_PRESETS)[number];
 
 const BEACH_DENSITY: { readonly [preset in Exclude<BeachPreset, 'auto'>]: number } = {
   quiet: 0.35,

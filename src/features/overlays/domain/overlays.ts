@@ -1,16 +1,7 @@
 import { ARCHETYPES } from '../../sim/domain/archetypes';
 import { TILE_VOXELS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 
-export type OverlayKind =
-  | 'footfall'
-  | 'mood'
-  | 'reach-food'
-  | 'reach-drink'
-  | 'reach-wash'
-  | 'scenery'
-  | 'litter';
-
-export const OVERLAY_KINDS: readonly OverlayKind[] = [
+export const OVERLAY_KINDS = [
   'footfall',
   'mood',
   'reach-food',
@@ -18,7 +9,9 @@ export const OVERLAY_KINDS: readonly OverlayKind[] = [
   'reach-wash',
   'scenery',
   'litter',
-];
+] as const;
+
+export type OverlayKind = (typeof OVERLAY_KINDS)[number];
 
 export interface Footfall {
   readonly seen: Float32Array;

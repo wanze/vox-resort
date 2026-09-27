@@ -1,26 +1,31 @@
 import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { ARCHETYPES } from './archetypes';
 import type { VenueDoors } from './doors';
 import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
-import { NEEDS } from './needs';
 import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
-export type AdviceKind =
-  | 'closed'
-  | 'no-entrance'
-  | 'no-reception'
-  | 'no-beds'
-  | 'unserved-need'
-  | 'full-lines'
-  | 'unreachable'
-  | 'dirty'
-  | 'littered'
-  | 'far-from-home'
-  | 'unvisited'
-  | 'weather-closed';
+// Declared so advice of equal weight comes out in the same order on every run.
+const KIND_ORDER = [
+  // First: nothing else matters while nobody can come.
+  'closed',
+  'no-entrance',
+  'no-reception',
+  'no-beds',
+  'unserved-need',
+  'full-lines',
+  'unreachable',
+  'dirty',
+  'littered',
+  'far-from-home',
+  'unvisited',
+  // Last: the one line the player cannot fix today.
+  'weather-closed',
+] as const;
+
+export type AdviceKind = (typeof KIND_ORDER)[number];
 
 export interface Advice {
   readonly kind: AdviceKind;
@@ -62,24 +67,6 @@ export interface ResortFacts {
   readonly litter?: LitterSummary;
 }
 
-// Declared so advice of equal weight comes out in the same order on every run.
-const KIND_ORDER: readonly AdviceKind[] = [
-  // First: nothing else matters while nobody can come.
-  'closed',
-  'no-entrance',
-  'no-reception',
-  'no-beds',
-  'unserved-need',
-  'full-lines',
-  'unreachable',
-  'dirty',
-  'littered',
-  'far-from-home',
-  'unvisited',
-  // Last: the one line the player cannot fix today.
-  'weather-closed',
-];
-
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 // Fifty balks in a day is a place plainly too small.
@@ -113,7 +100,7 @@ export function adviceNoBeds(facts: ResortFacts): Advice | null {
 // Silent about a need nobody wants yet: that is a new plot, not a badly built one.
 export function adviceUnservedNeeds(facts: ResortFacts): readonly Advice[] {
   const advice: Advice[] = [];
-  for (const need of NEEDS) {
+  for (const need of GUEST_NEEDS) {
     const wanting = facts.wanting[need];
     if (wanting <= 0) continue;
     if (facts.venues.some((venue) => reliefAt(venue, need) > 0)) continue;
@@ -204,7 +191,7 @@ export function adviceFarFromHome(facts: ResortFacts): Advice | null {
   let furthest = 0;
   let worst: { readonly lodging: Lodging; readonly need: GuestNeed } | null = null;
   for (const lodging of facts.lodgings) {
-    for (const need of NEEDS) {
+    for (const need of GUEST_NEEDS) {
       const distance = nearestServing(facts.venues, need, lodging);
       if (distance === null || distance <= TOO_FAR || distance <= furthest) continue;
       furthest = distance;
@@ -298,7 +285,7 @@ export function adviceWeatherClosed(facts: ResortFacts): readonly Advice[] {
   const closed = facts.closed;
   if (!closed || closed.size === 0) return [];
   const advice: Advice[] = [];
-  for (const need of NEEDS) {
+  for (const need of GUEST_NEEDS) {
     const wanting = facts.wanting[need];
     if (wanting <= 0) continue;
     const serving = facts.venues.filter((venue) => reliefAt(venue, need) > 0);

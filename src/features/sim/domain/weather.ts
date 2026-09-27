@@ -2,9 +2,9 @@ import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Shelter } from '../../../../voxel-gen/voxelgen.ts';
 import { mix } from './night';
 
-export type Weather = 'clear' | 'rain' | 'storm' | 'heatwave';
+export const WEATHERS = ['clear', 'rain', 'storm', 'heatwave'] as const;
 
-export const WEATHERS: readonly Weather[] = ['clear', 'rain', 'storm', 'heatwave'];
+export type Weather = (typeof WEATHERS)[number];
 
 type PerNeed = { readonly [need in GuestNeed]: number };
 

@@ -1,8 +1,8 @@
-import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { archetypeOf } from './archetypes';
 import { WALK_VOXELS_PER_SIM_HOUR } from './crowdRate';
-import { NEEDS, type Needs } from './needs';
+import type { Needs } from './needs';
 import type { Venue } from './venues';
 import { CLEAR_EFFECT, type WeatherEffect } from './weather';
 
@@ -44,7 +44,7 @@ export function appealOf(
   return gain;
 }
 
-// Ties break in NEEDS order, independent of the order a model lists its reliefs.
+// Ties break in GUEST_NEEDS order, independent of the order a model lists its reliefs.
 export function dominantNeedAt(
   venue: Venue,
   needs: Needs,
@@ -69,7 +69,7 @@ export function dominantNeedAt(
     const louder =
       best === null ||
       gain > most ||
-      (gain === most && NEEDS.indexOf(relief.need) < NEEDS.indexOf(best));
+      (gain === most && GUEST_NEEDS.indexOf(relief.need) < GUEST_NEEDS.indexOf(best));
     if (!louder) continue;
     most = gain;
     best = relief.need;

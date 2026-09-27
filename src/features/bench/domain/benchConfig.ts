@@ -6,9 +6,11 @@ import { cameraFramingFor } from '../../layout/domain/worldBounds';
 // Both are perspective only: docs/rendering.md was measured through that lens, and
 // an orthographic camera culls and fogs differently. `street` exists because
 // point-light cost is paid per lit fragment, which dominates at lamp height.
-export type BenchView = 'overview' | 'street';
+const VIEWS = ['overview', 'street'] as const;
 
-const BENCH_VIEWS: ReadonlySet<string> = new Set<BenchView>(['overview', 'street']);
+export type BenchView = (typeof VIEWS)[number];
+
+const BENCH_VIEWS: ReadonlySet<string> = new Set<string>(VIEWS);
 
 const BENCH_WEATHERS: ReadonlySet<string> = new Set<string>(WEATHERS);
 

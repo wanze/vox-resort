@@ -187,9 +187,9 @@ export function lotAnchor(lot: BlockLot, footprint: Footprint): { tileX: number;
   };
 }
 
-export type ParkDesign = 'canal' | 'twin' | 'plaza' | 'lake' | 'isle';
+export const PARK_DESIGNS = ['canal', 'twin', 'plaza', 'lake', 'isle'] as const;
 
-export const PARK_DESIGNS: readonly ParkDesign[] = ['canal', 'twin', 'plaza', 'lake', 'isle'];
+export type ParkDesign = (typeof PARK_DESIGNS)[number];
 
 const DESIGN_MIN: { readonly [design in ParkDesign]: { width: number; depth: number } } = {
   canal: { width: 11, depth: 8 },

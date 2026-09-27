@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NEEDS } from './needs';
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import { isOpenIn, MAX_EFFECT, weatherEffect, weatherOn, WEATHERS, type Weather } from './weather';
 
 const week = (seed: number, days: number): Weather[] =>
@@ -37,7 +37,7 @@ describe('weatherOn', () => {
 describe('weatherEffect', () => {
   it('leaves a clear day exactly as it was', () => {
     const clear = weatherEffect('clear');
-    for (const need of NEEDS) {
+    for (const need of GUEST_NEEDS) {
       expect(clear.weight[need]).toBe(1);
       expect(clear.decay[need]).toBe(1);
     }
@@ -48,7 +48,7 @@ describe('weatherEffect', () => {
   it('keeps every multiplier inside the bounds the archetype table is tuned against', () => {
     for (const kind of WEATHERS) {
       const effect = weatherEffect(kind);
-      for (const need of NEEDS) {
+      for (const need of GUEST_NEEDS) {
         for (const value of [effect.weight[need], effect.decay[need]]) {
           expect(value, `${kind} ${need}`).toBeGreaterThanOrEqual(MAX_EFFECT.min);
           expect(value, `${kind} ${need}`).toBeLessThanOrEqual(MAX_EFFECT.max);

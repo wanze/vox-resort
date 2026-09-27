@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, partyOf, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import {
@@ -9,7 +10,6 @@ import {
   setPartyGoal,
   setPartyVenue,
 } from './goals';
-import { NEEDS } from './needs';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
 
@@ -57,7 +57,7 @@ describe('setPartyGoal', () => {
     setPartyGoal(goals, guests, person, { venue: 3, need: 'hunger' });
     for (const member of party) {
       expect(goals.venue[member], `member ${member}`).toBe(3);
-      expect(goals.need[member]).toBe(NEEDS.indexOf('hunger'));
+      expect(goals.need[member]).toBe(GUEST_NEEDS.indexOf('hunger'));
     }
   });
 

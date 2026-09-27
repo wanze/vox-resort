@@ -15,9 +15,9 @@ export const MAX_TICKS_PER_ADVANCE = 12;
 // under the last tick as often as on it.
 const CARRY_EPSILON = 1e-6;
 
-export type SimSpeed = 'paused' | 'slow' | 'normal' | 'fast' | 'rush';
+export const SIM_SPEEDS = ['paused', 'slow', 'normal', 'fast', 'rush'] as const;
 
-export const SIM_SPEEDS: readonly SimSpeed[] = ['paused', 'slow', 'normal', 'fast', 'rush'];
+export type SimSpeed = (typeof SIM_SPEEDS)[number];
 
 export const SPEED_DAY_SECONDS: { readonly [speed in SimSpeed]: number } = {
   paused: Infinity,

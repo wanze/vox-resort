@@ -1,10 +1,8 @@
-import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, type GuestNeed, type NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { archetypeOf } from './archetypes';
 import { CLEAR_EFFECT, type WeatherEffect } from './weather';
-
-export const NEEDS: readonly GuestNeed[] = ['hunger', 'thirst', 'energy', 'fun', 'hygiene'];
 
 const TICKS_PER_HOUR = 60;
 
@@ -44,7 +42,7 @@ export function createNeeds(guests: Guests, seed: number): Needs {
     hygiene: new Float32Array(guests.count),
   };
   for (let person = 0; person < guests.count; person++) {
-    for (const need of NEEDS) level[need][person] = START_LEVEL.min + random() * span;
+    for (const need of GUEST_NEEDS) level[need][person] = START_LEVEL.min + random() * span;
   }
   return { count: guests.count, level };
 }
@@ -52,7 +50,7 @@ export function createNeeds(guests: Guests, seed: number): Needs {
 export function resetNeeds(needs: Needs, person: number, random: () => number): void {
   if (person < 0 || person >= needs.count) return;
   const span = START_LEVEL.max - START_LEVEL.min;
-  for (const need of NEEDS) needs.level[need][person] = START_LEVEL.min + random() * span;
+  for (const need of GUEST_NEEDS) needs.level[need][person] = START_LEVEL.min + random() * span;
 }
 
 // Takes whole ticks, never a frame delta, so decay does not depend on frame rate.
@@ -66,10 +64,10 @@ export function decayNeeds(
   if (ticks <= 0) return;
   const hours = ticks / TICKS_PER_HOUR;
   // Folded into the hours once, not multiplied per person per need: this is the hot loop.
-  for (const need of NEEDS) scratchRate[need] = effect.decay[need] * hours;
+  for (const need of GUEST_NEEDS) scratchRate[need] = effect.decay[need] * hours;
   for (let person = 0; person < needs.count; person++) {
     const { decayPerHour } = archetypeOf(guests, person);
-    for (const need of NEEDS) {
+    for (const need of GUEST_NEEDS) {
       const column = needs.level[need];
       // Clamped so one starving guest's urgency cannot grow without limit.
       const dropped = column[person]! - decayPerHour[need] * scratchRate[need];
@@ -100,7 +98,7 @@ export function strongestNeed(
 ): Urgency | null {
   const { weight } = archetypeOf(guests, person);
   let strongest: Urgency | null = null;
-  for (const need of NEEDS) {
+  for (const need of GUEST_NEEDS) {
     const urgency = weight[need] * effect.weight[need] * (1 - needs.level[need][person]!);
     if (urgency < CONTENT_URGENCY) continue;
     if (strongest === null || urgency > strongest.urgency) strongest = { need, urgency };

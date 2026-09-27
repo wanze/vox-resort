@@ -78,17 +78,11 @@ export function cameraFramingFor(bounds: WorldBounds, verticalFovDegrees: number
 
 export type CameraMode = 'perspective' | 'isometric';
 
-// Corners rather than cardinal points, which is what makes the view isometric.
-// North is -z and east is +x.
-export type CompassDirection = 'northeast' | 'southeast' | 'southwest' | 'northwest';
+// Corners rather than cardinal points, which is what makes the view isometric. North is -z
+// and east is +x. Clockwise from the north-east, so the index is also the quarter turn.
+export const COMPASS_DIRECTIONS = ['northeast', 'southeast', 'southwest', 'northwest'] as const;
 
-// Clockwise from the north-east, so the index is also the quarter turn.
-export const COMPASS_DIRECTIONS: readonly CompassDirection[] = [
-  'northeast',
-  'southeast',
-  'southwest',
-  'northwest',
-];
+export type CompassDirection = (typeof COMPASS_DIRECTIONS)[number];
 
 export function turnDirection(from: CompassDirection, quarters: number): CompassDirection {
   const index = COMPASS_DIRECTIONS.indexOf(from);

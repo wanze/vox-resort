@@ -1,5 +1,6 @@
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
-import { NEEDS, type Needs } from './needs';
+import type { Needs } from './needs';
 
 const TICKS_PER_HOUR = 60;
 
@@ -33,8 +34,8 @@ export function createHappiness(count: number): Happiness {
 // they enjoy their stay.
 function contentmentOf(needs: Needs, person: number): number {
   let total = 0;
-  for (const need of NEEDS) total += needs.level[need][person]!;
-  return total / NEEDS.length;
+  for (const need of GUEST_NEEDS) total += needs.level[need][person]!;
+  return total / GUEST_NEEDS.length;
 }
 
 // Allocates nothing: it runs up to MAX_TICKS_PER_ADVANCE times a frame. Absent people

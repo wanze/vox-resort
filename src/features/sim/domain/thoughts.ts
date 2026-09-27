@@ -1,16 +1,6 @@
 import type { Venue } from './venues';
 
-export type ThoughtKind =
-  | 'queue-too-long'
-  | 'closed'
-  | 'nothing-for'
-  | 'no-bed'
-  | 'filthy'
-  | 'enjoyed'
-  | 'lovely'
-  | 'littered';
-
-export const THOUGHT_KINDS: readonly ThoughtKind[] = [
+export const THOUGHT_KINDS = [
   'queue-too-long',
   'closed',
   'nothing-for',
@@ -19,7 +9,9 @@ export const THOUGHT_KINDS: readonly ThoughtKind[] = [
   'enjoyed',
   'lovely',
   'littered',
-];
+] as const;
+
+export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
 
 const KINDS = THOUGHT_KINDS.length;
 

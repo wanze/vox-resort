@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import {
@@ -11,7 +12,7 @@ import {
   SURROUNDINGS_SHARE,
   type Happiness,
 } from './happiness';
-import { createNeeds, NEEDS, type Needs } from './needs';
+import { createNeeds, type Needs } from './needs';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 60 }];
 
@@ -20,7 +21,7 @@ const guestsOf = (count = 40): Guests =>
 
 const needsAt = (guests: Guests, level: number): Needs => {
   const needs = createNeeds(guests, 7);
-  for (const need of NEEDS) needs.level[need].fill(level);
+  for (const need of GUEST_NEEDS) needs.level[need].fill(level);
   return needs;
 };
 

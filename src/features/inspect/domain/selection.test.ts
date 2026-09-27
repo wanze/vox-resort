@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   createCrowd,
   holdAt,
@@ -16,7 +16,7 @@ import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { shoreFor } from '../../layout/domain/shoreline';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { createHappiness } from '../../sim/domain/happiness';
-import { createNeeds, NEEDS, type Needs } from '../../sim/domain/needs';
+import { createNeeds, type Needs } from '../../sim/domain/needs';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
   activityLine,
@@ -58,7 +58,7 @@ const guestsOf = (count = 80): Guests =>
 
 const needsOf = (guests: Guests, level: number | null = null, person = 0): Needs => {
   const needs = createNeeds(guests, 7);
-  if (level !== null) for (const need of NEEDS) needs.level[need][person] = level;
+  if (level !== null) for (const need of GUEST_NEEDS) needs.level[need][person] = level;
   return needs;
 };
 
@@ -145,7 +145,7 @@ describe('guestView', () => {
     const guests = guestsOf();
     const needs = needsOf(guests);
     const view = guestView(guests, needs, moodOf(guests), NO_VENUES, 3, 0, HERE, null);
-    expect(view.needs.map((entry) => entry.need)).toEqual([...NEEDS]);
+    expect(view.needs.map((entry) => entry.need)).toEqual([...GUEST_NEEDS]);
     for (const entry of view.needs) {
       expect(entry.level).toBeCloseTo(needs.level[entry.need][3]!, 5);
     }
@@ -275,7 +275,7 @@ const until = (crowd: Crowd, matches: (i: number) => boolean): number => {
 
 const contentNeeds = (guests: Guests): Needs => {
   const needs = createNeeds(guests, 7);
-  for (const need of NEEDS) needs.level[need].fill(1);
+  for (const need of GUEST_NEEDS) needs.level[need].fill(1);
   return needs;
 };
 
@@ -331,7 +331,7 @@ describe('activityLine', () => {
 
   it('words each need as the one thing it is felt as', () => {
     const crowd = seatedStreet('sit');
-    const moods = NEEDS.map((need) => {
+    const moods = GUEST_NEEDS.map((need) => {
       const needs = contentNeeds(guests);
       needs.level[need][0] = 0;
       return doing(crowd, needs, 0).split(' · ')[0];

@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { ARCHETYPES } from './archetypes';
-import {
-  createNeeds,
-  decayNeeds,
-  NEEDS,
-  relieve,
-  START_LEVEL,
-  strongestNeed,
-  type Needs,
-} from './needs';
+import { createNeeds, decayNeeds, relieve, START_LEVEL, strongestNeed, type Needs } from './needs';
 import { weatherEffect } from './weather';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -28,18 +20,18 @@ const someone = (guests: Guests, kind: PartyKind): number => {
 };
 
 const setAll = (needs: Needs, person: number, level: number): void => {
-  for (const need of NEEDS) needs.level[need][person] = level;
+  for (const need of GUEST_NEEDS) needs.level[need][person] = level;
 };
 
 const levelsOf = (needs: Needs, person: number): number[] =>
-  NEEDS.map((need) => needs.level[need][person]!);
+  GUEST_NEEDS.map((need) => needs.level[need][person]!);
 
 describe('createNeeds', () => {
   it('gives every need a column the size of the registry', () => {
     const guests = guestsOf();
     const needs = createNeeds(guests, 7);
     expect(needs.count).toBe(guests.count);
-    for (const need of NEEDS) expect(needs.level[need].length).toBe(guests.count);
+    for (const need of GUEST_NEEDS) expect(needs.level[need].length).toBe(guests.count);
   });
 
   it('starts everybody somewhere in the middle, so nobody is desperate on day one', () => {
@@ -70,7 +62,7 @@ describe('createNeeds', () => {
   it('draws nothing for a resort nobody is staying in', () => {
     const needs = createNeeds(guestsOf(0), 7);
     expect(needs.count).toBe(0);
-    for (const need of NEEDS) expect(needs.level[need].length).toBe(0);
+    for (const need of GUEST_NEEDS) expect(needs.level[need].length).toBe(0);
   });
 });
 
@@ -134,7 +126,7 @@ describe('relieve', () => {
     setAll(needs, 3, 0.1);
     relieve(needs, 3, [{ need: 'fun', amount: 0.8 }]);
     expect(needs.level.fun[3]!).toBeCloseTo(0.9, 5);
-    for (const need of NEEDS) {
+    for (const need of GUEST_NEEDS) {
       if (need !== 'fun') expect(needs.level[need][3]!).toBeCloseTo(0.1, 5);
     }
   });

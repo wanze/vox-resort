@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { saltFor, tasteFor } from './appeal';
 import { chooseVenue, type ChoiceOptions } from './chooseVenue';
-import { createNeeds, NEEDS, type Needs } from './needs';
+import { createNeeds, type Needs } from './needs';
 import { MAX_QUEUE_SHOWN } from './queueLane';
 import type { Venue } from './venues';
 import { weatherEffect } from './weather';
@@ -47,7 +47,7 @@ const venue = (key: string, satisfies: readonly NeedRelief[], x: number, z: numb
 
 const wanting = (person: number, need: GuestNeed | null): Needs => {
   const needs = createNeeds(guests, 7);
-  for (const each of NEEDS) needs.level[each][person] = 1;
+  for (const each of GUEST_NEEDS) needs.level[each][person] = 1;
   if (need !== null) needs.level[need][person] = 0;
   return needs;
 };
@@ -251,7 +251,7 @@ describe('chooseVenue on the whole visit, not one need', () => {
 
   const at = (person: number, levels: Partial<Record<GuestNeed, number>>): Needs => {
     const needs = createNeeds(guests, 7);
-    for (const each of NEEDS) needs.level[each][person] = 1;
+    for (const each of GUEST_NEEDS) needs.level[each][person] = 1;
     for (const [need, level] of Object.entries(levels)) {
       needs.level[need as GuestNeed][person] = level;
     }
@@ -436,7 +436,7 @@ describe('a venue the weather has shut', () => {
   it('lets a heatwave decide what is wanted, not only what is open', () => {
     const person = someone('family');
     const needs = createNeeds(guests, 7);
-    for (const each of NEEDS) needs.level[each][person] = 1;
+    for (const each of GUEST_NEEDS) needs.level[each][person] = 1;
     needs.level.hunger[person] = 0.55;
     needs.level.thirst[person] = 0.5;
     const venues = [venue('bakery#0', HUNGER, 100), venue('bar#0', THIRST, 100)];

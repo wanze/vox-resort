@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import type { Shelter } from '../../../../voxel-gen/voxelgen.ts';
+import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { GuestNeed, Shelter } from '../../../../voxel-gen/voxelgen.ts';
 import { binReachOf, OBJECT_TYPES } from '../../catalog/domain/objectTypes';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
@@ -43,7 +43,7 @@ import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/e
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
-import { createNeeds, decayNeeds, NEEDS, type Needs } from './needs';
+import { createNeeds, decayNeeds, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
 import { gatewaysOn, type Gateway } from './gateways';
@@ -113,10 +113,10 @@ const bakery = (tileX: number): Venue => ({
   doors: [],
 });
 
-const wanting = (person: number, need: (typeof NEEDS)[number] | null): Needs => {
+const wanting = (person: number, need: GuestNeed | null): Needs => {
   const needs = createNeeds(guests, 7);
   for (let other = 0; other < guests.count; other++) {
-    for (const each of NEEDS) needs.level[each][other] = 1;
+    for (const each of GUEST_NEEDS) needs.level[each][other] = 1;
   }
   if (need !== null) needs.level[need][person] = 0;
   return needs;
@@ -1333,7 +1333,7 @@ const shareOutOf = (
 ): ShareOut => {
   const ranked = [...visits.entries()].toSorted((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const busiest = new Map<string, { key: string; share: number; of: number }>();
-  for (const need of NEEDS) {
+  for (const need of GUEST_NEEDS) {
     const serving = standing.filter((venue) =>
       venue.satisfies.some((relief) => relief.need === need && relief.amount > 0),
     );
@@ -1461,7 +1461,7 @@ describe('on the generated plot', () => {
 
   const starving = (
     capacityOf: (venue: Venue) => number,
-    need: (typeof NEEDS)[number] = 'hunger',
+    need: GuestNeed = 'hunger',
     walked: WalkNetwork = network,
     watch: Watch = {},
   ) => {
@@ -1813,7 +1813,7 @@ describe('on the generated plot', () => {
       seed: 11,
     });
     const needs = createNeeds(people, 9);
-    for (const need of NEEDS) needs.level[need].fill(1);
+    for (const need of GUEST_NEEDS) needs.level[need].fill(1);
     const food = venues.filter((venue) => venue.satisfies.some((each) => each.need === 'hunger'));
 
     let clock = withSpeed(createSimClock(0, 10 / 24), 'normal');
@@ -2436,8 +2436,8 @@ describe('on the generated plot', () => {
     const open = [...venues, beachVenueFor(network)!].filter((venue) =>
       isOpenIn(shelterOf(venue), closed),
     );
-    const unserved = NEEDS.filter((need) => !open.some((venue) => reliefAt(venue, need) > 0));
-    const clearUnserved = NEEDS.filter(
+    const unserved = GUEST_NEEDS.filter((need) => !open.some((venue) => reliefAt(venue, need) > 0));
+    const clearUnserved = GUEST_NEEDS.filter(
       (need) => ![...venues].some((venue) => reliefAt(venue, need) > 0),
     );
     expect(unserved, `a storm leaves ${unserved.join(', ')} unserved`).toEqual(clearUnserved);

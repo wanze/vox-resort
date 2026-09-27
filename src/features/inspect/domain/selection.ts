@@ -2,6 +2,7 @@
 // re-renders on a tick. The per-frame activity line goes to the DOM through a ref.
 
 import {
+  GUEST_NEEDS,
   TILE_VOXELS,
   type GuestNeed,
   type ModelVenue,
@@ -14,7 +15,7 @@ import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
 import type { Happiness } from '../../sim/domain/happiness';
-import { NEEDS, strongestNeed, type Needs } from '../../sim/domain/needs';
+import { strongestNeed, type Needs } from '../../sim/domain/needs';
 import type { ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
 
@@ -138,7 +139,7 @@ export function guestView(
     arrivedOn,
     nights,
     nightsLeft: arrivedOn + nights - day,
-    needs: NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
+    needs: GUEST_NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
     wants: wantsOf({ guests, needs, venues, person, at }),
     happiness: happiness.level[person] ?? 0,
     thought,

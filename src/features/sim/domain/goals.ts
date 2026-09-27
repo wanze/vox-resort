@@ -1,7 +1,7 @@
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { partyOf } from '../../guests/domain/guests';
 import type { VenueChoice } from './chooseVenue';
-import { NEEDS } from './needs';
 
 export const NO_GOAL = -1;
 
@@ -29,7 +29,7 @@ export function setPartyGoal(
   choice: VenueChoice,
 ): void {
   if (person < 0 || person >= goals.count) return;
-  const need = NEEDS.indexOf(choice.need);
+  const need = GUEST_NEEDS.indexOf(choice.need);
   for (const member of partyOf(guests, person)) {
     if (member >= goals.count) continue;
     goals.venue[member] = choice.venue;

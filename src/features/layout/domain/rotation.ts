@@ -2,9 +2,9 @@ import type { ModelDoor, ModelLight, ModelSeat } from '../../../../voxel-gen/vox
 
 // Quarter turns only: anything finer breaks tile footprints and grid alignment.
 // A turn n is n * 90 degrees in makeRotationY's sense, swinging north to face west.
-export type Rotation = 0 | 1 | 2 | 3;
+export const ROTATIONS = [0, 1, 2, 3] as const;
 
-export const ROTATIONS: readonly Rotation[] = [0, 1, 2, 3];
+export type Rotation = (typeof ROTATIONS)[number];
 
 export interface Extent {
   readonly x: number;

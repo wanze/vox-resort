@@ -91,7 +91,9 @@ export interface ModelDoor {
   readonly facing: QuarterTurns;
 }
 
-export type GuestNeed = 'hunger' | 'thirst' | 'energy' | 'fun' | 'hygiene';
+export const GUEST_NEEDS = ['hunger', 'thirst', 'energy', 'fun', 'hygiene'] as const;
+
+export type GuestNeed = (typeof GUEST_NEEDS)[number];
 
 export type VenueRole = 'lodging' | 'food' | 'drink' | 'activity' | 'service';
 

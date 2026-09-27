@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   bedCount,
   checkOutParty,
@@ -17,7 +18,7 @@ import {
   wavesDue,
 } from './checkIn';
 import { ARRIVAL_MOOD, createHappiness } from './happiness';
-import { createNeeds, NEEDS, START_LEVEL } from './needs';
+import { createNeeds, START_LEVEL } from './needs';
 import { ratingFor, type Rating } from './rating';
 import { TICKS_PER_DAY } from './simClock';
 
@@ -42,7 +43,7 @@ const dayOf = (guests: Guests, rating: Rating, day = 4) => {
   const needs = createNeeds(guests, 7);
   const happiness = createHappiness(guests.count);
   // Zeroed first so a level read back was really written on arrival, not left over.
-  for (const need of NEEDS) needs.level[need].fill(0);
+  for (const need of GUEST_NEEDS) needs.level[need].fill(0);
   happiness.level.fill(0);
   const arrived = runCheckIn({
     guests,
@@ -141,7 +142,7 @@ describe('runCheckIn', () => {
     expect(arrived.length).toBeGreaterThan(0);
     for (const person of arrived) {
       expect(happiness.level[person]).toBeCloseTo(ARRIVAL_MOOD);
-      for (const need of NEEDS) {
+      for (const need of GUEST_NEEDS) {
         expect(needs.level[need][person]).toBeGreaterThanOrEqual(START_LEVEL.min);
         expect(needs.level[need][person]).toBeLessThanOrEqual(START_LEVEL.max);
       }

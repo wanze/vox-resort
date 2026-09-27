@@ -8,8 +8,10 @@ import { RenderStats, type FrameCostElements } from './RenderStats';
 import { ResortPanel } from './ResortPanel';
 import { TimeOfDay } from './TimeOfDay';
 import { WeatherControl } from './WeatherControl';
+import { OverlayControl } from '../../overlays/components/OverlayControl';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
+import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
 import type { Advice } from '../../sim/domain/advice';
@@ -25,6 +27,7 @@ export interface TopBarProps {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
+  readonly overlay: OverlayControls;
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
@@ -44,6 +47,7 @@ export function TopBar(props: TopBarProps) {
     clock,
     camera,
     resort,
+    overlay,
     advice,
     voices,
     onShowOnPlot,
@@ -66,6 +70,8 @@ export function TopBar(props: TopBarProps) {
         forced={clock.forcedWeather}
         onWeatherChange={clock.setWeather}
       />
+
+      <OverlayControl kind={overlay.kind} onKindChange={overlay.setOverlay} />
 
       <div className="hud-bar-readouts">
         <HudReadout

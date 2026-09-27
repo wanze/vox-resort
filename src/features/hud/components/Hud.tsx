@@ -31,6 +31,7 @@ export function Hud(props: HudProps) {
         clock={props.clock}
         camera={props.camera}
         resort={props.resort}
+        overlay={props.overlay}
         advice={props.advice}
         voices={props.voices}
         onShowOnPlot={props.onShowOnPlot}

@@ -488,6 +488,39 @@ a venue, appeal and routing do not read it.
 The inspector shows a place's **Surroundings**, `sceneryOver`: the mean over its
 footprint and the ring around it.
 
+## Overlays
+
+The **Overlay** picker in the top bar tints each paved tile by one question
+(`overlays/domain/overlays.ts`). Every layer is a value from 0 to 1 per walk node,
+or `NaN` for no data (drawn as nothing), and **the high end is always the bad
+one**, so one ramp (`ramp.ts`: teal, yellow, magenta-red) and one legend serve
+them all.
+
+| Layer    | Asks                          | Value                                                                          |
+| -------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| Footfall | where guests walk             | sightings over the busiest node's; `NaN` where nobody walked                   |
+| Mood     | where guests are unhappy      | 1 minus the mean mood seen there; `NaN` below `MIN_SEEN` (5) sightings         |
+| Food     | how far to something to eat   | hops to the nearest door of a venue easing hunger, over `TOO_FAR_HOPS`, capped |
+| Drink    | how far to something to drink | the same for thirst                                                            |
+| Wash     | how far to somewhere to wash  | the same for hygiene                                                           |
+| Scenery  | where the walk is plain       | 1 minus the scenery field under the node                                       |
+| Litter   | where litter lies             | the litter level under the node                                                |
+
+`TOO_FAR_HOPS` is the family reach in tiles (20), where the advice starts saying
+far-from-home; a node no door reaches is 1. The reach layers are one multi-source
+sweep (`reach.ts`) from every serving door, about 0.2 ms on the reference plot,
+kept per walk graph until the next edit. A building on the sand has no door on the
+graph, so it is seeded as the router reaches it: at the gate of each of its sand
+routes, already that route's length in tiles away.
+
+Footfall is the one running sample: once a frame, every present guest adds 1 and
+their mood to the node they are at. It is halved every morning, so the map shows
+the last few days, and replaced empty on an edit, which renumbers nodes.
+
+A layer is worked out when it is switched on, once a simulated hour while it is
+on, and after an edit's rebuild; never per frame. The simulation never reads an
+overlay, and a benchmark refuses to switch one on.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.

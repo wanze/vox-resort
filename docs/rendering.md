@@ -32,7 +32,10 @@ authored plan is 112 × 100 tiles (448 × 400 m).
 9. **Frame**: three materials for the catalogue (lit, unlit, water), plus terrain,
    sea, figures and moving objects. Litter on the paths is a moving field too
    (`litter/adapters/litterField.ts`): one instanced mesh per litter model,
-   rewritten only when the litter changes.
+   rewritten only when the litter changes. The map overlay
+   (`overlays/adapters/overlayField.ts`) is one instanced quad per paved tile,
+   coloured per instance, 2.1 voxels up over the blob shadows, and hidden (no
+   draw call) while it is off.
 
 Steps 2 and 8 and the terrain mesh run in a worker (see
 [Preparing a resort](#preparing-a-resort)).

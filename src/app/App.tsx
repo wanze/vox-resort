@@ -8,6 +8,7 @@ import { useClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
 import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
+import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import type { BuildTool } from '../features/build/domain/buildTool';
@@ -41,6 +42,7 @@ export function App() {
   const resort = useResortControls(showcaseRef);
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
+  const mapOverlay = useOverlay(showcaseRef);
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
   const thoughts = useThoughts();
@@ -139,6 +141,7 @@ export function App() {
         clock={clock}
         camera={camera}
         resort={resort}
+        overlay={mapOverlay}
         advice={advice.advice}
         voices={thoughts.voices}
         onShowOnPlot={advice.showOnPlot}

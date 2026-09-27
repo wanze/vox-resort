@@ -185,6 +185,20 @@ import {
   type ResortFacts,
 } from '../features/sim/domain/advice';
 import { doorsFor } from '../features/sim/domain/doors';
+import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
+import {
+  createFootfall,
+  fadeFootfall,
+  overlayValuesFor,
+  sampleFootfall,
+  type Footfall,
+  type OverlayKind,
+} from '../features/overlays/domain/overlays';
+import {
+  buildOverlayField,
+  type OverlayField,
+  type OverlayTile,
+} from '../features/overlays/adapters/overlayField';
 import { nodeIndexFor, type NodeIndex } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor } from '../features/lighting/domain/lightAnchors';
@@ -448,6 +462,7 @@ export interface Showcase {
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
   setWeather(weather: Weather | null): void;
+  setOverlay(kind: OverlayKind | null): void;
   selectPerson(person: number): void;
   clearSelection(): void;
   dispose(): void;
@@ -732,6 +747,9 @@ interface Resort {
   scenery: SceneryField;
   // Kept across an edit, pruned to what is still paved: planting a hedge does not sweep the plot.
   readonly litter: Litter;
+  // Per node, so replaced empty on an edit, which renumbers nodes.
+  footfall: Footfall;
+  readonly overlay: OverlayField;
   // Per guest body, never replaced: a wrapper in hand outlasts an edit.
   readonly carrying: Carrying;
   // Per guest body too, and forgotten at check-in, when the body becomes somebody else.
@@ -1006,6 +1024,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     plan.tilesZ,
   );
   const litter = createLitter(plan.tilesX, plan.tilesZ);
+  const overlay = buildOverlayField();
   const carrying = createCarrying(population);
   const binCover = binCoverFor(
     binsOn([...plot.layout.placements, ...plot.layout.props]),
@@ -1139,6 +1158,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     upkeep,
     scenery,
     litter,
+    footfall: createFootfall(network.nodes.length),
+    overlay,
     carrying,
     thoughts: createThoughts(population),
     thoughtDay: createDay(),
@@ -1173,6 +1194,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
       staff.dispose();
       balloons.dispose();
       litterField.dispose();
+      overlay.dispose();
       sea.dispose();
       lighting.volume?.dispose();
     },
@@ -1210,6 +1232,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.remove(previous.staff.group);
       scene?.scene.remove(previous.balloons.group);
       scene?.scene.remove(previous.litterField.group);
+      scene?.scene.remove(previous.overlay.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
@@ -1218,6 +1241,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.add(resort.staff.group);
       scene?.scene.add(resort.balloons.group);
       scene?.scene.add(resort.litterField.group);
+      scene?.scene.add(resort.overlay.group);
       scene?.scene.add(resort.sea.group);
       scene?.reframe(
         resort.bounds,
@@ -1265,8 +1289,9 @@ function sceneStats(parts: {
   readonly rain: RainField;
 }): ShowcaseStats {
   const { handle, scratch, catalogue, rain } = parts;
-  const { plot, world, shadows, construction, crowd, staff, balloons, litterField, sea, lighting } =
+  const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
+  const { sea, lighting } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -1284,6 +1309,7 @@ function sceneStats(parts: {
       staff.drawCalls +
       balloons.drawCalls +
       litterField.drawCalls +
+      overlay.drawCalls +
       sea.drawCalls +
       rain.drawCalls,
     chunkCount: world.chunkCount,
@@ -1297,6 +1323,7 @@ function sceneStats(parts: {
       staff.triangleCount +
       balloons.triangleCount +
       litterField.triangleCount +
+      overlay.triangleCount +
       sea.triangleCount +
       rain.triangleCount,
     shadowCount: shadows.count,
@@ -1438,17 +1465,22 @@ interface DrawnLitter {
 
 const pavingIndices = new WeakMap<WalkNetwork, NodeIndex>();
 
+function pavingIndexOf(network: WalkNetwork): NodeIndex {
+  let index = pavingIndices.get(network);
+  if (!index) {
+    index = nodeIndexFor(network);
+    pavingIndices.set(network, index);
+  }
+  return index;
+}
+
 // Only on a change: litter moves a few times an hour, and a write touches every slot. The grid
 // is compared too, so a new resort whose version happens to match is still drawn.
 function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
   const { litter } = resort;
   if (drawn.litter === litter && drawn.version === litter.version) return drawn;
   const network = resort.crowd.crowd.network;
-  let index = pavingIndices.get(network);
-  if (!index) {
-    index = nodeIndexFor(network);
-    pavingIndices.set(network, index);
-  }
+  const index = pavingIndexOf(network);
   const nodeOnTile = (tileX: number, tileZ: number): { readonly y: number } | null => {
     const node = index.at(tileX, tileZ)?.[0];
     return node === undefined ? null : network.nodes[node]!;
@@ -1468,13 +1500,56 @@ function binsOn(placements: readonly Placement[]): BinSite[] {
   return bins;
 }
 
+// The first node on each tile stands for it, so a stair tile with two stands gets one quad.
+function overlayTilesOf(network: WalkNetwork): OverlayTile[] {
+  const index = pavingIndexOf(network);
+  const tiles: OverlayTile[] = [];
+  for (const [node, { tileX, tileZ, y }] of network.nodes.entries()) {
+    if (index.at(tileX, tileZ)?.[0] !== node) continue;
+    tiles.push({ x: (tileX + 0.5) * TILE_VOXELS, y, z: (tileZ + 0.5) * TILE_VOXELS, node });
+  }
+  return tiles;
+}
+
+// Per graph, which an edit replaces along with the venues, so a sweep is kept until the next
+// rebuild rather than rerun every hour.
+const reachSweeps = new WeakMap<WalkNetwork, Map<GuestNeed, Int32Array>>();
+
+function hopsTo(resort: Resort, need: GuestNeed): Int32Array {
+  const network = resort.crowd.crowd.network;
+  let sweeps = reachSweeps.get(network);
+  if (!sweeps) {
+    sweeps = new Map();
+    reachSweeps.set(network, sweeps);
+  }
+  let hops = sweeps.get(need);
+  if (!hops) {
+    hops = hopsFrom(network, reachSeedsFor(resort.venues, need, network, pavingIndexOf(network)));
+    sweeps.set(need, hops);
+  }
+  return hops;
+}
+
+function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
+  const { nodes } = resort.crowd.crowd.network;
+  const { litter } = resort;
+  return overlayValuesFor(kind, {
+    footfall: resort.footfall,
+    nodes: nodes.length,
+    tileOf: (node) => nodes[node]!,
+    hopsTo: (need) => hopsTo(resort, need),
+    scenery: resort.scenery,
+    litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
+  });
+}
+
 function runTicks(
   resort: Resort,
   clock: Clock,
   ticks: number,
   lastShare: number | null,
   advise: () => void,
-  speak: () => void,
+  hourly: () => void,
 ): number {
   decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather));
   // One tick at a time: a place freed on the first tick must let somebody in on the first.
@@ -1484,6 +1559,13 @@ function runTicks(
     // next.
     resort.staffRouter.tick(clock.ticks - tick + 1);
   }
+  // Once a frame, not once a tick: the inner loop is the router's, and a frame's sample is plenty.
+  sampleFootfall(
+    resort.footfall,
+    resort.crowd.crowd.node,
+    resort.guests.present,
+    resort.happiness.level,
+  );
   // After the ticks, so a guest is charged for the line they were actually in.
   ageHappiness(
     resort.happiness,
@@ -1500,11 +1582,12 @@ function runTicks(
     advise();
     resort.router.forgetTheDay();
     resort.thoughtDay.clear();
+    fadeFootfall(resort.footfall);
   }
   // After the morning's wipe, so the first hour of a day is heard in that day.
   if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
     hearSurroundings(resort, clock.ticks);
-    speak();
+    hourly();
   }
   admitLaterWaves(resort, clock, ticks);
   return lightRooms(resort, lastShare);
@@ -2221,6 +2304,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().litterField.group);
+  handle.scene.add(current().overlay.group);
   handle.scene.add(current().sea.group);
   // Not per resort: rain falls over the camera, not the plot.
   const rain = buildRainField(createRaindrops(MAX_DROPS, RAIN_SEED));
@@ -2442,8 +2526,32 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
 
+  let overlayKind: OverlayKind | null = null;
+  // The graph the tiles were placed for: a new one, from an edit or a new plot, places them again.
+  let overlayPlacedOn: WalkNetwork | null = null;
+
+  const paintOverlay = (): void => {
+    const resort = current();
+    if (overlayKind === null) {
+      resort.overlay.paint(null);
+      return;
+    }
+    const network = resort.crowd.crowd.network;
+    if (overlayPlacedOn !== network) {
+      resort.overlay.place(overlayTilesOf(network));
+      overlayPlacedOn = network;
+    }
+    resort.overlay.paint(overlayValues(resort, overlayKind));
+  };
+
+  const hourly = (): void => {
+    speak();
+    if (overlayKind !== null) paintOverlay();
+  };
+
   const rebuilt = (): void => {
     clock.relight();
+    paintOverlay();
     onSceneChange?.(statsNow());
     advise();
     speak();
@@ -2533,6 +2641,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       crowd.relocate(network);
       resort.staff.relocate(network);
       staffTheResort(resort);
+      resort.footfall = createFootfall(network.nodes.length);
+      paintOverlay();
       // Said now rather than tomorrow; the day's counters are left alone.
       advise();
       speak();
@@ -2544,7 +2654,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // of two runs.
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
-    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise, speak);
+    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise, hourly);
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
     // crowdScaleFor is 1 while paused.
@@ -2651,6 +2761,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     setTime: clock.setTime,
     setSpeed: clock.setSpeed,
     setWeather: clock.setWeather,
+    // Refused under a bench, as camera modes are: every recorded draw count has it off.
+    setOverlay(kind) {
+      if (bench) return;
+      overlayKind = kind;
+      paintOverlay();
+      onSceneChange?.(statsNow());
+    },
     selectPerson: (person) => select({ person }),
     clearSelection: () => select(null),
     dispose() {

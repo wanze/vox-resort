@@ -58,7 +58,7 @@ const BY_DAY = -2;
 
 // The furthest beach building on the reference plot is 28 tiles from a gate; 40 leaves
 // room for detours.
-const SAND_ROUTE_TILES = 40;
+export const SAND_ROUTE_TILES = 40;
 
 // Twice needs.ts's content line, so nobody on the sand jumps up every few minutes.
 const FETCH_URGENCY = 0.4;

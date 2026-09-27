@@ -48,6 +48,7 @@ export default defineModel({
     ],
     capacity: 10,
     dwellSeconds: { min: 1800, max: 5400 },
+    price: 6,
     doors: [{ x: 23, z: D - 1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

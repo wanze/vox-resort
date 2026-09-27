@@ -43,6 +43,7 @@ export default defineModel({
     ],
     capacity: 20,
     dwellSeconds: { min: 480, max: 1200 },
+    price: 4,
     doors: [{ x: DOOR.along + DOOR.w / 2 - 1, z: FRONT, facing: 0 }],
     litter: 0.03,
   },

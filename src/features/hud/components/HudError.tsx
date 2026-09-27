@@ -1,11 +1,12 @@
 export interface HudErrorProps {
+  readonly title?: string;
   readonly message: string;
 }
 
-export function HudError({ message }: HudErrorProps) {
+export function HudError({ title = 'Could not start the renderer', message }: HudErrorProps) {
   return (
     <div className="hud-error" role="alert">
-      <strong>Could not start the renderer</strong>
+      <strong>{title}</strong>
       <p>{message}</p>
     </div>
   );

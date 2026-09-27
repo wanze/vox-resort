@@ -21,6 +21,7 @@ export default defineModel({
     capacity: 4,
     beds: 4,
     dwellSeconds: { min: 25_200, max: 32_400 },
+    price: 22,
     doors: [{ x: 15, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

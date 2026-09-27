@@ -43,6 +43,8 @@ export default defineModel({
   label: 'Reception',
   category: 'amenities',
   tiles: { x: 4, z: 3 },
+  // Every tycoon resort must buy one, and it sells nothing.
+  cost: 600,
   emissive: [SIGN],
   windows: WINDOW_GLASS,
   lights: [{ x: 24, y: 12, z: 40, color: SIGN, intensity: 90, distance: 50 }],

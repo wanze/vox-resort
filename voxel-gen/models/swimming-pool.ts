@@ -25,6 +25,8 @@ export default defineModel({
   label: 'Swimming Pool',
   category: 'leisure',
   tiles: { x: 8, z: 6 },
+  // Mostly water, which the size rule reads as cheap.
+  cost: 5_000,
   seats: [
     ...NORTH_ROW.at.map(
       (x) => ({ x: x + 1, y: TOP_LAYER + 2, z: NORTH_ROW.z + 4, facing: 0, pose: 'lie' }) as const,

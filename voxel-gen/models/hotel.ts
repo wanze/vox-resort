@@ -44,6 +44,8 @@ export default defineModel({
   label: 'Hotel',
   category: 'lodging',
   tiles: { x: 10, z: 5 },
+  // The size rule counts its facade detail and would ask 22 430, nearly twice a house per bed.
+  cost: 12_000,
   emissive: [LANTERN],
   windows: WINDOW_GLASS,
   lights: LANTERNS.map((x) => ({
@@ -59,6 +61,7 @@ export default defineModel({
     capacity: 40,
     beds: 40,
     dwellSeconds: { min: 25_200, max: 32_400 },
+    price: 30,
     doors: [{ x: ARCHES[1] + 2, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

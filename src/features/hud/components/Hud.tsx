@@ -15,6 +15,7 @@ export interface HudProps extends TopBarProps {
   readonly onSelectPerson: (person: number) => void;
   readonly onClearSelection: () => void;
   readonly error: string | null;
+  readonly refusal: string | null;
 }
 
 export function Hud(props: HudProps) {
@@ -35,8 +36,14 @@ export function Hud(props: HudProps) {
         advice={props.advice}
         voices={props.voices}
         onShowOnPlot={props.onShowOnPlot}
+        ledger={props.ledger}
       />
-      <BuildPalette preview={props.preview} tool={props.tool} onToolChange={props.onToolChange} />
+      <BuildPalette
+        preview={props.preview}
+        tool={props.tool}
+        onToolChange={props.onToolChange}
+        ledger={props.ledger}
+      />
       <InspectPanel
         selection={props.selection}
         activityElement={props.inspectElement}
@@ -44,6 +51,9 @@ export function Hud(props: HudProps) {
         onClose={props.onClearSelection}
       />
       {props.error ? <HudError message={props.error} /> : null}
+      {!props.error && props.refusal ? (
+        <HudError title="Not enough money" message={props.refusal} />
+      ) : null}
     </div>
   );
 }

@@ -78,6 +78,7 @@ export default defineModel({
     ],
     capacity: 25,
     dwellSeconds: { min: 1800, max: 5400 },
+    price: 4,
     doors: FLIGHTS.map((x) => ({ x: x + FLIGHT_W / 2, z: BRINK + 4, facing: 0 as const })),
   },
   build: (b: VoxelBuilder) => {

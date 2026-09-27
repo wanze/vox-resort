@@ -11,6 +11,7 @@ export default defineModel({
     satisfies: [{ need: 'hunger', amount: 0.6 }],
     capacity: 10,
     dwellSeconds: { min: 300, max: 720 },
+    price: 3,
     doors: [{ x: 15, z: 12, facing: 0 }],
     litter: 0.05,
   },

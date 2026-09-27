@@ -635,7 +635,7 @@ input[type='checkbox'] {
 
 .hud-resort-actions {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
@@ -936,6 +936,18 @@ input[type='checkbox'] {
 
 .build-tile-draw {
   color: var(--foliage);
+}
+
+.build-tile-cost {
+  color: var(--sand);
+}
+
+.build-tile-short .build-tile-art {
+  opacity: 0.45;
+}
+
+.build-tile-short .build-tile-cost {
+  color: var(--terracotta-lit);
 }
 
 .terrain-tile {

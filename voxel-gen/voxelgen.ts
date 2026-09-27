@@ -109,6 +109,8 @@ export interface ModelVenue {
   readonly satisfies?: readonly NeedRelief[];
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };
+  // Per visit, or per guest-night at a lodging.
+  readonly price?: number;
   readonly beds?: number;
   // Optional on purpose: a venue without doors is entered from any walkable
   // tile touching it, so a new model works before it is measured.
@@ -133,6 +135,8 @@ export interface VoxelModelSource {
   // 0 to 1: how much nicer this makes the tiles around it. The reach is the simulation's,
   // so a model states only how strong it is.
   readonly scenery?: number;
+  // Derived from the model's size in prices.ts when omitted; declare it only where that is wrong.
+  readonly cost?: number;
   // Tiles a guest holding litter will look for this; 0 is not a bin.
   readonly binReach?: number;
   readonly emissive?: readonly Color[];
@@ -162,6 +166,7 @@ export interface VoxelModel {
   readonly groundDecides: boolean;
   readonly gateway: boolean;
   readonly scenery: number;
+  readonly cost: number | null;
   readonly binReach: number;
   readonly width: number;
   readonly height: number;
@@ -233,6 +238,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     groundDecides: source.groundDecides ?? false,
     gateway: source.gateway ?? false,
     scenery: source.scenery ?? 0,
+    cost: source.cost ?? null,
     binReach: source.binReach ?? 0,
     width: maxX - minX + 1,
     height: maxY - minY + 1,

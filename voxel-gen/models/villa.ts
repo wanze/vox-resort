@@ -34,6 +34,7 @@ export default defineModel({
     capacity: 8,
     beds: 8,
     dwellSeconds: { min: 25_200, max: 32_400 },
+    price: 35,
     doors: [{ x: CENTRE + 2, z: FRONT, facing: 0 }],
   },
   windows: WINDOW_GLASS,

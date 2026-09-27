@@ -7,11 +7,12 @@ import {
 } from '../../layout/domain/resortGenerator';
 import { sameConfig } from '../../layout/domain/resortConfig';
 import { ResortAdvanced } from './ResortAdvanced';
+import type { GameMode } from '../../sim/domain/ledger';
 
 export interface ResortPanelProps {
   readonly params: ResortParams;
   readonly onGenerate: (params: ResortParams) => void;
-  readonly onClear: (params: ResortParams) => void;
+  readonly onClear: (params: ResortParams, mode: GameMode) => void;
   readonly busy: boolean;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
@@ -149,11 +150,21 @@ export function ResortPanel({
           type="button"
           className="hud-resort-clear"
           disabled={busy}
-          onClick={commit(onClear)}
+          onClick={commit((asked) => onClear(asked, 'sandbox'))}
           aria-label="A bare landscape to build on by hand: a bay, a hill and a river"
           title="Bare ground: a bay, a terraced hill and a river off it, nothing built"
         >
           Terrain
+        </button>
+        <button
+          type="button"
+          className="hud-resort-clear"
+          disabled={busy}
+          onClick={commit((asked) => onClear(asked, 'tycoon'))}
+          aria-label="A bare landscape and a starting balance: everything you build is paid for"
+          title="Bare ground and a starting balance: every path, building and spadeful is paid for"
+        >
+          Tycoon
         </button>
       </div>
     </div>

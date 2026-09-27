@@ -1,6 +1,7 @@
 import { BuildTile } from './BuildTile';
 import type { PreviewLookup } from './BuildPalette';
 import type { ObjectTypeGroup } from '../../catalog/domain/objectTypes';
+import type { Ledger } from '../../sim/domain/ledger';
 
 export interface BuildGroupProps {
   readonly group: ObjectTypeGroup;
@@ -8,6 +9,7 @@ export interface BuildGroupProps {
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly selected: string | null;
+  readonly ledger: Ledger | null;
   readonly onSelect: (typeId: string | null) => void;
 }
 
@@ -19,6 +21,7 @@ export function BuildGroup({
   open,
   onToggle,
   selected,
+  ledger,
   onSelect,
 }: BuildGroupProps) {
   return (
@@ -43,6 +46,7 @@ export function BuildGroup({
               type={type}
               preview={preview}
               selected={selected === type.id}
+              ledger={ledger}
               onSelect={onSelect}
             />
           ))}

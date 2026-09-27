@@ -20,6 +20,14 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import {
+  buildCostOf,
+  costToStand,
+  DIG_COST,
+  nightPriceOf,
+  priceOf,
+  refundOf,
+} from '../features/catalog/domain/prices';
+import {
   blobOf,
   casterOf,
   lightsOf,
@@ -145,10 +153,28 @@ import {
   shiftChange,
   STAFF_ROLES,
   staffPool,
+  wagesFor,
   type Roster,
   type Staff,
   type Workplaces,
 } from '../features/sim/domain/staff';
+import {
+  canAfford,
+  closeDay,
+  createLedger,
+  OPENING_BALANCE,
+  record,
+  type GameMode,
+  type Ledger,
+  type Reason,
+} from '../features/sim/domain/ledger';
+import {
+  earn,
+  maintenanceFor,
+  stayBill,
+  takingsOf,
+  type VenueTakings,
+} from '../features/sim/domain/takings';
 import {
   createStaffRouter,
   meanCleanliness,
@@ -164,7 +190,7 @@ import {
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom } from '../features/layout/domain/random';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
-import { lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
+import { lodgingFor, lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
@@ -434,6 +460,8 @@ export interface ShowcaseOptions {
   readonly onThoughtsChange?: (view: VoicesView) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
+  readonly onMoneyChange?: (ledger: Ledger) => void;
+  readonly onRefused?: (message: string) => void;
 }
 
 export interface CameraView {
@@ -450,6 +478,7 @@ export interface Showcase {
   readonly params: ResortParams;
   readonly cameraView: CameraView;
   readonly open: boolean;
+  readonly ledger: Ledger;
   setOpen(open: boolean): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
@@ -457,7 +486,7 @@ export interface Showcase {
   turnCamera(quarters: number): void;
   lookAtTile(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
-  clear(params: ResortParams): Promise<void>;
+  clear(params: ResortParams, mode: GameMode): Promise<void>;
   selectTool(tool: BuildTool | null): void;
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
@@ -769,6 +798,8 @@ interface Resort {
   arrivalsAdmitted: number;
   // Per resort: two plots must not share a sequence.
   readonly arrivals: () => number;
+  ledger: Ledger;
+  readonly takings: VenueTakings;
   beds: { readonly total: number; readonly taken: number };
   // Rebuilt rather than updated on an edit: its flow fields are indexed by node, and an edit
   // renumbers nodes.
@@ -1070,6 +1101,9 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
         (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
       );
       judgeVisit(resort, parts.ticks(), person, venue);
+      const earned = priceOf(venue.id);
+      resort.ledger = record(resort.ledger, 'visit', earned);
+      earn(resort.takings, venue.key, earned);
     },
     onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
     seed: DWELL_SEED,
@@ -1175,6 +1209,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     beds: { total: beds.beds, taken: beds.taken },
     router,
     arrivals,
+    ledger: createLedger('sandbox', OPENING_BALANCE.sandbox),
+    takings: new Map(),
     balloons,
     litterField,
     sea,
@@ -1548,7 +1584,7 @@ function runTicks(
   clock: Clock,
   ticks: number,
   lastShare: number | null,
-  advise: () => void,
+  morning: () => void,
   hourly: () => void,
 ): number {
   decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather));
@@ -1577,9 +1613,10 @@ function runTicks(
   );
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
+    payTheBills(resort);
     runDay(resort, clock.day);
     // After the coaches and before the counters are wiped, which the advice reads.
-    advise();
+    morning();
     resort.router.forgetTheDay();
     resort.thoughtDay.clear();
     fadeFootfall(resort.footfall);
@@ -1670,6 +1707,23 @@ function factsNow(resort: Resort, weather: Weather): ResortFacts {
   };
 }
 
+// Before the morning coach, so a day in the books runs from one check-in to the next.
+function payTheBills(resort: Resort): void {
+  const { plot } = resort;
+  const standing = [...plot.placements, ...plot.props].map((placement) =>
+    buildCostOf(placement.id),
+  );
+  const billed = record(resort.ledger, 'wages', -wagesFor(resort.roster));
+  resort.ledger = closeDay(record(billed, 'maintenance', -maintenanceFor(standing)));
+  resort.takings.clear();
+}
+
+function nightlyRate(resort: Resort, home: number): number {
+  const { id, key } = resort.guests.homes[home]!;
+  const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
+  return lodging ? nightPriceOf(id, sceneryOver(resort.scenery, lodging)) : priceOf(id);
+}
+
 // The rating comes first, so the morning coach is sized by the resort the current guests
 // experienced.
 function runDay(resort: Resort, day: number): void {
@@ -1715,6 +1769,14 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     random: resort.arrivals,
     room,
   });
+  // At the bed, not the desk: a guest who never reaches reception has still paid.
+  const bill = stayBill(
+    arrived,
+    resort.guests,
+    (home) => nightlyRate(resort, home),
+    resort.takings,
+  );
+  resort.ledger = record(resort.ledger, 'night', bill);
   for (const person of arrived) {
     // The body was somebody else's, and so was whatever it was holding and thinking.
     resort.carrying.nodes[person] = 0;
@@ -1938,6 +2000,12 @@ interface EditMode {
   dispose(): void;
 }
 
+interface Purse {
+  canAfford(amount: number): boolean;
+  spend(reason: Reason, amount: number): void;
+  refund(amount: number): void;
+}
+
 // Occupancy keeps the layout's overlap check live, so a hover costs a map lookup per footprint
 // tile.
 function createEditMode(parts: {
@@ -1950,6 +2018,9 @@ function createEditMode(parts: {
   readonly onGroundChange: () => void;
   readonly onCancel: () => void;
   readonly onLift: (placement: Placement) => void;
+  readonly money: Purse;
+  // Null is the ground.
+  readonly onRefused: (id: string | null) => void;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -2090,12 +2161,13 @@ function createEditMode(parts: {
 
   // Every effect here must be mirrored by lift; raise holds the ones that wait for the building to
   // finish.
-  const stand = (placement: Placement, lifted?: Placement): void => {
+  const standPaid = (placement: Placement, due: number, lifted?: Placement): void => {
     const { plot, construction } = resort();
     if (lifted) lift(lifted);
     // Claimed first: if the tiles are gone the scene must not gain an object the index does not
     // know.
     occupancy.claim(placement, placement.key);
+    parts.money.spend('build', due);
     listFor(plot, placement.id).push(placement);
     // Whether or not it takes time: the ground under what stands is square from the moment the
     // tiles are claimed.
@@ -2109,6 +2181,13 @@ function createEditMode(parts: {
       raise(placement);
     }
     onChange();
+  };
+
+  // Refused before anything moves: a tile left unpaved re-lays no neighbour.
+  const stand = (placement: Placement, lifted?: Placement): void => {
+    const due = costToStand(placement.id, lifted !== undefined);
+    if (parts.money.canAfford(due)) standPaid(placement, due, lifted);
+    else parts.onRefused(placement.id);
   };
 
   const pointer = createBuildPointer({
@@ -2143,7 +2222,12 @@ function createEditMode(parts: {
     handrails,
     onRails: changeRails,
     onDig(tile, next) {
+      if (!parts.money.canAfford(DIG_COST)) {
+        parts.onRefused(null);
+        return;
+      }
       resort().terrain.set(tile.x, tile.z, next);
+      parts.money.spend('dig', DIG_COST);
       // Separate from onChange: the HUD counts are unchanged, but the terrain meshes must be
       // rebuilt.
       parts.onGroundChange();
@@ -2172,7 +2256,10 @@ function createEditMode(parts: {
     handrails,
     placementOf,
     onDemolish(placement) {
+      // Asked before lift, which cancels the site.
+      const stillBuilding = sites.some((site) => site.placement.key === placement.key);
       lift(placement);
+      parts.money.refund(refundOf(placement.id, stillBuilding));
       if (reshapesGround(placement)) parts.onGroundChange();
       onChange();
     },
@@ -2228,6 +2315,14 @@ function disposeCatalogue(catalogue: MeshedCatalogue): void {
       }
     }
   }
+}
+
+function refusalFor(id: string | null, balance: number): string {
+  const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
+  if (id === null) return `Reshaping a tile costs ${DIG_COST}, and ${bank}.`;
+  const name = objectTypeById(id).label.toLowerCase();
+  const article = /^[aeiou]/.test(name) ? 'An' : 'A';
+  return `${article} ${name} costs ${buildCostOf(id).toLocaleString('en-US')}, and ${bank}.`;
 }
 
 // A benchmark gets the authored plan: runs only compare if the scene is the same.
@@ -2423,6 +2518,28 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Deferred until the pointer is still for REANCHOR_DELAY_MS, so a whole stroke costs one rebuild.
   let walkStaleAt: number | null = null;
 
+  // Told once a frame: a drag spends once per tile.
+  let spent = false;
+
+  const tellMoney = (): void => options.onMoneyChange?.(current().ledger);
+
+  const money: Purse = {
+    canAfford: (amount) => canAfford(current().ledger, amount),
+    spend(reason, amount) {
+      const resort = current();
+      resort.ledger = record(resort.ledger, reason, -amount);
+      spent = true;
+    },
+    refund(amount) {
+      const resort = current();
+      resort.ledger = record(resort.ledger, 'demolish', amount);
+      spent = true;
+    },
+  };
+
+  const refused = (id: string | null): void =>
+    options.onRefused?.(refusalFor(id, current().ledger.balance));
+
   const build = createEditMode({
     canvas,
     handle,
@@ -2442,6 +2559,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onLift: (placement) => {
       if (namesPlacement(selected, placement.key)) select(null);
     },
+    money,
+    onRefused: refused,
   });
 
   let armedTool: BuildTool | null = null;
@@ -2479,6 +2598,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       router.occupancyOf(placement.key),
       sceneryOver(resort.scenery, placement),
       cleanliness(resort.upkeep, venue),
+      takingsOf(resort.takings, placement.key),
     );
   };
 
@@ -2546,7 +2666,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const hourly = (): void => {
     speak();
+    tellMoney();
     if (overlayKind !== null) paintOverlay();
+  };
+
+  const morning = (): void => {
+    advise();
+    tellMoney();
   };
 
   const rebuilt = (): void => {
@@ -2555,12 +2681,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSceneChange?.(statsNow());
     advise();
     speak();
+    tellMoney();
   };
 
   let requested = 0;
 
   // An answer overtaken by a later request is dropped rather than flashed on screen.
-  const regrow = async (asked: ResortParams, source: ResortSource): Promise<void> => {
+  const regrow = async (
+    asked: ResortParams,
+    source: ResortSource,
+    mode: GameMode,
+  ): Promise<void> => {
     const request = ++requested;
     const prepared = await preparer.prepare(prepRequestFor(source, bench));
     if (request !== requested || !running) return;
@@ -2570,6 +2701,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     select(null);
     walkStaleAt = null;
     slot.replace(prepared);
+    current().ledger = createLedger(mode, OPENING_BALANCE[mode]);
     rebuilt();
     options.onOpenChange?.(current().open);
   };
@@ -2600,6 +2732,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (counted) {
       onSceneChange?.(statsNow());
       counted = false;
+    }
+    if (spent) {
+      tellMoney();
+      spent = false;
     }
     // Guarded so a bench that ever places something does not rebuild mid-run.
     if (walkStaleAt !== null && !bench && timeMs - walkStaleAt >= REANCHOR_DELAY_MS) {
@@ -2654,7 +2790,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // of two runs.
     const ticks = clock.advance(bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
-    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, advise, hourly);
+    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly);
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
     // crowdScaleFor is 1 while paused.
@@ -2733,6 +2869,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get open() {
       return current().open;
     },
+    get ledger() {
+      return current().ledger;
+    },
     setOpen(open) {
       const resort = current();
       if (resort.open === open) return;
@@ -2750,12 +2889,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     lookAtTile,
     generate(next) {
       const asked = clampParams(next);
-      return regrow(asked, { kind: 'generate', params: asked });
+      // A generated plot is given, not bought, so it is always sandbox.
+      return regrow(asked, { kind: 'generate', params: asked }, 'sandbox');
     },
-    clear(next) {
+    clear(next, mode) {
       const asked = clampParams(next);
       // The seed goes along, so clearing gives a random landscape.
-      return regrow(asked, { kind: 'clear', params: asked });
+      return regrow(asked, { kind: 'clear', params: asked }, mode);
     },
     selectTool,
     setTime: clock.setTime,

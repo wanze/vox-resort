@@ -13,6 +13,7 @@ import {
 } from '../../build/domain/buildTool';
 import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBrush';
 import { countTypes, filterGroups } from '../domain/paletteFilter';
+import type { Ledger } from '../../sim/domain/ledger';
 
 // Injected rather than imported: the pictures come from the bundler, and components may not import
 // adapters.
@@ -33,10 +34,11 @@ export interface BuildPaletteProps {
   readonly preview: PreviewLookup;
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
+  readonly ledger: Ledger | null;
 }
 
 // A search opens every shelf: a hit inside a folded one would read as no hit.
-export function BuildPalette({ preview, tool, onToolChange }: BuildPaletteProps) {
+export function BuildPalette({ preview, tool, onToolChange, ledger }: BuildPaletteProps) {
   const groups = useMemo(() => objectTypeGroups(), []);
   const [shut, setShut] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -86,6 +88,7 @@ export function BuildPalette({ preview, tool, onToolChange }: BuildPaletteProps)
             open={searching || !shut.has(group.category)}
             onToggle={toggle(group.category)}
             selected={objectId}
+            ledger={ledger}
             onSelect={(next) => onToolChange(next === null ? null : { kind: 'object', id: next })}
           />
         ))}

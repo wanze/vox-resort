@@ -4,6 +4,7 @@ import { CameraPanel } from './CameraPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudPopover } from './HudPopover';
 import { HudReadout } from './HudReadout';
+import { LedgerPanel } from './LedgerPanel';
 import { RenderStats, type FrameCostElements } from './RenderStats';
 import { ResortPanel } from './ResortPanel';
 import { TimeOfDay } from './TimeOfDay';
@@ -15,6 +16,7 @@ import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
 import type { Advice } from '../../sim/domain/advice';
+import type { Ledger } from '../../sim/domain/ledger';
 
 export interface TopBarProps {
   readonly fps: number;
@@ -31,9 +33,15 @@ export interface TopBarProps {
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
+  readonly ledger: Ledger | null;
 }
 
-type Tool = 'details' | 'resort' | 'camera' | 'advice' | 'guests';
+function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
+  if (ledger?.mode !== 'tycoon') return null;
+  return <HudReadout label="Money" value={ledger.balance.toLocaleString('en-US')} />;
+}
+
+type Tool = 'details' | 'resort' | 'camera' | 'advice' | 'guests' | 'books';
 
 export function TopBar(props: TopBarProps) {
   const {
@@ -51,6 +59,7 @@ export function TopBar(props: TopBarProps) {
     advice,
     voices,
     onShowOnPlot,
+    ledger,
   } = props;
   const [tool, setTool] = useState<Tool | null>(null);
   const toggle = (next: Tool) => (): void => setTool((current) => (current === next ? null : next));
@@ -79,6 +88,7 @@ export function TopBar(props: TopBarProps) {
           value={stats ? stats.objectCount.toLocaleString('en-US') : '—'}
         />
         <HudReadout label="Resort" value={resort.open ? 'Open' : 'Closed'} />
+        <MoneyReadout ledger={ledger} />
         <HudReadout label="FPS" value={fps} />
       </div>
 
@@ -98,6 +108,10 @@ export function TopBar(props: TopBarProps) {
 
         <HudPopover label="Guests" open={tool === 'guests'} onToggle={toggle('guests')}>
           <GuestsPanel voices={voices} />
+        </HudPopover>
+
+        <HudPopover label="Books" open={tool === 'books'} onToggle={toggle('books')}>
+          <LedgerPanel ledger={ledger} />
         </HudPopover>
 
         <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>

@@ -67,6 +67,8 @@ export default defineModel({
   label: 'Waterpark',
   category: 'leisure',
   tiles: { x: 6, z: 6 },
+  // Mostly water, which the size rule reads as cheap.
+  cost: 8_000,
   seats: LOUNGERS.map(
     ([x, z]) =>
       ({ x: x + LIE_ON.x, y: LIE_ON.y, z: z + LIE_ON.z, facing: 0, pose: 'lie' }) as const,

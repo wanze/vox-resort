@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { onDuty, rosterFor, shiftChange, STAFF_CAPS, STAFF_ROLES, staffPool } from './staff';
+import {
+  onDuty,
+  rosterFor,
+  shiftChange,
+  STAFF_CAPS,
+  STAFF_ROLES,
+  staffPool,
+  WAGES,
+  wagesFor,
+} from './staff';
 
 describe('staffPool', () => {
   it('holds every role up to its cap, in role order', () => {
@@ -68,5 +77,16 @@ describe('shiftChange', () => {
       starting: [],
       leaving: [],
     });
+  });
+});
+
+describe('wagesFor', () => {
+  it('pays the roster times the table', () => {
+    expect(wagesFor({ cleaner: 15 })).toBe(15 * WAGES.cleaner);
+    expect(wagesFor(rosterFor({ venues: 91 }))).toBe(15 * WAGES.cleaner);
+  });
+
+  it('costs nothing for an empty roster, a cleared plot before anything is built', () => {
+    expect(wagesFor(rosterFor({ venues: 0 }))).toBe(0);
   });
 });

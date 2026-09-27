@@ -187,6 +187,9 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
       <StatRow label="Cleanliness" note="a dirty place is chosen less">
         {Math.round(venue.cleanliness * 100)}%
       </StatRow>
+      <StatRow label="Takings today" note="since the check-in hour">
+        {venue.takings.toLocaleString('en-US')}
+      </StatRow>
       <SurroundingsRow setting={setting} />
     </dl>
   );

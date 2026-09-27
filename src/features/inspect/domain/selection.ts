@@ -70,6 +70,7 @@ export interface PlaceView {
     readonly inside: number;
     readonly waiting: number;
     readonly cleanliness: number;
+    readonly takings: number;
   } | null;
   readonly residents: readonly PartyMemberView[];
 }
@@ -159,6 +160,7 @@ export function placeView(
   setting: number,
   // Null means spotless: a fixture, or a venue so new the router has not seen it.
   cleanliness: number | null = null,
+  takings = 0,
 ): PlaceView {
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
@@ -185,6 +187,7 @@ export function placeView(
           inside: occupancy?.inside ?? 0,
           waiting: occupancy?.waiting ?? 0,
           cleanliness: cleanliness ?? 1,
+          takings,
         }
       : null,
     residents,

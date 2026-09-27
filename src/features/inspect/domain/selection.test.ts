@@ -460,6 +460,21 @@ describe('placeView with a venue that is being used', () => {
     const fresh = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
     expect(fresh.venue?.cleanliness).toBe(1);
   });
+
+  it("reports today's takings, and nothing for a place the caller has none for", () => {
+    const busy = placeView(
+      at('restaurant#0', 'restaurant'),
+      'Restaurant',
+      guestsOf(),
+      null,
+      0,
+      null,
+      96,
+    );
+    expect(busy.venue?.takings).toBe(96);
+    const quiet = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
+    expect(quiet.venue?.takings).toBe(0);
+  });
 });
 
 describe('a guest at night', () => {

@@ -30,6 +30,7 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 | Night, weather, check-in        | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                   |
 | Cleanliness and staff           | `sim/domain/upkeep.ts`, `staffRouter.ts`                            |
 | Advice                          | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`            |
+| Money                           | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`    |
 | Guests, parties, beds, names    | `guests/domain/`                                                    |
 | Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                       |
 | Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
@@ -521,6 +522,78 @@ A layer is worked out when it is switched on, once a simulated hour while it is
 on, and after an edit's rebuild; never per frame. The simulation never reads an
 overlay, and a benchmark refuses to switch one on.
 
+## Money
+
+Everything has a price, and one simulation runs in both game modes. Sandbox and
+tycoon differ in exactly one predicate, `canAfford` in `ledger.ts`, which is
+always true in sandbox and compares against the balance in tycoon. It is the only
+function that reads the mode. **The ledger records in both modes**: sandbox means
+nobody is ever short of money, not that the books are blank, so a sandbox resort
+still pays wages and maintenance and the Books popover shows what it earns and
+costs. Do not "fix" wages to 0 in sandbox.
+
+**No guest behaves differently because of a price.** Choosing a venue, appeal,
+routing, needs, thoughts, reviews and the advice never read one; a price is
+something the resort takes, not something a guest weighs.
+
+The art declares two numbers, both optional:
+
+- `cost` on `VoxelModelSource`, what standing it costs. Undeclared, `prices.ts`
+  derives it from the model's size: voxels / 25, rounded to tens, at least 10. A
+  path tile is 20, a bungalow 680, a house 1 870. Declared only where the rule
+  is plainly wrong: `hotel` 12 000 (its facade detail would ask 22 430),
+  `swimming-pool` 5 000 and the draft `waterpark` 8 000 (mostly water, which the
+  rule reads as cheap) and `reception` 600 (every tycoon resort must buy one, and
+  it sells nothing).
+- `price` on the venue, what one visit takes, or one guest-night at a lodging.
+  Every lodging, food and drink venue declares one, and the paid activities (spa,
+  minigolf, pedalos, game hall, beach club). Services and free activities declare
+  none, which is 0. The beach's synthetic venue is not in the catalogue and earns 0.
+
+Money moves in seven ways, each a `Reason` with its own column in the books:
+
+| Reason      | When                                                                          |
+| ----------- | ----------------------------------------------------------------------------- |
+| build       | the player stands something; a neighbour the paving re-lays is free           |
+| demolish    | the bulldozer gives half back, or all of it for a site still going up         |
+| dig         | the spade, `DIG_COST` (20) per tile changed                                   |
+| visit       | `onVisited`, the venue's price                                                |
+| night       | at check-in (`admitWave`), the whole stay: nights times the lodging's rate    |
+| wages       | each check-in hour, `wagesFor(roster)`: the cleaners on duty, never the pool  |
+| maintenance | each check-in hour, 1% of the build cost of every placement and prop standing |
+
+A stay is billed at the bed, not the desk, so a guest who never reaches reception
+has still paid. A lodging's nightly rate is its price plus up to
+`SETTING_PREMIUM` (a quarter) for its surroundings (`nightPriceOf`, the
+inspector's Surroundings); that is a price, never a reason a party lodges
+anywhere. Paving and rails are not maintained, and rails, which the handrails lay
+on their own, cost nothing to stand. A day in the books runs from one check-in
+hour to the next: the bills are paid and the day closed just before the morning
+coach, so that coach's stays are the new day's. A resort that is **Closed** still
+pays its staff and its upkeep and earns no nights, which is real pressure and
+needs no code. Balances are integers, and a balance below zero only stops
+building.
+
+**Tycoon starts only from bare ground.** The resort panel's `Tycoon` button clears
+the plot like `Terrain` and opens the books with `OPENING_BALANCE.tycoon`
+(8 000, about twice a minimal start: a gate, the desk, thirty paths, three
+bungalows and a snack bar, 3 960). A generated resort is always sandbox: it is
+given, not bought, and refunding it would pay the player for nothing. The mode is
+chosen when a resort is created, lives on its ledger and never changes; every new
+resort opens new books.
+
+On the reference plot (seed 3, density 0.7) what stands costs 341 870, of which
+paving is 47 700 (14%). Its wages are 1 200 a day and its maintenance 2 942,
+against 12 000 to 16 500 a day in visits and, once the opening guests have been
+replaced by billed ones, about 11 000 in stays.
+
+The HUD hears about money after a click that moved it (once a frame at most), at
+the check-in hour, once a simulated hour for the visits in between, and when a new
+resort is built; never per visit. The top bar shows **Money** in tycoon only, and
+**Books** in both modes. A palette tile shows its cost and is dimmed, not
+disabled, when the bank cannot pay for it. The inspector shows a venue's
+**Takings today**.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.
@@ -535,3 +608,5 @@ overlay, and a benchmark refuses to switch one on.
 - How pleasant dressing is: `scenery` on the model's own source.
 - How much litter a visit leaves, and what is a bin: `venue.litter` and
   `binReach`.
+- What it costs to stand and what a visit or a night takes: `cost` on the
+  source (optional, derived from its size otherwise) and `venue.price`.

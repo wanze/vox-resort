@@ -60,6 +60,7 @@ export default defineModel({
     ],
     capacity: 24,
     dwellSeconds: { min: 900, max: 2400 },
+    price: 4,
     doors: [{ x: 23, z: COUNTER, facing: 0 }],
     litter: 0.015,
   },

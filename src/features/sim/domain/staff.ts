@@ -21,6 +21,13 @@ export interface Workplaces {
   readonly venues: number;
 }
 
+export const WAGES: { readonly [role in StaffRole]: number } = { cleaner: 80 };
+
+// The roster, never the pool: the pool is forty bodies on an empty plot.
+export function wagesFor(roster: Roster): number {
+  return STAFF_ROLES.reduce((sum, role) => sum + roster[role] * WAGES[role], 0);
+}
+
 // A cleaner keeps up with two or three venues, so one per six falls behind where
 // a venue is hammered. That gap is the mechanic.
 const CLEANERS_PER_VENUE = 1 / 6;

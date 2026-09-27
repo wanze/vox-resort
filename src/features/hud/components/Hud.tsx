@@ -10,9 +10,9 @@ import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { RenderStats, type DebugElements } from './RenderStats';
-import { ResortPanel } from './ResortPanel';
 import { ResortStats } from './ResortStats';
 import { TopBar, type MenuId } from './TopBar';
+import { NewGamePanel } from '../../welcome/components/NewGamePanel';
 import { WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, type WindowId } from '../domain/windowLayout';
 import type { BuildTool } from '../../build/domain/buildTool';
@@ -93,12 +93,15 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onDetailChange={camera.setDetail}
     />
   ),
-  resort: ({ resort }) =>
+  resort: ({ resort, windows }) =>
     resort.params ? (
-      <ResortPanel
+      <NewGamePanel
         params={resort.params}
-        onGenerate={resort.generate}
-        onClear={resort.clear}
+        onStart={(params, game) =>
+          void resort.start(params, game).then((built) => {
+            if (built) windows.show('resort', false);
+          })
+        }
         busy={resort.building}
       />
     ) : null,

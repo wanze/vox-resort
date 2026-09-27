@@ -177,10 +177,10 @@ function resortCommands({ resort, windows }: CommandContext): Command[] {
     },
     {
       id: 'resort:new',
-      label: 'New resort…',
+      label: 'New game…',
       group: 'Resort',
-      keywords: 'generate clear start game',
-      note: 'grow one, or start from bare ground',
+      keywords: 'generate clear start resort tycoon free play sandbox',
+      note: 'tycoon or free play, on bare land or a generated resort',
       art: { icon: 'resort' },
       run: () => windows.show('resort', true),
     },

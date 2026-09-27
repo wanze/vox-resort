@@ -8,7 +8,7 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   guests: 'Guests',
   books: 'Books',
   camera: 'Camera',
-  resort: 'New resort',
+  resort: 'New game',
   debug: 'Debug',
   inspect: 'Inspector',
 };

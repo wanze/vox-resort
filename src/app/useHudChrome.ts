@@ -25,6 +25,7 @@ export function useHudChrome(
   clock: ClockControls,
   tool: BuildTool | null,
   selection: SelectionView | null,
+  playing: boolean,
 ): HudChrome {
   const windows = useWindows();
   const [menu, setMenu] = useState<MenuId | null>(null);
@@ -53,7 +54,8 @@ export function useHudChrome(
       },
     },
   ];
-  useHotkeys(hotkeys);
+  // None behind the welcome screen: there is no HUD for them to open.
+  useHotkeys(playing ? hotkeys : []);
 
   return { windows, menu, setMenu, palette, setPalette };
 }

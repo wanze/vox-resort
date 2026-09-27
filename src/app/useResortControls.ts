@@ -1,6 +1,6 @@
 import { useCallback, useState, type RefObject } from 'react';
 import type { ResortParams } from '../features/layout/domain/resortGenerator';
-import type { GameMode } from '../features/sim/domain/ledger';
+import { groundOf, type NewGame } from '../features/welcome/domain/newGame';
 import type { Showcase } from './showcase';
 import { useMoney, type MoneyControls } from './useMoney';
 
@@ -12,8 +12,8 @@ export interface ResortControls {
   adopt(params: ResortParams): void;
   adoptOpen(open: boolean): void;
   setOpen(open: boolean): void;
-  generate(params: ResortParams): void;
-  clear(params: ResortParams, mode: GameMode): void;
+  // True once the new resort stands; false if it could not be built.
+  start(params: ResortParams, game: NewGame): Promise<boolean>;
 }
 
 export function useResortControls(showcase: RefObject<Showcase | null>): ResortControls {
@@ -22,17 +22,25 @@ export function useResortControls(showcase: RefObject<Showcase | null>): ResortC
   const [open, adoptOpen] = useState(true);
   const money = useMoney();
 
-  const rebuild = useCallback(
-    (next: ResortParams, run: (mounted: Showcase) => Promise<void>) => {
+  const start = useCallback(
+    async (next: ResortParams, game: NewGame): Promise<boolean> => {
       const mounted = showcase.current;
-      if (!mounted) return;
+      if (!mounted) return false;
       setBuilding(true);
       // Optimistic; the showcase's own clamped answer replaces it once the work is done.
       setParams(next);
-      run(mounted)
-        .then(() => setParams(mounted.params))
-        .catch((cause: unknown) => console.error(cause))
-        .finally(() => setBuilding(false));
+      try {
+        await (groundOf(game) === 'grown'
+          ? mounted.generate(next)
+          : mounted.clear(next, game.mode));
+        setParams(mounted.params);
+        return true;
+      } catch (cause: unknown) {
+        console.error(cause);
+        return false;
+      } finally {
+        setBuilding(false);
+      }
     },
     [showcase],
   );
@@ -46,13 +54,6 @@ export function useResortControls(showcase: RefObject<Showcase | null>): ResortC
     adoptOpen,
     // The showcase answers through onOpenChange, so the state follows what it did.
     setOpen: useCallback((next: boolean) => showcase.current?.setOpen(next), [showcase]),
-    generate: useCallback(
-      (next: ResortParams) => rebuild(next, (mounted) => mounted.generate(next)),
-      [rebuild],
-    ),
-    clear: useCallback(
-      (next: ResortParams, mode: GameMode) => rebuild(next, (mounted) => mounted.clear(next, mode)),
-      [rebuild],
-    ),
+    start,
   };
 }

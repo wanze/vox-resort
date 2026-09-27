@@ -602,13 +602,15 @@ pays its staff and its upkeep and earns no nights, which is real pressure and
 needs no code. Balances are integers, and a balance below zero only stops
 building.
 
-**Tycoon starts only from bare ground.** The New resort window's `Tycoon` button clears
-the plot like `Terrain` and opens the books with `OPENING_BALANCE.tycoon`
+**Tycoon starts only from bare ground.** The New game panel offers no choice of
+ground for it (`groundOf` in `welcome/domain/newGame.ts`): it clears the plot like
+Free play's bare land and opens the books with `OPENING_BALANCE.tycoon`
 (8 000, about twice a minimal start: a gate, the desk, thirty paths, three
 bungalows and a snack bar, 3 960). A generated resort is always sandbox: it is
 given, not bought, and refunding it would pay the player for nothing. The mode is
 chosen when a resort is created, lives on its ledger and never changes; every new
-resort opens new books.
+resort opens new books and restarts the clock at day 0. Free play is the players'
+name for sandbox; the code keeps `sandbox`.
 
 On the reference plot (seed 3, density 0.7) what stands costs 341 870, of which
 paving is 47 700 (14%). Its wages are 1 200 a day and its maintenance 2 942,

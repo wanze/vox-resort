@@ -1,4 +1,5 @@
 import { netOf, REASONS, type GameMode, type Ledger, type Reason } from '../../sim/domain/ledger';
+import { MODE_LABELS } from '../../welcome/components/modeNames';
 import { StatRow } from './StatRow';
 
 export interface LedgerPanelProps {
@@ -13,11 +14,6 @@ const REASON_LABELS: { readonly [reason in Reason]: string } = {
   night: 'Stays',
   wages: 'Wages',
   maintenance: 'Maintenance',
-};
-
-const MODE_LABELS: { readonly [mode in GameMode]: string } = {
-  sandbox: 'Sandbox',
-  tycoon: 'Tycoon',
 };
 
 const MODE_NOTES: { readonly [mode in GameMode]: string } = {

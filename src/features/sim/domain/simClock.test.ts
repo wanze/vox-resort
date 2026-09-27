@@ -7,8 +7,10 @@ import {
   clockLabel,
   createSimClock,
   dayOf,
+  followTime,
   hourOf,
   timeOf,
+  wallTimeOf,
   withSpeed,
   withTime,
   type SimClock,
@@ -118,5 +120,54 @@ describe('withSpeed', () => {
     const clock: SimClock = { ticks: 5000, speed: 'slow', carry: 12.5 };
     const next = withSpeed(clock, 'rush');
     expect(next).toEqual({ ticks: 5000, speed: 'rush', carry: 12.5 });
+  });
+});
+
+describe('wallTimeOf', () => {
+  it('reads the local hour and minute as a share of the day', () => {
+    expect(wallTimeOf(new Date(2026, 8, 28, 0, 0, 0))).toBe(0);
+    expect(wallTimeOf(new Date(2026, 8, 28, 18, 0, 59))).toBe(0.75);
+  });
+
+  it('lands on a whole tick, so a clock started from it is already caught up', () => {
+    const time = wallTimeOf(new Date(2026, 8, 28, 14, 31));
+    expect(followTime(createSimClock(0, time), time).ticks).toBe(0);
+  });
+});
+
+describe('followTime', () => {
+  it('runs the minutes between the clock and the time asked for', () => {
+    const result = followTime(atTick(600), 605 / TICKS_PER_DAY);
+    expect(result.ticks).toBe(5);
+    expect(result.clock.ticks).toBe(605);
+  });
+
+  it('hands back the identical clock when it is already there', () => {
+    const clock = atTick(600);
+    expect(followTime(clock, 600 / TICKS_PER_DAY).clock).toBe(clock);
+  });
+
+  it('goes over midnight into the next day rather than back', () => {
+    const result = followTime(atTick(TICKS_PER_DAY - 2), 1 / TICKS_PER_DAY);
+    expect(result.ticks).toBe(3);
+    expect(dayOf(result.clock)).toBe(1);
+  });
+
+  it('catches up a long gap a capped step at a time', () => {
+    let clock = atTick(0);
+    let steps = 0;
+    while (clock.ticks < 60) {
+      const result = followTime(clock, 60 / TICKS_PER_DAY);
+      expect(result.ticks).toBeLessThanOrEqual(MAX_TICKS_PER_ADVANCE);
+      clock = result.clock;
+      steps++;
+    }
+    expect(clock.ticks).toBe(60);
+    expect(steps).toBe(Math.ceil(60 / MAX_TICKS_PER_ADVANCE));
+  });
+
+  it('keeps the speed it was given', () => {
+    const clock = withSpeed(atTick(0), 'fast');
+    expect(followTime(clock, 10 / TICKS_PER_DAY).clock.speed).toBe('fast');
   });
 });

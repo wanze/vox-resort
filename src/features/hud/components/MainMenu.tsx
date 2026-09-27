@@ -34,8 +34,8 @@ export function MainMenu({ open, onOpenChange, windows, onFind }: MainMenuProps)
       <p className="hud-menu-heading">Game</p>
       <HudOption
         icon="resort"
-        label="New resort…"
-        note="grow one, or start from bare ground"
+        label="New game…"
+        note="tycoon or free play, on bare land or a generated resort"
         onSelect={run(() => windows.show('resort', true))}
       />
       <HudOption label="Save game" note="coming soon" disabled onSelect={() => {}} />

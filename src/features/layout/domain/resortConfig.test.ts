@@ -4,7 +4,6 @@ import {
   clampConfig,
   DEFAULT_CONFIG,
   PARK_SHARE,
-  sameConfig,
   VILLA_SHARE,
   type ResortConfig,
 } from './resortConfig';
@@ -30,13 +29,6 @@ describe('clampConfig', () => {
       gatePlazas: 'yes',
     } as unknown as Partial<ResortConfig>;
     expect(clampConfig(asked)).toEqual(DEFAULT_CONFIG);
-  });
-});
-
-describe('sameConfig', () => {
-  it('treats a missing config as the defaults', () => {
-    expect(sameConfig(undefined, DEFAULT_CONFIG)).toBe(true);
-    expect(sameConfig({ parkShare: 0.1 }, DEFAULT_CONFIG)).toBe(false);
   });
 });
 

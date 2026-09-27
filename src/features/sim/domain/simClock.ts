@@ -98,3 +98,19 @@ export function withTime(clock: SimClock, time: number): SimClock {
 export function withSpeed(clock: SimClock, speed: SimSpeed): SimClock {
   return { ...clock, speed };
 }
+
+export function wallTimeOf(date: Date): number {
+  return (date.getHours() * 3600 + date.getMinutes() * 60) / SIM_SECONDS_PER_DAY;
+}
+
+// Forward only, over midnight if need be, so every minute in between is simulated; capped like any
+// advance, so a tab left in the background catches up over a few frames instead of one.
+export function followTime(
+  clock: SimClock,
+  time: number,
+): { readonly clock: SimClock; readonly ticks: number } {
+  const behind = (tickOfDay(time) - (clock.ticks % TICKS_PER_DAY) + TICKS_PER_DAY) % TICKS_PER_DAY;
+  const ticks = Math.min(behind, MAX_TICKS_PER_ADVANCE);
+  if (ticks === 0) return { clock, ticks };
+  return { clock: { ...clock, ticks: clock.ticks + ticks, carry: 0 }, ticks };
+}

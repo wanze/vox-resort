@@ -56,12 +56,6 @@ export function clampConfig(asked: Partial<ResortConfig> = {}): ResortConfig {
   };
 }
 
-export function sameConfig(a?: Partial<ResortConfig>, b?: Partial<ResortConfig>): boolean {
-  const left = clampConfig(a);
-  const right = clampConfig(b);
-  return (Object.keys(left) as (keyof ResortConfig)[]).every((key) => left[key] === right[key]);
-}
-
 export function beachDensityOf(preset: BeachPreset, density: number): number {
   return preset === 'auto' ? density : BEACH_DENSITY[preset];
 }

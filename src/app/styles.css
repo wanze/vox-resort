@@ -51,6 +51,16 @@
   --knob-face: linear-gradient(180deg, var(--stone-50), var(--stone-400));
   --knob-shadow: 0 0 0 1px var(--edge), 0 2px 3px rgb(48 32 16 / 35%);
 
+  /* Stepped like stacked voxels, lit from the top left, so the title reads as built, not printed. */
+  --extrude:
+    2px 2px 0 var(--terracotta-lit), 4px 4px 0 var(--terracotta), 6px 6px 0 var(--terracotta-deep),
+    8px 8px 0 var(--stone-900), 10px 16px 28px rgb(20 12 4 / 45%);
+  --shadow-caption: 0 1px 2px rgb(20 12 4 / 70%);
+  --backdrop:
+    var(--grain), radial-gradient(ellipse at 70% 35%, var(--stone-700), var(--stone-900) 70%);
+  /* Darkest behind the menu and gone by the middle, so the resort stays the picture. */
+  --scrim: linear-gradient(90deg, rgb(35 27 17 / 62%) 0%, rgb(35 27 17 / 30%) 38%, transparent 62%);
+
   --text: #3a2e22;
   --text-dim: #6b5a45;
   --text-faint: #917e66;
@@ -1416,7 +1426,8 @@ input[type='checkbox'] {
   animation: hud-pop var(--pop);
 }
 
-.hud-error strong {
+.hud-error strong,
+.welcome-failure strong {
   display: block;
   margin-bottom: var(--space-2);
   font: 700 var(--size-lead) / 1.2 var(--font-ui);
@@ -1426,4 +1437,322 @@ input[type='checkbox'] {
 .hud-error p {
   margin: 0;
   color: var(--text-dim);
+}
+
+.welcome {
+  position: absolute;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  align-items: center;
+  padding: var(--space-5) clamp(16px, 7vw, 96px);
+  overflow-y: auto;
+}
+
+.welcome::before,
+.welcome::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.welcome::before {
+  background-image: var(--backdrop);
+  transition: opacity 1200ms var(--ease);
+}
+
+.welcome::after {
+  z-index: -2;
+  background-image: var(--scrim);
+}
+
+/* The one reveal on the page: the backdrop lifts and the resort is behind it. */
+.welcome[data-ready]::before {
+  opacity: 0;
+}
+
+.welcome-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(440px, 100%);
+}
+
+.welcome-wordmark {
+  margin: 0 0 var(--space-2);
+  font: 700 clamp(46px, 8vw, 92px) / 0.95 var(--font-ui);
+  letter-spacing: 0.01em;
+  color: var(--stone-50);
+  text-shadow: var(--extrude);
+}
+
+.welcome-tagline {
+  margin: 0 0 var(--space-3);
+  font-size: var(--size-lead);
+  color: var(--stone-100);
+  text-shadow: var(--shadow-caption);
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-stone);
+  background-image: var(--slab);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  animation: hud-pop var(--pop);
+}
+
+.welcome-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.welcome-card-head h2 {
+  margin: 0;
+  font: 700 22px / 1 var(--font-ui);
+  color: var(--terracotta-deep);
+}
+
+.welcome-back {
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+}
+
+.welcome-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.welcome-button,
+.new-game-mode {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--edge);
+  background-image: var(--slab-raised);
+  box-shadow:
+    var(--bevel),
+    0 1px 0 rgb(90 64 38 / 25%);
+  color: var(--text);
+  transition:
+    filter var(--quick),
+    box-shadow var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.welcome-button {
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-slab);
+  font: 700 24px / 1 var(--font-ui);
+}
+
+.welcome-button:nth-child(even) {
+  border-radius: 20px 14px 18px 13px / 14px 19px 13px 18px;
+}
+
+.welcome-button-main {
+  justify-content: center;
+  border-color: var(--terracotta-deep);
+  background-image: var(--slab-accent);
+  color: var(--text-on-accent);
+  text-shadow: var(--shadow-accent-text);
+}
+
+.welcome-button-note {
+  font: 400 var(--size-small) / 1 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.welcome-button:hover:not(:disabled),
+.new-game-mode:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.welcome-button:active:not(:disabled),
+.new-game-mode:active {
+  transform: translateY(1px);
+  box-shadow: var(--bevel-in);
+}
+
+.welcome-button:disabled {
+  opacity: 0.6;
+}
+
+.welcome-button-main:disabled {
+  opacity: 0.45;
+}
+
+.welcome-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.welcome-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, 10px);
+  gap: 3px;
+  flex: none;
+}
+
+.welcome-blocks > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--stone-300);
+  box-shadow: var(--bevel-in);
+  animation: welcome-lay 2.4s var(--ease) infinite;
+  animation-delay: calc(var(--block) * 140ms);
+}
+
+@keyframes welcome-lay {
+  0%,
+  8% {
+    background: var(--stone-300);
+    transform: translateY(-3px);
+  }
+
+  14%,
+  70% {
+    background: var(--terracotta);
+    box-shadow: var(--bevel);
+    transform: none;
+  }
+
+  86%,
+  100% {
+    background: var(--stone-300);
+  }
+}
+
+.welcome-loading-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.welcome-loading-text p {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.welcome-progress {
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+  overflow: hidden;
+}
+
+.welcome-progress > span {
+  display: block;
+  height: 100%;
+  background-image: var(--slab-accent);
+  transition: width 600ms var(--ease);
+}
+
+.welcome-failure p {
+  margin: 0 0 var(--space-2);
+  color: var(--text-dim);
+}
+
+.welcome-clock {
+  position: fixed;
+  left: clamp(16px, 7vw, 96px);
+  bottom: var(--space-4);
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--stone-100);
+  text-shadow: var(--shadow-caption);
+}
+
+.new-game-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.new-game-mode {
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-slab);
+  text-align: left;
+  font: 500 var(--size-small) / 1.35 var(--font-ui);
+}
+
+.new-game-mode:nth-child(even) {
+  border-radius: var(--radius-pebble-b);
+}
+
+.new-game-mode[aria-checked='true'] {
+  border-color: var(--terracotta);
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in), var(--glow-accent);
+  transform: none;
+}
+
+.new-game-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-dim);
+}
+
+.new-game-mode-text strong {
+  font: 700 var(--size-lead) / 1.1 var(--font-ui);
+  color: var(--text);
+}
+
+.new-game-mode[aria-checked='true'] strong {
+  color: var(--terracotta-deep);
+}
+
+.new-game-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: hud-pop var(--pop);
+}
+
+.new-game-ground {
+  text-transform: none;
+}
+
+.new-game-start {
+  height: 40px;
+  margin-top: var(--space-2);
+  font-size: var(--size-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-blocks > span {
+    animation: none;
+    background: var(--terracotta);
+  }
+
+  .welcome::before {
+    transition: none;
+  }
+}
+
+.new-game .hud-resort-row {
+  grid-template-columns: 74px 1fr 48px;
+}
+
+.new-game .hud-resort-choice-row {
+  grid-template-columns: 74px 1fr;
 }

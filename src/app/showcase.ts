@@ -94,8 +94,10 @@ import {
   clockLabel,
   createSimClock,
   dayOf,
+  followTime,
   TICKS_PER_DAY,
   timeOf,
+  wallTimeOf,
   withSpeed,
   withTime,
   type SimClock,
@@ -332,6 +334,8 @@ import { turnDirection } from '../features/layout/domain/worldBounds';
 import type { SceneHandle } from '../features/rendering/adapters/threeScene';
 import { createScene } from '../features/rendering/adapters/threeScene';
 import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
+import { startCameraDrift, type CameraDrift } from '../features/rendering/adapters/cameraDrift';
+import type { LoadingStep } from '../features/welcome/domain/loading';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
@@ -465,6 +469,10 @@ export interface ShowcaseOptions {
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
   readonly onRefused?: (message: string) => void;
+  // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
+  // the player's local time, until the first new game.
+  readonly welcome?: boolean;
+  readonly onLoading?: (step: LoadingStep) => void;
 }
 
 export interface CameraView {
@@ -1831,6 +1839,8 @@ interface Clock {
   readonly litLamps: number;
   readonly balloonReadiness: number;
   advance(elapsedSeconds: number): number;
+  follow(time: number, elapsedSeconds: number): number;
+  restart(time: number): void;
   relight(): void;
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
@@ -1918,6 +1928,16 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       clock = advanced.clock;
       apply();
       return advanced.ticks;
+    },
+    follow(next, elapsedSeconds) {
+      running += elapsedSeconds;
+      const followed = followTime(clock, next);
+      clock = followed.clock;
+      apply();
+      return followed.ticks;
+    },
+    restart(next) {
+      clock = withSpeed(createSimClock(0, next), clock.speed);
     },
     setTime(next) {
       clock = withTime(clock, next);
@@ -2355,9 +2375,36 @@ function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRe
   return { source, repeat: bench.repeat, view: bench.view };
 }
 
-function crowdStep(bench: boolean, speed: SimSpeed, elapsed: number): number {
+function crowdStep(bench: boolean, walking: boolean, elapsed: number): number {
   if (bench) return MAX_STEP;
-  return speed === 'paused' ? 0 : elapsed;
+  return walking ? elapsed : 0;
+}
+
+// Never under a benchmark: a drifting camera would draw a different frame on every run.
+function driftFor(
+  options: ShowcaseOptions,
+  bench: BenchConfig | null,
+  handle: SceneHandle,
+): CameraDrift | null {
+  if (!options.welcome || bench) return null;
+  return startCameraDrift(handle.camera, handle.controls.target);
+}
+
+function startTimeOf(bench: BenchConfig | null, welcome: boolean): number {
+  if (bench) return bench.time;
+  return welcome ? wallTimeOf(new Date()) : INITIAL_TIME;
+}
+
+// A wall clock rather than a speed: behind the welcome screen the resort shows the player's hour.
+function stepClock(clock: Clock, welcome: boolean, elapsed: number): number {
+  return welcome ? clock.follow(wallTimeOf(new Date()), elapsed) : clock.advance(elapsed);
+}
+
+function loaded<T>(step: LoadingStep, onLoading?: (step: LoadingStep) => void) {
+  return (value: T): T => {
+    onLoading?.(step);
+    return value;
+  };
 }
 
 function detailFrom(bench: BenchConfig | null): boolean {
@@ -2377,8 +2424,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
   let params = startingParams(bench);
   const [catalogue, first] = await Promise.all([
-    meshModels(scratch, bench),
-    preparer.prepare(prepRequestFor(startingSource(bench, params), bench)),
+    meshModels(scratch, bench).then(loaded('models', options.onLoading)),
+    preparer
+      .prepare(prepRequestFor(startingSource(bench, params), bench))
+      .then(loaded('resort', options.onLoading)),
   ]);
 
   const slot = createResortSlot({
@@ -2434,7 +2483,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let lastTimeMs: number | null = null;
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
-  const clock = createClock(handle, current, bench ? bench.time : INITIAL_TIME);
+  let drift = driftFor(options, bench, handle);
+  handle.controls.enabled = drift === null;
+  let drawnFirst = false;
+  const clock = createClock(handle, current, startTimeOf(bench, drift !== null));
   let lastWeather: Weather = clock.weather;
 
   // Cached: drawingBufferSize() allocates a vector per call; the resize handler updates it.
@@ -2499,10 +2551,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const cameraKeys = createCameraKeys({
     mode: () => handle.cameraMode,
     onModeChange: (mode) => {
+      if (drift) return;
       setCameraMode(mode);
       options.onCameraChange?.(cameraView());
     },
     onTurn: (quarters) => {
+      if (drift) return;
       setIsoDirection(turnDirection(handle.isoDirection, quarters));
       options.onCameraChange?.(cameraView());
     },
@@ -2723,6 +2777,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     walkStaleAt = null;
     slot.replace(prepared);
     current().ledger = createLedger(mode, OPENING_BALANCE[mode]);
+    // After the replace, whose reframe has put the camera back where a new plot is looked at from.
+    drift = null;
+    handle.controls.enabled = true;
+    clock.restart(INITIAL_TIME);
     rebuilt();
     options.onOpenChange?.(current().open);
   };
@@ -2735,6 +2793,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         litLamps: () => clock.litLamps,
       })
     : null;
+
+  const moveCamera = (elapsed: number): void => {
+    if (drift) drift.advance(elapsed);
+    else if (!bench) handle.controls.update();
+  };
+
+  // After the render call: that is where the shaders are built, which is most of the wait.
+  const tellDrawn = (): void => {
+    if (drawnFirst) return;
+    drawnFirst = true;
+    options.onLoading?.('scene');
+  };
 
   const chooseDetail = (): void => {
     const view = detail ? handle.detailView() : null;
@@ -2809,31 +2879,27 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     lastTimeMs = timeMs;
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
     // of two runs.
-    const ticks = clock.advance(bench ? MAX_STEP : elapsed);
+    const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly);
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
     // crowdScaleFor is 1 while paused.
-    current().crowd.advance(
-      crowdStep(bench !== null, clock.speed, elapsed),
-      bench ? 1 : crowdScaleFor(clock.speed),
-    );
-    current().staff.advance(
-      crowdStep(bench !== null, clock.speed, elapsed),
-      bench ? 1 : crowdScaleFor(clock.speed),
-    );
+    const walked = crowdStep(bench !== null, drift !== null || clock.speed !== 'paused', elapsed);
+    current().crowd.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
+    current().staff.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
     drawnLitter = drawLitter(current(), drawnLitter);
     current().sea.advance(bench ? MAX_STEP : elapsed);
     advanceWeather(elapsed);
     build.advance(bench ? MAX_STEP : elapsed);
-    if (!bench) handle.controls.update();
+    moveCamera(elapsed);
     chooseDetail();
     const renderStarted = performance.now();
     handle.renderer.render(handle.scene, handle.camera);
     // WebGPU records and submits here; the GPU works afterwards.
     const frameEnded = performance.now();
+    tellDrawn();
     frameCost = sampleFrameCost(frameCost, timeMs, frameEnded - frameStarted);
     // Resolving drains the query pool, so once a frame gives one reading a frame.
     void handle.renderer.resolveTimestampsAsync().then((duration) => {

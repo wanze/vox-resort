@@ -765,6 +765,34 @@ describe('the people who lie down', () => {
     expect(lying, 'nobody ever lay on a lounger').toBeGreaterThan(0);
   });
 
+  it('never sits a guest on a post, however long they roam the sand beside it', () => {
+    const post: SeatSpot = {
+      ...loungers(1)[0]!,
+      pose: 'sit',
+      x: 13 * TILE_VOXELS + 8,
+      z: 13 * TILE_VOXELS + 8,
+      tileX: 13,
+      tileZ: 13,
+      post: 'lifeguard',
+    };
+    const network = walkNetworkFor({
+      paved,
+      levelOf: FLAT,
+      shore,
+      tilesX: 20,
+      seats: [...loungers(6), post],
+    });
+    const [held] = network.posts as [number];
+    const crowd = createCrowd({ network, count: 40, variants: 2, seed: 21 });
+    let lying = 0;
+    for (let frame = 0; frame < 60 * 600; frame++) {
+      stepCrowd(crowd, 1 / 60);
+      expect(crowd.seatBy[held], 'a guest took the post').toBe(-1);
+      for (let i = 0; i < crowd.count; i++) if (restingOn(crowd, i) === RESTING.lying) lying++;
+    }
+    expect(lying, 'nobody used the loungers either, so nothing was proved').toBeGreaterThan(0);
+  });
+
   it('reports lying rather than sitting, off the seat rather than the person', () => {
     const crowd = createCrowd({ network: sandy(), count: 40, variants: 2, seed: 22 });
     const seen = new Set<number>();

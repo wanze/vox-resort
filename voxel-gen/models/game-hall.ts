@@ -42,6 +42,7 @@ export default defineModel({
   ],
   venue: {
     role: 'activity',
+    stage: true,
     satisfies: [{ need: 'fun', amount: 0.8 }],
     capacity: 24,
     dwellSeconds: { min: 1200, max: 3600 },

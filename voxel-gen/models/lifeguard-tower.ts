@@ -36,7 +36,7 @@ export default defineModel({
   tiles: { x: 1, z: 1 },
   // Only taken up on sand: inland there is no paving within reach of a deck this high,
   // so the seat is quietly dropped.
-  seats: [{ x: SITTER, y: PLANK + 1, z: BENCH.z1, facing: 0 }],
+  seats: [{ x: SITTER, y: PLANK + 1, z: BENCH.z1, facing: 0, post: 'lifeguard' }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, stucco, teak } = PALETTE;

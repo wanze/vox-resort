@@ -402,19 +402,47 @@ per kind; `reviews.ts` turns a party's stay into one line on check-out.
 
 **Staff** are a second population: their own registry (`STAFF_SOURCES`, kept out
 of `PEOPLE_SOURCES` so guest variants and seeded draws don't shift), crowd field
-and router. A resort meshes a standing pool (`staffPool`, `STAFF_CAPS`: 40
-cleaners) once; the roster (`rosterFor`) follows the plot, one cleaner per six
-venues, at least one wherever anything stands. After an edit the roster is
-recounted: a body going off duty is taken off the plot where it stands, one coming
-on duty enters at the first gate (node 0 with no gate yet; with no paving at all,
-at the next edit that lays some). The staff router never sends anybody off duty,
-and a cleaner let go mid-spell finishes it so the venue's claim is released.
-`staffRouter.ts` walks each cleaner to the dirtiest unclaimed venue and holds them
-there while they work. They use the same `crowd.ts` as guests. With no venue below
-`NEEDS_CLEANING`, a cleaner sweeps litter instead (see [Litter](#litter)).
+and router. The figures are in `STAFF_ROLES` order, since a body's variant is its
+role's index; `showcase.ts` throws if they are not. A resort meshes a standing
+pool once (`staffPool`, `STAFF_CAPS`: 24 cleaners, 8 lifeguards, 8 animators, 40
+bodies); the roster (`rosterFor`, fed by `workplacesOf`) follows the plot. After
+an edit the roster is recounted: a body going off duty is taken off the plot where
+it stands, one coming on duty enters at the first gate (node 0 with no gate yet;
+with no paving at all, at the next edit that lays some). The staff router never
+sends anybody off duty, and somebody let go mid-spell finishes it so the claim is
+released. They use the same `crowd.ts` as guests; the crowd was not changed for
+any of the three roles.
 
-Not done: lifeguards (need the sand routing shared from `router.ts`), animators
-(need venue events).
+- **Cleaners**: one per six venues, at least one wherever anything stands.
+  `staffRouter.ts` walks each to the dirtiest unclaimed venue and holds them there
+  for a spell. With no venue below `NEEDS_CLEANING`, a cleaner sweeps litter
+  instead (see [Litter](#litter)).
+- **Animators**: one per three venues the art marks `stage` (kids club,
+  playground, beach club, game hall), since a show moves between stages. An
+  animator takes the open stage with the most guests inside that has no show on,
+  performs for an hour or two (`SHOW_TICKS`), then moves to another stage.
+  `cheerTheAudience` tops up the fun of every guest inside a venue with a show on,
+  not those in its line, by `SHOW_FUN_PER_HOUR` (0.3), which roughly doubles what a
+  visit gives. Show claims are separate from cleaning claims, so a cleaner can
+  scrub a stage mid-show. A stage reached only over the sand gets no animator
+  yet: only the towers have a sand leg.
+- **Lifeguards**: one per venue the art marks `bathing` (swimming pool, waterpark)
+  and one per post, a seat the art marks `post: 'lifeguard'` (the tower's). The
+  walk graph files a post on the sand in `network.posts`, never in a node's seats
+  or `beachSeats`, which are the only lists guests look in, so no guest ever sits
+  there. A post inland is dropped. A lifeguard takes the busiest unwatched pool and stays there;
+  their spell never runs out. When the rain shuts the pool they wait at its door
+  and go back in when it reopens. A lifeguard with no pool left takes an unmanned
+  tower: the leg is planned once with `sandRoutesFor`, walked to the route's gate
+  on the graph, then one `walkSandTo` per waypoint, each ending in `step(worker,
+ON_SAND)`, and finally `holdOnSeat`. The seat is inside the tower's footprint,
+  which the sand grid blocks, so the leg ends on open sand beside it. A lifeguard
+  stays up the tower through a storm. None of `router.ts`'s errand bookkeeping is
+  used.
+
+An unwatched bathing venue, and the beach once a tower stands, is only reported
+for now: an `unwatched` advice line weighted by today's swimmers, and a Lifeguard
+row in the inspector. Plan 036 gives it consequences.
 
 ## Litter
 

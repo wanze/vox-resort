@@ -1,10 +1,21 @@
-import { holdAt, releaseTo, type Crowd } from '../../crowd/domain/crowd';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import {
+  holdAt,
+  holdOnSeat,
+  ON_SAND,
+  releaseTo,
+  walkSandTo,
+  type Crowd,
+} from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
+import { blockedAt } from '../../crowd/domain/sandGrid';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { createRandom } from '../../layout/domain/random';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import { mostLittered, sweep, SWEEP_ABOVE, type Litter } from './litter';
+import { SAND_ROUTE_TILES } from './router';
+import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
 import type { Staff } from './staff';
 import {
   cleanliness,
@@ -15,7 +26,7 @@ import {
   type Upkeep,
 } from './upkeep';
 import { shelterOf, type Venue } from './venues';
-import { isOpenIn, weatherEffect, type Weather } from './weather';
+import { isOpenIn, weatherEffect, type Weather, type WeatherEffect } from './weather';
 
 // In ticks (simulated minutes), drawn either way so cleaners who set off together do not finish together for ever.
 const SPELL_TICKS = { min: 15, max: 25 } as const;
@@ -23,11 +34,32 @@ const SPELL_TICKS = { min: 15, max: 25 } as const;
 // A sweep is a broom along one tile, shorter than scrubbing a venue.
 const SWEEP_TICKS = { min: 4, max: 8 } as const;
 
+// A show is an hour or two.
+const SHOW_TICKS = { min: 60, max: 120 } as const;
+
+// A lifeguard's spell never runs out: only the weather, the roster or an edit moves them.
+const FOR_EVER = 0x7fffffff;
+
 // Tasks are few, so a handful of fields covers them; a map that grows for a week is a leak.
-const MAX_TILE_FIELDS = 64;
+const MAX_NODE_FIELDS = 64;
 
 // A plot in pieces could otherwise sweep a field per littered tile on every step.
 const MAX_TILE_TRIES = 8;
+
+// The seat is inside the tower's own footprint, which the sand grid blocks, so the leg ends on
+// open sand beside it and the last step is the ladder.
+const FOOT_REACH = [0.75, 1.25].map((tiles) => tiles * TILE_VOXELS);
+
+const COMPASS = [
+  [0, 1],
+  [1, 0],
+  [0, -1],
+  [-1, 0],
+  [1, 1],
+  [1, -1],
+  [-1, 1],
+  [-1, -1],
+] as const;
 
 const NOBODY = -1;
 
@@ -36,6 +68,9 @@ export interface StaffRouter {
   tick(now: number): void;
   rebuild(venues: readonly Venue[], network: WalkNetwork): void;
   atWork(worker: number): Venue | null;
+  performingAt(venue: number): boolean;
+  watching(venue: number): boolean;
+  readonly watchingBeach: boolean;
   readonly workingCount: number;
 }
 
@@ -52,6 +87,8 @@ export function createStaffRouter(parts: {
   readonly duty?: () => Uint8Array;
   // Late-bound for the reason upkeep is. Omitted, nothing is ever swept.
   readonly litter?: () => Litter;
+  // Guests inside a venue, from the guests' router. Omitted, every stage and pool is as busy.
+  readonly occupants?: (venue: number) => number;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -65,6 +102,9 @@ export function createStaffRouter(parts: {
   let index: NodeIndex = nodeIndexFor(network);
   let fields: (FlowField | null)[] = venues.map(() => null);
   let claimedBy = new Int32Array(venues.length).fill(NOBODY);
+  // Apart from the cleaners' claims: a cleaner may scrub a venue while a show is on.
+  let showBy = new Int32Array(venues.length).fill(NOBODY);
+  let watchedBy = new Int32Array(venues.length).fill(NOBODY);
   let assigned = new Int32Array(staff.count).fill(NOBODY);
   let until = new Int32Array(staff.count);
   let working = new Uint8Array(staff.count);
@@ -72,7 +112,14 @@ export function createStaffRouter(parts: {
   // Apart from the venue claims: a tile index and a venue index are different numbers.
   let tileOf = new Int32Array(staff.count).fill(NOBODY);
   let tileClaimedBy = new Int32Array(0);
-  const tileFields = new Map<number, FlowField>();
+  let lastStage = new Int32Array(staff.count).fill(NOBODY);
+  let sheltering = new Uint8Array(staff.count);
+  let towerOf = new Int32Array(staff.count).fill(NOBODY);
+  let legOf = new Int32Array(staff.count);
+  let legRoute: (SandRoute | null)[] = Array.from({ length: staff.count }, () => null);
+  const towerBy = new Map<number, number>();
+  const towerRoutes = new Map<number, readonly SandRoute[]>();
+  const nodeFields = new Map<number, FlowField>();
   let workingCount = 0;
   let now = 0;
 
@@ -82,6 +129,19 @@ export function createStaffRouter(parts: {
   // A venue whose doors reach no paving sweeps to -1 throughout, which is how pick passes over it.
   const fieldFor = (venue: number): FlowField =>
     (fields[venue] ??= flowFieldFor(network, doorsFor(venues[venue]!, index).nodes));
+
+  const claimsOf = (worker: number): Int32Array => {
+    const role = staff.role[worker];
+    if (role === 'animator') return showBy;
+    return role === 'lifeguard' ? watchedBy : claimedBy;
+  };
+
+  const claim = (worker: number, venue: number): number => {
+    if (venue < 0) return NOBODY;
+    claimsOf(worker)[venue] = worker;
+    assigned[worker] = venue;
+    return venue;
+  };
 
   // Dirtiest first, so an unreachable venue is swept once instead of every venue being swept per worker.
   const pick = (worker: number, at: number): number => {
@@ -97,23 +157,78 @@ export function createStaffRouter(parts: {
         NEEDS_CLEANING,
       );
       if (venue < 0) return NOBODY;
-      if (fieldFor(venue).next[at]! >= 0) {
-        claimedBy[venue] = worker;
-        assigned[worker] = venue;
-        return venue;
-      }
+      if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue);
       passedOver.add(venue);
     }
     return NOBODY;
   };
 
-  // The middle of the footprint, so a cleaner at work is under the roof rather than in the doorway.
-  const setToWork = (worker: number, venue: number, door: number): void => {
+  // The busiest first: a show or a watch is worth most where most guests are. Guests are counted
+  // before the field is swept, so only a better candidate costs a sweep.
+  const busiest = (at: number, eligible: (venue: number) => boolean): number => {
+    let best = NOBODY;
+    let most = -1;
+    for (let venue = 0; venue < venues.length; venue++) {
+      if (!eligible(venue)) continue;
+      const inside = parts.occupants?.(venue) ?? 0;
+      if (inside <= most || fieldFor(venue).next[at]! < 0) continue;
+      best = venue;
+      most = inside;
+    }
+    return best;
+  };
+
+  const stageFree = (venue: number, effect: WeatherEffect): boolean => {
+    const place = venues[venue]!;
+    return place.stage === true && showBy[venue] === NOBODY && isOpenIn(shelterOf(place), effect);
+  };
+
+  // The last stage only when nothing else is free, so a show moves round the plot.
+  const pickStage = (worker: number, at: number): number => {
+    const effect = weatherEffect(weatherNow());
+    const last = lastStage[worker]!;
+    const elsewhere = busiest(at, (venue) => venue !== last && stageFree(venue, effect));
+    if (elsewhere >= 0 || last < 0) return claim(worker, elsewhere);
+    return claim(
+      worker,
+      busiest(at, (venue) => venue === last && stageFree(venue, effect)),
+    );
+  };
+
+  const pickWater = (worker: number, at: number): number => {
+    const effect = weatherEffect(weatherNow());
+    const unwatched = (venue: number): boolean => {
+      const place = venues[venue]!;
+      return (
+        place.bathing === true && watchedBy[venue] === NOBODY && isOpenIn(shelterOf(place), effect)
+      );
+    };
+    return claim(worker, busiest(at, unwatched));
+  };
+
+  const standAt = (worker: number, node: number): void => {
+    const people = parts.crowd();
+    const at = network.nodes[node]!;
+    holdAt(people, worker, at.x, at.y, at.z, people.heading[worker] ?? 0);
+  };
+
+  // The middle of the footprint, so somebody at work is under the roof rather than in the doorway.
+  const standInside = (worker: number, venue: number, door: number): void => {
     const people = parts.crowd();
     const place = venues[venue]!;
     holdAt(people, worker, place.x, network.nodes[door]!.y, place.z, people.heading[worker] ?? 0);
+  };
+
+  const spellFor = (worker: number): number => {
+    const role = staff.role[worker];
+    if (role === 'lifeguard') return FOR_EVER;
+    return now + ticksIn(role === 'animator' ? SHOW_TICKS : SPELL_TICKS);
+  };
+
+  const setToWork = (worker: number, venue: number, door: number): void => {
+    standInside(worker, venue, door);
     doorOf[worker] = door;
-    until[worker] = now + ticksIn(SPELL_TICKS);
+    until[worker] = spellFor(worker);
     working[worker] = 1;
     workingCount++;
   };
@@ -129,12 +244,12 @@ export function createStaffRouter(parts: {
   const nodeOnTile = (litter: Litter, tile: number): number =>
     index.at(tile % litter.tilesX, Math.floor(tile / litter.tilesX))?.[0] ?? NOBODY;
 
-  const tileFieldFor = (node: number): FlowField => {
-    const known = tileFields.get(node);
+  const nodeFieldFor = (node: number): FlowField => {
+    const known = nodeFields.get(node);
     if (known) return known;
-    if (tileFields.size >= MAX_TILE_FIELDS) tileFields.clear();
+    if (nodeFields.size >= MAX_NODE_FIELDS) nodeFields.clear();
     const field = flowFieldFor(network, [node]);
-    tileFields.set(node, field);
+    nodeFields.set(node, field);
     return field;
   };
 
@@ -148,7 +263,7 @@ export function createStaffRouter(parts: {
         SWEEP_ABOVE,
       );
       if (tile < 0) return NOBODY;
-      if (tileFieldFor(nodeOnTile(litter, tile)).next[at]! >= 0) {
+      if (nodeFieldFor(nodeOnTile(litter, tile)).next[at]! >= 0) {
         claims[tile] = worker;
         tileOf[worker] = tile;
         return tile;
@@ -165,9 +280,7 @@ export function createStaffRouter(parts: {
   };
 
   const setToSweep = (worker: number, node: number): void => {
-    const people = parts.crowd();
-    const at = network.nodes[node]!;
-    holdAt(people, worker, at.x, at.y, at.z, people.heading[worker] ?? 0);
+    standAt(worker, node);
     doorOf[worker] = node;
     until[worker] = now + ticksIn(SWEEP_TICKS);
     working[worker] = 1;
@@ -176,7 +289,7 @@ export function createStaffRouter(parts: {
 
   const stepToTile = (worker: number, at: number, litter: Litter): number => {
     const node = nodeOnTile(litter, tileOf[worker]!);
-    const onward = node >= 0 ? (tileFieldFor(node).next[at] ?? -1) : -1;
+    const onward = node >= 0 ? (nodeFieldFor(node).next[at] ?? -1) : -1;
     if (onward < 0) {
       giveUpTile(worker);
       return -1;
@@ -194,6 +307,89 @@ export function createStaffRouter(parts: {
     return stepToTile(worker, at, litter);
   };
 
+  const feetOf = (spot: SandPoint): readonly SandPoint[] => {
+    const sand = network.sand;
+    const open = (point: SandPoint): boolean => !sand || !blockedAt(sand, point.x, point.z);
+    if (open(spot)) return [{ x: spot.x, z: spot.z }];
+    for (const reach of FOOT_REACH) {
+      const feet = COMPASS.map(([dx, dz]) => ({ x: spot.x + dx * reach, z: spot.z + dz * reach }));
+      const clear = feet.filter(open);
+      if (clear.length > 0) return clear;
+    }
+    return [];
+  };
+
+  const towerRoutesFor = (seat: number): readonly SandRoute[] => {
+    let routes = towerRoutes.get(seat);
+    if (!routes) {
+      routes = sandRoutesFor(network, feetOf(network.seats[seat]!), SAND_ROUTE_TILES);
+      towerRoutes.set(seat, routes);
+    }
+    return routes;
+  };
+
+  const pickTower = (worker: number, at: number): number => {
+    for (const seat of network.posts) {
+      if (towerBy.has(seat)) continue;
+      const route = towerRoutesFor(seat).find((each) => nodeFieldFor(each.gate).next[at]! >= 0);
+      if (!route) continue;
+      towerBy.set(seat, worker);
+      towerOf[worker] = seat;
+      legRoute[worker] = route;
+      return seat;
+    }
+    return NOBODY;
+  };
+
+  const giveUpTower = (worker: number): void => {
+    const seat = towerOf[worker]!;
+    if (seat >= 0 && towerBy.get(seat) === worker) towerBy.delete(seat);
+    towerOf[worker] = NOBODY;
+    legRoute[worker] = null;
+  };
+
+  const climbTower = (worker: number, route: SandRoute): void => {
+    if (!holdOnSeat(parts.crowd(), worker, towerOf[worker]!)) {
+      giveUpTower(worker);
+      return;
+    }
+    doorOf[worker] = route.gate;
+    until[worker] = FOR_EVER;
+    working[worker] = 1;
+    workingCount++;
+  };
+
+  // Acts on every call, or the crowd turns the lifeguard into a beach roamer at the end of a leg.
+  const alongTheSand = (worker: number): number => {
+    const route = legRoute[worker];
+    if (!route || working[worker] === 1 || !isOnDuty(worker)) return -1;
+    const leg = legOf[worker]! + 1;
+    legOf[worker] = leg;
+    const next = route.waypoints[leg];
+    if (next) walkSandTo(parts.crowd(), worker, next.x, next.z);
+    else climbTower(worker, route);
+    return -1;
+  };
+
+  const towardsTower = (worker: number, at: number): number => {
+    const route = legRoute[worker]!;
+    const onward = nodeFieldFor(route.gate).next[at] ?? -1;
+    if (onward < 0) {
+      giveUpTower(worker);
+      return -1;
+    }
+    if (onward !== at) return onward;
+    legOf[worker] = -1;
+    return alongTheSand(worker);
+  };
+
+  const giveUp = (worker: number): void => {
+    const venue = assigned[worker]!;
+    const claims = claimsOf(worker);
+    if (venue >= 0 && claims[venue] === worker) claims[venue] = NOBODY;
+    assigned[worker] = NOBODY;
+  };
+
   const finishWork = (worker: number): void => {
     const tile = tileOf[worker]!;
     const litter = parts.litter?.();
@@ -202,10 +398,16 @@ export function createStaffRouter(parts: {
       giveUpTile(worker);
       return;
     }
+    if (towerOf[worker]! >= 0) {
+      giveUpTower(worker);
+      return;
+    }
     const venue = assigned[worker]!;
-    scrub(parts.upkeep(), venue, SCRUB_PER_SPELL);
-    claimedBy[venue] = NOBODY;
-    assigned[worker] = NOBODY;
+    const role = staff.role[worker];
+    if (role === 'cleaner') scrub(parts.upkeep(), venue, SCRUB_PER_SPELL);
+    if (role === 'animator') lastStage[worker] = venue;
+    sheltering[worker] = 0;
+    giveUp(worker);
   };
 
   const finish = (worker: number): void => {
@@ -217,10 +419,17 @@ export function createStaffRouter(parts: {
     if (door >= 0 && door < network.nodes.length) releaseTo(parts.crowd(), worker, door);
   };
 
-  const giveUp = (worker: number): void => {
+  // A tower is kept through a storm: nobody is in the water to leave for, and a walk back over
+  // the sand every storm is a lot of motion for nothing. A pool is waited out at its door.
+  const mindTheWeather = (worker: number, effect: WeatherEffect): void => {
     const venue = assigned[worker]!;
-    if (venue >= 0 && claimedBy[venue] === worker) claimedBy[venue] = NOBODY;
-    assigned[worker] = NOBODY;
+    if (towerOf[worker]! >= 0 || venue < 0) return;
+    const open = isOpenIn(shelterOf(venues[venue]!), effect);
+    if (open === (sheltering[worker] === 0)) return;
+    const door = doorOf[worker]!;
+    if (open) standInside(worker, venue, door);
+    else standAt(worker, door);
+    sheltering[worker] = open ? 0 : 1;
   };
 
   // A worker already sent to a tile sees it through before looking at venues again.
@@ -240,21 +449,48 @@ export function createStaffRouter(parts: {
     return -1;
   };
 
+  const cleanerStep = (worker: number, at: number): number => {
+    const venue = venueFor(worker, at);
+    return venue < 0 ? litterStep(worker, at) : venueStep(worker, at, venue);
+  };
+
+  const animatorStep = (worker: number, at: number): number => {
+    const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickStage(worker, at);
+    return venue < 0 ? -1 : venueStep(worker, at, venue);
+  };
+
+  // The water inside the resort first; a tower only for a lifeguard with no pool left to watch.
+  const lifeguardStep = (worker: number, at: number): number => {
+    if (towerOf[worker]! >= 0) return towardsTower(worker, at);
+    const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickWater(worker, at);
+    if (venue >= 0) return venueStep(worker, at, venue);
+    return pickTower(worker, at) >= 0 ? towardsTower(worker, at) : -1;
+  };
+
+  const claimedAndWorking = (claims: Int32Array, venue: number): boolean => {
+    const worker = claims[venue] ?? NOBODY;
+    return worker >= 0 && working[worker] === 1;
+  };
+
   return {
     step(worker, at) {
+      if (at === ON_SAND) return alongTheSand(worker);
       // A rebuild can let go of anybody at any moment, hence the guard.
       if (working[worker] === 1 || at < 0 || !isOnDuty(worker)) return -1;
-      const venue = venueFor(worker, at);
-      return venue < 0 ? litterStep(worker, at) : venueStep(worker, at, venue);
+      if (staff.role[worker] === 'lifeguard') return lifeguardStep(worker, at);
+      if (staff.role[worker] === 'animator') return animatorStep(worker, at);
+      return cleanerStep(worker, at);
     },
 
     tick(at) {
       now = at;
       if (workingCount === 0) return;
+      const effect = weatherEffect(weatherNow());
       for (let worker = 0; worker < staff.count; worker++) {
+        if (working[worker] !== 1) continue;
         // Let off duty mid-spell, they finish it: a half-scrubbed venue would keep its claim for ever.
-        const done = now >= until[worker]! || !isOnDuty(worker);
-        if (working[worker] === 1 && done) finish(worker);
+        if (now >= until[worker]! || !isOnDuty(worker)) finish(worker);
+        else if (staff.role[worker] === 'lifeguard') mindTheWeather(worker, effect);
       }
     },
 
@@ -265,13 +501,22 @@ export function createStaffRouter(parts: {
       // Node and venue indices mean nothing on the new graph, and a stale claim would hold a venue against every cleaner.
       fields = venues.map(() => null);
       claimedBy = new Int32Array(venues.length).fill(NOBODY);
+      showBy = new Int32Array(venues.length).fill(NOBODY);
+      watchedBy = new Int32Array(venues.length).fill(NOBODY);
       assigned = new Int32Array(staff.count).fill(NOBODY);
       until = new Int32Array(staff.count);
       working = new Uint8Array(staff.count);
       doorOf = new Int32Array(staff.count).fill(NOBODY);
       tileOf = new Int32Array(staff.count).fill(NOBODY);
       tileClaimedBy = new Int32Array(0);
-      tileFields.clear();
+      lastStage = new Int32Array(staff.count).fill(NOBODY);
+      sheltering = new Uint8Array(staff.count);
+      towerOf = new Int32Array(staff.count).fill(NOBODY);
+      legOf = new Int32Array(staff.count);
+      legRoute = Array.from({ length: staff.count }, () => null);
+      towerBy.clear();
+      towerRoutes.clear();
+      nodeFields.clear();
       workingCount = 0;
       // Nobody is released: the crowd is relocated onto the new graph in the same step.
     },
@@ -279,6 +524,19 @@ export function createStaffRouter(parts: {
     atWork(worker) {
       if (working[worker] !== 1) return null;
       return venues[assigned[worker]!] ?? null;
+    },
+
+    performingAt(venue) {
+      return claimedAndWorking(showBy, venue);
+    },
+
+    watching(venue) {
+      return claimedAndWorking(watchedBy, venue);
+    },
+
+    get watchingBeach() {
+      for (const worker of towerBy.values()) if (working[worker] === 1) return true;
+      return false;
     },
 
     get workingCount() {

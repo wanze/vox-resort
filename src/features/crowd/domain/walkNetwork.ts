@@ -62,6 +62,8 @@ export interface WalkNetwork {
   readonly beach: BeachBand | null;
   readonly seats: readonly WalkSeat[];
   readonly beachSeats: readonly number[];
+  // Staff seats: in neither a node's seats nor beachSeats, the only lists guests look in.
+  readonly posts: readonly number[];
   readonly sand: SandGrid | null;
 }
 
@@ -148,7 +150,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     }
   }
 
-  const { seats, beachSeats } = seatsAmong(input.seats ?? [], nodes, seatsOf, shore);
+  const { seats, beachSeats, posts } = seatsAmong(input.seats ?? [], nodes, seatsOf, shore);
 
   return {
     nodes,
@@ -157,6 +159,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     beach: shore ? { shore, tilesX } : null,
     seats,
     beachSeats,
+    posts,
     sand: sandOf(input),
   };
 }
@@ -179,29 +182,39 @@ function seatsAmong(
   nodes: readonly WalkNode[],
   seatsOf: readonly number[][],
   shore: Shore | null,
-): { readonly seats: WalkSeat[]; readonly beachSeats: number[] } {
+): { readonly seats: WalkSeat[]; readonly beachSeats: number[]; readonly posts: number[] } {
   const seats: WalkSeat[] = [];
   const beachSeats: number[] = [];
-  if (spots.length === 0) return { seats, beachSeats };
+  const posts: number[] = [];
+  if (spots.length === 0) return { seats, beachSeats, posts };
 
   const byTile = nodesByTile(nodes);
   for (const spot of spots) {
+    // Only on sand: a lifeguard reaches a post over the beach, never from the paving.
+    if (spot.post) {
+      if (!onOpenSand(spot, shore)) continue;
+      posts.push(seats.length);
+      seats.push(walkSeatAt(spot, OFF_THE_GRAPH));
+      continue;
+    }
     const node = nodeFor(spot, nodes, byTile);
     const sand = node === OFF_THE_GRAPH && onOpenSand(spot, shore);
     if (node === OFF_THE_GRAPH && !sand) continue;
     if (sand) beachSeats.push(seats.length);
     else seatsOf[node]!.push(seats.length);
-    seats.push({
-      x: spot.x,
-      y: spot.y,
-      z: spot.z,
-      heading: spot.heading,
-      pose: spot.pose,
-      node,
-    });
+    seats.push(walkSeatAt(spot, node));
   }
-  return { seats, beachSeats };
+  return { seats, beachSeats, posts };
 }
+
+const walkSeatAt = (spot: SeatSpot, node: number): WalkSeat => ({
+  x: spot.x,
+  y: spot.y,
+  z: spot.z,
+  heading: spot.heading,
+  pose: spot.pose,
+  node,
+});
 
 function onOpenSand(spot: SeatSpot, shore: Shore | null): boolean {
   return shore !== null && terrainAt(shore, spot.tileX, spot.tileZ) === 'beach';

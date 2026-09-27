@@ -37,6 +37,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
+  unwatched: ({ subject }) => `Nobody is watching ${subject}`,
   littered: ({ count }) => `Litter is piling up on ${count} tiles`,
   'far-from-home': ({ subject, count, need }) =>
     `${subject} guests walk ${count} tiles for ${NEED_ERRANDS[need ?? ''] ?? 'something they need'}`,
@@ -54,6 +55,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'full-lines': () => 'the line was already full',
   unreachable: ({ count }) => `${count} places standing idle`,
   dirty: ({ count }) => `${count}% clean`,
+  unwatched: ({ count }) => `${count} swam there today`,
   // Supported: a guest drops litter only where no bin covered six tiles in a row.
   littered: () => 'no bin within reach',
   'far-from-home': () => 'straight line, not walking distance',
@@ -70,6 +72,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'full-lines': 'Queues',
   unreachable: 'Stranded',
   dirty: 'Upkeep',
+  unwatched: 'Lifeguard',
   littered: 'Litter',
   'far-from-home': 'Distance',
   unvisited: 'Quiet',

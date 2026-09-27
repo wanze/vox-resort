@@ -38,6 +38,8 @@ export function beachVenueFor(network: WalkNetwork): Venue | null {
     dwellSeconds: BEACH_DWELL_SECONDS,
     // No roof, so the beach shuts in the rain.
     shelter: 'open',
+    // It is the sea.
+    bathing: true,
     x: x / gates.length,
     z: z / gates.length,
     tileX: first.tileX,

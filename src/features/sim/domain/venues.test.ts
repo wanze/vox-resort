@@ -108,6 +108,17 @@ describe('reliefAt', () => {
     expect(only([at('restaurant#0', 'restaurant')]).litter).toBe(0);
   });
 
+  it('carries a stage for a show off the art, and nowhere else', () => {
+    expect(only([at('kids-club#0', 'kids-club')]).stage).toBe(true);
+    expect(only([at('game-hall#0', 'game-hall')]).stage).toBe(true);
+    expect(only([at('bakery#0', 'bakery')]).stage).toBe(false);
+  });
+
+  it('carries where guests swim off the art, so a lifeguard knows where to watch', () => {
+    expect(only([at('swimming-pool#0', 'swimming-pool')]).bathing).toBe(true);
+    expect(only([at('kids-club#0', 'kids-club')]).bathing).toBe(false);
+  });
+
   it("keeps basketball's negative energy, because an hour of it is tiring", () => {
     const court = only([at('basketball-court#0', 'basketball-court')]);
     expect(reliefAt(court, 'fun')).toBe(0.8);

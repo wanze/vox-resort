@@ -4,7 +4,15 @@ import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { ARCHETYPES } from './archetypes';
-import { createNeeds, decayNeeds, relieve, START_LEVEL, strongestNeed, type Needs } from './needs';
+import {
+  cheer,
+  createNeeds,
+  decayNeeds,
+  relieve,
+  START_LEVEL,
+  strongestNeed,
+  type Needs,
+} from './needs';
 import { weatherEffect } from './weather';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -116,6 +124,20 @@ describe('decayNeeds', () => {
     for (let person = 0; person < needs.count; person++) {
       for (const level of levelsOf(needs, person)) expect(level).toBe(0);
     }
+  });
+});
+
+describe('cheer', () => {
+  it('tops up fun alone, and never past content', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    setAll(needs, 3, 0.5);
+    cheer(needs, 3, 0.2);
+    expect(needs.level.fun[3]!).toBeCloseTo(0.7, 5);
+    expect(needs.level.hunger[3]!).toBeCloseTo(0.5, 5);
+    cheer(needs, 3, 0.8);
+    expect(needs.level.fun[3]!).toBe(1);
+    cheer(needs, needs.count, 0.5);
   });
 });
 

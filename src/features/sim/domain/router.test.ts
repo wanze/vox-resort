@@ -360,6 +360,25 @@ describe('createRouter', () => {
     expect(router.goalOf(third)?.key).toBe('bakery#2');
   });
 
+  it('answers the venue a guest is inside by its index, and nothing once they leave', () => {
+    const network = networkOf(street(40));
+    const standing = [
+      { ...bakery(25), key: 'bakery#0' },
+      { ...bakery(35), key: 'bakery#1' },
+    ];
+    const needs = wanting(0, 'hunger');
+    const { router } = routerOn(network, standing, needs);
+    expect(router.venueIndexOf(0), 'before any visit').toBe(-1);
+    router.step(0, nodeAt(network, 30));
+    const chosen = router.goalOf(0)!;
+    router.step(0, nodeAt(network, chosen.tileX));
+    expect(router.visitOf(0)?.waiting).toBe(false);
+    expect(router.venueIndexOf(0)).toBe(standing.indexOf(chosen));
+    for (let tick = 1; tick <= 12; tick++) router.tick(tick);
+    expect(router.visitOf(0)).toBeNull();
+    expect(router.venueIndexOf(0)).toBe(-1);
+  });
+
   it('sends a guest to the other bakery on the way out of one, and forgets it on a rebuild', () => {
     const network = networkOf(street(40));
     const east = { ...bakery(25), key: 'bakery#0' };
@@ -2158,7 +2177,9 @@ describe('on the generated plot', () => {
     });
 
     const employed = staffPool();
-    const duty = onDuty(employed, rosterFor({ venues: venues.length }));
+    // Cleaners only: a lifeguard on post at a pool a cleaner scrubs would read as two at one venue.
+    const cleaning = { venues: venues.length, bathing: 0, posts: 0, stages: 0 };
+    const duty = onDuty(employed, rosterFor(cleaning));
     let workers: Crowd | null = null;
     const staffRouter = createStaffRouter({
       staff: employed,

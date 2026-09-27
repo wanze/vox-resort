@@ -71,6 +71,8 @@ export interface PlaceView {
     readonly waiting: number;
     readonly cleanliness: number;
     readonly takings: number;
+    // Null where nobody swims, so the inspector has nothing to say about a lifeguard.
+    readonly watched: boolean | null;
   } | null;
   readonly residents: readonly PartyMemberView[];
 }
@@ -161,6 +163,7 @@ export function placeView(
   // Null means spotless: a fixture, or a venue so new the router has not seen it.
   cleanliness: number | null = null,
   takings = 0,
+  watched = false,
 ): PlaceView {
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
@@ -188,6 +191,7 @@ export function placeView(
           waiting: occupancy?.waiting ?? 0,
           cleanliness: cleanliness ?? 1,
           takings,
+          watched: venue.bathing === true ? watched : null,
         }
       : null,
     residents,

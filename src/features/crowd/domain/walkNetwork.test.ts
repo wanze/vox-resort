@@ -503,6 +503,34 @@ describe('the seats out on the sand', () => {
     expect(network.beachSeats).toEqual([]);
   });
 
+  it('files a post on the sand apart from every seat a guest is offered', () => {
+    const post: SeatSpot = { ...lounger(5, 6), pose: 'sit', post: 'lifeguard' };
+    const network = walkNetworkFor({
+      paved: [{ tileX: 5, tileZ: 5, y: 0 }],
+      levelOf: FLAT,
+      shore,
+      tilesX: 10,
+      seats: [lounger(7, 6), post],
+    });
+    expect(network.posts).toEqual([1]);
+    expect(network.beachSeats).toEqual([0]);
+    expect(network.nodes.flatMap((node) => node.seats)).not.toContain(1);
+    expect(network.seats[1]!.node).toBe(OFF_THE_GRAPH);
+  });
+
+  it('drops a post inland, even beside the paving, since no lifeguard walks there', () => {
+    const network = walkNetworkFor({
+      paved: [{ tileX: 5, tileZ: 1, y: 0 }],
+      levelOf: FLAT,
+      shore,
+      tilesX: 10,
+      seats: [{ ...seatOn(5, 2, walkingSurface(0) + 2), pose: 'sit', post: 'lifeguard' }],
+    });
+    expect(network.seats).toEqual([]);
+    expect(network.posts).toEqual([]);
+    expect(network.nodes.flatMap((node) => node.seats)).toEqual([]);
+  });
+
   it('finds no beach seats on a plot with no coast', () => {
     const network = walkNetworkFor({
       paved: flat([[0, 0]]),

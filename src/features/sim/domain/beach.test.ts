@@ -57,3 +57,10 @@ describe('the beach in the rain', () => {
     expect(shelterOf(beachVenueFor(network)!)).toBe('open');
   });
 });
+
+describe('the beach and the lifeguards', () => {
+  it('is somewhere people swim, so somebody should be watching it', () => {
+    const network = walkNetworkFor({ paved: boardwalk(10), levelOf: () => 0, shore, tilesX: 20 });
+    expect(beachVenueFor(network)!.bathing).toBe(true);
+  });
+});

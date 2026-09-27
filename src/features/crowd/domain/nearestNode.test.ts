@@ -22,6 +22,7 @@ const networkOf = (nodes: readonly WalkNode[]): WalkNetwork => ({
   beach: null,
   seats: [],
   beachSeats: [],
+  posts: [],
   sand: null,
 });
 

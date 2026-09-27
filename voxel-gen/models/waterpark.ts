@@ -84,6 +84,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'activity',
+    bathing: true,
     satisfies: [
       { need: 'fun', amount: 1 },
       { need: 'energy', amount: -0.3 },

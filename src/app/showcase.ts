@@ -148,15 +148,17 @@ import {
   type SceneryField,
 } from '../features/sim/domain/scenery';
 import {
+  cheerTheAudience,
   onDuty,
   rosterFor,
   shiftChange,
   STAFF_ROLES,
   staffPool,
+  unwatched,
   wagesFor,
+  workplacesOf,
   type Roster,
   type Staff,
-  type Workplaces,
 } from '../features/sim/domain/staff';
 import {
   canAfford,
@@ -189,6 +191,7 @@ import {
 } from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom } from '../features/layout/domain/random';
+import { beachVenueFor } from '../features/sim/domain/beach';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingFor, lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
@@ -560,8 +563,8 @@ if (CHILD_VARIANT < 0) {
 const STAFF_IDS: ReadonlySet<string> = new Set(STAFF_MODELS.map((model) => model.id));
 
 // A staff variant indexes the meshed staff list, which is in STAFF_SOURCES order.
-if (STAFF_MODELS.length < STAFF_ROLES.length) {
-  throw new Error('Fewer staff models than staff roles; somebody would be drawn as nobody.');
+if (STAFF_ROLES.some((role, variant) => STAFF_MODELS[variant]?.id !== role)) {
+  throw new Error('Staff models are not in STAFF_ROLES order; somebody would wear the wrong kit.');
 }
 
 const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id));
@@ -1123,7 +1126,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   crowdField = crowd;
   // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
   const employed = staffPool();
-  const roster = rosterFor({ venues: venues.length });
+  const roster = rosterFor(workplacesOf(venues, network.posts));
   const duty = onDuty(employed, roster);
   let staffField: CrowdField | null = null;
   const staffRouter = createStaffRouter({
@@ -1135,6 +1138,8 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
     weather: parts.weather,
     duty: () => resort.duty,
     litter: () => resort.litter,
+    // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
+    occupants: (venue) => resort.router.occupancyOf(resort.venues[venue]!.key)?.inside ?? 0,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1627,11 +1632,14 @@ function runTicks(
     hourly();
   }
   admitLaterWaves(resort, clock, ticks);
+  cheerTheAudience(resort.needs, resort.guests.present, {
+    performing: (venue) => resort.staffRouter.performingAt(venue),
+    venueOf: (person) => resort.router.venueIndexOf(person),
+    waiting: (person) => resort.router.isWaitingAt(person),
+    venues: resort.venues.length,
+    hours: ticks / TICKS_PER_HOUR,
+  });
   return lightRooms(resort, lastShare);
-}
-
-function workplacesOn(resort: Resort): Workplaces {
-  return { venues: resort.venues.length };
 }
 
 // Stood at the node first, or a body dealt on an empty plot walks in from the origin.
@@ -1644,7 +1652,7 @@ function enterAt(crowd: Crowd, i: number, node: number): void {
 // After the relocate, so the arrival node is on the graph the staff crowd now walks. With no
 // entrance yet they start at node 0: anywhere on the paving beats waiting for a gate.
 function staffTheResort(resort: Resort): void {
-  const roster = rosterFor(workplacesOn(resort));
+  const roster = rosterFor(workplacesOf(resort.venues, resort.staff.crowd.network.posts));
   const duty = onDuty(resort.staffPool, roster);
   const workers = resort.staff.crowd;
   const shift = shiftChange(duty, workers.offPlot);
@@ -1675,6 +1683,17 @@ function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
   return counted;
 }
 
+// The beach last, as the guests' router lists it.
+function unwatchedOn(resort: Resort): ReadonlySet<string> {
+  const { staffRouter, venues } = resort;
+  const { network } = resort.crowd.crowd;
+  const beach = beachVenueFor(network);
+  const water = beach ? [...venues, beach] : venues;
+  const watching = (venue: number): boolean =>
+    venue < venues.length ? staffRouter.watching(venue) : staffRouter.watchingBeach;
+  return unwatched(water, watching, network.posts.length);
+}
+
 // Once a simulated day and on an edit, never per frame: it walks the guest list twice.
 function factsNow(resort: Resort, weather: Weather): ResortFacts {
   const { guests, router } = resort;
@@ -1698,6 +1717,7 @@ function factsNow(resort: Resort, weather: Weather): ResortFacts {
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
     ),
+    unwatched: unwatchedOn(resort),
     // The router's own isOpenIn, so the panel and the door agree about what is shut.
     closed: new Set(
       resort.venues
@@ -2599,6 +2619,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       sceneryOver(resort.scenery, placement),
       cleanliness(resort.upkeep, venue),
       takingsOf(resort.takings, placement.key),
+      resort.staffRouter.watching(venue),
     );
   };
 

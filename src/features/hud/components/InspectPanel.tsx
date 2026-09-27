@@ -167,6 +167,15 @@ function SurroundingsRow({ setting }: { readonly setting: number }) {
   );
 }
 
+function LifeguardRow({ watched }: { readonly watched: boolean | null }) {
+  if (watched === null) return null;
+  return (
+    <StatRow label="Lifeguard" note="one on post at the water">
+      {watched ? 'On watch' : 'Nobody watching'}
+    </StatRow>
+  );
+}
+
 function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
   return (
     <dl className="hud-stats">
@@ -190,6 +199,7 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
       <StatRow label="Takings today" note="since the check-in hour">
         {venue.takings.toLocaleString('en-US')}
       </StatRow>
+      <LifeguardRow watched={venue.watched} />
       <SurroundingsRow setting={setting} />
     </dl>
   );

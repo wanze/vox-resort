@@ -10,6 +10,7 @@ import {
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
+  adviceUnwatched,
   adviceWeatherClosed,
   unreachableOn,
   type ResortFacts,
@@ -470,6 +471,39 @@ const fouled = (fouledTiles: number, worstLevel = 1): LitterSummary => ({
   worst: { tileX: 7, tileZ: 3 },
   worstLevel,
   fouled: fouledTiles,
+});
+
+describe('adviceUnwatched', () => {
+  const pool = venueOf({ key: 'swimming-pool#0', label: 'Swimming Pool', x: 64, z: 80 });
+
+  it('is silent while every pool has its lifeguard', () => {
+    expect(adviceUnwatched(healthyFacts())).toEqual([]);
+    expect(adviceUnwatched(healthyFacts({ venues: [pool], unwatched: new Set() }))).toEqual([]);
+  });
+
+  it('names a pool nobody watches, at its tile, louder the more swam there today', () => {
+    const facts = (swam: number) =>
+      healthyFacts({
+        venues: [pool],
+        unwatched: new Set(['swimming-pool#0']),
+        visits: new Map([['swimming-pool#0', swam]]),
+      });
+    const [busy] = adviceUnwatched(facts(30));
+    expect(busy).toMatchObject({
+      kind: 'unwatched',
+      subject: 'Swimming Pool',
+      count: 30,
+      at: { tileX: 4, tileZ: 5 },
+    });
+    const [idle] = adviceUnwatched(facts(0));
+    expect(idle!.weight).toBeLessThan(busy!.weight);
+    expect(adviceFor(facts(30)).map((advice) => advice.kind)).toContain('unwatched');
+  });
+
+  it('calls the sea the beach, with no tile to show', () => {
+    const [beach] = adviceUnwatched(healthyFacts({ unwatched: new Set(['beach']) }));
+    expect(beach).toMatchObject({ subject: 'the beach', at: null });
+  });
 });
 
 describe('adviceLittered', () => {

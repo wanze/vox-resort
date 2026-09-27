@@ -257,11 +257,14 @@ Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 
 | Weather | Draw calls | Triangles | CPU median | GPU median |
 | ------- | ---------- | --------- | ---------- | ---------- |
-| clear   | 280        | 1.16 M    | 1.50 ms    | 2.95 ms    |
-| storm   | 281        | 1.21 M    | 1.70 ms    | 3.08 ms    |
+| clear   | 282        | 1.16 M    | 1.70 ms    | 4.78 ms    |
+| storm   | 283        | 1.22 M    | 2.60 ms    | 5.24 ms    |
 
 The litter field adds 2 draw calls and about 22 000 triangles (278 and 1.14 M
-before it).
+before it). The lifeguard and animator figures add 2 more, one per staff model
+(280 before). The medians were taken on a busier machine than the rows before
+them: the tree without the new figures measured 1.70 ms and 5.11 ms in the same
+session.
 
 The storm difference includes the 617 lamps that come on under cloud.
 

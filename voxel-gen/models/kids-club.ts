@@ -34,6 +34,7 @@ export default defineModel({
   seats: [23, 27].map((x) => ({ x, y: BENCH_HIPS, z: BENCH.z + 1, facing: 2 as const })),
   venue: {
     role: 'activity',
+    stage: true,
     satisfies: [{ need: 'fun', amount: 0.9 }],
     capacity: 20,
     dwellSeconds: { min: 3600, max: 10_800 },

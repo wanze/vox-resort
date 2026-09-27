@@ -21,6 +21,8 @@ const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
 const ROLE_NAMES: { readonly [role in StaffRole]: readonly [string, string] } = {
   cleaner: ['cleaner', 'cleaners'],
+  lifeguard: ['lifeguard', 'lifeguards'],
+  animator: ['animator', 'animators'],
 };
 
 const rosterLine = (roster: Roster): string =>

@@ -477,6 +477,17 @@ describe('placeView with a venue that is being used', () => {
   });
 });
 
+describe('placeView and the lifeguards', () => {
+  it('says whether a pool is watched, and nothing for a place nobody swims in', () => {
+    const pool = at('swimming-pool#0', 'swimming-pool');
+    const watched = placeView(pool, 'Swimming Pool', guestsOf(), null, 0, null, 0, true);
+    expect(watched.venue?.watched).toBe(true);
+    expect(placeView(pool, 'Swimming Pool', guestsOf(), null, 0).venue?.watched).toBe(false);
+    const dry = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
+    expect(dry.venue?.watched).toBeNull();
+  });
+});
+
 describe('a guest at night', () => {
   const guests = guestsOf();
   const content = contentNeeds(guests);

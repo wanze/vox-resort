@@ -18,6 +18,7 @@ const KIND_ORDER = [
   'full-lines',
   'unreachable',
   'dirty',
+  'unwatched',
   'littered',
   'far-from-home',
   'unvisited',
@@ -65,6 +66,8 @@ export interface ResortFacts {
   readonly bedsTotal?: number;
   // Absent means clean paths.
   readonly litter?: LitterSummary;
+  // Keys of the water nobody watches; absent means every pool has its lifeguard.
+  readonly unwatched?: ReadonlySet<string>;
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -157,6 +160,27 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
     }
   }
   return worst;
+}
+
+// An unused pool nobody watches is not urgent, so the weight follows today's swimmers.
+const SWIMMERS_LOUD = 40;
+
+export function adviceUnwatched(facts: ResortFacts): readonly Advice[] {
+  const advice: Advice[] = [];
+  for (const key of facts.unwatched ?? []) {
+    // Only the beach is missing from the venue list: it is terrain, not a building.
+    const venue = facts.venues.find((each) => each.key === key);
+    const swam = facts.visits.get(key) ?? 0;
+    advice.push({
+      kind: 'unwatched',
+      weight: 0.1 + 0.6 * clamp(swam / SWIMMERS_LOUD),
+      subject: venue?.label ?? 'the beach',
+      count: swam,
+      at: venue ? tileOf(venue) : null,
+      need: null,
+    });
+  }
+  return advice;
 }
 
 export function adviceLittered(facts: ResortFacts): Advice | null {
@@ -335,6 +359,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
     adviceDirty(facts),
+    ...adviceUnwatched(facts),
     adviceLittered(facts),
     adviceFarFromHome(facts),
     ...adviceUnvisited(facts),

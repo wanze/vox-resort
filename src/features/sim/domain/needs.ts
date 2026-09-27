@@ -85,6 +85,11 @@ export function relieve(needs: Needs, person: number, satisfies: readonly NeedRe
   }
 }
 
+export function cheer(needs: Needs, person: number, amount: number): void {
+  if (person < 0 || person >= needs.count) return;
+  needs.level.fun[person] = clamp(needs.level.fun[person]! + amount);
+}
+
 export interface Urgency {
   readonly need: GuestNeed;
   readonly urgency: number;

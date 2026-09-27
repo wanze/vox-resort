@@ -20,6 +20,7 @@ export interface SeatSpot {
   readonly pose: SeatPose;
   readonly tileX: number;
   readonly tileZ: number;
+  readonly post?: 'lifeguard';
 }
 
 export function seatSpotsFor(sites: readonly SeatSite[]): SeatSpot[] {
@@ -38,6 +39,7 @@ export function seatSpotsFor(sites: readonly SeatSite[]): SeatSpot[] {
         pose: seat.pose ?? 'sit',
         tileX: Math.floor(x / TILE_VOXELS),
         tileZ: Math.floor(z / TILE_VOXELS),
+        ...(seat.post ? { post: seat.post } : {}),
       });
     }
   }

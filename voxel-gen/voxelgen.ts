@@ -81,6 +81,8 @@ export interface ModelSeat {
   // lounger's seat faces the foot end of its mattress.
   readonly facing: QuarterTurns;
   readonly pose?: SeatPose;
+  // Staff only: guests are never offered it, and a lifeguard is sent to sit here.
+  readonly post?: 'lifeguard';
 }
 
 // x/z is the doorway's middle so a turn cannot push it over a tile boundary.
@@ -122,6 +124,10 @@ export interface ModelVenue {
   readonly receives?: boolean;
   // The chance, 0 to 1, that a visit sends somebody off holding something to throw away.
   readonly litter?: number;
+  // An animator can put a show on here.
+  readonly stage?: boolean;
+  // Guests swim here, so somebody should be watching.
+  readonly bathing?: boolean;
 }
 
 export interface VoxelModelSource {
@@ -198,6 +204,22 @@ export function defineModel(source: VoxelModelSource): VoxelModelSource {
   return source;
 }
 
+function seatFrom(
+  seat: ModelSeat,
+  minX: number,
+  minY: number,
+  minZ: number,
+): ModelSeat & { readonly pose: SeatPose } {
+  const placed = {
+    x: seat.x - minX,
+    y: seat.y - minY,
+    z: seat.z - minZ,
+    facing: seat.facing,
+    pose: seat.pose ?? 'sit',
+  };
+  return seat.post ? { ...placed, post: seat.post } : placed;
+}
+
 export function buildModel(source: VoxelModelSource): VoxelModel {
   const builder = new VoxelBuilder();
   source.build(builder);
@@ -255,13 +277,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       intensity: light.intensity,
       distance: light.distance,
     })),
-    seats: (source.seats ?? []).map((seat) => ({
-      x: seat.x - minX,
-      y: seat.y - minY,
-      z: seat.z - minZ,
-      facing: seat.facing,
-      pose: seat.pose ?? 'sit',
-    })),
+    seats: (source.seats ?? []).map((seat) => seatFrom(seat, minX, minY, minZ)),
     placement: source.placement ?? {},
     venue: source.venue ?? null,
   };

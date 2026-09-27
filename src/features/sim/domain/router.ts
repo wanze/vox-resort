@@ -129,6 +129,8 @@ export interface Router {
   isAsleep(person: number): boolean;
   // One array lookup rather than an object: read per tick for every guest.
   isWaitingAt(person: number): boolean;
+  // Inside or in the line, -1 otherwise; a lookup for the reason isWaitingAt is one.
+  venueIndexOf(person: number): number;
   homewardTo(person: number): Lodging | null;
   readonly occupancyTotals: VenueOccupancy;
   goalOf(person: number): Venue | null;
@@ -1054,6 +1056,11 @@ export function createRouter(parts: {
 
     isWaitingAt(person) {
       return occupancy.state[person] === VISIT.waiting;
+    },
+
+    venueIndexOf(person) {
+      const state = occupancy.state[person];
+      return state === undefined || state === VISIT.away ? -1 : occupancy.at[person]!;
     },
 
     homewardTo(person) {

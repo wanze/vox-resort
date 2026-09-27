@@ -365,6 +365,14 @@ describe('materials', () => {
   });
 });
 
+describe('staff posts', () => {
+  it('reserves the lifeguard tower seat for a lifeguard, and no seat anywhere else', () => {
+    const posts = OBJECT_TYPES.filter((type) => type.model.seats.some((seat) => seat.post));
+    expect(posts.map((type) => type.id)).toEqual(['lifeguard-tower']);
+    expect(posts[0]!.model.seats[0]!.post).toBe('lifeguard');
+  });
+});
+
 describe('sceneryOf', () => {
   it('keeps every declared scenery above nothing and at most one', () => {
     const dressed = OBJECT_TYPES.filter((type) => sceneryOf(type.id) !== 0);

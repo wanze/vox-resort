@@ -194,8 +194,8 @@ Tune `archetypes.ts` first.
 `router.ts` is the only thing the crowd calls. Guests who want nothing wander.
 
 - **One flow field per venue**, swept breadth-first from its doors
-  (`flowFieldFor`). Built on demand and dropped on every edit. The HUD's `Routes`
-  row counts them.
+  (`flowFieldFor`). Built on demand and dropped on every edit. The Debug window's
+  `Routes` row counts them.
 - The crowd knows nothing about venues: `createCrowd` takes an optional
   `routeOf(person, at)` and falls back to wandering.
 - **Parties move together.** Whoever decides sets the goal for the whole party.
@@ -306,7 +306,7 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   not flooded at once. A wave nobody could come in is not carried over.
 - **Open and closed.** A resort gates arrivals only; a closed one still rates its
   guests and sends them home. A plot with no paving starts closed (a building
-  site), a generated one open. The Resort panel switches it.
+  site), a generated one open. The Gates button in the top bar switches it.
 - **Check-in at reception.** An arriving party appears at the first gate and
   walks to the nearest reachable venue that `receives` (declared on the art:
   `reception.ts`). They queue there like anywhere; a balk sends them back to it
@@ -318,8 +318,8 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   five-star opening day of 171 arrivals through by 21:00, with a line of 12 at
   worst (`router.test.ts`).
 
-HUD rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`,
-`Weather`. The inspector's `Mood` is one guest's happiness.
+Overview rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`;
+the weather sits in the top bar. The inspector's `Mood` is one guest's happiness.
 
 ## Advice
 
@@ -557,7 +557,7 @@ tycoon differ in exactly one predicate, `canAfford` in `ledger.ts`, which is
 always true in sandbox and compares against the balance in tycoon. It is the only
 function that reads the mode. **The ledger records in both modes**: sandbox means
 nobody is ever short of money, not that the books are blank, so a sandbox resort
-still pays wages and maintenance and the Books popover shows what it earns and
+still pays wages and maintenance and the Books window shows what it earns and
 costs. Do not "fix" wages to 0 in sandbox.
 
 **No guest behaves differently because of a price.** Choosing a venue, appeal,
@@ -602,7 +602,7 @@ pays its staff and its upkeep and earns no nights, which is real pressure and
 needs no code. Balances are integers, and a balance below zero only stops
 building.
 
-**Tycoon starts only from bare ground.** The resort panel's `Tycoon` button clears
+**Tycoon starts only from bare ground.** The New resort window's `Tycoon` button clears
 the plot like `Terrain` and opens the books with `OPENING_BALANCE.tycoon`
 (8 000, about twice a minimal start: a gate, the desk, thirty paths, three
 bungalows and a snack bar, 3 960). A generated resort is always sandbox: it is

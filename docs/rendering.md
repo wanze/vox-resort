@@ -140,8 +140,9 @@ main thread per draw, so each placement goes into four layers of buckets and
 - **People** aren't bucketed. Anyone under 3 px is packed out of the draw.
 - Construction sites, the placement ghost, terrain, balloons, litter and the bay
   aren't levelled.
-- Toggle in the Camera panel or with `?lod=0`. _Details_ shows draws, frame
-  times, GPU time, buckets per layer and shader count.
+- Toggle in the Camera window or with `?lod=0`. The _Debug_ window (F3, or
+  Menu → Debug info) shows draws, frame times, GPU time, buckets per layer and
+  shader count.
 
 ### Shader builds
 

@@ -2,6 +2,8 @@
 // rate it reports. React still creates the nodes.
 
 export interface FrameUpdate {
+  // True on the frames the frame rate is re-measured, which is when the debug readouts move.
+  readonly sampled: boolean;
   readonly fps: number;
   readonly time: number;
   readonly clock: string;
@@ -9,7 +11,7 @@ export interface FrameUpdate {
   readonly drawCalls: number;
   readonly triangles: number;
   readonly cpu: {
-    readonly latestMs: number;
+    readonly meanMs: number;
     readonly worstMs: number;
     readonly renderMs: number;
   };
@@ -32,15 +34,17 @@ interface Slot<T> {
 }
 
 export interface HudOverlayParts {
-  readonly activeLights: Slot<HTMLSpanElement>;
   readonly time: Slot<HTMLInputElement>;
   readonly clock: Slot<HTMLSpanElement>;
-  readonly drawn: Slot<HTMLSpanElement>;
-  readonly cpu: Slot<HTMLSpanElement>;
-  readonly detail: Slot<HTMLSpanElement>;
-  readonly shaders: Slot<HTMLSpanElement>;
   readonly inspect: Slot<HTMLSpanElement>;
-  readonly onFpsChange: (fps: number) => void;
+  readonly fps: Slot<HTMLSpanElement>;
+  readonly cpu: Slot<HTMLSpanElement>;
+  readonly gpu: Slot<HTMLSpanElement>;
+  readonly drawn: Slot<HTMLSpanElement>;
+  readonly detail: Slot<HTMLSpanElement>;
+  readonly people: Slot<HTMLSpanElement>;
+  readonly shaders: Slot<HTMLSpanElement>;
+  readonly activeLights: Slot<HTMLSpanElement>;
 }
 
 export interface HudOverlay {
@@ -49,29 +53,10 @@ export interface HudOverlay {
 
 const formatCount = (value: number): string => value.toLocaleString('en-US');
 
+const formatMs = (value: number): string => `${value.toFixed(1)} ms`;
+
 export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
-  // Last written values, so an unchanged number costs no DOM write and no React render.
-  let fps = -1;
-  let activeLights = -1;
-
-  const writeLights = (count: number): void => {
-    const element = parts.activeLights.current;
-    if (count === activeLights || !element) return;
-    activeLights = count;
-    element.textContent = String(count);
-  };
-
-  let drawCalls = -1;
-  let triangles = -1;
-
-  const writeDrawn = (calls: number, tris: number): void => {
-    const element = parts.drawn.current;
-    if (!element || (calls === drawCalls && tris === triangles)) return;
-    drawCalls = calls;
-    triangles = tris;
-    element.textContent = `${calls.toLocaleString('en-US')} calls, ${tris.toLocaleString('en-US')} triangles`;
-  };
-
+  // Keyed by node, so a window closed and opened again gets its numbers back straight away.
   const written = new WeakMap<HTMLElement, string>();
   const writeText = (slot: Slot<HTMLSpanElement>, text: string): void => {
     const element = slot.current;
@@ -80,21 +65,32 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     element.textContent = text;
   };
 
-  const writeCost = (frame: FrameUpdate): void => {
+  const writeDebug = (frame: FrameUpdate): void => {
+    writeText(parts.fps, String(frame.fps));
     writeText(
       parts.cpu,
-      `${frame.cpu.latestMs.toFixed(1)} ms (render ${frame.cpu.renderMs.toFixed(1)}), ` +
-        `worst ${Math.round(frame.cpu.worstMs)} ms in the last second; ` +
-        `GPU ${frame.gpuMs === null ? 'n/a' : `${frame.gpuMs.toFixed(1)} ms`}`,
+      `${formatMs(frame.cpu.meanMs)} mean · ${Math.round(frame.cpu.worstMs)} ms worst`,
+    );
+    writeText(
+      parts.gpu,
+      `${formatMs(frame.cpu.renderMs)} · GPU ${frame.gpuMs === null ? 'n/a' : formatMs(frame.gpuMs)}`,
+    );
+    writeText(
+      parts.drawn,
+      `${formatCount(frame.drawCalls)} calls · ${formatCount(frame.triangles)} tris`,
     );
     const { near, mid, far, district, hidden } = frame.detail;
     writeText(
       parts.detail,
-      `${formatCount(near)} near, ${formatCount(mid)} mid, ${formatCount(far)} far, ` +
-        `${formatCount(district)} district, ${formatCount(hidden)} hidden; ` +
-        `${formatCount(frame.people.drawn)} of ${formatCount(frame.people.total)} people`,
+      `${formatCount(near)} near · ${formatCount(mid)} mid · ${formatCount(far)} far\n` +
+        `${formatCount(district)} district · ${formatCount(hidden)} hidden`,
+    );
+    writeText(
+      parts.people,
+      `${formatCount(frame.people.drawn)} of ${formatCount(frame.people.total)}`,
     );
     writeText(parts.shaders, formatCount(frame.shaderBuilds));
+    writeText(parts.activeLights, formatCount(frame.activeLights));
   };
 
   const writeTime = (time: number): void => {
@@ -106,15 +102,9 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
 
   return {
     update(frame) {
-      if (frame.fps !== fps) {
-        fps = frame.fps;
-        parts.onFpsChange(frame.fps);
-      }
-      writeLights(frame.activeLights);
+      if (frame.sampled) writeDebug(frame);
       writeTime(frame.time);
       writeText(parts.clock, frame.clock);
-      writeDrawn(frame.drawCalls, frame.triangles);
-      writeCost(frame);
       // Blanked rather than left standing, so a guest's last activity is never read as somebody else's.
       writeText(parts.inspect, frame.inspect ?? '');
     },

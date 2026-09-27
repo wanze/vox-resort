@@ -1,9 +1,14 @@
+import { HudDropdown } from '../../hud/components/HudDropdown';
+import { HudOption } from '../../hud/components/HudOption';
+import { PixelIcon } from '../../hud/components/PixelIcon';
 import { OVERLAY_KINDS, type OverlayKind } from '../domain/overlays';
 import { rampInto } from '../domain/ramp';
 
 export interface OverlayControlProps {
   readonly kind: OverlayKind | null;
   readonly onKindChange: (kind: OverlayKind | null) => void;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }
 
 // Kept here rather than in the domain so a phrase can change without touching it.
@@ -49,30 +54,42 @@ const cssColourAt = (value: number): string => {
 // Worked out once: the ramp is fixed, and the legend is read off the same stops the tiles are.
 const RAMP_GRADIENT = `linear-gradient(to right, ${cssColourAt(0)}, ${cssColourAt(0.5)}, ${cssColourAt(1)})`;
 
-export function OverlayControl({ kind, onKindChange }: OverlayControlProps) {
+export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
+  const pick = (next: OverlayKind | null) => (): void => {
+    onKindChange(next);
+    onOpenChange(false);
+  };
+
   return (
-    <div className="hud-weather hud-overlay" role="group" aria-label="Overlay">
-      <button
-        type="button"
-        className="hud-weather-pick"
-        aria-pressed={kind === null}
-        title="Show the resort as it is"
-        onClick={() => onKindChange(null)}
+    <div className="hud-overlay">
+      <HudDropdown
+        open={open}
+        onOpenChange={onOpenChange}
+        title={kind ? `Map view: ${OVERLAY_QUESTIONS[kind]}` : 'Map view'}
+        label={
+          <>
+            <PixelIcon name="overlay" />
+            <span className="hud-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Map view'}</span>
+          </>
+        }
       >
-        Off
-      </button>
-      {OVERLAY_KINDS.map((each) => (
-        <button
-          key={each}
-          type="button"
-          className="hud-weather-pick"
-          aria-pressed={kind === each}
-          title={OVERLAY_QUESTIONS[each]}
-          onClick={() => onKindChange(each)}
-        >
-          {OVERLAY_NAMES[each]}
-        </button>
-      ))}
+        <HudOption
+          label="Off"
+          note="show the resort as it is"
+          checked={kind === null}
+          onSelect={pick(null)}
+        />
+        <hr className="hud-rule" />
+        {OVERLAY_KINDS.map((each) => (
+          <HudOption
+            key={each}
+            label={OVERLAY_NAMES[each]}
+            note={OVERLAY_QUESTIONS[each]}
+            checked={kind === each}
+            onSelect={pick(each)}
+          />
+        ))}
+      </HudDropdown>
       {kind ? (
         <p className="hud-overlay-legend">
           <span>{OVERLAY_ENDS[kind][0]}</span>

@@ -123,7 +123,8 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
       painting = null;
       hovered = null;
       onHover(null);
-      canvas.style.cursor = next ? 'crosshair' : '';
+      // A flag rather than a cursor, so the stylesheet owns the pointer art.
+      canvas.toggleAttribute('data-armed', next);
       takeLeftButton(next);
     },
     refresh() {
@@ -136,7 +137,7 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('pointerleave', onPointerLeave);
       globalThis.removeEventListener('keydown', onKeyDown);
-      canvas.style.cursor = '';
+      canvas.removeAttribute('data-armed');
       takeLeftButton(false);
     },
   };

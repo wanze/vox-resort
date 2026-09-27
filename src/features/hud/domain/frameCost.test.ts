@@ -28,6 +28,16 @@ describe('sampleFrameCost', () => {
     expect(state.latestMs).toBe(4);
   });
 
+  it('reports the mean of the window that just closed, and holds it until the next closes', () => {
+    const closed = run([
+      [0, 4],
+      [500, 8],
+      [1000, 6],
+    ]);
+    expect(closed.meanMs).toBe(6);
+    expect(sampleFrameCost(closed, 1016, 40).meanMs).toBe(6);
+  });
+
   it('lets a stall go once a whole window has passed without one', () => {
     const state = run([
       [0, 900],

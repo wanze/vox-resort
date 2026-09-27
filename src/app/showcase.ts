@@ -2847,6 +2847,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
     const { world, crowd } = current();
     onFrame({
+      sampled: sample.updated,
       fps: fpsState.fps,
       time: clock.time,
       clock: clock.label,
@@ -2854,7 +2855,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       drawCalls: handle.renderer.info.render.drawCalls,
       triangles: handle.renderer.info.render.triangles,
       cpu: {
-        latestMs: frameCost.latestMs,
+        meanMs: frameCost.meanMs,
         worstMs: frameCost.worstMs,
         renderMs: frameEnded - renderStarted,
       },

@@ -5,15 +5,16 @@ import type {
   PlaceView,
   SelectionView,
 } from '../../inspect/domain/selection';
+import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { StatRow } from './StatRow';
 import { thoughtLine } from './thoughtWords';
 
 export interface InspectPanelProps {
+  readonly frame: HudWindowFrame;
   readonly selection: SelectionView | null;
   // Written per frame by the overlay, so the panel never re-renders as the resort ticks.
   readonly activityElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
-  readonly onClose: () => void;
 }
 
 const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
@@ -257,35 +258,30 @@ function titleOf(selection: SelectionView): string {
 }
 
 export function InspectPanel({
+  frame,
   selection,
   activityElement,
   onSelectPerson,
-  onClose,
 }: InspectPanelProps) {
   if (!selection) return null;
 
   return (
-    <section className="hud-inspect" aria-label="Inspector">
-      <div className="hud-inspect-head">
-        <h2 className="hud-inspect-title">{titleOf(selection)}</h2>
-        <button
-          type="button"
-          className="hud-camera-mode hud-inspect-close"
-          aria-label="Close the inspector"
-          onClick={onClose}
-        >
-          ✕
-        </button>
+    <HudWindow
+      frame={frame}
+      title={titleOf(selection)}
+      icon={selection.kind === 'guest' ? 'guests' : 'resort'}
+    >
+      <div className="hud-inspect">
+        {selection.kind === 'guest' ? (
+          <GuestDetails
+            guest={selection}
+            activityElement={activityElement}
+            onSelectPerson={onSelectPerson}
+          />
+        ) : (
+          <PlaceDetails place={selection} onSelectPerson={onSelectPerson} />
+        )}
       </div>
-      {selection.kind === 'guest' ? (
-        <GuestDetails
-          guest={selection}
-          activityElement={activityElement}
-          onSelectPerson={onSelectPerson}
-        />
-      ) : (
-        <PlaceDetails place={selection} onSelectPerson={onSelectPerson} />
-      )}
-    </section>
+    </HudWindow>
   );
 }

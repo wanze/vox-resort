@@ -31,7 +31,7 @@ const signed = (amount: number): string =>
 export function LedgerPanel({ ledger }: LedgerPanelProps) {
   if (!ledger) return <p className="hud-loading">No books yet.</p>;
   return (
-    <dl className="hud-stats">
+    <dl className="hud-stats hud-figures">
       <StatRow label="Mode" note={MODE_NOTES[ledger.mode]}>
         {MODE_LABELS[ledger.mode]}
       </StatRow>

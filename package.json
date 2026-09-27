@@ -24,6 +24,9 @@
     "@amodx/math": "0.0.18",
     "@amodx/threads": "0.0.35",
     "@divinevoxel/vlox": "0.0.85",
+    "@fontsource-variable/pixelify-sans": "5.3.0",
+    "@fontsource-variable/rubik": "5.3.0",
+    "@fontsource/silkscreen": "5.3.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "three": "0.185.1"

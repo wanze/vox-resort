@@ -51,9 +51,7 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
       </span>
       <span className="build-tile-name">{type.label}</span>
       <span className="build-tile-badge">
-        {footprintLabel(type)}
-        {isDrawable(type) ? <span className="build-tile-draw"> ✎</span> : null}
-        <span className="build-tile-cost"> {price}</span>
+        <span className="build-tile-cost">{price}</span>
       </span>
     </button>
   );

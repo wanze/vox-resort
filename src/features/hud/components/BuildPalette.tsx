@@ -35,10 +35,17 @@ export interface BuildPaletteProps {
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly ledger: Ledger | null;
+  readonly focusSearch: boolean;
 }
 
 // A search opens every shelf: a hit inside a folded one would read as no hit.
-export function BuildPalette({ preview, tool, onToolChange, ledger }: BuildPaletteProps) {
+export function BuildPalette({
+  preview,
+  tool,
+  onToolChange,
+  ledger,
+  focusSearch,
+}: BuildPaletteProps) {
   const groups = useMemo(() => objectTypeGroups(), []);
   const [shut, setShut] = useState<ReadonlySet<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -56,11 +63,12 @@ export function BuildPalette({ preview, tool, onToolChange, ledger }: BuildPalet
     });
 
   return (
-    <section className="hud-palette" aria-label="Build palette">
+    <div className="hud-palette">
       <BuildPaletteHead
         count={countTypes(shown)}
         query={query}
         onQueryChange={setQuery}
+        focusSearch={focusSearch}
         armed={armedLabel(tool)}
         onDisarm={() => onToolChange(null)}
       />
@@ -96,6 +104,6 @@ export function BuildPalette({ preview, tool, onToolChange, ledger }: BuildPalet
           <p className="hud-palette-empty">Nothing in the catalogue answers to that.</p>
         ) : null}
       </div>
-    </section>
+    </div>
   );
 }

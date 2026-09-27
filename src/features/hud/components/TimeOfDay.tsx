@@ -1,23 +1,15 @@
 import type { RefObject } from 'react';
-import { SIM_SPEEDS, SPEED_LABELS, type SimSpeed } from '../../sim/domain/simClock';
 
 export interface TimeOfDayProps {
   readonly timeElement: RefObject<HTMLInputElement | null>;
   readonly clockElement: RefObject<HTMLSpanElement | null>;
-  readonly speed: SimSpeed;
   readonly onTimeChange: (time: number) => void;
-  readonly onSpeedChange: (speed: SimSpeed) => void;
 }
 
-export function TimeOfDay({
-  timeElement,
-  clockElement,
-  speed,
-  onTimeChange,
-  onSpeedChange,
-}: TimeOfDayProps) {
+export function TimeOfDay({ timeElement, clockElement, onTimeChange }: TimeOfDayProps) {
   return (
     <div className="hud-time">
+      <span ref={clockElement} className="hud-time-clock" />
       <input
         ref={timeElement}
         type="range"
@@ -28,20 +20,6 @@ export function TimeOfDay({
         onChange={(event) => onTimeChange(Number(event.target.value))}
         aria-label="Time of day"
       />
-      <span ref={clockElement} className="hud-time-clock" />
-      <div className="hud-time-speeds" role="group" aria-label="Simulation speed">
-        {SIM_SPEEDS.map((option) => (
-          <button
-            key={option}
-            type="button"
-            className="hud-time-speed"
-            aria-pressed={speed === option}
-            onClick={() => onSpeedChange(option)}
-          >
-            {SPEED_LABELS[option]}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

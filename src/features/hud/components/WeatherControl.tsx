@@ -1,56 +1,77 @@
+import { HudDropdown } from './HudDropdown';
+import { HudOption } from './HudOption';
+import { PixelIcon } from './PixelIcon';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 
 export interface WeatherControlProps {
   readonly weather: Weather;
   readonly forced: Weather | null;
   readonly onWeatherChange: (weather: Weather | null) => void;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
 }
 
 // Kept here rather than in the domain so a phrase can change without touching it.
-const WEATHER_MARKS: { readonly [kind in Weather]: string } = {
-  clear: '☀︎',
-  rain: '☔︎',
-  storm: '⚡︎',
-  heatwave: '♨︎',
-};
-
 const WEATHER_NAMES: { readonly [kind in Weather]: string } = {
-  clear: 'Clear',
+  clear: 'Sunny',
   rain: 'Rain',
   storm: 'Storm',
   heatwave: 'Heatwave',
 };
 
-// Auto is its own button: pinned-to-clear and running-and-clear look identical
+const WEATHER_NOTES: { readonly [kind in Weather]: string } = {
+  clear: 'everywhere open',
+  rain: 'everything without a roof shuts',
+  storm: 'no roof, no business, and tiring',
+  heatwave: 'everywhere open, everybody thirsty',
+};
+
+// Forecast is its own row: pinned-to-sunny and running-and-sunny look identical
 // but behave differently at midnight.
-export function WeatherControl({ weather, forced, onWeatherChange }: WeatherControlProps) {
+export function WeatherControl({
+  weather,
+  forced,
+  onWeatherChange,
+  open,
+  onOpenChange,
+}: WeatherControlProps) {
+  const pick = (next: Weather | null) => (): void => {
+    onWeatherChange(next);
+    onOpenChange(false);
+  };
+
   return (
-    <div className="hud-weather" role="group" aria-label="Weather">
-      <span className="hud-weather-now">
-        <span aria-hidden="true">{WEATHER_MARKS[weather]}</span> {WEATHER_NAMES[weather]}
-      </span>
-      <button
-        type="button"
-        className="hud-weather-pick"
-        aria-pressed={forced === null}
-        title="Let the week's own weather run"
-        onClick={() => onWeatherChange(null)}
-      >
-        Auto
-      </button>
+    <HudDropdown
+      className="hud-weather"
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Weather: ${WEATHER_NAMES[weather]}${forced ? ', pinned' : ', following the forecast'}`}
+      label={
+        <>
+          <PixelIcon name={weather} />
+          <span className="hud-chip-label">{WEATHER_NAMES[weather]}</span>
+          <span className="hud-chip-tag">{forced ? 'pinned' : 'forecast'}</span>
+        </>
+      }
+    >
+      <HudOption
+        icon="forecast"
+        label="Forecast"
+        note="let the week's own weather run"
+        checked={forced === null}
+        onSelect={pick(null)}
+      />
+      <hr className="hud-rule" />
       {WEATHERS.map((kind) => (
-        <button
+        <HudOption
           key={kind}
-          type="button"
-          className="hud-weather-pick"
-          aria-pressed={forced === kind}
-          aria-label={WEATHER_NAMES[kind]}
-          title={WEATHER_NAMES[kind]}
-          onClick={() => onWeatherChange(kind)}
-        >
-          <span aria-hidden="true">{WEATHER_MARKS[kind]}</span>
-        </button>
+          icon={kind}
+          label={WEATHER_NAMES[kind]}
+          note={WEATHER_NOTES[kind]}
+          checked={forced === kind}
+          onSelect={pick(kind)}
+        />
       ))}
-    </div>
+    </HudDropdown>
   );
 }

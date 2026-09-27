@@ -219,31 +219,35 @@ function drawTriangles(fb: Framebuffer, triangles: readonly Triangle[], viewport
   }
 }
 
+// Transparent averages only the samples a model covered and keeps the coverage as alpha, so a
+// catalogue tile shows its own ground behind the picture instead of a baked-in backdrop.
+function averageBlock(fb: Framebuffer, samples: readonly number[], transparent: boolean): number[] {
+  const kept = transparent ? samples.filter((sample) => fb.depth[sample] !== -Infinity) : samples;
+  const sum = [0, 0, 0];
+  for (const sample of kept) {
+    for (let channel = 0; channel < 3; channel++) sum[channel]! += fb.pixels[sample * 3 + channel]!;
+  }
+  const shared = Math.max(kept.length, 1);
+  return [...sum.map((total) => total / shared), (kept.length / samples.length) * 255];
+}
+
 function downsample(
   fb: Framebuffer,
   factor: number,
+  transparent: boolean,
 ): { pixels: Uint8Array; width: number; height: number } {
   const width = Math.floor(fb.width / factor);
   const height = Math.floor(fb.height / factor);
-  const pixels = new Uint8Array(width * height * 3);
-  const samples = factor * factor;
+  const pixels = new Uint8Array(width * height * 4);
+  const offsets = Array.from({ length: factor * factor }, (_, index) => {
+    const sy = Math.floor(index / factor);
+    return sy * fb.width + (index % factor);
+  });
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      for (let sy = 0; sy < factor; sy++) {
-        for (let sx = 0; sx < factor; sx++) {
-          const index = ((y * factor + sy) * fb.width + (x * factor + sx)) * 3;
-          r += fb.pixels[index]!;
-          g += fb.pixels[index + 1]!;
-          b += fb.pixels[index + 2]!;
-        }
-      }
-      const out = (y * width + x) * 3;
-      pixels[out] = r / samples;
-      pixels[out + 1] = g / samples;
-      pixels[out + 2] = b / samples;
+      const corner = y * factor * fb.width + x * factor;
+      const samples = offsets.map((offset) => corner + offset);
+      pixels.set(averageBlock(fb, samples, transparent), (y * width + x) * 4);
     }
   }
   return { pixels, width, height };
@@ -258,7 +262,7 @@ function crc32(buffer: Buffer): number {
   return ~c >>> 0;
 }
 
-function encodePng(rgb: Uint8Array, width: number, height: number): Buffer {
+function encodePng(rgba: Uint8Array, width: number, height: number): Buffer {
   const chunk = (type: string, data: Buffer): Buffer => {
     const length = Buffer.alloc(4);
     length.writeUInt32BE(data.length, 0);
@@ -271,12 +275,12 @@ function encodePng(rgb: Uint8Array, width: number, height: number): Buffer {
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // colour type: RGB
-  const stride = 1 + width * 3;
+  ihdr[9] = 6; // colour type: RGBA
+  const stride = 1 + width * 4;
   const raw = Buffer.alloc(height * stride);
   for (let y = 0; y < height; y++) {
     raw[y * stride] = 0; // filter: none
-    for (let i = 0; i < width * 3; i++) raw[y * stride + 1 + i] = rgb[y * width * 3 + i]!;
+    for (let i = 0; i < width * 4; i++) raw[y * stride + 1 + i] = rgba[y * width * 4 + i]!;
   }
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -296,7 +300,7 @@ function renderModel(model: VoxelModel, size: number): Buffer {
     width: fb.width,
     height: fb.height,
   });
-  const { pixels, width, height } = downsample(fb, SUPERSAMPLE);
+  const { pixels, width, height } = downsample(fb, SUPERSAMPLE, true);
   return encodePng(pixels, width, height);
 }
 
@@ -311,7 +315,7 @@ function renderSheet(models: readonly VoxelModel[], cell: number, columns: numbe
       height: cell * SUPERSAMPLE,
     });
   });
-  const { pixels, width, height } = downsample(fb, SUPERSAMPLE);
+  const { pixels, width, height } = downsample(fb, SUPERSAMPLE, false);
   return encodePng(pixels, width, height);
 }
 
@@ -346,7 +350,7 @@ function renderLineup(models: readonly VoxelModel[], person: VoxelModel, size: n
   });
   const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE);
   drawTriangles(fb, buildTriangles({ voxels }), { x: 0, y: 0, width: fb.width, height: fb.height });
-  const { pixels, width, height } = downsample(fb, SUPERSAMPLE);
+  const { pixels, width, height } = downsample(fb, SUPERSAMPLE, false);
   return encodePng(pixels, width, height);
 }
 

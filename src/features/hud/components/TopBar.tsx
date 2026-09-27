@@ -1,143 +1,121 @@
-import { useState, type RefObject } from 'react';
-import { AdvicePanel } from './AdvicePanel';
-import { CameraPanel } from './CameraPanel';
-import { GuestsPanel } from './GuestsPanel';
-import { HudPopover } from './HudPopover';
+import type { RefObject } from 'react';
 import { HudReadout } from './HudReadout';
-import { LedgerPanel } from './LedgerPanel';
-import { RenderStats, type FrameCostElements } from './RenderStats';
-import { ResortPanel } from './ResortPanel';
+import { MainMenu } from './MainMenu';
+import { PixelIcon } from './PixelIcon';
+import { SpeedControl } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
 import { WeatherControl } from './WeatherControl';
+import { WindowToolbar } from './WindowToolbar';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
-import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
-import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
-import type { Advice } from '../../sim/domain/advice';
+import type { WindowControls } from '../../../app/useWindows';
 import type { Ledger } from '../../sim/domain/ledger';
 
+export type MenuId = 'main' | 'speed' | 'weather' | 'overlay';
+
 export interface TopBarProps {
-  readonly fps: number;
-  readonly stats: ShowcaseStats | null;
-  readonly activeLightsElement: RefObject<HTMLSpanElement | null>;
-  readonly drawnElement: RefObject<HTMLSpanElement | null>;
-  readonly frameCostElements: FrameCostElements;
   readonly timeElement: RefObject<HTMLInputElement | null>;
   readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
-  readonly camera: CameraControls;
   readonly resort: ResortControls;
   readonly overlay: OverlayControls;
-  readonly advice: readonly Advice[];
-  readonly voices: VoicesView;
-  readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
+  readonly adviceCount: number;
+  readonly windows: WindowControls;
+  readonly menu: MenuId | null;
+  readonly onMenuChange: (menu: MenuId | null) => void;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
   if (ledger?.mode !== 'tycoon') return null;
-  return <HudReadout label="Money" value={ledger.balance.toLocaleString('en-US')} />;
+  return (
+    <HudReadout
+      icon={<PixelIcon name="books" />}
+      label="Money"
+      value={ledger.balance.toLocaleString('en-US')}
+    />
+  );
 }
 
-type Tool = 'details' | 'resort' | 'camera' | 'advice' | 'guests' | 'books';
+function GatesToggle({
+  open,
+  onOpenChange,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="hud-gates"
+      aria-pressed={open}
+      title={open ? 'Close the gates to new guests' : 'Open the gates to new guests'}
+      onClick={() => onOpenChange(!open)}
+    >
+      <span className="hud-gates-lamp" aria-hidden="true" />
+      <span className="hud-readout">
+        <span className="hud-readout-label">Gates</span>
+        <span className="hud-readout-value">{open ? 'Open' : 'Closed'}</span>
+      </span>
+    </button>
+  );
+}
 
 export function TopBar(props: TopBarProps) {
-  const {
-    fps,
-    stats,
-    activeLightsElement,
-    drawnElement,
-    frameCostElements,
-    timeElement,
-    clockElement,
-    clock,
-    camera,
-    resort,
-    overlay,
-    advice,
-    voices,
-    onShowOnPlot,
-    ledger,
-  } = props;
-  const [tool, setTool] = useState<Tool | null>(null);
-  const toggle = (next: Tool) => (): void => setTool((current) => (current === next ? null : next));
+  const { clock, resort, overlay, ledger, windows, menu, onMenuChange } = props;
+  const opener =
+    (id: MenuId) =>
+    (open: boolean): void =>
+      onMenuChange(open ? id : null);
 
   return (
     <header className="hud-bar">
-      <TimeOfDay
-        timeElement={timeElement}
-        clockElement={clockElement}
-        speed={clock.speed}
-        onTimeChange={clock.setTime}
-        onSpeedChange={clock.setSpeed}
-      />
+      <div className="hud-plate">
+        <MainMenu open={menu === 'main'} onOpenChange={opener('main')} windows={windows} />
+      </div>
 
-      <WeatherControl
-        weather={clock.weather}
-        forced={clock.forcedWeather}
-        onWeatherChange={clock.setWeather}
-      />
-
-      <OverlayControl kind={overlay.kind} onKindChange={overlay.setOverlay} />
-
-      <div className="hud-bar-readouts">
-        <HudReadout
-          label="Objects"
-          value={stats ? stats.objectCount.toLocaleString('en-US') : '—'}
+      <div className="hud-plate">
+        <TimeOfDay
+          timeElement={props.timeElement}
+          clockElement={props.clockElement}
+          onTimeChange={clock.setTime}
         />
-        <HudReadout label="Resort" value={resort.open ? 'Open' : 'Closed'} />
+        <SpeedControl
+          speed={clock.speed}
+          onSpeedChange={clock.setSpeed}
+          open={menu === 'speed'}
+          onOpenChange={opener('speed')}
+        />
+      </div>
+
+      <div className="hud-plate">
+        <WeatherControl
+          weather={clock.weather}
+          forced={clock.forcedWeather}
+          onWeatherChange={clock.setWeather}
+          open={menu === 'weather'}
+          onOpenChange={opener('weather')}
+        />
+        <OverlayControl
+          kind={overlay.kind}
+          onKindChange={overlay.setOverlay}
+          open={menu === 'overlay'}
+          onOpenChange={opener('overlay')}
+        />
+      </div>
+
+      <div className="hud-plate hud-status">
         <MoneyReadout ledger={ledger} />
-        <HudReadout label="FPS" value={fps} />
+        <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />
       </div>
 
-      <div className="hud-bar-tools">
-        <HudPopover label="Details" open={tool === 'details'} onToggle={toggle('details')}>
-          <RenderStats
-            stats={stats}
-            activeLightsElement={activeLightsElement}
-            drawnElement={drawnElement}
-            frameCostElements={frameCostElements}
-          />
-        </HudPopover>
-
-        <HudPopover label="Advice" open={tool === 'advice'} onToggle={toggle('advice')}>
-          <AdvicePanel advice={advice} onShowOnPlot={onShowOnPlot} />
-        </HudPopover>
-
-        <HudPopover label="Guests" open={tool === 'guests'} onToggle={toggle('guests')}>
-          <GuestsPanel voices={voices} />
-        </HudPopover>
-
-        <HudPopover label="Books" open={tool === 'books'} onToggle={toggle('books')}>
-          <LedgerPanel ledger={ledger} />
-        </HudPopover>
-
-        <HudPopover label="Resort" open={tool === 'resort'} onToggle={toggle('resort')}>
-          {resort.params ? (
-            <ResortPanel
-              params={resort.params}
-              onGenerate={resort.generate}
-              onClear={resort.clear}
-              busy={resort.building}
-              open={resort.open}
-              onOpenChange={resort.setOpen}
-            />
-          ) : null}
-        </HudPopover>
-
-        <HudPopover label="Camera" open={tool === 'camera'} onToggle={toggle('camera')}>
-          <CameraPanel
-            mode={camera.view.mode}
-            direction={camera.view.direction}
-            detail={camera.view.detail}
-            onModeChange={camera.setMode}
-            onDirectionChange={camera.setDirection}
-            onDetailChange={camera.setDetail}
-          />
-        </HudPopover>
-      </div>
+      <WindowToolbar
+        layout={windows.layout}
+        onToggle={windows.toggle}
+        adviceCount={props.adviceCount}
+      />
     </header>
   );
 }

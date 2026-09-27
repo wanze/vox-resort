@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import type { Showcase } from './showcase';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 import type { Weather } from '../features/sim/domain/weather';
@@ -10,6 +10,7 @@ export interface ClockControls {
   readonly forcedWeather: Weather | null;
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
+  togglePause(): void;
   setWeather(weather: Weather | null): void;
   adoptWeather(weather: Weather): void;
 }
@@ -19,6 +20,19 @@ export function useClockControls(showcase: RefObject<Showcase | null>): ClockCon
   // Clear until the scene reports, on the frame after it mounts.
   const [weather, setWeather] = useState<Weather>('clear');
   const [forcedWeather, setForced] = useState<Weather | null>(null);
+  // So unpausing goes back to the speed the player had, not to a default.
+  const running = useRef<SimSpeed>('normal');
+  const current = useRef<SimSpeed>('paused');
+
+  const changeSpeed = useCallback(
+    (next: SimSpeed) => {
+      current.current = next;
+      if (next !== 'paused') running.current = next;
+      setSpeed(next);
+      showcase.current?.setSpeed(next);
+    },
+    [showcase],
+  );
 
   return {
     speed,
@@ -30,12 +44,10 @@ export function useClockControls(showcase: RefObject<Showcase | null>): ClockCon
       },
       [showcase],
     ),
-    setSpeed: useCallback(
-      (next: SimSpeed) => {
-        setSpeed(next);
-        showcase.current?.setSpeed(next);
-      },
-      [showcase],
+    setSpeed: changeSpeed,
+    togglePause: useCallback(
+      () => changeSpeed(current.current === 'paused' ? running.current : 'paused'),
+      [changeSpeed],
     ),
     setWeather: useCallback(
       (next: Weather | null) => {

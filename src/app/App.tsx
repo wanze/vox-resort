@@ -10,6 +10,7 @@ import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
+import { useHudChrome } from './useHudChrome';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import type { BuildTool } from '../features/build/domain/buildTool';
 
@@ -35,7 +36,6 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  const [fps, setFps] = useState(0);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { tool, select: selectTool, pending: toolRef } = useBuildTool(showcaseRef);
@@ -46,6 +46,7 @@ export function App() {
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
   const thoughts = useThoughts();
+  const { windows, menu, setMenu } = useHudChrome(clock, tool, inspector.selection);
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
   const { adopt: adoptParams, adoptOpen, money } = resort;
@@ -63,7 +64,7 @@ export function App() {
     let disposed = false;
 
     // The render loop writes to the DOM through the overlay; React only holds state that changes rarely.
-    const overlay = createHudOverlay({ ...hudNodes, onFpsChange: setFps });
+    const overlay = createHudOverlay(hudNodes);
 
     const options = {
       canvas,
@@ -133,15 +134,8 @@ export function App() {
     <div className="app">
       <canvas ref={canvasRef} className="app-canvas" />
       <Hud
-        fps={fps}
         stats={stats}
-        activeLightsElement={hudNodes.activeLights}
-        drawnElement={hudNodes.drawn}
-        frameCostElements={{
-          cpu: hudNodes.cpu,
-          detail: hudNodes.detail,
-          shaders: hudNodes.shaders,
-        }}
+        debugElements={hudNodes}
         timeElement={hudNodes.time}
         clockElement={hudNodes.clock}
         clock={clock}
@@ -161,6 +155,9 @@ export function App() {
         error={error}
         refusal={money.refusal}
         ledger={money.ledger}
+        windows={windows}
+        menu={menu}
+        onMenuChange={setMenu}
       />
     </div>
   );

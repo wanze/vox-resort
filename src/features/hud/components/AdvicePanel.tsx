@@ -47,7 +47,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
 };
 
 const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null } = {
-  closed: () => 'open it from the Resort panel',
+  closed: () => 'open the gates in the top bar',
   'no-entrance': () => null,
   'no-reception': () => null,
   'no-beds': () => null,

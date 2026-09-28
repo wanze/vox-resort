@@ -16,7 +16,11 @@ export interface ResortControls {
   start(params: ResortParams, game: NewGame): Promise<boolean>;
 }
 
-export function useResortControls(showcase: RefObject<Showcase | null>): ResortControls {
+// onStarted is told once the new resort stands, so its first save can be written at once.
+export function useResortControls(
+  showcase: RefObject<Showcase | null>,
+  onStarted: () => void,
+): ResortControls {
   const [params, setParams] = useState<ResortParams | null>(null);
   const [building, setBuilding] = useState(false);
   const [open, adoptOpen] = useState(true);
@@ -34,6 +38,7 @@ export function useResortControls(showcase: RefObject<Showcase | null>): ResortC
           ? mounted.generate(next)
           : mounted.clear(next, game.mode));
         setParams(mounted.params);
+        onStarted();
         return true;
       } catch (cause: unknown) {
         console.error(cause);
@@ -42,7 +47,7 @@ export function useResortControls(showcase: RefObject<Showcase | null>): ResortC
         setBuilding(false);
       }
     },
-    [showcase],
+    [showcase, onStarted],
   );
 
   return {

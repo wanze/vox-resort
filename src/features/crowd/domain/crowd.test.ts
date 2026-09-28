@@ -17,9 +17,11 @@ import {
   releaseTo,
   reseatCrowd,
   RESTING,
+  restoreCrowd,
   restingOn,
   rouseSunbathers,
   seatIsFree,
+  snapshotCrowd,
   stepCrowd,
   stepOntoSand,
   takeOffPlot,
@@ -36,6 +38,7 @@ import {
 } from './walkNetwork';
 import type { SeatSpot } from './seating';
 import { LANE, MAX_SIDE } from './avoidance';
+import { crowdSnapshotSchema } from './crowdSnapshot';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -1177,8 +1180,7 @@ describe('an errand over the sand', () => {
     expect(rebuilt.gates).toContain(reseated.gate[person]);
   });
 
-  // Pinned: every bench comparison relies on a router-less crowd replaying the same afternoon.
-  it('replays a crowd with no router to the voxel over 2 000 steps', () => {
+  const furnishedBeach = (): WalkNetwork => {
     const paved = [
       ...boardwalk(8),
       ...Array.from({ length: 12 }, (_, tileX) => ({ tileX: tileX + 4, tileZ: 9, y: 0 })),
@@ -1207,7 +1209,12 @@ describe('an errand over the sand', () => {
       width: 8,
       depth: 8,
     }));
-    const furnished = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats, obstacles });
+    return walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats, obstacles });
+  };
+
+  // Pinned: every bench comparison relies on a router-less crowd replaying the same afternoon.
+  it('replays a crowd with no router to the voxel over 2 000 steps', () => {
+    const furnished = furnishedBeach();
     const crowd = createCrowd({ network: furnished, count: 40, variants: 4, seed: 27 });
     for (let step = 0; step < 2000; step++) stepCrowd(crowd, MAX_STEP);
     let hash = 2166136261;
@@ -1217,6 +1224,41 @@ describe('an errand over the sand', () => {
       }
     }
     expect(hash).toBe(2894628438);
+  });
+
+  it('carries a restored crowd on exactly as the saved one goes on', () => {
+    const saved = createCrowd({ network: furnishedBeach(), count: 40, variants: 4, seed: 27 });
+    for (let step = 0; step < 700; step++) stepCrowd(saved, MAX_STEP);
+    const twin = restoreCrowd(
+      createCrowd({ network: furnishedBeach(), count: 40, variants: 4, seed: 27 }),
+      snapshotCrowd(saved),
+    );
+    expect(
+      Array.from(saved.seatBy).some((person) => person >= 0),
+      'nobody sat down',
+    ).toBe(true);
+    expect(
+      Array.from(saved.node).some((node) => node === -1),
+      'nobody roams',
+    ).toBe(true);
+
+    for (let step = 0; step < 900; step++) {
+      stepCrowd(saved, MAX_STEP);
+      stepCrowd(twin, MAX_STEP);
+    }
+    expect(snapshotCrowd(twin)).toEqual(snapshotCrowd(saved));
+  });
+
+  it('saves copies, which the crowd walking on does not change', () => {
+    const crowd = createCrowd({ network: furnishedBeach(), count: 40, variants: 4, seed: 27 });
+    const snapshot = snapshotCrowd(crowd);
+    const x = snapshot.x[0];
+    for (let step = 0; step < 50; step++) stepCrowd(crowd, MAX_STEP);
+    expect(snapshot.x[0]).toBe(x);
+    expect(crowdSnapshotSchema.safeParse(snapshot).success).toBe(true);
+    expect(crowdSnapshotSchema.safeParse({ ...snapshot, rate: [...snapshot.rate] }).success).toBe(
+      false,
+    );
   });
 });
 

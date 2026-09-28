@@ -13,6 +13,9 @@ export interface ClockControls {
   togglePause(): void;
   setWeather(weather: Weather | null): void;
   adoptWeather(weather: Weather): void;
+  // For a clock the showcase set itself, as a load does; nothing is sent back to it.
+  adoptSpeed(speed: SimSpeed): void;
+  adoptForced(weather: Weather | null): void;
 }
 
 export function useClockControls(showcase: RefObject<Showcase | null>): ClockControls {
@@ -59,5 +62,10 @@ export function useClockControls(showcase: RefObject<Showcase | null>): ClockCon
       [showcase],
     ),
     adoptWeather: useCallback((next: Weather) => setWeather(next), []),
+    adoptSpeed: useCallback((next: SimSpeed) => {
+      current.current = next;
+      setSpeed(next);
+    }, []),
+    adoptForced: useCallback((next: Weather | null) => setForced(next), []),
   };
 }

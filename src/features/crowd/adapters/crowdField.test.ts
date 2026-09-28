@@ -365,6 +365,18 @@ describe('buildCrowdField', () => {
     field.dispose();
   });
 
+  it('adopts a restored crowd where it stands, drawing somebody taken off the plot as gone', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    const restored = { ...field.crowd };
+    takeOffPlot(restored, 3, 0, 0, 0);
+    restored.x[4] = 7.5;
+    field.adopt(restored);
+    expect(field.crowd).toBe(restored);
+    expect(field.crowd.x[4]).toBe(7.5);
+    expect(field.drawnCount).toBe(39);
+    field.dispose();
+  });
+
   it('draws everybody the view admits after a relocate', () => {
     const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
     field.relocate(networkOf(paved(3)));

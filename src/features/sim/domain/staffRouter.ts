@@ -10,13 +10,14 @@ import {
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { blockedAt } from '../../crowd/domain/sandGrid';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
-import { createRandom } from '../../layout/domain/random';
+import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import { mostLittered, sweep, SWEEP_ABOVE, type Litter } from './litter';
 import { SAND_ROUTE_TILES } from './router';
 import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
 import type { Staff } from './staff';
+import { staffVenuesMatch, type StaffRouterSnapshot } from './staffRouterSnapshot';
 import {
   cleanliness,
   dirtiest,
@@ -72,6 +73,9 @@ export interface StaffRouter {
   watching(venue: number): boolean;
   readonly watchingBeach: boolean;
   readonly workingCount: number;
+  snapshot(): StaffRouterSnapshot;
+  // Onto a router built on the venues and network the snapshot was taken on; throws otherwise.
+  restore(snapshot: StaffRouterSnapshot): void;
 }
 
 export function createStaffRouter(parts: {
@@ -93,7 +97,7 @@ export function createStaffRouter(parts: {
   readonly seed: number;
 }): StaffRouter {
   const { staff } = parts;
-  const random = createRandom(parts.seed);
+  let random = createRandom(parts.seed);
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
   const isOnDuty = (worker: number): boolean => (parts.duty?.()[worker] ?? 1) === 1;
 
@@ -467,6 +471,23 @@ export function createStaffRouter(parts: {
     return pickTower(worker, at) >= 0 ? towardsTower(worker, at) : -1;
   };
 
+  // Every claim index follows from who is assigned or posted where.
+  const reclaim = (): void => {
+    claimedBy.fill(NOBODY);
+    showBy.fill(NOBODY);
+    watchedBy.fill(NOBODY);
+    towerBy.clear();
+    const litter = parts.litter?.();
+    tileClaimedBy = new Int32Array(litter?.level.length ?? 0).fill(NOBODY);
+    for (let worker = 0; worker < staff.count; worker++) {
+      const venue = assigned[worker]!;
+      if (venue >= 0) claimsOf(worker)[venue] = worker;
+      if (towerOf[worker]! >= 0) towerBy.set(towerOf[worker]!, worker);
+      if (tileOf[worker]! >= 0) tileClaimedBy[tileOf[worker]!] = worker;
+    }
+    workingCount = working.reduce((total, each) => total + each, 0);
+  };
+
   const claimedAndWorking = (claims: Int32Array, venue: number): boolean => {
     const worker = claims[venue] ?? NOBODY;
     return worker >= 0 && working[worker] === 1;
@@ -541,6 +562,42 @@ export function createStaffRouter(parts: {
 
     get workingCount() {
       return workingCount;
+    },
+
+    snapshot() {
+      return {
+        assigned: assigned.slice(),
+        until: until.slice(),
+        working: working.slice(),
+        doorOf: doorOf.slice(),
+        tileOf: tileOf.slice(),
+        lastStage: lastStage.slice(),
+        sheltering: sheltering.slice(),
+        towerOf: towerOf.slice(),
+        legOf: legOf.slice(),
+        legRoute: [...legRoute],
+        now,
+        random: random.state(),
+      };
+    },
+
+    restore(snapshot) {
+      if (!staffVenuesMatch(snapshot, venues.length)) {
+        throw new Error(`The save's staff work at venues this plot does not have`);
+      }
+      assigned = snapshot.assigned.slice();
+      until = snapshot.until.slice();
+      working = snapshot.working.slice();
+      doorOf = snapshot.doorOf.slice();
+      tileOf = snapshot.tileOf.slice();
+      lastStage = snapshot.lastStage.slice();
+      sheltering = snapshot.sheltering.slice();
+      towerOf = snapshot.towerOf.slice();
+      legOf = snapshot.legOf.slice();
+      legRoute = [...snapshot.legRoute];
+      now = snapshot.now;
+      random = resumeRandom(snapshot.random);
+      reclaim();
     },
   };
 }

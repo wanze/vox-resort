@@ -34,6 +34,8 @@ export interface CrowdField {
   setView(view: DetailView | null): void;
   readonly drawnCount: number;
   relocate(network: WalkNetwork): void;
+  // Takes a restored crowd as it is, where relocate would re-anchor everybody.
+  adopt(crowd: Crowd): void;
   dispose(): void;
 }
 
@@ -193,6 +195,10 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     relocate(network) {
       crowd = reseatCrowd(crowd, network);
       // Now rather than next frame, so nobody is drawn where the old graph had them.
+      writeAll();
+    },
+    adopt(next) {
+      crowd = next;
       writeAll();
     },
     dispose() {

@@ -624,6 +624,25 @@ resort is built; never per visit. The top bar shows **Money** in tycoon only, an
 disabled, when the bank cannot pay for it. The inspector shows a venue's
 **Takings today**.
 
+## Saving
+
+A save is the whole simulation, not the world and the money: every guest keeps
+their place, needs, visit, queue place, pitch, errand and sleep, and every member
+of staff their post, so a loaded game carries on as the saved one would have.
+`Showcase.snapshot()` assembles it from one snapshot per module (`snapshotGuests`,
+`router.snapshot()`, `snapshotCrowd`, ...) and `load()` restores them in a
+straight line onto a resort rebuilt from the saved placements, in their saved
+order, which renumbers nodes, seats and venues exactly as before. Saves live in
+IndexedDB and are parsed with zod on the way back (`saves/domain/snapshot.ts`).
+
+**Every piece of new simulation state must be added to its module's snapshot and
+schema, or `SAVE_VERSION` bumped.** There are no migrations: a save of another
+version is listed as unreadable. The twin-run tests (`crowd.test.ts`,
+`router.test.ts`) restore a snapshot into a second resort and run both side by
+side, so they catch a missed field, but only if their scenario exercises it.
+Reordering `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels
+changes what a saved number means, and needs a version bump too.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.

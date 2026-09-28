@@ -13,6 +13,8 @@ import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortStats } from './ResortStats';
 import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
+import { SavesPanel } from '../../saves/components/SavesPanel';
+import { readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, type WindowId } from '../domain/windowLayout';
 import type { BuildTool } from '../../build/domain/buildTool';
@@ -23,6 +25,7 @@ import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
+import type { SaveControls } from '../../../app/useSaves';
 import type { WindowControls } from '../../../app/useWindows';
 import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
 
@@ -34,6 +37,7 @@ export interface HudProps {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
+  readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
@@ -65,6 +69,7 @@ const PANELS: readonly Panel[] = [
   'books',
   'camera',
   'resort',
+  'saves',
   'debug',
 ];
 
@@ -93,7 +98,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onDetailChange={camera.setDetail}
     />
   ),
-  resort: ({ resort, windows }) =>
+  resort: ({ resort, saves, windows }) =>
     resort.params ? (
       <NewGamePanel
         params={resort.params}
@@ -103,8 +108,11 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
           })
         }
         busy={resort.building}
+        unsaved={readableById(saves.saves, UNSAVED_ID)}
+        onKeepUnsaved={saves.nameUnsaved}
       />
     ) : null,
+  saves: ({ saves }) => <SavesPanel saves={saves} />,
   debug: (props) => <RenderStats stats={props.stats} elements={props.debugElements} />,
 };
 
@@ -163,6 +171,7 @@ export function Hud(props: HudProps) {
         clockElement={props.clockElement}
         clock={props.clock}
         resort={props.resort}
+        saves={props.saves}
         overlay={props.overlay}
         ledger={props.ledger}
         adviceCount={props.advice.length}

@@ -6,6 +6,7 @@ const WINDOW_IDS = [
   'books',
   'camera',
   'resort',
+  'saves',
   'debug',
   'inspect',
 ] as const;

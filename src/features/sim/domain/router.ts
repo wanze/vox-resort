@@ -14,7 +14,7 @@ import {
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, partyOf, type Guests } from '../../guests/domain/guests';
-import { createRandom } from '../../layout/domain/random';
+import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { saltFor, tasteFor } from './appeal';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { doorsFor } from './doors';
@@ -24,8 +24,10 @@ import {
   clearPartyGoal,
   createGoals,
   NO_GOAL,
+  restoreGoals,
   setPartyGoal,
   setPartyVenue,
+  snapshotGoals,
   type Goals,
 } from './goals';
 import { type Gateway } from './gateways';
@@ -39,10 +41,13 @@ import {
   createOccupancy,
   type ArrivalOutcome,
   leaveVenue,
+  restoreOccupancy,
+  snapshotOccupancy,
   sweepOccupancy,
   VISIT,
   type Occupancy,
 } from './occupancy';
+import { routerVenuesMatch, type RouterSnapshot } from './routerSnapshot';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
@@ -140,6 +145,10 @@ export interface Router {
   forgetTheDay(): void;
   visitOf(person: number): Visit | null;
   stayOf(person: number): BeachStay | null;
+  snapshot(): RouterSnapshot;
+  // Onto a router built from the lists the snapshot was taken on, in the same order: every
+  // index it holds is into them. Throws when the venue count says otherwise.
+  restore(snapshot: RouterSnapshot): void;
 }
 
 export function createRouter(parts: {
@@ -174,7 +183,7 @@ export function createRouter(parts: {
   const onThought = parts.onThought ?? ((): void => {});
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
   const goals: Goals = createGoals(guests.count);
-  const random = createRandom(parts.seed);
+  let random = createRandom(parts.seed);
 
   let venues = withBeach(parts.venues, parts.network);
   let lodgings = parts.lodgings;
@@ -227,6 +236,49 @@ export function createRouter(parts: {
   // Kept across a rebuild: it is a fact about the guest, not about the graph.
   const arriving = new Uint8Array(guests.count);
   let now = 0;
+
+  const claimTable = (): {
+    readonly claims: readonly Claim[];
+    readonly idOf: (claim: Claim | null | undefined) => number;
+  } => {
+    const claims: Claim[] = [];
+    const ids = new Map<Claim, number>();
+    const idOf = (claim: Claim | null | undefined): number => {
+      if (!claim) return -1;
+      const known = ids.get(claim);
+      if (known !== undefined) return known;
+      ids.set(claim, claims.length);
+      claims.push(claim);
+      return claims.length - 1;
+    };
+    return { claims, idOf };
+  };
+
+  // Holders, pitched tiles and promised loungers all follow from who stays where.
+  const restoreClaims = (snapshot: RouterSnapshot): void => {
+    const claims: Claim[] = snapshot.claims.map(({ pitch, routes }) => ({
+      pitch,
+      routes,
+      holders: 0,
+    }));
+    partyPitches = snapshot.partyPitches.map((id) => claims[id] ?? null);
+    stays = Array.from(snapshot.stays, (id) => claims[id] ?? null);
+    for (const claim of stays) if (claim) claim.holders++;
+    pitched = new Set(claims.map((claim) => claim.pitch.tile));
+    promised = new Set(
+      claims.flatMap((claim) =>
+        claim.pitch.spots.map((spot) => spot.seat).filter((seat) => seat >= 0),
+      ),
+    );
+  };
+
+  // Rebuilt first: queue limits and walking distances read which fields exist.
+  const restoreFields = (swept: readonly number[]): void => {
+    fields = venues.map(() => null);
+    lanes = venues.map(() => null);
+    sandRoutes = venues.map(() => null);
+    for (const venue of swept) fieldFor(venue);
+  };
 
   const sweep = (sources: readonly number[]): FlowField => {
     built++;
@@ -1121,6 +1173,77 @@ export function createRouter(parts: {
     forgetTheDay() {
       balkCount.fill(0);
       visitCount.fill(0);
+    },
+
+    snapshot() {
+      const { claims, idOf } = claimTable();
+      const party = Array.from(partyPitches, (claim) => idOf(claim));
+      const staying = Int32Array.from(stays, (claim) => idOf(claim));
+      return {
+        goals: snapshotGoals(goals),
+        occupancy: snapshotOccupancy(occupancy),
+        errands: {
+          venue: errands.venue.slice(),
+          route: [...errands.route],
+          leg: errands.leg.slice(),
+          back: errands.back.slice(),
+        },
+        doorOf: doorOf.slice(),
+        justLeft: justLeft.slice(),
+        leaving: leaving.slice(),
+        asleep: asleep.slice(),
+        homeward: homeward.slice(),
+        homeLodging: homeLodging.slice(),
+        arriving: arriving.slice(),
+        claims: claims.map(({ pitch, routes }) => ({ pitch, routes })),
+        partyPitches: party,
+        stays: staying,
+        spotOf: spotOf.slice(),
+        fetching: fetching.slice(),
+        stayUntil: stayUntil.slice(),
+        stayRoutes: [...stayRoutes],
+        lookAgainAt: lookAgainAt.slice(),
+        balkCount: balkCount.slice(),
+        visitCount: visitCount.slice(),
+        fieldsBuilt: fields.flatMap((field, venue) => (field ? [venue] : [])),
+        now,
+        random: random.state(),
+      };
+    },
+
+    restore(snapshot) {
+      if (!routerVenuesMatch(snapshot, venues.length)) {
+        throw new Error(
+          `The save was taken on ${snapshot.balkCount.length} venues, not ${venues.length}`,
+        );
+      }
+      restoreFields(snapshot.fieldsBuilt);
+      restoreGoals(goals, snapshot.goals);
+      restoreOccupancy(occupancy, snapshot.occupancy);
+      errands = {
+        venue: snapshot.errands.venue.slice(),
+        route: [...snapshot.errands.route],
+        leg: snapshot.errands.leg.slice(),
+        back: snapshot.errands.back.slice(),
+      };
+      doorOf = snapshot.doorOf.slice();
+      justLeft = snapshot.justLeft.slice();
+      leaving = snapshot.leaving.slice();
+      asleep = snapshot.asleep.slice();
+      asleepCount = asleep.reduce((total, each) => total + each, 0);
+      homeward = snapshot.homeward.slice();
+      homeLodging = snapshot.homeLodging.slice();
+      arriving.set(snapshot.arriving);
+      restoreClaims(snapshot);
+      spotOf = snapshot.spotOf.slice();
+      fetching = snapshot.fetching.slice();
+      stayUntil = snapshot.stayUntil.slice();
+      stayRoutes = [...snapshot.stayRoutes];
+      lookAgainAt = snapshot.lookAgainAt.slice();
+      balkCount = snapshot.balkCount.slice();
+      visitCount = snapshot.visitCount.slice();
+      now = snapshot.now;
+      random = resumeRandom(snapshot.random);
     },
   };
 }

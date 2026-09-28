@@ -10,6 +10,7 @@ import { OverlayControl } from '../../overlays/components/OverlayControl';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
+import type { SaveControls } from '../../../app/useSaves';
 import type { WindowControls } from '../../../app/useWindows';
 import type { Ledger } from '../../sim/domain/ledger';
 
@@ -20,6 +21,7 @@ export interface TopBarProps {
   readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
   readonly resort: ResortControls;
+  readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly ledger: Ledger | null;
   readonly adviceCount: number;
@@ -78,6 +80,7 @@ export function TopBar(props: TopBarProps) {
           open={menu === 'main'}
           onOpenChange={opener('main')}
           windows={windows}
+          saves={props.saves}
           onFind={props.onFind}
         />
       </div>

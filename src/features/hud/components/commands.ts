@@ -25,6 +25,10 @@ import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
+import type { SaveControls } from '../../../app/useSaves';
+import { isReadable, listOrder, saveOrAsk } from '../../saves/domain/saveSlots';
+import { savedAgo, titleOf } from '../../saves/domain/saveWords';
+import { SAVE_SHORTCUT } from './MainMenu';
 import type { WindowControls } from '../../../app/useWindows';
 
 export type CommandArt =
@@ -45,6 +49,7 @@ export interface CommandContext {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
   readonly resort: ResortControls;
+  readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly windows: WindowControls;
   readonly tool: BuildTool | null;
@@ -161,6 +166,50 @@ function cameraCommands({ camera }: CommandContext): Command[] {
       checked: view.detail,
       run: () => camera.setDetail(!view.detail),
     },
+  ];
+}
+
+function savesWindow(id: string, label: string, note: string, windows: WindowControls): Command {
+  return {
+    id,
+    label,
+    group: 'Game',
+    keywords: 'save load saved game file',
+    note,
+    art: { icon: 'books' },
+    run: () => windows.show('saves', true),
+  };
+}
+
+// Nothing here deletes: that is asked about in the list, where the save being deleted is in view.
+function gameCommands({ saves, windows }: CommandContext): Command[] {
+  const now = Date.now();
+  const loads = listOrder(saves.saves)
+    .filter(isReadable)
+    .map((meta) => ({
+      id: `game:load:${meta.id}`,
+      label: `Load ${titleOf(meta)}`,
+      group: 'Game',
+      keywords: 'load saved game continue open',
+      note: `day ${meta.day}, saved ${savedAgo(meta.savedAt, now)}`,
+      art: { icon: 'books' as const },
+      run: () => void saves.load(meta.id),
+    }));
+  return [
+    {
+      id: 'game:save',
+      label: 'Save game',
+      group: 'Game',
+      keywords: 'save keep write',
+      note: saves.current?.name ?? 'name it first',
+      art: { icon: 'books' },
+      shortcut: SAVE_SHORTCUT,
+      run: () => void saveOrAsk(saves.save, () => windows.show('saves', true)),
+    },
+    savesWindow('game:save-as', 'Save as…', 'keep a copy under a new name', windows),
+    savesWindow('game:load', 'Load game…', 'every saved game, newest first', windows),
+    ...loads,
+    savesWindow('game:delete', 'Delete a saved game…', 'in the list of saved games', windows),
   ];
 }
 
@@ -289,6 +338,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...weatherCommands(context),
     ...overlayCommands(context),
     ...cameraCommands(context),
+    ...gameCommands(context),
     ...resortCommands(context),
     ...windowCommands(context),
     ...toolCommands(context),

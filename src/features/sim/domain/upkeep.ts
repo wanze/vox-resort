@@ -1,3 +1,5 @@
+import type { UpkeepSnapshot } from './resortSnapshot';
+
 // There is deliberately no decay back towards clean: the answer to dirt is a cleaner walking to it.
 
 export interface Upkeep {
@@ -70,4 +72,23 @@ export function carryUpkeep(
     carried.level[venue] = was.get(to[venue]!.key) ?? 1;
   }
   return carried;
+}
+
+export function snapshotUpkeep(
+  upkeep: Upkeep,
+  venues: readonly { readonly key: string }[],
+): UpkeepSnapshot {
+  return { keys: venues.map((venue) => venue.key), level: upkeep.level.slice() };
+}
+
+export function restoreUpkeep(
+  snapshot: UpkeepSnapshot,
+  venues: readonly { readonly key: string }[],
+): Upkeep {
+  const saved = { venues: snapshot.keys.length, level: snapshot.level };
+  return carryUpkeep(
+    saved,
+    snapshot.keys.map((key) => ({ key })),
+    venues,
+  );
 }

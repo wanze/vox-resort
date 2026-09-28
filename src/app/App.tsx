@@ -9,15 +9,17 @@ import type { ResortParams } from '../features/layout/domain/resortGenerator';
 import { parseBenchConfig } from '../features/bench/domain/benchConfig';
 import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
-import { useClockControls } from './useClockControls';
+import { useClockControls, type ClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
 import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
+import { useSaves, type SaveControls } from './useSaves';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import type { BuildTool } from '../features/build/domain/buildTool';
+import type { GameSnapshot } from '../features/saves/domain/snapshot';
 
 // A benchmark measures the game itself, so it skips the welcome screen.
 const OPENS_ON_WELCOME = parseBenchConfig(globalThis.location?.search ?? '') === null;
@@ -52,20 +54,50 @@ function Screen(props: {
   return props.playing ? props.children : props.welcome;
 }
 
-// With the resort's controls, because starting a new game is what ends the welcome screen: it
-// gives way to the HUD once the first new resort stands.
-function useWelcome(showcase: RefObject<Showcase | null>) {
-  const resort = useResortControls(showcase);
+// With the resort's controls, because starting or loading a game is what ends the welcome screen:
+// it gives way to the HUD once the resort stands.
+function useWelcome(
+  showcase: RefObject<Showcase | null>,
+  saves: SaveControls,
+  setPlaying: (playing: boolean) => void,
+) {
+  const resort = useResortControls(showcase, saves.started);
   const { start } = resort;
-  const [playing, setPlaying] = useState(!OPENS_ON_WELCOME);
+  const { load } = saves;
   const [loaded, setLoaded] = useState<readonly LoadingStep[]>([]);
   const adoptLoading = useCallback((step: LoadingStep) => setLoaded((done) => [...done, step]), []);
   const startGame = useCallback(
     (params: ResortParams, game: NewGame) =>
       void start(params, game).then((built) => built && setPlaying(true)),
-    [start],
+    [start, setPlaying],
   );
-  return { resort, playing, loaded, ready: loaded.includes('scene'), adoptLoading, startGame };
+  const loadGame = useCallback(
+    (id: string) => void load(id).then((running) => running && setPlaying(true)),
+    [load, setPlaying],
+  );
+  return { resort, loaded, ready: loaded.includes('scene'), adoptLoading, startGame, loadGame };
+}
+
+// The saves are made before the resort's controls, which tell them when a game starts, so the
+// params a load brings are handed over late.
+function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
+  const [playing, setPlaying] = useState(!OPENS_ON_WELCOME);
+  const { adoptForced } = clock;
+  const adoptParamsRef = useRef<(params: ResortParams) => void>(() => {});
+  const onLoaded = useCallback(
+    (snapshot: GameSnapshot) => {
+      adoptForced(snapshot.clock.forced);
+      adoptParamsRef.current(snapshot.params);
+    },
+    [adoptForced],
+  );
+  const saves = useSaves(showcase, playing, onLoaded);
+  const welcome = useWelcome(showcase, saves, setPlaying);
+  const { adopt: adoptParams } = welcome.resort;
+  useEffect(() => {
+    adoptParamsRef.current = adoptParams;
+  }, [adoptParams]);
+  return { playing, saves, welcome };
 }
 
 export function App() {
@@ -81,13 +113,14 @@ export function App() {
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
   const thoughts = useThoughts();
-  const welcome = useWelcome(showcaseRef);
-  const { resort, playing, adoptLoading } = welcome;
+  const { playing, saves, welcome } = useGame(showcaseRef, clock);
+  const { resort, adoptLoading } = welcome;
   const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
     clock,
     tool,
     inspector.selection,
     playing,
+    saves,
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
@@ -96,8 +129,9 @@ export function App() {
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
   const { adopt: adoptVoices } = thoughts;
-  const { adoptWeather } = clock;
+  const { adoptWeather, adoptSpeed } = clock;
   const { adopt: adoptLedger, refuse } = money;
+  const { markDirty, morning } = saves;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -122,6 +156,9 @@ export function App() {
       onRefused: refuse,
       onFrame: overlay.update,
       onLoading: adoptLoading,
+      onDirty: markDirty,
+      onMorning: morning,
+      onSpeedChange: adoptSpeed,
       welcome: OPENS_ON_WELCOME,
     };
 
@@ -173,6 +210,9 @@ export function App() {
     adoptLedger,
     adoptLoading,
     refuse,
+    markDirty,
+    morning,
+    adoptSpeed,
   ]);
 
   return (
@@ -188,6 +228,8 @@ export function App() {
             params={resort.params}
             busy={resort.building}
             onStart={welcome.startGame}
+            saves={saves}
+            onLoad={welcome.loadGame}
           />
         }
       >
@@ -199,6 +241,7 @@ export function App() {
           clock={clock}
           camera={camera}
           resort={resort}
+          saves={saves}
           overlay={mapOverlay}
           advice={advice.advice}
           voices={thoughts.voices}

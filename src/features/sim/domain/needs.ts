@@ -2,6 +2,7 @@ import { GUEST_NEEDS, type GuestNeed, type NeedRelief } from '../../../../voxel-
 import type { Guests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { archetypeOf } from './archetypes';
+import type { NeedsSnapshot } from './resortSnapshot';
 import { CLEAR_EFFECT, type WeatherEffect } from './weather';
 
 const TICKS_PER_HOUR = 60;
@@ -109,4 +110,19 @@ export function strongestNeed(
     if (strongest === null || urgency > strongest.urgency) strongest = { need, urgency };
   }
   return strongest;
+}
+
+export function snapshotNeeds(needs: Needs): NeedsSnapshot {
+  const { hunger, thirst, energy, fun, hygiene } = needs.level;
+  return {
+    hunger: hunger.slice(),
+    thirst: thirst.slice(),
+    energy: energy.slice(),
+    fun: fun.slice(),
+    hygiene: hygiene.slice(),
+  };
+}
+
+export function restoreNeeds(needs: Needs, snapshot: NeedsSnapshot): void {
+  for (const need of GUEST_NEEDS) needs.level[need].set(snapshot[need]);
 }

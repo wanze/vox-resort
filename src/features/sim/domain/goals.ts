@@ -2,6 +2,7 @@ import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import { partyOf } from '../../guests/domain/guests';
 import type { VenueChoice } from './chooseVenue';
+import type { RouterSnapshot } from './routerSnapshot';
 
 export const NO_GOAL = -1;
 
@@ -56,4 +57,14 @@ export function clearPartyGoal(goals: Goals, guests: Guests, person: number): vo
 
 export function clearAllGoals(goals: Goals): void {
   goals.venue.fill(NO_GOAL);
+}
+
+// `need` is saved too: it is never cleared, so it still says why a goal was set.
+export function snapshotGoals(goals: Goals): RouterSnapshot['goals'] {
+  return { venue: goals.venue.slice(), need: goals.need.slice() };
+}
+
+export function restoreGoals(goals: Goals, snapshot: RouterSnapshot['goals']): void {
+  goals.venue.set(snapshot.venue);
+  goals.need.set(snapshot.need);
 }

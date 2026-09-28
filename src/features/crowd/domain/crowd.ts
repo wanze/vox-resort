@@ -3,8 +3,9 @@
 // the benchmark replays the same scene.
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { createRandom } from '../../layout/domain/random';
+import { createRandom, resumeRandom, type Random } from '../../layout/domain/random';
 import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
+import { PER_BODY_COLUMNS, type CrowdSnapshot } from './crowdSnapshot';
 import { nearestNodeTo, nodeIndexFor } from './nearestNode';
 import { blockedAt, clearLine } from './sandGrid';
 import {
@@ -124,7 +125,7 @@ export interface Crowd extends Walkers {
   // was built.
   readonly offPlot: Uint8Array;
 
-  readonly random: () => number;
+  readonly random: Random;
   readonly routeOf: ((person: number, at: number) => number) | undefined;
   readonly offTheSand: ((person: number) => boolean) | undefined;
   readonly roamsBeach: boolean;
@@ -292,6 +293,23 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
   }
   crowd.seat.fill(-1, count);
   return reseated;
+}
+
+export function snapshotCrowd(crowd: Crowd): CrowdSnapshot {
+  const columns = Object.fromEntries(PER_BODY_COLUMNS.map((name) => [name, crowd[name].slice()]));
+  return {
+    ...(columns as Pick<CrowdSnapshot, (typeof PER_BODY_COLUMNS)[number]>),
+    seatBy: crowd.seatBy.slice(),
+    random: crowd.random.state(),
+  };
+}
+
+// Unlike reseatCrowd it re-derives nothing: the network must be the one the snapshot was
+// taken on, rebuilt from the same lists in the same order.
+export function restoreCrowd(crowd: Crowd, snapshot: CrowdSnapshot): Crowd {
+  for (const name of PER_BODY_COLUMNS) crowd[name].set(snapshot[name]);
+  crowd.seatBy.set(snapshot.seatBy);
+  return { ...crowd, random: resumeRandom(snapshot.random) };
 }
 
 // Whole steps of MAX_STEP then the remainder, so one n * MAX_STEP call equals n calls.

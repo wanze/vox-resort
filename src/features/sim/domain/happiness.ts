@@ -1,6 +1,7 @@
 import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
 import type { Needs } from './needs';
+import type { HappinessSnapshot } from './resortSnapshot';
 
 const TICKS_PER_HOUR = 60;
 
@@ -74,4 +75,12 @@ export function meanHappiness(happiness: Happiness, guests: Guests): number | nu
     people++;
   }
   return people === 0 ? null : total / people;
+}
+
+export function snapshotHappiness(happiness: Happiness): HappinessSnapshot {
+  return { level: happiness.level.slice() };
+}
+
+export function restoreHappiness(happiness: Happiness, snapshot: HappinessSnapshot): void {
+  happiness.level.set(snapshot.level);
 }

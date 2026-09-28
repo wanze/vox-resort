@@ -6,6 +6,9 @@ import {
   type ResortParams,
 } from '../../layout/domain/resortGenerator';
 import type { GameMode } from '../../sim/domain/ledger';
+import type { SaveOutcome } from '../../saves/domain/saveSlots';
+import type { SaveMeta } from '../../saves/domain/snapshot';
+import { UnsavedWarning } from '../../saves/components/UnsavedWarning';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import type { IconName } from '../../hud/components/pixelIcons';
 import { groundOf, type Ground, type NewGame } from '../domain/newGame';
@@ -16,6 +19,9 @@ export interface NewGamePanelProps {
   readonly params: ResortParams;
   readonly onStart: (params: ResortParams, game: NewGame) => void;
   readonly busy: boolean;
+  // The game in the unsaved slot, which a new game would autosave over.
+  readonly unsaved: SaveMeta | null;
+  readonly onKeepUnsaved: (name: string, overwrite: boolean) => Promise<SaveOutcome>;
 }
 
 const MODES: readonly {
@@ -180,7 +186,7 @@ function PlotFields(props: {
 }
 
 // The mode comes first and alone: the rest only means something once it is chosen.
-export function NewGamePanel({ params, onStart, busy }: NewGamePanelProps) {
+export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: NewGamePanelProps) {
   const [draft, setDraft] = useState<ResortParams>(params);
   const [mode, setMode] = useState<GameMode | null>(null);
   const [ground, setGround] = useState<Ground>('grown');
@@ -195,6 +201,7 @@ export function NewGamePanel({ params, onStart, busy }: NewGamePanelProps) {
 
   return (
     <div className="hud-resort new-game">
+      <UnsavedWarning unsaved={unsaved} onKeep={onKeepUnsaved} />
       <ModeChoice mode={mode} onPick={setMode} />
       {mode === null ? null : (
         <div className="new-game-options">

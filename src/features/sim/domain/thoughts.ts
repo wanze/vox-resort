@@ -1,3 +1,4 @@
+import type { ThoughtsSnapshot } from './resortSnapshot';
 import type { Venue } from './venues';
 
 export const THOUGHT_KINDS = [
@@ -190,3 +191,42 @@ const compareSubjects = (a: string | null, b: string | null): number => {
   const right = b ?? '';
   return left < right ? -1 : left > right ? 1 : 0;
 };
+
+export function snapshotThoughts(
+  thoughts: Thoughts,
+  day: ReadonlyMap<string, ThoughtTally>,
+): ThoughtsSnapshot {
+  return {
+    kind: thoughts.kind.slice(),
+    subject: [...thoughts.subject],
+    at: thoughts.at.slice(),
+    stay: thoughts.stay.slice(),
+    worstKind: thoughts.worstKind.slice(),
+    worstSubject: [...thoughts.worstSubject],
+    heardAt: thoughts.heardAt.slice(),
+    heardSubject: [...thoughts.heardSubject],
+    day: [...day].map(([key, tally]) => [key, { ...tally }]),
+  };
+}
+
+export function restoreThoughts(
+  thoughts: Thoughts,
+  day: Map<string, ThoughtTally>,
+  snapshot: ThoughtsSnapshot,
+): void {
+  thoughts.kind.set(snapshot.kind);
+  thoughts.at.set(snapshot.at);
+  thoughts.stay.set(snapshot.stay);
+  thoughts.worstKind.set(snapshot.worstKind);
+  thoughts.heardAt.set(snapshot.heardAt);
+  copyInto(thoughts.subject, snapshot.subject);
+  copyInto(thoughts.worstSubject, snapshot.worstSubject);
+  copyInto(thoughts.heardSubject, snapshot.heardSubject);
+  day.clear();
+  for (const [key, tally] of snapshot.day) day.set(key, { ...tally });
+}
+
+// A loop, not a spread into splice: a big plot has more subjects than a call takes arguments.
+function copyInto(target: (string | null)[], source: readonly (string | null)[]): void {
+  for (let i = 0; i < target.length; i++) target[i] = source[i] ?? null;
+}

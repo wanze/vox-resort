@@ -15,7 +15,9 @@ import {
   reseatCrowd,
   RESTING,
   restingOn,
+  restoreCrowd,
   seatIsFree,
+  snapshotCrowd,
   stepCrowd,
   takeOffPlot,
   type Crowd,
@@ -35,6 +37,8 @@ import {
   homeOf,
   partyOf,
   presentCount,
+  restoreGuests,
+  snapshotGuests,
   type Guests,
 } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
@@ -43,7 +47,7 @@ import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/e
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
-import { createNeeds, decayNeeds, type Needs } from './needs';
+import { createNeeds, decayNeeds, restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
 import { gatewaysOn, type Gateway } from './gateways';
@@ -70,7 +74,8 @@ import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './si
 import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 import { isOpenIn, weatherEffect, type Weather } from './weather';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
-import { onDuty, rosterFor, staffPool } from './staff';
+import { onDuty, rosterFor, staffPool, workplacesOf } from './staff';
+import { VISIT } from './occupancy';
 import { createStaffRouter, meanCleanliness } from './staffRouter';
 
 const FLAT: LevelProvider = () => 0;
@@ -2252,6 +2257,191 @@ describe('on the generated plot', () => {
       staff: { employed, router: staffRouter, doubled, dirtiestSeen, scrubbedBack },
     };
   };
+
+  // Everything a day on the plot changes, as showcase.ts wires it, so that a twin restored from
+  // a snapshot can be run beside the plot it was taken from.
+  const livePlot = () => {
+    const seated = walkNetworkFor({
+      paved: layout.paths,
+      levelOf: (x, z) => levelAt(elevation, x, z),
+      shore: shoreFor(plan),
+      tilesX: plan.tilesX,
+      obstacles: layout.placements,
+      seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
+    });
+    const lodgings = lodgingsOn(layout.placements);
+    const people = createGuests({
+      count: 600,
+      homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    const upkeep = createUpkeep(venues.length);
+    const litter = createLitter(plan.tilesX, plan.tilesZ);
+    const carrying = createCarrying(people.count);
+    const cover = binCoverFor([], plan.tilesX, plan.tilesZ);
+    let ticks = OPENS_AT;
+
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings,
+      gateways: [],
+      onLeave: () => {},
+      onVisited: (person, venue) =>
+        pickUp(
+          carrying,
+          person,
+          venue.litter ?? 0,
+          (mix(person * 2_654_435_761 + ticks) % 1024) / 1024,
+        ),
+      network: seated,
+      tickOfDay: () => ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network: seated,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => {
+        const node = seated.nodes[at];
+        if (node) stepWith(litter, carrying, cover, person, node.tileX, node.tileZ);
+        return router.step(person, at);
+      },
+      offTheSand: (person) => router.offTheSand(person),
+      roamsBeach: false,
+    });
+
+    const employed = staffPool();
+    const duty = onDuty(employed, rosterFor(workplacesOf(venues, seated.posts)));
+    let workers: Crowd | null = null;
+    const staffRouter = createStaffRouter({
+      staff: employed,
+      venues,
+      network: seated,
+      upkeep: () => upkeep,
+      crowd: () => workers!,
+      duty: () => duty,
+      litter: () => litter,
+      occupants: (venue) => router.occupancyOf(venues[venue]!.key)?.inside ?? 0,
+      seed: 9,
+    });
+    workers = createCrowd({
+      network: seated,
+      count: employed.count,
+      variants: 3,
+      variantOf: (worker) => employed.variant[worker] ?? 0,
+      seed: 5,
+      routeOf: (worker, at) => staffRouter.step(worker, at),
+      roamsBeach: false,
+    });
+    for (let worker = 0; worker < employed.count; worker++) {
+      if (duty[worker] === 1) continue;
+      takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+    }
+
+    const snapshot = () => ({
+      ticks,
+      guests: snapshotGuests(people),
+      needs: snapshotNeeds(needs),
+      upkeep: upkeep.level.slice(),
+      litter: litter.level.slice(),
+      carrying: carrying.nodes.slice(),
+      router: router.snapshot(),
+      staff: staffRouter.snapshot(),
+      crowd: snapshotCrowd(crowd!),
+      workers: snapshotCrowd(workers!),
+    });
+    return {
+      employed,
+      router,
+      snapshot,
+      get ticks() {
+        return ticks;
+      },
+      runTo(until: number) {
+        while (ticks < until) {
+          for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) {
+            stepCrowd(crowd!, MAX_STEP);
+            stepCrowd(workers!, MAX_STEP);
+          }
+          ticks++;
+          decayNeeds(needs, people, 1);
+          router.tick(ticks);
+          staffRouter.tick(ticks);
+        }
+      },
+      // In the order showcase.ts loads a save.
+      restore(saved: ReturnType<typeof snapshot>) {
+        ticks = saved.ticks;
+        restoreGuests(people, saved.guests);
+        restoreNeeds(needs, saved.needs);
+        carrying.nodes.set(saved.carrying);
+        litter.level.set(saved.litter);
+        upkeep.level.set(saved.upkeep);
+        router.restore(saved.router);
+        staffRouter.restore(saved.staff);
+        crowd = restoreCrowd(crowd!, saved.crowd);
+        workers = restoreCrowd(workers!, saved.workers);
+      },
+    };
+  };
+
+  it('carries a restored plot on exactly as the one it was saved from, by day and by night', () => {
+    const live = livePlot();
+    const { role } = live.employed;
+    const twinFrom = (saved: ReturnType<typeof live.snapshot>) => {
+      const twin = livePlot();
+      twin.restore(saved);
+      expect(twin.snapshot(), 'the restore itself lost something').toEqual(saved);
+      live.runTo(saved.ticks + 60);
+      twin.runTo(saved.ticks + 60);
+      expect(twin.snapshot()).toEqual(live.snapshot());
+    };
+
+    live.runTo(15 * 60);
+    // On to the next tick with a line somewhere, or the snapshot would not prove queues survive.
+    while (live.router.occupancyTotals.waiting === 0 && live.ticks < 17 * 60) {
+      live.runTo(live.ticks + 1);
+    }
+    const afternoon = live.snapshot();
+    const guest = afternoon.router;
+    const staff = afternoon.staff;
+    const at = (worker: number, kind: string) =>
+      role[worker] === kind && staff.working[worker] === 1;
+    expect(guest.occupancy.state.includes(VISIT.waiting), 'nobody queued').toBe(true);
+    expect(guest.occupancy.state.includes(VISIT.inside), 'nobody inside').toBe(true);
+    expect(guest.claims.length, 'nobody claimed a pitch on the beach').toBeGreaterThan(0);
+    expect(
+      guest.errands.venue.some((venue) => venue >= 0),
+      'nobody ran an errand',
+    ).toBe(true);
+    expect(
+      role.some((_, worker) => at(worker, 'cleaner')),
+      'nobody cleaning',
+    ).toBe(true);
+    expect(
+      role.some((_, worker) => at(worker, 'animator')),
+      'no show on',
+    ).toBe(true);
+    expect(
+      role.some((_, worker) => at(worker, 'lifeguard') && staff.towerOf[worker]! >= 0),
+      'no lifeguard up a tower',
+    ).toBe(true);
+    twinFrom(afternoon);
+
+    live.runTo(23 * 60 + 30);
+    const night = live.snapshot();
+    expect(night.router.asleep.includes(1), 'nobody asleep').toBe(true);
+    twinFrom(night);
+  });
 
   // What showcase.ts wires, with no cleaners: the bins alone decide where it lands.
   it('litters the plot over a day where no bin is in reach, but not into a landfill', () => {

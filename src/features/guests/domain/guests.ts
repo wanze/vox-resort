@@ -2,6 +2,7 @@
 // loop. Built to the requested count even for an empty crowd, so paving brings people back.
 
 import { createRandom } from '../../layout/domain/random';
+import type { GuestsSnapshot } from '../../sim/domain/resortSnapshot';
 import { assignHomes, homeWithRoom, NO_HOME, type Home } from './homes';
 import { givenName } from './names';
 import { partiesFor, partyShapeFor, type Party } from './parties';
@@ -26,9 +27,10 @@ export interface Guests {
   // Kept rather than recounted: asked once per arriving party, and a recount is a pass over every guest.
   // Replaced, with homes, by `rehome` when lodgings are built or demolished.
   freeBeds: Int32Array;
-  readonly people: readonly GuestRecord[];
+  // Replaced only by a load.
+  people: readonly GuestRecord[];
   // Entries are never removed, so a party index stays stable; the router keys on it.
-  readonly parties: readonly Party[];
+  parties: readonly Party[];
   homes: readonly Home[];
 }
 
@@ -266,4 +268,35 @@ export function bedCount(guests: Guests): { readonly beds: number; readonly take
     if (guests.present[i] === 1 && guests.home[i] !== NO_HOME) taken++;
   }
   return { beds, taken };
+}
+
+export function snapshotGuests(guests: Guests): GuestsSnapshot {
+  return {
+    count: guests.count,
+    party: guests.party.slice(),
+    home: guests.home.slice(),
+    arrivedOn: guests.arrivedOn.slice(),
+    nights: guests.nights.slice(),
+    child: guests.child.slice(),
+    variant: guests.variant.slice(),
+    present: guests.present.slice(),
+    freeBeds: guests.freeBeds.slice(),
+    people: guests.people.map((person) => ({ ...person })),
+    parties: guests.parties.map((party) => ({ ...party, members: [...party.members] })),
+    homes: guests.homes.map((home) => ({ ...home })),
+  };
+}
+
+export function restoreGuests(guests: Guests, snapshot: GuestsSnapshot): void {
+  guests.party.set(snapshot.party);
+  guests.home.set(snapshot.home);
+  guests.arrivedOn.set(snapshot.arrivedOn);
+  guests.nights.set(snapshot.nights);
+  guests.child.set(snapshot.child);
+  guests.variant.set(snapshot.variant);
+  guests.present.set(snapshot.present);
+  guests.freeBeds = snapshot.freeBeds.slice();
+  guests.people = snapshot.people.map((person) => ({ ...person }));
+  guests.parties = snapshot.parties.map((party) => ({ ...party, members: [...party.members] }));
+  guests.homes = snapshot.homes.map((home) => ({ ...home }));
 }

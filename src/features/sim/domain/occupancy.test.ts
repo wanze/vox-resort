@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { arriveAt, createOccupancy, leaveVenue, sweepOccupancy, VISIT } from './occupancy';
+import {
+  arriveAt,
+  createOccupancy,
+  leaveVenue,
+  restoreOccupancy,
+  snapshotOccupancy,
+  sweepOccupancy,
+  VISIT,
+} from './occupancy';
 import { MAX_QUEUE_SHOWN } from './queueLane';
 
 const SHOWER = { venue: 0, capacity: 1, dwell: 1 };
@@ -149,5 +157,25 @@ describe('leaveVenue', () => {
     leaveVenue(occupancy, 0);
     leaveVenue(occupancy, 99);
     expect(snapshotOf(occupancy)).toBe(before);
+  });
+});
+
+describe('restoreOccupancy', () => {
+  it('puts back the lines and recounts who is inside', () => {
+    const occupancy = occupancyFor();
+    arriveAt(occupancy, 0, SHOWER.venue, SHOWER.capacity, SHOWER.dwell, 0);
+    arriveAt(occupancy, 1, SHOWER.venue, SHOWER.capacity, SHOWER.dwell, 0);
+    arriveAt(occupancy, 2, SHOWER.venue, SHOWER.capacity, SHOWER.dwell, 0);
+    arriveAt(occupancy, 3, BAKERY.venue, BAKERY.capacity, BAKERY.dwell, 0);
+    const saved = snapshotOccupancy(occupancy);
+
+    const fresh = occupancyFor();
+    arriveAt(fresh, 9, BAKERY.venue, BAKERY.capacity, BAKERY.dwell, 0);
+    restoreOccupancy(fresh, saved);
+
+    expect(snapshotOccupancy(fresh)).toEqual(saved);
+    expect([...fresh.inside]).toEqual([1, 1]);
+    expect(fresh.queues[SHOWER.venue]).toEqual([1, 2]);
+    expect(sweepOccupancy(fresh, capacityOf, dwellTicksOf, 5).admitted).toEqual([1]);
   });
 });

@@ -7,8 +7,10 @@ import {
   clearPartyGoal,
   createGoals,
   NO_GOAL,
+  restoreGoals,
   setPartyGoal,
   setPartyVenue,
+  snapshotGoals,
 } from './goals';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
@@ -108,5 +110,17 @@ describe('clearAllGoals', () => {
     }
     clearAllGoals(goals);
     expect([...goals.venue].every((venue) => venue === NO_GOAL)).toBe(true);
+  });
+});
+
+describe('restoreGoals', () => {
+  it('puts back every goal and the need behind it', () => {
+    const goals = createGoals(6);
+    goals.venue[2] = 4;
+    goals.need[2] = 3;
+    const fresh = createGoals(6);
+    restoreGoals(fresh, snapshotGoals(goals));
+    expect(snapshotGoals(fresh)).toEqual(snapshotGoals(goals));
+    expect(fresh.venue[0]).toBe(NO_GOAL);
   });
 });

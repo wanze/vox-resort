@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import { useHotkeys } from './useHotkeys';
 import { useWindows, type WindowControls } from './useWindows';
 import type { ClockControls } from './useClockControls';
+import type { SaveControls } from './useSaves';
+import { saveOrAsk } from '../features/saves/domain/saveSlots';
 import type { Hotkey } from '../features/hud/adapters/hotkeys';
 import type { MenuId } from '../features/hud/components/TopBar';
 import { escapeOutcome } from '../features/hud/domain/escape';
@@ -26,6 +28,7 @@ export function useHudChrome(
   tool: BuildTool | null,
   selection: SelectionView | null,
   playing: boolean,
+  saves: SaveControls,
 ): HudChrome {
   const windows = useWindows();
   const [menu, setMenu] = useState<MenuId | null>(null);
@@ -40,6 +43,12 @@ export function useHudChrome(
 
   const hotkeys: readonly Hotkey[] = [
     { key: 'k', chord: true, run: always(() => setPalette(!palette)) },
+    // Taken whatever the game's state, so the browser's own save-page dialog never opens.
+    {
+      key: 's',
+      chord: true,
+      run: always(() => void saveOrAsk(saves.save, () => windows.show('saves', true))),
+    },
     { key: '/', run: always(() => setPalette(true)) },
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },

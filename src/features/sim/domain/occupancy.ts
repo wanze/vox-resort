@@ -1,4 +1,5 @@
 import { MAX_QUEUE_SHOWN } from './queueLane';
+import type { RouterSnapshot } from './routerSnapshot';
 
 export const VISIT = { away: 0, waiting: 1, inside: 2 } as const;
 
@@ -157,4 +158,32 @@ export function leaveVenue(occupancy: Occupancy, person: number): void {
   occupancy.state[person] = VISIT.away;
   occupancy.at[person] = -1;
   occupancy.slot[person] = -1;
+}
+
+export function snapshotOccupancy(occupancy: Occupancy): RouterSnapshot['occupancy'] {
+  return {
+    state: occupancy.state.slice(),
+    at: occupancy.at.slice(),
+    until: occupancy.until.slice(),
+    slot: occupancy.slot.slice(),
+    queues: occupancy.queues.map((queue) => [...queue]),
+  };
+}
+
+// `inside` is recounted rather than saved, so it cannot disagree with who is inside.
+export function restoreOccupancy(
+  occupancy: Occupancy,
+  snapshot: RouterSnapshot['occupancy'],
+): void {
+  occupancy.state.set(snapshot.state);
+  occupancy.at.set(snapshot.at);
+  occupancy.until.set(snapshot.until);
+  occupancy.slot.set(snapshot.slot);
+  for (const [venue, queue] of occupancy.queues.entries()) {
+    queue.splice(0, queue.length, ...(snapshot.queues[venue] ?? []));
+  }
+  occupancy.inside.fill(0);
+  for (let person = 0; person < occupancy.people; person++) {
+    if (occupancy.state[person] === VISIT.inside) occupancy.inside[occupancy.at[person]!]! += 1;
+  }
 }

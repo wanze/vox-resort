@@ -58,6 +58,7 @@ import {
 } from '../../rendering/domain/terrainSurface';
 import { buoyLampSites } from '../../sea/domain/buoyLamps';
 import { swimAreaMoorings, type Mooring, type Rental } from '../../sea/domain/swimArea';
+import { planOfWorld, type SavedWorld } from './savedWorld';
 
 const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
   id: type.id,
@@ -72,7 +73,8 @@ const CATALOGUE_LIGHTS = OBJECT_TYPES.flatMap((type) => type.model.lights);
 export type ResortSource =
   | { readonly kind: 'generate'; readonly params: ResortParams }
   | { readonly kind: 'clear'; readonly params: ResortParams }
-  | { readonly kind: 'authored' };
+  | { readonly kind: 'authored' }
+  | { readonly kind: 'saved'; readonly world: SavedWorld };
 
 export interface PrepRequest {
   readonly source: ResortSource;
@@ -129,6 +131,7 @@ export function rentalOf(shore: Shore | null, placements: readonly Placement[]):
 
 function planOf(source: ResortSource): ResortPlan {
   if (source.kind === 'authored') return RESORT_PLAN;
+  if (source.kind === 'saved') return planOfWorld(source.world);
   const { tilesX, tilesZ, seed } = source.params;
   return source.kind === 'clear'
     ? emptyResortPlan(tilesX, tilesZ, seed)
@@ -145,6 +148,20 @@ function layOut(plan: ResortPlan, repeat: number): Plot {
     props: tile(layout.props),
     paths: tile(layout.paths),
     rails: tile(layout.rails),
+  };
+}
+
+// The layout and the lists are the same placements in the same order, as a fresh plot's are,
+// so the first build and every rebuild after an edit number nodes and seats alike. Each list is
+// an array of its own, since the edit mode pushes and splices the plot's.
+function plotOfWorld(world: SavedWorld): Plot {
+  const { placements, props, paths, rails, tilesX, tilesZ } = world;
+  return {
+    layout: { placements, props, paths, rails, tilesX, tilesZ },
+    placements: [...placements],
+    props: [...props],
+    paths: [...paths],
+    rails: [...rails],
   };
 }
 
@@ -201,7 +218,10 @@ function boundsOf(plan: ResortPlan, everything: readonly Placement[]): WorldBoun
 export function prepareResort(request: PrepRequest): PreparedResort {
   const started = performance.now();
   const plan = planOf(request.source);
-  const plot = layOut(plan, request.repeat);
+  const plot =
+    request.source.kind === 'saved'
+      ? plotOfWorld(request.source.world)
+      : layOut(plan, request.repeat);
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
   const shore = shoreFor(plan);

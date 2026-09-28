@@ -62,6 +62,14 @@ import {
   type PreparedResort,
   type ResortSource,
 } from '../features/resort-prep/domain/prepareResort';
+import { savedWorldOf } from '../features/resort-prep/domain/savedWorld';
+import { restoreResort, snapshotResort } from '../features/sim/domain/resortState';
+import type { ClockSnapshot } from '../features/sim/domain/resortSnapshot';
+import {
+  SAVE_VERSION,
+  type CameraSnapshot,
+  type GameSnapshot,
+} from '../features/saves/domain/snapshot';
 import { createResortPreparer } from '../features/resort-prep/adapters/resortPreparer';
 import {
   isPaving,
@@ -192,7 +200,7 @@ import {
   wavesDue,
 } from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
-import { createRandom } from '../features/layout/domain/random';
+import { createRandom, type Random } from '../features/layout/domain/random';
 import { beachVenueFor } from '../features/sim/domain/beach';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
 import { lodgingFor, lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
@@ -271,6 +279,8 @@ import {
   holdAt,
   MAX_STEP,
   putOnPlot,
+  restoreCrowd,
+  snapshotCrowd,
   takeOffPlot,
   type Crowd,
 } from '../features/crowd/domain/crowd';
@@ -469,6 +479,11 @@ export interface ShowcaseOptions {
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
   readonly onRefused?: (message: string) => void;
+  // Something a save would keep has changed. Not per step: from the places that already tell React.
+  readonly onDirty?: () => void;
+  readonly onMorning?: () => void;
+  // Only for a speed the showcase set itself, as a load does.
+  readonly onSpeedChange?: (speed: SimSpeed) => void;
   // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
   // the player's local time, until the first new game.
   readonly welcome?: boolean;
@@ -505,6 +520,10 @@ export interface Showcase {
   setOverlay(kind: OverlayKind | null): void;
   selectPerson(person: number): void;
   clearSelection(): void;
+  // Finishes what is being built first: the save is of a world with no scaffolding.
+  snapshot(): GameSnapshot;
+  // Opens paused. Rejects, with the resort already replaced, if the save does not fit its world.
+  load(snapshot: GameSnapshot): Promise<void>;
   dispose(): void;
 }
 
@@ -808,7 +827,7 @@ interface Resort {
   arrivalsPlanned: number;
   arrivalsAdmitted: number;
   // Per resort: two plots must not share a sequence.
-  readonly arrivals: () => number;
+  arrivals: Random;
   ledger: Ledger;
   readonly takings: VenueTakings;
   beds: { readonly total: number; readonly taken: number };
@@ -1015,7 +1034,21 @@ interface ResortArt {
 }
 
 // The volume is wired up before the world, because the world's materials bind to it.
-function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): Resort {
+// A save brings its own: a plot started empty but paved since would otherwise be sized again, and
+// every per-guest array would come out another length.
+function populationOf(plan: ResortPlan, plot: Plot, saved: number | undefined): number {
+  if (saved !== undefined) return saved;
+  return plot.layout.paths.length === 0
+    ? crowdSizeForArea(plan.tilesX, plan.tilesZ, CROWD_OVERRIDE)
+    : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
+}
+
+function buildResort(
+  parts: ResortArt & {
+    readonly prepared: PreparedResort;
+    readonly population?: number | undefined;
+  },
+): Resort {
   const { plan, plot, moorings, bounds, framing } = parts.prepared;
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
@@ -1030,9 +1063,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
   // Only a plot with no paving is sized by its area and starts away: a generated plot's opening
   // scene and the benchmark stay as they were.
   const building = plot.layout.paths.length === 0;
-  const population = building
-    ? crowdSizeForArea(plan.tilesX, plan.tilesZ, CROWD_OVERRIDE)
-    : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
+  const population = populationOf(plan, plot, parts.population);
   const guests = createGuests({
     count: population,
     homes: homesOn(plot.layout.placements),
@@ -1254,7 +1285,7 @@ function buildResort(parts: ResortArt & { readonly prepared: PreparedResort }): 
 interface ResortSlot {
   readonly current: () => Resort;
   attach(handle: SceneHandle): void;
-  replace(prepared: PreparedResort): Resort;
+  replace(prepared: PreparedResort, population?: number): Resort;
 }
 
 function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort }): ResortSlot {
@@ -1268,11 +1299,11 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
     attach(handle) {
       scene = handle;
     },
-    replace(prepared) {
+    replace(prepared, population) {
       // Disposed last: the ground is bound to the light volume, and freeing it first leaves a
       // material holding freed textures.
       const previous = resort;
-      resort = buildResort({ ...parts, prepared });
+      resort = buildResort({ ...parts, prepared, population });
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.construction.group);
@@ -1844,8 +1875,10 @@ interface Clock {
   relight(): void;
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
-  // Kept on the clock, not in weather.ts, so weatherOn stays pure; it is not saved.
+  // Kept on the clock, not in weather.ts, so weatherOn stays pure; saved with the clock.
   setWeather(weather: Weather | null): void;
+  snapshot(): ClockSnapshot;
+  restore(saved: ClockSnapshot): void;
 }
 
 function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
@@ -1882,6 +1915,15 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
   };
   apply();
 
+  const relight = (): void => {
+    // A new resort's volume and blobs start at zero whatever the time of day.
+    applied = null;
+    appliedOvercast = null;
+    apply();
+    // Otherwise its windows open on the previous plot's sleeping share.
+    lightRooms(resort(), null);
+  };
+
   return {
     get time() {
       return time;
@@ -1914,14 +1956,7 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       // Flights already in the air finish, so a shower at dusk empties the sky gradually.
       return isWet(weatherNow()) ? 0 : releaseStrength(time);
     },
-    relight() {
-      // A new resort's volume and blobs start at zero whatever the time of day.
-      applied = null;
-      appliedOvercast = null;
-      apply();
-      // Otherwise its windows open on the previous plot's sleeping share.
-      lightRooms(resort(), null);
-    },
+    relight,
     advance(elapsedSeconds) {
       running += elapsedSeconds;
       const advanced = advanceClock(clock, elapsedSeconds);
@@ -1949,6 +1984,14 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       forced = next;
       // Applied now: pinning the weather while paused is what the button is for.
       apply();
+    },
+    snapshot() {
+      return { ticks: clock.ticks, speed: clock.speed, carry: clock.carry, forced };
+    },
+    restore(saved) {
+      clock = { ticks: saved.ticks, speed: saved.speed, carry: saved.carry };
+      forced = saved.forced;
+      relight();
     },
   };
 }
@@ -2035,6 +2078,8 @@ interface EditMode {
   select(tool: BuildTool | null): void;
   advance(dt: number): void;
   abandon(): void;
+  // Raises every open site at once, so what is saved is what stands.
+  finishAll(): void;
   readonly ground: PickGround;
   placementOf(key: string): Placement | undefined;
   dispose(): void;
@@ -2330,6 +2375,14 @@ function createEditMode(parts: {
     abandon() {
       sites = [];
     },
+    finishAll() {
+      const open = sites;
+      for (const site of open) {
+        cancelSite(site.placement.key);
+        raise(site.placement);
+      }
+      if (open.length > 0) onChange();
+    },
     ground,
     placementOf,
     dispose() {
@@ -2409,6 +2462,29 @@ function loaded<T>(step: LoadingStep, onLoading?: (step: LoadingStep) => void) {
 
 function detailFrom(bench: BenchConfig | null): boolean {
   return bench?.detail ?? true;
+}
+
+function cameraOf(handle: SceneHandle): CameraSnapshot {
+  const { position, zoom } = handle.camera;
+  const { target } = handle.controls;
+  return {
+    mode: handle.cameraMode,
+    isoDirection: handle.isoDirection,
+    target: { x: target.x, y: target.y, z: target.z },
+    position: { x: position.x, y: position.y, z: position.z },
+    zoom,
+  };
+}
+
+// Mode and direction first, as each re-stands the camera; the saved position then wins.
+function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void {
+  handle.setIsoDirection(camera.isoDirection);
+  handle.setCameraMode(camera.mode);
+  handle.lookAt(camera.target);
+  handle.camera.position.set(camera.position.x, camera.position.y, camera.position.z);
+  handle.camera.zoom = camera.zoom;
+  handle.camera.updateProjectionMatrix();
+  handle.controls.update();
 }
 
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
@@ -2603,11 +2679,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       const resort = current();
       resort.ledger = record(resort.ledger, reason, -amount);
       spent = true;
+      options.onDirty?.();
     },
     refund(amount) {
       const resort = current();
       resort.ledger = record(resort.ledger, 'demolish', amount);
       spent = true;
+      options.onDirty?.();
     },
   };
 
@@ -2622,9 +2700,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onChange: () => {
       counted = true;
       walkStaleAt = performance.now();
+      options.onDirty?.();
     },
     onGroundChange: () => {
       ground = true;
+      options.onDirty?.();
     },
     onCancel: () => {
       selectTool(null);
@@ -2743,11 +2823,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     speak();
     tellMoney();
     if (overlayKind !== null) paintOverlay();
+    options.onDirty?.();
   };
 
   const morning = (): void => {
     advise();
     tellMoney();
+    options.onDirty?.();
+    options.onMorning?.();
   };
 
   const rebuilt = (): void => {
@@ -2783,6 +2866,109 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     clock.restart(INITIAL_TIME);
     rebuilt();
     options.onOpenChange?.(current().open);
+  };
+
+  const snapshot = (): GameSnapshot => {
+    build.finishAll();
+    if (walkStaleAt !== null) reanchor();
+    const resort = current();
+    return {
+      version: SAVE_VERSION,
+      world: savedWorldOf(resort.plan, resort.terrain, resort.plot),
+      params,
+      population: resort.guests.count,
+      staffCount: resort.staffPool.count,
+      resort: snapshotResort(resort),
+      router: resort.router.snapshot(),
+      staffRouter: resort.staffRouter.snapshot(),
+      crowd: snapshotCrowd(resort.crowd.crowd),
+      staff: snapshotCrowd(resort.staff.crowd),
+      clock: clock.snapshot(),
+      camera: cameraOf(handle),
+    };
+  };
+
+  // Everything React shows is told again: the HUD still holds the game that was replaced.
+  const announceLoaded = (resort: Resort): void => {
+    rebuilt();
+    options.onOpenChange?.(resort.open);
+    options.onSpeedChange?.('paused');
+    options.onCameraChange?.(cameraView());
+  };
+
+  // Mirrors regrow. A straight line: every module is restored in the order its readers expect,
+  // the guests before the routers that read them and the routers before the crowds they steer.
+  const load = async (saved: GameSnapshot): Promise<void> => {
+    const request = ++requested;
+    const prepared = await preparer.prepare(
+      prepRequestFor({ kind: 'saved', world: saved.world }, bench),
+    );
+    if (request !== requested || !running) return;
+    build.abandon();
+    select(null);
+    walkStaleAt = null;
+    const resort = slot.replace(prepared, saved.population);
+    restoreResort(resort, saved.resort);
+    resort.router.restore(saved.router);
+    resort.staffRouter.restore(saved.staffRouter);
+    resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
+    resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));
+    clock.restore(saved.clock);
+    clock.setSpeed('paused');
+    drift = null;
+    handle.controls.enabled = true;
+    // After the replace, whose reframe has put the camera back where a new plot is looked at from.
+    restoreCamera(handle, saved.camera);
+    params = saved.params;
+    announceLoaded(resort);
+  };
+
+  // The walk graph and everything indexed by its nodes, rebuilt from the plot's lists after an
+  // edit. A snapshot runs it too, so what is saved never pairs new lists with the old graph.
+  const reanchor = (): void => {
+    walkStaleAt = null;
+    const resort = current();
+    const { plan, plot, shore, terrain, crowd } = resort;
+    const network = networkFor({
+      plan,
+      shore,
+      terrain,
+      paved: plot.paths,
+      standing: [...plot.placements, ...plot.props],
+    });
+    const wasStanding = resort.venues;
+    resort.venues = venuesOn(plot.placements);
+    resort.lodgings = lodgingsOn(plot.placements);
+    resort.gateways = gatewaysOn(plot.placements);
+    // Before the router's rebuild, whose findHomes maps the new home indices.
+    rehome(resort.guests, homesOn(plot.placements));
+    const beds = bedCount(resort.guests);
+    resort.beds = { total: beds.beds, taken: beds.taken };
+    // By key: surviving venues keep their dirt, and new ones start clean.
+    resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
+    resort.scenery = sceneryFieldFor(
+      sceneryItemsOf([...plot.placements, ...plot.props], sceneryOf),
+      plan.tilesX,
+      plan.tilesZ,
+    );
+    resort.binCover = binCoverFor(
+      binsOn([...plot.placements, ...plot.props]),
+      plan.tilesX,
+      plan.tilesZ,
+    );
+    const paving = nodeIndexFor(network);
+    pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
+    resort.unreachable = strandedOn(resort.venues, network);
+    resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
+    resort.staffRouter.rebuild(resort.venues, network);
+    crowd.relocate(network);
+    resort.staff.relocate(network);
+    staffTheResort(resort);
+    resort.footfall = createFootfall(network.nodes.length);
+    paintOverlay();
+    // Said now rather than tomorrow; the day's counters are left alone.
+    advise();
+    speak();
   };
 
   const recorder = bench
@@ -2829,51 +3015,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       spent = false;
     }
     // Guarded so a bench that ever places something does not rebuild mid-run.
-    if (walkStaleAt !== null && !bench && timeMs - walkStaleAt >= REANCHOR_DELAY_MS) {
-      walkStaleAt = null;
-      const resort = current();
-      const { plan, plot, shore, terrain, crowd } = resort;
-      const network = networkFor({
-        plan,
-        shore,
-        terrain,
-        paved: plot.paths,
-        standing: [...plot.placements, ...plot.props],
-      });
-      const wasStanding = resort.venues;
-      resort.venues = venuesOn(plot.placements);
-      resort.lodgings = lodgingsOn(plot.placements);
-      resort.gateways = gatewaysOn(plot.placements);
-      // Before the router's rebuild, whose findHomes maps the new home indices.
-      rehome(resort.guests, homesOn(plot.placements));
-      const beds = bedCount(resort.guests);
-      resort.beds = { total: beds.beds, taken: beds.taken };
-      // By key: surviving venues keep their dirt, and new ones start clean.
-      resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
-      resort.scenery = sceneryFieldFor(
-        sceneryItemsOf([...plot.placements, ...plot.props], sceneryOf),
-        plan.tilesX,
-        plan.tilesZ,
-      );
-      resort.binCover = binCoverFor(
-        binsOn([...plot.placements, ...plot.props]),
-        plan.tilesX,
-        plan.tilesZ,
-      );
-      const paving = nodeIndexFor(network);
-      pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
-      resort.unreachable = strandedOn(resort.venues, network);
-      resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
-      resort.staffRouter.rebuild(resort.venues, network);
-      crowd.relocate(network);
-      resort.staff.relocate(network);
-      staffTheResort(resort);
-      resort.footfall = createFootfall(network.nodes.length);
-      paintOverlay();
-      // Said now rather than tomorrow; the day's counters are left alone.
-      advise();
-      speak();
-    }
+    if (walkStaleAt !== null && !bench && timeMs - walkStaleAt >= REANCHOR_DELAY_MS) reanchor();
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
@@ -2965,6 +3107,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       if (resort.open === open) return;
       resort.open = open;
       options.onOpenChange?.(open);
+      options.onDirty?.();
       advise();
     },
     setCameraMode,
@@ -2986,7 +3129,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return regrow(asked, { kind: 'clear', params: asked }, mode);
     },
     selectTool,
-    setTime: clock.setTime,
+    setTime(time) {
+      clock.setTime(time);
+      options.onDirty?.();
+    },
     setSpeed: clock.setSpeed,
     setWeather: clock.setWeather,
     // Refused under a bench, as camera modes are: every recorded draw count has it off.
@@ -2998,6 +3144,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     selectPerson: (person) => select({ person }),
     clearSelection: () => select(null),
+    snapshot,
+    load,
     dispose() {
       running = false;
       handle.renderer.setAnimationLoop(null);

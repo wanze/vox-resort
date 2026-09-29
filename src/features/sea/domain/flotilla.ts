@@ -57,6 +57,7 @@ export interface FlotillaOptions {
   // Half the length, since a hull turns.
   readonly radii?: readonly number[];
   readonly piers?: readonly PierBox[];
+  readonly islands?: readonly PierBox[];
   readonly waterline: number;
   readonly seed: number;
 }
@@ -89,6 +90,7 @@ export interface Flotilla {
   readonly gap: Float32Array;
   readonly radius: Float32Array;
   readonly piers: readonly PierBox[];
+  readonly islands: readonly PierBox[];
   readonly waterline: number;
   clock: number;
 }
@@ -145,6 +147,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     gap: new Float32Array(count),
     radius: new Float32Array(count),
     piers: options.piers ?? [],
+    islands: options.islands ?? [],
     waterline: options.waterline,
     clock: 0,
   };
@@ -172,6 +175,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     flotilla.z[index] = landward + random() * Math.max(0, ground.seawardZ - landward);
     flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
     helm(index);
+    launchClear(flotilla, index);
   }
 
   for (let boat = 0; boat < hired; boat++) {
@@ -197,6 +201,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
       flotilla.x[index] = x;
       flotilla.z[index] = clamp(berth.z + Math.cos(bearing) * off, landward, ground.seawardZ);
       flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
+      launchClear(flotilla, index);
     }
   }
 
@@ -204,6 +209,15 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     flotilla.radius[index] = options.radii?.[flotilla.variant[index]!] ?? DEFAULT_RADIUS;
   }
   return flotilla;
+}
+
+// Before radii are dealt, so it clears the hull by the default reach; the first step settles the rest.
+function launchClear(flotilla: Flotilla, index: number): void {
+  shovedX = flotilla.x[index]!;
+  shovedZ = flotilla.z[index]!;
+  for (const island of flotilla.islands) outOfIsland(island, DEFAULT_RADIUS);
+  flotilla.x[index] = shovedX;
+  flotilla.z[index] = shovedZ;
 }
 
 function tieUp(flotilla: Flotilla, index: number, age: number): void {
@@ -352,18 +366,28 @@ const lookOf = (flotilla: Flotilla, index: number): number =>
 // Tested halfway along the look and at its end: enough for a tile-wide pier against a short look.
 function piersAhead(flotilla: Flotilla, index: number, aheadX: number, aheadZ: number): void {
   const look = lookOf(flotilla, index);
-  for (const pier of flotilla.piers) {
-    for (let half = 1; half <= 2; half++) {
-      const along = (look * half) / 2;
-      const px = flotilla.x[index]! + aheadX * along;
-      const pz = flotilla.z[index]! + aheadZ * along;
-      const cx = clamp(px, pier.minX, pier.maxX);
-      const cz = clamp(pz, pier.minZ, pier.maxZ);
-      if (along >= nearest || Math.hypot(px - cx, pz - cz) > flotilla.radius[index]!) continue;
-      nearest = along;
-      threatX = cx;
-      threatZ = cz;
-    }
+  for (const pier of flotilla.piers) boxAhead(flotilla, index, pier, aheadX, aheadZ, look);
+  for (const island of flotilla.islands) boxAhead(flotilla, index, island, aheadX, aheadZ, look);
+}
+
+function boxAhead(
+  flotilla: Flotilla,
+  index: number,
+  box: PierBox,
+  aheadX: number,
+  aheadZ: number,
+  look: number,
+): void {
+  for (let half = 1; half <= 2; half++) {
+    const along = (look * half) / 2;
+    const px = flotilla.x[index]! + aheadX * along;
+    const pz = flotilla.z[index]! + aheadZ * along;
+    const cx = clamp(px, box.minX, box.maxX);
+    const cz = clamp(pz, box.minZ, box.maxZ);
+    if (along >= nearest || Math.hypot(px - cx, pz - cz) > flotilla.radius[index]!) continue;
+    nearest = along;
+    threatX = cx;
+    threatZ = cz;
   }
 }
 
@@ -406,6 +430,7 @@ function shoveClear(flotilla: Flotilla, index: number, x: number, z: number): vo
     shovedZ += (rz / apart) * share;
   }
   for (const pier of flotilla.piers) outOfPier(pier, reach);
+  for (const island of flotilla.islands) outOfIsland(island, reach);
 }
 
 // Never out of the shoreward end: the landward limit would push it straight back in.
@@ -418,6 +443,20 @@ function outOfPier(pier: PierBox, reach: number): void {
   const least = Math.min(west, east, south);
   if (least === west) shovedX -= west;
   else if (least === east) shovedX += east;
+  else shovedZ += south;
+}
+
+// Any side, the shoreward one too: unlike a pier's, an island's has open water behind it.
+function outOfIsland(island: PierBox, reach: number): void {
+  const west = shovedX - (island.minX - reach);
+  const east = island.maxX + reach - shovedX;
+  const north = shovedZ - (island.minZ - reach);
+  const south = island.maxZ + reach - shovedZ;
+  const least = Math.min(west, east, north, south);
+  if (least <= 0) return;
+  if (least === west) shovedX -= west;
+  else if (least === east) shovedX += east;
+  else if (least === north) shovedZ -= north;
   else shovedZ += south;
 }
 

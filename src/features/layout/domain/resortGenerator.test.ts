@@ -730,6 +730,25 @@ describe('the districts a generated plot lays out by design', () => {
   });
 });
 
+const waterOf = (plan: ReturnType<typeof emptyResortPlan>) => {
+  const terrain = terrainFor(plan);
+  return (plan.terrain ?? []).filter(
+    (edit) => edit.surface === 'water' && !terrain.isSea(edit.tileX, edit.tileZ),
+  );
+};
+
+const islandOf = (plan: ReturnType<typeof emptyResortPlan>) => {
+  const terrain = terrainFor(plan);
+  return (plan.terrain ?? []).filter(
+    (edit) => edit.level > 0 && terrain.isSea(edit.tileX, edit.tileZ),
+  );
+};
+
+const hillsOf = (plan: ReturnType<typeof emptyResortPlan>) =>
+  (plan.terrain ?? []).filter(
+    (edit) => edit.surface === 'grass' && edit.level > plan.elevation!.terraces.at(-1)!.level,
+  );
+
 describe('emptyResortPlan', () => {
   it('has nothing on it', () => {
     const plan = emptyResortPlan(80, 80);
@@ -750,6 +769,72 @@ describe('emptyResortPlan', () => {
   it('keeps its size, clamped to what the generator will work at', () => {
     expect(emptyResortPlan(64, 72)).toMatchObject({ tilesX: 64, tilesZ: 72 });
     expect(emptyResortPlan(1, 1)).toMatchObject({ tilesX: PLOT_TILES.min, tilesZ: PLOT_TILES.min });
+  });
+
+  it('runs a river along the coast by default, and none when asked not to', () => {
+    expect(waterOf(emptyResortPlan(112, 100, 3)).length).toBeGreaterThan(112);
+    expect(waterOf(emptyResortPlan(112, 100, 3, { river: false }))).toEqual([]);
+  });
+
+  it('climbs two or three steps of sand off the beach before the grass starts', () => {
+    const tops = new Set<number>();
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const plan = emptyResortPlan(112, 100, seed, { river: false, hills: false });
+      const terraces = plan.elevation!.terraces;
+      const sand = terraces.filter((terrace) => terrace.surface === 'sand');
+      expect(sand.length === 2 || sand.length === 3).toBe(true);
+      expect(terraces.at(-1)).toMatchObject({ surface: 'grass', level: sand.length + 1 });
+      tops.add(sand.length);
+      const terrain = terrainFor(plan);
+      const shore = shoreFor(plan)!;
+      for (let tileX = 0; tileX < plan.tilesX; tileX += 7) {
+        const water = waterStartZ(shore, tileX);
+        expect(terrain.tileAt(tileX, water - 1)).toEqual({ level: 0, surface: 'sand' });
+        expect(terrain.tileAt(tileX, water - shore.spec.beach - 1)).toEqual({
+          level: 1,
+          surface: 'sand',
+        });
+        expect(terrain.tileAt(tileX, 0)).toEqual({ level: sand.length + 1, surface: 'grass' });
+      }
+    }
+    expect(tops).toEqual(new Set([2, 3]));
+  });
+
+  it('raises hills out on the grass by default, and none when asked not to', () => {
+    expect(hillsOf(emptyResortPlan(112, 100, 3)).length).toBeGreaterThan(50);
+    expect(hillsOf(emptyResortPlan(112, 100, 3, { hills: false }))).toEqual([]);
+  });
+
+  it('keeps the river on the level grass whether or not there are hills', () => {
+    for (const hills of [true, false]) {
+      const plan = emptyResortPlan(112, 100, 3, { hills });
+      const levels = new Set(waterOf(plan).map((edit) => edit.level));
+      const grass = plan.elevation!.terraces.at(-1)!.level;
+      expect({ hills, levels: [...levels] }).toEqual({ hills, levels: [grass] });
+    }
+  });
+
+  it('raises an island in the bay only when asked, deepening the bay to hold it', () => {
+    const plain = emptyResortPlan(112, 100, 3);
+    const isled = emptyResortPlan(112, 100, 3, { island: true });
+    expect(islandOf(plain)).toEqual([]);
+    expect(islandOf(isled).length).toBeGreaterThan(20);
+    expect(isled.shore!.inset).toBeGreaterThan(plain.shore!.inset);
+  });
+
+  it('lays out ground the elevation and the layout accept, whatever is asked for', () => {
+    for (const size of [PLOT_TILES.min, 80, 160, PLOT_TILES.max]) {
+      for (const land of [
+        {},
+        { island: true },
+        { hills: false, island: true },
+        { river: false, hills: false, island: false },
+      ]) {
+        const plan = emptyResortPlan(size, size, size, land);
+        expect(() => elevationFor(plan)).not.toThrow();
+        expect(() => layoutResort(ITEMS, plan)).not.toThrow();
+      }
+    }
   });
 });
 

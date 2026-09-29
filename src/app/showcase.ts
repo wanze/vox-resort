@@ -333,6 +333,7 @@ import type { SeaField } from '../features/sea/adapters/seaField';
 import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
 import { pierBoxesFor } from '../features/sea/domain/piers';
+import { islandBoxesFor } from '../features/sea/domain/islands';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
 import type { Mooring, Rental, SailingGround } from '../features/sea/domain/swimArea';
 import { sailingGroundFor } from '../features/sea/domain/swimArea';
@@ -985,6 +986,7 @@ const driftingVariants = (sea: readonly ModelGeometry[]): number[] =>
 // Moorings are worked out beforehand because the lamp bake needs them before there is a sea.
 function seaFor(parts: {
   readonly shore: Shore | null;
+  readonly terrain: Terrain;
   readonly paved: readonly Placement[];
   readonly placements: readonly Placement[];
   readonly moorings: readonly Mooring[];
@@ -1004,6 +1006,9 @@ function seaFor(parts: {
     ground,
     radii: SEA_RADII,
     piers: pierBoxesFor(shore, parts.paved),
+    // Off the terrain as it stands when the resort is built: an island raised later is sailed
+    // round from the next load.
+    islands: islandBoxesFor(parts.terrain),
     waterline: SEA_LEVEL,
     seed: SEA_SEED,
   });
@@ -1208,6 +1213,7 @@ function buildResort(
   });
   const sea = seaFor({
     shore,
+    terrain,
     paved: plot.layout.paths,
     placements: plot.layout.placements,
     moorings,

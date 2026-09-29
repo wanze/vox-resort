@@ -9,8 +9,9 @@ import { shoreFor, waterStartZ } from './shoreline';
 
 export type { Ground };
 
-// Two levels above the tallest crest the generator grows: a ceiling on the tool, not the terrain.
-export const MAX_TERRAIN_LEVEL = 8;
+// Above the tallest ground bare land is given (a dune of three, a hill of ten above it): a ceiling
+// on the tool, not the terrain.
+export const MAX_TERRAIN_LEVEL = 16;
 
 // One plot's width all round: an island at the far edge reads as out in the bay, and the renderer's
 // box (three times the extent either side) still draws every tile of it.
@@ -178,7 +179,7 @@ export function createTerrain(parts: TerrainParts): Terrain {
   return terrain;
 }
 
-const AROUND: readonly (readonly [number, number])[] = [
+export const AROUND: readonly (readonly [number, number])[] = [
   [-1, -1],
   [0, -1],
   [1, -1],

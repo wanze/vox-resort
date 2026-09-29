@@ -1,3 +1,4 @@
+// Runs along the coast, not down to it: a river from the sea up the hill reads as flowing uphill.
 // Tiles are flooded at the level they already stand, so the river never breaks the
 // neighbours-within-a-level invariant.
 
@@ -5,13 +6,13 @@ import { createRandom } from './random';
 import type { Terrain, TerrainEdit } from './terrain';
 import { createTerrain } from './terrain';
 import type { Elevation } from './elevation';
-import type { Shore } from './shoreline';
+import { waterEdgeZ, waterStartZ, type Shore } from './shoreline';
+import { meanderAt } from './wander';
 
 // One tile read as a ditch, three swallowed a district on a small plot.
 const RIVER_WIDTH = 2;
 
-// Holds its column for a few rows: wandering every row came out as a staircase.
-const BEND_CHANCE = 0.32;
+const MEANDER = 2;
 
 const BANK_MARGIN = 3;
 
@@ -26,34 +27,52 @@ export interface RiverParts {
 // Its own generator, so a plot that grew a taller hill does not get a different river.
 const RIVER_SALT = 0x1f7;
 
-function channelOf(parts: RiverParts, terrain: Terrain): { x: number; z: number }[] {
-  const random = createRandom(parts.seed + RIVER_SALT);
-  const span = parts.tilesX - 2 * BANK_MARGIN - RIVER_WIDTH;
-  if (span <= 0) return [];
-  let west = BANK_MARGIN + Math.floor(random() * span);
-  const tiles: { x: number; z: number }[] = [];
+// The hill's last step comes back down to the flat, so behind it is the ground a river can lie on.
+function inlandInset(shore: Shore, elevation: Elevation | null): number {
+  const back = elevation?.spec.terraces.at(-1);
+  return back ? back.inset + back.wave : shore.spec.beach;
+}
 
-  for (let tileZ = 0; tileZ < parts.tilesZ; tileZ++) {
-    let reachedWater = false;
-    for (let offset = 0; offset < RIVER_WIDTH; offset++) {
-      const tileX = west + offset;
-      // The sea is never edited, so the channel stops where it meets it.
-      if (terrain.isSea(tileX, tileZ)) {
-        reachedWater = true;
-        continue;
-      }
-      tiles.push({ x: tileX, z: tileZ });
+// In rows off the water. The bounds carry a row of slack each way for the rounding of the
+// coast and of the meander.
+function lineOf(parts: RiverParts, shore: Shore): number | null {
+  let nearest = Number.POSITIVE_INFINITY;
+  for (let tileX = 0; tileX < parts.tilesX; tileX++) {
+    nearest = Math.min(nearest, waterStartZ(shore, tileX));
+  }
+  const low = inlandInset(shore, parts.elevation) + BANK_MARGIN + MEANDER + 2;
+  const high = nearest - BANK_MARGIN - MEANDER - RIVER_WIDTH;
+  if (high < low) return null;
+  const random = createRandom(parts.seed + RIVER_SALT);
+  return low + Math.round((high - low) * (0.3 + random() * 0.4));
+}
+
+// Out through the apron as well, so the river comes from somewhere rather than out of the plot's edge.
+function channelOf(parts: RiverParts, shore: Shore, terrain: Terrain): { x: number; z: number }[] {
+  const line = lineOf(parts, shore);
+  if (line === null) return [];
+  const tiles: { x: number; z: number }[] = [];
+  let previous: { low: number; high: number } | null = null;
+  for (let tileX = -parts.tilesX; tileX < 2 * parts.tilesX; tileX++) {
+    const wander = meanderAt(parts.seed, RIVER_SALT, tileX, MEANDER);
+    const seaward = Math.round(waterEdgeZ(shore, tileX) - line - wander);
+    let low = seaward - RIVER_WIDTH + 1;
+    let high = seaward;
+    // A column two rows off the last would leave the channel joined only at a corner.
+    if (previous) {
+      low = Math.min(low, previous.high);
+      high = Math.max(high, previous.low);
     }
-    if (reachedWater) break;
-    if (random() < BEND_CHANCE) {
-      const step = random() < 0.5 ? -1 : 1;
-      west = Math.min(parts.tilesX - BANK_MARGIN - RIVER_WIDTH, Math.max(BANK_MARGIN, west + step));
+    previous = { low: seaward - RIVER_WIDTH + 1, high: seaward };
+    for (let tileZ = low; tileZ <= high; tileZ++) {
+      if (!terrain.holds(tileX, tileZ) || terrain.isSea(tileX, tileZ)) continue;
+      tiles.push({ x: tileX, z: tileZ });
     }
   }
   return tiles;
 }
 
-// Channel first, so the bank pass sees the whole channel and never writes sand over water.
+// Grass right up to the water: a sand bank read as a beach along an inland river.
 export function riverEditsFor(parts: RiverParts): readonly TerrainEdit[] {
   if (!parts.shore) return [];
   const terrain = createTerrain({
@@ -62,23 +81,8 @@ export function riverEditsFor(parts: RiverParts): readonly TerrainEdit[] {
     tilesX: parts.tilesX,
     tilesZ: parts.tilesZ,
   });
-
-  const channel = channelOf(parts, terrain);
-  for (const tile of channel) {
+  for (const tile of channelOf(parts, parts.shore, terrain)) {
     terrain.set(tile.x, tile.z, { level: terrain.levelOf(tile.x, tile.z), surface: 'water' });
   }
-
-  for (const tile of channel) {
-    const level = terrain.levelOf(tile.x, tile.z);
-    for (const dx of [-1, 1]) {
-      const bank = { x: tile.x + dx, z: tile.z };
-      if (!terrain.holds(bank.x, bank.z)) continue;
-      const standing = terrain.tileAt(bank.x, bank.z);
-      // A bank up a terrace riser is not a bank, and a water tile is the other half of the channel.
-      if (standing.surface === 'water' || standing.level !== level) continue;
-      terrain.set(bank.x, bank.z, { level: standing.level, surface: 'sand' });
-    }
-  }
-
   return terrain.edits;
 }

@@ -38,6 +38,13 @@ const paramsSchema = z.object({
       variety: z.enum(VARIETIES).exactOptional(),
     })
     .exactOptional(),
+  land: z
+    .object({
+      river: z.boolean().exactOptional(),
+      hills: z.boolean().exactOptional(),
+      island: z.boolean().exactOptional(),
+    })
+    .exactOptional(),
 }) satisfies z.ZodType<ResortParams>;
 
 const cameraSchema = z.object({

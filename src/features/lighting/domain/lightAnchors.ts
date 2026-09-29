@@ -38,6 +38,8 @@ export interface Ground {
   readonly maxX: number;
   readonly minZ: number;
   readonly maxZ: number;
+  // In voxels. The lamps stand on the ground, so the grid must reach up past the highest of it.
+  readonly top?: number;
 }
 
 // The whole plot is reserved so a lamp placed anywhere on the resort lights; beyond it nothing is.
@@ -58,6 +60,6 @@ export function lampReservationFor(
     minZ: ground.minZ - reach,
     maxZ: ground.maxZ + reach,
     minY: 0,
-    maxY: ceiling + reach,
+    maxY: (ground.top ?? 0) + ceiling + reach,
   };
 }

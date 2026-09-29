@@ -71,6 +71,13 @@ describe('lampReservationFor', () => {
     expect(reservation.maxY).toBe(78);
   });
 
+  it('reaches as far again above the highest ground, where a lamp can stand too', () => {
+    const reservation = lampReservationFor({ ...ground, top: 40 }, [
+      light({ y: 22, distance: 56 }),
+    ])!;
+    expect(reservation.maxY).toBe(118);
+  });
+
   it('takes the furthest reach, whichever model declared it', () => {
     const near = lampReservationFor(ground, [light({ distance: 30 })])!;
     const far = lampReservationFor(ground, [light({ distance: 30 }), light({ distance: 70 })])!;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { elevationFor, type ElevationSpec } from './elevation';
 import { riverEditsFor, type RiverParts } from './river';
-import { shoreFor, type ShoreSpec } from './shoreline';
+import { shoreFor, waterStartZ, type ShoreSpec } from './shoreline';
 import { createTerrain, type TerrainEdit } from './terrain';
 
 const SHORE: ShoreSpec = { inset: 10, beach: 6, wave: 2, seed: 5 };
@@ -16,32 +16,33 @@ const HILL: ElevationSpec = {
   seed: 5,
 };
 
-const parts = (over: Partial<RiverParts> = {}): RiverParts => {
-  const plan = { tilesX: 40, tilesZ: 60, shore: SHORE, elevation: HILL };
+const parts = (over: Partial<RiverParts> & { readonly hill?: boolean } = {}): RiverParts => {
+  const { hill = true, ...rest } = over;
+  const tilesZ = rest.tilesZ ?? 70;
+  const plan = { tilesX: 40, tilesZ, shore: SHORE, ...(hill ? { elevation: HILL } : {}) };
   return {
     shore: shoreFor(plan),
     elevation: elevationFor(plan),
     tilesX: 40,
-    tilesZ: 60,
+    tilesZ,
     seed: 3,
-    ...over,
+    ...rest,
   };
 };
 
-const flooded = (edits: readonly TerrainEdit[], made: RiverParts) =>
-  createTerrain({
-    shore: made.shore,
-    elevation: made.elevation,
-    tilesX: made.tilesX,
-    tilesZ: made.tilesZ,
-    edits,
-  });
+const bareOf = (made: RiverParts) => createTerrain({ ...made, edits: [] });
 
 const channelOf = (edits: readonly TerrainEdit[]) =>
   edits.filter((edit) => edit.surface === 'water');
 
+const rowsByColumn = (channel: readonly TerrainEdit[]) => {
+  const rows = new Map<number, number[]>();
+  for (const tile of channel) rows.set(tile.tileX, [...(rows.get(tile.tileX) ?? []), tile.tileZ]);
+  return rows;
+};
+
 describe('riverEditsFor', () => {
-  it('gives a plot with no sea no river, because there is nowhere for it to go', () => {
+  it('gives a plot with no sea no river, because there is no coast for it to follow', () => {
     expect(riverEditsFor(parts({ shore: null, elevation: null }))).toEqual([]);
   });
 
@@ -50,25 +51,34 @@ describe('riverEditsFor', () => {
     expect(riverEditsFor(parts({ seed: 4 }))).not.toEqual(riverEditsFor(parts()));
   });
 
-  it('runs from the back of the plot down to the water', () => {
+  it('crosses the plot from side to side, and on out past both edges', () => {
     const made = parts();
-    const channel = channelOf(riverEditsFor(made));
-    const rows = new Set(channel.map((tile) => tile.tileZ));
-    expect(rows.has(0)).toBe(true);
-    const mouth = Math.max(...rows);
-    const terrain = createTerrain({ ...made, edits: [] });
-    expect(terrain.isSea(channel[channel.length - 1]!.tileX, mouth + 1)).toBe(true);
+    const columns = rowsByColumn(channelOf(riverEditsFor(made)));
+    for (let tileX = -1; tileX <= made.tilesX; tileX++) expect(columns.has(tileX)).toBe(true);
   });
 
-  it('is an unbroken channel: every row between the source and the mouth', () => {
-    const channel = channelOf(riverEditsFor(parts()));
-    const rows = [...new Set(channel.map((tile) => tile.tileZ))].toSorted((a, b) => a - b);
-    expect(rows).toEqual(Array.from({ length: rows.length }, (_, index) => index));
+  it('runs parallel to the coast rather than down to it', () => {
+    const made = parts();
+    const shore = made.shore!;
+    const offsets = channelOf(riverEditsFor(made))
+      .filter((tile) => tile.tileX >= 0 && tile.tileX < made.tilesX)
+      .map((tile) => waterStartZ(shore, tile.tileX) - tile.tileZ);
+    expect(Math.max(...offsets) - Math.min(...offsets)).toBeLessThanOrEqual(8);
+  });
+
+  it('is an unbroken channel: each column shares a row with the one before', () => {
+    const columns = rowsByColumn(channelOf(riverEditsFor(parts())));
+    const xs = [...columns.keys()].toSorted((a, b) => a - b);
+    for (let index = 1; index < xs.length; index++) {
+      const before = new Set(columns.get(xs[index - 1]!));
+      expect(xs[index]).toBe(xs[index - 1]! + 1);
+      expect(columns.get(xs[index]!)!.some((row) => before.has(row))).toBe(true);
+    }
   });
 
   it('never paints the sea, which is nobody’s to change', () => {
     const made = parts();
-    const terrain = createTerrain({ ...made, edits: [] });
+    const terrain = bareOf(made);
     for (const edit of riverEditsFor(made)) {
       expect(terrain.isSea(edit.tileX, edit.tileZ)).toBe(false);
     }
@@ -76,44 +86,40 @@ describe('riverEditsFor', () => {
 
   it('moves no ground: every tile keeps the level it stood at', () => {
     const made = parts();
-    const bare = createTerrain({ ...made, edits: [] });
+    const bare = bareOf(made);
     for (const edit of riverEditsFor(made)) {
       expect(edit.level).toBe(bare.levelOf(edit.tileX, edit.tileZ));
     }
   });
 
-  it('falls down the hill rather than cutting through it', () => {
-    const channel = channelOf(riverEditsFor(parts()));
-    const levels = new Set(channel.map((edit) => edit.level));
-    expect(levels.size).toBeGreaterThan(1);
-  });
-
-  it('banks the channel in sand, at the channel’s own level', () => {
+  it('lies on the flat behind the hill instead of cutting across its steps', () => {
     const made = parts();
-    const edits = riverEditsFor(made);
-    const terrain = flooded(edits, made);
-    const banks = edits.filter((edit) => edit.surface === 'sand');
-    expect(banks.length).toBeGreaterThan(0);
-    for (const bank of banks) {
-      const beside = [
-        terrain.tileAt(bank.tileX - 1, bank.tileZ),
-        terrain.tileAt(bank.tileX + 1, bank.tileZ),
-      ];
-      expect(beside.some((tile) => tile.surface === 'water' && tile.level === bank.level)).toBe(
-        true,
-      );
+    const channel = channelOf(riverEditsFor(made));
+    expect(new Set(channel.map((edit) => edit.level))).toEqual(new Set([0]));
+    for (const tile of channel) {
+      expect(waterStartZ(made.shore!, tile.tileX) - tile.tileZ).toBeGreaterThan(24);
     }
   });
 
-  it('stays clear of the plot’s own sides', () => {
-    const made = parts();
-    for (const edit of riverEditsFor(made)) {
-      expect(edit.tileX).toBeGreaterThan(0);
-      expect(edit.tileX).toBeLessThan(made.tilesX - 1);
-    }
+  it('lies on the grass behind the beach when there is no hill', () => {
+    const made = parts({ hill: false });
+    const bare = bareOf(made);
+    const channel = channelOf(riverEditsFor(made));
+    expect(channel.length).toBeGreaterThan(0);
+    for (const tile of channel) expect(bare.surfaceOf(tile.tileX, tile.tileZ)).toBe('grass');
   });
 
-  it('gives a plot too narrow to hold a channel no river at all', () => {
-    expect(riverEditsFor(parts({ tilesX: 6 }))).toEqual([]);
+  it('floods the channel and nothing else, leaving grass right up to the water', () => {
+    const edits = riverEditsFor(parts());
+    expect(edits.length).toBeGreaterThan(0);
+    expect(edits.every((edit) => edit.surface === 'water')).toBe(true);
+  });
+
+  it('stays clear of the plot’s back edge', () => {
+    for (const edit of riverEditsFor(parts())) expect(edit.tileZ).toBeGreaterThan(0);
+  });
+
+  it('gives a plot too shallow to hold a channel behind its hill no river at all', () => {
+    expect(riverEditsFor(parts({ tilesZ: 40 }))).toEqual([]);
   });
 });

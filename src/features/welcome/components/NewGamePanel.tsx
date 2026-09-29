@@ -5,6 +5,7 @@ import {
   PLOT_TILES,
   type ResortParams,
 } from '../../layout/domain/resortGenerator';
+import { clampLand, type LandConfig } from '../../layout/domain/landConfig';
 import type { GameMode } from '../../sim/domain/ledger';
 import type { SaveOutcome } from '../../saves/domain/saveSlots';
 import type { SaveMeta } from '../../saves/domain/snapshot';
@@ -124,6 +125,37 @@ function Slider(props: {
   );
 }
 
+const LAND_FLAGS: readonly { readonly flag: keyof LandConfig; readonly label: string }[] = [
+  { flag: 'river', label: 'River' },
+  { flag: 'hills', label: 'Hills' },
+  { flag: 'island', label: 'Island' },
+];
+
+function LandFields(props: {
+  readonly land: Partial<LandConfig> | undefined;
+  readonly onChange: (land: LandConfig) => void;
+}) {
+  const current = clampLand(props.land);
+  return (
+    <div className="hud-resort-row hud-resort-choice-row" role="group" aria-label="Landscape">
+      <span>Landscape</span>
+      <div className="hud-resort-choices">
+        {LAND_FLAGS.map(({ flag, label }) => (
+          <button
+            key={flag}
+            type="button"
+            className="hud-resort-choice"
+            aria-pressed={current[flag]}
+            onClick={() => props.onChange({ ...current, [flag]: !current[flag] })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PlotFields(props: {
   readonly draft: ResortParams;
   readonly grown: boolean;
@@ -180,7 +212,9 @@ function PlotFields(props: {
       </div>
       {grown ? (
         <ResortAdvanced config={draft.config} onChange={(config) => onChange({ config })} />
-      ) : null}
+      ) : (
+        <LandFields land={draft.land} onChange={(land) => onChange({ land })} />
+      )}
     </>
   );
 }

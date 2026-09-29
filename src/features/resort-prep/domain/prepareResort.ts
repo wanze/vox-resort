@@ -33,6 +33,7 @@ import {
 import { PEDALO_RENTAL_ID, RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
+import { levelHeight } from '../../layout/domain/elevation';
 import {
   CAMERA_FOV_DEGREES,
   cameraFramingFor,
@@ -140,9 +141,9 @@ export function rentalOf(shore: Shore | null, placements: readonly Placement[]):
 function planOf(source: ResortSource): ResortPlan {
   if (source.kind === 'authored') return RESORT_PLAN;
   if (source.kind === 'saved') return planOfWorld(source.world);
-  const { tilesX, tilesZ, seed } = source.params;
+  const { tilesX, tilesZ, seed, land } = source.params;
   return source.kind === 'clear'
-    ? emptyResortPlan(tilesX, tilesZ, seed)
+    ? emptyResortPlan(tilesX, tilesZ, seed, land)
     : generateResort(GENERATOR_TYPES, source.params);
 }
 
@@ -259,7 +260,9 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const anchors = [...claiming, ...plot.rails]
     .flatMap((placement) => anchorsFor(placement, lightsOf(placement)))
     .concat(buoyLampsAt(moorings));
-  const lighting = bakeLighting(anchors, claiming, groundOf(plan));
+  const terrain = terrainFor(plan);
+  const lit = { ...groundOf(plan), top: levelHeight(terrain.maxLevel) };
+  const lighting = bakeLighting(anchors, claiming, lit);
   const bounds = boundsOf(plan, everything);
   const framing = request.view
     ? benchFraming(request.view, bounds, CAMERA_FOV_DEGREES)
@@ -267,7 +270,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   // Framed exactly as the scene frames it, so this mesh matches the one the scene would build.
   const occupancy = createTileOccupancy(claimingOn(plot.layout));
   const surfaces = terrainSurfacesFor({
-    terrain: terrainFor(plan),
+    terrain,
     isClear: (x, z) => occupancy.keyAt({ x, z }) === undefined,
     shore,
     center: { x: framing.target.x, z: framing.target.z },

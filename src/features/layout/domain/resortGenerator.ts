@@ -21,9 +21,12 @@ import { WOBBLE_LIMIT, type TileRect } from './parkShapes';
 import { gateSquare, type GateSquare } from './gateSquares';
 import { neighbourPairs, spreadPairs, uncutRuns, type LaneCut } from './districtMerge';
 import { SHORE_REACH } from './placementGround';
-import type { TerrainEdit } from './terrain';
+import { createTerrain, type TerrainEdit } from './terrain';
+import { hillEditsFor } from './hills';
 import { routeEdgeTiles, streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
 import { riverEditsFor } from './river';
+import { islandBayInset, islandEditsFor, islandSizeFor } from './island';
+import { clampLand, type LandConfig } from './landConfig';
 import {
   beachDepthAt,
   beachTilesOf,
@@ -36,6 +39,7 @@ import {
 import {
   elevationFor,
   levelAt,
+  maxLevelOf,
   raisedTilesOf,
   straddledTile,
   terraceAt,
@@ -62,6 +66,8 @@ export interface ResortParams {
   readonly density: number;
   readonly seed: number;
   readonly config?: Partial<ResortConfig>;
+  // Bare land only: a generated resort lays its own ground out around its streets.
+  readonly land?: Partial<LandConfig>;
 }
 
 export interface GeneratorType {
@@ -83,6 +89,7 @@ export function clampParams(params: ResortParams): ResortParams {
     density: clamp(params.density, PLOT_DENSITY.min, PLOT_DENSITY.max),
     seed: Math.abs(Math.trunc(params.seed)) % 0xffffffff,
     config: clampConfig(params.config),
+    ...(params.land ? { land: clampLand(params.land) } : {}),
   };
 }
 
@@ -2052,10 +2059,45 @@ function parklandOf(plans: readonly DistrictPlan[]): {
   };
 }
 
-export function emptyResortPlan(tilesX: number, tilesZ: number, seed = 0): ResortPlan {
+// The bay is deepened rather than the island put past the plot's south edge: out there it would be
+// off the framing, the lighting and the tiles the guests can walk.
+function bareShoreSpecFor(params: ResortParams, land: LandConfig): ShoreSpec {
+  const spec = shoreSpecFor(params);
+  if (!land.island) return spec;
+  const bay = islandBayInset(islandSizeFor(params.tilesX, params.tilesZ), spec.wave);
+  return { ...spec, inset: Math.max(spec.inset, bay) };
+}
+
+// The sand climbs in steps off the beach and the grass starts above it, so bare land never lies
+// flush with the sea. Each step follows the coast, so the dune is as deep all along it.
+const DUNE = { steps: { min: 2, max: 3 }, depth: { of: 0.02, min: 2, max: 4 } } as const;
+
+// Its own generator, so the dune's height does not move the river or the hills.
+const DUNE_SALT = 0x4d1;
+
+function bareTerracesFor(shore: ShoreSpec, params: ResortParams): ElevationSpec {
+  const random = createRandom(params.seed + DUNE_SALT);
+  const steps = DUNE.steps.min + Math.floor(random() * (DUNE.steps.max - DUNE.steps.min + 1));
+  const depth = Math.round(clamp(params.tilesZ * DUNE.depth.of, DUNE.depth.min, DUNE.depth.max));
+  const terraces = Array.from({ length: steps + 1 }, (_, index): TerraceSpec => ({
+    level: index + 1,
+    inset: shore.beach + index * depth,
+    anchor: 'water',
+    wave: 0,
+    surface: index < steps ? 'sand' : 'grass',
+  }));
+  return { terraces, seed: params.seed };
+}
+
+export function emptyResortPlan(
+  tilesX: number,
+  tilesZ: number,
+  seed = 0,
+  asked: Partial<LandConfig> = {},
+): ResortPlan {
   const params = clampParams({ tilesX, tilesZ, density: 1, seed });
-  const shoreSpec = shoreSpecFor(params);
-  const terraces = elevationSpecFor(hillFor(params, shoreSpec), params.seed);
+  const land = clampLand(asked);
+  const shoreSpec = bareShoreSpecFor(params, land);
   const plan: ResortPlan = {
     tilesX: params.tilesX,
     tilesZ: params.tilesZ,
@@ -2064,16 +2106,22 @@ export function emptyResortPlan(tilesX: number, tilesZ: number, seed = 0): Resor
     edges: [],
     plazas: [],
     shore: shoreSpec,
-    ...(terraces ? { elevation: terraces } : {}),
+    elevation: bareTerracesFor(shoreSpec, params),
     standsWholeCatalogue: false,
   };
-  // Carved against the plan's own ground so the river follows the hill's levels.
-  const river = riverEditsFor({
-    shore: shoreFor(plan),
-    elevation: elevationFor(plan),
-    tilesX: params.tilesX,
-    tilesZ: params.tilesZ,
-    seed: params.seed,
-  });
-  return river.length > 0 ? { ...plan, terrain: river } : plan;
+  const shore = shoreFor(plan);
+  const elevation = elevationFor(plan);
+  const ground = { tilesX: params.tilesX, tilesZ: params.tilesZ, seed: params.seed };
+  const river = land.river ? riverEditsFor({ ...ground, shore, elevation }) : [];
+  // Raised after the river is carved, so they keep clear of the water.
+  const hills = land.hills
+    ? hillEditsFor({
+        ...ground,
+        level: maxLevelOf(elevation),
+        terrain: createTerrain({ ...ground, shore, elevation, edits: river }),
+      })
+    : [];
+  const island = land.island && shore ? islandEditsFor({ ...ground, shore }) : [];
+  const terrain = [...river, ...hills, ...island];
+  return terrain.length > 0 ? { ...plan, terrain } : plan;
 }

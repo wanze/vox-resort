@@ -105,6 +105,41 @@ describe('createFlotilla', () => {
   });
 });
 
+describe('an island in the bay', () => {
+  const ISLAND = { minX: 150, maxX: 250, minZ: 600, maxZ: 660 };
+
+  const isled = (): Flotilla =>
+    createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 24,
+      craftVariants: [1, 2],
+      ground: GROUND,
+      islands: [ISLAND],
+      waterline: WATERLINE,
+      seed: 5,
+    });
+
+  const aground = (flotilla: Flotilla): number[] =>
+    Array.from({ length: flotilla.count }, (_, index) => index).filter((index) => {
+      const x = flotilla.x[index]!;
+      const z = flotilla.z[index]!;
+      return x > ISLAND.minX && x < ISLAND.maxX && z > ISLAND.minZ && z < ISLAND.maxZ;
+    });
+
+  it('launches no craft on it', () => {
+    expect(aground(isled())).toEqual([]);
+  });
+
+  it('keeps every craft off it, however long they sail', () => {
+    const flotilla = isled();
+    for (let second = 0; second < 300; second++) {
+      run(flotilla, 1);
+      expect(aground(flotilla)).toEqual([]);
+    }
+  });
+});
+
 describe('stepFlotilla', () => {
   it('leaves a moored buoy exactly where it was moored', () => {
     const flotilla = bay();

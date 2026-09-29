@@ -2,6 +2,11 @@ export const HOUSING_STYLES = ['blocks', 'mixed'] as const;
 
 export type HousingStyle = (typeof HOUSING_STYLES)[number];
 
+// Classic builds every family in its original style.
+export const VARIETIES = ['mixed', 'classic'] as const;
+
+export type Variety = (typeof VARIETIES)[number];
+
 export const BEACH_PRESETS = ['auto', 'quiet', 'busy', 'packed'] as const;
 
 export type BeachPreset = (typeof BEACH_PRESETS)[number];
@@ -19,6 +24,7 @@ export interface ResortConfig {
   readonly beach: BeachPreset;
   readonly streetTrees: boolean;
   readonly gatePlazas: boolean;
+  readonly variety: Variety;
 }
 
 export const PARK_SHARE = { min: 0, max: 0.4 } as const;
@@ -31,6 +37,7 @@ export const DEFAULT_CONFIG: ResortConfig = {
   beach: 'auto',
   streetTrees: false,
   gatePlazas: false,
+  variety: 'mixed',
 };
 
 const clampShare = (value: unknown, range: { min: number; max: number }, fallback: number) =>
@@ -53,6 +60,7 @@ export function clampConfig(asked: Partial<ResortConfig> = {}): ResortConfig {
     beach: oneOf(asked.beach, BEACH_PRESETS, DEFAULT_CONFIG.beach),
     streetTrees: flag(asked.streetTrees, DEFAULT_CONFIG.streetTrees),
     gatePlazas: flag(asked.gatePlazas, DEFAULT_CONFIG.gatePlazas),
+    variety: oneOf(asked.variety, VARIETIES, DEFAULT_CONFIG.variety),
   };
 }
 

@@ -46,7 +46,8 @@ describe('buildSectionMeshes', () => {
     }
     const triangles = sections.reduce((total, section) => total + section.indices.length / 3, 0);
     expect(triangles).toBeLessThan(writes.voxelIds.length * 4);
-  }, 30_000);
+    // Each variant brings as many voxels as its original, so this meshes twice what it did.
+  }, 60_000);
 
   it('emits faces that point outwards once their winding is flipped', async () => {
     // DVE keeps its world in module-level statics, so park this voxel well past

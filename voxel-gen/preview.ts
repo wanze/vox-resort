@@ -442,15 +442,25 @@ function renderVariants(ids: readonly string[]): Buffer {
   return renderSheet(pairs, 520, 2);
 }
 
-const CATALOGUE: Registry = { sources: MODEL_SOURCES, sheet: 'contact-sheet', sweeps: true };
+// Variants too: the build palette's style strip shows each one's picture.
+const CATALOGUE: Registry = {
+  sources: [...MODEL_SOURCES, ...VARIANT_SOURCES],
+  sheet: 'contact-sheet',
+  sweeps: true,
+};
 
 // Keeps ids from every registry, since other flags render into the same folder.
 // Anything left in out/ ships in the bundle, so drafts and removed models are swept.
 function sweepStale(outDir: string): void {
   const known = new Set(
-    [...MODEL_SOURCES, ...PEOPLE_SOURCES, ...SKY_SOURCES, ...SEA_SOURCES, ...LITTER_SOURCES].map(
-      (source) => `${source.id}.png`,
-    ),
+    [
+      ...MODEL_SOURCES,
+      ...VARIANT_SOURCES,
+      ...PEOPLE_SOURCES,
+      ...SKY_SOURCES,
+      ...SEA_SOURCES,
+      ...LITTER_SOURCES,
+    ].map((source) => `${source.id}.png`),
   );
   const stale = readdirSync(outDir, { withFileTypes: true })
     .filter((entry) => entry.isFile())

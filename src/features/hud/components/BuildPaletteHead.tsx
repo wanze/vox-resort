@@ -1,3 +1,8 @@
+import type { StylePick } from '../../build/domain/buildTool';
+import type { StyleStrip as Strip } from '../../build/domain/stylePick';
+import type { PreviewLookup } from './BuildPalette';
+import { StyleStrip } from './StyleStrip';
+
 export interface BuildPaletteHeadProps {
   readonly count: number;
   readonly query: string;
@@ -6,6 +11,9 @@ export interface BuildPaletteHeadProps {
   readonly focusSearch: boolean;
   readonly armed: string | null;
   readonly onDisarm: () => void;
+  readonly styles: Strip | null;
+  readonly preview: PreviewLookup;
+  readonly onStyle: (pick: StylePick) => void;
 }
 
 export function BuildPaletteHead({
@@ -15,6 +23,9 @@ export function BuildPaletteHead({
   focusSearch,
   armed,
   onDisarm,
+  styles,
+  preview,
+  onStyle,
 }: BuildPaletteHeadProps) {
   return (
     <>
@@ -50,6 +61,7 @@ export function BuildPaletteHead({
           </span>
         </button>
       ) : null}
+      {styles ? <StyleStrip strip={styles} preview={preview} onStyle={onStyle} /> : null}
     </>
   );
 }

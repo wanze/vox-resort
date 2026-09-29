@@ -6,6 +6,7 @@ import {
   waterByModelId,
   windowsByModelId,
   bedsOf,
+  familyOf,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
@@ -53,6 +54,7 @@ import { overlooksDrop, terrainFor } from '../features/layout/domain/terrain';
 import type { ResortParams } from '../features/layout/domain/resortGenerator';
 import { clampParams } from '../features/layout/domain/resortGenerator';
 import { layoutItemFor } from '../features/build/domain/buildPlan';
+import { itemChooser } from '../features/build/domain/stylePick';
 import {
   claimingOn,
   everythingOn,
@@ -2063,8 +2065,10 @@ function createBenchRecorder(parts: {
   };
 }
 
+// By family: a Street Lamp B filed by its own id would be looked for among the buildings,
+// and a bulldozed one would linger in the props.
 function listFor(plot: Plot, id: string): Placement[] {
-  return plot[listOf(id)];
+  return plot[listOf(familyOf(id))];
 }
 
 // Damping would nudge the camera for the first second, and runs must compare on the same pixels.
@@ -2353,11 +2357,16 @@ function createEditMode(parts: {
     onCancel,
   });
 
+  let armedFamily: string | null = null;
+
   return {
     select(tool) {
       // All three are told every time, so the order cannot matter.
-      const id = armedObject(tool);
-      pointer.select(id === null ? null : layoutItemFor(objectTypeById(id)));
+      const family = armedObject(tool);
+      const chooser = itemChooser(tool, Math.random);
+      if (chooser && family === armedFamily) pointer.restyle(chooser);
+      else pointer.select(chooser);
+      armedFamily = family;
       spade.select(armedBrush(tool));
       bulldozer.select(armedRemove(tool));
     },
@@ -2425,7 +2434,12 @@ function startingSource(bench: BenchConfig | null, params: ResortParams): Resort
 
 function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRequest {
   if (!bench) return { source, repeat: 1, view: null };
-  return { source, repeat: bench.repeat, view: bench.view };
+  return {
+    source,
+    repeat: bench.repeat,
+    view: bench.view,
+    ...(bench.styles ? { styles: bench.styles } : {}),
+  };
 }
 
 function crowdStep(bench: boolean, walking: boolean, elapsed: number): number {

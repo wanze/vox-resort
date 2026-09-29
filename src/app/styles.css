@@ -1422,6 +1422,30 @@ input[type='checkbox'] {
   color: var(--text-on-accent);
 }
 
+.hud-palette-styles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.style-tile {
+  flex: 0 1 var(--tile-min);
+  min-width: 0;
+}
+
+.style-tile .build-tile-name {
+  text-align: center;
+}
+
+/* The die sits where a model's picture would, clear of the name plate the others wear. */
+.style-tile .terrain-tile-glyph {
+  padding-bottom: 0;
+}
+
+.hud-palette-styles-key {
+  margin-left: auto;
+}
+
 .hud-error {
   position: absolute;
   bottom: var(--space-5);

@@ -119,6 +119,9 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
 
   return {
     arm(next) {
+      // The ghost and the canvas flag are shared, so an idle stroke told to stay idle must not
+      // hide the ghost another pointer has just drawn.
+      if (!next && !armed) return;
       armed = next;
       painting = null;
       hovered = null;

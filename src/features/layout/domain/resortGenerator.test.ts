@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { layoutResort, streetTiles, tileKey } from './resortLayout';
 import {
@@ -39,7 +39,7 @@ import {
   type ResortParams,
 } from './resortGenerator';
 
-const TYPES: GeneratorType[] = OBJECT_TYPES.map((type) => ({
+const TYPES: GeneratorType[] = ORIGINAL_TYPES.map((type) => ({
   id: type.id,
   category: type.category,
   tilesX: type.model.tiles.x,
@@ -47,7 +47,7 @@ const TYPES: GeneratorType[] = OBJECT_TYPES.map((type) => ({
   placement: type.model.placement,
 }));
 
-const ITEMS = OBJECT_TYPES.map(layoutItemFor);
+const ITEMS = ORIGINAL_TYPES.map(layoutItemFor);
 
 const BY_ID = new Map(TYPES.map((type) => [type.id, type]));
 
@@ -912,5 +912,51 @@ describe('the hill a generated plot gets', () => {
     const stairs = paths.filter((tile) => tile.id === STAIRS_ID).length;
     expect(stairs).toBeGreaterThan(5);
     expect(stairs).toBeLessThan(paths.length / 8);
+  });
+});
+
+const fnv1a = (text: string): number => {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index++) {
+    hash = Math.imul(hash ^ text.charCodeAt(index), 0x01000193) >>> 0;
+  }
+  return hash;
+};
+
+const withoutNeighbourhoods = (plan: ReturnType<typeof generateResort>) => {
+  const { neighbourhoods: _, ...rest } = plan;
+  return rest;
+};
+
+describe('the neighbourhoods a generated plot names', () => {
+  // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
+  it('leaves the rest of the plan exactly as it was', () => {
+    for (const [seed, hash] of [
+      [1, 1039714607],
+      [7, 3894323537],
+    ] as const) {
+      const plan = generateResort(TYPES, params({ seed }));
+      expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);
+    }
+  });
+
+  it('names one per district, none overlapping, and holds most of what stands', () => {
+    for (const seed of [1, 7]) {
+      const plan = generateResort(TYPES, params({ seed }));
+      const neighbourhoods = plan.neighbourhoods ?? [];
+      expect(neighbourhoods.length, `seed ${seed}`).toBeGreaterThan(1);
+      neighbourhoods.forEach((one, index) => {
+        for (const other of neighbourhoods.slice(index + 1)) {
+          const apart =
+            one.x1 < other.x0 || other.x1 < one.x0 || one.z1 < other.z0 || other.z1 < one.z0;
+          expect(apart, `seed ${seed}: ${JSON.stringify([one, other])}`).toBe(true);
+        }
+      });
+      // Not every plot: the shore and the hill are filled apart from the districts, houses included.
+      const housed = plan.plots.filter((plot) =>
+        neighbourhoods.some((rect) => inside(rect, plot.tileX, plot.tileZ)),
+      );
+      expect(housed.length, `seed ${seed}`).toBeGreaterThan(plan.plots.length * 0.75);
+    }
   });
 });

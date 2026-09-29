@@ -32,6 +32,13 @@ describe('parseBenchConfig', () => {
     });
   });
 
+  it('can style the authored plot, so a run can price the variants', () => {
+    expect(parseBenchConfig('?bench=1')?.styles).toBeUndefined();
+    expect(parseBenchConfig('?bench=1&styles=mixed')?.styles).toBe('mixed');
+    expect(parseBenchConfig('?bench=1&styles=scatter')?.styles).toBe('scatter');
+    expect(parseBenchConfig('?bench=1&styles=gaudy')?.styles).toBeUndefined();
+  });
+
   it('can pin the weather, so a run can price the rain', () => {
     expect(parseBenchConfig('?bench=1')?.weather).toBeNull();
     expect(parseBenchConfig('?bench=1&weather=storm')?.weather).toBe('storm');

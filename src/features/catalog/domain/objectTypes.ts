@@ -3,6 +3,7 @@ import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
 import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
+import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
 import {
   buildModel,
   MODEL_CATEGORIES,
@@ -10,6 +11,7 @@ import {
   type ModelCategory,
   type ModelVenue,
   type VoxelModel,
+  type VoxelModelSource,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
@@ -18,7 +20,11 @@ export type { ModelVenue };
 
 export interface ObjectTypeDefinition {
   readonly id: string;
+  // The family's, so the world never names a style; styleLabel tells them apart.
   readonly label: string;
+  readonly family: string;
+  readonly style: number;
+  readonly styleLabel: string;
   readonly category: ModelCategory;
   readonly model: VoxelModel;
   readonly color: number;
@@ -39,17 +45,37 @@ function dominantColor(model: VoxelModel): number {
   return best;
 }
 
-export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = MODEL_SOURCES.map((source) => {
-  const model = buildModel(source);
-  return {
-    id: model.id,
-    label: model.label,
-    category: model.category,
-    model,
-    color: dominantColor(model),
-    venue: model.venue,
-  };
-});
+const FAMILY_LABELS: ReadonlyMap<string, string> = new Map(
+  MODEL_SOURCES.map((source) => [source.id, source.label]),
+);
+
+const SOURCES_WITH_FAMILY: readonly (readonly [VoxelModelSource, string])[] = [
+  ...MODEL_SOURCES.map((source) => [source, source.id] as const),
+  ...VARIANTS.map((variant) => [variant.source, variant.of] as const),
+];
+
+export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = SOURCES_WITH_FAMILY.map(
+  ([source, family], index) => {
+    const model = buildModel(source);
+    const style = SOURCES_WITH_FAMILY.slice(0, index).filter(([, of]) => of === family).length;
+    return {
+      id: model.id,
+      label: FAMILY_LABELS.get(family) ?? model.label,
+      family,
+      style,
+      styleLabel: model.label,
+      category: model.category,
+      model,
+      color: dominantColor(model),
+      venue: model.venue,
+    };
+  },
+);
+
+// Each family once: what the palette offers and what the generator stands.
+export const ORIGINAL_TYPES: readonly ObjectTypeDefinition[] = OBJECT_TYPES.filter(
+  (type) => type.style === 0,
+);
 
 // Not ObjectTypeDefinitions: a person has no swatch, shelf or footprint to claim.
 export const PEOPLE_MODELS: readonly VoxelModel[] = PEOPLE_SOURCES.map(buildModel);
@@ -82,7 +108,7 @@ export interface ObjectTypeGroup {
 }
 
 export function objectTypeGroups(): readonly ObjectTypeGroup[] {
-  const offered = OBJECT_TYPES.filter((type) => !type.model.groundDecides);
+  const offered = ORIGINAL_TYPES.filter((type) => !type.model.groundDecides);
   return MODEL_CATEGORIES.map((category) => ({
     category: category.id,
     label: category.label,
@@ -94,6 +120,19 @@ export function objectTypeById(id: string): ObjectTypeDefinition {
   const found = OBJECT_TYPES.find((type) => type.id === id);
   if (!found) throw new Error(`Unknown object type "${id}"`);
   return found;
+}
+
+const FAMILIES: ReadonlyMap<string, string> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.family]),
+);
+
+// An unknown id is its own family, so a caller comparing families needs no catalogue check.
+export function familyOf(id: string): string {
+  return FAMILIES.get(id) ?? id;
+}
+
+export function stylesOf(family: string): readonly ObjectTypeDefinition[] {
+  return OBJECT_TYPES.filter((type) => type.family === family);
 }
 
 export function objectTypeTop(id: string): number {

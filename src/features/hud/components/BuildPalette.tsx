@@ -11,6 +11,7 @@ import {
   BULLDOZER,
   type BuildTool,
 } from '../../build/domain/buildTool';
+import { styleStripFor } from '../../build/domain/stylePick';
 import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBrush';
 import { countTypes, filterGroups } from '../domain/paletteFilter';
 import type { Ledger } from '../../sim/domain/ledger';
@@ -54,6 +55,7 @@ export function BuildPalette({
   const searching = query.trim().length > 0;
   const objectId = armedObject(tool);
   const brush = armedBrush(tool);
+  const styles = styleStripFor(tool);
 
   const toggle = (category: string) => (): void =>
     setShut((current) => {
@@ -71,6 +73,9 @@ export function BuildPalette({
         focusSearch={focusSearch}
         armed={armedLabel(tool)}
         onDisarm={() => onToolChange(null)}
+        styles={styles}
+        preview={preview}
+        onStyle={(style) => styles && onToolChange({ kind: 'object', id: styles.family, style })}
       />
 
       <div className="hud-palette-shelves">

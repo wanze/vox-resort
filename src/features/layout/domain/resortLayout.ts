@@ -54,7 +54,14 @@ export interface LayoutItem {
   readonly category?: ModelCategory;
   readonly ground?: PlacementGround;
   readonly doors?: readonly ModelDoor[];
+  // A style of that model, which the plan stands in its family's place.
+  readonly variantOf?: string;
 }
+
+// The model a plot or decoration of this family stands as, given where it stands.
+export type StyleOf = (id: string, tileX: number, tileZ: number) => string;
+
+export const keepStyle: StyleOf = (id) => id;
 
 export interface Placement {
   readonly key: string;
@@ -709,7 +716,7 @@ function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan)
   if (plan.standsWholeCatalogue === false) return;
   const planted = new Set(plan.plots.map((plot) => plot.id));
   for (const item of items) {
-    if (!DERIVED_IDS.has(item.id) && !planted.has(item.id)) {
+    if (!DERIVED_IDS.has(item.id) && !item.variantOf && !planted.has(item.id)) {
       throw new Error(`"${item.id}" has no plot on the resort plan`);
     }
   }
@@ -756,13 +763,25 @@ function railKey(item: LayoutItem, rail: RailTile): string {
   return `${derivedKey(item.id, rail.tile.x, rail.tile.z)}:${rail.rotation}`;
 }
 
-export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): ResortLayout {
+export function layoutResort(
+  items: readonly LayoutItem[],
+  unstyled: ResortPlan,
+  styleOf: StyleOf = keepStyle,
+): ResortLayout {
   const byId = new Map(items.map((item) => [item.id, item]));
   const path = byId.get(PATH_ID);
   if (!path) throw new Error(`The catalogue has no "${PATH_ID}" object to pave with`);
   if (path.tilesX !== 1 || path.tilesZ !== 1) throw new Error(`"${PATH_ID}" must be a 1x1 tile`);
 
-  requireEveryTypePlanted(items, plan);
+  requireEveryTypePlanted(items, unstyled);
+  // Before anything reads a plot, so its key, footprint and door spur are the style's own.
+  const plan: ResortPlan = {
+    ...unstyled,
+    plots: unstyled.plots.map((plot) => ({
+      ...plot,
+      id: styleOf(plot.id, plot.tileX, plot.tileZ),
+    })),
+  };
 
   const terrain = terrainFor(plan);
   const levelOf = (tileX: number, tileZ: number): number => terrain.levelOf(tileX, tileZ);
@@ -838,7 +857,7 @@ export function layoutResort(items: readonly LayoutItem[], plan: ResortPlan): Re
     levelOf,
   );
 
-  const props = propsFor(items, plan, levelOf);
+  const props = propsFor(items, plan, levelOf, styleOf);
   return { placements, props, paths, rails, tilesX: plan.tilesX, tilesZ: plan.tilesZ };
 }
 
@@ -846,6 +865,7 @@ function propsFor(
   items: readonly LayoutItem[],
   plan: ResortPlan,
   levelOf: (tileX: number, tileZ: number) => number,
+  styleOf: StyleOf,
 ): Placement[] {
   const byId = new Map(items.map((item) => [item.id, item]));
   const { lamps, benches, hedges, trees } = decorationsFor(items, plan);
@@ -855,7 +875,8 @@ function propsFor(
     ...trees.map((tile) => ({ id: plan.avenues?.tree ?? '', tile, rotation: 0 as Rotation })),
     ...benches.map(({ tile, rotation }) => ({ id: BENCH_ID, tile, rotation })),
   ];
-  return turned.flatMap(({ id, tile, rotation }) => {
+  return turned.flatMap(({ id: family, tile, rotation }) => {
+    const id = styleOf(family, tile.x, tile.z);
     const item = byId.get(id);
     if (!item) return [];
     return [

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { GuestNeed, Shelter } from '../../../../voxel-gen/voxelgen.ts';
-import { binReachOf, OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { binReachOf, ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import {
@@ -1377,14 +1377,14 @@ const shareOutOf = (
 };
 
 describe('on the generated plot', () => {
-  const TYPES = OBJECT_TYPES.map((type) => ({
+  const TYPES = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,
     category: type.category,
     placement: type.model.placement,
   }));
-  const ITEMS: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+  const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,

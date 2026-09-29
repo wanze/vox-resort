@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { blockedAt, clearLine, type ObstacleBox } from '../../crowd/domain/sandGrid';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
@@ -177,7 +177,7 @@ describe('sandRoutesFor', () => {
   // compiles clearLine and blockedAt, and wall clock is noisy beside the suite.
   it('routes every building on the reference plot’s beach in well under a frame', () => {
     const plan = generateResort(
-      OBJECT_TYPES.map((type) => ({
+      ORIGINAL_TYPES.map((type) => ({
         id: type.id,
         tilesX: type.model.tiles.x,
         tilesZ: type.model.tiles.z,
@@ -186,7 +186,7 @@ describe('sandRoutesFor', () => {
       })),
       clampParams({ tilesX: 112, tilesZ: 100, seed: 3, density: 0.7 }),
     );
-    const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+    const items: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
       id: type.id,
       tilesX: type.model.tiles.x,
       tilesZ: type.model.tiles.z,

@@ -26,8 +26,13 @@ export interface BuildPointerOptions {
   readonly onCancel: () => void;
 }
 
+// Asked for every placement, so a random style rolls afresh for each tile of a drag.
+export type ItemChooser = () => LayoutItem;
+
 export interface BuildPointer {
-  select(item: LayoutItem | null): void;
+  select(chooser: ItemChooser | null): void;
+  // Another style of the same family: the rotation is kept.
+  restyle(chooser: ItemChooser): void;
   dispose(): void;
 }
 
@@ -39,7 +44,9 @@ function turnAsked(event: KeyboardEvent): number {
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   const { ghost, occupancy, ground, paving, handrails, onPlace, onRails } = options;
 
+  let chooser: ItemChooser | null = null;
   let item: LayoutItem | null = null;
+  const nextItem = (): LayoutItem | null => chooser?.() ?? null;
   // Kept across placements so a row can face one way; reset when the type changes.
   let rotation: Rotation = 0;
 
@@ -73,6 +80,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       for (const relaid of relaidBy(tile, paving)) onPlace(relaid.placement, relaid.lifted);
       // Last, once paving and climbs are settled: a rail is a fact about the ground around a tile.
       reRailAround(tile, handrails, onRails);
+      item = nextItem();
     },
     onKey(event) {
       const quarters = turnAsked(event);
@@ -86,9 +94,15 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
 
   return {
     select(next) {
-      item = next;
+      chooser = next;
+      item = nextItem();
       rotation = 0;
       stroke.arm(next !== null);
+    },
+    restyle(next) {
+      chooser = next;
+      item = next();
+      stroke.refresh();
     },
     dispose() {
       stroke.dispose();

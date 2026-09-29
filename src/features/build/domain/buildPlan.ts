@@ -105,5 +105,6 @@ export function layoutItemFor(type: ObjectTypeDefinition): LayoutItem {
     category: type.category,
     ...(type.model.placement.ground ? { ground: type.model.placement.ground } : {}),
     ...(type.venue?.doors ? { doors: type.venue.doors } : {}),
+    ...(type.style > 0 ? { variantOf: type.family } : {}),
   };
 }

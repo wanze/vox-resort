@@ -85,11 +85,22 @@ street.
 
 ## Variants
 
-`variants/` holds alternative takes on catalogue models, each naming the model it
-is an alternative to (`VARIANTS` in `variants/index.ts`). They are held to the
-same tests as the catalogue but are not in it. Besides `--variants`, `pnpm dev`
-serves `/compare.html`, which shows each pair in 3D with voxel and triangle
-counts.
+`variants/` holds other styles of catalogue models, each naming the original it
+belongs with (`VARIANTS` in `variants/index.ts`). An original and its variants
+are a _family_. Variants are in the game: the player picks a style in the build
+palette (or lets it roll, except for 1 × 1 models drawn in runs, such as hedges
+and lamps), and generated resorts style their neighbourhoods.
+
+A new variant is one entry in `VARIANTS`, and nothing in `src/` changes. It must
+pass the family contract in `variants.test.ts`: the same tiles, category,
+placement and venue facts as its original. Only the look, the doors, seats,
+lights, windows and water may differ. If it needs other sim facts, it is a new
+model, not a variant. A variant costs what its original costs, unless it declares
+its own `cost`, and the world names it by its family ("Bakery", never
+"Bakery B").
+
+Besides `--variants`, `pnpm dev` serves `/compare.html`, which shows each pair in
+3D with voxel and triangle counts.
 
 ## Glow, lights and water
 

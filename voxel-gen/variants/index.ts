@@ -1,5 +1,5 @@
-// Alternative takes on catalogue models, kept out of the catalogue until one is
-// chosen; `of` names the model each one is an alternative to.
+// Styles a catalogue model can also be built in; `of` names the original, whose
+// family the variant joins. variants.test.ts holds each one to its original's sim facts.
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import bungalow from './bungalow.ts';

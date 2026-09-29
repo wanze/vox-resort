@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
+import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
@@ -11,17 +12,20 @@ import {
   isGateway,
   LITTER_MODELS,
   emissiveByModelId,
+  familyOf,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
   objectTypeGroups,
   objectTypeTop,
+  ORIGINAL_TYPES,
   PAINTED_MODELS,
   PEOPLE_MODELS,
   sceneryOf,
   SEA_MODELS,
   SKY_MODELS,
   STAFF_MODELS,
+  stylesOf,
   venueOf,
   venueTypes,
   windowsByModelId,
@@ -172,7 +176,8 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(OBJECT_TYPES.length).toBe(63);
+    expect(ORIGINAL_TYPES.length).toBe(63);
+    expect(OBJECT_TYPES.length).toBe(63 + VARIANTS.length);
   });
 
   it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {
@@ -185,7 +190,8 @@ describe('OBJECT_TYPES', () => {
 
   it('uses unique ids and labels', () => {
     expect(new Set(OBJECT_TYPES.map((type) => type.id)).size).toBe(OBJECT_TYPES.length);
-    expect(new Set(OBJECT_TYPES.map((type) => type.label)).size).toBe(OBJECT_TYPES.length);
+    expect(new Set(ORIGINAL_TYPES.map((type) => type.label)).size).toBe(ORIGINAL_TYPES.length);
+    expect(new Set(OBJECT_TYPES.map((type) => type.styleLabel)).size).toBe(OBJECT_TYPES.length);
   });
 
   it('starts every model at its own corner', () => {
@@ -294,8 +300,10 @@ const offered = (): string[] =>
 describe('objectTypeGroups', () => {
   it('offers every model the ground does not decide for you', () => {
     const picked = new Set(offered());
-    const decided = OBJECT_TYPES.filter((type) => type.model.groundDecides).map((type) => type.id);
-    expect(picked.size + decided.length).toBe(OBJECT_TYPES.length);
+    const decided = ORIGINAL_TYPES.filter((type) => type.model.groundDecides).map(
+      (type) => type.id,
+    );
+    expect(picked.size + decided.length).toBe(ORIGINAL_TYPES.length);
     for (const id of decided) expect(picked.has(id)).toBe(false);
   });
 
@@ -310,7 +318,7 @@ describe('objectTypeGroups', () => {
     for (const group of objectTypeGroups()) {
       expect(group.types.length).toBeGreaterThan(0);
       expect(group.types.map((type) => type.id)).toEqual(
-        OBJECT_TYPES.filter(
+        ORIGINAL_TYPES.filter(
           (type) => type.category === group.category && !type.model.groundDecides,
         ).map((type) => type.id),
       );
@@ -368,7 +376,7 @@ describe('materials', () => {
 describe('staff posts', () => {
   it('reserves the lifeguard tower seat for a lifeguard, and no seat anywhere else', () => {
     const posts = OBJECT_TYPES.filter((type) => type.model.seats.some((seat) => seat.post));
-    expect(posts.map((type) => type.id)).toEqual(['lifeguard-tower']);
+    expect([...new Set(posts.map((type) => type.family))]).toEqual(['lifeguard-tower']);
     expect(posts[0]!.model.seats[0]!.post).toBe('lifeguard');
   });
 });
@@ -396,5 +404,38 @@ describe('binReachOf', () => {
 
   it('answers 0 for an unknown id rather than throwing', () => {
     expect(binReachOf('not-a-model')).toBe(0);
+  });
+});
+
+describe('families', () => {
+  it("puts every variant in the catalogue, in its original's family", () => {
+    for (const { of, source } of VARIANTS) {
+      const type = objectTypeById(source.id);
+      expect(type.family, source.id).toBe(of);
+      expect(type.style, source.id).toBeGreaterThan(0);
+      expect(familyOf(source.id)).toBe(of);
+    }
+  });
+
+  it("lists a family's styles with the original first", () => {
+    expect(stylesOf('bakery').map((type) => type.id)).toEqual(['bakery', 'bakery-b']);
+    expect(stylesOf('bakery').map((type) => type.style)).toEqual([0, 1]);
+    expect(stylesOf('not-a-model')).toEqual([]);
+  });
+
+  it('names a variant after its family, and keeps its own name for telling styles apart', () => {
+    const variant = objectTypeById('bakery-b');
+    expect(variant.label).toBe(objectTypeById('bakery').label);
+    expect(variant.styleLabel).not.toBe(variant.label);
+  });
+
+  it('takes an unknown id as its own family', () => {
+    expect(familyOf('not-a-model')).toBe('not-a-model');
+  });
+
+  it('offers one palette entry per family, and no variant', () => {
+    const ids = offered();
+    for (const { source } of VARIANTS) expect(ids).not.toContain(source.id);
+    expect(ids).toHaveLength(ORIGINAL_TYPES.filter((type) => !type.model.groundDecides).length);
   });
 });

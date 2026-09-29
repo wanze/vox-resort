@@ -18,7 +18,8 @@ import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
-import type { BuildTool } from '../features/build/domain/buildTool';
+import type { BuildTool, StylePick } from '../features/build/domain/buildTool';
+import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 
 // A benchmark measures the game itself, so it skips the welcome screen.
@@ -31,11 +32,15 @@ function useBuildTool(showcase: RefObject<Showcase | null>) {
   // So a tool picked while the catalogue is still meshing is armed once the scene exists.
   const pending = useRef<BuildTool | null>(null);
   const [tool, setTool] = useState<BuildTool | null>(null);
+  // For the session only: a saved game does not bring back the styles its builder liked.
+  const styles = useRef<ReadonlyMap<string, StylePick>>(new Map());
   const select = useCallback(
     (next: BuildTool | null) => {
-      pending.current = next;
-      setTool(next);
-      showcase.current?.selectTool(next);
+      const armed = armWithMemory(next, styles.current);
+      styles.current = armed.memory;
+      pending.current = armed.tool;
+      setTool(armed.tool);
+      showcase.current?.selectTool(armed.tool);
     },
     [showcase],
   );
@@ -118,6 +123,7 @@ export function App() {
   const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
     clock,
     tool,
+    selectTool,
     inspector.selection,
     playing,
     saves,

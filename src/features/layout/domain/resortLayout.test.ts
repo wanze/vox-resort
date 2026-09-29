@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { familyOf, OBJECT_TYPES, ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
+import { styleMix } from '../../catalog/domain/styleMix';
 import {
   decorationsFor,
   derivedKey,
@@ -463,11 +464,27 @@ describe('layoutResort', () => {
   });
 });
 
+describe('a catalogue with styles', () => {
+  it('lays out the authored plan, which plants only the originals', () => {
+    const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+      id: type.id,
+      tilesX: type.model.tiles.x,
+      tilesZ: type.model.tiles.z,
+      width: type.model.width,
+      depth: type.model.depth,
+      ...(type.style > 0 ? { variantOf: type.family } : {}),
+    }));
+    expect(items.some((each) => each.variantOf)).toBe(true);
+    const layout = layoutResort(items, RESORT_PLAN);
+    expect(layout.placements.some((placement) => placement.id.endsWith('-b'))).toBe(false);
+  });
+});
+
 const derived = (layout: ResortLayout): Set<string> =>
   new Set([...layout.paths, ...layout.props].map((placement) => placement.key));
 
 describe('derived keys under an edit', () => {
-  const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+  const items: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,
@@ -548,7 +565,7 @@ describe('spurs', () => {
 });
 
 const catalogueItems = (): LayoutItem[] =>
-  OBJECT_TYPES.map((type) => ({
+  ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,
@@ -686,7 +703,7 @@ describe('isPathNetworkConnected', () => {
 });
 
 describe('the resort plan', () => {
-  const items: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+  const items: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,
@@ -701,7 +718,7 @@ describe('the resort plan', () => {
       layout.placements.length,
     );
     const placed = new Set(layout.placements.map((placement) => placement.id));
-    for (const type of OBJECT_TYPES) {
+    for (const type of ORIGINAL_TYPES) {
       if (DERIVED_IDS.has(type.id)) continue;
       expect(placed).toContain(type.id);
     }
@@ -1040,6 +1057,10 @@ const shutOut = (layout: ResortLayout, plan: ResortPlan): string[] => {
     .map((placement) => placement.key);
 };
 
+// A key follows its style, and each style numbers its repeats on its own.
+const familiesOf = (keys: readonly string[]) =>
+  keys.map((key) => familyOf(key.split('#')[0]!)).toSorted();
+
 const claimsOf = (layout: ResortLayout) =>
   layout.placements.map(({ key, id, tileX, tileZ, tilesX, tilesZ, width, depth }) => ({
     key,
@@ -1103,14 +1124,14 @@ describe('turning a building to open its door onto paving', () => {
   });
 
   describe('on the generated plot', () => {
-    const TYPES = OBJECT_TYPES.map((type) => ({
+    const TYPES = ORIGINAL_TYPES.map((type) => ({
       id: type.id,
       tilesX: type.model.tiles.x,
       tilesZ: type.model.tiles.z,
       category: type.category,
       placement: type.model.placement,
     }));
-    const withDoors: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+    const withDoors: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
       id: type.id,
       tilesX: type.model.tiles.x,
       tilesZ: type.model.tiles.z,
@@ -1132,6 +1153,29 @@ describe('turning a building to open its door onto paving', () => {
     it('lays every plot it laid before, however the doors turn it', () => {
       for (const seed of [1, 3, 7, 11]) {
         expect(() => layoutResort(withDoors, planFor(seed)), `seed ${seed}`).not.toThrow();
+      }
+    });
+
+    it('opens a styled building onto paving through its own doors', () => {
+      const variants: LayoutItem[] = OBJECT_TYPES.filter((type) => type.style > 0).map((type) => ({
+        id: type.id,
+        tilesX: type.model.tiles.x,
+        tilesZ: type.model.tiles.z,
+        width: type.model.width,
+        depth: type.model.depth,
+        category: type.category,
+        doors: type.venue?.doors ?? [],
+        variantOf: type.family,
+      }));
+      const styled = [...withDoors, ...variants];
+      for (const seed of [1, 3, 7, 11]) {
+        const seeded = planFor(seed);
+        const scatter = styleMix({ seed, neighbourhoods: [], oneOff: 1 });
+        const layout = layoutResort(styled, seeded, scatter);
+        expect(layout.placements.some((placement) => placement.id.endsWith('-b'))).toBe(true);
+        expect(familiesOf(shutOut(layout, seeded)), `seed ${seed}`).toEqual(
+          familiesOf(shutOut(layoutResort(withDoors, seeded), seeded)),
+        );
       }
     });
 

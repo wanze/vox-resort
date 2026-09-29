@@ -8,6 +8,7 @@ import type { Hotkey } from '../features/hud/adapters/hotkeys';
 import type { MenuId } from '../features/hud/components/TopBar';
 import { escapeOutcome } from '../features/hud/domain/escape';
 import type { BuildTool } from '../features/build/domain/buildTool';
+import { cycledTool } from '../features/build/domain/stylePick';
 import type { SelectionView } from '../features/inspect/domain/selection';
 
 export interface HudChrome {
@@ -26,6 +27,7 @@ const always = (action: () => void) => (): boolean => {
 export function useHudChrome(
   clock: ClockControls,
   tool: BuildTool | null,
+  onToolChange: (tool: BuildTool | null) => void,
   selection: SelectionView | null,
   playing: boolean,
   saves: SaveControls,
@@ -53,6 +55,15 @@ export function useHudChrome(
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },
     { key: 'f3', run: always(() => windows.toggle('debug')) },
+    // Passed on unless the armed family has styles to cycle through.
+    {
+      key: 'v',
+      run: () => {
+        const next = cycledTool(tool);
+        if (next) onToolChange(next);
+        return next !== null;
+      },
+    },
     {
       key: 'escape',
       run: () => {

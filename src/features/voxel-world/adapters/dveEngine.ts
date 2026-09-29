@@ -35,7 +35,7 @@ export const DEFAULT_WORLD_SCALE: WorldScale = {
   sectionPower2: { x: 4, y: 4, z: 4 },
   maxHeight: 256,
   // Wide enough for every model to be meshed in its own scratch region.
-  horizontalExtent: 8192,
+  horizontalExtent: 16384,
 };
 
 function sectorSizeOf(scale: WorldScale): VolumeSize {

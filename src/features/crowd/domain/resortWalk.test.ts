@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { elevationFor, levelAt } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
@@ -9,7 +9,7 @@ import { stairTilesFor } from '../../layout/domain/stairs';
 import { createCrowd, MAX_STEP, MAX_SUBSTEPS, stepCrowd } from './crowd';
 import { walkingSurface, walkNetworkFor, type WalkNetwork } from './walkNetwork';
 
-const TYPES = OBJECT_TYPES.map((type) => ({
+const TYPES = ORIGINAL_TYPES.map((type) => ({
   id: type.id,
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,
@@ -17,7 +17,7 @@ const TYPES = OBJECT_TYPES.map((type) => ({
   placement: type.model.placement,
 }));
 
-const ITEMS: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
   id: type.id,
   tilesX: type.model.tiles.x,
   tilesZ: type.model.tiles.z,

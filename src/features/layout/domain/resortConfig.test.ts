@@ -32,6 +32,14 @@ describe('clampConfig', () => {
   });
 });
 
+describe('variety', () => {
+  it('mixes the styles unless asked for the classic look, as a save from before it would be', () => {
+    expect(clampConfig().variety).toBe('mixed');
+    expect(clampConfig({ variety: 'classic' }).variety).toBe('classic');
+    expect(clampConfig({ variety: 'gaudy' as ResortConfig['variety'] }).variety).toBe('mixed');
+  });
+});
+
 describe('beachDensityOf', () => {
   it('follows the district density on auto, and ignores it otherwise', () => {
     expect(beachDensityOf('auto', 0.45)).toBe(0.45);

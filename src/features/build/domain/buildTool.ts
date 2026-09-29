@@ -1,8 +1,13 @@
 import type { TerrainBrush } from './terrainBrush';
 
+// A model id, or null to roll a style for every placement.
+export type StylePick = string | null;
+
+// The id is the family's. Left out, the style is the family's remembered pick; null rolls.
 export interface ObjectTool {
   readonly kind: 'object';
   readonly id: string;
+  readonly style?: StylePick;
 }
 
 export interface TerrainTool {

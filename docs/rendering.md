@@ -51,6 +51,10 @@ Steps 2 and 8 and the terrain mesh run in a worker (see
   every nine tiles (every four in parks, which get no hedges).
 - **An object stands on one level.** Authored plans throw, build mode shows red,
   the generator avoids it (`straddledTile`).
+- **Styles**: the generator only ever sees originals. `layoutResort` styles a
+  generated plot afterwards through `styleMix`: one style per family per
+  district, a tenth of placements on their own, 16-tile cells outside districts.
+  `classic` turns it off.
 
 ### Paving
 
@@ -269,6 +273,23 @@ session.
 
 The storm difference includes the 617 lamps that come on under cloud.
 
+Model variants (`pnpm bench -- --styles mixed|scatter`), same machine and case,
+2026-09-29. `--styles` styles the authored plot, which otherwise keeps the
+originals; with no districts on it, `mixed` falls back to 16-tile cells.
+`startup` and `mesher` are the first of two runs, the second agreed within 10%:
+
+| Tree                         | Draw calls | Triangles | CPU median | GPU median | Startup | Mesher  |
+| ---------------------------- | ---------- | --------- | ---------- | ---------- | ------- | ------- |
+| before variants (`cbca9a1`)  | 282        | 1.15 M    | 1.90 ms    | 8.91 ms    | 3219 ms | 2529 ms |
+| variants, originals only     | 282        | 1.15 M    | 1.50 ms    | 7.86 ms    | 5984 ms | 3854 ms |
+| variants, `--styles mixed`   | 412        | 1.18 M    | 3.00 ms    | 8.00 ms    | 6124 ms | 3838 ms |
+| variants, `--styles scatter` | 432        | 1.19 M    | 2.20 ms    | 6.62 ms    | 6081 ms | 3846 ms |
+
+The GPU medians were taken on a busier machine than the weather table. Both
+budgets in plan 040 were exceeded (`mixed` +46% draw calls against 20%, startup
++86% against 50%); the maintainer accepted them after the game held 120 fps.
+Meshing variants on first placement is the lever if startup matters later.
+
 The generator goes up to 480 × 480 tiles (`PLOT_TILES`): about 60 000
 placements and 8 000 people at full density.
 
@@ -284,7 +305,9 @@ placements and 8 000 people at full density.
 6. Run `pnpm test` (`dveEngine.test.ts` meshes the whole catalogue), and
    `pnpm bench` if it's placed a lot.
 
-Nothing in `src/` needs to change.
+Nothing in `src/` needs to change. A new style of an existing model goes in
+`voxel-gen/variants/` instead (see the README). The catalogue has 63 models plus
+51 variants, which roughly doubles the voxels meshed at load.
 
 ## DVE integration
 

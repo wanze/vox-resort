@@ -13,6 +13,11 @@ import {
 const voxelsOf = (id: string): number => objectTypeById(id).model.voxels.length;
 
 describe('buildCostOf', () => {
+  it('charges a variant what its family costs, not what its own size would', () => {
+    expect(buildCostOf('game-hall-b')).toBe(buildCostOf('game-hall'));
+    expect(refundOf('villa-b', false)).toBe(refundOf('villa', false));
+  });
+
   it('puts a cost above zero on everything in the catalogue', () => {
     for (const type of OBJECT_TYPES) expect(buildCostOf(type.id), type.id).toBeGreaterThan(0);
   });

@@ -70,6 +70,7 @@ interface Cli {
   readonly mainThread: boolean;
   readonly noDetail: boolean;
   readonly weather: string;
+  readonly styles: string;
   readonly json: boolean;
   readonly label: string;
   readonly window: { readonly width: number; readonly height: number };
@@ -111,6 +112,7 @@ function parseCli(argv: readonly string[]): Cli {
     mainThread: flags.get('no-worker') !== undefined,
     noDetail: flags.get('no-lod') !== undefined,
     weather: flags.get('weather') ?? '',
+    styles: flags.get('styles') ?? '',
     json: flags.get('json') !== undefined,
     label: flags.get('label') ?? '',
     window: {
@@ -283,6 +285,7 @@ async function runCase(
   if (cli.mainThread) params.set('worker', '0');
   if (cli.noDetail) params.set('lod', '0');
   if (cli.weather) params.set('weather', cli.weather);
+  if (cli.styles) params.set('styles', cli.styles);
 
   await browser.navigate(`${cli.url}?${params.toString()}`);
 

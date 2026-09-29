@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { familyOf } from '../../catalog/domain/objectTypes';
 import { listOf, PROP_IDS, RAIL_IDS } from './placementLists';
 import { PAVING_IDS } from './resortPlan';
 
@@ -13,6 +14,10 @@ describe('listOf', () => {
 
   it('files every kind of paving with the paths', () => {
     for (const id of PAVING_IDS) expect(listOf(id), id).toBe('paths');
+  });
+
+  it('files a styled prop with its family once asked by family', () => {
+    expect(listOf(familyOf('street-lamp-b'))).toBe('props');
   });
 
   it('counts a building as an object', () => {

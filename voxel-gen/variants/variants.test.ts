@@ -1,9 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES, MODEL_SOURCES } from '../models/index.ts';
-import { buildModel, TILE_VOXELS } from '../voxelgen.ts';
+import { buildModel, TILE_VOXELS, type VoxelModel } from '../voxelgen.ts';
 import { VARIANTS } from './index.ts';
 
 const catalogue = new Map(MODEL_SOURCES.map((source) => [source.id, source]));
+
+// Doors, seats, lights, windows and water are left out: the variant's shape decides those.
+function simFacts(model: VoxelModel) {
+  const venue = model.venue;
+  return {
+    placement: model.placement,
+    gateway: model.gateway,
+    groundDecides: model.groundDecides,
+    scenery: model.scenery,
+    binReach: model.binReach,
+    venue: venue && {
+      capacity: venue.capacity,
+      dwellSeconds: venue.dwellSeconds,
+      price: venue.price,
+      satisfies: venue.satisfies,
+      shelter: venue.shelter,
+      litter: venue.litter,
+      receives: venue.receives,
+      stage: venue.stage,
+      bathing: venue.bathing,
+    },
+  };
+}
 
 describe('VARIANTS', () => {
   it('offers an alternative to a model the catalogue has', () => {
@@ -26,6 +49,14 @@ describe('VARIANTS', () => {
       expect(source.category, source.id).toBe(original.category);
       expect(source.venue?.role, source.id).toBe(original.venue?.role);
       expect(source.venue?.beds, source.id).toBe(original.venue?.beds);
+    }
+  });
+
+  it('could stand in for its original: the sim and the generator decide alike', () => {
+    for (const { of, source } of VARIANTS) {
+      expect(simFacts(buildModel(source)), source.id).toEqual(
+        simFacts(buildModel(catalogue.get(of)!)),
+      );
     }
   });
 

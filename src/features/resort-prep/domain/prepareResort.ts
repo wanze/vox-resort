@@ -1,17 +1,21 @@
 // Pure and renderer-free so it can run in a worker while the current resort keeps drawing.
 
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
-import { benchFraming, type BenchView } from '../../bench/domain/benchConfig';
+import { benchFraming, type BenchStyles, type BenchView } from '../../bench/domain/benchConfig';
 import { repeatPlot } from '../../bench/domain/plotRepeat';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { createTileOccupancy } from '../../build/domain/tileOccupancy';
 import {
+  familyOf,
   OBJECT_TYPES,
   objectTypeTop,
+  ORIGINAL_TYPES,
   SEA_MODELS,
   TILE_VOXELS,
 } from '../../catalog/domain/objectTypes';
 import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
+import { ONE_OFF, styleMix } from '../../catalog/domain/styleMix';
+import { clampConfig } from '../../layout/domain/resortConfig';
 import {
   emptyResortPlan,
   generateResort,
@@ -19,10 +23,12 @@ import {
   type ResortParams,
 } from '../../layout/domain/resortGenerator';
 import {
+  keepStyle,
   layoutResort,
   tileKey,
   type Placement,
   type ResortLayout,
+  type StyleOf,
 } from '../../layout/domain/resortLayout';
 import { PEDALO_RENTAL_ID, RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
@@ -60,7 +66,8 @@ import { buoyLampSites } from '../../sea/domain/buoyLamps';
 import { swimAreaMoorings, type Mooring, type Rental } from '../../sea/domain/swimArea';
 import { planOfWorld, type SavedWorld } from './savedWorld';
 
-const GENERATOR_TYPES: readonly GeneratorType[] = OBJECT_TYPES.map((type) => ({
+// Originals only: the generator stands every type at least once, so styles would double the plot.
+const GENERATOR_TYPES: readonly GeneratorType[] = ORIGINAL_TYPES.map((type) => ({
   id: type.id,
   category: type.category,
   tilesX: type.model.tiles.x,
@@ -80,6 +87,7 @@ export interface PrepRequest {
   readonly source: ResortSource;
   readonly repeat: number;
   readonly view: BenchView | null;
+  readonly styles?: BenchStyles;
 }
 
 export interface Plot {
@@ -121,7 +129,7 @@ export function claimingOn(
 
 export function rentalOf(shore: Shore | null, placements: readonly Placement[]): Rental | null {
   if (!shore) return null;
-  const hut = placements.find((placement) => placement.id === PEDALO_RENTAL_ID);
+  const hut = placements.find((placement) => familyOf(placement.id) === PEDALO_RENTAL_ID);
   if (!hut) return null;
   return {
     x: (hut.tileX + hut.tilesX / 2) * TILE_VOXELS,
@@ -138,8 +146,30 @@ function planOf(source: ResortSource): ResortPlan {
     : generateResort(GENERATOR_TYPES, source.params);
 }
 
-function layOut(plan: ResortPlan, repeat: number): Plot {
-  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan);
+const BENCH_ONE_OFF: { readonly [styles in BenchStyles]: number } = { mixed: ONE_OFF, scatter: 1 };
+
+// The authored plot has no districts, so a bench mix falls back to render-chunk cells.
+function benchStyleOf(styles: BenchStyles | undefined): StyleOf {
+  if (!styles) return keepStyle;
+  return styleMix({ seed: 1, neighbourhoods: [], oneOff: BENCH_ONE_OFF[styles] });
+}
+
+// Styled after the generator has run, which only ever sees originals, so its draws never move.
+export function styleOfFor(request: PrepRequest, plan: ResortPlan): StyleOf {
+  const { source } = request;
+  if (source.kind === 'authored') return benchStyleOf(request.styles);
+  if (source.kind !== 'generate' || clampConfig(source.params.config).variety === 'classic') {
+    return keepStyle;
+  }
+  return styleMix({
+    seed: source.params.seed,
+    neighbourhoods: plan.neighbourhoods ?? [],
+    oneOff: ONE_OFF,
+  });
+}
+
+function layOut(plan: ResortPlan, repeat: number, styleOf: StyleOf): Plot {
+  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan, styleOf);
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, repeat, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   return {
@@ -221,7 +251,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const plot =
     request.source.kind === 'saved'
       ? plotOfWorld(request.source.world)
-      : layOut(plan, request.repeat);
+      : layOut(plan, request.repeat, styleOfFor(request, plan));
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
   const shore = shoreFor(plan);

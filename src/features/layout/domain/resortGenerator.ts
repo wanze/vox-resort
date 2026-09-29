@@ -1630,6 +1630,7 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
     ...(land.terraces ? { elevation: land.terraces } : {}),
     ...parklandOf(plans),
     ...(avenues ? { avenues } : {}),
+    neighbourhoods: plans.map(({ district: { x0, x1, z0, z1 } }) => ({ x0, x1, z0, z1 })),
   };
   return standResort({
     skeleton,

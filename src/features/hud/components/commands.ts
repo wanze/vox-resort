@@ -13,6 +13,7 @@ import {
   BULLDOZER,
   type BuildTool,
 } from '../../build/domain/buildTool';
+import { cycledTool, pickLabel, styleStripFor } from '../../build/domain/stylePick';
 import { TERRAIN_BRUSHES } from '../../build/domain/terrainBrush';
 import { COMPASS_DIRECTIONS, type CompassDirection } from '../../layout/domain/worldBounds';
 import { SIM_SPEEDS, SPEED_LABELS } from '../../sim/domain/simClock';
@@ -331,6 +332,23 @@ function objectCommands({ tool, onToolChange, ledger, preview }: CommandContext)
   );
 }
 
+function styleCommands({ tool, onToolChange }: CommandContext): Command[] {
+  const strip = styleStripFor(tool);
+  const next = cycledTool(tool);
+  if (!strip || !next) return [];
+  return [
+    {
+      id: 'tool:next-style',
+      label: 'Next style',
+      group: 'Build',
+      keywords: 'style variant look cycle',
+      note: pickLabel(strip),
+      shortcut: 'V',
+      run: () => onToolChange(next),
+    },
+  ];
+}
+
 // Controls first and the catalogue last, so an empty box opens on the handful of switches.
 export function listCommands(context: CommandContext): readonly Command[] {
   return [
@@ -342,6 +360,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...resortCommands(context),
     ...windowCommands(context),
     ...toolCommands(context),
+    ...styleCommands(context),
     ...objectCommands(context),
   ];
 }

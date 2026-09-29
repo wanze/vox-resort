@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
@@ -80,14 +80,14 @@ describe('flowFieldFor', () => {
 });
 
 describe('the cost of a field on the generated plot', () => {
-  const TYPES = OBJECT_TYPES.map((type) => ({
+  const TYPES = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,
     category: type.category,
     placement: type.model.placement,
   }));
-  const ITEMS: LayoutItem[] = OBJECT_TYPES.map((type) => ({
+  const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
     tilesX: type.model.tiles.x,
     tilesZ: type.model.tiles.z,

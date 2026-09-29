@@ -14,6 +14,13 @@ const BENCH_VIEWS: ReadonlySet<string> = new Set<string>(VIEWS);
 
 const BENCH_WEATHERS: ReadonlySet<string> = new Set<string>(WEATHERS);
 
+// Styles the authored plot, which otherwise keeps the originals so older numbers stay comparable.
+const STYLES = ['mixed', 'scatter'] as const;
+
+export type BenchStyles = (typeof STYLES)[number];
+
+const BENCH_STYLES: ReadonlySet<string> = new Set<string>(STYLES);
+
 export interface BenchConfig {
   readonly view: BenchView;
   readonly time: number;
@@ -24,6 +31,7 @@ export interface BenchConfig {
   readonly forceMainThreadMeshing: boolean;
   readonly detail: boolean;
   readonly weather: Weather | null;
+  readonly styles?: BenchStyles;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -63,6 +71,10 @@ export function parseBenchConfig(search: string): BenchConfig | null {
       ? (rawWeather as Weather)
       : DEFAULT_BENCH.weather;
 
+  const rawStyles = params.get('styles');
+  const styles =
+    rawStyles !== null && BENCH_STYLES.has(rawStyles) ? (rawStyles as BenchStyles) : null;
+
   return {
     view,
     time,
@@ -73,6 +85,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     forceMainThreadMeshing: params.get('worker') === '0',
     detail: params.get('lod') !== '0',
     weather,
+    ...(styles ? { styles } : {}),
   };
 }
 

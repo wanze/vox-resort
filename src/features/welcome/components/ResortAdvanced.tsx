@@ -3,6 +3,7 @@ import {
   clampConfig,
   HOUSING_STYLES,
   PARK_SHARE,
+  VARIETIES,
   VILLA_SHARE,
   type ResortConfig,
 } from '../../layout/domain/resortConfig';
@@ -95,6 +96,12 @@ export function ResortAdvanced({ config, onChange }: ResortAdvancedProps) {
           options={BEACH_PRESETS}
           value={current.beach}
           onPick={(beach) => change({ beach })}
+        />
+        <Choice
+          label="Styles"
+          options={VARIETIES}
+          value={current.variety}
+          onPick={(variety) => change({ variety })}
         />
         <div className="hud-resort-flags">
           <label className="hud-resort-flag">

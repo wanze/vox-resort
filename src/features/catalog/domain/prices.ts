@@ -18,8 +18,13 @@ function derivedCost(voxels: number): number {
   return Math.max(MIN_COST, Math.round(voxels / VOXELS_PER_UNIT / STEP) * STEP);
 }
 
-const COSTS: ReadonlyMap<string, number> = new Map(
+const OWN_COSTS: ReadonlyMap<string, number> = new Map(
   OBJECT_TYPES.map((type) => [type.id, type.model.cost ?? derivedCost(type.model.voxels.length)]),
+);
+
+// A style is free: sized by its own voxels, Game Hall B would cost more than twice its A.
+const COSTS: ReadonlyMap<string, number> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.cost ?? OWN_COSTS.get(type.family)!]),
 );
 
 const PRICES: ReadonlyMap<string, number> = new Map(

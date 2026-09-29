@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
+import { layoutItemFor } from '../../build/domain/buildPlan';
+import { objectTypeById } from '../../catalog/domain/objectTypes';
+import { place } from '../../layout/domain/resortLayout';
 import { RESORT_PLAN } from '../../layout/domain/resortPlan';
+import { shoreFor } from '../../layout/domain/shoreline';
 import { gridInterior } from '../../lighting/domain/lightGrid';
 import {
   claimingOn,
   everythingOn,
   prepareResort,
   preparedTransferables,
+  rentalOf,
+  styleOfFor,
+  type PrepRequest,
   type PreparedResort,
 } from './prepareResort';
 
@@ -64,6 +71,65 @@ describe('prepareResort', () => {
     expect(tiled.plan).toBe(RESORT_PLAN);
     expect(tiled.plot.placements).toHaveLength(tiled.plot.layout.placements.length * 4);
     expect(tiled.framing.position.y).toBeLessThan(20);
+  });
+});
+
+const request = (source: PrepRequest['source']): PrepRequest => ({
+  source,
+  repeat: 1,
+  view: null,
+});
+
+describe('styleOfFor', () => {
+  it('styles the authored plot only when a benchmark asks, by cell or scattered', () => {
+    const minorityIn = (styles?: 'mixed' | 'scatter'): number => {
+      const asked = { ...request({ kind: 'authored' }), ...(styles ? { styles } : {}) };
+      const styleOf = styleOfFor(asked, RESORT_PLAN);
+      let variants = 0;
+      for (let x = 0; x < 16; x++) {
+        for (let z = 0; z < 16; z++) if (styleOf('hedge', x, z) !== 'hedge') variants++;
+      }
+      return Math.min(variants, 256 - variants) / 256;
+    };
+    expect(minorityIn()).toBe(0);
+    expect(minorityIn('mixed')).toBeLessThan(0.15);
+    expect(minorityIn('scatter')).toBeGreaterThan(0.3);
+  });
+
+  const styledAcross = (source: PrepRequest['source']): Set<string> => {
+    const styleOf = styleOfFor(request(source), generated.plan);
+    const ids = new Set<string>();
+    for (let x = 0; x < 48; x++) {
+      for (let z = 0; z < 48; z++) ids.add(styleOf('bakery', x, z));
+    }
+    return ids;
+  };
+
+  it('mixes the styles of a generated plot', () => {
+    expect(styledAcross({ kind: 'generate', params: PARAMS })).toEqual(
+      new Set(['bakery', 'bakery-b']),
+    );
+  });
+
+  it('keeps the originals on a classic plot, the authored one and a cleared one', () => {
+    const classic = { ...PARAMS, config: { variety: 'classic' as const } };
+    expect(styledAcross({ kind: 'generate', params: classic })).toEqual(new Set(['bakery']));
+    expect(styledAcross({ kind: 'authored' })).toEqual(new Set(['bakery']));
+    expect(styledAcross({ kind: 'clear', params: PARAMS })).toEqual(new Set(['bakery']));
+  });
+
+  it('stands variants on a generated plot', () => {
+    const ids = new Set(generated.plot.placements.map((placement) => placement.id));
+    expect([...ids].some((id) => id.endsWith('-b'))).toBe(true);
+  });
+});
+
+describe('rentalOf', () => {
+  it('finds the pedalos a rental in another style', () => {
+    const hut = place(layoutItemFor(objectTypeById('pedalo-rental-b')), 'hut', 4, 6);
+    const shore = shoreFor(generated.plan);
+    expect(shore).not.toBeNull();
+    expect(rentalOf(shore, [hut])).not.toBeNull();
   });
 });
 

@@ -39,8 +39,9 @@ export default defineModel({
       shutteredWindow(b, { face: 'x-', at: LEFT, along, y: ground + 5, shutters: false });
     }
 
-    b.box(14, 17, ground + 4, ground + 11, FRONT, FRONT, PALETTE.bloom.base);
-    b.box(12, 19, ground + 7, ground + 8, FRONT, FRONT, PALETTE.bloom.base);
+    // Centred on the wall right of the door, with arms as thick as the upright.
+    b.box(17, 20, ground + 3, ground + 10, FRONT, FRONT, PALETTE.bloom.base);
+    b.box(15, 22, ground + 5, ground + 8, FRONT, FRONT, PALETTE.bloom.base);
 
     b.box(4, 12, ground + 9, ground + 9, FRONT + 1, FRONT + 3, PALETTE.foliage.light);
     for (let x = 4; x <= 12; x++) b.set(x, ground + 9, FRONT + 3, PALETTE.foliage.base);

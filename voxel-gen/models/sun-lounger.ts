@@ -18,8 +18,6 @@ export default defineModel({
       frame: 0xe9e9e2,
       cushion: 0x2fa0a8,
       stripe: 0xede6d6,
-      pole: 0xb0b4ba,
-      canopy: 0xdd5b6e,
     };
 
     const N = 15;
@@ -48,9 +46,5 @@ export default defineModel({
     box(3, 12, 4, 5, 4, 4, C.cushion);
     box(3, 12, 5, 6, 3, 3, C.cushion);
     box(3, 12, 4, 4, 3, 3, C.stripe);
-
-    box(13, 13, 2, 5, 13, 13, C.pole);
-    box(12, 14, 5, 6, 12, 14, C.canopy);
-    set(13, 7, 13, C.canopy);
   },
 });

@@ -20,6 +20,7 @@ pnpm preview --audit         # how much of its footprint each model fills
 pnpm preview --people        # the crowd; --sky for balloons, --sea for boats
 pnpm preview --drafts        # models withheld from the app (DRAFT_SOURCES)
 pnpm preview --lineup        # models side by side at one scale, with a person
+pnpm preview --variants      # each variant beside the model it would replace
 ```
 
 Output goes to `voxel-gen/out/` (git-ignored), or `VOXELGEN_OUT` if set.
@@ -81,6 +82,14 @@ To place it on the authored plot, add it to `RESORT_PLAN` in
 `src/features/layout/domain/resortPlan.ts`, otherwise the layout tests fail. It
 needs a free tile next to it for a path; the layout connects it to the nearest
 street.
+
+## Variants
+
+`variants/` holds alternative takes on catalogue models, each naming the model it
+is an alternative to (`VARIANTS` in `variants/index.ts`). They are held to the
+same tests as the catalogue but are not in it. Besides `--variants`, `pnpm dev`
+serves `/compare.html`, which shows each pair in 3D with voxel and triangle
+counts.
 
 ## Glow, lights and water
 

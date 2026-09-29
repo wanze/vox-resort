@@ -39,11 +39,10 @@ export default defineModel({
     const cx = 7;
     const cz = 7;
 
-    for (let x = 4; x <= 11; x++)
-      for (let z = 4; z <= 11; z++) {
-        const d = Math.hypot(x + 0.5 - (cx + 0.5), z + 0.5 - (cz + 0.5));
-        if (d <= 3.4) box(x, x, 2, 3, z, z, d > 2.5 ? C.stoneDark : C.stone);
-      }
+    // Socket and lantern stay within a voxel of the post: the post cannot get thinner
+    // and still stand on the tile's centre, so the rest slims down around it.
+    box(cx - 1, cx + 2, 2, 2, cz - 1, cz + 2, C.stoneDark);
+    box(cx - 1, cx + 2, 3, 3, cz - 1, cz + 2, C.stone);
     box(cx - 1, cx + 2, 4, 4, cz - 1, cz + 2, C.trim);
 
     box(cx, cx + 1, 5, 15, cz, cz + 1, C.post);
@@ -51,30 +50,9 @@ export default defineModel({
       set(cx + 1, y, cz + 1, C.postDark);
     }
 
-    box(cx - 1, cx + 2, 16, 16, cz - 1, cz + 2, C.trim);
-    box(cx, cx + 1, 17, 18, cz, cz + 1, C.glow);
-    for (const [x, z] of [
-      [cx - 1, cz - 1],
-      [cx + 2, cz - 1],
-      [cx - 1, cz + 2],
-      [cx + 2, cz + 2],
-    ] as const) {
-      box(x, x, 17, 18, z, z, C.postDark);
-    }
-    for (const [x, z] of [
-      [cx, cz - 1],
-      [cx + 1, cz - 1],
-      [cx, cz + 2],
-      [cx + 1, cz + 2],
-      [cx - 1, cz],
-      [cx - 1, cz + 1],
-      [cx + 2, cz],
-      [cx + 2, cz + 1],
-    ] as const) {
-      box(x, x, 17, 18, z, z, C.glow);
-    }
-
-    box(cx - 1, cx + 2, 19, 19, cz - 1, cz + 2, C.trim);
-    box(cx, cx + 1, 20, 20, cz, cz + 1, C.postDark);
+    box(cx, cx + 1, 16, 16, cz, cz + 1, C.trim);
+    box(cx, cx + 1, 17, 19, cz, cz + 1, C.glow);
+    box(cx - 1, cx + 2, 20, 20, cz - 1, cz + 2, C.trim);
+    box(cx, cx + 1, 21, 21, cz, cz + 1, C.postDark);
   },
 });

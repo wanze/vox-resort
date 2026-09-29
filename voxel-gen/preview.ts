@@ -7,6 +7,7 @@ import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
+import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
 import {
   buildModel,
   TILE_VOXELS,
@@ -392,6 +393,7 @@ async function chooseSources(
   const known = [
     ...MODEL_SOURCES,
     ...DRAFT_SOURCES,
+    ...VARIANT_SOURCES,
     ...PEOPLE_SOURCES,
     ...SKY_SOURCES,
     ...SEA_SOURCES,
@@ -427,6 +429,19 @@ const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
   ['--drafts', { sources: DRAFT_SOURCES, sheet: 'drafts', sweeps: false }],
 ]);
 
+// Each alternative sits beside the model it would replace, one pair to a row.
+function renderVariants(ids: readonly string[]): Buffer {
+  const chosen = VARIANTS.filter(
+    (variant) => !ids.length || ids.includes(variant.source.id) || ids.includes(variant.of),
+  );
+  const pairs = chosen.flatMap((variant) => {
+    const original = MODEL_SOURCES.find((source) => source.id === variant.of);
+    if (!original) throw new Error(`${variant.source.id} is a variant of unknown ${variant.of}`);
+    return [buildModel(original), buildModel(variant.source)];
+  });
+  return renderSheet(pairs, 520, 2);
+}
+
 const CATALOGUE: Registry = { sources: MODEL_SOURCES, sheet: 'contact-sheet', sweeps: true };
 
 // Keeps ids from every registry, since other flags render into the same folder.
@@ -453,6 +468,10 @@ function sheetFor(
   registry: Registry,
   models: readonly VoxelModel[],
 ): { readonly name: string; readonly png: () => Buffer } | null {
+  if (args.includes('--variants')) {
+    const ids = args.filter((arg) => !arg.startsWith('--'));
+    return { name: 'variants', png: () => renderVariants(ids) };
+  }
   if (args.includes('--lineup')) {
     const person = buildModel(PEOPLE_SOURCES[0]!);
     return { name: `${registry.sheet}-lineup`, png: () => renderLineup(models, person, 2400) };

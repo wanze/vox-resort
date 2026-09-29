@@ -2,15 +2,16 @@
   "$schema": "./node_modules/fallow/schema.json",
   "entry": [
     "src/main.tsx",
+    "src/app/compare.tsx",
     "src/features/voxel-world/adapters/meshWorker.ts",
     "src/features/resort-prep/adapters/prepWorker.ts"
   ],
   "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
   "health": {
-    "ignore": ["voxel-gen/models/**", "**/*.test.ts", "**/*.test.tsx"]
+    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**", "**/*.test.ts", "**/*.test.tsx"]
   },
   "duplicates": {
-    "ignore": ["voxel-gen/models/**"]
+    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**"]
   },
   "boundaries": {
     "zones": [
@@ -29,7 +30,7 @@
     ],
     "coverage": {
       "requireAllFiles": true,
-      "allowUnmatched": ["scripts/**", "vite.config.ts", "index.html"]
+      "allowUnmatched": ["scripts/**", "vite.config.ts", "index.html", "compare.html"]
     }
   }
 }

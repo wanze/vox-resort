@@ -3,9 +3,14 @@ import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
+import { VARIANT_SOURCES } from './variants/index.ts';
 import type { VoxelModelSource } from './voxelgen.ts';
 
-const SOURCES: readonly VoxelModelSource[] = [...MODEL_SOURCES, ...DRAFT_SOURCES];
+const SOURCES: readonly VoxelModelSource[] = [
+  ...MODEL_SOURCES,
+  ...DRAFT_SOURCES,
+  ...VARIANT_SOURCES,
+];
 
 const venues = SOURCES.filter((source) => source.venue !== undefined);
 
@@ -31,6 +36,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'oak',
   'olive',
   'palm',
+  'palm-b',
   'path',
   'picnic-table',
   'pier-railing',
@@ -44,6 +50,26 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'sun-lounger',
   'tikitorch',
   'willow',
+  'hedge-b',
+  'street-lamp-b',
+  'litter-bin-b',
+  'sign-post-b',
+  'flowerbed-b',
+  'pine-b',
+  'cypress-b',
+  'olive-b',
+  'oak-b',
+  'blossom-b',
+  'willow-b',
+  'statue-b',
+  'sun-lounger-b',
+  'bench-b',
+  'picnic-table-b',
+  'beach-umbrella-b',
+  'tikitorch-b',
+  'lifeguard-tower-b',
+  'entrance-b',
+  'fountain-b',
 ]);
 
 describe('the venues the catalogue declares', () => {

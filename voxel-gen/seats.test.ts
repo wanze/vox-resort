@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
+import { VARIANT_SOURCES } from './variants/index.ts';
 import { buildModel, TILE_VOXELS, type ModelSeat, type VoxelModel } from './voxelgen.ts';
 
-const MODELS: readonly VoxelModel[] = [...MODEL_SOURCES, ...DRAFT_SOURCES, ...SEA_SOURCES].map(
-  buildModel,
-);
+const MODELS: readonly VoxelModel[] = [
+  ...MODEL_SOURCES,
+  ...DRAFT_SOURCES,
+  ...VARIANT_SOURCES,
+  ...SEA_SOURCES,
+].map(buildModel);
 
 const withSeats = MODELS.filter((model) => model.seats.length > 0);
 

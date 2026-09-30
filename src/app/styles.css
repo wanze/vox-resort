@@ -979,6 +979,26 @@ input[type='checkbox'] {
   font-size: 13px;
 }
 
+.hud-overview {
+  gap: var(--space-2) var(--space-3);
+}
+
+.hud-figure-of,
+.hud-figure-aside {
+  color: var(--text-faint);
+  font-size: var(--size-small);
+}
+
+.hud-figure-aside {
+  margin-left: var(--space-2);
+}
+
+/* Counts in running text: pixel digits blur into each other at note size. */
+.hud-num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
 .hud-debug dd {
   white-space: pre-line;
 }

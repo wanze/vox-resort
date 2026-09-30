@@ -1,6 +1,6 @@
 import { checkInParty, checkOutParty, freeBodiesOf, type Guests } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
-import { ARRIVAL_MOOD, type Happiness } from './happiness';
+import { welcome, type Happiness } from './happiness';
 import { resetNeeds, type Needs } from './needs';
 import { arrivalsFor, type Rating } from './rating';
 import { TICKS_PER_DAY } from './simClock';
@@ -78,7 +78,7 @@ export function runCheckIn(parts: {
     }
     for (const person of party.members) {
       resetNeeds(needs, person, random);
-      happiness.level[person] = ARRIVAL_MOOD;
+      welcome(happiness, person);
       arrived.push(person);
     }
     room -= party.members.length;

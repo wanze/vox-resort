@@ -9,6 +9,7 @@
     "preview": "node voxel-gen/preview.ts",
     "preview:dist": "vite preview",
     "bench": "node scripts/bench.ts",
+    "sim:report": "vitest run --config scripts/simReport.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint && node scripts/check-comments.ts",
     "lint:fix": "oxlint --fix",

@@ -118,6 +118,19 @@ describe('decayNeeds', () => {
     expect(Array.from(needs.level.hunger)).toEqual(before);
   });
 
+  it('holds a sleeping guest where they went to bed, and decays everybody awake', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const sleeper = someone(guests, 'family');
+    const awake = someone(guests, 'couple');
+    setAll(needs, sleeper, 0.6);
+    setAll(needs, awake, 0.6);
+    const before = levelsOf(needs, sleeper);
+    decayNeeds(needs, guests, 9 * 60, undefined, (person) => person === sleeper);
+    expect(levelsOf(needs, sleeper)).toEqual(before);
+    expect(needs.level.hunger[awake]!).toBeLessThan(0.5);
+  });
+
   it('stops at desperate rather than running below zero', () => {
     const guests = guestsOf();
     const needs = createNeeds(guests, 7);

@@ -10,10 +10,12 @@ import {
   HURT_FLOOR,
   meanHappiness,
   QUEUE_COST_PER_HOUR,
+  STAY_MEMORY_HOURS,
   SURROUNDINGS_SHARE,
+  welcome,
   type Happiness,
 } from './happiness';
-import { createNeeds, type Needs } from './needs';
+import { createNeeds, SATISFIED_LEVEL, type Needs } from './needs';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 60 }];
 
@@ -129,8 +131,8 @@ describe('ageHappiness with surroundings', () => {
   it('settles a guest in the worst surroundings the share below their contentment', () => {
     const guests = guestsOf();
     const happiness = createHappiness(guests.count);
-    ageHappiness(happiness, needsAt(guests, 0.5), guests, NO_QUEUE, 100 * HOUR, () => -1);
-    expect(moodOf(happiness, 0)).toBeCloseTo(0.5 - SURROUNDINGS_SHARE);
+    ageHappiness(happiness, needsAt(guests, 0.4), guests, NO_QUEUE, 100 * HOUR, () => -1);
+    expect(moodOf(happiness, 0)).toBeCloseTo(0.4 / SATISFIED_LEVEL - SURROUNDINGS_SHARE);
   });
 });
 
@@ -143,19 +145,52 @@ describe('a hurt guest', () => {
     for (let person = 0; person < guests.count; person++) {
       if (guests.present[person] !== 1) continue;
       let total = 0;
-      for (const need of GUEST_NEEDS) total += needs.level[need][person]!;
+      for (const need of GUEST_NEEDS) {
+        total += Math.min(1, needs.level[need][person]! / SATISFIED_LEVEL);
+      }
       expect(moodOf(happiness, person)).toBe(Math.fround(total / GUEST_NEEDS.length));
     }
   });
 
   it('is at best half as content as their wants say at the worst', () => {
     const guests = guestsOf();
-    const needs = needsAt(guests, 0.8);
+    const needs = needsAt(guests, 0.4);
     needs.level.health.fill(0);
     const happiness = createHappiness(guests.count);
     ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR * 30);
     const present = [...guests.present.keys()].find((person) => guests.present[person] === 1)!;
-    expect(moodOf(happiness, present)).toBeCloseTo(0.8 * HURT_FLOOR);
+    expect(moodOf(happiness, present)).toBeCloseTo((0.4 / SATISFIED_LEVEL) * HURT_FLOOR);
     expect(HURT_FLOOR).toBe(0.5);
+  });
+});
+
+describe('a need nobody would get up for', () => {
+  it('counts as met, so a guest served well enough is fully content', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needsAt(guests, SATISFIED_LEVEL), guests, NO_QUEUE, 30 * HOUR);
+    expect(moodOf(happiness, 0)).toBe(1);
+  });
+});
+
+describe('the mood of a stay', () => {
+  it('follows the mood slowly, so one bad hour barely moves it', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needsAt(guests, 0), guests, NO_QUEUE, HOUR);
+    const hour = happiness.stay[0]!;
+    expect(hour).toBeLessThan(ARRIVAL_MOOD);
+    expect(hour).toBeGreaterThan(moodOf(happiness, 0));
+    ageHappiness(happiness, needsAt(guests, 0), guests, NO_QUEUE, 4 * STAY_MEMORY_HOURS * HOUR);
+    expect(happiness.stay[0]!).toBeLessThan(0.05);
+  });
+
+  it('starts afresh for the next guest in the same body', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needsAt(guests, 0), guests, NO_QUEUE, 30 * HOUR);
+    welcome(happiness, 0);
+    expect(moodOf(happiness, 0)).toBeCloseTo(ARRIVAL_MOOD);
+    expect(happiness.stay[0]!).toBeCloseTo(ARRIVAL_MOOD);
   });
 });

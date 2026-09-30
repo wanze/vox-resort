@@ -1147,7 +1147,7 @@ describe('turning a building to open its door onto paving', () => {
 
     it('opens every door-declaring building on the grass onto paving', () => {
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);
-      expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual(['playground']);
+      expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual([]);
     });
 
     it('lays every plot it laid before, however the doors turn it', () => {

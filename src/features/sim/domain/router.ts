@@ -18,6 +18,7 @@ import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { saltFor, tasteFor } from './appeal';
 import { isBroken, wear, type Breakdowns } from './breakdowns';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
+import { walkingTicks } from './crowdRate';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import {
@@ -35,7 +36,7 @@ import { type Gateway } from './gateways';
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
-import { beachVenueFor, isBeach } from './beach';
+import { beachVenueFor, isBeach, LOUNGER_RELIEF } from './beach';
 import { pitchFor, type Pitch } from './beachPitch';
 import {
   arriveAt,
@@ -71,6 +72,10 @@ const FETCH_URGENCY = 0.4;
 
 // Stops a guest whose nearest kiosk is unreachable from sweeping the beach every tick.
 const LOOK_AGAIN_TICKS = 15;
+
+// A guest who has just lain down stays down a while before anything gets them up again, or
+// a grubby guest walks from the gate to the shower and the lounger is only ever passed.
+const SETTLE_TICKS = 45;
 
 // Routes are per person, not per venue: each party member walks to their own beach spot.
 interface Errands {
@@ -146,6 +151,8 @@ export interface Router {
   forgetTheDay(): void;
   visitOf(person: number): Visit | null;
   stayOf(person: number): BeachStay | null;
+  // Resting on the open sand: a lounger stands under a parasol.
+  isSunbathing(person: number): boolean;
   snapshot(): RouterSnapshot;
   // Onto a router built from the lists the snapshot was taken on, in the same order: every
   // index it holds is into them. Throws when the venue count says otherwise.
@@ -577,7 +584,25 @@ export function createRouter(parts: {
         ? { ...route, waypoints: [...route.waypoints, spot], length: route.length + onward }
         : route;
     setOffAlong(person, venues.length - 1, toSpot);
+    occupancy.until[person] = stayEndFor(person, claim, toSpot);
     return true;
+  };
+
+  const restOnLounger = (person: number, venue: number): void => {
+    const spot = stays[person]?.pitch.spots[spotOf[person]!];
+    if (venue !== beachIndex() || !spot || spot.seat < 0) return;
+    relieve(needs, person, LOUNGER_RELIEF);
+  };
+
+  // One end for the party: a pitch holds every member's lounger until the last one leaves, so
+  // staggered ends left loungers promised and empty. The stay is timed from the gate, so the
+  // walk to a far lounger is added rather than eaten into.
+  const stayEndFor = (person: number, claim: Claim, route: SandRoute): number => {
+    for (const member of partyOf(guests, person)) {
+      if (member === person || stays[member] !== claim) continue;
+      return fetching[member]! >= 0 ? stayUntil[member]! : occupancy.until[member]!;
+    }
+    return occupancy.until[person]! + walkingTicks(route.length);
   };
 
   const leaveStay = (person: number): void => {
@@ -593,6 +618,7 @@ export function createRouter(parts: {
     errands.leg[person]! -= 1;
     const people = crowd();
     const spot = claim.pitch.spots[spotOf[person]!]!;
+    lookAgainAt[person] = now + SETTLE_TICKS;
     if (spot.seat >= 0 && holdOnSeat(people, person, spot.seat)) return;
     if (spot.seat >= 0) {
       holdAt(people, person, claim.pitch.x, BEACH_SURFACE, claim.pitch.z, 0, RESTING.lying);
@@ -614,7 +640,10 @@ export function createRouter(parts: {
       if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
       if (reliefAt(venues[beach]!, wanted.need) > 0) continue;
       lookAgainAt[person] = now + LOOK_AGAIN_TICKS;
-      fetchOverTheSand(person, people);
+      // First aid is on the paving, and an errand would fetch whatever the sand sells: a hurt
+      // guest would otherwise lie out the rest of a long stay.
+      if (wanted.need === 'health') occupancy.until[person] = now;
+      else fetchOverTheSand(person, people);
     }
   };
 
@@ -709,6 +738,7 @@ export function createRouter(parts: {
   const endStayFromErrand = (person: number, venue: number): void => {
     const beach = beachIndex();
     if (beach >= 0) relieve(needs, person, venues[beach]!.satisfies);
+    restOnLounger(person, beach);
     leaveStay(person);
     fetching[person] = -1;
     stayRoutes[person] = null;
@@ -838,6 +868,7 @@ export function createRouter(parts: {
       return;
     }
     endVisit(person, venue);
+    restOnLounger(person, venue);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;
@@ -1170,6 +1201,10 @@ export function createRouter(parts: {
       if (!venue || !isBeach(venue)) return null;
       if (errands.back[person] === 1) return 'leaving';
       return isWaiting(crowd(), person) ? 'resting' : 'arriving';
+    },
+
+    isSunbathing(person) {
+      return this.stayOf(person) === 'resting' && crowd().seat[person]! < 0;
     },
 
     occupancyOf(venueKey) {

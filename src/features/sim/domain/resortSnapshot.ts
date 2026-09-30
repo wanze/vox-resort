@@ -61,7 +61,7 @@ export const needsSnapshotSchema = z.object({
 
 export type NeedsSnapshot = z.infer<typeof needsSnapshotSchema>;
 
-export const happinessSnapshotSchema = z.object({ level: float32 });
+export const happinessSnapshotSchema = z.object({ level: float32, stay: float32 });
 
 export type HappinessSnapshot = z.infer<typeof happinessSnapshotSchema>;
 
@@ -188,6 +188,7 @@ export function resortPerPerson(snapshot: ResortSnapshot): readonly ArrayLike<un
     guests.people,
     ...Object.values(needs),
     snapshot.happiness.level,
+    snapshot.happiness.stay,
     thoughts.kind,
     thoughts.subject,
     thoughts.at,

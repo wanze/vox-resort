@@ -1,7 +1,5 @@
 import { StatRow } from './StatRow';
 import type { ShowcaseStats } from '../../../app/showcase';
-import { STAFF_ROLES, type Roster } from '../../sim/domain/staff';
-import { roleWord } from './staffWords';
 
 export interface ResortStatsProps {
   readonly stats: ShowcaseStats | null;
@@ -9,41 +7,43 @@ export interface ResortStatsProps {
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
-const rosterLine = (roster: Roster): string =>
-  STAFF_ROLES.map((role) => `${formatNumber(roster[role])} ${roleWord(role, roster[role])}`).join(
-    ' · ',
+function OutOf({ value, of }: { readonly value: number; readonly of: number }) {
+  return (
+    <>
+      {formatNumber(value)}
+      <span className="hud-figure-of"> / {formatNumber(of)}</span>
+    </>
   );
+}
 
-const bedsNote = (unmade: number): string =>
-  unmade > 0
-    ? `taken by guests, of all the plot sleeps; ${formatNumber(unmade)} waiting to be made up`
-    : 'taken by guests, of all the plot sleeps';
+function Aside({ children }: { readonly children: string }) {
+  return <span className="hud-figure-aside">{children}</span>;
+}
 
 export function ResortStats({ stats }: ResortStatsProps) {
   if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;
+  const { unmade } = stats.beds;
 
   return (
-    <dl className="hud-stats hud-stats-stacked hud-figures">
-      <StatRow label="Guests" note="on the plot now, of the bodies it was built for">
-        {formatNumber(stats.guests.present)} / {formatNumber(stats.guests.capacity)}
+    <dl className="hud-stats hud-figures hud-overview">
+      <StatRow label="Rating">{`${stats.rating.toFixed(1)} ★`}</StatRow>
+      <StatRow label="Guests">
+        <OutOf value={stats.guests.present} of={stats.guests.capacity} />
       </StatRow>
-      <StatRow label="Rating" note="out of five, from how happy they are and how many have a bed">
-        {stats.rating.toFixed(1)}
+      <StatRow label="Beds">
+        <OutOf value={stats.beds.taken} of={stats.beds.total} />
+        {unmade > 0 ? <Aside>{`${formatNumber(unmade)} unmade`}</Aside> : null}
       </StatRow>
-      <StatRow label="Beds" note={bedsNote(stats.beds.unmade)}>
-        {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
+      <StatRow label="Asleep">
+        <OutOf value={stats.asleep} of={stats.beds.taken} />
       </StatRow>
-      <StatRow label="Asleep" note="in bed now, of the guests who have one">
-        {formatNumber(stats.asleep)} / {formatNumber(stats.beds.taken)}
+      <StatRow label="Staff">
+        <OutOf value={stats.staff.working} of={stats.staff.total} />
       </StatRow>
-      <StatRow label="Staff" note={`working now, of ${rosterLine(stats.staff.roster)} on duty`}>
-        {formatNumber(stats.staff.working)} / {formatNumber(stats.staff.total)}
-      </StatRow>
-      <StatRow label="Cleanliness" note="mean over the venues standing">
-        {Math.round(stats.cleanliness * 100)}%
-      </StatRow>
-      <StatRow label="Venues" note="inside now, and queueing at a door">
-        {formatNumber(stats.venues.inside)} / {formatNumber(stats.venues.waiting)}
+      <StatRow label="Clean">{`${Math.round(stats.cleanliness * 100)}%`}</StatRow>
+      <StatRow label="Venues">
+        {formatNumber(stats.venues.inside)}
+        <Aside>{`${formatNumber(stats.venues.waiting)} queueing`}</Aside>
       </StatRow>
     </dl>
   );

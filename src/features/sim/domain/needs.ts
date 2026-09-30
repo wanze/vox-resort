@@ -13,6 +13,9 @@ export const START_LEVEL = { min: 0.45, max: 1 } as const;
 // Without a floor, everybody always chases their least-met need and nobody sits still.
 const CONTENT_URGENCY = 0.2;
 
+// Where an unweighted need stops sending a guest anywhere.
+export const SATISFIED_LEVEL = 1 - CONTENT_URGENCY;
+
 export interface Needs {
   readonly count: number;
   // 1 is content and 0 is desperate, so a relief amount adds to it.
@@ -64,12 +67,16 @@ export function decayNeeds(
   guests: Guests,
   ticks: number,
   effect: WeatherEffect = CLEAR_EFFECT,
+  asleep?: (person: number) => boolean,
 ): void {
   if (ticks <= 0) return;
   const hours = ticks / TICKS_PER_HOUR;
   // Folded into the hours once, not multiplied per person per need: this is the hot loop.
   for (const need of GUEST_NEEDS) scratchRate[need] = effect.decay[need] * hours;
   for (let person = 0; person < needs.count; person++) {
+    // A night's decay at these rates empties every need by morning, so a stay would always end
+    // on a guest who woke up miserable.
+    if (asleep?.(person) === true) continue;
     const { decayPerHour } = archetypeOf(guests, person);
     for (const need of GUEST_NEEDS) {
       const column = needs.level[need];

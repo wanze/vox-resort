@@ -31,6 +31,10 @@ export interface PitchInput {
 
 const PITCH_TILES = 12;
 
+// Further than a towel is carried, but within SAND_ROUTE_TILES: a free lounger is worth the walk,
+// and stopping at PITCH_TILES left whole rows empty while the sand beside the gate filled.
+const LOUNGER_TILES = 32;
+
 const SPOT_SPACING = 5;
 
 const ROW_LENGTH = 3;
@@ -76,6 +80,7 @@ export function pitchFor(input: PitchInput): Pitch | null {
     if (!pitch) continue;
     const tier = tierOf(pitch, tile, adults);
     if (tier === TIER.loungers) return pitch;
+    if (tier !== TIER.someLoungers && tile.depth > PITCH_TILES) continue;
     if (!best.has(tier)) best.set(tier, pitch);
   }
   for (const tier of [TIER.someLoungers, TIER.sand, TIER.atTheGate] as const) {
@@ -148,7 +153,7 @@ function sweepFrom(
   for (const [dx, dz] of NEIGHBOURS) reach(gate.tileX + dx, gate.tileZ + dz, gate, 0);
   for (let head = 0; head < reached.length; head++) {
     const from = reached[head]!;
-    if (from.depth >= PITCH_TILES) continue;
+    if (from.depth >= LOUNGER_TILES) continue;
     for (const [dx, dz] of NEIGHBOURS) {
       reach(from.tileX + dx, from.tileZ + dz, centreOf(from.tileX, from.tileZ), from.depth + 1);
     }

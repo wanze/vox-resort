@@ -381,20 +381,43 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('paves nothing across the beach but the lanes that run down to the water', () => {
+  it('paves nothing across the beach but the piers, and steps onto its landward edge', () => {
     for (const set of SWEEP) {
       const plan = planOf(set);
       const shore = shoreFor(plan)!;
       const { paths } = layoutResort(ITEMS, plan);
       const onSand = paths.filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'beach');
-      const perRow = new Map<number, number>();
-      for (const tile of onSand) perRow.set(tile.tileZ, (perRow.get(tile.tileZ) ?? 0) + 1);
-      const widest = Math.max(0, ...perRow.values());
-      expect({ set, sparse: widest <= 4 }).toEqual({ set, sparse: true });
-      expect({
+      const depthOf = (tile: { tileX: number; tileZ: number }) =>
+        beachDepthAt(shore, tile.tileX, tile.tileZ);
+      const piers = new Set(onSand.filter((tile) => depthOf(tile) === 0).map((tile) => tile.tileX));
+      const stray = onSand.filter(
+        (tile) => !piers.has(tile.tileX) && depthOf(tile) < shore.spec.beach - 2,
+      );
+      expect({ set, piers: piers.size > 0 && piers.size <= 2, stray }).toEqual({
         set,
-        reaches: onSand.some((tile) => beachDepthAt(shore, tile.tileX, tile.tileZ) === 0),
-      }).toEqual({ set, reaches: true });
+        piers: true,
+        stray: [],
+      });
+    }
+  });
+
+  it('brings a way onto the sand within half a bay of every lounger', () => {
+    for (const set of SWEEP) {
+      const plan = planOf(set);
+      const shore = shoreFor(plan)!;
+      const { paths } = layoutResort(ITEMS, plan);
+      const ways = paths
+        .filter((tile) => terrainAt(shore, tile.tileX, tile.tileZ) === 'beach')
+        .map((tile) => tile.tileX);
+      // 24 columns to a bay: a step down the middle of each, or a pier beside it.
+      const far = plan.plots
+        .filter(
+          (plot) =>
+            plot.id === 'sun-lounger' && terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
+        )
+        .filter((plot) => !ways.some((tileX) => Math.abs(tileX - plot.tileX) <= 12))
+        .map((plot) => `${plot.tileX},${plot.tileZ}`);
+      expect({ set, far }).toEqual({ set, far: [] });
     }
   });
 
@@ -681,7 +704,9 @@ describe('the districts a generated plot lays out by design', () => {
               Math.abs(house.tileX - villa.tileX) <= 16 && Math.abs(house.tileZ - villa.tileZ) <= 8,
           ),
       );
-      const owed = set.tilesX < 80 && villas.length === 1 ? 1 : 0;
+      // The one the catalogue is owed stands wherever there is room when no bench is deep enough
+      // for a villa, which on the 80-tile plot left it among no houses at all.
+      const owed = villas.length === cap.min ? cap.min : 0;
       expect({ set, lonely: lonely.length <= owed }).toEqual({ set, lonely: true });
     }
   });
@@ -1025,8 +1050,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 3064560658],
-      [7, 1000239515],
+      [1, 3117314938],
+      [7, 1199790226],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

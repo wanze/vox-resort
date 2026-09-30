@@ -9,8 +9,6 @@ export interface AdvicePanelProps {
   readonly onHire?: (role: StaffRole) => void;
 }
 
-const SHOWN = 4;
-
 const NEED_NAMES: { readonly [need: string]: string } = {
   hunger: 'hunger',
   thirst: 'thirst',
@@ -62,7 +60,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   closed: () => 'open the gates in the top bar',
   'no-entrance': () => null,
   'no-reception': () => null,
-  'no-beds': () => null,
+  'no-beds': () => 'build more lodgings, or they walk all night until they leave',
   unmade: () => 'no guest can be given them until a cleaner has been',
   hurt: () => null,
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
@@ -167,7 +165,7 @@ export function AdvicePanel({ advice, onShowOnPlot, onHire }: AdvicePanelProps) 
   }
   return (
     <dl className="hud-stats hud-advice">
-      {advice.slice(0, SHOWN).map((each) => (
+      {advice.map((each) => (
         <AdviceRow key={keyOf(each)} advice={each} onShowOnPlot={onShowOnPlot} onHire={onHire} />
       ))}
     </dl>

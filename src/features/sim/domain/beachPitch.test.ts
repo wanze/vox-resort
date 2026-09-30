@@ -95,6 +95,17 @@ describe('pitchFor', () => {
     expect(child.pose).toBe(RESTING.sitting);
   });
 
+  it('walks the adults past open sand to free loungers further than a towel is carried', () => {
+    const network = beachOf([lounger(0, 17), lounger(2, 17)]);
+    expect(network.beachSeats).toHaveLength(2);
+    const pitch = pitchFor(inputOn(network))!;
+    const { tileX, tileZ } = tileOf(pitch);
+    expect(Math.abs(tileX - 10) + Math.abs(tileZ - 12)).toBeGreaterThan(12);
+    expect(new Set(pitch.spots.map((spot) => spot.seat))).toEqual(
+      new Set([...network.beachSeats, -1]),
+    );
+  });
+
   it('passes over a lounger somebody else holds', () => {
     const network = beachOf([lounger(9, 12), lounger(11, 12)]);
     const [held] = network.beachSeats as [number];

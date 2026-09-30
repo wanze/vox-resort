@@ -19,7 +19,10 @@ function saidOf(review: Review): string | null {
 
 function LoudestRow({ tally }: { readonly tally: ThoughtTally }) {
   return (
-    <StatRow label={THOUGHT_LABELS[tally.kind]} note={`${tally.count}×`}>
+    <StatRow
+      label={THOUGHT_LABELS[tally.kind]}
+      note={<span className="hud-num">{`${tally.count}×`}</span>}
+    >
       {thoughtLine(tally.kind, tally.subject)}
     </StatRow>
   );
@@ -29,7 +32,10 @@ function ReviewRow({ review }: { readonly review: Review }) {
   const said = saidOf(review);
   return (
     <StatRow label="Review">
-      {`${review.name}, ${review.nights} nights, ${review.stars}★`}
+      {`${review.name}, `}
+      <span className="hud-num">{review.nights}</span>
+      {' nights, '}
+      <span className="hud-num">{`${review.stars}★`}</span>
       {said ? (
         <>
           <br />

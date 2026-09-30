@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_SUBSTEPS } from '../../crowd/domain/crowd';
-import { crowdScaleFor } from './crowdRate';
+import { crowdScaleFor, walkingTicks, WALK_VOXELS_PER_SIM_HOUR } from './crowdRate';
 import { SIM_SPEEDS, SPEED_DAY_SECONDS } from './simClock';
 
 describe('crowdScaleFor', () => {
@@ -33,5 +33,14 @@ describe('crowdScaleFor', () => {
 
   it('is 1 while paused', () => {
     expect(crowdScaleFor('paused')).toBe(1);
+  });
+});
+
+describe('walkingTicks', () => {
+  it('takes an hour for an hour of walking, rounding a part minute up, and none for no walk', () => {
+    expect(walkingTicks(WALK_VOXELS_PER_SIM_HOUR)).toBe(60);
+    expect(walkingTicks(WALK_VOXELS_PER_SIM_HOUR / 120)).toBe(1);
+    expect(walkingTicks(0)).toBe(0);
+    expect(walkingTicks(-5)).toBe(0);
   });
 });

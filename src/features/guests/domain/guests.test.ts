@@ -104,6 +104,16 @@ describe('createGuests', () => {
     }
   });
 
+  it('keeps a party no lodging could take away, rather than on the plot with nowhere to sleep', () => {
+    const guests = guestsWith({ count: 200 });
+    expect(everybody(guests).some((person) => guests.home[person] === NO_HOME)).toBe(true);
+    expect(homelessCount(guests)).toBe(0);
+    for (const person of everybody(guests)) {
+      expect(guests.present[person]).toBe(guests.home[person] === NO_HOME ? 0 : 1);
+    }
+    expect(presentCount(guests)).toBe(bedCount(guests).taken);
+  });
+
   it('replays the same registry for the same seed', () => {
     const a = guestsWith();
     const b = guestsWith();
@@ -185,6 +195,7 @@ describe('checking out and checking in', () => {
     const lodging = guests.home[members[0]!]!;
     const freeBefore = guests.freeBeds[lodging]!;
     const before = bedCount(guests).taken;
+    const bodiesBefore = freeBodiesCount(guests);
 
     const left = checkOutParty(guests, party);
 
@@ -195,9 +206,7 @@ describe('checking out and checking in', () => {
       expect(guests.present[person]).toBe(0);
       expect(homeOf(guests, person)).toBeNull();
     }
-    expect(freeBodiesOf(guests).adults.length + freeBodiesOf(guests).children.length).toBe(
-      members.length,
-    );
+    expect(freeBodiesCount(guests)).toBe(bodiesBefore + members.length);
     expect(checkOutParty(guests, party)).toEqual([]);
     expect(guests.freeBeds[lodging]).toBe(freeBefore + members.length);
   });
@@ -408,8 +417,7 @@ describe('rehome', () => {
   it('adds the beds of a new lodging', () => {
     const guests = guestsWith();
     const before = Array.from(guests.freeBeds);
-    const homeless = everybody(guests).filter((person) => guests.home[person] === NO_HOME).length;
-    expect(rehome(guests, [...HOMES, home('villa#1', 8)])).toBe(homeless);
+    expect(rehome(guests, [...HOMES, home('villa#1', 8)])).toBe(0);
     expect(Array.from(guests.freeBeds)).toEqual([...before, 8]);
   });
 

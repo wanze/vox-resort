@@ -4,7 +4,8 @@
     "src/main.tsx",
     "src/app/compare.tsx",
     "src/features/voxel-world/adapters/meshWorker.ts",
-    "src/features/resort-prep/adapters/prepWorker.ts"
+    "src/features/resort-prep/adapters/prepWorker.ts",
+    "scripts/simReport.test.ts"
   ],
   "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
   "health": {

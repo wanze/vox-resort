@@ -85,6 +85,7 @@ describe('need and happiness snapshots', () => {
   it('restore the mood', () => {
     const happiness = createHappiness(20);
     happiness.level[7] = 0.25;
+    happiness.stay[7] = 0.4;
     const saved = snapshotHappiness(happiness);
     const fresh = createHappiness(20);
     restoreHappiness(fresh, saved);

@@ -783,7 +783,8 @@ function standOne(parts: Stand, type: GeneratorType, tile: Tile): boolean {
   return false;
 }
 
-const SHELF_POOL: readonly string[] = ['palm', 'palm', 'olive', 'tikitorch', 'poolside-bar'];
+// Dressing only: a shelf venue's skirt keeps it off the walk, and nobody walks the raised sand to it.
+const SHELF_POOL: readonly string[] = ['palm', 'palm', 'olive', 'tikitorch'];
 
 // The two-tile trees are left out: the gaps between houses are mostly one tile wide.
 const HILLSIDE_POOL: readonly string[] = ['palm', 'cypress', 'olive', 'blossom', 'flowerbed'];
@@ -808,14 +809,29 @@ function lineBenchWalks(parts: WalkParts): void {
         const accent = accented ? allowedAccent(parts) : undefined;
         return accent ? [accent, type] : [type];
       };
-      standFacingWalk(parts, candidates, { tileX, rows, facesSea: surface === 'sand' });
+      standFacingWalk(parts, candidates, {
+        tileX: offTheSteps(parts.steps, tileX, type.tilesX),
+        rows,
+        facesSea: surface === 'sand',
+      });
       tileX += pitch * stride;
     }
   }
 }
 
+// Nudged into the gap beside the lot rather than dropped: the steps go where the loungers are, not
+// where the lots are. The rest of the row keeps its place, or its last lot falls off the plot.
+function offTheSteps(steps: readonly number[], tileX: number, width: number): number {
+  const cutting = steps.filter((step) => step >= tileX && step < tileX + width);
+  if (cutting.length === 0) return tileX;
+  const east = Math.max(...cutting) + 1;
+  const west = Math.min(...cutting) - width;
+  return east - tileX <= tileX - west ? east : west;
+}
+
 interface WalkParts extends HillParts {
   readonly walks: readonly (readonly Tile[])[];
+  readonly steps: readonly number[];
   readonly accent: GeneratorType | undefined;
   readonly accentShare: number;
   readonly allowance: (type: GeneratorType) => number;
@@ -1095,8 +1111,8 @@ function plazaAt(promenade: Street, band: Street, tilesX: number, tilesZ: number
   };
 }
 
-// Only two lanes cross the beach; running every lane to the sea paved the beach in stripes and made
-// the dune a wall of staircases.
+// Only two lanes run out to sea; running every lane there paved the beach in stripes and made the
+// dune a wall of staircases. beachStepsFor brings the rest down, spaced by the loungers.
 const SEA_LANES: readonly number[] = [0.3, 0.7];
 
 // Measured off the water rather than the plot edge, so it is the same pier on every plot and stays
@@ -1194,6 +1210,52 @@ interface Walks {
   readonly nodes: readonly PathNode[];
   readonly edges: readonly PathEdge[];
   readonly benches: readonly (readonly Tile[])[];
+}
+
+// Mirrors layBeachLines: the sets a bay keeps, cut back to those whole on the plot.
+function loungerMiddles(tilesX: number, density: number): number[] {
+  const kept = keptSets(density);
+  const first = Math.floor((BEACH_BAY - kept) / 2);
+  const reach = BEACH_SET.findLastIndex((item) => item !== null);
+  const middles: number[] = [];
+  for (let bay = bayOrigin(tilesX); bay < tilesX; bay += BAY_COLUMNS) {
+    const west = bay + first * BEACH_SET.length;
+    let east = -1;
+    for (let set = 0; set < kept; set++) {
+      const end = west + set * BEACH_SET.length + reach;
+      if (end < tilesX) east = end;
+    }
+    if (east >= 0) middles.push(Math.floor((west + east) / 2));
+  }
+  return middles;
+}
+
+// One down the middle of every bay's loungers, so none is more than half a bay from a gate. Straight
+// from the foot street over the hill: from the shelf walk, everybody still came down the two piers.
+// They stop at the sand's edge, as guests step off at the first gate and a pier to each paved stripes.
+function beachStepsFor(parts: {
+  readonly shore: Shore;
+  readonly town: Town;
+  readonly tilesX: number;
+  readonly density: number;
+}): { readonly nodes: readonly PathNode[]; readonly edges: readonly PathEdge[] } {
+  const { shore, town } = parts;
+  const foot = town.bands.at(-1)!.at;
+  const west = town.columns[0]!.at;
+  const east = town.columns.at(-1)!.at;
+  const nodes: PathNode[] = [];
+  const edges: PathEdge[] = [];
+  for (const tileX of loungerMiddles(parts.tilesX, parts.density)) {
+    // A pier beside it already brings people down there.
+    if ([...town.seaLanes].some((lane) => Math.abs(lane - tileX) < BEACH_SET.length)) continue;
+    // One past the landward row, where the flight lands: a flight is no gate onto the sand.
+    const bottom = waterStartZ(shore, tileX) - shore.spec.beach + 1;
+    if (tileX < west || tileX > east || bottom <= foot) continue;
+    const id = `beachstep${edges.length}`;
+    nodes.push({ id: `${id}-a`, tileX, tileZ: foot }, { id: `${id}-b`, tileX, tileZ: bottom });
+    edges.push({ from: `${id}-a`, to: `${id}-b`, width: 1 });
+  }
+  return { nodes, edges };
 }
 
 function benchesOf(hill: Hill): { readonly inset: number; readonly depth: number }[] {
@@ -1624,14 +1686,22 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
   const walks = land.shore
     ? walksFor({ shore: land.shore, hill: land.hill, tilesX: params.tilesX, tilesZ: params.tilesZ })
     : { nodes: [], edges: [], benches: [] };
+  const steps = land.shore
+    ? beachStepsFor({
+        shore: land.shore,
+        town,
+        tilesX: params.tilesX,
+        density: beachDensityOf(config.beach, params.density),
+      })
+    : { nodes: [], edges: [] };
   const inside = districtPaths(plans);
   const avenues = config.streetTrees ? avenuesOf(town, land, catalogue, random, params) : null;
   const skeleton: ResortPlan = {
     tilesX: params.tilesX,
     tilesZ: params.tilesZ,
     plots: [],
-    nodes: [...grid.nodes, ...walks.nodes, ...inside.nodes],
-    edges: [...grid.edges, ...walks.edges, ...inside.edges],
+    nodes: [...grid.nodes, ...walks.nodes, ...steps.nodes, ...inside.nodes],
+    edges: [...grid.edges, ...walks.edges, ...steps.edges, ...inside.edges],
     plazas: [town.plaza, ...squares.map((square) => square.plaza), ...parkPlazasOf(plans)],
     shore: land.shoreSpec,
     ...(land.terraces ? { elevation: land.terraces } : {}),
@@ -1647,6 +1717,7 @@ export function generateResort(types: readonly GeneratorType[], asked: ResortPar
     land,
     town,
     walks,
+    steps,
     plans,
     squares,
     random,
@@ -1840,6 +1911,7 @@ interface StandParts {
   readonly land: Land;
   readonly town: Town;
   readonly walks: Walks;
+  readonly steps: { readonly nodes: readonly PathNode[] };
   readonly plans: readonly DistrictPlan[];
   readonly squares: readonly GateSquare[];
   readonly random: () => number;
@@ -1888,6 +1960,9 @@ function standResort(parts: StandParts): ResortPlan {
   return { ...skeleton, plots, standsWholeCatalogue: missing.size === 0 };
 }
 
+// Its own generator, so a change on the beach or the hill does not rebuild the town behind it.
+const SHORE_SALT = 0x5e4;
+
 // Filled before the districts so bungalows and loungers end up here rather than in whichever district
 // came first, and no district spills onto ground a row grid does not fit.
 function fillShoreAndHill(
@@ -1899,8 +1974,9 @@ function fillShoreAndHill(
     readonly terraced: Elevation | null;
   },
 ): void {
-  const { params, config, catalogue, land, town, walks, random } = parts;
+  const { params, config, catalogue, land, town, walks } = parts;
   const { site, plots, missing, terraced } = stood;
+  const random = createRandom(params.seed + SHORE_SALT);
   const types = catalogue.byId;
   if (land.shore) {
     fillBeach({
@@ -1930,6 +2006,7 @@ function fillShoreAndHill(
     lineBenchWalks({
       ...hillParts,
       walks: walks.benches,
+      steps: parts.steps.nodes.map((node) => node.tileX),
       accent: catalogue.accent,
       accentShare: config.villaShare,
       allowance: (type) => allowanceOf(type, params),

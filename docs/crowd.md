@@ -106,7 +106,9 @@ Guests come in parties (`PARTY_MIX`):
 | solo    | 0.12  | 1      | 0        |
 
 Children use the `child` model. Beds come from the art (`bedsOf`); the biggest
-parties get the biggest lodgings first. A party without room gets `NO_HOME`.
+parties get the biggest lodgings first. A party without room gets `NO_HOME` and
+starts away, as check-in would have turned it away: a plot paved for more guests
+than it sleeps opens with only the housed ones on it.
 
 Homes follow the plot. After an edit, `rehome` rebuilds the free beds from the
 lodgings standing and remaps each guest's home **by key**, so an edit that leaves
@@ -169,7 +171,8 @@ and construction run at real time.
 from 1 (content) to 0 (desperate), and a sixth, health, that is not a want (see
 [Breakdowns and injuries](#breakdowns-and-injuries)). `decayNeeds` lowers them each tick at rates
 from `archetypes.ts`: families get hungry fastest and won't walk far, friends get
-bored fastest and walk anywhere.
+bored fastest and walk anywhere. A sleeping guest's needs hold where they went to
+bed; at these rates a night would otherwise empty every one of them by morning.
 
 `strongestNeed` decides **whether** a guest goes somewhere. `chooseVenue` decides
 **where**, scoring every venue:
@@ -234,18 +237,32 @@ sand.
 
 ## Staying on the beach
 
-The beach is one venue (`beach.ts`): fun 0.7, energy 0.3, 45 to 120 minutes,
+The beach is one venue (`beach.ts`): fun 0.7, energy 0.5, two to four hours,
 effectively unlimited capacity. Its values live in code because sand has no
-model.
+model. The stay is long because the trip is: crossing the plot takes 2.4
+simulated hours, and a short stay left more guests walking to the beach than
+lying on it.
 
 - **Each party picks a pitch** from the gate it arrives at (`beachPitch.ts`):
   preferring a lounger per adult, then any lounger, then open sand. Loungers are
-  counted across the nine surrounding tiles.
+  counted across the nine surrounding tiles. Sand is pitched within 12 tiles of
+  the gate, loungers within 32 (under `SAND_ROUTE_TILES`), so free loungers fill
+  before the sand beside the gate does.
+- A stay on a lounger restores `LOUNGER_RELIEF` (energy 0.3) on top of the
+  beach's own, and a lounger stands under a parasol, so nobody on one is
+  sunburnt (`Router.isSunbathing`).
+- The stay is timed from the gate, plus the walk to the spot (`walkingTicks`),
+  so a far lounger doesn't shorten it. A party shares one end: the first member
+  to settle sets it, because the pitch keeps every member's lounger until the
+  last one leaves.
 - Adults take the loungers. Others lie (adults) or sit (children) on the sand
   facing the sea.
 - A guest on the beach whose strongest need the beach doesn't serve walks to a
   beach building that does (snack bars and ice-cream carts are placed there for
-  this), then returns to their spot.
+  this), then returns to their spot. Not in the first `SETTLE_TICKS` (45) after
+  lying down, or a grubby guest walks from the gate to the shower and only ever
+  passes the lounger. A hurt guest ends the stay instead: first aid is on the
+  paving.
 - Bedtime ends a stay early.
 - The resort's crowd doesn't wander the beach aimlessly (`roamsBeach: false`).
   Anyone left there by an edit walks back.
@@ -298,7 +315,10 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
 - **Gates** are declared on the art (`gateway: true`) and aren't venues. No gate
   means no arrivals or departures.
 - **Happiness** (`happiness.ts`) drifts toward the mean of the five needs at 0.15
-  an hour, minus 0.3 an hour while queuing.
+  an hour, minus 0.3 an hour while queuing. A need at or above `SATISFIED_LEVEL`
+  (0.8, where it stops sending an unweighted guest anywhere) counts as fully met.
+  `stay` follows the mood with a day's memory (`STAY_MEMORY_HOURS`), and is what a
+  review is written from.
 - **Rating** (`rating.ts`) is three quarters mean happiness, one quarter share of
   guests with a bed, plus a small cleanliness term. An empty resort rates 3 stars.
 - **Arrivals** are sized at 11:00: none at 0 stars, up to a quarter of free beds
@@ -329,12 +349,13 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   the evicted are re-housed; a demolished lodging's go with it. Invariant per
   home: `freeBeds + unmade + beds taken = beds`.
 
-Overview rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`;
+Overview rows: `Rating`, `Guests`, `Beds`, `Asleep`, `Staff`, `Clean`, `Venues`;
 the weather sits in the top bar. The inspector's `Mood` is one guest's happiness.
 
 ## Advice
 
-`advice.ts` ranks the resort's problems; the Advice panel shows the top four.
+`advice.ts` ranks the resort's problems; the Advice panel lists them all, loudest
+first, so its count matches the toolbar badge.
 
 - **It only observes.** Every number comes from something already counted. If a
   rule needs a change in `chooseVenue.ts` or `occupancy.ts`, that's a bug there.
@@ -392,7 +413,8 @@ per kind; `reviews.ts` turns a party's stay into one line on check-out.
   panel shows its five loudest and is pushed at most once a simulated hour.
 - A body's memory is forgotten when a new guest checks into it.
 - **The review** is written in `onLeave`, before `checkOutParty` clears the
-  party. Stars are `round(5 × mean happiness)`, at least 1. The complaint is
+  party. Stars are `round(5 × mean stay mood)`, at least 1, so a hungry morning at
+  check-out does not outweigh the stay. The complaint is
   the one the party thought most (ties to the earlier kind), its subject from
   the spokesperson (first adult) or else the first member who had it; the
   praise is `enjoyed` or `lovely`, whichever came up more. `REVIEWS_KEPT` (12)
@@ -563,13 +585,13 @@ which beats any want at its worst, so a hurt guest heads for first aid through
 the ordinary `appealOf`; the `first-aid` model relieves `health` by 1.
 `contentmentOf` stays over the five wants and is scaled by
 `HURT_FLOOR + (1 - HURT_FLOOR) * health` (`HURT_FLOOR` 0.5); at health 1 it is
-bit-identical to before.
+unscaled.
 
 **Incidents** (`incidents.ts`) set health to `HURT_LEVEL` (0.35), never raising
 it, and are drawn by hash:
 
 - **Sunburn**: once a simulated hour on a heatwave day, every guest resting on
-  the sand has `SUNBURN_PER_HOUR` (0.04) of a burn (`burnTheSunbathers`).
+  the open sand (not a lounger) has `SUNBURN_PER_HOUR` (0.04) of a burn (`burnTheSunbathers`).
 - **Mishaps**: on every visit to a `bathing` venue, the beach included,
   `MISHAP_UNWATCHED` (0.02), or `MISHAP_WATCHED` (0.002) while a lifeguard is on
   watch there (a tower for the beach). That tenfold is what a lifeguard buys.
@@ -582,9 +604,10 @@ inspector shows a Repairs row on a broken venue and a health bar only on a guest
 who is hurt.
 
 Three days on the reference plot (seed 3, 600 guests, day two a heatwave;
-`router.test.ts`): 2, 2 and 5 breakdowns, all mended within 65–284 minutes; 4, 3
-and 0 guests hurt; 3 of the heatwave's 75 sunbathers burnt; every guest hurt in
-the heatwave treated that day.
+`router.test.ts`): 0, 3 and 6 breakdowns (the first day's crowd goes to the
+beach), all mended within 55–188 minutes; 1, 8 and 1 guests hurt; 7 of the
+heatwave's 118 sunbathers burnt; half of those hurt in the heatwave treated that
+day.
 
 ## Litter
 

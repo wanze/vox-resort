@@ -31,7 +31,8 @@ function gameFixture(): GameSnapshot {
   });
   const guests = createGuests({
     count: POPULATION,
-    homes: [],
+    // Room for everybody: a party with no bed would start away, and the save would list nobody.
+    homes: [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: POPULATION }],
     variants: 2,
     childVariant: 1,
     seed: 1,

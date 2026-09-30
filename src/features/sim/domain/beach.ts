@@ -10,10 +10,14 @@ const BEACH_KEY = 'beach';
 // Tuned: 0.6/0.2 left the beach nearly empty, 0.85/0.35 all but stopped the pool and courts being chosen.
 const BEACH_RELIEF: readonly NeedRelief[] = [
   { need: 'fun', amount: 0.7 },
-  { need: 'energy', amount: 0.3 },
+  { need: 'energy', amount: 0.5 },
 ];
 
-const BEACH_DWELL_SECONDS = { min: 45 * 60, max: 120 * 60 } as const;
+// On top of the beach's own relief: a lounger rests better than a towel, which is what makes
+// building loungers worth it. Energy is the need least else on the plot restores.
+export const LOUNGER_RELIEF: readonly NeedRelief[] = [{ need: 'energy', amount: 0.3 }];
+
+const BEACH_DWELL_SECONDS = { min: 120 * 60, max: 240 * 60 } as const;
 
 // Effectively unlimited: the beach has no door to queue at.
 const BEACH_CAPACITY = 100_000;

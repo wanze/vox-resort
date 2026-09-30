@@ -20,3 +20,7 @@ export function crowdScaleFor(speed: SimSpeed): number {
 }
 
 export const WALK_VOXELS_PER_SIM_HOUR = PLOT_CROSSING_VOXELS / (ERRAND_SHARE_OF_DAY * 24);
+
+export function walkingTicks(voxels: number): number {
+  return Math.ceil((Math.max(0, voxels) / WALK_VOXELS_PER_SIM_HOUR) * 60);
+}

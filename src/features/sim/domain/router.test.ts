@@ -64,7 +64,7 @@ import { bedtimeOf, mix } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
-import { beachVenueFor, isBeach } from './beach';
+import { beachVenueFor, isBeach, LOUNGER_RELIEF } from './beach';
 import { crowdScaleFor } from './crowdRate';
 import { arrivalsDueBy, checkInDue, freeBedsOn, runCheckIn, wavesDue } from './checkIn';
 import { createHappiness, meanHappiness } from './happiness';
@@ -789,6 +789,9 @@ const hotel = (tileZ = -1): Lodging => ({
   doors: [],
 });
 
+// The longest beach stay, four hours, and the walk out to the spot.
+const STAY_TICKS = 300;
+
 const untilSettled = (crowd: Crowd, people: readonly number[]): boolean => {
   for (let step = 0; step < 600; step++) {
     if (people.every((person) => isWaiting(crowd, person))) return true;
@@ -934,7 +937,7 @@ describe('a visit to the beach', () => {
     expect(new Set(held)).toEqual(new Set(walked.beachSeats));
 
     const freed = new Set<number>();
-    for (let tick = 1; tick <= 130 && freed.size < adults.length; tick++) {
+    for (let tick = 1; tick <= STAY_TICKS && freed.size < adults.length; tick++) {
       router.tick(tick);
       for (const [index, adult] of adults.entries()) {
         if (router.visitOf(adult) === null && !freed.has(adult)) {
@@ -944,6 +947,27 @@ describe('a visit to the beach', () => {
       }
     }
     expect(freed.size, 'the stay never ended').toBe(adults.length);
+  });
+
+  it('rests the adults on loungers better than the child on the sand', () => {
+    const walked = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers });
+    const { router, crowd, needs } = onTheBeach(family, { walked });
+    for (const person of family) needs.level.energy[person] = 0;
+    expect(untilSettled(crowd, family)).toBe(true);
+    for (
+      let tick = 1;
+      tick <= STAY_TICKS && family.some((person) => router.visitOf(person));
+      tick++
+    ) {
+      router.tick(tick);
+    }
+    const beach = beachVenueFor(walked)!;
+    const onSand = reliefAt(beach, 'energy');
+    const onLounger = onSand + LOUNGER_RELIEF[0]!.amount;
+    for (const person of family) {
+      const rested = guests.child[person] === 1 ? onSand : onLounger;
+      expect(needs.level.energy[person]!).toBeCloseTo(rested);
+    }
   });
 
   it('pitches two parties at the same gate on different tiles', () => {
@@ -1029,6 +1053,67 @@ describe('a visit to the beach', () => {
     expect(crowd.x[0]).toBeCloseTo(spot.x);
     expect(crowd.z[0]).toBeCloseTo(spot.z);
     expect(crowd.seat[0]).toBe(spot.seat);
+  });
+
+  const tickUntil = (
+    crowd: Crowd,
+    router: ReturnType<typeof createRouter>,
+    from: number,
+    to: number,
+    done: () => boolean,
+  ): number | null => {
+    for (let tick = from; tick <= to; tick++) {
+      for (let frame = 0; frame < SAND_TICKS_EVERY; frame++) stepCrowd(crowd, MAX_STEP);
+      router.tick(tick);
+      if (done()) return tick;
+    }
+    return null;
+  };
+
+  it('leaves a guest who has just lain down resting a while before an errand gets them up', () => {
+    const { needs, router, crowd } = onTheBeach([0], { venues: [kiosk] });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    needs.level.fun[0] = 1;
+    needs.level.thirst[0] = 0;
+    const away = () => router.goalOf(0)?.key === kiosk.key;
+    const left = tickUntil(crowd, router, 1, 120, away);
+    expect(left, 'never went for a drink').not.toBeNull();
+    expect(left!, 'got up the moment they lay down').toBeGreaterThanOrEqual(40);
+  });
+
+  it('sends a hurt guest off the beach, for the first aid the sand does not sell', () => {
+    const { needs, router, crowd } = onTheBeach([0], { venues: [kiosk] });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    needs.level.fun[0] = 1;
+    needs.level.health[0] = 0.35;
+    const off = tickUntil(crowd, router, 1, 120, () => router.visitOf(0) === null);
+    expect(off, 'lay out the stay hurt').not.toBeNull();
+    expect(router.goalOf(0)?.key).not.toBe(kiosk.key);
+  });
+
+  it('ends the stay of a whole party at once, so none of its loungers stands empty', () => {
+    const walked = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers });
+    const { router, crowd } = onTheBeach(family, { walked });
+    expect(untilSettled(crowd, family)).toBe(true);
+    const leftAt = new Map<number, number>();
+    for (let tick = 1; tick <= STAY_TICKS && leftAt.size < family.length; tick++) {
+      router.tick(tick);
+      for (const person of family) {
+        if (router.visitOf(person) === null && !leftAt.has(person)) leftAt.set(person, tick);
+      }
+    }
+    expect(leftAt.size, 'the stay never ended').toBe(family.length);
+    expect(new Set(leftAt.values()).size).toBe(1);
+  });
+
+  it('burns only who lies on the open sand: a lounger stands under a parasol', () => {
+    const walked = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers });
+    const { router, crowd } = onTheBeach(family, { walked });
+    expect(untilSettled(crowd, family)).toBe(true);
+    for (const person of family) {
+      expect(router.stayOf(person)).toBe('resting');
+      expect(router.isSunbathing(person)).toBe(guests.child[person] === 1);
+    }
   });
 
   it('wears the kiosk an errand off a pitch was run to, the way any visit does', () => {
@@ -1636,8 +1721,8 @@ describe('on the generated plot', () => {
       .join(';');
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2254);
-    expect(hash).toBe(192985375);
+    expect(layout.paths).toHaveLength(2415);
+    expect(hash).toBe(1940470544);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -2042,8 +2127,8 @@ describe('on the generated plot', () => {
     expect(overBeds, 'more beds taken than the plot has').toBeNull();
     expect(presentCount(people)).toBe(bedCount(people).taken);
   });
-  // Three receptions of capacity 12, opened empty on a five-star day: the most a day can send them.
-  // Measured: 171 admitted, none still checking in at 21:00, and a line of 12 at worst.
+  // Four receptions of capacity 12, opened empty on a five-star day: the most a day can send them.
+  // Measured: 178 admitted, none still checking in at 21:00, and a line of 12 at worst.
   it("checks a whole opening day's arrivals in at the desks by evening", () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
@@ -2065,7 +2150,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const desks = venues.filter((venue) => venue.receives);
-    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12]);
+    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12, 12]);
     let tick = 10 * 60;
 
     let crowd: Crowd | null = null;
@@ -2413,8 +2498,13 @@ describe('on the generated plot', () => {
     };
 
     live.runTo(15 * 60);
-    // On to the next tick with a line somewhere, or the snapshot would not prove queues survive.
-    while (live.router.occupancyTotals.waiting === 0 && live.ticks < 17 * 60) {
+    const cleaning = () => {
+      const { working } = live.snapshot().staff;
+      return role.some((kind, worker) => kind === 'cleaner' && working[worker] === 1);
+    };
+    // On to the next tick with a line somewhere and a cleaner at work, or the snapshot would not
+    // prove queues and cleaning survive.
+    while ((live.router.occupancyTotals.waiting === 0 || !cleaning()) && live.ticks < 17 * 60) {
       live.runTo(live.ticks + 1);
     }
     const afternoon = live.snapshot();
@@ -2576,7 +2666,7 @@ describe('on the generated plot', () => {
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual(['changing-cabins', 'gym-pavilion']);
+    expect(quiet).toEqual(['changing-cabins']);
 
     // The beach sat right at 0.6 for energy, and resizing the staff pool reseeds the cleaners'
     // walk enough to tip it to 0.62; the bound guards against one venue taking a need over.
@@ -2700,7 +2790,7 @@ describe('on the generated plot', () => {
           needs,
           people.present,
           (person) => {
-            const onTheSand = router.stayOf(person) === 'resting';
+            const onTheSand = router.isSunbathing(person);
             if (onTheSand) sunbathers.add(person);
             return onTheSand;
           },
@@ -2747,10 +2837,15 @@ describe('on the generated plot', () => {
     ].join('\n');
     console.log(report);
 
-    for (const count of brokeOn) {
-      expect(count, report).toBeGreaterThanOrEqual(1);
+    // The first day may pass quietly: wear builds with visits, and the beach takes a day's crowd.
+    for (const [day, count] of brokeOn.entries()) {
+      if (day > 0) expect(count, report).toBeGreaterThanOrEqual(1);
       expect(count, report).toBeLessThanOrEqual(6);
     }
+    expect(
+      brokeOn.reduce((sum, count) => sum + count, 0),
+      report,
+    ).toBeGreaterThanOrEqual(3);
     expect(stillDown, report).toEqual([]);
     expect(hurtInHeat.size, report).toBeGreaterThanOrEqual(1);
     expect(hurtInHeat.size, report).toBeLessThanOrEqual(present * 0.1);

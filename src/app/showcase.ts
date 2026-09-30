@@ -1099,6 +1099,14 @@ interface ResortArt {
   readonly litter: readonly ModelGeometry[];
 }
 
+// A party no lodging could take starts away, but createCrowd deals every body onto the paving.
+function keepAwayOffThePlot(guests: Guests, crowd: Crowd): void {
+  for (let person = 0; person < crowd.count; person++) {
+    if (guests.present[person] === 1) continue;
+    takeOffPlot(crowd, person, crowd.x[person]!, crowd.y[person]!, crowd.z[person]!);
+  }
+}
+
 // The volume is wired up before the world, because the world's materials bind to it.
 // A save brings its own: a plot started empty but paved since would otherwise be sized again, and
 // every per-guest array would come out another length.
@@ -1233,6 +1241,7 @@ function buildResort(
     offTheSand: (person) => router.offTheSand(person),
   });
   crowdField = crowd;
+  keepAwayOffThePlot(guests, crowd.crowd);
   // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
   const employed = staffPool();
   const recommended = rosterFor(workplacesOf(venues, network.posts, lodgings));
@@ -1619,7 +1628,7 @@ function burnOnTheBeach(resort: Resort, clock: Clock): void {
   burnTheSunbathers(
     resort.needs,
     resort.guests.present,
-    (person) => router.stayOf(person) === 'resting',
+    (person) => router.isSunbathing(person),
     Math.floor(clock.ticks / TICKS_PER_HOUR),
     (person) => hear(resort, clock.ticks, person, 'hurt', null),
   );
@@ -1656,7 +1665,7 @@ function reviewOfParty(resort: Resort, party: number): Review | null {
     partyKind: kind,
     name: fullNameOf(guests, spokesperson),
     nights: guests.nights[spokesperson]!,
-    happiness: (member) => happiness.level[member] ?? 0,
+    happiness: (member) => happiness.stay[member] ?? 0,
   });
 }
 
@@ -1774,7 +1783,9 @@ function runTicks(
   morning: () => void,
   hourly: () => void,
 ): number {
-  decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather));
+  decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather), (person) =>
+    resort.router.isAsleep(person),
+  );
   // One tick at a time: a place freed on the first tick must let somebody in on the first.
   for (let tick = ticks; tick > 0; tick--) {
     resort.router.tick(clock.ticks - tick + 1);

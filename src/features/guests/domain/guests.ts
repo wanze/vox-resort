@@ -98,6 +98,9 @@ export function createGuests(options: GuestOptions): Guests {
   const home = new Int32Array(count);
   const arrivedOn = new Int32Array(count);
   const nights = new Int32Array(count);
+  // A party no lodging could take stays away, as check-in would turn it away: a guest with no bed
+  // walks all night, and a plot paved for more people than it sleeps would open on a crowd of them.
+  const present = new Uint8Array(count);
   for (let p = 0; p < parties.length; p++) {
     // One stay per party: they leave together.
     const stay = stayNights(random);
@@ -106,6 +109,7 @@ export function createGuests(options: GuestOptions): Guests {
       home[person] = byParty[p]!;
       nights[person] = stay;
       arrivedOn[person] = arrived;
+      present[person] = byParty[p] === NO_HOME ? 0 : 1;
     }
   }
 
@@ -117,9 +121,7 @@ export function createGuests(options: GuestOptions): Guests {
     nights,
     child,
     variant,
-    // Everybody starts present, so the opening scene, the seeded draws and the bench replay are
-    // unchanged on frame one.
-    present: new Uint8Array(count).fill(away ? 0 : 1),
+    present,
     freeBeds,
     unmade: new Int32Array(homes.length),
     people,

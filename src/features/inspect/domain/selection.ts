@@ -73,6 +73,8 @@ export interface PlaceView {
     readonly takings: number;
     // Null where nobody swims, so the inspector has nothing to say about a lifeguard.
     readonly watched: boolean | null;
+    // Broken is closed: guests are turned away until a mechanic has been.
+    readonly broken: boolean;
   } | null;
   readonly residents: readonly PartyMemberView[];
 }
@@ -85,6 +87,7 @@ const NEED_LABELS: { readonly [need in GuestNeed]: string } = {
   energy: 'Energy',
   fun: 'Fun',
   hygiene: 'Hygiene',
+  health: 'Health',
 };
 
 const MINUTE = 60;
@@ -118,6 +121,13 @@ function wantsOf(options: {
   return choice === null ? null : { need: choice.need, label: venues[choice.venue]!.label };
 }
 
+// Health only once it is down: a full health bar on every guest says nothing.
+function needsShown(needs: Needs, person: number): GuestView['needs'] {
+  const shown = GUEST_NEEDS.map((need) => ({ need, level: needs.level[need][person]! }));
+  const health = needs.level.health[person]!;
+  return health < 1 ? [...shown, { need: 'health', level: health }] : shown;
+}
+
 export function guestView(
   guests: Guests,
   needs: Needs,
@@ -142,7 +152,7 @@ export function guestView(
     arrivedOn,
     nights,
     nightsLeft: arrivedOn + nights - day,
-    needs: GUEST_NEEDS.map((need) => ({ need, level: needs.level[need][person]! })),
+    needs: needsShown(needs, person),
     wants: wantsOf({ guests, needs, venues, person, at }),
     happiness: happiness.level[person] ?? 0,
     thought,
@@ -164,6 +174,7 @@ export function placeView(
   cleanliness: number | null = null,
   takings = 0,
   watched = false,
+  broken = false,
 ): PlaceView {
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
@@ -192,6 +203,7 @@ export function placeView(
           cleanliness: cleanliness ?? 1,
           takings,
           watched: venue.bathing === true ? watched : null,
+          broken,
         }
       : null,
     residents,
@@ -204,6 +216,7 @@ const NEED_MOODS: { readonly [need in GuestNeed]: string } = {
   energy: 'Tired',
   fun: 'Bored',
   hygiene: 'Grubby',
+  health: 'Hurt',
 };
 
 const PLACES: readonly string[] = ['First', 'Second', 'Third', 'Fourth'];

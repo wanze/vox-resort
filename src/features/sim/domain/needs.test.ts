@@ -9,6 +9,7 @@ import {
   createNeeds,
   decayNeeds,
   relieve,
+  resetNeeds,
   START_LEVEL,
   strongestNeed,
   type Needs,
@@ -272,5 +273,63 @@ describe('the weather over the needs', () => {
     setAll(spelled, person, 1);
     decayNeeds(spelled, guests, 120, weatherEffect('clear'));
     expect(levelsOf(spelled, person)).toEqual(levelsOf(needs, person));
+  });
+});
+
+describe('health', () => {
+  it('starts everybody well, and draws nothing for it', () => {
+    const needs = createNeeds(guestsOf(), 7);
+    expect(Array.from(needs.level.health).every((level) => level === 1)).toBe(true);
+    // Taken from createNeeds before health existed: the five wants must be drawn as they were.
+    const before = [
+      [
+        0.4840770363807678, 0.9872992038726807, 0.8344658017158508, 0.7367948889732361,
+        0.6730369329452515,
+      ],
+      [
+        0.7064279317855835, 0.5819588303565979, 0.7543290853500366, 0.8514021635055542,
+        0.5917985439300537,
+      ],
+    ];
+    expect(levelsOf(needs, 0)).toEqual(before[0]);
+    expect(levelsOf(needs, 1)).toEqual(before[1]);
+    expect(levelsOf(needs, 119)).toEqual([
+      0.4975746273994446, 0.6272715926170349, 0.7645559906959534, 0.7908678650856018,
+      0.9422182440757751,
+    ]);
+    expect(GUEST_NEEDS).not.toContain('health');
+  });
+
+  it('does not wear off by the hour, whatever the weather', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    needs.level.health[3] = 0.35;
+    decayNeeds(needs, guests, 60 * 24, weatherEffect('heatwave'));
+    expect(needs.level.health[3]).toBeCloseTo(0.35);
+    expect(needs.level.health[4]).toBe(1);
+  });
+
+  it('makes a hurt guest want first aid before anything else', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    for (const kind of ['family', 'couple', 'friends', 'solo'] as const) {
+      const person = someone(guests, kind);
+      setAll(needs, person, 0);
+      needs.level.health[person] = 0.35;
+      expect(strongestNeed(needs, guests, person)?.need, kind).toBe('health');
+      needs.level.health[person] = 1;
+      expect(strongestNeed(needs, guests, person)?.need, kind).not.toBe('health');
+    }
+  });
+
+  it('is put right by a visit that relieves it, and reset for the next guest', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    needs.level.health[2] = 0.35;
+    relieve(needs, 2, [{ need: 'health', amount: 1 }]);
+    expect(needs.level.health[2]).toBe(1);
+    needs.level.health[2] = 0.2;
+    resetNeeds(needs, 2, () => 0.5);
+    expect(needs.level.health[2]).toBe(1);
   });
 });

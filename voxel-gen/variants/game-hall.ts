@@ -49,6 +49,7 @@ export default defineModel({
     satisfies: [{ need: 'fun', amount: 0.8 }],
     capacity: 24,
     dwellSeconds: { min: 1200, max: 3600 },
+    reliability: 80,
     price: 2,
     doors: [{ x: DOOR.along + DOOR.w / 2, z: TOWER_FRONT, facing: 0 }],
   },

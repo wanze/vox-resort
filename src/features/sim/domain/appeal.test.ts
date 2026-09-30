@@ -232,3 +232,26 @@ describe('the taste hash', () => {
     expect(sum / 2000).toBeCloseTo(1, 2);
   });
 });
+
+describe('first aid', () => {
+  it('appeals to a guest who is hurt, and to nobody who is not', () => {
+    const post = venue('first-aid#0', [{ need: 'health', amount: 1 }]);
+    const person = someone('family');
+    const desperate = levels(person, {
+      hunger: 0,
+      thirst: 0,
+      energy: 0,
+      fun: 0,
+      hygiene: 0,
+    });
+    expect(appealOf(post, desperate, guests, person)).toBe(0);
+    expect(appealOf(post, levels(person, {}), guests, person)).toBe(0);
+    const hurt = levels(person, { health: 0.35 });
+    expect(appealOf(post, hurt, guests, person)).toBeGreaterThan(0);
+    const bakery = venue('bakery#0', [{ need: 'hunger', amount: 1 }]);
+    const hungryAndHurt = levels(person, { hunger: 0, health: 0.35 });
+    expect(appealOf(post, hungryAndHurt, guests, person)).toBeGreaterThan(
+      appealOf(bakery, hungryAndHurt, guests, person),
+    );
+  });
+});

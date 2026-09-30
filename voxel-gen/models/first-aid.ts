@@ -24,6 +24,7 @@ export default defineModel({
   ],
   venue: {
     role: 'service',
+    satisfies: [{ need: 'health', amount: 1 }],
     capacity: 4,
     dwellSeconds: { min: 300, max: 900 },
     doors: [{ x: 8, z: FRONT, facing: 0 }],

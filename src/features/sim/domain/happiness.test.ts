@@ -7,6 +7,7 @@ import {
   ARRIVAL_MOOD,
   createHappiness,
   DRIFT_PER_HOUR,
+  HURT_FLOOR,
   meanHappiness,
   QUEUE_COST_PER_HOUR,
   SURROUNDINGS_SHARE,
@@ -130,5 +131,31 @@ describe('ageHappiness with surroundings', () => {
     const happiness = createHappiness(guests.count);
     ageHappiness(happiness, needsAt(guests, 0.5), guests, NO_QUEUE, 100 * HOUR, () => -1);
     expect(moodOf(happiness, 0)).toBeCloseTo(0.5 - SURROUNDINGS_SHARE);
+  });
+});
+
+describe('a hurt guest', () => {
+  it('is exactly as content as before health existed while nobody is hurt', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR * 30);
+    for (let person = 0; person < guests.count; person++) {
+      if (guests.present[person] !== 1) continue;
+      let total = 0;
+      for (const need of GUEST_NEEDS) total += needs.level[need][person]!;
+      expect(moodOf(happiness, person)).toBe(Math.fround(total / GUEST_NEEDS.length));
+    }
+  });
+
+  it('is at best half as content as their wants say at the worst', () => {
+    const guests = guestsOf();
+    const needs = needsAt(guests, 0.8);
+    needs.level.health.fill(0);
+    const happiness = createHappiness(guests.count);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR * 30);
+    const present = [...guests.present.keys()].find((person) => guests.present[person] === 1)!;
+    expect(moodOf(happiness, present)).toBeCloseTo(0.8 * HURT_FLOOR);
+    expect(HURT_FLOOR).toBe(0.5);
   });
 });

@@ -20,7 +20,7 @@ const NOTHING: Workplaces = { venues: 0, bathing: 0, posts: 0, stages: 0 };
 
 const plot = (places: Partial<Workplaces>): Workplaces => ({ ...NOTHING, ...places });
 
-const NOBODY = { cleaner: 0, lifeguard: 0, animator: 0 };
+const NOBODY = { cleaner: 0, lifeguard: 0, animator: 0, mechanic: 0 };
 
 const venueAt = (key: string, flags: Partial<Venue>): Venue => ({
   key,
@@ -86,7 +86,13 @@ describe('rosterFor', () => {
   });
 
   it('caps every role so a tiled bench plot does not put a town on screen', () => {
-    const town = rosterFor({ venues: 5000, bathing: 500, posts: 500, stages: 500 });
+    const town = rosterFor({
+      venues: 5000,
+      bathing: 500,
+      posts: 500,
+      stages: 500,
+      reliable: 500,
+    });
     expect(town).toEqual(STAFF_CAPS);
     expect(rosterFor(plot({ venues: 50_000 })).cleaner).toBe(STAFF_CAPS.cleaner);
   });
@@ -107,7 +113,7 @@ describe('rosterFor', () => {
 describe('onDuty', () => {
   it('puts the first bodies of each role on duty and nobody else', () => {
     const pool = staffPool();
-    const duty = onDuty(pool, { cleaner: 3, lifeguard: 2, animator: 1 });
+    const duty = onDuty(pool, { cleaner: 3, lifeguard: 2, animator: 1, mechanic: 0 });
     expect(Array.from(duty.slice(0, 4))).toEqual([1, 1, 1, 0]);
     const lifeguards = STAFF_CAPS.cleaner;
     expect(Array.from(duty.slice(lifeguards, lifeguards + 3))).toEqual([1, 1, 0]);
@@ -143,7 +149,7 @@ describe('wagesFor', () => {
   });
 
   it('pays one of each role the three rows summed, a lifeguard above a cleaner', () => {
-    const one = { cleaner: 1, lifeguard: 1, animator: 1 };
+    const one = { cleaner: 1, lifeguard: 1, animator: 1, mechanic: 0 };
     expect(wagesFor(one)).toBe(WAGES.cleaner + WAGES.lifeguard + WAGES.animator);
     expect(WAGES.lifeguard).toBeGreaterThan(WAGES.cleaner);
     expect(WAGES.animator).toBeGreaterThan(WAGES.lifeguard);
@@ -180,7 +186,13 @@ describe('workplacesOf', () => {
       venueAt('game-hall#0', { stage: true }),
       venueAt('bakery#0', {}),
     ];
-    expect(workplacesOf(venues, [7])).toEqual({ venues: 4, bathing: 1, posts: 1, stages: 2 });
+    expect(workplacesOf(venues, [7])).toEqual({
+      venues: 4,
+      bathing: 1,
+      posts: 1,
+      stages: 2,
+      reliable: 0,
+    });
   });
 });
 
@@ -192,6 +204,7 @@ const needsOf = (count: number): Needs => ({
     energy: new Float32Array(count).fill(0.5),
     fun: new Float32Array(count).fill(0.5),
     hygiene: new Float32Array(count).fill(0.5),
+    health: new Float32Array(count).fill(1),
   },
 });
 
@@ -224,5 +237,30 @@ describe('cheerTheAudience', () => {
     expect(needs.level.fun[0]! - 0.5).toBeCloseTo(2 * half, 5);
     cheerTheAudience(needs, present, shows(20));
     expect(needs.level.fun[0]).toBe(1);
+  });
+});
+
+describe('mechanics', () => {
+  it('puts one mechanic on for every five venues that can break, and caps them', () => {
+    expect(rosterFor(NOTHING).mechanic).toBe(0);
+    expect(rosterFor(plot({ venues: 40 })).mechanic, 'nothing to break').toBe(0);
+    expect(rosterFor(plot({ reliable: 1 })).mechanic).toBe(1);
+    expect(rosterFor(plot({ reliable: 5 })).mechanic).toBe(1);
+    expect(rosterFor(plot({ reliable: 6 })).mechanic).toBe(2);
+    expect(rosterFor(plot({ reliable: 500 })).mechanic).toBe(STAFF_CAPS.mechanic);
+    const venues = [
+      venueAt('waterpark#0', { reliability: 400 }),
+      venueAt('game-hall#0', { stage: true, reliability: 600 }),
+      venueAt('bakery#0', {}),
+    ];
+    expect(workplacesOf(venues, []).reliable).toBe(2);
+  });
+
+  it('keeps the pool at forty, the mechanics last', () => {
+    const pool = staffPool();
+    expect(pool.count).toBe(40);
+    expect(STAFF_ROLES.at(-1)).toBe('mechanic');
+    expect(pool.role.slice(-STAFF_CAPS.mechanic).every((role) => role === 'mechanic')).toBe(true);
+    expect(pool.variant.at(-1)).toBe(STAFF_ROLES.indexOf('mechanic'));
   });
 });

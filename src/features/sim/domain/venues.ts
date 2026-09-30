@@ -22,6 +22,7 @@ export interface Venue {
   readonly litter?: number;
   readonly stage?: boolean;
   readonly bathing?: boolean;
+  readonly reliability?: number;
   readonly x: number;
   readonly z: number;
   readonly tileX: number;
@@ -52,6 +53,7 @@ export function venuesOn(placements: readonly Placement[]): Venue[] {
       litter: venue.litter ?? 0,
       stage: venue.stage ?? false,
       bathing: venue.bathing ?? false,
+      ...(venue.reliability === undefined ? {} : { reliability: venue.reliability }),
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
       tileX: placement.tileX,

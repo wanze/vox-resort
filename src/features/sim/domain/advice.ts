@@ -14,9 +14,11 @@ const KIND_ORDER = [
   'no-entrance',
   'no-reception',
   'no-beds',
+  'hurt',
   'unserved-need',
   'full-lines',
   'unreachable',
+  'broken',
   'dirty',
   'unwatched',
   'littered',
@@ -68,6 +70,10 @@ export interface ResortFacts {
   readonly litter?: LitterSummary;
   // Keys of the water nobody watches; absent means every pool has its lifeguard.
   readonly unwatched?: ReadonlySet<string>;
+  // Key to ticks since it broke; absent means nothing is broken.
+  readonly broken?: ReadonlyMap<string, number>;
+  // Guests here now with their health below full.
+  readonly hurt?: number;
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -100,10 +106,13 @@ export function adviceNoBeds(facts: ResortFacts): Advice | null {
   };
 }
 
+// Health too: somebody hurt with no first aid on the plot is a need nothing serves.
+const SERVED_NEEDS: readonly GuestNeed[] = [...GUEST_NEEDS, 'health'];
+
 // Silent about a need nobody wants yet: that is a new plot, not a badly built one.
 export function adviceUnservedNeeds(facts: ResortFacts): readonly Advice[] {
   const advice: Advice[] = [];
-  for (const need of GUEST_NEEDS) {
+  for (const need of SERVED_NEEDS) {
     const wanting = facts.wanting[need];
     if (wanting <= 0) continue;
     if (facts.venues.some((venue) => reliefAt(venue, need) > 0)) continue;
@@ -181,6 +190,45 @@ export function adviceUnwatched(facts: ResortFacts): readonly Advice[] {
     });
   }
   return advice;
+}
+
+// Three simulated hours down is as loud as a breakdown gets: by then a mechanic should have come.
+const DOWN_LOUD = 180;
+
+// Never silent: a broken venue turns every guest away, however briefly.
+export function adviceBroken(facts: ResortFacts): readonly Advice[] {
+  const broken = facts.broken;
+  if (!broken || broken.size === 0) return [];
+  return facts.venues
+    .filter((venue) => broken.has(venue.key))
+    .map((venue) => {
+      const down = Math.max(0, broken.get(venue.key)!);
+      return {
+        kind: 'broken' as const,
+        weight: 0.3 + 0.6 * clamp(down / DOWN_LOUD),
+        subject: venue.label,
+        count: down,
+        at: tileOf(venue),
+        need: null,
+      };
+    });
+}
+
+// Ten hurt at once is a plot with a problem, not bad luck.
+const HURT_LOUD = 10;
+
+// Says nothing about first aid: where there is none, the unserved need already says so.
+export function adviceHurt(facts: ResortFacts): Advice | null {
+  const hurt = facts.hurt ?? 0;
+  if (hurt <= 0) return null;
+  return {
+    kind: 'hurt',
+    weight: 0.2 + 0.5 * clamp(hurt / HURT_LOUD),
+    subject: 'injuries',
+    count: hurt,
+    at: null,
+    need: null,
+  };
 }
 
 export function adviceLittered(facts: ResortFacts): Advice | null {
@@ -355,9 +403,11 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
   const found = [
     gate,
     adviceNoBeds(facts),
+    adviceHurt(facts),
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
+    ...adviceBroken(facts),
     adviceDirty(facts),
     ...adviceUnwatched(facts),
     adviceLittered(facts),

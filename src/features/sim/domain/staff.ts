@@ -2,18 +2,19 @@ import { isBeach } from './beach';
 import { cheer, type Needs } from './needs';
 import type { Venue } from './venues';
 
-export type StaffRole = 'cleaner' | 'lifeguard' | 'animator';
+export type StaffRole = 'cleaner' | 'lifeguard' | 'animator' | 'mechanic';
 
 // Declared here rather than derived from the art so the domain stays pure;
 // `showcase.ts` asserts it matches `STAFF_SOURCES`.
-export const STAFF_ROLES: readonly StaffRole[] = ['cleaner', 'lifeguard', 'animator'];
+export const STAFF_ROLES: readonly StaffRole[] = ['cleaner', 'lifeguard', 'animator', 'mechanic'];
 
 // Bodies per role, meshed once per resort; the roster decides how many are on duty. Capped
 // because a ninefold benchmark plot would otherwise make staff the most expensive thing drawn.
 export const STAFF_CAPS: { readonly [role in StaffRole]: number } = {
-  cleaner: 24,
+  cleaner: 18,
   lifeguard: 8,
   animator: 8,
+  mechanic: 6,
 };
 
 // Staff are not guests: in the guest registry they would skew every HUD count.
@@ -30,13 +31,17 @@ export interface Workplaces {
   readonly bathing: number;
   readonly posts: number;
   readonly stages: number;
+  // Optional so a plot counted before anything could break still staffs itself.
+  readonly reliable?: number;
 }
 
-// A lifeguard sits a whole day where a cleaner comes and goes, and an animator is a performer.
+// A lifeguard sits a whole day where a cleaner comes and goes, an animator is a performer, and a
+// mechanic is a trade.
 export const WAGES: { readonly [role in StaffRole]: number } = {
   cleaner: 80,
   lifeguard: 100,
   animator: 120,
+  mechanic: 110,
 };
 
 // About what a fun venue gives over a whole visit, so a show roughly doubles a visit's fun and
@@ -55,6 +60,10 @@ const CLEANERS_PER_VENUE = 1 / 6;
 // A show moves from stage to stage, so one animator carries three.
 const STAGES_PER_ANIMATOR = 3;
 
+// The reference plot's six unreliable venues break about three times a day between them, and a
+// repair with the walk there is about two hours, so one mechanic keeps up with five.
+const RELIABLE_PER_MECHANIC = 5;
+
 // Roles in STAFF_ROLES order, so a body's index says its role for the life of the resort.
 export function staffPool(): Staff {
   const role: StaffRole[] = STAFF_ROLES.flatMap((each) =>
@@ -71,10 +80,12 @@ export function rosterFor(places: Workplaces): Roster {
   const cleaners = venues > 0 ? Math.max(1, Math.round(venues * CLEANERS_PER_VENUE)) : 0;
   const lifeguards = Math.max(0, places.bathing) + Math.max(0, places.posts);
   const animators = Math.ceil(Math.max(0, places.stages) / STAGES_PER_ANIMATOR);
+  const mechanics = Math.ceil(Math.max(0, places.reliable ?? 0) / RELIABLE_PER_MECHANIC);
   return {
     cleaner: Math.min(STAFF_CAPS.cleaner, cleaners),
     lifeguard: Math.min(STAFF_CAPS.lifeguard, lifeguards),
     animator: Math.min(STAFF_CAPS.animator, animators),
+    mechanic: Math.min(STAFF_CAPS.mechanic, mechanics),
   };
 }
 
@@ -113,6 +124,7 @@ export function workplacesOf(venues: readonly Venue[], posts: readonly number[])
     bathing: venues.filter((venue) => venue.bathing === true).length,
     posts: posts.length,
     stages: venues.filter((venue) => venue.stage === true).length,
+    reliable: venues.filter((venue) => venue.reliability !== undefined).length,
   };
 }
 

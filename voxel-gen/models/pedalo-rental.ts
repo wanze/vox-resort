@@ -39,6 +39,7 @@ export default defineModel({
     ],
     capacity: 8,
     dwellSeconds: { min: 1200, max: 2700 },
+    reliability: 40,
     price: 4,
     doors: [{ x: HUT.x + 7, z: FRONT + 2, facing: 0 }],
   },

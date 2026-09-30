@@ -54,6 +54,7 @@ export const needsSnapshotSchema = z.object({
   energy: float32,
   fun: float32,
   hygiene: float32,
+  health: float32,
 });
 
 export type NeedsSnapshot = z.infer<typeof needsSnapshotSchema>;
@@ -87,6 +88,15 @@ export type ThoughtsSnapshot = z.infer<typeof thoughtsSnapshotSchema>;
 export const upkeepSnapshotSchema = z.object({ keys: z.array(z.string()), level: float32 });
 
 export type UpkeepSnapshot = z.infer<typeof upkeepSnapshotSchema>;
+
+export const breakdownsSnapshotSchema = z.object({
+  keys: z.array(z.string()),
+  broken: uint8,
+  since: int32,
+  worn: int32,
+});
+
+export type BreakdownsSnapshot = z.infer<typeof breakdownsSnapshotSchema>;
 
 const reviewSchema = z.object({
   party: count,
@@ -132,6 +142,7 @@ export const resortSnapshotSchema = z.object({
   carrying: int8,
   litter: float32,
   upkeep: upkeepSnapshotSchema,
+  breakdowns: breakdownsSnapshotSchema,
   takings: z.array(z.tuple([z.string(), z.number()])),
   footfall: z.object({ seen: float32, mood: float32 }),
   reviews: z.array(reviewSchema),

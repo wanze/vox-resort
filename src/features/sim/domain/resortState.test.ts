@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBreakdowns } from './breakdowns';
 import { createGuests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import { createRandom } from '../../layout/domain/random';
@@ -28,6 +29,7 @@ function stateFor(seed: number): ResortState {
     carrying: createCarrying(40),
     litter: createLitter(6, 5),
     upkeep: createUpkeep(VENUES.length),
+    breakdowns: createBreakdowns(VENUES.length),
     venues: VENUES,
     takings: new Map(),
     footfall: createFootfall(9),
@@ -45,12 +47,16 @@ function stateFor(seed: number): ResortState {
 function played(): ResortState {
   const state = stateFor(5);
   state.needs.level.hunger[1] = 0.1;
+  state.needs.level.health[3] = 0.35;
   state.happiness.level[2] = 0.3;
   think(state.thoughts, 3, 'filthy', 'Bar', 77);
   tallyInto(state.thoughtDay, 'filthy', 'Bar');
   state.carrying.nodes[4] = 5;
   state.litter.level[7] = 0.75;
   state.upkeep.level[1] = 0.4;
+  state.breakdowns.broken[1] = 1;
+  state.breakdowns.since[1] = 300;
+  state.breakdowns.worn[1] = 40;
   earn(state.takings, 'bar#0', 120);
   state.footfall.seen[2] = 11;
   state.footfall.mood[2] = 6.5;

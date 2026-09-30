@@ -19,6 +19,10 @@ export const ARRIVAL_MOOD = 0.7;
 // Small against the needs, or a player could make up for no restaurant with flowerbeds.
 export const SURROUNDINGS_SHARE = 0.1;
 
+// A hurt guest is at best half as content as their wants say: a plaster does not make up for the
+// fall, but a full stomach still counts for something.
+export const HURT_FLOOR = 0.5;
+
 export interface Happiness {
   readonly count: number;
   readonly level: Float32Array;
@@ -32,11 +36,13 @@ export function createHappiness(count: number): Happiness {
 }
 
 // Unweighted on purpose: archetype weights decide where a guest walks, not whether
-// they enjoy their stay.
+// they enjoy their stay. Health scales the wants rather than joining them.
 function contentmentOf(needs: Needs, person: number): number {
   let total = 0;
   for (const need of GUEST_NEEDS) total += needs.level[need][person]!;
-  return total / GUEST_NEEDS.length;
+  const wants = total / GUEST_NEEDS.length;
+  const health = needs.level.health[person]!;
+  return health >= 1 ? wants : wants * (HURT_FLOOR + (1 - HURT_FLOOR) * health);
 }
 
 // Allocates nothing: it runs up to MAX_TICKS_PER_ADVANCE times a frame. Absent people

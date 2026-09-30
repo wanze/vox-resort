@@ -31,6 +31,7 @@ const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: stri
   energy: 'Energy',
   fun: 'Fun',
   hygiene: 'Hygiene',
+  health: 'Health',
 };
 
 const NEED_MOODS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
@@ -39,6 +40,7 @@ const NEED_MOODS: { readonly [need in GuestView['needs'][number]['need']]: strin
   energy: 'tired',
   fun: 'bored',
   hygiene: 'grubby',
+  health: 'hurt',
 };
 
 const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: string } = {
@@ -177,10 +179,20 @@ function LifeguardRow({ watched }: { readonly watched: boolean | null }) {
   );
 }
 
+function BrokenRow({ broken }: { readonly broken: boolean }) {
+  if (!broken) return null;
+  return (
+    <StatRow label="Repairs" note="closed until a mechanic has been">
+      Broken down
+    </StatRow>
+  );
+}
+
 function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
   return (
     <dl className="hud-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
+      <BrokenRow broken={venue.broken} />
       <StatRow label="Capacity">{venue.capacity}</StatRow>
       {venue.role === 'lodging' ? (
         <StatRow label="Beds">{venue.beds}</StatRow>

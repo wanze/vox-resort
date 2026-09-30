@@ -28,6 +28,7 @@ const scratchRate: { [need in GuestNeed]: number } = {
   energy: 0,
   fun: 0,
   hygiene: 0,
+  health: 0,
 };
 
 // The draw order is load-bearing: changing it reshuffles every seeded scene, which
@@ -41,6 +42,7 @@ export function createNeeds(guests: Guests, seed: number): Needs {
     energy: new Float32Array(guests.count),
     fun: new Float32Array(guests.count),
     hygiene: new Float32Array(guests.count),
+    health: new Float32Array(guests.count).fill(1),
   };
   for (let person = 0; person < guests.count; person++) {
     for (const need of GUEST_NEEDS) level[need][person] = START_LEVEL.min + random() * span;
@@ -52,6 +54,7 @@ export function resetNeeds(needs: Needs, person: number, random: () => number): 
   if (person < 0 || person >= needs.count) return;
   const span = START_LEVEL.max - START_LEVEL.min;
   for (const need of GUEST_NEEDS) needs.level[need][person] = START_LEVEL.min + random() * span;
+  needs.level.health[person] = 1;
 }
 
 // Takes whole ticks, never a frame delta, so decay does not depend on frame rate.
@@ -91,6 +94,9 @@ export function cheer(needs: Needs, person: number, amount: number): void {
   needs.level.fun[person] = clamp(needs.level.fun[person]! + amount);
 }
 
+// Health after the five, so a tie with a want goes to the want, as it did before health.
+const URGENCY_ORDER: readonly GuestNeed[] = [...GUEST_NEEDS, 'health'];
+
 export interface Urgency {
   readonly need: GuestNeed;
   readonly urgency: number;
@@ -104,7 +110,7 @@ export function strongestNeed(
 ): Urgency | null {
   const { weight } = archetypeOf(guests, person);
   let strongest: Urgency | null = null;
-  for (const need of GUEST_NEEDS) {
+  for (const need of URGENCY_ORDER) {
     const urgency = weight[need] * effect.weight[need] * (1 - needs.level[need][person]!);
     if (urgency < CONTENT_URGENCY) continue;
     if (strongest === null || urgency > strongest.urgency) strongest = { need, urgency };
@@ -113,16 +119,18 @@ export function strongestNeed(
 }
 
 export function snapshotNeeds(needs: Needs): NeedsSnapshot {
-  const { hunger, thirst, energy, fun, hygiene } = needs.level;
+  const { hunger, thirst, energy, fun, hygiene, health } = needs.level;
   return {
     hunger: hunger.slice(),
     thirst: thirst.slice(),
     energy: energy.slice(),
     fun: fun.slice(),
     hygiene: hygiene.slice(),
+    health: health.slice(),
   };
 }
 
 export function restoreNeeds(needs: Needs, snapshot: NeedsSnapshot): void {
   for (const need of GUEST_NEEDS) needs.level[need].set(snapshot[need]);
+  needs.level.health.set(snapshot.health);
 }

@@ -16,6 +16,7 @@ import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork'
 import { homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { saltFor, tasteFor } from './appeal';
+import { isBroken, wear, type Breakdowns } from './breakdowns';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
@@ -165,7 +166,7 @@ export function createRouter(parts: {
   // Told what the router already decided, never asked: nothing here reads a thought back.
   readonly onThought?: (
     person: number,
-    kind: 'queue-too-long' | 'closed' | 'nothing-for' | 'no-bed',
+    kind: 'queue-too-long' | 'closed' | 'broken' | 'nothing-for' | 'no-bed',
     subject: string | null,
   ) => void;
   // Late-bound: an arrival happens between ticks, and the clock knows the hour.
@@ -175,6 +176,8 @@ export function createRouter(parts: {
   readonly crowd: () => Crowd;
   // Late-bound for the same reason: an edit replaces the venue list and its upkeep.
   readonly upkeep: () => Upkeep;
+  // Late-bound for the same reason. Omitted, nothing ever breaks.
+  readonly breakdowns?: () => Breakdowns;
   readonly weather?: () => Weather;
   readonly seed: number;
 }): Router {
@@ -405,10 +408,21 @@ export function createRouter(parts: {
   // The synthetic beach lies past the upkeep array and so reads as spotless, which is right.
   const cleanOf = (venue: number): number => cleanliness(parts.upkeep(), venue);
 
+  const isBrokenDown = (venue: number): boolean => {
+    const breakdowns = parts.breakdowns?.();
+    return breakdowns !== undefined && isBroken(breakdowns, venue);
+  };
+
   // Asked every time rather than kept: the day can turn over between ticks.
   const isOpen = (venue: number): boolean => {
     const declared = venues[venue];
-    return declared ? isOpenIn(shelterOf(declared), weatherEffect(weatherNow())) : false;
+    if (!declared || isBrokenDown(venue)) return false;
+    return isOpenIn(shelterOf(declared), weatherEffect(weatherNow()));
+  };
+
+  const wearOut = (venue: number): void => {
+    const breakdowns = parts.breakdowns?.();
+    if (breakdowns) wear(breakdowns, venue, venues[venue]!.reliability, salts[venue]!, now);
   };
 
   const affinityOf =
@@ -419,7 +433,7 @@ export function createRouter(parts: {
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
     // A venue that shuts while somebody is inside is not emptied.
     if (!isOpen(venue)) {
-      onThought(person, 'closed', venues[venue]?.label ?? null);
+      onThought(person, isBrokenDown(venue) ? 'broken' : 'closed', venues[venue]?.label ?? null);
       return 'balked';
     }
     if (queueLength(venue) >= queueLimit(venue)) {
@@ -673,10 +687,16 @@ export function createRouter(parts: {
     walkSandTo(crowd(), person, spot.x, spot.z);
   };
 
-  const leaveErrand = (person: number, venue: number): void => {
+  // Worn on both ways out of a visit, or venues served from the beach would stay spotless.
+  const endVisit = (person: number, venue: number): void => {
     relieve(needs, person, venues[venue]!.satisfies);
     soil(parts.upkeep(), venue, venues[venue]!.capacity);
+    wearOut(venue);
     onVisited(person, venues[venue]!);
+  };
+
+  const leaveErrand = (person: number, venue: number): void => {
+    endVisit(person, venue);
     const route = errandOf(person);
     const staying = stays[person] !== null && now < stayUntil[person]! && !dueInBed(person);
     if (route && staying) {
@@ -817,10 +837,7 @@ export function createRouter(parts: {
       leaveErrand(person, venue);
       return;
     }
-    relieve(needs, person, venues[venue]!.satisfies);
-    // Worn on both ways out of a visit, or venues served from the beach would stay spotless.
-    soil(parts.upkeep(), venue, venues[venue]!.capacity);
-    onVisited(person, venues[venue]!);
+    endVisit(person, venue);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;

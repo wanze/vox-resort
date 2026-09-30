@@ -69,12 +69,14 @@ import { crowdScaleFor } from './crowdRate';
 import { arrivalsDueBy, checkInDue, freeBedsOn, runCheckIn, wavesDue } from './checkIn';
 import { createHappiness, meanHappiness } from './happiness';
 import { arrivalsFor, ratingFor } from './rating';
+import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
+import { burnTheSunbathers, hurt, mishap } from './incidents';
 import { createRouter, type Router } from './router';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 import { isOpenIn, weatherEffect, type Weather } from './weather';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
-import { onDuty, rosterFor, staffPool, workplacesOf } from './staff';
+import { onDuty, rosterFor, STAFF_ROLES, staffPool, workplacesOf } from './staff';
 import { VISIT } from './occupancy';
 import { createStaffRouter, meanCleanliness } from './staffRouter';
 
@@ -1348,7 +1350,9 @@ interface ShareOut {
   readonly ignored: readonly string[];
 }
 
-const serves = (venue: Venue): boolean => venue.satisfies.some((relief) => relief.amount > 0);
+// Wants only: first aid serves health, which nobody needs until somebody is hurt.
+const serves = (venue: Venue): boolean =>
+  venue.satisfies.some((relief) => relief.amount > 0 && GUEST_NEEDS.includes(relief.need));
 
 const shareOutOf = (
   standing: readonly Venue[],
@@ -2583,6 +2587,174 @@ describe('on the generated plot', () => {
     }
   });
 
+  // What showcase.ts wires for breakdowns and incidents, with the plot's own roster, first-aid
+  // posts and towers. Bins and litter are left out: they are not what is measured.
+  it('breaks things and hurts people over three days, and the staff keep up', () => {
+    const seated = walkNetworkFor({
+      paved: layout.paths,
+      levelOf: (x, z) => levelAt(elevation, x, z),
+      shore: shoreFor(plan),
+      tilesX: plan.tilesX,
+      obstacles: layout.placements,
+      seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
+    });
+    const lodgings = lodgingsOn(layout.placements);
+    const people = createGuests({
+      count: 600,
+      homes: lodgings.toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key)),
+      variants: 4,
+      childVariant: 3,
+      seed: 12,
+    });
+    const needs = createNeeds(people, 13);
+    const upkeep = createUpkeep(venues.length);
+    const breakdowns = createBreakdowns(venues.length);
+    const HEATWAVE_DAY = 1;
+    let ticks = OPENS_AT;
+    const dayOf = (): number => Math.floor((ticks - OPENS_AT) / TICKS_PER_DAY);
+    const weather = (): Weather => (dayOf() === HEATWAVE_DAY ? 'heatwave' : 'clear');
+
+    const hurtOn = [new Set<number>(), new Set<number>(), new Set<number>()];
+    const bySun = new Set<number>();
+    const sunbathers = new Set<number>();
+    const employed = staffPool();
+    const roster = rosterFor(workplacesOf(venues, seated.posts));
+    const duty = onDuty(employed, roster);
+    let crowd: Crowd | null = null;
+    let workers: Crowd | null = null;
+    let staffRouter: ReturnType<typeof createStaffRouter> | null = null;
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings,
+      gateways: [],
+      onLeave: () => {},
+      onVisited: (person, venue) => {
+        if (venue.bathing !== true) return;
+        const index = venues.findIndex((each) => each.key === venue.key);
+        const watched = index >= 0 ? staffRouter!.watching(index) : staffRouter!.watchingBeach;
+        if (!mishap(person, ticks, watched)) return;
+        hurt(needs, person);
+        hurtOn[dayOf()]!.add(person);
+      },
+      network: seated,
+      tickOfDay: () => ticks % TICKS_PER_DAY,
+      crowd: () => crowd!,
+      upkeep: () => upkeep,
+      breakdowns: () => breakdowns,
+      weather,
+      seed: 19,
+    });
+    crowd = createCrowd({
+      network: seated,
+      count: people.count,
+      variants: 4,
+      seed: 4,
+      routeOf: (person, at) => router.step(person, at),
+      roamsBeach: false,
+    });
+    staffRouter = createStaffRouter({
+      staff: employed,
+      venues,
+      network: seated,
+      upkeep: () => upkeep,
+      breakdowns: () => breakdowns,
+      crowd: () => workers!,
+      weather,
+      duty: () => duty,
+      occupants: (venue) => router.occupancyOf(venues[venue]!.key)?.inside ?? 0,
+      seed: 9,
+    });
+    workers = createCrowd({
+      network: seated,
+      count: employed.count,
+      variants: STAFF_ROLES.length,
+      variantOf: (worker) => employed.variant[worker] ?? 0,
+      seed: 5,
+      routeOf: (worker, at) => staffRouter!.step(worker, at),
+      roamsBeach: false,
+    });
+    for (let worker = 0; worker < employed.count; worker++) {
+      if (duty[worker] === 1) continue;
+      takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+    }
+
+    const brokeOn = [0, 0, 0];
+    const outages: { key: string; from: number; to: number | null }[] = [];
+    const open = new Map<number, number>();
+    const treatedBy = new Map<number, number>();
+    for (let step = 0; step < 3 * TICKS_PER_DAY; step++) {
+      for (let frame = 0; frame < NORMAL_FRAMES_PER_TICK; frame++) {
+        stepCrowd(crowd, MAX_STEP);
+        stepCrowd(workers, MAX_STEP);
+      }
+      ticks++;
+      decayNeeds(needs, people, 1, weatherEffect(weather()));
+      router.tick(ticks);
+      staffRouter.tick(ticks);
+      if (ticks % 60 === 0 && weather() === 'heatwave') {
+        burnTheSunbathers(
+          needs,
+          people.present,
+          (person) => {
+            const onTheSand = router.stayOf(person) === 'resting';
+            if (onTheSand) sunbathers.add(person);
+            return onTheSand;
+          },
+          ticks / 60,
+          (person) => {
+            bySun.add(person);
+            hurtOn[dayOf()]!.add(person);
+          },
+        );
+      }
+      for (let venue = 0; venue < venues.length; venue++) {
+        const down = isBroken(breakdowns, venue);
+        if (down && !open.has(venue)) {
+          open.set(venue, outages.length);
+          outages.push({ key: venues[venue]!.key, from: ticks, to: null });
+          brokeOn[dayOf()]!++;
+        } else if (!down && open.has(venue)) {
+          outages[open.get(venue)!]!.to = ticks;
+          open.delete(venue);
+        }
+      }
+      for (const person of hurtOn[HEATWAVE_DAY]!) {
+        if (needs.level.health[person] === 1 && !treatedBy.has(person))
+          treatedBy.set(person, ticks);
+      }
+    }
+
+    const endOfHeatwave = OPENS_AT + (HEATWAVE_DAY + 1) * TICKS_PER_DAY;
+    const hurtInHeat = hurtOn[HEATWAVE_DAY]!;
+    const treated = [...hurtInHeat].filter(
+      (person) => (treatedBy.get(person) ?? Infinity) <= endOfHeatwave,
+    );
+    const present = people.present.reduce((sum, each) => sum + each, 0);
+    const lasted = outages.map((each) => (each.to ?? ticks) - each.from);
+    const stillDown = outages.filter((each) => each.to === null && ticks - each.from > 180);
+    const reliable = venues.filter((venue) => venue.reliability !== undefined).length;
+    const report = [
+      `${reliable} unreliable venues, ${roster.mechanic} mechanics, ${roster.lifeguard} lifeguards`,
+      `breakdowns per day: ${brokeOn.join(', ')}`,
+      `outages: ${outages.map((each, at) => `${each.key} ${lasted[at]} min${each.to === null ? ' (open)' : ''}`).join('; ')}`,
+      `hurt per day: ${hurtOn.map((each) => each.size).join(', ')} of ${present}`,
+      `sunburnt: ${bySun.size} of ${sunbathers.size} on the sand in the heatwave`,
+      `hurt in the heatwave and treated that day: ${treated.length} of ${hurtInHeat.size}`,
+    ].join('\n');
+    console.log(report);
+
+    for (const count of brokeOn) {
+      expect(count, report).toBeGreaterThanOrEqual(1);
+      expect(count, report).toBeLessThanOrEqual(6);
+    }
+    expect(stillDown, report).toEqual([]);
+    expect(hurtInHeat.size, report).toBeGreaterThanOrEqual(1);
+    expect(hurtInHeat.size, report).toBeLessThanOrEqual(present * 0.1);
+    expect(treated.length * 2, report).toBeGreaterThanOrEqual(hurtInHeat.size);
+  });
+
   it('empties what has no roof in a storm, and fills what has one', () => {
     const lodgings = lodgingsOn(layout.placements);
     const visitsUnder = (weather: Weather): ReadonlyMap<string, number> => {
@@ -2858,6 +3030,90 @@ describe('a venue the weather has shut', () => {
     hot.router.step(person, nodeAt(network, 0));
     expect(hot.router.goalOf(person)?.key, `clear chose ${chosenClear}`).toBe('resort-bar#0');
     expect(chosenClear).toBe('tennis-court#0');
+  });
+});
+
+describe('a venue that has broken down', () => {
+  const slide = (tileX: number, reliability?: number): Venue => ({
+    ...bakery(tileX),
+    key: 'waterpark#0',
+    id: 'waterpark',
+    label: 'Waterpark',
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 1 }],
+    dwellSeconds: { min: 60, max: 120 },
+    ...(reliability === undefined ? {} : { reliability }),
+  });
+
+  const brokenRouter = (venues: readonly Venue[], needs: Needs, breakdowns: Breakdowns) => {
+    const network = networkOf(street(8));
+    const { heard, onThought } = hearing();
+    let crowd: Crowd | null = null;
+    const router = createRouter({
+      guests,
+      needs,
+      venues,
+      lodgings: [],
+      gateways: [],
+      onLeave: () => {},
+      onThought,
+      network,
+      tickOfDay: () => NOON,
+      crowd: () => crowd!,
+      upkeep: spotless(venues.length),
+      breakdowns: () => breakdowns,
+      seed: 13,
+    });
+    crowd = createCrowd({
+      network,
+      count: guests.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+    });
+    return { network, router, heard };
+  };
+
+  it('is passed over for the sound one, as a venue the rain shut is', () => {
+    const venues = [slide(7), { ...slide(3), key: 'waterpark#1' }];
+    const breakdowns = createBreakdowns(venues.length);
+    const sound = brokenRouter(venues, wanting(0, 'fun'), breakdowns);
+    sound.router.step(0, nodeAt(sound.network, 6));
+    expect(sound.router.goalOf(0)?.key).toBe('waterpark#0');
+
+    breakdowns.broken[0] = 1;
+    const { network, router } = brokenRouter(venues, wanting(0, 'fun'), breakdowns);
+    router.step(0, nodeAt(network, 6));
+    expect(router.goalOf(0)?.key).toBe('waterpark#1');
+  });
+
+  it('turns away at the door a guest who set off before it broke, and says why', () => {
+    const breakdowns = createBreakdowns(1);
+    const needs = wanting(0, 'fun');
+    const { network, router, heard } = brokenRouter([slide(7)], needs, breakdowns);
+    router.step(0, nodeAt(network, 0));
+    expect(router.goalOf(0)?.key).toBe('waterpark#0');
+
+    breakdowns.broken[0] = 1;
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    expect(router.visitOf(0)).toBeNull();
+    expect(router.goalOf(0)).toBeNull();
+    expect(needs.level.fun[0], 'relieved by a slide that was broken').toBe(0);
+    expect(heard[0]).toEqual([0, 'broken', 'Waterpark']);
+  });
+
+  it('wears the venue with every visit, and breaks one the art calls unreliable', () => {
+    const breakdowns = createBreakdowns(1);
+    const needs = wanting(0, 'fun');
+    const { network, router } = brokenRouter([slide(7, 1)], needs, breakdowns);
+    router.step(0, nodeAt(network, 0));
+    router.step(0, nodeAt(network, 7));
+    expect(router.visitOf(0)?.venue.key).toBe('waterpark#0');
+    for (let tick = 1; tick <= 5; tick++) router.tick(tick);
+    expect(router.visitOf(0)).toBeNull();
+    expect(breakdowns.worn[0]).toBe(1);
+    expect(isBroken(breakdowns, 0), 'one chance in one, and it held').toBe(true);
+    expect(breakdowns.since[0]).toBeGreaterThan(0);
   });
 });
 

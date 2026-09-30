@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  adviceBroken,
   adviceFarFromHome,
   adviceFor,
   adviceFullLines,
+  adviceHurt,
   adviceNoBeds,
   adviceNobodyComes,
   adviceDirty,
@@ -72,6 +74,7 @@ const NOTHING_WANTED: { readonly [need in GuestNeed]: number } = {
   energy: 0,
   fun: 0,
   hygiene: 0,
+  health: 0,
 };
 
 function healthyFacts(over: Partial<ResortFacts> = {}): ResortFacts {
@@ -538,5 +541,52 @@ describe('adviceLittered', () => {
     const kinds = adviceFor(facts).map((each) => each.kind);
     expect(kinds.indexOf('dirty')).toBeGreaterThanOrEqual(0);
     expect(kinds.indexOf('littered')).toBe(kinds.indexOf('dirty') + 1);
+  });
+});
+
+describe('breakdowns and injuries', () => {
+  it('says nothing about repairs while nothing is broken', () => {
+    expect(adviceBroken(healthyFacts())).toEqual([]);
+    expect(adviceBroken(healthyFacts({ broken: new Map() }))).toEqual([]);
+    expect(adviceFor(healthyFacts()).some((advice) => advice.kind === 'broken')).toBe(false);
+  });
+
+  it('names each broken venue where it stands, louder the longer it has been down', () => {
+    const slide = venueOf({ key: 'waterpark#0', label: 'Waterpark', x: 64, z: 96 });
+    const hall = venueOf({ key: 'game-hall#0', label: 'Games Hall', x: 16, z: 16 });
+    const facts = healthyFacts({
+      venues: [...healthyFacts().venues, slide, hall],
+      broken: new Map([
+        ['waterpark#0', 240],
+        ['game-hall#0', 20],
+      ]),
+    });
+    const advice = adviceBroken(facts);
+    expect(advice.map((each) => each.subject)).toEqual(['Waterpark', 'Games Hall']);
+    expect(advice[0]).toMatchObject({ kind: 'broken', count: 240, at: { tileX: 4, tileZ: 6 } });
+    expect(advice[0]!.weight).toBeGreaterThan(advice[1]!.weight);
+    expect(adviceFor(facts).filter((each) => each.kind === 'broken')).toHaveLength(2);
+  });
+
+  it('counts the guests who have been hurt', () => {
+    expect(adviceHurt(healthyFacts())).toBeNull();
+    expect(adviceHurt(healthyFacts({ hurt: 0 }))).toBeNull();
+    const three = adviceHurt(healthyFacts({ hurt: 3 }));
+    expect(three).toMatchObject({ kind: 'hurt', count: 3, need: null, at: null });
+    expect(adviceHurt(healthyFacts({ hurt: 12 }))!.weight).toBeGreaterThan(three!.weight);
+  });
+
+  it('leaves the missing first aid to the unserved need, and says it only once', () => {
+    const facts = healthyFacts({ hurt: 4, wanting: { ...NOTHING_WANTED, health: 4 } });
+    const advice = adviceFor(facts);
+    const unserved = advice.filter((each) => each.kind === 'unserved-need');
+    expect(unserved).toEqual([expect.objectContaining({ need: 'health', count: 4 })]);
+    const hurt = advice.find((each) => each.kind === 'hurt')!;
+    expect(hurt.need).toBeNull();
+    expect(hurt.subject).not.toBe('health');
+    const aid = venueOf({ key: 'first-aid#0', satisfies: [{ need: 'health', amount: 1 }] });
+    const served = adviceFor({ ...facts, venues: [...facts.venues, aid] });
+    expect(served.some((each) => each.kind === 'unserved-need')).toBe(false);
+    expect(served.some((each) => each.kind === 'hurt')).toBe(true);
   });
 });

@@ -12,6 +12,7 @@ const ROLE_NAMES: { readonly [role in StaffRole]: readonly [string, string] } = 
   cleaner: ['cleaner', 'cleaners'],
   lifeguard: ['lifeguard', 'lifeguards'],
   animator: ['animator', 'animators'],
+  mechanic: ['mechanic', 'mechanics'],
 };
 
 const rosterLine = (roster: Roster): string =>

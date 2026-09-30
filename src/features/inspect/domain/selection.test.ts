@@ -616,3 +616,26 @@ describe('a guest staying on the beach', () => {
     expect(line.startsWith('Walking back from the beach · tile ')).toBe(true);
   });
 });
+
+describe('breakdowns and injuries', () => {
+  it('says a venue is broken only when it is, and that first aid sees to health', () => {
+    const guests = guestsOf();
+    const aid = at('first-aid#0', 'first-aid');
+    expect(placeView(aid, 'First Aid', guests, null, 0).venue?.broken).toBe(false);
+    const broken = placeView(aid, 'First Aid', guests, null, 0, null, 0, false, true);
+    expect(broken.venue?.broken).toBe(true);
+    expect(broken.venue?.serves).toEqual(['Health']);
+  });
+
+  it('shows a health bar only for a guest who has been hurt', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const shown = (person: number) =>
+      guestView(guests, needs, moodOf(guests), NO_VENUES, person, 0, HERE, null).needs.map(
+        (entry) => entry.need,
+      );
+    expect(shown(3)).toEqual([...GUEST_NEEDS]);
+    needs.level.health[3] = 0.35;
+    expect(shown(3)).toEqual([...GUEST_NEEDS, 'health']);
+  });
+});

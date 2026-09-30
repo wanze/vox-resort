@@ -122,6 +122,13 @@ import {
 } from '../features/sim/domain/happiness';
 import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
 import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
+import { burnTheSunbathers, hurt, mishap } from '../features/sim/domain/incidents';
+import {
+  carryBreakdowns,
+  createBreakdowns,
+  isBroken,
+  type Breakdowns,
+} from '../features/sim/domain/breakdowns';
 import {
   binCoverFor,
   createCarrying,
@@ -805,6 +812,8 @@ interface Resort {
   // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
   // plot.
   upkeep: Upkeep;
+  // Carried by key like the dirt, so paving a tile does not mend a broken slide.
+  breakdowns: Breakdowns;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
   // Kept across an edit, pruned to what is still paved: planting a hedge does not sweep the plot.
@@ -1097,6 +1106,7 @@ function buildResort(
   const gateways = gatewaysOn(plot.layout.placements);
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
+  const breakdowns = createBreakdowns(venues.length);
   // Off the layout's lists, as the network is, and props too: the layout stands trees as either.
   const scenery = sceneryFieldFor(
     sceneryItemsOf([...plot.layout.placements, ...plot.layout.props], sceneryOf),
@@ -1141,6 +1151,7 @@ function buildResort(
     // Late-bound: an edit replaces the upkeep, and a stale one would soil venues that no longer
     // stand.
     upkeep: () => resort.upkeep,
+    breakdowns: () => resort.breakdowns,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => {
       pickUp(
@@ -1150,6 +1161,7 @@ function buildResort(
         (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
       );
       judgeVisit(resort, parts.ticks(), person, venue);
+      riskTheWater(resort, parts.ticks(), person, venue);
       const earned = priceOf(venue.id);
       resort.ledger = record(resort.ledger, 'visit', earned);
       earn(resort.takings, venue.key, earned);
@@ -1180,6 +1192,7 @@ function buildResort(
     venues,
     network,
     upkeep: () => resort.upkeep,
+    breakdowns: () => resort.breakdowns,
     crowd: () => staffField!.crowd,
     weather: parts.weather,
     duty: () => resort.duty,
@@ -1242,6 +1255,7 @@ function buildResort(
     lodgings,
     gateways,
     upkeep,
+    breakdowns,
     scenery,
     litter,
     footfall: createFootfall(network.nodes.length),
@@ -1494,6 +1508,29 @@ function judgeVisit(resort: Resort, tick: number, person: number, venue: Venue):
   if (thought) hear(resort, tick, person, thought, venue.label);
 }
 
+// A mishap in water somebody is watching is ten times rarer; the beach is watched from a tower.
+function riskTheWater(resort: Resort, tick: number, person: number, venue: Venue): void {
+  if (venue.bathing !== true) return;
+  const index = venueIndexOf(resort.venues, venue.key);
+  const { staffRouter } = resort;
+  const watched = index >= 0 ? staffRouter.watching(index) : staffRouter.watchingBeach;
+  if (!mishap(person, tick, watched)) return;
+  hurt(resort.needs, person);
+  hear(resort, tick, person, 'hurt', venue.label);
+}
+
+function burnOnTheBeach(resort: Resort, clock: Clock): void {
+  if (clock.weather !== 'heatwave') return;
+  const { router } = resort;
+  burnTheSunbathers(
+    resort.needs,
+    resort.guests.present,
+    (person) => router.stayOf(person) === 'resting',
+    Math.floor(clock.ticks / TICKS_PER_HOUR),
+    (person) => hear(resort, clock.ticks, person, 'hurt', null),
+  );
+}
+
 function hearSurroundings(resort: Resort, tick: number): void {
   for (let person = 0; person < resort.guests.count; person++) {
     const thought = lookAround(resort, person);
@@ -1676,6 +1713,7 @@ function runTicks(
   // After the morning's wipe, so the first hour of a day is heard in that day.
   if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
     hearSurroundings(resort, clock.ticks);
+    burnOnTheBeach(resort, clock);
     hourly();
   }
   admitLaterWaves(resort, clock, ticks);
@@ -1721,7 +1759,7 @@ function strandedOn(venues: readonly Venue[], network: WalkNetwork): ReadonlySet
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
   const { guests, needs } = resort;
-  const counted = { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0 };
+  const counted = { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0, health: 0 };
   for (let person = 0; person < guests.count; person++) {
     if (guests.present[person] !== 1) continue;
     const want = strongestNeed(needs, guests, person);
@@ -1741,8 +1779,26 @@ function unwatchedOn(resort: Resort): ReadonlySet<string> {
   return unwatched(water, watching, network.posts.length);
 }
 
-// Once a simulated day and on an edit, never per frame: it walks the guest list twice.
-function factsNow(resort: Resort, weather: Weather): ResortFacts {
+function brokenOn(resort: Resort, now: number): ReadonlyMap<string, number> {
+  const { breakdowns, venues } = resort;
+  const down = new Map<string, number>();
+  for (const [index, venue] of venues.entries()) {
+    if (isBroken(breakdowns, index)) down.set(venue.key, now - breakdowns.since[index]!);
+  }
+  return down;
+}
+
+function hurtCount(resort: Resort): number {
+  const { guests, needs } = resort;
+  let count = 0;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1 && needs.level.health[person]! < 1) count++;
+  }
+  return count;
+}
+
+// Once a simulated day and on an edit, never per frame: it walks the guest list three times.
+function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
   const { guests, router } = resort;
   const effect = weatherEffect(weather);
   return {
@@ -1765,7 +1821,10 @@ function factsNow(resort: Resort, weather: Weather): ResortFacts {
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
     ),
     unwatched: unwatchedOn(resort),
-    // The router's own isOpenIn, so the panel and the door agree about what is shut.
+    broken: brokenOn(resort, now),
+    hurt: hurtCount(resort),
+    // The router's own isOpenIn, so the panel and the door agree about what is shut. The weather's
+    // alone: the rain is not to blame for a breakdown, which has its own line.
     closed: new Set(
       resort.venues
         .filter((venue) => !isOpenIn(shelterOf(venue), effect))
@@ -2774,6 +2833,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       cleanliness(resort.upkeep, venue),
       takingsOf(resort.takings, placement.key),
       resort.staffRouter.watching(venue),
+      isBroken(resort.breakdowns, venue),
     );
   };
 
@@ -2817,7 +2877,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
 
   const advise = (): void =>
-    options.onAdviceChange?.(adviceFor(factsNow(current(), clock.weather)));
+    options.onAdviceChange?.(adviceFor(factsNow(current(), clock.weather, clock.ticks)));
 
   const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
 
@@ -2966,6 +3026,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.beds = { total: beds.beds, taken: beds.taken };
     // By key: surviving venues keep their dirt, and new ones start clean.
     resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
+    resort.breakdowns = carryBreakdowns(resort.breakdowns, wasStanding, resort.venues);
     resort.scenery = sceneryFieldFor(
       sceneryItemsOf([...plot.placements, ...plot.props], sceneryOf),
       plan.tilesX,
@@ -3105,7 +3166,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return statsNow();
     },
     get advice() {
-      return adviceFor(factsNow(current(), clock.weather));
+      return adviceFor(factsNow(current(), clock.weather, clock.ticks));
     },
     get voices() {
       return voicesOf(current());

@@ -93,9 +93,11 @@ export interface ModelDoor {
   readonly facing: QuarterTurns;
 }
 
-export const GUEST_NEEDS = ['hunger', 'thirst', 'energy', 'fun', 'hygiene'] as const;
+export type GuestNeed = 'hunger' | 'thirst' | 'energy' | 'fun' | 'hygiene' | 'health';
 
-export type GuestNeed = (typeof GUEST_NEEDS)[number];
+// The wants. Health is a need but not a want: never drawn, never decayed, and left out here so
+// the seeded draws and a guest's contentment stay over the five.
+export const GUEST_NEEDS: readonly GuestNeed[] = ['hunger', 'thirst', 'energy', 'fun', 'hygiene'];
 
 export type VenueRole = 'lodging' | 'food' | 'drink' | 'activity' | 'service';
 
@@ -128,6 +130,8 @@ export interface ModelVenue {
   readonly stage?: boolean;
   // Guests swim here, so somebody should be watching.
   readonly bathing?: boolean;
+  // Visits between breakdowns, on average; absent, it never breaks.
+  readonly reliability?: number;
 }
 
 export interface VoxelModelSource {

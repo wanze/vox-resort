@@ -24,6 +24,7 @@ function simFacts(model: VoxelModel) {
       receives: venue.receives,
       stage: venue.stage,
       bathing: venue.bathing,
+      reliability: venue.reliability,
     },
   };
 }

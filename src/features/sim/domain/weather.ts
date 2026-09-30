@@ -19,7 +19,7 @@ export interface WeatherEffect {
 // surface; weather.test.ts enforces it.
 export const MAX_EFFECT = { min: 0.5, max: 2 } as const;
 
-const NO_CHANGE: PerNeed = { hunger: 1, thirst: 1, energy: 1, fun: 1, hygiene: 1 };
+const NO_CHANGE: PerNeed = { hunger: 1, thirst: 1, energy: 1, fun: 1, hygiene: 1, health: 1 };
 
 // Every day moves both weight and decay: moving only one makes guests thirsty without
 // wanting a drink, or the reverse.

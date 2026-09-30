@@ -1,6 +1,7 @@
 import { restoreGuests, snapshotGuests, type Guests } from '../../guests/domain/guests';
 import { resumeRandom, type Random } from '../../layout/domain/random';
 import type { Footfall } from '../../overlays/domain/overlays';
+import { restoreBreakdowns, snapshotBreakdowns, type Breakdowns } from './breakdowns';
 import { restoreHappiness, snapshotHappiness, type Happiness } from './happiness';
 import type { Ledger } from './ledger';
 import type { Carrying, Litter } from './litter';
@@ -23,6 +24,7 @@ export interface ResortState {
   readonly carrying: Carrying;
   readonly litter: Litter;
   upkeep: Upkeep;
+  breakdowns: Breakdowns;
   readonly venues: readonly { readonly key: string }[];
   readonly takings: VenueTakings;
   readonly footfall: Footfall;
@@ -45,6 +47,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     carrying: state.carrying.nodes.slice(),
     litter: state.litter.level.slice(),
     upkeep: snapshotUpkeep(state.upkeep, state.venues),
+    breakdowns: snapshotBreakdowns(state.breakdowns, state.venues),
     takings: [...state.takings],
     footfall: { seen: state.footfall.seen.slice(), mood: state.footfall.mood.slice() },
     reviews: state.reviews.map((review) => ({ ...review })),
@@ -75,6 +78,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.litter.level.set(snapshot.litter);
   state.litter.version++;
   state.upkeep = restoreUpkeep(snapshot.upkeep, state.venues);
+  state.breakdowns = restoreBreakdowns(snapshot.breakdowns, state.venues);
   state.takings.clear();
   for (const [key, amount] of snapshot.takings) state.takings.set(key, amount);
   state.footfall.seen.set(snapshot.footfall.seen);

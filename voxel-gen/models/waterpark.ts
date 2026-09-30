@@ -91,6 +91,7 @@ export default defineModel({
     ],
     capacity: 40,
     dwellSeconds: { min: 3600, max: 10_800 },
+    reliability: 60,
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

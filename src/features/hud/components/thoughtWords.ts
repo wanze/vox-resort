@@ -7,6 +7,7 @@ const NEED_WORDS: { readonly [need: string]: string } = {
   energy: 'tired legs',
   fun: 'boredom',
   hygiene: 'sandy feet',
+  health: 'scrapes',
 };
 
 // In a guest's voice, and only what the simulation decided: never a reason it did not weigh.
@@ -21,6 +22,8 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   enjoyed: (subject) => (subject ? `Loved ${subject}` : 'Loved it here'),
   lovely: () => 'What a lovely spot',
   littered: () => 'The paths are covered in litter',
+  broken: (subject) => (subject ? `${subject} was broken` : 'Things kept breaking'),
+  hurt: (subject) => (subject ? `I got hurt at ${subject}` : 'I got sunburnt'),
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -32,6 +35,8 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   enjoyed: 'Fun',
   lovely: 'Setting',
   littered: 'Litter',
+  broken: 'Repairs',
+  hurt: 'Injuries',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

@@ -14,6 +14,7 @@ const NEED_NAMES: { readonly [need: string]: string } = {
   energy: 'rest',
   fun: 'anything to do',
   hygiene: 'getting clean',
+  health: 'first aid',
 };
 
 const NEED_ERRANDS: { readonly [need: string]: string } = {
@@ -22,6 +23,7 @@ const NEED_ERRANDS: { readonly [need: string]: string } = {
   energy: 'somewhere to rest',
   fun: 'something to do',
   hygiene: 'somewhere to wash',
+  health: 'first aid',
 };
 
 const guests = (count: number): string => (count === 1 ? 'guest has' : 'guests have');
@@ -32,10 +34,12 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'no-entrance': () => 'Nobody can arrive: there is no entrance',
   'no-reception': () => 'Nobody can check in: no reception is reachable from the entrance',
   'no-beds': ({ count }) => `${count} ${guests(count)} nowhere to sleep`,
+  hurt: ({ count }) => `${count} ${guests(count)} been hurt`,
   'unserved-need': ({ subject, need }) =>
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
+  broken: ({ subject }) => `${subject} has broken down`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
   unwatched: ({ subject }) => `Nobody is watching ${subject}`,
   littered: ({ count }) => `Litter is piling up on ${count} tiles`,
@@ -51,9 +55,12 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'no-entrance': () => null,
   'no-reception': () => null,
   'no-beds': () => null,
+  hurt: () => null,
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
   unreachable: ({ count }) => `${count} places standing idle`,
+  broken: ({ count }) =>
+    count < 60 ? 'down under an hour' : `down for ${Math.round(count / 60)} h`,
   dirty: ({ count }) => `${count}% clean`,
   unwatched: ({ count }) => `${count} swam there today`,
   // Supported: a guest drops litter only where no bin covered six tiles in a row.
@@ -68,9 +75,11 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'no-entrance': 'Entrance',
   'no-reception': 'Reception',
   'no-beds': 'Beds',
+  hurt: 'Injuries',
   'unserved-need': 'Missing',
   'full-lines': 'Queues',
   unreachable: 'Stranded',
+  broken: 'Repairs',
   dirty: 'Upkeep',
   unwatched: 'Lifeguard',
   littered: 'Litter',

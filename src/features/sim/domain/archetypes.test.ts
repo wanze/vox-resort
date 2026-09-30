@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import { PARTY_MIX } from '../../guests/domain/parties';
@@ -10,7 +11,9 @@ const guestsOf = (count = 120): Guests =>
   createGuests({ count, homes: HOMES, variants: 4, childVariant: 3, seed: 5 });
 
 const entries = Object.values(ARCHETYPES);
-const ratesOf = (archetype: Archetype): number[] => Object.values(archetype.decayPerHour);
+// The wants only: health never decays, and has its own test.
+const ratesOf = (archetype: Archetype): number[] =>
+  GUEST_NEEDS.map((need) => archetype.decayPerHour[need]);
 const weightsOf = (archetype: Archetype): number[] => Object.values(archetype.weight);
 
 describe('ARCHETYPES', () => {

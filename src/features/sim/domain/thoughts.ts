@@ -10,6 +10,8 @@ export const THOUGHT_KINDS = [
   'enjoyed',
   'lovely',
   'littered',
+  'broken',
+  'hurt',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];

@@ -19,7 +19,8 @@ import {
 } from '../../crowd/domain/walkNetwork';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { createStaffRouter, meanCleanliness, type StaffRouter } from './staffRouter';
+import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
+import { createStaffRouter, meanCleanliness, REPAIR_TICKS, type StaffRouter } from './staffRouter';
 import { createLitter, litterAt, SWEEP_ABOVE, type Litter } from './litter';
 import { rosterFor, STAFF_ROLES, unwatched, type Staff, type StaffRole } from './staff';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
@@ -592,5 +593,148 @@ describe('a lifeguard on a tower', () => {
     for (let step = 0; step < 6000 && !router.watching(0); step++) stepCrowd(crowd, MAX_STEP);
     expect(router.watching(0), 'never reached the pool').toBe(true);
     expect(router.watchingBeach).toBe(false);
+  });
+});
+
+const brokenAt = (venues: number, since: readonly (number | null)[]): Breakdowns => {
+  const breakdowns = createBreakdowns(venues);
+  for (const [venue, tick] of since.entries()) {
+    if (tick === null) continue;
+    breakdowns.broken[venue] = 1;
+    breakdowns.since[venue] = tick;
+  }
+  return breakdowns;
+};
+
+describe('breakdowns', () => {
+  const repairCrewOn = (
+    venues: readonly Venue[],
+    roles: readonly StaffRole[],
+    breakdowns: Breakdowns,
+    dirt: readonly number[] = [],
+  ): { router: StaffRouter; network: WalkNetwork; upkeep: Upkeep } => {
+    const network = networkOf(street(8));
+    const upkeep = createUpkeep(venues.length);
+    for (const [venue, level] of dirt.entries()) upkeep.level[venue] = level;
+    const staff = crew(roles);
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff,
+      venues,
+      network,
+      upkeep: () => upkeep,
+      breakdowns: () => breakdowns,
+      crowd: () => crowd!,
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network,
+      count: staff.count,
+      variants: STAFF_ROLES.length,
+      variantOf: (worker) => staff.variant[worker] ?? 0,
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+    });
+    return { router, network, upkeep };
+  };
+
+  it('does not send a cleaner to scrub a venue that is broken, however dirty', () => {
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const { router, network } = repairCrewOn(venues, ['cleaner'], brokenAt(2, [5]), [0.1, 0.5]);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+  });
+
+  it('walks a mechanic to the broken venue and mends it once the spell is done', () => {
+    const breakdowns = brokenAt(2, [null, 5]);
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const { router, network } = repairCrewOn(venues, ['mechanic'], breakdowns);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    expect(router.atWork(0)?.key).toBe('bar#0');
+    for (let tick = 1; tick < REPAIR_TICKS.min; tick++) router.tick(tick);
+    expect(isBroken(breakdowns, 1), 'mended before the spell was up').toBe(true);
+    for (let tick = REPAIR_TICKS.min; tick <= REPAIR_TICKS.max; tick++) router.tick(tick);
+    expect(isBroken(breakdowns, 1)).toBe(false);
+    expect(router.workingCount).toBe(0);
+    expect(router.step(0, nodeAt(network, 7)), 'nothing left to mend, so they stay put').toBe(-1);
+  });
+
+  it('mends what has been down longest first', () => {
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const { router, network } = repairCrewOn(venues, ['mechanic'], brokenAt(2, [50, 10]));
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+  });
+
+  it('never sends two mechanics to the same venue', () => {
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const both = repairCrewOn(venues, ['mechanic', 'mechanic'], brokenAt(2, [10, 20]));
+    expect(both.router.step(0, nodeAt(both.network, 4))).toBe(nodeAt(both.network, 3));
+    expect(both.router.step(1, nodeAt(both.network, 4))).toBe(nodeAt(both.network, 5));
+    const one = repairCrewOn(venues, ['mechanic', 'mechanic'], brokenAt(2, [10, null]));
+    expect(one.router.step(0, nodeAt(one.network, 4))).toBe(nodeAt(one.network, 3));
+    expect(one.router.step(1, nodeAt(one.network, 4))).toBe(-1);
+  });
+});
+
+describe('a mechanic on the beach', () => {
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+    tileX: 10,
+    tileZ: 4 + index,
+    y: 0,
+  }));
+  const beach = walkNetworkFor({
+    paved,
+    levelOf: FLAT,
+    shore,
+    tilesX: 20,
+    obstacles: [{ x: 4 * TILE_VOXELS, z: 14 * TILE_VOXELS, width: 16, depth: 16 }],
+  });
+  const pedalos: Venue = {
+    ...shop('pedalo-rental#0', 4),
+    role: 'activity',
+    tileZ: 14,
+    z: 14.5 * TILE_VOXELS,
+    reliability: 40,
+  };
+
+  it('walks over the sand to a broken building with no door on the paving, and mends it', () => {
+    const breakdowns = createBreakdowns(1);
+    breakdowns.broken[0] = 1;
+    const staff = crew(['mechanic']);
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff,
+      venues: [pedalos],
+      network: beach,
+      upkeep: () => createUpkeep(1),
+      breakdowns: () => breakdowns,
+      crowd: () => crowd!,
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network: beach,
+      count: 1,
+      variants: STAFF_ROLES.length,
+      variantOf: () => STAFF_ROLES.indexOf('mechanic'),
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+      roamsBeach: false,
+    });
+    let tick = 0;
+    let wentOnSand = false;
+    for (let step = 0; step < 8000 && isBroken(breakdowns, 0); step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (crowd.z[0]! > 12 * TILE_VOXELS) wentOnSand = true;
+      if (step % 4 === 0) router.tick(++tick);
+    }
+    expect(isBroken(breakdowns, 0), 'never mended').toBe(false);
+    expect(wentOnSand, 'mended it from the paving').toBe(true);
+    for (let step = 0; step < 4000; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.z[0]!, 'left standing on the sand').toBeLessThan(12 * TILE_VOXELS);
   });
 });

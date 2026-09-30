@@ -29,6 +29,7 @@ export default defineModel({
   seats: [11, 16].map((z) => ({ x: BENCH.x0 + 1, y: HIPS, z, facing: 1 as const })),
   venue: {
     role: 'service',
+    satisfies: [{ need: 'health', amount: 1 }],
     capacity: 4,
     dwellSeconds: { min: 300, max: 900 },
     doors: [{ x: 8, z: FRONT, facing: 0 }],

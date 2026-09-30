@@ -166,7 +166,8 @@ and construction run at real time.
 ## Needs and choosing a venue
 
 `needs.ts` holds five levels per guest (hunger, thirst, energy, fun, hygiene),
-from 1 (content) to 0 (desperate). `decayNeeds` lowers them each tick at rates
+from 1 (content) to 0 (desperate), and a sixth, health, that is not a want (see
+[Breakdowns and injuries](#breakdowns-and-injuries)). `decayNeeds` lowers them each tick at rates
 from `archetypes.ts`: families get hungry fastest and won't walk far, friends get
 bored fastest and walk anywhere.
 
@@ -338,6 +339,8 @@ the weather sits in the top bar. The inspector's `Mood` is one guest's happiness
 | `unserved-need`  | needs no venue serves                | share wanting it                     |
 | `full-lines`     | the day's turn-aways per venue       | share refused × count                |
 | `unreachable`    | venues with no door node and no sand | 0.9                                  |
+| `broken`         | each broken venue, ticks down        | 0.3–0.9 over three hours             |
+| `hurt`           | guests here with health below 1      | 0.2–0.7 over ten guests              |
 | `littered`       | tiles at or above `SWEEP_ABOVE`      | worst level × tiles / 20             |
 | `far-from-home`  | lodging to nearest venue per need    | distance vs. `reach` (straight line) |
 | `unvisited`      | venues nobody visited today          | 0.2–0.4 by capacity                  |
@@ -404,14 +407,14 @@ per kind; `reviews.ts` turns a party's stay into one line on check-out.
 of `PEOPLE_SOURCES` so guest variants and seeded draws don't shift), crowd field
 and router. The figures are in `STAFF_ROLES` order, since a body's variant is its
 role's index; `showcase.ts` throws if they are not. A resort meshes a standing
-pool once (`staffPool`, `STAFF_CAPS`: 24 cleaners, 8 lifeguards, 8 animators, 40
-bodies); the roster (`rosterFor`, fed by `workplacesOf`) follows the plot. After
+pool once (`staffPool`, `STAFF_CAPS`: 18 cleaners, 8 lifeguards, 8 animators, 6
+mechanics, 40 bodies); the roster (`rosterFor`, fed by `workplacesOf`) follows the plot. After
 an edit the roster is recounted: a body going off duty is taken off the plot where
 it stands, one coming on duty enters at the first gate (node 0 with no gate yet;
 with no paving at all, at the next edit that lays some). The staff router never
 sends anybody off duty, and somebody let go mid-spell finishes it so the claim is
 released. They use the same `crowd.ts` as guests; the crowd was not changed for
-any of the three roles.
+any of the four roles.
 
 - **Cleaners**: one per six venues, at least one wherever anything stands.
   `staffRouter.ts` walks each to the dirtiest unclaimed venue and holds them there
@@ -425,7 +428,7 @@ any of the three roles.
   not those in its line, by `SHOW_FUN_PER_HOUR` (0.3), which roughly doubles what a
   visit gives. Show claims are separate from cleaning claims, so a cleaner can
   scrub a stage mid-show. A stage reached only over the sand gets no animator
-  yet: only the towers have a sand leg.
+  yet: only towers and mechanics have a sand leg.
 - **Lifeguards**: one per venue the art marks `bathing` (swimming pool, waterpark)
   and one per post, a seat the art marks `post: 'lifeguard'` (the tower's). The
   walk graph files a post on the sand in `network.posts`, never in a node's seats
@@ -440,9 +443,64 @@ ON_SAND)`, and finally `holdOnSeat`. The seat is inside the tower's footprint,
   stays up the tower through a storm. None of `router.ts`'s errand bookkeeping is
   used.
 
-An unwatched bathing venue, and the beach once a tower stands, is only reported
-for now: an `unwatched` advice line weighted by today's swimmers, and a Lifeguard
-row in the inspector. Plan 036 gives it consequences.
+An unwatched bathing venue, and the beach once a tower stands, gets an
+`unwatched` advice line weighted by today's swimmers and a Lifeguard row in the
+inspector; the consequence is ten times the mishaps (next section).
+
+## Breakdowns and injuries
+
+**Breakdowns.** The art declares `venue.reliability`, visits between breakdowns
+on average (waterpark 60, pedalo rental 40, swimming pool 120, game hall 80); a
+venue without it never breaks. `breakdowns.ts` keeps `broken`, `since` and
+`worn` per venue in `upkeep.ts`'s shape, carried across edits by key
+(`carryBreakdowns`) and saved. The router calls `wear` beside `soil` on both ways
+out of a visit; one chance in `reliability` per visit, drawn by `mix` over the
+venue's salt and its visit count, so no seeded stream moves.
+
+- **One closed predicate.** The router's `isOpen` is the weather's `isOpenIn`
+  _and_ not broken, and it is what `chooseVenue` and the door both read, so a
+  broken venue is skipped and a guest already walking there is turned away (they
+  think `broken`, not `closed`). Cleaners and animators skip a broken venue; a
+  lifeguard at a broken pool stays. The advice's `weather-closed` still reads
+  the weather alone: the rain is not to blame for a breakdown.
+- **Mechanics**: one per five venues that declare `reliability`
+  (`RELIABLE_PER_MECHANIC`). A mechanic takes the longest-broken unclaimed venue
+  (`brokenFirst`, whose `eligible` stays a parameter for zones), walks there,
+  holds for `REPAIR_TICKS` (30–60) and `repair`s it. The weather is no bar. A
+  building with no door on the paving (the pedalo rental) is reached over the
+  sand with the tower's leg machinery, and the mechanic is released to the gate
+  afterwards. With nothing broken a mechanic stands where they are.
+
+**Health** is a need but not a want. `GuestNeed` includes `'health'`,
+`GUEST_NEEDS` does not: the column starts at 1, is never drawn (so the five
+seeded draws are unchanged), never decays, and `resetNeeds` sets it back to 1.
+`strongestNeed` looks at it after the five with weight 3 for every archetype,
+which beats any want at its worst, so a hurt guest heads for first aid through
+the ordinary `appealOf`; the `first-aid` model relieves `health` by 1.
+`contentmentOf` stays over the five wants and is scaled by
+`HURT_FLOOR + (1 - HURT_FLOOR) * health` (`HURT_FLOOR` 0.5); at health 1 it is
+bit-identical to before.
+
+**Incidents** (`incidents.ts`) set health to `HURT_LEVEL` (0.35), never raising
+it, and are drawn by hash:
+
+- **Sunburn**: once a simulated hour on a heatwave day, every guest resting on
+  the sand has `SUNBURN_PER_HOUR` (0.04) of a burn (`burnTheSunbathers`).
+- **Mishaps**: on every visit to a `bathing` venue, the beach included,
+  `MISHAP_UNWATCHED` (0.02), or `MISHAP_WATCHED` (0.002) while a lifeguard is on
+  watch there (a tower for the beach). That tenfold is what a lifeguard buys.
+
+The guest thinks `hurt` (`I got hurt at …` / `I got sunburnt`). The advice adds
+`broken` (each broken venue, louder the longer it is down) and `hurt` (how many
+are hurt now). `hurt` says nothing about first aid: with no first-aid post,
+`unserved-need` already says "Nothing on the plot serves first aid". The
+inspector shows a Repairs row on a broken venue and a health bar only on a guest
+who is hurt.
+
+Three days on the reference plot (seed 3, 600 guests, day two a heatwave;
+`router.test.ts`): 2, 2 and 5 breakdowns, all mended within 65–284 minutes; 4, 3
+and 0 guests hurt; 3 of the heatwave's 75 sunbathers burnt; every guest hurt in
+the heatwave treated that day.
 
 ## Litter
 
@@ -648,7 +706,8 @@ changes what a saved number means, and needs a version bump too.
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.
   `figure.ts` has the shared builder and `hipHeight`. Preview with
   `pnpm preview --people`.
-- Staff: `voxel-gen/people/cleaner.ts`, via `STAFF_SOURCES`.
+- Staff: `voxel-gen/people/{cleaner,lifeguard,animator,mechanic}.ts`, via
+  `STAFF_SOURCES`, in `STAFF_ROLES` order.
 - Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`. Litter:
   `voxel-gen/litter/`, preview with `pnpm preview --litter`.
 - `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky, sea
@@ -657,5 +716,7 @@ changes what a saved number means, and needs a version bump too.
 - How pleasant dressing is: `scenery` on the model's own source.
 - How much litter a visit leaves, and what is a bin: `venue.litter` and
   `binReach`.
+- How often a venue breaks: `venue.reliability`. What first aid treats: its
+  `satisfies`, `health`.
 - What it costs to stand and what a visit or a night takes: `cost` on the
   source (optional, derived from its size otherwise) and `venue.price`.

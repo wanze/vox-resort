@@ -4,6 +4,7 @@ import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import { createGuests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { createFootfall } from '../../overlays/domain/overlays';
+import { createBreakdowns } from '../../sim/domain/breakdowns';
 import { createHappiness } from '../../sim/domain/happiness';
 import { createLedger } from '../../sim/domain/ledger';
 import { createCarrying, createLitter } from '../../sim/domain/litter';
@@ -69,6 +70,7 @@ function gameFixture(): GameSnapshot {
     carrying: createCarrying(POPULATION),
     litter: createLitter(4, 3),
     upkeep,
+    breakdowns: createBreakdowns(0),
     venues: [],
     takings: new Map([['bar#0', 40]]),
     footfall: createFootfall(network.nodes.length),

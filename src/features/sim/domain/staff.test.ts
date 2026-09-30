@@ -113,6 +113,18 @@ describe('rosterFor', () => {
     expect(rosterFor(plot({ stages: 1 })).animator).toBe(1);
     expect(rosterFor(NOTHING).animator).toBe(0);
   });
+
+  it('adds cleaners for the beds they make up', () => {
+    expect(rosterFor(plot({ venues: 12, beds: 120 })).cleaner).toBe(4);
+    expect(rosterFor(plot({ venues: 12, beds: 120 })).cleaner).toBeGreaterThan(
+      rosterFor(plot({ venues: 12 })).cleaner,
+    );
+  });
+
+  it('gives a plot of lodgings and nothing else one cleaner', () => {
+    expect(rosterFor(plot({ beds: 4 })).cleaner).toBe(1);
+    expect(rosterFor(plot({ beds: 20 })).cleaner).toBe(1);
+  });
 });
 
 describe('onDuty', () => {
@@ -198,6 +210,11 @@ describe('workplacesOf', () => {
       stages: 2,
       reliable: 0,
     });
+  });
+
+  it('sums the beds of the lodgings it is given', () => {
+    const places = workplacesOf([venueAt('bakery#0', {})], [], [{ beds: 4 }, { beds: 40 }]);
+    expect(places.beds).toBe(44);
   });
 });
 

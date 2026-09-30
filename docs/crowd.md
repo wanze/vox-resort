@@ -318,6 +318,16 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   check-out does not pass it. The reference plot's one desk (capacity 12) sees a
   five-star opening day of 171 arrivals through by 21:00, with a line of 12 at
   worst (`router.test.ts`).
+- **Turnover.** A party leaving through the gate (`onLeave`) checks out with
+  `checkOutParty(..., true)`: its beds go to `guests.unmade`, not `freeBeds`, and
+  an unmade bed is given to nobody (check-in, `arrivalsFor`'s free beds and
+  re-housing after an edit all read `freeBeds` only) until a cleaner has made it
+  up (`makeBeds`). Departures are sent at 11:00, after the morning wave, so the
+  beds freed that morning can only go to the 14:00 and 17:00 waves, and only if
+  the cleaners got to them first. A party turned away at the desk had no bed, so
+  its check-out keeps the default. A `rehome` carries unmade beds by key, before
+  the evicted are re-housed; a demolished lodging's go with it. Invariant per
+  home: `freeBeds + unmade + beds taken = beds`.
 
 Overview rows: `Guests` (present / capacity), `Rating`, `Asleep`, `Venues`;
 the weather sits in the top bar. The inspector's `Mood` is one guest's happiness.
@@ -416,10 +426,19 @@ sends anybody off duty, and somebody let go mid-spell finishes it so the claim i
 released. They use the same `crowd.ts` as guests; the crowd was not changed for
 any of the four roles.
 
-- **Cleaners**: one per six venues, at least one wherever anything stands.
-  `staffRouter.ts` walks each to the dirtiest unclaimed venue and holds them there
-  for a spell. With no venue below `NEEDS_CLEANING`, a cleaner sweeps litter
-  instead (see [Litter](#litter)).
+- **Cleaners**: one per six venues plus one per `BEDS_PER_CLEANER` (60) beds,
+  at least one wherever anything stands. Rooms before venues before litter: an
+  idle cleaner first takes the unclaimed lodging with the most unmade beds (a bed
+  that cannot be sold is lost money and turned-away guests), stands in its middle
+  for a spell and makes up `BEDS_PER_SPELL` (4) beds; a hotel after a busy
+  morning is several spells. With no room waiting, `staffRouter.ts` walks them to
+  the dirtiest unclaimed venue and holds them there for a spell. With no venue
+  below `NEEDS_CLEANING`, a cleaner sweeps litter instead (see [Litter](#litter)).
+  Lodgings are not venues and get no cleanliness: `resort.homeOfLodging` maps a
+  lodging to its home (homes are sorted by beds, lodgings stand in placement
+  order), and the router reads and makes beds through a late-bound `beds` part.
+  Waiting beds get an `unmade` advice line (Housekeeping) and a note on the Beds
+  row.
 - **Animators**: one per three venues the art marks `stage` (kids club,
   playground, beach club, game hall), since a show moves between stages. An
   animator takes the open stage with the most guests inside that has no show on,
@@ -473,7 +492,7 @@ disarming brings none back.
 - Staff are **dealt, not assigned**: `rezone` in `showcase.ts` deals each role's
   on-duty bodies round-robin over the zones, in zone order, that hold a workplace
   for that role (`dealZones`). What counts is what that role's task choice
-  considers: any venue or paved tile for cleaners, stages for animators, bathing
+  considers: any venue, lodging or paved tile for cleaners, stages for animators, bathing
   venues and towers for lifeguards, venues that can break for mechanics. It runs
   on build, after every edit and every hire (`staffTheResort`), after a load, and
   on every tile a stroke changes.
@@ -734,7 +753,9 @@ IndexedDB and are parsed with zod on the way back (`saves/domain/snapshot.ts`).
 
 **Every piece of new simulation state must be added to its module's snapshot and
 schema, or `SAVE_VERSION` bumped.** There are no migrations: a save of another
-version is listed as unreadable. The hiring is saved with the resort; a load
+version is listed as unreadable. Unmade beds are saved with the guests beside
+`freeBeds` (per home, like it), and a cleaner making up a room as `roomOf` in the
+staff router's snapshot. The hiring is saved with the resort; a load
 recomputes the roster and the duty from it without a shift change, since the
 staff crowd comes back from the save as it was. The twin-run tests (`crowd.test.ts`,
 `router.test.ts`) restore a snapshot into a second resort and run both side by

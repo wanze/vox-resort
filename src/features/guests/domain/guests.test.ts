@@ -8,10 +8,12 @@ import {
   fullNameOf,
   homeOf,
   homelessCount,
+  makeBeds,
   partyOf,
   presentCount,
   rehome,
   STAY_NIGHTS,
+  unmadeCount,
   type FreeBodies,
   type GuestOptions,
   type Guests,
@@ -35,6 +37,11 @@ const guestsWith = (overrides: Partial<GuestOptions> = {}): Guests =>
   createGuests({ ...OPTIONS, ...overrides });
 
 const everybody = (guests: Guests): number[] => Array.from({ length: guests.count }, (_, i) => i);
+
+const freeBodiesCount = (guests: Guests): number => {
+  const free = freeBodiesOf(guests);
+  return free.adults.length + free.children.length;
+};
 
 describe('createGuests', () => {
   it('sizes every column to the count', () => {
@@ -272,6 +279,98 @@ describe('checking out and checking in', () => {
       expect(guests.arrivedOn[person]).toBe(12);
       expect(guests.nights[person], 'one stay per party').toBe(nights);
     }
+  });
+});
+
+const bedsAddUp = (guests: Guests): boolean =>
+  guests.homes.every((lodging, index) => {
+    const taken = everybody(guests).filter(
+      (person) => guests.present[person] === 1 && guests.home[person] === index,
+    ).length;
+    return guests.freeBeds[index]! + guests.unmade[index]! + taken === lodging.beds;
+  });
+
+const partyIn = (guests: Guests, key: string): number =>
+  guests.party[everybody(guests).find((person) => homeOf(guests, person)?.key === key)!]!;
+
+describe('unmade beds', () => {
+  it('leaves the beds of a turnover unmade rather than free', () => {
+    const guests = guestsWith();
+    const party = biggestParty(guests);
+    const members = guests.parties[party]!.members;
+    const lodging = guests.home[members[0]!]!;
+    const freeBefore = guests.freeBeds[lodging]!;
+
+    checkOutParty(guests, party, true);
+
+    expect(guests.freeBeds[lodging]).toBe(freeBefore);
+    expect(guests.unmade[lodging]).toBe(members.length);
+    expect(unmadeCount(guests)).toBe(members.length);
+    expect(bedsAddUp(guests)).toBe(true);
+  });
+
+  it('frees the beds straight away without a turnover', () => {
+    const guests = guestsWith();
+    checkOutParty(guests, biggestParty(guests));
+    expect(unmadeCount(guests)).toBe(0);
+    expect(bedsAddUp(guests)).toBe(true);
+  });
+
+  it('makes up at most as many beds as asked, and says how many', () => {
+    const guests = guestsWith();
+    const party = biggestParty(guests);
+    const size = guests.parties[party]!.members.length;
+    const lodging = guests.home[guests.parties[party]!.members[0]!]!;
+    const freeBefore = guests.freeBeds[lodging]!;
+    checkOutParty(guests, party, true);
+    expect(size).toBeGreaterThan(1);
+
+    expect(makeBeds(guests, lodging, 1)).toBe(1);
+    expect(guests.unmade[lodging]).toBe(size - 1);
+    expect(guests.freeBeds[lodging]).toBe(freeBefore + 1);
+    expect(makeBeds(guests, lodging, 99)).toBe(size - 1);
+    expect(makeBeds(guests, lodging, 99)).toBe(0);
+    expect(guests.freeBeds[lodging]).toBe(freeBefore + size);
+    expect(bedsAddUp(guests)).toBe(true);
+  });
+
+  it('makes up nothing for no home or a home that is not there', () => {
+    const guests = guestsWith();
+    checkOutParty(guests, biggestParty(guests), true);
+    const unmade = unmadeCount(guests);
+    expect(makeBeds(guests, NO_HOME, 4)).toBe(0);
+    expect(makeBeds(guests, guests.homes.length, 4)).toBe(0);
+    expect(unmadeCount(guests)).toBe(unmade);
+  });
+
+  it("keeps a standing lodging's unmade beds over a rehome and drops a demolished one's", () => {
+    const guests = guestsWith();
+    checkOutParty(guests, partyIn(guests, 'villa#0'), true);
+    checkOutParty(guests, partyIn(guests, 'bungalow#1'), true);
+    const villa = guests.unmade[guests.homes.findIndex((each) => each.key === 'villa#0')]!;
+    expect(villa).toBeGreaterThan(0);
+    expect(unmadeCount(guests)).toBeGreaterThan(villa);
+
+    rehome(guests, [home('cottage#3', 4), ...HOMES.slice(0, 4)]);
+
+    expect(guests.unmade[guests.homes.findIndex((each) => each.key === 'villa#0')]).toBe(villa);
+    expect(unmadeCount(guests)).toBe(villa);
+    expect(bedsAddUp(guests)).toBe(true);
+  });
+
+  it('never re-houses an evicted party in a bed still waiting to be made up', () => {
+    const run = (turnover: boolean): { housed: number; guests: Guests } => {
+      const guests = guestsWith({ count: 20, homes: [home('villa#0', 8), home('hotel#0', 40)] });
+      checkOutParty(guests, partyIn(guests, 'villa#0'), turnover);
+      rehome(guests, [home('villa#0', 8)]);
+      return { housed: 20 - homelessCount(guests) - freeBodiesCount(guests), guests };
+    };
+    const made = run(false);
+    const unmade = run(true);
+    expect(unmade.housed, 'the free beds took an evicted party').toBeLessThan(made.housed);
+    expect(unmade.guests.unmade[0]).toBeGreaterThan(0);
+    expect(bedsAddUp(unmade.guests)).toBe(true);
+    expect(bedsAddUp(made.guests)).toBe(true);
   });
 });
 

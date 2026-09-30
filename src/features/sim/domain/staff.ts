@@ -33,6 +33,8 @@ export interface Workplaces {
   readonly stages: number;
   // Optional so a plot counted before anything could break still staffs itself.
   readonly reliable?: number;
+  // Optional for the same reason: a plot counted before rooms were made up.
+  readonly beds?: number;
 }
 
 // A lifeguard sits a whole day where a cleaner comes and goes, an animator is a performer, and a
@@ -57,6 +59,10 @@ export function wagesFor(roster: Roster): number {
 // a venue is hammered. That gap is the mechanic.
 const CLEANERS_PER_VENUE = 1 / 6;
 
+// Stays average about eight nights, so sixty beds turn over about seven a day, a couple of
+// spells; the rounding means a small plot's one cleaner covers its rooms.
+const BEDS_PER_CLEANER = 60;
+
 // A show moves from stage to stage, so one animator carries three.
 const STAGES_PER_ANIMATOR = 3;
 
@@ -77,7 +83,11 @@ export function staffPool(): Staff {
 // One lifeguard per pool and per tower: water nobody watches is the gap a lifeguard fills.
 export function rosterFor(places: Workplaces): Roster {
   const venues = Math.max(0, places.venues);
-  const cleaners = venues > 0 ? Math.max(1, Math.round(venues * CLEANERS_PER_VENUE)) : 0;
+  const beds = Math.max(0, places.beds ?? 0);
+  const cleaners =
+    venues > 0 || beds > 0
+      ? Math.max(1, Math.round(venues * CLEANERS_PER_VENUE + beds / BEDS_PER_CLEANER))
+      : 0;
   const lifeguards = Math.max(0, places.bathing) + Math.max(0, places.posts);
   const animators = Math.ceil(Math.max(0, places.stages) / STAGES_PER_ANIMATOR);
   const mechanics = Math.ceil(Math.max(0, places.reliable ?? 0) / RELIABLE_PER_MECHANIC);
@@ -161,8 +171,14 @@ export function shiftChange(
 }
 
 // Posts are the walk graph's: a tower inland has no seat there, so it gets no lifeguard either.
-export function workplacesOf(venues: readonly Venue[], posts: readonly number[]): Workplaces {
+export function workplacesOf(
+  venues: readonly Venue[],
+  posts: readonly number[],
+  lodgings?: readonly { readonly beds: number }[],
+): Workplaces {
+  const beds = lodgings?.reduce((sum, lodging) => sum + lodging.beds, 0);
   return {
+    ...(beds === undefined ? {} : { beds }),
     venues: venues.length,
     bathing: venues.filter((venue) => venue.bathing === true).length,
     posts: posts.length,

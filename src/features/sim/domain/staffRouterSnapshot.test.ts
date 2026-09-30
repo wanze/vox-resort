@@ -12,6 +12,7 @@ const snapshotOf = (workers: number): StaffRouterSnapshot => ({
   working: new Uint8Array(workers),
   doorOf: new Int32Array(workers).fill(-1),
   tileOf: new Int32Array(workers).fill(-1),
+  roomOf: new Int32Array(workers).fill(-1),
   lastStage: new Int32Array(workers).fill(-1),
   sheltering: new Uint8Array(workers),
   towerOf: new Int32Array(workers).fill(-1),
@@ -26,7 +27,7 @@ describe('a staff router snapshot', () => {
     const snapshot = snapshotOf(5);
     expect(staffRouterSnapshotSchema.safeParse(snapshot).success).toBe(true);
     const columns = staffPerWorker(snapshot);
-    expect(columns).toHaveLength(10);
+    expect(columns).toHaveLength(11);
     expect(columns.every((column) => column.length === 5)).toBe(true);
   });
 
@@ -41,5 +42,13 @@ describe('a staff router snapshot', () => {
     snapshot.lastStage[2] = 2;
     expect(staffVenuesMatch(snapshot, 5)).toBe(true);
     expect(staffVenuesMatch(snapshot, 4)).toBe(false);
+  });
+
+  it('matches a lodging list only if every room being made up is on it', () => {
+    const snapshot = snapshotOf(3);
+    snapshot.roomOf[0] = 2;
+    expect(staffVenuesMatch(snapshot, 1, 3)).toBe(true);
+    expect(staffVenuesMatch(snapshot, 1, 2)).toBe(false);
+    expect(staffVenuesMatch(snapshot, 1)).toBe(false);
   });
 });

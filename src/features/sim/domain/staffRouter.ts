@@ -14,6 +14,7 @@ import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { brokenFirst, isBroken, repair, type Breakdowns } from './breakdowns';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
+import type { Lodging } from './lodgings';
 import { mostLittered, sweep, SWEEP_ABOVE, type Litter } from './litter';
 import { SAND_ROUTE_TILES } from './router';
 import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
@@ -33,6 +34,9 @@ import { NO_ZONE } from './zones';
 
 // In ticks (simulated minutes), drawn either way so cleaners who set off together do not finish together for ever.
 const SPELL_TICKS = { min: 15, max: 25 } as const;
+
+// One room a spell, so a hotel after a busy morning is several spells, not one.
+export const BEDS_PER_SPELL = 4;
 
 // A sweep is a broom along one tile, shorter than scrubbing a venue.
 const SWEEP_TICKS = { min: 4, max: 8 } as const;
@@ -74,13 +78,15 @@ export interface StaffZones {
   readonly zoneOf: Int8Array;
   // A bitmask per venue, from zonesOf.
   readonly venueZones: Int32Array;
+  // The same per lodging. Omitted, a zoned cleaner makes up no room.
+  readonly lodgingZones?: Int32Array;
   readonly tileZone: (tileX: number, tileZ: number) => number;
 }
 
 export interface StaffRouter {
   step(worker: number, at: number): number;
   tick(now: number): void;
-  rebuild(venues: readonly Venue[], network: WalkNetwork): void;
+  rebuild(venues: readonly Venue[], network: WalkNetwork, lodgings?: readonly Lodging[]): void;
   atWork(worker: number): Venue | null;
   performingAt(venue: number): boolean;
   watching(venue: number): boolean;
@@ -110,6 +116,13 @@ export function createStaffRouter(parts: {
   readonly occupants?: (venue: number) => number;
   // Late-bound: painting or hiring deals the staff afresh. Omitted, nobody is zoned.
   readonly zones?: () => StaffZones;
+  // Omitted, no lodging is ever made up.
+  readonly lodgings?: readonly Lodging[];
+  // Late-bound: the beds live on the guests, which a load replaces in place.
+  readonly beds?: () => {
+    readonly unmadeAt: (lodging: number) => number;
+    readonly make: (lodging: number, most: number) => void;
+  };
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -138,6 +151,11 @@ export function createStaffRouter(parts: {
   // Apart from the venue claims: a tile index and a venue index are different numbers.
   let tileOf = new Int32Array(staff.count).fill(NOBODY);
   let tileClaimedBy = new Int32Array(0);
+  let lodgings = parts.lodgings ?? [];
+  // Apart from the venue claims too: a lodging index is not a venue index.
+  let roomOf = new Int32Array(staff.count).fill(NOBODY);
+  let roomBy = new Int32Array(lodgings.length).fill(NOBODY);
+  let roomFields: (FlowField | null)[] = lodgings.map(() => null);
   let lastStage = new Int32Array(staff.count).fill(NOBODY);
   let sheltering = new Uint8Array(staff.count);
   let towerOf = new Int32Array(staff.count).fill(NOBODY);
@@ -168,6 +186,13 @@ export function createStaffRouter(parts: {
     if (!zones) return () => true;
     const zone = zones.zoneOf[worker]!;
     return (venue) => (((zones.venueZones[venue] ?? 0) >> zone) & 1) === 1;
+  };
+
+  const lodgingInZone = (worker: number): ((lodging: number) => boolean) => {
+    const zones = zonedFor(worker);
+    if (!zones) return () => true;
+    const zone = zones.zoneOf[worker]!;
+    return (lodging) => (((zones.lodgingZones?.[lodging] ?? 0) >> zone) & 1) === 1;
   };
 
   const tileInZone = (worker: number): ((tileX: number, tileZ: number) => boolean) => {
@@ -328,6 +353,72 @@ export function createStaffRouter(parts: {
     if (role === 'lifeguard') return FOR_EVER;
     if (role === 'mechanic') return now + ticksIn(REPAIR_TICKS);
     return now + ticksIn(role === 'animator' ? SHOW_TICKS : SPELL_TICKS);
+  };
+
+  const roomFieldFor = (lodging: number): FlowField =>
+    (roomFields[lodging] ??= flowFieldFor(network, doorsFor(lodgings[lodging]!, index).nodes));
+
+  // The most unmade beds first: a bed that cannot be sold is worse than a dirty venue. Beds are
+  // counted before the field is swept, so only a better candidate costs a sweep.
+  const pickRoom = (worker: number, at: number): number => {
+    const beds = parts.beds?.();
+    if (!beds) return NOBODY;
+    const inZone = lodgingInZone(worker);
+    let best = NOBODY;
+    let most = 0;
+    for (let lodging = 0; lodging < lodgings.length; lodging++) {
+      if (roomBy[lodging] !== NOBODY || !inZone(lodging)) continue;
+      const unmade = beds.unmadeAt(lodging);
+      if (unmade <= most || roomFieldFor(lodging).next[at]! < 0) continue;
+      best = lodging;
+      most = unmade;
+    }
+    if (best >= 0) {
+      roomBy[best] = worker;
+      roomOf[worker] = best;
+    }
+    return best;
+  };
+
+  const giveUpRoom = (worker: number): void => {
+    const room = roomOf[worker]!;
+    if (room >= 0 && roomBy[room] === worker) roomBy[room] = NOBODY;
+    roomOf[worker] = NOBODY;
+  };
+
+  const setToMakeUp = (worker: number, room: number, door: number): void => {
+    const people = parts.crowd();
+    const lodging = lodgings[room]!;
+    holdAt(
+      people,
+      worker,
+      lodging.x,
+      network.nodes[door]!.y,
+      lodging.z,
+      people.heading[worker] ?? 0,
+    );
+    doorOf[worker] = door;
+    until[worker] = now + ticksIn(SPELL_TICKS);
+    working[worker] = 1;
+    workingCount++;
+  };
+
+  const roomStep = (worker: number, at: number): number => {
+    const room = roomOf[worker]!;
+    const onward = roomFieldFor(room).next[at] ?? -1;
+    if (onward < 0) {
+      giveUpRoom(worker);
+      return -1;
+    }
+    if (onward !== at) return onward;
+    setToMakeUp(worker, room, at);
+    return -1;
+  };
+
+  // Only a cleaner with nothing on hand looks for a room: one already sent somewhere sees it through.
+  const roomFor = (worker: number, at: number): number => {
+    if (roomOf[worker]! >= 0) return roomOf[worker]!;
+    return assigned[worker]! < 0 && tileOf[worker]! < 0 ? pickRoom(worker, at) : NOBODY;
   };
 
   const setToWork = (worker: number, venue: number, door: number): void => {
@@ -534,6 +625,12 @@ export function createStaffRouter(parts: {
   };
 
   const finishWork = (worker: number): void => {
+    const room = roomOf[worker]!;
+    if (room >= 0) {
+      parts.beds?.().make(room, BEDS_PER_SPELL);
+      giveUpRoom(worker);
+      return;
+    }
     const tile = tileOf[worker]!;
     const litter = parts.litter?.();
     if (tile >= 0) {
@@ -588,6 +685,7 @@ export function createStaffRouter(parts: {
   };
 
   const cleanerStep = (worker: number, at: number): number => {
+    if (roomFor(worker, at) >= 0) return roomStep(worker, at);
     const venue = venueFor(worker, at);
     return venue < 0 ? litterStep(worker, at) : venueStep(worker, at, venue);
   };
@@ -619,6 +717,7 @@ export function createStaffRouter(parts: {
     watchedBy.fill(NOBODY);
     repairBy.fill(NOBODY);
     towerBy.clear();
+    roomBy = new Int32Array(lodgings.length).fill(NOBODY);
     const litter = parts.litter?.();
     tileClaimedBy = new Int32Array(litter?.level.length ?? 0).fill(NOBODY);
     for (let worker = 0; worker < staff.count; worker++) {
@@ -626,6 +725,7 @@ export function createStaffRouter(parts: {
       if (venue >= 0) claimsOf(worker)[venue] = worker;
       if (towerOf[worker]! >= 0) towerBy.set(towerOf[worker]!, worker);
       if (tileOf[worker]! >= 0) tileClaimedBy[tileOf[worker]!] = worker;
+      if (roomOf[worker]! >= 0) roomBy[roomOf[worker]!] = worker;
     }
     workingCount = working.reduce((total, each) => total + each, 0);
   };
@@ -658,8 +758,9 @@ export function createStaffRouter(parts: {
       }
     },
 
-    rebuild(nextVenues, nextNetwork) {
+    rebuild(nextVenues, nextNetwork, nextLodgings = []) {
       venues = nextVenues;
+      lodgings = nextLodgings;
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       // Node and venue indices mean nothing on the new graph, and a stale claim would hold a venue against every cleaner.
@@ -674,6 +775,9 @@ export function createStaffRouter(parts: {
       doorOf = new Int32Array(staff.count).fill(NOBODY);
       tileOf = new Int32Array(staff.count).fill(NOBODY);
       tileClaimedBy = new Int32Array(0);
+      roomOf = new Int32Array(staff.count).fill(NOBODY);
+      roomBy = new Int32Array(lodgings.length).fill(NOBODY);
+      roomFields = lodgings.map(() => null);
       lastStage = new Int32Array(staff.count).fill(NOBODY);
       sheltering = new Uint8Array(staff.count);
       towerOf = new Int32Array(staff.count).fill(NOBODY);
@@ -716,6 +820,7 @@ export function createStaffRouter(parts: {
         working: working.slice(),
         doorOf: doorOf.slice(),
         tileOf: tileOf.slice(),
+        roomOf: roomOf.slice(),
         lastStage: lastStage.slice(),
         sheltering: sheltering.slice(),
         towerOf: towerOf.slice(),
@@ -727,7 +832,7 @@ export function createStaffRouter(parts: {
     },
 
     restore(snapshot) {
-      if (!staffVenuesMatch(snapshot, venues.length)) {
+      if (!staffVenuesMatch(snapshot, venues.length, lodgings.length)) {
         throw new Error(`The save's staff work at venues this plot does not have`);
       }
       assigned = snapshot.assigned.slice();
@@ -735,6 +840,7 @@ export function createStaffRouter(parts: {
       working = snapshot.working.slice();
       doorOf = snapshot.doorOf.slice();
       tileOf = snapshot.tileOf.slice();
+      roomOf = snapshot.roomOf.slice();
       lastStage = snapshot.lastStage.slice();
       sheltering = snapshot.sheltering.slice();
       towerOf = snapshot.towerOf.slice();

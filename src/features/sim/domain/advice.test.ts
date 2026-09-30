@@ -10,6 +10,7 @@ import {
   adviceShortStaffed,
   adviceDirty,
   adviceLittered,
+  adviceUnmade,
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
@@ -119,6 +120,26 @@ describe('the advice rules', () => {
     const roomy = adviceNoBeds(healthyFacts({ homeless: 25, bedsFree: 10 }))!;
     expect(roomy.count).toBe(full.count);
     expect(roomy.weight).toBeLessThan(full.weight);
+  });
+
+  it('says nothing about housekeeping while every bed is made up', () => {
+    expect(adviceUnmade(healthyFacts({}))).toBeNull();
+    expect(adviceUnmade(healthyFacts({ bedsUnmade: 0, bedsTotal: 100 }))).toBeNull();
+  });
+
+  it('says how many beds are waiting to be made up', () => {
+    const advice = adviceUnmade(healthyFacts({ bedsUnmade: 12, bedsTotal: 200 }));
+    expect(advice).toMatchObject({ kind: 'unmade', subject: 'beds', count: 12, at: null });
+    expect(adviceFor(healthyFacts({ bedsUnmade: 12, bedsTotal: 200 }))).toContainEqual(advice);
+  });
+
+  it('weighs more beds waiting louder, up to a quarter of the plot', () => {
+    const few = adviceUnmade(healthyFacts({ bedsUnmade: 4, bedsTotal: 200 }))!;
+    const many = adviceUnmade(healthyFacts({ bedsUnmade: 40, bedsTotal: 200 }))!;
+    const most = adviceUnmade(healthyFacts({ bedsUnmade: 150, bedsTotal: 200 }))!;
+    expect(many.weight).toBeGreaterThan(few.weight);
+    expect(most.weight).toBeCloseTo(0.8);
+    expect(adviceUnmade(healthyFacts({ bedsUnmade: 50, bedsTotal: 200 }))!.weight).toBeCloseTo(0.8);
   });
 
   it('names a need nothing on the plot relieves, and only one that somebody wants', () => {

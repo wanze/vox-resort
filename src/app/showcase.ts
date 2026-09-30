@@ -234,7 +234,12 @@ import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { createRandom, type Random } from '../features/layout/domain/random';
 import { beachVenueFor } from '../features/sim/domain/beach';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
-import { lodgingFor, lodgingsOn, type Lodging } from '../features/sim/domain/lodgings';
+import {
+  homesOfLodgings,
+  lodgingFor,
+  lodgingsOn,
+  type Lodging,
+} from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
@@ -328,8 +333,10 @@ import {
   createGuests,
   fullNameOf,
   homelessCount,
+  makeBeds,
   presentCount,
   rehome,
+  unmadeCount,
   type Guests,
 } from '../features/guests/domain/guests';
 import type { Home } from '../features/guests/domain/homes';
@@ -462,7 +469,7 @@ export interface ShowcaseStats {
   readonly meshedInWorker: boolean;
   // A blocked main thread paints none, so this, not startupMs, says whether the page stayed alive.
   readonly startupFrames: number;
-  readonly beds: { readonly total: number; readonly taken: number };
+  readonly beds: { readonly total: number; readonly taken: number; readonly unmade: number };
   readonly asleep: number;
   readonly venues: { readonly inside: number; readonly waiting: number };
   readonly routeFields: number;
@@ -840,12 +847,15 @@ interface Resort {
   // Dealt afresh by rezone, and read late by the staff router, as the duty is.
   zoneOf: Int8Array;
   venueZones: Int32Array;
+  lodgingZones: Int32Array;
   readonly guests: Guests;
   readonly needs: Needs;
   readonly happiness: Happiness;
   // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
   venues: readonly Venue[];
   lodgings: readonly Lodging[];
+  // Homes are sorted by beds, lodgings stand in placement order; rebuilt with both on an edit.
+  homeOfLodging: Int32Array;
   gateways: readonly Gateway[];
   // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
   // plot.
@@ -1174,7 +1184,7 @@ function buildResort(
       // Before check-out, which clears who was here.
       const review = reviewOfParty(resort, party);
       if (review) resort.reviews = keepReview(resort.reviews, review);
-      const left = checkOutParty(guests, party);
+      const left = checkOutParty(guests, party, true);
       const people = crowdField!.crowd;
       for (const member of left) {
         // Every member: a visit left standing would walk an empty body out of the door.
@@ -1222,7 +1232,7 @@ function buildResort(
   crowdField = crowd;
   // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
   const employed = staffPool();
-  const recommended = rosterFor(workplacesOf(venues, network.posts));
+  const recommended = rosterFor(workplacesOf(venues, network.posts, lodgings));
   const roster = rosterOf(AUTO_HIRING, recommended);
   const duty = onDuty(employed, roster);
   let staffField: CrowdField | null = null;
@@ -1234,7 +1244,18 @@ function buildResort(
     get venueZones() {
       return resort.venueZones;
     },
+    get lodgingZones() {
+      return resort.lodgingZones;
+    },
     tileZone: (tileX, tileZ) => zoneAt(resort.zones, tileX, tileZ),
+  };
+  // Built once: the guests and the lodging map are read through the resort, which a load and an
+  // edit replace.
+  const housekeeping = {
+    unmadeAt: (lodging: number) => resort.guests.unmade[resort.homeOfLodging[lodging] ?? -1] ?? 0,
+    make: (lodging: number, most: number) => {
+      makeBeds(resort.guests, resort.homeOfLodging[lodging] ?? -1, most);
+    },
   };
   const staffRouter = createStaffRouter({
     staff: employed,
@@ -1249,6 +1270,8 @@ function buildResort(
     // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
     occupants: (venue) => resort.router.occupancyOf(resort.venues[venue]!.key)?.inside ?? 0,
     zones: () => staffZones,
+    lodgings,
+    beds: () => housekeeping,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1303,11 +1326,13 @@ function buildResort(
     zones: createZones(plan.tilesX, plan.tilesZ),
     zoneOf: new Int8Array(employed.count).fill(NO_ZONE),
     venueZones: new Int32Array(venues.length),
+    lodgingZones: new Int32Array(lodgings.length),
     guests,
     needs,
     happiness,
     venues,
     lodgings,
+    homeOfLodging: homesOfLodgings(lodgings, guests.homes),
     gateways,
     upkeep,
     breakdowns,
@@ -1497,7 +1522,7 @@ function sceneStats(parts: {
     dveMs: catalogue.dveMs,
     meshMs: catalogue.meshMs,
     meshedInWorker: catalogue.threaded,
-    beds: parts.resort.beds,
+    beds: { ...parts.resort.beds, unmade: unmadeCount(parts.resort.guests) },
     asleep: parts.resort.router.asleepCount,
     venues: parts.resort.router.occupancyTotals,
     routeFields: parts.resort.router.fieldCount,
@@ -1817,32 +1842,44 @@ function staffTheResort(resort: Resort): void {
 }
 
 // A zone holds a workplace for a role wherever that role's task choice could send somebody, so
-// nobody is dealt to a zone with no work for them. Cleaners sweep paving, so paving counts too.
+// nobody is dealt to a zone with no work for them. Cleaners sweep paving and make up rooms, so
+// paving and lodgings count too.
 function rezone(resort: Resort): void {
-  const { zones, venues } = resort;
+  const { zones, venues, lodgings } = resort;
   if (!anyZone(zones)) {
     resort.venueZones = new Int32Array(venues.length);
+    resort.lodgingZones = new Int32Array(lodgings.length);
     resort.zoneOf = new Int8Array(resort.staffPool.count).fill(NO_ZONE);
     return;
   }
   const network = resort.staff.crowd.network;
-  const index = pavingIndexOf(network);
-  resort.venueZones = Int32Array.from(venues, (venue) =>
-    zonesOf(
-      zones,
-      venue,
-      doorsFor(venue, index).nodes.map((node) => network.nodes[node]!),
-    ),
-  );
+  resort.venueZones = zonesOfPlaces(zones, venues, network);
+  resort.lodgingZones = zonesOfPlaces(zones, lodgings, network);
   const held = workplaceZones(zones, venues, resort.venueZones, {
     paved: network.nodes,
     towers: network.posts.map((seat) => tileUnder(network.seats[seat]!)),
   });
+  held.cleaner = resort.lodgingZones.reduce((mask, each) => mask | each, held.cleaner);
   const roles = resort.staffPool.role.map((role) => STAFF_ROLES.indexOf(role));
   resort.zoneOf = dealZones(
     roles,
     resort.duty,
     STAFF_ROLES.map((role) => zonesIn(held[role])),
+  );
+}
+
+function zonesOfPlaces(
+  zones: Zones,
+  places: readonly (Venue | Lodging)[],
+  network: WalkNetwork,
+): Int32Array {
+  const index = pavingIndexOf(network);
+  return Int32Array.from(places, (place) =>
+    zonesOf(
+      zones,
+      place,
+      doorsFor(place, index).nodes.map((node) => network.nodes[node]!),
+    ),
   );
 }
 
@@ -1858,7 +1895,9 @@ function rosterNow(resort: Resort): {
   readonly roster: Roster;
   readonly duty: Uint8Array;
 } {
-  const recommended = rosterFor(workplacesOf(resort.venues, resort.staff.crowd.network.posts));
+  const recommended = rosterFor(
+    workplacesOf(resort.venues, resort.staff.crowd.network.posts, resort.lodgings),
+  );
   const roster = rosterOf(resort.hiring, recommended);
   return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
 }
@@ -1918,6 +1957,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     present: presentCount(guests),
     homeless: homelessCount(guests),
     bedsFree: guests.freeBeds.reduce((free, home) => free + home, 0),
+    bedsUnmade: unmadeCount(guests),
     wanting: wantingOn(resort),
     balks: router.dayBalks(),
     visits: router.dayVisits(),
@@ -3173,6 +3213,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.gateways = gatewaysOn(plot.placements);
     // Before the router's rebuild, whose findHomes maps the new home indices.
     rehome(resort.guests, homesOn(plot.placements));
+    resort.homeOfLodging = homesOfLodgings(resort.lodgings, resort.guests.homes);
     const beds = bedCount(resort.guests);
     resort.beds = { total: beds.beds, taken: beds.taken };
     // By key: surviving venues keep their dirt, and new ones start clean.
@@ -3192,7 +3233,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
     resort.unreachable = strandedOn(resort.venues, network);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
-    resort.staffRouter.rebuild(resort.venues, network);
+    resort.staffRouter.rebuild(resort.venues, network, resort.lodgings);
     crowd.relocate(network);
     resort.staff.relocate(network);
     staffTheResort(resort);

@@ -27,6 +27,8 @@ export interface Guests {
   // Kept rather than recounted: asked once per arriving party, and a recount is a pass over every guest.
   // Replaced, with homes, by `rehome` when lodgings are built or demolished.
   freeBeds: Int32Array;
+  // Freed by a check-out and not yet made up: in neither freeBeds nor anybody's bed.
+  unmade: Int32Array;
   // Replaced only by a load.
   people: readonly GuestRecord[];
   // Entries are never removed, so a party index stays stable; the router keys on it.
@@ -119,6 +121,7 @@ export function createGuests(options: GuestOptions): Guests {
     // unchanged on frame one.
     present: new Uint8Array(count).fill(away ? 0 : 1),
     freeBeds,
+    unmade: new Int32Array(homes.length),
     people,
     // Copied: this list grows, and partiesFor's result must not.
     parties: [...parties],
@@ -127,19 +130,32 @@ export function createGuests(options: GuestOptions): Guests {
 }
 
 // The home is cleared, unlike the rest of the biography: a bed handed back but still pointed
-// at would be two answers to one question.
-export function checkOutParty(guests: Guests, party: number): readonly number[] {
+// at would be two answers to one question. A turnover leaves the bed for a cleaner to make up.
+export function checkOutParty(guests: Guests, party: number, turnover = false): readonly number[] {
+  const handedBack = turnover ? guests.unmade : guests.freeBeds;
   const members = guests.parties[party]?.members ?? [];
   const left: number[] = [];
   for (const person of members) {
     if (guests.present[person] !== 1) continue;
     guests.present[person] = 0;
     const home = guests.home[person]!;
-    if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! + 1;
+    if (home !== NO_HOME) handedBack[home] = handedBack[home]! + 1;
     guests.home[person] = NO_HOME;
     left.push(person);
   }
   return left;
+}
+
+export function makeBeds(guests: Guests, home: number, most: number): number {
+  if (home < 0 || home >= guests.unmade.length) return 0;
+  const made = Math.max(0, Math.min(most, guests.unmade[home]!));
+  guests.unmade[home] = guests.unmade[home]! - made;
+  guests.freeBeds[home] = guests.freeBeds[home]! + made;
+  return made;
+}
+
+export function unmadeCount(guests: Guests): number {
+  return guests.unmade.reduce((sum, beds) => sum + beds, 0);
 }
 
 export function freeBodiesOf(guests: Guests): FreeBodies {
@@ -199,9 +215,12 @@ export function checkInParty(
 export function rehome(guests: Guests, homes: readonly Home[]): number {
   const freeBeds = Int32Array.from(homes, (home) => home.beds);
   const evicted = keepHomesByKey(guests, homes, freeBeds);
+  // Before the evicted are re-housed, so nobody is put into a bed still waiting to be made up.
+  const unmade = carryUnmade(guests, homes, freeBeds);
   for (const party of [...evicted].toSorted((a, b) => a - b)) rehouse(guests, party, freeBeds);
   guests.homes = homes;
   guests.freeBeds = freeBeds;
+  guests.unmade = unmade;
   return homelessCount(guests);
 }
 
@@ -222,6 +241,16 @@ function keepHomesByKey(
     else freeBeds[next] = freeBeds[next]! - 1;
   }
   return evicted;
+}
+
+// A demolished lodging's unmade beds go with it.
+function carryUnmade(guests: Guests, homes: readonly Home[], freeBeds: Int32Array): Int32Array {
+  const before = new Map(guests.homes.map((home, index) => [home.key, guests.unmade[index] ?? 0]));
+  const unmade = Int32Array.from(homes, (home, index) =>
+    Math.max(0, Math.min(before.get(home.key) ?? 0, freeBeds[index]!)),
+  );
+  for (let home = 0; home < homes.length; home++) freeBeds[home] = freeBeds[home]! - unmade[home]!;
+  return unmade;
 }
 
 function rehouse(guests: Guests, party: number, freeBeds: Int32Array): void {
@@ -281,6 +310,7 @@ export function snapshotGuests(guests: Guests): GuestsSnapshot {
     variant: guests.variant.slice(),
     present: guests.present.slice(),
     freeBeds: guests.freeBeds.slice(),
+    unmade: guests.unmade.slice(),
     people: guests.people.map((person) => ({ ...person })),
     parties: guests.parties.map((party) => ({ ...party, members: [...party.members] })),
     homes: guests.homes.map((home) => ({ ...home })),
@@ -296,6 +326,7 @@ export function restoreGuests(guests: Guests, snapshot: GuestsSnapshot): void {
   guests.variant.set(snapshot.variant);
   guests.present.set(snapshot.present);
   guests.freeBeds = snapshot.freeBeds.slice();
+  guests.unmade = snapshot.unmade.slice();
   guests.people = snapshot.people.map((person) => ({ ...person }));
   guests.parties = snapshot.parties.map((party) => ({ ...party, members: [...party.members] }));
   guests.homes = snapshot.homes.map((home) => ({ ...home }));

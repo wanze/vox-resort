@@ -44,6 +44,15 @@ export function lodgingsOn(placements: readonly Placement[]): readonly Lodging[]
   return lodgings;
 }
 
+// Homes are sorted by beds and lodgings stand in placement order, so the two indices differ.
+export function homesOfLodgings(
+  lodgings: readonly Lodging[],
+  homes: readonly { readonly key: string }[],
+): Int32Array {
+  const byKey = new Map(homes.map((home, index) => [home.key, index]));
+  return Int32Array.from(lodgings, (lodging) => byKey.get(lodging.key) ?? -1);
+}
+
 // A linear scan is fine: asked once per guest on build, never per frame.
 export function lodgingFor(lodgings: readonly Lodging[], key: string): number {
   return lodgings.findIndex((lodging) => lodging.key === key);

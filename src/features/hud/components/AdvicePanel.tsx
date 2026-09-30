@@ -37,6 +37,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'no-entrance': () => 'Nobody can arrive: there is no entrance',
   'no-reception': () => 'Nobody can check in: no reception is reachable from the entrance',
   'no-beds': ({ count }) => `${count} ${guests(count)} nowhere to sleep`,
+  unmade: ({ count }) => `${count} ${count === 1 ? 'bed is' : 'beds are'} waiting to be made up`,
   hurt: ({ count }) => `${count} ${guests(count)} been hurt`,
   'unserved-need': ({ subject, need }) =>
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
@@ -60,6 +61,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'no-entrance': () => null,
   'no-reception': () => null,
   'no-beds': () => null,
+  unmade: () => 'no guest can be given them until a cleaner has been',
   hurt: () => null,
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
@@ -81,6 +83,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'no-entrance': 'Entrance',
   'no-reception': 'Reception',
   'no-beds': 'Beds',
+  unmade: 'Housekeeping',
   hurt: 'Injuries',
   'unserved-need': 'Missing',
   'full-lines': 'Queues',

@@ -8,6 +8,7 @@ export const staffRouterSnapshotSchema = z.object({
   working: uint8,
   doorOf: int32,
   tileOf: int32,
+  roomOf: int32,
   lastStage: int32,
   sheltering: uint8,
   towerOf: int32,
@@ -26,6 +27,7 @@ export function staffPerWorker(snapshot: StaffRouterSnapshot): readonly ArrayLik
     snapshot.working,
     snapshot.doorOf,
     snapshot.tileOf,
+    snapshot.roomOf,
     snapshot.lastStage,
     snapshot.sheltering,
     snapshot.towerOf,
@@ -34,8 +36,17 @@ export function staffPerWorker(snapshot: StaffRouterSnapshot): readonly ArrayLik
   ];
 }
 
-// Venue indices are into the list the snapshot was taken on; one past its end means another list.
-export function staffVenuesMatch(snapshot: StaffRouterSnapshot, venues: number): boolean {
+// Venue and lodging indices are into the lists the snapshot was taken on; one past the end of
+// either means another list.
+export function staffVenuesMatch(
+  snapshot: StaffRouterSnapshot,
+  venues: number,
+  lodgings = 0,
+): boolean {
   const within = (venue: number): boolean => venue < venues;
-  return snapshot.assigned.every(within) && snapshot.lastStage.every(within);
+  return (
+    snapshot.assigned.every(within) &&
+    snapshot.lastStage.every(within) &&
+    snapshot.roomOf.every((lodging) => lodging < lodgings)
+  );
 }

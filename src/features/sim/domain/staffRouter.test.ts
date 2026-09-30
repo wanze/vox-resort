@@ -20,7 +20,9 @@ import {
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
+import type { Lodging } from './lodgings';
 import {
+  BEDS_PER_SPELL,
   createStaffRouter,
   meanCleanliness,
   REPAIR_TICKS,
@@ -826,5 +828,169 @@ describe('zones', () => {
     };
     const { router } = crewOn(network, [], ['cleaner'], { litter, zones });
     expect(router.step(0, nodeAt(network, 3))).toBe(nodeAt(network, 4));
+  });
+});
+
+const cottage = (key: string, tileX: number): Lodging => ({
+  key,
+  id: key.split('#')[0]!,
+  label: key,
+  beds: 4,
+  dwellSeconds: { min: 25_200, max: 32_400 },
+  x: (tileX + 0.5) * TILE_VOXELS,
+  z: -0.5 * TILE_VOXELS,
+  tileX,
+  tileZ: -1,
+  tilesX: 1,
+  tilesZ: 1,
+  doors: [],
+});
+
+describe('making up rooms', () => {
+  const housekeepersOn = (
+    network: WalkNetwork,
+    parts: {
+      readonly venues?: readonly Venue[];
+      readonly dirt?: readonly number[];
+      readonly lodgings?: readonly Lodging[];
+      readonly unmade: number[];
+      readonly workers?: number;
+      readonly zones?: StaffZones;
+    },
+  ): { router: StaffRouter; crowd: Crowd; made: [number, number][] } => {
+    const venues = parts.venues ?? [];
+    const upkeep = createUpkeep(venues.length);
+    for (const [venue, level] of (parts.dirt ?? []).entries()) upkeep.level[venue] = level;
+    const workers = parts.workers ?? 1;
+    const made: [number, number][] = [];
+    const beds = {
+      unmadeAt: (lodging: number) => parts.unmade[lodging] ?? 0,
+      make: (lodging: number, most: number) => {
+        made.push([lodging, most]);
+        parts.unmade[lodging] = Math.max(0, parts.unmade[lodging]! - most);
+      },
+    };
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff: cleaners(workers),
+      venues,
+      network,
+      upkeep: () => upkeep,
+      crowd: () => crowd!,
+      beds: () => beds,
+      ...(parts.lodgings ? { lodgings: parts.lodgings } : {}),
+      ...(parts.zones ? { zones: () => parts.zones! } : {}),
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network,
+      count: workers,
+      variants: 1,
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+    });
+    return { router, crowd, made };
+  };
+
+  it('sends an idle cleaner to unmade beds before a dirty venue', () => {
+    const network = networkOf(street(8));
+    const { router } = housekeepersOn(network, {
+      venues: [shop('bakery#0', 1)],
+      dirt: [0.1],
+      lodgings: [cottage('cottage#0', 7)],
+      unmade: [2],
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+  });
+
+  it('makes up BEDS_PER_SPELL beds in a spell, and lets the cleaner go', () => {
+    const network = networkOf(street(8));
+    const unmade = [10];
+    const { router, crowd, made } = housekeepersOn(network, {
+      lodgings: [cottage('hotel#0', 7)],
+      unmade,
+    });
+    router.step(0, nodeAt(network, 4));
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    expect(isWaiting(crowd, 0), 'walked straight past the room').toBe(true);
+    expect(router.workingCount).toBe(1);
+    expect(router.atWork(0), 'a lodging is not a venue').toBeNull();
+    for (let tick = 1; tick <= 30; tick++) router.tick(tick);
+    expect(made).toEqual([[0, BEDS_PER_SPELL]]);
+    expect(unmade).toEqual([10 - BEDS_PER_SPELL]);
+    expect(router.workingCount).toBe(0);
+    expect(isWaiting(crowd, 0), 'never let go of the room').toBe(false);
+  });
+
+  it('never lets two cleaners make up the same lodging', () => {
+    const network = networkOf(street(8));
+    const { router } = housekeepersOn(network, {
+      lodgings: [cottage('cottage#0', 1), cottage('cottage#1', 7)],
+      unmade: [2, 6],
+      workers: 2,
+    });
+    expect(router.step(0, nodeAt(network, 4)), 'the most unmade first').toBe(nodeAt(network, 5));
+    expect(router.step(1, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('passes over a lodging it cannot reach and scrubs the dirty venue', () => {
+    const network = networkOf([...street(8), { tileX: 20, tileZ: 0, y: 0 }]);
+    const { router } = housekeepersOn(network, {
+      venues: [shop('bakery#0', 1)],
+      dirt: [0.2],
+      lodgings: [cottage('villa#0', 20)],
+      unmade: [8],
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.atWork(0)).toBeNull();
+  });
+
+  it('makes up nothing when it is given no lodgings', () => {
+    const network = networkOf(street(8));
+    const { router, made } = housekeepersOn(network, {
+      venues: [shop('bakery#0', 1)],
+      dirt: [0.2],
+      unmade: [8],
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    router.step(0, nodeAt(network, 1));
+    for (let tick = 1; tick <= 30; tick++) router.tick(tick);
+    expect(made).toEqual([]);
+  });
+
+  it('keeps a zoned cleaner to the lodgings in its zone', () => {
+    const network = networkOf(street(8));
+    const { router } = housekeepersOn(network, {
+      lodgings: [cottage('cottage#0', 1), cottage('cottage#1', 7)],
+      unmade: [2, 6],
+      zones: { ...zonedAs([1], []), lodgingZones: Int32Array.from([0b10, 0b01]) },
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('carries a room being made up, and its claim, through a snapshot', () => {
+    const network = networkOf(street(8));
+    const setup = () =>
+      housekeepersOn(network, {
+        venues: [shop('bakery#0', 1)],
+        dirt: [0.2],
+        lodgings: [cottage('cottage#0', 7)],
+        unmade: [6],
+        workers: 2,
+      });
+    const before = setup();
+    before.router.step(0, nodeAt(network, 4));
+    before.router.step(0, nodeAt(network, 7));
+    const saved = before.router.snapshot();
+    expect(Array.from(saved.roomOf)).toEqual([0, -1]);
+
+    const after = setup();
+    after.router.restore(saved);
+    expect(after.router.workingCount).toBe(1);
+    expect(after.router.step(1, nodeAt(network, 4)), 'the room was left unclaimed').toBe(
+      nodeAt(network, 3),
+    );
+    for (let tick = 1; tick <= 30; tick++) after.router.tick(tick);
+    expect(after.made).toEqual([[0, BEDS_PER_SPELL]]);
   });
 });

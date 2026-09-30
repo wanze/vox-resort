@@ -42,6 +42,7 @@ export const guestsSnapshotSchema = z.object({
   variant: int32,
   present: uint8,
   freeBeds: int32,
+  unmade: int32,
   people: z.array(z.object({ given: z.string(), family: z.string() })),
   parties: z.array(partySchema),
   homes: z.array(homeSchema),

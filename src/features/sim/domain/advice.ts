@@ -15,6 +15,7 @@ const KIND_ORDER = [
   'no-entrance',
   'no-reception',
   'no-beds',
+  'unmade',
   'hurt',
   'unserved-need',
   'full-lines',
@@ -69,6 +70,8 @@ export interface ResortFacts {
   readonly entrance?: boolean;
   readonly reception?: boolean;
   readonly bedsTotal?: number;
+  // Freed by a check-out and waiting for a cleaner; absent means every bed is made up.
+  readonly bedsUnmade?: number;
   // Absent means clean paths.
   readonly litter?: LitterSummary;
   // Keys of the water nobody watches; absent means every pool has its lifeguard.
@@ -106,6 +109,20 @@ export function adviceNoBeds(facts: ResortFacts): Advice | null {
     weight: facts.bedsFree > 0 ? share * 0.6 : share,
     subject: 'beds',
     count: facts.homeless,
+    at: null,
+    need: null,
+  };
+}
+
+// A quarter of the beds waiting is as loud as it gets: that is a quarter of the plot unsellable.
+export function adviceUnmade(facts: ResortFacts): Advice | null {
+  const unmade = facts.bedsUnmade ?? 0;
+  if (unmade <= 0) return null;
+  return {
+    kind: 'unmade',
+    weight: 0.2 + 0.6 * clamp((4 * unmade) / Math.max(1, facts.bedsTotal ?? unmade)),
+    subject: 'beds',
+    count: unmade,
     at: null,
     need: null,
   };
@@ -419,6 +436,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
   const found = [
     gate,
     adviceNoBeds(facts),
+    adviceUnmade(facts),
     adviceHurt(facts),
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),

@@ -14,6 +14,11 @@ const rosterLine = (roster: Roster): string =>
     ' · ',
   );
 
+const bedsNote = (unmade: number): string =>
+  unmade > 0
+    ? `taken by guests, of all the plot sleeps; ${formatNumber(unmade)} waiting to be made up`
+    : 'taken by guests, of all the plot sleeps';
+
 export function ResortStats({ stats }: ResortStatsProps) {
   if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;
 
@@ -25,7 +30,7 @@ export function ResortStats({ stats }: ResortStatsProps) {
       <StatRow label="Rating" note="out of five, from how happy they are and how many have a bed">
         {stats.rating.toFixed(1)}
       </StatRow>
-      <StatRow label="Beds" note="taken by guests, of all the plot sleeps">
+      <StatRow label="Beds" note={bedsNote(stats.beds.unmade)}>
         {formatNumber(stats.beds.taken)} / {formatNumber(stats.beds.total)}
       </StatRow>
       <StatRow label="Asleep" note="in bed now, of the guests who have one">

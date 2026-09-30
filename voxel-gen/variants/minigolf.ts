@@ -4,7 +4,7 @@ import { poolWater } from '../parts/pool.ts';
 import { pottedPlant } from '../parts/props.ts';
 import { gableRoof, hipRoof } from '../parts/roof.ts';
 import { awning, doorway, shutteredWindow, stuccoWall } from '../parts/wall.ts';
-import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+import { defineModel, type QuarterTurns, type VoxelBuilder } from '../voxelgen.ts';
 
 const X = 143;
 const Z = 111;
@@ -165,6 +165,28 @@ const frameOf = (r: Area): Frame => {
 };
 const at = (f: Frame, t: number): number => Math.round(f.lo + (f.hi - f.lo) * t);
 
+// Two consecutive holes of every four, tee then cup, so a party plays one or two holes
+// together and a full course still shows play all along the walk.
+const PLAYED = HOLES.filter((_, index) => index % 4 < 2);
+
+const stretchOf = (hole: Hole, [x, z]: readonly [number, number]) => {
+  const f = frameOf(hole.lane.find((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1)!);
+  const near = (f.alongX ? x : z) < (f.lo + f.hi) / 2;
+  return { x, z, alongX: f.alongX, near };
+};
+
+// Beside the ball rather than on it, facing into its stretch: the pair at a hole face each other.
+const beside = (hole: Hole, point: readonly [number, number], y: number) => {
+  const { x, z, alongX, near } = stretchOf(hole, point);
+  const facing: QuarterTurns = alongX ? (near ? 1 : 3) : near ? 0 : 2;
+  return { x: alongX ? x : x - 2, y, z: alongX ? z + 2 : z, facing };
+};
+
+const PLAYERS = PLAYED.flatMap((hole) => [
+  beside(hole, hole.tee, GREEN + 1),
+  beside(hole, hole.cup, hole.hazard === 'plateau' ? GREEN + 3 : GREEN + 1),
+]);
+
 const TOWER = { x: 5, z: 5, w: 10, d: 10 } as const;
 const BELFRY = GREEN + 22;
 const CLUBHOUSE = { x: 5, z: 44, w: 12, d: 20 } as const;
@@ -196,6 +218,7 @@ export default defineModel({
     capacity: 16,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 3,
+    spots: PLAYERS,
     doors: [
       { x: BACK_GATE + 1, z: 0, facing: 2 },
       { x: FRONT_GATE + 1, z: Z, facing: 0 },

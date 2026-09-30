@@ -25,7 +25,13 @@ const HALL = { x: 7, x1: 56, z: 8, z1: FRONT - 2 } as const;
 // from.
 const OVERHANG = 1;
 
+const GROUND = 3;
+
 const TABLES = { z: 34, z1: 40 } as const;
+
+// The only cabinets the camera sees through the bays: their players stand in the arcade itself.
+const FRONT_ROW = [8, 11, 19, 22, 40, 43, 50, 53] as const;
+const DOOR_X = 31;
 
 const BOARD = { x: 24, x1: 39, y: 19, y1: 23 } as const;
 
@@ -48,13 +54,18 @@ export default defineModel({
     dwellSeconds: { min: 1200, max: 3600 },
     reliability: 80,
     price: 2,
-    doors: [{ x: 31, z: FRONT, facing: 0 }],
+    spots: [
+      ...FRONT_ROW.map((x) => ({ x: x + 1, y: GROUND, z: HALL.z1 + 1, facing: 2 as const })),
+      { x: DOOR_X, y: GROUND, z: HALL.z1 - 1, facing: 0, for: 'animator' },
+    ],
+    doors: [{ x: DOOR_X, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { stone, stucco, slate, metal, teak, foliage, bloom } = PALETTE;
 
     const ground = plinth(b, { x: 0, z: 0, w: PLOT, d: PLOT });
+    if (ground !== GROUND) throw new Error('The plinth moved under the players');
     const eaves = stuccoWall(b, { ...BODY, y: ground, storeys: 1 });
 
     const cornice = arcade(b, {
@@ -140,7 +151,7 @@ export default defineModel({
     // The back wall is invisible from the resort's viewing angles, so the main row
     // stands just inside the outer bays, facing out.
     const screens = [SCREEN, NEON, SIGN];
-    for (const [i, x] of [8, 11, 19, 22, 40, 43, 50, 53].entries()) {
+    for (const [i, x] of FRONT_ROW.entries()) {
       cabinet(x, HALL.z1 - 1, 'z+', screens[i % screens.length]!);
     }
     for (const [i, x] of [12, 16, 20, 24, 28, 32, 36, 40, 44].entries()) {

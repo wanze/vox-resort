@@ -83,6 +83,15 @@ export default defineModel({
     capacity: 25,
     dwellSeconds: { min: 1800, max: 5400 },
     price: 4,
+    spots: [
+      {
+        x: (STAGE.x0 + STAGE.x1 + 1) / 2,
+        y: DECK_TOP + 2,
+        z: STAGE.z0 + 4,
+        facing: 0,
+        for: 'animator',
+      },
+    ],
     doors: [
       { x: FRONT_FLIGHT.x + FRONT_FLIGHT.w / 2, z: BRINK + 2, facing: 0 },
       { x: 0, z: SIDE_FLIGHT.z + SIDE_FLIGHT.w / 2, facing: 3 },

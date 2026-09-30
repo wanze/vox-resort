@@ -24,6 +24,7 @@ const WING_FRONT = WINGS[0].z + WINGS[0].d - 1;
 
 const PORCH = { x0: 24, x1: 39, z0: HALL_FRONT + 1, z1: HALL_FRONT + 8 } as const;
 const DOOR = { x: 29, w: 6 } as const;
+const DESKS = [DOOR.x + DOOR.w / 2, PORCH.x0 + 2, PORCH.x1 - 2] as const;
 
 const GROUND = 3;
 
@@ -53,6 +54,7 @@ export default defineModel({
     role: 'service',
     capacity: 12,
     dwellSeconds: { min: 120, max: 480 },
+    spots: DESKS.map((x) => ({ x, y: GROUND, z: PORCH.z0 + 3, facing: 2 as const })),
     doors: [{ x: 31, z: HALL_FRONT, facing: 0 }],
     receives: true,
   },

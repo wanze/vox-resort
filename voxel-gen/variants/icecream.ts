@@ -4,6 +4,15 @@ import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const CART = { x0: 3, x1: 12, z0: 5, z1: 10 } as const;
 const POLE = { x: 7, z: 7 } as const;
+const GROUND = 2;
+
+// Three abreast is all the front takes beside the A-board, so the fourth waits behind them.
+const QUEUE = [
+  { x: CART.x0, y: GROUND, z: CART.z1 + 3, facing: 2 },
+  { x: CART.x0 + 3, y: GROUND, z: CART.z1 + 3, facing: 2 },
+  { x: CART.x0 + 6, y: GROUND, z: CART.z1 + 3, facing: 2 },
+  { x: CART.x0 + 2, y: GROUND, z: CART.z1 + 5, facing: 2 },
+] as const;
 
 // Eight wedges, alternating: each wedge is one flat region, so the stripes cost a
 // handful of quads instead of one per voxel like a checkerboard would.
@@ -33,12 +42,14 @@ export default defineModel({
     capacity: 4,
     dwellSeconds: { min: 120, max: 300 },
     price: 2,
+    spots: QUEUE,
     doors: [{ x: 8, z: 12, facing: 0 }],
     litter: 0.06,
   },
   build: (b: VoxelBuilder) => {
     const { amber, bloom, foliage, glass, metal, stone, stucco, teak, water } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 16, d: 16, height: 2 });
+    if (ground !== GROUND) throw new Error('The plinth moved under the queue');
 
     const axle = ground + 2;
     // Spoked and open between the spokes: a solid disc reads as a door from this far off.

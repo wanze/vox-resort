@@ -19,7 +19,28 @@ const MIRROR_Z = BLOCK.z + BLOCK.d - 1;
 const HEAD = GROUND + 11;
 const PLATE = HEAD + 1;
 
+const PULL_UP = { x0: 8, x1: 15, z: 22 } as const;
+const MATS = [21, 25, 29] as const;
+const MAT_Z = { z0: 21, z1: 26 } as const;
+const RACK = { x0: 38, x1: 41, z0: 20, z1: 28 } as const;
+
 const YARD = { x0: 47, x1: 61, z0: 4, z1: 29 } as const;
+const RIG = { x0: 49, x1: 60, z0: 8, z1: 21 } as const;
+
+const ATHLETES = [
+  { x: (PULL_UP.x0 + PULL_UP.x1) >> 1, y: GROUND, z: PULL_UP.z, facing: 0 },
+  ...[MATS[0], MATS[2]].map((x) => ({
+    x: x + 1,
+    y: GROUND + 1,
+    z: MAT_Z.z0 + 2,
+    facing: 2 as const,
+  })),
+  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1) / 2, facing: 1 },
+  ...[RIG.x0 + 3, RIG.x1 - 3].flatMap((x) => [
+    { x, y: GROUND, z: RIG.z1 - 4, facing: 2 as const },
+    { x, y: GROUND, z: YARD.z1 - 6, facing: 0 as const },
+  ]),
+] as const;
 
 const BENCHES = [
   [6, 36],
@@ -54,6 +75,7 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 1800, max: 3600 },
+    spots: ATHLETES,
     doors: [{ x: 31, z: PLOT.d - 1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
@@ -107,30 +129,30 @@ export default defineModel({
       box(x - 1, x + 2, ground + 5, ground + 5, z, z, metal.shade);
     }
 
-    for (const x of [8, 15]) box(x, x, ground, ground + 9, 22, 23, metal.base);
+    for (const x of [PULL_UP.x0, PULL_UP.x1]) {
+      box(x, x, ground, ground + 9, PULL_UP.z, PULL_UP.z + 1, metal.base);
+    }
     box(6, 17, ground + 7, ground + 7, 22, 22, metal.light);
     for (const x of [7, 16]) box(x, x, ground + 6, ground + 8, 21, 23, bloom.base);
     box(10, 13, ground, ground + 1, 24, 28, slate.deep);
-    for (const [x, mat] of [
-      [21, glass.shade],
-      [25, bloom.shade],
-      [29, foliage.light],
-    ] as const) {
-      box(x, x + 2, ground, ground, 21, 26, mat);
-    }
-    box(38, 41, ground, ground + 2, 20, 28, metal.deep);
-    box(38, 41, ground + 3, ground + 3, 20, 28, metal.base);
+    const mats = [glass.shade, bloom.shade, foliage.light] as const;
+    MATS.forEach((x, i) => box(x, x + 2, ground, ground, MAT_Z.z0, MAT_Z.z1, mats[i]!));
+    box(RACK.x0, RACK.x1, ground, ground + 2, RACK.z0, RACK.z1, metal.deep);
+    box(RACK.x0, RACK.x1, ground + 3, ground + 3, RACK.z0, RACK.z1, metal.base);
 
     for (const [x, z] of LANTERNS) {
       box(x, x, PLATE - 1, PLATE, z, z, teak.deep);
       b.set(x, PLATE - 2, z, LANTERN);
     }
 
-    for (const x of [49, 59]) {
-      for (const z of [8, 20]) box(x, x + 1, ground, ground + 11, z, z + 1, metal.base);
-      box(x, x + 1, ground + 11, ground + 11, 8, 21, metal.shade);
+    for (const x of [RIG.x0, RIG.x1 - 1]) {
+      for (const z of [RIG.z0, RIG.z1 - 1])
+        box(x, x + 1, ground, ground + 11, z, z + 1, metal.base);
+      box(x, x + 1, ground + 11, ground + 11, RIG.z0, RIG.z1, metal.shade);
     }
-    for (const z of [8, 14, 20]) box(49, 60, ground + 11, ground + 11, z, z, metal.light);
+    for (const z of [RIG.z0, (RIG.z0 + RIG.z1 - 1) / 2, RIG.z1 - 1]) {
+      box(RIG.x0, RIG.x1, ground + 11, ground + 11, z, z, metal.light);
+    }
     box(51, 54, ground, ground + 2, 25, 27, teak.base);
     box(56, 59, ground, ground + 3, 25, 27, teak.shade);
     box(52, 53, ground, ground + 1, 12, 13, amber.shade);

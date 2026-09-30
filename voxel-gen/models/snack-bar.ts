@@ -1,6 +1,10 @@
 // The isometric preview camera sits in the +z/-x octant, so detail lives on those faces.
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
+const ON_BASE = 3;
+const COUNTER = { x: 4, x1: 27, y1: 8, z: 10, z1: 12 } as const;
+const QUEUE = [0, 1, 2, 3].map((place) => COUNTER.x + 3 + place * 6);
+
 export default defineModel({
   id: 'snack-bar',
   label: 'Snack Bar',
@@ -12,6 +16,7 @@ export default defineModel({
     capacity: 10,
     dwellSeconds: { min: 300, max: 720 },
     price: 3,
+    spots: QUEUE.map((x) => ({ x, y: ON_BASE, z: COUNTER.z1 + 2, facing: 2 as const })),
     doors: [{ x: 15, z: 12, facing: 0 }],
     litter: 0.05,
   },
@@ -39,7 +44,7 @@ export default defineModel({
     const NX = 31;
     const NZ = 15;
 
-    box(0, NX, 0, 2, 0, NZ, C.base);
+    box(0, NX, 0, ON_BASE - 1, 0, NZ, C.base);
     for (let x = 0; x <= NX; x++) {
       set(x, 2, 0, C.baseDark);
       set(x, 2, NZ, C.baseDark);
@@ -56,8 +61,8 @@ export default defineModel({
 
     box(2, 29, 15, 16, 1, 11, C.roof);
 
-    box(4, 27, 3, 7, 10, 12, C.counter);
-    box(4, 27, 8, 8, 10, 12, C.counterTop);
+    box(COUNTER.x, COUNTER.x1, ON_BASE, COUNTER.y1 - 1, COUNTER.z, COUNTER.z1, C.counter);
+    box(COUNTER.x, COUNTER.x1, COUNTER.y1, COUNTER.y1, COUNTER.z, COUNTER.z1, C.counterTop);
 
     // Hung high so the serving side stays open.
     for (let x = 2; x <= 29; x++) box(x, x, 15, 15, 10, 14, x % 2 === 0 ? C.awningA : C.awningB);

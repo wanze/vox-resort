@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES, MODEL_SOURCES } from '../models/index.ts';
-import { buildModel, TILE_VOXELS, type VoxelModel } from '../voxelgen.ts';
+import { buildModel, TILE_VOXELS, type ModelSpot, type VoxelModel } from '../voxelgen.ts';
 import { VARIANTS } from './index.ts';
 
 const catalogue = new Map(MODEL_SOURCES.map((source) => [source.id, source]));
@@ -28,6 +28,25 @@ function simFacts(model: VoxelModel) {
     },
   };
 }
+
+// Counted only as far as the venue can use them: a variant's own seats may number differently.
+function placesOf(model: VoxelModel) {
+  const spots = model.venue?.spots ?? [];
+  const spotsFor = (kind: NonNullable<ModelSpot['for']>): number =>
+    spots.filter((spot) => (spot.for ?? 'visitor') === kind).length;
+  const seats = model.seats.filter((seat) => !seat.post);
+  const watching = seats.filter((seat) => seat.watches).length;
+  return {
+    visitor: Math.min(model.venue?.capacity ?? 0, seats.length - watching + spotsFor('visitor')),
+    // The sim shows no longer a line than this.
+    watcher: Math.min(12, watching + spotsFor('watcher')),
+    animator: spotsFor('animator'),
+    lifeguard: spotsFor('lifeguard'),
+  };
+}
+
+const declaresPlaces = (model: VoxelModel): boolean =>
+  (model.venue?.spots ?? []).length > 0 || model.seats.some((seat) => seat.watches);
 
 describe('VARIANTS', () => {
   it('offers an alternative to a model the catalogue has', () => {
@@ -66,6 +85,14 @@ describe('VARIANTS', () => {
       const model = buildModel(source);
       expect(model.width, source.id).toBe(source.tiles.x * TILE_VOXELS);
       expect(model.depth, source.id).toBe(source.tiles.z * TILE_VOXELS);
+    }
+  });
+
+  it('draws its visitors in as many places as its original does', () => {
+    for (const { of, source } of VARIANTS) {
+      const original = buildModel(catalogue.get(of)!);
+      if (!declaresPlaces(original)) continue;
+      expect(placesOf(buildModel(source)), source.id).toEqual(placesOf(original));
     }
   });
 });

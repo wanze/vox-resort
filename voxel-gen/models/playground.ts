@@ -24,6 +24,13 @@ const SWING = { x0: 34, x1: 50, z0: 11, top: GROUND + 11 } as const;
 
 const SWINGS = [38, 42, 46] as const;
 
+const CLIMBERS = [
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+] as const;
+
 const BARS = { x0: 37, x1: 54, z0: 22, z1: 27, top: GROUND + 9 } as const;
 const RUNGS = [41, 44, 47, 50] as const;
 
@@ -60,6 +67,30 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 900, max: 2400 },
+    spots: [
+      ...SWINGS.map((x) => ({
+        x: x + 1,
+        y: GROUND + 5,
+        z: SWING.z0,
+        facing: 0 as const,
+        pose: 'sit' as const,
+      })),
+      ...CLIMBERS,
+      // Ground sitters are lifted by the crowd's GROUND_SIT_RISE, so the hips sit 1.5 above the sand.
+      ...(
+        [
+          [PIT.x0 + 4, 1],
+          [PIT.x1 - 4, 3],
+        ] as const
+      ).map(([x, facing]) => ({
+        x,
+        y: GROUND + 2.5,
+        z: (PIT.z0 + PIT.z1) >> 1,
+        facing,
+        pose: 'sit' as const,
+      })),
+      { x: (MAT.x0 + MAT.x1) >> 1, y: GROUND + 1, z: BARS.z0 - 2, facing: 2, for: 'animator' },
+    ],
     doors: [{ x: GATE.lo + 2, z: LAWN.z1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

@@ -18,6 +18,33 @@ const CHAIR = { x0: 45, x1: 50, z0: 8, z1: 12, deck: GROUND + 7 } as const;
 
 const DUGOUTS = [22, 59] as const;
 const DUGOUT = { w: 15, back: 3, front: 9, eaves: GROUND + 10 } as const;
+const BENCH = GROUND + 1;
+// Where along each dugout's bench a towel lies, one course deep; who sits there sits on it.
+const TOWELS = [3, 8] as const;
+const SITTERS = [1, 5, 9, 13] as const;
+
+const FRONT = 8;
+const BACK = 22;
+const LANES = [COURT.z0 + 5, (COURT.z0 + COURT.z1 + 1) / 2, COURT.z1 - 5] as const;
+
+// Each place is filled on both sides of the net at once; the back corners first, so four
+// guests make a game of two against two.
+const ROLES = [
+  { d: BACK, z: LANES[0] },
+  { d: BACK, z: LANES[2] },
+  { d: FRONT, z: LANES[1] },
+  { d: BACK, z: LANES[1] },
+  { d: FRONT, z: LANES[0] },
+  { d: FRONT, z: LANES[2] },
+] as const;
+
+const PLAYERS = ROLES.flatMap(({ d, z }) => [
+  { x: NET_X - d, y: GROUND, z, facing: 1 as const },
+  { x: NET_X + 1 + d, y: GROUND, z: COURT.z0 + COURT.z1 - z, facing: 3 as const },
+]);
+
+// The dugouts seat eight; the rest watch from the front sideline, clear of the umpire.
+const WATCHERS_X = [NET_X - 23, NET_X - 11, NET_X + 12, NET_X + 24] as const;
 
 export default defineModel({
   id: 'volleyball-b',
@@ -33,6 +60,31 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 1200, max: 2700 },
+    spots: [
+      ...PLAYERS,
+      // Spots, not seats: a seat joins the walk network, and a passer-by sitting down on it
+      // would move every seeded replay.
+      ...DUGOUTS.flatMap((x0, i) =>
+        SITTERS.map((along) => {
+          const onTowel = along >= TOWELS[i]! && along <= TOWELS[i]! + 2;
+          return {
+            x: x0 + along,
+            y: BENCH + (onTowel ? 2 : 1),
+            z: DUGOUT.back + 1,
+            facing: 0 as const,
+            pose: 'sit' as const,
+            for: 'watcher' as const,
+          };
+        }),
+      ),
+      ...WATCHERS_X.map((x) => ({
+        x,
+        y: GROUND,
+        z: COURT.z1 + 3,
+        facing: 2 as const,
+        for: 'watcher' as const,
+      })),
+    ],
   },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
@@ -67,12 +119,14 @@ export default defineModel({
     for (const x0 of DUGOUTS) {
       const x1 = x0 + DUGOUT.w - 1;
       box(x0, x1, GROUND, DUGOUT.eaves - 1, DUGOUT.back, DUGOUT.back, thatch.shade);
-      box(x0 + 1, x1 - 1, GROUND, GROUND + 1, DUGOUT.back + 1, DUGOUT.back + 2, teak.light);
+      box(x0 + 1, x1 - 1, GROUND, BENCH, DUGOUT.back + 1, DUGOUT.back + 2, teak.light);
       box(x0 - 1, x1 + 1, DUGOUT.eaves, DUGOUT.eaves, DUGOUT.back - 1, DUGOUT.front, thatch.base);
     }
-    const seat = GROUND + 2;
-    box(DUGOUTS[0] + 3, DUGOUTS[0] + 5, seat, seat, DUGOUT.back + 1, DUGOUT.back + 2, stucco.light);
-    box(DUGOUTS[1] + 8, DUGOUTS[1] + 10, seat, seat, DUGOUT.back + 1, DUGOUT.back + 2, bloom.base);
+    const towel = BENCH + 1;
+    for (const [i, color] of [stucco.light, bloom.base].entries()) {
+      const x0 = DUGOUTS[i]! + TOWELS[i]!;
+      box(x0, x0 + 2, towel, towel, DUGOUT.back + 1, DUGOUT.back + 2, color);
+    }
     const cooler = DUGOUTS[1] + DUGOUT.w + 1;
     box(cooler, cooler + 2, GROUND, GROUND + 1, 6, 8, water.light);
     box(cooler, cooler + 2, GROUND + 2, GROUND + 2, 6, 8, stucco.light);

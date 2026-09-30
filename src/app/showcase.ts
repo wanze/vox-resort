@@ -329,6 +329,17 @@ import {
 import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
+  createCast,
+  keepSeats,
+  recast,
+  recastStaff,
+  SHOWN,
+  whereDrawn,
+  type Cast,
+  type Casting,
+} from '../features/choreography/domain/casting';
+import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
+import {
   bedCount,
   checkOutParty,
   createGuests,
@@ -834,6 +845,18 @@ interface Resort {
   readonly crowd: CrowdField;
   // A second crowd: a guest's variant indexes the guest models, and HUD counts are about guests.
   readonly staff: CrowdField;
+  // Where visitors are drawn, index-aligned with `venues`. Replaced with them on an edit, which
+  // renumbers the network's seats the places point into.
+  places: readonly VenuePlaces[];
+  cast: Cast;
+  staffCast: Cast;
+  readonly casting: Casting;
+  // Allocated once, for a click to merge the crowd with the cast into.
+  readonly drawnAt: {
+    readonly x: Float32Array;
+    readonly y: Float32Array;
+    readonly z: Float32Array;
+  };
   // Rebuilt rather than updated on an edit: its flow fields are indexed by node, and an edit
   // renumbers nodes.
   readonly staffRouter: StaffRouter;
@@ -937,6 +960,7 @@ function crowdFor(parts: {
   readonly population: number;
   readonly routeOf: (person: number, at: number) => number;
   readonly offTheSand: (person: number) => boolean;
+  readonly drawnAs: Cast;
 }): CrowdField {
   return buildCrowdField({
     crowd: createCrowd({
@@ -951,6 +975,7 @@ function crowdFor(parts: {
     }),
     models: parts.people,
     lightVolume: parts.lightVolume,
+    drawnAs: parts.drawnAs,
   });
 }
 
@@ -960,6 +985,7 @@ function staffCrowdFor(parts: {
   readonly lightVolume: BakedLightVolume | null;
   readonly staff: Staff;
   readonly routeOf: (worker: number, at: number) => number;
+  readonly drawnAs: Cast;
 }): CrowdField {
   return buildCrowdField({
     crowd: createCrowd({
@@ -974,6 +1000,7 @@ function staffCrowdFor(parts: {
     }),
     models: parts.models,
     lightVolume: parts.lightVolume,
+    drawnAs: parts.drawnAs,
   });
 }
 
@@ -1163,6 +1190,8 @@ function buildResort(
   const lodgings = lodgingsOn(plot.layout.placements);
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
+  const places = placesFor(venues, byKey(plot.layout.placements), network);
+  const cast = createCast(population, places);
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
@@ -1239,6 +1268,7 @@ function buildResort(
       return router.step(person, at);
     },
     offTheSand: (person) => router.offTheSand(person),
+    drawnAs: cast,
   });
   crowdField = crowd;
   keepAwayOffThePlot(guests, crowd.crowd);
@@ -1247,6 +1277,7 @@ function buildResort(
   const recommended = rosterFor(workplacesOf(venues, network.posts, lodgings));
   const roster = rosterOf(AUTO_HIRING, recommended);
   const duty = onDuty(employed, roster);
+  const staffCast = createCast(employed.count, places);
   let staffField: CrowdField | null = null;
   // Getters, so the router reads the latest deal without an object built per question.
   const staffZones: StaffZones = {
@@ -1298,6 +1329,7 @@ function buildResort(
     lightVolume: lighting.volume,
     staff: employed,
     routeOf: (worker, at) => staffRouter.step(worker, at),
+    drawnAs: staffCast,
   });
   staffField = staff;
   const workers = staff.crowd;
@@ -1335,6 +1367,22 @@ function buildResort(
     construction,
     crowd,
     staff,
+    places,
+    cast,
+    staffCast,
+    casting: {
+      count: population,
+      venueOf: (person) => router.venueIndexOf(person),
+      isWaiting: (person) => router.isWaitingAt(person),
+      queuePlace: (person) => router.queuePlaceOf(person),
+      isAsleep: (person) => router.isAsleep(person),
+      isPresent: (person) => guests.present[person] === 1,
+    },
+    drawnAt: {
+      x: new Float32Array(population),
+      y: new Float32Array(population),
+      z: new Float32Array(population),
+    },
     staffRouter,
     staffPool: employed,
     hiring: AUTO_HIRING,
@@ -1401,7 +1449,35 @@ function buildResort(
     },
   };
   rezone(resort);
+  recastAll(resort);
   return resort;
+}
+
+const byKey = (placements: readonly Placement[]): ReadonlyMap<string, Placement> =>
+  new Map(placements.map((placement) => [placement.key, placement]));
+
+// After the ticks, never inside them: the cast only reads what the routers decided.
+function recastAll(resort: Resort): void {
+  recast(resort.cast, resort.casting, resort.crowd.crowd.seatBy);
+  const { staffRouter, venues } = resort;
+  recastStaff(
+    resort.staffCast,
+    (worker) => {
+      const venue = staffRouter.atWork(worker);
+      return venue ? venues.indexOf(venue) : -1;
+    },
+    (worker) => resort.staffPool.role[worker]!,
+  );
+}
+
+// Rebuilt with the venues and the network: a place points at a seat by its index there.
+function recastAfterEdit(resort: Resort, network: WalkNetwork): void {
+  resort.places = placesFor(resort.venues, byKey(resort.plot.placements), network);
+  resort.cast = createCast(resort.guests.count, resort.places);
+  resort.staffCast = createCast(resort.staffPool.count, resort.places);
+  recastAll(resort);
+  resort.crowd.drawAs(resort.cast);
+  resort.staff.drawAs(resort.staffCast);
 }
 
 interface ResortSlot {
@@ -3034,8 +3110,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let selectedOn = clock.day;
 
   const guestAt = (person: number): SelectionView => {
-    const { guests, needs, happiness, venues, crowd, thoughts } = current();
-    const at = { x: crowd.crowd.x[person] ?? 0, z: crowd.crowd.z[person] ?? 0 };
+    const { guests, needs, happiness, venues, crowd, thoughts, cast } = current();
+    // Where they are drawn; somebody hidden indoors is where the crowd holds them, in the venue.
+    const drawn = cast.shown[person] === SHOWN.placed ? cast : crowd.crowd;
+    const at = { x: drawn.x[person] ?? 0, z: drawn.z[person] ?? 0 };
     const thought = latestOf(thoughts, person);
     return guestView(guests, needs, happiness, venues, person, clock.day, at, thought);
   };
@@ -3095,7 +3173,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     canvas,
     camera: () => handle.camera,
     armed: () => armedTool === null,
-    people: () => current().crowd.crowd,
+    people: () => {
+      const { crowd, cast, drawnAt } = current();
+      return whereDrawn(crowd.crowd, cast, { count: crowd.count, ...drawnAt });
+    },
     aimHeight: AIM_HEIGHT,
     ground: build.ground,
     keyAt: (tile) => current().occupancy.keyAt(tile),
@@ -3230,6 +3311,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.staffRouter.restore(saved.staffRouter);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
     resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));
+    recastAll(resort);
     clock.restore(saved.clock);
     clock.setSpeed('paused');
     drift = null;
@@ -3284,6 +3366,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     crowd.relocate(network);
     resort.staff.relocate(network);
     staffTheResort(resort);
+    recastAfterEdit(resort, network);
     resort.footfall = createFootfall(network.nodes.length);
     paintOverlay();
     // Said now rather than tomorrow; the day's counters are left alone.
@@ -3343,11 +3426,15 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // of two runs.
     const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
-    if (ticks > 0) lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly);
+    if (ticks > 0) {
+      lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly);
+      recastAll(current());
+    }
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
     // crowdScaleFor is 1 while paused.
     const walked = crowdStep(bench !== null, drift !== null || clock.speed !== 'paused', elapsed);
+    keepSeats(current().cast, current().casting, current().crowd.crowd.seatBy);
     current().crowd.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
     current().staff.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);

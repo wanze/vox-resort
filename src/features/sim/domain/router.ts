@@ -142,6 +142,8 @@ export interface Router {
   isWaitingAt(person: number): boolean;
   // Inside or in the line, -1 otherwise; a lookup for the reason isWaitingAt is one.
   venueIndexOf(person: number): number;
+  // The rank in the line, -1 when not waiting; a lookup for the reason isWaitingAt is one.
+  queuePlaceOf(person: number): number;
   homewardTo(person: number): Lodging | null;
   readonly occupancyTotals: VenueOccupancy;
   goalOf(person: number): Venue | null;
@@ -1161,6 +1163,10 @@ export function createRouter(parts: {
     venueIndexOf(person) {
       const state = occupancy.state[person];
       return state === undefined || state === VISIT.away ? -1 : occupancy.at[person]!;
+    },
+
+    queuePlaceOf(person) {
+      return occupancy.state[person] === VISIT.waiting ? occupancy.slot[person]! : -1;
     },
 
     homewardTo(person) {

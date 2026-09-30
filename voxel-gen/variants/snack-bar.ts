@@ -9,6 +9,8 @@ const KIOSK = { x: 2, z: 1, w: 18, d: 10 } as const;
 const FRONT = KIOSK.z + KIOSK.d - 1;
 const RIGHT = KIOSK.x + KIOSK.w - 1;
 const HATCH = { along: KIOSK.x + 2, w: KIOSK.w - 4 } as const;
+const GROUND = 2;
+const QUEUE = [0, 1, 2, 3].map((place) => HATCH.along + 1 + place * 4);
 
 // Both tones of the awning are whole courses: stripes running down the slope would be
 // a quad per stripe per step, stripes across it are one plane each.
@@ -26,12 +28,14 @@ export default defineModel({
     capacity: 10,
     dwellSeconds: { min: 300, max: 720 },
     price: 3,
+    spots: QUEUE.map((x) => ({ x, y: GROUND, z: FRONT + 4, facing: 2 as const })),
     doors: [{ x: HATCH.along + HATCH.w / 2, z: 12, facing: 0 }],
     litter: 0.05,
   },
   build: (b: VoxelBuilder) => {
     const { amber, bloom, foliage, glass, metal, stone, stucco, teak, water } = PALETTE;
     const ground = plinth(b, { x: 0, z: 0, w: 32, d: 16, height: 2 });
+    if (ground !== GROUND) throw new Error('The plinth moved under the queue');
 
     const eaves = stuccoWall(b, {
       ...KIOSK,

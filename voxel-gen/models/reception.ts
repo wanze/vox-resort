@@ -27,6 +27,8 @@ const BAYS = [
   [48, 54],
 ] as const;
 
+const DESKS = [BAYS[2], BAYS[1], BAYS[3]] as const;
+
 const BENCH = { z: LOGGIA.z + 1, z1: LOGGIA.z + 3 } as const;
 const BENCH_HIPS = GROUND + 2;
 
@@ -55,6 +57,7 @@ export default defineModel({
     role: 'service',
     capacity: 12,
     dwellSeconds: { min: 120, max: 480 },
+    spots: DESKS.map(([x0]) => ({ x: x0 + 3, y: GROUND, z: LOGGIA.z + 2, facing: 2 as const })),
     doors: [{ x: 31, z: FRONT, facing: 0 }],
     receives: true,
   },

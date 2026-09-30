@@ -40,6 +40,28 @@ const LANDING_Y = GROUND + 5;
 const POOL = { x: 32, z: 24, w: 13, d: 12 } as const;
 const PIT = { x0: 3, x1: 13, z0: 31, z1: 40 } as const;
 
+const EAST_LAWN = TOWER.x + TOWER.w;
+const SLIDE_FOOT = LANDING.z1 + 12;
+
+const PLAYERS = [
+  { x: LANDING.x0 + 2, y: GROUND, z: SLIDE_FOOT, facing: 0 },
+  { x: LANDING.x0 - 4, y: GROUND, z: SLIDE_FOOT, facing: 1 },
+  ...[TOWER.z + 6, TOWER.z + 11, TOWER.z + 16].flatMap((z) =>
+    [EAST_LAWN + 3, EAST_LAWN + 9].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+  ),
+  ...[PIT.z0 + 1, PIT.z0 + 6].flatMap((z) =>
+    [PIT.x1 + 6, PIT.x1 + 12].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+  ),
+  ...[PIT.x0 + 1, PIT.x0 + 7].map((x) => ({ x, y: GROUND, z: PIT.z0 - 4, facing: 0 as const })),
+  ...[POOL.x + 3, POOL.x + 9].map((x) => ({
+    x,
+    y: GROUND,
+    z: POOL.z + POOL.d + 4,
+    facing: 2 as const,
+  })),
+  { x: PIT.x0 + 2, y: GROUND, z: PIT.z1 + 4, facing: 2 },
+] as const;
+
 const BENCH = { x0: 21, x1: 31, z: 41, z1: 43 } as const;
 const BENCH_HIPS = GROUND + 2;
 
@@ -57,6 +79,11 @@ export default defineModel({
     satisfies: [{ need: 'fun', amount: 0.9 }],
     capacity: 20,
     dwellSeconds: { min: 3600, max: 10_800 },
+    spots: [
+      ...PLAYERS,
+      { x: PIT.x0 + 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 1 },
+      { x: EAST_LAWN + 6, y: GROUND, z: TOWER.z + 1, facing: 0, for: 'animator' },
+    ],
     doors: [{ x: 14, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

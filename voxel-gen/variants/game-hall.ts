@@ -27,6 +27,10 @@ const BLADE = { x: 31, x1: 32 } as const;
 // that the overhead camera still sees their screens.
 const VITRINE = { depth: 3, h: 7, w: 8 } as const;
 const VITRINES = [5, 14, 42, 51] as const;
+// Three players take nine voxels and a vitrine is eight wide, so only its outer cabinets are played.
+const PLAYED = [1, VITRINE.w - 2] as const;
+
+const GROUND = 3;
 
 const PENT_COURSES = 3;
 const PENT_OVERHANG = 2;
@@ -51,6 +55,12 @@ export default defineModel({
     dwellSeconds: { min: 1200, max: 3600 },
     reliability: 80,
     price: 2,
+    spots: [
+      ...VITRINES.flatMap((x0) =>
+        PLAYED.map((dx) => ({ x: x0 + dx, y: GROUND, z: FRONT, facing: 2 as const })),
+      ),
+      { x: MARQUEE.x + 4, y: GROUND, z: TOWER_FRONT + 2, facing: 0, for: 'animator' },
+    ],
     doors: [{ x: DOOR.along + DOOR.w / 2, z: TOWER_FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
@@ -58,6 +68,7 @@ export default defineModel({
     const { foliage, glass, metal, slate, stone, stucco, teak, terracotta } = PALETTE;
 
     const ground = plinth(b, { x: 0, z: 0, w: PLOT, d: PLOT });
+    if (ground !== GROUND) throw new Error('The plinth moved under the players');
     const eaves = stuccoWall(b, { ...HALL, y: ground, storeys: 1 });
     // Cut off after a few courses: a full hip this wide buries the shopfront under tile.
     for (let course = 0; course < PENT_COURSES; course++) {

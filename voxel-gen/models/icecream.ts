@@ -1,5 +1,9 @@
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
+const ON_BASE = 2;
+const COUNTER = { x: 3, x1: 12, y: 8, z: 4, z1: 12 } as const;
+const QUEUE = [0, 1, 2, 3].map((place) => COUNTER.x + place * 3);
+
 export default defineModel({
   id: 'icecream',
   label: 'Ice Cream Cart',
@@ -15,6 +19,7 @@ export default defineModel({
     capacity: 4,
     dwellSeconds: { min: 120, max: 300 },
     price: 2,
+    spots: QUEUE.map((x) => ({ x, y: ON_BASE, z: COUNTER.z1 + 2, facing: 2 as const })),
     doors: [{ x: 8, z: 12, facing: 0 }],
     litter: 0.06,
   },
@@ -40,7 +45,7 @@ export default defineModel({
 
     const N = 15;
 
-    box(0, N, 0, 1, 0, N, C.base);
+    box(0, N, 0, ON_BASE - 1, 0, N, C.base);
     for (let x = 0; x <= N; x++) {
       set(x, 1, 0, C.baseDark);
       set(x, 1, N, C.baseDark);
@@ -62,7 +67,7 @@ export default defineModel({
 
     box(3, 12, 4, 7, 4, 11, C.body);
     box(3, 12, 5, 5, 4, 11, C.bodyTrim);
-    box(3, 12, 8, 8, 4, 12, C.counter);
+    box(COUNTER.x, COUNTER.x1, COUNTER.y, COUNTER.y, COUNTER.z, COUNTER.z1, C.counter);
 
     box(4, 6, 9, 10, 5, 8, C.cooler);
     box(9, 12, 9, 11, 10, 10, C.board);

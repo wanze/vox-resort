@@ -6,6 +6,7 @@ import {
   type InstancedBufferAttribute,
   type MeshStandardNodeMaterial,
 } from 'three/webgpu';
+import { SHOWN, type DrawnAs } from '../../choreography/domain/casting';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import {
   figureGeometry,
@@ -32,6 +33,8 @@ export interface CrowdField {
   // A zero dt still writes: who is too small to draw follows the camera, not the clock.
   advance(dt: number, scale: number): void;
   setView(view: DetailView | null): void;
+  // A rebuild renumbers the places, so it hands over a new cast rather than a new field.
+  drawAs(next: DrawnAs | null): void;
   readonly drawnCount: number;
   relocate(network: WalkNetwork): void;
   // Takes a restored crowd as it is, where relocate would re-anchor everybody.
@@ -44,6 +47,8 @@ export interface CrowdFieldOptions {
   // A person's variant indexes this, in people registry order.
   readonly models: readonly ModelGeometry[];
   readonly lightVolume?: BakedLightVolume | null;
+  // Drawn over the crowd, never written into it: the sim steers the crowd and must not see this.
+  readonly drawnAs?: DrawnAs;
 }
 
 interface PersonMesh {
@@ -91,25 +96,52 @@ function buildPersonMesh(
   };
 }
 
+const tooSmall = (
+  view: DetailView | null,
+  x: number,
+  y: number,
+  z: number,
+  height: number,
+): boolean => {
+  if (!view) return false;
+  const dx = x - view.x;
+  const dy = y + height / 2 - view.y;
+  const dz = z - view.z;
+  const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return !standsOut(pixelsPerVoxel(view.lens, distance), height);
+};
+
+// continue, not break, for whoever is not drawn: slot 7 being empty says nothing about slot 8.
+const isDrawn = (crowd: Crowd, drawnAs: DrawnAs | null, person: number): boolean =>
+  crowd.offPlot[person] !== 1 && drawnAs?.shown[person] !== SHOWN.hidden;
+
+const placedIn = (drawnAs: DrawnAs | null, person: number): DrawnAs | null =>
+  drawnAs?.shown[person] === SHOWN.placed ? drawnAs : null;
+
+const restingOf = (crowd: Crowd, placed: DrawnAs | null, person: number): number =>
+  placed ? placed.pose[person]! : restingOn(crowd, person);
+
 // Column-major, and the figure faces +z, so the yaw matches crowd.ts's atan2(dx, dz).
-function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null): number {
+function writeInstances(
+  part: PersonMesh,
+  crowd: Crowd,
+  view: DetailView | null,
+  drawnAs: DrawnAs | null,
+): number {
   const matrices = part.mesh.instanceMatrix.array;
   const pose = part.pose.array;
-  const middle = part.height / 2;
   let slot = 0;
   for (let index = 0; index < part.people.length; index++) {
     const person = part.people[index]!;
     if (person >= crowd.count) break;
-    // continue, not break: slot 7 being empty says nothing about slot 8.
-    if (crowd.offPlot[person] === 1) continue;
-    if (view) {
-      const dx = crowd.x[person]! - view.x;
-      const dy = crowd.y[person]! + middle - view.y;
-      const dz = crowd.z[person]! - view.z;
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (!standsOut(pixelsPerVoxel(view.lens, distance), part.height)) continue;
-    }
-    const heading = crowd.heading[person]!;
+    if (!isDrawn(crowd, drawnAs, person)) continue;
+    const placed = placedIn(drawnAs, person);
+    const from = placed ?? crowd;
+    const x = from.x[person]!;
+    const y = from.y[person]!;
+    const z = from.z[person]!;
+    if (tooSmall(view, x, y, z, part.height)) continue;
+    const heading = from.heading[person]!;
     const yawCos = Math.cos(heading);
     const yawSin = Math.sin(heading);
     const at = slot * 16;
@@ -117,13 +149,14 @@ function writeInstances(part: PersonMesh, crowd: Crowd, view: DetailView | null)
     matrices[at + 2] = -yawSin;
     matrices[at + 8] = yawSin;
     matrices[at + 10] = yawCos;
-    matrices[at + 12] = crowd.x[person]!;
-    matrices[at + 13] = crowd.y[person]!;
-    matrices[at + 14] = crowd.z[person]!;
+    matrices[at + 12] = x;
+    matrices[at + 13] = y;
+    matrices[at + 14] = z;
     const packed = slot * POSE_STRIDE;
     pose[packed + POSE_SIN] = yawSin;
     pose[packed + POSE_COS] = yawCos;
-    pose[packed + POSE_RESTING] = restingOn(crowd, person);
+    pose[packed + POSE_RESTING] = restingOf(crowd, placed, person);
+    // The person's own, placed or not, so the walk cycle does not jump when they are let go.
     pose[packed + POSE_PHASE] = crowd.phase[person]!;
     slot++;
   }
@@ -137,6 +170,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   // Rebound by relocate, so closures must read this binding rather than hold a crowd of their own.
   let crowd = options.crowd;
   const { models } = options;
+  let drawnAs = options.drawnAs ?? null;
   const group = new Group();
   group.name = 'crowd';
 
@@ -155,7 +189,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   let drawnCount = 0;
   const writeAll = (): void => {
     drawnCount = 0;
-    for (const part of parts) drawnCount += writeInstances(part, crowd, view);
+    for (const part of parts) drawnCount += writeInstances(part, crowd, view, drawnAs);
   };
   writeAll();
 
@@ -172,6 +206,10 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     },
     setView(next) {
       view = next;
+    },
+    drawAs(next) {
+      drawnAs = next;
+      writeAll();
     },
     // Empty meshes are skipped by the renderer, so the HUD must not count them either.
     get drawCalls() {

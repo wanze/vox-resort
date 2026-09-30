@@ -83,6 +83,19 @@ export interface ModelSeat {
   readonly pose?: SeatPose;
   // Staff only: guests are never offered it, and a lifeguard is sent to sit here.
   readonly post?: 'lifeguard';
+  // A spectator's seat: the venue's line is drawn here while it waits, never its visitors.
+  readonly watches?: true;
+}
+
+// Where a visitor is drawn: `watcher` places are for the line, staff places for somebody at work.
+// Measured as a seat is, except that a standing spot's y is the layer the feet stand in.
+export interface ModelSpot {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly facing: QuarterTurns;
+  readonly pose?: SeatPose | 'stand';
+  readonly for?: 'visitor' | 'watcher' | 'animator' | 'lifeguard';
 }
 
 // x/z is the doorway's middle so a turn cannot push it over a tile boundary.
@@ -132,6 +145,8 @@ export interface ModelVenue {
   readonly bathing?: boolean;
   // Visits between breakdowns, on average; absent, it never breaks.
   readonly reliability?: number;
+  // In declaration order, the order visitors fill them in; seats are filled first.
+  readonly spots?: readonly ModelSpot[];
 }
 
 export interface ModelDepot {
@@ -228,7 +243,26 @@ function seatFrom(
     facing: seat.facing,
     pose: seat.pose ?? 'sit',
   };
-  return seat.post ? { ...placed, post: seat.post } : placed;
+  return {
+    ...placed,
+    ...(seat.post ? { post: seat.post } : {}),
+    ...(seat.watches ? { watches: seat.watches } : {}),
+  };
+}
+
+// Moved with the voxels as the seats are, or a model painted off the origin draws its visitors
+// off its floor.
+function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number): ModelVenue {
+  if (!venue.spots) return venue;
+  return {
+    ...venue,
+    spots: venue.spots.map((spot) => ({
+      ...spot,
+      x: spot.x - minX,
+      y: spot.y - minY,
+      z: spot.z - minZ,
+    })),
+  };
 }
 
 export function buildModel(source: VoxelModelSource): VoxelModel {
@@ -291,6 +325,6 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     })),
     seats: (source.seats ?? []).map((seat) => seatFrom(seat, minX, minY, minZ)),
     placement: source.placement ?? {},
-    venue: source.venue ?? null,
+    venue: source.venue ? venueFrom(source.venue, minX, minY, minZ) : null,
   };
 }

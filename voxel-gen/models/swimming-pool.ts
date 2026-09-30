@@ -14,11 +14,26 @@ const NORTH_ROW = { z: 2, at: [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120] } 
 const SOUTH_ROW = { z: 85, at: [6, 16, 26, 36, 46, 56, 66, 76, 86, 96, 106, 116] } as const;
 
 const LENGTHS = { x: 6, z: 26, w: 80, d: 38 } as const;
-const PADDLING = { x: 90, z: 14, w: 32, d: 28 } as const;
+const PADDLING = { x: 90, z: 14, w: 32, d: 28, depth: 1 } as const;
 const SPLASH = { x: 90, z: 58, w: 24, d: 20 } as const;
 
 const TOWER = { x: 117, z: 62, w: 5, d: 7, y: 11 } as const;
 const CHUTE = { from: 116, to: 104, top: TOWER.y, end: 3, z: 64 } as const;
+
+// Feet on the paddling pool's floor, so its one layer of water laps the shins.
+const WADING = TOP_LAYER - 1 - PADDLING.depth;
+const PADDLE_MID = { x: PADDLING.x + PADDLING.w / 2, z: PADDLING.z + PADDLING.d / 2 } as const;
+const WADERS = [
+  { dx: -7, dz: 0, facing: 1 },
+  { dx: -4, dz: -6, facing: 0 },
+  { dx: 4, dz: -6, facing: 0 },
+  { dx: 7, dz: 0, facing: 3 },
+  { dx: 4, dz: 6, facing: 2 },
+  { dx: -4, dz: 6, facing: 2 },
+  { dx: 11, dz: -5, facing: 3 },
+] as const;
+
+const LIFEGUARD = { x: LENGTHS.x + LENGTHS.w / 2, z: LENGTHS.z + LENGTHS.d + 1 } as const;
 
 export default defineModel({
   id: 'swimming-pool',
@@ -55,6 +70,15 @@ export default defineModel({
     capacity: 30,
     dwellSeconds: { min: 1800, max: 5400 },
     reliability: 120,
+    spots: [
+      ...WADERS.map(({ dx, dz, facing }) => ({
+        x: PADDLE_MID.x + dx,
+        y: WADING,
+        z: PADDLE_MID.z + dz,
+        facing,
+      })),
+      { ...LIFEGUARD, y: TOP_LAYER, facing: 2, for: 'lifeguard' },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -67,7 +91,7 @@ export default defineModel({
     const deck = top - 1;
 
     const surface = poolWater(b, { ...LENGTHS, deck });
-    poolWater(b, { ...PADDLING, shape: 'round', deck, depth: 1 });
+    poolWater(b, { ...PADDLING, shape: 'round', deck });
     poolWater(b, { ...SPLASH, deck });
 
     box(82, 84, surface, surface, 30, 50, stone.light);

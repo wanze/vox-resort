@@ -17,6 +17,19 @@ const CHANNEL = { x0: 86, x1: 97, z0: 44, z1: 49 } as const;
 const SPA = { x: 109, z: 47, r: 12 } as const;
 const HUT = { x: 102, z: 3, w: 20, d: 11 } as const;
 
+// The raised spa holds the only single layer of water, so it stands in for a paddling pool.
+const SPA_WATER = TOP_LAYER + 2;
+const WADERS = [
+  { dx: -6, dz: 0, facing: 1 },
+  { dx: -3, dz: -5, facing: 0 },
+  { dx: 3, dz: -5, facing: 0 },
+  { dx: 6, dz: 0, facing: 3 },
+  { dx: 3, dz: 5, facing: 2 },
+  { dx: -3, dz: 5, facing: 2 },
+] as const;
+
+const CHAIR = { x: 56, z: 69, seat: TOP_LAYER + 7 } as const;
+
 const NORTH = { head: 8, pairs: [4, 20, 36, 52, 68, 84] } as const;
 const SOUTH = { head: 87, pairs: [6, 26, 46, 66, 86, 106] } as const;
 const PAIR = [0, 7] as const;
@@ -83,6 +96,22 @@ export default defineModel({
     capacity: 30,
     dwellSeconds: { min: 1800, max: 5400 },
     reliability: 120,
+    spots: [
+      ...WADERS.map(({ dx, dz, facing }) => ({
+        x: SPA.x + dx,
+        y: SPA_WATER,
+        z: SPA.z + dz,
+        facing,
+      })),
+      {
+        x: CHAIR.x + 1,
+        y: CHAIR.seat + 1,
+        z: CHAIR.z + 1,
+        facing: 2,
+        pose: 'sit',
+        for: 'lifeguard',
+      },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -166,7 +195,7 @@ export default defineModel({
     box(tx - 1, tx - 1, crown - 1, crown - 1, tz, tz + 1, teak.deep);
 
     // Raised a metre so it reads as a spa rather than a second pool, and so it can spill.
-    const spaTop = top + 2;
+    const spaTop = SPA_WATER;
     for (let x = SPA.x - SPA.r; x < SPA.x + SPA.r; x++) {
       for (let z = SPA.z - SPA.r; z < SPA.z + SPA.r; z++) {
         if (!inCircle(SPA, x, z)) continue;
@@ -198,14 +227,13 @@ export default defineModel({
     box(3, 6, top, top + 1, 45, 48, stone.base);
     box(3, 13, top + 2, top + 2, 46, 47, stucco.light);
 
-    const chair = { x: 56, z: 69 } as const;
-    for (const x of [chair.x, chair.x + 3]) {
-      for (const z of [chair.z, chair.z + 3]) box(x, x, top, top + 6, z, z, teak.shade);
+    for (const x of [CHAIR.x, CHAIR.x + 3]) {
+      for (const z of [CHAIR.z, CHAIR.z + 3]) box(x, x, top, top + 6, z, z, teak.shade);
     }
-    box(chair.x, chair.x + 3, top + 3, top + 3, chair.z, chair.z, teak.base);
-    box(chair.x, chair.x + 3, top + 7, top + 7, chair.z, chair.z + 3, teak.base);
-    box(chair.x, chair.x + 3, top + 8, top + 10, chair.z + 3, chair.z + 3, teak.base);
-    box(chair.x + 1, chair.x + 2, top + 4, top + 5, chair.z + 4, chair.z + 4, bloom.base);
+    box(CHAIR.x, CHAIR.x + 3, top + 3, top + 3, CHAIR.z, CHAIR.z, teak.base);
+    box(CHAIR.x, CHAIR.x + 3, CHAIR.seat, CHAIR.seat, CHAIR.z, CHAIR.z + 3, teak.base);
+    box(CHAIR.x, CHAIR.x + 3, top + 8, top + 10, CHAIR.z + 3, CHAIR.z + 3, teak.base);
+    box(CHAIR.x + 1, CHAIR.x + 2, top + 4, top + 5, CHAIR.z + 4, CHAIR.z + 4, bloom.base);
 
     const lounger = (x: number, head: number, headNorth: boolean): void => {
       const z0 = headNorth ? head : head - 5;

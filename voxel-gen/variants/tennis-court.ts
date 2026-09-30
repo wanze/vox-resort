@@ -24,6 +24,14 @@ const POSTS = [10, 34, 52, 71, 72, 91, 109, 133] as const;
 
 const NET = { x: 71, z0: COURT.z0 - 3, z1: COURT.z1 + 3, top: ON_TURF + 3 } as const;
 
+// Singles first, so the first two places are the baseline players; the net pair makes it doubles.
+const PLAYERS = [
+  { x: COURT.x0 - 2, y: ON_TURF, z: MID - 5, facing: 1 },
+  { x: COURT.x1 + 2, y: ON_TURF, z: MID + 6, facing: 3 },
+  { x: NET.x - 12, y: ON_TURF, z: MID + 6, facing: 1 },
+  { x: NET.x + 13, y: ON_TURF, z: MID - 5, facing: 3 },
+] as const;
+
 const STAND = { x0: 36, x1: 107 } as const;
 const TIERS = [
   { z0: 8, z1: 13, top: ON_TURF + 1 },
@@ -65,7 +73,13 @@ export default defineModel({
   tiles: { x: 9, z: 5 },
   emissive: [LANTERN],
   seats: TIERS.flatMap((tier) =>
-    SITTERS.map((x) => ({ x, y: tier.top + 1, z: tier.z1 - 2, facing: 0 as const })),
+    SITTERS.map((x) => ({
+      x,
+      y: tier.top + 1,
+      z: tier.z1 - 2,
+      facing: 0 as const,
+      watches: true as const,
+    })),
   ),
   lights: [
     ...BEAMS_X.flatMap((x) =>
@@ -98,6 +112,7 @@ export default defineModel({
     ],
     capacity: 4,
     dwellSeconds: { min: 1800, max: 3600 },
+    spots: PLAYERS,
     doors: GATES.flatMap((x0) => [
       { x: x0 + GATE_W / 2, z: 0, facing: 2 as const },
       { x: x0 + GATE_W / 2, z: NZ, facing: 0 as const },

@@ -3,8 +3,8 @@ import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
-import { VARIANT_SOURCES } from './variants/index.ts';
-import type { VoxelModelSource } from './voxelgen.ts';
+import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
+import { buildModel, type VoxelModel, type VoxelModelSource } from './voxelgen.ts';
 
 const SOURCES: readonly VoxelModelSource[] = [
   ...MODEL_SOURCES,
@@ -137,5 +137,73 @@ describe('the venues the catalogue declares', () => {
     ).map((source) => source.id);
     expect(undecided).toEqual([]);
     expect(SOURCES.length).toBe(NOT_VENUES.size + venues.length);
+  });
+});
+
+// The sim's queueLane.ts draws no longer a line than this, and art may not import the sim.
+const MAX_QUEUE_SHOWN = 12;
+
+// The courts whose line watches from the benches rather than queueing on the path.
+const WATCHED: ReadonlySet<string> = new Set(['tennis-court', 'basketball-court', 'volleyball']);
+
+// Open venues drawn with everybody in a place; the rest hide what does not fit inside.
+const SEEN: ReadonlySet<string> = new Set([
+  'tennis-court',
+  'basketball-court',
+  'volleyball',
+  'swimming-pool',
+  'minigolf',
+  'playground',
+  'kids-club',
+  'gym-pavilion',
+  'beach-club',
+  'beach-shower',
+  'icecream',
+]);
+
+const originalOf = new Map(VARIANTS.map(({ of, source }) => [source.id, of]));
+
+const familyOf = (id: string): string => originalOf.get(id) ?? id;
+
+const visitorPlaces = (model: VoxelModel): number =>
+  model.seats.filter((seat) => !seat.watches && !seat.post).length +
+  (model.venue?.spots ?? []).filter((spot) => (spot.for ?? 'visitor') === 'visitor').length;
+
+const watcherPlaces = (model: VoxelModel): number =>
+  model.seats.filter((seat) => seat.watches).length +
+  (model.venue?.spots ?? []).filter((spot) => spot.for === 'watcher').length;
+
+describe('the places a venue draws its visitors in', () => {
+  const models = venues.map(buildModel);
+
+  it('keeps every spot inside its model, above the ground', () => {
+    for (const model of models) {
+      for (const spot of model.venue!.spots ?? []) {
+        const at = `${model.id} at ${spot.x},${spot.y},${spot.z}`;
+        expect(spot.x, at).toBeGreaterThanOrEqual(0);
+        expect(spot.x, at).toBeLessThan(model.width);
+        expect(spot.z, at).toBeGreaterThanOrEqual(0);
+        expect(spot.z, at).toBeLessThan(model.depth);
+        expect(spot.y, at).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('seats a whole shown line where the courts are watched', () => {
+    for (const model of models) {
+      if (!WATCHED.has(familyOf(model.id))) continue;
+      expect(watcherPlaces(model), `${model.id} has too few watchers`).toBeGreaterThanOrEqual(
+        MAX_QUEUE_SHOWN,
+      );
+    }
+  });
+
+  it('has a place for every visitor it admits, where it is seen', () => {
+    for (const model of models) {
+      if (!SEEN.has(familyOf(model.id))) continue;
+      expect(visitorPlaces(model), `${model.id} has too few places`).toBeGreaterThanOrEqual(
+        model.venue!.capacity,
+      );
+    }
   });
 });

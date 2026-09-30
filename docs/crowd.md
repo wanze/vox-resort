@@ -34,6 +34,7 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 | Guests, parties, beds, names    | `guests/domain/`                                                    |
 | Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                       |
 | Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
+| Places in a venue               | `choreography/domain/places.ts`, `casting.ts`                       |
 | Boats and passengers            | `sea/domain/piers.ts`, `passengers.ts`                              |
 
 ## Walk network
@@ -141,6 +142,9 @@ queuing.
   `crowdField.test.ts` counts them.
 - People use the lit material (so lamps light them) and get no blob shadow.
 - Passengers are a separate figure field posed in the boat's frame.
+- The field draws a `DrawnAs` (the cast, see Places) over the crowd: a placed
+  person is drawn at their place and pose, a hidden one not at all. The crowd's
+  own state is never written.
 
 ## Determinism
 
@@ -220,6 +224,34 @@ Tune `archetypes.ts` first.
   before they arrive.
 - Each tick: people leave, then the front of the queue enters, then the queue
   moves up.
+
+## Places
+
+A **place** is where somebody at a venue is drawn: a seat or a spot the art
+declares (`placesFor`). The sim holds a visitor at the middle of the
+footprint. The **cast** (`casting.ts`) draws them somewhere better. This is
+**visual only**: nothing in the sim reads it, nothing is saved, and a load or
+an edit simply recasts.
+
+- **Visitors** fill a venue's visitor spots in declaration order, then its
+  seats (those without `watches` or `post`). A party admitted together takes
+  places side by side. The first two tennis places are the singles players.
+- **Watchers**: at the tennis, basketball and volleyball courts, the line is
+  drawn on the spectator seats (`watches`) and watcher spots, by queue rank,
+  instead of on the path. The simulated queue itself is unchanged. With no
+  watcher place left, a waiting guest stays on the lane.
+- **Hidden inside**: a visitor with no free place is not drawn at all, and
+  neither is a guest asleep in a lodging. That covers the restrooms, the
+  supermarket, and the overflow of a restaurant with more capacity than
+  seats. A hidden person cannot be picked.
+- **Staff**: an animator at work is drawn on the venue's `animator` spot, and a
+  lifeguard on its `lifeguard` spot. Cleaners and mechanics are drawn where the
+  staff router holds them.
+- **The seat pop**: passers-by still sit down on venue seats, since keeping
+  them off would change every seeded replay. When one claims a seat a visitor
+  is drawn on, `keepSeats` moves the visitor to another place in the same frame.
+- The cast is recast once after a frame's ticks. It is rebuilt with the
+  network on every edit, because places point at network seats by index.
 
 ## Beach buildings
 
@@ -831,3 +863,4 @@ changes what a saved number means, and needs a version bump too.
   `satisfies`, `health`.
 - What it costs to stand and what a visit or a night takes: `cost` on the
   source (optional, derived from its size otherwise) and `venue.price`.
+- Where visitors are drawn: `venue.spots` and seats; `watches` for spectators.

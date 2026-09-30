@@ -21,6 +21,28 @@ const DOOR = 39;
 
 const PERGOLA = { x0: 2, x1: 15, z0: 4, z1: 24 } as const;
 const RAFTER_Y = GROUND + 12;
+const BAG = { x: 5, z: 9 } as const;
+const ROPE = { x: 7, z: 19 } as const;
+
+const MATS = [5, 12, 19, 26] as const;
+const MAT_Z = { z0: 32, z1: 40 } as const;
+
+const YARD = { x0: 47, x1: 61, z0: 30, z1: 41 } as const;
+const RACK = { x0: 58, x1: 60, z0: 31, z1: 40 } as const;
+const PRESS = { x0: 50, x1: 53, z0: 33, z1: 38 } as const;
+
+const ATHLETES = [
+  { x: BAG.x, y: GROUND, z: BAG.z + 3, facing: 2 },
+  { x: ROPE.x, y: GROUND, z: ROPE.z + 2, facing: 2 },
+  ...MATS.map((x) => ({
+    x: x + 2,
+    y: GROUND + 1,
+    z: (MAT_Z.z0 + MAT_Z.z1) / 2,
+    facing: 2 as const,
+  })),
+  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1 + 1) / 2, facing: 1 },
+  { x: (PRESS.x0 + PRESS.x1) >> 1, y: GROUND, z: PRESS.z0 - 2, facing: 0 },
+] as const;
 
 const BENCHES = [29, 38] as const;
 const BENCH_X = 35;
@@ -53,6 +75,7 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 1800, max: 3600 },
+    spots: ATHLETES,
     doors: [{ x: DOOR + 2, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
@@ -138,9 +161,9 @@ export default defineModel({
     for (let z = PERGOLA.z0; z <= PERGOLA.z1; z += 5) {
       box(PERGOLA.x0 - 1, PERGOLA.x1 + 1, RAFTER_Y, RAFTER_Y, z, z, teak.base);
     }
-    box(5, 5, ground + 9, RAFTER_Y - 1, 9, 9, metal.base);
-    box(5, 6, ground + 3, ground + 8, 9, 10, bloom.shade);
-    box(7, 7, ground, RAFTER_Y - 1, 19, 19, thatch.light);
+    box(BAG.x, BAG.x, ground + 9, RAFTER_Y - 1, BAG.z, BAG.z, metal.base);
+    box(BAG.x, BAG.x + 1, ground + 3, ground + 8, BAG.z, BAG.z + 1, bloom.shade);
+    box(ROPE.x, ROPE.x, ground, RAFTER_Y - 1, ROPE.z, ROPE.z, thatch.light);
     box(9, 12, ground, ground + 2, 5, 7, teak.base);
     box(10, 12, ground + 3, ground + 4, 5, 7, teak.light);
 
@@ -151,14 +174,8 @@ export default defineModel({
     }
 
     box(1, BENCH_X - 2, FLOOR_Y, FLOOR_Y, 29, PLOT.d - 3, grass.base);
-    for (const [x, mat] of [
-      [5, glass.shade],
-      [12, bloom.shade],
-      [19, foliage.light],
-      [26, amber.shade],
-    ] as const) {
-      box(x, x + 3, ground, ground, 32, 40, mat);
-    }
+    const mats = [glass.shade, bloom.shade, foliage.light, amber.shade] as const;
+    MATS.forEach((x, i) => box(x, x + 3, ground, ground, MAT_Z.z0, MAT_Z.z1, mats[i]!));
 
     box(DOOR - 1, DOOR + 4, FLOOR_Y, FLOOR_Y, FRONT + 1, PLOT.d - 1, stone.light);
     steps(b, { x: DOOR - 1, z: PLOT.d - 4, w: 6, y: FLOOR_Y, treads: 2, descends: 'z+' });
@@ -172,11 +189,13 @@ export default defineModel({
       box(BENCH_X + 3, BENCH_X + 3, BENCH_HIPS, BENCH_HIPS + 1, z0, z0 + 6, teak.shade);
     }
 
-    box(47, 61, FLOOR_Y, FLOOR_Y, 30, 41, terracotta.deep);
-    box(58, 60, ground, ground + 2, 31, 40, metal.deep);
-    for (const z of [32, 37]) box(58, 60, ground + 3, ground + 3, z, z + 1, metal.base);
-    box(51, 52, ground, ground + 1, 33, 38, metal.shade);
-    box(50, 53, ground + 2, ground + 2, 33, 38, teak.shade);
+    box(YARD.x0, YARD.x1, FLOOR_Y, FLOOR_Y, YARD.z0, YARD.z1, terracotta.deep);
+    box(RACK.x0, RACK.x1, ground, ground + 2, RACK.z0, RACK.z1, metal.deep);
+    for (const z of [RACK.z0 + 1, RACK.z1 - 3]) {
+      box(RACK.x0, RACK.x1, ground + 3, ground + 3, z, z + 1, metal.base);
+    }
+    box(PRESS.x0 + 1, PRESS.x1 - 1, ground, ground + 1, PRESS.z0, PRESS.z1, metal.shade);
+    box(PRESS.x0, PRESS.x1, ground + 2, ground + 2, PRESS.z0, PRESS.z1, teak.shade);
     box(48, 50, ground, ground + 2, 40, 41, teak.base);
 
     flowerBox(b, {

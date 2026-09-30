@@ -26,6 +26,15 @@ const DECK = GROUND + 6;
 const SWING = { x0: 39, x1: 57, z: 11, top: GROUND + 11 } as const;
 const SWINGS = [42, 46, 50, 54] as const;
 
+const CLIMBERS = [
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+] as const;
+
+const PIT = { x0: 20, x1: 25, z0: 38, z1: 42 } as const;
+
 const GATE = { lo: PATH.x0, hi: PATH.x1 } as const;
 
 // On the path's north verge, backs to the path, so the parents watch the swings and the tower.
@@ -55,6 +64,36 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 900, max: 2400 },
+    spots: [
+      ...SWINGS.slice(0, 3).map((x) => ({
+        x: x + 1,
+        y: GROUND + 5,
+        z: SWING.z,
+        facing: 0 as const,
+        pose: 'sit' as const,
+      })),
+      ...CLIMBERS,
+      // Ground sitters are lifted by the crowd's GROUND_SIT_RISE, so the hips sit 1.5 above the sand.
+      ...(
+        [
+          [PIT.x0, 1],
+          [PIT.x1, 3],
+        ] as const
+      ).map(([x, facing]) => ({
+        x,
+        y: GROUND + 2.5,
+        z: PIT.z0 + 1,
+        facing,
+        pose: 'sit' as const,
+      })),
+      {
+        x: (MATS.ne.x0 + MATS.ne.x1) >> 1,
+        y: GROUND + 1,
+        z: MATS.ne.z1 - 3,
+        facing: 2,
+        for: 'animator',
+      },
+    ],
     doors: [{ x: GATE.lo + 2, z: Z - 1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
@@ -150,7 +189,7 @@ export default defineModel({
     box(round.x - 3, round.x + 3, GROUND + 5, GROUND + 5, round.z, round.z, metal.light);
     box(round.x, round.x, GROUND + 5, GROUND + 5, round.z - 3, round.z + 3, metal.light);
 
-    box(20, 25, GROUND, GROUND, 38, 42, sand.base);
+    box(PIT.x0, PIT.x1, GROUND, GROUND, PIT.z0, PIT.z1, sand.base);
     box(22, 23, GROUND + 1, GROUND + 2, 39, 40, bloom.base);
     for (const [z, paint] of [
       [31, bloom],

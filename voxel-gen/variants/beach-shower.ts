@@ -33,6 +33,7 @@ export default defineModel({
     satisfies: [{ need: 'hygiene', amount: 0.6 }],
     capacity: 1,
     dwellSeconds: { min: 30, max: 90 },
+    spots: [{ x: PIPE.x1, y: GROUND + 1, z: ROSE, facing: 0 }],
     doors: [{ x: PIPE.x1, z: SLATS.at(-1)! + 1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

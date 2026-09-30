@@ -20,6 +20,21 @@ const THREE = { depth: 28, inset: 4 } as const;
 const RIM = 12;
 const BOARD = 5;
 
+// A 2-1-2 zone, measured in from each baseline. Each role is filled in both halves at once,
+// so a small party plays one on one before the teams fill up.
+const ZONE = [
+  { d: KEY.depth - 3, dz: 0 },
+  { d: THREE.depth + 1, dz: -(KEY.half + 3) },
+  { d: THREE.depth + 1, dz: KEY.half + 2 },
+  { d: BOARD + 3, dz: -KEY.half },
+  { d: BOARD + 3, dz: KEY.half - 1 },
+] as const;
+
+const PLAYERS = ZONE.flatMap(({ d, dz }) => [
+  { x: COURT.x0 + d, y: ON, z: MID_Z + dz, facing: 1 as const },
+  { x: COURT.x1 - d, y: ON, z: MID_Z - 1 - dz, facing: 3 as const },
+]);
+
 const STAND = { x0: 32, x1: 95 } as const;
 const TIERS = 3;
 const tierZ = (k: number): number => COURT.z0 - 3 - 2 * k;
@@ -43,7 +58,13 @@ export default defineModel({
   tiles: { x: 8, z: 5 },
   emissive: [LANTERN],
   seats: Array.from({ length: TIERS }, (_, k) =>
-    SITTERS.map((x) => ({ x, y: tierTop(k) + 1, z: tierZ(k) - 1, facing: 0 as const })),
+    SITTERS.map((x) => ({
+      x,
+      y: tierTop(k) + 1,
+      z: tierZ(k) - 1,
+      facing: 0 as const,
+      watches: true as const,
+    })),
   ).flat(),
   lights: [
     [36, 26],
@@ -67,6 +88,7 @@ export default defineModel({
     ],
     capacity: 10,
     dwellSeconds: { min: 1200, max: 2700 },
+    spots: PLAYERS,
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

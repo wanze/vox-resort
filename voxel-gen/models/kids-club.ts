@@ -22,6 +22,27 @@ const GATE = { x0: 10, x1: 17 } as const;
 
 const SLIDE = { x: 35, z: 6, deck: GROUND + 5 } as const;
 
+const PIT = { x0: 19, x1: 30, z0: 26, z1: 35 } as const;
+const HOUSE = { x: 35, z: 29, w: 7, d: 7 } as const;
+
+const PLAYERS = [
+  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z + 15, facing: 0 },
+  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z - 3, facing: 0 },
+  ...[SLIDE.z + 3, SLIDE.z + 9].map((z) => ({ x: SLIDE.x - 3, y: GROUND, z, facing: 1 as const })),
+  ...[SLIDE.z - 2, SLIDE.z + 4, SLIDE.z + 10].map((z) => ({
+    x: FENCE_X - 3,
+    y: GROUND,
+    z,
+    facing: 3 as const,
+  })),
+  ...[FRONT + 11, FRONT + 16, FRONT + 21].flatMap((z) =>
+    [GATE.x0 - 7, GATE.x0 - 1].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+  ),
+  { x: HOUSE.x + 3, y: GROUND, z: HOUSE.z + HOUSE.d + 3, facing: 2 },
+  { x: HOUSE.x, y: GROUND, z: HOUSE.z - 3, facing: 0 },
+  { x: HOUSE.x + HOUSE.w - 1, y: GROUND, z: HOUSE.z - 3, facing: 0 },
+] as const;
+
 const BENCH = { x0: 21, x1: 31, z: 41, z1: 43 } as const;
 const BENCH_HIPS = GROUND + 2;
 
@@ -38,6 +59,12 @@ export default defineModel({
     satisfies: [{ need: 'fun', amount: 0.9 }],
     capacity: 20,
     dwellSeconds: { min: 3600, max: 10_800 },
+    spots: [
+      ...PLAYERS,
+      { x: PIT.x1 - 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 3 },
+      { x: BENCH.x0 + 1, y: GROUND, z: BENCH.z - 3, facing: 2 },
+      { x: GATE.x0 - 4, y: GROUND, z: FRONT + 6, facing: 0, for: 'animator' },
+    ],
     doors: [{ x: 14, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {
@@ -107,13 +134,11 @@ export default defineModel({
       box(SLIDE.x + 1, SLIDE.x + 2, SLIDE.deck - step - 1, SLIDE.deck - step, z, z + 1, amber.base);
     }
 
-    const PIT = { x0: 19, x1: 30, z0: 26, z1: 35 } as const;
     box(PIT.x0, PIT.x1, ground, ground, PIT.z0, PIT.z1, teak.base);
     box(PIT.x0 + 1, PIT.x1 - 1, ground, ground, PIT.z0 + 1, PIT.z1 - 1, sand.base);
     box(26, 27, ground + 1, ground + 2, 29, 30, bloom.base);
     parasol(b, { x: 23, z: 30, y: ground + 1, height: 9, reach: 3, canvas: bloom });
 
-    const HOUSE = { x: 35, z: 29, w: 7, d: 7 } as const;
     const hx1 = HOUSE.x + HOUSE.w - 1;
     const hz1 = HOUSE.z + HOUSE.d - 1;
     box(HOUSE.x, hx1, ground, ground + 5, HOUSE.z, hz1, stucco.base);

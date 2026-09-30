@@ -4,7 +4,7 @@ import { poolWater } from '../parts/pool.ts';
 import { awning, shutteredWindow, stuccoWall } from '../parts/wall.ts';
 import { pottedPlant } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
-import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+import { defineModel, type QuarterTurns, type VoxelBuilder } from '../voxelgen.ts';
 
 const X = 143;
 const Z = 111;
@@ -77,6 +77,36 @@ const LANES: readonly Lane[] = [
   },
 ];
 
+// Two neighbouring holes in every quarter, tee then cup, so a party plays one or two holes
+// together and a full course still shows play in each quarter.
+const PLAYED = QUARTERS.flatMap(([qx, qz], quarter) =>
+  LANES.filter((_, index) => (quarter + index) % 2 === 0).map((lane) => ({ lane, qx, qz })),
+);
+
+const puttedAlong = (lane: Lane): 'x' | 'z' => {
+  const last = lane.rects[lane.rects.length - 1]!;
+  return last.w > last.d ? 'x' : 'z';
+};
+
+// Beside the ball rather than on it, facing into the lane: the pair at a hole face each other.
+const beside = (x: number, z: number, along: 'x' | 'z', sign: number) => ({
+  x: along === 'z' ? x - 2 : x,
+  y: GREEN + 1,
+  z: along === 'x' ? z + 2 : z,
+  facing: (along === 'x' ? (sign > 0 ? 1 : 3) : sign > 0 ? 0 : 2) as QuarterTurns,
+});
+
+const PLAYERS = PLAYED.flatMap(({ lane, qx, qz }) => {
+  const [tx, tz] = lane.tee;
+  const [cx, cz] = lane.cup;
+  const putt = puttedAlong(lane);
+  const play = (along: 'x' | 'z'): number => Math.sign(along === 'x' ? cx - tx : cz - tz);
+  return [
+    beside(qx + tx, qz + tz, lane.along, play(lane.along)),
+    beside(qx + cx, qz + cz, putt, -play(putt)),
+  ];
+});
+
 const SIDES = [
   [1, 0],
   [-1, 0],
@@ -127,6 +157,7 @@ export default defineModel({
     capacity: 16,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 3,
+    spots: PLAYERS,
     doors: [
       { x: CROSS.x + 1, z: 0, facing: 2 },
       { x: CROSS.x + 1, z: Z, facing: 0 },

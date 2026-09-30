@@ -15,6 +15,34 @@ const POST_HEIGHT = 11;
 
 const NET_HEIGHT = 4;
 
+const FRONT = 8;
+const BACK = 22;
+const LANES = [COURT.z0 + 5, (COURT.z0 + COURT.z1 + 1) / 2, COURT.z1 - 5] as const;
+
+// Each place is filled on both sides of the net at once; the back corners first, so four
+// guests make a game of two against two.
+const ROLES = [
+  { d: BACK, z: LANES[0] },
+  { d: BACK, z: LANES[2] },
+  { d: FRONT, z: LANES[1] },
+  { d: BACK, z: LANES[1] },
+  { d: FRONT, z: LANES[0] },
+  { d: FRONT, z: LANES[2] },
+] as const;
+
+const PLAYERS = ROLES.flatMap(({ d, z }) => [
+  { x: POST.x - d, y: GROUND, z, facing: 1 as const },
+  { x: POST.x1 + d, y: GROUND, z: COURT.z0 + COURT.z1 - z, facing: 3 as const },
+]);
+
+const BENCH = { x0: 86, x1: 87, z0: 22, z1: 33, plank: GROUND + 2 } as const;
+
+const SIDELINES = [
+  { z: COURT.z0 - 3, facing: 0 },
+  { z: COURT.z1 + 3, facing: 2 },
+] as const;
+const WATCHERS_X = [POST.x - 23, POST.x - 11, POST.x1 + 11, POST.x1 + 23] as const;
+
 export default defineModel({
   id: 'volleyball',
   label: 'Volleyball Court',
@@ -29,6 +57,28 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 1200, max: 2700 },
+    spots: [
+      ...PLAYERS,
+      // Spots, not seats: a seat joins the walk network, and a passer-by sitting down on it
+      // would move every seeded replay.
+      ...Array.from({ length: 4 }, (_, i) => ({
+        x: BENCH.x1,
+        y: BENCH.plank + 1,
+        z: BENCH.z0 + 1 + 3 * i,
+        facing: 3 as const,
+        pose: 'sit' as const,
+        for: 'watcher' as const,
+      })),
+      ...SIDELINES.flatMap(({ z, facing }) =>
+        WATCHERS_X.map((x) => ({
+          x,
+          y: GROUND,
+          z,
+          facing,
+          for: 'watcher' as const,
+        })),
+      ),
+    ],
   },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
@@ -60,9 +110,10 @@ export default defineModel({
     box(28, 29, GROUND, GROUND + 1, 30, 31, stucco.light);
     box(28, 29, GROUND, GROUND + 1, 30, 30, bloom.base);
 
-    box(86, 87, GROUND, GROUND + 1, 22, 22, teak.shade);
-    box(86, 87, GROUND, GROUND + 1, 33, 33, teak.shade);
-    box(86, 87, GROUND + 2, GROUND + 2, 22, 33, teak.base);
+    for (const z of [BENCH.z0, BENCH.z1]) {
+      box(BENCH.x0, BENCH.x1, GROUND, BENCH.plank - 1, z, z, teak.shade);
+    }
+    box(BENCH.x0, BENCH.x1, BENCH.plank, BENCH.plank, BENCH.z0, BENCH.z1, teak.base);
     parasol(b, { x: 90, z: 42, y: GROUND, reach: 3 });
     box(88, 89, GROUND, GROUND + 1, 44, 45, bloom.base);
   },

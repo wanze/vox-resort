@@ -7,9 +7,10 @@ import {
   type InstancedMesh,
 } from 'three/webgpu';
 import { ADULT_VOXELS, CHILD_VOXELS, hipHeight } from '../../../../voxel-gen/people/figure.ts';
+import { createCast, SHOWN, type DrawnAs } from '../../choreography/domain/casting';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { orthographicLens } from '../../rendering/domain/levelOfDetail';
-import { createCrowd, putOnPlot, takeOffPlot, type Crowd } from '../domain/crowd';
+import { createCrowd, putOnPlot, RESTING, takeOffPlot, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
 
@@ -417,5 +418,58 @@ describe('buildCrowdField', () => {
     const field = buildCrowdField({ crowd: crowdOf(20), models: MODELS });
     field.dispose();
     expect(field.group.children).toHaveLength(0);
+  });
+
+  it('draws a placed person at the place, in its pose, and nowhere the crowd has them', () => {
+    const crowd = crowdOf(1);
+    const drawnAs: DrawnAs = createCast(1, []);
+    drawnAs.shown[0] = SHOWN.placed;
+    drawnAs.x.set([40.5]);
+    drawnAs.y.set([7]);
+    drawnAs.z.set([3.5]);
+    drawnAs.heading.set([Math.PI / 2]);
+    drawnAs.pose.set([RESTING.sitting]);
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const [mesh] = meshes(field.group);
+    const at = positionOf(mesh!, 0);
+    expect([at.x, at.y, at.z]).toEqual([40.5, 7, 3.5]);
+    const pose = mesh!.geometry.getAttribute('pose');
+    expect(pose.getX(0)).toBeCloseTo(1, 5);
+    expect(pose.getZ(0)).toBe(RESTING.sitting);
+    expect(pose.getW(0)).toBeCloseTo(crowd.phase[0]!, 5);
+    field.dispose();
+  });
+
+  it('draws nobody hidden inside, and keeps drawing everybody after them', () => {
+    const crowd = crowdOf(6);
+    const drawnAs = createCast(6, []);
+    drawnAs.shown[1] = SHOWN.hidden;
+    drawnAs.shown[4] = SHOWN.hidden;
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    expect(field.drawnCount).toBe(4);
+    const standing = meshes(field.group).flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, slot) => positionOf(mesh, slot)),
+    );
+    for (const person of [0, 2, 3, 5]) {
+      const here = standing.some(
+        (at) =>
+          Math.abs(at.x - crowd.x[person]!) < 1e-3 && Math.abs(at.z - crowd.z[person]!) < 1e-3,
+      );
+      expect(here, `person ${person} was not drawn`).toBe(true);
+    }
+    field.dispose();
+  });
+
+  it('draws everybody as the crowd has them when nobody is cast', () => {
+    const crowd = crowdOf(30);
+    const plain = buildCrowdField({ crowd, models: MODELS });
+    const cast = buildCrowdField({ crowd, models: MODELS, drawnAs: createCast(30, []) });
+    for (const [index, mesh] of meshes(plain.group).entries()) {
+      const other = meshes(cast.group)[index]!;
+      expect(other.count).toBe(mesh.count);
+      expect(Array.from(other.instanceMatrix.array)).toEqual(Array.from(mesh.instanceMatrix.array));
+    }
+    plain.dispose();
+    cast.dispose();
   });
 });

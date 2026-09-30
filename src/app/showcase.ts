@@ -231,6 +231,7 @@ import {
   wavesDue,
 } from '../features/sim/domain/checkIn';
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
+import { depotForShift, depotsOn, type Depot } from '../features/sim/domain/depots';
 import { createRandom, type Random } from '../features/layout/domain/random';
 import { beachVenueFor } from '../features/sim/domain/beach';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
@@ -857,6 +858,7 @@ interface Resort {
   // Homes are sorted by beds, lodgings stand in placement order; rebuilt with both on an edit.
   homeOfLodging: Int32Array;
   gateways: readonly Gateway[];
+  depots: readonly Depot[];
   // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
   // plot.
   upkeep: Upkeep;
@@ -1152,6 +1154,7 @@ function buildResort(
   const venues = venuesOn(plot.layout.placements);
   const lodgings = lodgingsOn(plot.layout.placements);
   const gateways = gatewaysOn(plot.layout.placements);
+  const depots = depotsOn(plot.layout.placements);
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
@@ -1272,6 +1275,12 @@ function buildResort(
     zones: () => staffZones,
     lodgings,
     beds: () => housekeeping,
+    depots,
+    supplyNode: () => resort.router.arrivalNode,
+    onClockedOff: (worker) => {
+      const workers = staffField!.crowd;
+      takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+    },
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1334,6 +1343,7 @@ function buildResort(
     lodgings,
     homeOfLodging: homesOfLodgings(lodgings, guests.homes),
     gateways,
+    depots,
     upkeep,
     breakdowns,
     scenery,
@@ -1822,23 +1832,44 @@ function enterAt(crowd: Crowd, i: number, node: number): void {
   putOnPlot(crowd, i, node);
 }
 
-// After the relocate, so the arrival node is on the graph the staff crowd now walks. With no
-// entrance yet they start at node 0: anywhere on the paving beats waiting for a gate.
+// After the relocate, so the arrival node is on the graph the staff crowd now walks. Rezoned
+// before anybody clocks on, so a zoned worker starts at a depot in their zone.
 function staffTheResort(resort: Resort): void {
   const { recommended, roster, duty } = rosterNow(resort);
   const workers = resort.staff.crowd;
   const shift = shiftChange(duty, workers.offPlot);
-  for (const worker of shift.leaving) {
-    takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
-  }
-  const arrival = Math.max(0, resort.router.arrivalNode);
-  // No paving yet: they are owed their shift at the next edit that lays some.
-  const paved = workers.network.edges.length > 0;
-  if (paved) for (const worker of shift.starting) enterAt(workers, worker, arrival);
   resort.recommended = recommended;
   resort.roster = roster;
   resort.duty = duty;
   rezone(resort);
+  for (const worker of shift.leaving) resort.staffRouter.clockOff(worker);
+  // No paving yet: they are owed their shift at the next edit that lays some.
+  if (workers.network.edges.length === 0) return;
+  const entries = clockOnNodes(resort, shift.starting);
+  for (const [turn, worker] of shift.starting.entries()) {
+    enterAt(workers, worker, entries[turn]!);
+    resort.staffRouter.clockOn(worker);
+  }
+}
+
+// With no staff house, at the entrance; with no entrance either, at node 0: anywhere on the
+// paving beats waiting for a gate.
+function clockOnNodes(resort: Resort, starting: readonly number[]): readonly number[] {
+  const network = resort.staff.crowd.network;
+  const index = pavingIndexOf(network);
+  const doors = resort.depots
+    .map((depot) => ({ depot, node: doorsFor(depot, index).nodes[0] ?? -1 }))
+    .filter((door) => door.node >= 0);
+  const depotZones = zonesOfPlaces(
+    resort.zones,
+    doors.map((door) => door.depot),
+    network,
+  );
+  const arrival = Math.max(0, resort.router.arrivalNode);
+  return starting.map((worker, turn) => {
+    const depot = depotForShift(turn, resort.zoneOf[worker] ?? NO_ZONE, depotZones);
+    return depot < 0 ? arrival : doors[depot]!.node;
+  });
 }
 
 // A zone holds a workplace for a role wherever that role's task choice could send somebody, so
@@ -1870,7 +1901,7 @@ function rezone(resort: Resort): void {
 
 function zonesOfPlaces(
   zones: Zones,
-  places: readonly (Venue | Lodging)[],
+  places: readonly (Venue | Lodging | Depot)[],
   network: WalkNetwork,
 ): Int32Array {
   const index = pavingIndexOf(network);
@@ -1975,6 +2006,10 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     broken: brokenOn(resort, now),
     shortStaffed: shortOf(resort.hiring, resort.recommended),
     hurt: hurtCount(resort),
+    depots: resort.depots.length,
+    cleanersOnDuty: resort.staffPool.role.filter(
+      (role, worker) => role === 'cleaner' && resort.duty[worker] === 1,
+    ).length,
     // The router's own isOpenIn, so the panel and the door agree about what is shut. The weather's
     // alone: the rain is not to blame for a breakdown, which has its own line.
     closed: new Set(
@@ -3211,6 +3246,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.venues = venuesOn(plot.placements);
     resort.lodgings = lodgingsOn(plot.placements);
     resort.gateways = gatewaysOn(plot.placements);
+    resort.depots = depotsOn(plot.placements);
     // Before the router's rebuild, whose findHomes maps the new home indices.
     rehome(resort.guests, homesOn(plot.placements));
     resort.homeOfLodging = homesOfLodgings(resort.lodgings, resort.guests.homes);
@@ -3233,7 +3269,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
     resort.unreachable = strandedOn(resort.venues, network);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
-    resort.staffRouter.rebuild(resort.venues, network, resort.lodgings);
+    resort.staffRouter.rebuild(resort.venues, network, resort.lodgings, resort.depots);
     crowd.relocate(network);
     resort.staff.relocate(network);
     staffTheResort(resort);

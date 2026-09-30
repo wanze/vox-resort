@@ -169,7 +169,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('spa-pavilion', 44, 1),
     at('resort-bar', 48, 1),
     at('game-hall', 52, 1),
-    at('first-aid', 44, 4),
+    at('staff-house', 44, 4),
     at('restrooms', 47, 4),
     at('snack-bar', 50, 4),
     at('tikitorch', 56, 1),

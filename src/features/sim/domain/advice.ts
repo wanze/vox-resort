@@ -27,6 +27,7 @@ const KIND_ORDER = [
   'unwatched',
   'littered',
   'far-from-home',
+  'no-depot',
   'unvisited',
   // Last: the one line the player cannot fix today.
   'weather-closed',
@@ -82,6 +83,9 @@ export interface ResortFacts {
   readonly hurt?: number;
   // Hand-set roles below what the plot wants; absent means every role is on Auto or enough.
   readonly shortStaffed?: readonly Shortfall[];
+  // Absent means the plot's staff houses were not counted, which says nothing.
+  readonly depots?: number;
+  readonly cleanersOnDuty?: number;
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -330,6 +334,21 @@ function nearestServing(
   return nearest;
 }
 
+// Quiet on purpose: with no staff house the cleaners still restock, only at the gate, so it is
+// time lost rather than a thing broken.
+export function adviceNoDepot(facts: ResortFacts): Advice | null {
+  const cleaners = facts.cleanersOnDuty ?? 0;
+  if (facts.depots !== 0 || cleaners <= 0) return null;
+  return {
+    kind: 'no-depot',
+    weight: 0.15,
+    subject: 'staff house',
+    count: cleaners,
+    at: null,
+    need: null,
+  };
+}
+
 // Scaled by size rather than flat, or which idle venues reach the panel comes down
 // to placement order. Kept below `adviceUnreachable`'s 0.9.
 const IDLE_LOUDEST = 0.4;
@@ -447,6 +466,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceUnwatched(facts),
     adviceLittered(facts),
     adviceFarFromHome(facts),
+    adviceNoDepot(facts),
     ...adviceUnvisited(facts),
     ...adviceWeatherClosed(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);

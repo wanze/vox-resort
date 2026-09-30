@@ -51,6 +51,8 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   littered: ({ count }) => `Litter is piling up on ${count} tiles`,
   'far-from-home': ({ subject, count, need }) =>
     `${subject} guests walk ${count} tiles for ${NEED_ERRANDS[need ?? ''] ?? 'something they need'}`,
+  'no-depot': ({ count }) =>
+    `${count} ${roleWord('cleaner', count)} ${count === 1 ? 'fetches' : 'fetch'} supplies from the entrance`,
   unvisited: ({ subject }) => `Nobody visited ${subject} today`,
   'weather-closed': ({ subject, need }) =>
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
@@ -74,6 +76,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   // Supported: a guest drops litter only where no bin covered six tiles in a row.
   littered: () => 'no bin within reach',
   'far-from-home': () => 'straight line, not walking distance',
+  'no-depot': () => 'a staff house near their work saves the walk',
   unvisited: ({ count }) => `room for ${count}`,
   'weather-closed': ({ count }) => `${count} of them have no roof`,
 };
@@ -94,6 +97,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   unwatched: 'Lifeguard',
   littered: 'Litter',
   'far-from-home': 'Distance',
+  'no-depot': 'Staff house',
   unvisited: 'Quiet',
   'weather-closed': 'Weather',
 };

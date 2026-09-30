@@ -572,8 +572,16 @@ describe('the shore a generated plot gets', () => {
 
   it('lays the loungers and parasols out as a grid, a parasol behind a parasol', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
+    const rows = plan.plots.filter((plot) => plot.id === 'beach-umbrella').map((p) => p.tileZ);
+    // The beach rows only: a pool's loungers stand inland in whatever column the pool left them.
+    const onBeach = (tileZ: number) =>
+      tileZ >= Math.min(...rows) - 1 && tileZ <= Math.max(...rows) + 1;
     const columns = (id: string) =>
-      new Set(plan.plots.filter((plot) => plot.id === id).map((plot) => plot.tileX));
+      new Set(
+        plan.plots
+          .filter((plot) => plot.id === id && onBeach(plot.tileZ))
+          .map((plot) => plot.tileX),
+      );
     const parasols = columns('beach-umbrella');
     const loungers = columns('sun-lounger');
     expect(parasols.size).toBeGreaterThan(3);
@@ -1017,8 +1025,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 1039714607],
-      [7, 3894323537],
+      [1, 3064560658],
+      [7, 1000239515],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

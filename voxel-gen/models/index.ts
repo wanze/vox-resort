@@ -52,6 +52,7 @@ import restrooms from './restrooms.ts';
 import sign_post from './sign-post.ts';
 import snack_bar from './snack-bar.ts';
 import spa_pavilion from './spa-pavilion.ts';
+import staff_house from './staff-house.ts';
 import stair_railing from './stair-railing.ts';
 import stairs from './stairs.ts';
 import statue from './statue.ts';
@@ -105,6 +106,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   changing_cabins,
   beach_shower,
   first_aid,
+  staff_house,
   bakery,
   lifeguard_tower,
   coffee_shop,

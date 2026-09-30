@@ -419,12 +419,38 @@ and router. The figures are in `STAFF_ROLES` order, since a body's variant is it
 role's index; `showcase.ts` throws if they are not. A resort meshes a standing
 pool once (`staffPool`, `STAFF_CAPS`: 18 cleaners, 8 lifeguards, 8 animators, 6
 mechanics, 40 bodies); the roster (`rosterFor`, fed by `workplacesOf`) follows the plot. After
-an edit the roster is recounted: a body going off duty is taken off the plot where
-it stands, one coming on duty enters at the first gate (node 0 with no gate yet;
-with no paving at all, at the next edit that lays some). The staff router never
-sends anybody off duty, and somebody let go mid-spell finishes it so the claim is
-released. They use the same `crowd.ts` as guests; the crowd was not changed for
-any of the four roles.
+an edit or a hire the roster is recounted (see the staff house below for where
+bodies come on and go off). The staff router sends nobody off duty to work, and
+somebody let go mid-spell finishes it so the claim is released. They use the same
+`crowd.ts` as guests; the crowd was not changed for any of the roles or for the
+staff house.
+
+**The staff house** (`staff-house`, a 2 × 2 amenity) is a depot: the art declares
+`depot: { doors }` instead of a venue, and `depotsOn` lists depots apart from
+venues and gateways, so no guest is ever sent in. A second depot model is art
+only. The generator stands one to three per plot (`perResort`); the authored plan
+has one where a first-aid post stood.
+
+- **Clocking on**: a body coming on duty enters at a depot's first door node,
+  dealt round the depots in turn (`depotForShift`); a zoned worker starts at a
+  depot in their zone when there is one. With no depot, at the entrance (node 0
+  with no entrance yet; with no paving at all, at the next edit that lays some).
+- **Clocking off**: a body let go (`clockOff`, idempotent) drops its tasks, walks
+  to the nearest depot, or the entrance with none, and leaves the plot there
+  (`onClockedOff`). One taken back on during the walk goes back to work. Cut off
+  from the depot, or out on the sand, they leave where they stand, and with
+  neither a depot nor an entrance at once.
+- **Supplies**: a cleaner carries `SPELLS_PER_LOAD` (4) cleaning spells; scrubbing
+  a venue or making up a room takes one, a sweep takes none. Empty and between
+  tasks, they walk to the nearest depot, stand inside for `RESTOCK_TICKS` (5-10)
+  and come out full. **With no depot, supplies come in at the entrance**, so a
+  depot near the work saves cleaning time; with no entrance either, or cut off
+  from both, the cart is refilled where they stand. The load is per body, kept
+  through an edit and saved; restocking is dropped by an edit like any spell.
+- A plot with cleaners on duty and no staff house gets a quiet `no-depot` advice
+  line (Staff house).
+- Deferred: a hiring cap per depot, breaks and energy, staff happiness, spare
+  parts for mechanics, and litter carried back to the depot.
 
 - **Cleaners**: one per six venues plus one per `BEDS_PER_CLEANER` (60) beds,
   at least one wherever anything stands. Rooms before venues before litter: an

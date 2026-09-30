@@ -20,12 +20,14 @@ import {
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
+import type { Depot } from './depots';
 import type { Lodging } from './lodgings';
 import {
   BEDS_PER_SPELL,
   createStaffRouter,
   meanCleanliness,
   REPAIR_TICKS,
+  SPELLS_PER_LOAD,
   type StaffRouter,
   type StaffZones,
 } from './staffRouter';
@@ -992,5 +994,222 @@ describe('making up rooms', () => {
     );
     for (let tick = 1; tick <= 30; tick++) after.router.tick(tick);
     expect(after.made).toEqual([[0, BEDS_PER_SPELL]]);
+  });
+});
+
+// Across the street from the shops, with its door on the paving at `tileX`.
+const staffHouse = (key: string, tileX: number): Depot => ({
+  key,
+  tileX,
+  tileZ: 1,
+  tilesX: 1,
+  tilesZ: 1,
+  x: (tileX + 0.5) * TILE_VOXELS,
+  z: 1.5 * TILE_VOXELS,
+  doors: [{ x: (tileX + 0.5) * TILE_VOXELS, z: TILE_VOXELS, facing: 2 }],
+});
+
+const suppliedOn = (
+  network: WalkNetwork,
+  parts: {
+    readonly depots?: readonly Depot[];
+    readonly supplyNode?: number;
+    readonly litter?: Litter;
+    readonly duty?: Uint8Array;
+    readonly clockedOff?: number[];
+  } = {},
+) => {
+  const venues = [shop('bakery#0', 1)];
+  const upkeep = createUpkeep(venues.length);
+  let crowd: Crowd | null = null;
+  const router = createStaffRouter({
+    staff: cleaners(1),
+    venues,
+    network,
+    upkeep: () => upkeep,
+    crowd: () => crowd!,
+    ...(parts.depots ? { depots: parts.depots } : {}),
+    ...(parts.supplyNode === undefined ? {} : { supplyNode: () => parts.supplyNode! }),
+    ...(parts.litter ? { litter: () => parts.litter! } : {}),
+    ...(parts.duty ? { duty: () => parts.duty! } : {}),
+    ...(parts.clockedOff
+      ? { onClockedOff: (worker: number) => parts.clockedOff!.push(worker) }
+      : {}),
+    seed: 11,
+  });
+  crowd = createCrowd({
+    network,
+    count: 1,
+    variants: 1,
+    seed: 3,
+    routeOf: (worker, at) => router.step(worker, at),
+  });
+  let now = 0;
+  // Long enough for any spell or restock, each on a clock that only goes forwards.
+  const wait = (): void => {
+    for (const end = now + 30; now < end;) router.tick(++now);
+  };
+  const scrubTheBakery = (): void => {
+    upkeep.level[0] = 0.2;
+    router.step(0, nodeAt(network, 4));
+    expect(router.step(0, nodeAt(network, 1))).toBe(-1);
+    wait();
+  };
+  const soilTheBakery = (): void => {
+    upkeep.level[0] = 0.2;
+  };
+  return { router, crowd, wait, scrubTheBakery, soilTheBakery };
+};
+
+describe('supplies', () => {
+  it('walks a cleaner to the staff house after a load of scrubs, before the next dirty venue', () => {
+    const network = networkOf(street(12));
+    const { router, wait, scrubTheBakery, soilTheBakery } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+    });
+    for (let spell = 0; spell < SPELLS_PER_LOAD - 1; spell++) scrubTheBakery();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4)), 'went back with a load left').toBe(
+      nodeAt(network, 3),
+    );
+    expect(router.step(0, nodeAt(network, 1))).toBe(-1);
+    wait();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.atWork(0)).toBeNull();
+  });
+
+  it('restocks inside the staff house, and goes back to work with a full load', () => {
+    const network = networkOf(street(12));
+    const { router, crowd, wait, scrubTheBakery, soilTheBakery } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+    });
+    for (let spell = 0; spell < SPELLS_PER_LOAD; spell++) scrubTheBakery();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 10))).toBe(-1);
+    expect(isWaiting(crowd, 0), 'walked straight past the shelves').toBe(true);
+    expect(crowd.z[0]).toBeCloseTo(1.5 * TILE_VOXELS);
+    expect(router.workingCount).toBe(1);
+    expect(router.atWork(0), 'a staff house is not a venue').toBeNull();
+    wait();
+    expect(router.workingCount).toBe(0);
+    for (let spell = 0; spell < SPELLS_PER_LOAD - 1; spell++) scrubTheBakery();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('fetches supplies from the entrance on a plot with no staff house', () => {
+    const network = networkOf(street(12));
+    const { router, crowd, scrubTheBakery, soilTheBakery } = suppliedOn(network, {
+      supplyNode: nodeAt(network, 11),
+    });
+    for (let spell = 0; spell < SPELLS_PER_LOAD; spell++) scrubTheBakery();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.step(0, nodeAt(network, 11))).toBe(-1);
+    expect(isWaiting(crowd, 0)).toBe(true);
+    expect(router.workingCount).toBe(1);
+  });
+
+  it('refills where they stand with neither a staff house nor an entrance', () => {
+    const network = networkOf(street(12));
+    const { router, scrubTheBakery, soilTheBakery } = suppliedOn(network);
+    for (let spell = 0; spell < SPELLS_PER_LOAD; spell++) scrubTheBakery();
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.workingCount).toBe(0);
+  });
+
+  it('spends nothing on a sweep', () => {
+    const network = networkOf(street(12));
+    const litter = createLitter(12, 1);
+    const { router, wait, soilTheBakery } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+      litter,
+    });
+    for (let sweep = 0; sweep <= SPELLS_PER_LOAD; sweep++) {
+      litter.level[6] = 1;
+      router.step(0, nodeAt(network, 4));
+      expect(router.step(0, nodeAt(network, 6))).toBe(-1);
+      wait();
+    }
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('keeps an empty cart empty through a rebuild and a snapshot', () => {
+    const network = networkOf(street(12));
+    const depots = [staffHouse('staff-house#0', 10)];
+    const before = suppliedOn(network, { depots });
+    for (let spell = 0; spell < SPELLS_PER_LOAD; spell++) before.scrubTheBakery();
+    before.router.rebuild([shop('bakery#0', 1)], network, [], depots);
+    before.soilTheBakery();
+    expect(before.router.step(0, nodeAt(network, 4)), 'the edit refilled the cart').toBe(
+      nodeAt(network, 5),
+    );
+
+    const saved = before.router.snapshot();
+    expect(Array.from(saved.load)).toEqual([0]);
+    const after = suppliedOn(network, { depots });
+    after.router.restore(saved);
+    after.soilTheBakery();
+    expect(after.router.step(0, nodeAt(network, 4)), 'the load was restocked').toBe(
+      nodeAt(network, 5),
+    );
+  });
+});
+
+describe('clocking off', () => {
+  it('walks a cleaner let go to the staff house, and takes them off there', () => {
+    const network = networkOf(street(12));
+    const duty = Uint8Array.from([1]);
+    const clockedOff: number[] = [];
+    const { router } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+      duty,
+      clockedOff,
+    });
+    duty[0] = 0;
+    router.clockOff(0);
+    router.clockOff(0);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(clockedOff, 'went before reaching the door').toEqual([]);
+    expect(router.step(0, nodeAt(network, 10))).toBe(-1);
+    expect(clockedOff).toEqual([0]);
+  });
+
+  it('sends a cleaner taken back on while walking home back to work', () => {
+    const network = networkOf(street(12));
+    const duty = Uint8Array.from([1]);
+    const clockedOff: number[] = [];
+    const { router, soilTheBakery } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+      duty,
+      clockedOff,
+    });
+    duty[0] = 0;
+    router.clockOff(0);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    duty[0] = 1;
+    soilTheBakery();
+    expect(router.step(0, nodeAt(network, 5))).toBe(nodeAt(network, 4));
+    expect(router.step(0, nodeAt(network, 10)), 'still walking home').toBe(nodeAt(network, 9));
+    expect(clockedOff).toEqual([]);
+  });
+
+  it('takes a cleaner off where they stand when the staff house is cut off', () => {
+    const island = [...street(8), { tileX: 10, tileZ: 0, y: 0 }, { tileX: 11, tileZ: 0, y: 0 }];
+    const network = networkOf(island);
+    const duty = Uint8Array.from([1]);
+    const clockedOff: number[] = [];
+    const { router } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 11)],
+      duty,
+      clockedOff,
+    });
+    duty[0] = 0;
+    router.clockOff(0);
+    expect(router.step(0, nodeAt(network, 4))).toBe(-1);
+    expect(clockedOff).toEqual([0]);
   });
 });

@@ -134,6 +134,10 @@ export interface ModelVenue {
   readonly reliability?: number;
 }
 
+export interface ModelDepot {
+  readonly doors: readonly ModelDoor[];
+}
+
 export interface VoxelModelSource {
   readonly id: string;
   readonly label: string;
@@ -142,6 +146,8 @@ export interface VoxelModelSource {
   readonly groundDecides?: boolean;
   // Not a venue: a gate in the venue list would have guests queueing at it.
   readonly gateway?: boolean;
+  // Staff only: shifts start here and cleaners restock here. Not a venue, so no guest goes in.
+  readonly depot?: ModelDepot;
   // 0 to 1: how much nicer this makes the tiles around it. The reach is the simulation's,
   // so a model states only how strong it is.
   readonly scenery?: number;
@@ -175,6 +181,7 @@ export interface VoxelModel {
   readonly tiles: TileFootprint;
   readonly groundDecides: boolean;
   readonly gateway: boolean;
+  readonly depot: ModelDepot | null;
   readonly scenery: number;
   readonly cost: number | null;
   readonly binReach: number;
@@ -263,6 +270,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     tiles: source.tiles,
     groundDecides: source.groundDecides ?? false,
     gateway: source.gateway ?? false,
+    depot: source.depot ?? null,
     scenery: source.scenery ?? 0,
     cost: source.cost ?? null,
     binReach: source.binReach ?? 0,

@@ -12,6 +12,7 @@ import { blockedAt } from '../../crowd/domain/sandGrid';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { brokenFirst, isBroken, repair, type Breakdowns } from './breakdowns';
+import type { Depot } from './depots';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import type { Lodging } from './lodgings';
@@ -37,6 +38,12 @@ const SPELL_TICKS = { min: 15, max: 25 } as const;
 
 // One room a spell, so a hotel after a busy morning is several spells, not one.
 export const BEDS_PER_SPELL = 4;
+
+// Four spells is a morning's round; a sweep needs no supplies, so it takes none.
+export const SPELLS_PER_LOAD = 4;
+
+// A quick stop at the shelves: the walk there and back is what a restock costs.
+const RESTOCK_TICKS = { min: 5, max: 10 } as const;
 
 // A sweep is a broom along one tile, shorter than scrubbing a venue.
 const SWEEP_TICKS = { min: 4, max: 8 } as const;
@@ -86,7 +93,15 @@ export interface StaffZones {
 export interface StaffRouter {
   step(worker: number, at: number): number;
   tick(now: number): void;
-  rebuild(venues: readonly Venue[], network: WalkNetwork, lodgings?: readonly Lodging[]): void;
+  rebuild(
+    venues: readonly Venue[],
+    network: WalkNetwork,
+    lodgings?: readonly Lodging[],
+    depots?: readonly Depot[],
+  ): void;
+  clockOn(worker: number): void;
+  // Idempotent: a shift change lists a worker still walking home as leaving on every edit.
+  clockOff(worker: number): void;
   atWork(worker: number): Venue | null;
   performingAt(venue: number): boolean;
   watching(venue: number): boolean;
@@ -123,6 +138,12 @@ export function createStaffRouter(parts: {
     readonly unmadeAt: (lodging: number) => number;
     readonly make: (lodging: number, most: number) => void;
   };
+  // Omitted, and with no supply node, a cleaner restocks where they stand.
+  readonly depots?: readonly Depot[];
+  // Late-bound: the entrance moves with an edit. Where supplies come in with no depot.
+  readonly supplyNode?: () => number;
+  // Omitted, a worker let go walks home and stays on the plot.
+  readonly onClockedOff?: (worker: number) => void;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -161,6 +182,14 @@ export function createStaffRouter(parts: {
   let towerOf = new Int32Array(staff.count).fill(NOBODY);
   let legOf = new Int32Array(staff.count);
   let legRoute: (SandRoute | null)[] = Array.from({ length: staff.count }, () => null);
+  // Per body rather than per node, so kept across a rebuild: an edit must not refill every cart.
+  let load = new Uint8Array(staff.count).fill(SPELLS_PER_LOAD);
+  let restocking = new Uint8Array(staff.count);
+  let goingHome = new Uint8Array(staff.count);
+  let depots = parts.depots ?? [];
+  // Undefined until swept; null when no depot door reaches the paving.
+  let depotField: FlowField | null | undefined;
+  const depotAtNode = new Map<number, number>();
   const towerBy = new Map<number, number>();
   const towerRoutes = new Map<number, readonly SandRoute[]>();
   const venueSandRoutes = new Map<number, readonly SandRoute[]>();
@@ -342,11 +371,17 @@ export function createStaffRouter(parts: {
   };
 
   // The middle of the footprint, so somebody at work is under the roof rather than in the doorway.
-  const standInside = (worker: number, venue: number, door: number): void => {
+  const standIn = (
+    worker: number,
+    place: { readonly x: number; readonly z: number },
+    door: number,
+  ): void => {
     const people = parts.crowd();
-    const place = venues[venue]!;
     holdAt(people, worker, place.x, network.nodes[door]!.y, place.z, people.heading[worker] ?? 0);
   };
+
+  const standInside = (worker: number, venue: number, door: number): void =>
+    standIn(worker, venues[venue]!, door);
 
   const spellFor = (worker: number): number => {
     const role = staff.role[worker];
@@ -387,16 +422,7 @@ export function createStaffRouter(parts: {
   };
 
   const setToMakeUp = (worker: number, room: number, door: number): void => {
-    const people = parts.crowd();
-    const lodging = lodgings[room]!;
-    holdAt(
-      people,
-      worker,
-      lodging.x,
-      network.nodes[door]!.y,
-      lodging.z,
-      people.heading[worker] ?? 0,
-    );
+    standIn(worker, lodgings[room]!, door);
     doorOf[worker] = door;
     until[worker] = now + ticksIn(SPELL_TICKS);
     working[worker] = 1;
@@ -447,6 +473,27 @@ export function createStaffRouter(parts: {
     const field = flowFieldFor(network, [node]);
     nodeFields.set(node, field);
     return field;
+  };
+
+  const depotFieldNow = (): FlowField | null => {
+    if (depotField !== undefined) return depotField;
+    depotAtNode.clear();
+    depots.forEach((depot, each) => {
+      for (const node of doorsFor(depot, index).nodes) {
+        if (!depotAtNode.has(node)) depotAtNode.set(node, each);
+      }
+    });
+    const nodes = [...depotAtNode.keys()].toSorted((a, b) => a - b);
+    depotField = nodes.length > 0 ? flowFieldFor(network, nodes) : null;
+    return depotField;
+  };
+
+  // The entrance is asked afresh every time, as it moves with an edit that keeps this router.
+  const supplyField = (): FlowField | null => {
+    const depot = depotFieldNow();
+    if (depot) return depot;
+    const node = parts.supplyNode?.() ?? -1;
+    return node >= 0 && node < network.nodes.length ? nodeFieldFor(node) : null;
   };
 
   const pickTile = (worker: number, at: number, litter: Litter): number => {
@@ -617,17 +664,30 @@ export function createStaffRouter(parts: {
   const finishAtVenue = (worker: number): void => {
     const venue = assigned[worker]!;
     const role = staff.role[worker];
-    if (role === 'cleaner') scrub(parts.upkeep(), venue, SCRUB_PER_SPELL);
+    if (role === 'cleaner') {
+      scrub(parts.upkeep(), venue, SCRUB_PER_SPELL);
+      spend(worker);
+    }
     if (role === 'animator') lastStage[worker] = venue;
     if (role === 'mechanic') mend(venue);
     sheltering[worker] = 0;
     giveUp(worker);
   };
 
+  const spend = (worker: number): void => {
+    load[worker] = Math.max(0, load[worker]! - 1);
+  };
+
   const finishWork = (worker: number): void => {
+    if (restocking[worker] === 1) {
+      restocking[worker] = 0;
+      load[worker] = SPELLS_PER_LOAD;
+      return;
+    }
     const room = roomOf[worker]!;
     if (room >= 0) {
       parts.beds?.().make(room, BEDS_PER_SPELL);
+      spend(worker);
       giveUpRoom(worker);
       return;
     }
@@ -684,10 +744,64 @@ export function createStaffRouter(parts: {
     return -1;
   };
 
-  const cleanerStep = (worker: number, at: number): number => {
+  const cleanerWork = (worker: number, at: number): number => {
     if (roomFor(worker, at) >= 0) return roomStep(worker, at);
     const venue = venueFor(worker, at);
     return venue < 0 ? litterStep(worker, at) : venueStep(worker, at, venue);
+  };
+
+  const setToRestock = (worker: number, node: number): void => {
+    const depot = depotAtNode.get(node);
+    if (depot === undefined) standAt(worker, node);
+    else standIn(worker, depots[depot]!, node);
+    doorOf[worker] = node;
+    until[worker] = now + ticksIn(RESTOCK_TICKS);
+    working[worker] = 1;
+    restocking[worker] = 1;
+    workingCount++;
+  };
+
+  // Nowhere to fetch from, or cut off from it, the cart is refilled on the spot: a cleaner who
+  // cannot restock must not stand idle for ever.
+  const restockStep = (worker: number, at: number): number => {
+    const onward = supplyField()?.next[at] ?? -1;
+    if (onward < 0) {
+      load[worker] = SPELLS_PER_LOAD;
+      return cleanerWork(worker, at);
+    }
+    if (onward !== at) return onward;
+    setToRestock(worker, at);
+    return -1;
+  };
+
+  // Only between tasks: one already sent somewhere sees it through, and a sweep needs no load.
+  const cleanerStep = (worker: number, at: number): number => {
+    const empty = load[worker] === 0;
+    if (empty && assigned[worker]! < 0 && tileOf[worker]! < 0 && roomOf[worker]! < 0) {
+      return restockStep(worker, at);
+    }
+    return cleanerWork(worker, at);
+  };
+
+  const dropTasks = (worker: number): void => {
+    if (towerOf[worker]! >= 0) giveUpTower(worker);
+    giveUp(worker);
+    giveUpTile(worker);
+    giveUpRoom(worker);
+  };
+
+  const clockedOff = (worker: number): void => {
+    goingHome[worker] = 0;
+    parts.onClockedOff?.(worker);
+  };
+
+  // Tasks are dropped on the way, so a venue is not held for somebody who is not coming.
+  const homeStep = (worker: number, at: number): number => {
+    dropTasks(worker);
+    const onward = supplyField()?.next[at] ?? -1;
+    if (onward >= 0 && onward !== at) return onward;
+    clockedOff(worker);
+    return -1;
   };
 
   const animatorStep = (worker: number, at: number): number => {
@@ -708,6 +822,28 @@ export function createStaffRouter(parts: {
     const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickWater(worker, at);
     if (venue >= 0) return venueStep(worker, at, venue);
     return pickTower(worker, at) >= 0 ? towardsTheSand(worker, at) : -1;
+  };
+
+  // Null for anybody not on their way home. Taken back on before they got there, they work on
+  // from wherever they are; the sand has no node to walk home from, so they leave from it.
+  const leavingStep = (worker: number, at: number): number | null => {
+    if (goingHome[worker] !== 1) return null;
+    if (isOnDuty(worker)) {
+      goingHome[worker] = 0;
+      return null;
+    }
+    if (working[worker] === 1) return -1;
+    if (at !== ON_SAND) return at < 0 ? -1 : homeStep(worker, at);
+    dropTasks(worker);
+    clockedOff(worker);
+    return -1;
+  };
+
+  const roleStep = (worker: number, at: number): number => {
+    const role = staff.role[worker];
+    if (role === 'lifeguard') return lifeguardStep(worker, at);
+    if (role === 'animator') return animatorStep(worker, at);
+    return role === 'mechanic' ? mechanicStep(worker, at) : cleanerStep(worker, at);
   };
 
   // Every claim index follows from who is assigned or posted where.
@@ -737,13 +873,12 @@ export function createStaffRouter(parts: {
 
   return {
     step(worker, at) {
+      const leaving = leavingStep(worker, at);
+      if (leaving !== null) return leaving;
       if (at === ON_SAND) return alongTheSand(worker);
       // A rebuild can let go of anybody at any moment, hence the guard.
       if (working[worker] === 1 || at < 0 || !isOnDuty(worker)) return -1;
-      if (staff.role[worker] === 'lifeguard') return lifeguardStep(worker, at);
-      if (staff.role[worker] === 'animator') return animatorStep(worker, at);
-      if (staff.role[worker] === 'mechanic') return mechanicStep(worker, at);
-      return cleanerStep(worker, at);
+      return roleStep(worker, at);
     },
 
     tick(at) {
@@ -758,9 +893,12 @@ export function createStaffRouter(parts: {
       }
     },
 
-    rebuild(nextVenues, nextNetwork, nextLodgings = []) {
+    rebuild(nextVenues, nextNetwork, nextLodgings = [], nextDepots = []) {
       venues = nextVenues;
       lodgings = nextLodgings;
+      depots = nextDepots;
+      depotField = undefined;
+      restocking = new Uint8Array(staff.count);
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       // Node and venue indices mean nothing on the new graph, and a stale claim would hold a venue against every cleaner.
@@ -789,6 +927,17 @@ export function createStaffRouter(parts: {
       nodeFields.clear();
       workingCount = 0;
       // Nobody is released: the crowd is relocated onto the new graph in the same step.
+    },
+
+    clockOn(worker) {
+      load[worker] = SPELLS_PER_LOAD;
+      goingHome[worker] = 0;
+    },
+
+    clockOff(worker) {
+      if (goingHome[worker] === 1) return;
+      goingHome[worker] = 1;
+      if (!supplyField()) clockedOff(worker);
     },
 
     atWork(worker) {
@@ -826,6 +975,9 @@ export function createStaffRouter(parts: {
         towerOf: towerOf.slice(),
         legOf: legOf.slice(),
         legRoute: [...legRoute],
+        load: load.slice(),
+        restocking: restocking.slice(),
+        goingHome: goingHome.slice(),
         now,
         random: random.state(),
       };
@@ -846,6 +998,9 @@ export function createStaffRouter(parts: {
       towerOf = snapshot.towerOf.slice();
       legOf = snapshot.legOf.slice();
       legRoute = [...snapshot.legRoute];
+      load = snapshot.load.slice();
+      restocking = snapshot.restocking.slice();
+      goingHome = snapshot.goingHome.slice();
       now = snapshot.now;
       random = resumeRandom(snapshot.random);
       reclaim();

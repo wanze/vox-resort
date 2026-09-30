@@ -18,6 +18,9 @@ const snapshotOf = (workers: number): StaffRouterSnapshot => ({
   towerOf: new Int32Array(workers).fill(-1),
   legOf: new Int32Array(workers),
   legRoute: Array.from({ length: workers }, () => null),
+  load: new Uint8Array(workers).fill(4),
+  restocking: new Uint8Array(workers),
+  goingHome: new Uint8Array(workers),
   now: 600,
   random: 12345,
 });
@@ -27,7 +30,7 @@ describe('a staff router snapshot', () => {
     const snapshot = snapshotOf(5);
     expect(staffRouterSnapshotSchema.safeParse(snapshot).success).toBe(true);
     const columns = staffPerWorker(snapshot);
-    expect(columns).toHaveLength(11);
+    expect(columns).toHaveLength(14);
     expect(columns.every((column) => column.length === 5)).toBe(true);
   });
 

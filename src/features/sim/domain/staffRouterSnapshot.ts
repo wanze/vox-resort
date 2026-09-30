@@ -14,6 +14,9 @@ export const staffRouterSnapshotSchema = z.object({
   towerOf: int32,
   legOf: int32,
   legRoute: sandRoutesSchema,
+  load: uint8,
+  restocking: uint8,
+  goingHome: uint8,
   now: z.number(),
   random: z.number().int(),
 });
@@ -33,6 +36,9 @@ export function staffPerWorker(snapshot: StaffRouterSnapshot): readonly ArrayLik
     snapshot.towerOf,
     snapshot.legOf,
     snapshot.legRoute,
+    snapshot.load,
+    snapshot.restocking,
+    snapshot.goingHome,
   ];
 }
 

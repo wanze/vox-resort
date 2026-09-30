@@ -1636,8 +1636,8 @@ describe('on the generated plot', () => {
       .join(';');
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2240);
-    expect(hash).toBe(2140810103);
+    expect(layout.paths).toHaveLength(2254);
+    expect(hash).toBe(192985375);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -2042,9 +2042,9 @@ describe('on the generated plot', () => {
     expect(overBeds, 'more beds taken than the plot has').toBeNull();
     expect(presentCount(people)).toBe(bedCount(people).taken);
   });
-  // One reception of capacity 12, opened empty on a five-star day: the most a day can send it.
+  // Three receptions of capacity 12, opened empty on a five-star day: the most a day can send them.
   // Measured: 171 admitted, none still checking in at 21:00, and a line of 12 at worst.
-  it("checks a whole opening day's arrivals in at the one desk by evening", () => {
+  it("checks a whole opening day's arrivals in at the desks by evening", () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
       levelOf: (x, z) => levelAt(elevation, x, z),
@@ -2065,7 +2065,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const desks = venues.filter((venue) => venue.receives);
-    expect(desks.map((venue) => venue.capacity)).toEqual([12]);
+    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12]);
     let tick = 10 * 60;
 
     let crowd: Crowd | null = null;
@@ -2120,7 +2120,9 @@ describe('on the generated plot', () => {
         admitted += arrived.length;
         for (const person of arrived) router.admit(person, router.arrivalNode);
       }
-      longestLine = Math.max(longestLine, router.occupancyOf(desks[0]!.key)!.waiting);
+      for (const desk of desks) {
+        longestLine = Math.max(longestLine, router.occupancyOf(desk.key)!.waiting);
+      }
       if (tick === 21 * 60) {
         stillArriving = 0;
         for (let person = 0; person < people.count; person++) {
@@ -2574,7 +2576,7 @@ describe('on the generated plot', () => {
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual(['changing-cabins']);
+    expect(quiet).toEqual(['changing-cabins', 'gym-pavilion']);
 
     // The beach sat right at 0.6 for energy, and resizing the staff pool reseeds the cleaners'
     // walk enough to tip it to 0.62; the bound guards against one venue taking a need over.

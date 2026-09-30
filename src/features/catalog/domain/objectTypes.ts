@@ -9,6 +9,7 @@ import {
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
+  type ModelDepot,
   type ModelVenue,
   type VoxelModel,
   type VoxelModelSource,
@@ -153,6 +154,10 @@ export function bedsOf(id: string): number {
 
 export function isGateway(id: string): boolean {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.gateway ?? false;
+}
+
+export function depotOf(id: string): ModelDepot | null {
+  return OBJECT_TYPES.find((type) => type.id === id)?.model.depot ?? null;
 }
 
 export function sceneryOf(id: string): number {

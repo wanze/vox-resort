@@ -10,6 +10,7 @@ import {
   adviceShortStaffed,
   adviceDirty,
   adviceLittered,
+  adviceNoDepot,
   adviceUnmade,
   adviceUnreachable,
   adviceUnservedNeeds,
@@ -643,5 +644,26 @@ describe('adviceShortStaffed', () => {
       healthyFacts({ shortStaffed: [{ role: 'cleaner', short: 5, wanted: 6 }] }),
     );
     expect(many!.weight).toBeGreaterThan(few!.weight);
+  });
+});
+
+describe('adviceNoDepot', () => {
+  it('says the cleaners fetch from the gate only when there is no staff house', () => {
+    expect(adviceNoDepot(healthyFacts())).toBeNull();
+    expect(adviceNoDepot(healthyFacts({ depots: 1, cleanersOnDuty: 3 }))).toBeNull();
+    expect(adviceNoDepot(healthyFacts({ depots: 0, cleanersOnDuty: 3 }))).toEqual({
+      kind: 'no-depot',
+      weight: 0.15,
+      subject: 'staff house',
+      count: 3,
+      at: null,
+      need: null,
+    });
+  });
+
+  it('is silent with no cleaner on duty to walk anywhere', () => {
+    expect(adviceNoDepot(healthyFacts({ depots: 0, cleanersOnDuty: 0 }))).toBeNull();
+    const advice = adviceFor(healthyFacts({ depots: 0, cleanersOnDuty: 2 }));
+    expect(advice.some((each) => each.kind === 'no-depot')).toBe(true);
   });
 });

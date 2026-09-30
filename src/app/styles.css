@@ -1460,6 +1460,28 @@ input[type='checkbox'] {
   color: var(--terracotta);
 }
 
+.zone-staff {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+
+.zone-staff-row {
+  display: contents;
+}
+
+.zone-staff dt {
+  font: 400 var(--size-label) / 1.2 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.zone-staff dd {
+  margin: 0;
+  color: var(--text-dim);
+}
+
 .build-tile:hover {
   border-color: var(--stone-700);
   box-shadow: var(--bevel), var(--shadow-lift);

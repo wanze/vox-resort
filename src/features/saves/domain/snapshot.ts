@@ -96,6 +96,9 @@ function misfitsOf(game: GameShape): readonly string[] {
     ...(game.resort.guests.count === population ? [] : ['a guest count off the population']),
     // The pool is fixed by the staff caps, and a body is a mesh slot: another size is another game.
     ...(staffCount === staffPool().count ? [] : ['a staff pool of another size']),
+    ...(game.resort.zones.length === game.world.tilesX * game.world.tilesZ
+      ? []
+      : ['a zone grid of another size']),
   ];
 }
 

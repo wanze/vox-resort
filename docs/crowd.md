@@ -457,6 +457,35 @@ the recommendation gets a `short-staffed` advice line (`shortOf`), ranked above
 the dirty, unwatched and broken lines it causes, with a Hire button that tops the
 role up to the recommendation and keeps it hand-set. An Auto role is never short.
 
+**Zones** let the player paint where staff work, as RollerCoaster Tycoon's patrol
+areas do. A zone is a set of painted tiles on the plan's grid (`zones.ts`, up to
+`ZONES` = 4, one colour each), kept per tile so it survives every edit without
+being carried, and saved with the resort. The Zones shelf in the build palette
+arms a brush per zone and an eraser; `zonePointer.ts` paints along a drag through
+`createTileStroke`, as the terrain brush does. While the brush is armed the
+overlay field draws the zone of every walk tile in a categorical palette
+(`ZONE_COLOURS`, none of them a heat-ramp stop); arming it puts any map away and
+disarming brings none back.
+
+- A workplace is **in a zone** if any tile of its footprint, or the tile of any of
+  its door nodes, is painted in it (`zonesOf`, a bitmask, so a building on a
+  border is in both). A tower is in the zone of the tile under its seat.
+- Staff are **dealt, not assigned**: `rezone` in `showcase.ts` deals each role's
+  on-duty bodies round-robin over the zones, in zone order, that hold a workplace
+  for that role (`dealZones`). What counts is what that role's task choice
+  considers: any venue or paved tile for cleaners, stages for animators, bathing
+  venues and towers for lifeguards, venues that can break for mechanics. It runs
+  on build, after every edit and every hire (`staffTheResort`), after a load, and
+  on every tile a stroke changes.
+- A zoned worker only takes tasks inside their zone: every choice in
+  `staffRouter.ts` adds the zone to its `eligible` test. With nothing there, they
+  wait where they are. A role with no zoned workplace works the whole plot, so
+  **no zones painted is exactly the behaviour without zones**. Zones never reach
+  the guests.
+- Deferred: per-person assignment (the Staff window is per role) and patrolling,
+  idle staff walking their zone. A lifeguard already posted keeps the post when a
+  paint moves them to another zone, until the next edit rebuilds the router.
+
 ## Breakdowns and injuries
 
 **Breakdowns.** The art declares `venue.reliability`, visits between breakdowns

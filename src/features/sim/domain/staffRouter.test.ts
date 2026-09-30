@@ -20,12 +20,19 @@ import {
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
-import { createStaffRouter, meanCleanliness, REPAIR_TICKS, type StaffRouter } from './staffRouter';
+import {
+  createStaffRouter,
+  meanCleanliness,
+  REPAIR_TICKS,
+  type StaffRouter,
+  type StaffZones,
+} from './staffRouter';
 import { createLitter, litterAt, SWEEP_ABOVE, type Litter } from './litter';
 import { rosterFor, STAFF_ROLES, unwatched, type Staff, type StaffRole } from './staff';
 import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import type { Venue } from './venues';
 import type { Weather } from './weather';
+import { NO_ZONE } from './zones';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -374,6 +381,8 @@ const crewOn = (
     readonly occupants?: readonly number[];
     readonly weather?: () => Weather;
     readonly dirt?: readonly number[];
+    readonly zones?: StaffZones;
+    readonly litter?: Litter;
   } = {},
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
@@ -388,6 +397,8 @@ const crewOn = (
     crowd: () => crowd!,
     ...(options.weather ? { weather: options.weather } : {}),
     ...(options.occupants ? { occupants: (venue: number) => options.occupants![venue] ?? 0 } : {}),
+    ...(options.zones ? { zones: () => options.zones! } : {}),
+    ...(options.litter ? { litter: () => options.litter! } : {}),
     seed: 11,
   });
   crowd = createCrowd({
@@ -516,6 +527,19 @@ describe('a lifeguard at the pool', () => {
   });
 });
 
+// Worker 0 in zone 0, and only the one tile painted.
+const zoned = (tile: { tileX: number; tileZ: number }): StaffZones => ({
+  zoneOf: Int8Array.from([0]),
+  venueZones: new Int32Array(0),
+  tileZone: (tileX, tileZ) => (tileX === tile.tileX && tileZ === tile.tileZ ? 0 : NO_ZONE),
+});
+
+const zonedAs = (zoneOf: readonly number[], venueZones: readonly number[]): StaffZones => ({
+  zoneOf: Int8Array.from(zoneOf),
+  venueZones: Int32Array.from(venueZones),
+  tileZone: () => NO_ZONE,
+});
+
 const untilSeated = (router: StaffRouter, crowd: Crowd): boolean => {
   for (let step = 0; step < 6000; step++) {
     stepCrowd(crowd, MAX_STEP);
@@ -585,6 +609,17 @@ describe('a lifeguard on a tower', () => {
     for (let tick = 1; tick <= 10; tick++) router.tick(tick);
     expect(router.watchingBeach).toBe(true);
     expect(crowd.seat[0]).toBe(post);
+  });
+
+  it("leaves a tower outside a lifeguard's zone alone", () => {
+    const at = nodeAt(beach, 10, 12);
+    const elsewhere = crewOn(beach, [], ['lifeguard'], { zones: zoned({ tileX: 2, tileZ: 2 }) });
+    expect(elsewhere.router.step(0, at)).toBe(-1);
+    const under = crewOn(beach, [], ['lifeguard'], { zones: zoned(TOWER) });
+    expect(
+      under.router.step(0, at),
+      'the sand under the tower did not zone it',
+    ).toBeGreaterThanOrEqual(0);
   });
 
   it('prefers a pool inside the resort to the tower', () => {
@@ -736,5 +771,60 @@ describe('a mechanic on the beach', () => {
     expect(wentOnSand, 'mended it from the paving').toBe(true);
     for (let step = 0; step < 4000; step++) stepCrowd(crowd, MAX_STEP);
     expect(crowd.z[0]!, 'left standing on the sand').toBeLessThan(12 * TILE_VOXELS);
+  });
+});
+
+describe('zones', () => {
+  it('keeps a zoned cleaner to the venue in its zone, past a dirtier one outside', () => {
+    const network = networkOf(street(8));
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const zones = zonedAs([1], [0b01, 0b10]);
+    const { router } = crewOn(network, venues, ['cleaner'], { dirt: [0.1, 0.3], zones });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+  });
+
+  it('lets an unzoned cleaner take the dirtiest venue anywhere, as before', () => {
+    const network = networkOf(street(8));
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const zones = zonedAs([NO_ZONE], [0b01, 0b10]);
+    const { router } = crewOn(network, venues, ['cleaner'], { dirt: [0.1, 0.3], zones });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('keeps a zoned lifeguard to a pool in its zone, and waits when there is none', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 1), pool('swimming-pool#1', 7)];
+    const inside = crewOn(network, venues, ['lifeguard'], {
+      occupants: [9, 0],
+      zones: zonedAs([2], [0b001, 0b100]),
+    });
+    expect(inside.router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    const none = crewOn(network, venues, ['lifeguard'], {
+      occupants: [9, 0],
+      zones: zonedAs([3], [0b001, 0b100]),
+    });
+    expect(none.router.step(0, nodeAt(network, 4))).toBe(-1);
+  });
+
+  it('keeps a zoned animator to the stages in its zone', () => {
+    const network = networkOf(street(8));
+    const venues = [stage('kids-club#0', 1), stage('game-hall#0', 7)];
+    const zones = zonedAs([0], [0b1, 0]);
+    const { router } = crewOn(network, venues, ['animator'], { occupants: [2, 9], zones });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('keeps a zoned cleaner to the littered tiles in its zone', () => {
+    const network = networkOf(street(8));
+    const litter = littered([
+      [1, 1],
+      [6, 0.75],
+    ]);
+    const zones: StaffZones = {
+      ...zonedAs([0], []),
+      tileZone: (tileX) => (tileX >= 5 ? 0 : NO_ZONE),
+    };
+    const { router } = crewOn(network, [], ['cleaner'], { litter, zones });
+    expect(router.step(0, nodeAt(network, 3))).toBe(nodeAt(network, 4));
   });
 });

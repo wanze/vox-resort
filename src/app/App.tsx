@@ -18,7 +18,8 @@ import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
-import type { BuildTool, StylePick } from '../features/build/domain/buildTool';
+import { armedZone, type BuildTool, type StylePick } from '../features/build/domain/buildTool';
+import type { OverlayKind } from '../features/overlays/domain/overlays';
 import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 
@@ -28,7 +29,10 @@ const OPENS_ON_WELCOME = parseBenchConfig(globalThis.location?.search ?? '') ===
 // Serialised so StrictMode's double-invoked effect never puts two renderers on the same canvas.
 let lifecycle: Promise<void> = Promise.resolve();
 
-function useBuildTool(showcase: RefObject<Showcase | null>) {
+function useBuildTool(
+  showcase: RefObject<Showcase | null>,
+  setOverlay: (kind: OverlayKind | null) => void,
+) {
   // So a tool picked while the catalogue is still meshing is armed once the scene exists.
   const pending = useRef<BuildTool | null>(null);
   const [tool, setTool] = useState<BuildTool | null>(null);
@@ -41,8 +45,10 @@ function useBuildTool(showcase: RefObject<Showcase | null>) {
       pending.current = armed.tool;
       setTool(armed.tool);
       showcase.current?.selectTool(armed.tool);
+      // The showcase puts the map away itself; this keeps the map picker saying so.
+      if (armedZone(armed.tool) !== null) setOverlay(null);
     },
-    [showcase],
+    [showcase, setOverlay],
   );
   return { tool, select, pending };
 }
@@ -111,10 +117,14 @@ export function App() {
   const showcaseRef = useRef<Showcase | null>(null);
   const [stats, setStats] = useState<ShowcaseStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { tool, select: selectTool, pending: toolRef } = useBuildTool(showcaseRef);
+  const mapOverlay = useOverlay(showcaseRef);
+  const {
+    tool,
+    select: selectTool,
+    pending: toolRef,
+  } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
-  const mapOverlay = useOverlay(showcaseRef);
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
   const thoughts = useThoughts();

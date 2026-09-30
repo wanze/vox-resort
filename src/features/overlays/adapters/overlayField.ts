@@ -7,7 +7,8 @@ import {
   PlaneGeometry,
 } from 'three/webgpu';
 import { capacityFor } from '../../rendering/domain/spatialChunks';
-import { rampInto } from '../domain/ramp';
+import { rampInto, zoneColourInto } from '../domain/ramp';
+import { NO_ZONE } from '../../sim/domain/zones';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 
 // Just above the blob shadows' 2.05, so a tile is tinted over its shadow rather than under it.
@@ -32,6 +33,8 @@ export interface OverlayField {
   // One quad per tile, at a node's height; the list is rebuilt on an edit.
   place(tiles: readonly OverlayTile[]): void;
   paint(values: Float32Array | null): void;
+  // Categorical where paint is a ramp; a slot whose node is unzoned is hidden.
+  paintZones(zoneOfNode: Int8Array | null): void;
   dispose(): void;
 }
 
@@ -77,12 +80,12 @@ export function buildOverlayField(): OverlayField {
   const colour = { r: 0, g: 0, b: 0 };
 
   // A slot with no data is scaled to nothing, as a waiting balloon is, so no second mesh is needed.
-  function writeSlot(slot: number, value: number): void {
+  function writeSlot(slot: number, shown: boolean): void {
     const matrices = mesh.instanceMatrix.array;
     const at = slot * 16;
     matrices.fill(0, at, at + 16);
     matrices[at + 15] = 1;
-    if (!rampInto(value, colour)) return;
+    if (!shown) return;
     const tile = placed[slot]!;
     matrices[at] = 1;
     matrices[at + 5] = 1;
@@ -94,6 +97,16 @@ export function buildOverlayField(): OverlayField {
     colours[slot * 3] = colour.r;
     colours[slot * 3 + 1] = colour.g;
     colours[slot * 3 + 2] = colour.b;
+  }
+
+  function paintSlots(on: boolean, colourOf: (node: number) => boolean): void {
+    mesh.visible = on && placed.length > 0;
+    if (!on) return;
+    for (let slot = 0; slot < placed.length; slot++) writeSlot(slot, colourOf(placed[slot]!.node));
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.instanceColor!.needsUpdate = true;
+    // Without this the frustum test uses the sphere of the last graph and culls the new tiles.
+    if (placed.length > 0) mesh.computeBoundingSphere();
   }
 
   function grow(capacity: number): void {
@@ -120,15 +133,12 @@ export function buildOverlayField(): OverlayField {
       mesh.visible = false;
     },
     paint(values) {
-      mesh.visible = values !== null && placed.length > 0;
-      if (!values) return;
-      for (let slot = 0; slot < placed.length; slot++) {
-        writeSlot(slot, values[placed[slot]!.node] ?? Number.NaN);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.instanceColor!.needsUpdate = true;
-      // Without this the frustum test uses the sphere of the last graph and culls the new tiles.
-      if (placed.length > 0) mesh.computeBoundingSphere();
+      paintSlots(values !== null, (node) => rampInto(values![node] ?? Number.NaN, colour));
+    },
+    paintZones(zoneOfNode) {
+      paintSlots(zoneOfNode !== null, (node) =>
+        zoneColourInto(zoneOfNode![node] ?? NO_ZONE, colour),
+      );
     },
     dispose() {
       mesh.dispose();

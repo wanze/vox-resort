@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Matrix4, type InstancedMesh } from 'three/webgpu';
+import { NO_ZONE } from '../../sim/domain/zones';
 import { buildOverlayField, type OverlayField, type OverlayTile } from './overlayField';
 
 const tileAt = (node: number, x: number): OverlayTile => ({ x, y: 0, z: 0, node });
@@ -39,6 +40,18 @@ describe('buildOverlayField', () => {
     expect(scaleOf(field, 0)).toBe(1);
     expect(scaleOf(field, 1)).toBe(0);
     expect(meshOf(field).instanceColor).not.toBeNull();
+    field.dispose();
+  });
+
+  it('paints zones, hiding an unzoned tile, and nothing once cleared', () => {
+    const field = buildOverlayField();
+    field.place([tileAt(0, 0), tileAt(1, 16)]);
+    field.paintZones(Int8Array.from([NO_ZONE, 2]));
+    expect(field.drawCalls).toBe(1);
+    expect(scaleOf(field, 0)).toBe(0);
+    expect(scaleOf(field, 1)).toBe(1);
+    field.paintZones(null);
+    expect(field.drawCalls).toBe(0);
     field.dispose();
   });
 

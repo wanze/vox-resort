@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { rampInto, type Rgb } from './ramp';
+import { NO_ZONE, ZONES } from '../../sim/domain/zones';
+import { rampInto, zoneColourInto, ZONE_COLOURS, type Rgb } from './ramp';
 
 const colourOf = (value: number): Rgb => {
   const out = { r: -1, g: -1, b: -1 };
@@ -39,5 +40,28 @@ describe('rampInto', () => {
   it('clamps a value past either end to that end', () => {
     expect(colourOf(-3)).toEqual(colourOf(0));
     expect(colourOf(7)).toEqual(colourOf(1));
+  });
+});
+
+const zoneColour = (zone: number): Rgb => {
+  const out = { r: -1, g: -1, b: -1 };
+  zoneColourInto(zone, out);
+  return out;
+};
+
+describe('zoneColourInto', () => {
+  it('gives every zone its own colour, and none of them a heat stop', () => {
+    expect(ZONE_COLOURS).toHaveLength(ZONES);
+    const zones = Array.from({ length: ZONES }, (_, zone) => JSON.stringify(zoneColour(zone)));
+    const heat = [0, 0.5, 1].map((value) => JSON.stringify(colourOf(value)));
+    expect(new Set(zones).size).toBe(ZONES);
+    for (const colour of zones) expect(heat).not.toContain(colour);
+  });
+
+  it('draws nothing for an unzoned tile and leaves out untouched', () => {
+    const out = { r: -1, g: -1, b: -1 };
+    expect(zoneColourInto(NO_ZONE, out)).toBe(false);
+    expect(zoneColourInto(ZONES, out)).toBe(false);
+    expect(out).toEqual({ r: -1, g: -1, b: -1 });
   });
 });

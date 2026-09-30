@@ -13,6 +13,7 @@ import type { Hiring } from './staff';
 import type { VenueTakings } from './takings';
 import { restoreThoughts, snapshotThoughts, type Thoughts, type ThoughtTally } from './thoughts';
 import { restoreUpkeep, snapshotUpkeep, type Upkeep } from './upkeep';
+import type { Zones } from './zones';
 
 // The guest side of a resort, which the showcase's Resort satisfies. Everything here is either
 // written into in place or replaced whole, so a restore never leaves a stale alias behind.
@@ -38,6 +39,7 @@ export interface ResortState {
   open: boolean;
   beds: { readonly total: number; readonly taken: number };
   hiring: Hiring;
+  readonly zones: Zones;
 }
 
 export function snapshotResort(state: ResortState): ResortSnapshot {
@@ -67,6 +69,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     open: state.open,
     beds: { ...state.beds },
     hiring: { ...state.hiring },
+    zones: state.zones.zone.slice(),
   };
 }
 
@@ -95,4 +98,6 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.open = snapshot.open;
   state.beds = { ...snapshot.beds };
   state.hiring = { ...snapshot.hiring };
+  state.zones.zone.set(snapshot.zones);
+  state.zones.version++;
 }

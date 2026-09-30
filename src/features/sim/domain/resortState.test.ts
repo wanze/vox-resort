@@ -15,6 +15,7 @@ import { AUTO_HIRING, hire } from './staff';
 import { earn } from './takings';
 import { createDay, createThoughts, tallyInto, think } from './thoughts';
 import { createUpkeep } from './upkeep';
+import { createZones, paintZone, zoneAt } from './zones';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 30 }];
 const VENUES = [{ key: 'bar#0' }, { key: 'pool#0' }];
@@ -43,6 +44,7 @@ function stateFor(seed: number): ResortState {
     open: true,
     beds: { total: 30, taken: 0 },
     hiring: AUTO_HIRING,
+    zones: createZones(6, 5),
   };
 }
 
@@ -106,6 +108,17 @@ describe('snapshotResort', () => {
     const fresh = stateFor(9);
     restoreResort(fresh, snapshotResort(played()));
     expect(fresh.litter.version).toBe(1);
+  });
+
+  it('keeps a painted zone, and bumps the version so the staff are dealt afresh', () => {
+    const state = played();
+    paintZone(state.zones, 4, 3, 2);
+    const fresh = stateFor(9);
+    const grid = fresh.zones.zone;
+    restoreResort(fresh, snapshotResort(state));
+    expect(zoneAt(fresh.zones, 4, 3)).toBe(2);
+    expect(fresh.zones.zone, 'the grid was replaced').toBe(grid);
+    expect(fresh.zones.version).toBe(1);
   });
 
   it('keeps a hand-set role through a save', () => {

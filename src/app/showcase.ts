@@ -85,9 +85,11 @@ import {
   armedBrush,
   armedObject,
   armedRemove,
+  armedZone,
   type BuildTool,
 } from '../features/build/domain/buildTool';
 import { createTerrainPointer } from '../features/build/adapters/terrainPointer';
+import { createZonePointer } from '../features/build/adapters/zonePointer';
 import { createDemolishPointer } from '../features/build/adapters/demolishPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
 import { createTileOccupancy, footprintTiles } from '../features/build/domain/tileOccupancy';
@@ -206,7 +208,21 @@ import {
   createStaffRouter,
   meanCleanliness,
   type StaffRouter,
+  type StaffZones,
 } from '../features/sim/domain/staffRouter';
+import {
+  anyZone,
+  createZones,
+  dealZones,
+  NO_ZONE,
+  paintZone,
+  staffByZone,
+  zoneAt,
+  workplaceZones,
+  zonesIn,
+  zonesOf,
+  type Zones,
+} from '../features/sim/domain/zones';
 import {
   arrivalsDueBy,
   checkInDue,
@@ -457,6 +473,8 @@ export interface ShowcaseStats {
     readonly roster: Roster;
     readonly recommended: Roster;
     readonly hiring: Hiring;
+    // Per zone, in zone order: who was dealt there.
+    readonly zones: readonly Roster[];
   };
   readonly cleanliness: number;
   readonly rating: number;
@@ -817,6 +835,11 @@ interface Resort {
   roster: Roster;
   // Read late by the staff router, so an edit swaps it rather than writing into it.
   duty: Uint8Array;
+  // Per tile of the plan, so it survives every edit without being carried; never replaced.
+  readonly zones: Zones;
+  // Dealt afresh by rezone, and read late by the staff router, as the duty is.
+  zoneOf: Int8Array;
+  venueZones: Int32Array;
   readonly guests: Guests;
   readonly needs: Needs;
   readonly happiness: Happiness;
@@ -1203,6 +1226,16 @@ function buildResort(
   const roster = rosterOf(AUTO_HIRING, recommended);
   const duty = onDuty(employed, roster);
   let staffField: CrowdField | null = null;
+  // Getters, so the router reads the latest deal without an object built per question.
+  const staffZones: StaffZones = {
+    get zoneOf() {
+      return resort.zoneOf;
+    },
+    get venueZones() {
+      return resort.venueZones;
+    },
+    tileZone: (tileX, tileZ) => zoneAt(resort.zones, tileX, tileZ),
+  };
   const staffRouter = createStaffRouter({
     staff: employed,
     venues,
@@ -1215,6 +1248,7 @@ function buildResort(
     litter: () => resort.litter,
     // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
     occupants: (venue) => resort.router.occupancyOf(resort.venues[venue]!.key)?.inside ?? 0,
+    zones: () => staffZones,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1266,6 +1300,9 @@ function buildResort(
     recommended,
     roster,
     duty,
+    zones: createZones(plan.tilesX, plan.tilesZ),
+    zoneOf: new Int8Array(employed.count).fill(NO_ZONE),
+    venueZones: new Int32Array(venues.length),
     guests,
     needs,
     happiness,
@@ -1319,6 +1356,7 @@ function buildResort(
       lighting.volume?.dispose();
     },
   };
+  rezone(resort);
   return resort;
 }
 
@@ -1470,6 +1508,7 @@ function sceneStats(parts: {
       roster: parts.resort.roster,
       recommended: parts.resort.recommended,
       hiring: parts.resort.hiring,
+      zones: staffByZone(parts.resort.staffPool.role, parts.resort.zoneOf),
     },
     cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
@@ -1656,6 +1695,10 @@ function overlayTilesOf(network: WalkNetwork): OverlayTile[] {
   return tiles;
 }
 
+function zonesOfNodes(zones: Zones, network: WalkNetwork): Int8Array {
+  return Int8Array.from(network.nodes, (node) => zoneAt(zones, node.tileX, node.tileZ));
+}
+
 // Per graph, which an edit replaces along with the venues, so a sweep is kept until the next
 // rebuild rather than rerun every hour.
 const reachSweeps = new WeakMap<WalkNetwork, Map<GuestNeed, Int32Array>>();
@@ -1770,7 +1813,43 @@ function staffTheResort(resort: Resort): void {
   resort.recommended = recommended;
   resort.roster = roster;
   resort.duty = duty;
+  rezone(resort);
 }
+
+// A zone holds a workplace for a role wherever that role's task choice could send somebody, so
+// nobody is dealt to a zone with no work for them. Cleaners sweep paving, so paving counts too.
+function rezone(resort: Resort): void {
+  const { zones, venues } = resort;
+  if (!anyZone(zones)) {
+    resort.venueZones = new Int32Array(venues.length);
+    resort.zoneOf = new Int8Array(resort.staffPool.count).fill(NO_ZONE);
+    return;
+  }
+  const network = resort.staff.crowd.network;
+  const index = pavingIndexOf(network);
+  resort.venueZones = Int32Array.from(venues, (venue) =>
+    zonesOf(
+      zones,
+      venue,
+      doorsFor(venue, index).nodes.map((node) => network.nodes[node]!),
+    ),
+  );
+  const held = workplaceZones(zones, venues, resort.venueZones, {
+    paved: network.nodes,
+    towers: network.posts.map((seat) => tileUnder(network.seats[seat]!)),
+  });
+  const roles = resort.staffPool.role.map((role) => STAFF_ROLES.indexOf(role));
+  resort.zoneOf = dealZones(
+    roles,
+    resort.duty,
+    STAFF_ROLES.map((role) => zonesIn(held[role])),
+  );
+}
+
+const tileUnder = (spot: { readonly x: number; readonly z: number }) => ({
+  tileX: Math.floor(spot.x / TILE_VOXELS),
+  tileZ: Math.floor(spot.z / TILE_VOXELS),
+});
 
 // Shared with a load, which sets the duty without a shift change: the saved staff crowd already
 // has everyone where the save left them.
@@ -2203,6 +2282,8 @@ function createEditMode(parts: {
   readonly onChange: () => void;
   // Placing counts too: the ground under anything standing is drawn square.
   readonly onGroundChange: () => void;
+  // Only for a tile whose zone changed, so a drag over painted tiles deals nobody afresh.
+  readonly onZonesChange: () => void;
   readonly onCancel: () => void;
   readonly onLift: (placement: Placement) => void;
   readonly money: Purse;
@@ -2422,6 +2503,19 @@ function createEditMode(parts: {
     onCancel,
   });
 
+  // Free: a zone is paint on the plan, not a change to the ground.
+  const zoneBrush = createZonePointer({
+    canvas,
+    camera: () => handle.camera,
+    takeLeftButton: lendLeftButton('zone'),
+    ghost,
+    ground,
+    onPaint(tile, zone) {
+      if (paintZone(resort().zones, tile.x, tile.z, zone)) parts.onZonesChange();
+    },
+    onCancel,
+  });
+
   // A scan rather than a second key table, which every edit would have to keep in step.
   const placementOf = (key: string): Placement | undefined => {
     const { plot } = resort();
@@ -2459,13 +2553,14 @@ function createEditMode(parts: {
 
   return {
     select(tool) {
-      // All three are told every time, so the order cannot matter.
+      // Every pointer is told every time, so the order cannot matter.
       const family = armedObject(tool);
       const chooser = itemChooser(tool, Math.random);
       if (chooser && family === armedFamily) pointer.restyle(chooser);
       else pointer.select(chooser);
       armedFamily = family;
       spade.select(armedBrush(tool));
+      zoneBrush.select(armedZone(tool));
       bulldozer.select(armedRemove(tool));
     },
     advance(dt) {
@@ -2495,6 +2590,7 @@ function createEditMode(parts: {
     dispose() {
       pointer.dispose();
       spade.dispose();
+      zoneBrush.dispose();
       bulldozer.dispose();
       handle.scene.remove(ghost.group);
       ghost.dispose();
@@ -2818,6 +2914,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       ground = true;
       options.onDirty?.();
     },
+    onZonesChange: () => {
+      rezone(current());
+      paintOverlay();
+      counted = true;
+      options.onDirty?.();
+    },
     onCancel: () => {
       selectTool(null);
       options.onToolChange?.(null);
@@ -2831,8 +2933,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
+    const wasZoning = armedZone(armedTool) !== null;
+    const zoning = armedZone(tool) !== null;
     armedTool = tool;
     build.select(tool);
+    // Arming puts any map away; disarming brings none back, the player picks it again.
+    if (zoning && !wasZoning) overlayKind = null;
+    if (zoning !== wasZoning) paintOverlay();
   };
 
   // The index, not the view: the view is rebuilt on a new day or an edit, and the live line needs
@@ -2918,18 +3025,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // The graph the tiles were placed for: a new one, from an edit or a new plot, places them again.
   let overlayPlacedOn: WalkNetwork | null = null;
 
-  const paintOverlay = (): void => {
-    const resort = current();
-    if (overlayKind === null) {
-      resort.overlay.paint(null);
-      return;
-    }
+  const placeOverlay = (resort: Resort): WalkNetwork => {
     const network = resort.crowd.crowd.network;
     if (overlayPlacedOn !== network) {
       resort.overlay.place(overlayTilesOf(network));
       overlayPlacedOn = network;
     }
-    resort.overlay.paint(overlayValues(resort, overlayKind));
+    return network;
+  };
+
+  // The zone view wins while the zone brush is armed: both are drawn on the same tiles.
+  const paintOverlay = (): void => {
+    const resort = current();
+    const zoning = armedZone(armedTool) !== null;
+    if (overlayKind === null && !zoning) {
+      resort.overlay.paint(null);
+      return;
+    }
+    const network = placeOverlay(resort);
+    if (zoning) resort.overlay.paintZones(zonesOfNodes(resort.zones, network));
+    else resort.overlay.paint(overlayValues(resort, overlayKind!));
   };
 
   const hourly = (): void => {
@@ -3024,6 +3139,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     restoreResort(resort, saved.resort);
     // Before the staff router's restore, which reads the duty.
     Object.assign(resort, rosterNow(resort));
+    rezone(resort);
     resort.router.restore(saved.router);
     resort.staffRouter.restore(saved.staffRouter);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));

@@ -19,7 +19,13 @@ export interface RemoveTool {
   readonly kind: 'remove';
 }
 
-export type BuildTool = ObjectTool | TerrainTool | RemoveTool;
+// NO_ZONE erases.
+export interface ZoneTool {
+  readonly kind: 'zone';
+  readonly zone: number;
+}
+
+export type BuildTool = ObjectTool | TerrainTool | RemoveTool | ZoneTool;
 
 export const BULLDOZER = {
   label: 'Bulldozer',
@@ -37,4 +43,8 @@ export function armedObject(tool: BuildTool | null): string | null {
 
 export function armedBrush(tool: BuildTool | null): TerrainBrush | null {
   return tool?.kind === 'terrain' ? tool.brush : null;
+}
+
+export function armedZone(tool: BuildTool | null): number | null {
+  return tool?.kind === 'zone' ? tool.zone : null;
 }

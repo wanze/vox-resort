@@ -16,6 +16,7 @@ import { AUTO_HIRING, staffPool } from '../../sim/domain/staff';
 import { createStaffRouter } from '../../sim/domain/staffRouter';
 import { createDay, createThoughts } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
+import { createZones } from '../../sim/domain/zones';
 import { gameSnapshotSchema, metaOf, SAVE_VERSION, type GameSnapshot } from './snapshot';
 
 const POPULATION = 12;
@@ -83,6 +84,7 @@ function gameFixture(): GameSnapshot {
     open: true,
     beds: { total: 0, taken: 0 },
     hiring: AUTO_HIRING,
+    zones: createZones(4, 3),
   });
   return {
     version: SAVE_VERSION,
@@ -157,6 +159,12 @@ describe('gameSnapshotSchema', () => {
   it('refuses a staff column one short of the staff', () => {
     const game = gameFixture();
     const broken = { ...game, staff: { ...game.staff, x: game.staff.x.slice(1) } };
+    expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it('refuses a zone grid of another size than the world', () => {
+    const game = gameFixture();
+    const broken = { ...game, resort: { ...game.resort, zones: game.resort.zones.slice(1) } };
     expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
   });
 

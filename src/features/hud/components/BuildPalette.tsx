@@ -3,11 +3,13 @@ import { BuildGroup } from './BuildGroup';
 import { BuildPaletteHead } from './BuildPaletteHead';
 import { TerrainShelf } from './TerrainShelf';
 import { ToolShelf } from './ToolShelf';
+import { ZoneShelf, zoneLabel } from './ZoneShelf';
 import { objectTypeById, objectTypeGroups } from '../../catalog/domain/objectTypes';
 import {
   armedBrush,
   armedObject,
   armedRemove,
+  armedZone,
   BULLDOZER,
   type BuildTool,
 } from '../../build/domain/buildTool';
@@ -15,6 +17,7 @@ import { styleStripFor } from '../../build/domain/stylePick';
 import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBrush';
 import { countTypes, filterGroups } from '../domain/paletteFilter';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { Roster } from '../../sim/domain/staff';
 
 // Injected rather than imported: the pictures come from the bundler, and components may not import
 // adapters.
@@ -24,6 +27,8 @@ function armedLabel(tool: BuildTool | null): string | null {
   if (armedRemove(tool)) return BULLDOZER.label;
   const id = armedObject(tool);
   if (id) return objectTypeById(id).label;
+  const zone = armedZone(tool);
+  if (zone !== null) return zoneLabel(zone);
   return brushLabel(armedBrush(tool));
 }
 
@@ -37,6 +42,7 @@ export interface BuildPaletteProps {
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly ledger: Ledger | null;
   readonly focusSearch: boolean;
+  readonly zoneStaff: readonly Roster[] | null;
 }
 
 // A search opens every shelf: a hit inside a folded one would read as no hit.
@@ -46,6 +52,7 @@ export function BuildPalette({
   onToolChange,
   ledger,
   focusSearch,
+  zoneStaff,
 }: BuildPaletteProps) {
   const groups = useMemo(() => objectTypeGroups(), []);
   const [shut, setShut] = useState<ReadonlySet<string>>(new Set());
@@ -84,6 +91,14 @@ export function BuildPalette({
           onToggle={toggle('terrain')}
           selected={brush}
           onSelect={(next) => onToolChange(next === null ? null : { kind: 'terrain', brush: next })}
+        />
+
+        <ZoneShelf
+          open={!shut.has('zones')}
+          onToggle={toggle('zones')}
+          selected={armedZone(tool)}
+          onSelect={(zone) => onToolChange(zone === null ? null : { kind: 'zone', zone })}
+          staff={zoneStaff}
         />
 
         <ToolShelf

@@ -160,6 +160,7 @@ export const resortSnapshotSchema = z.object({
   open: z.boolean(),
   beds: z.object({ total: count, taken: count }),
   hiring: hiringSchema,
+  zones: int8,
 });
 
 export type ResortSnapshot = z.infer<typeof resortSnapshotSchema>;

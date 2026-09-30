@@ -1,3 +1,5 @@
+import { NO_ZONE, ZONES } from '../../sim/domain/zones';
+
 export interface Rgb {
   r: number;
   g: number;
@@ -23,5 +25,18 @@ export function rampInto(value: number, out: Rgb): boolean {
   out.r = between(from.r, to.r, t);
   out.g = between(from.g, to.g, t);
   out.b = between(from.b, to.b, t);
+  return true;
+}
+
+// Blue, orange, green and violet: none is a heat stop, so a zone view never reads as a heat map,
+// and none is a brown that sinks into the sand of the paving.
+export const ZONE_COLOURS: readonly number[] = [0x2f6fe4, 0xf27a1c, 0x5bbf3a, 0x9b5de5];
+
+export function zoneColourInto(zone: number, out: Rgb): boolean {
+  if (zone === NO_ZONE || zone < 0 || zone >= ZONES) return false;
+  const hex = ZONE_COLOURS[zone]!;
+  out.r = ((hex >> 16) & 0xff) / 255;
+  out.g = ((hex >> 8) & 0xff) / 255;
+  out.b = (hex & 0xff) / 255;
   return true;
 }

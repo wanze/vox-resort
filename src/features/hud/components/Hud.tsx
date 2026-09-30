@@ -84,6 +84,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onToolChange={props.onToolChange}
       ledger={props.ledger}
       focusSearch={props.windows.layout.focus === 'build'}
+      zoneStaff={props.stats?.staff.zones ?? null}
     />
   ),
   overview: (props) => <ResortStats stats={props.stats} />,

@@ -29,6 +29,7 @@ import {
 } from './upkeep';
 import { shelterOf, type Venue } from './venues';
 import { isOpenIn, weatherEffect, type Weather, type WeatherEffect } from './weather';
+import { NO_ZONE } from './zones';
 
 // In ticks (simulated minutes), drawn either way so cleaners who set off together do not finish together for ever.
 const SPELL_TICKS = { min: 15, max: 25 } as const;
@@ -69,6 +70,13 @@ const COMPASS = [
 
 const NOBODY = -1;
 
+export interface StaffZones {
+  readonly zoneOf: Int8Array;
+  // A bitmask per venue, from zonesOf.
+  readonly venueZones: Int32Array;
+  readonly tileZone: (tileX: number, tileZ: number) => number;
+}
+
 export interface StaffRouter {
   step(worker: number, at: number): number;
   tick(now: number): void;
@@ -100,6 +108,8 @@ export function createStaffRouter(parts: {
   readonly litter?: () => Litter;
   // Guests inside a venue, from the guests' router. Omitted, every stage and pool is as busy.
   readonly occupants?: (venue: number) => number;
+  // Late-bound: painting or hiring deals the staff afresh. Omitted, nobody is zoned.
+  readonly zones?: () => StaffZones;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -147,6 +157,26 @@ export function createStaffRouter(parts: {
   const fieldFor = (venue: number): FlowField =>
     (fields[venue] ??= flowFieldFor(network, doorsFor(venues[venue]!, index).nodes));
 
+  // Asked once per choice rather than per candidate: the zones are dealt afresh by every paint.
+  const zonedFor = (worker: number): StaffZones | null => {
+    const zones = parts.zones?.();
+    return zones && (zones.zoneOf[worker] ?? NO_ZONE) !== NO_ZONE ? zones : null;
+  };
+
+  const venueInZone = (worker: number): ((venue: number) => boolean) => {
+    const zones = zonedFor(worker);
+    if (!zones) return () => true;
+    const zone = zones.zoneOf[worker]!;
+    return (venue) => (((zones.venueZones[venue] ?? 0) >> zone) & 1) === 1;
+  };
+
+  const tileInZone = (worker: number): ((tileX: number, tileZ: number) => boolean) => {
+    const zones = zonedFor(worker);
+    if (!zones) return () => true;
+    const zone = zones.zoneOf[worker]!;
+    return (tileX, tileZ) => zones.tileZone(tileX, tileZ) === zone;
+  };
+
   const claimsOf = (worker: number): Int32Array => {
     const role = staff.role[worker];
     if (role === 'animator') return showBy;
@@ -164,6 +194,7 @@ export function createStaffRouter(parts: {
   // Dirtiest first, so an unreachable venue is swept once instead of every venue being swept per worker.
   const pick = (worker: number, at: number): number => {
     const passedOver = new Set<number>();
+    const inZone = venueInZone(worker);
     for (let attempt = 0; attempt < venues.length; attempt++) {
       const effect = weatherEffect(weatherNow());
       const venue = dirtiest(
@@ -171,6 +202,7 @@ export function createStaffRouter(parts: {
         (each) =>
           claimedBy[each] === NOBODY &&
           !passedOver.has(each) &&
+          inZone(each) &&
           !isBrokenDown(each) &&
           isOpenIn(shelterOf(venues[each]!), effect),
         NEEDS_CLEANING,
@@ -197,10 +229,15 @@ export function createStaffRouter(parts: {
     return best;
   };
 
-  const stageFree = (venue: number, effect: WeatherEffect): boolean => {
+  const stageFree = (
+    venue: number,
+    effect: WeatherEffect,
+    inZone: (venue: number) => boolean,
+  ): boolean => {
     const place = venues[venue]!;
     return (
       place.stage === true &&
+      inZone(venue) &&
       showBy[venue] === NOBODY &&
       !isBrokenDown(venue) &&
       isOpenIn(shelterOf(place), effect)
@@ -211,20 +248,25 @@ export function createStaffRouter(parts: {
   const pickStage = (worker: number, at: number): number => {
     const effect = weatherEffect(weatherNow());
     const last = lastStage[worker]!;
-    const elsewhere = busiest(at, (venue) => venue !== last && stageFree(venue, effect));
+    const inZone = venueInZone(worker);
+    const elsewhere = busiest(at, (venue) => venue !== last && stageFree(venue, effect, inZone));
     if (elsewhere >= 0 || last < 0) return claim(worker, elsewhere);
     return claim(
       worker,
-      busiest(at, (venue) => venue === last && stageFree(venue, effect)),
+      busiest(at, (venue) => venue === last && stageFree(venue, effect, inZone)),
     );
   };
 
   const pickWater = (worker: number, at: number): number => {
     const effect = weatherEffect(weatherNow());
+    const inZone = venueInZone(worker);
     const unwatched = (venue: number): boolean => {
       const place = venues[venue]!;
       return (
-        place.bathing === true && watchedBy[venue] === NOBODY && isOpenIn(shelterOf(place), effect)
+        place.bathing === true &&
+        watchedBy[venue] === NOBODY &&
+        inZone(venue) &&
+        isOpenIn(shelterOf(place), effect)
       );
     };
     return claim(worker, busiest(at, unwatched));
@@ -246,10 +288,15 @@ export function createStaffRouter(parts: {
     const breakdowns = parts.breakdowns?.();
     if (!breakdowns) return NOBODY;
     const passedOver = new Set<number>();
+    const inZone = venueInZone(worker);
     for (let attempt = 0; attempt < venues.length; attempt++) {
       const venue = brokenFirst(
         breakdowns,
-        (each) => each < venues.length && repairBy[each] === NOBODY && !passedOver.has(each),
+        (each) =>
+          each < venues.length &&
+          repairBy[each] === NOBODY &&
+          !passedOver.has(each) &&
+          inZone(each),
       );
       if (venue < 0) return NOBODY;
       if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue);
@@ -314,10 +361,15 @@ export function createStaffRouter(parts: {
   const pickTile = (worker: number, at: number, litter: Litter): number => {
     const claims = tileClaims(litter);
     const passedOver = new Set<number>();
+    const inZone = tileInZone(worker);
     for (let attempt = 0; attempt < MAX_TILE_TRIES; attempt++) {
       const tile = mostLittered(
         litter,
-        (each) => claims[each] === NOBODY && !passedOver.has(each) && nodeOnTile(litter, each) >= 0,
+        (each) =>
+          claims[each] === NOBODY &&
+          !passedOver.has(each) &&
+          inZone(each % litter.tilesX, Math.floor(each / litter.tilesX)) &&
+          nodeOnTile(litter, each) >= 0,
         SWEEP_ABOVE,
       );
       if (tile < 0) return NOBODY;
@@ -386,9 +438,13 @@ export function createStaffRouter(parts: {
     return routes;
   };
 
+  // By the tile under the seat, so painting the sand under a tower zones it.
   const pickTower = (worker: number, at: number): number => {
+    const inZone = tileInZone(worker);
     for (const seat of network.posts) {
       if (towerBy.has(seat)) continue;
+      const spot = network.seats[seat]!;
+      if (!inZone(Math.floor(spot.x / TILE_VOXELS), Math.floor(spot.z / TILE_VOXELS))) continue;
       const route = towerRoutesFor(seat).find((each) => nodeFieldFor(each.gate).next[at]! >= 0);
       if (!route) continue;
       towerBy.set(seat, worker);

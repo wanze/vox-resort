@@ -96,18 +96,18 @@ const FACES: readonly Face[] = [
 
 const hexRgb = (hex: Color): Vec3 => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
-function buildTriangles(model: Pick<VoxelModel, 'voxels'>): Triangle[] {
-  const filled = new Set(model.voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
+function buildTriangles({ voxels, scale = 1 }: Pick<VoxelModel, 'voxels' | 'scale'>): Triangle[] {
+  const filled = new Set(voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
   const triangles: Triangle[] = [];
-  for (const voxel of model.voxels) {
+  for (const voxel of voxels) {
     const rgb = hexRgb(voxel.color);
     for (const face of FACES) {
       const neighbour = `${voxel.x + face.d[0]},${voxel.y + face.d[1]},${voxel.z + face.d[2]}`;
       if (filled.has(neighbour)) continue;
       const p = face.c.map((corner): Vec3 => [
-        voxel.x + corner[0],
-        voxel.y + corner[1],
-        voxel.z + corner[2],
+        (voxel.x + corner[0]) * scale,
+        (voxel.y + corner[1]) * scale,
+        (voxel.z + corner[2]) * scale,
       ]);
       triangles.push({ p: [p[0]!, p[1]!, p[2]!], n: face.n, rgb });
       triangles.push({ p: [p[0]!, p[2]!, p[3]!], n: face.n, rgb });
@@ -341,16 +341,23 @@ function lineupOrigins(models: readonly VoxelModel[]): (readonly [number, number
   return origins;
 }
 
+// The person is drawn apart from the model: painted finer, it is scaled on its own.
 function renderLineup(models: readonly VoxelModel[], person: VoxelModel, size: number): Buffer {
+  const scale = person.scale ?? 1;
+  const [personWidth, personDepth] = [person.width * scale, person.depth * scale];
+  const origins = lineupOrigins(models);
   // Concatenated rather than spread into `push`: the hotel exceeds the argument limit.
-  const voxels = lineupOrigins(models).flatMap(([x, z], index): PaintedVoxel[] => {
-    const model = models[index]!;
-    return shifted(model, x, z).concat(
-      shifted(person, x - person.width - 1, z + model.depth - person.depth),
-    );
-  });
+  const voxels = origins.flatMap(([x, z], index) => shifted(models[index]!, x, z));
+  const people = origins.flatMap(([x, z], index) =>
+    shifted(
+      person,
+      (x - personWidth - 1) / scale,
+      (z + models[index]!.depth - personDepth) / scale,
+    ),
+  );
+  const triangles = buildTriangles({ voxels }).concat(buildTriangles({ voxels: people, scale }));
   const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE);
-  drawTriangles(fb, buildTriangles({ voxels }), { x: 0, y: 0, width: fb.width, height: fb.height });
+  drawTriangles(fb, triangles, { x: 0, y: 0, width: fb.width, height: fb.height });
   const { pixels, width, height } = downsample(fb, SUPERSAMPLE, false);
   return encodePng(pixels, width, height);
 }

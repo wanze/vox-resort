@@ -6,10 +6,22 @@ import {
   Vector3,
   type InstancedMesh,
 } from 'three/webgpu';
-import { ADULT_VOXELS, CHILD_VOXELS, hipHeight } from '../../../../voxel-gen/people/figure.ts';
+import {
+  ADULT_VOXELS,
+  CHEST_HALF_WIDTH,
+  CHILD_VOXELS,
+  handHeight,
+  hipHeight,
+  shoulderHeight,
+} from '../../../../voxel-gen/people/figure.ts';
+import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
+import { buildModel, type VoxelModelSource } from '../../../../voxel-gen/voxelgen.ts';
 import { createCast, SHOWN, type DrawnAs } from '../../choreography/domain/casting';
+import { meshVoxelModel } from '../../model-compare/domain/voxelMesh';
+import { ARM_WEIGHT, figureGeometry } from '../../rendering/adapters/figureField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { orthographicLens } from '../../rendering/domain/levelOfDetail';
+import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
 import { createCrowd, putOnPlot, RESTING, takeOffPlot, type Crowd } from '../domain/crowd';
 import { walkNetworkFor, type PavedTile } from '../domain/walkNetwork';
 import { buildCrowdField } from './crowdField';
@@ -50,6 +62,74 @@ const MODELS: readonly ModelGeometry[] = [
   personGeometry('guest-a', ADULT_VOXELS),
   personGeometry('child', CHILD_VOXELS),
 ];
+
+// The comparison mesher gives every quad its own vertices, as the game's does.
+function meshedPerson(source: VoxelModelSource): ModelGeometry {
+  const model = buildModel(source);
+  const lit = meshVoxelModel(model).surfaces.lit!;
+  const scale = model.scale ?? 1;
+  const geometry = new BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new BufferAttribute(
+      lit.positions.map((value) => value * scale),
+      3,
+    ),
+  );
+  geometry.setAttribute('normal', new BufferAttribute(lit.normals, 3));
+  geometry.setAttribute('color', new BufferAttribute(lit.colors, 3));
+  geometry.setIndex(new BufferAttribute(lit.indices, 1));
+  return {
+    id: source.id,
+    lit: geometry,
+    emissive: null,
+    water: null,
+    window: null,
+    triangleCount: lit.indices.length / 3,
+    unmergedTriangleCount: lit.indices.length / 3,
+  };
+}
+
+interface Corner {
+  readonly x: number;
+  readonly y: number;
+  readonly weight: number;
+  readonly part: 'leg' | 'arm' | 'body' | 'seam';
+}
+
+// Every corner of every triangle of a posed figure, with the part its triangle's centroid is on;
+// a seam is where an arm meets the body, and belongs to either.
+function cornersOf(source: VoxelModelSource): { corners: Corner[][] } {
+  const geometry = figureGeometry(meshedPerson(source), 1);
+  const positions = geometry.getAttribute('position');
+  const weights = geometry.getAttribute('figure');
+  const index = geometry.getIndex()!;
+  geometry.computeBoundingBox();
+  const height = geometry.boundingBox!.max.y;
+  const hip = hipHeight(height);
+  const shoulder = shoulderHeight(height);
+  const hand = handHeight(height);
+  const corners: Corner[][] = [];
+  for (let first = 0; first < index.count; first += 3) {
+    const vertices = [0, 1, 2].map((corner) => index.getX(first + corner));
+    const x = vertices.reduce((sum, vertex) => sum + positions.getX(vertex), 0) / 3;
+    const y = vertices.reduce((sum, vertex) => sum + positions.getY(vertex), 0) / 3;
+    let part: Corner['part'] = y < hip ? 'leg' : 'body';
+    if (Math.abs(Math.abs(x) - CHEST_HALF_WIDTH) < 1e-4) part = 'seam';
+    else if (Math.abs(x) > CHEST_HALF_WIDTH && y >= hand && y <= shoulder) part = 'arm';
+    corners.push(
+      vertices.map((vertex) => ({
+        x: positions.getX(vertex),
+        y: positions.getY(vertex),
+        weight: weights.getX(vertex),
+        part,
+      })),
+    );
+  }
+  return { corners };
+}
+
+const EVERY_PERSON = [...PEOPLE_SOURCES, ...STAFF_SOURCES];
 
 // WebGPU's default `maxVertexBuffers`, which Three.js does not raise.
 const MAX_VERTEX_BUFFERS = 8;
@@ -235,6 +315,48 @@ describe('buildCrowdField', () => {
       }
     }
     field.dispose();
+  });
+
+  it('weights each arm whole by its side, one against the other', () => {
+    for (const source of EVERY_PERSON) {
+      const arms = cornersOf(source)
+        .corners.flat()
+        .filter((corner) => corner.part === 'arm');
+      expect(arms.length, source.id).toBeGreaterThan(0);
+      for (const corner of arms) {
+        expect(corner.weight, `${source.id} at ${corner.x}, ${corner.y}`).toBe(
+          Math.sign(corner.x) * ARM_WEIGHT,
+        );
+      }
+      expect(new Set(arms.map((corner) => corner.weight)), source.id).toEqual(
+        new Set([-ARM_WEIGHT, ARM_WEIGHT]),
+      );
+    }
+  });
+
+  it('gives the chest and the head no weight', () => {
+    for (const source of EVERY_PERSON) {
+      const body = cornersOf(source)
+        .corners.flat()
+        .filter((corner) => corner.part === 'body');
+      expect(body.length, source.id).toBeGreaterThan(0);
+      for (const corner of body) expect(corner.weight, source.id).toBeCloseTo(0, 5);
+    }
+  });
+
+  it('shares no vertex between an arm and the chest, so each can be told apart', () => {
+    for (const source of EVERY_PERSON) {
+      const geometry = figureGeometry(meshedPerson(source), 1);
+      const index = geometry.getIndex()!;
+      const { corners } = cornersOf(source);
+      const partOf = new Map<number, Corner['part']>();
+      for (let corner = 0; corner < index.count; corner++) {
+        const vertex = index.getX(corner);
+        const part = corners[Math.floor(corner / 3)]![corner % 3]!.part;
+        expect(partOf.get(vertex) ?? part, `${source.id} vertex ${vertex}`).toBe(part);
+        partOf.set(vertex, part);
+      }
+    }
   });
 
   it('gives every person a walk cycle of their own, in an instanced attribute', () => {
@@ -437,6 +559,30 @@ describe('buildCrowdField', () => {
     expect(pose.getX(0)).toBeCloseTo(1, 5);
     expect(pose.getZ(0)).toBe(RESTING.sitting);
     expect(pose.getW(0)).toBeCloseTo(crowd.phase[0]!, 5);
+    field.dispose();
+  });
+
+  it('hands the shader every drawn pose, and how far into it a person is', () => {
+    const codes = Object.values(DRAWN_POSE);
+    const crowd = crowdOf(codes.length);
+    const drawnAs = createCast(codes.length, []);
+    for (const [person, code] of codes.entries()) {
+      drawnAs.shown[person] = SHOWN.placed;
+      drawnAs.x[person] = person;
+      drawnAs.pose[person] = poseWith(code, person / codes.length);
+    }
+    const field = buildCrowdField({ crowd, models: MODELS, drawnAs });
+    const drawn = meshes(field.group).flatMap((mesh) =>
+      Array.from({ length: mesh.count }, (_, slot) => ({
+        x: positionOf(mesh, slot).x,
+        pose: mesh.geometry.getAttribute('pose').getZ(slot),
+      })),
+    );
+    for (const [person, code] of codes.entries()) {
+      const pose = drawn.find((each) => each.x === person)!.pose;
+      expect(Math.floor(pose), `person ${person}`).toBe(code);
+      expect(pose - code).toBeCloseTo(person / codes.length, 5);
+    }
     field.dispose();
   });
 

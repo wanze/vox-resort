@@ -179,6 +179,9 @@ export interface VoxelModelSource {
   readonly seats?: readonly ModelSeat[];
   readonly placement?: ModelPlacement;
   readonly venue?: ModelVenue;
+  // One voxel's edge in world voxels, for art painted finer than the world; the mesher grows or
+  // shrinks it back, so width, height and depth stay in the model's own voxels.
+  readonly scale?: number;
   readonly build: (builder: VoxelBuilder) => void;
 }
 
@@ -211,6 +214,7 @@ export interface VoxelModel {
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
   readonly placement: ModelPlacement;
   readonly venue: ModelVenue | null;
+  readonly scale?: number;
 }
 
 export const TILE_VOXELS = 16;
@@ -297,7 +301,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     }))
     .toSorted((a, b) => a.y - b.y || a.z - b.z || a.x - b.x);
 
-  return {
+  return withScale(source, {
     id: source.id,
     label: source.label,
     category: source.category,
@@ -326,5 +330,8 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     seats: (source.seats ?? []).map((seat) => seatFrom(seat, minX, minY, minZ)),
     placement: source.placement ?? {},
     venue: source.venue ? venueFrom(source.venue, minX, minY, minZ) : null,
-  };
+  });
 }
+
+const withScale = (source: VoxelModelSource, model: VoxelModel): VoxelModel =>
+  source.scale === undefined ? model : { ...model, scale: source.scale };

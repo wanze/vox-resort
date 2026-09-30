@@ -10,6 +10,7 @@ export interface DrawnAs {
   readonly y: Float32Array;
   readonly z: Float32Array;
   readonly heading: Float32Array;
+  // A RESTING code or one of rendering's DRAWN_POSE, which only the figure shader reads.
   readonly pose: Float32Array;
 }
 

@@ -91,10 +91,15 @@ function meshGroup(mesh: VoxelMesh, materials: Record<SurfaceKind, Material>): G
   return group;
 }
 
+interface Person {
+  readonly mesh: VoxelMesh;
+  readonly scale: number;
+}
+
 // Centred on its pivot so a spin turns it in place, with a guest beside it for scale.
 function modelPivot(
   compared: ComparedModel,
-  person: VoxelMesh,
+  person: Person,
   materials: Record<SurfaceKind, Material>,
 ): Group {
   const { width, depth } = compared.model;
@@ -102,7 +107,8 @@ function modelPivot(
   const body = meshGroup(compared.mesh, materials);
   body.position.set(-width / 2, 0, -depth / 2);
   pivot.add(body);
-  const figure = meshGroup(person, materials);
+  const figure = meshGroup(person.mesh, materials);
+  figure.scale.setScalar(person.scale);
   figure.position.set(-width / 2 - 6, 0, depth / 2 - 4);
   pivot.add(figure);
   return pivot;
@@ -181,7 +187,8 @@ export async function createCompareStage(canvas: HTMLCanvasElement): Promise<Com
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
   const materials = createMaterials();
-  const person = meshVoxelModel(buildModel(PEOPLE_SOURCES[0]!));
+  const guest = buildModel(PEOPLE_SOURCES[0]!);
+  const person = { mesh: meshVoxelModel(guest), scale: guest.scale ?? 1 };
   let pivots: { original: Group; variant: Group } | null = null;
   let current: Comparison | null = null;
   let view: CompareView = 'side';

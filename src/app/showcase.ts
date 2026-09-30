@@ -367,7 +367,7 @@ import {
   type SelectionView,
 } from '../features/inspect/domain/selection';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
-import { hipHeight } from '../../voxel-gen/people/figure.ts';
+import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
 import { buildLitterField, type LitterField } from '../features/litter/adapters/litterField';
 import { piecesFor } from '../features/litter/domain/litterPieces';
@@ -443,7 +443,7 @@ const WEATHER_SEED = 13;
 
 const RAIN_SEED = 4;
 
-const AIM_HEIGHT = hipHeight(Math.max(...PEOPLE_MODELS.map((model) => model.height)));
+const AIM_HEIGHT = hipHeight(ADULT_VOXELS);
 
 // Late afternoon, so day 0 opens in daylight.
 const INITIAL_TIME = 0.62;

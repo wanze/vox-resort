@@ -5,7 +5,7 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 |          |                                                                                                        |
 | -------- | ------------------------------------------------------------------------------------------------------ |
 | People   | 0.25 per paved tile, max 10 000 (`crowdSize.ts`), `?people=n` overrides. Three adult models, one child |
-| Poses    | walk, sit, lie                                                                                         |
+| Poses    | walk, stand, sit, lie; drawn only: swim, wade, hop, cheer, jog, strike, reach                          |
 | Boats    | 12 (`CRAFT_COUNT`), plus buoys and rental boats                                                        |
 | Balloons | 36 (`BALLOON_COUNT`)                                                                                   |
 
@@ -136,10 +136,28 @@ queuing.
 
 - One `InstancedMesh` per person model, not chunked or frustum-culled. People
   under `HIDDEN_PIXELS` are packed out of the draw but keep walking.
-- The CPU writes position and yaw. Walk, sit and lie are done in the vertex
-  shader from one per-vertex `figure` vec4 and one per-instance `pose` vec4.
-  These are packed because WebGPU allows only eight vertex buffers;
-  `crowdField.test.ts` counts them.
+- The CPU writes position and yaw. Every pose is done in the vertex shader
+  from one per-vertex `figure` vec4 and one per-instance `pose` vec4. These are
+  packed because WebGPU allows only eight vertex buffers; `crowdField.test.ts`
+  counts them.
+- People are painted at half a world voxel (`FIGURE_SCALE`, the model
+  source's `scale`), which the mesher shrinks back, so a figure stays 3 wide,
+  2 deep and 7 tall in the world while its arms and legs are half a voxel
+  across. The arms hang from `shoulderHeight` to `handHeight`, beside the
+  thighs: one voxel of sleeve, two of forearm.
+- `figure.x` is one weight channel for both limbs. A leg's weight tapers from
+  the foot to the hip; an arm carries only its side at `ARM_WEIGHT`, past any
+  leg's, since it turns whole about the shoulder. Arms are found per triangle,
+  from the centroid, which relies on the mesher giving every quad its own
+  vertices.
+- The mesher culls the faces where an arm touches the body, so
+  `rendering/domain/figureLimbs.ts` adds them back: the arm's inner side and
+  the chest and thigh behind it, coloured from the part they close. Without
+  them a swinging arm would open a see-through slit.
+- `pose.z` is `code + progress`. Codes 0 to 3 are the crowd's `RESTING`; 4 to
+  10 are `DRAWN_POSE` in `rendering/domain/poses.ts`, only ever drawn, set
+  through `DrawnAs.pose`. Cyclic poses run on the field's clock; timed ones
+  (strike, reach) read `progress`, set with `poseWith`.
 - People use the lit material (so lamps light them) and get no blob shadow.
 - Passengers are a separate figure field posed in the boat's frame.
 - The field draws a `DrawnAs` (the cast, see Places) over the crowd: a placed
@@ -847,8 +865,10 @@ changes what a saved number means, and needs a version bump too.
 ## Where the art lives
 
 - People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.
-  `figure.ts` has the shared builder and `hipHeight`. Preview with
-  `pnpm preview --people`.
+  `figure.ts` has the shared builder, `hipHeight`, `shoulderHeight` and
+  `handHeight`. Every person passes `sleeves` to `figure()`, the upper arm, a
+  shade darker than the shirt (the forearm is skin), and `scale: FIGURE_SCALE`
+  on its source. Preview with `pnpm preview --people`.
 - Staff: `voxel-gen/people/{cleaner,lifeguard,animator,mechanic}.ts`, via
   `STAFF_SOURCES`, in `STAFF_ROLES` order.
 - Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`. Litter:

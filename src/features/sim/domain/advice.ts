@@ -4,6 +4,7 @@ import { ARCHETYPES } from './archetypes';
 import type { VenueDoors } from './doors';
 import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
+import type { Shortfall } from './staff';
 import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
 
@@ -18,6 +19,8 @@ const KIND_ORDER = [
   'unserved-need',
   'full-lines',
   'unreachable',
+  // Above the lines a short roster causes, so the cause reads before its symptoms.
+  'short-staffed',
   'broken',
   'dirty',
   'unwatched',
@@ -74,6 +77,8 @@ export interface ResortFacts {
   readonly broken?: ReadonlyMap<string, number>;
   // Guests here now with their health below full.
   readonly hurt?: number;
+  // Hand-set roles below what the plot wants; absent means every role is on Auto or enough.
+  readonly shortStaffed?: readonly Shortfall[];
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -257,6 +262,17 @@ export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
     }));
 }
 
+export function adviceShortStaffed(facts: ResortFacts): readonly Advice[] {
+  return (facts.shortStaffed ?? []).map(({ role, short, wanted }) => ({
+    kind: 'short-staffed' as const,
+    weight: 0.2 + 0.5 * clamp(short / Math.max(1, wanted)),
+    subject: role,
+    count: short,
+    at: null,
+    need: null,
+  }));
+}
+
 // Straight line on purpose: a flow field per lodging per need is the eager sweep
 // `router.ts` refuses to do.
 export function adviceFarFromHome(facts: ResortFacts): Advice | null {
@@ -407,6 +423,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
+    ...adviceShortStaffed(facts),
     ...adviceBroken(facts),
     adviceDirty(facts),
     ...adviceUnwatched(facts),

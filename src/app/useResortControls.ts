@@ -1,6 +1,7 @@
 import { useCallback, useState, type RefObject } from 'react';
 import type { ResortParams } from '../features/layout/domain/resortGenerator';
 import { groundOf, type NewGame } from '../features/welcome/domain/newGame';
+import type { StaffRole } from '../features/sim/domain/staff';
 import type { Showcase } from './showcase';
 import { useMoney, type MoneyControls } from './useMoney';
 
@@ -12,6 +13,7 @@ export interface ResortControls {
   adopt(params: ResortParams): void;
   adoptOpen(open: boolean): void;
   setOpen(open: boolean): void;
+  setHiring(role: StaffRole, count: number | null): void;
   // True once the new resort stands; false if it could not be built.
   start(params: ResortParams, game: NewGame): Promise<boolean>;
 }
@@ -59,6 +61,10 @@ export function useResortControls(
     adoptOpen,
     // The showcase answers through onOpenChange, so the state follows what it did.
     setOpen: useCallback((next: boolean) => showcase.current?.setOpen(next), [showcase]),
+    setHiring: useCallback(
+      (role: StaffRole, count: number | null) => showcase.current?.setHiring(role, count),
+      [showcase],
+    ),
     start,
   };
 }

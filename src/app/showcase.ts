@@ -167,17 +167,23 @@ import {
   type SceneryField,
 } from '../features/sim/domain/scenery';
 import {
+  AUTO_HIRING,
   cheerTheAudience,
+  hire,
   onDuty,
   rosterFor,
+  rosterOf,
   shiftChange,
+  shortOf,
   STAFF_ROLES,
   staffPool,
   unwatched,
   wagesFor,
   workplacesOf,
+  type Hiring,
   type Roster,
   type Staff,
+  type StaffRole,
 } from '../features/sim/domain/staff';
 import {
   canAfford,
@@ -445,7 +451,13 @@ export interface ShowcaseStats {
   readonly venues: { readonly inside: number; readonly waiting: number };
   readonly routeFields: number;
   readonly guests: { readonly present: number; readonly capacity: number };
-  readonly staff: { readonly total: number; readonly working: number; readonly roster: Roster };
+  readonly staff: {
+    readonly total: number;
+    readonly working: number;
+    readonly roster: Roster;
+    readonly recommended: Roster;
+    readonly hiring: Hiring;
+  };
   readonly cleanliness: number;
   readonly rating: number;
   readonly weather: Weather;
@@ -516,6 +528,7 @@ export interface Showcase {
   readonly open: boolean;
   readonly ledger: Ledger;
   setOpen(open: boolean): void;
+  setHiring(role: StaffRole, count: number | null): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
   setDetail(enabled: boolean): void;
@@ -799,6 +812,8 @@ interface Resort {
   // renumbers nodes.
   readonly staffRouter: StaffRouter;
   readonly staffPool: Staff;
+  hiring: Hiring;
+  recommended: Roster;
   roster: Roster;
   // Read late by the staff router, so an edit swaps it rather than writing into it.
   duty: Uint8Array;
@@ -1184,7 +1199,8 @@ function buildResort(
   crowdField = crowd;
   // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
   const employed = staffPool();
-  const roster = rosterFor(workplacesOf(venues, network.posts));
+  const recommended = rosterFor(workplacesOf(venues, network.posts));
+  const roster = rosterOf(AUTO_HIRING, recommended);
   const duty = onDuty(employed, roster);
   let staffField: CrowdField | null = null;
   const staffRouter = createStaffRouter({
@@ -1246,6 +1262,8 @@ function buildResort(
     staff,
     staffRouter,
     staffPool: employed,
+    hiring: AUTO_HIRING,
+    recommended,
     roster,
     duty,
     guests,
@@ -1450,6 +1468,8 @@ function sceneStats(parts: {
       total: parts.resort.duty.reduce((sum, each) => sum + each, 0),
       working: parts.resort.staffRouter.workingCount,
       roster: parts.resort.roster,
+      recommended: parts.resort.recommended,
+      hiring: parts.resort.hiring,
     },
     cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
@@ -1737,8 +1757,7 @@ function enterAt(crowd: Crowd, i: number, node: number): void {
 // After the relocate, so the arrival node is on the graph the staff crowd now walks. With no
 // entrance yet they start at node 0: anywhere on the paving beats waiting for a gate.
 function staffTheResort(resort: Resort): void {
-  const roster = rosterFor(workplacesOf(resort.venues, resort.staff.crowd.network.posts));
-  const duty = onDuty(resort.staffPool, roster);
+  const { recommended, roster, duty } = rosterNow(resort);
   const workers = resort.staff.crowd;
   const shift = shiftChange(duty, workers.offPlot);
   for (const worker of shift.leaving) {
@@ -1748,8 +1767,21 @@ function staffTheResort(resort: Resort): void {
   // No paving yet: they are owed their shift at the next edit that lays some.
   const paved = workers.network.edges.length > 0;
   if (paved) for (const worker of shift.starting) enterAt(workers, worker, arrival);
+  resort.recommended = recommended;
   resort.roster = roster;
   resort.duty = duty;
+}
+
+// Shared with a load, which sets the duty without a shift change: the saved staff crowd already
+// has everyone where the save left them.
+function rosterNow(resort: Resort): {
+  readonly recommended: Roster;
+  readonly roster: Roster;
+  readonly duty: Uint8Array;
+} {
+  const recommended = rosterFor(workplacesOf(resort.venues, resort.staff.crowd.network.posts));
+  const roster = rosterOf(resort.hiring, recommended);
+  return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
 }
 
 function strandedOn(venues: readonly Venue[], network: WalkNetwork): ReadonlySet<string> {
@@ -1822,6 +1854,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     ),
     unwatched: unwatchedOn(resort),
     broken: brokenOn(resort, now),
+    shortStaffed: shortOf(resort.hiring, resort.recommended),
     hurt: hurtCount(resort),
     // The router's own isOpenIn, so the panel and the door agree about what is shut. The weather's
     // alone: the rain is not to blame for a breakdown, which has its own line.
@@ -2989,6 +3022,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     walkStaleAt = null;
     const resort = slot.replace(prepared, saved.population);
     restoreResort(resort, saved.resort);
+    // Before the staff router's restore, which reads the duty.
+    Object.assign(resort, rosterNow(resort));
     resort.router.restore(saved.router);
     resort.staffRouter.restore(saved.staffRouter);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
@@ -3189,6 +3224,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.open = open;
       options.onOpenChange?.(open);
       options.onDirty?.();
+      advise();
+    },
+    setHiring(role, count) {
+      const resort = current();
+      resort.hiring = hire(resort.hiring, role, count);
+      staffTheResort(resort);
+      options.onDirty?.();
+      onSceneChange?.(statsNow());
       advise();
     },
     setCameraMode,

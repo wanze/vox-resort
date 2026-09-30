@@ -447,6 +447,16 @@ An unwatched bathing venue, and the beach once a tower stands, gets an
 `unwatched` advice line weighted by today's swimmers and a Lifeguard row in the
 inspector; the consequence is ten times the mishaps (next section).
 
+**Hiring** is the player's, with the plot's count as the default. The roster is
+`rosterOf(hiring, rosterFor(...))`: every role starts on Auto (`AUTO_HIRING`,
+`null`), which is exactly `rosterFor`'s recommendation and follows the plot. A
+role the player sets by hand in the Staff window (`hire`) keeps that number
+through every edit until it is switched back to Auto. Nobody is hired past
+`STAFF_CAPS`: hiring changes the roster, never the pool. A hand-set role below
+the recommendation gets a `short-staffed` advice line (`shortOf`), ranked above
+the dirty, unwatched and broken lines it causes, with a Hire button that tops the
+role up to the recommendation and keeps it hand-set. An Auto role is never short.
+
 ## Breakdowns and injuries
 
 **Breakdowns.** The art declares `venue.reliability`, visits between breakdowns
@@ -695,7 +705,9 @@ IndexedDB and are parsed with zod on the way back (`saves/domain/snapshot.ts`).
 
 **Every piece of new simulation state must be added to its module's snapshot and
 schema, or `SAVE_VERSION` bumped.** There are no migrations: a save of another
-version is listed as unreadable. The twin-run tests (`crowd.test.ts`,
+version is listed as unreadable. The hiring is saved with the resort; a load
+recomputes the roster and the duty from it without a shift change, since the
+staff crowd comes back from the save as it was. The twin-run tests (`crowd.test.ts`,
 `router.test.ts`) restore a snapshot into a second resort and run both side by
 side, so they catch a missed field, but only if their scenario exercises it.
 Reordering `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels

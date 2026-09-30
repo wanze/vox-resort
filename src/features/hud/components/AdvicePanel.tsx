@@ -1,9 +1,12 @@
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import { isStaffRole, type StaffRole } from '../../sim/domain/staff';
 import { StatRow } from './StatRow';
+import { roleWord } from './staffWords';
 
 export interface AdvicePanelProps {
   readonly advice: readonly Advice[];
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
+  readonly onHire?: (role: StaffRole) => void;
 }
 
 const SHOWN = 4;
@@ -39,6 +42,8 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
+  'short-staffed': ({ subject, count }) =>
+    `The plot needs ${count} more ${isStaffRole(subject) ? roleWord(subject, count) : subject}`,
   broken: ({ subject }) => `${subject} has broken down`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
   unwatched: ({ subject }) => `Nobody is watching ${subject}`,
@@ -59,6 +64,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
   unreachable: ({ count }) => `${count} places standing idle`,
+  'short-staffed': () => 'hired by hand, so the roster does not follow the plot',
   broken: ({ count }) =>
     count < 60 ? 'down under an hour' : `down for ${Math.round(count / 60)} h`,
   dirty: ({ count }) => `${count}% clean`,
@@ -79,6 +85,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'unserved-need': 'Missing',
   'full-lines': 'Queues',
   unreachable: 'Stranded',
+  'short-staffed': 'Staff',
   broken: 'Repairs',
   dirty: 'Upkeep',
   unwatched: 'Lifeguard',
@@ -98,12 +105,35 @@ function noteOf(advice: Advice): string | null {
 const keyOf = (advice: Advice): string =>
   `${advice.kind}:${advice.subject}:${advice.at ? `${advice.at.tileX},${advice.at.tileZ}` : ''}`;
 
+function HireButton({
+  advice,
+  onHire,
+}: {
+  readonly advice: Advice;
+  readonly onHire: AdvicePanelProps['onHire'];
+}) {
+  const role = advice.subject;
+  if (advice.kind !== 'short-staffed' || !isStaffRole(role) || !onHire) return null;
+  return (
+    <button
+      type="button"
+      className="hud-camera-mode hud-advice-show"
+      aria-label={`Hire ${roleWord(role, 2)} up to what the plot needs`}
+      onClick={() => onHire(role)}
+    >
+      Hire
+    </button>
+  );
+}
+
 function AdviceRow({
   advice,
   onShowOnPlot,
+  onHire,
 }: {
   readonly advice: Advice;
   readonly onShowOnPlot: AdvicePanelProps['onShowOnPlot'];
+  readonly onHire: AdvicePanelProps['onHire'];
 }) {
   const { at } = advice;
   return (
@@ -119,18 +149,19 @@ function AdviceRow({
           Show
         </button>
       ) : null}
+      <HireButton advice={advice} onHire={onHire} />
     </StatRow>
   );
 }
 
-export function AdvicePanel({ advice, onShowOnPlot }: AdvicePanelProps) {
+export function AdvicePanel({ advice, onShowOnPlot, onHire }: AdvicePanelProps) {
   if (advice.length === 0) {
     return <p className="hud-loading">Nothing needs attention.</p>;
   }
   return (
     <dl className="hud-stats hud-advice">
       {advice.slice(0, SHOWN).map((each) => (
-        <AdviceRow key={keyOf(each)} advice={each} onShowOnPlot={onShowOnPlot} />
+        <AdviceRow key={keyOf(each)} advice={each} onShowOnPlot={onShowOnPlot} onHire={onHire} />
       ))}
     </dl>
   );

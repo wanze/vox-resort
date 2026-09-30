@@ -11,6 +11,7 @@ import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortStats } from './ResortStats';
+import { StaffPanel } from './StaffPanel';
 import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
@@ -66,6 +67,7 @@ const PANELS: readonly Panel[] = [
   'overview',
   'advice',
   'guests',
+  'staff',
   'books',
   'camera',
   'resort',
@@ -85,8 +87,18 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
     />
   ),
   overview: (props) => <ResortStats stats={props.stats} />,
-  advice: (props) => <AdvicePanel advice={props.advice} onShowOnPlot={props.onShowOnPlot} />,
+  advice: (props) => (
+    <AdvicePanel
+      advice={props.advice}
+      onShowOnPlot={props.onShowOnPlot}
+      // Tops the role up to what the plot wants and keeps it hand-set.
+      onHire={(role) => props.resort.setHiring(role, props.stats?.staff.recommended[role] ?? null)}
+    />
+  ),
   guests: (props) => <GuestsPanel voices={props.voices} />,
+  staff: ({ stats, resort }) => (
+    <StaffPanel staff={stats?.staff ?? null} onHire={resort.setHiring} />
+  ),
   books: (props) => <LedgerPanel ledger={props.ledger} />,
   camera: ({ camera }) => (
     <CameraPanel

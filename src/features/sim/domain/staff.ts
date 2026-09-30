@@ -89,6 +89,49 @@ export function rosterFor(places: Workplaces): Roster {
   };
 }
 
+// null is Auto: the role follows rosterFor as the plot changes.
+export type Hiring = { readonly [role in StaffRole]: number | null };
+
+export const AUTO_HIRING: Hiring = {
+  cleaner: null,
+  lifeguard: null,
+  animator: null,
+  mechanic: null,
+};
+
+export interface Shortfall {
+  readonly role: StaffRole;
+  readonly short: number;
+  readonly wanted: number;
+}
+
+const clampToCap = (role: StaffRole, count: number): number =>
+  Math.min(STAFF_CAPS[role], Math.max(0, Math.round(count)));
+
+// The pool is part of every save, so nobody is hired past the cap however the count is asked for.
+export function hire(hiring: Hiring, role: StaffRole, count: number | null): Hiring {
+  return { ...hiring, [role]: count === null ? null : clampToCap(role, count) };
+}
+
+export function rosterOf(hiring: Hiring, recommended: Roster): Roster {
+  const roster = {} as { [role in StaffRole]: number };
+  for (const role of STAFF_ROLES)
+    roster[role] = clampToCap(role, hiring[role] ?? recommended[role]);
+  return roster;
+}
+
+// An Auto role is the recommendation by definition, so only a hand-set one can fall behind it.
+export function shortOf(hiring: Hiring, recommended: Roster): readonly Shortfall[] {
+  const roster = rosterOf(hiring, recommended);
+  return STAFF_ROLES.filter(
+    (role) => hiring[role] !== null && roster[role] < recommended[role],
+  ).map((role) => ({ role, short: recommended[role] - roster[role], wanted: recommended[role] }));
+}
+
+export function isStaffRole(value: string): value is StaffRole {
+  return (STAFF_ROLES as readonly string[]).includes(value);
+}
+
 export function onDuty(staff: Staff, roster: Roster): Uint8Array {
   const duty = new Uint8Array(staff.count);
   const seen = new Map<StaffRole, number>();

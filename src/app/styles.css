@@ -363,7 +363,8 @@ input[type='checkbox'] {
 .hud-palette-armed-label,
 .hud-chip-tag,
 .hud-resort-advanced > summary,
-.hud-stat dt {
+.hud-stat dt,
+.hud-staff dt {
   font: 400 var(--size-label) / 1.2 var(--font-label);
   letter-spacing: var(--track-label);
   text-transform: uppercase;
@@ -838,6 +839,7 @@ input[type='checkbox'] {
 .hud-window[data-window='overview'],
 .hud-window[data-window='advice'],
 .hud-window[data-window='guests'],
+.hud-window[data-window='staff'],
 .hud-window[data-window='books'],
 .hud-window[data-window='camera'] {
   right: calc(var(--palette-w) + var(--space-3) * 2);
@@ -852,6 +854,11 @@ input[type='checkbox'] {
 
 .hud-window[data-window='guests'] {
   --window-top: calc(var(--window-floor) + 52px);
+  width: 380px;
+}
+
+.hud-window[data-window='staff'] {
+  --window-top: calc(var(--window-floor) + 65px);
   width: 380px;
 }
 
@@ -980,6 +987,54 @@ input[type='checkbox'] {
   font-size: var(--size-lead);
   font-weight: 700;
   color: var(--foliage);
+}
+
+.hud-staff {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.hud-staff-row {
+  display: contents;
+}
+
+.hud-staff dt {
+  padding-right: var(--space-2);
+}
+
+.hud-staff dd {
+  margin: 0;
+}
+
+.hud-staff-count {
+  min-width: 2ch;
+  padding-right: var(--space-1);
+  font: 600 13px / 1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hud-staff-total .hud-staff-count {
+  grid-column: 2 / -1;
+  padding-top: var(--space-2);
+  text-align: left;
+}
+
+.hud-staff-step {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 var(--space-2);
+}
+
+.hud-staff-note {
+  color: var(--text-faint);
+  font: 500 var(--size-small) / 1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 /* Rows are sentences here; .hud-stats keeps every line on one line, which would

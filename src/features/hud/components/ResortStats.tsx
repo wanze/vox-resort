@@ -1,6 +1,7 @@
 import { StatRow } from './StatRow';
 import type { ShowcaseStats } from '../../../app/showcase';
-import { STAFF_ROLES, type Roster, type StaffRole } from '../../sim/domain/staff';
+import { STAFF_ROLES, type Roster } from '../../sim/domain/staff';
+import { roleWord } from './staffWords';
 
 export interface ResortStatsProps {
   readonly stats: ShowcaseStats | null;
@@ -8,18 +9,10 @@ export interface ResortStatsProps {
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
-const ROLE_NAMES: { readonly [role in StaffRole]: readonly [string, string] } = {
-  cleaner: ['cleaner', 'cleaners'],
-  lifeguard: ['lifeguard', 'lifeguards'],
-  animator: ['animator', 'animators'],
-  mechanic: ['mechanic', 'mechanics'],
-};
-
 const rosterLine = (roster: Roster): string =>
-  STAFF_ROLES.map((role) => {
-    const [one, many] = ROLE_NAMES[role];
-    return `${formatNumber(roster[role])} ${roster[role] === 1 ? one : many}`;
-  }).join(' · ');
+  STAFF_ROLES.map((role) => `${formatNumber(roster[role])} ${roleWord(role, roster[role])}`).join(
+    ' · ',
+  );
 
 export function ResortStats({ stats }: ResortStatsProps) {
   if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;

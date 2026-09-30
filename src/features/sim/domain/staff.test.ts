@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Needs } from './needs';
 import {
+  AUTO_HIRING,
   cheerTheAudience,
+  hire,
+  isStaffRole,
   onDuty,
   rosterFor,
+  rosterOf,
   shiftChange,
+  shortOf,
   STAFF_CAPS,
   STAFF_ROLES,
   staffPool,
@@ -262,5 +267,50 @@ describe('mechanics', () => {
     expect(STAFF_ROLES.at(-1)).toBe('mechanic');
     expect(pool.role.slice(-STAFF_CAPS.mechanic).every((role) => role === 'mechanic')).toBe(true);
     expect(pool.variant.at(-1)).toBe(STAFF_ROLES.indexOf('mechanic'));
+  });
+});
+
+describe('hiring', () => {
+  const wanted = { cleaner: 4, lifeguard: 2, animator: 1, mechanic: 1 };
+
+  it('clamps a hand-set count to the cap and to nobody, and rounds it', () => {
+    expect(hire(AUTO_HIRING, 'cleaner', 99).cleaner).toBe(STAFF_CAPS.cleaner);
+    expect(hire(AUTO_HIRING, 'lifeguard', -3).lifeguard).toBe(0);
+    expect(hire(AUTO_HIRING, 'animator', 2.6).animator).toBe(3);
+  });
+
+  it('switches a role back to Auto with null', () => {
+    const manual = hire(AUTO_HIRING, 'mechanic', 2);
+    expect(hire(manual, 'mechanic', null)).toEqual(AUTO_HIRING);
+  });
+
+  it('leaves the hiring it was given untouched', () => {
+    const before = { ...AUTO_HIRING };
+    hire(AUTO_HIRING, 'cleaner', 3);
+    expect(AUTO_HIRING).toEqual(before);
+  });
+
+  it('staffs an all-Auto resort exactly as the plot recommends', () => {
+    expect(rosterOf(AUTO_HIRING, wanted)).toEqual(wanted);
+    const reference = rosterFor(plot({ venues: 91, bathing: 3, posts: 2, stages: 4, reliable: 6 }));
+    expect(rosterOf(AUTO_HIRING, reference)).toEqual(reference);
+  });
+
+  it('keeps a hand-set role at its number while the recommendation moves', () => {
+    const hiring = hire(AUTO_HIRING, 'cleaner', 3);
+    expect(rosterOf(hiring, wanted).cleaner).toBe(3);
+    expect(rosterOf(hiring, { ...wanted, cleaner: 10 }).cleaner).toBe(3);
+    expect(rosterOf(hiring, { ...wanted, cleaner: 10 }).lifeguard).toBe(2);
+  });
+
+  it('names only hand-set roles below what the plot wants', () => {
+    expect(shortOf(AUTO_HIRING, wanted)).toEqual([]);
+    const hiring = hire(hire(hire(AUTO_HIRING, 'cleaner', 1), 'lifeguard', 2), 'animator', 5);
+    expect(shortOf(hiring, wanted)).toEqual([{ role: 'cleaner', short: 3, wanted: 4 }]);
+  });
+
+  it('tells a role from anything else a subject can be', () => {
+    expect(isStaffRole('cleaner')).toBe(true);
+    expect(isStaffRole('the beach')).toBe(false);
   });
 });

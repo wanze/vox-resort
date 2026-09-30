@@ -9,6 +9,7 @@ import { restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import type { Rating } from './rating';
 import type { ResortSnapshot } from './resortSnapshot';
 import type { Review } from './reviews';
+import type { Hiring } from './staff';
 import type { VenueTakings } from './takings';
 import { restoreThoughts, snapshotThoughts, type Thoughts, type ThoughtTally } from './thoughts';
 import { restoreUpkeep, snapshotUpkeep, type Upkeep } from './upkeep';
@@ -36,6 +37,7 @@ export interface ResortState {
   arrivals: Random;
   open: boolean;
   beds: { readonly total: number; readonly taken: number };
+  hiring: Hiring;
 }
 
 export function snapshotResort(state: ResortState): ResortSnapshot {
@@ -64,6 +66,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     },
     open: state.open,
     beds: { ...state.beds },
+    hiring: { ...state.hiring },
   };
 }
 
@@ -91,4 +94,5 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.arrivals = resumeRandom(snapshot.arrivals.random);
   state.open = snapshot.open;
   state.beds = { ...snapshot.beds };
+  state.hiring = { ...snapshot.hiring };
 }

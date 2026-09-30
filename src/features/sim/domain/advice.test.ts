@@ -7,6 +7,7 @@ import {
   adviceHurt,
   adviceNoBeds,
   adviceNobodyComes,
+  adviceShortStaffed,
   adviceDirty,
   adviceLittered,
   adviceUnreachable,
@@ -588,5 +589,38 @@ describe('breakdowns and injuries', () => {
     const served = adviceFor({ ...facts, venues: [...facts.venues, aid] });
     expect(served.some((each) => each.kind === 'unserved-need')).toBe(false);
     expect(served.some((each) => each.kind === 'hurt')).toBe(true);
+  });
+});
+
+describe('adviceShortStaffed', () => {
+  it('is silent while no hand-set role falls short', () => {
+    expect(adviceShortStaffed(healthyFacts())).toEqual([]);
+    expect(adviceShortStaffed(healthyFacts({ shortStaffed: [] }))).toEqual([]);
+  });
+
+  it('says how many of each role the plot is missing, with no tile to show', () => {
+    const facts = healthyFacts({
+      shortStaffed: [
+        { role: 'cleaner', short: 2, wanted: 5 },
+        { role: 'mechanic', short: 1, wanted: 1 },
+      ],
+    });
+    const advice = adviceShortStaffed(facts);
+    expect(advice.map((each) => [each.subject, each.count])).toEqual([
+      ['cleaner', 2],
+      ['mechanic', 1],
+    ]);
+    expect(advice[0]).toMatchObject({ kind: 'short-staffed', at: null, need: null });
+    expect(adviceFor(facts).filter((each) => each.kind === 'short-staffed')).toHaveLength(2);
+  });
+
+  it('weighs a larger shortfall more', () => {
+    const [few] = adviceShortStaffed(
+      healthyFacts({ shortStaffed: [{ role: 'cleaner', short: 1, wanted: 6 }] }),
+    );
+    const [many] = adviceShortStaffed(
+      healthyFacts({ shortStaffed: [{ role: 'cleaner', short: 5, wanted: 6 }] }),
+    );
+    expect(many!.weight).toBeGreaterThan(few!.weight);
   });
 });

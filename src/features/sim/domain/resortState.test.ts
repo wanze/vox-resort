@@ -11,6 +11,7 @@ import { createNeeds } from './needs';
 import { ratingFor } from './rating';
 import { resortSnapshotSchema } from './resortSnapshot';
 import { restoreResort, snapshotResort, type ResortState } from './resortState';
+import { AUTO_HIRING, hire } from './staff';
 import { earn } from './takings';
 import { createDay, createThoughts, tallyInto, think } from './thoughts';
 import { createUpkeep } from './upkeep';
@@ -41,6 +42,7 @@ function stateFor(seed: number): ResortState {
     arrivals: createRandom(8),
     open: true,
     beds: { total: 30, taken: 0 },
+    hiring: AUTO_HIRING,
   };
 }
 
@@ -104,6 +106,21 @@ describe('snapshotResort', () => {
     const fresh = stateFor(9);
     restoreResort(fresh, snapshotResort(played()));
     expect(fresh.litter.version).toBe(1);
+  });
+
+  it('keeps a hand-set role through a save', () => {
+    const state = played();
+    state.hiring = hire(AUTO_HIRING, 'cleaner', 3);
+    const fresh = stateFor(9);
+    restoreResort(fresh, snapshotResort(state));
+    expect(fresh.hiring).toEqual({ ...AUTO_HIRING, cleaner: 3 });
+  });
+
+  it('keeps every role on Auto through a save', () => {
+    const fresh = stateFor(9);
+    fresh.hiring = hire(AUTO_HIRING, 'mechanic', 2);
+    restoreResort(fresh, snapshotResort(played()));
+    expect(fresh.hiring).toEqual(AUTO_HIRING);
   });
 
   it('refuses litter saved as a plain list', () => {

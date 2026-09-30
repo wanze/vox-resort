@@ -5,6 +5,7 @@ import type { Ledger } from './ledger';
 import type { Rating } from './rating';
 import type { Review } from './reviews';
 import { SIM_SPEEDS } from './simClock';
+import type { Hiring } from './staff';
 import { THOUGHT_KINDS, type ThoughtTally } from './thoughts';
 import { WEATHERS } from './weather';
 
@@ -134,6 +135,13 @@ const ledgerSchema = z.object({
   mode: z.enum(['sandbox', 'tycoon']),
 }) satisfies z.ZodType<Ledger>;
 
+const hiringSchema = z.object({
+  cleaner: count.nullable(),
+  lifeguard: count.nullable(),
+  animator: count.nullable(),
+  mechanic: count.nullable(),
+}) satisfies z.ZodType<Hiring>;
+
 export const resortSnapshotSchema = z.object({
   guests: guestsSnapshotSchema,
   needs: needsSnapshotSchema,
@@ -151,6 +159,7 @@ export const resortSnapshotSchema = z.object({
   arrivals: z.object({ planned: count, admitted: count, random: z.number().int() }),
   open: z.boolean(),
   beds: z.object({ total: count, taken: count }),
+  hiring: hiringSchema,
 });
 
 export type ResortSnapshot = z.infer<typeof resortSnapshotSchema>;

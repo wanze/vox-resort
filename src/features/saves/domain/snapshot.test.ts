@@ -12,7 +12,7 @@ import { createNeeds } from '../../sim/domain/needs';
 import { ratingFor } from '../../sim/domain/rating';
 import { snapshotResort } from '../../sim/domain/resortState';
 import { createRouter } from '../../sim/domain/router';
-import { staffPool } from '../../sim/domain/staff';
+import { AUTO_HIRING, staffPool } from '../../sim/domain/staff';
 import { createStaffRouter } from '../../sim/domain/staffRouter';
 import { createDay, createThoughts } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
@@ -82,6 +82,7 @@ function gameFixture(): GameSnapshot {
     arrivals: createRandom(8),
     open: true,
     beds: { total: 0, taken: 0 },
+    hiring: AUTO_HIRING,
   });
   return {
     version: SAVE_VERSION,
@@ -123,6 +124,22 @@ describe('gameSnapshotSchema', () => {
 
   it('refuses another version', () => {
     expect(gameSnapshotSchema.safeParse({ ...gameFixture(), version: 2 }).success).toBe(false);
+  });
+
+  it('refuses a hand-set role with a negative count, and takes a role on Auto', () => {
+    const game = gameFixture();
+    const hiredAs = (cleaner: number | null) => ({
+      ...game,
+      resort: { ...game.resort, hiring: { ...AUTO_HIRING, cleaner } },
+    });
+    expect(gameSnapshotSchema.safeParse(hiredAs(-1)).success).toBe(false);
+    expect(gameSnapshotSchema.safeParse(hiredAs(null)).success).toBe(true);
+  });
+
+  it('takes a hand-set role', () => {
+    const game = gameFixture();
+    const hired = { ...game, resort: { ...game.resort, hiring: { ...AUTO_HIRING, cleaner: 3 } } };
+    expect(gameSnapshotSchema.safeParse(hired).success).toBe(true);
   });
 
   it('refuses a save with a part missing', () => {

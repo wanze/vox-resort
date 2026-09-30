@@ -6,6 +6,7 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   overview: 'Overview',
   advice: 'Advice',
   guests: 'Guests',
+  staff: 'Staff',
   books: 'Books',
   camera: 'Camera',
   resort: 'New game',
@@ -19,6 +20,7 @@ export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
   overview: 'overview',
   advice: 'advice',
   guests: 'guests',
+  staff: 'guests',
   books: 'books',
   camera: 'camera',
   resort: 'resort',
@@ -39,6 +41,7 @@ export const TOOLBAR_WINDOWS = [
   'overview',
   'advice',
   'guests',
+  'staff',
   'books',
   'camera',
 ] as const;

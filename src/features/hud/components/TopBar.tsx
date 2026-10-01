@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
 import { MainMenu } from './MainMenu';
 import { PixelIcon } from './PixelIcon';
@@ -134,6 +135,8 @@ export function TopBar(props: TopBarProps) {
           onOpenChange={opener('overlay')}
         />
       </div>
+
+      <DemandMeter demand={status?.demand ?? null} onOpen={() => windows.show('demand', true)} />
 
       <div className="hud-plate hud-status">
         {status ? (

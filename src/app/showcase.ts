@@ -272,6 +272,7 @@ import {
   type Advice,
   type ResortFacts,
 } from '../features/sim/domain/advice';
+import { demandFor, type Demand } from '../features/sim/domain/demand';
 import { doorsFor } from '../features/sim/domain/doors';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
@@ -553,6 +554,7 @@ export interface StatusView {
   readonly rating: Rating;
   readonly present: number;
   readonly beds: { readonly total: number; readonly taken: number };
+  readonly demand: Demand | null;
 }
 
 export interface ShowcaseOptions {
@@ -1831,12 +1833,13 @@ function voicesOf(resort: Resort): VoicesView {
 }
 
 // The rating is the one set at check-in, not a fresh one: it is what sizes the arrivals.
-function statusOf(resort: Resort, clock: Pick<Clock, 'day'>): StatusView {
+function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | null): StatusView {
   return {
     day: clock.day,
     rating: resort.rating,
     present: presentCount(resort.guests),
     beds: resort.beds,
+    demand,
   };
 }
 
@@ -3302,20 +3305,27 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
 
   let dayAdvice: readonly Advice[] = [];
+  let demandNow: Demand | null = null;
+
+  // One facts build for both, so the bars and the advice describe the same moment.
+  const adviceAndDemand = (): readonly Advice[] => {
+    const facts = factsNow(current(), clock.weather, clock.ticks);
+    demandNow = demandFor(facts);
+    return adviceFor(facts);
+  };
 
   const advise = (): void => {
-    dayAdvice = adviceFor(factsNow(current(), clock.weather, clock.ticks));
+    dayAdvice = adviceAndDemand();
     options.onAdviceChange?.(dayAdvice, clock.ticks);
   };
 
   const adviseHourly = (): void => {
-    const fresh = adviceFor(factsNow(current(), clock.weather, clock.ticks));
-    options.onAdviceChange?.(refreshedWithin(dayAdvice, fresh), clock.ticks);
+    options.onAdviceChange?.(refreshedWithin(dayAdvice, adviceAndDemand()), clock.ticks);
   };
 
   const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
 
-  const report = (): void => options.onStatusChange?.(statusOf(current(), clock));
+  const report = (): void => options.onStatusChange?.(statusOf(current(), clock, demandNow));
 
   const tellHistory = (): void => options.onHistoryChange?.(current().history);
 
@@ -3516,6 +3526,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Said now rather than tomorrow; the day's counters are left alone.
     advise();
     speak();
+    report();
   };
 
   const recorder = bench
@@ -3641,14 +3652,15 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get stats() {
       return statsNow();
     },
+    // Also fills the demand, so the status read after it at mount has bars.
     get advice() {
-      return adviceFor(factsNow(current(), clock.weather, clock.ticks));
+      return adviceAndDemand();
     },
     get voices() {
       return voicesOf(current());
     },
     get status() {
-      return statusOf(current(), clock);
+      return statusOf(current(), clock, demandNow);
     },
     get history() {
       return current().history;

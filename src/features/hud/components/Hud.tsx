@@ -5,6 +5,7 @@ import { CommandPalette } from './CommandPalette';
 import { listCommands } from './commands';
 import { CameraPanel } from './CameraPanel';
 import { DayReportPanel } from './DayReportPanel';
+import { DemandPanel } from './DemandPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
@@ -78,6 +79,7 @@ const PANELS: readonly Panel[] = [
   'advice',
   'messages',
   'report',
+  'demand',
   'guests',
   'staff',
   'books',
@@ -144,6 +146,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       mode={modeOf(ledger)}
     />
   ),
+  demand: ({ status }) => <DemandPanel status={status} />,
   guests: (props) => <GuestsPanel voices={props.voices} />,
   staff: ({ stats, resort }) => (
     <StaffPanel staff={stats?.staff ?? null} onHire={resort.setHiring} />

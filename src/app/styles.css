@@ -21,6 +21,10 @@
   --ochre: #9a6117;
   --lamp-on: #7cc443;
   --lamp-off: #d2503a;
+  /* The pixel icons' warm, red and quiet grey inks, so a demand bar reads like the icons beside it. */
+  --ink-warm: #e98a2c;
+  --ink-red: #d2503a;
+  --ink-quiet: #8e9aab;
 
   /* Brown specks at a fine scale and soft patches at a coarse one: flat colour reads as
      plastic, the two together as cut sandstone. */
@@ -776,6 +780,138 @@ input[type='checkbox'] {
   font-size: var(--size-body);
 }
 
+.hud-demand {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Most of the plate, which is 12px taller than a control, so the bars stand as tall as the rating. */
+  height: calc(var(--control-h) + 6px);
+  padding: 0 var(--space-2);
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: var(--cursor-hand);
+}
+
+.hud-demand:hover {
+  color: var(--terracotta-deep);
+}
+
+.hud-demand-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hud-demand-initial {
+  font: 400 var(--size-label) / 1 var(--font-label);
+}
+
+/* Zero sits in the middle; the fill grows up or down from it by --pressure, -1 to 1.
+   One edge of the fill stays on zero because one of the max/min is always 0. */
+.hud-demand-bar {
+  --demand-ink: var(--ink-quiet);
+  position: relative;
+  display: block;
+  width: 9px;
+  /* With the initial under it, this fills the button's height and no more. */
+  height: 26px;
+  border-radius: 2px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.hud-demand-bar[data-tone='up'] {
+  --demand-ink: var(--ink-warm);
+}
+
+.hud-demand-bar[data-tone='loud'] {
+  --demand-ink: var(--ink-red);
+}
+
+.hud-demand-bar::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: var(--edge);
+}
+
+.hud-demand-fill {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: calc(50% - max(var(--pressure), 0) * 50%);
+  bottom: calc(50% + min(var(--pressure), 0) * 50%);
+  background: var(--demand-ink);
+}
+
+.hud-demand-bar[data-across] {
+  width: 100%;
+  height: 8px;
+}
+
+.hud-demand-bar[data-across]::before {
+  top: -1px;
+  bottom: -1px;
+  left: calc(50% - 0.5px);
+  right: auto;
+  width: 1px;
+  height: auto;
+}
+
+.hud-demand-bar[data-across] .hud-demand-fill {
+  top: 1px;
+  bottom: 1px;
+  left: calc(50% + min(var(--pressure), 0) * 50%);
+  right: calc(50% - max(var(--pressure), 0) * 50%);
+}
+
+.hud-demand-grid {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+}
+
+.hud-demand-group-heading {
+  grid-column: 1 / -1;
+  margin: var(--space-2) 0 0;
+}
+
+.hud-demand-row {
+  display: contents;
+}
+
+.hud-demand-head {
+  font: 400 var(--size-label) / 1.2 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.hud-demand-scale {
+  display: flex;
+  justify-content: space-between;
+}
+
+.hud-demand-name {
+  font: 600 var(--size-small) / 1.2 var(--font-ui);
+}
+
+.hud-demand-figure {
+  font: 400 var(--size-small) / 1.2 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
 .hud-rating .hud-dropdown-panel {
   min-width: 280px;
 }
@@ -928,6 +1064,13 @@ input[type='checkbox'] {
   left: calc(50% - 180px);
   width: 360px;
   border-radius: 20px 24px 18px 22px / 24px 18px 22px 20px;
+}
+
+.hud-window[data-window='demand'] {
+  --window-top: calc(var(--window-floor) + 13px);
+  right: calc(var(--palette-w) + var(--space-3) * 2);
+  width: 340px;
+  border-radius: 22px 26px 18px 24px / 24px 18px 26px 22px;
 }
 
 .hud-window[data-window='saves'] {

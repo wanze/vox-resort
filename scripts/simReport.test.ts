@@ -16,7 +16,9 @@ import {
   bedCount,
   checkOutParty,
   createGuests,
+  homelessCount,
   presentCount,
+  unmadeCount,
   type Guests,
 } from '../src/features/guests/domain/guests';
 import { elevationFor, levelAt } from '../src/features/layout/domain/elevation';
@@ -33,10 +35,16 @@ import {
   wavesDue,
 } from '../src/features/sim/domain/checkIn';
 import { crowdScaleFor } from '../src/features/sim/domain/crowdRate';
+import { demandFor, type DemandLine } from '../src/features/sim/domain/demand';
 import { gatewaysOn } from '../src/features/sim/domain/gateways';
 import { ageHappiness, createHappiness, meanHappiness } from '../src/features/sim/domain/happiness';
 import { lodgingsOn } from '../src/features/sim/domain/lodgings';
-import { createNeeds, decayNeeds } from '../src/features/sim/domain/needs';
+import {
+  createNeeds,
+  decayNeeds,
+  strongestNeed,
+  type Needs,
+} from '../src/features/sim/domain/needs';
 import { arrivalsFor, ratingFor } from '../src/features/sim/domain/rating';
 import { reviewFor } from '../src/features/sim/domain/reviews';
 import { createRouter, type Router } from '../src/features/sim/domain/router';
@@ -49,7 +57,7 @@ import {
   think,
 } from '../src/features/sim/domain/thoughts';
 import { createUpkeep } from '../src/features/sim/domain/upkeep';
-import { venuesOn } from '../src/features/sim/domain/venues';
+import { venuesOn, type Venue } from '../src/features/sim/domain/venues';
 
 const [TILES_X, TILES_Z] = (process.env.SIM_PLOT ?? '112x100').split('x').map(Number) as [
   number,
@@ -176,6 +184,41 @@ const ranked = (tally: ReadonlyMap<string, number>): string =>
 const percentile = (sorted: readonly number[], share: number): number =>
   sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * share))] ?? 0;
 
+const DEMAND_LINES: readonly DemandLine[] = [
+  'beds',
+  'energy',
+  'hunger',
+  'thirst',
+  'fun',
+  'hygiene',
+  'health',
+];
+
+// The facts the showcase counts, less what the bars do not read: nothing here breaks or shuts.
+function demandNow(guests: Guests, needs: Needs, router: Router, venues: readonly Venue[]): string {
+  const wanting = { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0, health: 0 };
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1) continue;
+    const want = strongestNeed(needs, guests, person);
+    if (want) wanting[want.need]++;
+  }
+  const demand = demandFor({
+    venues,
+    lodgings: [],
+    present: presentCount(guests),
+    homeless: homelessCount(guests),
+    bedsFree: freeBedsOn(guests),
+    bedsTotal: bedCount(guests).beds,
+    bedsUnmade: unmadeCount(guests),
+    wanting,
+    balks: router.dayBalks(),
+    visits: router.dayVisits(),
+    unreachable: new Set(),
+    cleanliness: new Map(),
+  });
+  return DEMAND_LINES.map((line) => `${line} ${demand.lines[line].pressure.toFixed(2)}`).join(', ');
+}
+
 it('reports a few days on a generated plot', () => {
   const { layout, network, homes, population } = plotOf();
   const venues = venuesOn(layout.placements);
@@ -298,6 +341,7 @@ it('reports a few days on a generated plot', () => {
             `  walks to the beach: ${sorted.length}, median ${percentile(sorted, 0.5)} min, ` +
               `p90 ${percentile(sorted, 0.9)} min; ${changedMind} changed their mind`,
             `  loudest thoughts: ${said.join(', ') || 'none'}`,
+            `  demand: ${demandNow(guests, needs, router, venues)}`,
           ].join('\n'),
         );
       }

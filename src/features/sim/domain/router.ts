@@ -153,6 +153,8 @@ export interface Router {
   forgetTheDay(): void;
   visitOf(person: number): Visit | null;
   stayOf(person: number): BeachStay | null;
+  // When a resting beach stay ends, in ticks; NaN for anybody not resting there.
+  restingUntil(person: number): number;
   // Resting on the open sand: a lounger stands under a parasol.
   isSunbathing(person: number): boolean;
   snapshot(): RouterSnapshot;
@@ -1207,6 +1209,10 @@ export function createRouter(parts: {
       if (!venue || !isBeach(venue)) return null;
       if (errands.back[person] === 1) return 'leaving';
       return isWaiting(crowd(), person) ? 'resting' : 'arriving';
+    },
+
+    restingUntil(person) {
+      return this.stayOf(person) === 'resting' ? occupancy.until[person]! : Number.NaN;
     },
 
     isSunbathing(person) {

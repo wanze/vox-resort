@@ -35,6 +35,7 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 | Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                       |
 | Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
 | Places in a venue               | `choreography/domain/places.ts`, `casting.ts`                       |
+| Swimming in the sea             | `choreography/domain/seaSwim.ts`, `sea/domain/swimArea.ts`          |
 | Boats and passengers            | `sea/domain/piers.ts`, `passengers.ts`                              |
 
 ## Walk network
@@ -345,6 +346,33 @@ lying on it.
 - Bedtime ends a stay early.
 - The resort's crowd doesn't wander the beach aimlessly (`roamsBeach: false`).
   Anyone left there by an edit walks back.
+
+**Swimming is drawn only** (`seaSwim.ts`). The router still has a swimmer
+resting on their pitch: needs, mishaps and the lifeguard's watch never hear of
+it, and nothing is saved. `recast` lists the resting beach guests
+(`Router.restingUntil`), and `performAtSea` runs after `perform` every frame.
+A swimmer walks straight to the water, wades in over a tile, swims a leg or
+two to hashed points within two tiles of their pitch's x, treads water 10 to
+40 s after each, and comes back the same way. While they are away their lounger
+is drawn empty; the seat stays theirs in the crowd.
+
+- **The share**: about a quarter of resting adults and a third of resting
+  children are in the water at any moment (`SWIM_SHARE`). The acts clock is cut
+  into `SWIM_WINDOW` (240 crowd seconds), and the chance to swim in a window is
+  scaled by the trip's length, so short trips from the front row don't drag the
+  share down. A trip lasts 40 to 200 crowd seconds, about half an hour to an
+  hour of sim time.
+- **Where**: inside the buoy line, one tile short of it, off the tile-rounded
+  edge where the sand stops being drawn (`swimmableAt`). Nobody swims in the
+  pedalo corridor or its flare, where craft come in short of the buoys.
+- **Why the stay must have room**: a trip is started only when the stay
+  outlasts it (`walkingTicks` of the trip's length, swimming counted at its
+  speed). The stay ends in the router, and a swimmer whose stay ends mid-swim
+  pops back to wherever the crowd has them. Rain and storm end it the same way.
+- **A straight line, or no swim**: the walk is `clearLine` on the sand. Lounger
+  columns repeat every two tiles, so most lounger holders have another lounger
+  in their way; on seed 3 only about 30% of resting guests have a clear line.
+  Routing round obstacles would let the rest swim.
 
 ## Night
 

@@ -64,6 +64,21 @@ export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
   return moorings;
 }
 
+// Where a guest may swim: inside the buoy line and clear of the pedalo corridor, flare and all,
+// since craft are let in short of the buoys there. Off the tile-rounded edge, where the sand stops.
+export function swimmableAt(
+  options: SwimAreaOptions,
+  x: number,
+): { readonly fromZ: number; readonly toZ: number } | null {
+  const { shore } = options;
+  if (!shore || x < 0 || x >= shore.tilesX * TILE_VOXELS) return null;
+  if (offRental(options.rental ?? null, x) < CORRIDOR_TILES + CORRIDOR_FLARE) return null;
+  const water = waterStartZ(shore, Math.floor(x / TILE_VOXELS));
+  if (water >= shore.tilesZ) return null;
+  // One tile short of the buoys, which are moored mid-tile.
+  return { fromZ: water * TILE_VOXELS, toZ: (water + SWIM_TILES - 0.5) * TILE_VOXELS };
+}
+
 // The limit follows the coast as a curve: stepping a tile per column would turn boats
 // sharply in open water.
 export interface SailingGround {

@@ -1,6 +1,7 @@
 import type { StaffRole } from '../../sim/domain/staff';
 import { isMoving } from './acts';
 import type { Place, VenuePlaces } from './places';
+import type { SeaShore, SwimTrip } from './seaSwim';
 
 export const SHOWN = { asCrowd: 0, placed: 1, hidden: 2 } as const;
 
@@ -13,6 +14,23 @@ export interface DrawnAs {
   readonly heading: Float32Array;
   // A RESTING code or one of rendering's DRAWN_POSE, which only the figure shader reads.
   readonly pose: Float32Array;
+}
+
+// The resting beach guests, rebuilt by recast: only they are visited for a swim each frame.
+export interface Bathers {
+  readonly sea: SeaShore | null;
+  readonly people: Int32Array;
+  count: number;
+  // Per person, as recast last saw them: the pitch the crowd holds them at.
+  readonly x: Float32Array;
+  readonly z: Float32Array;
+  readonly child: Uint8Array;
+  readonly onLounger: Uint8Array;
+  // Ticks.
+  readonly until: Float64Array;
+  // The window a trip was last decided for, NaN to decide afresh.
+  readonly window: Float64Array;
+  readonly trips: (SwimTrip | null)[];
 }
 
 interface Range {
@@ -51,6 +69,7 @@ export interface Cast extends DrawnAs {
   readonly legSeconds: Float64Array;
   // -1 until perform starts the first leg.
   readonly legNo: Int32Array;
+  readonly bathers: Bathers;
 }
 
 export interface Casting {
@@ -62,12 +81,29 @@ export interface Casting {
   isPresent(person: number): boolean;
   // Left out, everybody is an adult.
   isChild?(person: number): boolean;
+  // Left out, nobody goes for a swim.
+  readonly bathing?: Bathing;
+}
+
+export interface Bathing {
+  // Ticks; NaN for anybody not resting on the beach.
+  restingUntil(person: number): number;
+  // Where the crowd holds a resting guest, which a swim sets off from and comes back to.
+  readonly crowd: {
+    readonly x: ArrayLike<number>;
+    readonly z: ArrayLike<number>;
+    readonly seat: ArrayLike<number>;
+  };
 }
 
 const NOWHERE = -1;
 const ASLEEP = -2;
 
-export function createCast(capacity: number, places: readonly VenuePlaces[]): Cast {
+export function createCast(
+  capacity: number,
+  places: readonly VenuePlaces[],
+  sea: SeaShore | null = null,
+): Cast {
   const flat: Place[] = [];
   const take = (list: readonly Place[]): Range => {
     const range = { start: flat.length, count: list.length };
@@ -108,6 +144,18 @@ export function createCast(capacity: number, places: readonly VenuePlaces[]): Ca
     legStart: new Float64Array(capacity),
     legSeconds: new Float64Array(capacity),
     legNo: new Int32Array(capacity).fill(-1),
+    bathers: {
+      sea,
+      people: new Int32Array(capacity),
+      count: 0,
+      x: new Float32Array(capacity),
+      z: new Float32Array(capacity),
+      child: new Uint8Array(capacity),
+      onLounger: new Uint8Array(capacity),
+      until: new Float64Array(capacity),
+      window: new Float64Array(capacity).fill(Number.NaN),
+      trips: Array.from({ length: capacity }, () => null),
+    },
   };
 }
 
@@ -181,14 +229,32 @@ function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Arra
   else cast.shown[person] = waiting ? SHOWN.asCrowd : SHOWN.hidden;
 }
 
+// The router's beach comes after the resort's own venues, so it alone has no places.
+function noteBather(cast: Cast, casting: Casting, bathing: Bathing, person: number, venue: number) {
+  const { bathers } = cast;
+  const until = venue >= cast.venues.length ? bathing.restingUntil(person) : Number.NaN;
+  if (Number.isNaN(until)) {
+    bathers.window[person] = Number.NaN;
+    return;
+  }
+  bathers.people[bathers.count++] = person;
+  bathers.x[person] = bathing.crowd.x[person]!;
+  bathers.z[person] = bathing.crowd.z[person]!;
+  bathers.child[person] = Number(casting.isChild?.(person) === true);
+  bathers.onLounger[person] = Number(bathing.crowd.seat[person]! >= 0);
+  bathers.until[person] = until;
+}
+
 // Once after a frame's ticks. Every change is let go before anybody is placed, so a place given
 // up this frame can be taken this frame.
 export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
   const count = Math.min(casting.count, cast.shown.length);
+  cast.bathers.count = 0;
   for (let person = 0; person < count; person++) {
     let venue = NOWHERE;
     if (casting.isPresent(person))
       venue = casting.isAsleep(person) ? ASLEEP : casting.venueOf(person);
+    if (casting.bathing) noteBather(cast, casting, casting.bathing, person, venue);
     const waiting = venue >= 0 && casting.isWaiting(person) ? 1 : 0;
     if (venue === cast.lastVenue[person] && waiting === cast.lastWaiting[person]) continue;
     release(cast, person);

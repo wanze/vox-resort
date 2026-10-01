@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { shoreFor, waterStartZ, type Shore } from '../../layout/domain/shoreline';
-import { sailingGroundFor, swimAreaMoorings, type Rental } from './swimArea';
+import { sailingGroundFor, swimAreaMoorings, swimmableAt, type Rental } from './swimArea';
 
 const shore = (wave = 0): Shore =>
   shoreFor({ tilesX: 48, tilesZ: 40, shore: { inset: 8, beach: 10, wave, seed: 5 } })!;
@@ -118,5 +118,37 @@ describe('the corridor in front of the hire hut', () => {
       expect(across[step]!).toBeGreaterThanOrEqual(across[step - 1]!);
       expect(across[step]! - across[step - 1]!).toBeLessThan(TILE_VOXELS);
     }
+  });
+});
+
+describe('swimmableAt', () => {
+  const bay = shore(3);
+  const RENTAL: Rental = { x: 24 * TILE_VOXELS, z: 20 * TILE_VOXELS };
+
+  it('gives a band from the water to short of the buoys, where no craft comes', () => {
+    const ground = sailingGroundFor(bay, RENTAL);
+    const moorings = swimAreaMoorings({ shore: bay, rental: RENTAL });
+    // Past the flare: in it the craft come in short of the buoys.
+    const clear = moorings.filter((mooring) => Math.abs(mooring.x - RENTAL.x) >= 4 * TILE_VOXELS);
+    expect(clear.length).toBeGreaterThan(6);
+    for (const mooring of clear) {
+      const band = swimmableAt({ shore: bay, rental: RENTAL }, mooring.x)!;
+      expect(band.fromZ).toBe(waterStartZ(bay, Math.floor(mooring.x / TILE_VOXELS)) * TILE_VOXELS);
+      expect(band.toZ).toBeGreaterThan(band.fromZ);
+      expect(band.toZ).toBeLessThan(mooring.z);
+      expect(band.toZ).toBeLessThan(ground.landwardZ(mooring.x));
+    }
+  });
+
+  it('gives nothing in front of the hire hut, where the pedalos land', () => {
+    expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x)).toBeNull();
+    expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x + 3 * TILE_VOXELS)).toBeNull();
+    expect(swimmableAt({ shore: bay }, RENTAL.x)).not.toBeNull();
+  });
+
+  it('gives nothing on a plot with no sea, or off the plot', () => {
+    expect(swimmableAt({ shore: null }, 100)).toBeNull();
+    expect(swimmableAt({ shore: bay }, -1)).toBeNull();
+    expect(swimmableAt({ shore: bay }, 48 * TILE_VOXELS)).toBeNull();
   });
 });

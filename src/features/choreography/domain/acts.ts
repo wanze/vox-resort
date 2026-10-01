@@ -37,7 +37,7 @@ export interface RideLoop {
 export const isMoving = (place: Place): place is AreaPlace | LoopPlace =>
   place.act !== undefined && place.act !== 'still';
 
-const SWIM_SPEED = WALK_SPEED / 3;
+export const SWIM_SPEED = WALK_SPEED / 3;
 const WADE_SPEED = WALK_SPEED;
 // About a rung a second: the ladder's rungs are two layers apart.
 const CLIMB_SPEED = 1.5;

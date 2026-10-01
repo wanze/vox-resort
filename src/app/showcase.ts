@@ -340,6 +340,7 @@ import {
 } from '../features/choreography/domain/casting';
 import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
 import { advanceActs, perform } from '../features/choreography/domain/acts';
+import { performAtSea } from '../features/choreography/domain/seaSwim';
 import {
   bedCount,
   checkOutParty,
@@ -384,7 +385,12 @@ import { createFlotilla } from '../features/sea/domain/flotilla';
 import { pierBoxesFor } from '../features/sea/domain/piers';
 import { islandBoxesFor } from '../features/sea/domain/islands';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
-import type { Mooring, Rental, SailingGround } from '../features/sea/domain/swimArea';
+import type {
+  Mooring,
+  Rental,
+  SailingGround,
+  SwimAreaOptions,
+} from '../features/sea/domain/swimArea';
 import { sailingGroundFor } from '../features/sea/domain/swimArea';
 import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
 import type {
@@ -852,6 +858,8 @@ interface Resort {
   cast: Cast;
   staffCast: Cast;
   readonly casting: Casting;
+  // Off the rental the sea was built with, which an edit does not move either.
+  readonly bathing: SwimAreaOptions;
   // Allocated once, for a click to merge the crowd with the cast into.
   readonly drawnAt: {
     readonly x: Float32Array;
@@ -1192,7 +1200,8 @@ function buildResort(
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
   const places = placesFor(venues, byKey(plot.layout.placements), network);
-  const cast = createCast(population, places);
+  const bathing = { shore, rental: rentalOf(shore, plot.layout.placements) };
+  const cast = createCast(population, places, { sand: network.sand, swim: bathing });
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
@@ -1379,7 +1388,15 @@ function buildResort(
       isAsleep: (person) => router.isAsleep(person),
       isPresent: (person) => guests.present[person] === 1,
       isChild: (person) => guests.child[person] === 1,
+      bathing: {
+        restingUntil: (person) => router.restingUntil(person),
+        // A getter: relocate replaces the crowd.
+        get crowd() {
+          return resort.crowd.crowd;
+        },
+      },
     },
+    bathing,
     drawnAt: {
       x: new Float32Array(population),
       y: new Float32Array(population),
@@ -1475,7 +1492,10 @@ function recastAll(resort: Resort): void {
 // Rebuilt with the venues and the network: a place points at a seat by its index there.
 function recastAfterEdit(resort: Resort, network: WalkNetwork): void {
   resort.places = placesFor(resort.venues, byKey(resort.plot.placements), network);
-  resort.cast = createCast(resort.guests.count, resort.places);
+  resort.cast = createCast(resort.guests.count, resort.places, {
+    sand: network.sand,
+    swim: resort.bathing,
+  });
   resort.staffCast = createCast(resort.staffPool.count, resort.places);
   recastAll(resort);
   resort.crowd.drawAs(resort.cast);
@@ -3443,6 +3463,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Before the crowd writes its instances, which draw the cast where perform left it.
     actSeconds = advanceActs(actSeconds, walked, crowdScale);
     perform(current().cast, actSeconds);
+    performAtSea(current().cast, actSeconds, clock.ticks);
     current().crowd.advance(walked, crowdScale);
     current().staff.advance(walked, crowdScale);
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);

@@ -9,9 +9,11 @@ import { HudError } from './HudError';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
+import { MessagesPanel } from './MessagesPanel';
 import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortStats } from './ResortStats';
 import { StaffPanel } from './StaffPanel';
+import { Toasts } from './Toasts';
 import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
@@ -22,8 +24,10 @@ import type { BuildTool } from '../../build/domain/buildTool';
 import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { StaffRole } from '../../sim/domain/staff';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
+import type { NewsControls } from '../../../app/useNews';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
@@ -41,6 +45,7 @@ export interface HudProps {
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly advice: readonly Advice[];
+  readonly news: NewsControls;
   readonly voices: VoicesView;
   readonly status: StatusView | null;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
@@ -67,6 +72,7 @@ const PANELS: readonly Panel[] = [
   'build',
   'overview',
   'advice',
+  'messages',
   'guests',
   'staff',
   'books',
@@ -75,6 +81,10 @@ const PANELS: readonly Panel[] = [
   'saves',
   'debug',
 ];
+
+// Tops the role up to what the plot wants and keeps it hand-set.
+const hireUpTo = (props: HudProps, role: StaffRole): void =>
+  props.resort.setHiring(role, props.stats?.staff.recommended[role] ?? null);
 
 // Null when a window has nothing to show yet, such as the generator before the first resort.
 const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
@@ -93,8 +103,15 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
     <AdvicePanel
       advice={props.advice}
       onShowOnPlot={props.onShowOnPlot}
-      // Tops the role up to what the plot wants and keeps it hand-set.
-      onHire={(role) => props.resort.setHiring(role, props.stats?.staff.recommended[role] ?? null)}
+      onHire={(role) => hireUpTo(props, role)}
+    />
+  ),
+  messages: ({ news, onShowOnPlot }) => (
+    <MessagesPanel
+      log={news.log}
+      prefs={news.prefs}
+      onMutedChange={news.setMuted}
+      onShowOnPlot={onShowOnPlot}
     />
   ),
   guests: (props) => <GuestsPanel voices={props.voices} />,
@@ -196,6 +213,13 @@ export function Hud(props: HudProps) {
         onFind={() => props.onPaletteChange(true)}
       />
       <Windows {...props} />
+      <Toasts
+        toasts={props.news.toasts}
+        onShowOnPlot={props.onShowOnPlot}
+        onHire={(role) => hireUpTo(props, role)}
+        onOpenAdvice={() => props.windows.show('advice', true)}
+        onDismiss={props.news.dismiss}
+      />
       <Palette {...props} />
       {props.error ? <HudError message={props.error} /> : null}
       {!props.error && props.refusal ? (

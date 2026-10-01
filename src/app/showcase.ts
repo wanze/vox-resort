@@ -257,6 +257,7 @@ import type { RainView } from '../features/weather/domain/rainfall';
 import { pixelsPerVoxel } from '../features/rendering/domain/levelOfDetail';
 import {
   adviceFor,
+  refreshedWithin,
   unreachableOn,
   type Advice,
   type ResortFacts,
@@ -551,7 +552,9 @@ export interface ShowcaseOptions {
   readonly onToolChange?: (tool: BuildTool | null) => void;
   readonly onCameraChange?: (view: CameraView) => void;
   readonly onSelectionChange?: (selection: SelectionView | null) => void;
-  readonly onAdviceChange?: (advice: readonly Advice[]) => void;
+  readonly onAdviceChange?: (advice: readonly Advice[], ticks: number) => void;
+  // A new game or a load, told before the new resort's first advice.
+  readonly onResortReplaced?: () => void;
   // At most once a simulated hour: thoughts are heard per step, and React must not be.
   readonly onThoughtsChange?: (view: VoicesView) => void;
   readonly onStatusChange?: (status: StatusView) => void;
@@ -2130,7 +2133,7 @@ function hurtCount(resort: Resort): number {
   return count;
 }
 
-// Once a simulated day and on an edit, never per frame: it walks the guest list three times.
+// Once a simulated hour and on an edit, never per frame: it walks the guest list three times.
 function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
   const { guests, router } = resort;
   const effect = weatherEffect(weather);
@@ -3252,8 +3255,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSelect: select,
   });
 
-  const advise = (): void =>
-    options.onAdviceChange?.(adviceFor(factsNow(current(), clock.weather, clock.ticks)));
+  let dayAdvice: readonly Advice[] = [];
+
+  const advise = (): void => {
+    dayAdvice = adviceFor(factsNow(current(), clock.weather, clock.ticks));
+    options.onAdviceChange?.(dayAdvice, clock.ticks);
+  };
+
+  const adviseHourly = (): void => {
+    const fresh = adviceFor(factsNow(current(), clock.weather, clock.ticks));
+    options.onAdviceChange?.(refreshedWithin(dayAdvice, fresh), clock.ticks);
+  };
 
   const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
 
@@ -3286,6 +3298,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   };
 
   const hourly = (): void => {
+    adviseHourly();
     speak();
     report();
     tellMoney();
@@ -3313,6 +3326,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   let requested = 0;
 
+  // Told at once, so a save that fails to restore still leaves the next advice a baseline.
+  const replaceResort = (prepared: PreparedResort, population?: number): Resort => {
+    const resort = slot.replace(prepared, population);
+    options.onResortReplaced?.();
+    return resort;
+  };
+
   // An answer overtaken by a later request is dropped rather than flashed on screen.
   const regrow = async (
     asked: ResortParams,
@@ -3327,7 +3347,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // The person index and the placement key both name something on the old plot.
     select(null);
     walkStaleAt = null;
-    slot.replace(prepared);
+    replaceResort(prepared);
     current().ledger = createLedger(mode, OPENING_BALANCE[mode]);
     // After the replace, whose reframe has put the camera back where a new plot is looked at from.
     drift = null;
@@ -3376,7 +3396,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     build.abandon();
     select(null);
     walkStaleAt = null;
-    const resort = slot.replace(prepared, saved.population);
+    const resort = replaceResort(prepared, saved.population);
     restoreResort(resort, saved.resort);
     // Before the staff router's restore, which reads the duty.
     Object.assign(resort, rosterNow(resort));

@@ -472,3 +472,16 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);
   return found.toSorted(louderFirst);
 }
+
+// Judged on a whole day's counters, so an hourly refresh keeps the morning's verdict.
+const DAY_COUNTED: ReadonlySet<AdviceKind> = new Set(['full-lines', 'unvisited']);
+
+export function refreshedWithin(
+  morning: readonly Advice[],
+  now: readonly Advice[],
+): readonly Advice[] {
+  return [
+    ...now.filter((advice) => !DAY_COUNTED.has(advice.kind)),
+    ...morning.filter((advice) => DAY_COUNTED.has(advice.kind)),
+  ].toSorted(louderFirst);
+}

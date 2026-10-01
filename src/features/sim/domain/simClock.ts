@@ -51,8 +51,15 @@ export function createSimClock(day: number, time: number): SimClock {
   return { ticks: day * TICKS_PER_DAY + tickOfDay(time), speed: 'paused', carry: 0 };
 }
 
+export function stampOf(ticks: number): { readonly day: number; readonly hour: number } {
+  return {
+    day: Math.floor(ticks / TICKS_PER_DAY),
+    hour: Math.floor((ticks % TICKS_PER_DAY) / 60),
+  };
+}
+
 export function dayOf(clock: SimClock): number {
-  return Math.floor(clock.ticks / TICKS_PER_DAY);
+  return stampOf(clock.ticks).day;
 }
 
 export function timeOf(clock: SimClock): number {
@@ -60,7 +67,7 @@ export function timeOf(clock: SimClock): number {
 }
 
 export function hourOf(clock: SimClock): number {
-  return Math.floor((clock.ticks % TICKS_PER_DAY) / 60);
+  return stampOf(clock.ticks).hour;
 }
 
 export function clockLabel(clock: SimClock): string {

@@ -9,6 +9,7 @@ import {
   dayOf,
   followTime,
   hourOf,
+  stampOf,
   timeOf,
   wallTimeOf,
   withSpeed,
@@ -98,6 +99,13 @@ describe('timeOf', () => {
 describe('hourOf', () => {
   it('reads the hour at 14:20', () => {
     expect(hourOf(atTick(14 * 60 + 20))).toBe(14);
+  });
+});
+
+describe('stampOf', () => {
+  it('reads the day and the hour from bare ticks', () => {
+    expect(stampOf(3 * TICKS_PER_DAY + 14 * 60 + 20)).toEqual({ day: 3, hour: 14 });
+    expect(stampOf(TICKS_PER_DAY - 1)).toEqual({ day: 0, hour: 23 });
   });
 });
 

@@ -1,6 +1,6 @@
 import type { ThoughtKind } from '../../sim/domain/thoughts';
 
-// Not AdvicePanel's need names: those finish "serves ...", these finish "my ...".
+// Not the advice's need names: those finish "serves ...", these finish "my ...".
 const NEED_WORDS: { readonly [need: string]: string } = {
   hunger: 'hunger',
   thirst: 'thirst',

@@ -11,6 +11,7 @@ import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls, type ClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
+import { useNews } from './useNews';
 import { useStatus } from './useStatus';
 import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
@@ -23,6 +24,7 @@ import { armedZone, type BuildTool, type StylePick } from '../features/build/dom
 import type { OverlayKind } from '../features/overlays/domain/overlays';
 import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
+import type { SimSpeed } from '../features/sim/domain/simClock';
 
 // A benchmark measures the game itself, so it skips the welcome screen.
 const OPENS_ON_WELCOME = parseBenchConfig(globalThis.location?.search ?? '') === null;
@@ -112,6 +114,12 @@ function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
   return { playing, saves, welcome };
 }
 
+// Together because the advice is what the news is heard from.
+function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed) {
+  const news = useNews(speed);
+  return { news, advice: useAdvice(showcase, news.hear) };
+}
+
 function useHourly() {
   return { thoughts: useThoughts(), status: useStatus() };
 }
@@ -131,7 +139,7 @@ export function App() {
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
-  const advice = useAdvice(showcaseRef);
+  const { news, advice } = useAdviceNews(showcaseRef, clock.speed);
   const { thoughts, status } = useHourly();
   const { playing, saves, welcome } = useGame(showcaseRef, clock);
   const { resort, adoptLoading } = welcome;
@@ -148,7 +156,8 @@ export function App() {
   const { adopt: adoptParams, adoptOpen, money } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
-  const { adopt: adoptAdvice } = advice;
+  const { adopt: adoptAdvice, show: showAdvice } = advice;
+  const { reset: resetNews } = news;
   const { adopt: adoptVoices } = thoughts;
   const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
@@ -171,6 +180,7 @@ export function App() {
       onCameraChange: adoptCamera,
       onSelectionChange: adoptSelection,
       onAdviceChange: adoptAdvice,
+      onResortReplaced: resetNews,
       onThoughtsChange: adoptVoices,
       onStatusChange: adoptStatus,
       onWeatherChange: adoptWeather,
@@ -197,7 +207,7 @@ export function App() {
         mounted.selectTool(toolRef.current);
         setStats(mounted.stats);
         // So the panel says something before the first check-in hour comes round.
-        adoptAdvice(mounted.advice);
+        showAdvice(mounted.advice);
         adoptVoices(mounted.voices);
         adoptStatus(mounted.status);
         adoptCamera(mounted.cameraView);
@@ -229,6 +239,8 @@ export function App() {
     adoptCamera,
     adoptSelection,
     adoptAdvice,
+    showAdvice,
+    resetNews,
     adoptVoices,
     adoptStatus,
     adoptWeather,
@@ -269,6 +281,7 @@ export function App() {
           saves={saves}
           overlay={mapOverlay}
           advice={advice.advice}
+          news={news}
           voices={thoughts.voices}
           status={status.status}
           onShowOnPlot={advice.showOnPlot}

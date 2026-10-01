@@ -17,7 +17,9 @@ import {
   adviceUnvisited,
   adviceUnwatched,
   adviceWeatherClosed,
+  refreshedWithin,
   unreachableOn,
+  type Advice,
   type ResortFacts,
 } from './advice';
 import type { VenueDoors } from './doors';
@@ -665,5 +667,34 @@ describe('adviceNoDepot', () => {
     expect(adviceNoDepot(healthyFacts({ depots: 0, cleanersOnDuty: 0 }))).toBeNull();
     const advice = adviceFor(healthyFacts({ depots: 0, cleanersOnDuty: 2 }));
     expect(advice.some((each) => each.kind === 'no-depot')).toBe(true);
+  });
+});
+
+const line = (kind: Advice['kind'], weight: number, subject: string = kind): Advice => ({
+  kind,
+  weight,
+  subject,
+  count: 1,
+  at: { tileX: 1, tileZ: 1 },
+  need: null,
+});
+
+describe('refreshedWithin', () => {
+  it('takes a breakdown the morning did not know about', () => {
+    const broken = line('broken', 0.5, 'Pool Bar');
+    expect(refreshedWithin([], [broken])).toEqual([broken]);
+  });
+
+  it("keeps the morning's verdict on the day-counted kinds", () => {
+    const morningIdle = line('unvisited', 0.3, 'Bakery');
+    const noonIdle = line('unvisited', 0.3, 'Kiosk');
+    expect(refreshedWithin([morningIdle], [])).toEqual([morningIdle]);
+    expect(refreshedWithin([morningIdle], [noonIdle])).toEqual([morningIdle]);
+  });
+
+  it('comes out louder first', () => {
+    const quiet = line('dirty', 0.2);
+    const queue = line('full-lines', 0.8);
+    expect(refreshedWithin([queue], [quiet])).toEqual([queue, quiet]);
   });
 });

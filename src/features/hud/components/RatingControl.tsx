@@ -1,6 +1,7 @@
 import { HudDropdown } from './HudDropdown';
 import { HudReadout } from './HudReadout';
 import { PixelIcon } from './PixelIcon';
+import { trendArrow, trendWords } from './dayWords';
 import {
   costliestPart,
   EMPTY_STARS,
@@ -12,6 +13,8 @@ import {
 
 export interface RatingControlProps {
   readonly rating: Rating;
+  // Against the morning before; null until there are two reports.
+  readonly trend: number | null;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }
@@ -28,7 +31,7 @@ const lostWords = (lost: number): string => (lost > 0 ? `−${lost.toFixed(1)} �
 // benefit of the doubt an empty plot gets, whose parts do not add up to its stars.
 const unrated = (rating: Rating): boolean => rating.happiness === 0 && rating.stars === EMPTY_STARS;
 
-function Breakdown({ rating }: { readonly rating: Rating }) {
+export function RatingBreakdown({ rating }: { readonly rating: Rating }) {
   if (unrated(rating)) {
     return <p className="hud-rating-note">No guests have stayed the night yet.</p>;
   }
@@ -46,17 +49,27 @@ function Breakdown({ rating }: { readonly rating: Rating }) {
   );
 }
 
-export function RatingControl({ rating, open, onOpenChange }: RatingControlProps) {
+export function RatingControl({ rating, trend, open, onOpenChange }: RatingControlProps) {
   const stars = rating.stars.toFixed(1);
+  const arrow = trendArrow(trend);
+  const change = trendWords(trend);
   return (
     <HudDropdown
       className="hud-rating"
       open={open}
       onOpenChange={onOpenChange}
-      title={`Rating: ${stars} stars`}
-      label={<HudReadout icon={<PixelIcon name="star" />} label="Rating" value={`${stars} ★`} />}
+      title={
+        change ? `Rating: ${stars} stars, ${change} since the day before` : `Rating: ${stars} stars`
+      }
+      label={
+        <HudReadout
+          icon={<PixelIcon name="star" />}
+          label="Rating"
+          value={arrow ? `${stars} ★ ${arrow}` : `${stars} ★`}
+        />
+      }
     >
-      <Breakdown rating={rating} />
+      <RatingBreakdown rating={rating} />
       <hr className="hud-rule" />
       <p className="hud-rating-note">
         Set each morning at check-in. The more stars, the more guests arrive.

@@ -365,6 +365,8 @@ input[type='checkbox'] {
 .hud-chip-tag,
 .hud-resort-advanced > summary,
 .hud-stat dt,
+.hud-report-row dt,
+.hud-message dt,
 .hud-staff dt {
   font: 400 var(--size-label) / 1.2 var(--font-label);
   letter-spacing: var(--track-label);
@@ -921,6 +923,13 @@ input[type='checkbox'] {
   width: 340px;
 }
 
+.hud-window[data-window='report'] {
+  --window-top: calc(var(--window-floor) + 30px);
+  left: calc(50% - 180px);
+  width: 360px;
+  border-radius: 20px 24px 18px 22px / 24px 18px 22px 20px;
+}
+
 .hud-window[data-window='saves'] {
   --window-top: calc(var(--window-floor) + 60px);
   left: calc(50% - 190px);
@@ -1111,10 +1120,132 @@ input[type='checkbox'] {
   vertical-align: baseline;
 }
 
-.hud-messages {
+.hud-messages,
+.hud-stack,
+.hud-report {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.hud-message-toggles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.hud-message-list {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3) var(--space-3);
+  align-items: center;
+  margin: 0;
+}
+
+.hud-message {
+  display: contents;
+}
+
+.hud-message dd {
+  margin: 0;
+}
+
+.hud-message-when {
+  display: block;
+  margin-top: var(--space-1);
+  font: 500 var(--size-small) / 1 var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text-faint);
+}
+
+.hud-message-action {
+  justify-self: end;
+}
+
+.hud-message-action .hud-advice-show {
+  margin-left: 0;
+}
+
+.hud-report-stepper {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  gap: var(--space-2);
+  align-items: center;
+  text-align: center;
+}
+
+.hud-report-stepper strong {
+  font: 700 var(--size-lead) / 1.1 var(--font-ui);
+}
+
+.hud-report-heading {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  font: 700 var(--size-body) / 1.2 var(--font-ui);
+  color: var(--stone-800);
+}
+
+.hud-report-rows {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  margin: 0;
+}
+
+.hud-report-rows[data-layout='said'] {
+  grid-template-columns: auto 1fr auto;
+}
+
+.hud-report-rows[data-layout='chart'] {
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+}
+
+.hud-report-row {
+  display: contents;
+}
+
+.hud-report-row dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hud-report-row dd.hud-report-said {
+  font-family: var(--font-ui);
+  text-align: left;
+  white-space: normal;
+}
+
+.hud-report-row dd.hud-report-chart {
+  line-height: 0;
+}
+
+.hud-report-row[data-total] > * {
+  padding-top: var(--space-2);
+  border-top: 2px dotted var(--edge-soft);
+  font-weight: 700;
+}
+
+/* Flush with the report's own rows, which the dropdown's padding would push in. */
+.hud-report .hud-rating-parts {
+  padding: 0;
+}
+
+.hud-report-stars {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-lead);
+}
+
+.hud-sparkline {
+  display: block;
+  color: var(--foliage);
 }
 
 /* Over the canvas and under every window, which starts at z-index 10. */
@@ -1146,6 +1277,10 @@ input[type='checkbox'] {
 
 .hud-toast[data-severity='warning'] {
   border-left-color: var(--ochre);
+}
+
+.hud-toast[data-severity='day'] {
+  border-left-color: var(--foliage);
 }
 
 .hud-toast-body {

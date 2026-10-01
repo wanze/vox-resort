@@ -13,7 +13,7 @@ export const REASONS: readonly Reason[] = [
   'maintenance',
 ];
 
-type Column = { readonly [reason in Reason]: number };
+export type Column = { readonly [reason in Reason]: number };
 
 export interface Ledger {
   readonly balance: number;

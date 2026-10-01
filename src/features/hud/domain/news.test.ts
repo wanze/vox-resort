@@ -1,17 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import { startDay, reportOf, type DayReport } from '../../sim/domain/dayReport';
+import { createLedger } from '../../sim/domain/ledger';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   adviceKey,
   expireToasts,
   logNews,
+  newDayIn,
   newsFrom,
   severityOf,
+  showDay,
   showToasts,
   withoutResolved,
+  type Message,
   type News,
   type Severity,
   type Toast,
+  type ToastKind,
 } from './news';
 
 const advice = (kind: AdviceKind, weight = 0.9, tileX = 0): Advice => ({
@@ -33,7 +39,27 @@ const newsOf = (kind: AdviceKind, severity: Severity, tileX = 0): News => ({
 
 const NOTHING_HEARD: ReadonlyMap<string, number> = new Map();
 
-const normally = { speed: 'normal', muted: new Set<Severity>(), nowMs: 1000 } as const;
+const normally = { speed: 'normal', muted: new Set<ToastKind>(), nowMs: 1000 } as const;
+
+const adviceOf = (message: Message): Advice | null =>
+  message.kind === 'advice' ? message.news.advice : null;
+
+const kindOf = (toast: Toast): string => adviceOf(toast)?.kind ?? toast.kind;
+
+const severityOfToast = (toast: Toast): string =>
+  toast.kind === 'advice' ? toast.news.severity : toast.kind;
+
+const reportOn = (day: number): DayReport =>
+  reportOf({
+    counts: startDay(day),
+    rating: { stars: 3.8, happiness: 0.7, housed: 0.9, cleanliness: 0.8 },
+    present: 42,
+    beds: { total: 60, taken: 40 },
+    ledger: createLedger('tycoon', 1000),
+    thoughts: new Map(),
+  });
+
+const toastOf = (news: News, until: number | null): Toast => ({ kind: 'advice', news, until });
 
 describe('severityOf', () => {
   it('toasts a breakdown as urgent and a missing need as a warning', () => {
@@ -116,7 +142,7 @@ describe('showToasts', () => {
       normally,
     );
     const next = showToasts(shown, [newsOf('unreachable', 'urgent')], normally);
-    expect(next.map((toast) => toast.news.advice.kind)).toEqual(['dirty', 'broken', 'unreachable']);
+    expect(next.map(kindOf)).toEqual(['dirty', 'broken', 'unreachable']);
   });
 
   it('pushes out the oldest urgent toast when every one shown is urgent', () => {
@@ -126,7 +152,7 @@ describe('showToasts', () => {
       normally,
     );
     const next = showToasts(shown, [newsOf('unreachable', 'urgent')], normally);
-    expect(next.map((toast) => toast.news.advice.at?.tileX)).toEqual([2, 3, 0]);
+    expect(next.map((toast) => adviceOf(toast)?.at?.tileX)).toEqual([2, 3, 0]);
   });
 
   it('never pushes out an urgent toast for a warning', () => {
@@ -142,7 +168,7 @@ describe('showToasts', () => {
     const news = [newsOf('no-beds', 'warning'), newsOf('broken', 'urgent')];
     for (const speed of ['fast', 'rush'] as const) {
       const shown = showToasts([], news, { ...normally, speed });
-      expect(shown.map((toast) => toast.news.severity)).toEqual(['urgent']);
+      expect(shown.map(severityOfToast)).toEqual(['urgent']);
     }
   });
 
@@ -150,7 +176,7 @@ describe('showToasts', () => {
     const news = [newsOf('no-beds', 'warning'), newsOf('broken', 'urgent')];
     const muted = new Set<Severity>(['urgent']);
     const shown = showToasts([], news, { ...normally, muted });
-    expect(shown.map((toast) => toast.news.severity)).toEqual(['warning']);
+    expect(shown.map(severityOfToast)).toEqual(['warning']);
   });
 
   it('lets a warning fade and keeps an urgent toast until it is dealt with', () => {
@@ -163,11 +189,45 @@ describe('showToasts', () => {
   });
 });
 
+describe('showDay', () => {
+  it('replaces the day before, so only one day is ever shown', () => {
+    const first = showDay([], reportOn(3), normally);
+    const second = showDay(first, reportOn(4), normally);
+    expect(second).toHaveLength(1);
+    expect(second[0]).toMatchObject({ kind: 'day', report: { day: 4 }, until: 11_000 });
+  });
+
+  it('pushes out no advice, and takes none of its three places', () => {
+    const urgent = [1, 2, 3].map((tileX) => newsOf('broken', 'urgent', tileX));
+    const withDay = showDay(showToasts([], urgent, normally), reportOn(3), normally);
+    expect(withDay.map(kindOf)).toEqual(['day', 'broken', 'broken', 'broken']);
+    const next = showToasts(withDay, [newsOf('unreachable', 'urgent')], normally);
+    expect(next.map(kindOf)).toEqual(['day', 'broken', 'broken', 'unreachable']);
+  });
+
+  it('shows the day at rush, where warnings are kept out of the corner', () => {
+    const rush = { ...normally, speed: 'rush' } as const;
+    expect(showDay([], reportOn(3), rush)).toHaveLength(1);
+    expect(showDay([], reportOn(3), { ...rush, muted: new Set<ToastKind>(['day']) })).toEqual([]);
+  });
+});
+
+describe('newDayIn', () => {
+  it('hears a report closed since the last history, and nothing in a baseline', () => {
+    const history = [reportOn(3), reportOn(4)];
+    expect(newDayIn(history, undefined)).toBeNull();
+    expect(newDayIn(history, 4)).toBeNull();
+    expect(newDayIn(history, 3)?.day).toBe(4);
+    expect(newDayIn([reportOn(0)], null)?.day).toBe(0);
+    expect(newDayIn([], null)).toBeNull();
+  });
+});
+
 describe('expireToasts', () => {
   it('drops a faded warning and keeps a toast with no end', () => {
     const shown: readonly Toast[] = [
-      { news: newsOf('no-beds', 'warning'), until: 5000 },
-      { news: newsOf('broken', 'urgent'), until: null },
+      toastOf(newsOf('no-beds', 'warning'), 5000),
+      toastOf(newsOf('broken', 'urgent'), null),
     ];
     expect(expireToasts(shown, 4999)).toBe(shown);
     expect(expireToasts(shown, 5000).map((toast) => toast.until)).toEqual([null]);
@@ -177,21 +237,21 @@ describe('expireToasts', () => {
 describe('withoutResolved', () => {
   it('takes down the toast of a problem the advice no longer has', () => {
     const shown: readonly Toast[] = [
-      { news: newsOf('broken', 'urgent', 1), until: null },
-      { news: newsOf('broken', 'urgent', 2), until: null },
+      toastOf(newsOf('broken', 'urgent', 1), null),
+      toastOf(newsOf('broken', 'urgent', 2), null),
     ];
     const left = withoutResolved(shown, [advice('broken', 0.9, 2)]);
-    expect(left.map((toast) => toast.news.advice.at?.tileX)).toEqual([2]);
+    expect(left.map((toast) => adviceOf(toast)?.at?.tileX)).toEqual([2]);
   });
 });
 
 describe('logNews', () => {
   it('puts the newest first and keeps fifty', () => {
-    let log: readonly News[] = [];
+    let log: readonly Message[] = [];
     for (let tileX = 0; tileX < 60; tileX++)
       log = logNews(log, [newsOf('broken', 'urgent', tileX)]);
     expect(log).toHaveLength(50);
-    expect(log[0]!.advice.at?.tileX).toBe(59);
-    expect(log.at(-1)!.advice.at?.tileX).toBe(10);
+    expect(adviceOf(log[0]!)?.at?.tileX).toBe(59);
+    expect(adviceOf(log.at(-1)!)?.at?.tileX).toBe(10);
   });
 });

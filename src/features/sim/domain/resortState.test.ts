@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBreakdowns } from './breakdowns';
+import { countArrivals, countReview, HISTORY_DAYS, reportOf, startDay } from './dayReport';
 import { createGuests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import { createRandom } from '../../layout/domain/random';
@@ -36,6 +37,8 @@ function stateFor(seed: number): ResortState {
     takings: new Map(),
     footfall: createFootfall(9),
     reviews: [],
+    today: startDay(0),
+    history: [],
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     ledger: createLedger('sandbox', 0),
     arrivalsPlanned: 0,
@@ -88,6 +91,17 @@ function played(): ResortState {
   return state;
 }
 
+function reportedOn(state: ResortState, day: number) {
+  return reportOf({
+    counts: countReview(countArrivals(startDay(day), 6), 4),
+    rating: state.rating,
+    present: 22,
+    beds: state.beds,
+    ledger: state.ledger,
+    thoughts: state.thoughtDay,
+  });
+}
+
 describe('snapshotResort', () => {
   it('restores into a fresh resort so that it snapshots the same again', () => {
     const saved = snapshotResort(played());
@@ -134,6 +148,24 @@ describe('snapshotResort', () => {
     fresh.hiring = hire(AUTO_HIRING, 'mechanic', 2);
     restoreResort(fresh, snapshotResort(played()));
     expect(fresh.hiring).toEqual(AUTO_HIRING);
+  });
+
+  it('keeps the day counts and the reports of the days before', () => {
+    const state = played();
+    state.history = [reportedOn(state, 3), reportedOn(state, 4)];
+    state.today = countArrivals(startDay(5), 2);
+    const saved = snapshotResort(state);
+    const fresh = stateFor(9);
+    restoreResort(fresh, saved);
+    expect(fresh.history).toEqual(state.history);
+    expect(fresh.today).toEqual({ from: 5, arrived: 2, left: 0, reviews: 0, reviewStars: 0 });
+    expect(resortSnapshotSchema.safeParse(saved).success).toBe(true);
+  });
+
+  it('refuses a history longer than the days it keeps', () => {
+    const state = played();
+    state.history = Array.from({ length: HISTORY_DAYS + 1 }, (_, day) => reportedOn(state, day));
+    expect(resortSnapshotSchema.safeParse(snapshotResort(state)).success).toBe(false);
   });
 
   it('refuses litter saved as a plain list', () => {

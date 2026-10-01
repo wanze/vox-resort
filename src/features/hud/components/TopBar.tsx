@@ -27,6 +27,7 @@ export interface TopBarProps {
   readonly overlay: OverlayControls;
   readonly ledger: Ledger | null;
   readonly status: StatusView | null;
+  readonly trend: number | null;
   readonly adviceCount: number;
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
@@ -138,6 +139,7 @@ export function TopBar(props: TopBarProps) {
         {status ? (
           <RatingControl
             rating={status.rating}
+            trend={props.trend}
             open={menu === 'rating'}
             onOpenChange={opener('rating')}
           />

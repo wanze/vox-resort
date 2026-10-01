@@ -3,33 +3,41 @@ import { loadPrefs, savePrefs } from '../features/hud/adapters/prefsStore';
 import type { HudPrefs } from '../features/hud/domain/hudPrefs';
 import {
   expireToasts,
+  logDay,
   logNews,
   newsFrom,
+  showDay,
   showToasts,
+  toastKey,
   withoutResolved,
-  type News,
-  type Severity,
+  type Message,
   type Toast,
+  type ToastKind,
 } from '../features/hud/domain/news';
 import type { Advice } from '../features/sim/domain/advice';
+import type { DayReport } from '../features/sim/domain/dayReport';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 
 export interface NewsControls {
   readonly toasts: readonly Toast[];
-  readonly log: readonly News[];
+  readonly log: readonly Message[];
   readonly prefs: HudPrefs;
   hear(advice: readonly Advice[], ticks: number): void;
+  closeDay(report: DayReport): void;
   dismiss(key: string): void;
-  setMuted(severity: Severity, muted: boolean): void;
+  setMuted(kind: ToastKind, muted: boolean): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;
 }
 
 const TICK_MS = 1000;
 
+const kindOfToast = (toast: Toast): ToastKind =>
+  toast.kind === 'advice' ? toast.news.severity : toast.kind;
+
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
-  const [log, setLog] = useState<readonly News[]>([]);
+  const [log, setLog] = useState<readonly Message[]>([]);
   const [prefs, setPrefs] = useState<HudPrefs>(loadPrefs);
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
@@ -52,6 +60,12 @@ export function useNews(speed: SimSpeed): NewsControls {
     setLog((kept) => logNews(kept, found.news));
   }, []);
 
+  const closeDay = useCallback((report: DayReport) => {
+    const options = { muted: new Set(latest.current.muted), nowMs: Date.now() };
+    setToasts((shown) => showDay(shown, report, options));
+    setLog((kept) => logDay(kept, report));
+  }, []);
+
   const fading = toasts.some((toast) => toast.until !== null);
   useEffect(() => {
     if (!fading) return;
@@ -67,18 +81,19 @@ export function useNews(speed: SimSpeed): NewsControls {
     log,
     prefs,
     hear,
+    closeDay,
     dismiss: useCallback(
-      (key: string) => setToasts((shown) => shown.filter((toast) => toast.news.key !== key)),
+      (key: string) => setToasts((shown) => shown.filter((toast) => toastKey(toast) !== key)),
       [],
     ),
-    setMuted: useCallback((severity: Severity, muted: boolean) => {
+    setMuted: useCallback((kind: ToastKind, muted: boolean) => {
       setPrefs((was) => {
-        const others = was.muted.filter((each) => each !== severity);
-        const next = { ...was, muted: muted ? [...others, severity] : others };
+        const others = was.muted.filter((each) => each !== kind);
+        const next = { ...was, muted: muted ? [...others, kind] : others };
         savePrefs(next);
         return next;
       });
-      if (muted) setToasts((shown) => shown.filter((toast) => toast.news.severity !== severity));
+      if (muted) setToasts((shown) => shown.filter((toast) => kindOfToast(toast) !== kind));
     }, []),
     reset: useCallback(() => {
       before.current = null;

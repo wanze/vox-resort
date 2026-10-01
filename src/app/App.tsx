@@ -11,6 +11,7 @@ import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls, type ClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
+import { useHistory } from './useHistory';
 import { useNews } from './useNews';
 import { useStatus } from './useStatus';
 import { useThoughts } from './useThoughts';
@@ -114,10 +115,18 @@ function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
   return { playing, saves, welcome };
 }
 
-// Together because the advice is what the news is heard from.
+// Together because the advice and the day's report are what the news is heard from, and a new
+// resort is a baseline for both.
 function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed) {
   const news = useNews(speed);
-  return { news, advice: useAdvice(showcase, news.hear) };
+  const history = useHistory(news.closeDay);
+  const { reset: resetNews } = news;
+  const { reset: resetHistory } = history;
+  const replaced = useCallback(() => {
+    resetNews();
+    resetHistory();
+  }, [resetNews, resetHistory]);
+  return { news, history, replaced, advice: useAdvice(showcase, news.hear) };
 }
 
 function useHourly() {
@@ -139,7 +148,7 @@ export function App() {
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
-  const { news, advice } = useAdviceNews(showcaseRef, clock.speed);
+  const { news, history, replaced, advice } = useAdviceNews(showcaseRef, clock.speed);
   const { thoughts, status } = useHourly();
   const { playing, saves, welcome } = useGame(showcaseRef, clock);
   const { resort, adoptLoading } = welcome;
@@ -157,7 +166,7 @@ export function App() {
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice, show: showAdvice } = advice;
-  const { reset: resetNews } = news;
+  const { adopt: adoptHistory } = history;
   const { adopt: adoptVoices } = thoughts;
   const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
@@ -180,9 +189,10 @@ export function App() {
       onCameraChange: adoptCamera,
       onSelectionChange: adoptSelection,
       onAdviceChange: adoptAdvice,
-      onResortReplaced: resetNews,
+      onResortReplaced: replaced,
       onThoughtsChange: adoptVoices,
       onStatusChange: adoptStatus,
+      onHistoryChange: adoptHistory,
       onWeatherChange: adoptWeather,
       onOpenChange: adoptOpen,
       onMoneyChange: adoptLedger,
@@ -210,6 +220,7 @@ export function App() {
         showAdvice(mounted.advice);
         adoptVoices(mounted.voices);
         adoptStatus(mounted.status);
+        adoptHistory(mounted.history);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
         adoptOpen(mounted.open);
@@ -240,9 +251,10 @@ export function App() {
     adoptSelection,
     adoptAdvice,
     showAdvice,
-    resetNews,
+    replaced,
     adoptVoices,
     adoptStatus,
+    adoptHistory,
     adoptWeather,
     adoptLedger,
     adoptLoading,
@@ -284,6 +296,7 @@ export function App() {
           news={news}
           voices={thoughts.voices}
           status={status.status}
+          history={history}
           onShowOnPlot={advice.showOnPlot}
           preview={previewUrl}
           tool={tool}

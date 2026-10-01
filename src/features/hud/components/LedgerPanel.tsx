@@ -1,28 +1,16 @@
-import { netOf, REASONS, type GameMode, type Ledger, type Reason } from '../../sim/domain/ledger';
+import { netOf, REASONS, type GameMode, type Ledger } from '../../sim/domain/ledger';
 import { MODE_LABELS } from '../../welcome/components/modeNames';
+import { REASON_LABELS, signed } from './ledgerWords';
 import { StatRow } from './StatRow';
 
 export interface LedgerPanelProps {
   readonly ledger: Ledger | null;
 }
 
-const REASON_LABELS: { readonly [reason in Reason]: string } = {
-  build: 'Building',
-  demolish: 'Refunds',
-  dig: 'Earthworks',
-  visit: 'Visits',
-  night: 'Stays',
-  wages: 'Wages',
-  maintenance: 'Maintenance',
-};
-
 const MODE_NOTES: { readonly [mode in GameMode]: string } = {
   sandbox: 'funds without limit',
   tycoon: 'everything built is paid for',
 };
-
-const signed = (amount: number): string =>
-  amount.toLocaleString('en-US', { signDisplay: 'exceptZero' });
 
 export function LedgerPanel({ ledger }: LedgerPanelProps) {
   if (!ledger) return <p className="hud-loading">No books yet.</p>;

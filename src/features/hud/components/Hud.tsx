@@ -4,6 +4,7 @@ import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { CommandPalette } from './CommandPalette';
 import { listCommands } from './commands';
 import { CameraPanel } from './CameraPanel';
+import { DayReportPanel } from './DayReportPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
@@ -23,10 +24,12 @@ import { depthOf, isOpen, type WindowId } from '../domain/windowLayout';
 import type { BuildTool } from '../../build/domain/buildTool';
 import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
-import type { Ledger } from '../../sim/domain/ledger';
+import { starsTrend } from '../../sim/domain/dayReport';
+import type { GameMode, Ledger } from '../../sim/domain/ledger';
 import type { StaffRole } from '../../sim/domain/staff';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
+import type { HistoryControls } from '../../../app/useHistory';
 import type { NewsControls } from '../../../app/useNews';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
@@ -48,6 +51,7 @@ export interface HudProps {
   readonly news: NewsControls;
   readonly voices: VoicesView;
   readonly status: StatusView | null;
+  readonly history: HistoryControls;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
   readonly preview: PreviewLookup;
@@ -73,6 +77,7 @@ const PANELS: readonly Panel[] = [
   'overview',
   'advice',
   'messages',
+  'report',
   'guests',
   'staff',
   'books',
@@ -82,9 +87,17 @@ const PANELS: readonly Panel[] = [
   'debug',
 ];
 
+const modeOf = (ledger: Ledger | null): GameMode | null => ledger?.mode ?? null;
+
 // Tops the role up to what the plot wants and keeps it hand-set.
 const hireUpTo = (props: HudProps, role: StaffRole): void =>
   props.resort.setHiring(role, props.stats?.staff.recommended[role] ?? null);
+
+// null for the newest, which is where the Overview and the palette open it.
+const openReport = (props: Pick<HudProps, 'history' | 'windows'>, day: number | null): void => {
+  props.history.show(day);
+  props.windows.show('report', true);
+};
 
 // Null when a window has nothing to show yet, such as the generator before the first resort.
 const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
@@ -98,7 +111,13 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       zoneStaff={props.stats?.staff.zones ?? null}
     />
   ),
-  overview: (props) => <ResortStats stats={props.stats} status={props.status} />,
+  overview: (props) => (
+    <ResortStats
+      stats={props.stats}
+      status={props.status}
+      onOpenReport={() => openReport(props, null)}
+    />
+  ),
   advice: (props) => (
     <AdvicePanel
       advice={props.advice}
@@ -106,12 +125,23 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onHire={(role) => hireUpTo(props, role)}
     />
   ),
-  messages: ({ news, onShowOnPlot }) => (
+  messages: (props) => (
     <MessagesPanel
-      log={news.log}
-      prefs={news.prefs}
-      onMutedChange={news.setMuted}
-      onShowOnPlot={onShowOnPlot}
+      log={props.news.log}
+      prefs={props.news.prefs}
+      history={props.history.history}
+      mode={modeOf(props.ledger)}
+      onMutedChange={props.news.setMuted}
+      onShowOnPlot={props.onShowOnPlot}
+      onOpenReport={(day) => openReport(props, day)}
+    />
+  ),
+  report: ({ history, ledger }) => (
+    <DayReportPanel
+      history={history.history}
+      shown={history.shown}
+      onShow={history.show}
+      mode={modeOf(ledger)}
     />
   ),
   guests: (props) => <GuestsPanel voices={props.voices} />,
@@ -206,6 +236,7 @@ export function Hud(props: HudProps) {
         overlay={props.overlay}
         ledger={props.ledger}
         status={props.status}
+        trend={starsTrend(props.history.history)}
         adviceCount={props.advice.length}
         windows={props.windows}
         menu={props.menu}
@@ -215,9 +246,12 @@ export function Hud(props: HudProps) {
       <Windows {...props} />
       <Toasts
         toasts={props.news.toasts}
+        history={props.history.history}
+        mode={modeOf(props.ledger)}
         onShowOnPlot={props.onShowOnPlot}
         onHire={(role) => hireUpTo(props, role)}
         onOpenAdvice={() => props.windows.show('advice', true)}
+        onOpenReport={(day) => openReport(props, day)}
         onDismiss={props.news.dismiss}
       />
       <Palette {...props} />

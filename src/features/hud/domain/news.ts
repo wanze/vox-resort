@@ -1,7 +1,11 @@
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import type { DayReport } from '../../sim/domain/dayReport';
 import { TICKS_PER_DAY, type SimSpeed } from '../../sim/domain/simClock';
 
 export type Severity = 'urgent' | 'warning';
+
+// What the player can mute: each severity of advice, and the report at check-in.
+export type ToastKind = Severity | 'day';
 
 export interface News {
   // adviceKey of the first advice; merged news keep the first one's key.
@@ -13,11 +17,19 @@ export interface News {
   readonly at: number;
 }
 
-export interface Toast {
-  readonly news: News;
-  // Wall-clock ms; null stays until dismissed.
-  readonly until: number | null;
-}
+export type Message =
+  | { readonly kind: 'advice'; readonly news: News }
+  | { readonly kind: 'day'; readonly report: DayReport };
+
+// Wall-clock ms; null stays until dismissed.
+export type Toast = Message & { readonly until: number | null };
+
+type AdviceToast = Extract<Toast, { readonly kind: 'advice' }>;
+
+const isAdvice = (toast: Toast): toast is AdviceToast => toast.kind === 'advice';
+
+export const toastKey = (message: Message): string =>
+  message.kind === 'advice' ? message.news.key : `day:${message.report.day}`;
 
 // Unique per building, not per model: two idle Changing Cabins are two rows.
 export const adviceKey = (advice: Advice): string =>
@@ -58,6 +70,8 @@ const MAX_TOASTS = 3;
 
 const WARNING_MS = 12_000;
 
+const DAY_MS = 10_000;
+
 const MESSAGES_KEPT = 50;
 
 // A null `before` is a baseline: a load or a new game marks what is already wrong as heard
@@ -93,7 +107,7 @@ export function newsFrom(
 
 interface ToastOptions {
   readonly speed: SimSpeed;
-  readonly muted: ReadonlySet<Severity>;
+  readonly muted: ReadonlySet<ToastKind>;
   readonly nowMs: number;
 }
 
@@ -103,24 +117,26 @@ const toasted = ({ severity }: News, { speed, muted }: ToastOptions): boolean =>
 
 // Only toasts from before this call make room, so one loud refresh cannot push out its own
 // loudest news for its quietest. A warning never makes room: it is still logged.
-function roomFor(older: readonly Toast[], { severity }: News): readonly Toast[] | null {
+function roomFor(older: readonly AdviceToast[], { severity }: News): readonly AdviceToast[] | null {
   if (severity !== 'urgent') return null;
   const victim = older.find((toast) => toast.news.severity === 'warning') ?? older[0];
   return victim ? older.filter((toast) => toast !== victim) : null;
 }
 
-const toastOf = (news: News, nowMs: number): Toast => ({
+const toastOf = (news: News, nowMs: number): AdviceToast => ({
+  kind: 'advice',
   news,
   until: news.severity === 'urgent' ? null : nowMs + WARNING_MS,
 });
 
+// The day's toast is not advice, so it never takes one of the three places.
 export function showToasts(
   shown: readonly Toast[],
   news: readonly News[],
   options: ToastOptions,
 ): readonly Toast[] {
-  let older = shown;
-  const added: Toast[] = [];
+  let older: readonly AdviceToast[] = shown.filter(isAdvice);
+  const added: AdviceToast[] = [];
   for (const each of news.filter((one) => toasted(one, options))) {
     older = older.filter((toast) => toast.news.key !== each.key);
     const room = older.length + added.length < MAX_TOASTS ? older : roomFor(older, each);
@@ -128,7 +144,28 @@ export function showToasts(
     older = room;
     added.push(toastOf(each, options.nowMs));
   }
-  return [...older, ...added];
+  return [...shown.filter((toast) => !isAdvice(toast)), ...older, ...added];
+}
+
+// undefined for a history not yet heard, which is a baseline: the reports a load brings were
+// closed long ago.
+export function newDayIn(
+  history: readonly DayReport[],
+  heard: number | null | undefined,
+): DayReport | null {
+  const newest = history.at(-1);
+  return heard !== undefined && newest && newest.day !== heard ? newest : null;
+}
+
+// At every speed, rush included: at thirty seconds a day, yesterday is what the player can act on.
+export function showDay(
+  shown: readonly Toast[],
+  report: DayReport,
+  { muted, nowMs }: Omit<ToastOptions, 'speed'>,
+): readonly Toast[] {
+  const advice = shown.filter(isAdvice);
+  if (muted.has('day')) return advice.length === shown.length ? shown : advice;
+  return [{ kind: 'day', report, until: nowMs + DAY_MS }, ...advice];
 }
 
 export function expireToasts(shown: readonly Toast[], nowMs: number): readonly Toast[] {
@@ -141,10 +178,20 @@ export function withoutResolved(
   advice: readonly Advice[],
 ): readonly Toast[] {
   const current = new Set(advice.map(adviceKey));
-  const kept = shown.filter((toast) => current.has(toast.news.key));
+  const kept = shown.filter((toast) => !isAdvice(toast) || current.has(toast.news.key));
   return kept.length === shown.length ? shown : kept;
 }
 
-export function logNews(log: readonly News[], news: readonly News[]): readonly News[] {
-  return news.length === 0 ? log : [...news, ...log].slice(0, MESSAGES_KEPT);
+const logged = (log: readonly Message[], messages: readonly Message[]): readonly Message[] =>
+  messages.length === 0 ? log : [...messages, ...log].slice(0, MESSAGES_KEPT);
+
+export function logNews(log: readonly Message[], news: readonly News[]): readonly Message[] {
+  return logged(
+    log,
+    news.map((each) => ({ kind: 'advice', news: each })),
+  );
+}
+
+export function logDay(log: readonly Message[], report: DayReport): readonly Message[] {
+  return logged(log, [{ kind: 'day', report }]);
 }

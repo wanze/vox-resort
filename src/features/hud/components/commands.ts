@@ -24,6 +24,7 @@ import { isOpen } from '../domain/windowLayout';
 import type { Searchable } from '../domain/commandSearch';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
+import type { HistoryControls } from '../../../app/useHistory';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
@@ -53,6 +54,7 @@ export interface CommandContext {
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly windows: WindowControls;
+  readonly history: HistoryControls;
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly ledger: Ledger | null;
@@ -237,7 +239,8 @@ function resortCommands({ resort, windows }: CommandContext): Command[] {
   ];
 }
 
-function windowCommands({ windows }: CommandContext): Command[] {
+function windowCommands({ windows, history }: CommandContext): Command[] {
+  const reportOpen = isOpen(windows.layout, 'report');
   return [
     ...TOOLBAR_WINDOWS.map((id) => ({
       id: `window:${id}`,
@@ -249,6 +252,19 @@ function windowCommands({ windows }: CommandContext): Command[] {
       checked: isOpen(windows.layout, id),
       run: () => windows.toggle(id),
     })),
+    {
+      id: 'window:report',
+      label: WINDOW_TITLES.report,
+      group: 'Windows',
+      keywords: 'window summary yesterday history day check-in chart trend',
+      note: 'the last fourteen days, closed each morning at check-in',
+      art: { icon: WINDOW_ICONS.report },
+      checked: reportOpen,
+      run: () => {
+        if (!reportOpen) history.show(null);
+        windows.toggle('report');
+      },
+    },
     {
       id: 'window:debug',
       label: 'Debug info',

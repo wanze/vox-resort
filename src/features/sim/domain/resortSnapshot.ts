@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Home } from '../../guests/domain/homes';
 import type { Party } from '../../guests/domain/parties';
+import { HISTORY_DAYS, type DayCounts, type DayReport } from './dayReport';
 import type { Ledger } from './ledger';
 import type { Rating } from './rating';
 import type { Review } from './reviews';
@@ -129,6 +130,30 @@ const columnSchema = z.object({
   maintenance: z.number(),
 });
 
+const bedsSchema = z.object({ total: count, taken: count });
+
+const dayCountsSchema = z.object({
+  from: count,
+  arrived: count,
+  left: count,
+  reviews: count,
+  reviewStars: z.number(),
+}) satisfies z.ZodType<DayCounts>;
+
+const dayReportSchema = z.object({
+  day: count,
+  rating: ratingSchema,
+  present: count,
+  beds: bedsSchema,
+  arrived: count,
+  left: count,
+  reviews: count,
+  meanReview: z.number().nullable(),
+  money: columnSchema,
+  balance: z.number(),
+  loudest: z.array(tallySchema),
+}) satisfies z.ZodType<DayReport>;
+
 const ledgerSchema = z.object({
   balance: z.number(),
   today: columnSchema,
@@ -155,11 +180,13 @@ export const resortSnapshotSchema = z.object({
   takings: z.array(z.tuple([z.string(), z.number()])),
   footfall: z.object({ seen: float32, mood: float32 }),
   reviews: z.array(reviewSchema),
+  today: dayCountsSchema,
+  history: z.array(dayReportSchema).max(HISTORY_DAYS),
   rating: ratingSchema,
   ledger: ledgerSchema,
   arrivals: z.object({ planned: count, admitted: count, random: z.number().int() }),
   open: z.boolean(),
-  beds: z.object({ total: count, taken: count }),
+  beds: bedsSchema,
   hiring: hiringSchema,
   zones: int8,
 });

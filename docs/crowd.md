@@ -474,6 +474,14 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   at 5 stars, never more than the free beds. They come in three waves
   (`ARRIVAL_WAVES`): half at 11:00, 30% at 14:00, 20% at 17:00, so one desk is
   not flooded at once. A wave nobody could come in is not carried over.
+- **The check-in hour** pays the bills, rates the day, reports it, then lets the
+  morning coach in (`rateTheDay`, `closeTheDay`, `runDay`). The report
+  (`dayReport.ts`) is labelled with the day its period started on and keeps the
+  rating, the guests, the arrivals, check-outs and reviews counted since the last
+  check-in, the ledger's `yesterday` and the three loudest thoughts. The last 14
+  are kept, oldest first. The morning coach already counts towards the new day.
+  The first check-in of a resort built that morning closes nothing anybody
+  played, so it only restarts the counts.
 - **Open and closed.** A resort gates arrivals only; a closed one still rates its
   guests and sends them home. A plot with no paving starts closed (a building
   site), a generated one open. The Gates button in the top bar switches it.
@@ -955,7 +963,8 @@ version is listed as unreadable. Unmade beds are saved with the guests beside
 `freeBeds` (per home, like it), and a cleaner making up a room as `roomOf` in the
 staff router's snapshot. The hiring is saved with the resort; a load
 recomputes the roster and the duty from it without a shift change, since the
-staff crowd comes back from the save as it was. The twin-run tests (`crowd.test.ts`,
+staff crowd comes back from the save as it was. The day's counts and the 14-day
+report history are saved with the resort. The twin-run tests (`crowd.test.ts`,
 `router.test.ts`) restore a snapshot into a second resort and run both side by
 side, so they catch a missed field, but only if their scenario exercises it.
 Reordering `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels

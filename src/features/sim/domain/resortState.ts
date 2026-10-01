@@ -2,6 +2,7 @@ import { restoreGuests, snapshotGuests, type Guests } from '../../guests/domain/
 import { resumeRandom, type Random } from '../../layout/domain/random';
 import type { Footfall } from '../../overlays/domain/overlays';
 import { restoreBreakdowns, snapshotBreakdowns, type Breakdowns } from './breakdowns';
+import type { DayCounts, DayReport } from './dayReport';
 import { restoreHappiness, snapshotHappiness, type Happiness } from './happiness';
 import type { Ledger } from './ledger';
 import type { Carrying, Litter } from './litter';
@@ -31,6 +32,8 @@ export interface ResortState {
   readonly takings: VenueTakings;
   readonly footfall: Footfall;
   reviews: readonly Review[];
+  today: DayCounts;
+  history: readonly DayReport[];
   rating: Rating;
   ledger: Ledger;
   arrivalsPlanned: number;
@@ -41,6 +44,14 @@ export interface ResortState {
   hiring: Hiring;
   readonly zones: Zones;
 }
+
+const copyReport = (report: DayReport) => ({
+  ...report,
+  rating: { ...report.rating },
+  beds: { ...report.beds },
+  money: { ...report.money },
+  loudest: report.loudest.map((tally) => ({ ...tally })),
+});
 
 export function snapshotResort(state: ResortState): ResortSnapshot {
   return {
@@ -55,6 +66,8 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     takings: [...state.takings],
     footfall: { seen: state.footfall.seen.slice(), mood: state.footfall.mood.slice() },
     reviews: state.reviews.map((review) => ({ ...review })),
+    today: { ...state.today },
+    history: state.history.map(copyReport),
     rating: { ...state.rating },
     ledger: {
       ...state.ledger,
@@ -90,6 +103,8 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.footfall.seen.set(snapshot.footfall.seen);
   state.footfall.mood.set(snapshot.footfall.mood);
   state.reviews = snapshot.reviews.map((review) => ({ ...review }));
+  state.today = { ...snapshot.today };
+  state.history = snapshot.history.map(copyReport);
   state.rating = { ...snapshot.rating };
   state.ledger = snapshot.ledger;
   state.arrivalsPlanned = snapshot.arrivals.planned;

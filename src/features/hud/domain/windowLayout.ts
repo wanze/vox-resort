@@ -3,6 +3,7 @@ const WINDOW_IDS = [
   'overview',
   'advice',
   'messages',
+  'report',
   'guests',
   'staff',
   'books',

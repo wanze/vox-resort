@@ -149,6 +149,16 @@ import {
 import { mix } from '../features/sim/domain/night';
 import { keepReview, reviewFor, type Review } from '../features/sim/domain/reviews';
 import {
+  countArrivals,
+  countDeparture,
+  countReview,
+  keepDay,
+  reportOf,
+  startDay,
+  type DayCounts,
+  type DayReport,
+} from '../features/sim/domain/dayReport';
+import {
   createDay,
   createThoughts,
   forgetStay,
@@ -558,6 +568,8 @@ export interface ShowcaseOptions {
   // At most once a simulated hour: thoughts are heard per step, and React must not be.
   readonly onThoughtsChange?: (view: VoicesView) => void;
   readonly onStatusChange?: (status: StatusView) => void;
+  // Each morning, after the day before is reported, and with whatever history a load brings.
+  readonly onHistoryChange?: (history: readonly DayReport[]) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
@@ -584,6 +596,7 @@ export interface Showcase {
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
   readonly status: StatusView;
+  readonly history: readonly DayReport[];
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
   readonly cameraView: CameraView;
@@ -933,6 +946,9 @@ interface Resort {
   // Cleared each morning with the router's counters, so the panel speaks for today.
   readonly thoughtDay: Map<string, ThoughtTally>;
   reviews: readonly Review[];
+  // From one check-in to the next, as the books run.
+  today: DayCounts;
+  history: readonly DayReport[];
   // Replaced on an edit, as the scenery is.
   binCover: Uint8Array;
   unreachable: ReadonlySet<string>;
@@ -1258,8 +1274,12 @@ function buildResort(
       const party = guests.party[person]!;
       // Before check-out, which clears who was here.
       const review = reviewOfParty(resort, party);
-      if (review) resort.reviews = keepReview(resort.reviews, review);
+      if (review) {
+        resort.reviews = keepReview(resort.reviews, review);
+        resort.today = countReview(resort.today, review.stars);
+      }
       const left = checkOutParty(guests, party, true);
+      resort.today = countDeparture(resort.today, left.length);
       const people = crowdField!.crowd;
       for (const member of left) {
         // Every member: a visit left standing would walk an empty body out of the door.
@@ -1460,6 +1480,9 @@ function buildResort(
     thoughts: createThoughts(population),
     thoughtDay: createDay(),
     reviews: [],
+    // Every resort is built on a clock restarted at day 0, and a load restores its own counts.
+    today: startDay(0),
+    history: [],
     binCover,
     unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
@@ -1956,6 +1979,8 @@ function runTicks(
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
     payTheBills(resort);
+    rateTheDay(resort);
+    closeTheDay(resort, clock.day);
     runDay(resort, clock.day);
     // After the coaches and before the counters are wiped, which the advice reads.
     morning();
@@ -2192,9 +2217,7 @@ function nightlyRate(resort: Resort, home: number): number {
   return lodging ? nightPriceOf(id, sceneryOver(resort.scenery, lodging)) : priceOf(id);
 }
 
-// The rating comes first, so the morning coach is sized by the resort the current guests
-// experienced.
-function runDay(resort: Resort, day: number): void {
+function rateTheDay(resort: Resort): void {
   const beds = bedCount(resort.guests);
   resort.rating = ratingFor({
     happiness: meanHappiness(resort.happiness, resort.guests),
@@ -2202,6 +2225,28 @@ function runDay(resort: Resort, day: number): void {
     housed: beds.taken,
     cleanliness: meanCleanliness(resort.upkeep, resort.venues.length),
   });
+}
+
+// Before the morning coach, which counts towards the new day. The first check-in of a resort
+// built that morning closes a period nobody played, so it only restarts the counts.
+function closeTheDay(resort: Resort, day: number): void {
+  if (resort.today.from !== day) {
+    const report = reportOf({
+      counts: resort.today,
+      rating: resort.rating,
+      present: presentCount(resort.guests),
+      beds: resort.beds,
+      ledger: resort.ledger,
+      thoughts: resort.thoughtDay,
+    });
+    resort.history = keepDay(resort.history, report);
+  }
+  resort.today = startDay(day);
+}
+
+// The rating comes first, so the morning coach is sized by the resort the current guests
+// experienced.
+function runDay(resort: Resort, day: number): void {
   resort.arrivalsPlanned = arrivalsFor(resort.rating, freeBedsOn(resort.guests));
   resort.arrivalsAdmitted = 0;
   admitWave(resort, day, 0);
@@ -2252,6 +2297,7 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     resort.router.admit(person, resort.router.arrivalNode);
   }
   resort.arrivalsAdmitted += arrived.length;
+  resort.today = countArrivals(resort.today, arrived.length);
   const beds = bedCount(resort.guests);
   resort.beds = { total: beds.beds, taken: beds.taken };
 }
@@ -3271,6 +3317,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const report = (): void => options.onStatusChange?.(statusOf(current(), clock));
 
+  const tellHistory = (): void => options.onHistoryChange?.(current().history);
+
   let overlayKind: OverlayKind | null = null;
   // The graph the tiles were placed for: a new one, from an edit or a new plot, places them again.
   let overlayPlacedOn: WalkNetwork | null = null;
@@ -3309,6 +3357,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const morning = (): void => {
     advise();
     report();
+    tellHistory();
     tellMoney();
     options.onDirty?.();
     options.onMorning?.();
@@ -3321,6 +3370,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     advise();
     speak();
     report();
+    tellHistory();
     tellMoney();
   };
 
@@ -3599,6 +3649,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     get status() {
       return statusOf(current(), clock);
+    },
+    get history() {
+      return current().history;
     },
     get params() {
       return params;

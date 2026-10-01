@@ -10,6 +10,9 @@ export interface OverlayControlProps {
   readonly onKindChange: (kind: OverlayKind | null) => void;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  // Not a layer: the markers stand over whichever layer is on, or none.
+  readonly markers: boolean;
+  readonly onMarkersChange: (shown: boolean) => void;
 }
 
 // Both ends of the one ramp, worded for the layer; the high end is always the bad one.
@@ -34,7 +37,14 @@ const cssColourAt = (value: number): string => {
 // Worked out once: the ramp is fixed, and the legend is read off the same stops the tiles are.
 const RAMP_GRADIENT = `linear-gradient(to right, ${cssColourAt(0)}, ${cssColourAt(0.5)}, ${cssColourAt(1)})`;
 
-export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
+export function OverlayControl({
+  kind,
+  onKindChange,
+  open,
+  onOpenChange,
+  markers,
+  onMarkersChange,
+}: OverlayControlProps) {
   const pick = (next: OverlayKind | null) => (): void => {
     onKindChange(next);
     onOpenChange(false);
@@ -69,6 +79,14 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
             onSelect={pick(each)}
           />
         ))}
+        <hr className="hud-rule" />
+        <HudOption
+          label="Problem markers"
+          note="pin a sign over every building in trouble"
+          checked={markers}
+          many
+          onSelect={() => onMarkersChange(!markers)}
+        />
       </HudDropdown>
       {kind ? (
         <p className="hud-overlay-legend">

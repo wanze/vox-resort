@@ -1,17 +1,23 @@
-import type { RefObject } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import type {
   GuestView,
   PartyMemberView,
   PlaceView,
   SelectionView,
 } from '../../inspect/domain/selection';
+import type { Advice } from '../../sim/domain/advice';
+import { adviceAt, markerIconOf } from '../domain/markers';
+import { adviceKey, severityOf } from '../domain/news';
+import { adviceSays } from './adviceWords';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
+import { PixelIcon } from './PixelIcon';
 import { StatRow } from './StatRow';
 import { thoughtLine } from './thoughtWords';
 
 export interface InspectPanelProps {
   readonly frame: HudWindowFrame;
   readonly selection: SelectionView | null;
+  readonly advice: readonly Advice[];
   // Written per frame by the overlay, so the panel never re-renders as the resort ticks.
   readonly activityElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
@@ -34,21 +40,29 @@ const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: stri
   health: 'Health',
 };
 
-const NEED_MOODS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
-  hunger: 'hungry',
-  thirst: 'thirsty',
-  energy: 'tired',
-  fun: 'bored',
-  hygiene: 'grubby',
-  health: 'hurt',
-};
-
 const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: string } = {
   lodging: 'Lodging',
   food: 'Food',
   drink: 'Drinks',
   activity: 'Activity',
   service: 'Service',
+};
+
+// Pixel digits blur into each other, so every figure in the panel is set in the plain face.
+const Num = ({ children }: { readonly children: ReactNode }) => (
+  <span className="hud-num">{children}</span>
+);
+
+// Keyed by where the figure starts in the text, which is what tells two figures apart.
+const withFigures = (text: string): ReactNode => {
+  const parts: ReactNode[] = [];
+  let from = 0;
+  for (const match of text.matchAll(/\d[\d,.]*%?/g)) {
+    parts.push(text.slice(from, match.index), <Num key={match.index}>{match[0]}</Num>);
+    from = match.index + match[0].length;
+  }
+  parts.push(text.slice(from));
+  return parts;
 };
 
 const nightsOf = (count: number): string => `${count} ${count === 1 ? 'night' : 'nights'}`;
@@ -104,11 +118,7 @@ function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
 
 function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
   if (!wants) return <StatRow label="Wants">Nothing right now</StatRow>;
-  return (
-    <StatRow label="Wants" note={NEED_MOODS[wants.need]}>
-      {wants.label}
-    </StatRow>
-  );
+  return <StatRow label="Wants">{wants.label}</StatRow>;
 }
 
 function ThinksRow({ thought }: { readonly thought: GuestView['thought'] }) {
@@ -136,15 +146,11 @@ function GuestDetails({
         <span ref={activityElement}>—</span>
       </p>
       <dl className="hud-stats">
-        <StatRow label="Party" note={guest.family}>
-          {PARTY_KINDS[guest.partyKind]}
-        </StatRow>
-        <StatRow label="Sleeps" note={guest.home?.key}>
-          {guest.home ? guest.home.label : 'No bed on the plot'}
-        </StatRow>
-        <StatRow label="Stay">{stayLine(guest)}</StatRow>
-        <StatRow label="Mood" note="how good a time they are having">
-          {Math.round(guest.happiness * 100)}%
+        <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
+        <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
+        <StatRow label="Stay">{withFigures(stayLine(guest))}</StatRow>
+        <StatRow label="Mood">
+          <Num>{Math.round(guest.happiness * 100)}%</Num>
         </StatRow>
         <WantsRow wants={guest.wants} />
       </dl>
@@ -164,28 +170,20 @@ type Venue = NonNullable<PlaceView['venue']>;
 
 function SurroundingsRow({ setting }: { readonly setting: number }) {
   return (
-    <StatRow label="Surroundings" note="how pleasant it is around it">
-      {Math.round(setting * 100)}%
+    <StatRow label="Surroundings">
+      <Num>{Math.round(setting * 100)}%</Num>
     </StatRow>
   );
 }
 
 function LifeguardRow({ watched }: { readonly watched: boolean | null }) {
   if (watched === null) return null;
-  return (
-    <StatRow label="Lifeguard" note="one on post at the water">
-      {watched ? 'On watch' : 'Nobody watching'}
-    </StatRow>
-  );
+  return <StatRow label="Lifeguard">{watched ? 'On watch' : 'Nobody watching'}</StatRow>;
 }
 
 function BrokenRow({ broken }: { readonly broken: boolean }) {
   if (!broken) return null;
-  return (
-    <StatRow label="Repairs" note="closed until a mechanic has been">
-      Broken down
-    </StatRow>
-  );
+  return <StatRow label="Repairs">Broken down</StatRow>;
 }
 
 function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
@@ -193,24 +191,30 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
     <dl className="hud-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
       <BrokenRow broken={venue.broken} />
-      <StatRow label="Capacity">{venue.capacity}</StatRow>
+      <StatRow label="Capacity">
+        <Num>{venue.capacity}</Num>
+      </StatRow>
       {venue.role === 'lodging' ? (
-        <StatRow label="Beds">{venue.beds}</StatRow>
+        <StatRow label="Beds">
+          <Num>{venue.beds}</Num>
+        </StatRow>
       ) : (
         <StatRow label="Serves">{venue.serves.join(', ') || '—'}</StatRow>
       )}
       <StatRow label="Typical stay">{venue.dwell}</StatRow>
-      <StatRow label="Inside" note="of what it holds">
-        {venue.inside} / {venue.capacity}
+      <StatRow label="Inside">
+        <Num>
+          {venue.inside} / {venue.capacity}
+        </Num>
       </StatRow>
-      <StatRow label="Waiting" note="in the line at the door">
-        {venue.waiting === 0 ? 'Nobody' : venue.waiting}
+      <StatRow label="Waiting">
+        {venue.waiting === 0 ? 'Nobody' : <Num>{venue.waiting}</Num>}
       </StatRow>
-      <StatRow label="Cleanliness" note="a dirty place is chosen less">
-        {Math.round(venue.cleanliness * 100)}%
+      <StatRow label="Cleanliness">
+        <Num>{Math.round(venue.cleanliness * 100)}%</Num>
       </StatRow>
-      <StatRow label="Takings today" note="since the check-in hour">
-        {venue.takings.toLocaleString('en-US')}
+      <StatRow label="Takings today">
+        <Num>{venue.takings.toLocaleString('en-US')}</Num>
       </StatRow>
       <LifeguardRow watched={venue.watched} />
       <SurroundingsRow setting={setting} />
@@ -237,11 +241,37 @@ function Residents({
   );
 }
 
+// The same icon as the marker over the roof, so a click on one explains itself here.
+function Problems({ problems }: { readonly problems: readonly Advice[] }) {
+  if (problems.length === 0) return null;
+  return (
+    <ul className="hud-inspect-problems" aria-label="Problems">
+      {problems.map((advice) => {
+        const icon = markerIconOf(advice.kind);
+        return (
+          <li
+            key={adviceKey(advice)}
+            className="hud-inspect-problem"
+            data-severity={severityOf(advice) ?? 'note'}
+          >
+            <span className="hud-inspect-problem-icon">
+              {icon ? <PixelIcon name={icon} /> : null}
+            </span>
+            <span>{withFigures(adviceSays(advice))}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function PlaceDetails({
   place,
+  advice,
   onSelectPerson,
 }: {
   readonly place: PlaceView;
+  readonly advice: readonly Advice[];
   readonly onSelectPerson: (person: number) => void;
 }) {
   if (!place.venue) {
@@ -256,6 +286,7 @@ function PlaceDetails({
   }
   return (
     <>
+      <Problems problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })} />
       <VenueRows venue={place.venue} setting={place.setting} />
       <Residents place={place} onSelectPerson={onSelectPerson} />
     </>
@@ -263,15 +294,14 @@ function PlaceDetails({
 }
 
 function titleOf(selection: SelectionView): string {
-  if (selection.kind === 'place') {
-    return `${selection.label}, tile ${selection.tile.x}, ${selection.tile.z}`;
-  }
+  if (selection.kind === 'place') return selection.label;
   return selection.child ? `${selection.name} (child)` : selection.name;
 }
 
 export function InspectPanel({
   frame,
   selection,
+  advice,
   activityElement,
   onSelectPerson,
 }: InspectPanelProps) {
@@ -291,7 +321,7 @@ export function InspectPanel({
             onSelectPerson={onSelectPerson}
           />
         ) : (
-          <PlaceDetails place={selection} onSelectPerson={onSelectPerson} />
+          <PlaceDetails place={selection} advice={advice} onSelectPerson={onSelectPerson} />
         )}
       </div>
     </HudWindow>

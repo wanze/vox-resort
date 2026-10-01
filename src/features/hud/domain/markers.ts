@@ -1,0 +1,51 @@
+import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import { adviceKey } from './news';
+
+export type MarkerIcon = 'broken' | 'stranded' | 'queue' | 'dirty' | 'lifeguard' | 'litter';
+
+export interface Marker {
+  // adviceKey of the loudest advice on that tile.
+  readonly key: string;
+  readonly icon: MarkerIcon;
+  readonly at: { readonly tileX: number; readonly tileZ: number };
+  readonly advice: Advice;
+}
+
+// The showcase preallocates its anchor buffers and the HUD its buttons to this count.
+export const MAX_MARKERS = 12;
+
+// An idle building or a far lodging is a design note, not a problem to walk to,
+// and a dozen of them would bury the rest.
+const ICONS: Partial<Record<AdviceKind, MarkerIcon>> = {
+  broken: 'broken',
+  unreachable: 'stranded',
+  'full-lines': 'queue',
+  dirty: 'dirty',
+  unwatched: 'lifeguard',
+  littered: 'litter',
+};
+
+export const markerIconOf = (kind: AdviceKind): MarkerIcon | null => ICONS[kind] ?? null;
+
+// Advice names a building by its origin tile, the same one the inspector reports.
+export const adviceAt = (
+  advice: readonly Advice[],
+  tile: { readonly tileX: number; readonly tileZ: number },
+): readonly Advice[] =>
+  advice.filter((each) => each.at?.tileX === tile.tileX && each.at.tileZ === tile.tileZ);
+
+// The advice arrives loudest first, so the first one seen on a tile wins it.
+export function markersOf(advice: readonly Advice[]): readonly Marker[] {
+  const markers: Marker[] = [];
+  const taken = new Set<string>();
+  for (const each of advice) {
+    if (markers.length === MAX_MARKERS) break;
+    const icon = markerIconOf(each.kind);
+    if (!icon || !each.at) continue;
+    const tile = `${each.at.tileX},${each.at.tileZ}`;
+    if (taken.has(tile)) continue;
+    taken.add(tile);
+    markers.push({ key: adviceKey(each), icon, at: each.at, advice: each });
+  }
+  return markers;
+}

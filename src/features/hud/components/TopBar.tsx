@@ -34,6 +34,8 @@ export interface TopBarProps {
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly onFind: () => void;
+  readonly markers: boolean;
+  readonly onMarkersChange: (shown: boolean) => void;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -133,6 +135,8 @@ export function TopBar(props: TopBarProps) {
           onKindChange={overlay.setOverlay}
           open={menu === 'overlay'}
           onOpenChange={opener('overlay')}
+          markers={props.markers}
+          onMarkersChange={props.onMarkersChange}
         />
       </div>
 

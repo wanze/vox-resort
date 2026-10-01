@@ -26,6 +26,8 @@ export interface FrameUpdate {
   readonly people: { readonly drawn: number; readonly total: number };
   readonly shaderBuilds: number;
   readonly inspect: string | null;
+  // The same object every frame: spots is [x px, y px, visible 0|1] per marker, up to count.
+  readonly markers: { readonly count: number; readonly spots: Float32Array };
 }
 
 // A React ref by shape, so this module stays free of React.
@@ -45,6 +47,8 @@ export interface HudOverlayParts {
   readonly people: Slot<HTMLSpanElement>;
   readonly shaders: Slot<HTMLSpanElement>;
   readonly activeLights: Slot<HTMLSpanElement>;
+  // One per marker, in the order the showcase was given their tiles.
+  readonly markers: Slot<readonly (HTMLButtonElement | null)[]>;
 }
 
 export interface HudOverlay {
@@ -52,6 +56,8 @@ export interface HudOverlay {
 }
 
 const formatCount = (value: number): string => value.toLocaleString('en-US');
+
+const pixelScale = (): number => globalThis.devicePixelRatio || 1;
 
 const formatMs = (value: number): string => `${value.toFixed(1)} ms`;
 
@@ -100,8 +106,42 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     element.value = time.toFixed(3);
   };
 
+  // In whole device pixels: CSS pixels step 2 at a time on a Retina screen, which reads as a
+  // shake while the camera's damping glides, and anything finer blurs the pixel icons.
+  const placed = new WeakMap<HTMLElement, number>();
+  const placeMarker = (button: HTMLButtonElement, x: number, y: number, scale: number): void => {
+    const packed = x * 65536 + y;
+    if (placed.get(button) === packed) return;
+    placed.set(button, packed);
+    button.style.transform = `translate(${x / scale}px, ${y / scale}px)`;
+  };
+
+  const showMarker = (
+    button: HTMLButtonElement,
+    index: number,
+    { count, spots }: FrameUpdate['markers'],
+    scale: number,
+  ): void => {
+    const visible = index < count && spots[index * 3 + 2] === 1;
+    if (button.hidden === visible) button.hidden = !visible;
+    if (visible) {
+      const x = Math.round(spots[index * 3]! * scale);
+      placeMarker(button, x, Math.round(spots[index * 3 + 1]! * scale), scale);
+    }
+  };
+
+  const writeMarkers = (markers: FrameUpdate['markers']): void => {
+    const buttons = parts.markers.current ?? [];
+    const scale = pixelScale();
+    for (let index = 0; index < buttons.length; index++) {
+      const button = buttons[index];
+      if (button) showMarker(button, index, markers, scale);
+    }
+  };
+
   return {
     update(frame) {
+      writeMarkers(frame.markers);
       if (frame.sampled) writeDebug(frame);
       writeTime(frame.time);
       writeText(parts.clock, frame.clock);

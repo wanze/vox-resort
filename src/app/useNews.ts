@@ -26,6 +26,7 @@ export interface NewsControls {
   closeDay(report: DayReport): void;
   dismiss(key: string): void;
   setMuted(kind: ToastKind, muted: boolean): void;
+  setMarkers(shown: boolean): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;
 }
@@ -94,6 +95,13 @@ export function useNews(speed: SimSpeed): NewsControls {
         return next;
       });
       if (muted) setToasts((shown) => shown.filter((toast) => kindOfToast(toast) !== kind));
+    }, []),
+    setMarkers: useCallback((shown: boolean) => {
+      setPrefs((was) => {
+        const next = { ...was, markers: shown };
+        savePrefs(next);
+        return next;
+      });
     }, []),
     reset: useCallback(() => {
       before.current = null;

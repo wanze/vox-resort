@@ -8,6 +8,7 @@ export interface InspectorControls {
   // Stable, so the mount effect can hold it.
   readonly adopt: (selection: SelectionView | null) => void;
   selectPerson(person: number): void;
+  selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   clear(): void;
 }
 
@@ -20,6 +21,12 @@ export function useInspector(showcase: RefObject<Showcase | null>): InspectorCon
     selectPerson: useCallback(
       (person: number) => {
         showcase.current?.selectPerson(person);
+      },
+      [showcase],
+    ),
+    selectAt: useCallback(
+      (tile: { readonly tileX: number; readonly tileZ: number }) => {
+        showcase.current?.selectAt(tile);
       },
       [showcase],
     ),

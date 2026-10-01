@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { previewUrl } from '../features/catalog/adapters/previews';
 import { createHudOverlay } from '../features/hud/adapters/hudOverlay';
+import { markersOf } from '../features/hud/domain/markers';
 import { Hud } from '../features/hud/components/Hud';
 import { WelcomeScreen } from '../features/welcome/components/WelcomeScreen';
 import type { LoadingStep } from '../features/welcome/domain/loading';
@@ -126,7 +127,13 @@ function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed) {
     resetNews();
     resetHistory();
   }, [resetNews, resetHistory]);
-  return { news, history, replaced, advice: useAdvice(showcase, news.hear) };
+  const advice = useAdvice(showcase, news.hear);
+  const shown = news.prefs.markers;
+  // markersOf on the same list ProblemMarkers renders, so the anchors and the buttons line up.
+  useEffect(() => {
+    showcase.current?.setMarkers(shown ? markersOf(advice.advice).map((marker) => marker.at) : []);
+  }, [showcase, advice.advice, shown]);
+  return { news, history, replaced, advice };
 }
 
 function useHourly() {
@@ -298,6 +305,8 @@ export function App() {
           status={status.status}
           history={history}
           onShowOnPlot={advice.showOnPlot}
+          markerElements={hudNodes.markers}
+          onSelectAt={inspector.selectAt}
           preview={previewUrl}
           tool={tool}
           onToolChange={selectTool}

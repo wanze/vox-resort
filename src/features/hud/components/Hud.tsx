@@ -12,6 +12,7 @@ import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
+import { ProblemMarkers } from './ProblemMarkers';
 import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortStats } from './ResortStats';
 import { StaffPanel } from './StaffPanel';
@@ -54,6 +55,8 @@ export interface HudProps {
   readonly status: StatusView | null;
   readonly history: HistoryControls;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
+  readonly markerElements: RefObject<(HTMLButtonElement | null)[]>;
+  readonly onSelectAt: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
   readonly preview: PreviewLookup;
   readonly tool: BuildTool | null;
@@ -212,6 +215,7 @@ function Windows(props: HudProps) {
       <InspectPanel
         frame={frameOf(windows, 'inspect', props.onClearSelection)}
         selection={props.selection}
+        advice={props.advice}
         activityElement={props.inspectElement}
         onSelectPerson={props.onSelectPerson}
       />
@@ -230,6 +234,13 @@ function Palette(props: HudProps) {
 export function Hud(props: HudProps) {
   return (
     <div className="hud">
+      <ProblemMarkers
+        advice={props.advice}
+        shown={props.news.prefs.markers}
+        elements={props.markerElements}
+        onShowOnPlot={props.onShowOnPlot}
+        onSelectAt={props.onSelectAt}
+      />
       <TopBar
         timeElement={props.timeElement}
         clockElement={props.clockElement}
@@ -245,6 +256,8 @@ export function Hud(props: HudProps) {
         menu={props.menu}
         onMenuChange={props.onMenuChange}
         onFind={() => props.onPaletteChange(true)}
+        markers={props.news.prefs.markers}
+        onMarkersChange={props.news.setMarkers}
       />
       <Windows {...props} />
       <Toasts

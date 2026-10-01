@@ -421,6 +421,8 @@ import type { LoadingStep } from '../features/welcome/domain/loading';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
+import { MAX_MARKERS } from '../features/hud/domain/markers';
+import { Vector3 } from 'three/webgpu';
 import { parseBenchConfig, type BenchConfig } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
 
@@ -611,6 +613,9 @@ export interface Showcase {
   setDetail(enabled: boolean): void;
   turnCamera(quarters: number): void;
   lookAtTile(tile: { readonly tileX: number; readonly tileZ: number }): void;
+  // Where the problem markers stand, in the order the HUD draws them; at most MAX_MARKERS.
+  setMarkers(tiles: readonly { readonly tileX: number; readonly tileZ: number }[]): void;
+  selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
   selectTool(tool: BuildTool | null): void;
@@ -2974,6 +2979,67 @@ function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void {
   handle.controls.update();
 }
 
+// Over the roof of the venue on the tile, or over the ground where it is litter. Resolved once per
+// advice refresh, not per frame.
+function markerAnchorOf(
+  resort: Resort,
+  tile: { readonly tileX: number; readonly tileZ: number },
+): { readonly x: number; readonly y: number; readonly z: number } {
+  const key = resort.occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });
+  const venue = key === undefined ? undefined : resort.venues.find((each) => each.key === key);
+  const ground = (place: { readonly tileX: number; readonly tileZ: number }): number =>
+    levelHeight(resort.terrain.levelOf(place.tileX, place.tileZ));
+  if (!venue) {
+    return {
+      x: (tile.tileX + 0.5) * TILE_VOXELS,
+      y: ground(tile) + LITTER_MARKER_LIFT,
+      z: (tile.tileZ + 0.5) * TILE_VOXELS,
+    };
+  }
+  return {
+    x: (venue.tileX + venue.tilesX / 2) * TILE_VOXELS,
+    y: ground(venue) + objectTypeById(venue.id).model.height + ROOF_MARKER_GAP,
+    z: (venue.tileZ + venue.tilesZ / 2) * TILE_VOXELS,
+  };
+}
+
+const ROOF_MARKER_GAP = 2;
+const LITTER_MARKER_LIFT = 8;
+
+const projected = new Vector3();
+
+// z beyond 1 is behind the camera, or past its far plane.
+const inViewport = (point: Vector3): boolean =>
+  point.z <= 1 && Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1;
+
+// Preallocated, and the same view handed to every frame: the overlay reads it in place.
+function createMarkerSpots() {
+  const anchors = new Float32Array(MAX_MARKERS * 3);
+  const view = { count: 0, spots: new Float32Array(MAX_MARKERS * 3) };
+  return {
+    view: view as FrameUpdate['markers'],
+    place(points: readonly { readonly x: number; readonly y: number; readonly z: number }[]): void {
+      view.count = Math.min(points.length, MAX_MARKERS);
+      for (let index = 0; index < view.count; index++) {
+        const point = points[index]!;
+        anchors[index * 3] = point.x;
+        anchors[index * 3 + 1] = point.y;
+        anchors[index * 3 + 2] = point.z;
+      }
+    },
+    // In CSS pixels, which is what the overlay positions its buttons in.
+    project(camera: SceneHandle['camera'], width: number, height: number): void {
+      for (let index = 0; index < view.count; index++) {
+        const at = index * 3;
+        projected.set(anchors[at]!, anchors[at + 1]!, anchors[at + 2]!).project(camera);
+        view.spots[at] = ((projected.x + 1) / 2) * width;
+        view.spots[at + 1] = ((1 - projected.y) / 2) * height;
+        view.spots[at + 2] = Number(inViewport(projected));
+      }
+    },
+  };
+}
+
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
   const { canvas, onFrame, onSceneChange } = options;
   const mountStarted = performance.now();
@@ -3129,15 +3195,20 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
   });
 
+  const viewSize = { width: 0, height: 0 };
   const resize = (): void => {
-    handle.resize(
-      canvas.clientWidth || globalThis.innerWidth,
-      canvas.clientHeight || globalThis.innerHeight,
-    );
+    viewSize.width = canvas.clientWidth || globalThis.innerWidth;
+    viewSize.height = canvas.clientHeight || globalThis.innerHeight;
+    handle.resize(viewSize.width, viewSize.height);
     // The rain is sized in pixels, so a resize changes it.
     buffer = handle.drawingBufferSize();
   };
   globalThis.addEventListener('resize', resize);
+  // Measured here rather than per frame: reading the canvas's size forces a layout.
+  viewSize.width = canvas.clientWidth || globalThis.innerWidth;
+  viewSize.height = canvas.clientHeight || globalThis.innerHeight;
+
+  const markerSpots = createMarkerSpots();
 
   const statsNow = createStatsReader({
     handle,
@@ -3621,6 +3692,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;
 
+    markerSpots.project(handle.camera, viewSize.width, viewSize.height);
     const { world, crowd } = current();
     onFrame({
       sampled: sample.updated,
@@ -3640,6 +3712,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       people: { drawn: crowd.drawnCount, total: crowd.count },
       shaderBuilds: handle.shaderBuilds(),
       inspect: inspectLine(),
+      markers: markerSpots.view,
     });
 
     recorder?.record(elapsed * 1000);
@@ -3701,6 +3774,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     turnCamera: (quarters) => setIsoDirection(turnDirection(handle.isoDirection, quarters)),
     lookAtTile,
+    // Off under a bench, as overlays are: every recorded figure has them off.
+    setMarkers(tiles) {
+      if (bench) return;
+      const resort = current();
+      markerSpots.place(tiles.slice(0, MAX_MARKERS).map((tile) => markerAnchorOf(resort, tile)));
+    },
+    selectAt(tile) {
+      const key = current().occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });
+      if (key !== undefined) select({ key });
+    },
     generate(next) {
       const asked = clampParams(next);
       // A generated plot is given, not bought, so it is always sandbox.

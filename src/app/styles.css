@@ -1391,6 +1391,60 @@ input[type='checkbox'] {
   color: var(--foliage);
 }
 
+/* Under the toasts and every window; the render loop moves each marker with a transform. */
+.hud-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: hidden;
+}
+
+/* The negative margins put the tip of the tail, not the corner, on the anchor. */
+.hud-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -39px 0 0 -16px;
+  padding: 0;
+  border: 2px solid var(--ochre);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  cursor: pointer;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.hud-marker[hidden] {
+  display: none;
+}
+
+.hud-marker::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-top-color: var(--marker-edge, var(--ochre));
+  border-bottom: 0;
+}
+
+.hud-marker[data-severity='urgent'] {
+  --marker-edge: var(--lamp-off);
+  border-color: var(--lamp-off);
+}
+
+.hud-marker:hover,
+.hud-marker:focus-visible {
+  z-index: 1;
+  filter: brightness(1.08);
+}
+
 /* Over the canvas and under every window, which starts at z-index 10. */
 .hud-toasts {
   position: absolute;
@@ -1586,6 +1640,40 @@ input[type='checkbox'] {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.hud-inspect-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-inspect-problem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-left: 3px solid var(--ochre);
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  white-space: normal;
+}
+
+.hud-inspect-problem[data-severity='urgent'] {
+  border-left-color: var(--lamp-off);
+}
+
+.hud-inspect-problem[data-severity='note'] {
+  border-left-color: var(--edge-soft);
+}
+
+.hud-inspect-problem-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
 }
 
 .hud-inspect-activity {

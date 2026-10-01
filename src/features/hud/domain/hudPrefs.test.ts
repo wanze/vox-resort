@@ -9,11 +9,18 @@ describe('parsePrefs', () => {
   });
 
   it('reads back what was stored', () => {
-    const prefs = { muted: ['warning' as const] };
+    const prefs = { muted: ['warning' as const], markers: false };
     expect(parsePrefs(JSON.parse(JSON.stringify(prefs)))).toEqual(prefs);
   });
 
   it('drops a severity it does not know', () => {
-    expect(parsePrefs({ muted: ['urgent', 'gossip', 7, 'urgent'] })).toEqual({ muted: ['urgent'] });
+    expect(parsePrefs({ muted: ['urgent', 'gossip', 7, 'urgent'] }).muted).toEqual(['urgent']);
+  });
+
+  it('shows the markers unless they were turned off', () => {
+    for (const garbage of [undefined, 'false', 0, null]) {
+      expect(parsePrefs({ muted: [], markers: garbage }).markers).toBe(true);
+    }
+    expect(parsePrefs({ muted: [], markers: false }).markers).toBe(false);
   });
 });

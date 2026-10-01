@@ -339,6 +339,7 @@ import {
   type Casting,
 } from '../features/choreography/domain/casting';
 import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
+import { advanceActs, perform } from '../features/choreography/domain/acts';
 import {
   bedCount,
   checkOutParty,
@@ -1377,6 +1378,7 @@ function buildResort(
       queuePlace: (person) => router.queuePlaceOf(person),
       isAsleep: (person) => router.isAsleep(person),
       isPresent: (person) => guests.present[person] === 1,
+      isChild: (person) => guests.child[person] === 1,
     },
     drawnAt: {
       x: new Float32Array(population),
@@ -2927,6 +2929,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let gpuMs: number | null = null;
   let running = true;
   let lastTimeMs: number | null = null;
+  // Kept across rebuilds, though a new cast starts everybody on a fresh leg anyway.
+  let actSeconds = 0;
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   let drift = driftFor(options, bench, handle);
@@ -3435,8 +3439,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // crowdScaleFor is 1 while paused.
     const walked = crowdStep(bench !== null, drift !== null || clock.speed !== 'paused', elapsed);
     keepSeats(current().cast, current().casting, current().crowd.crowd.seatBy);
-    current().crowd.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
-    current().staff.advance(walked, bench ? 1 : crowdScaleFor(clock.speed));
+    const crowdScale = bench ? 1 : crowdScaleFor(clock.speed);
+    // Before the crowd writes its instances, which draw the cast where perform left it.
+    actSeconds = advanceActs(actSeconds, walked, crowdScale);
+    perform(current().cast, actSeconds);
+    current().crowd.advance(walked, crowdScale);
+    current().staff.advance(walked, crowdScale);
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
     drawnLitter = drawLitter(current(), drawnLitter);
     current().sea.advance(bench ? MAX_STEP : elapsed);

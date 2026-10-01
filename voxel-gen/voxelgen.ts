@@ -100,6 +100,45 @@ export interface ModelSpot {
 
 // x/z is the doorway's middle so a turn cannot push it over a tile boundary.
 // facing is the walk-out direction, declared because a corner door is ambiguous.
+export type AreaKind = 'swim' | 'wade';
+
+// Water visitors move about in. x/z/w/d are the wet cells, inside the coping.
+export interface ModelArea {
+  readonly kind: AreaKind;
+  readonly x: number;
+  readonly z: number;
+  readonly w: number;
+  readonly d: number;
+  // The ellipse inscribed in the rectangle, as poolWater's round basin is.
+  readonly round?: true;
+  // The water's top face, in model voxels.
+  readonly surface: number;
+  // How many visitors it holds; each is a place in declaration order.
+  readonly places: number;
+  readonly for?: 'child';
+  // Laps run the long way; left out, swimmers wander.
+  readonly laps?: boolean;
+}
+
+export type LoopPose = 'walk' | 'climb' | 'slide' | 'swim';
+
+// A swim point's y is the water's top face, as an area's surface is; a slide point's is the
+// hips', as a seat's; any other the layer the feet stand in.
+export interface ModelLoopPoint {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  // How the rider moves on to the next point; the last one leads back to the first.
+  readonly pose: LoopPose;
+}
+
+export interface ModelLoop {
+  readonly points: readonly ModelLoopPoint[];
+  readonly places: number;
+}
+
+export type PlaceGroup = 'spots' | 'seats' | 'areas' | 'loops';
+
 export interface ModelDoor {
   readonly x: number;
   readonly z: number;
@@ -145,8 +184,12 @@ export interface ModelVenue {
   readonly bathing?: boolean;
   // Visits between breakdowns, on average; absent, it never breaks.
   readonly reliability?: number;
-  // In declaration order, the order visitors fill them in; seats are filled first.
+  // In declaration order, the order visitors fill them in.
   readonly spots?: readonly ModelSpot[];
+  readonly areas?: readonly ModelArea[];
+  readonly loops?: readonly ModelLoop[];
+  // Which kind of place visitors fill first; left out, spots, seats, areas, loops.
+  readonly order?: readonly PlaceGroup[];
 }
 
 export interface ModelDepot {
@@ -257,15 +300,27 @@ function seatFrom(
 // Moved with the voxels as the seats are, or a model painted off the origin draws its visitors
 // off its floor.
 function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number): ModelVenue {
-  if (!venue.spots) return venue;
+  const moved = <T extends { readonly x: number; readonly z: number }>(at: T): T => ({
+    ...at,
+    x: at.x - minX,
+    z: at.z - minZ,
+  });
   return {
     ...venue,
-    spots: venue.spots.map((spot) => ({
-      ...spot,
-      x: spot.x - minX,
-      y: spot.y - minY,
-      z: spot.z - minZ,
-    })),
+    ...(venue.spots
+      ? { spots: venue.spots.map((spot) => ({ ...moved(spot), y: spot.y - minY })) }
+      : {}),
+    ...(venue.areas
+      ? { areas: venue.areas.map((area) => ({ ...moved(area), surface: area.surface - minY })) }
+      : {}),
+    ...(venue.loops
+      ? {
+          loops: venue.loops.map((loop) => ({
+            ...loop,
+            points: loop.points.map((point) => ({ ...moved(point), y: point.y - minY })),
+          })),
+        }
+      : {}),
   };
 }
 

@@ -252,8 +252,15 @@ footprint. The **cast** (`casting.ts`) draws them somewhere better. This is
 an edit simply recasts.
 
 - **Visitors** fill a venue's visitor spots in declaration order, then its
-  seats (those without `watches` or `post`). A party admitted together takes
-  places side by side. The first two tennis places are the singles players.
+  seats (those without `watches` or `post`), then its areas and loops. A
+  venue's `order` changes which kind comes first: the pools list
+  `['areas', 'loops', 'spots', 'seats']`, so the loungers fill last. A party
+  admitted together takes places side by side. The first two tennis places
+  are the singles players.
+- **Children's places**: an area marked `for: 'child'` (the paddling pool, the
+  spa of the second pool) takes children first. A child takes the first free
+  child's place, else any free place; an adult takes the first free place not
+  marked for children, else one that is.
 - **Watchers**: at the tennis, basketball and volleyball courts, the line is
   drawn on the spectator seats (`watches`) and watcher spots, by queue rank,
   instead of on the path. The simulated queue itself is unchanged. With no
@@ -270,6 +277,28 @@ an edit simply recasts.
   is drawn on, `keepSeats` moves the visitor to another place in the same frame.
 - The cast is recast once after a frame's ticks. It is rebuilt with the
   network on every edit, because places point at network seats by index.
+- **Areas and loops**: a venue can declare `areas` (water visitors move about
+  in, each holding `places` visitors) and `loops` (a polyline its riders go
+  round). A visitor on one is **acting**: `perform` (`acts.ts`) draws them
+  every frame, after `keepSeats`. In a `swim` area they swim from one hashed
+  point to the next and tread water for 1 to 4 s between legs; with `laps`
+  they swim the long way in a lane of their own and turn at each end; in a
+  `wade` area children walk, wade and hop. A loop rider goes round at a speed
+  set by each leg's pose: slowly up a ladder (`climb`, drawn jogging), fast
+  down a slide (`slide`, drawn sitting), swimming and walking. Riders are
+  spread over the loop's time, so they keep their spacing on every leg. The
+  mix at a pool is its declaration order, so tuning it is art.
+- **The acts clock** is the choreography's own, advanced every frame by
+  exactly the crowd's scaled step (`advanceActs`), so acts pause, hurry and
+  replay under the bench with the crowd. Where somebody is is a pure function
+  of the act, the place, the person and the time: leg targets are hashed with
+  `mix`, never drawn from a seeded stream. The cast caches only the current
+  leg, so a frame does not replay every leg since the cast.
+- **None of this is saved.** Like the rest of the cast it is visual only: the
+  simulation never reads where a swimmer is, and a seeded draw here would
+  move every replay. After a load or a rebuild everybody starts a fresh leg.
+  When a visit ends the place is released and the swimmer pops back to where
+  the crowd has them.
 
 ## Beach buildings
 

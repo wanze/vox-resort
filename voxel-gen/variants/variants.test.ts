@@ -36,8 +36,15 @@ function placesOf(model: VoxelModel) {
     spots.filter((spot) => (spot.for ?? 'visitor') === kind).length;
   const seats = model.seats.filter((seat) => !seat.post);
   const watching = seats.filter((seat) => seat.watches).length;
+  const moving = [...(model.venue?.areas ?? []), ...(model.venue?.loops ?? [])].reduce(
+    (sum, { places }) => sum + places,
+    0,
+  );
   return {
-    visitor: Math.min(model.venue?.capacity ?? 0, seats.length - watching + spotsFor('visitor')),
+    visitor: Math.min(
+      model.venue?.capacity ?? 0,
+      seats.length - watching + spotsFor('visitor') + moving,
+    ),
     // The sim shows no longer a line than this.
     watcher: Math.min(12, watching + spotsFor('watcher')),
     animator: spotsFor('animator'),

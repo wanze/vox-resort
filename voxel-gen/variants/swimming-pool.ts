@@ -19,14 +19,17 @@ const HUT = { x: 102, z: 3, w: 20, d: 11 } as const;
 
 // The raised spa holds the only single layer of water, so it stands in for a paddling pool.
 const SPA_WATER = TOP_LAYER + 2;
-const WADERS = [
-  { dx: -6, dz: 0, facing: 1 },
-  { dx: -3, dz: -5, facing: 0 },
-  { dx: 3, dz: -5, facing: 0 },
-  { dx: 6, dz: 0, facing: 3 },
-  { dx: 3, dz: 5, facing: 2 },
-  { dx: -3, dz: 5, facing: 2 },
-] as const;
+
+// The deck's layer, the lagoon's top face: the basin floods up to one below it.
+const SURFACE = TOP_LAYER - 1;
+
+// Rectangles of open water either side of the island, inside the coping. The west end is
+// wandered; the long reaches north and south of the island are swum in laps.
+const NORTH_REACH = { x: 20, z: LAGOON.z + 2, w: 58, d: 10 } as const;
+const SOUTH_REACH = { x: 20, z: LAGOON.z + LAGOON.d - 12, w: 58, d: 10 } as const;
+const WEST_END = { x: 11, z: 38, w: 31, d: 18 } as const;
+// Inside the spa's stone ring, which takes its outermost voxel.
+const SPA_POOL = { x: SPA.x - SPA.r + 1, z: SPA.z - SPA.r + 1, w: 2 * SPA.r - 2, d: 2 * SPA.r - 2 };
 
 const CHAIR = { x: 56, z: 69, seat: TOP_LAYER + 7 } as const;
 
@@ -96,13 +99,14 @@ export default defineModel({
     capacity: 30,
     dwellSeconds: { min: 1800, max: 5400 },
     reliability: 120,
+    order: ['areas', 'spots', 'seats'],
+    areas: [
+      { kind: 'swim', ...NORTH_REACH, surface: SURFACE, places: 4, laps: true },
+      { kind: 'wade', ...SPA_POOL, round: true, surface: SPA_WATER + 1, places: 6, for: 'child' },
+      { kind: 'swim', ...SOUTH_REACH, surface: SURFACE, places: 4, laps: true },
+      { kind: 'swim', ...WEST_END, surface: SURFACE, places: 4 },
+    ],
     spots: [
-      ...WADERS.map(({ dx, dz, facing }) => ({
-        x: SPA.x + dx,
-        y: SPA_WATER,
-        z: SPA.z + dz,
-        facing,
-      })),
       {
         x: CHAIR.x + 1,
         y: CHAIR.seat + 1,

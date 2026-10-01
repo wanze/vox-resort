@@ -14,7 +14,8 @@ import {
   type Rotation,
 } from '../../layout/domain/rotation';
 import { venuesOn } from '../../sim/domain/venues';
-import { placesFor } from './places';
+import { createCast, recast, type Casting } from './casting';
+import { placesFor, type AreaPlace, type LoopPlace, type Place } from './places';
 
 const placed = (id: string, rotation: Rotation = 0, tileX = 2, tileZ = 3): Placement => {
   const { model } = objectTypeById(id);
@@ -120,5 +121,83 @@ describe('placesFor', () => {
       animators: [],
       lifeguards: [],
     });
+  });
+});
+
+const isArea = (place: Place): place is AreaPlace =>
+  place.act === 'swim' || place.act === 'laps' || place.act === 'wade';
+const isLoop = (place: Place): place is LoopPlace => place.act === 'loop';
+
+describe('placesFor at the pool', () => {
+  it('turns the areas and the loops with the venue', () => {
+    const { model } = objectTypeById('swimming-pool');
+    const placement = placed('swimming-pool', 1);
+    const { visitors } = placesOf(placement);
+    const areas = [...new Set(visitors.filter(isArea).map((place) => place.area))];
+    expect(areas).toHaveLength(model.venue!.areas!.length);
+    for (const [index, declared] of model.venue!.areas!.entries()) {
+      const a = rotatePoint(declared, model.width, model.depth, 1);
+      const b = rotatePoint(
+        { x: declared.x + declared.w, z: declared.z + declared.d },
+        model.width,
+        model.depth,
+        1,
+      );
+      expect(areas[index]).toMatchObject({
+        minX: placement.x + Math.min(a.x, b.x),
+        maxX: placement.x + Math.max(a.x, b.x),
+        minZ: placement.z + Math.min(a.z, b.z),
+        maxZ: placement.z + Math.max(a.z, b.z),
+        surface: declared.surface,
+      });
+    }
+    const loop = visitors.find(isLoop)!.loop;
+    for (const [index, point] of model.venue!.loops![0]!.points.entries()) {
+      const at = rotatePoint({ x: point.x + 0.5, z: point.z + 0.5 }, model.width, model.depth, 1);
+      expect(loop.stops[index]).toMatchObject({ x: placement.x + at.x, z: placement.z + at.z });
+    }
+  });
+
+  it('fills the water first and the loungers last, as the order says', () => {
+    const { model } = objectTypeById('swimming-pool');
+    const { visitors } = placesOf(placed('swimming-pool'));
+    const inWater = model.venue!.areas!.reduce((sum, area) => sum + area.places, 0);
+    const riding = model.venue!.loops!.reduce((sum, loop) => sum + loop.places, 0);
+    expect(visitors.slice(0, inWater).every(isArea)).toBe(true);
+    expect(visitors.slice(inWater, inWater + riding).every(isLoop)).toBe(true);
+    const rest = visitors.slice(inWater + riding);
+    expect(rest).toHaveLength(model.seats.length);
+    for (const place of rest) expect(place.pose).toBe(RESTING.lying);
+  });
+});
+
+const castOf = (children: ReadonlySet<number>, count: number): Casting => ({
+  count,
+  venueOf: () => 0,
+  isWaiting: () => false,
+  queuePlace: () => -1,
+  isAsleep: () => false,
+  isPresent: () => true,
+  isChild: (person) => children.has(person),
+});
+
+describe('casting at the pool', () => {
+  const pool = placesOf(placed('swimming-pool'));
+
+  it('sends a child to the paddling pool before a lap lane', () => {
+    const cast = createCast(2, [pool]);
+    recast(cast, castOf(new Set([1]), 2), new Int32Array(0));
+    expect(cast.places[cast.placeOf[0]!]!.act).toBe('laps');
+    expect(cast.places[cast.placeOf[1]!]!).toMatchObject({ act: 'wade', forChild: true });
+  });
+
+  it('sends an adult to the paddling pool only when nothing else is free', () => {
+    const others = pool.visitors.filter((place) => !place.forChild).length;
+    const cast = createCast(others + 1, [pool]);
+    recast(cast, castOf(new Set(), others + 1), new Int32Array(0));
+    for (let person = 0; person < others; person++) {
+      expect(cast.places[cast.placeOf[person]!]!.forChild, `adult ${person}`).toBeUndefined();
+    }
+    expect(cast.places[cast.placeOf[others]!]!.forChild).toBe(true);
   });
 });

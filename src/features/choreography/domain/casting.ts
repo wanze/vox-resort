@@ -1,4 +1,5 @@
 import type { StaffRole } from '../../sim/domain/staff';
+import { isMoving } from './acts';
 import type { Place, VenuePlaces } from './places';
 
 export const SHOWN = { asCrowd: 0, placed: 1, hidden: 2 } as const;
@@ -38,6 +39,18 @@ export interface Cast extends DrawnAs {
   readonly venues: readonly VenueRanges[];
   // The flat indices of the places on a network seat, the only ones a passer-by can take.
   readonly onSeats: Int32Array;
+  // The flat indices of the area and loop places: the only people perform draws.
+  readonly moving: Int32Array;
+  // The leg an act has somebody on, cached so a frame does not replay every leg since the cast.
+  readonly fromX: Float32Array;
+  readonly fromZ: Float32Array;
+  readonly toX: Float32Array;
+  readonly toZ: Float32Array;
+  // The clock grows all day, past where a float32 still resolves a frame.
+  readonly legStart: Float64Array;
+  readonly legSeconds: Float64Array;
+  // -1 until perform starts the first leg.
+  readonly legNo: Int32Array;
 }
 
 export interface Casting {
@@ -47,6 +60,8 @@ export interface Casting {
   queuePlace(person: number): number;
   isAsleep(person: number): boolean;
   isPresent(person: number): boolean;
+  // Left out, everybody is an adult.
+  isChild?(person: number): boolean;
 }
 
 const NOWHERE = -1;
@@ -66,7 +81,11 @@ export function createCast(capacity: number, places: readonly VenuePlaces[]): Ca
     lifeguards: take(venue.lifeguards),
   }));
   const onSeats: number[] = [];
-  for (const [index, place] of flat.entries()) if (place.seat >= 0) onSeats.push(index);
+  const moving: number[] = [];
+  for (const [index, place] of flat.entries()) {
+    if (place.seat >= 0) onSeats.push(index);
+    if (isMoving(place)) moving.push(index);
+  }
   return {
     shown: new Uint8Array(capacity),
     x: new Float32Array(capacity),
@@ -81,6 +100,14 @@ export function createCast(capacity: number, places: readonly VenuePlaces[]): Ca
     heldBy: new Int32Array(flat.length).fill(-1),
     venues,
     onSeats: Int32Array.from(onSeats),
+    moving: Int32Array.from(moving),
+    fromX: new Float32Array(capacity),
+    fromZ: new Float32Array(capacity),
+    toX: new Float32Array(capacity),
+    toZ: new Float32Array(capacity),
+    legStart: new Float64Array(capacity),
+    legSeconds: new Float64Array(capacity),
+    legNo: new Int32Array(capacity).fill(-1),
   };
 }
 
@@ -101,6 +128,7 @@ function hold(cast: Cast, person: number, index: number): void {
   cast.z[person] = place.z;
   cast.heading[person] = place.heading;
   cast.pose[person] = place.pose;
+  cast.legNo[person] = -1;
 }
 
 function isFree(cast: Cast, index: number, seatBy: Int32Array | null): boolean {
@@ -121,6 +149,17 @@ function freePlace(cast: Cast, range: Range, rank: number, seatBy: Int32Array | 
   return -1;
 }
 
+// The children's places to a child first, and to an adult last.
+function freeFor(cast: Cast, range: Range, child: boolean, seatBy: Int32Array): number {
+  let fallback = -1;
+  for (let index = range.start; index < range.start + range.count; index++) {
+    if (!isFree(cast, index, seatBy)) continue;
+    if ((cast.places[index]!.forChild === true) === child) return index;
+    if (fallback < 0) fallback = index;
+  }
+  return fallback;
+}
+
 function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Array): void {
   const venue = cast.lastVenue[person]!;
   if (venue === ASLEEP) {
@@ -134,8 +173,9 @@ function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Arra
   }
   if (cast.placeOf[person]! >= 0) return;
   const waiting = cast.lastWaiting[person] === 1;
-  const range = waiting ? ranges.watchers : ranges.visitors;
-  const place = freePlace(cast, range, waiting ? casting.queuePlace(person) : 0, seatBy);
+  const place = waiting
+    ? freePlace(cast, ranges.watchers, casting.queuePlace(person), seatBy)
+    : freeFor(cast, ranges.visitors, casting.isChild?.(person) === true, seatBy);
   if (place >= 0) hold(cast, person, place);
   // Waiting with no bench is left to the lane; inside with no place is out of sight indoors.
   else cast.shown[person] = waiting ? SHOWN.asCrowd : SHOWN.hidden;

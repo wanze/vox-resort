@@ -4,7 +4,13 @@ import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
-import { buildModel, type VoxelModel, type VoxelModelSource } from './voxelgen.ts';
+import {
+  buildModel,
+  TILE_VOXELS,
+  type ModelArea,
+  type VoxelModel,
+  type VoxelModelSource,
+} from './voxelgen.ts';
 
 const SOURCES: readonly VoxelModelSource[] = [
   ...MODEL_SOURCES,
@@ -167,11 +173,24 @@ const familyOf = (id: string): string => originalOf.get(id) ?? id;
 
 const visitorPlaces = (model: VoxelModel): number =>
   model.seats.filter((seat) => !seat.watches && !seat.post).length +
-  (model.venue?.spots ?? []).filter((spot) => (spot.for ?? 'visitor') === 'visitor').length;
+  (model.venue?.spots ?? []).filter((spot) => (spot.for ?? 'visitor') === 'visitor').length +
+  (model.venue?.areas ?? []).reduce((sum, area) => sum + area.places, 0) +
+  (model.venue?.loops ?? []).reduce((sum, loop) => sum + loop.places, 0);
 
 const watcherPlaces = (model: VoxelModel): number =>
   model.seats.filter((seat) => seat.watches).length +
   (model.venue?.spots ?? []).filter((spot) => spot.for === 'watcher').length;
+
+// By voxel centre against the true centre, as poolWater draws a round basin.
+function* cellsOf(area: ModelArea): Generator<readonly [number, number]> {
+  for (let x = area.x; x < area.x + area.w; x++) {
+    for (let z = area.z; z < area.z + area.d; z++) {
+      const u = (x + 0.5 - area.x - area.w / 2) / (area.w / 2);
+      const v = (z + 0.5 - area.z - area.d / 2) / (area.d / 2);
+      if (!area.round || u * u + v * v <= 1) yield [x, z];
+    }
+  }
+}
 
 describe('the places a venue draws its visitors in', () => {
   const models = venues.map(buildModel);
@@ -185,6 +204,45 @@ describe('the places a venue draws its visitors in', () => {
         expect(spot.z, at).toBeGreaterThanOrEqual(0);
         expect(spot.z, at).toBeLessThan(model.depth);
         expect(spot.y, at).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('keeps every area in water, and every loop on its model', () => {
+    for (const model of models) {
+      const water = new Set(model.water);
+      const painted = new Map(model.voxels.map((v) => [`${v.x},${v.y},${v.z}`, v.color]));
+      for (const area of model.venue!.areas ?? []) {
+        expect(area.places, `${model.id} has an area for nobody`).toBeGreaterThan(0);
+        for (const [x, z] of cellsOf(area)) {
+          const color = painted.get(`${x},${area.surface - 1},${z}`);
+          expect(color !== undefined && water.has(color), `${model.id} is dry at ${x},${z}`).toBe(
+            true,
+          );
+        }
+      }
+      for (const loop of model.venue!.loops ?? []) {
+        expect(loop.points.length, `${model.id} has a loop of one point`).toBeGreaterThan(1);
+        for (const point of loop.points) {
+          const at = `${model.id} at ${point.x},${point.y},${point.z}`;
+          expect(point.x, at).toBeGreaterThanOrEqual(0);
+          expect(point.x, at).toBeLessThan(model.width);
+          expect(point.z, at).toBeGreaterThanOrEqual(0);
+          expect(point.z, at).toBeLessThan(model.depth);
+        }
+      }
+    }
+  });
+
+  // A leg crossing a wall would go unseen in a test; a short one cannot cross much.
+  it('keeps the points of a loop within a tile of each other', () => {
+    for (const model of models) {
+      for (const loop of model.venue!.loops ?? []) {
+        for (const [index, point] of loop.points.entries()) {
+          const next = loop.points[(index + 1) % loop.points.length]!;
+          const length = Math.hypot(next.x - point.x, next.y - point.y, next.z - point.z);
+          expect(length, `${model.id} leaps from point ${index}`).toBeLessThanOrEqual(TILE_VOXELS);
+        }
       }
     }
   });

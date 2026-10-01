@@ -5,7 +5,12 @@ import { flowerBox, parasol, pottedPlant } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
 import { balustrade } from '../parts/veranda.ts';
 import { shutteredWindow, stuccoWall, WINDOW_GLASS } from '../parts/wall.ts';
-import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
+import {
+  defineModel,
+  type ModelLoop,
+  type ModelLoopPoint,
+  type VoxelBuilder,
+} from '../voxelgen.ts';
 
 const X = 95;
 const Z = 95;
@@ -62,6 +67,120 @@ const PARASOLS = [
 
 const FLOOD = 0x7fd8ee;
 
+// Where each section's roof is walked, and where its flight of steps lands.
+const platformOf = (storeys: number): number => TOP + storeys * 12 + 1;
+
+// The loops ride the same curve the flumes are built on.
+const flumeFloor = (from: number, z: number): number => {
+  const t = (z - TOWER_FRONT) / (CHUTE_END - TOWER_FRONT);
+  return Math.round(from - (from - TOP) * (2 * t - t * t));
+};
+
+// The first free layer over the bed: where the flume drops, its bed is filled up to one under
+// the step before.
+const flumeSeat = (from: number, z: number): number =>
+  Math.max(flumeFloor(from, z) + 1, z > TOWER_FRONT ? flumeFloor(from, z - 1) : from);
+
+// Inside the coping and south of where the flumes come down, so nobody swims under one.
+const SWIM = {
+  x: BASIN.x + 2,
+  z: CHUTE_END + 2,
+  w: BASIN.w - 4,
+  d: BASIN.z + BASIN.d - CHUTE_END - 4,
+} as const;
+
+// The middle of the stair and of the flights' treads, a column clear of their rails.
+const STAIR_MIDDLE = STAIR.x + 2;
+const FLIGHT_Z = TOWER_Z + 2;
+const TREADS = [0, 6, 12, 18, 24, 30, 37] as const;
+const FLUME_STEPS = [0, 5, 10, 15, 20, 25, 30, 35, 40] as const;
+// Out over the east coping, where no lounger stands, and round to the foot of the stair.
+const EAST_EXIT = { swim: BASIN.x + BASIN.w - 3, deck: BASIN.x + BASIN.w + 1, z: 72 } as const;
+const STAIR_FOOT = STAIR.head + (STAIR.top - TOP) * 2 + 2;
+
+type Point = ModelLoopPoint;
+
+function upTheStair(): Point[] {
+  const rise = STAIR.top - TOP;
+  return TREADS.map((tread) => ({
+    x: STAIR_MIDDLE,
+    y: TOP + tread + 1,
+    z: STAIR.head + (rise - tread) * 2 + 1,
+    pose: 'walk',
+  }));
+}
+
+// From the gangway down the flights to the section's own roof, then to the mouth of its flume.
+function acrossTheRoofs(section: number): Point[] {
+  const top = SECTIONS[SECTIONS.length - 1]!;
+  const points: Point[] = [
+    { x: top.x + SECTION_W - 1, y: platformOf(top.storeys) + 1, z: FLIGHT_Z, pose: 'walk' },
+  ];
+  for (let step = SECTIONS.length - 2; step >= section; step--) {
+    const lower = SECTIONS[step]!;
+    const upper = SECTIONS[step + 1]!;
+    const low = platformOf(lower.storeys) + 1;
+    const high = platformOf(upper.storeys) + 1;
+    const foot = lower.x + FLIGHT_LANDING;
+    points.push(
+      { x: upper.x - 1, y: high, z: FLIGHT_Z, pose: 'walk' },
+      { x: (foot + upper.x - 1) / 2, y: (low + high) / 2, z: FLIGHT_Z, pose: 'walk' },
+      { x: foot, y: low, z: FLIGHT_Z, pose: 'walk' },
+    );
+  }
+  const { x, storeys } = SECTIONS[section]!;
+  const feet = platformOf(storeys) + 1;
+  const flume = x + CHUTE_INSET + CHUTE_W / 2;
+  const aside = section === SECTIONS.length - 1 ? x + SECTION_W - 2 : x + 2;
+  points.push(
+    { x: aside, y: feet, z: FLIGHT_Z, pose: 'walk' },
+    { x: aside, y: feet, z: TOWER_FRONT - 3, pose: 'walk' },
+    { x: flume, y: feet, z: TOWER_FRONT - 2, pose: 'slide' },
+  );
+  return points;
+}
+
+function downTheFlume(section: number): Point[] {
+  const { x, storeys } = SECTIONS[section]!;
+  const flume = x + CHUTE_INSET + CHUTE_W / 2;
+  return FLUME_STEPS.map((step) => ({
+    x: flume,
+    y: flumeSeat(platformOf(storeys), TOWER_FRONT + step),
+    z: TOWER_FRONT + step,
+    pose: 'slide',
+  }));
+}
+
+function backToTheStair(section: number): Point[] {
+  const { x } = SECTIONS[section]!;
+  const flume = x + CHUTE_INSET + CHUTE_W / 2;
+  const legs = Math.ceil((EAST_EXIT.swim - flume) / 15);
+  const swim: Point[] = Array.from({ length: legs }, (_, leg) => ({
+    x: Math.round(flume + ((EAST_EXIT.swim - flume) * leg) / legs),
+    y: DECK,
+    z: Math.round(CHUTE_END + 2 + ((EAST_EXIT.z - CHUTE_END - 2) * leg) / legs),
+    pose: 'swim',
+  }));
+  return [
+    ...swim,
+    { x: EAST_EXIT.swim, y: DECK, z: EAST_EXIT.z, pose: 'climb' },
+    { x: EAST_EXIT.swim + 1, y: TOP + 1, z: EAST_EXIT.z, pose: 'walk' },
+    { x: EAST_EXIT.deck, y: TOP, z: EAST_EXIT.z, pose: 'walk' },
+    { x: EAST_EXIT.deck + 1, y: TOP, z: STAIR_FOOT, pose: 'walk' },
+    { x: STAIR_MIDDLE, y: TOP, z: STAIR_FOOT + 1, pose: 'walk' },
+  ];
+}
+
+const rideFor = (section: number): ModelLoop => ({
+  places: 3,
+  points: [
+    ...upTheStair(),
+    ...acrossTheRoofs(section),
+    ...downTheFlume(section),
+    ...backToTheStair(section),
+  ],
+});
+
 export default defineModel({
   id: 'waterpark',
   label: 'Waterpark',
@@ -92,6 +211,9 @@ export default defineModel({
     capacity: 40,
     dwellSeconds: { min: 3600, max: 10_800 },
     reliability: 60,
+    order: ['areas', 'loops', 'seats'],
+    areas: [{ kind: 'swim', ...SWIM, surface: DECK, places: 10 }],
+    loops: SECTIONS.map((_, section) => rideFor(section)),
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -105,13 +227,11 @@ export default defineModel({
     const flume = (x0: number, from: number, paint: Ramp): void => {
       const bed0 = x0 + 1;
       const bed1 = x0 + CHUTE_W - 2;
-      const drop = from - TOP;
       const run = CHUTE_END - TOWER_FRONT;
       let last = from;
       for (let step = 0; step <= run; step++) {
         const z = TOWER_FRONT + step;
-        const t = step / run;
-        const y = Math.round(from - drop * (2 * t - t * t));
+        const y = flumeFloor(from, z);
         box(bed0, bed1, y, y, z, z, paint.base);
         box(x0, x0, y, y + 1, z, z, paint.shade);
         box(x0 + CHUTE_W - 1, x0 + CHUTE_W - 1, y, y + 1, z, z, paint.shade);
@@ -119,8 +239,7 @@ export default defineModel({
         last = y;
       }
       for (const z of [TOWER_FRONT + 6, TOWER_FRONT + 16, TOWER_FRONT + 26]) {
-        const t = (z - TOWER_FRONT) / run;
-        const y = Math.round(from - drop * (2 * t - t * t));
+        const y = flumeFloor(from, z);
         for (const post of [x0, x0 + CHUTE_W - 2])
           box(post, post + 1, TOP, y - 1, z, z + 1, teak.base);
       }
@@ -136,6 +255,8 @@ export default defineModel({
         y: TOP,
         storeys: section.storeys,
       });
+      if (platform !== platformOf(section.storeys))
+        throw new Error('The riders and roofs disagree');
       box(section.x, x1, platform, platform, TOWER_Z, TOWER_Z + TOWER_D - 1, teak.light);
 
       const rail = { y: platform + 1, height: 4, pitch: 3, rail: teak } as const;
@@ -196,8 +317,8 @@ export default defineModel({
       flight(
         lower.x + FLIGHT_LANDING,
         upper.x - 1,
-        TOP + lower.storeys * 12 + 1,
-        TOP + upper.storeys * 12 + 1,
+        platformOf(lower.storeys),
+        platformOf(upper.storeys),
       );
     }
 

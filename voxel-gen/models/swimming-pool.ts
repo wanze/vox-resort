@@ -20,18 +20,30 @@ const SPLASH = { x: 90, z: 58, w: 24, d: 20 } as const;
 const TOWER = { x: 117, z: 62, w: 5, d: 7, y: 11 } as const;
 const CHUTE = { from: 116, to: 104, top: TOWER.y, end: 3, z: 64 } as const;
 
-// Feet on the paddling pool's floor, so its one layer of water laps the shins.
-const WADING = TOP_LAYER - 1 - PADDLING.depth;
-const PADDLE_MID = { x: PADDLING.x + PADDLING.w / 2, z: PADDLING.z + PADDLING.d / 2 } as const;
-const WADERS = [
-  { dx: -7, dz: 0, facing: 1 },
-  { dx: -4, dz: -6, facing: 0 },
-  { dx: 4, dz: -6, facing: 0 },
-  { dx: 7, dz: 0, facing: 3 },
-  { dx: 4, dz: 6, facing: 2 },
-  { dx: -4, dz: 6, facing: 2 },
-  { dx: 11, dz: -5, facing: 3 },
-] as const;
+// The loop rides the same curve the chute is built on. Squared, not linear, so the chute flattens
+// into a runout instead of reading as stairs.
+const CHUTE_RUN = CHUTE.from - CHUTE.to;
+const chuteFloor = (step: number): number =>
+  Math.round(CHUTE.end + (CHUTE.top - CHUTE.end) * (1 - step / CHUTE_RUN) ** 2);
+
+// The deck's layer, the water's top face: poolWater floods up to one below it.
+const SURFACE = TOP_LAYER - 1;
+
+// Inside the coping, which takes the outermost ring of each basin, and short of the stone ledge
+// across the lap pool's east end and of the chute's runout over the splash pool.
+const LAP_LANES = { x: LENGTHS.x + 1, z: LENGTHS.z + 1, w: 75, d: LENGTHS.d - 2 } as const;
+const PADDLE = {
+  x: PADDLING.x + 1,
+  z: PADDLING.z + 1,
+  w: PADDLING.w - 2,
+  d: PADDLING.d - 2,
+} as const;
+const SPLASH_WEST = { x: SPLASH.x + 1, z: SPLASH.z + 1, w: 12, d: SPLASH.d - 2 } as const;
+
+const LADDER = { x: TOWER.x + TOWER.w + 1, z: CHUTE.z + 1 } as const;
+// Out by the ladder on the splash pool's north rim, then home along the deck.
+const SPLASH_LADDER = { x: 101, z: SPLASH.z - 1 } as const;
+const SLIDE_STEPS = Array.from({ length: CHUTE_RUN + 1 }, (_, step) => step);
 
 const LIFEGUARD = { x: LENGTHS.x + LENGTHS.w / 2, z: LENGTHS.z + LENGTHS.d + 1 } as const;
 
@@ -70,15 +82,38 @@ export default defineModel({
     capacity: 30,
     dwellSeconds: { min: 1800, max: 5400 },
     reliability: 120,
-    spots: [
-      ...WADERS.map(({ dx, dz, facing }) => ({
-        x: PADDLE_MID.x + dx,
-        y: WADING,
-        z: PADDLE_MID.z + dz,
-        facing,
-      })),
-      { ...LIFEGUARD, y: TOP_LAYER, facing: 2, for: 'lifeguard' },
+    order: ['areas', 'loops', 'spots', 'seats'],
+    areas: [
+      { kind: 'swim', ...LAP_LANES, surface: SURFACE, places: 8, laps: true },
+      { kind: 'wade', ...PADDLE, round: true, surface: SURFACE, places: 6, for: 'child' },
+      { kind: 'swim', ...SPLASH_WEST, surface: SURFACE, places: 2 },
     ],
+    loops: [
+      {
+        places: 4,
+        points: [
+          { x: LADDER.x, y: TOP_LAYER, z: LADDER.z, pose: 'climb' },
+          { x: LADDER.x, y: TOWER.y + 1, z: LADDER.z, pose: 'walk' },
+          { x: TOWER.x, y: TOWER.y + 1, z: LADDER.z, pose: 'slide' },
+          ...SLIDE_STEPS.map(
+            (step) =>
+              ({
+                x: CHUTE.from - step,
+                y: chuteFloor(step) + 2,
+                z: LADDER.z,
+                pose: 'slide',
+              }) as const,
+          ),
+          { x: CHUTE.to - 2, y: SURFACE, z: LADDER.z, pose: 'swim' },
+          { x: SPLASH_LADDER.x, y: SURFACE, z: SPLASH.z + 2, pose: 'climb' },
+          { x: SPLASH_LADDER.x, y: TOP_LAYER + 1, z: SPLASH.z + 1, pose: 'walk' },
+          { x: SPLASH_LADDER.x, y: TOP_LAYER, z: SPLASH_LADDER.z, pose: 'walk' },
+          { x: TOWER.x - 1, y: TOP_LAYER, z: SPLASH_LADDER.z, pose: 'walk' },
+          { x: LADDER.x, y: TOP_LAYER, z: SPLASH_LADDER.z, pose: 'walk' },
+        ],
+      },
+    ],
+    spots: [{ ...LIFEGUARD, y: TOP_LAYER, facing: 2, for: 'lifeguard' }],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
@@ -93,6 +128,7 @@ export default defineModel({
     const surface = poolWater(b, { ...LENGTHS, deck });
     poolWater(b, { ...PADDLING, shape: 'round', deck });
     poolWater(b, { ...SPLASH, deck });
+    if (surface + 1 !== SURFACE) throw new Error('The water and its swimmers must agree on it');
 
     box(82, 84, surface, surface, 30, 50, stone.light);
 
@@ -130,11 +166,7 @@ export default defineModel({
     for (const rung of [top + 1, top + 3, top + 5, top + 7])
       box(122, 122, rung, rung, 64, 66, metal.base);
 
-    // Squared, not linear, so the chute flattens into a runout instead of reading as stairs.
-    const run = CHUTE.from - CHUTE.to;
-    const chuteFloor = (step: number): number =>
-      Math.round(CHUTE.end + (CHUTE.top - CHUTE.end) * (1 - step / run) ** 2);
-    for (let step = 0; step <= run; step++) {
+    for (let step = 0; step <= CHUTE_RUN; step++) {
       const x = CHUTE.from - step;
       const y = chuteFloor(step);
       box(x, x, y, y + 1, CHUTE.z, CHUTE.z + 2, amber.base);

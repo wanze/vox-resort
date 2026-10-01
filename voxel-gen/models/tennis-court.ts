@@ -23,11 +23,12 @@ const NET = { x: 71, z0: COURT.z0 - 4, z1: COURT.z1 + 4, top: ON_TURF + 3 } as c
 const MIDDLE = (COURT.z0 + COURT.z1 + 1) / 2;
 
 // Singles first, so the first two places are the baseline players; the net pair makes it doubles.
+// Side 0 is the low-x half, as it is on every court.
 const PLAYERS = [
-  { x: COURT.x0 - 2, y: ON_TURF, z: MIDDLE - 6, facing: 1 },
-  { x: COURT.x1 + 2, y: ON_TURF, z: MIDDLE + 5, facing: 3 },
-  { x: NET.x - 12, y: ON_TURF, z: MIDDLE + 5, facing: 1 },
-  { x: NET.x + 13, y: ON_TURF, z: MIDDLE - 6, facing: 3 },
+  { x: COURT.x0 - 2, y: ON_TURF, z: MIDDLE - 6, facing: 1, game: 'tennis', side: 0 },
+  { x: COURT.x1 + 2, y: ON_TURF, z: MIDDLE + 5, facing: 3, game: 'tennis', side: 1 },
+  { x: NET.x - 12, y: ON_TURF, z: MIDDLE + 5, facing: 1, game: 'tennis', side: 0 },
+  { x: NET.x + 13, y: ON_TURF, z: MIDDLE - 6, facing: 3, game: 'tennis', side: 1 },
 ] as const;
 
 const GATE = { x0: 62, x1: 81, z0: 33, z1: 46 } as const;
@@ -114,6 +115,9 @@ export default defineModel({
     capacity: 4,
     dwellSeconds: { min: 1800, max: 3600 },
     spots: PLAYERS,
+    // Struck at the hip, a racket's reach below where the arm swings.
+    ball: { model: 'ball-tennis', y: ON_TURF + 3 },
+    court: { ...COURT, net: { x: NET.x, top: NET.top } },
     doors: [
       { x: (GATE.x0 + GATE.x1) / 2, z: 0, facing: 2 },
       { x: (GATE.x0 + GATE.x1) / 2, z: 79, facing: 0 },

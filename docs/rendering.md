@@ -13,7 +13,8 @@ authored plan is 112 × 100 tiles (448 × 400 m).
 ## Pipeline
 
 1. **Catalogue**: `OBJECT_TYPES` builds every model once and creates one material
-   per colour. `PAINTED_MODELS` adds people, staff, balloons, boats and litter.
+   per colour. `PAINTED_MODELS` adds people, staff, balloons, boats, litter and
+   balls.
 2. **Layout**: `layoutResort` turns `RESORT_PLAN` (or a generated plan) into
    placements, paving, props and rails.
 3. **Scratch regions**: `scratchLayoutFor` gives each model its own slice of the
@@ -32,7 +33,10 @@ authored plan is 112 × 100 tiles (448 × 400 m).
 9. **Frame**: three materials for the catalogue (lit, unlit, water), plus terrain,
    sea, figures and moving objects. Litter on the paths is a moving field too
    (`litter/adapters/litterField.ts`): one instanced mesh per litter model,
-   rewritten only when the litter changes. The map overlay
+   rewritten only when the litter changes. The ball field beside it
+   (`choreography/adapters/ballField.ts`) is one instanced mesh per ball, 16
+   slots each, rewritten every frame, a court with no game packed out. The map
+   overlay
    (`overlays/adapters/overlayField.ts`) is one instanced quad per paved tile,
    coloured per instance, 2.1 voxels up over the blob shadows, and hidden (no
    draw call) while it is off.
@@ -266,7 +270,8 @@ Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 | storm   | 283        | 1.22 M    | 2.60 ms    | 5.24 ms    |
 
 The litter field adds 2 draw calls and about 22 000 triangles (278 and 1.14 M
-before it). The lifeguard and animator figures add 2 more, one per staff model
+before it). The ball field adds 3 draw calls and about 770 triangles, at no
+measurable cost (287 and 1.18 M before it, both medians unchanged). The lifeguard and animator figures add 2 more, one per staff model
 (280 before). The medians were taken on a busier machine than the rows before
 them: the tree without the new figures measured 1.70 ms and 5.11 ms in the same
 session.

@@ -28,9 +28,10 @@ export type ModelCategory =
   | 'people'
   | 'sky'
   | 'sea'
-  | 'litter';
+  | 'litter'
+  | 'props';
 
-// people, sky, sea and litter never show: each lives in its own registry, so no
+// people, sky, sea, litter and props never show: each lives in its own registry, so no
 // OBJECT_TYPES entry carries them and the palette drops the empty shelves.
 export const MODEL_CATEGORIES: readonly {
   readonly id: ModelCategory;
@@ -44,6 +45,7 @@ export const MODEL_CATEGORIES: readonly {
   { id: 'sky', label: 'Sky' },
   { id: 'sea', label: 'Sea' },
   { id: 'litter', label: 'Litter' },
+  { id: 'props', label: 'Props' },
 ];
 
 export interface TileFootprint {
@@ -97,6 +99,24 @@ export interface ModelSpot {
   readonly facing: QuarterTurns;
   readonly pose?: SeatPose | 'stand';
   readonly for?: 'visitor' | 'watcher' | 'animator' | 'lifeguard';
+  // A player's place in the venue's game, on the half of the court that is theirs.
+  readonly game?: GameKind;
+  readonly side?: 0 | 1;
+}
+
+export type GameKind = 'tennis' | 'basketball' | 'volleyball';
+
+// Its length runs along x, so a net is a column of x and the hoops sit at either end.
+export interface ModelCourt {
+  // The outer lines, as inclusive voxel columns.
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+  // The net's column and the layer of its top, which every ball over it clears.
+  readonly net?: { readonly x: number; readonly top: number };
+  // Each ring's middle, a point between columns, on the ring's own layer.
+  readonly hoops?: readonly { readonly x: number; readonly y: number; readonly z: number }[];
 }
 
 // x/z is the doorway's middle so a turn cannot push it over a tile boundary.
@@ -191,6 +211,9 @@ export interface ModelVenue {
   readonly loops?: readonly ModelLoop[];
   // Which kind of place visitors fill first; left out, spots, seats, areas, loops.
   readonly order?: readonly PlaceGroup[];
+  // The prop a game here is played with, and the layer it is struck at.
+  readonly ball?: { readonly model: string; readonly y: number };
+  readonly court?: ModelCourt;
 }
 
 export interface ModelDepot {
@@ -319,6 +342,27 @@ function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number):
           loops: venue.loops.map((loop) => ({
             ...loop,
             points: loop.points.map((point) => ({ ...moved(point), y: point.y - minY })),
+          })),
+        }
+      : {}),
+    ...(venue.ball ? { ball: { ...venue.ball, y: venue.ball.y - minY } } : {}),
+    ...(venue.court ? { court: courtFrom(venue.court, minX, minY, minZ) } : {}),
+  };
+}
+
+function courtFrom(court: ModelCourt, minX: number, minY: number, minZ: number): ModelCourt {
+  return {
+    x0: court.x0 - minX,
+    x1: court.x1 - minX,
+    z0: court.z0 - minZ,
+    z1: court.z1 - minZ,
+    ...(court.net ? { net: { x: court.net.x - minX, top: court.net.top - minY } } : {}),
+    ...(court.hoops
+      ? {
+          hoops: court.hoops.map((hoop) => ({
+            x: hoop.x - minX,
+            y: hoop.y - minY,
+            z: hoop.z - minZ,
           })),
         }
       : {}),

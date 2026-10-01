@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
+import { PROP_SOURCES } from './props/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
@@ -262,6 +263,124 @@ describe('the places a venue draws its visitors in', () => {
       expect(visitorPlaces(model), `${model.id} has too few places`).toBeGreaterThanOrEqual(
         model.venue!.capacity,
       );
+    }
+  });
+});
+
+const playersOf = (model: VoxelModel) =>
+  (model.venue!.spots ?? []).filter((spot) => spot.game !== undefined);
+
+const paintedOf = (model: VoxelModel): ReadonlySet<string> =>
+  new Set(model.voxels.map((v) => `${v.x},${v.y},${v.z}`));
+
+describe('the games a court is played on', () => {
+  const all = venues.map(buildModel);
+  const games = all.filter((model) => model.venue!.court !== undefined);
+
+  it('is played at every watched court, and nowhere else', () => {
+    expect(games.map((model) => familyOf(model.id)).toSorted()).toEqual(
+      [...WATCHED, ...WATCHED].toSorted(),
+    );
+    for (const model of all) {
+      if (model.venue!.court) continue;
+      expect(playersOf(model), `${model.id} has players and no court`).toEqual([]);
+    }
+  });
+
+  it('gives every player a side, one game, and somebody on both sides', () => {
+    for (const model of games) {
+      const players = playersOf(model);
+      expect(new Set(players.map((spot) => spot.game)).size, model.id).toBe(1);
+      for (const spot of players) {
+        expect(spot.side, `${model.id} has a player on no side`).toBeDefined();
+        expect(spot.for ?? 'visitor', model.id).toBe('visitor');
+      }
+      for (const side of [0, 1]) {
+        expect(
+          players.some((spot) => spot.side === side),
+          `${model.id} has nobody on side ${side}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('puts side 0 on the low-x half and side 1 on the other', () => {
+    for (const model of games) {
+      const { court } = model.venue!;
+      const middle = court!.net ? court!.net.x + 0.5 : (court!.x0 + court!.x1 + 1) / 2;
+      for (const spot of playersOf(model)) {
+        const low = spot.x + 0.5 < middle;
+        expect(low, `${model.id} at ${spot.x},${spot.z}`).toBe(spot.side === 0);
+      }
+    }
+  });
+
+  it('makes no venue of a ball', () => {
+    for (const source of PROP_SOURCES) expect(source.venue, source.id).toBeUndefined();
+  });
+
+  it('plays with one of the props, struck above the court', () => {
+    const props = new Set(PROP_SOURCES.map((source) => source.id));
+    for (const model of games) {
+      const { ball } = model.venue!;
+      expect(ball, `${model.id} has no ball`).toBeDefined();
+      expect(props.has(ball!.model), `${model.id} plays with ${ball!.model}`).toBe(true);
+      const ground = Math.min(...playersOf(model).map((spot) => spot.y));
+      expect(ball!.y, model.id).toBeGreaterThan(ground);
+    }
+  });
+
+  it('keeps the court inside the model', () => {
+    for (const model of games) {
+      const court = model.venue!.court!;
+      expect(court.x0, model.id).toBeGreaterThanOrEqual(0);
+      expect(court.z0, model.id).toBeGreaterThanOrEqual(0);
+      expect(court.x1, model.id).toBeLessThan(model.width);
+      expect(court.z1, model.id).toBeLessThan(model.depth);
+      expect(court.x0, model.id).toBeLessThan(court.x1);
+      expect(court.z0, model.id).toBeLessThan(court.z1);
+    }
+  });
+
+  // Its top at the middle only: a beach net's antennae stand above it at the lines.
+  it('declares the net where the model paints it, its top the last layer', () => {
+    for (const model of games) {
+      const { net, z0, z1, x0, x1 } = model.venue!.court!;
+      if (!net) continue;
+      expect(net.x, model.id).toBeGreaterThan(x0);
+      expect(net.x, model.id).toBeLessThan(x1);
+      const painted = paintedOf(model);
+      const middle = Math.round((z0 + z1) / 2);
+      for (const z of [z0, middle, z1]) {
+        expect(painted.has(`${net.x},${net.top},${z}`), `${model.id} has no net at ${z}`).toBe(
+          true,
+        );
+      }
+      expect(painted.has(`${net.x},${net.top + 1},${middle}`), `${model.id} nets higher`).toBe(
+        false,
+      );
+    }
+  });
+
+  it('declares a hoop where the model paints a ring, with the hole at its middle', () => {
+    for (const model of games) {
+      const painted = paintedOf(model);
+      for (const hoop of model.venue!.court!.hoops ?? []) {
+        const at = `${model.id} at ${hoop.x},${hoop.z}`;
+        expect(painted.has(`${Math.floor(hoop.x)},${hoop.y},${Math.floor(hoop.z)}`), at).toBe(
+          false,
+        );
+        for (const [dx, dz] of [
+          [-2, 0],
+          [1, 0],
+          [0, -2],
+          [0, 1],
+        ] as const) {
+          const x = Math.floor(hoop.x) + dx;
+          const z = Math.floor(hoop.z) + dz;
+          expect(painted.has(`${x},${hoop.y},${z}`), `${at}: no rim at ${x},${z}`).toBe(true);
+        }
+      }
     }
   });
 });

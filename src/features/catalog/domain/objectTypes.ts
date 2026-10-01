@@ -1,6 +1,7 @@
 import { LITTER_SOURCES } from '../../../../voxel-gen/litter/index.ts';
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
+import { PROP_SOURCES } from '../../../../voxel-gen/props/index.ts';
 import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
 import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
@@ -91,6 +92,8 @@ export const SEA_MODELS: readonly VoxelModel[] = SEA_SOURCES.map(buildModel);
 
 export const LITTER_MODELS: readonly VoxelModel[] = LITTER_SOURCES.map(buildModel);
 
+export const PROP_MODELS: readonly VoxelModel[] = PROP_SOURCES.map(buildModel);
+
 // Materials must come from every registry: only people paint with skin, and
 // without it the mesher would be asked for a voxel DVE never registered.
 export const PAINTED_MODELS: readonly VoxelModel[] = [
@@ -100,6 +103,7 @@ export const PAINTED_MODELS: readonly VoxelModel[] = [
   ...SKY_MODELS,
   ...SEA_MODELS,
   ...LITTER_MODELS,
+  ...PROP_MODELS,
 ];
 
 export interface ObjectTypeGroup {

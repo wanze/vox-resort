@@ -12,8 +12,12 @@ const GROUND = SURFACE + 1;
 const POST = { x: 47, x1: 48 } as const;
 
 const POST_HEIGHT = 11;
+const POST_TOP = GROUND + POST_HEIGHT - 1;
+const TAPE = POST_TOP - 1;
 
 const NET_HEIGHT = 4;
+
+const game = 'volleyball' as const;
 
 const FRONT = 8;
 const BACK = 22;
@@ -31,8 +35,15 @@ const ROLES = [
 ] as const;
 
 const PLAYERS = ROLES.flatMap(({ d, z }) => [
-  { x: POST.x - d, y: GROUND, z, facing: 1 as const },
-  { x: POST.x1 + d, y: GROUND, z: COURT.z0 + COURT.z1 - z, facing: 3 as const },
+  { x: POST.x - d, y: GROUND, z, facing: 1 as const, game, side: 0 as const },
+  {
+    x: POST.x1 + d,
+    y: GROUND,
+    z: COURT.z0 + COURT.z1 - z,
+    facing: 3 as const,
+    game,
+    side: 1 as const,
+  },
 ]);
 
 const BENCH = { x0: 86, x1: 87, z0: 22, z1: 33, plank: GROUND + 2 } as const;
@@ -79,6 +90,9 @@ export default defineModel({
         })),
       ),
     ],
+    // Played over the head, set and spiked from there.
+    ball: { model: 'ball-volley', y: GROUND + 7 },
+    court: { ...COURT, net: { x: POST.x, top: TAPE } },
   },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
@@ -94,14 +108,13 @@ export default defineModel({
     box(COURT.x0, COURT.x0, SURFACE, SURFACE, COURT.z0, COURT.z1, stucco.light);
     box(COURT.x1, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z1, stucco.light);
 
-    const top = GROUND + POST_HEIGHT - 1;
     for (const z of [COURT.z0 - 5, COURT.z1 + 4]) {
-      box(POST.x, POST.x1, GROUND, top, z, z + 1, teak.base);
+      box(POST.x, POST.x1, GROUND, POST_TOP, z, z + 1, teak.base);
     }
 
     // A net of strands would be a dither costing more triangles than a hotel, so it is a
     // solid band, kept thin and dark or it reads as a wall across the court.
-    const tape = top - 1;
+    const tape = TAPE;
     const netZ0 = COURT.z0 - 3;
     const netZ1 = COURT.z1 + 3;
     box(POST.x, POST.x, tape - NET_HEIGHT + 1, tape - 1, netZ0, netZ1, stucco.shade);

@@ -3,6 +3,7 @@ import type {
   ModelLoop,
   ModelSeat,
   ModelSpot,
+  ModelVenue,
   PlaceGroup,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
@@ -16,6 +17,7 @@ import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { mix } from '../../sim/domain/night';
 import type { Venue } from '../../sim/domain/venues';
 import { rideLoop, SWIM_SINK, type AreaAct, type RideLoop, type WaterArea } from './acts';
+import type { CourtFrame, Game } from './games';
 
 export type PlaceKind = 'visitor' | 'watcher' | 'animator' | 'lifeguard';
 
@@ -35,6 +37,8 @@ interface PlaceAt {
 // Left out on a seat or a spot, which is where 044 placed everybody.
 export interface StillPlace extends PlaceAt {
   readonly act?: 'still';
+  // A player's, on the half of the court that is theirs.
+  readonly side?: 0 | 1;
 }
 
 export interface AreaPlace extends PlaceAt {
@@ -56,6 +60,7 @@ export interface VenuePlaces {
   readonly watchers: readonly Place[];
   readonly animators: readonly Place[];
   readonly lifeguards: readonly Place[];
+  readonly game?: Game;
 }
 
 const NO_PLACES: VenuePlaces = { visitors: [], watchers: [], animators: [], lifeguards: [] };
@@ -76,7 +81,7 @@ const asSeat = (spot: ModelSpot): ModelSeat => ({
   facing: spot.facing,
 });
 
-const placeAt = (at: SeatSpot, pose: number, kind: PlaceKind, seat: number): Place => ({
+const placeAt = (at: SeatSpot, pose: number, kind: PlaceKind, seat: number): StillPlace => ({
   x: at.x,
   y: at.y,
   z: at.z,
@@ -94,7 +99,8 @@ function addSpots(places: PlacesByKind, site: SeatSite, spots: readonly ModelSpo
   const spotsAt = seatSpotsFor([{ ...site, seats: spots.map(asSeat) }]);
   for (const [index, spot] of spots.entries()) {
     const kind = spot.for ?? 'visitor';
-    places[kind].push(placeAt(spotsAt[index]!, poseOf(spot.pose), kind, -1));
+    const place = placeAt(spotsAt[index]!, poseOf(spot.pose), kind, -1);
+    places[kind].push(spot.game && spot.side !== undefined ? { ...place, side: spot.side } : place);
   }
 }
 
@@ -180,18 +186,70 @@ function loopPlaces(site: SeatSite, loops: readonly ModelLoop[]): Place[] {
   });
 }
 
+// The court's middle and its two axes, turned with the venue as the places are.
+function frameOf(site: SeatSite, venue: ModelVenue, ground: number): CourtFrame {
+  const { x0, x1, z0, z1 } = venue.court!;
+  const middleX = (x0 + x1 + 1) / 2;
+  const middleZ = (z0 + z1 + 1) / 2;
+  const at = turned(site, middleX, middleZ);
+  const along = turned(site, middleX + 1, middleZ);
+  const across = turned(site, middleX, middleZ + 1);
+  return {
+    x: at.x,
+    z: at.z,
+    ground,
+    alongX: along.x - at.x,
+    alongZ: along.z - at.z,
+    acrossX: across.x - at.x,
+    acrossZ: across.z - at.z,
+  };
+}
+
+function gameOf(site: SeatSite, venue: ModelVenue, visitors: readonly Place[]): Game | undefined {
+  const { court, ball } = venue;
+  const kind = venue.spots?.find((spot) => spot.game)?.game;
+  const playing = visitors.flatMap((place, visitor) =>
+    'side' in place && place.side !== undefined ? [{ place, visitor, side: place.side }] : [],
+  );
+  if (!court || !ball || !kind || playing.length === 0) return undefined;
+  const ground = Math.min(...playing.map(({ place }) => place.y));
+  const frame = frameOf(site, venue, ground);
+  const middleX = (court.x0 + court.x1 + 1) / 2;
+  const middleZ = (court.z0 + court.z1 + 1) / 2;
+  const above = (y: number): number => site.y + y - ground;
+  return {
+    kind,
+    frame,
+    court: {
+      halfLength: (court.x1 + 1 - court.x0) / 2,
+      halfWidth: (court.z1 + 1 - court.z0) / 2,
+      net: court.net ? { u: court.net.x + 0.5 - middleX, top: above(court.net.top) } : null,
+      hoops: (court.hoops ?? []).map((hoop) => ({
+        u: hoop.x - middleX,
+        v: hoop.z - middleZ,
+        y: above(hoop.y),
+      })),
+    },
+    players: playing.map(({ place, visitor, side }) => ({
+      visitor,
+      side,
+      u: (place.x - frame.x) * frame.alongX + (place.z - frame.z) * frame.alongZ,
+      v: (place.x - frame.x) * frame.acrossX + (place.z - frame.z) * frame.acrossZ,
+    })),
+    strike: above(ball.y),
+    ball: ball.model,
+    salt: mix(mix(Math.round(frame.x)) + Math.round(frame.z)),
+  };
+}
+
 // Spots before seats unless the art says otherwise: what the venue is for comes first, and the
 // benches of the parents and the waiting are filled last. A group the order leaves out follows.
 const ORDER: readonly PlaceGroup[] = ['spots', 'seats', 'areas', 'loops'];
 
 function placesOf(placement: Placement, seatIndex: ReadonlyMap<string, number>): VenuePlaces {
   const site = seatSiteOf(placement);
-  const {
-    spots = [],
-    areas = [],
-    loops = [],
-    order = [],
-  } = objectTypeById(placement.id).model.venue ?? {};
+  const venue = objectTypeById(placement.id).model.venue;
+  const { spots = [], areas = [], loops = [], order = [] } = venue ?? {};
   if (site.seats.length + spots.length + areas.length + loops.length === 0) return NO_PLACES;
   const fromSpots = byKind();
   addSpots(fromSpots, site, spots);
@@ -203,11 +261,14 @@ function placesOf(placement: Placement, seatIndex: ReadonlyMap<string, number>):
     areas: areaPlaces(site, areas),
     loops: loopPlaces(site, loops),
   };
+  const visitors = [...new Set([...order, ...ORDER])].flatMap((group) => groups[group]);
+  const game = venue ? gameOf(site, venue, visitors) : undefined;
   return {
-    visitors: [...new Set([...order, ...ORDER])].flatMap((group) => groups[group]),
+    visitors,
     watchers: [...fromSpots.watcher, ...fromSeats.watcher],
     animators: fromSpots.animator,
     lifeguards: fromSpots.lifeguard,
+    ...(game ? { game } : {}),
   };
 }
 

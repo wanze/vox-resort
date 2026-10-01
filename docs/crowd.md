@@ -11,32 +11,33 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 
 ## Code
 
-| What                            | Where                                                               |
-| ------------------------------- | ------------------------------------------------------------------- |
-| Walk network                    | `crowd/domain/walkNetwork.ts`                                       |
-| Crowd state and step            | `crowd/domain/crowd.ts`                                             |
-| Avoidance                       | `crowd/domain/avoidance.ts`                                         |
-| Crowd speed per clock speed     | `sim/domain/crowdRate.ts`                                           |
-| Obstacles on the sand           | `crowd/domain/sandGrid.ts`                                          |
-| Seats in world space            | `crowd/domain/seating.ts`                                           |
-| Re-placing people after an edit | `crowd/domain/nearestNode.ts`, `reseatCrowd`                        |
-| Venue doors                     | `sim/domain/doors.ts`                                               |
-| Flow fields                     | `sim/domain/flowField.ts`                                           |
-| Choosing a venue                | `sim/domain/chooseVenue.ts`, `appeal.ts`                            |
-| Routing and arriving            | `sim/domain/router.ts`                                              |
-| Queues and visits               | `sim/domain/occupancy.ts`                                           |
-| Beach                           | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`              |
-| Needs, happiness, rating        | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                  |
-| Night, weather, check-in        | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                   |
-| Cleanliness and staff           | `sim/domain/upkeep.ts`, `staffRouter.ts`                            |
-| Advice                          | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`            |
-| Money                           | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`    |
-| Guests, parties, beds, names    | `guests/domain/`                                                    |
-| Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                       |
-| Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
-| Places in a venue               | `choreography/domain/places.ts`, `casting.ts`                       |
-| Swimming in the sea             | `choreography/domain/seaSwim.ts`, `sea/domain/swimArea.ts`          |
-| Boats and passengers            | `sea/domain/piers.ts`, `passengers.ts`                              |
+| What                            | Where                                                                |
+| ------------------------------- | -------------------------------------------------------------------- |
+| Walk network                    | `crowd/domain/walkNetwork.ts`                                        |
+| Crowd state and step            | `crowd/domain/crowd.ts`                                              |
+| Avoidance                       | `crowd/domain/avoidance.ts`                                          |
+| Crowd speed per clock speed     | `sim/domain/crowdRate.ts`                                            |
+| Obstacles on the sand           | `crowd/domain/sandGrid.ts`                                           |
+| Seats in world space            | `crowd/domain/seating.ts`                                            |
+| Re-placing people after an edit | `crowd/domain/nearestNode.ts`, `reseatCrowd`                         |
+| Venue doors                     | `sim/domain/doors.ts`                                                |
+| Flow fields                     | `sim/domain/flowField.ts`                                            |
+| Choosing a venue                | `sim/domain/chooseVenue.ts`, `appeal.ts`                             |
+| Routing and arriving            | `sim/domain/router.ts`                                               |
+| Queues and visits               | `sim/domain/occupancy.ts`                                            |
+| Beach                           | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`               |
+| Needs, happiness, rating        | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                   |
+| Night, weather, check-in        | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                    |
+| Cleanliness and staff           | `sim/domain/upkeep.ts`, `staffRouter.ts`                             |
+| Advice                          | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`             |
+| Money                           | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`     |
+| Guests, parties, beds, names    | `guests/domain/`                                                     |
+| Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                        |
+| Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts`  |
+| Places in a venue               | `choreography/domain/places.ts`, `casting.ts`                        |
+| Swimming in the sea             | `choreography/domain/seaSwim.ts`, `sea/domain/swimArea.ts`           |
+| Ball games                      | `choreography/domain/games.ts`, `courts.ts`, `adapters/ballField.ts` |
+| Boats and passengers            | `sea/domain/piers.ts`, `passengers.ts`                               |
 
 ## Walk network
 
@@ -300,6 +301,47 @@ an edit simply recasts.
   move every replay. After a load or a rebuild everybody starts a fresh leg.
   When a visit ends the place is released and the swimmer pops back to where
   the crowd has them.
+- **Games**: at the tennis, basketball and volleyball courts the players
+  play (`games.ts`), and the watchers follow the ball (`courts.ts`). A game
+  belongs to the venue, not to a person: each frame `perform` replays the
+  court's current **rally** from its start, a pure function of the game, who
+  is playing and where they stood as it began, the rally's number and the
+  time into it. Every choice in it (shot lengths, targets, apexes, who
+  receives, how many touches) is hashed with `mix`. A rally plays for a
+  hashed 6 to 20 s, the last ball is a winner nobody reaches, and a 2 to 4 s
+  pause follows; only the rally's start and length are cached on the court.
+  - **Tennis**: one player practises serves, each ball bouncing in the far
+    service box and rolling on to the back. One a side is singles from the
+    baselines, two a side is doubles with a player at the net who volleys.
+    With three, the odd one waits by the net post and hops now and then.
+    Every ball clears the net, bounces inside the lines and is struck as it
+    reaches the receiver, the swing halfway through.
+  - **Basketball**: up to four shoot around at the hoop nearer most of them,
+    each from a place of their own on its half, rebounding the shot before
+    their own. Five or more, at least two a side, play a possession a rally:
+    the attackers take the defenders' places mirrored through the middle,
+    pass about, shoot, and the defence rebounds; the next rally the other
+    team attacks the other hoop. The ball is always in somebody's hands
+    (held or dribbled) or in the air.
+  - **Volleyball**: with somebody on both sides, each side touches the ball
+    one to three times before it goes back over, the third touch sometimes
+    a spike. Alone on one side, the ball is bumped up and down until dropped.
+  - Players move to meet the ball at jog speed, never further than a jog
+    covers in time, and stay on their own side of the net (in basketball, in
+    the half being played). They face the ball, and in their own hands face
+    where they mean to send it.
+  - **Watchers** turn towards the ball at 3 rad/s, at most 1.4 rad from
+    facing the court. In the pause after a point a hashed half of them cheer
+    (a seated watcher stands up on the seat to do it). A court nobody plays
+    on has no game, no ball, and watchers facing the court.
+  - Whoever is cast mid-rally stands at their place, following the ball, and
+    joins at the next rally. Somebody walking off mid-rally breaks it off:
+    the ball drops where it was and the next rally starts 1.5 s later with
+    whoever is left.
+  - **The ball** is a prop drawn by the ball field
+    (`choreography/adapters/ballField.ts`), one slot per court, rewritten
+    every frame after `perform`. All of it is drawn only: the simulation
+    never reads a game, and nothing of it is saved.
 
 ## Beach buildings
 
@@ -929,9 +971,10 @@ changes what a saved number means, and needs a version bump too.
 - Staff: `voxel-gen/people/{cleaner,lifeguard,animator,mechanic}.ts`, via
   `STAFF_SOURCES`, in `STAFF_ROLES` order.
 - Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`. Litter:
-  `voxel-gen/litter/`, preview with `pnpm preview --litter`.
-- `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky, sea
-  and litter. `dveEngine.test.ts` meshes all of it.
+  `voxel-gen/litter/`, preview with `pnpm preview --litter`. Balls:
+  `voxel-gen/props/` (`PROP_SOURCES`), preview with `pnpm preview --props`.
+- `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky, sea,
+  litter and props. `dveEngine.test.ts` meshes all of it.
 - People paint from the palette; `skin` is the only family they add.
 - How pleasant dressing is: `scenery` on the model's own source.
 - How much litter a visit leaves, and what is a bin: `venue.litter` and
@@ -941,3 +984,7 @@ changes what a saved number means, and needs a version bump too.
 - What it costs to stand and what a visit or a night takes: `cost` on the
   source (optional, derived from its size otherwise) and `venue.price`.
 - Where visitors are drawn: `venue.spots` and seats; `watches` for spectators.
+- A game: `game` and `side` on each player's spot (side 0 the low-x half),
+  `venue.court` (the outer lines, the net's column and top, the hoops' middles,
+  read from the model's own constants) and `venue.ball` (the prop and the layer
+  it is struck at). A court's length runs along x.

@@ -20,6 +20,8 @@ const THREE = { depth: 28, inset: 4 } as const;
 const RIM = 12;
 const BOARD = 5;
 
+const game = 'basketball' as const;
+
 // A 2-1-2 zone, measured in from each baseline. Each role is filled in both halves at once,
 // so a small party plays one on one before the teams fill up.
 const ZONE = [
@@ -30,10 +32,17 @@ const ZONE = [
   { d: BOARD + 3, dz: KEY.half - 1 },
 ] as const;
 
+// A side is the half a team defends, the one its zone stands in.
 const PLAYERS = ZONE.flatMap(({ d, dz }) => [
-  { x: COURT.x0 + d, y: ON, z: MID_Z + dz, facing: 1 as const },
-  { x: COURT.x1 - d, y: ON, z: MID_Z - 1 - dz, facing: 3 as const },
+  { x: COURT.x0 + d, y: ON, z: MID_Z + dz, facing: 1 as const, game, side: 0 as const },
+  { x: COURT.x1 - d, y: ON, z: MID_Z - 1 - dz, facing: 3 as const, game, side: 1 as const },
 ]);
+
+// The hole's middle: the ring is four columns across with the two inside cut out.
+const HOOPS = [
+  { x: COURT.x0 + BOARD + 3, y: ON + RIM - 1, z: MID_Z },
+  { x: COURT.x1 - BOARD - 2, y: ON + RIM - 1, z: MID_Z },
+];
 
 const STAND = { x0: 32, x1: 95 } as const;
 const TIERS = 3;
@@ -89,6 +98,9 @@ export default defineModel({
     capacity: 10,
     dwellSeconds: { min: 1200, max: 2700 },
     spots: PLAYERS,
+    // Held at the chest; a shot is let go higher, a dribble bounces lower.
+    ball: { model: 'ball-basket', y: ON + 4 },
+    court: { ...COURT, hoops: HOOPS },
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

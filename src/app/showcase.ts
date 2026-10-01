@@ -14,6 +14,7 @@ import {
   LITTER_MODELS,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
   SKY_MODELS,
@@ -372,6 +373,7 @@ import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
 import { buildLitterField, type LitterField } from '../features/litter/adapters/litterField';
+import { buildBallField, type BallField } from '../features/choreography/adapters/ballField';
 import { piecesFor } from '../features/litter/domain/litterPieces';
 import { buildBalloonField } from '../features/balloons/adapters/balloonField';
 import {
@@ -425,6 +427,10 @@ const BALLOON_SEED = 2;
 
 // Four pieces on 128 tiles is already a landfill, and the advice will have said so long before.
 const LITTER_PIECES = 512;
+
+// Per kind of ball: courts playing at once beyond this go without one. Fixed, so an edit that
+// adds a court needs no new field.
+const BALLS_PER_KIND = 16;
 
 const CRAFT_COUNT = 12;
 
@@ -639,6 +645,7 @@ interface MeshedCatalogue {
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
   readonly litter: readonly ModelGeometry[];
+  readonly props: readonly ModelGeometry[];
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
@@ -667,12 +674,15 @@ const SEA_IDS: ReadonlySet<string> = new Set(SEA_MODELS.map((model) => model.id)
 
 const LITTER_IDS: ReadonlySet<string> = new Set(LITTER_MODELS.map((model) => model.id));
 
+const PROP_IDS: ReadonlySet<string> = new Set(PROP_MODELS.map((model) => model.id));
+
 const KEPT_APART_IDS: ReadonlySet<string> = new Set([
   ...PEOPLE_IDS,
   ...STAFF_IDS,
   ...SKY_IDS,
   ...SEA_IDS,
   ...LITTER_IDS,
+  ...PROP_IDS,
 ]);
 
 async function meshModels(
@@ -701,6 +711,7 @@ async function meshModels(
     sky: geometries.filter((model) => SKY_IDS.has(model.id)),
     sea: geometries.filter((model) => SEA_IDS.has(model.id)),
     litter: geometries.filter((model) => LITTER_IDS.has(model.id)),
+    props: geometries.filter((model) => PROP_IDS.has(model.id)),
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
@@ -930,6 +941,7 @@ interface Resort {
   readonly router: Router;
   readonly balloons: BalloonField;
   readonly litterField: LitterField;
+  readonly ballField: BallField;
   readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
   readonly plan: ResortPlan;
@@ -1133,6 +1145,7 @@ interface ResortArt {
   readonly sky: readonly ModelGeometry[];
   readonly sea: readonly ModelGeometry[];
   readonly litter: readonly ModelGeometry[];
+  readonly props: readonly ModelGeometry[];
 }
 
 // A party no lodging could take starts away, but createCrowd deals every body onto the paving.
@@ -1357,6 +1370,11 @@ function buildResort(
     capacity: LITTER_PIECES,
     lightVolume: lighting.volume,
   });
+  const ballField = buildBallField({
+    models: parts.props,
+    capacity: BALLS_PER_KIND,
+    lightVolume: lighting.volume,
+  });
   const sea = seaFor({
     shore,
     terrain,
@@ -1445,6 +1463,7 @@ function buildResort(
     takings: new Map(),
     balloons,
     litterField,
+    ballField,
     sea,
     shore,
     terrain,
@@ -1462,6 +1481,7 @@ function buildResort(
       staff.dispose();
       balloons.dispose();
       litterField.dispose();
+      ballField.dispose();
       overlay.dispose();
       sea.dispose();
       lighting.volume?.dispose();
@@ -1532,6 +1552,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.remove(previous.staff.group);
       scene?.scene.remove(previous.balloons.group);
       scene?.scene.remove(previous.litterField.group);
+      scene?.scene.remove(previous.ballField.group);
       scene?.scene.remove(previous.overlay.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
@@ -1541,6 +1562,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.add(resort.staff.group);
       scene?.scene.add(resort.balloons.group);
       scene?.scene.add(resort.litterField.group);
+      scene?.scene.add(resort.ballField.group);
       scene?.scene.add(resort.overlay.group);
       scene?.scene.add(resort.sea.group);
       scene?.reframe(
@@ -1591,7 +1613,7 @@ function sceneStats(parts: {
   const { handle, scratch, catalogue, rain } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
-  const { sea, lighting } = parts.resort;
+  const { sea, lighting, ballField } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -1609,6 +1631,7 @@ function sceneStats(parts: {
       staff.drawCalls +
       balloons.drawCalls +
       litterField.drawCalls +
+      ballField.drawCalls +
       overlay.drawCalls +
       sea.drawCalls +
       rain.drawCalls,
@@ -1623,6 +1646,7 @@ function sceneStats(parts: {
       staff.triangleCount +
       balloons.triangleCount +
       litterField.triangleCount +
+      ballField.triangleCount +
       overlay.triangleCount +
       sea.triangleCount +
       rain.triangleCount,
@@ -2910,6 +2934,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     sky: catalogue.sky,
     sea: catalogue.sea,
     litter: catalogue.litter,
+    props: catalogue.props,
   });
   const current = slot.current;
 
@@ -2936,6 +2961,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().litterField.group);
+  handle.scene.add(current().ballField.group);
   handle.scene.add(current().overlay.group);
   handle.scene.add(current().sea.group);
   // Not per resort: rain falls over the camera, not the plot.
@@ -3464,6 +3490,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     actSeconds = advanceActs(actSeconds, walked, crowdScale);
     perform(current().cast, actSeconds);
     performAtSea(current().cast, actSeconds, clock.ticks);
+    current().ballField.write(current().cast.courts);
     current().crowd.advance(walked, crowdScale);
     current().staff.advance(walked, crowdScale);
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);

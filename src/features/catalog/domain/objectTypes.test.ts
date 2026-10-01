@@ -21,6 +21,7 @@ import {
   ORIGINAL_TYPES,
   PAINTED_MODELS,
   PEOPLE_MODELS,
+  PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
   SKY_MODELS,
@@ -103,7 +104,8 @@ describe('PAINTED_MODELS', () => {
         STAFF_MODELS.length +
         SKY_MODELS.length +
         SEA_MODELS.length +
-        LITTER_MODELS.length,
+        LITTER_MODELS.length +
+        PROP_MODELS.length,
     );
     expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
   });
@@ -124,6 +126,19 @@ describe('PAINTED_MODELS', () => {
     for (const piece of LITTER_MODELS) {
       expect(catalogue.has(piece.id), `${piece.id} is in the catalogue too`).toBe(false);
       expect(piece.category).toBe('litter');
+    }
+  });
+
+  it('keeps the balls out of the catalogue, which is what they are apart from', () => {
+    const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
+    expect(PROP_MODELS.map((prop) => prop.id)).toEqual([
+      'ball-tennis',
+      'ball-volley',
+      'ball-basket',
+    ]);
+    for (const prop of PROP_MODELS) {
+      expect(catalogue.has(prop.id), `${prop.id} is in the catalogue too`).toBe(false);
+      expect(prop.category).toBe('props');
     }
   });
 

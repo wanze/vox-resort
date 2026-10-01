@@ -1,5 +1,6 @@
 import type { StaffRole } from '../../sim/domain/staff';
 import { isMoving } from './acts';
+import { createCourtGame, type CourtGame } from './courts';
 import type { Place, VenuePlaces } from './places';
 import type { SeaShore, SwimTrip } from './seaSwim';
 
@@ -70,6 +71,8 @@ export interface Cast extends DrawnAs {
   // -1 until perform starts the first leg.
   readonly legNo: Int32Array;
   readonly bathers: Bathers;
+  // One for each venue with a game, in venue order.
+  readonly courts: readonly CourtGame[];
 }
 
 export interface Casting {
@@ -116,6 +119,13 @@ export function createCast(
     animators: take(venue.animators),
     lifeguards: take(venue.lifeguards),
   }));
+  const courts = places.flatMap(({ game }, venue) => {
+    if (!game) return [];
+    const { visitors, watchers } = venues[venue]!;
+    const players = Int32Array.from(game.players, (player) => visitors.start + player.visitor);
+    const watching = Int32Array.from({ length: watchers.count }, (_, at) => watchers.start + at);
+    return [createCourtGame(game, players, watching)];
+  });
   const onSeats: number[] = [];
   const moving: number[] = [];
   for (const [index, place] of flat.entries()) {
@@ -156,6 +166,7 @@ export function createCast(
       window: new Float64Array(capacity).fill(Number.NaN),
       trips: Array.from({ length: capacity }, () => null),
     },
+    courts,
   };
 }
 

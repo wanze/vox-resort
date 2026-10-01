@@ -12,6 +12,7 @@ const GROUND = SURFACE + 1;
 
 const NET_X = 47;
 const POST_TOP = GROUND + 10;
+const TAPE = POST_TOP - 1;
 const POSTS_Z = [COURT.z0 - 4, COURT.z1 + 3] as const;
 
 const CHAIR = { x0: 45, x1: 50, z0: 8, z1: 12, deck: GROUND + 7 } as const;
@@ -22,6 +23,8 @@ const BENCH = GROUND + 1;
 // Where along each dugout's bench a towel lies, one course deep; who sits there sits on it.
 const TOWELS = [3, 8] as const;
 const SITTERS = [1, 5, 9, 13] as const;
+
+const game = 'volleyball' as const;
 
 const FRONT = 8;
 const BACK = 22;
@@ -39,8 +42,15 @@ const ROLES = [
 ] as const;
 
 const PLAYERS = ROLES.flatMap(({ d, z }) => [
-  { x: NET_X - d, y: GROUND, z, facing: 1 as const },
-  { x: NET_X + 1 + d, y: GROUND, z: COURT.z0 + COURT.z1 - z, facing: 3 as const },
+  { x: NET_X - d, y: GROUND, z, facing: 1 as const, game, side: 0 as const },
+  {
+    x: NET_X + 1 + d,
+    y: GROUND,
+    z: COURT.z0 + COURT.z1 - z,
+    facing: 3 as const,
+    game,
+    side: 1 as const,
+  },
 ]);
 
 // The dugouts seat eight; the rest watch from the front sideline, clear of the umpire.
@@ -85,6 +95,9 @@ export default defineModel({
         for: 'watcher' as const,
       })),
     ],
+    // Played over the head, set and spiked from there.
+    ball: { model: 'ball-volley', y: GROUND + 7 },
+    court: { ...COURT, net: { x: NET_X, top: TAPE } },
   },
   tiles: { x: 6, z: 4 },
   build: (b: VoxelBuilder) => {
@@ -102,7 +115,7 @@ export default defineModel({
     box(COURT.x1, COURT.x1, SURFACE, SURFACE, COURT.z0, COURT.z1, water.light);
 
     for (const z of POSTS_Z) box(NET_X, NET_X + 1, GROUND, POST_TOP, z, z + 1, bloom.base);
-    const tape = POST_TOP - 1;
+    const tape = TAPE;
     box(NET_X, NET_X, tape - 3, tape - 1, POSTS_Z[0] + 2, POSTS_Z[1] - 1, metal.light);
     box(NET_X, NET_X, tape, tape, POSTS_Z[0] + 2, POSTS_Z[1] - 1, stucco.light);
     for (const z of [COURT.z0, COURT.z1]) box(NET_X, NET_X, tape + 1, tape + 4, z, z, stucco.light);

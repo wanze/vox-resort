@@ -3,6 +3,7 @@ import { MAX_STEP, RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { mix } from '../../sim/domain/night';
 import type { Cast } from './casting';
+import { playGames } from './courts';
 import type { AreaPlace, LoopPlace, Place } from './places';
 
 export type AreaAct = 'swim' | 'laps' | 'wade';
@@ -242,7 +243,8 @@ export function advanceActs(seconds: number, dt: number, scale: number): number 
   return step > 0 ? seconds + step : seconds;
 }
 
-// Every frame, after keepSeats: whoever holds an area or a loop is drawn where the act has them.
+// Every frame, after keepSeats: whoever holds an area or a loop is drawn where the act has them,
+// and whoever is at a court where its game has them.
 export function perform(cast: Cast, clock: number): void {
   for (let at = 0; at < cast.moving.length; at++) {
     const index = cast.moving[at]!;
@@ -252,4 +254,5 @@ export function perform(cast: Cast, clock: number): void {
     if (place.act === 'loop') ride(cast, person, place, clock);
     else if (isMoving(place)) swimArea(cast, person, place, clock);
   }
+  playGames(cast, clock);
 }

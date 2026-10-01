@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { LITTER_SOURCES } from './litter/index.ts';
+import { PROP_SOURCES } from './props/index.ts';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
@@ -405,6 +406,7 @@ async function chooseSources(
     ...SKY_SOURCES,
     ...SEA_SOURCES,
     ...LITTER_SOURCES,
+    ...PROP_SOURCES,
   ];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
@@ -433,6 +435,7 @@ const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
   ['--sky', { sources: SKY_SOURCES, sheet: 'sky', sweeps: true }],
   ['--sea', { sources: SEA_SOURCES, sheet: 'sea', sweeps: true }],
   ['--litter', { sources: LITTER_SOURCES, sheet: 'litter', sweeps: true }],
+  ['--props', { sources: PROP_SOURCES, sheet: 'props', sweeps: true }],
   ['--drafts', { sources: DRAFT_SOURCES, sheet: 'drafts', sweeps: false }],
 ]);
 
@@ -467,6 +470,7 @@ function sweepStale(outDir: string): void {
       ...SKY_SOURCES,
       ...SEA_SOURCES,
       ...LITTER_SOURCES,
+      ...PROP_SOURCES,
     ].map((source) => `${source.id}.png`),
   );
   const stale = readdirSync(outDir, { withFileTypes: true })

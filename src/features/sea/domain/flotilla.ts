@@ -1,4 +1,6 @@
+import { WALK_SPEED } from '../../crowd/domain/crowd';
 import { createRandom } from '../../layout/domain/random';
+import { WALK_VOXELS_PER_SIM_HOUR } from '../../sim/domain/crowdRate';
 import type { PierBox } from './piers';
 import type { Mooring, Rental, SailingGround } from './swimArea';
 
@@ -14,18 +16,29 @@ const SPEED_SPREAD = 0.45;
 const TURN_RADIANS = 0.11;
 const SWING_RATE = 0.09;
 
-// Real seconds, not resort time: the resort clock can be stopped or scrubbed,
-// which would freeze pedalos mid-bay.
-const HIRE_SECONDS = 120;
+// Hire boats keep the crowd's seconds, not real ones: they carry guests, so they stop when the
+// crowd does, and a hire is the same share of the resort day at every speed.
+const CROWD_SECONDS_PER_HOUR = WALK_VOXELS_PER_SIM_HOUR / WALK_SPEED;
+const HIRE_SECONDS = 2 * CROWD_SECONDS_PER_HOUR;
 
-// Keeps hire boats in sight of their hut, and the trip home short.
-const HIRE_REACH = 180;
+const PEDAL_SHARE_OF_WALK = 0.6;
+
+// Under a voxel a step at pedal pace, so a boat coming home cannot step over its berth.
+const HIRE_STEP = 0.25;
+// Bounds a long frame at rush the way the crowd's substeps do; the rest is dropped.
+const MAX_HIRE_STEPS = 16;
+
+// Just short of launching, so a boat held for want of a hirer goes out the frame one turns up.
+const HELD_AGE = -1e-3;
+
+// Thirty tiles: out across the bay, yet home within the hour.
+const HIRE_REACH = 480;
 
 const TIED_SECONDS = 25;
 const TIED_SPREAD = 45;
 
-// Far harder than the idle swing, or a boat would take half its hire to point home.
-const HELM_RADIANS = 0.5;
+// A turning circle inside the berth's reach, or a quick boat circles its berth for ever.
+const HELM_VOXELS = 3;
 
 const BERTH_VOXELS = 4;
 
@@ -53,6 +66,8 @@ export interface FlotillaOptions {
   readonly craft: number;
   readonly craftVariants: readonly number[];
   readonly hire?: HireOptions | null;
+  // Left out, every hire boat may be out at once.
+  readonly hireAllowed?: number;
   readonly ground: SailingGround;
   // Half the length, since a hull turns.
   readonly radii?: readonly number[];
@@ -92,6 +107,8 @@ export interface Flotilla {
   readonly piers: readonly PierBox[];
   readonly islands: readonly PierBox[];
   readonly waterline: number;
+  // How many hire boats may be out at once; lowering it lets a boat finish its hire.
+  hireAllowed: number;
   clock: number;
 }
 
@@ -149,6 +166,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     piers: options.piers ?? [],
     islands: options.islands ?? [],
     waterline: options.waterline,
+    hireAllowed: options.hireAllowed ?? hired,
     clock: 0,
   };
 
@@ -188,6 +206,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     flotilla.berthHeading[index] = berth.heading;
     flotilla.gap[index] = TIED_SECONDS + random() * TIED_SPREAD;
     helm(index);
+    flotilla.speed[index]! *= (PEDAL_SHARE_OF_WALK * WALK_SPEED) / SPEED_VOXELS;
     // Dropped anywhere in the cycle, so the berths fill and empty from the first minute.
     const age = random() * (HIRE_SECONDS + flotilla.gap[index]!) - flotilla.gap[index]!;
     flotilla.age[index] = age;
@@ -205,10 +224,22 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     }
   }
 
+  // Only once every draw is dealt, so an allowance never moves the seeded ones.
+  holdBeyondAllowance(flotilla, count - hired);
+
   for (let index = 0; index < count; index++) {
     flotilla.radius[index] = options.radii?.[flotilla.variant[index]!] ?? DEFAULT_RADIUS;
   }
   return flotilla;
+}
+
+function holdBeyondAllowance(flotilla: Flotilla, firstHire: number): void {
+  let out = 0;
+  for (let index = firstHire; index < flotilla.count; index++) {
+    if (flotilla.age[index]! < 0) continue;
+    if (out < flotilla.hireAllowed) out++;
+    else tieUp(flotilla, index, HELD_AGE);
+  }
 }
 
 // Before radii are dealt, so it clears the hull by the default reach; the first step settles the rest.
@@ -227,21 +258,36 @@ function tieUp(flotilla: Flotilla, index: number, age: number): void {
   flotilla.heading[index] = flotilla.berthHeading[index]!;
 }
 
-export function stepFlotilla(flotilla: Flotilla, dt: number, ground: SailingGround): void {
+// `hireDt` is the crowd's time this frame; left out, the hire boats keep real time with the rest.
+export function stepFlotilla(
+  flotilla: Flotilla,
+  dt: number,
+  ground: SailingGround,
+  hireDt = dt,
+): void {
   flotilla.clock += dt;
   for (let index = 0; index < flotilla.count; index++) {
-    if (flotilla.speed[index] === 0) continue;
-    if (flotilla.hired[index] === 0) {
+    if (flotilla.speed[index] !== 0 && flotilla.hired[index] === 0) {
       drift(flotilla, index, dt, ground);
-      continue;
     }
-
-    stepHire(flotilla, index, dt, ground);
+  }
+  if (!(hireDt > 0)) return;
+  const steps = Math.min(MAX_HIRE_STEPS, Math.ceil(hireDt / HIRE_STEP));
+  const step = Math.min(HIRE_STEP, hireDt / steps);
+  for (let at = 0; at < steps; at++) {
+    for (let index = 0; index < flotilla.count; index++) {
+      if (flotilla.hired[index] === 1) stepHire(flotilla, index, step, ground);
+    }
   }
 }
 
 function stepHire(flotilla: Flotilla, index: number, dt: number, ground: SailingGround): void {
+  const tied = flotilla.age[index]! < 0;
   const age = flotilla.age[index]! + dt;
+  if (tied && age >= 0 && hiresOut(flotilla) >= flotilla.hireAllowed) {
+    flotilla.age[index] = HELD_AGE;
+    return;
+  }
   flotilla.age[index] = age;
   if (age < 0) return;
 
@@ -258,6 +304,15 @@ function stepHire(flotilla: Flotilla, index: number, dt: number, ground: Sailing
   else drift(flotilla, index, dt, ground);
 }
 
+// Counted afresh rather than kept, so it cannot drift from the ages; only a boat due out asks.
+function hiresOut(flotilla: Flotilla): number {
+  let out = 0;
+  for (let index = 0; index < flotilla.count; index++) {
+    if (flotilla.hired[index] === 1 && flotilla.age[index]! >= 0) out++;
+  }
+  return out;
+}
+
 // Turned back by mirroring the heading about the limit it met: steering towards the
 // middle can leave a boat grinding along an edge.
 function drift(flotilla: Flotilla, index: number, dt: number, ground: SailingGround): void {
@@ -272,7 +327,8 @@ function steerHome(flotilla: Flotilla, index: number, dt: number, ground: Sailin
     flotilla.berthZ[index]! - flotilla.z[index]!,
   );
   const off = wrapAngle(bearing - flotilla.heading[index]!);
-  const over = Math.sign(off) * Math.min(Math.abs(off), HELM_RADIANS * dt);
+  const helm = (flotilla.speed[index]! / HELM_VOXELS) * dt;
+  const over = Math.sign(off) * Math.min(Math.abs(off), helm);
   hold(flotilla, index, wrapAngle(flotilla.heading[index]! + over), dt, ground);
 }
 

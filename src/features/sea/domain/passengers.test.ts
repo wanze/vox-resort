@@ -108,6 +108,20 @@ describe('createPassengers', () => {
     }
   });
 
+  it('seats a pair in every hire boat whose art has room for two', () => {
+    const flotilla = bay(0, 6);
+    const passengers = createPassengers({
+      flotilla,
+      berths: [[], [], BERTHS[BOAT]!],
+      variants: 4,
+      seed: 3,
+    });
+    for (const craft of new Set(passengers.craft)) {
+      expect(takenOn(passengers, craft), `craft ${craft}`).toHaveLength(2);
+    }
+    expect(passengers.count).toBe(12);
+  });
+
   it('leaves some of the private boats empty and crews most of them', () => {
     const flotilla = bay(40, 0);
     const passengers = crewFor(flotilla);

@@ -68,13 +68,14 @@ export function createPassengers(options: PassengersOptions): Passengers {
 
   for (let index = 0; index < flotilla.count; index++) {
     const offered = berths[flotilla.variant[index]!] ?? [];
-    // A hire boat is out because somebody took it out, so its first berth is taken.
-    let chance = flotilla.hired[index] === 1 ? 1 : AT_THE_HELM;
+    // A hire boat is out because a pair took it out, so every berth is taken.
+    const hired = flotilla.hired[index] === 1;
+    let chance = hired ? 1 : AT_THE_HELM;
     for (const seat of offered) {
       if (random() >= chance) break;
       craft.push(index);
       berth.push(seat);
-      chance = ALONGSIDE;
+      chance = hired ? 1 : ALONGSIDE;
     }
   }
 

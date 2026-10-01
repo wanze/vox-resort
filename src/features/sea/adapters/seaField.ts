@@ -23,7 +23,9 @@ export interface SeaField {
   readonly crewCount: number;
   readonly drawCalls: number;
   readonly triangleCount: number;
-  advance(dt: number): void;
+  // `crowdDt` is the crowd's scaled time, which the hire boats keep.
+  advance(dt: number, crowdDt: number): void;
+  allowHire(boats: number): void;
   dispose(): void;
 }
 
@@ -106,13 +108,16 @@ export function buildSeaField(options: SeaFieldOptions): SeaField {
     get triangleCount() {
       return hulls + crew.triangleCount;
     },
-    advance(dt) {
+    advance(dt, crowdDt) {
       const step = Math.min(Math.max(dt, 0), MAX_STEP);
       if (step === 0) return;
-      stepFlotilla(flotilla, step, ground);
+      stepFlotilla(flotilla, step, ground, crowdDt);
       for (const part of parts) writeInstances(part, flotilla);
       // After the hulls: a passenger sits in the boat as it is this frame, not last frame.
       crew.write();
+    },
+    allowHire(boats) {
+      flotilla.hireAllowed = boats;
     },
     dispose() {
       crew.dispose();

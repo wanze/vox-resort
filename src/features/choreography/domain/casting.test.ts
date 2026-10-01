@@ -3,6 +3,7 @@ import { RESTING } from '../../crowd/domain/crowd';
 import type { StaffRole } from '../../sim/domain/staff';
 import {
   createCast,
+  insideAt,
   keepSeats,
   recast,
   recastStaff,
@@ -143,6 +144,22 @@ describe('recast', () => {
     recast(cast, casting, freeSeats());
     expect(cast.shown[0]).toBe(SHOWN.asCrowd);
     expect(cast.placeOf[0]).toBe(-1);
+  });
+});
+
+describe('insideAt', () => {
+  it('counts a venue’s visitors, placed or hidden, but not its line nor the beach', () => {
+    const { venue, waiting, casting } = world(7);
+    const cast = createCast(7, ALL);
+    venue.set([0, 0, 0, 0, 0, ALL.length, 2]);
+    waiting[4] = 1;
+    recast(cast, casting, freeSeats());
+    expect(insideAt(cast, 0)).toBe(4);
+    expect(insideAt(cast, 2)).toBe(1);
+    expect(insideAt(cast, 1)).toBe(0);
+    venue.fill(NONE);
+    recast(cast, casting, freeSeats());
+    expect(insideAt(cast, 0)).toBe(0);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { hull, pedalo, PEDALO_BEAM, PEDALO_LENGTH } from './boat.ts';
+import { hull, pedalo, PEDALO_BEAM, PEDALO_LENGTH, PEDALO_PAIR_BEAM, pedaloSeats } from './boat.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
   b.voxels.get(`${x},${y},${z}`);
@@ -73,6 +73,22 @@ describe('pedalo', () => {
     for (const side of [-1, 1]) {
       expect(at(b, side * 2, 2, 5)).toBe(PALETTE.bloom.base);
       expect(at(b, side * 2, 3, 3)).toBe(PALETTE.bloom.shade);
+    }
+  });
+
+  it('seats two abreast at the pair beam, each figure clear of its float and its neighbour', () => {
+    const b = new VoxelBuilder();
+    pedalo(b, { x: 0, z: 0, y: 0, beam: PEDALO_PAIR_BEAM });
+    const seats = pedaloSeats({ x: 0, y: 0, z: 0 });
+    expect(seats).toHaveLength(2);
+    const [port, starboard] = seats.map((seat) => seat.x).toSorted((one, other) => one - other);
+    expect(starboard! - port!).toBeGreaterThanOrEqual(3);
+    // A float's top is stucco light at the gunwale; a figure is three voxels wide.
+    for (const seat of seats) {
+      for (let x = seat.x - 1; x <= seat.x + 1; x++) {
+        expect(at(b, x, 2, seat.z), `figure at ${x}`).not.toBe(PALETTE.stucco.light);
+      }
+      expect(at(b, seat.x + Math.sign(seat.x) * 2, 2, seat.z)).toBe(PALETTE.stucco.light);
     }
   });
 

@@ -46,6 +46,7 @@ import {
   BRIDGE_RAMP_ID,
   JETTY_ID,
   PATH_ID,
+  PEDALO_RENTAL_ID,
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
@@ -343,6 +344,7 @@ import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkN
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
   createCast,
+  insideAt,
   keepSeats,
   noteShows,
   recast,
@@ -452,6 +454,9 @@ const CRAFT_COUNT = 12;
 
 // Capped by the hut: a wider rack would moor boats among the swimmers.
 const HIRE_COUNT = 6;
+
+// A pedalo seats two, and goes out full.
+const HIRERS_PER_BOAT = 2;
 
 const SEA_SEED = 3;
 
@@ -1147,6 +1152,8 @@ function seaFor(parts: {
     craft: shore ? CRAFT_COUNT : 0,
     craftVariants: driftingVariants(parts.sea),
     hire: rental ? { count: HIRE_COUNT, variant: PEDALO_INDEX, rental } : null,
+    // Nobody is at the hut before the first recast, which sets the real allowance.
+    hireAllowed: 0,
     ground,
     radii: SEA_RADII,
     piers: pierBoxesFor(shore, parts.paved),
@@ -1540,9 +1547,30 @@ function buildResort(
 const byKey = (placements: readonly Placement[]): ReadonlyMap<string, Placement> =>
   new Map(placements.map((placement) => [placement.key, placement]));
 
+const rentalIndices = new WeakMap<readonly Venue[], number>();
+
+// The first hut, as rentalOf picks it for the berths. Built once per venue list, as venueIndexOf is.
+function rentalVenueOf(venues: readonly Venue[]): number {
+  let index = rentalIndices.get(venues);
+  if (index === undefined) {
+    index = venues.findIndex((venue) => familyOf(venue.id) === PEDALO_RENTAL_ID);
+    rentalIndices.set(venues, index);
+  }
+  return index;
+}
+
+// Drawn only: the visit is the router's, and the boats keep the crowd's time. A hut pulled down
+// keeps its boats in, since the sea is not rebuilt on an edit.
+function allowHire(resort: Resort): void {
+  const rental = rentalVenueOf(resort.venues);
+  const hirers = rental >= 0 ? insideAt(resort.cast, rental) : 0;
+  resort.sea.allowHire(Math.min(HIRE_COUNT, Math.ceil(hirers / HIRERS_PER_BOAT)));
+}
+
 // After the ticks, never inside them: the cast only reads what the routers decided.
 function recastAll(resort: Resort): void {
   recast(resort.cast, resort.casting, resort.crowd.crowd.seatBy);
+  allowHire(resort);
   const { staffRouter, venues } = resort;
   noteShows(resort.cast, (venue) => staffRouter.performingAt(venue));
   recastStaff(
@@ -3677,7 +3705,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     current().staff.advance(walked, crowdScale);
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
     drawnLitter = drawLitter(current(), drawnLitter);
-    current().sea.advance(bench ? MAX_STEP : elapsed);
+    current().sea.advance(bench ? MAX_STEP : elapsed, walked * crowdScale);
     advanceWeather(elapsed);
     build.advance(bench ? MAX_STEP : elapsed);
     moveCamera(elapsed);

@@ -70,6 +70,16 @@ position and identity but lose their seat. Crowd size doesn't change.
   behind. Paused means standing still.
 - **Boats** look ahead, steer away from piers and each other, and stay inside the
   bay.
+- **Hire boats** go out only while the pedalo rental has visitors, one boat for
+  every two (`HIRERS_PER_BOAT`), read from the cast after each recast
+  (`insideAt`), and always with two aboard. A hire is two resort hours out,
+  then the trip home; a boat out when the visitors leave finishes its hire, and
+  none is called back early. This is drawn only: the visit, its dwell and its
+  price are the router's.
+- Hire boats keep the **crowd's time** (`walked * crowdScale`), not real time:
+  they pedal at 0.6 of walking pace, stop when the crowd stops, and fall behind
+  the day at rush as the crowd does. Long frames are split into substeps of a
+  quarter of a crowd second, so a boat never steps over its berth.
 
 ## Storage
 
@@ -186,8 +196,8 @@ paused.
 | Fast   | 120                  |
 | Rush   | 30                   |
 
-Needs run on ticks. The crowd runs on frame time scaled by speed. Balloons, sea
-and construction run at real time.
+Needs run on ticks. The crowd and the hire boats run on frame time scaled by
+speed. Balloons, the rest of the sea and construction run at real time.
 
 ## Needs and choosing a venue
 

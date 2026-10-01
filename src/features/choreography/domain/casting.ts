@@ -115,6 +115,8 @@ export interface Cast extends DrawnAs {
   readonly fromShowZ: Float32Array;
   // Every ball in play, the courts' and the courses', for the ball field to draw.
   readonly played: readonly { readonly ball: DrawnBall }[];
+  // Per venue, as recast last saw it: its visitors, not those waiting outside.
+  readonly inside: Int32Array;
 }
 
 export interface Casting {
@@ -286,6 +288,7 @@ export function createCast(
     showFrom: new Float64Array(venues.length).fill(Number.NaN),
     showTo: new Float64Array(venues.length).fill(Number.NaN),
     played: [...courts, ...golf.flatMap((play) => play.balls.map((ball) => ({ ball })))],
+    inside: new Int32Array(venues.length),
   };
 }
 
@@ -382,11 +385,17 @@ function noteFamily(cast: Cast, casting: Casting, person: number, venue: number)
   cast.child[person] = Number(there && casting.isChild?.(person) === true);
 }
 
+// The beach and anybody asleep or nowhere fall outside the venues, so they count nowhere.
+function noteInside(cast: Cast, venue: number, waiting: number): void {
+  if (waiting === 0 && venue >= 0 && venue < cast.inside.length) cast.inside[venue]!++;
+}
+
 // Once after a frame's ticks. Every change is let go before anybody is placed, so a place given
 // up this frame can be taken this frame.
 export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
   const count = Math.min(casting.count, cast.shown.length);
   cast.bathers.count = 0;
+  cast.inside.fill(0);
   for (let person = 0; person < count; person++) {
     let venue = NOWHERE;
     if (casting.isPresent(person))
@@ -394,6 +403,7 @@ export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
     if (casting.bathing) noteBather(cast, casting, casting.bathing, person, venue);
     noteFamily(cast, casting, person, venue);
     const waiting = venue >= 0 && casting.isWaiting(person) ? 1 : 0;
+    noteInside(cast, venue, waiting);
     if (venue === cast.lastVenue[person] && waiting === cast.lastWaiting[person]) continue;
     release(cast, person);
     cast.lastVenue[person] = venue;
@@ -401,6 +411,8 @@ export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
   }
   for (let person = 0; person < count; person++) castOne(cast, casting, person, seatBy);
 }
+
+export const insideAt = (cast: Cast, venue: number): number => cast.inside[venue] ?? 0;
 
 // Every frame: a passer-by keeps sitting down on venue seats, and whoever was drawn there moves.
 export function keepSeats(cast: Cast, casting: Casting, seatBy: Int32Array): void {

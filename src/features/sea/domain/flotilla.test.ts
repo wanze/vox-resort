@@ -340,7 +340,7 @@ describe('the rental’s own boats', () => {
   });
 
   it('opens with some out and some tied up, rather than the whole rack leaving at once', () => {
-    const flotilla = hiring(8, 0, 3);
+    const flotilla = hiring(8, 0, 2);
     const ages = hireSlots(flotilla).map((index) => flotilla.age[index]!);
     expect(ages.some((age) => age < 0)).toBe(true);
     expect(ages.some((age) => age >= 0)).toBe(true);
@@ -385,9 +385,60 @@ describe('a hire boat’s round trip', () => {
   });
 
   it('keeps its boats in sight of the hut rather than letting them cross the bay', () => {
-    for (const trip of trips(hiring(6, 0, 5), 900)) {
-      expect(trip.away).toBeLessThan(220);
+    const wide: SailingGround = { ...GROUND, westX: -1500, eastX: 1500, seawardZ: 1500 };
+    const flotilla = createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1],
+      hire: { count: 6, variant: 3, rental: RENTAL },
+      ground: wide,
+      waterline: WATERLINE,
+      seed: 5,
+    });
+    let away = 0;
+    for (let tick = 0; tick < 20_000; tick++) {
+      stepFlotilla(flotilla, 0.1, wide);
+      for (const index of hireSlots(flotilla)) {
+        away = Math.max(
+          away,
+          Math.hypot(
+            flotilla.x[index]! - flotilla.berthX[index]!,
+            flotilla.z[index]! - flotilla.berthZ[index]!,
+          ),
+        );
+      }
     }
+    expect(away).toBeGreaterThan(300);
+    expect(away).toBeLessThan(520);
+  });
+
+  it('keeps the crowd’s time: still while it stands still, the rest of the bay sailing on', () => {
+    const flotilla = hiring(6, 4, 7);
+    const from = [...flotilla.x];
+    const ages = [...flotilla.age];
+    for (let tick = 0; tick < 100; tick++) stepFlotilla(flotilla, 0.1, GROUND, 0);
+    for (const index of hireSlots(flotilla)) {
+      expect(flotilla.x[index]).toBe(from[index]);
+      expect(flotilla.age[index]).toBe(ages[index]);
+    }
+    const craft = MOORINGS.length;
+    expect(flotilla.x[craft]).not.toBe(from[craft]);
+  });
+
+  it('still comes home on the long steps of a fast resort', () => {
+    const flotilla = hiring(6, 0, 5);
+    const ties = hireSlots(flotilla).map(() => 0);
+    const tied = hireSlots(flotilla).map((index) => flotilla.age[index]! < 0);
+    for (let tick = 0; tick < 2000; tick++) {
+      stepFlotilla(flotilla, 0.1, GROUND, 3.2);
+      for (const [boat, index] of hireSlots(flotilla).entries()) {
+        const lying = flotilla.age[index]! < 0;
+        if (lying && !tied[boat]) ties[boat]!++;
+        tied[boat] = lying;
+      }
+    }
+    for (const count of ties) expect(count).toBeGreaterThanOrEqual(2);
   });
 
   it('lies still at the berth once it is home, and then goes out again', () => {
@@ -419,5 +470,74 @@ describe('a hire boat’s round trip', () => {
         expect(flotilla.z[index]).toBeLessThanOrEqual(GROUND.seawardZ);
       }
     }
+  });
+});
+
+describe('a hire allowance', () => {
+  const allowed = (hireAllowed: number, seed = 5): Flotilla =>
+    createFlotilla({
+      moorings: MOORINGS,
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1, 2],
+      hire: { count: 6, variant: 3, rental: RENTAL },
+      hireAllowed,
+      ground: GROUND,
+      waterline: WATERLINE,
+      seed,
+    });
+
+  const out = (flotilla: Flotilla): number =>
+    hireSlots(flotilla).filter((index) => flotilla.age[index]! >= 0).length;
+
+  it('keeps every hire boat tied up while nobody is at the hut', () => {
+    const flotilla = allowed(0);
+    expect(out(flotilla)).toBe(0);
+    for (let second = 0; second < 300; second++) {
+      run(flotilla, 1);
+      expect(out(flotilla)).toBe(0);
+    }
+  });
+
+  it('launches as many as it is raised to, and no more', () => {
+    const flotilla = allowed(0);
+    run(flotilla, 60);
+    flotilla.hireAllowed = 2;
+    stepFlotilla(flotilla, 0.05, GROUND);
+    expect(out(flotilla)).toBe(2);
+    run(flotilla, 30);
+    expect(out(flotilla)).toBe(2);
+  });
+
+  it('never calls a boat back early when it is lowered', () => {
+    const flotilla = allowed(6);
+    run(flotilla, 60);
+    const boats = hireSlots(flotilla).filter((index) => flotilla.age[index]! >= 0);
+    const ages = boats.map((index) => flotilla.age[index]!);
+    expect(ages.some((age) => age < 100)).toBe(true);
+    flotilla.hireAllowed = 0;
+    run(flotilla, 10);
+    for (const [boat, index] of boats.entries()) {
+      if (ages[boat]! < 100) expect(flotilla.age[index]).toBeGreaterThan(ages[boat]!);
+    }
+  });
+
+  it('changes nothing when every boat is allowed out', () => {
+    const plain = hiring(6, 4, 7);
+    const full = createFlotilla({
+      moorings: MOORINGS,
+      buoyVariant: 0,
+      craft: 4,
+      craftVariants: [1, 2],
+      hire: { count: 6, variant: 3, rental: RENTAL },
+      hireAllowed: 6,
+      ground: GROUND,
+      waterline: WATERLINE,
+      seed: 7,
+    });
+    run(plain, 60);
+    run(full, 60);
+    expect([...full.x]).toEqual([...plain.x]);
+    expect([...full.age]).toEqual([...plain.age]);
   });
 });

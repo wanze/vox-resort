@@ -54,17 +54,27 @@ export function hull(b: VoxelBuilder, o: HullOptions): number {
 export const PEDALO_LENGTH = 12;
 export const PEDALO_BEAM = 4;
 
+// Wider on the water than in the hut's rack: two three-voxel figures abreast need a seven-voxel
+// footwell, and three racked boats have to fit two tiles.
+export const PEDALO_PAIR_BEAM = 5;
+
 const PEDALO_GUNWALE = 2;
 
-// One seat: the footwell is five voxels and a figure three, so two abreast would each put a leg in a float.
+// Abreast on the two pads, which clears both floats only at PEDALO_PAIR_BEAM.
 export function pedaloSeats(o: { x: number; y: number; z: number }): ModelSeat[] {
-  return [{ x: o.x - 1, y: o.y + PEDALO_GUNWALE + 1, z: o.z + 4, facing: 0 }];
+  return [-1, 1].map((side) => ({
+    x: o.x + side * 2,
+    y: o.y + PEDALO_GUNWALE + 1,
+    z: o.z + 4,
+    facing: 0,
+  }));
 }
 
 export interface PedaloOptions {
   readonly x: number;
   readonly z: number;
   readonly y: number;
+  readonly beam?: number;
   readonly shell?: Ramp;
   readonly trim?: Ramp;
 }
@@ -73,6 +83,7 @@ export function pedalo(b: VoxelBuilder, o: PedaloOptions): void {
   const shell = o.shell ?? PALETTE.stucco;
   const trim = o.trim ?? PALETTE.water;
   const { slate } = PALETTE;
+  const beam = o.beam ?? PEDALO_BEAM;
 
   const stern = o.z;
   const bow = o.z + PEDALO_LENGTH - 1;
@@ -80,8 +91,8 @@ export function pedalo(b: VoxelBuilder, o: PedaloOptions): void {
   const gunwale = o.y + PEDALO_GUNWALE;
 
   for (const side of [-1, 1] as const) {
-    const outer = o.x + side * PEDALO_BEAM;
-    const inner = o.x + side * (PEDALO_BEAM - 1);
+    const outer = o.x + side * beam;
+    const inner = o.x + side * (beam - 1);
     const west = Math.min(outer, inner);
     const east = Math.max(outer, inner);
     b.box(west, east, o.y, o.y, stern, bow - 1, shell.shade);
@@ -91,8 +102,8 @@ export function pedalo(b: VoxelBuilder, o: PedaloOptions): void {
     b.box(inner, inner, o.y, well, bow, bow, shell.light);
   }
 
-  b.box(o.x - PEDALO_BEAM + 2, o.x + PEDALO_BEAM - 2, o.y, o.y, stern + 2, bow - 1, shell.shade);
-  b.box(o.x - PEDALO_BEAM + 2, o.x + PEDALO_BEAM - 2, well, well, stern + 2, bow - 1, shell.light);
+  b.box(o.x - beam + 2, o.x + beam - 2, o.y, o.y, stern + 2, bow - 1, shell.shade);
+  b.box(o.x - beam + 2, o.x + beam - 2, well, well, stern + 2, bow - 1, shell.light);
   for (const side of [-1, 1] as const) {
     const seat = o.x + side * 2;
     const west = Math.min(seat, seat - side);

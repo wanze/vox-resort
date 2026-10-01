@@ -27,10 +27,10 @@ const SWING = { x0: 39, x1: 57, z: 11, top: GROUND + 11 } as const;
 const SWINGS = [42, 46, 50, 54] as const;
 
 const CLIMBERS = [
-  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
-  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
-  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
-  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1, child: true },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1, child: true },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0, child: true },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0, child: true },
 ] as const;
 
 const PIT = { x0: 20, x1: 25, z0: 38, z1: 42 } as const;
@@ -71,9 +71,12 @@ export default defineModel({
         z: SWING.z,
         facing: 0 as const,
         pose: 'sit' as const,
+        act: 'swing' as const,
+        pivot: SWING.top,
+        child: true as const,
       })),
       ...CLIMBERS,
-      // Ground sitters are lifted by the crowd's GROUND_SIT_RISE, so the hips sit 1.5 above the sand.
+      // Kneeling in the sand, which the dig draws by sinking a standing child into it.
       ...(
         [
           [PIT.x0, 1],
@@ -81,10 +84,11 @@ export default defineModel({
         ] as const
       ).map(([x, facing]) => ({
         x,
-        y: GROUND + 2.5,
+        y: GROUND + 1,
         z: PIT.z0 + 1,
         facing,
-        pose: 'sit' as const,
+        act: 'dig' as const,
+        child: true as const,
       })),
       {
         x: (MATS.ne.x0 + MATS.ne.x1) >> 1,

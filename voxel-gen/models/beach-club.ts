@@ -53,6 +53,9 @@ const DAYBEDS = [
 // A daybed's depth in front of the front row is the middle of the aisle, open on both sides.
 const ANIMATOR = { x: DECK.x + DECK.w / 2, z: DAYBEDS[0][1] - 7 } as const;
 
+// The aisle between the two rows of daybeds, clear of the balustrades either end.
+const FLOOR = { x: LEFT + 4, z: DAYBEDS[6][1] + 9, w: DECK.w - 8, d: 9, y: TOP_LAYER } as const;
+
 export default defineModel({
   id: 'beach-club',
   label: 'Beach Club',
@@ -84,6 +87,7 @@ export default defineModel({
     dwellSeconds: { min: 1800, max: 5400 },
     price: 4,
     spots: [{ ...ANIMATOR, y: TOP_LAYER, facing: 0, for: 'animator' }],
+    floor: FLOOR,
     doors: FLIGHTS.map((x) => ({ x: x + FLIGHT_W / 2, z: BRINK + 4, facing: 0 as const })),
   },
   build: (b: VoxelBuilder) => {

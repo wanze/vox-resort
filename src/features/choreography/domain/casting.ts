@@ -1,10 +1,24 @@
+import { RESTING } from '../../crowd/domain/crowd';
 import type { StaffRole } from '../../sim/domain/staff';
 import { isMoving } from './acts';
-import { createCourtGame, type CourtGame } from './courts';
+import { createCourtGame, type CourtGame, type DrawnBall } from './courts';
+import { createGolfPlay, type GolfPlay } from './golf';
+import type { Audience, Floor } from './shows';
+import type { TagGame, Yard } from './tag';
 import type { Place, VenuePlaces } from './places';
 import type { SeaShore, SwimTrip } from './seaSwim';
 
 export const SHOWN = { asCrowd: 0, placed: 1, hidden: 2 } as const;
+
+// What somebody at work is drawn doing, by role.
+export const WORK = { none: 0, show: 1, watch: 2, sweep: 3, mend: 4 } as const;
+
+const WORK_OF: Readonly<Record<StaffRole, number>> = {
+  animator: WORK.show,
+  lifeguard: WORK.watch,
+  cleaner: WORK.sweep,
+  mechanic: WORK.mend,
+};
 
 // What the crowd field draws instead of the crowd: 0 as the crowd has them, 1 placed, 2 not drawn.
 export interface DrawnAs {
@@ -44,6 +58,7 @@ interface VenueRanges {
   readonly watchers: Range;
   readonly animators: Range;
   readonly lifeguards: Range;
+  readonly staff: Range;
 }
 
 // Visual state only, rebuilt from what the router reports: nothing here is ever saved.
@@ -73,6 +88,33 @@ export interface Cast extends DrawnAs {
   readonly bathers: Bathers;
   // One for each venue with a game, in venue order.
   readonly courts: readonly CourtGame[];
+  readonly golf: readonly GolfPlay[];
+  // Per person, as recast last saw them: -1 for no party.
+  readonly party: Int32Array;
+  readonly child: Uint8Array;
+  // Triples: a parent's place, then the start and count of its venue's visitor places.
+  readonly minding: Int32Array;
+  // The clock last performed, for how far a parent turns in a frame.
+  readonly frame: { clock: number };
+  readonly tag: readonly TagGame[];
+  // Per venue: 1 while an animator puts a show on there, and the act clock it began or last ended.
+  readonly shows: Uint8Array;
+  readonly showFrom: Float64Array;
+  readonly showTo: Float64Array;
+  readonly audiences: readonly Audience[];
+  // Staff only: a WORK code, and where the work is done, its place's or where the sim holds them.
+  readonly work: Uint8Array;
+  readonly workX: Float32Array;
+  readonly workY: Float32Array;
+  readonly workZ: Float32Array;
+  readonly workHeading: Float32Array;
+  // Per person: the show they last set off for, when, and from where.
+  readonly joined: Float64Array;
+  readonly joinedAt: Float64Array;
+  readonly fromShowX: Float32Array;
+  readonly fromShowZ: Float32Array;
+  // Every ball in play, the courts' and the courses', for the ball field to draw.
+  readonly played: readonly { readonly ball: DrawnBall }[];
 }
 
 export interface Casting {
@@ -84,6 +126,8 @@ export interface Casting {
   isPresent(person: number): boolean;
   // Left out, everybody is an adult.
   isChild?(person: number): boolean;
+  // Left out, nobody is anybody's parent.
+  partyOf?(person: number): number;
   // Left out, nobody goes for a swim.
   readonly bathing?: Bathing;
 }
@@ -102,6 +146,33 @@ export interface Bathing {
 const NOWHERE = -1;
 const ASLEEP = -2;
 
+const gathers = (place: Place): boolean => place.act === 'tag' || place.act === 'play';
+
+const dances = (place: Place): boolean => !isMoving(place) && place.pose === RESTING.sitting;
+
+// Who leaves off for a show: tag and the machines gather round the animator, sitters dance.
+function audienceOf(
+  flat: readonly Place[],
+  { visitors, animators }: VenueRanges,
+  venue: number,
+  floor: Floor | undefined,
+): Audience[] {
+  const own = Array.from({ length: visitors.count }, (_, at) => visitors.start + at);
+  const animator = animators.count > 0 ? animators.start : -1;
+  const gathering = animator >= 0 ? own.filter((index) => gathers(flat[index]!)) : [];
+  const dancing = floor ? own.filter((index) => dances(flat[index]!)) : [];
+  if (gathering.length + dancing.length === 0) return [];
+  return [
+    {
+      venue,
+      animator,
+      gathering: Int32Array.from(gathering),
+      dancing: Int32Array.from(dancing),
+      floor: floor ?? null,
+    },
+  ];
+}
+
 export function createCast(
   capacity: number,
   places: readonly VenuePlaces[],
@@ -118,6 +189,7 @@ export function createCast(
     watchers: take(venue.watchers),
     animators: take(venue.animators),
     lifeguards: take(venue.lifeguards),
+    staff: take(venue.staff ?? []),
   }));
   const courts = places.flatMap(({ game }, venue) => {
     if (!game) return [];
@@ -126,12 +198,39 @@ export function createCast(
     const watching = Int32Array.from({ length: watchers.count }, (_, at) => watchers.start + at);
     return [createCourtGame(game, players, watching)];
   });
+  const golf = places.flatMap((venue, at) => {
+    if (!venue.golf) return [];
+    const { start } = venues[at]!.visitors;
+    const parties = venue.golf.lanes.map((lane) =>
+      Int32Array.from(lane.party, (visitor) => start + visitor),
+    );
+    return [createGolfPlay(venue.golf, parties)];
+  });
   const onSeats: number[] = [];
   const moving: number[] = [];
   for (const [index, place] of flat.entries()) {
     if (place.seat >= 0) onSeats.push(index);
     if (isMoving(place)) moving.push(index);
   }
+  const tag = venues.flatMap(({ visitors }) => {
+    const games = new Map<Yard, number[]>();
+    for (let index = visitors.start; index < visitors.start + visitors.count; index++) {
+      const place = flat[index]!;
+      if (place.act !== 'tag' || !place.yard) continue;
+      games.set(place.yard, [...(games.get(place.yard) ?? []), index]);
+    }
+    return [...games].map(([yard, indices]) => ({ yard, places: Int32Array.from(indices) }));
+  });
+  const audiences = places.flatMap((venue, at) => audienceOf(flat, venues[at]!, at, venue.floor));
+  const minding = venues.flatMap(({ visitors }) => {
+    const own = flat.slice(visitors.start, visitors.start + visitors.count);
+    if (!own.some((place) => place.forChild)) return [];
+    return own.flatMap((place, at) =>
+      place.forChild || isMoving(place)
+        ? []
+        : [visitors.start + at, visitors.start, visitors.count],
+    );
+  });
   return {
     shown: new Uint8Array(capacity),
     x: new Float32Array(capacity),
@@ -167,6 +266,26 @@ export function createCast(
       trips: Array.from({ length: capacity }, () => null),
     },
     courts,
+    golf,
+    party: new Int32Array(capacity).fill(-1),
+    child: new Uint8Array(capacity),
+    minding: Int32Array.from(minding),
+    frame: { clock: 0 },
+    tag,
+    audiences,
+    work: new Uint8Array(capacity),
+    workX: new Float32Array(capacity),
+    workY: new Float32Array(capacity),
+    workZ: new Float32Array(capacity),
+    workHeading: new Float32Array(capacity),
+    joined: new Float64Array(capacity).fill(Number.NaN),
+    joinedAt: new Float64Array(capacity),
+    fromShowX: new Float32Array(capacity),
+    fromShowZ: new Float32Array(capacity),
+    shows: new Uint8Array(venues.length),
+    showFrom: new Float64Array(venues.length).fill(Number.NaN),
+    showTo: new Float64Array(venues.length).fill(Number.NaN),
+    played: [...courts, ...golf.flatMap((play) => play.balls.map((ball) => ({ ball })))],
   };
 }
 
@@ -175,6 +294,7 @@ function release(cast: Cast, person: number): void {
   if (place >= 0) cast.heldBy[place] = -1;
   cast.placeOf[person] = -1;
   cast.shown[person] = SHOWN.asCrowd;
+  cast.work[person] = WORK.none;
 }
 
 function hold(cast: Cast, person: number, index: number): void {
@@ -256,6 +376,12 @@ function noteBather(cast: Cast, casting: Casting, bathing: Bathing, person: numb
   bathers.until[person] = until;
 }
 
+function noteFamily(cast: Cast, casting: Casting, person: number, venue: number): void {
+  const there = venue >= 0;
+  cast.party[person] = there ? (casting.partyOf?.(person) ?? -1) : -1;
+  cast.child[person] = Number(there && casting.isChild?.(person) === true);
+}
+
 // Once after a frame's ticks. Every change is let go before anybody is placed, so a place given
 // up this frame can be taken this frame.
 export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
@@ -266,6 +392,7 @@ export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
     if (casting.isPresent(person))
       venue = casting.isAsleep(person) ? ASLEEP : casting.venueOf(person);
     if (casting.bathing) noteBather(cast, casting, casting.bathing, person, venue);
+    noteFamily(cast, casting, person, venue);
     const waiting = venue >= 0 && casting.isWaiting(person) ? 1 : 0;
     if (venue === cast.lastVenue[person] && waiting === cast.lastWaiting[person]) continue;
     release(cast, person);
@@ -285,26 +412,66 @@ export function keepSeats(cast: Cast, casting: Casting, seatBy: Int32Array): voi
   }
 }
 
-// Only an animator on a stage and a lifeguard at a pool: everybody else at work is drawn where
-// the staff router holds them.
+// After the staff's ticks: which venues have a show on, for their visitors to gather round.
+export function noteShows(cast: Cast, performingAt: (venue: number) => boolean): void {
+  for (let venue = 0; venue < cast.shows.length; venue++) {
+    cast.shows[venue] = Number(performingAt(venue));
+  }
+}
+
+// Where the staff crowd holds everybody, for a cleaner or a mechanic at a venue with no staff place.
+export interface StaffAt {
+  readonly x: ArrayLike<number>;
+  readonly y: ArrayLike<number>;
+  readonly z: ArrayLike<number>;
+  readonly heading: ArrayLike<number>;
+}
+
+function startWork(cast: Cast, worker: number, work: number): void {
+  cast.work[worker] = work;
+  cast.workX[worker] = cast.x[worker]!;
+  cast.workY[worker] = cast.y[worker]!;
+  cast.workZ[worker] = cast.z[worker]!;
+  cast.workHeading[worker] = cast.heading[worker]!;
+}
+
+// At the sim's position, inside the door, when the art gives the venue nowhere better.
+function workWhereHeld(cast: Cast, worker: number, at: StaffAt): void {
+  cast.shown[worker] = SHOWN.placed;
+  cast.x[worker] = at.x[worker]!;
+  cast.y[worker] = at.y[worker]!;
+  cast.z[worker] = at.z[worker]!;
+  cast.heading[worker] = at.heading[worker]!;
+}
+
+const rangeFor = (ranges: VenueRanges, work: number): Range => {
+  if (work === WORK.show) return ranges.animators;
+  return work === WORK.watch ? ranges.lifeguards : ranges.staff;
+};
+
+// Everybody at a venue's work, on its place for their role. A room being made up or a store
+// restocked is no venue's, so whoever does it stays where the sim hides them.
 export function recastStaff(
   cast: Cast,
   atWork: (worker: number) => number,
   roleOf: (worker: number) => StaffRole,
+  at?: StaffAt,
 ): void {
   for (let worker = 0; worker < cast.shown.length; worker++) {
-    const role = roleOf(worker);
-    const placed = role === 'animator' || role === 'lifeguard';
-    const venue = placed ? atWork(worker) : NOWHERE;
+    const work = WORK_OF[roleOf(worker)];
+    const venue = atWork(worker);
     if (venue !== cast.lastVenue[worker]) {
       release(cast, worker);
       cast.lastVenue[worker] = venue;
     }
     const ranges = venue >= 0 ? cast.venues[venue] : undefined;
-    if (!ranges || cast.placeOf[worker]! >= 0) continue;
-    const range = role === 'animator' ? ranges.animators : ranges.lifeguards;
-    const place = freePlace(cast, range, 0, null);
+    if (!ranges || cast.work[worker] !== WORK.none) continue;
+    const place = freePlace(cast, rangeFor(ranges, work), 0, null);
+    const anywhere = at && (work === WORK.sweep || work === WORK.mend);
     if (place >= 0) hold(cast, worker, place);
+    else if (anywhere) workWhereHeld(cast, worker, at);
+    else continue;
+    startWork(cast, worker, work);
   }
 }
 

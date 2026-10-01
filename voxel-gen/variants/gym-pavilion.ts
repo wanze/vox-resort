@@ -32,16 +32,17 @@ const RACK = { x0: 58, x1: 60, z0: 31, z1: 40 } as const;
 const PRESS = { x0: 50, x1: 53, z0: 33, z1: 38 } as const;
 
 const ATHLETES = [
-  { x: BAG.x, y: GROUND, z: BAG.z + 3, facing: 2 },
-  { x: ROPE.x, y: GROUND, z: ROPE.z + 2, facing: 2 },
+  { x: BAG.x, y: GROUND, z: BAG.z + 3, facing: 2, station: 'lift' },
+  { x: ROPE.x, y: GROUND, z: ROPE.z + 2, facing: 2, station: 'jump' },
   ...MATS.map((x) => ({
     x: x + 2,
     y: GROUND + 1,
     z: (MAT_Z.z0 + MAT_Z.z1) / 2,
     facing: 2 as const,
+    station: 'mat' as const,
   })),
-  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1 + 1) / 2, facing: 1 },
-  { x: (PRESS.x0 + PRESS.x1) >> 1, y: GROUND, z: PRESS.z0 - 2, facing: 0 },
+  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1 + 1) / 2, facing: 1, station: 'lift' },
+  { x: (PRESS.x0 + PRESS.x1) >> 1, y: GROUND, z: PRESS.z0 - 2, facing: 0, station: 'lift' },
 ] as const;
 
 const BENCHES = [29, 38] as const;

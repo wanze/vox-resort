@@ -114,7 +114,8 @@ export default defineModel({
     ],
     capacity: 4,
     dwellSeconds: { min: 1800, max: 3600 },
-    spots: PLAYERS,
+    // Beside the north net post, outside the doubles alley.
+    spots: [...PLAYERS, { x: NET.x, y: ON_TURF, z: NET.z0 - 2, facing: 0, for: 'staff' }],
     // Struck at the hip, a racket's reach below where the arm swings.
     ball: { model: 'ball-tennis', y: ON_TURF + 3 },
     court: { ...COURT, net: { x: NET.x, top: NET.top } },

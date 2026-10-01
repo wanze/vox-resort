@@ -1,10 +1,14 @@
 import type { LoopPose } from '../../../../voxel-gen/voxelgen.ts';
 import { MAX_STEP, RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
-import { DRAWN_POSE } from '../../rendering/domain/poses';
+import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
 import { mix } from '../../sim/domain/night';
 import type { Cast } from './casting';
 import { playGames } from './courts';
-import type { AreaPlace, LoopPlace, Place } from './places';
+import { playRounds } from './golf';
+import { mindChildren, playSpot } from './play';
+import { playShows } from './shows';
+import { playTag } from './tag';
+import type { AreaPlace, LoopPlace, Place, StillPlace } from './places';
 
 export type AreaAct = 'swim' | 'laps' | 'wade';
 
@@ -35,14 +39,20 @@ export interface RideLoop {
   readonly riders: number;
 }
 
-export const isMoving = (place: Place): place is AreaPlace | LoopPlace =>
+export const isMoving = (place: Place): place is Exclude<Place, StillPlace> =>
   place.act !== undefined && place.act !== 'still';
+
+const isArea = (place: Place): place is AreaPlace =>
+  place.act === 'swim' || place.act === 'laps' || place.act === 'wade';
 
 export const SWIM_SPEED = WALK_SPEED / 3;
 const WADE_SPEED = WALK_SPEED;
 // About a rung a second: the ladder's rungs are two layers apart.
 const CLIMB_SPEED = 1.5;
 const SLIDE_SPEED = 12;
+// Hand over hand, a rung every two seconds or so; letting go is a fall.
+const HANG_SPEED = 1.5;
+const DROP_SPEED = 12;
 
 // Zero: 045's swim pose already lowers the body so a quarter voxel of back and the head's top
 // stay above the instance; any lower and the opaque water swallows the swimmer whole.
@@ -182,6 +192,8 @@ function speedOn(pose: LoopPose): number {
   if (pose === 'climb') return CLIMB_SPEED;
   if (pose === 'slide') return SLIDE_SPEED;
   if (pose === 'swim') return SWIM_SPEED;
+  if (pose === 'hang') return HANG_SPEED;
+  if (pose === 'drop') return DROP_SPEED;
   return WALK_SPEED;
 }
 
@@ -189,6 +201,9 @@ function drawnOn(pose: LoopPose): number {
   if (pose === 'climb') return DRAWN_POSE.jog;
   if (pose === 'slide') return RESTING.sitting;
   if (pose === 'swim') return DRAWN_POSE.swim;
+  // Arms straight up, short of the progress where the reach would lift the body.
+  if (pose === 'hang') return poseWith(DRAWN_POSE.reach, 1);
+  if (pose === 'drop') return RESTING.standing;
   return RESTING.none;
 }
 
@@ -244,7 +259,7 @@ export function advanceActs(seconds: number, dt: number, scale: number): number 
 }
 
 // Every frame, after keepSeats: whoever holds an area or a loop is drawn where the act has them,
-// and whoever is at a court where its game has them.
+// and whoever is at a court or on a course where its game has them.
 export function perform(cast: Cast, clock: number): void {
   for (let at = 0; at < cast.moving.length; at++) {
     const index = cast.moving[at]!;
@@ -252,7 +267,12 @@ export function perform(cast: Cast, clock: number): void {
     if (person < 0) continue;
     const place = cast.places[index]!;
     if (place.act === 'loop') ride(cast, person, place, clock);
-    else if (isMoving(place)) swimArea(cast, person, place, clock);
+    else if (isArea(place)) swimArea(cast, person, place, clock);
+    else if (isMoving(place)) playSpot(cast, person, place, clock);
   }
+  mindChildren(cast, clock);
+  playTag(cast, clock);
+  playShows(cast, clock);
   playGames(cast, clock);
+  playRounds(cast, clock);
 }

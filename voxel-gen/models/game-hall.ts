@@ -55,7 +55,13 @@ export default defineModel({
     reliability: 80,
     price: 2,
     spots: [
-      ...FRONT_ROW.map((x) => ({ x: x + 1, y: GROUND, z: HALL.z1 + 1, facing: 2 as const })),
+      ...FRONT_ROW.map((x) => ({
+        x: x + 1,
+        y: GROUND,
+        z: HALL.z1 + 1,
+        facing: 2 as const,
+        act: 'play' as const,
+      })),
       { x: DOOR_X, y: GROUND, z: HALL.z1 - 1, facing: 0, for: 'animator' },
     ],
     doors: [{ x: DOOR_X, z: FRONT, facing: 0 }],

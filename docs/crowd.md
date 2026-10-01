@@ -259,10 +259,12 @@ an edit simply recasts.
   `['areas', 'loops', 'spots', 'seats']`, so the loungers fill last. A party
   admitted together takes places side by side. The first two tennis places
   are the singles players.
-- **Children's places**: an area marked `for: 'child'` (the paddling pool, the
-  spa of the second pool) takes children first. A child takes the first free
+- **Children's places**: an area or loop marked `for: 'child'` (the paddling
+  pool, the spa of the second pool, the playground's tower and bars, the kids
+  club's slide) and a spot marked `child` (the swings, the sandpit, the kids
+  club's play spots) take children first. A child takes the first free
   child's place, else any free place; an adult takes the first free place not
-  marked for children, else one that is.
+  marked for children, else one that is, so parents end up on the benches.
 - **Watchers**: at the tennis, basketball and volleyball courts, the line is
   drawn on the spectator seats (`watches`) and watcher spots, by queue rank,
   instead of on the path. The simulated queue itself is unchanged. With no
@@ -271,9 +273,13 @@ an edit simply recasts.
   neither is a guest asleep in a lodging. That covers the restrooms, the
   supermarket, and the overflow of a restaurant with more capacity than
   seats. A hidden person cannot be picked.
-- **Staff**: an animator at work is drawn on the venue's `animator` spot, and a
-  lifeguard on its `lifeguard` spot. Cleaners and mechanics are drawn where the
-  staff router holds them.
+- **Staff**: a worker the staff router has at work at a venue (`atWork`) is
+  drawn there by `recastStaff`: an animator on its `animator` spot, a
+  lifeguard on its `lifeguard` spot, and a cleaner or a mechanic on its
+  `for: 'staff'` spot (tennis, basketball, volleyball, pool, minigolf,
+  playground), or, at a venue with none, where the router holds them. A
+  cleaner making up a room or restocking is at no venue, so stays where the
+  sim hides them indoors. What they do there is under **Staff at work**.
 - **The seat pop**: passers-by still sit down on venue seats, since keeping
   them off would change every seeded replay. When one claims a seat a visitor
   is drawn on, `keepSeats` moves the visitor to another place in the same frame.
@@ -339,9 +345,63 @@ an edit simply recasts.
     the ball drops where it was and the next rally starts 1.5 s later with
     whoever is left.
   - **The ball** is a prop drawn by the ball field
-    (`choreography/adapters/ballField.ts`), one slot per court, rewritten
-    every frame after `perform`. All of it is drawn only: the simulation
-    never reads a game, and nothing of it is saved.
+    (`choreography/adapters/ballField.ts`), one slot per court and per
+    minigolf party (`cast.played`), rewritten every frame after `perform`.
+    All of it is drawn only: the simulation never reads a game, and nothing
+    of it is saved.
+- **Minigolf** (`golf.ts`): the art declares `lanes`, each a ball `line` from
+  tee to cup bent round the lane's hedges and corner, the `walk` from its cup
+  to the `next` lane's tee by the sand walks, and the layer `y` the players
+  stand on; a spot's `lane` makes it a waiting place, the first beside the
+  tee, the second beside the cup. The holders of a lane's spots are a party.
+  Every party moves on a lane each **slot** at once (82 s on the catalogue
+  course, the slowest lane's walk and turns), so no two share a lane. A slot
+  is the walk over in file, then each member's turn: up to the tee, 1 to 3
+  hashed putts (`strike` with its progress swept, the ball rolling and
+  slowing along the line), down the lane to the cup, and to wait beside it.
+  The others wait beside the tee or the cup, facing the putter.
+- **Playground** (`play.ts`): a spot with `act: 'swing'` swings as a pendulum
+  from the bar on layer `pivot`, 3 voxels out at the top, period hashed 2 to
+  3 s, and one swing in four the child stands up cheering at the front of the
+  arc (the painted seat stays where it is). `act: 'dig'` is a child kneeling
+  in the sandpit, drawn as a slow `strike` sunk a voxel into the sand, since a
+  figure holds one pose. The tower is a loop up the ladder, over the deck and
+  down the chute; the monkey bars a loop that climbs inside the end ladder,
+  goes hand over hand (`hang`, drawn reaching up) and lets go (`drop`). A
+  parent sitting at a venue with children's places turns towards their own
+  party's child, eased at 1.5 rad/s and at most 1.4 rad from facing.
+- **Kids club** (`tag.ts`): the yard spots carry `act: 'tag'` and the `yard`
+  rectangle they share. Every player runs 3 s legs between hashed points,
+  jogging there and hopping for the rest; the hashed "it" (a new one every
+  24 s) wanders, and the others take the one of three hashed points furthest
+  from where it is heading. The slide is a loop as on the playground.
+- **Shows** (`shows.ts`): `noteShows` reads `performingAt` after the ticks.
+  While a show is on, the kids club's tag players and the game hall's players
+  run to rows of four in front of the animator and cheer and hop by turns,
+  and at a venue with a `floor` (the beach club's aisle) everybody sitting
+  gets up and dances on it: a hashed spot clear of the animator, `jog`,
+  `cheer` and `hop` steps, the heading swaying. Lying stays lying. After the
+  show they run back and sit down where they were. Where each set off from is
+  kept per person, so the run over is one straight line.
+- **Gym**: a spot's `station` is what its athlete does in place, facing the
+  art's way: `run` jogs on the spot (the treadmills face the mirror), `jump`
+  is jumping jacks (`cheer` and standing by turns), `lift` cycles `reach`,
+  and `mat` lies with a sit-up a cycle.
+- **Game hall**: `act: 'play'` hammers the machine's buttons, a fast
+  `strike`, heading fixed on it; for a show the players back out of the bay
+  before running round.
+- **Beach shower**: `act: 'rinse'` turns slowly on the spot under the rose,
+  hands up (`cheer`) and down (`wade`) by turns.
+- **Staff at work** (`work.ts`, `performWork` on the staff cast every frame):
+  an animator plays in hashed 2.4 s phrases of `cheer`, `hop` and `strike`,
+  facing the mean of the venue's drawn visitors; a lifeguard's heading sweeps
+  0.7 rad either side of the water, and one 20 s window in three raises the
+  whistle; a cleaner sweeps with a slow `strike`, shuffling 0.6 voxels either
+  side; a mechanic kneels (sunk by an adult's legs) and hammers in bursts.
+- Every act above is drawn only and hashed with `mix`; none is saved. The
+  variants declare the same acts except the minigolf's lanes, the playground's
+  and the kids club's loops, and the staff spots; where the art declares
+  nothing, visitors stand at their places as before.
 
 ## Beach buildings
 

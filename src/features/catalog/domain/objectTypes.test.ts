@@ -135,6 +135,7 @@ describe('PAINTED_MODELS', () => {
       'ball-tennis',
       'ball-volley',
       'ball-basket',
+      'ball-golf',
     ]);
     for (const prop of PROP_MODELS) {
       expect(catalogue.has(prop.id), `${prop.id} is in the catalogue too`).toBe(false);

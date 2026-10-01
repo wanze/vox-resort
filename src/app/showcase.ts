@@ -344,6 +344,7 @@ import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
   createCast,
   keepSeats,
+  noteShows,
   recast,
   recastStaff,
   SHOWN,
@@ -354,6 +355,7 @@ import {
 import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
 import { advanceActs, perform } from '../features/choreography/domain/acts';
 import { performAtSea } from '../features/choreography/domain/seaSwim';
+import { performWork } from '../features/choreography/domain/work';
 import {
   bedCount,
   checkOutParty,
@@ -1445,6 +1447,7 @@ function buildResort(
       isAsleep: (person) => router.isAsleep(person),
       isPresent: (person) => guests.present[person] === 1,
       isChild: (person) => guests.child[person] === 1,
+      partyOf: (person) => guests.party[person]!,
       bathing: {
         restingUntil: (person) => router.restingUntil(person),
         // A getter: relocate replaces the crowd.
@@ -1541,6 +1544,7 @@ const byKey = (placements: readonly Placement[]): ReadonlyMap<string, Placement>
 function recastAll(resort: Resort): void {
   recast(resort.cast, resort.casting, resort.crowd.crowd.seatBy);
   const { staffRouter, venues } = resort;
+  noteShows(resort.cast, (venue) => staffRouter.performingAt(venue));
   recastStaff(
     resort.staffCast,
     (worker) => {
@@ -1548,6 +1552,7 @@ function recastAll(resort: Resort): void {
       return venue ? venues.indexOf(venue) : -1;
     },
     (worker) => resort.staffPool.role[worker]!,
+    resort.staff.crowd,
   );
 }
 
@@ -3666,7 +3671,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     actSeconds = advanceActs(actSeconds, walked, crowdScale);
     perform(current().cast, actSeconds);
     performAtSea(current().cast, actSeconds, clock.ticks);
-    current().ballField.write(current().cast.courts);
+    performWork(current().staffCast, current().cast, actSeconds);
+    current().ballField.write(current().cast.played);
     current().crowd.advance(walked, crowdScale);
     current().staff.advance(walked, crowdScale);
     current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);

@@ -43,23 +43,47 @@ const PIT = { x0: 3, x1: 13, z0: 31, z1: 40 } as const;
 const EAST_LAWN = TOWER.x + TOWER.w;
 const SLIDE_FOOT = LANDING.z1 + 12;
 
+// The east lawn, between the tower and the fence, in front of the animator.
+const YARD = { x: EAST_LAWN + 1, z: TOWER.z + 2, w: 11, d: 17 } as const;
+
 const PLAYERS = [
-  { x: LANDING.x0 + 2, y: GROUND, z: SLIDE_FOOT, facing: 0 },
-  { x: LANDING.x0 - 4, y: GROUND, z: SLIDE_FOOT, facing: 1 },
+  { x: LANDING.x0 + 2, y: GROUND, z: SLIDE_FOOT, facing: 0, child: true },
+  { x: LANDING.x0 - 4, y: GROUND, z: SLIDE_FOOT, facing: 1, child: true },
   ...[TOWER.z + 6, TOWER.z + 11, TOWER.z + 16].flatMap((z) =>
-    [EAST_LAWN + 3, EAST_LAWN + 9].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+    [EAST_LAWN + 3, EAST_LAWN + 9].map((x) => ({
+      x,
+      y: GROUND,
+      z,
+      facing: 2 as const,
+      child: true as const,
+      act: 'tag' as const,
+      yard: YARD,
+    })),
   ),
   ...[PIT.z0 + 1, PIT.z0 + 6].flatMap((z) =>
-    [PIT.x1 + 6, PIT.x1 + 12].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+    [PIT.x1 + 6, PIT.x1 + 12].map((x) => ({
+      x,
+      y: GROUND,
+      z,
+      facing: 2 as const,
+      child: true as const,
+    })),
   ),
-  ...[PIT.x0 + 1, PIT.x0 + 7].map((x) => ({ x, y: GROUND, z: PIT.z0 - 4, facing: 0 as const })),
+  ...[PIT.x0 + 1, PIT.x0 + 7].map((x) => ({
+    x,
+    y: GROUND,
+    z: PIT.z0 - 4,
+    facing: 0 as const,
+    child: true as const,
+  })),
   ...[POOL.x + 3, POOL.x + 9].map((x) => ({
     x,
     y: GROUND,
     z: POOL.z + POOL.d + 4,
     facing: 2 as const,
+    child: true as const,
   })),
-  { x: PIT.x0 + 2, y: GROUND, z: PIT.z1 + 4, facing: 2 },
+  { x: PIT.x0 + 2, y: GROUND, z: PIT.z1 + 4, facing: 2, child: true },
 ] as const;
 
 const BENCH = { x0: 21, x1: 31, z: 41, z1: 43 } as const;
@@ -81,7 +105,7 @@ export default defineModel({
     dwellSeconds: { min: 3600, max: 10_800 },
     spots: [
       ...PLAYERS,
-      { x: PIT.x0 + 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 1 },
+      { x: PIT.x0 + 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 1, child: true },
       { x: EAST_LAWN + 6, y: GROUND, z: TOWER.z + 1, facing: 0, for: 'animator' },
     ],
     doors: [{ x: 14, z: FRONT, facing: 0 }],

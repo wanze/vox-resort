@@ -25,23 +25,64 @@ const SLIDE = { x: 35, z: 6, deck: GROUND + 5 } as const;
 const PIT = { x0: 19, x1: 30, z0: 26, z1: 35 } as const;
 const HOUSE = { x: 35, z: 29, w: 7, d: 7 } as const;
 
+// West of the pit, across the path to the gate's fence posts, in front of the animator.
+const YARD = { x: 2, z: FRONT + 8, w: 16, d: 17 } as const;
+
 const PLAYERS = [
-  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z + 15, facing: 0 },
-  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z - 3, facing: 0 },
-  ...[SLIDE.z + 3, SLIDE.z + 9].map((z) => ({ x: SLIDE.x - 3, y: GROUND, z, facing: 1 as const })),
+  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z + 15, facing: 0, child: true },
+  { x: SLIDE.x + 1, y: GROUND, z: SLIDE.z - 3, facing: 0, child: true },
+  ...[SLIDE.z + 3, SLIDE.z + 9].map((z) => ({
+    x: SLIDE.x - 3,
+    y: GROUND,
+    z,
+    facing: 1 as const,
+    child: true as const,
+  })),
   ...[SLIDE.z - 2, SLIDE.z + 4, SLIDE.z + 10].map((z) => ({
     x: FENCE_X - 3,
     y: GROUND,
     z,
     facing: 3 as const,
+    child: true as const,
   })),
   ...[FRONT + 11, FRONT + 16, FRONT + 21].flatMap((z) =>
-    [GATE.x0 - 7, GATE.x0 - 1].map((x) => ({ x, y: GROUND, z, facing: 2 as const })),
+    [GATE.x0 - 7, GATE.x0 - 1].map((x) => ({
+      x,
+      y: GROUND,
+      z,
+      facing: 2 as const,
+      act: 'tag' as const,
+      yard: YARD,
+      child: true as const,
+    })),
   ),
-  { x: HOUSE.x + 3, y: GROUND, z: HOUSE.z + HOUSE.d + 3, facing: 2 },
-  { x: HOUSE.x, y: GROUND, z: HOUSE.z - 3, facing: 0 },
-  { x: HOUSE.x + HOUSE.w - 1, y: GROUND, z: HOUSE.z - 3, facing: 0 },
+  { x: HOUSE.x + 3, y: GROUND, z: HOUSE.z + HOUSE.d + 3, facing: 2, child: true },
+  { x: HOUSE.x, y: GROUND, z: HOUSE.z - 3, facing: 0, child: true },
+  { x: HOUSE.x + HOUSE.w - 1, y: GROUND, z: HOUSE.z - 3, facing: 0, child: true },
 ] as const;
+
+// Up the ladder and over the deck's back rail, down the chute's steps and round its east legs.
+const RIDE_X = SLIDE.x + 1.5;
+const BACK_X = SLIDE.x + 5.5;
+const FOOT_Z = SLIDE.z + 15.5;
+
+const SLIDE_LOOP = {
+  places: 2,
+  for: 'child',
+  points: [
+    { x: RIDE_X, y: GROUND, z: SLIDE.z - 2.5, pose: 'climb' },
+    { x: RIDE_X, y: SLIDE.deck + 3, z: SLIDE.z - 2.5, pose: 'walk' },
+    { x: RIDE_X, y: SLIDE.deck + 3, z: SLIDE.z, pose: 'walk' },
+    { x: RIDE_X, y: SLIDE.deck + 1, z: SLIDE.z + 1.5, pose: 'walk' },
+    { x: RIDE_X, y: SLIDE.deck + 1, z: SLIDE.z + 3.5, pose: 'slide' },
+    { x: RIDE_X, y: GROUND + 2, z: SLIDE.z + 12.5, pose: 'slide' },
+    { x: RIDE_X, y: GROUND + 1.5, z: SLIDE.z + 14.5, pose: 'slide' },
+    { x: RIDE_X, y: GROUND, z: FOOT_Z, pose: 'walk' },
+    { x: BACK_X, y: GROUND, z: FOOT_Z, pose: 'walk' },
+    { x: BACK_X, y: GROUND, z: SLIDE.z + 6, pose: 'walk' },
+    { x: BACK_X, y: GROUND, z: SLIDE.z - 2.5, pose: 'walk' },
+  ],
+} as const;
 
 const BENCH = { x0: 21, x1: 31, z: 41, z1: 43 } as const;
 const BENCH_HIPS = GROUND + 2;
@@ -61,10 +102,11 @@ export default defineModel({
     dwellSeconds: { min: 3600, max: 10_800 },
     spots: [
       ...PLAYERS,
-      { x: PIT.x1 - 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 3 },
+      { x: PIT.x1 - 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 3, child: true },
       { x: BENCH.x0 + 1, y: GROUND, z: BENCH.z - 3, facing: 2 },
       { x: GATE.x0 - 4, y: GROUND, z: FRONT + 6, facing: 0, for: 'animator' },
     ],
+    loops: [SLIDE_LOOP],
     doors: [{ x: 14, z: FRONT, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

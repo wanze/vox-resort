@@ -42,6 +42,8 @@ const CABANA_Z = DECK_BACK + 8;
 const DAYBEDS = [8, 20, 68, 80] as const;
 const DAYBED_Z = DECK_BACK + 28;
 const STAGE = { x0: 41, x1: 54, z0: DECK_BACK + 19, z1: DECK_BACK + 26 } as const;
+// In front of the stage, between the daybeds either side.
+const FLOOR = { x: 28, z: STAGE.z1 + 2, w: 40, d: 7, y: DECK_TOP } as const;
 
 const FRONT_FLIGHT = { x: 40, w: 16 } as const;
 const SIDE_FLIGHT = { z: DECK_BACK + 18, w: 8 } as const;
@@ -92,6 +94,7 @@ export default defineModel({
         for: 'animator',
       },
     ],
+    floor: FLOOR,
     doors: [
       { x: FRONT_FLIGHT.x + FRONT_FLIGHT.w / 2, z: BRINK + 2, facing: 0 },
       { x: 0, z: SIDE_FLIGHT.z + SIDE_FLIGHT.w / 2, facing: 3 },

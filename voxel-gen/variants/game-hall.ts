@@ -57,7 +57,13 @@ export default defineModel({
     price: 2,
     spots: [
       ...VITRINES.flatMap((x0) =>
-        PLAYED.map((dx) => ({ x: x0 + dx, y: GROUND, z: FRONT, facing: 2 as const })),
+        PLAYED.map((dx) => ({
+          x: x0 + dx,
+          y: GROUND,
+          z: FRONT,
+          facing: 2 as const,
+          act: 'play' as const,
+        })),
       ),
       { x: MARQUEE.x + 4, y: GROUND, z: TOWER_FRONT + 2, facing: 0, for: 'animator' },
     ],

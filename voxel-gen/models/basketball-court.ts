@@ -97,7 +97,8 @@ export default defineModel({
     ],
     capacity: 10,
     dwellSeconds: { min: 1200, max: 2700 },
-    spots: PLAYERS,
+    // Off the west baseline, clear of the stand.
+    spots: [...PLAYERS, { x: COURT.x0 - 3, y: ON, z: MID_Z + 4, facing: 1, for: 'staff' }],
     // Held at the chest; a shot is let go higher, a dribble bounces lower.
     ball: { model: 'ball-basket', y: ON + 4 },
     court: { ...COURT, hoops: HOOPS },

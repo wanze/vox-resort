@@ -27,19 +27,31 @@ const RACK = { x0: 38, x1: 41, z0: 20, z1: 28 } as const;
 const YARD = { x0: 47, x1: 61, z0: 4, z1: 29 } as const;
 const RIG = { x0: 49, x1: 60, z0: 8, z1: 21 } as const;
 
+// The belts run from the mirror back; a runner on one faces the mirror.
+const TREADMILLS = [8, 14, 20] as const;
+const BELT_Z = MIRROR_Z + 6.5;
+
 const ATHLETES = [
-  { x: (PULL_UP.x0 + PULL_UP.x1) >> 1, y: GROUND, z: PULL_UP.z, facing: 0 },
+  { x: (PULL_UP.x0 + PULL_UP.x1) >> 1, y: GROUND, z: PULL_UP.z, facing: 0, station: 'lift' },
   ...[MATS[0], MATS[2]].map((x) => ({
     x: x + 1,
     y: GROUND + 1,
     z: MAT_Z.z0 + 2,
     facing: 2 as const,
+    station: 'mat' as const,
   })),
-  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1) / 2, facing: 1 },
+  { x: RACK.x0 - 2, y: GROUND, z: (RACK.z0 + RACK.z1) / 2, facing: 1, station: 'lift' },
   ...[RIG.x0 + 3, RIG.x1 - 3].flatMap((x) => [
-    { x, y: GROUND, z: RIG.z1 - 4, facing: 2 as const },
-    { x, y: GROUND, z: YARD.z1 - 6, facing: 0 as const },
+    { x, y: GROUND, z: RIG.z1 - 4, facing: 2 as const, station: 'jump' as const },
+    { x, y: GROUND, z: YARD.z1 - 6, facing: 0 as const, station: 'run' as const },
   ]),
+  ...TREADMILLS.map((x) => ({
+    x: x + 1.5,
+    y: GROUND + 1,
+    z: BELT_Z,
+    facing: 2 as const,
+    station: 'run' as const,
+  })),
 ] as const;
 
 const BENCHES = [
@@ -112,7 +124,7 @@ export default defineModel({
 
     hipRoof(b, { ...FRAME, y: PLATE + 1 });
 
-    for (const x of [8, 14, 20]) {
+    for (const x of TREADMILLS) {
       const z = MIRROR_Z + 3;
       box(x, x + 3, ground, ground, z, z + 7, metal.base);
       box(x + 1, x + 2, ground, ground, z + 1, z + 6, metal.deep);

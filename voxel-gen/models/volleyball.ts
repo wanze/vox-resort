@@ -70,6 +70,8 @@ export default defineModel({
     dwellSeconds: { min: 1200, max: 2700 },
     spots: [
       ...PLAYERS,
+      // Beside the north net post, facing it.
+      { x: POST.x - 2, y: GROUND, z: COURT.z0 - 5, facing: 1, for: 'staff' },
       // Spots, not seats: a seat joins the walk network, and a passer-by sitting down on it
       // would move every seeded replay.
       ...Array.from({ length: 4 }, (_, i) => ({

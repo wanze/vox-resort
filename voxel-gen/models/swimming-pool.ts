@@ -113,7 +113,10 @@ export default defineModel({
         ],
       },
     ],
-    spots: [{ ...LIFEGUARD, y: TOP_LAYER, facing: 2, for: 'lifeguard' }],
+    spots: [
+      { ...LIFEGUARD, y: TOP_LAYER, facing: 2, for: 'lifeguard' },
+      { x: LENGTHS.x + 14, y: TOP_LAYER, z: LIFEGUARD.z, facing: 2, for: 'staff' },
+    ],
   },
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);

@@ -235,6 +235,61 @@ describe('the places a venue draws its visitors in', () => {
     }
   });
 
+  it('runs every lane from a tee to a cup, waited at by its own spots', () => {
+    for (const model of models) {
+      const lanes = model.venue!.lanes ?? [];
+      const painted = new Set(model.voxels.map((v) => `${v.x},${v.y},${v.z}`));
+      for (const [index, lane] of lanes.entries()) {
+        const at = `${model.id} lane ${index}`;
+        const tee = lane.line[0]!;
+        const cup = lane.line.at(-1)!;
+        expect(painted.has(`${tee.x},${lane.y},${tee.z}`), `${at} has no tee`).toBe(true);
+        expect(painted.has(`${cup.x},${lane.y - 1},${cup.z}`), `${at} has no cup`).toBe(true);
+        expect(lane.next, at).toBeGreaterThanOrEqual(0);
+        expect(lane.next, at).toBeLessThan(lanes.length);
+        const spots = (model.venue!.spots ?? []).filter((spot) => spot.lane === index);
+        expect(spots.length, `${at} is waited at by nobody`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('keeps every yard and dance floor open: floored, and clear up to the head', () => {
+    for (const model of models) {
+      const painted = new Set(model.voxels.map((v) => `${v.x},${v.y},${v.z}`));
+      const { floor, spots = [] } = model.venue!;
+      const open = [
+        ...(floor ? [floor] : []),
+        ...spots.flatMap((spot) => (spot.yard ? [{ ...spot.yard, y: spot.y }] : [])),
+      ];
+      for (const rect of open) {
+        for (let x = rect.x; x < rect.x + rect.w; x++) {
+          for (let z = rect.z; z < rect.z + rect.d; z++) {
+            const at = `${model.id} at ${x},${rect.y},${z}`;
+            expect(painted.has(`${x},${rect.y - 1},${z}`), `${at} has no floor`).toBe(true);
+            for (const up of [0, 1, 2, 3]) {
+              expect(painted.has(`${x},${rect.y + up},${z}`), `${at} is in the way`).toBe(false);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('stands every staff spot on something, with nothing in the way up to the head', () => {
+    for (const model of models) {
+      const painted = new Set(model.voxels.map((v) => `${v.x},${v.y},${v.z}`));
+      for (const spot of (model.venue!.spots ?? []).filter((each) => each.for === 'staff')) {
+        const at = `${model.id} staff at ${spot.x},${spot.y},${spot.z}`;
+        expect(painted.has(`${spot.x},${spot.y - 1},${spot.z}`), `${at} floats`).toBe(true);
+        for (const up of [0, 1, 2, 3]) {
+          expect(painted.has(`${spot.x},${spot.y + up},${spot.z}`), `${at} is walled in`).toBe(
+            false,
+          );
+        }
+      }
+    }
+  });
+
   // A leg crossing a wall would go unseen in a test; a short one cannot cross much.
   it('keeps the points of a loop within a tile of each other', () => {
     for (const model of models) {

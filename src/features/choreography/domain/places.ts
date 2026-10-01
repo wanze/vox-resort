@@ -1,10 +1,14 @@
 import type {
   ModelArea,
+  ModelFloor,
+  ModelLane,
   ModelLoop,
   ModelSeat,
   ModelSpot,
   ModelVenue,
   PlaceGroup,
+  SpotAct,
+  Station,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { objectTypeById } from '../../catalog/domain/objectTypes';
@@ -18,8 +22,11 @@ import { mix } from '../../sim/domain/night';
 import type { Venue } from '../../sim/domain/venues';
 import { rideLoop, SWIM_SINK, type AreaAct, type RideLoop, type WaterArea } from './acts';
 import type { CourtFrame, Game } from './games';
+import { slotFor, type GolfCourse, type GolfLane, type Waiting } from './golf';
+import type { Floor } from './shows';
+import type { Yard } from './tag';
 
-export type PlaceKind = 'visitor' | 'watcher' | 'animator' | 'lifeguard';
+export type PlaceKind = 'visitor' | 'watcher' | 'animator' | 'lifeguard' | 'staff';
 
 interface PlaceAt {
   readonly x: number;
@@ -39,6 +46,8 @@ export interface StillPlace extends PlaceAt {
   readonly act?: 'still';
   // A player's, on the half of the court that is theirs.
   readonly side?: 0 | 1;
+  // A golfer's, on the lane whose party they play in.
+  readonly lane?: number;
 }
 
 export interface AreaPlace extends PlaceAt {
@@ -53,14 +62,28 @@ export interface LoopPlace extends PlaceAt {
   readonly index: number;
 }
 
-export type Place = StillPlace | AreaPlace | LoopPlace;
+// A spot whose visitor is drawn at it, doing something.
+export interface SpotActPlace extends PlaceAt {
+  readonly act: SpotAct | 'station';
+  readonly station?: Station;
+  // A swing's bar, in world voxels.
+  readonly pivot?: number;
+  // Shared by every place playing one game of tag.
+  readonly yard?: Yard;
+}
+
+export type Place = StillPlace | AreaPlace | LoopPlace | SpotActPlace;
 
 export interface VenuePlaces {
   readonly visitors: readonly Place[];
   readonly watchers: readonly Place[];
   readonly animators: readonly Place[];
   readonly lifeguards: readonly Place[];
+  // Where a cleaner sweeps or a mechanic mends; with none, they are drawn where the sim has them.
+  readonly staff?: readonly Place[];
   readonly game?: Game;
+  readonly golf?: GolfCourse;
+  readonly floor?: Floor;
 }
 
 const NO_PLACES: VenuePlaces = { visitors: [], watchers: [], animators: [], lifeguards: [] };
@@ -93,14 +116,63 @@ const placeAt = (at: SeatSpot, pose: number, kind: PlaceKind, seat: number): Sti
 
 type PlacesByKind = Record<PlaceKind, Place[]>;
 
-const byKind = (): PlacesByKind => ({ visitor: [], watcher: [], animator: [], lifeguard: [] });
+const byKind = (): PlacesByKind => ({
+  visitor: [],
+  watcher: [],
+  animator: [],
+  lifeguard: [],
+  staff: [],
+});
+
+function yardOf(site: SeatSite, spot: ModelSpot, yards: Map<string, Yard>): Yard | undefined {
+  const declared = spot.yard;
+  if (!declared) return undefined;
+  const key = `${declared.x},${declared.z},${declared.w},${declared.d}`;
+  const known = yards.get(key);
+  if (known) return known;
+  const a = turned(site, declared.x, declared.z);
+  const b = turned(site, declared.x + declared.w, declared.z + declared.d);
+  const minX = Math.min(a.x, b.x);
+  const minZ = Math.min(a.z, b.z);
+  const yard = {
+    minX,
+    maxX: Math.max(a.x, b.x),
+    minZ,
+    maxZ: Math.max(a.z, b.z),
+    ground: site.y + spot.y,
+    salt: mix(mix(Math.round(minX)) + Math.round(minZ)),
+  };
+  yards.set(key, yard);
+  return yard;
+}
+
+// What the art adds to a spot's place: the act it is drawn in, or the game it plays a part in.
+function extrasOf(site: SeatSite, spot: ModelSpot, yards: Map<string, Yard>) {
+  if (spot.station) return { act: 'station' as const, station: spot.station };
+  if (spot.act) {
+    const yard = yardOf(site, spot, yards);
+    return {
+      act: spot.act,
+      ...(spot.pivot === undefined ? {} : { pivot: site.y + spot.pivot }),
+      ...(yard ? { yard } : {}),
+    };
+  }
+  return {
+    ...(spot.game && spot.side !== undefined ? { side: spot.side } : {}),
+    ...(spot.lane === undefined ? {} : { lane: spot.lane }),
+  };
+}
 
 function addSpots(places: PlacesByKind, site: SeatSite, spots: readonly ModelSpot[]): void {
   const spotsAt = seatSpotsFor([{ ...site, seats: spots.map(asSeat) }]);
+  const yards = new Map<string, Yard>();
   for (const [index, spot] of spots.entries()) {
     const kind = spot.for ?? 'visitor';
-    const place = placeAt(spotsAt[index]!, poseOf(spot.pose), kind, -1);
-    places[kind].push(spot.game && spot.side !== undefined ? { ...place, side: spot.side } : place);
+    places[kind].push({
+      ...placeAt(spotsAt[index]!, poseOf(spot.pose), kind, -1),
+      ...(spot.child ? { forChild: true as const } : {}),
+      ...extrasOf(site, spot, yards),
+    });
   }
 }
 
@@ -179,6 +251,7 @@ function loopPlaces(site: SeatSite, loops: readonly ModelLoop[]): Place[] {
       pose: RESTING.standing,
       kind: 'visitor',
       seat: -1,
+      ...(declared.for === 'child' ? { forChild: true as const } : {}),
       act: 'loop',
       loop,
       index,
@@ -242,6 +315,58 @@ function gameOf(site: SeatSite, venue: ModelVenue, visitors: readonly Place[]): 
   };
 }
 
+const waiting = (place: Place): Waiting => ({ x: place.x, z: place.z, heading: place.heading });
+
+// A lane's first place is beside its tee and its second beside its cup; one alone is both.
+function golfOf(
+  site: SeatSite,
+  lanes: readonly ModelLane[],
+  visitors: readonly Place[],
+): GolfCourse | undefined {
+  const built = lanes.flatMap((declared, index): GolfLane[] => {
+    const party = visitors.flatMap((place, visitor) =>
+      'lane' in place && place.lane === index ? [visitor] : [],
+    );
+    if (party.length === 0) return [];
+    const line = declared.line.map((point) => turned(site, point.x + 0.5, point.z + 0.5));
+    let length = 0;
+    for (let at = 1; at < line.length; at++) {
+      length += Math.hypot(line[at]!.x - line[at - 1]!.x, line[at]!.z - line[at - 1]!.z);
+    }
+    return [
+      {
+        line,
+        length,
+        ground: site.y + declared.y,
+        tee: waiting(visitors[party[0]!]!),
+        cup: waiting(visitors[party.at(-1)!]!),
+        walk: declared.walk.map((point) => turned(site, point.x + 0.5, point.z + 0.5)),
+        next: declared.next,
+        party,
+      },
+    ];
+  });
+  if (built.length !== lanes.length) return undefined;
+  const first = built[0]!.line[0]!;
+  return {
+    lanes: built,
+    slot: slotFor(built),
+    salt: mix(mix(Math.round(first.x)) + Math.round(first.z)),
+  };
+}
+
+function floorOf(site: SeatSite, floor: ModelFloor): Floor {
+  const a = turned(site, floor.x, floor.z);
+  const b = turned(site, floor.x + floor.w, floor.z + floor.d);
+  return {
+    minX: Math.min(a.x, b.x),
+    maxX: Math.max(a.x, b.x),
+    minZ: Math.min(a.z, b.z),
+    maxZ: Math.max(a.z, b.z),
+    ground: site.y + floor.y,
+  };
+}
+
 // Spots before seats unless the art says otherwise: what the venue is for comes first, and the
 // benches of the parents and the waiting are filled last. A group the order leaves out follows.
 const ORDER: readonly PlaceGroup[] = ['spots', 'seats', 'areas', 'loops'];
@@ -262,13 +387,24 @@ function placesOf(placement: Placement, seatIndex: ReadonlyMap<string, number>):
     loops: loopPlaces(site, loops),
   };
   const visitors = [...new Set([...order, ...ORDER])].flatMap((group) => groups[group]);
-  const game = venue ? gameOf(site, venue, visitors) : undefined;
   return {
     visitors,
     watchers: [...fromSpots.watcher, ...fromSeats.watcher],
     animators: fromSpots.animator,
     lifeguards: fromSpots.lifeguard,
+    staff: fromSpots.staff,
+    ...(venue ? playedOn(site, venue, visitors) : {}),
+  };
+}
+
+// What the venue's visitors play or dance on, where the art declares it.
+function playedOn(site: SeatSite, venue: ModelVenue, visitors: readonly Place[]) {
+  const game = gameOf(site, venue, visitors);
+  const golf = venue.lanes ? golfOf(site, venue.lanes, visitors) : undefined;
+  return {
     ...(game ? { game } : {}),
+    ...(golf ? { golf } : {}),
+    ...(venue.floor ? { floor: floorOf(site, venue.floor) } : {}),
   };
 }
 

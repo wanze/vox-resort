@@ -58,7 +58,7 @@ describe('placesFor', () => {
     expect(places.watchers.map(({ x, z, heading }) => ({ x, z, heading }))).toEqual(
       seats.map(({ x, z, heading }) => ({ x, z, heading })),
     );
-    const spots = model.venue!.spots!;
+    const spots = model.venue!.spots!.filter((spot) => (spot.for ?? 'visitor') === 'visitor');
     expect(places.visitors).toHaveLength(spots.length);
     for (const [index, spot] of spots.entries()) {
       const centre = { x: spot.x + 0.5, z: spot.z + 0.5 };
@@ -77,7 +77,9 @@ describe('placesFor', () => {
     const both = OBJECT_TYPES.find(
       (type) =>
         (type.model.venue?.spots ?? []).some((spot) => (spot.for ?? 'visitor') === 'visitor') &&
-        type.model.seats.some((seat) => !seat.watches && !seat.post),
+        type.model.seats.some((seat) => !seat.watches && !seat.post) &&
+        !type.model.venue?.areas &&
+        !type.model.venue?.loops,
     )!;
     const placement = placed(both.id);
     const spots = both.model.venue!.spots!.filter((spot) => (spot.for ?? 'visitor') === 'visitor');

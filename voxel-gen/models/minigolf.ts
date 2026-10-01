@@ -4,7 +4,13 @@ import { poolWater } from '../parts/pool.ts';
 import { awning, shutteredWindow, stuccoWall } from '../parts/wall.ts';
 import { pottedPlant } from '../parts/props.ts';
 import { hipRoof } from '../parts/roof.ts';
-import { defineModel, type QuarterTurns, type VoxelBuilder } from '../voxelgen.ts';
+import {
+  defineModel,
+  type ModelLane,
+  type ModelPoint,
+  type QuarterTurns,
+  type VoxelBuilder,
+} from '../voxelgen.ts';
 
 const X = 143;
 const Z = 111;
@@ -80,7 +86,9 @@ const LANES: readonly Lane[] = [
 // Two neighbouring holes in every quarter, tee then cup, so a party plays one or two holes
 // together and a full course still shows play in each quarter.
 const PLAYED = QUARTERS.flatMap(([qx, qz], quarter) =>
-  LANES.filter((_, index) => (quarter + index) % 2 === 0).map((lane) => ({ lane, qx, qz })),
+  LANES.flatMap((lane, index) =>
+    (quarter + index) % 2 === 0 ? [{ lane, index, quarter, qx, qz }] : [],
+  ),
 );
 
 const puttedAlong = (lane: Lane): 'x' | 'z' => {
@@ -96,17 +104,16 @@ const beside = (x: number, z: number, along: 'x' | 'z', sign: number) => ({
   facing: (along === 'x' ? (sign > 0 ? 1 : 3) : sign > 0 ? 0 : 2) as QuarterTurns,
 });
 
-const PLAYERS = PLAYED.flatMap(({ lane, qx, qz }) => {
+const PLAYERS = PLAYED.flatMap(({ lane, qx, qz }, hole) => {
   const [tx, tz] = lane.tee;
   const [cx, cz] = lane.cup;
   const putt = puttedAlong(lane);
   const play = (along: 'x' | 'z'): number => Math.sign(along === 'x' ? cx - tx : cz - tz);
   return [
-    beside(qx + tx, qz + tz, lane.along, play(lane.along)),
-    beside(qx + cx, qz + cz, putt, -play(putt)),
+    { ...beside(qx + tx, qz + tz, lane.along, play(lane.along)), lane: hole },
+    { ...beside(qx + cx, qz + cz, putt, -play(putt)), lane: hole },
   ];
 });
-
 const SIDES = [
   [1, 0],
   [-1, 0],
@@ -127,6 +134,71 @@ const DRESSING: ReadonlyArray<{
   { obstacles: ['hedge', 'bank', 'mound', 'none'], landmark: 'kiosk' },
   { obstacles: ['bank', 'mound', 'hedge', 'pond'], landmark: 'fountain' },
 ];
+
+// The hedge pair's gaps, as the build cuts them: a ball through a chicane goes round both.
+function chicane(middle: Rect, along: 'x' | 'z', sign: number): ModelPoint[] {
+  const r = inner(middle);
+  const width = along === 'z' ? r.w : r.d;
+  const reach = Math.ceil(width * 0.6) - 1;
+  const mid = along === 'z' ? r.z + Math.floor(r.d / 2) : r.x + Math.floor(r.w / 2);
+  const from = along === 'z' ? r.x : r.z;
+  const first = from + (reach + width) / 2;
+  const second = from + (width - 2 - reach) / 2;
+  const at = (gap: number, step: number): ModelPoint =>
+    along === 'z' ? { x: gap, z: mid + step } : { x: mid + step, z: gap };
+  const points = [at(first, -6), at(first, -2), at(second, 2), at(second, 6)];
+  return sign > 0 ? points : points.toReversed();
+}
+
+// Where an L's two arms cross, so the ball turns the corner rather than cutting the lawn.
+const corners = (lane: Lane): ModelPoint[] =>
+  lane.rects.slice(1).map((r, at) => {
+    const before = lane.rects[at]!;
+    return before.w < before.d
+      ? { x: before.x + Math.floor(before.w / 2), z: r.z + Math.floor(r.d / 2) }
+      : { x: r.x + Math.floor(r.w / 2), z: before.z + Math.floor(before.d / 2) };
+  });
+
+// Off the green by the sand walks, which every quarter has at -4 to -1 and past its far lanes.
+const NEAR_WALK = -2.5;
+const FAR_WALK_X = 61.5;
+const FAR_WALK_Z = 45.5;
+
+// From the cup's waiting spot to the next hole's: lane 0 to 2 and 1 to 3 cross only lawn, round
+// their own flag first, and the way back goes round by the walks, clear of the corner's landmark.
+const WALKS: Readonly<Record<number, readonly ModelPoint[]>> = {
+  0: [{ x: 4, z: 42.5 }],
+  1: [{ x: 33, z: 27 }],
+  2: [
+    { x: 55, z: FAR_WALK_Z },
+    { x: NEAR_WALK, z: FAR_WALK_Z },
+    { x: NEAR_WALK, z: 4 },
+  ],
+  3: [
+    { x: FAR_WALK_X, z: 9 },
+    { x: FAR_WALK_X, z: NEAR_WALK },
+    { x: 14, z: NEAR_WALK },
+  ],
+};
+
+const HOLES: readonly ModelLane[] = PLAYED.map(({ lane, index, quarter, qx, qz }, hole) => {
+  const [tx, tz] = lane.tee;
+  const [cx, cz] = lane.cup;
+  const sign = Math.sign(lane.along === 'x' ? cx - tx : cz - tz);
+  const hedge = DRESSING[quarter]!.obstacles[index] === 'hedge';
+  const shift = ({ x, z }: ModelPoint): ModelPoint => ({ x: x + qx, z: z + qz });
+  return {
+    line: [
+      { x: tx, z: tz },
+      ...(hedge ? chicane(lane.middle, lane.along, sign) : []),
+      ...corners(lane),
+      { x: cx, z: cz },
+    ].map(shift),
+    y: GREEN + 1,
+    walk: WALKS[index]!.map(shift),
+    next: hole % 2 === 0 ? hole + 1 : hole - 1,
+  };
+});
 
 const LANTERN = PALETTE.amber.light;
 
@@ -157,7 +229,8 @@ export default defineModel({
     capacity: 16,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 3,
-    spots: PLAYERS,
+    spots: [...PLAYERS, { x: CROSS.x + 1, y: GREEN + 1, z: 30, facing: 3, for: 'staff' }],
+    lanes: HOLES,
     doors: [
       { x: CROSS.x + 1, z: 0, facing: 2 },
       { x: CROSS.x + 1, z: Z, facing: 0 },

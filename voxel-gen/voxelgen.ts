@@ -90,7 +90,8 @@ export interface ModelSeat {
   readonly watches?: true;
 }
 
-// Where a visitor is drawn: `watcher` places are for the line, staff places for somebody at work.
+// Where a visitor is drawn: `watcher` places are for the line, the rest for somebody at work, a
+// `staff` place for a cleaner or a mechanic.
 // Measured as a seat is, except that a standing spot's y is the layer the feet stand in.
 export interface ModelSpot {
   readonly x: number;
@@ -98,10 +99,38 @@ export interface ModelSpot {
   readonly z: number;
   readonly facing: QuarterTurns;
   readonly pose?: SeatPose | 'stand';
-  readonly for?: 'visitor' | 'watcher' | 'animator' | 'lifeguard';
+  readonly for?: 'visitor' | 'watcher' | 'animator' | 'lifeguard' | 'staff';
   // A player's place in the venue's game, on the half of the court that is theirs.
   readonly game?: GameKind;
   readonly side?: 0 | 1;
+  // Into the venue's lanes: the party playing that lane waits here.
+  readonly lane?: number;
+  // Drawn doing this rather than standing still; a swing hangs from the bar on layer `pivot`, and
+  // tag is played over the `yard`'s cells by everybody at a spot sharing it.
+  readonly act?: SpotAct;
+  readonly pivot?: number;
+  readonly yard?: ModelRect;
+  // A gym's: run and jump on the spot, lift, or sit up on a mat lying with its legs to `facing`.
+  readonly station?: Station;
+  // Offered to a child before an adult.
+  readonly child?: true;
+}
+
+export type SpotAct = 'swing' | 'dig' | 'tag' | 'play' | 'rinse';
+
+export type Station = 'run' | 'jump' | 'lift' | 'mat';
+
+export interface ModelRect {
+  readonly x: number;
+  readonly z: number;
+  readonly w: number;
+  readonly d: number;
+}
+
+// Open floor whose seated visitors get up and dance on it while a show is on; y is the layer the
+// feet stand in.
+export interface ModelFloor extends ModelRect {
+  readonly y: number;
 }
 
 export type GameKind = 'tennis' | 'basketball' | 'volleyball';
@@ -141,7 +170,8 @@ export interface ModelArea {
   readonly laps?: boolean;
 }
 
-export type LoopPose = 'walk' | 'climb' | 'slide' | 'swim';
+// `hang` goes hand over hand along a bar overhead, `drop` lets go of it.
+export type LoopPose = 'walk' | 'climb' | 'slide' | 'swim' | 'hang' | 'drop';
 
 // A swim point's y is the water's top face, as an area's surface is; a slide point's is the
 // hips', as a seat's; any other the layer the feet stand in.
@@ -156,6 +186,23 @@ export interface ModelLoopPoint {
 export interface ModelLoop {
   readonly points: readonly ModelLoopPoint[];
   readonly places: number;
+  readonly for?: 'child';
+}
+
+export interface ModelPoint {
+  readonly x: number;
+  readonly z: number;
+}
+
+// A hole the venue's visitors play in turn, as columns: the ball rolls along `line`, tee first
+// and cup last, bent round whatever stands on the felt.
+export interface ModelLane {
+  readonly line: readonly ModelPoint[];
+  // The layer the players' feet stand in.
+  readonly y: number;
+  // Holed out, the party walks from the cup by these to the tee of lane `next`.
+  readonly walk: readonly ModelPoint[];
+  readonly next: number;
 }
 
 export type PlaceGroup = 'spots' | 'seats' | 'areas' | 'loops';
@@ -209,6 +256,8 @@ export interface ModelVenue {
   readonly spots?: readonly ModelSpot[];
   readonly areas?: readonly ModelArea[];
   readonly loops?: readonly ModelLoop[];
+  readonly lanes?: readonly ModelLane[];
+  readonly floor?: ModelFloor;
   // Which kind of place visitors fill first; left out, spots, seats, areas, loops.
   readonly order?: readonly PlaceGroup[];
   // The prop a game here is played with, and the layer it is struck at.
@@ -332,7 +381,14 @@ function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number):
   return {
     ...venue,
     ...(venue.spots
-      ? { spots: venue.spots.map((spot) => ({ ...moved(spot), y: spot.y - minY })) }
+      ? {
+          spots: venue.spots.map((spot) => ({
+            ...moved(spot),
+            y: spot.y - minY,
+            ...(spot.pivot === undefined ? {} : { pivot: spot.pivot - minY }),
+            ...(spot.yard ? { yard: moved(spot.yard) } : {}),
+          })),
+        }
       : {}),
     ...(venue.areas
       ? { areas: venue.areas.map((area) => ({ ...moved(area), surface: area.surface - minY })) }
@@ -345,6 +401,17 @@ function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number):
           })),
         }
       : {}),
+    ...(venue.lanes
+      ? {
+          lanes: venue.lanes.map((lane) => ({
+            ...lane,
+            y: lane.y - minY,
+            line: lane.line.map(moved),
+            walk: lane.walk.map(moved),
+          })),
+        }
+      : {}),
+    ...(venue.floor ? { floor: { ...moved(venue.floor), y: venue.floor.y - minY } } : {}),
     ...(venue.ball ? { ball: { ...venue.ball, y: venue.ball.y - minY } } : {}),
     ...(venue.court ? { court: courtFrom(venue.court, minX, minY, minZ) } : {}),
   };

@@ -25,14 +25,57 @@ const SWING = { x0: 34, x1: 50, z0: 11, top: GROUND + 11 } as const;
 const SWINGS = [38, 42, 46] as const;
 
 const CLIMBERS = [
-  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
-  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1 },
-  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
-  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0 },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 2, facing: 1, child: true },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 2, facing: 1, child: true },
+  { x: TOWER.x + 2, y: DECK + 1, z: TOWER.z + 5, facing: 0, child: true },
+  { x: TOWER.x + 5, y: DECK + 1, z: TOWER.z + 5, facing: 0, child: true },
 ] as const;
 
 const BARS = { x0: 37, x1: 54, z0: 22, z1: 27, top: GROUND + 9 } as const;
 const RUNGS = [41, 44, 47, 50] as const;
+
+// The chute falls a layer every column from the deck's east edge, hips a layer above it.
+const CHUTE = { x0: TOWER.x + TOWER.w, z: TOWER.z + 3.5 } as const;
+const FALL = DECK - (GROUND + 1);
+const LADDER = { x: TOWER.x - 2, z: TOWER.z + 3 } as const;
+// South of the posts and the chute's solid foot, on the way back round.
+const ROUND_Z = TOWER.z + TOWER.d + 1.5;
+
+const TOWER_LOOP = {
+  places: 3,
+  for: 'child',
+  points: [
+    { x: LADDER.x - 1, y: GROUND + 1, z: LADDER.z, pose: 'walk' },
+    { x: LADDER.x, y: GROUND + 1, z: LADDER.z, pose: 'climb' },
+    { x: LADDER.x, y: DECK + 1, z: LADDER.z, pose: 'walk' },
+    { x: CHUTE.x0, y: DECK + 1, z: CHUTE.z, pose: 'slide' },
+    { x: CHUTE.x0 + FALL, y: GROUND + 2, z: CHUTE.z, pose: 'slide' },
+    { x: CHUTE.x0 + FALL + 2, y: GROUND + 2, z: CHUTE.z, pose: 'walk' },
+    { x: CHUTE.x0 + FALL + 2, y: GROUND + 1, z: ROUND_Z, pose: 'walk' },
+    { x: TOWER.x + 3, y: GROUND + 1, z: ROUND_Z, pose: 'walk' },
+    { x: LADDER.x - 1, y: GROUND + 1, z: ROUND_Z, pose: 'walk' },
+  ],
+} as const;
+
+// Hands on the rungs, a child's three voxels below them. Up inside the end ladder, which is
+// solid across the frame, and back in from the open side between the posts.
+const HANG = BARS.top - 3.5;
+const BARS_Z = (BARS.z0 + BARS.z1 - 1) / 2;
+const BACK_Z = BARS.z1 + 1;
+const INSIDE = BARS.x0 + 2;
+
+const BARS_LOOP = {
+  places: 2,
+  for: 'child',
+  points: [
+    { x: INSIDE, y: GROUND + 1, z: BARS_Z, pose: 'climb' },
+    { x: INSIDE, y: HANG, z: BARS_Z, pose: 'hang' },
+    { x: RUNGS[3], y: HANG, z: BARS_Z, pose: 'drop' },
+    { x: RUNGS[3] + 1, y: GROUND + 1, z: BARS_Z, pose: 'walk' },
+    { x: RUNGS[3] + 1, y: GROUND + 1, z: BACK_Z, pose: 'walk' },
+    { x: INSIDE, y: GROUND + 1, z: BACK_Z, pose: 'walk' },
+  ],
+} as const;
 
 const GATE = { lo: 29, hi: 34 } as const;
 
@@ -74,9 +117,12 @@ export default defineModel({
         z: SWING.z0,
         facing: 0 as const,
         pose: 'sit' as const,
+        act: 'swing' as const,
+        pivot: SWING.top,
+        child: true as const,
       })),
       ...CLIMBERS,
-      // Ground sitters are lifted by the crowd's GROUND_SIT_RISE, so the hips sit 1.5 above the sand.
+      // Kneeling in the sand, which the dig draws by sinking a standing child into it.
       ...(
         [
           [PIT.x0 + 4, 1],
@@ -84,13 +130,16 @@ export default defineModel({
         ] as const
       ).map(([x, facing]) => ({
         x,
-        y: GROUND + 2.5,
+        y: GROUND + 1,
         z: (PIT.z0 + PIT.z1) >> 1,
         facing,
-        pose: 'sit' as const,
+        act: 'dig' as const,
+        child: true as const,
       })),
       { x: (MAT.x0 + MAT.x1) >> 1, y: GROUND + 1, z: BARS.z0 - 2, facing: 2, for: 'animator' },
+      { x: GATE.hi + 1, y: GROUND + 1, z: LAWN.z1 - 6, facing: 2, for: 'staff' },
     ],
+    loops: [TOWER_LOOP, BARS_LOOP],
     doors: [{ x: GATE.lo + 2, z: LAWN.z1, facing: 0 }],
   },
   build: (b: VoxelBuilder) => {

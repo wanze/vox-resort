@@ -181,6 +181,7 @@ function heightOn(kind: number, z: number, edgeZ: number): number {
 
 function poseOn(kind: number): number {
   if (kind === KIND.walk) return RESTING.none;
+  if (kind === KIND.tread) return RESTING.standing;
   return kind === KIND.swim ? DRAWN_POSE.swim : DRAWN_POSE.wade;
 }
 

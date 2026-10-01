@@ -282,7 +282,7 @@ an edit simply recasts.
   in, each holding `places` visitors) and `loops` (a polyline its riders go
   round). A visitor on one is **acting**: `perform` (`acts.ts`) draws them
   every frame, after `keepSeats`. In a `swim` area they swim from one hashed
-  point to the next and tread water for 1 to 4 s between legs; with `laps`
+  point to the next and stand in the water for 1 to 4 s between legs; with `laps`
   they swim the long way in a lane of their own and turn at each end; in a
   `wade` area children walk, wade and hop. A loop rider goes round at a speed
   set by each leg's pose: slowly up a ladder (`climb`, drawn jogging), fast
@@ -352,7 +352,7 @@ resting on their pitch: needs, mishaps and the lifeguard's watch never hear of
 it, and nothing is saved. `recast` lists the resting beach guests
 (`Router.restingUntil`), and `performAtSea` runs after `perform` every frame.
 A swimmer walks straight to the water, wades in over a tile, swims a leg or
-two to hashed points within two tiles of their pitch's x, treads water 10 to
+two to hashed points within two tiles of their pitch's x, stands in the water 10 to
 40 s after each, and comes back the same way. While they are away their lounger
 is drawn empty; the seat stays theirs in the crowd.
 

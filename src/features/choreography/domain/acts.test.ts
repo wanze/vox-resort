@@ -102,7 +102,7 @@ describe('acts in an area', () => {
     }
   });
 
-  it('keeps a wanderer in the water, treading it between legs', () => {
+  it('keeps a wanderer in the water, standing in it between legs', () => {
     for (const person of [8, 9]) {
       const cast = poolCast(10);
       expect(placeOf(cast, person).act).toBe('swim');
@@ -112,7 +112,7 @@ describe('acts in an area', () => {
         expect(inside(area, cast.x[person]!, cast.z[person]!)).toBe(true);
         poses.add(cast.pose[person]!);
       });
-      expect(poses).toEqual(new Set([DRAWN_POSE.swim, DRAWN_POSE.wade]));
+      expect(poses).toEqual(new Set([DRAWN_POSE.swim, RESTING.standing]));
     }
   });
 
@@ -142,7 +142,7 @@ describe('acts in an area', () => {
         const pose = cast.pose[person]!;
         let sink = SWIM_SINK;
         if (place.act === 'wade') sink = WADE_SINK;
-        else if (pose === DRAWN_POSE.wade) sink = TREAD_SINK;
+        else if (pose === RESTING.standing) sink = TREAD_SINK;
         expect(cast.y[person]).toBe(place.area.surface - sink);
       }
     });

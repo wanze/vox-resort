@@ -46,7 +46,7 @@ const SLIDE_SPEED = 12;
 // Zero: 045's swim pose already lowers the body so a quarter voxel of back and the head's top
 // stay above the instance; any lower and the opaque water swallows the swimmer whole.
 export const SWIM_SINK = 0;
-// Treading water: an adult's shoulders stay half a voxel above, so the sculling arms show.
+// Resting between legs: an adult's shoulders stay half a voxel above, so the head clears the water.
 export const TREAD_SINK = 2;
 // Feet on a one-layer paddling pool's floor, so the water laps the shins.
 export const WADE_SINK = 1;
@@ -148,6 +148,10 @@ function movingPose(place: AreaPlace, n: number): number {
   return n % 3 === 2 ? DRAWN_POSE.hop : DRAWN_POSE.wade;
 }
 
+// Standing still, not the wade's sculling: swung arms on an upright body read as a walk.
+const restingPose = (place: AreaPlace): number =>
+  place.act === 'wade' ? DRAWN_POSE.wade : RESTING.standing;
+
 function sinkOf(place: AreaPlace, moving: boolean): number {
   if (place.act === 'wade') return WADE_SINK;
   return moving ? SWIM_SINK : TREAD_SINK;
@@ -168,9 +172,9 @@ function swimArea(cast: Cast, person: number, place: AreaPlace, clock: number): 
   cast.x[person] = fromX + dx * done;
   cast.z[person] = fromZ + dz * done;
   cast.y[person] = place.area.surface - sinkOf(place, moving);
-  // Kept through the rest, so a swimmer treads water facing the way they came.
+  // Kept through the rest, so a swimmer stands facing the way they came.
   cast.heading[person] = Math.atan2(dx, dz);
-  cast.pose[person] = moving ? movingPose(place, cast.legNo[person]!) : DRAWN_POSE.wade;
+  cast.pose[person] = moving ? movingPose(place, cast.legNo[person]!) : restingPose(place);
 }
 
 function speedOn(pose: LoopPose): number {

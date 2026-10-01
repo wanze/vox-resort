@@ -3,6 +3,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { RESTING } from '../../crowd/domain/crowd';
 import { sandGridFor, type ObstacleBox } from '../../crowd/domain/sandGrid';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { swimmableAt, type Rental } from '../../sea/domain/swimArea';
 import { createCast, recast, SHOWN, type Casting } from './casting';
 import {
@@ -157,6 +158,16 @@ describe('planSwim and swimAt', () => {
     };
     expect(Math.abs(shareOf(false) - SWIM_SHARE.adult)).toBeLessThan(0.05 * SWIM_SHARE.adult);
     expect(Math.abs(shareOf(true) - SWIM_SHARE.child)).toBeLessThan(0.05 * SWIM_SHARE.child);
+  });
+
+  it('stands still between swim legs rather than wading', () => {
+    const { trip } = firstSwimmer(SEA);
+    const samples = samplesOf(trip);
+    const swimming = samples.findIndex((at) => at.pose === DRAWN_POSE.swim);
+    const back = samples.findLastIndex((at) => at.pose === DRAWN_POSE.swim);
+    const between = samples.slice(swimming, back).filter((at) => at.pose !== DRAWN_POSE.swim);
+    expect(between.length).toBeGreaterThan(0);
+    for (const at of between) expect(at.pose).toBe(RESTING.standing);
   });
 
   it('draws the same swimmer at the same place every time', () => {

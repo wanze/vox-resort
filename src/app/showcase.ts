@@ -537,6 +537,13 @@ export interface VoicesView {
   readonly reviews: readonly Review[];
 }
 
+export interface StatusView {
+  readonly day: number;
+  readonly rating: Rating;
+  readonly present: number;
+  readonly beds: { readonly total: number; readonly taken: number };
+}
+
 export interface ShowcaseOptions {
   readonly canvas: HTMLCanvasElement;
   readonly onFrame: (update: FrameUpdate) => void;
@@ -547,6 +554,7 @@ export interface ShowcaseOptions {
   readonly onAdviceChange?: (advice: readonly Advice[]) => void;
   // At most once a simulated hour: thoughts are heard per step, and React must not be.
   readonly onThoughtsChange?: (view: VoicesView) => void;
+  readonly onStatusChange?: (status: StatusView) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
@@ -572,6 +580,7 @@ export interface Showcase {
   readonly stats: ShowcaseStats;
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
+  readonly status: StatusView;
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
   readonly cameraView: CameraView;
@@ -1793,6 +1802,16 @@ function reviewOfParty(resort: Resort, party: number): Review | null {
 
 function voicesOf(resort: Resort): VoicesView {
   return { loudest: loudest(resort.thoughtDay, LOUDEST_SHOWN), reviews: resort.reviews };
+}
+
+// The rating is the one set at check-in, not a fresh one: it is what sizes the arrivals.
+function statusOf(resort: Resort, clock: Pick<Clock, 'day'>): StatusView {
+  return {
+    day: clock.day,
+    rating: resort.rating,
+    present: presentCount(resort.guests),
+    beds: resort.beds,
+  };
 }
 
 // The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
@@ -3238,6 +3257,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const speak = (): void => options.onThoughtsChange?.(voicesOf(current()));
 
+  const report = (): void => options.onStatusChange?.(statusOf(current(), clock));
+
   let overlayKind: OverlayKind | null = null;
   // The graph the tiles were placed for: a new one, from an edit or a new plot, places them again.
   let overlayPlacedOn: WalkNetwork | null = null;
@@ -3266,6 +3287,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const hourly = (): void => {
     speak();
+    report();
     tellMoney();
     if (overlayKind !== null) paintOverlay();
     options.onDirty?.();
@@ -3273,6 +3295,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const morning = (): void => {
     advise();
+    report();
     tellMoney();
     options.onDirty?.();
     options.onMorning?.();
@@ -3284,6 +3307,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSceneChange?.(statsNow());
     advise();
     speak();
+    report();
     tellMoney();
   };
 
@@ -3552,6 +3576,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     get voices() {
       return voicesOf(current());
+    },
+    get status() {
+      return statusOf(current(), clock);
     },
     get params() {
       return params;

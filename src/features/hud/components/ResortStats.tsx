@@ -1,8 +1,10 @@
 import { StatRow } from './StatRow';
-import type { ShowcaseStats } from '../../../app/showcase';
+import type { ShowcaseStats, StatusView } from '../../../app/showcase';
 
 export interface ResortStatsProps {
   readonly stats: ShowcaseStats | null;
+  // Pushed hourly, where stats come only on an edit: the rating and the guests would sit frozen.
+  readonly status: StatusView | null;
 }
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
@@ -20,15 +22,21 @@ function Aside({ children }: { readonly children: string }) {
   return <span className="hud-figure-aside">{children}</span>;
 }
 
-export function ResortStats({ stats }: ResortStatsProps) {
+function liveFigures(stats: ShowcaseStats, status: StatusView | null) {
+  if (status === null) return { stars: stats.rating, present: stats.guests.present };
+  return { stars: status.rating.stars, present: status.present };
+}
+
+export function ResortStats({ stats, status }: ResortStatsProps) {
   if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;
   const { unmade } = stats.beds;
+  const { stars, present } = liveFigures(stats, status);
 
   return (
     <dl className="hud-stats hud-figures hud-overview">
-      <StatRow label="Rating">{`${stats.rating.toFixed(1)} ★`}</StatRow>
+      <StatRow label="Rating">{`${stars.toFixed(1)} ★`}</StatRow>
       <StatRow label="Guests">
-        <OutOf value={stats.guests.present} of={stats.guests.capacity} />
+        <OutOf value={present} of={stats.guests.capacity} />
       </StatRow>
       <StatRow label="Beds">
         <OutOf value={stats.beds.taken} of={stats.beds.total} />

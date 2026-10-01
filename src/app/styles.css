@@ -743,7 +743,8 @@ input[type='checkbox'] {
 
 @media (max-width: 1060px) {
   .hud-wordmark,
-  .hud-chip-tag {
+  .hud-chip-tag,
+  .hud-status .hud-readout-label {
     display: none;
   }
 }
@@ -770,6 +771,46 @@ input[type='checkbox'] {
 .hud-gates .hud-readout-value {
   font-family: var(--font-ui);
   font-size: var(--size-body);
+}
+
+.hud-rating .hud-dropdown-panel {
+  min-width: 280px;
+}
+
+.hud-rating-parts {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  white-space: nowrap;
+}
+
+.hud-rating-part {
+  display: contents;
+}
+
+.hud-rating-parts dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hud-rating-lost {
+  color: var(--text-dim);
+}
+
+.hud-rating-part[data-costliest='true'] > * {
+  font-weight: 700;
+  color: var(--terracotta-deep);
+}
+
+.hud-rating-note {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--size-small);
+  color: var(--text-faint);
 }
 
 /* The legend hangs under the picker it explains. */

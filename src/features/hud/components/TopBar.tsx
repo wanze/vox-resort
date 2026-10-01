@@ -2,6 +2,7 @@ import type { RefObject } from 'react';
 import { HudReadout } from './HudReadout';
 import { MainMenu } from './MainMenu';
 import { PixelIcon } from './PixelIcon';
+import { RatingControl } from './RatingControl';
 import { SpeedControl } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
 import { WeatherControl } from './WeatherControl';
@@ -11,10 +12,11 @@ import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
+import type { StatusView } from '../../../app/showcase';
 import type { WindowControls } from '../../../app/useWindows';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export type MenuId = 'main' | 'speed' | 'weather' | 'overlay';
+export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'rating';
 
 export interface TopBarProps {
   readonly timeElement: RefObject<HTMLInputElement | null>;
@@ -24,6 +26,7 @@ export interface TopBarProps {
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
   readonly ledger: Ledger | null;
+  readonly status: StatusView | null;
   readonly adviceCount: number;
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
@@ -38,6 +41,22 @@ function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
       icon={<PixelIcon name="books" />}
       label="Money"
       value={ledger.balance.toLocaleString('en-US')}
+    />
+  );
+}
+
+function GuestsReadout({ status }: { readonly status: StatusView | null }) {
+  if (status === null) return null;
+  return (
+    <HudReadout
+      icon={<PixelIcon name="guests" />}
+      label="Guests"
+      value={
+        <>
+          {status.present.toLocaleString('en-US')}
+          <span className="hud-figure-of"> / {status.beds.total.toLocaleString('en-US')}</span>
+        </>
+      }
     />
   );
 }
@@ -67,7 +86,7 @@ function GatesToggle({
 }
 
 export function TopBar(props: TopBarProps) {
-  const { clock, resort, overlay, ledger, windows, menu, onMenuChange } = props;
+  const { clock, resort, overlay, ledger, status, windows, menu, onMenuChange } = props;
   const opener =
     (id: MenuId) =>
     (open: boolean): void =>
@@ -116,6 +135,14 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <div className="hud-plate hud-status">
+        {status ? (
+          <RatingControl
+            rating={status.rating}
+            open={menu === 'rating'}
+            onOpenChange={opener('rating')}
+          />
+        ) : null}
+        <GuestsReadout status={status} />
         <MoneyReadout ledger={ledger} />
         <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />
       </div>

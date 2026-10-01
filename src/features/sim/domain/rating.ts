@@ -50,3 +50,34 @@ export function arrivalsFor(rating: Rating, freeBeds: number): number {
   const cap = Math.max(1, Math.round(beds * MAX_ARRIVALS_SHARE));
   return Math.min(beds, Math.round(cap * clamp(rating.stars / 5)));
 }
+
+export type RatingPart = 'happiness' | 'housed' | 'cleanliness';
+
+export const RATING_PARTS: readonly RatingPart[] = ['happiness', 'housed', 'cleanliness'];
+
+const SHARES: Readonly<Record<RatingPart, number>> = {
+  happiness: HAPPINESS_SHARE,
+  housed: HOUSED_SHARE,
+  cleanliness: CLEAN_SHARE,
+};
+
+// A loss under a tenth of a star rounds away in the HUD, so it is not worth naming.
+const NOTABLE_LOSS = 0.1;
+
+// Stars this part would add if it were perfect; the HUD names the largest as the one to fix.
+export function starsLost(rating: Rating, part: RatingPart): number {
+  return oneDecimal(5 * SHARES[part] * (1 - rating[part]));
+}
+
+export function costliestPart(rating: Rating): RatingPart | null {
+  let costliest: RatingPart | null = null;
+  let most = 0;
+  for (const part of RATING_PARTS) {
+    const lost = starsLost(rating, part);
+    if (lost >= NOTABLE_LOSS && lost > most) {
+      costliest = part;
+      most = lost;
+    }
+  }
+  return costliest;
+}

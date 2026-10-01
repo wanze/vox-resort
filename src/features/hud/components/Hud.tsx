@@ -28,7 +28,7 @@ import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
 import type { WindowControls } from '../../../app/useWindows';
-import type { ShowcaseStats, VoicesView } from '../../../app/showcase';
+import type { ShowcaseStats, StatusView, VoicesView } from '../../../app/showcase';
 
 export interface HudProps {
   readonly stats: ShowcaseStats | null;
@@ -42,6 +42,7 @@ export interface HudProps {
   readonly overlay: OverlayControls;
   readonly advice: readonly Advice[];
   readonly voices: VoicesView;
+  readonly status: StatusView | null;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
   readonly preview: PreviewLookup;
@@ -87,7 +88,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       zoneStaff={props.stats?.staff.zones ?? null}
     />
   ),
-  overview: (props) => <ResortStats stats={props.stats} />,
+  overview: (props) => <ResortStats stats={props.stats} status={props.status} />,
   advice: (props) => (
     <AdvicePanel
       advice={props.advice}
@@ -187,6 +188,7 @@ export function Hud(props: HudProps) {
         saves={props.saves}
         overlay={props.overlay}
         ledger={props.ledger}
+        status={props.status}
         adviceCount={props.advice.length}
         windows={props.windows}
         menu={props.menu}

@@ -11,6 +11,7 @@ import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
 import { useClockControls, type ClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
+import { useStatus } from './useStatus';
 import { useThoughts } from './useThoughts';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
@@ -111,6 +112,10 @@ function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
   return { playing, saves, welcome };
 }
 
+function useHourly() {
+  return { thoughts: useThoughts(), status: useStatus() };
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
@@ -127,7 +132,7 @@ export function App() {
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
   const advice = useAdvice(showcaseRef);
-  const thoughts = useThoughts();
+  const { thoughts, status } = useHourly();
   const { playing, saves, welcome } = useGame(showcaseRef, clock);
   const { resort, adoptLoading } = welcome;
   const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
@@ -145,6 +150,7 @@ export function App() {
   const { adopt: adoptSelection } = inspector;
   const { adopt: adoptAdvice } = advice;
   const { adopt: adoptVoices } = thoughts;
+  const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
   const { adopt: adoptLedger, refuse } = money;
   const { markDirty, morning } = saves;
@@ -166,6 +172,7 @@ export function App() {
       onSelectionChange: adoptSelection,
       onAdviceChange: adoptAdvice,
       onThoughtsChange: adoptVoices,
+      onStatusChange: adoptStatus,
       onWeatherChange: adoptWeather,
       onOpenChange: adoptOpen,
       onMoneyChange: adoptLedger,
@@ -192,6 +199,7 @@ export function App() {
         // So the panel says something before the first check-in hour comes round.
         adoptAdvice(mounted.advice);
         adoptVoices(mounted.voices);
+        adoptStatus(mounted.status);
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
         adoptOpen(mounted.open);
@@ -222,6 +230,7 @@ export function App() {
     adoptSelection,
     adoptAdvice,
     adoptVoices,
+    adoptStatus,
     adoptWeather,
     adoptLedger,
     adoptLoading,
@@ -261,6 +270,7 @@ export function App() {
           overlay={mapOverlay}
           advice={advice.advice}
           voices={thoughts.voices}
+          status={status.status}
           onShowOnPlot={advice.showOnPlot}
           preview={previewUrl}
           tool={tool}

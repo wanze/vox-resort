@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { arrivalsFor, EMPTY_STARS, MAX_ARRIVALS_SHARE, ratingFor } from './rating';
+import {
+  arrivalsFor,
+  costliestPart,
+  EMPTY_STARS,
+  MAX_ARRIVALS_SHARE,
+  RATING_PARTS,
+  ratingFor,
+  starsLost,
+} from './rating';
 
 describe('ratingFor', () => {
   it('gives five stars to a resort that is happy and housed', () => {
@@ -56,6 +64,32 @@ describe('ratingFor', () => {
     expect(stars).toBe(Math.round(stars * 10) / 10);
     expect(stars).toBeGreaterThan(0);
     expect(stars).toBeLessThan(5);
+  });
+});
+
+describe('starsLost', () => {
+  it('finds nothing lost in a perfect resort', () => {
+    const rating = ratingFor({ happiness: 1, present: 600, housed: 600, cleanliness: 1 });
+    for (const part of RATING_PARTS) expect(starsLost(rating, part)).toBe(0);
+    expect(costliestPart(rating)).toBeNull();
+  });
+
+  it('charges half the happiness at its share of five stars', () => {
+    const rating = ratingFor({ happiness: 0.5, present: 600, housed: 600, cleanliness: 1 });
+    expect(starsLost(rating, 'happiness')).toBe(1.8);
+    expect(costliestPart(rating)).toBe('happiness');
+  });
+
+  it('names the part losing most, even when it is not happiness', () => {
+    const rating = ratingFor({ happiness: 0.9, present: 600, housed: 0, cleanliness: 1 });
+    expect(starsLost(rating, 'housed')).toBeGreaterThan(starsLost(rating, 'happiness'));
+    expect(costliestPart(rating)).toBe('housed');
+  });
+
+  it('adds up to the stars missing from five, give or take the rounding', () => {
+    const rating = ratingFor({ happiness: 0.63, present: 600, housed: 410, cleanliness: 0.37 });
+    const lost = RATING_PARTS.reduce((sum, part) => sum + starsLost(rating, part), 0);
+    expect(Math.abs(lost - (5 - rating.stars))).toBeLessThanOrEqual(0.15);
   });
 });
 

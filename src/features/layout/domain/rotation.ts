@@ -62,6 +62,18 @@ export function rotatePoint(
   }
 }
 
+// A column covers [x, x + 1], so its centre is what turns: turning x itself as a point
+// lands one voxel off on every axis the turn flips.
+export function rotateColumn(
+  column: Extent,
+  width: number,
+  depth: number,
+  rotation: Rotation,
+): Extent {
+  const centre = rotatePoint({ x: column.x + 0.5, z: column.z + 0.5 }, width, depth, rotation);
+  return { x: centre.x - 0.5, z: centre.z - 0.5 };
+}
+
 export function rotateLights(
   lights: readonly ModelLight[],
   width: number,
@@ -71,7 +83,7 @@ export function rotateLights(
   if (rotation === 0 || lights.length === 0) return lights;
   return lights.map((light) => ({
     ...light,
-    ...rotatePoint(light, width, depth, rotation),
+    ...rotateColumn(light, width, depth, rotation),
   }));
 }
 
@@ -84,7 +96,7 @@ export function rotateSeats(
   if (rotation === 0 || seats.length === 0) return seats;
   return seats.map((seat) => ({
     ...seat,
-    ...rotatePoint(seat, width, depth, rotation),
+    ...rotateColumn(seat, width, depth, rotation),
     facing: normalizeRotation(seat.facing + rotation),
   }));
 }

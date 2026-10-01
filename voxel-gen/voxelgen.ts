@@ -51,6 +51,7 @@ export interface TileFootprint {
   readonly z: number;
 }
 
+// x/z is the column the light hangs in, as a seat's is; y is a height, free to fall between layers.
 export interface ModelLight {
   readonly x: number;
   readonly y: number;

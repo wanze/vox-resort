@@ -21,7 +21,7 @@ describe('anchorsFor', () => {
 
   it('carries the light to where the object stands', () => {
     const [anchor] = anchorsFor({ key: 'street-lamp:4', x: 320, z: 96, y: 0 }, [light()]);
-    expect(anchor).toMatchObject({ x: 327, z: 103, y: 18, intensity: 90, distance: 46 });
+    expect(anchor).toMatchObject({ x: 327.5, z: 103.5, y: 18, intensity: 90, distance: 46 });
   });
 
   it("takes the light's height off the ground the object is planted in", () => {

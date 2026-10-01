@@ -9,10 +9,10 @@ describe('buoyLampSites', () => {
     expect(buoyLampSites([], buoy, 0.1)).toEqual([]);
   });
 
-  it('puts a lamp declared at the middle of the model over its mooring', () => {
+  it("puts a lamp declared on the model's middle column over its mooring", () => {
     const [site] = buoyLampSites([{ x: 40, z: 72 }], buoy, 0.1);
     const [anchor] = anchorsFor(site!, [
-      { x: 2.5, y: 10.5, z: 2.5, color: 0xffcc66, intensity: 40, distance: 30 },
+      { x: 2, y: 10.5, z: 2, color: 0xffcc66, intensity: 40, distance: 30 },
     ]);
     expect(anchor).toMatchObject({ x: 40, y: 10.6, z: 72 });
   });

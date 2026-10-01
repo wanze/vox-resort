@@ -123,7 +123,9 @@ export default defineModel({
 - `lights` are baked into a light volume at load (`lighting/domain/lightGrid.ts`)
   and cost nothing per frame, only bake time and memory. Use them for things that
   actually light their surroundings (lamps, torches, pool floods), not every lit
-  window. A light doesn't need a voxel behind it.
+  window. A light doesn't need a voxel behind it. Its `x`/`z` name a voxel
+  column, as a seat's do, and the light hangs in that column's middle; `y` is a
+  plain height.
 - `water` faces ripple and reflect like the sea. Paint them in one flat tone.
 
 Positions are in model coordinates, so they follow the object when it's placed.

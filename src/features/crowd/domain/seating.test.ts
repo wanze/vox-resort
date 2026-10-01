@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { Matrix4, Vector3 } from 'three/webgpu';
 import { TILE_VOXELS, type ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
-import { rotationRadians, type Rotation } from '../../layout/domain/rotation';
+import {
+  rotateExtent,
+  rotationRadians,
+  ROTATIONS,
+  turnedOrigin,
+  type Rotation,
+} from '../../layout/domain/rotation';
 import { seatSpotsFor, type SeatSite } from './seating';
 
 const BENCH: readonly ModelSeat[] = [4, 8, 12].map((x) => ({ x, y: 4, z: 7, facing: 0 }));
@@ -17,7 +24,38 @@ const benchAt = (tileX: number, tileZ: number, rotation: Rotation = 0): SeatSite
   seats: BENCH,
 });
 
+// Built the way writeSlot builds it, so a seat is checked against the drawn model.
+function instanceMatrix(site: SeatSite): Matrix4 {
+  const turned = rotateExtent(site.width, site.depth, site.rotation);
+  const origin = turnedOrigin(turned.x, turned.z, site.rotation);
+  return new Matrix4()
+    .makeRotationY(rotationRadians(site.rotation))
+    .setPosition(site.x + origin.x, site.y, site.z + origin.z);
+}
+
 describe('seatSpotsFor', () => {
+  it('sits on the centre of the voxel the drawn model turned the seat onto', () => {
+    const seats: readonly ModelSeat[] = [
+      { x: 0, y: 4, z: 0, facing: 0 },
+      { x: 5, y: 4, z: 13, facing: 1 },
+      { x: 31, y: 4, z: 15, facing: 2 },
+    ];
+    for (const rotation of ROTATIONS) {
+      const site: SeatSite = { x: 48, z: 80, y: 0, rotation, width: 32, depth: 16, seats };
+      const matrix = instanceMatrix(site);
+      for (const [index, spot] of seatSpotsFor([site]).entries()) {
+        const seat = seats[index]!;
+        const centre = new Vector3(seat.x + 0.5, 0, seat.z + 0.5).applyMatrix4(matrix);
+        expect({ rotation, seat: index, x: spot.x, z: spot.z }).toEqual({
+          rotation,
+          seat: index,
+          x: Math.round(centre.x * 2) / 2,
+          z: Math.round(centre.z * 2) / 2,
+        });
+      }
+    }
+  });
+
   it('puts an unturned model’s seats where the art declared them', () => {
     const [first, second, third] = seatSpotsFor([benchAt(2, 3)]);
     expect(first).toEqual({
@@ -41,7 +79,7 @@ describe('seatSpotsFor', () => {
   it('turns where the sitter looks along with where they sit', () => {
     const spots = seatSpotsFor([benchAt(0, 0, 1)]);
     expect(spots.map((spot) => spot.heading)).toEqual(([1, 1, 1] as const).map(rotationRadians));
-    expect(spots.map((spot) => spot.z)).toEqual([12.5, 8.5, 4.5]);
+    expect(spots.map((spot) => spot.z)).toEqual([11.5, 7.5, 3.5]);
     for (const spot of spots) expect(spot.x).toBe(7.5);
   });
 

@@ -24,9 +24,10 @@ export interface LightSite {
 export function anchorsFor(site: LightSite, lights: readonly ModelLight[]): LightAnchor[] {
   return lights.map((light, index) => ({
     key: `${site.key}:${index}`,
-    x: site.x + light.x,
+    // Half a voxel on, because a light hangs in the middle of the column it names.
+    x: site.x + light.x + 0.5,
     y: site.y + light.y,
-    z: site.z + light.z,
+    z: site.z + light.z + 0.5,
     color: light.color,
     intensity: light.intensity,
     distance: light.distance,

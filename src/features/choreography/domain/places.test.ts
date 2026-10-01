@@ -61,10 +61,11 @@ describe('placesFor', () => {
     const spots = model.venue!.spots!;
     expect(places.visitors).toHaveLength(spots.length);
     for (const [index, spot] of spots.entries()) {
-      const turned = rotatePoint(spot, model.width, model.depth, 1);
+      const centre = { x: spot.x + 0.5, z: spot.z + 0.5 };
+      const turned = rotatePoint(centre, model.width, model.depth, 1);
       expect(places.visitors[index]).toMatchObject({
-        x: placement.x + turned.x + 0.5,
-        z: placement.z + turned.z + 0.5,
+        x: placement.x + turned.x,
+        z: placement.z + turned.z,
         y: spot.y,
         heading: rotationRadians(normalizeRotation(spot.facing + 1)),
         pose: RESTING.standing,

@@ -14,9 +14,9 @@ export default defineModel({
   category: 'sea',
   tiles: { x: 1, z: 1 },
   emissive: [LAMP],
-  // Brighter than a bridge lantern: the water it lights is ten voxels below. At the voxel's middle
-  // because the buoy is hung on its own middle.
-  lights: [{ x: 0.5, y: DRUM + MAST + 0.5, z: 0.5, color: LAMP, intensity: 40, distance: 32 }],
+  // Brighter than a bridge lantern: the water it lights is ten voxels below. Half a layer up so it
+  // glows from the lamp voxel's middle rather than its floor.
+  lights: [{ x: 0, y: DRUM + MAST + 0.5, z: 0, color: LAMP, intensity: 40, distance: 32 }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { amber, bloom, metal } = PALETTE;

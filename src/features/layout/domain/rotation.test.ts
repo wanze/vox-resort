@@ -4,6 +4,7 @@ import type { ModelDoor, ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import {
   normalizeRotation,
   rotateDoors,
+  rotateColumn,
   rotateExtent,
   rotateLights,
   rotatePoint,
@@ -133,6 +134,50 @@ describe('rotatePoint', () => {
   });
 });
 
+describe('rotateColumn', () => {
+  it('turns the centre of a voxel column the way the drawn model turns it', () => {
+    for (const rotation of ROTATIONS) {
+      const matrix = instanceMatrix(WIDTH, DEPTH, rotation);
+      for (const column of [
+        { x: 0, z: 0 },
+        { x: 7, z: 18 },
+        { x: WIDTH - 1, z: DEPTH - 1 },
+      ]) {
+        const centre = new Vector3(column.x + 0.5, 0, column.z + 0.5).applyMatrix4(matrix);
+        const at = rotateColumn(column, WIDTH, DEPTH, rotation);
+        expect({ rotation, column, x: at.x + 0.5, z: at.z + 0.5 }).toEqual({
+          rotation,
+          column,
+          x: Math.round(centre.x * 2) / 2,
+          z: Math.round(centre.z * 2) / 2,
+        });
+      }
+    }
+  });
+
+  it('keeps a corner column inside the turned footprint', () => {
+    for (const rotation of ROTATIONS) {
+      const turned = rotateExtent(WIDTH, DEPTH, rotation);
+      const at = rotateColumn({ x: WIDTH - 1, z: DEPTH - 1 }, WIDTH, DEPTH, rotation);
+      expect(at.x).toBeGreaterThanOrEqual(0);
+      expect(at.z).toBeGreaterThanOrEqual(0);
+      expect(at.x).toBeLessThan(turned.x);
+      expect(at.z).toBeLessThan(turned.z);
+    }
+  });
+
+  it('brings a column back where it started after four turns', () => {
+    let column = { x: 7, z: 18 };
+    let width = WIDTH;
+    let depth = DEPTH;
+    for (let turn = 0; turn < 4; turn++) {
+      column = rotateColumn(column, width, depth, 1);
+      ({ x: width, z: depth } = rotateExtent(width, depth, 1));
+    }
+    expect(column).toEqual({ x: 7, z: 18 });
+  });
+});
+
 const lamp = (overrides: Partial<ModelLight> = {}): ModelLight => ({
   x: 7,
   y: 18,
@@ -149,9 +194,9 @@ describe('rotateLights', () => {
     expect(rotateLights(lights, WIDTH, DEPTH, 0)).toBe(lights);
   });
 
-  it('moves a light to where the turned model puts it', () => {
+  it('moves a light to the column the turned model puts its own column in', () => {
     const [turned] = rotateLights([lamp()], WIDTH, DEPTH, 2);
-    expect(turned).toMatchObject({ x: WIDTH - 7, z: DEPTH - 7 });
+    expect(turned).toMatchObject({ x: WIDTH - 8, z: DEPTH - 8 });
   });
 
   it('leaves the height, colour and reach of a light alone', () => {

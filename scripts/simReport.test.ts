@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import { GUEST_NEEDS, type GuestNeed } from '../voxel-gen/voxelgen.ts';
 import { ORIGINAL_TYPES, venueOf } from '../src/features/catalog/domain/objectTypes';
@@ -32,7 +33,11 @@ import {
   type LayoutItem,
   type Placement,
 } from '../src/features/layout/domain/resortLayout';
+import type { ResortPlan } from '../src/features/layout/domain/resortPlan';
 import { shoreFor } from '../src/features/layout/domain/shoreline';
+import { terrainFor } from '../src/features/layout/domain/terrain';
+import { ownedSpan, type TileSpan } from '../src/features/land/domain/landRights';
+import { planOfWorld } from '../src/features/resort-prep/domain/savedWorld';
 import {
   arrivalsDueBy,
   CHECK_IN_TICK,
@@ -57,7 +62,11 @@ import { arrivalsFor, ratingFor } from '../src/features/sim/domain/rating';
 import { OPENING_BALANCE } from '../src/features/sim/domain/ledger';
 import { reviewFor } from '../src/features/sim/domain/reviews';
 import { createRouter, type Router } from '../src/features/sim/domain/router';
-import { SPEED_DAY_SECONDS, TICKS_PER_DAY } from '../src/features/sim/domain/simClock';
+import {
+  SPEED_DAY_SECONDS,
+  TICKS_PER_DAY,
+  type SimSpeed,
+} from '../src/features/sim/domain/simClock';
 import {
   createDay,
   createThoughts,
@@ -82,10 +91,14 @@ const KEEP = process.env.SIM_KEEP ?? '';
 const PATH_TILES = process.env.SIM_PATHS === undefined ? null : Number(process.env.SIM_PATHS);
 const OPENS_EMPTY = process.env.SIM_EMPTY === '1';
 const QUIET = process.env.SIM_QUIET === '1';
+// The JSON a save exports to: runs the player's own resort instead of a generated one.
+const SAVE = process.env.SIM_SAVE ?? '';
+// Rush caps the crowd's substeps, so guests there walk slower against the clock than at normal.
+const SPEED = (process.env.SIM_SPEED ?? 'normal') as SimSpeed;
 
 // The frames a normal-speed tick runs, so walks take as long as they do in the app.
 const FRAMES_PER_TICK = Math.round(
-  (crowdScaleFor('normal') * SPEED_DAY_SECONDS.normal) / TICKS_PER_DAY / MAX_STEP,
+  (crowdScaleFor(SPEED) * SPEED_DAY_SECONDS[SPEED]) / TICKS_PER_DAY / MAX_STEP,
 );
 
 const OPENS_AT = 8 * 60;
@@ -112,20 +125,54 @@ const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
 
 const hourOf = (tick: number): number => Math.floor((tick % TICKS_PER_DAY) / HOUR);
 
-function plotOf() {
+interface Ground {
+  readonly plan: ResortPlan;
+  readonly placements: readonly Placement[];
+  readonly props: readonly Placement[];
+  readonly paths: readonly Placement[];
+  readonly levelOf: (tileX: number, tileZ: number) => number;
+  readonly span?: TileSpan;
+  readonly population?: number;
+}
+
+function generatedGround(): Ground {
   const plan = generateResort(
     TYPES,
     clampParams({ tilesX: TILES_X, tilesZ: TILES_Z, seed: SEED, density: 0.7 }),
   );
-  const laid = layoutResort(ITEMS, plan);
-  const layout = KEEP ? { ...laid, placements: kept(laid.placements), props: [] } : laid;
   const elevation = elevationFor(plan);
+  return { plan, ...layoutResort(ITEMS, plan), levelOf: (x, z) => levelAt(elevation, x, z) };
+}
+
+// The save's own snapshot as exported from IndexedDB, typed arrays written out as plain arrays.
+function savedGround(path: string): Ground {
+  const snapshot = JSON.parse(readFileSync(path, 'utf8'));
+  const world = snapshot.world;
+  const land = world.land && { ...world.land, owned: Uint8Array.from(world.land.owned) };
+  const plan = planOfWorld({ ...world, ...(land ? { land } : {}) });
+  const terrain = terrainFor(plan);
+  return {
+    plan,
+    placements: world.placements,
+    props: world.props,
+    paths: world.paths,
+    levelOf: (x, z) => terrain.levelOf(x, z),
+    span: ownedSpan(plan.land ?? null, plan),
+    population: snapshot.population,
+  };
+}
+
+function plotOf() {
+  const ground = SAVE ? savedGround(SAVE) : generatedGround();
+  const { plan } = ground;
+  const layout = KEEP ? { ...ground, placements: kept(ground.placements), props: [] } : ground;
   const standing = [...layout.placements, ...layout.props];
   const network = walkNetworkFor({
     paved: layout.paths,
-    levelOf: (x, z) => levelAt(elevation, x, z),
+    levelOf: ground.levelOf,
     shore: shoreFor(plan),
     tilesX: plan.tilesX,
+    ...(ground.span ? { span: ground.span } : {}),
     obstacles: standing,
     seats: seatSpotsFor(standing.map(seatSiteOf)),
   });
@@ -144,7 +191,8 @@ function plotOf() {
     ...standing.map((placement) => buildCostOf(placement.id)),
     paths * buildCostOf('path'),
   ];
-  return { layout, network, homes, built, population: crowdSizeFor(layout.paths.length) };
+  const population = ground.population ?? crowdSizeFor(layout.paths.length);
+  return { layout, network, homes, built, population };
 }
 
 function kept(placements: readonly Placement[]): Placement[] {
@@ -370,7 +418,8 @@ it('reports a few days on a generated plot', () => {
   }
 
   console.log(
-    `Plot ${TILES_X}x${TILES_Z} seed ${SEED}: ${population} guests, ${bedCount(guests).beds} beds, ` +
+    `${SAVE ? `Saved resort ${SAVE}` : `Plot ${TILES_X}x${TILES_Z} seed ${SEED}`} at ${SPEED}: ` +
+      `${population} guests, ${bedCount(guests).beds} beds, ` +
       `${venues.length} venues, ${network.beachSeats.length} loungers, ${network.gates.length} gate tiles onto the beach`,
   );
   console.log(

@@ -71,8 +71,9 @@ position and identity but lose their seat. Crowd size doesn't change.
   check for a clear line.
 - **Speed follows the clock**: `crowdScaleFor(speed)` makes crossing the
   reference plot take a tenth of a simulated day at every speed. Long frames are
-  split into `MAX_STEP` substeps, capped at 32 (`MAX_SUBSTEPS`), so `rush` falls
-  behind. Paused means standing still.
+  split into `MAX_STEP` substeps, capped at 112 (`MAX_SUBSTEPS`), which `rush`
+  (107) fits under: at the old cap of 32 its guests walked a third as fast as the
+  clock and a fully built resort rated three stars. Paused means standing still.
 - **Boats** look ahead, steer away from piers and each other, and stay inside the
   bay.
 - **Hire boats** go out only while the pedalo rental has visitors, one boat for
@@ -82,8 +83,7 @@ position and identity but lose their seat. Crowd size doesn't change.
   none is called back early. This is drawn only: the visit, its dwell and its
   price are the router's.
 - Hire boats keep the **crowd's time** (`walked * crowdScale`), not real time:
-  they pedal at 0.6 of walking pace, stop when the crowd stops, and fall behind
-  the day at rush as the crowd does. Long frames are split into substeps of a
+  they pedal at 0.6 of walking pace and stop when the crowd stops. Long frames are split into substeps of a
   quarter of a crowd second, so a boat never steps over its berth.
 
 ## Storage

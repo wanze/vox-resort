@@ -24,9 +24,9 @@ const SPEED_SPREAD = 0.25;
 // About a body's width per step, which the avoidance spatial hash is sized for.
 export const MAX_STEP = 0.1;
 
-// Caps the crowd's speed-up (`crowdRate.ts` reads it) and bounds the catch-up after
-// a backgrounded tab.
-export const MAX_SUBSTEPS = 32;
+// Caps the crowd's speed-up (`crowdRate.ts` reads it). Rush asks for 107: at 32 its guests walked a
+// third as far per simulated hour as at normal, and every need ran dry on the way.
+export const MAX_SUBSTEPS = 112;
 
 // Summed steps of MAX_STEP overshoot slightly in binary; without this an empty extra
 // step would run.

@@ -22,9 +22,11 @@ describe('crowdScaleFor', () => {
     }
   });
 
-  it('caps at the most sub-steps a crowd step runs, and only rush reaches it', () => {
-    expect(crowdScaleFor('rush')).toBe(MAX_SUBSTEPS);
-    expect(crowdScaleFor('fast')).toBeLessThan(MAX_SUBSTEPS);
+  it('walks every preset at its full rate, rush included, under the most sub-steps a step runs', () => {
+    for (const speed of SIM_SPEEDS) {
+      expect(crowdScaleFor(speed), speed).toBeLessThan(MAX_SUBSTEPS);
+    }
+    expect(crowdScaleFor('rush')).toBeCloseTo(106.67, 2);
     // Pinned, so a change to the share or a preset is a change somebody made.
     expect(crowdScaleFor('slow')).toBeCloseTo(3.56, 2);
     expect(crowdScaleFor('normal')).toBeCloseTo(10.67, 2);

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../layout/domain/random';
-import { PARTY_MIX, partiesFor, type PartyKind } from './parties';
+import { guestsSnapshotSchema } from '../../sim/domain/resortSnapshot';
+import { createGuests, snapshotGuests } from './guests';
+import { PARTY_MIX, partiesFor, WHEELCHAIR_SHARE, wheelchairFor, type PartyKind } from './parties';
 
 const partiesOf = (count: number, seed = 1) => partiesFor({ count, random: createRandom(seed) });
 
@@ -58,5 +60,65 @@ describe('partiesFor', () => {
     for (const shape of PARTY_MIX) {
       expect((counts.get(shape.kind) ?? 0) / parties.length).toBeCloseTo(shape.share, 1);
     }
+  });
+});
+
+describe('wheelchairFor', () => {
+  it('puts one adult in a wheelchair in about one party in WHEELCHAIR_SHARE', () => {
+    let seated = 0;
+    for (let party = 0; party < 10_000; party++) {
+      if (wheelchairFor(party, [party * 4, party * 4 + 1]) >= 0) seated++;
+    }
+    expect(Math.abs(seated / 10_000 - WHEELCHAIR_SHARE)).toBeLessThan(0.01);
+  });
+
+  it('never seats a child', () => {
+    const { parties, child } = partiesOf(20_000, 3);
+    const seated = parties.filter((each) => each.wheelchair >= 0);
+    expect(seated.length).toBeGreaterThan(0);
+    for (const each of seated) {
+      expect(each.members).toContain(each.wheelchair);
+      expect(child[each.wheelchair]).toBe(0);
+    }
+  });
+
+  it('draws nothing from the stream the party shapes come from', () => {
+    const guests = createGuests({
+      count: 600,
+      homes: [{ key: 'h#0', id: 'h', label: 'H', beds: 600 }],
+      variants: 4,
+      childVariant: 3,
+      seed: 21,
+    });
+    const text = JSON.stringify([
+      guests.parties.map((each) => [each.kind, each.family, each.members]),
+      guests.people,
+      [...guests.variant],
+      [...guests.nights],
+      [...guests.arrivedOn],
+    ]);
+    let hash = 2166136261;
+    for (let at = 0; at < text.length; at++) {
+      hash = Math.imul(hash ^ text.charCodeAt(at), 16777619) >>> 0;
+    }
+    // Taken from the same draw before wheelchairs existed.
+    expect(hash).toBe(3507471660);
+  });
+
+  it('loads a save from before wheelchairs with nobody in one', () => {
+    const guests = createGuests({
+      count: 40,
+      homes: [{ key: 'h#0', id: 'h', label: 'H', beds: 40 }],
+      variants: 4,
+      childVariant: 3,
+      seed: 2,
+    });
+    const saved = snapshotGuests(guests);
+    const old = {
+      ...saved,
+      parties: saved.parties.map(({ kind, family, members }) => ({ kind, family, members })),
+    };
+    const loaded = guestsSnapshotSchema.parse(old);
+    expect(loaded.parties.every((each) => each.wheelchair === -1)).toBe(true);
   });
 });

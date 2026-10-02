@@ -17,6 +17,7 @@ import {
   checkOutParty,
   createGuests,
   homelessCount,
+  paceOf,
   presentCount,
   unmadeCount,
   type Guests,
@@ -279,6 +280,7 @@ it('reports a few days on a generated plot', () => {
     seed: 4,
     routeOf: (person, at) => router.step(person, at),
     offTheSand: (person) => router.offTheSand(person),
+    paceOf: (person) => paceOf(guests, person),
     roamsBeach: false,
   });
   for (let person = 0; person < population; person++) {

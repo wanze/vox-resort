@@ -7,7 +7,8 @@ import {
 import { railsAt, type WaterProvider } from '../../layout/domain/railings';
 import type { SpanProvider } from '../../layout/domain/spans';
 import type { LevelProvider } from '../../layout/domain/elevation';
-import { CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
+import type { PavedProvider } from '../../layout/domain/stairs';
+import { CLIMB_REACH } from '../../layout/domain/climbs';
 import type { PavedGround } from './paving';
 
 export interface StandingRails {
@@ -21,6 +22,7 @@ export interface HandrailRules {
   readonly isWater: WaterProvider;
   // Without it a hand-drawn crossing gets rails stood in the river, inside its own deck.
   readonly isSpan: SpanProvider;
+  readonly wantsStairs: PavedProvider;
   readonly models: RailModels;
   readonly standing: StandingRails;
 }
@@ -30,15 +32,18 @@ export interface RailChange {
   readonly lift: readonly Placement[];
 }
 
-// Only these five tiles can change: a rail depends on a tile and its neighbours alone.
-const AROUND: readonly { readonly dx: number; readonly dz: number }[] = [
-  { dx: 0, dz: 0 },
-  ...CLIMBS.map(({ dx, dz }) => ({ dx, dz })),
-];
+const SPAN = 2 * CLIMB_REACH + 1;
+
+// Only these tiles can change: a rail follows the climb under it, which reads as far as a ramp's
+// head reads.
+const AROUND: readonly { readonly dx: number; readonly dz: number }[] = Array.from(
+  { length: SPAN * SPAN },
+  (_, index) => ({ dx: (index % SPAN) - CLIMB_REACH, dz: Math.floor(index / SPAN) - CLIMB_REACH }),
+).filter(({ dx, dz }) => Math.abs(dx) + Math.abs(dz) <= CLIMB_REACH);
 
 // Asked after the tile and any flight it made are laid, so the rule reads the final paving.
 export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
-  const { pavedWith, levelOf, isWater, isSpan, models, standing } = rules;
+  const { pavedWith, levelOf, isWater, isSpan, wantsStairs, models, standing } = rules;
   const isPaved: PavedProvider = (tileX, tileZ) => pavedWith(tileX, tileZ) !== null;
   const stand: Placement[] = [];
   const lift: Placement[] = [];
@@ -52,7 +57,7 @@ export function railChangeAt(tile: Tile, rules: HandrailRules): RailChange {
     }
     const wanted = railPlacementsFor(
       models,
-      railsAt(around, isPaved, levelOf, isWater, isSpan),
+      railsAt(around, isPaved, levelOf, isWater, isSpan, wantsStairs),
       levelOf,
     );
     const wantedKeys = new Set(wanted.map((rail) => rail.key));

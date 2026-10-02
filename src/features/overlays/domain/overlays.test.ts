@@ -6,6 +6,7 @@ import {
   gridValues,
   MIN_SEEN,
   moodValues,
+  OVERLAY_KINDS,
   overlayValuesFor,
   reachValues,
   sampleFootfall,
@@ -137,6 +138,7 @@ describe('overlayValuesFor', () => {
     },
     scenery: { tilesX: 2, tilesZ: 1, value: Float32Array.from([1, 0]) },
     litter: { tilesX: 2, tilesZ: 1, value: Float32Array.from([0, 0.5]) },
+    stepFree: () => Float32Array.from([0, 1]),
   };
 
   it('sweeps from the need each reach layer is about, and only that one', () => {
@@ -156,5 +158,27 @@ describe('overlayValuesFor', () => {
   it('turns scenery over and reads litter as it lies', () => {
     expect([...overlayValuesFor('scenery', sources)]).toEqual([0, 1]);
     expect([...overlayValuesFor('litter', sources)]).toEqual([0, 0.5]);
+  });
+});
+
+describe('overlayValuesFor, step-free', () => {
+  it('hands over the step-free reach as it was swept, and sweeps nothing else', () => {
+    const swept = Float32Array.from([0, 1, Number.NaN]);
+    let asked = 0;
+    const values = overlayValuesFor('step-free', {
+      footfall: createFootfall(3),
+      nodes: 3,
+      tileOf: (node) => ({ tileX: node, tileZ: 0 }),
+      hopsTo: () => {
+        asked++;
+        return new Int32Array(3);
+      },
+      stepFree: () => swept,
+      scenery: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
+      litter: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
+    });
+    expect(values).toBe(swept);
+    expect(asked).toBe(0);
+    expect(OVERLAY_KINDS).toContain('step-free');
   });
 });

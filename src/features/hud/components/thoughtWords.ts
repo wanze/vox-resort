@@ -24,6 +24,7 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   littered: () => 'The paths are covered in litter',
   broken: (subject) => (subject ? `${subject} was broken` : 'Things kept breaking'),
   hurt: (subject) => (subject ? `I got hurt at ${subject}` : 'I got sunburnt'),
+  'no-step-free': (subject) => `Stairs everywhere, I could not get to ${subject ?? 'anything'}`,
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -37,6 +38,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   littered: 'Litter',
   broken: 'Repairs',
   hurt: 'Injuries',
+  'no-step-free': 'Access',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

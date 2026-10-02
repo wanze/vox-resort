@@ -12,6 +12,8 @@ import {
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
   type Plaza,
@@ -454,16 +456,20 @@ describe('the shore a generated plot gets', () => {
     expect(reserved.filter((tile) => covered.has(`${tile.x},${tile.z}`))).toEqual([]);
   });
 
-  it('paves the water with jetties, the beach with boardwalks, the steps with stairs and the rest with flagstones', () => {
+  it('paves the water with jetties, the beach with boardwalks, the steps with stairs or ramps and the rest with flagstones', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const elevation = elevationFor(plan)!;
     const terrain = terrainFor(plan);
     const { paths } = layoutResort(ITEMS, plan);
     const paved = new Set(paths.map((tile) => `${tile.tileX},${tile.tileZ}`));
+    const heads = new Set(
+      paths.filter((tile) => tile.id === RAMP_HEAD_ID).map((tile) => `${tile.tileX},${tile.tileZ}`),
+    );
 
     expect(paths.some((tile) => tile.id === BOARDWALK_ID)).toBe(true);
     expect(paths.some((tile) => tile.id === STAIRS_ID)).toBe(true);
+    expect(heads.size).toBeGreaterThan(0);
     expect(paths.some((tile) => tile.id === JETTY_ID)).toBe(true);
 
     for (const tile of paths) {
@@ -478,6 +484,12 @@ describe('the shore a generated plot gets', () => {
           paved.has(`${tile.tileX + dx!},${tile.tileZ + dz!}`) &&
           levelAt(elevation, tile.tileX + dx!, tile.tileZ + dz!) === level + 1,
       );
+      const footing = [
+        [0, -1],
+        [-1, 0],
+        [0, 1],
+        [1, 0],
+      ].some(([dx, dz]) => heads.has(`${tile.tileX + dx!},${tile.tileZ + dz!}`));
       const ground = groundAt(shore, elevation, tile.tileX, tile.tileZ);
       const inland = terrain.surfaceOf(tile.tileX, tile.tileZ) === 'water' && ground !== 'water';
       const wanted = inland
@@ -487,10 +499,14 @@ describe('the shore a generated plot gets', () => {
         : ground === 'water'
           ? JETTY_ID
           : climbs
-            ? STAIRS_ID
-            : ground === 'sand'
-              ? BOARDWALK_ID
-              : PATH_ID;
+            ? tile.id === RAMP_HEAD_ID
+              ? RAMP_HEAD_ID
+              : STAIRS_ID
+            : footing && tile.id === RAMP_FOOT_ID
+              ? RAMP_FOOT_ID
+              : ground === 'sand'
+                ? BOARDWALK_ID
+                : PATH_ID;
       expect({ key: tile.key, id: tile.id }).toEqual({ key: tile.key, id: wanted });
     }
   });

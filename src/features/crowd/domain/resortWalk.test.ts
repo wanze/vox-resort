@@ -53,18 +53,26 @@ describe('the network of a generated resort', () => {
     expect(network.nodes.length).toBeGreaterThan(1000);
   });
 
-  it('never stands a node under the treads of the flight it is on', () => {
-    const paved = new Map(layout.paths.map((path) => [`${path.tileX},${path.tileZ}`, path]));
-    for (const stair of stairs) {
-      const tile = paved.get(`${stair.tile.x},${stair.tile.z}`)!;
+  it('never stands a node under the treads of a flight or the slope of a ramp it is on', () => {
+    const ends: { readonly [id: string]: readonly number[] } = {
+      stairs: [0, LEVEL_VOXELS],
+      'ramp-foot': [0, LEVEL_VOXELS / 2],
+      'ramp-head': [LEVEL_VOXELS / 2, LEVEL_VOXELS],
+    };
+    const climbing = layout.paths.filter((path) => ends[path.id] !== undefined);
+    expect(new Set(climbing.map((path) => path.id))).toEqual(new Set(Object.keys(ends)));
+    for (const tile of climbing) {
       const on = network.nodes.filter(
-        (node) => node.tileX === stair.tile.x && node.tileZ === stair.tile.z,
+        (node) => node.tileX === tile.tileX && node.tileZ === tile.tileZ,
       );
+      // A node shared with the tile below, as a ramp's middle is, is filed under that tile.
+      expect(on.length, `${tile.tileX},${tile.tileZ}`).toBeGreaterThan(0);
       for (const node of on) {
-        const acrossX = Math.abs(node.x - (stair.tile.x + 0.5) * TILE_VOXELS);
-        const acrossZ = Math.abs(node.z - (stair.tile.z + 0.5) * TILE_VOXELS);
-        expect(Math.max(acrossX, acrossZ), `${stair.tile.x},${stair.tile.z}`).toBe(TILE_VOXELS / 2);
-        expect([walkingSurface(tile.y), walkingSurface(tile.y) + LEVEL_VOXELS]).toContain(node.y);
+        const acrossX = Math.abs(node.x - (tile.tileX + 0.5) * TILE_VOXELS);
+        const acrossZ = Math.abs(node.z - (tile.tileZ + 0.5) * TILE_VOXELS);
+        expect(Math.max(acrossX, acrossZ), `${tile.tileX},${tile.tileZ}`).toBe(TILE_VOXELS / 2);
+        const rises = ends[tile.id]!.map((rise) => walkingSurface(tile.y) + rise);
+        expect(rises).toContain(node.y);
       }
     }
   });

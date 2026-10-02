@@ -80,7 +80,7 @@ export interface HudProps {
   readonly palette: boolean;
   readonly onPaletteChange: (open: boolean) => void;
   readonly error: string | null;
-  readonly refusal: string | null;
+  readonly refusal: { readonly title: string; readonly message: string } | null;
 }
 
 type Panel = Exclude<WindowId, 'inspect'>;
@@ -289,7 +289,7 @@ export function Hud(props: HudProps) {
       <Palette {...props} />
       {props.error ? <HudError message={props.error} /> : null}
       {!props.error && props.refusal ? (
-        <HudError title="Not enough money" message={props.refusal} />
+        <HudError title={props.refusal.title} message={props.refusal.message} />
       ) : null}
     </div>
   );

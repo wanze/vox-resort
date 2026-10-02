@@ -7,10 +7,13 @@ import {
   loudest,
   REPEAT_TICKS,
   stayCount,
+  snapshotThoughts,
   surroundingsThought,
   tallyInto,
   think,
+  THOUGHT_KINDS,
   visitThought,
+  widenThoughts,
   worstOf,
 } from './thoughts';
 
@@ -149,5 +152,31 @@ describe("the day's loudest thoughts", () => {
 
   it('shows nothing for a quiet day', () => {
     expect(loudest(createDay(), 5)).toEqual([]);
+  });
+});
+
+describe('widenThoughts', () => {
+  it('pads a save from before the newest kind, keeping every row where it was', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 1, 'hurt', 'Pool', 5);
+    const kinds = THOUGHT_KINDS.length;
+    const old = snapshotThoughts(thoughts, new Map());
+    const narrow = (column: ArrayLike<number | string | null>, fill: number | string | null) =>
+      Array.from({ length: 2 * (kinds - 1) }, (_, at) => {
+        const person = Math.floor(at / (kinds - 1));
+        const kind = at % (kinds - 1);
+        return column[person * kinds + kind] ?? fill;
+      });
+    const saved = {
+      ...old,
+      stay: Uint16Array.from(narrow(old.stay, 0) as number[]),
+      heardAt: Int32Array.from(narrow(old.heardAt, 0) as number[]),
+      heardSubject: narrow(old.heardSubject, null) as (string | null)[],
+    };
+    const widened = widenThoughts(saved);
+    expect(widened.stay).toEqual(old.stay);
+    expect(widened.heardAt).toEqual(old.heardAt);
+    expect(widened.heardSubject).toEqual(old.heardSubject);
+    expect(widenThoughts(old)).toBe(old);
   });
 });

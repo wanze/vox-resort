@@ -19,8 +19,12 @@ import {
 } from '../../rendering/adapters/figureField';
 import { pixelsPerVoxel, standsOut, type DetailView } from '../../rendering/domain/levelOfDetail';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
-import { MAX_STEP, reseatCrowd, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
+import { standTurned } from '../../rendering/adapters/movingField';
+import { CHAIR_SEAT_VOXELS } from '../../../../voxel-gen/props/wheelchair.ts';
+import { WHEELCHAIR_SHARE } from '../../guests/domain/parties';
+import { MAX_STEP, reseatCrowd, RESTING, restingOn, stepCrowd, type Crowd } from '../domain/crowd';
 import type { WalkNetwork } from '../domain/walkNetwork';
+import { buildChairField, type ChairField } from './chairField';
 
 export interface CrowdField {
   readonly group: Group;
@@ -49,7 +53,12 @@ export interface CrowdFieldOptions {
   readonly lightVolume?: BakedLightVolume | null;
   // Drawn over the crowd, never written into it: the sim steers the crowd and must not see this.
   readonly drawnAs?: DrawnAs;
+  // Left out, nobody is drawn in a wheelchair.
+  readonly chair?: ModelGeometry;
 }
+
+// Parties are a few people each, so this is room for twice the share's worth of users.
+const chairsFor = (capacity: number): number => Math.ceil(capacity * WHEELCHAIR_SHARE) + 8;
 
 interface PersonMesh {
   readonly mesh: InstancedMesh;
@@ -121,12 +130,26 @@ const placedIn = (drawnAs: DrawnAs | null, person: number): DrawnAs | null =>
 const restingOf = (crowd: Crowd, placed: DrawnAs | null, person: number): number =>
   placed ? placed.pose[person]! : restingOn(crowd, person);
 
+// Sat in the chair wherever they are drawn: the hips stay where a sitting pose put them, and go a
+// seat's height above wherever anything else stood them. Answers the height the figure is drawn at.
+function seatInChair(
+  chairs: ChairField | null,
+  at: { readonly x: number; readonly y: number; readonly z: number },
+  resting: number,
+  yaw: { readonly cos: number; readonly sin: number },
+): number {
+  const hip = resting === RESTING.sitting ? at.y : at.y + CHAIR_SEAT_VOXELS;
+  chairs?.put(at.x, hip - CHAIR_SEAT_VOXELS, at.z, yaw.cos, yaw.sin);
+  return hip;
+}
+
 // Column-major, and the figure faces +z, so the yaw matches crowd.ts's atan2(dx, dz).
 function writeInstances(
   part: PersonMesh,
   crowd: Crowd,
   view: DetailView | null,
   drawnAs: DrawnAs | null,
+  chairs: ChairField | null,
 ): number {
   const matrices = part.mesh.instanceMatrix.array;
   const pose = part.pose.array;
@@ -144,18 +167,16 @@ function writeInstances(
     const heading = from.heading[person]!;
     const yawCos = Math.cos(heading);
     const yawSin = Math.sin(heading);
-    const at = slot * 16;
-    matrices[at] = yawCos;
-    matrices[at + 2] = -yawSin;
-    matrices[at + 8] = yawSin;
-    matrices[at + 10] = yawCos;
-    matrices[at + 12] = x;
-    matrices[at + 13] = y;
-    matrices[at + 14] = z;
+    const resting = restingOf(crowd, placed, person);
+    const seated = drawnAs?.chair[person] === 1;
+    const drawnY = seated
+      ? seatInChair(chairs, { x, y, z }, resting, { cos: yawCos, sin: yawSin })
+      : y;
+    standTurned(matrices as Float32Array, slot, { x, y: drawnY, z }, yawCos, yawSin);
     const packed = slot * POSE_STRIDE;
     pose[packed + POSE_SIN] = yawSin;
     pose[packed + POSE_COS] = yawCos;
-    pose[packed + POSE_RESTING] = restingOf(crowd, placed, person);
+    pose[packed + POSE_RESTING] = seated ? RESTING.sitting : resting;
     // The person's own, placed or not, so the walk cycle does not jump when they are let go.
     pose[packed + POSE_PHASE] = crowd.phase[person]!;
     slot++;
@@ -183,13 +204,24 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     group.add(part.mesh);
   }
 
+  const chairs = options.chair
+    ? buildChairField({
+        model: options.chair,
+        capacity: chairsFor(crowd.capacity),
+        lightVolume: options.lightVolume ?? null,
+      })
+    : null;
+  if (chairs) group.add(chairs.group);
+
   const triangles = parts.reduce((total, part) => total + part.triangles * part.people.length, 0);
   let clock = 0;
   let view: DetailView | null = null;
   let drawnCount = 0;
   const writeAll = (): void => {
     drawnCount = 0;
-    for (const part of parts) drawnCount += writeInstances(part, crowd, view, drawnAs);
+    chairs?.begin();
+    for (const part of parts) drawnCount += writeInstances(part, crowd, view, drawnAs, chairs);
+    chairs?.end();
   };
   writeAll();
 
@@ -213,10 +245,10 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     },
     // Empty meshes are skipped by the renderer, so the HUD must not count them either.
     get drawCalls() {
-      return drawnCount === 0 ? 0 : parts.length;
+      return (drawnCount === 0 ? 0 : parts.length) + (chairs?.drawCalls ?? 0);
     },
     get triangleCount() {
-      return drawnCount === 0 ? 0 : triangles;
+      return (drawnCount === 0 ? 0 : triangles) + (chairs?.triangleCount ?? 0);
     },
     advance(dt, scale) {
       // Clamped so a backgrounded tab neither teleports the crowd nor spins its legs; legs swing at the same
@@ -245,6 +277,7 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
         // This field's own clone; the model geometry belongs to the meshed catalogue and outlives every resort.
         part.geometry.dispose();
       }
+      chairs?.dispose();
       group.clear();
       walk.material.dispose();
     },

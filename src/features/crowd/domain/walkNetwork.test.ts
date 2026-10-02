@@ -40,6 +40,74 @@ const reachable = (network: WalkNetwork, from: number): string[] =>
     return `${to.tileX},${to.tileZ}`;
   }).toSorted();
 
+const inner = (network: WalkNetwork, tileZ: number) =>
+  network.edges.filter((edge) => {
+    const from = network.nodes[edge.from]!;
+    const to = network.nodes[edge.to]!;
+    return from.tileZ === tileZ && to.tileZ === tileZ && from.y !== to.y;
+  });
+
+describe('walkNetworkFor, from the climbs that were laid', () => {
+  const up = (pieces: Record<string, string>): WalkNetwork =>
+    walkNetworkFor({
+      paved: [0, 1, 2, 3].map((tileZ) => ({
+        tileX: 0,
+        tileZ,
+        y: tileZ <= 0 ? LEVEL_VOXELS : 0,
+        id: pieces[tileZ] ?? 'path',
+        rotation: 0,
+      })),
+      levelOf: STEP_AT_Z1,
+      shore: null,
+      tilesX: 4,
+    });
+
+  it('marks the treads of a flight as steps, and a ramp as none', () => {
+    const flight = up({ 1: 'stairs' });
+    expect(inner(flight, 1).map((edge) => edge.stepped)).toEqual([true, true]);
+    const ramp = up({ 1: 'ramp-head', 2: 'ramp-foot' });
+    const sloped = ramp.edges.filter((edge) => ramp.nodes[edge.from]!.y !== ramp.nodes[edge.to]!.y);
+    expect(sloped.length).toBeGreaterThanOrEqual(4);
+    expect(ramp.edges.some((edge) => edge.stepped)).toBe(false);
+  });
+
+  it('rises half a level over each tile of a ramp, its middle shared by both', () => {
+    const ramp = up({ 1: 'ramp-head', 2: 'ramp-foot' });
+    const heights = [...new Set(ramp.nodes.map((node) => node.y))].toSorted((a, b) => a - b);
+    expect(heights).toEqual([
+      walkingSurface(0),
+      walkingSurface(0) + LEVEL_VOXELS / 2,
+      walkingSurface(0) + LEVEL_VOXELS,
+    ]);
+    expect(
+      ramp.nodes.filter((node) => node.y === walkingSurface(0) + LEVEL_VOXELS / 2),
+    ).toHaveLength(1);
+  });
+
+  it('walks the flight an old save laid, where the ground alone would now make a ramp', () => {
+    const old = up({ 1: 'stairs' });
+    expect(old.edges.filter((edge) => edge.stepped)).toHaveLength(2);
+  });
+
+  it('lets nobody onto a ramp from the side, where it is off the ground', () => {
+    const network = walkNetworkFor({
+      paved: [
+        { tileX: 1, tileZ: 0, y: LEVEL_VOXELS, id: 'path', rotation: 0 },
+        { tileX: 1, tileZ: 1, y: 0, id: 'ramp-head', rotation: 0 },
+        { tileX: 1, tileZ: 2, y: 0, id: 'ramp-foot', rotation: 0 },
+        { tileX: 0, tileZ: 1, y: 0, id: 'path', rotation: 0 },
+        { tileX: 0, tileZ: 2, y: 0, id: 'path', rotation: 0 },
+      ],
+      levelOf: STEP_AT_Z1,
+      shore: null,
+      tilesX: 4,
+    });
+    const beside = nodeAt(network, 0, 1);
+    expect(reachable(network, beside)).toEqual(['0,2']);
+    expect(reachable(network, nodeAt(network, 0, 2))).toContain('1,2');
+  });
+});
+
 describe('walkNetworkFor', () => {
   it('joins paved neighbours and leaves the diagonals alone', () => {
     const network = walkNetworkFor({

@@ -72,6 +72,7 @@ import { arrivalsFor, ratingFor } from './rating';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
 import { burnTheSunbathers, hurt, mishap } from './incidents';
 import { createRouter, type Router } from './router';
+import { guestsSnapshotSchema } from './resortSnapshot';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 import { isOpenIn, weatherEffect, type Weather } from './weather';
@@ -1722,7 +1723,7 @@ describe('on the generated plot', () => {
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
     expect(layout.paths).toHaveLength(2415);
-    expect(hash).toBe(1940470544);
+    expect(hash).toBe(3931954368);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -1962,6 +1963,7 @@ describe('on the generated plot', () => {
     const family = [...Array(people.count).keys()].filter(
       (person) =>
         people.parties[people.party[person]!]!.kind === 'family' &&
+        people.parties[people.party[person]!]!.wheelchair < 0 &&
         !isRoaming(crowd!, person) &&
         nearestFood(person) <= reach,
     );
@@ -3298,5 +3300,161 @@ describe('checking in at reception', () => {
     expect(router.isArriving(0)).toBe(true);
     expect(router.step(0, nodeAt(rebuilt, 1))).toBe(nodeAt(rebuilt, 2));
     expect(router.goalOf(0)?.key).toBe('reception#0');
+  });
+});
+
+// The terrace is one level up north of z = 1, with a street along each level. A flight climbs
+// it at x = 0 and, when asked, a ramp at x = 4; the bakery stands on top.
+const terrace = (ramp: boolean): WalkNetwork => {
+  const paved: PavedTile[] = [];
+  for (let tileX = 0; tileX <= 4; tileX++) {
+    paved.push({ tileX, tileZ: 0, y: 8 }, { tileX, tileZ: 3, y: 0 });
+  }
+  paved.push(
+    { tileX: 0, tileZ: 2, y: 0, id: 'path', rotation: 0 },
+    { tileX: 0, tileZ: 1, y: 0, id: 'stairs', rotation: 0 },
+  );
+  if (ramp) {
+    paved.push(
+      { tileX: 4, tileZ: 2, y: 0, id: 'ramp-foot', rotation: 0 },
+      { tileX: 4, tileZ: 1, y: 0, id: 'ramp-head', rotation: 0 },
+    );
+  }
+  return walkNetworkFor({
+    paved,
+    levelOf: (_x, tileZ) => (tileZ < 1 ? 1 : 0),
+    shore: null,
+    tilesX: 8,
+  });
+};
+
+const below = (network: WalkNetwork, tileX: number): number =>
+  network.nodes.findIndex((node) => node.tileX === tileX && node.tileZ === 3);
+
+const walk = (router: Router, network: WalkNetwork, person: number, from: number) => {
+  const tiles: string[] = [];
+  let at = from;
+  for (let hop = 0; hop < 40; hop++) {
+    const next = router.step(person, at);
+    if (next < 0) break;
+    at = next;
+    tiles.push(`${network.nodes[at]!.tileX},${network.nodes[at]!.tileZ}`);
+  }
+  return { tiles, arrived: router.visitOf(person) !== null };
+};
+
+describe('a party with a wheelchair', () => {
+  const seated = guests.party[0]!;
+  const walker = guests.parties.find((_, index) => index !== seated)!.members[0]!;
+
+  const inChair: Guests = {
+    ...guests,
+    parties: guests.parties.map((party, index) =>
+      Object.assign({}, party, { wheelchair: index === seated ? 0 : -1 }),
+    ),
+  };
+
+  const routerFor = (
+    people: Guests,
+    network: WalkNetwork,
+    venues: readonly Venue[],
+    need: GuestNeed,
+  ) => {
+    const needs = createNeeds(people, 7);
+    for (let other = 0; other < people.count; other++) {
+      for (const each of GUEST_NEEDS) needs.level[each][other] = 1;
+    }
+    needs.level[need][0] = 0;
+    needs.level[need][walker] = 0;
+    let crowd: Crowd | null = null;
+    const heard = hearing();
+    const router = createRouter({
+      guests: people,
+      needs,
+      venues,
+      lodgings: [],
+      gateways: [],
+      onLeave: () => {},
+      onThought: heard.onThought,
+      network,
+      tickOfDay: () => NOON,
+      crowd: () => crowd!,
+      upkeep: spotless(venues.length),
+      seed: 13,
+    });
+    crowd = createCrowd({
+      network,
+      count: people.count,
+      variants: 4,
+      seed: 3,
+      routeOf: (person, at) => router.step(person, at),
+      roamsBeach: false,
+    });
+    return { router, crowd, heard: heard.heard };
+  };
+
+  it('crosses a terrace by the ramp, never by the stairs', () => {
+    const network = terrace(true);
+    const { router } = routerFor(inChair, network, [bakery(2)], 'hunger');
+    const route = walk(router, network, 0, below(network, 0));
+    expect(route.arrived).toBe(true);
+    expect(route.tiles).toContain('4,1');
+    expect(route.tiles).not.toContain('0,1');
+  });
+
+  it('takes the stairs as ever when nobody in the party uses a wheelchair', () => {
+    const network = terrace(true);
+    const { router } = routerFor(inChair, network, [bakery(2)], 'hunger');
+    const route = walk(router, network, walker, below(network, 0));
+    expect(route.arrived).toBe(true);
+    expect(route.tiles).toContain('0,1');
+  });
+
+  it('never reaches a venue up a flight with no ramp, and says why', () => {
+    const network = terrace(false);
+    const { router, heard } = routerFor(inChair, network, [bakery(2)], 'hunger');
+    expect(walk(router, network, 0, below(network, 0)).arrived).toBe(false);
+    expect(heard).toContainEqual([0, 'no-step-free', 'Bakery']);
+    expect(walk(router, network, walker, below(network, 0)).arrived).toBe(true);
+  });
+
+  it('never goes onto the sand, where the beach is the only fun there is', () => {
+    const shore = shoreFor({
+      tilesX: 20,
+      tilesZ: 20,
+      shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+    });
+    const paved: PavedTile[] = Array.from({ length: 8 }, (_, index) => ({
+      tileX: 10,
+      tileZ: 10 + index,
+      y: 0,
+    }));
+    const network = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20 });
+    const { router, crowd, heard } = routerFor(inChair, network, [], 'fun');
+    router.step(0, nodeAt(network, 10, 10));
+    router.step(walker, nodeAt(network, 10, 10));
+    expect(router.goalOf(0)).toBeNull();
+    expect(router.goalOf(walker)?.label).toBe('Beach');
+    for (let step = 0; step < 1500; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (step % 10 === 0) router.tick(step / 10);
+      expect(isRoaming(crowd, 0) || router.stayOf(0) !== null).toBe(false);
+    }
+    expect(heard.some(([person, kind]) => person === 0 && kind === 'no-step-free')).toBe(false);
+  });
+
+  it('keeps who uses the wheelchair, and the fields they walk, through a save and a load', () => {
+    const network = terrace(true);
+    const { router } = routerFor(inChair, network, [bakery(2)], 'hunger');
+    walk(router, network, 0, below(network, 0));
+    const saved = router.snapshot();
+    expect(saved.stepFreeFieldsBuilt).toEqual([0]);
+    const fresh = routerFor(inChair, network, [bakery(2)], 'hunger').router;
+    fresh.restore(saved);
+    expect(fresh.snapshot().stepFreeFieldsBuilt).toEqual([0]);
+
+    const loaded = createGuests({ count: 60, homes: HOMES, variants: 4, childVariant: 3, seed: 9 });
+    restoreGuests(loaded, guestsSnapshotSchema.parse(snapshotGuests(inChair)));
+    expect(loaded.parties[seated]!.wheelchair).toBe(0);
   });
 });

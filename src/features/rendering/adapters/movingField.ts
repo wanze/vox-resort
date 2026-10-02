@@ -57,6 +57,24 @@ function buildFieldMesh(parts: {
   };
 }
 
+// Column-major, turned about y only: the scale and the constant entries are left as they stand.
+export function standTurned(
+  matrices: Float32Array,
+  slot: number,
+  at: { readonly x: number; readonly y: number; readonly z: number },
+  yawCos: number,
+  yawSin: number,
+): void {
+  const base = slot * 16;
+  matrices[base] = yawCos;
+  matrices[base + 2] = -yawSin;
+  matrices[base + 8] = yawSin;
+  matrices[base + 10] = yawCos;
+  matrices[base + 12] = at.x;
+  matrices[base + 13] = at.y;
+  matrices[base + 14] = at.z;
+}
+
 export function slotsFor(variants: Int32Array, count: number, variant: number): Int32Array {
   const mine: number[] = [];
   for (let index = 0; index < count; index++) {

@@ -62,6 +62,11 @@ export const BOARDWALK_ID = 'boardwalk';
 
 export const STAIRS_ID = 'stairs';
 
+export const STAIRCASE_ID = 'staircase';
+
+export const RAMP_FOOT_ID = 'ramp-foot';
+export const RAMP_HEAD_ID = 'ramp-head';
+
 export const JETTY_ID = 'jetty';
 
 export const BRIDGE_ID = 'bridge';
@@ -72,6 +77,9 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([
   PATH_ID,
   BOARDWALK_ID,
   STAIRS_ID,
+  STAIRCASE_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
@@ -91,6 +99,9 @@ export const PIER_RAILING_ID = 'pier-railing';
 
 export const STAIR_RAILING_ID = 'stair-railing';
 
+export const RAMP_FOOT_RAILING_ID = 'ramp-foot-railing';
+export const RAMP_HEAD_RAILING_ID = 'ramp-head-railing';
+
 export const BRIDGE_RAILING_ID = 'bridge-railing';
 
 export const BRIDGE_RAMP_RAILING_LEFT_ID = 'bridge-ramp-railing-left';
@@ -100,6 +111,9 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   PATH_ID,
   BOARDWALK_ID,
   STAIRS_ID,
+  STAIRCASE_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
@@ -109,6 +123,8 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   RAILING_ID,
   PIER_RAILING_ID,
   STAIR_RAILING_ID,
+  RAMP_FOOT_RAILING_ID,
+  RAMP_HEAD_RAILING_ID,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,

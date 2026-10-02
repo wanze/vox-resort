@@ -187,7 +187,7 @@ export function App() {
   const { adopt: adoptVoices } = thoughts;
   const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
-  const { adopt: adoptLedger, refuse } = money;
+  const { adopt: adoptLedger, refuse, note } = money;
   const { markDirty, morning } = saves;
 
   useEffect(() => {
@@ -215,6 +215,7 @@ export function App() {
       onOpenChange: adoptOpen,
       onMoneyChange: adoptLedger,
       onRefused: refuse,
+      onBuildNote: note,
       onFrame: overlay.update,
       onLoading: adoptLoading,
       onDirty: markDirty,
@@ -278,6 +279,7 @@ export function App() {
     adoptLedger,
     adoptLoading,
     refuse,
+    note,
     markDirty,
     morning,
     adoptSpeed,

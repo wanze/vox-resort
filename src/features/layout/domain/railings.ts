@@ -1,4 +1,5 @@
-import { CLIMBS, climbAt, type PavedProvider } from './stairs';
+import { CLIMBS, type PavedProvider } from './stairs';
+import { climbKindAt } from './climbs';
 import { spanAt, type SpanProvider } from './spans';
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
@@ -12,7 +13,17 @@ const NO_WATER: WaterProvider = () => false;
 
 const NO_SPAN: SpanProvider = () => false;
 
-export type RailKind = 'flight' | 'edge' | 'pier' | 'span' | 'ramp-left' | 'ramp-right';
+const NO_RAMPS: PavedProvider = () => true;
+
+export type RailKind =
+  | 'flight'
+  | 'ramp-foot'
+  | 'ramp-head'
+  | 'edge'
+  | 'pier'
+  | 'span'
+  | 'ramp-left'
+  | 'ramp-right';
 
 export interface RailTile {
   readonly tile: Tile;
@@ -36,19 +47,21 @@ export function railsAt(
   levelOf: LevelProvider,
   isWater: WaterProvider = NO_WATER,
   isSpan: SpanProvider = NO_SPAN,
+  wantsStairs: PavedProvider = NO_RAMPS,
 ): RailTile[] {
   // Spans take their own parapets: an ordinary rail stands at the tile's ground
   // height, which for a bridge is in the river.
   if (isSpan(tile.x, tile.z)) return spanRailsAt(tile, isPaved, isSpan);
-  const climb = climbAt(tile, isPaved, levelOf);
+  const climb = climbKindAt(tile, isPaved, levelOf, wantsStairs);
   if (climb !== null) {
-    // Both flanks or neither: one model carries the pair, so a wide staircase is
-    // left open rather than railed down its treads.
-    const alone = flanksOf(climb).every((flank) => {
+    // Both flanks or neither: one model carries the pair, so a wide staircase or
+    // ramp is left open rather than railed down its middle.
+    const alone = flanksOf(climb.rotation).every((flank) => {
       const { dx, dz } = stepOf(flank);
       return !isPaved(tile.x + dx, tile.z + dz);
     });
-    return alone ? [{ tile, rotation: climb, kind: 'flight' }] : [];
+    const kind: RailKind = climb.kind === 'stairs' ? 'flight' : climb.kind;
+    return alone ? [{ tile, rotation: climb.rotation, kind }] : [];
   }
 
   const level = levelOf(tile.x, tile.z);
@@ -82,8 +95,9 @@ export function railTilesFor(
   levelOf: LevelProvider,
   isWater: WaterProvider = NO_WATER,
   isSpan: SpanProvider = NO_SPAN,
+  wantsStairs: PavedProvider = NO_RAMPS,
 ): RailTile[] {
   const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
   const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
-  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater, isSpan));
+  return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater, isSpan, wantsStairs));
 }

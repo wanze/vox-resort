@@ -1,3 +1,4 @@
+import { createRandom } from '../../layout/domain/random';
 import { familyName } from './names';
 
 export type PartyKind = 'family' | 'couple' | 'friends' | 'solo';
@@ -6,6 +7,24 @@ export interface Party {
   readonly kind: PartyKind;
   readonly family: string;
   readonly members: readonly number[];
+  // The member who uses a wheelchair, by person index, or -1.
+  readonly wheelchair: number;
+}
+
+export const WHEELCHAIR_SHARE = 0.07;
+
+// A wheelchair rolls at this share of its user's walking pace.
+export const WHEELCHAIR_PACE = 0.8;
+
+const WHEELCHAIR_SALT = 0x2c1b3c6d;
+
+// From its own stream, salted off the party index, so no draw of partyShapeFor's moves and every
+// seeded scene keeps its parties. Always an adult: a child is pushed, not rolling alone.
+export function wheelchairFor(party: number, adults: readonly number[]): number {
+  if (adults.length === 0) return -1;
+  const random = createRandom(WHEELCHAIR_SALT ^ Math.imul(party + 1, 0x9e3779b1));
+  if (random() >= WHEELCHAIR_SHARE) return -1;
+  return adults[Math.min(adults.length - 1, Math.floor(random() * adults.length))]!;
 }
 
 export interface PartyOptions {
@@ -82,7 +101,8 @@ export function partiesFor(options: PartyOptions): {
       party[person] = parties.length;
       child[person] = m >= adults ? 1 : 0;
     }
-    parties.push({ kind, family, members });
+    const grownUps = members.filter((person) => child[person] === 0);
+    parties.push({ kind, family, members, wheelchair: wheelchairFor(parties.length, grownUps) });
     next += size;
   }
 

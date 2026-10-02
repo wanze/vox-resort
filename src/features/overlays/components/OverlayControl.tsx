@@ -24,6 +24,7 @@ const OVERLAY_ENDS: { readonly [kind in OverlayKind]: readonly [string, string] 
   'reach-food': ['near', 'far'],
   'reach-drink': ['near', 'far'],
   'reach-wash': ['near', 'far'],
+  'step-free': ['step-free', 'stairs only'],
   scenery: ['pleasant', 'plain'],
   litter: ['clean', 'littered'],
 };

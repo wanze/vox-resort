@@ -10,9 +10,19 @@ export interface FlowField {
   readonly hops: Int32Array;
 }
 
+export interface FlowOptions {
+  // Never up or down a flight's treads, for a party with a wheelchair.
+  readonly stepFree?: boolean;
+}
+
 // Sources are seeded in order so ties are deterministic. Invalid sources are skipped,
 // not thrown at, because a door list may outlive a just-rebuilt graph.
-export function flowFieldFor(network: WalkNetwork, sources: readonly number[]): FlowField {
+export function flowFieldFor(
+  network: WalkNetwork,
+  sources: readonly number[],
+  options: FlowOptions = {},
+): FlowField {
+  const stepFree = options.stepFree === true;
   const count = network.nodes.length;
   const next = new Int32Array(count).fill(-1);
   const hops = new Int32Array(count).fill(-1);
@@ -31,8 +41,8 @@ export function flowFieldFor(network: WalkNetwork, sources: readonly number[]): 
     const step = hops[at]! + 1;
     for (const edge of network.nodes[at]!.exits) {
       // Edges are stored both ways, so the node we came from is the neighbour's way in.
-      const to = network.edges[edge]!.to;
-      if (hops[to] !== -1) continue;
+      const { to, stepped } = network.edges[edge]!;
+      if (hops[to] !== -1 || (stepFree && stepped)) continue;
       hops[to] = step;
       next[to] = at;
       queue[tail++] = to;

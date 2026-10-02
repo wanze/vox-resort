@@ -7,7 +7,7 @@ import type { Rating } from './rating';
 import type { Review } from './reviews';
 import { SIM_SPEEDS } from './simClock';
 import type { Hiring } from './staff';
-import { THOUGHT_KINDS, type ThoughtTally } from './thoughts';
+import { THOUGHT_KINDS, widenThoughts, type ThoughtTally } from './thoughts';
 import { WEATHERS } from './weather';
 
 const float32 = z.instanceof(Float32Array);
@@ -24,7 +24,9 @@ const partySchema = z.object({
   kind: z.enum(['family', 'couple', 'friends', 'solo']),
   family: z.string(),
   members: z.array(count),
-}) satisfies z.ZodType<Party>;
+  // Saves from before wheelchairs load with nobody in one.
+  wheelchair: z.number().int().optional().default(-1),
+}) satisfies z.ZodType<Party, unknown>;
 
 const homeSchema = z.object({
   key: z.string(),
@@ -74,7 +76,7 @@ const tallySchema = z.object({
   count,
 }) satisfies z.ZodType<ThoughtTally>;
 
-export const thoughtsSnapshotSchema = z.object({
+const savedThoughtsSchema = z.object({
   kind: int8,
   subject: subjects,
   at: int32,
@@ -86,7 +88,9 @@ export const thoughtsSnapshotSchema = z.object({
   day: z.array(z.tuple([z.string(), tallySchema])),
 });
 
-export type ThoughtsSnapshot = z.infer<typeof thoughtsSnapshotSchema>;
+export type ThoughtsSnapshot = z.infer<typeof savedThoughtsSchema>;
+
+export const thoughtsSnapshotSchema = savedThoughtsSchema.transform(widenThoughts);
 
 export const upkeepSnapshotSchema = z.object({ keys: z.array(z.string()), level: float32 });
 

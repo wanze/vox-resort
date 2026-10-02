@@ -219,3 +219,39 @@ describe('whereDrawn', () => {
     expect(Array.from(drawn.z)).toEqual([10, Number.NaN, 5]);
   });
 });
+
+describe('recast, for somebody in a wheelchair', () => {
+  const lounger: Place = { ...place('visitor', 41), pose: RESTING.lying };
+  const swing: Place = { ...place('visitor', 42), act: 'swing' };
+  const seat = place('visitor', 43, 0);
+  const spot = place('visitor', 44);
+
+  const seated = (venues: readonly VenuePlaces[]) => {
+    const { venue, casting } = world(2);
+    const cast = createCast(2, venues);
+    venue[0] = 0;
+    recast(cast, { ...casting, inChair: (person) => person === 0 }, freeSeats());
+    return cast;
+  };
+
+  it('takes a spot to stand at before a seat, and passes the lounger and the swing by', () => {
+    const cast = seated([places({ visitors: [lounger, swing, seat, spot] })]);
+    expect(cast.chair[0]).toBe(1);
+    expect(cast.chair[1]).toBe(0);
+    expect(cast.x[0]).toBe(44);
+  });
+
+  it('takes a seat where there is no spot, never the lounger', () => {
+    const cast = seated([places({ visitors: [lounger, seat] })]);
+    expect(cast.shown[0]).toBe(SHOWN.placed);
+    expect(cast.x[0]).toBe(43);
+  });
+
+  it('watches from the edge of a venue where every place is a game or the water', () => {
+    const cast = seated([
+      places({ visitors: [swing, lounger], watchers: [place('watcher', 51, 1)] }),
+    ]);
+    expect(cast.shown[0]).toBe(SHOWN.placed);
+    expect(cast.x[0]).toBe(51);
+  });
+});

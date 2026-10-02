@@ -15,6 +15,8 @@ import {
   BRIDGE_RAMP_RAILING_RIGHT_ID,
   PATH_ID,
   RAILING_ID,
+  RAMP_FOOT_RAILING_ID,
+  RAMP_HEAD_RAILING_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
@@ -38,6 +40,8 @@ const CATALOGUE = [
   STAIRS,
   item(RAILING_ID, 16, 2),
   item(STAIR_RAILING_ID),
+  item(RAMP_FOOT_RAILING_ID),
+  item(RAMP_HEAD_RAILING_ID),
   item(BRIDGE_RAILING_ID, 16, 2),
   item(BRIDGE_RAMP_RAILING_LEFT_ID, 16, 2),
   item(BRIDGE_RAMP_RAILING_RIGHT_ID, 16, 2),
@@ -61,6 +65,7 @@ const rules = (parts: Partial<HandrailRules> = {}): HandrailRules => ({
   levelOf: () => 0,
   isWater: () => false,
   isSpan: () => false,
+  wantsStairs: () => true,
   models: railModelsIn(CATALOGUE),
   standing: () => [],
   ...parts,
@@ -119,6 +124,24 @@ describe('railChangeAt', () => {
     );
     expect(railsOf(change.lift)).toEqual([{ id: RAILING_ID, x: 1, z: 2, rotation: 2 }]);
     expect(railsOf(change.stand)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+  });
+
+  it('swaps the balustrade of a flight for a ramp’s once the foot two tiles off is drawn', () => {
+    const top = { x: 1, z: 1 };
+    const head = { x: 1, z: 2 };
+    const foot = { x: 1, z: 3 };
+    const ramps = { wantsStairs: () => false, levelOf: bench };
+    const flight = railChangeAt(head, rules({ ...ramps, pavedWith: pavedOf([top, head]) })).stand;
+    expect(railsOf(flight)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    const change = railChangeAt(
+      foot,
+      rules({ ...ramps, pavedWith: pavedOf([top, head, foot]), standing: standingOf(flight) }),
+    );
+    expect(railsOf(change.lift)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(change.stand)).toEqual([
+      { id: RAMP_FOOT_RAILING_ID, x: 1, z: 3, rotation: 0 },
+      { id: RAMP_HEAD_RAILING_ID, x: 1, z: 2, rotation: 0 },
+    ]);
   });
 
   it('opens a flight up once a second one is paved beside it', () => {

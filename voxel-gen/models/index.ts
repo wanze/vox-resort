@@ -45,6 +45,10 @@ import pine from './pine.ts';
 import playground from './playground.ts';
 import poolside_bar from './poolside-bar.ts';
 import railing from './railing.ts';
+import ramp_foot from './ramp-foot.ts';
+import ramp_foot_railing from './ramp-foot-railing.ts';
+import ramp_head from './ramp-head.ts';
+import ramp_head_railing from './ramp-head-railing.ts';
 import reception from './reception.ts';
 import resort_bar from './resort-bar.ts';
 import restaurant from './restaurant.ts';
@@ -54,6 +58,7 @@ import snack_bar from './snack-bar.ts';
 import spa_pavilion from './spa-pavilion.ts';
 import staff_house from './staff-house.ts';
 import stair_railing from './stair-railing.ts';
+import staircase from './staircase.ts';
 import stairs from './stairs.ts';
 import statue from './statue.ts';
 import street_lamp from './street-lamp.ts';
@@ -74,9 +79,14 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   bridge,
   bridge_ramp,
   stairs,
+  staircase,
+  ramp_foot,
+  ramp_head,
   railing,
   pier_railing,
   stair_railing,
+  ramp_foot_railing,
+  ramp_head_railing,
   bridge_railing,
   bridge_ramp_railing_left,
   bridge_ramp_railing_right,

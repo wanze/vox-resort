@@ -43,9 +43,14 @@ Guests, staff, boats and balloons, and the simulation that drives them.
 
 Built from the layout, and rebuilt after every hand edit.
 
-- **Nodes**: one per paved tile. Stairs and bridge ramps get two (foot and head).
+- **Nodes**: one per paved tile. Stairs, ramps and bridge ramps get two (foot and
+  head). The climbs are read off the pieces laid (`id` and `rotation` on each
+  paved tile), so an old save's flights are what the graph walks. A ramp's foot
+  rises half a level and its head the other half; the head's low node is the
+  foot's high one. Nobody steps onto a ramp's head from the side.
 - **Edges**: between neighbouring paved tiles at most one level apart; a
-  one-level difference only via stairs.
+  one-level difference only via stairs or a ramp's head. The two edges up and
+  down a flight's treads are `stepped`, the one thing a wheelchair cannot use.
 - **Seats** from the art (`ModelSeat`) are placed in world space by `seating.ts`
   and attached to the nearest paved node within reach. Seats with no paving
   nearby are dropped. Seats on sand go into `network.beachSeats`.
@@ -118,6 +123,12 @@ Guests come in parties (`PARTY_MIX`):
 | friends | 0.18  | 3–4    | 0        |
 | solo    | 0.12  | 1      | 0        |
 
+About one party in 14 (`WHEELCHAIR_SHARE`, 0.07) has an adult in a wheelchair
+(`Party.wheelchair`, the person index or -1). It is drawn from its own stream
+salted off the party index, so no other draw moves. A wheelchair rolls at 0.8 of
+its user's drawn speed (`paceOf`, asked per edge). Saves from before load with
+nobody in one.
+
 Children use the `child` model. Beds come from the art (`bedsOf`); the biggest
 parties get the biggest lodgings first. A party without room gets `NO_HOME` and
 starts away, as check-in would have turned it away: a plot paved for more guests
@@ -148,6 +159,12 @@ queuing.
 
 - One `InstancedMesh` per person model, not chunked or frustum-culled. People
   under `HIDDEN_PIXELS` are packed out of the draw but keep walking.
+- A wheelchair user is drawn sitting wherever they are (`DrawnAs.chair`, from
+  `Casting.inChair`), the hips a seat's height (`CHAIR_SEAT_VOXELS`) above where
+  anything but a sitting pose stood them, and the `wheelchair` prop under them
+  from `crowd/adapters/chairField.ts`: one preallocated mesh, one draw call.
+  Casting gives them a still spot to stand at, then a seat, never a lounger, a
+  game or the water; a venue with none of those has them at a watcher's place.
 - The CPU writes position and yaw. Every pose is done in the vertex shader
   from one per-vertex `figure` vec4 and one per-instance `pose` vec4. These are
   packed because WebGPU allows only eight vertex buffers; `crowdField.test.ts`
@@ -237,6 +254,14 @@ Tune `archetypes.ts` first.
 - The crowd knows nothing about venues: `createCrowd` takes an optional
   `routeOf(person, at)` and falls back to wandering.
 - **Parties move together.** Whoever decides sets the goal for the whole party.
+- **Step-free fields.** A party with a wheelchair user routes as a whole on
+  fields that skip stepped edges (`flowFieldFor(..., { stepFree: true })`), for
+  venues, beds, the desk and the way out. Each is swept only when such a party
+  first asks, and always when it considers a venue: a straight line would hide
+  that the way there is all stairs. The beach and every venue reached over the
+  sand are out of their reach. Nobody else ever sweeps one, so a resort with no
+  wheelchair users routes exactly as before. The saved router lists them in
+  `stepFreeFieldsBuilt`.
 
 ## Visits and queues
 
@@ -593,25 +618,31 @@ first, so its count matches the toolbar badge.
   rule needs a change in `chooseVenue.ts` or `occupancy.ts`, that's a bug there.
 - One function and one test per rule, each taking a `ResortFacts` literal:
 
-| Rule             | Reads                                | Weight                               |
-| ---------------- | ------------------------------------ | ------------------------------------ |
-| `closed`         | closed, with at least one bed        | 1                                    |
-| `no-entrance`    | open, no gate                        | 1                                    |
-| `no-reception`   | open, no desk the gate reaches       | 1                                    |
-| `no-beds`        | guests with `NO_HOME`                | share of guests                      |
-| `unserved-need`  | needs no venue serves                | share wanting it                     |
-| `full-lines`     | the day's turn-aways per venue       | share refused × count                |
-| `unreachable`    | venues with no door node and no sand | 0.9                                  |
-| `broken`         | each broken venue, ticks down        | 0.3–0.9 over three hours             |
-| `hurt`           | guests here with health below 1      | 0.2–0.7 over ten guests              |
-| `littered`       | tiles at or above `FOULED_AT`        | worst level × tiles / 20             |
-| `far-from-home`  | lodging to nearest venue per need    | distance vs. `reach` (straight line) |
-| `unvisited`      | venues nobody visited today          | 0.2–0.4 by capacity                  |
-| `weather-closed` | needs whose venues are mostly closed |                                      |
+| Rule             | Reads                                 | Weight                               |
+| ---------------- | ------------------------------------- | ------------------------------------ |
+| `closed`         | closed, with at least one bed         | 1                                    |
+| `no-entrance`    | open, no gate                         | 1                                    |
+| `no-reception`   | open, no desk the gate reaches        | 1                                    |
+| `no-beds`        | guests with `NO_HOME`                 | share of guests                      |
+| `unserved-need`  | needs no venue serves                 | share wanting it                     |
+| `full-lines`     | the day's turn-aways per venue        | share refused × count                |
+| `unreachable`    | venues with no door node and no sand  | 0.9                                  |
+| `not-step-free`  | venues reached on foot, not step-free | 0.3–0.6 by share of venues, one line |
+| `broken`         | each broken venue, ticks down         | 0.3–0.9 over three hours             |
+| `hurt`           | guests here with health below 1       | 0.2–0.7 over ten guests              |
+| `littered`       | tiles at or above `FOULED_AT`         | worst level × tiles / 20             |
+| `far-from-home`  | lodging to nearest venue per need     | distance vs. `reach` (straight line) |
+| `unvisited`      | venues nobody visited today           | 0.2–0.4 by capacity                  |
+| `weather-closed` | needs whose venues are mostly closed  |                                      |
 
 - The first three are asked even with nobody present, since a new plot never has
   anybody; every other rule stays silent on an empty resort.
 - Recomputed once a day after arrivals, after an edit, and on opening or closing.
+- `not-step-free`, the step-free overlay and the top bar's step-free line all read
+  one sweep pair from the gates (`stepFree.ts`), kept per walk graph. Only venues
+  with a door on the paving count. The line, "Step-free: 14 of 17 venues", sits
+  under the rating's parts and counts toward no star: a wheelchair guest who
+  cannot get somewhere is unhappy, which reaches the rating already.
 - Advice about a building includes its tile and a **Show** button that pans the
   camera there. Wording lives in `AdvicePanel.tsx` and only states what was
   measured.
@@ -637,6 +668,7 @@ per kind; `reviews.ts` turns a party's stay into one line on check-out.
 | `enjoyed`        | end of a visit to an activity at or above 0.8 clean          | venue label |
 | `lovely`         | hourly, surroundings above 0.6                               | none        |
 | `littered`       | hourly, surroundings below -0.3                              | none        |
+| `no-step-free`   | `decide`, the wheelchair user, where on foot they would go   | venue label |
 
 - The same person, kind and subject within `REPEAT_TICKS` (120, two simulated
   hours) is ignored. That window is per kind, so a homeless guest who also has
@@ -653,6 +685,10 @@ per kind; `reviews.ts` turns a party's stay into one line on check-out.
   are kept, newest first.
 - Wording lives in `hud/components/thoughtWords.ts`; the domain only owns kinds
   and counts.
+- `THOUGHT_KINDS` is only ever appended to: a save keeps a slot per person and
+  kind, and `widenThoughts` pads an older save's rows on load.
+- `no-step-free` is not said of the beach or a venue on the sand, which no
+  paving fixes: there the wheelchair user still thinks `nothing-for`.
 
 ## Cleanliness and staff
 
@@ -986,15 +1022,16 @@ or `NaN` for no data (drawn as nothing), and **the high end is always the bad
 one**, so one ramp (`ramp.ts`: teal, yellow, magenta-red) and one legend serve
 them all.
 
-| Layer    | Asks                          | Value                                                                          |
-| -------- | ----------------------------- | ------------------------------------------------------------------------------ |
-| Footfall | where guests walk             | sightings over the busiest node's; `NaN` where nobody walked                   |
-| Mood     | where guests are unhappy      | 1 minus the mean mood seen there; `NaN` below `MIN_SEEN` (5) sightings         |
-| Food     | how far to something to eat   | hops to the nearest door of a venue easing hunger, over `TOO_FAR_HOPS`, capped |
-| Drink    | how far to something to drink | the same for thirst                                                            |
-| Wash     | how far to somewhere to wash  | the same for hygiene                                                           |
-| Scenery  | where the walk is plain       | 1 minus the scenery field under the node                                       |
-| Litter   | where litter lies             | the litter level under the node, and on every beach tile                       |
+| Layer     | Asks                          | Value                                                                          |
+| --------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| Footfall  | where guests walk             | sightings over the busiest node's; `NaN` where nobody walked                   |
+| Mood      | where guests are unhappy      | 1 minus the mean mood seen there; `NaN` below `MIN_SEEN` (5) sightings         |
+| Food      | how far to something to eat   | hops to the nearest door of a venue easing hunger, over `TOO_FAR_HOPS`, capped |
+| Drink     | how far to something to drink | the same for thirst                                                            |
+| Wash      | how far to somewhere to wash  | the same for hygiene                                                           |
+| Step-free | where a wheelchair can go     | 0 reached from the gates step-free, 1 only by stairs, `NaN` unreached          |
+| Scenery   | where the walk is plain       | 1 minus the scenery field under the node                                       |
+| Litter    | where litter lies             | the litter level under the node, and on every beach tile                       |
 
 `TOO_FAR_HOPS` is the family reach in tiles (20), where the advice starts saying
 far-from-home; a node no door reaches is 1. The reach layers are one multi-source

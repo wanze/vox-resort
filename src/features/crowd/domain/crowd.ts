@@ -128,6 +128,7 @@ export interface Crowd extends Walkers {
   readonly random: Random;
   readonly routeOf: ((person: number, at: number) => number) | undefined;
   readonly offTheSand: ((person: number) => boolean) | undefined;
+  readonly paceOf: ((person: number) => number) | undefined;
   readonly roamsBeach: boolean;
 }
 
@@ -140,6 +141,8 @@ export interface CrowdOptions {
   readonly routeOf?: (person: number, at: number) => number;
   // Needed besides routeOf: routeOf is only asked at nodes, and the sand has none.
   readonly offTheSand?: (person: number) => boolean;
+  // A share of the body's drawn speed, asked per edge: who walks in a body changes at check-in.
+  readonly paceOf?: (person: number) => number;
   readonly roamsBeach?: boolean;
 }
 
@@ -186,6 +189,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     random,
     routeOf: options.routeOf,
     offTheSand: options.offTheSand,
+    paceOf: options.paceOf,
     roamsBeach: options.roamsBeach ?? true,
   };
 
@@ -854,6 +858,7 @@ function segment(crowd: Crowd, i: number, x: number, y: number, z: number): void
     crowd.heading[i] = Math.atan2(dx, dz);
   }
   const length = Math.hypot(x - crowd.fromX[i]!, y - crowd.fromY[i]!, z - crowd.fromZ[i]!);
-  crowd.rate[i] = length > 0 ? crowd.speed[i]! / length : Number.POSITIVE_INFINITY;
+  const speed = crowd.speed[i]! * (crowd.paceOf?.(i) ?? 1);
+  crowd.rate[i] = length > 0 ? speed / length : Number.POSITIVE_INFINITY;
   crowd.t[i] = 0;
 }

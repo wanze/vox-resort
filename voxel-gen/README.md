@@ -222,11 +222,21 @@ placed by the generator. `PAINTED_MODELS` in `objectTypes.ts` joins all of them;
 Their origin is where they're drawn from: people from their feet, balloons from
 the basket, sea models from their waterline (nothing below it is drawn).
 
+`props/` holds the balls and the `wheelchair`, which the crowd field draws under a
+seated guest. It is painted at the figure's scale with its seat
+`CHAIR_SEAT_VOXELS` up, and reaches as far behind the seat as the footrest does in
+front, so centring both on their footprints puts the figure over the seat.
+
 ## Paving
 
-Players only pick `path`. The ground decides what it becomes: `path` on grass,
-`boardwalk` on sand, `jetty` on water, `stairs` on a terrace step. Those three
-declare `groundDecides` so the palette hides them. All paving is two voxels tall
+Players pick `path` or `staircase` ("Stairs"). The ground decides what a path
+becomes: `path` on grass, `boardwalk` on sand, `jetty` on water, and on a terrace
+step a ramp where two straight tiles fit below it (`ramp-foot` on the tile before,
+`ramp-head` against the step, 1:4), else `stairs`. A `staircase` stays a flight
+where it climbs and is flat paving where it does not. The derived kinds declare
+`groundDecides` so the palette hides them; `parts/flight.ts` builds the flight,
+the ramp courses and the balustrades (`stair-railing`, `ramp-foot-railing`,
+`ramp-head-railing`) for all of them. All paving is two voxels tall
 (`PAVING_VOXELS`). A new kind of paving is a model file plus an entry in
 `PAVING_IDS`.
 

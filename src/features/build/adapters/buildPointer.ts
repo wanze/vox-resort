@@ -3,7 +3,7 @@ import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayo
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt } from '../domain/buildPlan';
 import type { PickGround } from '../domain/groundPick';
-import { pavingAt, relaidBy, standsOn, type PavingRules } from '../domain/paving';
+import { fellBackToStairs, pavingAt, relaidBy, standsOn, type PavingRules } from '../domain/paving';
 import { reRailAround, type HandrailRules } from '../domain/handrails';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
@@ -24,6 +24,9 @@ export interface BuildPointerOptions {
   // a blob shadow of its own.
   readonly onRails: (stand: readonly Placement[], lift: readonly Placement[]) => void;
   readonly onCancel: () => void;
+  // Told whether the tile under the pointer would be a path's fallback flight, so the player learns
+  // before painting that it will not be step-free.
+  readonly onFallback?: (fellBack: boolean) => void;
 }
 
 // Asked for every placement, so a random style rolls afresh for each tile of a drag.
@@ -43,6 +46,7 @@ function turnAsked(event: KeyboardEvent): number {
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   const { ghost, occupancy, ground, paving, handrails, onPlace, onRails } = options;
+  const onFallback = options.onFallback ?? ((): void => {});
 
   let chooser: ItemChooser | null = null;
   let item: LayoutItem | null = null;
@@ -52,9 +56,10 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
 
   const planOn = (picked: LayoutItem, tile: Tile) => {
     const laid = pavingAt(picked, tile, rotation, paving);
-    return planAt(laid.item, tile, occupancy, laid.rotation, ground.levelOf, (under) =>
+    const plan = planAt(laid.item, tile, occupancy, laid.rotation, ground.levelOf, (under) =>
       standsOn(laid.item, under, paving),
     );
+    return { ...plan, fellBack: !plan.blocked && fellBackToStairs(laid, paving) };
   };
 
   const stroke = createTileStroke({
@@ -66,10 +71,12 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     onHover(tile) {
       if (!item || !tile) {
         ghost.hide();
+        onFallback(false);
         return;
       }
       const plan = planOn(item, tile);
       ghost.show(plan.placement, plan.blocked);
+      onFallback(plan.fellBack);
     },
     onTile(tile) {
       if (!item) return;

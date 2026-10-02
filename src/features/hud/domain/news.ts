@@ -47,6 +47,8 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   'unserved-need': ['warning', 0],
   'full-lines': ['warning', 0.4],
   unreachable: ['urgent', 0],
+  // A note for the panel and the map: it counts toward nothing, so it never interrupts.
+  'not-step-free': null,
   'short-staffed': ['warning', 0],
   broken: ['urgent', 0],
   dirty: ['warning', 0.4],

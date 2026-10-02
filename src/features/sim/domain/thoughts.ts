@@ -1,6 +1,8 @@
 import type { ThoughtsSnapshot } from './resortSnapshot';
 import type { Venue } from './venues';
 
+// Only ever appended to: a save keeps a slot per person and kind, and widenThoughts pads an older
+// save's rows with the kinds it had not heard of.
 export const THOUGHT_KINDS = [
   'queue-too-long',
   'closed',
@@ -12,6 +14,7 @@ export const THOUGHT_KINDS = [
   'littered',
   'broken',
   'hurt',
+  'no-step-free',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
@@ -226,6 +229,23 @@ export function restoreThoughts(
   copyInto(thoughts.heardSubject, snapshot.heardSubject);
   day.clear();
   for (const [key, tally] of snapshot.day) day.set(key, { ...tally });
+}
+
+export function widenThoughts(snapshot: ThoughtsSnapshot): ThoughtsSnapshot {
+  const people = snapshot.kind.length;
+  const saved = people === 0 ? KINDS : snapshot.stay.length / people;
+  if (!Number.isInteger(saved) || saved >= KINDS) return snapshot;
+  const stay = new Uint16Array(people * KINDS);
+  const heardAt = new Int32Array(people * KINDS).fill(NEVER);
+  const heardSubject: (string | null)[] = Array.from({ length: people * KINDS }, () => null);
+  for (let person = 0; person < people; person++) {
+    for (let kind = 0; kind < saved; kind++) {
+      stay[person * KINDS + kind] = snapshot.stay[person * saved + kind]!;
+      heardAt[person * KINDS + kind] = snapshot.heardAt[person * saved + kind]!;
+      heardSubject[person * KINDS + kind] = snapshot.heardSubject[person * saved + kind] ?? null;
+    }
+  }
+  return { ...snapshot, stay, heardAt, heardSubject };
 }
 
 // A loop, not a spread into splice: a big plot has more subjects than a call takes arguments.

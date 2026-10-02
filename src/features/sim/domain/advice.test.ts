@@ -11,6 +11,7 @@ import {
   adviceDirty,
   adviceLittered,
   adviceNoDepot,
+  adviceNotStepFree,
   adviceUnmade,
   adviceUnreachable,
   adviceUnservedNeeds,
@@ -22,6 +23,7 @@ import {
   type Advice,
   type ResortFacts,
 } from './advice';
+import { markerIconOf } from '../../hud/domain/markers';
 import type { VenueDoors } from './doors';
 import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
@@ -696,5 +698,28 @@ describe('refreshedWithin', () => {
     const quiet = line('dirty', 0.2);
     const queue = line('full-lines', 0.8);
     expect(refreshedWithin([queue], [quiet])).toEqual([queue, quiet]);
+  });
+});
+
+describe('the step-free advice', () => {
+  const cafe = venueOf({ key: 'cafe#0', label: 'Cafe', x: 64, z: 96 });
+  const bar = venueOf({ key: 'bar#0', label: 'Bar', x: 16, z: 16 });
+
+  it('says nothing where every venue is step-free', () => {
+    expect(adviceNotStepFree(healthyFacts())).toBeNull();
+    expect(adviceNotStepFree(healthyFacts({ notStepFree: [] }))).toBeNull();
+  });
+
+  it('counts every venue a wheelchair cannot reach in one line, at the first of them', () => {
+    const advice = adviceNotStepFree(healthyFacts({ notStepFree: [cafe, bar] }))!;
+    expect(advice).toMatchObject({ kind: 'not-step-free', subject: 'Cafe', count: 2 });
+    expect(advice.at).toEqual({ tileX: 4, tileZ: 6 });
+  });
+
+  it('ranks below a building nobody reaches at all, and is shown on the map', () => {
+    const facts = healthyFacts({ notStepFree: [cafe], unreachable: new Set(['bakery#0']) });
+    const kinds = adviceFor(facts).map((advice) => advice.kind);
+    expect(kinds.indexOf('unreachable')).toBeLessThan(kinds.indexOf('not-step-free'));
+    expect(markerIconOf('not-step-free')).toBe('wheelchair');
   });
 });

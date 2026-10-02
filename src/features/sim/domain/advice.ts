@@ -20,6 +20,7 @@ const KIND_ORDER = [
   'unserved-need',
   'full-lines',
   'unreachable',
+  'not-step-free',
   // Above the lines a short roster causes, so the cause reads before its symptoms.
   'short-staffed',
   'broken',
@@ -86,6 +87,8 @@ export interface ResortFacts {
   // Absent means the plot's staff houses were not counted, which says nothing.
   readonly depots?: number;
   readonly cleanersOnDuty?: number;
+  // Reached from the gates on foot but not in a wheelchair; absent means every one is step-free.
+  readonly notStepFree?: readonly Venue[];
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -283,6 +286,22 @@ export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
     }));
 }
 
+// One line for them all, at the first: a resort with stairs everywhere is one problem, not twenty.
+// Below the unreachable, as a stranded building fails everybody and this a few.
+export function adviceNotStepFree(facts: ResortFacts): Advice | null {
+  const cutOff = facts.notStepFree ?? [];
+  const first = cutOff[0];
+  if (!first) return null;
+  return {
+    kind: 'not-step-free',
+    weight: 0.3 + 0.3 * clamp(cutOff.length / Math.max(1, facts.venues.length)),
+    subject: first.label,
+    count: cutOff.length,
+    at: tileOf(first),
+    need: null,
+  };
+}
+
 export function adviceShortStaffed(facts: ResortFacts): readonly Advice[] {
   return (facts.shortStaffed ?? []).map(({ role, short, wanted }) => ({
     kind: 'short-staffed' as const,
@@ -460,6 +479,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),
     ...adviceUnreachable(facts),
+    adviceNotStepFree(facts),
     ...adviceShortStaffed(facts),
     ...adviceBroken(facts),
     adviceDirty(facts),

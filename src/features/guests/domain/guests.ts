@@ -5,7 +5,7 @@ import { createRandom } from '../../layout/domain/random';
 import type { GuestsSnapshot } from '../../sim/domain/resortSnapshot';
 import { assignHomes, homeWithRoom, NO_HOME, type Home } from './homes';
 import { givenName } from './names';
-import { partiesFor, partyShapeFor, type Party } from './parties';
+import { partiesFor, partyShapeFor, WHEELCHAIR_PACE, wheelchairFor, type Party } from './parties';
 
 export interface GuestRecord {
   readonly given: string;
@@ -190,8 +190,14 @@ export function checkInParty(
     free.children.unshift(...members);
     return null;
   }
-  const party: Party = { kind: shape.kind, family: shape.family, members };
   const index = guests.parties.length;
+  const adults = members.filter((person) => guests.child[person] === 0);
+  const party: Party = {
+    kind: shape.kind,
+    family: shape.family,
+    members,
+    wheelchair: wheelchairFor(index, adults),
+  };
   (guests.parties as Party[]).push(party);
 
   const home = homeWithRoom(guests.freeBeds, members.length);
@@ -285,6 +291,16 @@ export function fullNameOf(guests: Guests, person: number): string {
 
 export function partyOf(guests: Guests, person: number): readonly number[] {
   return guests.parties[guests.party[person]!]!.members;
+}
+
+// Asked of the party rather than kept per body: a body is handed to whoever checks in next.
+export function usesWheelchair(guests: Guests, person: number): boolean {
+  const party = guests.parties[guests.party[person]!];
+  return party !== undefined && party.wheelchair === person && guests.present[person] === 1;
+}
+
+export function paceOf(guests: Guests, person: number): number {
+  return usesWheelchair(guests, person) ? WHEELCHAIR_PACE : 1;
 }
 
 export function homeOf(guests: Guests, person: number): Home | null {

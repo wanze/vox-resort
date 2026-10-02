@@ -13,14 +13,14 @@ import {
 } from '../../crowd/domain/crowd';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
-import { homeOf, partyOf, type Guests } from '../../guests/domain/guests';
+import { homeOf, partyOf, usesWheelchair, type Guests } from '../../guests/domain/guests';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { saltFor, tasteFor } from './appeal';
 import { isBroken, wear, type Breakdowns } from './breakdowns';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { walkingTicks } from './crowdRate';
 import { doorsFor } from './doors';
-import { flowFieldFor, type FlowField } from './flowField';
+import { flowFieldFor, type FlowField, type FlowOptions } from './flowField';
 import {
   clearAllGoals,
   clearPartyGoal,
@@ -69,6 +69,8 @@ export const SAND_ROUTE_TILES = 40;
 
 // Twice needs.ts's content line, so nobody on the sand jumps up every few minutes.
 const FETCH_URGENCY = 0.4;
+
+const STEP_FREE: FlowOptions = { stepFree: true };
 
 // Stops a guest whose nearest kiosk is unreachable from sweeping the beach every tick.
 const LOOK_AGAIN_TICKS = 15;
@@ -177,7 +179,7 @@ export function createRouter(parts: {
   // Told what the router already decided, never asked: nothing here reads a thought back.
   readonly onThought?: (
     person: number,
-    kind: 'queue-too-long' | 'closed' | 'broken' | 'nothing-for' | 'no-bed',
+    kind: 'queue-too-long' | 'closed' | 'broken' | 'nothing-for' | 'no-bed' | 'no-step-free',
     subject: string | null,
   ) => void;
   // Late-bound: an arrival happens between ticks, and the clock knows the hour.
@@ -207,6 +209,11 @@ export function createRouter(parts: {
   // One field per venue, not per need: a per-need field routes to the nearest venue and
   // ignores chooseVenue's weighing. Built lazily; a sweep costs about 0.5 ms.
   let fields: (FlowField | null)[] = venues.map(() => null);
+  // A party with a wheelchair walks fields of its own, built only once one of them asks.
+  let stepFreeFields: (FlowField | null)[] = venues.map(() => null);
+  let stepFreeHomeFields: (FlowField | null)[] = lodgings.map(() => null);
+  let stepFreeLeaving: FlowField | null = null;
+  let cutOffField: FlowField | null = null;
   let lanes: (readonly QueueSpot[] | null)[] = venues.map(() => null);
   let sandRoutes: (readonly SandRoute[] | null)[] = venues.map(() => null);
   let errands = createErrands(guests.count);
@@ -287,17 +294,50 @@ export function createRouter(parts: {
   };
 
   // Rebuilt first: queue limits and walking distances read which fields exist.
-  const restoreFields = (swept: readonly number[]): void => {
+  const restoreFields = (swept: readonly number[], stepFreeSwept: readonly number[]): void => {
     fields = venues.map(() => null);
+    stepFreeFields = venues.map(() => null);
     lanes = venues.map(() => null);
     sandRoutes = venues.map(() => null);
     for (const venue of swept) fieldFor(venue);
+    for (const venue of stepFreeSwept) stepFreeFieldFor(venue);
   };
 
-  const sweep = (sources: readonly number[]): FlowField => {
+  const sweep = (sources: readonly number[], options?: FlowOptions): FlowField => {
     built++;
-    return flowFieldFor(network, sources);
+    return flowFieldFor(network, sources, options);
   };
+
+  // Asked of the party, which routes as one: nobody goes on ahead up a flight.
+  const isStepFree = (person: number): boolean =>
+    (guests.parties[guests.party[person] ?? -1]?.wheelchair ?? -1) >= 0;
+
+  const cutOff = (): FlowField => {
+    cutOffField ??= {
+      next: new Int32Array(network.nodes.length).fill(-1),
+      hops: new Int32Array(network.nodes.length).fill(-1),
+    };
+    return cutOffField;
+  };
+
+  // No sand leg: the beach and a venue reached over the sand are out of reach in a wheelchair.
+  const stepFreeFieldFor = (venue: number): FlowField => {
+    const existing = stepFreeFields[venue];
+    if (existing) return existing;
+    const declared = venues[venue]!;
+    const doors = isBeach(declared) ? null : doorsFor(declared, index, network);
+    const field = doors && doors.nodes.length > 0 ? sweep(doors.nodes, STEP_FREE) : cutOff();
+    stepFreeFields[venue] = field;
+    if (doors && doors.nodes.length > 0) {
+      lanes[venue] ??= longestLane(network, doors.nodes, declared);
+    }
+    return field;
+  };
+
+  const reachedOverSand = (venue: number): boolean => isBeach(venues[venue]!) || isOnSand(venue);
+
+  const routeField = (person: number, venue: number): FlowField =>
+    isStepFree(person) ? stepFreeFieldFor(venue) : fieldFor(venue);
 
   const fieldFor = (venue: number): FlowField => {
     const existing = fields[venue];
@@ -350,12 +390,15 @@ export function createRouter(parts: {
   };
 
   // Null is a real state, a plot nobody can leave, which the HUD shows.
-  const leavingFieldOf = (): FlowField | null => {
-    if (leavingField) return leavingField;
+  const leavingFieldOf = (stepFree: boolean): FlowField | null => {
+    const known = stepFree ? stepFreeLeaving : leavingField;
+    if (known) return known;
     const sources = gateNodesOf();
     if (sources.length === 0) return null;
-    leavingField = sweep(sources);
-    return leavingField;
+    const field = sweep(sources, stepFree ? STEP_FREE : undefined);
+    if (stepFree) stepFreeLeaving = field;
+    else leavingField = field;
+    return field;
   };
 
   const gateNodesOf = (): readonly number[] => {
@@ -368,11 +411,15 @@ export function createRouter(parts: {
     return gateNodes;
   };
 
-  const homeFieldFor = (lodging: number): FlowField => {
-    const existing = homeFields[lodging];
+  const homeFieldFor = (lodging: number, stepFree: boolean): FlowField => {
+    const swept = stepFree ? stepFreeHomeFields : homeFields;
+    const existing = swept[lodging];
     if (existing) return existing;
-    const field = sweep(doorsFor(lodgings[lodging]!, index).nodes);
-    homeFields[lodging] = field;
+    const field = sweep(
+      doorsFor(lodgings[lodging]!, index).nodes,
+      stepFree ? STEP_FREE : undefined,
+    );
+    swept[lodging] = field;
     return field;
   };
 
@@ -395,8 +442,19 @@ export function createRouter(parts: {
   };
 
   // Only from fields already built: sweeping just to score would make the lazy build eager.
-  // Unvisited venues are scored on the straight line.
-  const walkingDistanceAt =
+  // Unvisited venues are scored on the straight line, except for a party in a wheelchair, whose
+  // field is swept as it considers: a straight line would hide that the way there is all stairs.
+  const walkingDistanceAt = (at: number, stepFree: boolean) =>
+    stepFree ? rollingDistanceAt(at) : onFootDistanceAt(at);
+
+  const rollingDistanceAt =
+    (at: number) =>
+    (venue: number): number => {
+      const hops = stepFreeFieldFor(venue).hops[at] ?? -1;
+      return hops < 0 ? Number.POSITIVE_INFINITY : hops * TILE_VOXELS;
+    };
+
+  const onFootDistanceAt =
     (at: number) =>
     (venue: number): number => {
       // The beach is swept as soon as it is considered: a straight line to the middle
@@ -457,17 +515,16 @@ export function createRouter(parts: {
     return arriveAt(occupancy, person, venue, declared.capacity, dwellTicksFor(declared), now);
   };
 
-  const decide = (person: number, at: number): void => {
+  const choiceFor = (person: number, at: number, stepFree: boolean) => {
     const people = crowd();
-    const weather = weatherEffect(weatherNow());
-    const choice = chooseVenue({
+    return chooseVenue({
       needs,
       guests,
       person,
       venues,
       x: people.x[person] ?? 0,
       z: people.z[person] ?? 0,
-      walkingDistance: walkingDistanceAt(at),
+      walkingDistance: walkingDistanceAt(at, stepFree),
       queueLength,
       queueLimit,
       occupants,
@@ -475,15 +532,26 @@ export function createRouter(parts: {
       justLeft: justLeft[person]!,
       cleanliness: cleanOf,
       isOpen,
-      weather,
+      weather: weatherEffect(weatherNow()),
     });
+  };
+
+  const decide = (person: number, at: number): void => {
+    const stepFree = isStepFree(person);
+    const choice = choiceFor(person, at, stepFree);
     if (choice) {
       setPartyGoal(goals, guests, person, choice);
       return;
     }
     // Only here: chooseVenue's null also means content, which is no complaint.
-    const wanted = strongestNeed(needs, guests, person, weather);
-    if (wanted) onThought(person, 'nothing-for', wanted.need);
+    const wanted = strongestNeed(needs, guests, person, weatherEffect(weatherNow()));
+    if (!wanted) return;
+    // Asked only for the user in the chair, whose complaint it is: on foot they would have gone.
+    // Not for the sand, which no paving fixes: that stays plain missing.
+    const onFoot = stepFree && usesWheelchair(guests, person) ? choiceFor(person, at, false) : null;
+    if (onFoot && !reachedOverSand(onFoot.venue)) {
+      onThought(person, 'no-step-free', venues[onFoot.venue]!.label);
+    } else onThought(person, 'nothing-for', wanted.need);
   };
 
   // The height is the door node's: a venue knows its middle, not the ground height there.
@@ -508,7 +576,7 @@ export function createRouter(parts: {
     const goal = goals.venue[person]!;
     if (goal === NO_GOAL || goal >= venues.length) return false;
     const venue = venues[goal]!;
-    if (fieldFor(goal).next[at] !== at) return false;
+    if (routeField(person, goal).next[at] !== at) return false;
     const overSand = sandRoutes[goal] ?? [];
     if (overSand.length > 0) return setOffOverSand(person, goal, at, overSand);
 
@@ -886,7 +954,7 @@ export function createRouter(parts: {
   // should show it. Guests inside a venue at bedtime are never asked; this runs on arrival.
   const homewardStep = (person: number, at: number): number => {
     const lodging = homeLodging[person]!;
-    const onward = lodging < 0 ? -1 : (homeFieldFor(lodging).next[at] ?? -1);
+    const onward = lodging < 0 ? -1 : (homeFieldFor(lodging, isStepFree(person)).next[at] ?? -1);
     if (onward < 0) {
       onThought(person, 'no-bed', null);
       return BY_DAY;
@@ -932,7 +1000,7 @@ export function createRouter(parts: {
   // theirs. There is no teleport: a guest who cannot reach a gate stays on the plot.
   const leavingStep = (person: number, at: number): number => {
     if (person < 0 || person >= goals.count || leaving[person] !== 1) return BY_DAY;
-    const field = leavingFieldOf();
+    const field = leavingFieldOf(isStepFree(person));
     const onward = field?.next[at] ?? -1;
     if (onward < 0) return BY_DAY;
     if (onward !== at) return onward;
@@ -966,12 +1034,13 @@ export function createRouter(parts: {
   };
 
   // Least hops, ties to the lower index; only fields for receiving venues are swept.
-  const nearestReception = (at: number): number => {
+  const nearestReception = (at: number, stepFree: boolean): number => {
     let best = -1;
     let bestHops = Number.POSITIVE_INFINITY;
     for (let venue = 0; venue < venues.length; venue++) {
       if (!venues[venue]!.receives) continue;
-      const hops = fieldFor(venue).hops[at] ?? -1;
+      const field = stepFree ? stepFreeFieldFor(venue) : fieldFor(venue);
+      const hops = field.hops[at] ?? -1;
       if (hops < 0 || hops >= bestHops) continue;
       best = venue;
       bestHops = hops;
@@ -982,7 +1051,7 @@ export function createRouter(parts: {
   // A guest who cannot reach a desk was already let in, and must not stand still for ever.
   const sendToDesk = (person: number, at: number): boolean => {
     if (arriving[person] !== 1) return false;
-    const reception = nearestReception(at);
+    const reception = nearestReception(at, isStepFree(person));
     if (reception < 0) {
       arriving[person] = 0;
       return false;
@@ -1006,7 +1075,7 @@ export function createRouter(parts: {
 
     const chosen = goals.venue[person]!;
     if (chosen === NO_GOAL || chosen >= venues.length) return -1;
-    const onward = fieldFor(chosen).next[at] ?? -1;
+    const onward = routeField(person, chosen).next[at] ?? -1;
     // Forgotten rather than retried at every arrival; they decide afresh at the next node.
     if (onward < 0) {
       clearPartyGoal(goals, guests, person);
@@ -1071,7 +1140,7 @@ export function createRouter(parts: {
 
     get receptionReachable() {
       const gate = gateNodesOf()[0];
-      return gate !== undefined && nearestReception(gate) >= 0;
+      return gate !== undefined && nearestReception(gate, false) >= 0;
     },
 
     isArriving(person) {
@@ -1110,11 +1179,15 @@ export function createRouter(parts: {
       network = nextNetwork;
       index = nodeIndexFor(nextNetwork);
       fields = venues.map(() => null);
+      stepFreeFields = venues.map(() => null);
+      cutOffField = null;
       lanes = venues.map(() => null);
       sandRoutes = venues.map(() => null);
       errands = createErrands(guests.count);
       homeFields = nextLodgings.map(() => null);
+      stepFreeHomeFields = nextLodgings.map(() => null);
       leavingField = null;
+      stepFreeLeaving = null;
       gateNodes = null;
       // Leavers are re-sent on the next day's pass; their node indices mean nothing now.
       leaving = new Uint8Array(guests.count);
@@ -1270,6 +1343,7 @@ export function createRouter(parts: {
         balkCount: balkCount.slice(),
         visitCount: visitCount.slice(),
         fieldsBuilt: fields.flatMap((field, venue) => (field ? [venue] : [])),
+        stepFreeFieldsBuilt: stepFreeFields.flatMap((field, venue) => (field ? [venue] : [])),
         now,
         random: random.state(),
       };
@@ -1281,7 +1355,7 @@ export function createRouter(parts: {
           `The save was taken on ${snapshot.balkCount.length} venues, not ${venues.length}`,
         );
       }
-      restoreFields(snapshot.fieldsBuilt);
+      restoreFields(snapshot.fieldsBuilt, snapshot.stepFreeFieldsBuilt);
       restoreGoals(goals, snapshot.goals);
       restoreOccupancy(occupancy, snapshot.occupancy);
       errands = {

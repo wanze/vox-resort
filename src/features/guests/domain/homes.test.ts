@@ -7,6 +7,7 @@ const partyOfSize = (size: number): Party => ({
   kind: size === 1 ? 'solo' : 'family',
   family: 'Rossi',
   members: Array.from({ length: size }, () => nextPerson++),
+  wheelchair: -1,
 });
 
 const home = (key: string, beds: number): Home => ({ key, id: key, label: key, beds });

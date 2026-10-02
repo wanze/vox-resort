@@ -17,6 +17,7 @@ export interface RatingControlProps {
   readonly trend: number | null;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  readonly stepFree: { readonly reached: number; readonly venues: number };
 }
 
 const PART_WORDS: Readonly<Record<RatingPart, string>> = {
@@ -49,7 +50,19 @@ export function RatingBreakdown({ rating }: { readonly rating: Rating }) {
   );
 }
 
-export function RatingControl({ rating, trend, open, onOpenChange }: RatingControlProps) {
+// No star value beside it: wheelchair guests who cannot get somewhere are unhappy, and that
+// already reaches the stars through happiness.
+function StepFreeLine({ reached, venues }: RatingControlProps['stepFree']) {
+  if (venues === 0) return null;
+  return (
+    <p className="hud-rating-step-free" title="For the record only: it counts toward no star">
+      <span>Step-free</span>
+      <span>{`${reached} of ${venues} venues`}</span>
+    </p>
+  );
+}
+
+export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: RatingControlProps) {
   const stars = rating.stars.toFixed(1);
   const arrow = trendArrow(trend);
   const change = trendWords(trend);
@@ -70,6 +83,7 @@ export function RatingControl({ rating, trend, open, onOpenChange }: RatingContr
       }
     >
       <RatingBreakdown rating={rating} />
+      <StepFreeLine {...stepFree} />
       <hr className="hud-rule" />
       <p className="hud-rating-note">
         Set each morning at check-in. The more stars, the more guests arrive.

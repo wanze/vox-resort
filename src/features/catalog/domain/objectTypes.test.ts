@@ -129,13 +129,14 @@ describe('PAINTED_MODELS', () => {
     }
   });
 
-  it('keeps the balls out of the catalogue, which is what they are apart from', () => {
+  it('keeps the balls and the wheelchair out of the catalogue, which is what they are apart from', () => {
     const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
     expect(PROP_MODELS.map((prop) => prop.id)).toEqual([
       'ball-tennis',
       'ball-volley',
       'ball-basket',
       'ball-golf',
+      'wheelchair',
     ]);
     for (const prop of PROP_MODELS) {
       expect(catalogue.has(prop.id), `${prop.id} is in the catalogue too`).toBe(false);
@@ -192,8 +193,8 @@ describe('emissiveByModelId', () => {
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(ORIGINAL_TYPES.length).toBe(64);
-    expect(OBJECT_TYPES.length).toBe(64 + VARIANTS.length);
+    expect(ORIGINAL_TYPES.length).toBe(69);
+    expect(OBJECT_TYPES.length).toBe(69 + VARIANTS.length);
   });
 
   it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {
@@ -323,11 +324,18 @@ describe('objectTypeGroups', () => {
     for (const id of decided) expect(picked.has(id)).toBe(false);
   });
 
-  it('offers one paving tool, not the four kinds of paving it lays', () => {
+  it('offers path and stairs to pave with, not the kinds of paving the ground lays for them', () => {
     expect(offered()).toContain('path');
-    expect(offered()).not.toContain('stairs');
-    expect(offered()).not.toContain('boardwalk');
-    expect(offered()).not.toContain('jetty');
+    expect(offered()).toContain('staircase');
+    for (const laid of ['stairs', 'ramp-foot', 'ramp-head', 'boardwalk', 'jetty']) {
+      expect(offered()).not.toContain(laid);
+    }
+  });
+
+  it('shelves the stairs beside the path', () => {
+    const grounds = objectTypeGroups().find((group) => group.category === 'grounds')!;
+    const ids = grounds.types.map((type) => type.id);
+    expect(ids.indexOf('staircase')).toBe(ids.indexOf('path') + 1);
   });
 
   it('groups the rest under the shelf its model declares, in registry order', () => {

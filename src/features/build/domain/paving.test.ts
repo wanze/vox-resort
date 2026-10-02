@@ -7,6 +7,9 @@ import {
   BRIDGE_RAMP_ID,
   JETTY_ID,
   PATH_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
+  STAIRCASE_ID,
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
 import {
@@ -21,6 +24,8 @@ import {
   type Relaid,
 } from './paving';
 import { createTileOccupancy } from './tileOccupancy';
+import { climbTilesFor } from '../../layout/domain/climbs';
+import { createRandom } from '../../layout/domain/random';
 
 const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
   id,
@@ -33,6 +38,9 @@ const item = (id: string, tilesX = 1, tilesZ = 1): LayoutItem => ({
 const PATH = item(PATH_ID);
 const BOARDWALK = item(BOARDWALK_ID);
 const STAIRS = item(STAIRS_ID);
+const STAIRCASE = item(STAIRCASE_ID);
+const RAMP_FOOT = item(RAMP_FOOT_ID);
+const RAMP_HEAD = item(RAMP_HEAD_ID);
 const JETTY = item(JETTY_ID);
 const BRIDGE = item(BRIDGE_ID);
 const BRIDGE_RAMP = item(BRIDGE_RAMP_ID);
@@ -59,6 +67,9 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   bridge: BRIDGE,
   bridgeRamp: BRIDGE_RAMP,
   stairs: STAIRS,
+  staircase: STAIRCASE,
+  rampFoot: RAMP_FOOT,
+  rampHead: RAMP_HEAD,
   flagstones: PATH,
   ...parts,
 });
@@ -506,5 +517,146 @@ describe('standsOn', () => {
     expect(standsOn(hut, { x: 0, z: 2 }, beach)).toBe(true);
     expect(standsOn(hut, { x: 0, z: 4 }, beach)).toBe(true);
     expect(standsOn(COTTAGE, { x: 0, z: 1 }, beach)).toBe(true);
+  });
+});
+
+interface Laid {
+  readonly id: string;
+  readonly rotation: number;
+}
+
+// Plays the pointers: what pavingAt lays, then what relaidBy or unlaidBy re-lays, on a live table.
+function sketchpad(levelOf: LevelProvider, start: Record<string, Laid> = {}) {
+  const items = new Map(
+    [PATH, BOARDWALK, STAIRS, STAIRCASE, RAMP_FOOT, RAMP_HEAD].map((one) => [one.id, one]),
+  );
+  const table = new Map(Object.entries(start));
+  const live = rules({
+    levelOf,
+    pavedWith: (x, z) => {
+      const laid = table.get(`${x},${z}`);
+      return laid ? items.get(laid.id)! : null;
+    },
+  });
+  const apply = (relaid: readonly Relaid[]): void => {
+    for (const { placement } of relaid) {
+      table.set(`${placement.tileX},${placement.tileZ}`, {
+        id: placement.id,
+        rotation: placement.rotation,
+      });
+    }
+  };
+  return {
+    paint(x: number, z: number, picked = PATH): void {
+      const laid = pavingAt(picked, { x, z }, 0, live);
+      table.set(`${x},${z}`, { id: laid.item.id, rotation: laid.rotation });
+      apply(relaidBy({ x, z }, live));
+    },
+    remove(x: number, z: number): void {
+      table.delete(`${x},${z}`);
+      apply(unlaidBy({ x, z }, live));
+    },
+    get state(): Record<string, Laid> {
+      return Object.fromEntries([...table].toSorted(([a], [b]) => a.localeCompare(b)));
+    },
+  };
+}
+
+const RAMP_UP: Record<string, Laid> = {
+  '0,0': { id: PATH_ID, rotation: 0 },
+  '0,1': { id: RAMP_HEAD_ID, rotation: 0 },
+  '0,2': { id: RAMP_FOOT_ID, rotation: 0 },
+};
+
+describe('drawing a path up a step', () => {
+  const orders: readonly (readonly number[])[] = [
+    [0, 1, 2],
+    [0, 2, 1],
+    [1, 0, 2],
+    [1, 2, 0],
+    [2, 0, 1],
+    [2, 1, 0],
+  ];
+
+  it.each(orders)('lays the same ramp whichever order the tiles go down in: %j', (...order) => {
+    const pad = sketchpad(benchAt(1));
+    for (const z of order) pad.paint(0, z);
+    expect(pad.state).toEqual(RAMP_UP);
+  });
+
+  it('turns the head into stairs once its foot is taken up', () => {
+    const pad = sketchpad(benchAt(1), RAMP_UP);
+    pad.remove(0, 2);
+    expect(pad.state).toEqual({
+      '0,0': { id: PATH_ID, rotation: 0 },
+      '0,1': { id: STAIRS_ID, rotation: 0 },
+    });
+  });
+
+  it('lays both halves flat once the top is taken up', () => {
+    const pad = sketchpad(benchAt(1), RAMP_UP);
+    pad.remove(0, 0);
+    expect(pad.state).toEqual({
+      '0,1': { id: PATH_ID, rotation: 0 },
+      '0,2': { id: PATH_ID, rotation: 0 },
+    });
+  });
+
+  it('keeps a staircase the player put at the step when a foot is drawn below it', () => {
+    const pad = sketchpad(benchAt(1));
+    pad.paint(0, 0);
+    pad.paint(0, 1, STAIRCASE);
+    pad.paint(0, 2);
+    expect(pad.state).toEqual({
+      '0,0': { id: PATH_ID, rotation: 0 },
+      '0,1': { id: STAIRCASE_ID, rotation: 0 },
+      '0,2': { id: PATH_ID, rotation: 0 },
+    });
+  });
+
+  it('lays a staircase drawn on level ground as flagstones', () => {
+    expect(pavingAt(STAIRCASE, { x: 3, z: 3 }, 0, rules())).toEqual({ item: PATH, rotation: 0 });
+  });
+
+  it("turns an old save's flight into a ramp once its foot is drawn", () => {
+    const pad = sketchpad(benchAt(1), {
+      '0,0': { id: PATH_ID, rotation: 0 },
+      '0,1': { id: STAIRS_ID, rotation: 0 },
+    });
+    pad.paint(0, 2);
+    expect(pad.state).toEqual(RAMP_UP);
+  });
+
+  it('settles on what the generated plot lays, whatever order a drag paints it in', () => {
+    const random = createRandom(7);
+    for (let scene = 0; scene < 40; scene++) {
+      const heights = new Map<string, number>();
+      const levelOf: LevelProvider = (x, z) => heights.get(`${x},${z}`) ?? 0;
+      const tiles: Tile[] = [];
+      for (let x = 0; x < 6; x++) {
+        for (let z = 0; z < 6; z++) {
+          heights.set(`${x},${z}`, Math.floor(random() * 2) + (z < 3 ? 1 : 0));
+          if (random() < 0.6) tiles.push({ x, z });
+        }
+      }
+      const order = tiles.toSorted(() => random() - 0.5);
+      const pad = sketchpad(levelOf);
+      for (const tile of order) pad.paint(tile.x, tile.z);
+      const whole = new Map(
+        climbTilesFor(tiles, levelOf, () => false).map((climb) => [
+          `${climb.tile.x},${climb.tile.z}`,
+          { id: climb.kind === 'stairs' ? STAIRS_ID : climb.kind, rotation: climb.rotation },
+        ]),
+      );
+      const expected = Object.fromEntries(
+        tiles
+          .map((tile): [string, Laid] => {
+            const key = `${tile.x},${tile.z}`;
+            return [key, whole.get(key) ?? { id: PATH_ID, rotation: 0 }];
+          })
+          .toSorted(([a], [b]) => a.localeCompare(b)),
+      );
+      expect(pad.state).toEqual(expected);
+    }
   });
 });

@@ -1,7 +1,14 @@
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import { adviceKey } from './news';
 
-export type MarkerIcon = 'broken' | 'stranded' | 'queue' | 'dirty' | 'lifeguard' | 'litter';
+export type MarkerIcon =
+  | 'broken'
+  | 'stranded'
+  | 'wheelchair'
+  | 'queue'
+  | 'dirty'
+  | 'lifeguard'
+  | 'litter';
 
 export interface Marker {
   // adviceKey of the loudest advice on that tile.
@@ -32,6 +39,7 @@ export const MAX_MARKERS = 12;
 const ICONS: Partial<Record<AdviceKind, MarkerIcon>> = {
   broken: 'broken',
   unreachable: 'stranded',
+  'not-step-free': 'wheelchair',
   'full-lines': 'queue',
   dirty: 'dirty',
   unwatched: 'lifeguard',

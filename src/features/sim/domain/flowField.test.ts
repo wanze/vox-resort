@@ -4,6 +4,7 @@ import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/e
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
 import { shoreFor } from '../../layout/domain/shoreline';
+import { LEVEL_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { flowFieldFor } from './flowField';
 
@@ -79,6 +80,71 @@ describe('flowFieldFor', () => {
   });
 });
 
+// A terrace one level up north of z = 1, climbed at x = 0 by a flight and at x = 4 by a ramp; the
+// lower street runs along z = 3 and the upper one along z = 0.
+const terrace = (ramp: boolean): WalkNetwork => {
+  const paved: PavedTile[] = [];
+  for (let tileX = 0; tileX <= 4; tileX++) {
+    paved.push({ tileX, tileZ: 0, y: LEVEL_VOXELS }, { tileX, tileZ: 3, y: 0 });
+  }
+  paved.push(
+    { tileX: 0, tileZ: 2, y: 0, id: 'path', rotation: 0 },
+    { tileX: 0, tileZ: 1, y: 0, id: 'stairs', rotation: 0 },
+  );
+  if (ramp) {
+    paved.push(
+      { tileX: 4, tileZ: 2, y: 0, id: 'ramp-foot', rotation: 0 },
+      { tileX: 4, tileZ: 1, y: 0, id: 'ramp-head', rotation: 0 },
+    );
+  }
+  return walkNetworkFor({
+    paved,
+    levelOf: (_x, tileZ) => (tileZ < 1 ? 1 : 0),
+    shore: null,
+    tilesX: 8,
+  });
+};
+
+const lowest = (network: WalkNetwork, tileX: number, tileZ: number): number =>
+  network.nodes.findIndex(
+    (node) =>
+      node.tileX === tileX &&
+      node.tileZ === tileZ &&
+      node.y ===
+        Math.min(
+          ...network.nodes
+            .filter((other) => other.tileX === tileX && other.tileZ === tileZ)
+            .map((other) => other.y),
+        ),
+  );
+
+describe('flowFieldFor, step-free', () => {
+  it('never climbs a flight', () => {
+    const network = terrace(false);
+    const field = flowFieldFor(network, [lowest(network, 2, 0)], { stepFree: true });
+    expect(field.hops[lowest(network, 2, 3)]).toBe(-1);
+    expect(
+      flowFieldFor(network, [lowest(network, 2, 0)]).hops[lowest(network, 2, 3)],
+    ).toBeGreaterThan(0);
+  });
+
+  it('climbs a ramp, the long way round if it must', () => {
+    const network = terrace(true);
+    const upstairs = lowest(network, 0, 0);
+    const stepFree = flowFieldFor(network, [upstairs], { stepFree: true });
+    const walking = flowFieldFor(network, [upstairs]);
+    const below = lowest(network, 0, 3);
+    expect(stepFree.hops[below]).toBeGreaterThan(walking.hops[below]!);
+    let at = below;
+    const passed = new Set<number>();
+    while (stepFree.next[at] !== at) {
+      at = stepFree.next[at]!;
+      passed.add(network.nodes[at]!.tileX);
+    }
+    expect(passed.has(4)).toBe(true);
+  });
+});
+
 describe('the cost of a field on the generated plot', () => {
   const TYPES = ORIGINAL_TYPES.map((type) => ({
     id: type.id,
@@ -106,6 +172,18 @@ describe('the cost of a field on the generated plot', () => {
     levelOf: (x, z) => levelAt(elevation, x, z),
     shore: shoreFor(plan),
     tilesX: plan.tilesX,
+  });
+
+  it('walks exactly as it did before steps were marked, unless asked to be step-free', () => {
+    const unmarked = {
+      ...network,
+      edges: network.edges.map((edge) => ({ ...edge, stepped: false })),
+    };
+    expect(flowFieldFor(network, network.gates)).toEqual(flowFieldFor(unmarked, network.gates));
+    expect(flowFieldFor(network, network.gates, { stepFree: false })).toEqual(
+      flowFieldFor(network, network.gates),
+    );
+    expect(network.edges.some((edge) => edge.stepped)).toBe(true);
   });
 
   // A ceiling on the lazy per-venue field design, not a benchmark: the budgets are

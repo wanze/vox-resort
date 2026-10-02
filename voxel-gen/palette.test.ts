@@ -34,11 +34,15 @@ const luminance = (color: Color): number =>
 
 const hex = (color: Color): string => `#${color.toString(16).padStart(6, '0')}`;
 
-// Exempt until their style pass lands; this list only ever shrinks.
+// Exempt until their style pass lands; this list only ever shrinks. The staircase and ramps are
+// here only because they share path's colours, and leave with it.
 const LEGACY = new Set([
   'path',
   'boardwalk',
   'stairs',
+  'staircase',
+  'ramp-foot',
+  'ramp-head',
   'railing',
   'stair-railing',
   'street-lamp',

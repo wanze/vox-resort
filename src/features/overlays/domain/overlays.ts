@@ -7,6 +7,7 @@ export const OVERLAY_KINDS = [
   'reach-food',
   'reach-drink',
   'reach-wash',
+  'step-free',
   'scenery',
   'litter',
 ] as const;
@@ -116,6 +117,8 @@ export interface OverlaySources {
   readonly tileOf: (node: number) => { readonly tileX: number; readonly tileZ: number };
   // A function, so only the sweep a layer asks for is run.
   readonly hopsTo: (need: GuestNeed) => Int32Array;
+  // Step-free from the gates is 0, stairs only 1, so the ramp's bad end is where a wheelchair stops.
+  readonly stepFree: () => Float32Array;
   readonly scenery: TileGrid;
   readonly litter: TileGrid;
 }
@@ -129,6 +132,7 @@ const REACH_NEEDS: { readonly [kind in OverlayKind]?: GuestNeed } = {
 export function overlayValuesFor(kind: OverlayKind, sources: OverlaySources): Float32Array {
   const need = REACH_NEEDS[kind];
   if (need) return reachValues(sources.hopsTo(need), TOO_FAR_HOPS);
+  if (kind === 'step-free') return sources.stepFree();
   if (kind === 'footfall') return footfallValues(sources.footfall);
   if (kind === 'mood') return moodValues(sources.footfall);
   const scenery = kind === 'scenery';

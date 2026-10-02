@@ -101,3 +101,14 @@ describe('a review on the way out', () => {
     expect(kept.at(-1)!.nights).toBe(4);
   });
 });
+
+describe('a review from a party with a wheelchair', () => {
+  it('complains of the stairs that kept them from a venue', () => {
+    const thoughts = createThoughts(2);
+    often(thoughts, 0, 'no-step-free', 'Restaurant', 3);
+    often(thoughts, 1, 'queue-too-long', 'Bar', 1);
+    const review = reviewOf(thoughts, [0, 1]);
+    expect(review.complaint).toBe('no-step-free');
+    expect(review.subject).toBe('Restaurant');
+  });
+});

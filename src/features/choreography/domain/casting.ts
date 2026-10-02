@@ -29,6 +29,8 @@ export interface DrawnAs {
   readonly heading: Float32Array;
   // A RESTING code or one of rendering's DRAWN_POSE, which only the figure shader reads.
   readonly pose: Float32Array;
+  // 1 for somebody drawn in a wheelchair, whatever the pose says.
+  readonly chair: Uint8Array;
 }
 
 // The resting beach guests, rebuilt by recast: only they are visited for a swim each frame.
@@ -130,6 +132,8 @@ export interface Casting {
   isChild?(person: number): boolean;
   // Left out, nobody is anybody's parent.
   partyOf?(person: number): number;
+  // Left out, nobody uses a wheelchair.
+  inChair?(person: number): boolean;
   // Left out, nobody goes for a swim.
   readonly bathing?: Bathing;
 }
@@ -240,6 +244,7 @@ export function createCast(
     z: new Float32Array(capacity),
     heading: new Float32Array(capacity),
     pose: new Float32Array(capacity),
+    chair: new Uint8Array(capacity),
     placeOf: new Int32Array(capacity).fill(-1),
     lastVenue: new Int32Array(capacity).fill(NOWHERE),
     lastWaiting: new Uint8Array(capacity),
@@ -331,6 +336,26 @@ function freePlace(cast: Cast, range: Range, rank: number, seatBy: Int32Array | 
   return -1;
 }
 
+// Somewhere to sit in the chair: a spot to stand at, then a seat, never a lounger, the water or a
+// game. A venue with none of those, a pool or a court, has them watch from its edge.
+const keepsStill = (place: Place): boolean =>
+  !isMoving(place) && (place.act ?? 'still') === 'still' && place.pose !== RESTING.lying;
+
+function freeStill(cast: Cast, range: Range, seatBy: Int32Array, pose: number): number {
+  for (let index = range.start; index < range.start + range.count; index++) {
+    const place = cast.places[index]!;
+    if (place.pose === pose && keepsStill(place) && isFree(cast, index, seatBy)) return index;
+  }
+  return -1;
+}
+
+function chairPlace(cast: Cast, ranges: VenueRanges, seatBy: Int32Array): number {
+  const standing = freeStill(cast, ranges.visitors, seatBy, RESTING.standing);
+  if (standing >= 0) return standing;
+  const seat = freeStill(cast, ranges.visitors, seatBy, RESTING.sitting);
+  return seat >= 0 ? seat : freePlace(cast, ranges.watchers, 0, seatBy);
+}
+
 // The children's places to a child first, and to an adult last.
 function freeFor(cast: Cast, range: Range, child: boolean, seatBy: Int32Array): number {
   let fallback = -1;
@@ -340,6 +365,17 @@ function freeFor(cast: Cast, range: Range, child: boolean, seatBy: Int32Array): 
     if (fallback < 0) fallback = index;
   }
   return fallback;
+}
+
+function insidePlace(
+  cast: Cast,
+  casting: Casting,
+  person: number,
+  ranges: VenueRanges,
+  seatBy: Int32Array,
+): number {
+  if (cast.chair[person] === 1) return chairPlace(cast, ranges, seatBy);
+  return freeFor(cast, ranges.visitors, casting.isChild?.(person) === true, seatBy);
 }
 
 function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Array): void {
@@ -357,7 +393,7 @@ function castOne(cast: Cast, casting: Casting, person: number, seatBy: Int32Arra
   const waiting = cast.lastWaiting[person] === 1;
   const place = waiting
     ? freePlace(cast, ranges.watchers, casting.queuePlace(person), seatBy)
-    : freeFor(cast, ranges.visitors, casting.isChild?.(person) === true, seatBy);
+    : insidePlace(cast, casting, person, ranges, seatBy);
   if (place >= 0) hold(cast, person, place);
   // Waiting with no bench is left to the lane; inside with no place is out of sight indoors.
   else cast.shown[person] = waiting ? SHOWN.asCrowd : SHOWN.hidden;
@@ -383,6 +419,7 @@ function noteFamily(cast: Cast, casting: Casting, person: number, venue: number)
   const there = venue >= 0;
   cast.party[person] = there ? (casting.partyOf?.(person) ?? -1) : -1;
   cast.child[person] = Number(there && casting.isChild?.(person) === true);
+  cast.chair[person] = Number(casting.inChair?.(person) === true);
 }
 
 // The beach and anybody asleep or nowhere fall outside the venues, so they count nowhere.

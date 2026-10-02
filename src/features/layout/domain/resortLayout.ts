@@ -19,6 +19,10 @@ import {
   PATH_ID,
   PIER_RAILING_ID,
   RAILING_ID,
+  RAMP_FOOT_ID,
+  RAMP_FOOT_RAILING_ID,
+  RAMP_HEAD_ID,
+  RAMP_HEAD_RAILING_ID,
   STAIR_RAILING_ID,
   STAIRS_ID,
   type Bend,
@@ -32,7 +36,8 @@ import type { Ground } from './ground';
 import type { Terrain } from './terrain';
 import { terrainFor } from './terrain';
 import { levelHeight, straddledTile, type LevelProvider } from './elevation';
-import { stairTilesFor } from './stairs';
+import { climbTilesFor, type ClimbKind } from './climbs';
+import type { PavedProvider } from './stairs';
 import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
@@ -722,12 +727,30 @@ function requireEveryTypePlanted(items: readonly LayoutItem[], plan: ResortPlan)
   }
 }
 
+type ClimbItems = { readonly [kind in ClimbKind]: LayoutItem | undefined } & {
+  readonly ramps: boolean;
+};
+
+// Ramps come as a pair or not at all: half a ramp is a hole at the step.
+function climbItemsIn(byId: ReadonlyMap<string, LayoutItem>): ClimbItems {
+  const foot = byId.get(RAMP_FOOT_ID);
+  const head = byId.get(RAMP_HEAD_ID);
+  return {
+    stairs: byId.get(STAIRS_ID),
+    'ramp-foot': foot,
+    'ramp-head': head,
+    ramps: foot !== undefined && head !== undefined,
+  };
+}
+
 export type RailModels = { readonly [kind in RailKind]: LayoutItem | undefined };
 
 export function railModelsIn(items: readonly LayoutItem[]): RailModels {
   const byId = new Map(items.map((item) => [item.id, item]));
   return {
     flight: byId.get(STAIR_RAILING_ID),
+    'ramp-foot': byId.get(RAMP_FOOT_RAILING_ID),
+    'ramp-head': byId.get(RAMP_HEAD_RAILING_ID),
     edge: byId.get(RAILING_ID),
     // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
     pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
@@ -736,6 +759,8 @@ export function railModelsIn(items: readonly LayoutItem[]): RailModels {
     'ramp-right': byId.get(BRIDGE_RAMP_RAILING_RIGHT_ID),
   };
 }
+
+const STANDS_ON_TILE: ReadonlySet<RailKind> = new Set(['flight', 'ramp-foot', 'ramp-head']);
 
 // Shared with the pointer, so a rail drawn by hand does not land a voxel off the one beside it.
 export function railPlacementsFor(
@@ -750,7 +775,7 @@ export function railPlacementsFor(
     const { x, z } = rail.tile;
     const level = levelOf(x, z);
     placements.push(
-      rail.kind === 'flight'
+      STANDS_ON_TILE.has(rail.kind)
         ? place(item, railKey(item, rail), x, z, rail.rotation, level)
         : placeOnEdge(item, railKey(item, rail), x, z, rail.rotation, level),
     );
@@ -812,11 +837,14 @@ export function layoutResort(
   };
 
   const { tiles: paved, turns } = pavingOf(items, plan);
-  const stairs = byId.get(STAIRS_ID);
-  const flights = new Map(
-    stairTilesFor(paved, levelOf).map((flight) => [
-      tileKey(flight.tile.x, flight.tile.z),
-      flight.rotation,
+  const climbItems = climbItemsIn(byId);
+  // Water never takes a ramp: a span stands there, and a foot on it would leave the head hanging.
+  const overWater: PavedProvider = (tileX, tileZ) => surfaceOf(tileX, tileZ) === 'water';
+  const wantsStairs: PavedProvider = climbItems.ramps ? overWater : () => true;
+  const climbs = new Map(
+    climbTilesFor(paved, levelOf, wantsStairs).map((climb) => [
+      tileKey(climb.tile.x, climb.tile.z),
+      climb,
     ]),
   );
   const spans = new Map(
@@ -824,16 +852,15 @@ export function layoutResort(
   );
   const paths = paved.map((tile) => {
     const span = spans.get(tileKey(tile.x, tile.z));
-    const climb = span || !stairs ? undefined : flights.get(tileKey(tile.x, tile.z));
+    const found = span ? undefined : climbs.get(tileKey(tile.x, tile.z));
+    const climbItem = found && climbItems[found.kind];
     const paving = span
       ? span.kind === 'ramp'
         ? bridgeRamp
         : bridge
-      : climb === undefined
-        ? pavingFor(tile)
-        : stairs!;
+      : (climbItem ?? pavingFor(tile));
     const key = derivedKey(paving.id, tile.x, tile.z);
-    const rotation = span ? span.rotation : (climb ?? 0);
+    const rotation = span ? span.rotation : climbItem ? found!.rotation : 0;
     return place(paving, key, tile.x, tile.z, rotation, levelOf(tile.x, tile.z));
   });
   const keys = plotKeys(plan.plots);
@@ -850,10 +877,9 @@ export function layoutResort(
 
   // Water counts as a drop: the sea beside a jetty stands at the jetty's own level, so the heights
   // alone would say there was nothing to fall into.
-  const overWater = (tileX: number, tileZ: number): boolean => surfaceOf(tileX, tileZ) === 'water';
   const rails = railPlacementsFor(
     railModelsIn(items),
-    railTilesFor(paved, levelOf, overWater, raised),
+    railTilesFor(paved, levelOf, overWater, raised, wantsStairs),
     levelOf,
   );
 

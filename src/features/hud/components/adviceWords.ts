@@ -35,6 +35,8 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
+  'not-step-free': ({ count }) =>
+    `${count} ${count === 1 ? "venue can't" : "venues can't"} be reached by wheelchair`,
   'short-staffed': ({ subject, count }) =>
     `The plot needs ${count} more ${isStaffRole(subject) ? roleWord(subject, count) : subject}`,
   broken: ({ subject }) => `${subject} has broken down`,
@@ -60,6 +62,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
   'full-lines': () => 'the line was already full',
   unreachable: ({ count }) => `${count} places standing idle`,
+  'not-step-free': ({ subject }) => `stairs and no ramp on the way to ${subject}`,
   'short-staffed': () => 'hired by hand, so the roster does not follow the plot',
   broken: ({ count }) =>
     count < 60 ? 'down under an hour' : `down for ${Math.round(count / 60)} h`,
@@ -83,6 +86,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'unserved-need': 'Missing',
   'full-lines': 'Queues',
   unreachable: 'Stranded',
+  'not-step-free': 'Access',
   'short-staffed': 'Staff',
   broken: 'Repairs',
   dirty: 'Upkeep',

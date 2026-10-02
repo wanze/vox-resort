@@ -7,6 +7,9 @@ import { buildModel, TILE_VOXELS, type VoxelModelSource } from './voxelgen.ts';
 // plane as the paving would z-fight. Bottom faces are culled and exempt.
 const PAIRS: readonly (readonly [string, string])[] = [
   ['stairs', 'stair-railing'],
+  ['staircase', 'stair-railing'],
+  ['ramp-foot', 'ramp-foot-railing'],
+  ['ramp-head', 'ramp-head-railing'],
   ['path', 'railing'],
   ['boardwalk', 'railing'],
   ['jetty', 'railing'],

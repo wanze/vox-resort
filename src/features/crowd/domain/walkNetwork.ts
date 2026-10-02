@@ -7,6 +7,14 @@ import {
 import type { LevelProvider } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
 import { CLIMBS, stairTilesFor } from '../../layout/domain/stairs';
+import type { ClimbKind } from '../../layout/domain/climbs';
+import {
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
+  STAIRCASE_ID,
+  STAIRS_ID,
+} from '../../layout/domain/resortPlan';
+import type { Rotation } from '../../layout/domain/rotation';
 import { spanTilesFor, type SpanKind, type SpanProvider } from '../../layout/domain/spans';
 import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
@@ -18,6 +26,9 @@ export interface PavedTile {
   readonly tileX: number;
   readonly tileZ: number;
   readonly y: number;
+  // What was laid, read so the graph climbs where the paving does, an old save's flights included.
+  readonly id?: string;
+  readonly rotation?: Rotation;
 }
 
 export interface WalkNode {
@@ -35,6 +46,8 @@ export interface WalkEdge {
   readonly from: number;
   readonly to: number;
   readonly length: number;
+  // Up or down the treads of a flight: the one way a wheelchair cannot go.
+  readonly stepped: boolean;
 }
 
 export interface BeachBand {
@@ -125,30 +138,32 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     return index;
   };
 
-  const link = (from: number, to: number): void => {
+  const link = (from: number, to: number, stepped = false): void => {
     if (from === to) return;
     const a = nodes[from]!;
     const b = nodes[to]!;
     exits[from]!.push(edges.length);
-    edges.push({ from, to, length: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) });
+    edges.push({ from, to, length: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), stepped });
   };
 
   const stands = paved.map((tile) => standFor(tile, climbs, spans, shore, indexOf, standAt));
   for (const stand of stands) {
     if (stand.kind !== 'flight') continue;
-    link(stand.low, stand.high);
-    link(stand.high, stand.low);
+    link(stand.low, stand.high, stand.stepped);
+    link(stand.high, stand.low, stand.stepped);
   }
 
-  for (const [index, tile] of paved.entries()) {
+  const linkNeighbours = (index: number, tile: PavedTile): void => {
     for (const [dx, dz] of NEIGHBOURS) {
       const other = indexOf.get(tileKey(tile.tileX + dx, tile.tileZ + dz));
       if (other === undefined) continue;
-      const rise = paved[other]!.y - tile.y;
-      if (!walkable(tile, { dx, dz }, rise, climbs)) continue;
-      link(facing(stands[index]!, dx, dz), facing(stands[other]!, -dx, -dz));
+      const here = stands[index]!;
+      const there = stands[other]!;
+      if (!steppable(tile, paved[other]!, { here, there, dx, dz }, climbs)) continue;
+      link(facing(here, dx, dz), facing(there, -dx, -dz));
     }
-  }
+  };
+  for (const [index, tile] of paved.entries()) linkNeighbours(index, tile);
 
   const { seats, beachSeats, posts } = seatsAmong(input.seats ?? [], nodes, seatsOf, shore);
 
@@ -261,7 +276,26 @@ type TileStand =
       readonly climb: { readonly dx: number; readonly dz: number };
       readonly low: number;
       readonly high: number;
+      readonly stepped: boolean;
+      // Only the foot of a slope can be stepped onto from the side: elsewhere it is off the ground.
+      readonly raised: boolean;
     };
+
+interface Climb {
+  readonly dx: number;
+  readonly dz: number;
+  readonly kind: ClimbKind;
+}
+
+const HALF_LEVEL = LEVEL_VOXELS / 2;
+
+// Where each piece starts and ends above its tile's walking surface. A ramp's head starts half a
+// level up, so it shares its low node with its foot's high one by position.
+const SLOPES: { readonly [kind in ClimbKind]: Omit<Slope, 'gate'> } = {
+  stairs: { low: 0, high: LEVEL_VOXELS, stepped: true, raised: false },
+  'ramp-foot': { low: 0, high: HALF_LEVEL, stepped: false, raised: false },
+  'ramp-head': { low: HALF_LEVEL, high: LEVEL_VOXELS, stepped: false, raised: true },
+};
 
 const HALF_TILE = TILE_VOXELS / 2;
 
@@ -270,38 +304,97 @@ const HALF_TILE = TILE_VOXELS / 2;
 // flights across corridors, and refusing them would strand the corridor.
 function standFor(
   tile: PavedTile,
-  climbs: ReadonlyMap<string, { dx: number; dz: number }>,
+  climbs: ReadonlyMap<string, Climb>,
   spans: ReadonlyMap<string, Span>,
   shore: Shore | null,
   paved: ReadonlyMap<string, number>,
   standAt: (x: number, y: number, z: number, tile: PavedTile, gate?: boolean) => number,
 ): TileStand {
-  const x = (tile.tileX + 0.5) * TILE_VOXELS;
-  const z = (tile.tileZ + 0.5) * TILE_VOXELS;
-  const foot = walkingSurface(tile.y);
+  const { x, z, foot } = middleOf(tile);
   const key = tileKey(tile.tileX, tile.tileZ);
   const span = spans.get(key);
   // Never a beach gate: the deck stands a metre above the sand.
   if (span?.kind === 'deck') {
     return { kind: 'centre', node: standAt(x, tile.y + BRIDGE_VOXELS, z, tile) };
   }
-  const rise = span ? BRIDGE_VOXELS - PAVING_VOXELS : LEVEL_VOXELS;
-  const climb = span ? span.climb : climbs.get(key);
-  if (!climb) {
-    const gate = adjoinsOpenSand(tile, shore, paved);
-    return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
-  }
+  if (span) return slopeOn(tile, span.climb, BRIDGE_SLOPE, standAt);
+  const climb = climbs.get(key);
+  const gate = adjoinsOpenSand(tile, shore, paved);
+  if (!climb) return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
+  // The foot of a ramp can be the last tile before the sand, as the slab it replaced was.
+  return slopeOn(tile, climb, { ...SLOPES[climb.kind], gate }, standAt);
+}
+
+function middleOf(tile: PavedTile): {
+  readonly x: number;
+  readonly z: number;
+  readonly foot: number;
+} {
+  return {
+    x: (tile.tileX + 0.5) * TILE_VOXELS,
+    z: (tile.tileZ + 0.5) * TILE_VOXELS,
+    foot: walkingSurface(tile.y),
+  };
+}
+
+interface Slope {
+  readonly low: number;
+  readonly high: number;
+  readonly stepped: boolean;
+  readonly raised: boolean;
+  readonly gate: boolean;
+}
+
+const BRIDGE_SLOPE: Slope = {
+  low: 0,
+  high: BRIDGE_VOXELS - PAVING_VOXELS,
+  stepped: false,
+  raised: false,
+  gate: false,
+};
+
+function slopeOn(
+  tile: PavedTile,
+  climb: { readonly dx: number; readonly dz: number },
+  slope: Slope,
+  standAt: (x: number, y: number, z: number, tile: PavedTile, gate?: boolean) => number,
+): TileStand {
+  const { x, z, foot } = middleOf(tile);
+  const { dx, dz } = climb;
   return {
     kind: 'flight',
     climb,
-    low: standAt(x - climb.dx * HALF_TILE, foot, z - climb.dz * HALF_TILE, tile),
-    high: standAt(x + climb.dx * HALF_TILE, foot + rise, z + climb.dz * HALF_TILE, tile),
+    low: standAt(x - dx * HALF_TILE, foot + slope.low, z - dz * HALF_TILE, tile, slope.gate),
+    high: standAt(x + dx * HALF_TILE, foot + slope.high, z + dz * HALF_TILE, tile),
+    stepped: slope.stepped,
+    raised: slope.raised,
   };
 }
 
 function facing(stand: TileStand, dx: number, dz: number): number {
   if (stand.kind === 'centre') return stand.node;
   return stand.climb.dx === dx && stand.climb.dz === dz ? stand.high : stand.low;
+}
+
+function steppable(
+  tile: PavedTile,
+  other: PavedTile,
+  step: {
+    readonly here: TileStand;
+    readonly there: TileStand;
+    readonly dx: number;
+    readonly dz: number;
+  },
+  climbs: ReadonlyMap<string, Climb>,
+): boolean {
+  const { here, there, dx, dz } = step;
+  if (!walkable(tile, { dx, dz }, other.y - tile.y, climbs)) return false;
+  return !enteredSideways(here, dx, dz) && !enteredSideways(there, -dx, -dz);
+}
+
+function enteredSideways(stand: TileStand, dx: number, dz: number): boolean {
+  if (stand.kind !== 'flight' || !stand.raised) return false;
+  return stand.climb.dx === 0 ? dx !== 0 : dz !== 0;
 }
 
 // Flipped from spans.ts, which names a ramp by its shore: a stand wants the way the surface rises.
@@ -329,19 +422,44 @@ function spansAmong(
   return spans;
 }
 
-// Asked of stairs.ts: where a path turns on a step, the corner tile has higher paving on two
-// sides but can only climb one; the other pair looks walkable and is a wall.
+const CLIMB_IDS: ReadonlyMap<string, ClimbKind> = new Map([
+  [STAIRS_ID, 'stairs'],
+  [STAIRCASE_ID, 'stairs'],
+  [RAMP_FOOT_ID, 'ramp-foot'],
+  [RAMP_HEAD_ID, 'ramp-head'],
+]);
+
+const towards = (rotation: Rotation) => CLIMBS.find((climb) => climb.rotation === rotation)!;
+
+// Read off the pieces laid, so the graph climbs exactly where the paving does. Paving without ids
+// asks stairs.ts: where a path turns on a step, the corner tile has higher paving on two sides but
+// can only climb one; the other pair looks walkable and is a wall.
 function climbsAmong(
   paved: readonly PavedTile[],
   levelOf: LevelProvider,
-): ReadonlyMap<string, { dx: number; dz: number }> {
-  const climbs = new Map<string, { dx: number; dz: number }>();
+): ReadonlyMap<string, Climb> {
+  const climbs = new Map<string, Climb>();
+  if (paved.some((tile) => tile.id !== undefined)) {
+    for (const tile of paved) {
+      const kind = tile.id === undefined ? undefined : CLIMB_IDS.get(tile.id);
+      if (kind === undefined) continue;
+      const { dx, dz } = towards(tile.rotation ?? 0);
+      climbs.set(tileKey(tile.tileX, tile.tileZ), { dx, dz, kind });
+    }
+    return climbs;
+  }
   const asTiles: Tile[] = paved.map((tile) => ({ x: tile.tileX, z: tile.tileZ }));
   for (const stair of stairTilesFor(asTiles, levelOf)) {
-    const climb = CLIMBS.find((candidate) => candidate.rotation === stair.rotation);
-    if (climb) climbs.set(tileKey(stair.tile.x, stair.tile.z), { dx: climb.dx, dz: climb.dz });
+    const { dx, dz } = towards(stair.rotation);
+    climbs.set(tileKey(stair.tile.x, stair.tile.z), { dx, dz, kind: 'stairs' });
   }
   return climbs;
+}
+
+// A ramp's foot never meets a tile a level off: its head does that.
+function risingAt(climbs: ReadonlyMap<string, Climb>, x: number, z: number): Climb | undefined {
+  const climb = climbs.get(tileKey(x, z));
+  return climb?.kind === 'ramp-foot' ? undefined : climb;
 }
 
 // A drop is answered by the edge in the other direction: every adjacency is visited from both ends.
@@ -349,7 +467,7 @@ function walkable(
   tile: PavedTile,
   step: { readonly dx: number; readonly dz: number },
   rise: number,
-  climbs: ReadonlyMap<string, { dx: number; dz: number }>,
+  climbs: ReadonlyMap<string, Climb>,
 ): boolean {
   if (rise === 0) return true;
   if (Math.abs(rise) !== LEVEL_VOXELS) return false;
@@ -359,7 +477,7 @@ function walkable(
   const climbing = rise > 0;
   const lowerX = climbing ? tile.tileX : tile.tileX + step.dx;
   const lowerZ = climbing ? tile.tileZ : tile.tileZ + step.dz;
-  const climb = climbs.get(tileKey(lowerX, lowerZ));
+  const climb = risingAt(climbs, lowerX, lowerZ);
   if (!climb) return false;
   const towardsX = climbing ? step.dx : -step.dx;
   const towardsZ = climbing ? step.dz : -step.dz;

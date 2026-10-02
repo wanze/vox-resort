@@ -8,7 +8,8 @@ import {
 import { PAVING_IDS } from '../../layout/domain/resortPlan';
 import { groundTakes } from '../../layout/domain/placementGround';
 import type { LevelProvider } from '../../layout/domain/elevation';
-import { climbAt, CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
+import { CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
+import { CLIMB_REACH, climbKindAt, type ClimbKind } from '../../layout/domain/climbs';
 import { spanAt, type SpanProvider } from '../../layout/domain/spans';
 import type { Rotation } from '../../layout/domain/rotation';
 import type { TileOccupancy } from './tileOccupancy';
@@ -43,6 +44,9 @@ export interface PavingRules {
   readonly bridge: LayoutItem | null;
   readonly bridgeRamp: LayoutItem | null;
   readonly stairs: LayoutItem | null;
+  readonly staircase: LayoutItem | null;
+  readonly rampFoot: LayoutItem | null;
+  readonly rampHead: LayoutItem | null;
   readonly flagstones: LayoutItem | null;
 }
 
@@ -55,6 +59,36 @@ const pavedProvider =
   (rules: PavingRules): PavedProvider =>
   (tileX, tileZ) =>
     rules.pavedWith(tileX, tileZ) !== null;
+
+const isStaircase = (item: LayoutItem | null, rules: PavingRules): boolean =>
+  item !== null && item.id === rules.staircase?.id;
+
+// Water never takes a ramp, as in layoutResort, and without both halves nothing does.
+export const wantsStairsOf =
+  (rules: PavingRules): PavedProvider =>
+  (tileX, tileZ) =>
+    rules.rampFoot === null ||
+    rules.rampHead === null ||
+    rules.isWater(tileX, tileZ) ||
+    isStaircase(rules.pavedWith(tileX, tileZ), rules);
+
+function climbItemOf(kind: ClimbKind, chosen: boolean, rules: PavingRules): LayoutItem | null {
+  if (kind === 'ramp-foot') return rules.rampFoot;
+  if (kind === 'ramp-head') return rules.rampHead;
+  return chosen ? rules.staircase : rules.stairs;
+}
+
+function climbOn(
+  tile: Tile,
+  chosen: boolean,
+  rules: PavingRules,
+  isPaved: PavedProvider,
+  wantsStairs: PavedProvider,
+): Paving | null {
+  const climb = climbKindAt(tile, isPaved, rules.levelOf, wantsStairs);
+  const item = climb && climbItemOf(climb.kind, chosen, rules);
+  return item ? { item, rotation: climb.rotation } : null;
+}
 
 // The climb is asked first, as in layoutResort: a step's lower tile can be the landward row of sand,
 // and there the flight is right. Flat paving is laid unturned: a slab has no front.
@@ -75,13 +109,19 @@ export function pavingAt(
     const ramp = crossing.kind === 'ramp' ? rules.bridgeRamp : null;
     return { item: ramp ?? span, rotation: crossing.rotation };
   }
-  const { stairs } = rules;
-  if (stairs) {
-    const climb = climbAt(tile, pavedProvider(rules), rules.levelOf);
-    if (climb !== null) return { item: stairs, rotation: climb };
-  }
+  const chosen = isStaircase(item, rules);
+  const others = wantsStairsOf(rules);
+  const wantsStairs: PavedProvider = (tileX, tileZ) =>
+    tileX === tile.x && tileZ === tile.z ? chosen || others(tileX, tileZ) : others(tileX, tileZ);
+  const climb = climbOn(tile, chosen, rules, pavedProvider(rules), wantsStairs);
+  if (climb) return climb;
   const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
-  return { item: decking ?? item, rotation: 0 };
+  const flat = chosen ? (rules.flagstones ?? item) : item;
+  return { item: decking ?? flat, rotation: 0 };
+}
+
+export function fellBackToStairs(laid: Paving, rules: PavingRules): boolean {
+  return laid.item.id === rules.stairs?.id && rules.rampFoot !== null && rules.rampHead !== null;
 }
 
 // One place, so pavingAt and standsOn cannot drift apart and stand a bridge on ground that refuses it.
@@ -109,60 +149,136 @@ export interface Relaid {
   readonly lifted: Placement;
 }
 
-// Asked after the tile is laid, so it counts as paved. The lifted slab is rebuilt rather than looked
-// up: flat paving is always unturned at its own tile's level.
+const CLIMB_PIECES = (rules: PavingRules): ReadonlySet<string | undefined> =>
+  new Set([rules.stairs?.id, rules.staircase?.id, rules.rampFoot?.id, rules.rampHead?.id]);
+
+const SPAN = 2 * CLIMB_REACH + 1;
+
+// Every tile a climb could read, since a ramp's head depends on paving three tiles off. The four
+// beside come first, in CLIMBS order, as they did when they were all a re-lay asked.
+const REACH: readonly { readonly dx: number; readonly dz: number; readonly beside: boolean }[] = [
+  ...CLIMBS.map(({ dx, dz }) => ({ dx, dz, beside: true })),
+  ...Array.from({ length: SPAN * SPAN }, (_, index) => ({
+    dx: (index % SPAN) - CLIMB_REACH,
+    dz: Math.floor(index / SPAN) - CLIMB_REACH,
+    beside: false,
+  })).filter(({ dx, dz }) => {
+    const away = Math.abs(dx) + Math.abs(dz);
+    return away > 1 && away <= CLIMB_REACH;
+  }),
+];
+
+// Asked after the tile is laid, so it counts as paved. A staircase stays as the player put it.
 export function relaidBy(tile: Tile, rules: PavingRules): Relaid[] {
   if (rules.pavedWith(tile.x, tile.z) === null) return [];
-  return relayBeside(tile, rules, (beside, slab, isPaved, isRaised) =>
-    isRaised(beside.x, beside.z)
-      ? spanBeside(beside, rules, isPaved, isRaised)
-      : flightBeside(beside, slab, rules, isPaved),
-  );
+  return relayAround(tile, rules, { paved: false, keepStaircase: true });
 }
 
-// Re-laid whatever the answer: a flight's facing is not on the index, so a correct one cannot be told
-// from a wrong one.
 export function unlaidBy(tile: Tile, rules: PavingRules): Relaid[] {
-  return relayBeside(tile, rules, (beside, standing, isPaved, isRaised) => {
-    if (isRaised(beside.x, beside.z)) return spanBeside(beside, rules, isPaved, isRaised);
-    if (standing.id !== rules.stairs?.id) return null;
-    return flightOrFlat(beside, rules, isPaved);
-  });
+  return relayAround(tile, rules, { paved: true, keepStaircase: false });
 }
 
-interface RelayRule {
-  (
-    beside: Tile,
-    standing: LayoutItem,
-    isPaved: PavedProvider,
-    isRaised: SpanProvider,
-  ): Paving | null;
+interface Before {
+  readonly paved: boolean;
+  readonly keepStaircase: boolean;
 }
 
-function relayBeside(tile: Tile, rules: PavingRules, rule: RelayRule): Relaid[] {
+interface Relay {
+  readonly rules: PavingRules;
+  readonly isPaved: PavedProvider;
+  readonly wasPaved: PavedProvider;
+  readonly isRaised: SpanProvider;
+  readonly wantsStairs: PavedProvider;
+  readonly climbing: ReadonlySet<string | undefined>;
+  readonly keepStaircase: boolean;
+}
+
+function relayAround(tile: Tile, plain: PavingRules, before: Before): Relaid[] {
+  const rules: PavingRules = { ...plain, pavedWith: remembered(plain.pavedWith) };
   const isPaved = pavedProvider(rules);
-  const isRaised = raisedProvider(rules);
+  const relay: Relay = {
+    rules,
+    isPaved,
+    wasPaved: (tileX, tileZ) =>
+      tileX === tile.x && tileZ === tile.z ? before.paved : isPaved(tileX, tileZ),
+    isRaised: raisedProvider(rules),
+    wantsStairs: wantsStairsOf(rules),
+    climbing: CLIMB_PIECES(rules),
+    keepStaircase: before.keepStaircase,
+  };
   const relaid: Relaid[] = [];
-  for (const { dx, dz } of CLIMBS) {
+  for (const { dx, dz, beside: next } of REACH) {
     const beside: Tile = { x: tile.x + dx, z: tile.z + dz };
-    const slab = rules.pavedWith(beside.x, beside.z);
-    if (!slab) continue;
-    const laid = rule(beside, slab, isPaved, isRaised);
-    if (!laid) continue;
-    const level = rules.levelOf(beside.x, beside.z);
-    relaid.push({
-      placement: place(
-        laid.item,
-        derivedKey(laid.item.id, beside.x, beside.z),
-        beside.x,
-        beside.z,
-        laid.rotation,
-        level,
-      ),
-      lifted: place(slab, derivedKey(slab.id, beside.x, beside.z), beside.x, beside.z, 0, level),
-    });
+    const standing = rules.pavedWith(beside.x, beside.z);
+    const laid = standing && relaidOn(beside, standing, next, relay);
+    if (laid) relaid.push(relaidAs(laid, standing, beside, rules.levelOf(beside.x, beside.z)));
   }
   return relaid;
+}
+
+function relaidOn(beside: Tile, standing: LayoutItem, next: boolean, relay: Relay): Paving | null {
+  if (relay.isRaised(beside.x, beside.z)) {
+    return next ? spanBeside(beside, relay.rules, relay.isPaved, relay.isRaised) : null;
+  }
+  if (relay.keepStaircase && isStaircase(standing, relay.rules)) return null;
+  return climbMoved(beside, standing, relay);
+}
+
+// Answered twice, before the edit and after it, because a climb's turn is not on the index: a tile
+// still the same piece is re-laid only if its turn has moved. Flat paving never changes kind here.
+function climbMoved(beside: Tile, standing: LayoutItem, relay: Relay): Paving | null {
+  const { rules, climbing } = relay;
+  const chosen = isStaircase(standing, rules);
+  const now = settledOn(beside, chosen, rules, relay.isPaved, relay.wantsStairs);
+  if (now === null) return null;
+  const turned = climbing.has(now.item.id);
+  if (!turned && !climbing.has(standing.id)) return null;
+  if (now.item.id !== standing.id) return now;
+  if (!turned) return null;
+  const then = settledOn(beside, chosen, rules, relay.wasPaved, relay.wantsStairs);
+  return then?.item.id === now.item.id && then.rotation === now.rotation ? null : now;
+}
+
+function relaidAs(laid: Paving, standing: LayoutItem, tile: Tile, level: number): Relaid {
+  return {
+    placement: place(
+      laid.item,
+      derivedKey(laid.item.id, tile.x, tile.z),
+      tile.x,
+      tile.z,
+      laid.rotation,
+      level,
+    ),
+    lifted: place(standing, derivedKey(standing.id, tile.x, tile.z), tile.x, tile.z, 0, level),
+  };
+}
+
+// Two dozen tiles each read their neighbourhood, some twice, so the index is asked once per tile.
+function remembered(pavedWith: PavedGround): PavedGround {
+  const known = new Map<string, LayoutItem | null>();
+  return (tileX, tileZ) => {
+    const key = `${tileX},${tileZ}`;
+    let item = known.get(key);
+    if (item === undefined) {
+      item = pavedWith(tileX, tileZ);
+      known.set(key, item);
+    }
+    return item;
+  };
+}
+
+function settledOn(
+  tile: Tile,
+  chosen: boolean,
+  rules: PavingRules,
+  isPaved: PavedProvider,
+  wantsStairs: PavedProvider,
+): Paving | null {
+  const climb = climbOn(tile, chosen, rules, isPaved, wantsStairs);
+  if (climb) return climb;
+  const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
+  const flat = decking ?? rules.flagstones;
+  return flat === null ? null : { item: flat, rotation: 0 };
 }
 
 // Re-asked every time: the answer includes the tile's turn, so there is no settled state to stop at.
@@ -177,26 +293,4 @@ function spanBeside(
   const crossing = spanAt(tile, isPaved, isRaised);
   const item = crossing.kind === 'ramp' ? (rules.bridgeRamp ?? bridge) : bridge;
   return { item, rotation: crossing.rotation };
-}
-
-// A tile already a flight is left alone: re-facing it would only move the fudge an L-bend was
-// resolved with.
-function flightBeside(
-  tile: Tile,
-  slab: LayoutItem,
-  rules: PavingRules,
-  isPaved: PavedProvider,
-): Paving | null {
-  const { stairs } = rules;
-  if (!stairs || slab.id === stairs.id) return null;
-  const climb = climbAt(tile, isPaved, rules.levelOf);
-  return climb === null ? null : { item: stairs, rotation: climb };
-}
-
-function flightOrFlat(tile: Tile, rules: PavingRules, isPaved: PavedProvider): Paving | null {
-  const climb = climbAt(tile, isPaved, rules.levelOf);
-  if (climb !== null) return { item: rules.stairs!, rotation: climb };
-  const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
-  const flat = decking ?? rules.flagstones;
-  return flat === null ? null : { item: flat, rotation: 0 };
 }

@@ -48,6 +48,9 @@ import {
   PATH_ID,
   PEDALO_RENTAL_ID,
   STAIRS_ID,
+  STAIRCASE_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
 import { beachTilesOf, isBeach, shoreFor } from '../features/layout/domain/shoreline';
@@ -79,6 +82,7 @@ import {
   isPaving,
   pavedGroundOf,
   raisedProvider,
+  wantsStairsOf,
   type PavingRules,
 } from '../features/build/domain/paving';
 import { type HandrailRules } from '../features/build/domain/handrails';
@@ -289,6 +293,7 @@ import {
 } from '../features/sim/domain/advice';
 import { demandFor, type Demand } from '../features/sim/domain/demand';
 import { doorsFor } from '../features/sim/domain/doors';
+import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/stepFree';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
   createFootfall,
@@ -384,6 +389,8 @@ import {
   fullNameOf,
   homelessCount,
   makeBeds,
+  paceOf,
+  usesWheelchair,
   presentCount,
   rehome,
   unmadeCount,
@@ -604,6 +611,9 @@ export interface VoicesView {
 export interface StatusView {
   readonly day: number;
   readonly rating: Rating;
+  // Shown under the rating and counted toward none of it: wheelchair guests who cannot get
+  // somewhere are unhappy, and that already reaches the stars.
+  readonly stepFree: { readonly reached: number; readonly venues: number };
   readonly present: number;
   readonly beds: { readonly total: number; readonly taken: number };
   readonly demand: Demand | null;
@@ -629,6 +639,7 @@ export interface ShowcaseOptions {
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
   readonly onRefused?: (message: string) => void;
+  readonly onBuildNote?: (note: BuildNote) => void;
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
   readonly onMorning?: () => void;
@@ -768,6 +779,9 @@ const SEA_IDS: ReadonlySet<string> = new Set(SEA_MODELS.map((model) => model.id)
 const LITTER_IDS: ReadonlySet<string> = new Set(LITTER_MODELS.map((model) => model.id));
 
 const PROP_IDS: ReadonlySet<string> = new Set(PROP_MODELS.map((model) => model.id));
+
+// A prop the crowd field draws under its users, not a ball.
+const WHEELCHAIR_ID = 'wheelchair';
 
 const KEPT_APART_IDS: ReadonlySet<string> = new Set([
   ...PEOPLE_IDS,
@@ -1084,6 +1098,7 @@ function crowdFor(parts: {
   readonly routeOf: (person: number, at: number) => number;
   readonly offTheSand: (person: number) => boolean;
   readonly drawnAs: Cast;
+  readonly chair: ModelGeometry | undefined;
 }): CrowdField {
   return buildCrowdField({
     crowd: createCrowd({
@@ -1093,12 +1108,14 @@ function crowdFor(parts: {
       variantOf: (i) => parts.guests.variant[i] ?? 0,
       routeOf: parts.routeOf,
       offTheSand: parts.offTheSand,
+      paceOf: (i) => paceOf(parts.guests, i),
       roamsBeach: false,
       seed: CROWD_SEED,
     }),
     models: parts.people,
     lightVolume: parts.lightVolume,
     drawnAs: parts.drawnAs,
+    ...(parts.chair ? { chair: parts.chair } : {}),
   });
 }
 
@@ -1401,6 +1418,7 @@ function buildResort(
     },
     offTheSand: (person) => router.offTheSand(person),
     drawnAs: cast,
+    chair: parts.props.find((model) => model.id === WHEELCHAIR_ID),
   });
   crowdField = crowd;
   keepAwayOffThePlot(guests, crowd.crowd);
@@ -1480,7 +1498,7 @@ function buildResort(
     lightVolume: lighting.volume,
   });
   const ballField = buildBallField({
-    models: parts.props,
+    models: parts.props.filter((model) => model.id !== WHEELCHAIR_ID),
     capacity: BALLS_PER_KIND,
     lightVolume: lighting.volume,
   });
@@ -1516,6 +1534,7 @@ function buildResort(
       isPresent: (person) => guests.present[person] === 1,
       isChild: (person) => guests.child[person] === 1,
       partyOf: (person) => guests.party[person]!,
+      inChair: (person) => usesWheelchair(guests, person),
       bathing: {
         restingUntil: (person) => router.restingUntil(person),
         // A getter: relocate replaces the crowd.
@@ -1959,9 +1978,11 @@ function voicesOf(resort: Resort): VoicesView {
 
 // The rating is the one set at check-in, not a fresh one: it is what sizes the arrivals.
 function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | null): StatusView {
+  const { reached, venues } = stepFreeOf(resort);
   return {
     day: clock.day,
     rating: resort.rating,
+    stepFree: { reached, venues },
     present: presentCount(resort.guests),
     beds: resort.beds,
     demand,
@@ -2120,6 +2141,28 @@ function hopsTo(resort: Resort, need: GuestNeed): Int32Array {
   return hops;
 }
 
+// Per graph, as the reach sweeps are: venues and gates change only with the graph an edit makes.
+const stepFreeSweeps = new WeakMap<WalkNetwork, StepFreeReach>();
+
+function stepFreeOf(resort: Resort): StepFreeReach {
+  const network = resort.crowd.crowd.network;
+  let reach = stepFreeSweeps.get(network);
+  if (!reach) {
+    const index = pavingIndexOf(network);
+    const gates = [
+      ...new Set(resort.gateways.flatMap((gateway) => doorsFor(gateway, index).nodes)),
+    ].toSorted((a, b) => a - b);
+    reach = stepFreeReachOn(
+      network,
+      resort.venues,
+      (venue) => doorsFor(venue, index, network).nodes,
+      gates,
+    );
+    stepFreeSweeps.set(network, reach);
+  }
+  return reach;
+}
+
 // Only litter is fielded on the sand; every other layer leaves the sand slots hidden.
 function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
   const { network } = resort.crowd.crowd;
@@ -2131,6 +2174,7 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
     nodes: nodes.length + sand.length,
     tileOf: (node) => nodes[node] ?? sand[node - nodes.length]!,
     hopsTo: (need) => hopsTo(resort, need),
+    stepFree: () => stepFreeOf(resort).nodes,
     scenery: resort.scenery,
     litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
   });
@@ -2368,6 +2412,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     balks: router.dayBalks(),
     visits: router.dayVisits(),
     unreachable: resort.unreachable,
+    notStepFree: stepFreeOf(resort).cutOff,
     open: resort.open,
     entrance: router.arrivalNode >= 0,
     reception: router.receptionReachable,
@@ -2760,6 +2805,7 @@ function createEditMode(parts: {
   readonly money: Purse;
   // Null is the ground.
   readonly onRefused: (id: string | null) => void;
+  readonly onFallback: (fellBack: boolean) => void;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -2803,6 +2849,9 @@ function createEditMode(parts: {
     bridge: pavingItem(BRIDGE_ID),
     bridgeRamp: pavingItem(BRIDGE_RAMP_ID),
     stairs: pavingItem(STAIRS_ID),
+    staircase: pavingItem(STAIRCASE_ID),
+    rampFoot: pavingItem(RAMP_FOOT_ID),
+    rampHead: pavingItem(RAMP_HEAD_ID),
     flagstones: pavingItem(PATH_ID),
   };
 
@@ -2813,6 +2862,7 @@ function createEditMode(parts: {
     levelOf: ground.levelOf,
     isWater: paving.isWater,
     isSpan: raisedProvider(paving),
+    wantsStairs: wantsStairsOf(paving),
     models: railModelsIn(catalogue),
     standing: (tileX, tileZ) => resort().railIndex.at(tileX, tileZ),
   };
@@ -2942,6 +2992,7 @@ function createEditMode(parts: {
     onPlace: stand,
     onRails: changeRails,
     onCancel,
+    onFallback: parts.onFallback,
   });
 
   const terrainRules: TerrainRules = {
@@ -3083,6 +3134,16 @@ function disposeCatalogue(catalogue: MeshedCatalogue): void {
     }
   }
 }
+
+export interface BuildNote {
+  readonly title: string;
+  readonly message: string;
+}
+
+const STAIRS_FALLBACK: BuildNote = {
+  title: 'Stairs here',
+  message: 'A ramp needs two straight tiles below the step.',
+};
 
 function refusalFor(id: string | null, balance: number): string {
   const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
@@ -3632,6 +3693,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const refused = (id: string | null): void =>
     options.onRefused?.(refusalFor(id, current().ledger.balance));
 
+  // Told once as the pointer comes onto such a tile, not on every move across it.
+  let fellBack = false;
+  const fallback = (now: boolean): void => {
+    if (now && !fellBack) options.onBuildNote?.(STAIRS_FALLBACK);
+    fellBack = now;
+  };
+
   const build = createEditMode({
     canvas,
     handle,
@@ -3661,6 +3729,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     money,
     onRefused: refused,
+    onFallback: fallback,
   });
 
   let armedTool: BuildTool | null = null;

@@ -61,6 +61,7 @@ export const routerSnapshotSchema = z.object({
   balkCount: int32,
   visitCount: int32,
   fieldsBuilt: z.array(index),
+  stepFreeFieldsBuilt: z.array(index).optional().default([]),
   now: z.number(),
   random: index,
 });

@@ -35,6 +35,8 @@ export interface FigureOptions {
   readonly shirt: Color;
   readonly sleeves: Color;
   readonly legs: Color;
+  // Over the hair, the top voxel of the head: a uniform no guest can be dressed in.
+  readonly cap?: Color;
   readonly height?: number;
 }
 
@@ -59,7 +61,7 @@ export function figure(b: VoxelBuilder, o: FigureOptions): void {
   }
 
   b.box(2, 3, shoulder, top - FINE, 0, 3, o.skin);
-  b.box(2, 3, top - FINE + 1, top, 0, 3, o.hair);
+  b.box(2, 3, top - FINE + 1, top, 0, 3, o.cap ?? o.hair);
 }
 
 export const WARDROBE: readonly Ramp[] = [

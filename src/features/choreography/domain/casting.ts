@@ -305,11 +305,11 @@ function hold(cast: Cast, person: number, index: number): void {
   cast.heldBy[index] = person;
   cast.placeOf[person] = index;
   cast.shown[person] = SHOWN.placed;
+  cast.heading[person] = place.heading;
+  cast.pose[person] = place.pose;
   cast.x[person] = place.x;
   cast.y[person] = place.y;
   cast.z[person] = place.z;
-  cast.heading[person] = place.heading;
-  cast.pose[person] = place.pose;
   cast.legNo[person] = -1;
 }
 
@@ -461,29 +461,43 @@ const rangeFor = (ranges: VenueRanges, work: number): Range => {
   return work === WORK.watch ? ranges.lifeguards : ranges.staff;
 };
 
-// Everybody at a venue's work, on its place for their role. A room being made up or a store
-// restocked is no venue's, so whoever does it stays where the sim hides them.
+// Sweeping a path is no venue's work, so it stands apart from every venue index.
+const SWEEPING = -3;
+
+function castAtVenue(cast: Cast, worker: number, venue: number, work: number, at?: StaffAt) {
+  const ranges = venue >= 0 ? cast.venues[venue] : undefined;
+  if (!ranges) return;
+  const place = freePlace(cast, rangeFor(ranges, work), 0, null);
+  const anywhere = at && (work === WORK.sweep || work === WORK.mend);
+  if (place >= 0) hold(cast, worker, place);
+  else if (anywhere) workWhereHeld(cast, worker, at);
+  else return;
+  startWork(cast, worker, work);
+}
+
+// Everybody at a venue's work, on its place for their role, and a cleaner sweeping a path where
+// the sim holds them on it. A room being made up or a store restocked is no venue's, so whoever
+// does it stays where the sim hides them.
 export function recastStaff(
   cast: Cast,
   atWork: (worker: number) => number,
   roleOf: (worker: number) => StaffRole,
   at?: StaffAt,
+  sweeping?: (worker: number) => boolean,
 ): void {
   for (let worker = 0; worker < cast.shown.length; worker++) {
-    const work = WORK_OF[roleOf(worker)];
-    const venue = atWork(worker);
+    const swept = sweeping?.(worker) === true;
+    const venue = swept ? SWEEPING : atWork(worker);
     if (venue !== cast.lastVenue[worker]) {
       release(cast, worker);
       cast.lastVenue[worker] = venue;
     }
-    const ranges = venue >= 0 ? cast.venues[venue] : undefined;
-    if (!ranges || cast.work[worker] !== WORK.none) continue;
-    const place = freePlace(cast, rangeFor(ranges, work), 0, null);
-    const anywhere = at && (work === WORK.sweep || work === WORK.mend);
-    if (place >= 0) hold(cast, worker, place);
-    else if (anywhere) workWhereHeld(cast, worker, at);
-    else continue;
-    startWork(cast, worker, work);
+    if (cast.work[worker] !== WORK.none) continue;
+    if (!swept) castAtVenue(cast, worker, venue, WORK_OF[roleOf(worker)], at);
+    else if (at) {
+      workWhereHeld(cast, worker, at);
+      startWork(cast, worker, WORK.sweep);
+    }
   }
 }
 

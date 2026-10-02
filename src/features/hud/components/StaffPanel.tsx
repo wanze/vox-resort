@@ -1,21 +1,29 @@
 import type { ShowcaseStats } from '../../../app/showcase';
 import { STAFF_CAPS, STAFF_ROLES, WAGES, wagesFor, type StaffRole } from '../../sim/domain/staff';
+import type { RoleTally, StaffTally } from '../domain/staffPins';
 import { roleWord } from './staffWords';
 
 export interface StaffPanelProps {
   readonly staff: ShowcaseStats['staff'] | null;
+  // Hourly, with the status: what those on duty were doing on the hour.
+  readonly tally: StaffTally | undefined;
   readonly onHire: (role: StaffRole, count: number | null) => void;
 }
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
 
+const tallyWords = ({ working, walking, idle }: RoleTally): string =>
+  `${working} working, ${walking} walking, ${idle} idle`;
+
 function StaffRow({
   role,
   staff,
+  tally,
   onHire,
 }: {
   readonly role: StaffRole;
   readonly staff: ShowcaseStats['staff'];
+  readonly tally: RoleTally | null;
   readonly onHire: StaffPanelProps['onHire'];
 }) {
   const count = staff.roster[role];
@@ -62,17 +70,24 @@ function StaffRow({
         {auto ? null : `wants ${formatNumber(staff.recommended[role])}`}
       </dd>
       <dd className="hud-staff-note">{formatNumber(WAGES[role])}/day</dd>
+      {tally && count > 0 ? <dd className="hud-staff-tally">{tallyWords(tally)}</dd> : null}
     </div>
   );
 }
 
-export function StaffPanel({ staff, onHire }: StaffPanelProps) {
+export function StaffPanel({ staff, tally, onHire }: StaffPanelProps) {
   if (!staff) return <p className="hud-loading">Meshing the catalogue…</p>;
 
   return (
     <dl className="hud-staff">
       {STAFF_ROLES.map((role) => (
-        <StaffRow key={role} role={role} staff={staff} onHire={onHire} />
+        <StaffRow
+          key={role}
+          role={role}
+          staff={staff}
+          tally={tally?.[role] ?? null}
+          onHire={onHire}
+        />
       ))}
       <div className="hud-staff-row hud-staff-total">
         <dt>Wages</dt>

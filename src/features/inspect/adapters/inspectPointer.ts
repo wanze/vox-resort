@@ -1,7 +1,7 @@
 import { Matrix4, type Camera } from 'three/webgpu';
 import { pickTile, type PickGround } from '../../build/domain/groundPick';
 import type { Tile } from '../../layout/domain/resortLayout';
-import { pickPerson, type PickablePeople } from '../domain/pickPerson';
+import { pickGuestOrWorker, type PickablePeople } from '../domain/pickPerson';
 import type { InspectTarget } from '../domain/selection';
 
 // Listens instead of capturing the left button, which belongs to the camera drag
@@ -16,6 +16,7 @@ export interface InspectPointerOptions {
   readonly camera: () => Camera;
   readonly armed: () => boolean;
   readonly people: () => PickablePeople;
+  readonly staff: () => PickablePeople;
   readonly aimHeight: number;
   readonly ground: PickGround;
   readonly keyAt: (tile: Tile) => string | undefined;
@@ -31,7 +32,7 @@ function inAField(target: EventTarget | null): boolean {
 }
 
 export function createInspectPointer(options: InspectPointerOptions): InspectPointer {
-  const { canvas, camera, armed, people, aimHeight, ground, keyAt, onSelect } = options;
+  const { canvas, camera, armed, people, staff, aimHeight, ground, keyAt, onSelect } = options;
 
   const viewProjection = new Matrix4();
   const inverseViewProjection = new Matrix4();
@@ -51,8 +52,9 @@ export function createInspectPointer(options: InspectPointerOptions): InspectPoi
     const pointer = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
     const size = viewport();
 
-    const person = pickPerson(pointer, size, viewProjection.elements, people(), aimHeight);
-    if (person !== -1) return { person };
+    const crowds = { guests: people(), staff: staff() };
+    const picked = pickGuestOrWorker(pointer, size, viewProjection.elements, crowds, aimHeight);
+    if (picked) return picked;
 
     inverseViewProjection.copy(viewProjection).invert();
     const tile = pickTile(pointer, size, inverseViewProjection.elements, undefined, ground);

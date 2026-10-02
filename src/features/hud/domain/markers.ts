@@ -11,6 +11,19 @@ export interface Marker {
   readonly advice: Advice;
 }
 
+// Where an order sends somebody, on the tile its marker would stand on.
+export interface OrderSpot {
+  readonly role: 'mechanic' | 'cleaner';
+  readonly tileX: number;
+  readonly tileZ: number;
+}
+
+export const tileKey = (at: { readonly tileX: number; readonly tileZ: number }): string =>
+  `${at.tileX},${at.tileZ}`;
+
+export const orderedTiles = (orders: readonly OrderSpot[]): ReadonlySet<string> =>
+  new Set(orders.map(tileKey));
+
 // The showcase preallocates its anchor buffers and the HUD its buttons to this count.
 export const MAX_MARKERS = 12;
 

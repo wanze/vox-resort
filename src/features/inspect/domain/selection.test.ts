@@ -26,6 +26,10 @@ import {
   personOf,
   placeView,
   placeWording,
+  sendOffers,
+  staffLine,
+  staffView,
+  workerOf,
   type Errand,
   type GuestSpot,
   type InspectTarget,
@@ -39,6 +43,12 @@ describe('what a selection names', () => {
     expect(personOf({ person: 41 })).toBe(41);
     expect(personOf({ key: 'bungalow#0' })).toBeNull();
     expect(personOf(nothing)).toBeNull();
+  });
+
+  it('reads the worker out of a member of staff, and nobody out of a guest', () => {
+    expect(workerOf({ worker: 3 })).toBe(3);
+    expect(workerOf({ person: 3 })).toBeNull();
+    expect(personOf({ worker: 3 })).toBeNull();
   });
 
   it('matches a placement by its key alone', () => {
@@ -637,5 +647,71 @@ describe('breakdowns and injuries', () => {
     expect(shown(3)).toEqual([...GUEST_NEEDS]);
     needs.level.health[3] = 0.35;
     expect(shown(3)).toEqual([...GUEST_NEEDS, 'health']);
+  });
+});
+
+describe('a member of staff', () => {
+  const roles = ['cleaner', 'cleaner', 'mechanic'] as const;
+
+  it('is named within their role, with their zone or everywhere', () => {
+    expect(staffView(roles, 1, 2, true)).toMatchObject({
+      kind: 'staff',
+      name: 'Cleaner 2',
+      roleTitle: 'Cleaner',
+      zone: 'Zone 3',
+      onDuty: true,
+    });
+    expect(staffView(roles, 2, -1, true).zone).toBe('Everywhere');
+  });
+
+  it("says what they are doing, with a cleaner's cart, and where", () => {
+    const facts = { working: true, venue: null, lodging: null } as const;
+    const spot = { x: 4.5 * TILE_VOXELS, z: 2.5 * TILE_VOXELS };
+    expect(staffLine({ ...facts, kind: 'sweep', role: 'cleaner' }, 3, 4, spot)).toBe(
+      'Sweeping a path · cart 3 of 4 · tile 4, 2',
+    );
+    expect(
+      staffLine({ ...facts, kind: 'venue', role: 'mechanic', venue: 'Game Hall' }, 4, 4, spot),
+    ).toBe('Mending the Game Hall · tile 4, 2');
+  });
+
+  it('keeps saying off duty once they have clocked off', () => {
+    expect(staffView(roles, 0, -1, false).onDuty).toBe(false);
+    const off = {
+      kind: 'off',
+      working: false,
+      role: 'cleaner',
+      venue: null,
+      lodging: null,
+    } as const;
+    expect(staffLine(off, 4, 4, { x: Number.NaN, z: Number.NaN })).toBe('Off duty');
+  });
+});
+
+describe('sendOffers', () => {
+  const none = { mechanic: 0, cleaner: 0 };
+  const neither = { mechanic: false, cleaner: false };
+
+  it('offers a role only where it has work, and says why it cannot be sent', () => {
+    expect(
+      sendOffers({
+        broken: true,
+        dirty: false,
+        onDuty: { mechanic: 1, cleaner: 0 },
+        sent: neither,
+      }),
+    ).toEqual({ mechanic: 'ready', cleaner: null });
+    expect(sendOffers({ broken: true, dirty: true, onDuty: none, sent: neither })).toEqual({
+      mechanic: 'nobody',
+      cleaner: 'nobody',
+    });
+    expect(
+      sendOffers({
+        broken: false,
+        dirty: true,
+        onDuty: { mechanic: 0, cleaner: 2 },
+        sent: { mechanic: false, cleaner: true },
+      }),
+    ).toEqual({ mechanic: null, cleaner: 'sent' });
   });
 });

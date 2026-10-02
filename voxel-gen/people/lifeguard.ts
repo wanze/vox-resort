@@ -13,9 +13,11 @@ export default defineModel({
       skin: PALETTE.skin.shade,
       hair: PALETTE.thatch.base,
       // Yellow over red, the colours a lifeguard wears on any beach, read before the tower does.
-      shirt: PALETTE.amber.light,
-      sleeves: PALETTE.amber.shade,
+      // Thatch rather than amber, which a child wears.
+      shirt: PALETTE.thatch.light,
+      sleeves: PALETTE.thatch.shade,
       legs: PALETTE.bloom.base,
+      cap: PALETTE.bloom.base,
       height: ADULT_VOXELS,
     });
   },

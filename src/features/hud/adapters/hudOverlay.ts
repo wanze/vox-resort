@@ -28,6 +28,13 @@ export interface FrameUpdate {
   readonly inspect: string | null;
   // The same object every frame: spots is [x px, y px, visible 0|1] per marker, up to count.
   readonly markers: { readonly count: number; readonly spots: Float32Array };
+  // As markers, one slot per member of staff; inside is 1 for a pin over a roof.
+  readonly staff: {
+    readonly count: number;
+    readonly spots: Float32Array;
+    readonly inside: Uint8Array;
+    readonly titles: readonly string[];
+  };
 }
 
 // A React ref by shape, so this module stays free of React.
@@ -48,7 +55,9 @@ export interface HudOverlayParts {
   readonly shaders: Slot<HTMLSpanElement>;
   readonly activeLights: Slot<HTMLSpanElement>;
   // One per marker, in the order the showcase was given their tiles.
-  readonly markers: Slot<readonly (HTMLButtonElement | null)[]>;
+  readonly markers: Slot<readonly (HTMLElement | null)[]>;
+  // One per member of staff, in staff order.
+  readonly staffPins: Slot<readonly (HTMLButtonElement | null)[]>;
 }
 
 export interface HudOverlay {
@@ -109,7 +118,7 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
   // In whole device pixels: CSS pixels step 2 at a time on a Retina screen, which reads as a
   // shake while the camera's damping glides, and anything finer blurs the pixel icons.
   const placed = new WeakMap<HTMLElement, number>();
-  const placeMarker = (button: HTMLButtonElement, x: number, y: number, scale: number): void => {
+  const placeMarker = (button: HTMLElement, x: number, y: number, scale: number): void => {
     const packed = x * 65536 + y;
     if (placed.get(button) === packed) return;
     placed.set(button, packed);
@@ -117,7 +126,7 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
   };
 
   const showMarker = (
-    button: HTMLButtonElement,
+    button: HTMLElement,
     index: number,
     { count, spots }: FrameUpdate['markers'],
     scale: number,
@@ -139,9 +148,39 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     }
   };
 
+  const titled = new WeakMap<HTMLElement, string>();
+  const describePin = (button: HTMLButtonElement, inside: boolean, title: string): void => {
+    if (button.hasAttribute('data-inside') !== inside)
+      button.toggleAttribute('data-inside', inside);
+    if (title === '' || titled.get(button) === title) return;
+    titled.set(button, title);
+    button.title = title;
+    button.setAttribute('aria-label', title);
+  };
+
+  const writePin = (
+    button: HTMLButtonElement,
+    index: number,
+    pins: FrameUpdate['staff'],
+    scale: number,
+  ): void => {
+    showMarker(button, index, pins, scale);
+    if (!button.hidden) describePin(button, pins.inside[index] === 1, pins.titles[index] ?? '');
+  };
+
+  const writeStaffPins = (pins: FrameUpdate['staff']): void => {
+    const buttons = parts.staffPins.current ?? [];
+    const scale = pixelScale();
+    for (let index = 0; index < buttons.length; index++) {
+      const button = buttons[index];
+      if (button) writePin(button, index, pins, scale);
+    }
+  };
+
   return {
     update(frame) {
       writeMarkers(frame.markers);
+      writeStaffPins(frame.staff);
       if (frame.sampled) writeDebug(frame);
       writeTime(frame.time);
       writeText(parts.clock, frame.clock);

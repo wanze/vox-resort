@@ -4,7 +4,10 @@ import type {
   PartyMemberView,
   PlaceView,
   SelectionView,
+  SendState,
+  StaffView,
 } from '../../inspect/domain/selection';
+import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { Advice } from '../../sim/domain/advice';
 import { adviceAt, markerIconOf } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
@@ -21,6 +24,9 @@ export interface InspectPanelProps {
   // Written per frame by the overlay, so the panel never re-renders as the resort ticks.
   readonly activityElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
+  // Looks at the inspected worker where they are now: staff walk off while the panel is open.
+  readonly onShow: () => void;
+  readonly onSend: (role: OrderRole) => void;
 }
 
 const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
@@ -265,14 +271,67 @@ function Problems({ problems }: { readonly problems: readonly Advice[] }) {
   );
 }
 
+const SEND_LABELS: { readonly [role in OrderRole]: string } = {
+  mechanic: 'Send a mechanic',
+  cleaner: 'Send a cleaner',
+};
+
+const WHY_NOT: { readonly [state in Exclude<SendState, 'ready'>]: (role: OrderRole) => string } = {
+  nobody: (role) => `No ${role} is on duty`,
+  sent: (role) => `A ${role} is on the way`,
+};
+
+function SendButton({
+  role,
+  state,
+  onSend,
+}: {
+  readonly role: OrderRole;
+  readonly state: SendState | null;
+  readonly onSend: (role: OrderRole) => void;
+}) {
+  if (state === null) return null;
+  const why = state === 'ready' ? undefined : WHY_NOT[state](role);
+  return (
+    <button
+      type="button"
+      className="hud-camera-mode"
+      disabled={why !== undefined}
+      title={why}
+      onClick={() => onSend(role)}
+    >
+      {why ?? SEND_LABELS[role]}
+    </button>
+  );
+}
+
+function SendButtons({
+  place,
+  onSend,
+}: {
+  readonly place: PlaceView;
+  readonly onSend: (role: OrderRole) => void;
+}) {
+  const send = place.send;
+  if (!send || (send.mechanic === null && send.cleaner === null)) return null;
+  return (
+    <div className="hud-inspect-members" role="group" aria-label="Send staff">
+      <SendButton role="mechanic" state={send.mechanic} onSend={onSend} />
+      <SendButton role="cleaner" state={send.cleaner} onSend={onSend} />
+    </div>
+  );
+}
+
 function PlaceDetails({
   place,
   advice,
   onSelectPerson,
+  onSend,
 }: {
   readonly place: PlaceView;
   readonly advice: readonly Advice[];
   readonly onSelectPerson: (person: number) => void;
+  readonly onSend: (role: OrderRole) => void;
 }) {
   if (!place.venue) {
     return (
@@ -287,42 +346,93 @@ function PlaceDetails({
   return (
     <>
       <Problems problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })} />
+      <SendButtons place={place} onSend={onSend} />
       <VenueRows venue={place.venue} setting={place.setting} />
       <Residents place={place} onSelectPerson={onSelectPerson} />
     </>
   );
 }
 
+function StaffDetails({
+  worker,
+  activityElement,
+  onShow,
+}: {
+  readonly worker: StaffView;
+  readonly activityElement: RefObject<HTMLSpanElement | null>;
+  readonly onShow: () => void;
+}) {
+  return (
+    <>
+      <p className="hud-inspect-activity">
+        <span ref={activityElement}>—</span>
+      </p>
+      <dl className="hud-stats">
+        <StatRow label="Role">{worker.roleTitle}</StatRow>
+        <StatRow label="Works">{worker.zone}</StatRow>
+        <StatRow label="Shift">{worker.onDuty ? 'On duty' : 'Off duty'}</StatRow>
+        <StatRow label="Wage">
+          <Num>{worker.wage.toLocaleString('en-US')}</Num>/day
+        </StatRow>
+      </dl>
+      {worker.onDuty ? (
+        <div className="hud-inspect-members">
+          <button type="button" className="hud-camera-mode" onClick={onShow}>
+            Show
+          </button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function titleOf(selection: SelectionView): string {
   if (selection.kind === 'place') return selection.label;
+  if (selection.kind === 'staff') return selection.name;
   return selection.child ? `${selection.name} (child)` : selection.name;
 }
 
-export function InspectPanel({
-  frame,
+function Details({
   selection,
   advice,
   activityElement,
   onSelectPerson,
-}: InspectPanelProps) {
+  onShow,
+  onSend,
+}: Omit<InspectPanelProps, 'frame' | 'selection'> & { readonly selection: SelectionView }) {
+  if (selection.kind === 'guest') {
+    return (
+      <GuestDetails
+        guest={selection}
+        activityElement={activityElement}
+        onSelectPerson={onSelectPerson}
+      />
+    );
+  }
+  if (selection.kind === 'staff') {
+    return <StaffDetails worker={selection} activityElement={activityElement} onShow={onShow} />;
+  }
+  return (
+    <PlaceDetails
+      place={selection}
+      advice={advice}
+      onSelectPerson={onSelectPerson}
+      onSend={onSend}
+    />
+  );
+}
+
+export function InspectPanel({ frame, selection, ...details }: InspectPanelProps) {
   if (!selection) return null;
 
   return (
     <HudWindow
       frame={frame}
       title={titleOf(selection)}
-      icon={selection.kind === 'guest' ? 'guests' : 'resort'}
+      icon={selection.kind === 'place' ? 'resort' : 'guests'}
     >
       <div className="hud-inspect">
-        {selection.kind === 'guest' ? (
-          <GuestDetails
-            guest={selection}
-            activityElement={activityElement}
-            onSelectPerson={onSelectPerson}
-          />
-        ) : (
-          <PlaceDetails place={selection} advice={advice} onSelectPerson={onSelectPerson} />
-        )}
+        <Details selection={selection} {...details} />
       </div>
     </HudWindow>
   );

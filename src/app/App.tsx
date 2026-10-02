@@ -118,7 +118,8 @@ function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
 
 // Together because the advice and the day's report are what the news is heard from, and a new
 // resort is a baseline for both.
-function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed) {
+// sceneUp, so the staff pins a preference read at startup asks for are not told to nobody.
+function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sceneUp: boolean) {
   const news = useNews(speed);
   const history = useHistory(news.closeDay);
   const { reset: resetNews } = news;
@@ -133,6 +134,10 @@ function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed) {
   useEffect(() => {
     showcase.current?.setMarkers(shown ? markersOf(advice.advice).map((marker) => marker.at) : []);
   }, [showcase, advice.advice, shown]);
+  const staffPins = news.prefs.staff;
+  useEffect(() => {
+    if (sceneUp) showcase.current?.setStaffPins(staffPins);
+  }, [showcase, sceneUp, staffPins]);
   return { news, history, replaced, advice };
 }
 
@@ -155,7 +160,11 @@ export function App() {
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
-  const { news, history, replaced, advice } = useAdviceNews(showcaseRef, clock.speed);
+  const { news, history, replaced, advice } = useAdviceNews(
+    showcaseRef,
+    clock.speed,
+    stats !== null,
+  );
   const { thoughts, status } = useHourly();
   const { playing, saves, welcome } = useGame(showcaseRef, clock);
   const { resort, adoptLoading } = welcome;
@@ -166,12 +175,13 @@ export function App() {
     inspector.selection,
     playing,
     saves,
+    () => news.setStaffPins(!news.prefs.staff),
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
   const { adopt: adoptParams, adoptOpen, money } = resort;
   const { adopt: adoptCamera } = camera;
-  const { adopt: adoptSelection } = inspector;
+  const { adopt: adoptSelection, adoptOrders } = inspector;
   const { adopt: adoptAdvice, show: showAdvice } = advice;
   const { adopt: adoptHistory } = history;
   const { adopt: adoptVoices } = thoughts;
@@ -195,6 +205,7 @@ export function App() {
       onToolChange: selectTool,
       onCameraChange: adoptCamera,
       onSelectionChange: adoptSelection,
+      onOrdersChange: adoptOrders,
       onAdviceChange: adoptAdvice,
       onResortReplaced: replaced,
       onThoughtsChange: adoptVoices,
@@ -256,6 +267,7 @@ export function App() {
     adoptOpen,
     adoptCamera,
     adoptSelection,
+    adoptOrders,
     adoptAdvice,
     showAdvice,
     replaced,
@@ -306,6 +318,8 @@ export function App() {
           history={history}
           onShowOnPlot={advice.showOnPlot}
           markerElements={hudNodes.markers}
+          staffPinElements={hudNodes.staffPins}
+          onSelectWorker={inspector.selectWorker}
           onSelectAt={inspector.selectAt}
           preview={previewUrl}
           tool={tool}
@@ -313,6 +327,10 @@ export function App() {
           selection={inspector.selection}
           inspectElement={hudNodes.inspect}
           onSelectPerson={inspector.selectPerson}
+          onShowSelected={inspector.showSelected}
+          orders={inspector.orders}
+          onSend={inspector.send}
+          onSendCleanerTo={inspector.sendCleanerTo}
           onClearSelection={inspector.clear}
           error={error}
           refusal={money.refusal}

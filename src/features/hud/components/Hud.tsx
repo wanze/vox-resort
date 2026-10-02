@@ -13,6 +13,7 @@ import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { ProblemMarkers } from './ProblemMarkers';
+import { StaffPins } from './StaffPins';
 import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortStats } from './ResortStats';
 import { StaffPanel } from './StaffPanel';
@@ -29,6 +30,8 @@ import type { Advice } from '../../sim/domain/advice';
 import { starsTrend } from '../../sim/domain/dayReport';
 import type { GameMode, Ledger } from '../../sim/domain/ledger';
 import type { StaffRole } from '../../sim/domain/staff';
+import type { OrderRole } from '../../sim/domain/staffRouter';
+import type { OrderSpot } from '../domain/markers';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { HistoryControls } from '../../../app/useHistory';
@@ -55,7 +58,9 @@ export interface HudProps {
   readonly status: StatusView | null;
   readonly history: HistoryControls;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
-  readonly markerElements: RefObject<(HTMLButtonElement | null)[]>;
+  readonly markerElements: RefObject<(HTMLElement | null)[]>;
+  readonly staffPinElements: RefObject<(HTMLButtonElement | null)[]>;
+  readonly onSelectWorker: (worker: number) => void;
   readonly onSelectAt: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
   readonly preview: PreviewLookup;
@@ -64,6 +69,10 @@ export interface HudProps {
   readonly selection: SelectionView | null;
   readonly inspectElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
+  readonly onShowSelected: () => void;
+  readonly orders: readonly OrderSpot[];
+  readonly onSend: (role: OrderRole) => void;
+  readonly onSendCleanerTo: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly onClearSelection: () => void;
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
@@ -151,8 +160,8 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
   guests: (props) => <GuestsPanel voices={props.voices} />,
-  staff: ({ stats, resort }) => (
-    <StaffPanel staff={stats?.staff ?? null} onHire={resort.setHiring} />
+  staff: ({ stats, status, resort }) => (
+    <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />
   ),
   books: (props) => <LedgerPanel ledger={props.ledger} />,
   camera: ({ camera }) => (
@@ -218,6 +227,8 @@ function Windows(props: HudProps) {
         advice={props.advice}
         activityElement={props.inspectElement}
         onSelectPerson={props.onSelectPerson}
+        onShow={props.onShowSelected}
+        onSend={props.onSend}
       />
     </>
   );
@@ -234,12 +245,15 @@ function Palette(props: HudProps) {
 export function Hud(props: HudProps) {
   return (
     <div className="hud">
+      <StaffPins elements={props.staffPinElements} onSelectWorker={props.onSelectWorker} />
       <ProblemMarkers
         advice={props.advice}
         shown={props.news.prefs.markers}
         elements={props.markerElements}
         onShowOnPlot={props.onShowOnPlot}
         onSelectAt={props.onSelectAt}
+        orders={props.orders}
+        onSendCleaner={props.onSendCleanerTo}
       />
       <TopBar
         timeElement={props.timeElement}
@@ -258,6 +272,8 @@ export function Hud(props: HudProps) {
         onFind={() => props.onPaletteChange(true)}
         markers={props.news.prefs.markers}
         onMarkersChange={props.news.setMarkers}
+        staffPins={props.news.prefs.staff}
+        onStaffPinsChange={props.news.setStaffPins}
       />
       <Windows {...props} />
       <Toasts

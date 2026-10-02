@@ -15,14 +15,29 @@ import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
 import type { Happiness } from '../../sim/domain/happiness';
+import { WAGES, type StaffRole } from '../../sim/domain/staff';
 import { strongestNeed, type Needs } from '../../sim/domain/needs';
 import type { ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
+import { NO_ZONE } from '../../sim/domain/zones';
+import { roleTitle, staffName, taskWords, type TaskFacts } from './staffWords';
 
-export type InspectTarget = { readonly person: number } | { readonly key: string } | null;
+export type InspectTarget =
+  | { readonly person: number }
+  | { readonly worker: number }
+  | { readonly key: string }
+  | null;
 
 export function personOf(target: InspectTarget): number | null {
   return target !== null && 'person' in target ? target.person : null;
+}
+
+export function placementKeyOf(target: InspectTarget): string | null {
+  return target !== null && 'key' in target ? target.key : null;
+}
+
+export function workerOf(target: InspectTarget): number | null {
+  return target !== null && 'worker' in target ? target.worker : null;
 }
 
 export function namesPlacement(target: InspectTarget, key: string): boolean {
@@ -77,9 +92,68 @@ export interface PlaceView {
     readonly broken: boolean;
   } | null;
   readonly residents: readonly PartyMemberView[];
+  // Who the player may send there; set by the showcase, which knows the roster and the orders.
+  readonly send?: SendOffers;
 }
 
-export type SelectionView = GuestView | PlaceView;
+// Null where the role has nothing to do there.
+export type SendState = 'ready' | 'nobody' | 'sent';
+
+export interface SendOffers {
+  readonly mechanic: SendState | null;
+  readonly cleaner: SendState | null;
+}
+
+export interface SendFacts {
+  readonly broken: boolean;
+  readonly dirty: boolean;
+  readonly onDuty: { readonly mechanic: number; readonly cleaner: number };
+  readonly sent: { readonly mechanic: boolean; readonly cleaner: boolean };
+}
+
+function sendState(wanted: boolean, onDuty: number, sent: boolean): SendState | null {
+  if (!wanted) return null;
+  if (sent) return 'sent';
+  return onDuty > 0 ? 'ready' : 'nobody';
+}
+
+export const sendOffers = (facts: SendFacts): SendOffers => ({
+  mechanic: sendState(facts.broken, facts.onDuty.mechanic, facts.sent.mechanic),
+  cleaner: sendState(facts.dirty, facts.onDuty.cleaner, facts.sent.cleaner),
+});
+
+// What the task is, worded, goes to the activity line per frame; this is what holds still.
+export interface StaffView {
+  readonly kind: 'staff';
+  readonly worker: number;
+  readonly role: StaffRole;
+  readonly roleTitle: string;
+  readonly name: string;
+  readonly zone: string;
+  readonly onDuty: boolean;
+  readonly wage: number;
+}
+
+export type SelectionView = GuestView | PlaceView | StaffView;
+
+export function staffView(
+  roles: readonly StaffRole[],
+  worker: number,
+  zone: number,
+  onDuty: boolean,
+): StaffView {
+  const role = roles[worker]!;
+  return {
+    kind: 'staff',
+    worker,
+    role,
+    roleTitle: roleTitle(role),
+    name: staffName(roles, worker),
+    zone: zone === NO_ZONE ? 'Everywhere' : `Zone ${zone + 1}`,
+    onDuty,
+    wage: WAGES[role],
+  };
+}
 
 const NEED_LABELS: { readonly [need in GuestNeed]: string } = {
   hunger: 'Hunger',
@@ -327,4 +401,20 @@ export function activityLine(
   const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
   return `${mood}${doing} · tile ${tileX}, ${tileZ}`;
+}
+
+// Per frame for the inspected worker, as activityLine is for a guest. The cart is a cleaner's
+// alone, and nobody off duty has a tile worth naming.
+export function staffLine(
+  facts: TaskFacts,
+  load: number,
+  spellsPerLoad: number,
+  at: { readonly x: number; readonly z: number },
+): string {
+  const words = taskWords(facts);
+  if (facts.kind === 'off') return words;
+  const cart = facts.role === 'cleaner' ? ` · cart ${load} of ${spellsPerLoad}` : '';
+  const tileX = Math.floor(at.x / TILE_VOXELS);
+  const tileZ = Math.floor(at.z / TILE_VOXELS);
+  return `${words}${cart} · tile ${tileX}, ${tileZ}`;
 }

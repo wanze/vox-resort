@@ -31,6 +31,7 @@ export function useHudChrome(
   selection: SelectionView | null,
   playing: boolean,
   saves: SaveControls,
+  onToggleStaffPins: () => void,
 ): HudChrome {
   const windows = useWindows();
   const [menu, setMenu] = useState<MenuId | null>(null);
@@ -54,6 +55,7 @@ export function useHudChrome(
     { key: '/', run: always(() => setPalette(true)) },
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },
+    { key: 's', run: always(onToggleStaffPins) },
     { key: 'f3', run: always(() => windows.toggle('debug')) },
     // Passed on unless the armed family has styles to cycle through.
     {

@@ -149,6 +149,45 @@ describe('the staff at work', () => {
     expect([cast.x[1], cast.y[1], cast.z[1]]).toEqual([HELD.x[1], HELD.y[1]! - 1.5, HELD.z[1]]);
   });
 
+  it('draws a cleaner sweeping a path sweeping, where the sim holds them', () => {
+    const cast = createCast(2, places);
+    const sweeping = [true, false];
+    const recastNow = (): void =>
+      recastStaff(
+        cast,
+        () => -1,
+        () => 'cleaner',
+        HELD,
+        (worker) => sweeping[worker]!,
+      );
+    recastNow();
+    expect([...cast.work]).toEqual([WORK.sweep, WORK.none]);
+    performWork(cast, null, 2);
+    expect(Math.hypot(cast.x[0]! - HELD.x[0]!, cast.z[0]! - HELD.z[0]!)).toBeLessThanOrEqual(
+      0.6 + 1e-5,
+    );
+    expect(cast.y[0]).toBe(HELD.y[0]);
+    expect(Math.floor(cast.pose[0]!)).toBe(DRAWN_POSE.strike);
+    sweeping[0] = false;
+    recastNow();
+    expect(cast.work[0], 'still sweeping after the tile was done').toBe(WORK.none);
+    expect(cast.shown[0]).toBe(SHOWN.asCrowd);
+  });
+
+  it('leaves a cleaner on the way to a littered tile walking as the crowd has them', () => {
+    const cast = createCast(1, places);
+    recastStaff(
+      cast,
+      () => -1,
+      () => 'cleaner',
+      HELD,
+      () => false,
+    );
+    performWork(cast, null, 2);
+    expect(cast.shown[0]).toBe(SHOWN.asCrowd);
+    expect(cast.work[0]).toBe(WORK.none);
+  });
+
   it('casts nobody who is not at work, whatever their role', () => {
     const roles: StaffRole[] = ['animator', 'lifeguard', 'cleaner', 'mechanic'];
     const cast = staffAt(roles, [PLAYGROUND, POOL, POOL, PLAYGROUND]);

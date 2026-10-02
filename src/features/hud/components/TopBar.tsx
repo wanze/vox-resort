@@ -36,6 +36,8 @@ export interface TopBarProps {
   readonly onFind: () => void;
   readonly markers: boolean;
   readonly onMarkersChange: (shown: boolean) => void;
+  readonly staffPins: boolean;
+  readonly onStaffPinsChange: (shown: boolean) => void;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -137,6 +139,8 @@ export function TopBar(props: TopBarProps) {
           onOpenChange={opener('overlay')}
           markers={props.markers}
           onMarkersChange={props.onMarkersChange}
+          staff={props.staffPins}
+          onStaffChange={props.onStaffPinsChange}
         />
       </div>
 

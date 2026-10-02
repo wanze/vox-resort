@@ -12,10 +12,11 @@ export default defineModel({
     figure(b, {
       skin: PALETTE.skin.base,
       hair: PALETTE.metal.deep,
-      // Cool greys against the warm colours guests wear, so the figure reads as staff.
-      shirt: PALETTE.glass.base,
-      sleeves: PALETTE.glass.shade,
+      // White under a teal cap: glass, which it wore before, is a guest's shirt too.
+      shirt: PALETTE.stone.light,
+      sleeves: PALETTE.stone.base,
       legs: PALETTE.metal.shade,
+      cap: PALETTE.water.shade,
       height: ADULT_VOXELS,
     });
   },

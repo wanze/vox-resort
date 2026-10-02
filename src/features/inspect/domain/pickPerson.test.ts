@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Matrix4, PerspectiveCamera, Vector3 } from 'three/webgpu';
 import { groundPointAt } from '../../build/domain/groundPick';
-import { PICK_PIXELS, pickPerson, type PickablePeople } from './pickPerson';
+import { pickGuestOrWorker, PICK_PIXELS, pickPerson, type PickablePeople } from './pickPerson';
 
 const VIEWPORT = { width: 800, height: 400 };
 const AIM = 6;
@@ -94,5 +94,30 @@ describe('pickPerson', () => {
     expect(() => pickPerson({ x: 0, y: 0 }, VIEWPORT, [1, 0, 0, 1], peopleAt(), AIM)).toThrow(
       /16 elements/,
     );
+  });
+});
+
+describe('pickGuestOrWorker', () => {
+  const eye = camera();
+  const matrix = viewProjectionOf(eye).elements;
+
+  it('takes whichever of a guest and a worker is nearer the pointer', () => {
+    const guests = peopleAt([10, 0, 0]);
+    const staff = peopleAt([-30, 0, 10], [14, 0, 0]);
+    const nearGuest = screenOf(eye, 10.5, AIM, 0);
+    const nearWorker = screenOf(eye, 13.5, AIM, 0);
+    const crowds = { guests, staff };
+    expect(pickGuestOrWorker(nearGuest, VIEWPORT, matrix, crowds, AIM)).toEqual({ person: 0 });
+    expect(pickGuestOrWorker(nearWorker, VIEWPORT, matrix, crowds, AIM)).toEqual({ worker: 1 });
+    expect(pickGuestOrWorker({ x: 5, y: 5 }, VIEWPORT, matrix, crowds, AIM)).toBeNull();
+  });
+
+  it('picks a worker with no guest near, and never a hidden one', () => {
+    const guests = peopleAt();
+    const staff = peopleAt([14, 0, 0], [Number.NaN, Number.NaN, Number.NaN]);
+    const pointer = screenOf(eye, 14, AIM, 0);
+    expect(pickGuestOrWorker(pointer, VIEWPORT, matrix, { guests, staff }, AIM)).toEqual({
+      worker: 0,
+    });
   });
 });

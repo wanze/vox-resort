@@ -2,6 +2,15 @@ import { z } from 'zod';
 import { int32, uint8 } from './resortSnapshot';
 import { sandRoutesSchema } from './routerSnapshot';
 
+// -1 for the index the order does not name: a venue order has no tile, and the other way round.
+const orderSchema = z.object({
+  role: z.enum(['mechanic', 'cleaner']),
+  venue: z.number().int(),
+  tile: z.number().int(),
+  worker: z.number().int(),
+  taken: z.boolean(),
+});
+
 export const staffRouterSnapshotSchema = z.object({
   assigned: int32,
   until: int32,
@@ -19,6 +28,8 @@ export const staffRouterSnapshotSchema = z.object({
   goingHome: uint8,
   now: z.number(),
   random: z.number().int(),
+  // Optional, so a save from before orders loads with none open.
+  orders: z.array(orderSchema).optional(),
 });
 
 export type StaffRouterSnapshot = z.infer<typeof staffRouterSnapshotSchema>;
@@ -53,6 +64,7 @@ export function staffVenuesMatch(
   return (
     snapshot.assigned.every(within) &&
     snapshot.lastStage.every(within) &&
-    snapshot.roomOf.every((lodging) => lodging < lodgings)
+    snapshot.roomOf.every((lodging) => lodging < lodgings) &&
+    (snapshot.orders ?? []).every((order) => within(order.venue))
   );
 }

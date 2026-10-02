@@ -462,6 +462,47 @@ export const ICONS = {
     '............',
     '............',
   ],
+  // The staff pins: each role's cap and shirt, as the figures wear them.
+  cleaner: [
+    '..qqqq..',
+    '.qqqqqq.',
+    '..pppp..',
+    '..pppp..',
+    '.wwwwww.',
+    'pwwwwwwp',
+    '.wwwwww.',
+    '.DD..DD.',
+  ],
+  guard: [
+    '..rrrr..',
+    '.rrrrrr.',
+    '..pppp..',
+    '..pppp..',
+    '.yyyyyy.',
+    'pyyyyyyp',
+    '.yyyyyy.',
+    '.rr..rr.',
+  ],
+  animator: [
+    '..YYYY..',
+    '.YYYYYY.',
+    '..pppp..',
+    '..pppp..',
+    '.rrrrrr.',
+    'prrrrrrp',
+    '.rrrrrr.',
+    '.bb..bb.',
+  ],
+  mechanic: [
+    '..DDDD..',
+    '.DDDDDD.',
+    '..pppp..',
+    '..pppp..',
+    '.tttttt.',
+    'pttttttp',
+    '.tttttt.',
+    '.tt..tt.',
+  ],
 } as const satisfies { readonly [name: string]: readonly string[] };
 
 export type IconName = keyof typeof ICONS;

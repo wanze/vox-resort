@@ -19,12 +19,13 @@ import {
 } from '../../crowd/domain/walkNetwork';
 import type { LevelProvider } from '../../layout/domain/elevation';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
+import { createBreakdowns, isBroken, repair, type Breakdowns } from './breakdowns';
 import type { Depot } from './depots';
 import type { Lodging } from './lodgings';
 import {
   BEDS_PER_SPELL,
   createStaffRouter,
+  createStaffTask,
   meanCleanliness,
   REPAIR_TICKS,
   SPELLS_PER_LOAD,
@@ -776,6 +777,39 @@ describe('a mechanic on the beach', () => {
     for (let step = 0; step < 4000; step++) stepCrowd(crowd, MAX_STEP);
     expect(crowd.z[0]!, 'left standing on the sand').toBeLessThan(12 * TILE_VOXELS);
   });
+  it('walks a cleaner sent there over the sand too, and scrubs it', () => {
+    const { reliability: _reliable, ...shower } = { ...pedalos, key: 'beach-shower#0' };
+    const upkeep = createUpkeep(1);
+    upkeep.level[0] = 0.4;
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff: cleaners(1),
+      venues: [shower],
+      network: beach,
+      upkeep: () => upkeep,
+      crowd: () => crowd!,
+      seed: 11,
+    });
+    crowd = createCrowd({
+      network: beach,
+      count: 1,
+      variants: 1,
+      seed: 3,
+      routeOf: (worker, at) => router.step(worker, at),
+      roamsBeach: false,
+    });
+    expect(router.order('cleaner', { venue: 0 })).toBe(true);
+    let tick = 0;
+    let wentOnSand = false;
+    for (let step = 0; step < 8000 && router.ordersOf().length > 0; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (crowd.z[0]! > 12 * TILE_VOXELS) wentOnSand = true;
+      if (step % 4 === 0) router.tick(++tick);
+    }
+    expect(router.ordersOf(), 'nobody came').toEqual([]);
+    expect(wentOnSand, 'scrubbed it from the paving').toBe(true);
+    expect(cleanliness(upkeep, 0)).toBeGreaterThan(0.4);
+  });
 });
 
 describe('zones', () => {
@@ -1211,5 +1245,198 @@ describe('clocking off', () => {
     router.clockOff(0);
     expect(router.step(0, nodeAt(network, 4))).toBe(-1);
     expect(clockedOff).toEqual([0]);
+  });
+});
+
+describe('taskOf', () => {
+  it('says a worker on duty with nothing to do is idle', () => {
+    const network = networkOf(street(8));
+    const { router } = staffOn(network, [shop('bakery#0', 1)], [1]);
+    expect(router.step(0, nodeAt(network, 4))).toBe(-1);
+    const task = router.taskOf(0);
+    expect(task.kind).toBe('idle');
+    expect(task.working).toBe(false);
+    expect(task.load).toBe(SPELLS_PER_LOAD);
+  });
+
+  it('names the venue on the way there, and says so once at it', () => {
+    const network = networkOf(street(8));
+    const { router } = staffOn(network, [shop('bakery#0', 1), shop('bar#0', 7)], [0.6, 0.2]);
+    router.step(0, nodeAt(network, 4));
+    const task = createStaffTask();
+    expect(router.taskOf(0, task)).toBe(task);
+    expect(task).toMatchObject({ kind: 'venue', venue: 1, working: false });
+    router.step(0, nodeAt(network, 7));
+    expect(router.taskOf(0, task)).toMatchObject({ kind: 'venue', venue: 1, working: true });
+  });
+
+  it('names the littered tile a cleaner is sweeping', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, 0.75]]);
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff: cleaners(1),
+      venues: [],
+      network,
+      upkeep: () => createUpkeep(0),
+      crowd: () => crowd!,
+      litter: () => litter,
+      seed: 11,
+    });
+    crowd = createCrowd({ network, count: 1, variants: 1, seed: 3 });
+    router.step(0, nodeAt(network, 2));
+    expect(router.taskOf(0)).toMatchObject({ kind: 'sweep', tile: 6, working: false });
+    router.step(0, nodeAt(network, 6));
+    expect(router.taskOf(0)).toMatchObject({ kind: 'sweep', tile: 6, working: true });
+  });
+
+  it('says off duty for a worker not on the roster, and going home for one let go', () => {
+    const network = networkOf(street(12));
+    const duty = Uint8Array.from([1]);
+    const { router } = suppliedOn(network, {
+      depots: [staffHouse('staff-house#0', 10)],
+      duty,
+      clockedOff: [],
+    });
+    duty[0] = 0;
+    router.clockOff(0);
+    expect(router.taskOf(0).kind).toBe('home');
+    router.step(0, nodeAt(network, 10));
+    expect(router.taskOf(0).kind).toBe('off');
+  });
+});
+
+describe('orders', () => {
+  const orderedCrew = (
+    roles: readonly StaffRole[],
+    parts: {
+      readonly dirt?: readonly number[];
+      readonly broken?: readonly (number | null)[];
+      readonly zones?: StaffZones;
+    } = {},
+  ) => {
+    const network = networkOf(street(8));
+    const venues = [shop('bakery#0', 1), shop('bar#0', 7)];
+    const upkeep = createUpkeep(venues.length);
+    for (const [venue, level] of (parts.dirt ?? []).entries()) upkeep.level[venue] = level;
+    const breakdowns = brokenAt(venues.length, parts.broken ?? []);
+    const staff = crew(roles);
+    const build = () => {
+      let crowd: Crowd | null = null;
+      const router = createStaffRouter({
+        staff,
+        venues,
+        network,
+        upkeep: () => upkeep,
+        breakdowns: () => breakdowns,
+        crowd: () => crowd!,
+        ...(parts.zones ? { zones: () => parts.zones! } : {}),
+        seed: 11,
+      });
+      crowd = createCrowd({
+        network,
+        count: staff.count,
+        variants: STAFF_ROLES.length,
+        variantOf: (worker) => staff.variant[worker] ?? 0,
+        seed: 3,
+        routeOf: (worker, at) => router.step(worker, at),
+      });
+      return router;
+    };
+    return { router: build(), build, network, upkeep, breakdowns };
+  };
+
+  it('sends a cleaner to the ordered venue before a dirtier one', () => {
+    const { router, network } = orderedCrew(['cleaner'], { dirt: [0.6, 0.2] });
+    expect(router.order('cleaner', { venue: 0 })).toBe(true);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.ordersOf()).toMatchObject([
+      { role: 'cleaner', venue: 0, worker: 0, taken: true },
+    ]);
+    expect(router.taskOf(0)).toMatchObject({ kind: 'venue', venue: 0, ordered: true });
+  });
+
+  it('crosses into another zone only when nobody in the zone is free', () => {
+    const inZone = orderedCrew(['cleaner', 'cleaner'], {
+      dirt: [0.6, 1],
+      zones: zonedAs([0, 1], [0b01, 0b10]),
+    });
+    inZone.router.order('cleaner', { venue: 0 });
+    expect(inZone.router.step(1, nodeAt(inZone.network, 4))).not.toBe(nodeAt(inZone.network, 3));
+    expect(inZone.router.step(0, nodeAt(inZone.network, 4))).toBe(nodeAt(inZone.network, 3));
+
+    const outside = orderedCrew(['cleaner'], { dirt: [0.6, 1], zones: zonedAs([1], [0b01, 0b10]) });
+    outside.router.order('cleaner', { venue: 0 });
+    expect(outside.router.step(0, nodeAt(outside.network, 4))).toBe(nodeAt(outside.network, 3));
+  });
+
+  it('ends the order once the work is done', () => {
+    const { router, network, breakdowns } = orderedCrew(['mechanic'], { broken: [null, 5] });
+    router.order('mechanic', { venue: 1 });
+    router.step(0, nodeAt(network, 4));
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    for (let tick = 1; tick < REPAIR_TICKS.min; tick++) router.tick(tick);
+    expect(router.ordersOf(), 'ended while the mending was still going on').toHaveLength(1);
+    for (let tick = REPAIR_TICKS.min; tick <= REPAIR_TICKS.max; tick++) router.tick(tick);
+    expect(isBroken(breakdowns, 1)).toBe(false);
+    expect(router.ordersOf()).toEqual([]);
+  });
+
+  it('ends the order and lets the worker go when the venue is mended before they get there', () => {
+    const { router, network, breakdowns } = orderedCrew(['mechanic'], { broken: [null, 5] });
+    router.order('mechanic', { venue: 1 });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    repair(breakdowns, 1);
+    router.tick(1);
+    expect(router.ordersOf()).toEqual([]);
+    expect(router.taskOf(0).kind).toBe('idle');
+  });
+
+  it('keeps an open order through a save and a load', () => {
+    const { router, build, network } = orderedCrew(['mechanic', 'cleaner'], {
+      broken: [5, null],
+      dirt: [1, 0.5],
+    });
+    router.order('mechanic', { venue: 0 });
+    router.order('cleaner', { venue: 1 });
+    router.step(0, nodeAt(network, 4));
+    const loaded = build();
+    loaded.restore(router.snapshot());
+    expect(loaded.ordersOf()).toEqual(router.ordersOf());
+    expect(loaded.taskOf(0)).toMatchObject({ kind: 'venue', venue: 0, ordered: true });
+  });
+
+  it('refuses an order with nothing to do, and changes nothing without one', () => {
+    const { router, network } = orderedCrew(['cleaner', 'mechanic'], { dirt: [1, 0.5] });
+    const none = router.ordersOf();
+    expect(router.order('cleaner', { venue: 0 }), 'the bakery is clean').toBe(false);
+    expect(router.order('mechanic', { venue: 1 }), 'the bar is not broken').toBe(false);
+    expect(router.order('cleaner', { tile: 3 }), 'no litter is kept').toBe(false);
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    router.tick(1);
+    expect(router.ordersOf()).toBe(none);
+    expect(router.snapshot().orders).toEqual([]);
+  });
+
+  it('sends a cleaner to sweep a tile they would have left for later', () => {
+    const network = networkOf(street(8));
+    const litter = littered([[6, SWEEP_ABOVE / 2]]);
+    let crowd: Crowd | null = null;
+    const router = createStaffRouter({
+      staff: cleaners(1),
+      venues: [],
+      network,
+      upkeep: () => createUpkeep(0),
+      crowd: () => crowd!,
+      litter: () => litter,
+      seed: 11,
+    });
+    crowd = createCrowd({ network, count: 1, variants: 1, seed: 3 });
+    expect(router.order('cleaner', { tile: 6 })).toBe(true);
+    expect(router.step(0, nodeAt(network, 2))).toBe(nodeAt(network, 3));
+    expect(router.step(0, nodeAt(network, 6))).toBe(-1);
+    for (let tick = 1; tick <= 10; tick++) router.tick(tick);
+    expect(litterAt(litter, 6, 0)).toBe(0);
+    expect(router.ordersOf()).toEqual([]);
   });
 });

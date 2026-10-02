@@ -54,4 +54,16 @@ describe('a staff router snapshot', () => {
     expect(staffVenuesMatch(snapshot, 1, 2)).toBe(false);
     expect(staffVenuesMatch(snapshot, 1)).toBe(false);
   });
+
+  it('parses a save from before orders, and matches the venues an order names', () => {
+    const snapshot = snapshotOf(2);
+    expect(staffRouterSnapshotSchema.parse(snapshot).orders).toBeUndefined();
+    const ordered = {
+      ...snapshot,
+      orders: [{ role: 'mechanic' as const, venue: 3, tile: -1, worker: -1, taken: false }],
+    };
+    expect(staffRouterSnapshotSchema.safeParse(ordered).success).toBe(true);
+    expect(staffVenuesMatch(ordered, 4)).toBe(true);
+    expect(staffVenuesMatch(ordered, 3)).toBe(false);
+  });
 });

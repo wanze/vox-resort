@@ -9,7 +9,7 @@ describe('parsePrefs', () => {
   });
 
   it('reads back what was stored', () => {
-    const prefs = { muted: ['warning' as const], markers: false };
+    const prefs = { muted: ['warning' as const], markers: false, staff: true };
     expect(parsePrefs(JSON.parse(JSON.stringify(prefs)))).toEqual(prefs);
   });
 
@@ -22,5 +22,11 @@ describe('parsePrefs', () => {
       expect(parsePrefs({ muted: [], markers: garbage }).markers).toBe(true);
     }
     expect(parsePrefs({ muted: [], markers: false }).markers).toBe(false);
+  });
+
+  it('keeps the staff pins away unless they were turned on, as in a store from before them', () => {
+    expect(parsePrefs({ muted: [], markers: true }).staff).toBe(false);
+    expect(parsePrefs({ muted: [], markers: true, staff: 'yes' }).staff).toBe(false);
+    expect(parsePrefs({ muted: [], markers: true, staff: true }).staff).toBe(true);
   });
 });

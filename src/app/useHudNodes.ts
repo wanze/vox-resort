@@ -1,6 +1,7 @@
 import { useMemo, useRef, type RefObject } from 'react';
 import type { DebugElements } from '../features/hud/components/RenderStats';
 import { MAX_MARKERS } from '../features/hud/domain/markers';
+import { PINNED_STAFF } from '../features/hud/domain/staffPins';
 
 // Written by the render loop outside React: re-rendering the HUD every frame
 // would distort the frame rate it reports.
@@ -8,7 +9,8 @@ export interface HudNodes extends DebugElements {
   readonly time: RefObject<HTMLInputElement | null>;
   readonly clock: RefObject<HTMLSpanElement | null>;
   readonly inspect: RefObject<HTMLSpanElement | null>;
-  readonly markers: RefObject<(HTMLButtonElement | null)[]>;
+  readonly markers: RefObject<(HTMLElement | null)[]>;
+  readonly staffPins: RefObject<(HTMLButtonElement | null)[]>;
 }
 
 export function useHudNodes(): HudNodes {
@@ -23,8 +25,9 @@ export function useHudNodes(): HudNodes {
   const people = useRef<HTMLSpanElement | null>(null);
   const shaders = useRef<HTMLSpanElement | null>(null);
   const activeLights = useRef<HTMLSpanElement | null>(null);
-  const markers = useRef<(HTMLButtonElement | null)[]>(
-    Array.from({ length: MAX_MARKERS }, () => null),
+  const markers = useRef<(HTMLElement | null)[]>(Array.from({ length: MAX_MARKERS }, () => null));
+  const staffPins = useRef<(HTMLButtonElement | null)[]>(
+    Array.from({ length: PINNED_STAFF.length }, () => null),
   );
   // One stable object, so the effect mounting the renderer runs exactly once.
   return useMemo(
@@ -41,7 +44,22 @@ export function useHudNodes(): HudNodes {
       shaders,
       activeLights,
       markers,
+      staffPins,
     }),
-    [time, clock, inspect, fps, cpu, gpu, drawn, detail, people, shaders, activeLights, markers],
+    [
+      time,
+      clock,
+      inspect,
+      fps,
+      cpu,
+      gpu,
+      drawn,
+      detail,
+      people,
+      shaders,
+      activeLights,
+      markers,
+      staffPins,
+    ],
   );
 }

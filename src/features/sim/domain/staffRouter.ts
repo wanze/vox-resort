@@ -90,6 +90,65 @@ export interface StaffZones {
   readonly tileZone: (tileX: number, tileZ: number) => number;
 }
 
+export const STAFF_TASK_KINDS = [
+  'off',
+  'idle',
+  'venue',
+  'room',
+  'sweep',
+  'restock',
+  'tower',
+  'home',
+] as const;
+
+export type StaffTaskKind = (typeof STAFF_TASK_KINDS)[number];
+
+// Mutable so a caller asking every frame can hand the same one back. An index is -1 where the
+// task has none: a venue, a room's lodging, a litter tile, a tower's seat, a depot restocked in.
+export interface StaffTask {
+  kind: StaffTaskKind;
+  venue: number;
+  lodging: number;
+  tile: number;
+  seat: number;
+  depot: number;
+  // At it rather than on the way there.
+  working: boolean;
+  // Spells left in a cleaner's cart.
+  load: number;
+  // Sent there by an order rather than by their own choice.
+  ordered: boolean;
+}
+
+export const createStaffTask = (): StaffTask => ({
+  kind: 'off',
+  venue: -1,
+  lodging: -1,
+  tile: -1,
+  seat: -1,
+  depot: -1,
+  working: false,
+  load: 0,
+  ordered: false,
+});
+
+export type OrderRole = 'mechanic' | 'cleaner';
+
+export type OrderTarget = { readonly venue: number } | { readonly tile: number };
+
+// A tile is an index into the litter grid, tileZ * tilesX + tileX. Reserved for the nearest
+// free worker until they step, taken once they have claimed the target.
+export interface Order {
+  readonly role: OrderRole;
+  readonly venue: number;
+  readonly tile: number;
+  readonly worker: number;
+  readonly taken: boolean;
+}
+
+// A handful is all a player gives at once; more would be a second job queue.
+const MAX_ORDERS = 8;
+
 export interface StaffRouter {
   step(worker: number, at: number): number;
   tick(now: number): void;
@@ -103,6 +162,8 @@ export interface StaffRouter {
   // Idempotent: a shift change lists a worker still walking home as leaving on every edit.
   clockOff(worker: number): void;
   atWork(worker: number): Venue | null;
+  // A read for the HUD: what the worker is doing, without changing what they will do.
+  taskOf(worker: number, into?: StaffTask): StaffTask;
   performingAt(venue: number): boolean;
   watching(venue: number): boolean;
   readonly watchingBeach: boolean;
@@ -110,6 +171,10 @@ export interface StaffRouter {
   snapshot(): StaffRouterSnapshot;
   // Onto a router built on the venues and network the snapshot was taken on; throws otherwise.
   restore(snapshot: StaffRouterSnapshot): void;
+  // False when it cannot be given: nothing to do there, already ordered, or too many open.
+  order(role: OrderRole, target: OrderTarget): boolean;
+  // The same array until an order is given, taken or ended, so a caller can compare it.
+  ordersOf(): readonly Order[];
 }
 
 export function createStaffRouter(parts: {
@@ -612,7 +677,7 @@ export function createStaffRouter(parts: {
   };
 
   // Released to the gate when done, which walks them back off the sand as a lifeguard comes down.
-  const mendOnSand = (worker: number, route: SandRoute): void => {
+  const workOnSand = (worker: number, route: SandRoute): void => {
     const people = parts.crowd();
     const place = venues[assigned[worker]!]!;
     holdAt(people, worker, place.x, BEACH_SURFACE, place.z, people.heading[worker] ?? 0);
@@ -631,7 +696,7 @@ export function createStaffRouter(parts: {
     const next = route.waypoints[leg];
     if (next) walkSandTo(parts.crowd(), worker, next.x, next.z);
     else if (towerOf[worker]! >= 0) climbTower(worker, route);
-    else mendOnSand(worker, route);
+    else workOnSand(worker, route);
     return -1;
   };
 
@@ -706,6 +771,7 @@ export function createStaffRouter(parts: {
   };
 
   const finish = (worker: number): void => {
+    doneWith(worker);
     finishWork(worker);
     working[worker] = 0;
     workingCount--;
@@ -744,10 +810,13 @@ export function createStaffRouter(parts: {
     return -1;
   };
 
+  // Only an order sends a cleaner over the sand: their own choice is a venue on the paving.
   const cleanerWork = (worker: number, at: number): number => {
+    takeOrder(worker, at);
     if (roomFor(worker, at) >= 0) return roomStep(worker, at);
     const venue = venueFor(worker, at);
-    return venue < 0 ? litterStep(worker, at) : venueStep(worker, at, venue);
+    if (venue < 0) return litterStep(worker, at);
+    return legRoute[worker] ? towardsTheSand(worker, at) : venueStep(worker, at, venue);
   };
 
   const setToRestock = (worker: number, node: number): void => {
@@ -811,6 +880,7 @@ export function createStaffRouter(parts: {
 
   // Nothing broken, a mechanic stands where they are: there is nowhere they are meant to wait yet.
   const mechanicStep = (worker: number, at: number): number => {
+    takeOrder(worker, at);
     const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickRepair(worker, at);
     if (venue < 0) return -1;
     return legRoute[worker] ? towardsTheSand(worker, at) : venueStep(worker, at, venue);
@@ -866,6 +936,254 @@ export function createStaffRouter(parts: {
     workingCount = working.reduce((total, each) => total + each, 0);
   };
 
+  // An empty cart with nothing on hand is on its way to fetch more.
+  const unclaimedKind = (worker: number): StaffTaskKind => {
+    if (assigned[worker]! >= 0) return 'venue';
+    const empty = staff.role[worker] === 'cleaner' && load[worker] === 0;
+    return empty ? 'restock' : 'idle';
+  };
+
+  const claimedKind = (worker: number): StaffTaskKind => {
+    if (restocking[worker] === 1) return 'restock';
+    if (roomOf[worker]! >= 0) return 'room';
+    if (tileOf[worker]! >= 0) return 'sweep';
+    return towerOf[worker]! >= 0 ? 'tower' : unclaimedKind(worker);
+  };
+
+  // Taken back on before reaching the door, a worker is no longer going home, whatever the flag
+  // says until their next step.
+  const kindOf = (worker: number): StaffTaskKind => {
+    if (isOnDuty(worker)) return claimedKind(worker);
+    return goingHome[worker] === 1 ? 'home' : 'off';
+  };
+
+  // The door map is filled lazily, and a restored router may not have filled it yet; the fill
+  // is a cache, so it changes nothing the sim does.
+  const depotOf = (worker: number): number => {
+    if (restocking[worker] !== 1) return NOBODY;
+    if (depotField === undefined) depotFieldNow();
+    return depotAtNode.get(doorOf[worker]!) ?? NOBODY;
+  };
+
+  let orders: {
+    role: OrderRole;
+    venue: number;
+    tile: number;
+    worker: number;
+    taken: boolean;
+  }[] = [];
+  let published: readonly Order[] = [];
+  const publish = (): void => {
+    published = orders.map((each) => ({ ...each }));
+  };
+
+  type OpenOrder = (typeof orders)[number];
+
+  const orderApplies = (order: OpenOrder): boolean => {
+    if (order.tile >= 0) {
+      const litter = parts.litter?.();
+      return litter !== undefined && (litter.level[order.tile] ?? 0) > 0;
+    }
+    if (order.venue >= venues.length) return false;
+    if (order.role === 'mechanic') return isBrokenDown(order.venue);
+    return cleanliness(parts.upkeep(), order.venue) < NEEDS_CLEANING;
+  };
+
+  const isFree = (worker: number): boolean =>
+    isOnDuty(worker) &&
+    goingHome[worker] === 0 &&
+    working[worker] === 0 &&
+    claimedKind(worker) === 'idle';
+
+  const tileField = (order: OpenOrder): FlowField | null => {
+    const litter = parts.litter?.();
+    const node = litter ? nodeOnTile(litter, order.tile) : NOBODY;
+    return node >= 0 ? nodeFieldFor(node) : null;
+  };
+
+  // A building with no door on the paving is reached over the sand from a gate, whoever is sent.
+  const venueHops = (venue: number, at: number): number => {
+    const paved = fieldFor(venue).hops[at] ?? NOBODY;
+    if (paved >= 0) return paved;
+    const route = sandRouteTo(venue, at);
+    return route ? nodeFieldFor(route.gate).hops[at]! + route.waypoints.length : NOBODY;
+  };
+
+  // -1 for a target that cannot be reached from the node.
+  const orderHops = (order: OpenOrder, at: number): number =>
+    order.venue >= 0 ? venueHops(order.venue, at) : (tileField(order)?.hops[at] ?? NOBODY);
+
+  const orderInZone = (worker: number, order: OpenOrder): boolean => {
+    if (order.venue >= 0) return venueInZone(worker)(order.venue);
+    const tilesX = parts.litter?.().tilesX ?? 1;
+    return tileInZone(worker)(order.tile % tilesX, Math.floor(order.tile / tilesX));
+  };
+
+  // Hops from where the worker is walking to; -1 for anybody off the paving or cut off from it.
+  const hopsTo = (order: OpenOrder, worker: number): number => {
+    const at = parts.crowd().node[worker] ?? NOBODY;
+    if (at < 0 || at >= network.nodes.length) return NOBODY;
+    return orderHops(order, at);
+  };
+
+  const candidates = (order: OpenOrder, except: number): number[] => {
+    const free: number[] = [];
+    for (let worker = 0; worker < staff.count; worker++) {
+      if (worker === except || staff.role[worker] !== order.role || !isFree(worker)) continue;
+      if (hopsTo(order, worker) >= 0) free.push(worker);
+    }
+    return free;
+  };
+
+  // The nearest free worker of the role, from the zone the target is in if anybody there is.
+  const nearestFor = (order: OpenOrder): number => {
+    const free = candidates(order, NOBODY);
+    const zoned = free.filter((worker) => orderInZone(worker, order));
+    const pool = zoned.length > 0 ? zoned : free;
+    let best = NOBODY;
+    for (const worker of pool) {
+      if (best < 0 || hopsTo(order, worker) < hopsTo(order, best)) best = worker;
+    }
+    return best;
+  };
+
+  const holderOf = (order: OpenOrder): number => {
+    if (order.tile >= 0) return tileClaimedBy[order.tile] ?? NOBODY;
+    return (order.role === 'mechanic' ? repairBy : claimedBy)[order.venue] ?? NOBODY;
+  };
+
+  const holds = (worker: number, order: OpenOrder): boolean =>
+    order.tile >= 0 ? tileOf[worker] === order.tile : assigned[worker] === order.venue;
+
+  // Somebody already on their way there serves the order; nobody is sent after them.
+  const attachOrReserve = (order: OpenOrder): void => {
+    const holder = holderOf(order);
+    if (holder >= 0 && staff.role[holder] === order.role) {
+      order.worker = holder;
+      order.taken = true;
+      return;
+    }
+    order.taken = false;
+    order.worker = nearestFor(order);
+  };
+
+  const claimVenueOrder = (worker: number, at: number, order: OpenOrder): boolean => {
+    if (fieldFor(order.venue).next[at]! >= 0) return claim(worker, order.venue) >= 0;
+    const overSand = sandRouteTo(order.venue, at);
+    if (!overSand) return false;
+    legRoute[worker] = overSand;
+    return claim(worker, order.venue) >= 0;
+  };
+
+  const claimTileOrder = (worker: number, at: number, order: OpenOrder): boolean => {
+    const litter = parts.litter?.();
+    if (!litter || (tileField(order)?.next[at] ?? NOBODY) < 0) return false;
+    tileClaims(litter)[order.tile] = worker;
+    tileOf[worker] = order.tile;
+    return true;
+  };
+
+  const claimOrder = (worker: number, at: number, order: OpenOrder): boolean => {
+    const holder = holderOf(order);
+    if (holder >= 0 && holder !== worker) {
+      attachOrReserve(order);
+      publish();
+      return false;
+    }
+    const claimed =
+      order.tile >= 0 ? claimTileOrder(worker, at, order) : claimVenueOrder(worker, at, order);
+    order.worker = claimed ? worker : NOBODY;
+    order.taken = claimed;
+    publish();
+    return claimed;
+  };
+
+  // A worker outside the target's zone waits while somebody inside it is free to go.
+  const mayTake = (worker: number, at: number, order: OpenOrder): boolean => {
+    if (order.taken || order.role !== staff.role[worker]) return false;
+    if (order.worker >= 0) return order.worker === worker;
+    if (orderHops(order, at) < 0) return false;
+    if (orderInZone(worker, order)) return true;
+    return !candidates(order, worker).some((other) => orderInZone(other, order));
+  };
+
+  // Before any choice of their own, and only by a worker with nothing on hand. With no order open
+  // it returns at once, so a resort nobody orders about runs as it always has.
+  const takeOrder = (worker: number, at: number): void => {
+    if (orders.length === 0 || claimedKind(worker) !== 'idle') return;
+    const mine = orders.find((order) => order.worker === worker && !order.taken);
+    const order = mine ?? orders.find((each) => mayTake(worker, at, each));
+    if (order) claimOrder(worker, at, order);
+  };
+
+  const releaseOrder = (order: OpenOrder): void => {
+    if (!order.taken || working[order.worker] === 1 || !holds(order.worker, order)) return;
+    if (order.tile >= 0) giveUpTile(order.worker);
+    else giveUp(order.worker);
+  };
+
+  // A worker who has let go of the target, by a rebuild, a clock-off or a dead end, frees the
+  // order for somebody else; one who was only reserved and is busy now is passed over.
+  const reconcile = (order: OpenOrder): void => {
+    if (order.worker < 0) attachOrReserve(order);
+    else if (order.taken ? !holds(order.worker, order) : !isFree(order.worker)) {
+      attachOrReserve(order);
+    }
+  };
+
+  const keepOrders = (): void => {
+    if (orders.length === 0) return;
+    // Eight small objects at most, and only while an order is open.
+    const before = JSON.stringify(orders);
+    const ended = orders.filter(
+      (order) => !orderApplies(order) && !(order.taken && working[order.worker] === 1),
+    );
+    for (const order of ended) releaseOrder(order);
+    orders = orders.filter((order) => !ended.includes(order));
+    for (const order of orders) reconcile(order);
+    if (JSON.stringify(orders) !== before) publish();
+  };
+
+  const doneWith = (worker: number): void => {
+    if (orders.length === 0) return;
+    const left = orders.filter(
+      (order) => !(order.taken && order.worker === worker && holds(worker, order)),
+    );
+    if (left.length === orders.length) return;
+    orders = left;
+    publish();
+  };
+
+  const orderedTo = (worker: number): boolean =>
+    orders.some((order) => order.taken && order.worker === worker);
+
+  const placeOrder = (role: OrderRole, target: OrderTarget): boolean => {
+    const venue = 'venue' in target ? target.venue : NOBODY;
+    const tile = 'tile' in target ? target.tile : NOBODY;
+    const order = { role, venue, tile, worker: NOBODY, taken: false };
+    const same = (each: OpenOrder): boolean =>
+      each.role === role && each.venue === venue && each.tile === tile;
+    if (orders.length >= MAX_ORDERS || orders.some(same) || !orderApplies(order)) return false;
+    if (venue < 0 && tile < 0) return false;
+    attachOrReserve(order);
+    orders = [...orders, order];
+    publish();
+    return true;
+  };
+
+  // By key across an edit, which renumbers venues; a tile is a tile of the same grid.
+  const carryOrders = (was: readonly Venue[]): void => {
+    if (orders.length === 0) return;
+    const indexOf = new Map(venues.map((venue, at) => [venue.key, at]));
+    orders = orders.flatMap((order) => {
+      const venue =
+        order.venue >= 0 ? (indexOf.get(was[order.venue]?.key ?? '') ?? NOBODY) : NOBODY;
+      if (order.venue >= 0 && venue < 0) return [];
+      return [{ ...order, venue, worker: NOBODY, taken: false }];
+    });
+    publish();
+  };
+
   const claimedAndWorking = (claims: Int32Array, venue: number): boolean => {
     const worker = claims[venue] ?? NOBODY;
     return worker >= 0 && working[worker] === 1;
@@ -883,6 +1201,7 @@ export function createStaffRouter(parts: {
 
     tick(at) {
       now = at;
+      keepOrders();
       if (workingCount === 0) return;
       const effect = weatherEffect(weatherNow());
       for (let worker = 0; worker < staff.count; worker++) {
@@ -894,6 +1213,7 @@ export function createStaffRouter(parts: {
     },
 
     rebuild(nextVenues, nextNetwork, nextLodgings = [], nextDepots = []) {
+      const wasStanding = venues;
       venues = nextVenues;
       lodgings = nextLodgings;
       depots = nextDepots;
@@ -926,6 +1246,7 @@ export function createStaffRouter(parts: {
       venueSandRoutes.clear();
       nodeFields.clear();
       workingCount = 0;
+      carryOrders(wasStanding);
       // Nobody is released: the crowd is relocated onto the new graph in the same step.
     },
 
@@ -943,6 +1264,19 @@ export function createStaffRouter(parts: {
     atWork(worker) {
       if (working[worker] !== 1) return null;
       return venues[assigned[worker]!] ?? null;
+    },
+
+    taskOf(worker, into = createStaffTask()) {
+      into.kind = kindOf(worker);
+      into.venue = assigned[worker] ?? NOBODY;
+      into.lodging = roomOf[worker] ?? NOBODY;
+      into.tile = tileOf[worker] ?? NOBODY;
+      into.seat = towerOf[worker] ?? NOBODY;
+      into.depot = depotOf(worker);
+      into.working = working[worker] === 1;
+      into.load = load[worker] ?? 0;
+      into.ordered = orderedTo(worker);
+      return into;
     },
 
     performingAt(venue) {
@@ -980,6 +1314,7 @@ export function createStaffRouter(parts: {
         goingHome: goingHome.slice(),
         now,
         random: random.state(),
+        orders: published.map((order) => ({ ...order })),
       };
     },
 
@@ -1004,6 +1339,21 @@ export function createStaffRouter(parts: {
       now = snapshot.now;
       random = resumeRandom(snapshot.random);
       reclaim();
+      const known = (worker: number): boolean => worker >= 0 && worker < staff.count;
+      orders = (snapshot.orders ?? []).map(({ role, venue, tile, worker, taken }) => ({
+        role,
+        venue,
+        tile,
+        worker: known(worker) ? worker : NOBODY,
+        taken: taken && known(worker),
+      }));
+      publish();
+    },
+
+    order: placeOrder,
+
+    ordersOf() {
+      return published;
     },
   };
 }

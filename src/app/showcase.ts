@@ -125,7 +125,13 @@ import {
   type Happiness,
 } from '../features/sim/domain/happiness';
 import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
-import { carryUpkeep, cleanliness, createUpkeep, type Upkeep } from '../features/sim/domain/upkeep';
+import {
+  carryUpkeep,
+  cleanliness,
+  createUpkeep,
+  NEEDS_CLEANING,
+  type Upkeep,
+} from '../features/sim/domain/upkeep';
 import { burnTheSunbathers, hurt, mishap } from '../features/sim/domain/incidents';
 import {
   carryBreakdowns,
@@ -218,8 +224,14 @@ import {
 } from '../features/sim/domain/takings';
 import {
   createStaffRouter,
+  createStaffTask,
   meanCleanliness,
+  SPELLS_PER_LOAD,
+  STAFF_TASK_KINDS,
+  type Order,
+  type OrderRole,
   type StaffRouter,
+  type StaffTask,
   type StaffZones,
 } from '../features/sim/domain/staffRouter';
 import {
@@ -380,10 +392,17 @@ import {
   guestView,
   namesPlacement,
   personOf,
+  placementKeyOf,
   placeView,
+  sendOffers,
+  staffLine,
+  staffView,
+  workerOf,
   type Errand,
   type InspectTarget,
   type SelectionView,
+  type PlaceView,
+  type SendFacts,
 } from '../features/inspect/domain/selection';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
@@ -425,7 +444,24 @@ import type { LoadingStep } from '../features/welcome/domain/loading';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
-import { MAX_MARKERS } from '../features/hud/domain/markers';
+import { MAX_MARKERS, type OrderSpot } from '../features/hud/domain/markers';
+import {
+  createPinSpot,
+  isPinned,
+  roofOver,
+  staffPinOf,
+  tallyStaff,
+  type Anchor,
+  type Footprint,
+  type Roofs,
+  type StaffTally,
+} from '../features/hud/domain/staffPins';
+import {
+  pinTitle,
+  staffName,
+  taskWords,
+  type TaskFacts,
+} from '../features/inspect/domain/staffWords';
 import { Vector3 } from 'three/webgpu';
 import { parseBenchConfig, type BenchConfig } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
@@ -564,6 +600,7 @@ export interface StatusView {
   readonly present: number;
   readonly beds: { readonly total: number; readonly taken: number };
   readonly demand: Demand | null;
+  readonly staff: StaffTally;
 }
 
 export interface ShowcaseOptions {
@@ -590,6 +627,8 @@ export interface ShowcaseOptions {
   readonly onMorning?: () => void;
   // Only for a speed the showcase set itself, as a load does.
   readonly onSpeedChange?: (speed: SimSpeed) => void;
+  // Whenever an order is given, taken up or ended, for the markers to flag.
+  readonly onOrdersChange?: (orders: readonly OrderSpot[]) => void;
   // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
   // the player's local time, until the first new game.
   readonly welcome?: boolean;
@@ -622,6 +661,8 @@ export interface Showcase {
   lookAtTile(tile: { readonly tileX: number; readonly tileZ: number }): void;
   // Where the problem markers stand, in the order the HUD draws them; at most MAX_MARKERS.
   setMarkers(tiles: readonly { readonly tileX: number; readonly tileZ: number }[]): void;
+  // A pin over every member of staff on duty; the one inspected is pinned either way.
+  setStaffPins(shown: boolean): void;
   selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
@@ -631,6 +672,12 @@ export interface Showcase {
   setWeather(weather: Weather | null): void;
   setOverlay(kind: OverlayKind | null): void;
   selectPerson(person: number): void;
+  selectWorker(worker: number): void;
+  // Turns the camera on the inspected member of staff, wherever they have walked to since.
+  showSelected(): void;
+  // Sends the nearest free worker of the role to the inspected building.
+  sendStaff(role: OrderRole): void;
+  sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
   clearSelection(): void;
   // Finishes what is being built first: the save is of a world with no scaffolding.
   snapshot(): GameSnapshot;
@@ -912,6 +959,11 @@ interface Resort {
   readonly bathing: SwimAreaOptions;
   // Allocated once, for a click to merge the crowd with the cast into.
   readonly drawnAt: {
+    readonly x: Float32Array;
+    readonly y: Float32Array;
+    readonly z: Float32Array;
+  };
+  readonly staffDrawnAt: {
     readonly x: Float32Array;
     readonly y: Float32Array;
     readonly z: Float32Array;
@@ -1469,6 +1521,11 @@ function buildResort(
       y: new Float32Array(population),
       z: new Float32Array(population),
     },
+    staffDrawnAt: {
+      x: new Float32Array(employed.count),
+      y: new Float32Array(employed.count),
+      z: new Float32Array(employed.count),
+    },
     staffRouter,
     staffPool: employed,
     hiring: AUTO_HIRING,
@@ -1581,8 +1638,14 @@ function recastAll(resort: Resort): void {
     },
     (worker) => resort.staffPool.role[worker]!,
     resort.staff.crowd,
+    (worker) => isSweeping(staffRouter.taskOf(worker, recastTask)),
   );
 }
+
+// Shared by every recast: a task read per worker per frame must not allocate.
+const recastTask = createStaffTask();
+
+const isSweeping = (task: StaffTask): boolean => task.kind === 'sweep' && task.working;
 
 // Rebuilt with the venues and the network: a place points at a seat by its index there.
 function recastAfterEdit(resort: Resort, network: WalkNetwork): void {
@@ -1878,6 +1941,9 @@ function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | nu
     present: presentCount(resort.guests),
     beds: resort.beds,
     demand,
+    staff: tallyStaff(resort.staffPool.role, (worker, into) =>
+      resort.staffRouter.taskOf(worker, into),
+    ),
   };
 }
 
@@ -3017,26 +3083,24 @@ function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void {
 function markerAnchorOf(
   resort: Resort,
   tile: { readonly tileX: number; readonly tileZ: number },
-): { readonly x: number; readonly y: number; readonly z: number } {
+): Anchor {
   const key = resort.occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });
   const venue = key === undefined ? undefined : resort.venues.find((each) => each.key === key);
-  const ground = (place: { readonly tileX: number; readonly tileZ: number }): number =>
-    levelHeight(resort.terrain.levelOf(place.tileX, place.tileZ));
   if (!venue) {
     return {
       x: (tile.tileX + 0.5) * TILE_VOXELS,
-      y: ground(tile) + LITTER_MARKER_LIFT,
+      y: groundUnder(resort, tile) + LITTER_MARKER_LIFT,
       z: (tile.tileZ + 0.5) * TILE_VOXELS,
     };
   }
-  return {
-    x: (venue.tileX + venue.tilesX / 2) * TILE_VOXELS,
-    y: ground(venue) + objectTypeById(venue.id).model.height + ROOF_MARKER_GAP,
-    z: (venue.tileZ + venue.tilesZ / 2) * TILE_VOXELS,
-  };
+  return roofOver(venue, groundUnder(resort, venue), objectTypeById(venue.id).model.height);
 }
 
-const ROOF_MARKER_GAP = 2;
+const groundUnder = (
+  resort: Resort,
+  place: { readonly tileX: number; readonly tileZ: number },
+): number => levelHeight(resort.terrain.levelOf(place.tileX, place.tileZ));
+
 const LITTER_MARKER_LIFT = 8;
 
 const projected = new Vector3();
@@ -3045,20 +3109,25 @@ const projected = new Vector3();
 const inViewport = (point: Vector3): boolean =>
   point.z <= 1 && Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1;
 
-// Preallocated, and the same view handed to every frame: the overlay reads it in place.
-function createMarkerSpots() {
-  const anchors = new Float32Array(MAX_MARKERS * 3);
-  const view = { count: 0, spots: new Float32Array(MAX_MARKERS * 3) };
+// Preallocated, and the same view handed to every frame: the overlay reads it in place. A NaN
+// anchor projects to NaN, which is never in the viewport, so its button stays hidden.
+function createMarkerSpots(capacity: number) {
+  const anchors = new Float32Array(capacity * 3);
+  const view = { count: 0, spots: new Float32Array(capacity * 3) };
+  const anchor = (index: number, point: Anchor): void => {
+    anchors[index * 3] = point.x;
+    anchors[index * 3 + 1] = point.y;
+    anchors[index * 3 + 2] = point.z;
+  };
   return {
     view: view as FrameUpdate['markers'],
-    place(points: readonly { readonly x: number; readonly y: number; readonly z: number }[]): void {
-      view.count = Math.min(points.length, MAX_MARKERS);
-      for (let index = 0; index < view.count; index++) {
-        const point = points[index]!;
-        anchors[index * 3] = point.x;
-        anchors[index * 3 + 1] = point.y;
-        anchors[index * 3 + 2] = point.z;
-      }
+    place(points: readonly Anchor[]): void {
+      view.count = Math.min(points.length, capacity);
+      for (let index = 0; index < view.count; index++) anchor(index, points[index]!);
+    },
+    anchor,
+    showing(count: number): void {
+      view.count = Math.min(count, capacity);
     },
     // In CSS pixels, which is what the overlay positions its buttons in.
     project(camera: SceneHandle['camera'], width: number, height: number): void {
@@ -3072,6 +3141,192 @@ function createMarkerSpots() {
     },
   };
 }
+
+interface RoofsFor {
+  readonly venues: readonly Venue[];
+  readonly lodgings: readonly Lodging[];
+  readonly depots: readonly Depot[];
+  readonly roofs: Roofs;
+}
+
+const heightOf = (id: string | undefined): number =>
+  id === undefined ? 0 : objectTypeById(id).model.height;
+
+// A depot carries no model id, so its height is read off the placement it stands for.
+function roofsNow(resort: Resort): Roofs {
+  const { venues, lodgings, depots, plot } = resort;
+  const over = (place: Footprint, id: string | undefined): Anchor =>
+    roofOver(place, groundUnder(resort, place), heightOf(id));
+  const placed = byKey(plot.placements);
+  return {
+    venues: venues.map((venue) => (shelterOf(venue) === 'covered' ? over(venue, venue.id) : null)),
+    lodgings: lodgings.map((lodging) => over(lodging, lodging.id)),
+    depots: depots.map((depot) => over(depot, placed.get(depot.key)?.id)),
+  };
+}
+
+// Pinned per worker: slot i is worker i, so a button's role never changes under it.
+function createStaffPinner(capacity: number) {
+  const spots = createMarkerSpots(capacity);
+  const inside = new Uint8Array(capacity);
+  const titles = Array.from({ length: capacity }, () => '');
+  // What each title was worded from, so a title is only built again when the task changes.
+  const worded = new Float64Array(capacity).fill(-1);
+  const task = createStaffTask();
+  const spot = createPinSpot();
+  const drawn = { x: 0, y: 0, z: 0 };
+  let cached: RoofsFor | null = null;
+
+  const roofsOf = (resort: Resort): Roofs => {
+    if (cached === null || !roofsStand(cached, resort)) {
+      const { venues, lodgings, depots } = resort;
+      cached = { venues, lodgings, depots, roofs: roofsNow(resort) };
+      // The indices a title was worded from name other buildings now.
+      worded.fill(-1);
+    }
+    return cached.roofs;
+  };
+
+  const retitle = (resort: Resort, worker: number): void => {
+    const key = titleKey(task);
+    if (worded[worker] === key) return;
+    worded[worker] = key;
+    const words = taskWords(taskFactsOf(resort, worker, task));
+    titles[worker] = pinTitle(staffName(resort.staffPool.role, worker), words);
+  };
+
+  const pin = (resort: Resort, worker: number, roofs: Roofs): void => {
+    resort.staffRouter.taskOf(worker, task);
+    const pinned = staffPinOf(task, writeDrawn(resort, worker, drawn), roofs, spot);
+    spots.anchor(worker, pinned ? spot : NOWHERE);
+    inside[worker] = Number(spot.inside);
+    if (pinned) retitle(resort, worker);
+  };
+
+  const pinEach = (resort: Resort, count: number, shown: boolean, selected: number | null) => {
+    const roofs = roofsOf(resort);
+    for (let worker = 0; worker < count; worker++) {
+      if (isPinned(worker, shown, selected)) pin(resort, worker, roofs);
+      else spots.anchor(worker, NOWHERE);
+    }
+  };
+
+  return {
+    view: Object.assign(spots.view, { inside, titles }) as FrameUpdate['staff'],
+    pin(resort: Resort, shown: boolean, selected: number | null): void {
+      const count = shown || selected !== null ? Math.min(capacity, resort.staffPool.count) : 0;
+      if (count > 0) pinEach(resort, count, shown, selected);
+      spots.showing(count);
+    },
+    project: spots.project,
+  };
+}
+
+const roofsStand = (cached: RoofsFor, resort: Resort): boolean =>
+  cached.venues === resort.venues &&
+  cached.lodgings === resort.lodgings &&
+  cached.depots === resort.depots;
+
+const titleKey = (task: StaffTask): number => {
+  const kind =
+    STAFF_TASK_KINDS.indexOf(task.kind) * 4 + Number(task.working) * 2 + Number(task.ordered);
+  return (kind * TITLE_SPAN + task.venue + 1) * TITLE_SPAN + task.lodging + 1;
+};
+
+const labelOf = (list: readonly { readonly label: string }[], index: number): string | null =>
+  list[index]?.label ?? null;
+
+function taskFactsOf(resort: Resort, worker: number, task: StaffTask): TaskFacts {
+  return {
+    kind: task.kind,
+    working: task.working,
+    role: resort.staffPool.role[worker]!,
+    venue: labelOf(resort.venues, task.venue),
+    lodging: labelOf(resort.lodgings, task.lodging),
+    ordered: task.ordered,
+  };
+}
+
+const isAway = (resort: Resort, worker: number): boolean =>
+  resort.staff.crowd.offPlot[worker] === 1 || resort.staffCast.shown[worker] === SHOWN.hidden;
+
+// Where the worker is drawn, the cast's place or the crowd's; NaN for anybody not on the plot.
+function writeDrawn(resort: Resort, worker: number, into: { x: number; y: number; z: number }) {
+  if (isAway(resort, worker)) return Object.assign(into, NOWHERE);
+  const { staffCast } = resort;
+  const from = staffCast.shown[worker] === SHOWN.placed ? staffCast : resort.staff.crowd;
+  into.x = from.x[worker]!;
+  into.y = from.y[worker]!;
+  into.z = from.z[worker]!;
+  return into;
+}
+
+function lookAtWorker(handle: SceneHandle, resort: Resort, worker: number | null): void {
+  if (worker === null) return;
+  const at = writeDrawn(resort, worker, { x: 0, y: 0, z: 0 });
+  if (!Number.isNaN(at.x)) handle.lookAt(at);
+}
+
+function sendToPlace(resort: Resort, role: OrderRole, key: string | null): void {
+  const venue = key === null ? -1 : venueIndexOf(resort.venues, key);
+  if (venue >= 0) resort.staffRouter.order(role, { venue });
+}
+
+function sendToTile(resort: Resort, at: { readonly tileX: number; readonly tileZ: number }) {
+  resort.staffRouter.order('cleaner', { tile: at.tileZ * resort.litter.tilesX + at.tileX });
+}
+
+// Only a venue can be sent to; a fixture or a lodging has nothing for a mechanic or a cleaner.
+const withSends = (resort: Resort, view: PlaceView, venue: number): PlaceView =>
+  venue < 0 ? view : { ...view, send: sendOffers(sendFactsOf(resort, venue)) };
+
+const onDutyAs = (resort: Resort, role: StaffRole): number =>
+  resort.staffPool.role.filter((each, worker) => each === role && resort.duty[worker] === 1).length;
+
+function sendFactsOf(resort: Resort, venue: number): SendFacts {
+  const sent = (role: OrderRole): boolean =>
+    resort.staffRouter.ordersOf().some((order) => order.role === role && order.venue === venue);
+  return {
+    broken: isBroken(resort.breakdowns, venue),
+    dirty: cleanliness(resort.upkeep, venue) < NEEDS_CLEANING,
+    onDuty: { mechanic: onDutyAs(resort, 'mechanic'), cleaner: onDutyAs(resort, 'cleaner') },
+    sent: { mechanic: sent('mechanic'), cleaner: sent('cleaner') },
+  };
+}
+
+// Where advice and markers name it: a venue by its origin tile.
+function orderSpotsOf(resort: Resort, orders: readonly Order[]): readonly OrderSpot[] {
+  const { tilesX } = resort.litter;
+  return orders.flatMap((order) => {
+    const venue = resort.venues[order.venue];
+    if (venue) return [{ role: order.role, tileX: venue.tileX, tileZ: venue.tileZ }];
+    if (order.tile < 0) return [];
+    return [
+      { role: order.role, tileX: order.tile % tilesX, tileZ: Math.floor(order.tile / tilesX) },
+    ];
+  });
+}
+
+const shiftChanged = (view: SelectionView | null, working: boolean): boolean =>
+  view?.kind === 'staff' && view.onDuty !== working;
+
+const NOWHERE: Anchor = { x: Number.NaN, y: Number.NaN, z: Number.NaN };
+
+// NaN for anybody off the plot as well as out of sight: a worker gone home is not to be clicked.
+function staffWhereDrawn(resort: Resort) {
+  const { staff, staffCast, staffDrawnAt } = resort;
+  const drawn = whereDrawn(staff.crowd, staffCast, { count: staff.count, ...staffDrawnAt });
+  for (let worker = 0; worker < drawn.count; worker++) {
+    if (staff.crowd.offPlot[worker] !== 1) continue;
+    drawn.x[worker] = Number.NaN;
+    drawn.y[worker] = Number.NaN;
+    drawn.z[worker] = Number.NaN;
+  }
+  return drawn;
+}
+
+// Wider than any plot's venue or lodging list, so a title key never runs one into the next.
+const TITLE_SPAN = 1 << 16;
 
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
   const { canvas, onFrame, onSceneChange } = options;
@@ -3241,7 +3496,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   viewSize.width = canvas.clientWidth || globalThis.innerWidth;
   viewSize.height = canvas.clientHeight || globalThis.innerHeight;
 
-  const markerSpots = createMarkerSpots();
+  const markerSpots = createMarkerSpots(MAX_MARKERS);
+  const staffPins = createStaffPinner(current().staffPool.count);
+  let staffPinsShown = false;
 
   const statsNow = createStatsReader({
     handle,
@@ -3343,9 +3600,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     return guestView(guests, needs, happiness, venues, person, clock.day, at, thought);
   };
 
+  const workerAt = (worker: number): SelectionView | null => {
+    const { staffPool: pool, zoneOf, duty } = current();
+    if (worker < 0 || worker >= pool.count) return null;
+    return staffView(pool.role, worker, zoneOf[worker] ?? NO_ZONE, duty[worker] === 1);
+  };
+
+  const somebodyAt = (target: { readonly person: number } | { readonly worker: number }) =>
+    'person' in target ? guestAt(target.person) : workerAt(target.worker);
+
   const viewOf = (target: InspectTarget): SelectionView | null => {
     if (!target) return null;
-    if ('person' in target) return guestAt(target.person);
+    if (!('key' in target)) return somebodyAt(target);
     const placement = build.placementOf(target.key);
     if (!placement) return null;
     const resort = current();
@@ -3353,7 +3619,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const label = objectTypeById(placement.id).label;
     // By key: the venue list is the router's numbering; -1 reads as spotless.
     const venue = resort.venues.findIndex((candidate) => candidate.key === placement.key);
-    return placeView(
+    const view = placeView(
       placement,
       label,
       guests,
@@ -3364,11 +3630,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.staffRouter.watching(venue),
       isBroken(resort.breakdowns, venue),
     );
+    return withSends(resort, view, venue);
   };
+
+  // Kept to tell when a worker's shift has changed under their open panel.
+  let selectedView: SelectionView | null = null;
 
   const select = (target: InspectTarget): void => {
     const view = viewOf(target);
     selected = view ? target : null;
+    selectedView = view;
     selectedOn = clock.day;
     options.onSelectionChange?.(view);
   };
@@ -3386,8 +3657,40 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     });
   };
 
+  let toldOrders: readonly Order[] | null = null;
+
+  // The panel of a building an order names says who is on the way, so it is worded again.
+  const tellOrders = (): void => {
+    const resort = current();
+    const orders = resort.staffRouter.ordersOf();
+    if (orders === toldOrders) return;
+    toldOrders = orders;
+    options.onOrdersChange?.(orderSpotsOf(resort, orders));
+    rewordPlace();
+  };
+
+  const rewordPlace = (): void => {
+    if (placementKeyOf(selected) !== null) select(selected);
+  };
+
+  const workerTask = createStaffTask();
+  const workerAtNow = { x: 0, y: 0, z: 0 };
+
+  const workerLine = (worker: number): string => {
+    const resort = current();
+    if (shiftChanged(selectedView, resort.duty[worker] === 1)) select(selected);
+    const task = resort.staffRouter.taskOf(worker, workerTask);
+    const at = writeDrawn(resort, worker, workerAtNow);
+    return staffLine(taskFactsOf(resort, worker, task), task.load, SPELLS_PER_LOAD, at);
+  };
+
   const inspectLine = (): string | null => {
     if (selected !== null && clock.day !== selectedOn) select(selected);
+    const worker = workerOf(selected);
+    return worker === null ? guestLine() : workerLine(worker);
+  };
+
+  const guestLine = (): string | null => {
     const person = personOf(selected);
     if (person === null) return null;
     const { crowd, needs, guests } = current();
@@ -3402,6 +3705,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       const { crowd, cast, drawnAt } = current();
       return whereDrawn(crowd.crowd, cast, { count: crowd.count, ...drawnAt });
     },
+    staff: () => staffWhereDrawn(current()),
     aimHeight: AIM_HEIGHT,
     ground: build.ground,
     keyAt: (tile) => current().occupancy.keyAt(tile),
@@ -3727,6 +4031,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     fpsState = sample.state;
 
     markerSpots.project(handle.camera, viewSize.width, viewSize.height);
+    staffPins.pin(current(), staffPinsShown, workerOf(selected));
+    tellOrders();
+    staffPins.project(handle.camera, viewSize.width, viewSize.height);
     const { world, crowd } = current();
     onFrame({
       sampled: sample.updated,
@@ -3747,6 +4054,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       shaderBuilds: handle.shaderBuilds(),
       inspect: inspectLine(),
       markers: markerSpots.view,
+      staff: staffPins.view,
     });
 
     recorder?.record(elapsed * 1000);
@@ -3814,6 +4122,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       const resort = current();
       markerSpots.place(tiles.slice(0, MAX_MARKERS).map((tile) => markerAnchorOf(resort, tile)));
     },
+    // Not refused under a bench as the markers are: a bench's fresh profile has them off.
+    setStaffPins(shown) {
+      staffPinsShown = shown;
+    },
     selectAt(tile) {
       const key = current().occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });
       if (key !== undefined) select({ key });
@@ -3843,6 +4155,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       onSceneChange?.(statsNow());
     },
     selectPerson: (person) => select({ person }),
+    selectWorker: (worker) => select({ worker }),
+    showSelected: () => lookAtWorker(handle, current(), workerOf(selected)),
+    sendStaff: (role) => sendToPlace(current(), role, placementKeyOf(selected)),
+    sendCleanerTo: (tile) => sendToTile(current(), tile),
     clearSelection: () => select(null),
     snapshot,
     load,

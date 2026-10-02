@@ -13,6 +13,8 @@ export interface OverlayControlProps {
   // Not a layer: the markers stand over whichever layer is on, or none.
   readonly markers: boolean;
   readonly onMarkersChange: (shown: boolean) => void;
+  readonly staff: boolean;
+  readonly onStaffChange: (shown: boolean) => void;
 }
 
 // Both ends of the one ramp, worded for the layer; the high end is always the bad one.
@@ -44,6 +46,8 @@ export function OverlayControl({
   onOpenChange,
   markers,
   onMarkersChange,
+  staff,
+  onStaffChange,
 }: OverlayControlProps) {
   const pick = (next: OverlayKind | null) => (): void => {
     onKindChange(next);
@@ -86,6 +90,13 @@ export function OverlayControl({
           checked={markers}
           many
           onSelect={() => onMarkersChange(!markers)}
+        />
+        <HudOption
+          label="Staff"
+          note="pin every member of staff on duty (S)"
+          checked={staff}
+          many
+          onSelect={() => onStaffChange(!staff)}
         />
       </HudDropdown>
       {kind ? (

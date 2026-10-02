@@ -408,6 +408,11 @@ an edit simply recasts.
   0.7 rad either side of the water, and one 20 s window in three raises the
   whistle; a cleaner sweeps with a slow `strike`, shuffling 0.6 voxels either
   side; a mechanic kneels (sunk by an adult's legs) and hammers in bursts.
+- **A cleaner sweeping a path** is no venue's: `recastStaff` takes a `sweeping`
+  callback (the showcase reads `taskOf`: `sweep` and `working`) and draws them
+  where the router holds them on the litter's node, with `WORK.sweep`. On the
+  way to the tile they walk as the crowd has them; making up a room and
+  restocking stay hidden indoors.
 - Every act above is drawn only and hashed with `mix`; none is saved. The
   variants declare the same acts except the minigolf's lanes, the playground's
   and the kids club's loops, and the staff spots; where the art declares
@@ -779,6 +784,53 @@ disarming brings none back.
 - Deferred: per-person assignment (the Staff window is per role) and patrolling,
   idle staff walking their zone. A lifeguard already posted keeps the post when a
   paint moves them to another zone, until the next edit rebuilds the router.
+
+**What a worker is doing** is one read, `staffRouter.taskOf(worker, into?)`,
+which changes nothing: a kind (`off`, `home`, `idle`, `venue`, `room`, `sweep`,
+`restock`, `tower`), the venue, lodging, litter tile, seat or depot it names,
+whether they are at it or on the way, the cart load and whether an order sent
+them. An empty cart with nothing on hand reads as `restock` on the way. An idle
+worker wanders the graph and is asked again at every node.
+
+- **Uniforms**: every staff figure wears a cap, the top voxel of the head, in a
+  role colour (cleaner teal, lifeguard red, animator yellow, mechanic slate),
+  and no staff shirt is a colour of a guest's `WARDROBE` ramp: the cleaner is in
+  stone white, the lifeguard in thatch over red, the animator in lime, the
+  mechanic in terracotta. Same geometry as before, so no extra triangles.
+- **Pins**: "Staff" in the Map view menu (or `S`, off by default, kept with the
+  HUD prefs) pins every member of staff on duty with a DOM button, positioned
+  per frame as the problem markers are (`createMarkerSpots` with a capacity of
+  the pool, slot = worker). `staffPinOf` (`hud/domain/staffPins.ts`) puts the pin
+  over the head of whoever is drawn, and over the roof (`roofOver`) of a covered
+  venue, a lodging or a depot for whoever is at work inside one, with a dot that
+  says so. The title is worded again only when the task changes. The inspected
+  worker keeps their pin with the rest put away (`isPinned`). Off, no pin is
+  computed. The Staff window adds, per role and hourly with the status, how many
+  are working, walking and idle (`tallyStaff`).
+- **Inspecting staff**: a click picks the nearer on screen of a guest and a
+  worker (`pickGuestOrWorker`); anybody off the plot is not pickable. A pin
+  click selects too. The panel (`StaffView`) names them within their role
+  ("Cleaner 7"), their zone or Everywhere, the shift and the wage, with "Show"
+  to turn the camera on them; the live line (`staffLine`) says what they are
+  doing (`staffWords.ts`), a cleaner's cart and their tile. A change of shift
+  words the panel again.
+- **Orders**: `order(role, { venue } | { tile })` sends a mechanic to a broken
+  venue or a cleaner to a dirty venue or a littered tile; at most eight are open
+  and one per role and target. The nearest free worker of the role (in the
+  target's zone if anybody there is free) is reserved for it and claims it at
+  their next step, before any choice of their own; one already busy finishes
+  first, and somebody already on their way there serves it. A building with no door
+  on the paving is reached over the sand, as a mechanic does, whoever is sent;
+  a cleaner's own choices stay on the paving. An order ends when
+  its worker finishes there, or when it no longer applies (mended, back above
+  `NEEDS_CLEANING`, nothing left to sweep), which also lets a worker still walking there go. An edit
+  carries orders across by key; they are saved as an optional `orders` field
+  (`SAVE_VERSION` unchanged). With none open nothing runs, so a resort nobody
+  orders about behaves exactly as before. The inspector of a broken or dirty
+  venue has "Send a mechanic" or "Send a cleaner", disabled with the reason when
+  nobody of the role is on duty or one is on the way; a litter marker has "Send
+  a cleaner" on hover; an ordered target's marker carries a green pennant, and
+  the worker's pin and panel say "Sent to ...".
 
 ## Breakdowns and injuries
 

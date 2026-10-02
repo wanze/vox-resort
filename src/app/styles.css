@@ -1251,6 +1251,14 @@ input[type='checkbox'] {
   text-align: right;
 }
 
+/* A line of its own under the role's row, as the grid has no column left for it. */
+.hud-staff-tally {
+  grid-column: 1 / -1;
+  margin-top: calc(-1 * var(--space-1));
+  color: var(--text-faint);
+  font: 500 var(--size-small) / 1 var(--font-num);
+}
+
 /* Rows are sentences here; .hud-stats keeps every line on one line, which would
    make the panel too wide. */
 .hud-advice {
@@ -1399,6 +1407,62 @@ input[type='checkbox'] {
   overflow: hidden;
 }
 
+/* The render loop moves the spot; the marker and its menu hang off it. */
+.hud-marker-spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.hud-marker-spot[hidden] {
+  display: none;
+}
+
+.hud-marker-spot:hover,
+.hud-marker-spot:focus-within {
+  z-index: 1;
+}
+
+/* Touching the marker's right edge, so the pointer can cross from one to the other. */
+.hud-marker-menu {
+  position: absolute;
+  top: -39px;
+  left: 16px;
+  display: none;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--ochre);
+  border-radius: var(--radius-pebble-b);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-marker-spot:hover .hud-marker-menu,
+.hud-marker-spot:focus-within .hud-marker-menu {
+  display: block;
+}
+
+/* A pennant on the corner: somebody has been sent. */
+.hud-marker-flag {
+  display: none;
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 9px solid var(--lamp-on);
+}
+
+.hud-marker[data-sent] .hud-marker-flag {
+  display: block;
+}
+
 /* The negative margins put the tip of the tail, not the corner, on the anchor. */
 .hud-marker {
   position: absolute;
@@ -1419,10 +1483,6 @@ input[type='checkbox'] {
   will-change: transform;
 }
 
-.hud-marker[hidden] {
-  display: none;
-}
-
 .hud-marker::after {
   content: '';
   position: absolute;
@@ -1441,6 +1501,87 @@ input[type='checkbox'] {
 
 .hud-marker:hover,
 .hud-marker:focus-visible {
+  z-index: 1;
+  filter: brightness(1.08);
+}
+
+/* Under the problem markers: a sign over a building in trouble outranks who is walking past. */
+.hud-pins {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+}
+
+.hud-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -27px 0 0 -11px;
+  padding: 0;
+  border: 2px solid var(--pin-edge);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  cursor: pointer;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.hud-pin[hidden] {
+  display: none;
+}
+
+.hud-pin::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--pin-edge);
+  border-bottom: 0;
+}
+
+.hud-pin[data-role='cleaner'] {
+  --pin-edge: #2f8e9e;
+}
+
+.hud-pin[data-role='lifeguard'] {
+  --pin-edge: #d2503a;
+}
+
+.hud-pin[data-role='animator'] {
+  --pin-edge: #f5c03c;
+}
+
+.hud-pin[data-role='mechanic'] {
+  --pin-edge: #6c7686;
+}
+
+/* Over a roof, the pin says so: the worker is under it, not standing on it. */
+.hud-pin-inside {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--stone-50);
+  border-radius: 50%;
+  background: var(--pin-edge);
+}
+
+.hud-pin[data-inside] .hud-pin-inside {
+  display: block;
+}
+
+.hud-pin:hover,
+.hud-pin:focus-visible {
   z-index: 1;
   filter: brightness(1.08);
 }

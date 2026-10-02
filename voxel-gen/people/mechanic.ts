@@ -16,6 +16,8 @@ export default defineModel({
       shirt: PALETTE.terracotta.base,
       sleeves: PALETTE.terracotta.shade,
       legs: PALETTE.terracotta.base,
+      // Slate, not metal: a near-black cap reads as the dark hair a guest has.
+      cap: PALETTE.slate.deep,
       height: ADULT_VOXELS,
     });
   },

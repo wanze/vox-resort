@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
-import { MAX_MARKERS, adviceAt, markerIconOf, markersOf } from './markers';
+import { MAX_MARKERS, adviceAt, markerIconOf, markersOf, orderedTiles } from './markers';
 
 const advice = (kind: AdviceKind, tileX = 0, tileZ = 0): Advice => ({
   kind,
@@ -74,5 +74,16 @@ describe('markerIconOf', () => {
   it('has no icon for a kind that gets no marker', () => {
     expect(markerIconOf('unvisited')).toBeNull();
     expect(markerIconOf('broken')).toBe('broken');
+  });
+});
+
+describe('orderedTiles', () => {
+  it('keys every ordered spot by its tile', () => {
+    const tiles = orderedTiles([
+      { role: 'cleaner', tileX: 3, tileZ: 4 },
+      { role: 'mechanic', tileX: 3, tileZ: 4 },
+      { role: 'cleaner', tileX: 0, tileZ: 9 },
+    ]);
+    expect([...tiles]).toEqual(['3,4', '0,9']);
   });
 });

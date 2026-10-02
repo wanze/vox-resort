@@ -27,6 +27,7 @@ export interface NewsControls {
   dismiss(key: string): void;
   setMuted(kind: ToastKind, muted: boolean): void;
   setMarkers(shown: boolean): void;
+  setStaffPins(shown: boolean): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;
 }
@@ -99,6 +100,13 @@ export function useNews(speed: SimSpeed): NewsControls {
     setMarkers: useCallback((shown: boolean) => {
       setPrefs((was) => {
         const next = { ...was, markers: shown };
+        savePrefs(next);
+        return next;
+      });
+    }, []),
+    setStaffPins: useCallback((shown: boolean) => {
+      setPrefs((was) => {
+        const next = { ...was, staff: shown };
         savePrefs(next);
         return next;
       });

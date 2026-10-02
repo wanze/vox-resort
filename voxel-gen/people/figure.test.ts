@@ -190,4 +190,33 @@ describe('PEOPLE_SOURCES', () => {
       }
     }
   });
+
+  it("dresses no member of staff in a shirt from the guests' wardrobe", () => {
+    const worn = new Set(WARDROBE.flatMap((ramp) => Object.values(ramp)));
+    const chest = hipHeight(ADULT_VOXELS) * FINE;
+    for (const source of STAFF_SOURCES) {
+      const model = buildModel(source);
+      const shirt = model.voxels.find(
+        (voxel) => voxel.x === 1 && voxel.y === chest && voxel.z === 1,
+      );
+      expect(shirt, source.id).toBeDefined();
+      expect(worn.has(shirt!.color), `${source.id} wears a guest's shirt`).toBe(false);
+    }
+  });
+
+  it('caps every member of staff, each role in a colour of its own', () => {
+    const top = ADULT_VOXELS * FINE - 1;
+    const caps = STAFF_SOURCES.map((source) => {
+      const model = buildModel(source);
+      return model.voxels.find((voxel) => voxel.x === 2 && voxel.y === top && voxel.z === 0)!.color;
+    });
+    expect(new Set(caps).size).toBe(STAFF_SOURCES.length);
+    const hair = PEOPLE_SOURCES.map((source) => {
+      const model = buildModel(source);
+      const height = model.height - 1;
+      return model.voxels.find((voxel) => voxel.x === 2 && voxel.y === height && voxel.z === 0)!
+        .color;
+    });
+    for (const cap of caps) expect(hair).not.toContain(cap);
+  });
 });

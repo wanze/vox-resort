@@ -2,12 +2,12 @@ import {
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,
+  CLIMB_RAILING_IDS,
   HEDGE_ID,
   LAMP_ID,
   PAVING_IDS,
   PIER_RAILING_ID,
   RAILING_ID,
-  STAIR_RAILING_ID,
 } from './resortPlan';
 
 export type PlacementList = 'paths' | 'rails' | 'props' | 'placements';
@@ -19,7 +19,7 @@ export const PROP_IDS: ReadonlySet<string> = new Set([LAMP_ID, HEDGE_ID]);
 export const RAIL_IDS: ReadonlySet<string> = new Set([
   RAILING_ID,
   PIER_RAILING_ID,
-  STAIR_RAILING_ID,
+  ...CLIMB_RAILING_IDS,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,

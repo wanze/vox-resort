@@ -386,7 +386,8 @@ const SHORE_BEACH = { of: 0.14, min: 10, max: 16, wander: 3 } as const;
 const HILL = {
   dune: 3,
   peak: { max: 6, min: 3 },
-  shelf: { of: 0.09, min: 4, max: 11 },
+  // Six holds a walk with a bungalow either side, with a row to spare for the coast drifting under it.
+  shelf: { of: 0.09, min: 6, max: 11 },
   bench: { of: 0.07, min: 4, max: 9 },
   step: { of: 0.05, min: 3, max: 7 },
   resort: 24,
@@ -394,6 +395,12 @@ const HILL = {
 
 // A walk holds one z while the coast drifts under it, so on a narrower bench it would step on and off.
 const WALKABLE_BENCH = 5;
+
+// A ramp needs two tiles below the step it climbs, and the third is a landing before the next one.
+const DUNE_STEP = 3;
+
+const shelfDepthOf = (tilesZ: number): number =>
+  Math.round(clamp(tilesZ * HILL.shelf.of, HILL.shelf.min, HILL.shelf.max));
 
 interface HillStep {
   readonly level: number;
@@ -416,7 +423,7 @@ function hillStepsFor(
     steps.push({
       level,
       surface: 'sand',
-      depth: level < HILL.dune ? 1 : size.shelf,
+      depth: level < HILL.dune ? DUNE_STEP : size.shelf,
     });
   }
   for (let level = HILL.dune + 1; level <= peak; level++) {
@@ -457,7 +464,7 @@ function terracesOf(steps: readonly HillStep[], beach: number): TerraceSpec[] {
 // furthest inland where the sea does.
 function hillFor(params: ResortParams, shore: ShoreSpec): Hill | null {
   const size = {
-    shelf: Math.round(clamp(params.tilesZ * HILL.shelf.of, HILL.shelf.min, HILL.shelf.max)),
+    shelf: shelfDepthOf(params.tilesZ),
     bench: Math.round(clamp(params.tilesZ * HILL.bench.of, HILL.bench.min, HILL.bench.max)),
     step: Math.round(clamp(params.tilesZ * HILL.step.of, HILL.step.min, HILL.step.max)),
   };
@@ -2146,23 +2153,28 @@ function bareShoreSpecFor(params: ResortParams, land: LandConfig): ShoreSpec {
 }
 
 // The sand climbs in steps off the beach and the grass starts above it, so bare land never lies
-// flush with the sea. Each step follows the coast, so the dune is as deep all along it.
-const DUNE = { steps: { min: 2, max: 3 }, depth: { of: 0.02, min: 2, max: 4 } } as const;
+// flush with the sea. Each step follows the coast, so the dune is as deep all along it. The top
+// step is a shelf, as on a generated plot, so it has room for bungalows.
+const DUNE_STEPS = { min: 2, max: 3 } as const;
 
 // Its own generator, so the dune's height does not move the river or the hills.
 const DUNE_SALT = 0x4d1;
 
 function bareTerracesFor(shore: ShoreSpec, params: ResortParams): ElevationSpec {
   const random = createRandom(params.seed + DUNE_SALT);
-  const steps = DUNE.steps.min + Math.floor(random() * (DUNE.steps.max - DUNE.steps.min + 1));
-  const depth = Math.round(clamp(params.tilesZ * DUNE.depth.of, DUNE.depth.min, DUNE.depth.max));
-  const terraces = Array.from({ length: steps + 1 }, (_, index): TerraceSpec => ({
-    level: index + 1,
-    inset: shore.beach + index * depth,
-    anchor: 'water',
-    wave: 0,
-    surface: index < steps ? 'sand' : 'grass',
-  }));
+  const steps = DUNE_STEPS.min + Math.floor(random() * (DUNE_STEPS.max - DUNE_STEPS.min + 1));
+  let inset = shore.beach;
+  const terraces = Array.from({ length: steps + 1 }, (_, index): TerraceSpec => {
+    const terrace: TerraceSpec = {
+      level: index + 1,
+      inset,
+      anchor: 'water',
+      wave: 0,
+      surface: index < steps ? 'sand' : 'grass',
+    };
+    inset += index < steps - 1 ? DUNE_STEP : shelfDepthOf(params.tilesZ);
+    return terrace;
+  });
   return { terraces, seed: params.seed };
 }
 

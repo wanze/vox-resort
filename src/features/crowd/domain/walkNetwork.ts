@@ -175,16 +175,26 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     seats,
     beachSeats,
     posts,
-    sand: sandOf(input),
+    sand: sandOf(input, climbs),
   };
 }
 
-function sandOf(input: WalkNetworkInput): SandGrid | null {
+// Roamers cross the sand at its own height, and a ramp or flight rises out of it: walked through,
+// it would hide them to the waist.
+function sandOf(input: WalkNetworkInput, climbs: ReadonlyMap<string, Climb>): SandGrid | null {
   if (!input.shore) return null;
+  const raised: ObstacleBox[] = input.paved
+    .filter((tile) => climbs.has(tileKey(tile.tileX, tile.tileZ)))
+    .map((tile) => ({
+      x: tile.tileX * TILE_VOXELS,
+      z: tile.tileZ * TILE_VOXELS,
+      width: TILE_VOXELS,
+      depth: TILE_VOXELS,
+    }));
   return sandGridFor({
     shore: input.shore,
     tilesX: input.tilesX,
-    obstacles: input.obstacles ?? [],
+    obstacles: [...(input.obstacles ?? []), ...raised],
   });
 }
 
@@ -321,8 +331,10 @@ function standFor(
   const climb = climbs.get(key);
   const gate = adjoinsOpenSand(tile, shore, paved);
   if (!climb) return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
-  // The foot of a ramp can be the last tile before the sand, as the slab it replaced was.
-  return slopeOn(tile, climb, { ...SLOPES[climb.kind], gate }, standAt);
+  // The foot of a ramp can be the last tile before the sand, as the slab it replaced was. A head's
+  // low end is half a level up, and shared with its foot: a gate there walks people into the ramp.
+  const slope = SLOPES[climb.kind];
+  return slopeOn(tile, climb, { ...slope, gate: gate && !slope.raised }, standAt);
 }
 
 function middleOf(tile: PavedTile): {

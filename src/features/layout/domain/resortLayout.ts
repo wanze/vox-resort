@@ -20,10 +20,13 @@ import {
   PIER_RAILING_ID,
   RAILING_ID,
   RAMP_FOOT_ID,
-  RAMP_FOOT_RAILING_ID,
+  RAMP_FOOT_RAILING_LEFT_ID,
+  RAMP_FOOT_RAILING_RIGHT_ID,
   RAMP_HEAD_ID,
-  RAMP_HEAD_RAILING_ID,
-  STAIR_RAILING_ID,
+  RAMP_HEAD_RAILING_LEFT_ID,
+  RAMP_HEAD_RAILING_RIGHT_ID,
+  STAIR_RAILING_LEFT_ID,
+  STAIR_RAILING_RIGHT_ID,
   STAIRS_ID,
   type Bend,
   type PathEdge,
@@ -748,9 +751,12 @@ export type RailModels = { readonly [kind in RailKind]: LayoutItem | undefined }
 export function railModelsIn(items: readonly LayoutItem[]): RailModels {
   const byId = new Map(items.map((item) => [item.id, item]));
   return {
-    flight: byId.get(STAIR_RAILING_ID),
-    'ramp-foot': byId.get(RAMP_FOOT_RAILING_ID),
-    'ramp-head': byId.get(RAMP_HEAD_RAILING_ID),
+    'flight-left': byId.get(STAIR_RAILING_LEFT_ID),
+    'flight-right': byId.get(STAIR_RAILING_RIGHT_ID),
+    'ramp-foot-left': byId.get(RAMP_FOOT_RAILING_LEFT_ID),
+    'ramp-foot-right': byId.get(RAMP_FOOT_RAILING_RIGHT_ID),
+    'ramp-head-left': byId.get(RAMP_HEAD_RAILING_LEFT_ID),
+    'ramp-head-right': byId.get(RAMP_HEAD_RAILING_RIGHT_ID),
     edge: byId.get(RAILING_ID),
     // A catalogue with no lit pier rail rails its piers the way it rails a terrace.
     pier: byId.get(PIER_RAILING_ID) ?? byId.get(RAILING_ID),
@@ -759,8 +765,6 @@ export function railModelsIn(items: readonly LayoutItem[]): RailModels {
     'ramp-right': byId.get(BRIDGE_RAMP_RAILING_RIGHT_ID),
   };
 }
-
-const STANDS_ON_TILE: ReadonlySet<RailKind> = new Set(['flight', 'ramp-foot', 'ramp-head']);
 
 // Shared with the pointer, so a rail drawn by hand does not land a voxel off the one beside it.
 export function railPlacementsFor(
@@ -774,11 +778,7 @@ export function railPlacementsFor(
     if (!item) continue;
     const { x, z } = rail.tile;
     const level = levelOf(x, z);
-    placements.push(
-      STANDS_ON_TILE.has(rail.kind)
-        ? place(item, railKey(item, rail), x, z, rail.rotation, level)
-        : placeOnEdge(item, railKey(item, rail), x, z, rail.rotation, level),
-    );
+    placements.push(placeOnEdge(item, railKey(item, rail), x, z, rail.rotation, level));
   }
   return placements;
 }

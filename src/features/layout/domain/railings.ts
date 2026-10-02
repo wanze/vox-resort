@@ -15,15 +15,9 @@ const NO_SPAN: SpanProvider = () => false;
 
 const NO_RAMPS: PavedProvider = () => true;
 
-export type RailKind =
-  | 'flight'
-  | 'ramp-foot'
-  | 'ramp-head'
-  | 'edge'
-  | 'pier'
-  | 'span'
-  | 'ramp-left'
-  | 'ramp-right';
+export type ClimbRailKind = `${'flight' | 'ramp-foot' | 'ramp-head'}-${'left' | 'right'}`;
+
+export type RailKind = ClimbRailKind | 'edge' | 'pier' | 'span' | 'ramp-left' | 'ramp-right';
 
 export interface RailTile {
   readonly tile: Tile;
@@ -31,9 +25,11 @@ export interface RailTile {
   readonly kind: RailKind;
 }
 
-function flanksOf(climb: Rotation): Rotation[] {
-  return [normalizeRotation(climb + 1), normalizeRotation(climb + 3)];
-}
+// A quarter turn on from the climb is the left flank looking up it.
+const FLANKS = [
+  { turn: 1, side: 'left' },
+  { turn: 3, side: 'right' },
+] as const;
 
 function stepOf(rotation: Rotation): { readonly dx: number; readonly dz: number } {
   const climb = CLIMBS.find((candidate) => candidate.rotation === rotation)!;
@@ -54,14 +50,15 @@ export function railsAt(
   if (isSpan(tile.x, tile.z)) return spanRailsAt(tile, isPaved, isSpan);
   const climb = climbKindAt(tile, isPaved, levelOf, wantsStairs);
   if (climb !== null) {
-    // Both flanks or neither: one model carries the pair, so a wide staircase or
-    // ramp is left open rather than railed down its middle.
-    const alone = flanksOf(climb.rotation).every((flank) => {
-      const { dx, dz } = stepOf(flank);
-      return !isPaved(tile.x + dx, tile.z + dz);
+    // Each flank on its own edge, so a wide staircase or ramp is railed down its outer flanks and
+    // left open down its middle.
+    const piece = climb.kind === 'stairs' ? 'flight' : climb.kind;
+    return FLANKS.flatMap(({ turn, side }) => {
+      const edge = normalizeRotation(climb.rotation + turn);
+      const { dx, dz } = stepOf(edge);
+      if (isPaved(tile.x + dx, tile.z + dz)) return [];
+      return [{ tile, rotation: edge, kind: `${piece}-${side}` as const }];
     });
-    const kind: RailKind = climb.kind === 'stairs' ? 'flight' : climb.kind;
-    return alone ? [{ tile, rotation: climb.rotation, kind }] : [];
   }
 
   const level = levelOf(tile.x, tile.z);

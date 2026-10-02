@@ -14,7 +14,7 @@ import {
   RAILING_ID,
   RAMP_FOOT_ID,
   RAMP_HEAD_ID,
-  STAIR_RAILING_ID,
+  STAIR_RAILING_LEFT_ID,
   STAIRS_ID,
   type Plaza,
 } from './resortPlan';
@@ -849,6 +849,23 @@ describe('emptyResortPlan', () => {
     expect(tops).toEqual(new Set([2, 3]));
   });
 
+  it('leaves room for a ramp on every step of sand, and a shelf on top for bungalows', () => {
+    for (const size of [PLOT_TILES.min, 100]) {
+      for (const seed of [1, 2, 3, 4, 5, 6]) {
+        const terraces = emptyResortPlan(size, size, seed).elevation!.terraces;
+        const depths = terraces
+          .filter((terrace) => terrace.surface === 'sand')
+          .map((terrace, index) => terraces[index + 1]!.inset - terrace.inset);
+        expect({ size, seed, steps: depths.slice(0, -1).every((depth) => depth >= 3) }).toEqual({
+          size,
+          seed,
+          steps: true,
+        });
+        expect({ size, seed, shelf: depths.at(-1)! >= 6 }).toEqual({ size, seed, shelf: true });
+      }
+    }
+  });
+
   it('raises hills out on the grass by default, and none when asked not to', () => {
     expect(hillsOf(emptyResortPlan(112, 100, 3)).length).toBeGreaterThan(50);
     expect(hillsOf(emptyResortPlan(112, 100, 3, { hills: false }))).toEqual([]);
@@ -1030,14 +1047,30 @@ describe('the hill a generated plot gets', () => {
     const paved = new Set(paths.map((tile) => tileKey(tile.tileX, tile.tileZ)));
 
     expect(rails.some((rail) => rail.id === RAILING_ID)).toBe(true);
-    expect(rails.some((rail) => rail.id === STAIR_RAILING_ID)).toBe(true);
+    expect(rails.some((rail) => rail.id === STAIR_RAILING_LEFT_ID)).toBe(true);
     for (const rail of rails) {
       expect({ key: rail.key, on: paved.has(tileKey(rail.tileX, rail.tileZ)) }).toEqual({
         key: rail.key,
         on: true,
       });
     }
-    expect(rails.length).toBeLessThan(paths.length / 8);
+    // A railed climb stands two balustrades, one a flank.
+    expect(rails.length).toBeLessThan(paths.length / 6);
+  });
+
+  it('ramps every path that comes down the dune to the beach', () => {
+    for (const seed of [1, 2, 3]) {
+      const plan = generateResort(TYPES, params({ seed }));
+      const terrain = terrainFor(plan);
+      const { paths } = layoutResort(ITEMS, plan);
+      const onDune = paths.filter(
+        (tile) =>
+          terrain.surfaceOf(tile.tileX, tile.tileZ) === 'sand' &&
+          terrain.levelOf(tile.tileX, tile.tileZ) < 3,
+      );
+      expect(onDune.filter((tile) => tile.id === RAMP_HEAD_ID).length).toBeGreaterThan(5);
+      expect(onDune.filter((tile) => tile.id === STAIRS_ID)).toEqual([]);
+    }
   });
 
   it('lays a flight where a path crosses a step and nowhere else', () => {
@@ -1066,8 +1099,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 3117314938],
-      [7, 1199790226],
+      [1, 4044561752],
+      [7, 1134888250],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

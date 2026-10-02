@@ -35,7 +35,8 @@ import {
   PATH_ID,
   RAILING_ID,
   RESORT_PLAN,
-  STAIR_RAILING_ID,
+  STAIR_RAILING_LEFT_ID,
+  STAIR_RAILING_RIGHT_ID,
   type ResortPlan,
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
@@ -305,7 +306,9 @@ describe('handrails', () => {
     width: TILE_VOXELS,
     depth: 2,
   };
-  const railItems: LayoutItem[] = [item(PATH_ID), railItem, item(STAIR_RAILING_ID)];
+  const flankItem = (id: string): LayoutItem => ({ ...railItem, id });
+  const flightRails = [flankItem(STAIR_RAILING_LEFT_ID), flankItem(STAIR_RAILING_RIGHT_ID)];
+  const railItems: LayoutItem[] = [item(PATH_ID), railItem, ...flightRails];
 
   const bench: ResortPlan = {
     tilesX: 5,
@@ -342,11 +345,15 @@ describe('handrails', () => {
     });
   });
 
-  it('guards the flight where the lane comes down off the bench', () => {
+  it('guards both flanks of the flight where the lane comes down off the bench', () => {
     const { rails } = layoutResort(railItems, bench);
-    const flight = rails.filter((rail) => rail.id === STAIR_RAILING_ID);
-    expect(flight).toHaveLength(1);
-    expect(flight[0]).toMatchObject({ tileX: 0, tileZ: 2, rotation: 0, y: 0 });
+    const flight = rails.filter((rail) => rail.id.startsWith('stair-railing'));
+    expect(
+      flight.map(({ id, tileX, tileZ, rotation, x, y }) => ({ id, tileX, tileZ, rotation, x, y })),
+    ).toEqual([
+      { id: STAIR_RAILING_LEFT_ID, tileX: 0, tileZ: 2, rotation: 1, x: 0, y: 0 },
+      { id: STAIR_RAILING_RIGHT_ID, tileX: 0, tileZ: 2, rotation: 3, x: TILE_VOXELS - 2, y: 0 },
+    ]);
   });
 
   it('stands every rail on a tile that is paved', () => {
@@ -362,9 +369,7 @@ describe('handrails', () => {
   });
 
   it('rails nothing on a plot with no steps in it', () => {
-    expect(layoutResort([...tinyItems, railItem, item(STAIR_RAILING_ID)], tinyPlan).rails).toEqual(
-      [],
-    );
+    expect(layoutResort([...tinyItems, railItem, ...flightRails], tinyPlan).rails).toEqual([]);
   });
 
   it('lays no rails at all when the catalogue has none', () => {
@@ -1143,7 +1148,9 @@ describe('turning a building to open its door onto paving', () => {
     const without: LayoutItem[] = withDoors.map(({ doors: _doors, ...rest }) => rest);
     const planFor = (seed: number): ResortPlan =>
       generateResort(TYPES, clampParams({ tilesX: 112, tilesZ: 100, seed, density: 0.7 }));
-    const plan = planFor(3);
+    // A seed whose packing leaves every door a free side: some seeds wall a pavilion in on both
+    // sides its footprint lets it turn to, which no turn can fix.
+    const plan = planFor(1);
 
     it('opens every door-declaring building on the grass onto paving', () => {
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);

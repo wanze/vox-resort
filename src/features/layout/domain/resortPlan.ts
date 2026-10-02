@@ -97,10 +97,22 @@ export const RAILING_ID = 'railing';
 
 export const PIER_RAILING_ID = 'pier-railing';
 
-export const STAIR_RAILING_ID = 'stair-railing';
+export const STAIR_RAILING_LEFT_ID = 'stair-railing-left';
+export const STAIR_RAILING_RIGHT_ID = 'stair-railing-right';
 
-export const RAMP_FOOT_RAILING_ID = 'ramp-foot-railing';
-export const RAMP_HEAD_RAILING_ID = 'ramp-head-railing';
+export const RAMP_FOOT_RAILING_LEFT_ID = 'ramp-foot-railing-left';
+export const RAMP_FOOT_RAILING_RIGHT_ID = 'ramp-foot-railing-right';
+export const RAMP_HEAD_RAILING_LEFT_ID = 'ramp-head-railing-left';
+export const RAMP_HEAD_RAILING_RIGHT_ID = 'ramp-head-railing-right';
+
+export const CLIMB_RAILING_IDS: readonly string[] = [
+  STAIR_RAILING_LEFT_ID,
+  STAIR_RAILING_RIGHT_ID,
+  RAMP_FOOT_RAILING_LEFT_ID,
+  RAMP_FOOT_RAILING_RIGHT_ID,
+  RAMP_HEAD_RAILING_LEFT_ID,
+  RAMP_HEAD_RAILING_RIGHT_ID,
+];
 
 export const BRIDGE_RAILING_ID = 'bridge-railing';
 
@@ -122,9 +134,7 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   BENCH_ID,
   RAILING_ID,
   PIER_RAILING_ID,
-  STAIR_RAILING_ID,
-  RAMP_FOOT_RAILING_ID,
-  RAMP_HEAD_RAILING_ID,
+  ...CLIMB_RAILING_IDS,
   BRIDGE_RAILING_ID,
   BRIDGE_RAMP_RAILING_LEFT_ID,
   BRIDGE_RAMP_RAILING_RIGHT_ID,

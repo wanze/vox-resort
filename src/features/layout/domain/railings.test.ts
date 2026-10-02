@@ -48,28 +48,45 @@ describe('railsAt', () => {
     expect(railsAt({ x: 1, z: 2 }, pavedOf([{ x: 1, z: 2 }]), bench)).toEqual([]);
   });
 
-  it('guards a flight up both flanks, turned the way it climbs', () => {
+  it('guards a flight up both flanks, each on the edge it stands along', () => {
     const paved = [
       { x: 1, z: 1 },
       { x: 1, z: 2 },
     ];
     expect(railsAt({ x: 1, z: 2 }, pavedOf(paved), bench)).toEqual([
-      { tile: { x: 1, z: 2 }, rotation: 0, kind: 'flight' },
+      { tile: { x: 1, z: 2 }, rotation: 1, kind: 'flight-left' },
+      { tile: { x: 1, z: 2 }, rotation: 3, kind: 'flight-right' },
     ]);
   });
 
-  it('leaves a staircase wider than one tile open', () => {
+  it('turns the flanks with the climb, the left one a quarter turn on from it', () => {
+    const westward = groundOf(['100', '100', '100']);
+    const paved = [
+      { x: 0, z: 1 },
+      { x: 1, z: 1 },
+    ];
+    expect(railsAt({ x: 1, z: 1 }, pavedOf(paved), westward)).toEqual([
+      { tile: { x: 1, z: 1 }, rotation: 2, kind: 'flight-left' },
+      { tile: { x: 1, z: 1 }, rotation: 0, kind: 'flight-right' },
+    ]);
+  });
+
+  it('rails a staircase wider than one tile down its outer flanks only', () => {
     const paved = [
       { x: 1, z: 1 },
       { x: 2, z: 1 },
       { x: 1, z: 2 },
       { x: 2, z: 2 },
     ];
-    expect(railsAt({ x: 1, z: 2 }, pavedOf(paved), bench)).toEqual([]);
-    expect(railsAt({ x: 2, z: 2 }, pavedOf(paved), bench)).toEqual([]);
+    expect(railsAt({ x: 1, z: 2 }, pavedOf(paved), bench)).toEqual([
+      { tile: { x: 1, z: 2 }, rotation: 1, kind: 'flight-left' },
+    ]);
+    expect(railsAt({ x: 2, z: 2 }, pavedOf(paved), bench)).toEqual([
+      { tile: { x: 2, z: 2 }, rotation: 3, kind: 'flight-right' },
+    ]);
   });
 
-  it('guards a ramp up both flanks of both its tiles, turned the way it climbs', () => {
+  it('guards a ramp up both flanks of both its tiles', () => {
     const paved = pavedOf([
       { x: 1, z: 0 },
       { x: 1, z: 1 },
@@ -77,21 +94,30 @@ describe('railsAt', () => {
     ]);
     const terrace = groundOf(['111', '000', '000']);
     expect(railsAt({ x: 1, z: 1 }, paved, terrace, undefined, undefined, ramps)).toEqual([
-      { tile: { x: 1, z: 1 }, rotation: 0, kind: 'ramp-head' },
+      { tile: { x: 1, z: 1 }, rotation: 1, kind: 'ramp-head-left' },
+      { tile: { x: 1, z: 1 }, rotation: 3, kind: 'ramp-head-right' },
     ]);
     expect(railsAt({ x: 1, z: 2 }, paved, terrace, undefined, undefined, ramps)).toEqual([
-      { tile: { x: 1, z: 2 }, rotation: 0, kind: 'ramp-foot' },
+      { tile: { x: 1, z: 2 }, rotation: 1, kind: 'ramp-foot-left' },
+      { tile: { x: 1, z: 2 }, rotation: 3, kind: 'ramp-foot-right' },
     ]);
   });
 
-  it('leaves a ramp wider than one tile open, as a wide staircase is', () => {
+  it('rails a ramp wider than one tile down its outer flanks, as a wide staircase', () => {
     const tiles = [0, 1, 2].flatMap((z) => [
       { x: 1, z },
       { x: 2, z },
     ]);
     const terrace = groundOf(['111', '000', '000']);
     const rails = railTilesFor(tiles, terrace, undefined, undefined, ramps);
-    expect(rails.filter((rail) => rail.tile.z > 0)).toEqual([]);
+    expect(rails.filter((rail) => rail.tile.z > 0).map((rail) => rail.kind)).toEqual([
+      'ramp-head-left',
+      'ramp-head-right',
+      'ramp-foot-left',
+      'ramp-foot-right',
+    ]);
+    const left = rails.filter((rail) => rail.kind.endsWith('-left'));
+    expect(left.every((rail) => rail.tile.x === 1)).toBe(true);
   });
 
   it('rails nothing at all on flat ground', () => {
@@ -111,7 +137,8 @@ describe('railTilesFor', () => {
     const rails = railTilesFor(paved, bench);
     expect(rails).toEqual([
       { tile: { x: 1, z: 1 }, rotation: 2, kind: 'edge' },
-      { tile: { x: 2, z: 2 }, rotation: 0, kind: 'flight' },
+      { tile: { x: 2, z: 2 }, rotation: 1, kind: 'flight-left' },
+      { tile: { x: 2, z: 2 }, rotation: 3, kind: 'flight-right' },
     ]);
   });
 });

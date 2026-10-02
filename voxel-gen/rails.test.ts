@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_SOURCES } from './models/index.ts';
+import { flightTreadAt, rampTreadAt } from './parts/flight.ts';
 import { rampPlanksAt } from './parts/span.ts';
 import { buildModel, TILE_VOXELS, type VoxelModelSource } from './voxelgen.ts';
 
 // A rail shares its tile with the paving under it, so an outward face in the same
 // plane as the paving would z-fight. Bottom faces are culled and exempt.
 const PAIRS: readonly (readonly [string, string])[] = [
-  ['stairs', 'stair-railing'],
-  ['staircase', 'stair-railing'],
-  ['ramp-foot', 'ramp-foot-railing'],
-  ['ramp-head', 'ramp-head-railing'],
   ['path', 'railing'],
   ['boardwalk', 'railing'],
   ['jetty', 'railing'],
@@ -106,4 +103,41 @@ describe('the parapets on a bridge ramp', () => {
       }).toEqual({ z, plank: true, kick: true });
     }
   });
+});
+
+// Unturned, a climb rises north; its left flank is the west edge, a quarter turn on.
+const FLANK_RAILS: readonly (readonly [string, string, Turn, (z: number) => number])[] = [
+  ['stairs', 'stair-railing-left', 1, flightTreadAt],
+  ['stairs', 'stair-railing-right', 3, flightTreadAt],
+  ['staircase', 'stair-railing-left', 1, flightTreadAt],
+  ['staircase', 'stair-railing-right', 3, flightTreadAt],
+  ['ramp-foot', 'ramp-foot-railing-left', 1, (z) => rampTreadAt('foot', z)],
+  ['ramp-foot', 'ramp-foot-railing-right', 3, (z) => rampTreadAt('foot', z)],
+  ['ramp-head', 'ramp-head-railing-left', 1, (z) => rampTreadAt('head', z)],
+  ['ramp-head', 'ramp-head-railing-right', 3, (z) => rampTreadAt('head', z)],
+];
+
+describe('the balustrades up the flanks of a climb', () => {
+  it.each(FLANK_RAILS)('%s and %s turned %i share no face plane', (pavingId, railId, turn) => {
+    const paving = facesOf(byId.get(pavingId)!);
+    const shared = [...facesOf(byId.get(railId)!, turn)].filter((face) => paving.has(face));
+    expect(shared).toEqual([]);
+  });
+
+  it.each(FLANK_RAILS)(
+    '%s: %s turned %i rises with the treads',
+    (pavingId, railId, turn, treadAt) => {
+      const paving = voxelsOnEdge(byId.get(pavingId)!);
+      const rail = voxelsOnEdge(byId.get(railId)!, turn);
+      const x = turn === 1 ? 0 : TILE_VOXELS - 1;
+      for (let z = 0; z < TILE_VOXELS; z++) {
+        const y = treadAt(z);
+        expect({
+          z,
+          tread: paving.has(`${x},${y},${z}`),
+          kick: rail.has(`${x},${y + 1},${z}`),
+        }).toEqual({ z, tread: true, kick: true });
+      }
+    },
+  );
 });

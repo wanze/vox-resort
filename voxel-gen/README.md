@@ -235,8 +235,10 @@ step a ramp where two straight tiles fit below it (`ramp-foot` on the tile befor
 `ramp-head` against the step, 1:4), else `stairs`. A `staircase` stays a flight
 where it climbs and is flat paving where it does not. The derived kinds declare
 `groundDecides` so the palette hides them; `parts/flight.ts` builds the flight,
-the ramp courses and the balustrades (`stair-railing`, `ramp-foot-railing`,
-`ramp-head-railing`) for all of them. All paving is two voxels tall
+the ramp courses and the balustrades for all of them, one model a flank
+(`stair-railing-left`/`-right`, `ramp-foot-railing-left`/`-right`,
+`ramp-head-railing-left`/`-right`) laid along the edge like any rail, so a climb
+wider than a tile is railed down its outer flanks only. All paving is two voxels tall
 (`PAVING_VOXELS`). A new kind of paving is a model file plus an entry in
 `PAVING_IDS`.
 

@@ -3,14 +3,19 @@ import { balustrade, rampTreadAt } from '../parts/flight.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 export default defineModel({
-  id: 'ramp-head-railing',
-  label: 'Ramp Balustrade (Head)',
+  id: 'ramp-foot-railing-left',
+  label: 'Ramp Balustrade (Foot, Left)',
   category: 'grounds',
   tiles: { x: 1, z: 1 },
   groundDecides: true,
   build: (b: VoxelBuilder) =>
-    balustrade(b, (z) => rampTreadAt('head', z), {
-      wall: PALETTE.sand.base,
-      cap: PALETTE.stucco.base,
-    }),
+    balustrade(
+      b,
+      (z) => rampTreadAt('foot', z),
+      {
+        wall: PALETTE.sand.base,
+        cap: PALETTE.stucco.base,
+      },
+      'left',
+    ),
 });

@@ -14,6 +14,7 @@ import {
   type WalkNode,
 } from './walkNetwork';
 import type { SeatSpot } from './seating';
+import { blockedAt } from './sandGrid';
 
 const flat = (tiles: readonly (readonly [number, number])[]): PavedTile[] =>
   tiles.map(([tileX, tileZ]) => ({ tileX, tileZ, y: 0 }));
@@ -382,6 +383,42 @@ describe('the gates onto the beach', () => {
     expect(network.nodes[nodeAt(network, 5, 4)]!.gate).toBe(true);
     expect(network.nodes[nodeAt(network, 5, 5)]!.gate).toBe(true);
     expect(network.gates).toHaveLength(2);
+  });
+
+  const rampToSand = (order: readonly number[]): WalkNetwork =>
+    walkNetworkFor({
+      paved: order.map((tileZ) => ({
+        tileX: 5,
+        tileZ,
+        y: tileZ <= 3 ? LEVEL_VOXELS : 0,
+        id: ({ 4: 'ramp-head', 5: 'ramp-foot' } as Record<number, string>)[tileZ] ?? 'path',
+        rotation: 0,
+      })),
+      levelOf: (_x, z) => (z <= 3 ? 1 : 0),
+      shore,
+      tilesX: 10,
+    });
+
+  it('opens no gate half way up a ramp, whichever tile is laid first', () => {
+    for (const order of [
+      [3, 4, 5, 6],
+      [6, 5, 4, 3],
+    ]) {
+      const network = rampToSand(order);
+      const heights = network.gates.map((gate) => network.nodes[gate]!.y);
+      expect({ order, heights }).toEqual({
+        order,
+        heights: [walkingSurface(0), walkingSurface(0)],
+      });
+    }
+  });
+
+  it('keeps roamers off a ramp standing on the sand, and lets them past beside it', () => {
+    const { sand } = rampToSand([3, 4, 5, 6]);
+    const middle = (tileX: number, tileZ: number) =>
+      blockedAt(sand!, (tileX + 0.5) * TILE_VOXELS, (tileZ + 0.5) * TILE_VOXELS);
+    expect([middle(5, 4), middle(5, 5)]).toEqual([true, true]);
+    expect([middle(5, 6), middle(3, 4), middle(7, 5)]).toEqual([false, false, false]);
   });
 });
 

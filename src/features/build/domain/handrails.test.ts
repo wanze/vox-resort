@@ -15,9 +15,12 @@ import {
   BRIDGE_RAMP_RAILING_RIGHT_ID,
   PATH_ID,
   RAILING_ID,
-  RAMP_FOOT_RAILING_ID,
-  RAMP_HEAD_RAILING_ID,
-  STAIR_RAILING_ID,
+  RAMP_FOOT_RAILING_LEFT_ID,
+  RAMP_FOOT_RAILING_RIGHT_ID,
+  RAMP_HEAD_RAILING_LEFT_ID,
+  RAMP_HEAD_RAILING_RIGHT_ID,
+  STAIR_RAILING_LEFT_ID,
+  STAIR_RAILING_RIGHT_ID,
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
 import { railChangeAt, reRailAround, type HandrailRules } from './handrails';
@@ -39,9 +42,12 @@ const CATALOGUE = [
   item(BOARDWALK_ID),
   STAIRS,
   item(RAILING_ID, 16, 2),
-  item(STAIR_RAILING_ID),
-  item(RAMP_FOOT_RAILING_ID),
-  item(RAMP_HEAD_RAILING_ID),
+  item(STAIR_RAILING_LEFT_ID, 16, 2),
+  item(STAIR_RAILING_RIGHT_ID, 16, 2),
+  item(RAMP_FOOT_RAILING_LEFT_ID, 16, 2),
+  item(RAMP_FOOT_RAILING_RIGHT_ID, 16, 2),
+  item(RAMP_HEAD_RAILING_LEFT_ID, 16, 2),
+  item(RAMP_HEAD_RAILING_RIGHT_ID, 16, 2),
   item(BRIDGE_RAILING_ID, 16, 2),
   item(BRIDGE_RAMP_RAILING_LEFT_ID, 16, 2),
   item(BRIDGE_RAMP_RAILING_RIGHT_ID, 16, 2),
@@ -80,6 +86,12 @@ const railsOf = (placements: readonly Placement[]) =>
 
 const bench = groundOf(['1111', '1111', '0000', '0000']);
 
+// A flight up the north step at 1,2 has its left flank to the west and its right to the east.
+const flightAt = (x: number, z: number) => [
+  { id: STAIR_RAILING_LEFT_ID, x, z, rotation: 1 },
+  { id: STAIR_RAILING_RIGHT_ID, x, z, rotation: 3 },
+];
+
 describe('railChangeAt', () => {
   it('rails the edge of a tile just paved on the lip of a drop', () => {
     const paved = [{ x: 1, z: 1 }];
@@ -100,6 +112,22 @@ describe('railChangeAt', () => {
     expect({ x: rail.x, z: rail.z }).toEqual({ x: 16, z: 16 + 16 - 2 });
   });
 
+  it('stands a flight’s balustrades flush against its two flanks', () => {
+    const flight = [
+      { x: 1, z: 1 },
+      { x: 1, z: 2 },
+    ];
+    const change = railChangeAt(
+      { x: 1, z: 2 },
+      rules({ pavedWith: pavedOf(flight), levelOf: bench }),
+    );
+    const at = change.stand.map((rail) => ({ id: rail.id, x: rail.x, z: rail.z }));
+    expect(at.toSorted((a, b) => a.x - b.x)).toEqual([
+      { id: STAIR_RAILING_LEFT_ID, x: 16, z: 32 },
+      { id: STAIR_RAILING_RIGHT_ID, x: 16 + 16 - 2, z: 32 },
+    ]);
+  });
+
   it('takes an edge rail down once the paving carries on across that edge', () => {
     const walk = { x: 1, z: 1 };
     const railed = railChangeAt(walk, rules({ pavedWith: pavedOf([walk]), levelOf: bench })).stand;
@@ -109,7 +137,7 @@ describe('railChangeAt', () => {
       rules({ pavedWith: pavedOf([walk, below]), levelOf: bench, standing: standingOf(railed) }),
     );
     expect(railsOf(change.lift)).toEqual([{ id: RAILING_ID, x: 1, z: 1, rotation: 2 }]);
-    expect(railsOf(change.stand)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(change.stand)).toEqual(flightAt(1, 2));
   });
 
   it('swaps a slab’s edge rails for a balustrade when it becomes a flight', () => {
@@ -123,7 +151,7 @@ describe('railChangeAt', () => {
       rules({ pavedWith: pavedOf([lower, upper]), levelOf: step, standing: standingOf(edges) }),
     );
     expect(railsOf(change.lift)).toEqual([{ id: RAILING_ID, x: 1, z: 2, rotation: 2 }]);
-    expect(railsOf(change.stand)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(change.stand)).toEqual(flightAt(1, 2));
   });
 
   it('swaps the balustrade of a flight for a ramp’s once the foot two tiles off is drawn', () => {
@@ -132,19 +160,21 @@ describe('railChangeAt', () => {
     const foot = { x: 1, z: 3 };
     const ramps = { wantsStairs: () => false, levelOf: bench };
     const flight = railChangeAt(head, rules({ ...ramps, pavedWith: pavedOf([top, head]) })).stand;
-    expect(railsOf(flight)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(flight)).toEqual(flightAt(1, 2));
     const change = railChangeAt(
       foot,
       rules({ ...ramps, pavedWith: pavedOf([top, head, foot]), standing: standingOf(flight) }),
     );
-    expect(railsOf(change.lift)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(change.lift)).toEqual(flightAt(1, 2));
     expect(railsOf(change.stand)).toEqual([
-      { id: RAMP_FOOT_RAILING_ID, x: 1, z: 3, rotation: 0 },
-      { id: RAMP_HEAD_RAILING_ID, x: 1, z: 2, rotation: 0 },
+      { id: RAMP_FOOT_RAILING_LEFT_ID, x: 1, z: 3, rotation: 1 },
+      { id: RAMP_FOOT_RAILING_RIGHT_ID, x: 1, z: 3, rotation: 3 },
+      { id: RAMP_HEAD_RAILING_LEFT_ID, x: 1, z: 2, rotation: 1 },
+      { id: RAMP_HEAD_RAILING_RIGHT_ID, x: 1, z: 2, rotation: 3 },
     ]);
   });
 
-  it('opens a flight up once a second one is paved beside it', () => {
+  it('opens the flank between two flights paved side by side, and rails their outer ones', () => {
     const first = [
       { x: 1, z: 1 },
       { x: 1, z: 2 },
@@ -153,14 +183,16 @@ describe('railChangeAt', () => {
       { x: 1, z: 2 },
       rules({ pavedWith: pavedOf(first), levelOf: bench }),
     ).stand;
-    expect(railsOf(guarded)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
+    expect(railsOf(guarded)).toEqual(flightAt(1, 2));
     const wide = [...first, { x: 2, z: 1 }, { x: 2, z: 2 }];
     const change = railChangeAt(
       { x: 2, z: 2 },
       rules({ pavedWith: pavedOf(wide), levelOf: bench, standing: standingOf(guarded) }),
     );
-    expect(railsOf(change.lift)).toEqual([{ id: STAIR_RAILING_ID, x: 1, z: 2, rotation: 0 }]);
-    expect(change.stand).toEqual([]);
+    expect(railsOf(change.lift)).toEqual([{ id: STAIR_RAILING_RIGHT_ID, x: 1, z: 2, rotation: 3 }]);
+    expect(railsOf(change.stand)).toEqual([
+      { id: STAIR_RAILING_RIGHT_ID, x: 2, z: 2, rotation: 3 },
+    ]);
   });
 
   it('leaves a rail that already stands where one belongs alone', () => {

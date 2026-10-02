@@ -33,6 +33,7 @@ import type { LandView } from '../../land/domain/landRights';
 import type { StaffRole } from '../../sim/domain/staff';
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { OrderSpot } from '../domain/markers';
+import type { UpdateAction } from '../domain/news';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { HistoryControls } from '../../../app/useHistory';
@@ -55,6 +56,7 @@ export interface HudProps {
   readonly overlay: OverlayControls;
   readonly advice: readonly Advice[];
   readonly news: NewsControls;
+  readonly onUpdate: (action: UpdateAction) => void;
   readonly voices: VoicesView;
   readonly status: StatusView | null;
   readonly history: HistoryControls;
@@ -281,13 +283,16 @@ export function Hud(props: HudProps) {
       <Windows {...props} />
       <Toasts
         toasts={props.news.toasts}
-        history={props.history.history}
-        mode={modeOf(props.ledger)}
-        onShowOnPlot={props.onShowOnPlot}
-        onHire={(role) => hireUpTo(props, role)}
-        onOpenAdvice={() => props.windows.show('advice', true)}
-        onOpenReport={(day) => openReport(props, day)}
-        onDismiss={props.news.dismiss}
+        onUpdate={props.onUpdate}
+        news={{
+          history: props.history.history,
+          mode: modeOf(props.ledger),
+          onShowOnPlot: props.onShowOnPlot,
+          onHire: (role) => hireUpTo(props, role),
+          onOpenAdvice: () => props.windows.show('advice', true),
+          onOpenReport: (day) => openReport(props, day),
+          onDismiss: props.news.dismiss,
+        }}
       />
       <Palette {...props} />
       {props.error ? <HudError message={props.error} /> : null}

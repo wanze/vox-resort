@@ -5,3 +5,4 @@ dist
 .DS_Store
 voxel-gen/out
 plans
+public/icons

@@ -1631,6 +1631,10 @@ input[type='checkbox'] {
   border-left-color: var(--foliage);
 }
 
+.welcome + .hud-toasts {
+  z-index: 301;
+}
+
 .hud-toast-body {
   flex: 1;
   min-width: 0;

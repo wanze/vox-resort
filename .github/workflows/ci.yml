@@ -40,10 +40,16 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Icons
+        run: node voxel-gen/preview.ts --icons
+
       # Not `pnpm build`: its preview render takes ~30 s and only feeds catalogue
       # thumbnails, which the app treats as optional.
       - name: Bundle
         run: pnpm exec vite build
+
+      - name: Precache
+        run: node scripts/check-precache.ts
 
       - name: Architecture boundaries
         if: github.event_name == 'pull_request'

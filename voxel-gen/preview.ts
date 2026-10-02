@@ -139,12 +139,12 @@ const LIGHT: Vec3 = (() => {
   return [-0.4 / length, 0.85 / length, 0.55 / length];
 })();
 
-const createFramebuffer = (width: number, height: number): Framebuffer => {
+const createFramebuffer = (width: number, height: number, background = BACKGROUND): Framebuffer => {
   const pixels = new Uint8Array(width * height * 3);
   for (let i = 0; i < width * height; i++) {
-    pixels[i * 3] = BACKGROUND[0];
-    pixels[i * 3 + 1] = BACKGROUND[1];
-    pixels[i * 3 + 2] = BACKGROUND[2];
+    pixels[i * 3] = background[0];
+    pixels[i * 3 + 1] = background[1];
+    pixels[i * 3 + 2] = background[2];
   }
   return { width, height, pixels, depth: new Float32Array(width * height).fill(-Infinity) };
 };
@@ -303,6 +303,16 @@ function renderModel(model: VoxelModel, size: number): Buffer {
     height: fb.height,
   });
   const { pixels, width, height } = downsample(fb, SUPERSAMPLE, true);
+  return encodePng(pixels, width, height);
+}
+
+// Rounded: the rasterizer walks whole pixels from the viewport's corner.
+function renderIcon(model: VoxelModel, size: number, fill: number, background: Vec3): Buffer {
+  const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE, background);
+  const inner = Math.round(size * fill * SUPERSAMPLE);
+  const inset = Math.round((fb.width - inner) / 2);
+  drawTriangles(fb, buildTriangles(model), { x: inset, y: inset, width: inner, height: inner });
+  const { pixels, width, height } = downsample(fb, SUPERSAMPLE, false);
   return encodePng(pixels, width, height);
 }
 
@@ -484,6 +494,27 @@ function sweepStale(outDir: string): void {
   }
 }
 
+const ICON_MODEL = 'palm';
+// The sea's water colour; the palm's trunk and base are sand and vanish on a sand ground.
+const ICON_BACKGROUND: Vec3 = [79, 198, 222];
+const ICONS = [
+  { file: 'icon-192.png', size: 192, fill: 0.84 },
+  { file: 'icon-512.png', size: 512, fill: 0.84 },
+  // A maskable icon may be cut to a circle of 80% of its width.
+  { file: 'maskable-512.png', size: 512, fill: 0.62 },
+  { file: 'apple-touch-icon.png', size: 180, fill: 0.78 },
+  { file: 'favicon.png', size: 64, fill: 0.92 },
+] as const;
+
+function writeIcons(model: VoxelModel, iconDir: string): void {
+  mkdirSync(iconDir, { recursive: true });
+  for (const icon of ICONS) {
+    const file = path.join(iconDir, icon.file);
+    writeFileSync(file, renderIcon(model, icon.size, icon.fill, ICON_BACKGROUND));
+    console.info(`icon -> ${file}`);
+  }
+}
+
 function sheetFor(
   args: readonly string[],
   registry: Registry,
@@ -508,6 +539,14 @@ async function main(): Promise<void> {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
+  const iconDir = path.join(here, '..', 'public', 'icons');
+  const iconSource = MODEL_SOURCES.find((source) => source.id === ICON_MODEL);
+  if (!iconSource) throw new Error(`The icon model ${ICON_MODEL} is not in the registry`);
+  // CI renders only the icons: the whole catalogue is the ~30 s it skips.
+  if (args.includes('--icons')) {
+    writeIcons(buildModel(iconSource), iconDir);
+    return;
+  }
 
   const flag = args.find((arg) => FLAGGED_REGISTRIES.has(arg));
   const registry = (flag && FLAGGED_REGISTRIES.get(flag)) || CATALOGUE;
@@ -539,7 +578,10 @@ async function main(): Promise<void> {
     );
   }
   // Only a whole-registry run sweeps, so naming a few ids never deletes anything.
-  if (registry.sweeps && args.every((arg) => arg.startsWith('--'))) sweepStale(outDir);
+  const whole = args.every((arg) => arg.startsWith('--'));
+  if (registry.sweeps && whole) sweepStale(outDir);
+  const icon = models.find((model) => model.id === ICON_MODEL);
+  if (registry === CATALOGUE && whole && icon) writeIcons(icon, iconDir);
 }
 
 await main();

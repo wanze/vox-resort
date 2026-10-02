@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { parseBenchConfig } from '../features/bench/domain/benchConfig';
 import {
+  askToKeepSaves,
   listSaves,
   moveSave,
   readSave,
@@ -59,6 +60,8 @@ export interface SaveControls {
   started(): void;
   markDirty(): void;
   morning(): void;
+  // True when the game is safe to leave: saved now, nothing to save, or no game to lose.
+  saveBeforeReload(): Promise<boolean>;
 }
 
 const freshId = (): string =>
@@ -180,6 +183,15 @@ function settled<T>(work: Promise<T>, fail: (cause: unknown) => void): Promise<T
   });
 }
 
+// Waits out a write that starts while the one before it is finishing, answering for the last.
+async function writesDone(
+  inFlight: RefObject<Promise<boolean> | null>,
+  earlier = true,
+): Promise<boolean> {
+  const pending = inFlight.current;
+  return pending ? writesDone(inFlight, await pending) : earlier;
+}
+
 interface Session {
   readonly store: SaveStore;
   readonly current: CurrentGame | null;
@@ -217,8 +229,11 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
   const { setStatus, saved, refresh, fail } = store;
   const enabledRef = useLatest(playing && !BENCHING);
   const writing = useRef(false);
+  // So a reload can wait for it rather than start a second write to the same slot.
+  const inFlight = useRef<Promise<boolean> | null>(null);
+  const keptAsked = useRef(false);
 
-  const write = useCallback(
+  const writeNow = useCallback(
     async (target: SaveTarget): Promise<boolean> => {
       writing.current = true;
       setStatus('saving');
@@ -228,10 +243,26 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
       lastSavedRef.current = at;
       saved(at);
       follow({ id: target.id, name: target.name });
+      if (!keptAsked.current) {
+        keptAsked.current = true;
+        void askToKeepSaves();
+      }
       await refresh();
       return true;
     },
     [showcaseRef, setStatus, dirtyRef, fail, lastSavedRef, saved, follow, refresh],
+  );
+
+  const write = useCallback(
+    (target: SaveTarget): Promise<boolean> => {
+      const pending = writeNow(target);
+      inFlight.current = pending;
+      void pending.finally(() => {
+        if (inFlight.current === pending) inFlight.current = null;
+      });
+      return pending;
+    },
+    [writeNow],
   );
 
   const autosave = useCallback(
@@ -249,7 +280,21 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
     [enabledRef, dirtyRef, lastSavedRef, currentRef, write],
   );
 
-  return { write, autosave };
+  // A write already under way answers for the changes it took: dirty was cleared as it began.
+  const saveBeforeReload = useCallback(async (): Promise<boolean> => {
+    const earlier = await writesDone(inFlight);
+    const due = autosaveDue({
+      enabled: enabledRef.current,
+      busy: writing.current,
+      dirty: dirtyRef.current,
+      lastSavedAt: lastSavedRef.current,
+      now: Date.now(),
+      trigger: 'update',
+    });
+    return due ? write(autosaveTarget(currentRef.current)) : earlier;
+  }, [enabledRef, dirtyRef, lastSavedRef, currentRef, write]);
+
+  return { write, autosave, saveBeforeReload };
 }
 
 function useLoader(
@@ -329,7 +374,7 @@ export function useSaves(
 ): SaveControls {
   const session = useSession();
   const { store, currentRef, savesRef, dirtyRef } = session;
-  const { write, autosave } = useWriter(showcaseRef, session, playing);
+  const { write, autosave, saveBeforeReload } = useWriter(showcaseRef, session, playing);
   const load = useLoader(showcaseRef, session, autosave, onLoaded);
   const { remove, nameUnsaved } = useSlots(session, autosave);
 
@@ -373,5 +418,6 @@ export function useSaves(
       dirtyRef.current = true;
     }, [dirtyRef]),
     morning: useCallback(() => void autosave('morning'), [autosave]),
+    saveBeforeReload,
   };
 }

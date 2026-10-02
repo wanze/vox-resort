@@ -13,6 +13,7 @@ import {
   showDay,
   showToasts,
   withoutResolved,
+  withUpdate,
   type Message,
   type News,
   type Severity,
@@ -41,7 +42,7 @@ const NOTHING_HEARD: ReadonlyMap<string, number> = new Map();
 
 const normally = { speed: 'normal', muted: new Set<ToastKind>(), nowMs: 1000 } as const;
 
-const adviceOf = (message: Message): Advice | null =>
+const adviceOf = (message: Message | Toast): Advice | null =>
   message.kind === 'advice' ? message.news.advice : null;
 
 const kindOf = (toast: Toast): string => adviceOf(toast)?.kind ?? toast.kind;
@@ -209,6 +210,37 @@ describe('showDay', () => {
     const rush = { ...normally, speed: 'rush' } as const;
     expect(showDay([], reportOn(3), rush)).toHaveLength(1);
     expect(showDay([], reportOn(3), { ...rush, muted: new Set<ToastKind>(['day']) })).toEqual([]);
+  });
+});
+
+describe('withUpdate', () => {
+  const urgent = [1, 2, 3].map((tileX) => newsOf('broken', 'urgent', tileX));
+
+  it('adds one update toast at the front', () => {
+    const shown = withUpdate(showToasts([], urgent, normally), 'ready');
+    expect(shown.map(kindOf)).toEqual(['update', 'broken', 'broken', 'broken']);
+    expect(shown[0]).toEqual({ kind: 'update', phase: 'ready', until: null });
+  });
+
+  it('replaces the phase rather than adding another', () => {
+    const shown = withUpdate(withUpdate([], 'ready'), 'saving');
+    expect(shown).toEqual([{ kind: 'update', phase: 'saving', until: null }]);
+  });
+
+  it('removes it with null and keeps the rest', () => {
+    const shown = showToasts([], urgent, normally);
+    expect(withUpdate(withUpdate(shown, 'unsaved'), null)).toEqual(shown);
+  });
+
+  it('takes none of the three places', () => {
+    const shown = withUpdate(showToasts([], urgent, normally), 'ready');
+    const next = showToasts(shown, [newsOf('unreachable', 'urgent')], normally);
+    expect(next.map(kindOf)).toEqual(['update', 'broken', 'broken', 'unreachable']);
+  });
+
+  it('never expires', () => {
+    const shown = withUpdate(showToasts([], [newsOf('no-beds', 'warning')], normally), 'ready');
+    expect(expireToasts(shown, 1e12).map(kindOf)).toEqual(['update']);
   });
 });
 

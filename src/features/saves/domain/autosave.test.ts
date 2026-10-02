@@ -22,6 +22,12 @@ describe('autosaveDue', () => {
     expect(autosaveDue({ ...asked, trigger: 'hidden' })).toBe(true);
   });
 
+  it('saves at once before a reload into a new version', () => {
+    const recently = { ...asked, lastSavedAt: 1_000, now: 11_000 };
+    expect(autosaveDue({ ...recently, trigger: 'update' })).toBe(true);
+    expect(autosaveDue(recently)).toBe(false);
+  });
+
   it('never saves an unchanged game, or one it must not', () => {
     expect(autosaveDue({ ...asked, trigger: 'hidden', dirty: false })).toBe(false);
     expect(autosaveDue({ ...asked, trigger: 'hidden', enabled: false })).toBe(false);

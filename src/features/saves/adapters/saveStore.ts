@@ -111,6 +111,18 @@ export async function removeSave(id: string): Promise<void> {
   await done(transaction);
 }
 
+// Otherwise the browser may clear IndexedDB under storage pressure. Firefox asks the player;
+// Chrome answers by itself, and grants it to an installed app.
+// Missing outside a secure context. A refusal leaves saving working, only not protected.
+export async function askToKeepSaves(): Promise<void> {
+  const storage = navigator.storage as StorageManager | undefined;
+  if (!storage?.persist) return;
+  await storage
+    .persisted()
+    .then((kept) => kept || storage.persist())
+    .catch(() => false);
+}
+
 function forget(transaction: IDBTransaction, id: string): void {
   transaction.objectStore(META).delete(id);
   transaction.objectStore(SNAPSHOTS).delete(id);

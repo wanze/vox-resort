@@ -21,15 +21,24 @@ export type Message =
   | { readonly kind: 'advice'; readonly news: News }
   | { readonly kind: 'day'; readonly report: DayReport };
 
-// Wall-clock ms; null stays until dismissed.
-export type Toast = Message & { readonly until: number | null };
+export type UpdatePhase = 'ready' | 'saving' | 'unsaved';
+
+export type UpdateAction = 'reload' | 'reload-anyway' | 'later';
+
+// Wall-clock ms; null stays until dismissed. A new version is not news about the resort, so it
+// is never logged and has no message.
+export type Toast =
+  | (Message & { readonly until: number | null })
+  | { readonly kind: 'update'; readonly phase: UpdatePhase; readonly until: null };
 
 type AdviceToast = Extract<Toast, { readonly kind: 'advice' }>;
 
 const isAdvice = (toast: Toast): toast is AdviceToast => toast.kind === 'advice';
 
-export const toastKey = (message: Message): string =>
-  message.kind === 'advice' ? message.news.key : `day:${message.report.day}`;
+export const toastKey = (shown: Message | Toast): string => {
+  if (shown.kind === 'update') return 'update';
+  return shown.kind === 'advice' ? shown.news.key : `day:${shown.report.day}`;
+};
 
 // Unique per building, not per model: two idle Changing Cabins are two rows.
 export const adviceKey = (advice: Advice): string =>
@@ -165,9 +174,21 @@ export function showDay(
   report: DayReport,
   { muted, nowMs }: Omit<ToastOptions, 'speed'>,
 ): readonly Toast[] {
-  const advice = shown.filter(isAdvice);
-  if (muted.has('day')) return advice.length === shown.length ? shown : advice;
-  return [{ kind: 'day', report, until: nowMs + DAY_MS }, ...advice];
+  const others = shown.filter((toast) => toast.kind !== 'day');
+  if (muted.has('day')) return others.length === shown.length ? shown : others;
+  const update = others.filter((toast) => toast.kind === 'update');
+  return [...update, { kind: 'day', report, until: nowMs + DAY_MS }, ...others.filter(isAdvice)];
+}
+
+export const updateOnly = (shown: readonly Toast[]): readonly Toast[] =>
+  shown.filter((toast) => toast.kind === 'update');
+
+// Never muted and never expired, at every speed, and it takes none of the three places: the
+// player may be about to lose the game to a reload.
+export function withUpdate(shown: readonly Toast[], phase: UpdatePhase | null): readonly Toast[] {
+  const others = shown.filter((toast) => toast.kind !== 'update');
+  if (phase === null) return others.length === shown.length ? shown : others;
+  return [{ kind: 'update', phase, until: null }, ...others];
 }
 
 export function expireToasts(shown: readonly Toast[], nowMs: number): readonly Toast[] {

@@ -1,4 +1,10 @@
-import { toastKey, type News, type Toast } from '../domain/news';
+import {
+  toastKey,
+  type News,
+  type Toast,
+  type UpdateAction,
+  type UpdatePhase,
+} from '../domain/news';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { GameMode } from '../../sim/domain/ledger';
 import { isStaffRole, type StaffRole } from '../../sim/domain/staff';
@@ -6,8 +12,7 @@ import { adviceLabel, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
 import { PixelIcon } from './PixelIcon';
 
-export interface ToastsProps {
-  readonly toasts: readonly Toast[];
+interface NewsToastsProps {
   readonly history: readonly DayReport[];
   readonly mode: GameMode | null;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
@@ -17,7 +22,14 @@ export interface ToastsProps {
   readonly onDismiss: (key: string) => void;
 }
 
-type ToastActionsProps = Pick<ToastsProps, 'onShowOnPlot' | 'onHire' | 'onOpenAdvice'>;
+export interface ToastsProps {
+  readonly toasts: readonly Toast[];
+  readonly onUpdate: (action: UpdateAction) => void;
+  // Null on the welcome screen, which has no resort to tell of and offers only a new version.
+  readonly news: NewsToastsProps | null;
+}
+
+type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'onHire' | 'onOpenAdvice'>;
 
 function ToastActions({ news, ...props }: { readonly news: News } & ToastActionsProps) {
   const { advice } = news;
@@ -75,7 +87,7 @@ function DismissButton({
   );
 }
 
-function DayPlate({ report, ...props }: { readonly report: DayReport } & ToastsProps) {
+function DayPlate({ report, ...props }: { readonly report: DayReport } & NewsToastsProps) {
   const label = `Day ${report.day} report`;
   return (
     <div className="hud-toast" data-severity="day" role="status">
@@ -105,7 +117,7 @@ function ToastPlate({
   news,
   onDismiss,
   ...props
-}: { readonly news: News } & Pick<ToastsProps, 'onDismiss'> & ToastActionsProps) {
+}: { readonly news: News } & Pick<NewsToastsProps, 'onDismiss'> & ToastActionsProps) {
   const urgent = news.severity === 'urgent';
   const label = adviceLabel(news.advice.kind);
   return (
@@ -121,18 +133,90 @@ function ToastPlate({
   );
 }
 
+const UPDATE_WORDS: {
+  readonly [phase in UpdatePhase]: {
+    readonly line: string;
+    readonly actions: readonly (readonly [string, UpdateAction])[];
+  };
+} = {
+  ready: {
+    line: 'A new version of Vox Resort is ready.',
+    actions: [
+      ['Reload', 'reload'],
+      ['Later', 'later'],
+    ],
+  },
+  saving: {
+    line: 'Saving your game…',
+    actions: [
+      ['Reload', 'reload'],
+      ['Later', 'later'],
+    ],
+  },
+  unsaved: {
+    line: 'Your game could not be saved. Reload anyway, and lose what changed since the last save?',
+    actions: [
+      ['Reload anyway', 'reload-anyway'],
+      ['Later', 'later'],
+    ],
+  },
+};
+
+// No dismiss cross: Later is the dismissal, and it is the one choice that keeps this version.
+function UpdatePlate({
+  phase,
+  onUpdate,
+}: {
+  readonly phase: UpdatePhase;
+  readonly onUpdate: (action: UpdateAction) => void;
+}) {
+  const { line, actions } = UPDATE_WORDS[phase];
+  return (
+    <div
+      className="hud-toast"
+      data-severity="warning"
+      role={phase === 'unsaved' ? 'alert' : 'status'}
+    >
+      <PixelIcon name="refresh" />
+      <div className="hud-toast-body">
+        <strong>New version</strong>
+        <p>{line}</p>
+        <div className="hud-toast-actions">
+          {actions.map(([label, action]) => (
+            <button
+              key={action}
+              type="button"
+              className="hud-camera-mode hud-advice-show"
+              disabled={phase === 'saving'}
+              onClick={() => onUpdate(action)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ToastOf({ toast, ...props }: { readonly toast: Toast } & ToastsProps) {
+  if (toast.kind === 'update') return <UpdatePlate phase={toast.phase} onUpdate={props.onUpdate} />;
+  if (!props.news) return null;
+  return toast.kind === 'day' ? (
+    <DayPlate report={toast.report} {...props.news} />
+  ) : (
+    <ToastPlate news={toast.news} {...props.news} />
+  );
+}
+
 // Never pauses and never sounds: the corner is for the eye, the log keeps what scrolled past.
 export function Toasts(props: ToastsProps) {
   if (props.toasts.length === 0) return null;
   return (
     <div className="hud-toasts">
-      {props.toasts.map((toast) =>
-        toast.kind === 'day' ? (
-          <DayPlate key={toastKey(toast)} report={toast.report} {...props} />
-        ) : (
-          <ToastPlate key={toastKey(toast)} news={toast.news} {...props} />
-        ),
-      )}
+      {props.toasts.map((toast) => (
+        <ToastOf key={toastKey(toast)} toast={toast} {...props} />
+      ))}
     </div>
   );
 }

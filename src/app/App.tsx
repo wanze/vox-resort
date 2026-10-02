@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObjec
 import { previewUrl } from '../features/catalog/adapters/previews';
 import { createHudOverlay } from '../features/hud/adapters/hudOverlay';
 import { markersOf } from '../features/hud/domain/markers';
+import { updateOnly, type UpdatePhase } from '../features/hud/domain/news';
 import { Hud } from '../features/hud/components/Hud';
+import { Toasts } from '../features/hud/components/Toasts';
 import { WelcomeScreen } from '../features/welcome/components/WelcomeScreen';
 import type { LoadingStep } from '../features/welcome/domain/loading';
 import type { NewGame } from '../features/welcome/domain/newGame';
@@ -21,6 +23,7 @@ import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
+import { useUpdate } from './useUpdate';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import {
   armedLand,
@@ -102,7 +105,11 @@ function useWelcome(
 
 // The saves are made before the resort's controls, which tell them when a game starts, so the
 // params a load brings are handed over late.
-function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
+function useGame(
+  showcase: RefObject<Showcase | null>,
+  clock: ClockControls,
+  setUpdate: (phase: UpdatePhase | null) => void,
+) {
   const [playing, setPlaying] = useState(!OPENS_ON_WELCOME);
   const { adoptForced } = clock;
   const adoptParamsRef = useRef<(params: ResortParams) => void>(() => {});
@@ -119,7 +126,8 @@ function useGame(showcase: RefObject<Showcase | null>, clock: ClockControls) {
   useEffect(() => {
     adoptParamsRef.current = adoptParams;
   }, [adoptParams]);
-  return { playing, saves, welcome };
+  const onUpdate = useUpdate(saves.saveBeforeReload, setUpdate);
+  return { playing, saves, welcome, onUpdate };
 }
 
 // Together because the advice and the day's report are what the news is heard from, and a new
@@ -182,7 +190,7 @@ export function App() {
     stats !== null,
   );
   const { thoughts, status } = useHourly();
-  const { playing, saves, welcome } = useGame(showcaseRef, clock);
+  const { playing, saves, welcome, onUpdate } = useGame(showcaseRef, clock, news.setUpdate);
   const { resort, adoptLoading } = welcome;
   const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
     clock,
@@ -311,16 +319,19 @@ export function App() {
       <Screen
         playing={playing}
         welcome={
-          <WelcomeScreen
-            loaded={welcome.loaded}
-            ready={welcome.ready}
-            error={error}
-            params={resort.params}
-            busy={resort.building}
-            onStart={welcome.startGame}
-            saves={saves}
-            onLoad={welcome.loadGame}
-          />
+          <>
+            <WelcomeScreen
+              loaded={welcome.loaded}
+              ready={welcome.ready}
+              error={error}
+              params={resort.params}
+              busy={resort.building}
+              onStart={welcome.startGame}
+              saves={saves}
+              onLoad={welcome.loadGame}
+            />
+            <Toasts toasts={updateOnly(news.toasts)} onUpdate={onUpdate} news={null} />
+          </>
         }
       >
         <Hud
@@ -335,6 +346,7 @@ export function App() {
           overlay={mapOverlay}
           advice={advice.advice}
           news={news}
+          onUpdate={onUpdate}
           voices={thoughts.voices}
           status={status.status}
           history={history}

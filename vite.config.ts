@@ -1,8 +1,44 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
+
+const SAND = '#dccdb1';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'prompt',
+      // Registered by useUpdate, so a reload can wait for the autosave.
+      injectRegister: false,
+      manifest: {
+        name: 'Vox Resort',
+        short_name: 'Vox Resort',
+        description: 'Build and run a voxel beach resort.',
+        lang: 'en',
+        display: 'standalone',
+        background_color: SAND,
+        theme_color: SAND,
+        icons: [
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          {
+            src: 'icons/maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2}'],
+        // The main chunk is 1.75 MB against Workbox's 2 MiB default, and a file over the cap is
+        // skipped with only a warning. scripts/check-precache.ts fails the build if one is.
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+      },
+    }),
+  ],
   resolve: {
     alias: [
       // three's addons import from "three"; aliasing it to the WebGPU build keeps one copy of the core classes.

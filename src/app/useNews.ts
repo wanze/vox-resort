@@ -9,10 +9,13 @@ import {
   showDay,
   showToasts,
   toastKey,
+  updateOnly,
   withoutResolved,
+  withUpdate,
   type Message,
   type Toast,
   type ToastKind,
+  type UpdatePhase,
 } from '../features/hud/domain/news';
 import type { Advice } from '../features/sim/domain/advice';
 import type { DayReport } from '../features/sim/domain/dayReport';
@@ -28,19 +31,45 @@ export interface NewsControls {
   setMuted(kind: ToastKind, muted: boolean): void;
   setMarkers(shown: boolean): void;
   setStaffPins(shown: boolean): void;
+  setUpdate(phase: UpdatePhase | null): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;
 }
 
 const TICK_MS = 1000;
 
-const kindOfToast = (toast: Toast): ToastKind =>
-  toast.kind === 'advice' ? toast.news.severity : toast.kind;
+const kindOfToast = (toast: Toast): ToastKind | null => {
+  if (toast.kind === 'update') return null;
+  return toast.kind === 'advice' ? toast.news.severity : toast.kind;
+};
+
+function usePrefs() {
+  const [prefs, setPrefs] = useState<HudPrefs>(loadPrefs);
+  const change = useCallback((next: (was: HudPrefs) => HudPrefs) => {
+    setPrefs((was) => {
+      const changed = next(was);
+      savePrefs(changed);
+      return changed;
+    });
+  }, []);
+  return {
+    prefs,
+    change,
+    setMarkers: useCallback(
+      (shown: boolean) => change((was) => ({ ...was, markers: shown })),
+      [change],
+    ),
+    setStaffPins: useCallback(
+      (shown: boolean) => change((was) => ({ ...was, staff: shown })),
+      [change],
+    ),
+  };
+}
 
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
-  const [prefs, setPrefs] = useState<HudPrefs>(loadPrefs);
+  const { prefs, change, setMarkers, setStaffPins } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
   // Read through refs so `hear` stays stable: the showcase holds it from its mount on.
@@ -88,33 +117,27 @@ export function useNews(speed: SimSpeed): NewsControls {
       (key: string) => setToasts((shown) => shown.filter((toast) => toastKey(toast) !== key)),
       [],
     ),
-    setMuted: useCallback((kind: ToastKind, muted: boolean) => {
-      setPrefs((was) => {
-        const others = was.muted.filter((each) => each !== kind);
-        const next = { ...was, muted: muted ? [...others, kind] : others };
-        savePrefs(next);
-        return next;
-      });
-      if (muted) setToasts((shown) => shown.filter((toast) => kindOfToast(toast) !== kind));
-    }, []),
-    setMarkers: useCallback((shown: boolean) => {
-      setPrefs((was) => {
-        const next = { ...was, markers: shown };
-        savePrefs(next);
-        return next;
-      });
-    }, []),
-    setStaffPins: useCallback((shown: boolean) => {
-      setPrefs((was) => {
-        const next = { ...was, staff: shown };
-        savePrefs(next);
-        return next;
-      });
-    }, []),
+    setMuted: useCallback(
+      (kind: ToastKind, muted: boolean) => {
+        change((was) => {
+          const others = was.muted.filter((each) => each !== kind);
+          return { ...was, muted: muted ? [...others, kind] : others };
+        });
+        if (muted) setToasts((shown) => shown.filter((toast) => kindOfToast(toast) !== kind));
+      },
+      [change],
+    ),
+    setMarkers,
+    setStaffPins,
+    setUpdate: useCallback(
+      (phase: UpdatePhase | null) => setToasts((shown) => withUpdate(shown, phase)),
+      [],
+    ),
+    // A new version is not about the resort being replaced, so it stays on offer.
     reset: useCallback(() => {
       before.current = null;
       heard.current = new Map();
-      setToasts([]);
+      setToasts(updateOnly);
       setLog([]);
     }, []),
   };

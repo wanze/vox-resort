@@ -3,9 +3,10 @@ export const AUTOSAVE_INTERVAL_MS = 120_000;
 // How often the timer asks, well inside the interval so a save is never much later than due.
 export const AUTOSAVE_CHECK_MS = 30_000;
 
-export type AutosaveTrigger = 'timer' | 'morning' | 'hidden';
+export type AutosaveTrigger = 'timer' | 'morning' | 'hidden' | 'update';
 
-// The morning and a hidden tab save whatever changed; the timer only once the interval is up.
+// The morning, a hidden tab and a reload into a new version save whatever changed; the timer
+// only once the interval is up.
 // Never while another save is being written: the two would race to the same slot.
 export function autosaveDue(parts: {
   readonly enabled: boolean;

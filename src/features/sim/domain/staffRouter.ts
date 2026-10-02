@@ -11,12 +11,13 @@ import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { blockedAt } from '../../crowd/domain/sandGrid';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
+import { isBeach } from '../../layout/domain/shoreline';
 import { brokenFirst, isBroken, repair, type Breakdowns } from './breakdowns';
 import type { Depot } from './depots';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
 import type { Lodging } from './lodgings';
-import { mostLittered, sweep, SWEEP_ABOVE, type Litter } from './litter';
+import { litterAt, mostLittered, PIECE, sweep, type Litter } from './litter';
 import { SAND_ROUTE_TILES } from './router';
 import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
 import type { Staff } from './staff';
@@ -259,6 +260,7 @@ export function createStaffRouter(parts: {
   const towerRoutes = new Map<number, readonly SandRoute[]>();
   const venueSandRoutes = new Map<number, readonly SandRoute[]>();
   const nodeFields = new Map<number, FlowField>();
+  const tileSandRoutes = new Map<number, readonly SandRoute[]>();
   let workingCount = 0;
   let now = 0;
 
@@ -327,7 +329,7 @@ export function createStaffRouter(parts: {
         NEEDS_CLEANING,
       );
       if (venue < 0) return NOBODY;
-      if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue);
+      if (claimReachable(worker, venue, at)) return venue;
       passedOver.add(venue);
     }
     return NOBODY;
@@ -391,7 +393,7 @@ export function createStaffRouter(parts: {
     return claim(worker, busiest(at, unwatched));
   };
 
-  // A beach building has no door on the paving, so a mechanic walks the last leg over the sand.
+  // A beach building has no door on the paving, so a worker walks the last leg over the sand.
   const sandRouteTo = (venue: number, at: number): SandRoute | undefined => {
     let routes = venueSandRoutes.get(venue);
     if (!routes) {
@@ -400,6 +402,15 @@ export function createStaffRouter(parts: {
       venueSandRoutes.set(venue, routes);
     }
     return routes.find((route) => nodeFieldFor(route.gate).next[at]! >= 0);
+  };
+
+  // The paving when it reaches, so a venue with doors on both sides is not walked to over the sand.
+  const claimReachable = (worker: number, venue: number, at: number): boolean => {
+    if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue) >= 0;
+    const overSand = sandRouteTo(venue, at);
+    if (!overSand) return false;
+    legRoute[worker] = overSand;
+    return claim(worker, venue) >= 0;
   };
 
   // Weather is no bar: a machine is mended under a roof or in the rain alike.
@@ -418,12 +429,7 @@ export function createStaffRouter(parts: {
           inZone(each),
       );
       if (venue < 0) return NOBODY;
-      if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue);
-      const overSand = sandRouteTo(venue, at);
-      if (overSand) {
-        legRoute[worker] = overSand;
-        return claim(worker, venue);
-      }
+      if (claimReachable(worker, venue, at)) return venue;
       passedOver.add(venue);
     }
     return NOBODY;
@@ -561,6 +567,49 @@ export function createStaffRouter(parts: {
     return node >= 0 && node < network.nodes.length ? nodeFieldFor(node) : null;
   };
 
+  const onTheBeach = (litter: Litter, tile: number): boolean =>
+    network.beach !== null &&
+    isBeach(network.beach.shore, tile % litter.tilesX, Math.floor(tile / litter.tilesX));
+
+  // Sand has no node: a sweep there is a leg from a gate, as a beach building's is.
+  const sandRouteToTile = (litter: Litter, tile: number, at: number): SandRoute | undefined => {
+    if (!onTheBeach(litter, tile)) return undefined;
+    let routes = tileSandRoutes.get(tile);
+    if (!routes) {
+      const x = ((tile % litter.tilesX) + 0.5) * TILE_VOXELS;
+      const z = (Math.floor(tile / litter.tilesX) + 0.5) * TILE_VOXELS;
+      if (tileSandRoutes.size >= MAX_NODE_FIELDS) tileSandRoutes.clear();
+      routes = sandRoutesFor(network, feetOf({ x, z }), SAND_ROUTE_TILES);
+      tileSandRoutes.set(tile, routes);
+    }
+    return routes.find((route) => nodeFieldFor(route.gate).next[at]! >= 0);
+  };
+
+  const claimTile = (worker: number, litter: Litter, tile: number): void => {
+    tileClaims(litter)[tile] = worker;
+    tileOf[worker] = tile;
+  };
+
+  // The paving when the tile has a node, so a stair onto the sand is not swept from the beach.
+  const claimReachableTile = (
+    worker: number,
+    at: number,
+    litter: Litter,
+    tile: number,
+  ): boolean => {
+    const node = nodeOnTile(litter, tile);
+    if (node >= 0) {
+      if (nodeFieldFor(node).next[at]! < 0) return false;
+      claimTile(worker, litter, tile);
+      return true;
+    }
+    const overSand = sandRouteToTile(litter, tile, at);
+    if (!overSand) return false;
+    claimTile(worker, litter, tile);
+    legRoute[worker] = overSand;
+    return true;
+  };
+
   const pickTile = (worker: number, at: number, litter: Litter): number => {
     const claims = tileClaims(litter);
     const passedOver = new Set<number>();
@@ -572,24 +621,23 @@ export function createStaffRouter(parts: {
           claims[each] === NOBODY &&
           !passedOver.has(each) &&
           inZone(each % litter.tilesX, Math.floor(each / litter.tilesX)) &&
-          nodeOnTile(litter, each) >= 0,
-        SWEEP_ABOVE,
+          (nodeOnTile(litter, each) >= 0 || onTheBeach(litter, each)),
+        PIECE,
       );
       if (tile < 0) return NOBODY;
-      if (nodeFieldFor(nodeOnTile(litter, tile)).next[at]! >= 0) {
-        claims[tile] = worker;
-        tileOf[worker] = tile;
-        return tile;
-      }
+      if (claimReachableTile(worker, at, litter, tile)) return tile;
       passedOver.add(tile);
     }
     return NOBODY;
   };
 
+  // The leg too, or a cleaner called off a sand sweep would walk on to the beach for nothing.
   const giveUpTile = (worker: number): void => {
     const tile = tileOf[worker]!;
-    if (tile >= 0 && tileClaimedBy[tile] === worker) tileClaimedBy[tile] = NOBODY;
+    if (tile < 0) return;
+    if (tileClaimedBy[tile] === worker) tileClaimedBy[tile] = NOBODY;
     tileOf[worker] = NOBODY;
+    legRoute[worker] = null;
   };
 
   const setToSweep = (worker: number, node: number): void => {
@@ -612,12 +660,23 @@ export function createStaffRouter(parts: {
     return -1;
   };
 
-  // Only once no venue wants a cleaner: a dirty venue is worse than a dirty path.
+  // Without stopping, so an errand is not held up; a tile somebody has claimed is left to them,
+  // or their walk there would end at nothing.
+  const sweepInPassing = (at: number): void => {
+    const litter = parts.litter?.();
+    const node = network.nodes[at];
+    if (!litter || !node || litterAt(litter, node.tileX, node.tileZ) <= 0) return;
+    if (tileClaims(litter)[node.tileZ * litter.tilesX + node.tileX] !== NOBODY) return;
+    sweep(litter, node.tileX, node.tileZ);
+  };
+
+  // Only once no venue wants a cleaner: a dirty venue is worse than a dirty path. A single
+  // wrapper is still worth the walk to somebody with nothing else to do.
   const litterStep = (worker: number, at: number): number => {
     const litter = parts.litter?.();
     if (!litter) return -1;
     if (tileOf[worker]! < 0 && pickTile(worker, at, litter) < 0) return -1;
-    return stepToTile(worker, at, litter);
+    return legRoute[worker] ? towardsTheSand(worker, at) : stepToTile(worker, at, litter);
   };
 
   const feetOf = (spot: SandPoint): readonly SandPoint[] => {
@@ -687,6 +746,24 @@ export function createStaffRouter(parts: {
     workingCount++;
   };
 
+  // Where the route ends, which feetOf may have moved off a blocked centre; the tile swept is
+  // still the one claimed.
+  const sweepOnSand = (worker: number, route: SandRoute): void => {
+    const people = parts.crowd();
+    const spot = route.waypoints.at(-1)!;
+    holdAt(people, worker, spot.x, BEACH_SURFACE, spot.z, people.heading[worker] ?? 0);
+    doorOf[worker] = route.gate;
+    until[worker] = now + ticksIn(SWEEP_TICKS);
+    working[worker] = 1;
+    workingCount++;
+  };
+
+  const endOfLeg = (worker: number, route: SandRoute): void => {
+    if (towerOf[worker]! >= 0) climbTower(worker, route);
+    else if (tileOf[worker]! >= 0) sweepOnSand(worker, route);
+    else workOnSand(worker, route);
+  };
+
   // Acts on every call, or the crowd turns the lifeguard into a beach roamer at the end of a leg.
   const alongTheSand = (worker: number): number => {
     const route = legRoute[worker];
@@ -695,8 +772,7 @@ export function createStaffRouter(parts: {
     legOf[worker] = leg;
     const next = route.waypoints[leg];
     if (next) walkSandTo(parts.crowd(), worker, next.x, next.z);
-    else if (towerOf[worker]! >= 0) climbTower(worker, route);
-    else workOnSand(worker, route);
+    else endOfLeg(worker, route);
     return -1;
   };
 
@@ -705,6 +781,7 @@ export function createStaffRouter(parts: {
     const onward = nodeFieldFor(route.gate).next[at] ?? -1;
     if (onward < 0) {
       if (towerOf[worker]! >= 0) giveUpTower(worker);
+      else if (tileOf[worker]! >= 0) giveUpTile(worker);
       else giveUp(worker);
       return -1;
     }
@@ -810,7 +887,8 @@ export function createStaffRouter(parts: {
     return -1;
   };
 
-  // Only an order sends a cleaner over the sand: their own choice is a venue on the paving.
+  // A venue on the sand, chosen or ordered, has no door on the paving: the leg there is the
+  // route set when it was claimed.
   const cleanerWork = (worker: number, at: number): number => {
     takeOrder(worker, at);
     if (roomFor(worker, at) >= 0) return roomStep(worker, at);
@@ -845,6 +923,7 @@ export function createStaffRouter(parts: {
 
   // Only between tasks: one already sent somewhere sees it through, and a sweep needs no load.
   const cleanerStep = (worker: number, at: number): number => {
+    sweepInPassing(at);
     const empty = load[worker] === 0;
     if (empty && assigned[worker]! < 0 && tileOf[worker]! < 0 && roomOf[worker]! < 0) {
       return restockStep(worker, at);
@@ -989,16 +1068,23 @@ export function createStaffRouter(parts: {
     return cleanliness(parts.upkeep(), order.venue) < NEEDS_CLEANING;
   };
 
-  const isFree = (worker: number): boolean =>
-    isOnDuty(worker) &&
-    goingHome[worker] === 0 &&
-    working[worker] === 0 &&
-    claimedKind(worker) === 'idle';
+  // A walk to litter of their own choosing gives way to an order; a venue or a room does not.
+  const isSendable = (worker: number): boolean => {
+    const kind = claimedKind(worker);
+    return kind === 'idle' || (kind === 'sweep' && working[worker] === 0 && !orderedTo(worker));
+  };
 
-  const tileField = (order: OpenOrder): FlowField | null => {
+  const isFree = (worker: number): boolean =>
+    isOnDuty(worker) && goingHome[worker] === 0 && working[worker] === 0 && isSendable(worker);
+
+  // A tile on the sand is reached over it from a gate, as a beach building is.
+  const tileHops = (tile: number, at: number): number => {
     const litter = parts.litter?.();
-    const node = litter ? nodeOnTile(litter, order.tile) : NOBODY;
-    return node >= 0 ? nodeFieldFor(node) : null;
+    if (!litter) return NOBODY;
+    const node = nodeOnTile(litter, tile);
+    if (node >= 0) return nodeFieldFor(node).hops[at] ?? NOBODY;
+    const route = sandRouteToTile(litter, tile, at);
+    return route ? nodeFieldFor(route.gate).hops[at]! + route.waypoints.length : NOBODY;
   };
 
   // A building with no door on the paving is reached over the sand from a gate, whoever is sent.
@@ -1011,7 +1097,7 @@ export function createStaffRouter(parts: {
 
   // -1 for a target that cannot be reached from the node.
   const orderHops = (order: OpenOrder, at: number): number =>
-    order.venue >= 0 ? venueHops(order.venue, at) : (tileField(order)?.hops[at] ?? NOBODY);
+    order.venue >= 0 ? venueHops(order.venue, at) : tileHops(order.tile, at);
 
   const orderInZone = (worker: number, order: OpenOrder): boolean => {
     if (order.venue >= 0) return venueInZone(worker)(order.venue);
@@ -1067,20 +1153,9 @@ export function createStaffRouter(parts: {
     order.worker = nearestFor(order);
   };
 
-  const claimVenueOrder = (worker: number, at: number, order: OpenOrder): boolean => {
-    if (fieldFor(order.venue).next[at]! >= 0) return claim(worker, order.venue) >= 0;
-    const overSand = sandRouteTo(order.venue, at);
-    if (!overSand) return false;
-    legRoute[worker] = overSand;
-    return claim(worker, order.venue) >= 0;
-  };
-
-  const claimTileOrder = (worker: number, at: number, order: OpenOrder): boolean => {
+  const claimTileOrder = (worker: number, at: number, tile: number): boolean => {
     const litter = parts.litter?.();
-    if (!litter || (tileField(order)?.next[at] ?? NOBODY) < 0) return false;
-    tileClaims(litter)[order.tile] = worker;
-    tileOf[worker] = order.tile;
-    return true;
+    return litter !== undefined && claimReachableTile(worker, at, litter, tile);
   };
 
   const claimOrder = (worker: number, at: number, order: OpenOrder): boolean => {
@@ -1091,7 +1166,9 @@ export function createStaffRouter(parts: {
       return false;
     }
     const claimed =
-      order.tile >= 0 ? claimTileOrder(worker, at, order) : claimVenueOrder(worker, at, order);
+      order.tile >= 0
+        ? claimTileOrder(worker, at, order.tile)
+        : claimReachable(worker, order.venue, at);
     order.worker = claimed ? worker : NOBODY;
     order.taken = claimed;
     publish();
@@ -1110,10 +1187,12 @@ export function createStaffRouter(parts: {
   // Before any choice of their own, and only by a worker with nothing on hand. With no order open
   // it returns at once, so a resort nobody orders about runs as it always has.
   const takeOrder = (worker: number, at: number): void => {
-    if (orders.length === 0 || claimedKind(worker) !== 'idle') return;
+    if (orders.length === 0 || !isSendable(worker)) return;
     const mine = orders.find((order) => order.worker === worker && !order.taken);
     const order = mine ?? orders.find((each) => mayTake(worker, at, each));
-    if (order) claimOrder(worker, at, order);
+    if (!order) return;
+    if (!holds(worker, order)) giveUpTile(worker);
+    claimOrder(worker, at, order);
   };
 
   const releaseOrder = (order: OpenOrder): void => {
@@ -1245,6 +1324,7 @@ export function createStaffRouter(parts: {
       towerRoutes.clear();
       venueSandRoutes.clear();
       nodeFields.clear();
+      tileSandRoutes.clear();
       workingCount = 0;
       carryOrders(wasStanding);
       // Nobody is released: the crowd is relocated onto the new graph in the same step.

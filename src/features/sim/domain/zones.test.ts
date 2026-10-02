@@ -112,6 +112,20 @@ describe('workplaceZones', () => {
     });
     expect(held).toEqual({ cleaner: 0b010, animator: 0, lifeguard: 0b100, mechanic: 0 });
   });
+
+  it('holds cleaners, and nobody else, in a zone painted only on the beach', () => {
+    const zones = createZones(4, 4);
+    paintZone(zones, 2, 3, 3);
+    const held = workplaceZones(zones, [], new Int32Array(0), {
+      paved: [{ tileX: 0, tileZ: 0 }],
+      towers: [],
+      beach: [
+        { tileX: 2, tileZ: 3 },
+        { tileX: 3, tileZ: 3 },
+      ],
+    });
+    expect(held).toEqual({ cleaner: 0b1000, animator: 0, lifeguard: 0, mechanic: 0 });
+  });
 });
 
 describe('zonesIn', () => {

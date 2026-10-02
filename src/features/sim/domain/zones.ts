@@ -74,16 +74,20 @@ export function zonesOf(zones: Zones, footprint: Footprint, doorTiles: readonly 
   return mask;
 }
 
-// Mirrors the staff router's task choices: a cleaner scrubs any venue and sweeps any paving, and
-// a tower is worked from the tile under its seat.
+// Mirrors the staff router's task choices: a cleaner scrubs any venue and sweeps any paving or
+// sand, and a tower is worked from the tile under its seat.
 export function workplaceZones(
   zones: Zones,
   venues: readonly Workplace[],
   venueZones: Int32Array,
-  ground: { readonly paved: readonly TileAt[]; readonly towers: readonly TileAt[] },
+  ground: {
+    readonly paved: readonly TileAt[];
+    readonly towers: readonly TileAt[];
+    readonly beach?: readonly TileAt[];
+  },
 ): WorkplaceZones {
   const held = {
-    cleaner: maskOf(zones, ground.paved),
+    cleaner: maskOf(zones, ground.paved) | maskOf(zones, ground.beach ?? []),
     lifeguard: maskOf(zones, ground.towers),
     animator: 0,
     mechanic: 0,

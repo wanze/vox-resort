@@ -3,7 +3,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createLitter, PIECE, type Litter } from '../../sim/domain/litter';
 import { piecesFor } from './litterPieces';
 
-const everywhere = (): { y: number } => ({ y: 3 });
+const everywhere = (): number => 3;
 
 const fouled = (): Litter => {
   const litter = createLitter(4, 3);
@@ -31,9 +31,18 @@ describe('piecesFor', () => {
     expect(piecesFor(fouled(), everywhere, 0, 2)).toEqual([]);
   });
 
-  it('lays nothing on clean paths, or where no node stands', () => {
+  it('lays nothing on clean paths, or where there is no ground to lay it on', () => {
     expect(piecesFor(createLitter(4, 4), everywhere, 100, 2)).toEqual([]);
     expect(piecesFor(fouled(), () => null, 100, 2)).toEqual([]);
+  });
+
+  it('lays pieces on any ground it is given a height for, the sand at 0 included', () => {
+    const litter = createLitter(3, 1);
+    litter.level.set([PIECE, PIECE, PIECE]);
+    const heights = [3, null, 0];
+    const pieces = piecesFor(litter, (tileX) => heights[tileX] ?? null, 100, 1);
+    expect(pieces.map((piece) => piece.y)).toEqual([3, 0]);
+    expect(Math.floor(pieces[1]!.x / TILE_VOXELS)).toBe(2);
   });
 
   it('keeps every piece inside its own tile, and a variant that exists', () => {

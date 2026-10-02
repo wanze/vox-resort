@@ -4,6 +4,7 @@ import {
   CARRY_NODES,
   createCarrying,
   createLitter,
+  dropAt,
   litterAt,
   litterSummary,
   mostLittered,
@@ -12,7 +13,7 @@ import {
   pruneLitter,
   stepWith,
   sweep,
-  SWEEP_ABOVE,
+  FOULED_AT,
 } from './litter';
 
 const nowhere = (tiles: number): Uint8Array => new Uint8Array(tiles);
@@ -119,16 +120,16 @@ describe('mostLittered', () => {
   it('takes the worst eligible tile at or above the threshold', () => {
     const litter = createLitter(4, 1);
     litter.level.set([0.25, 1, 0.75, 0.5]);
-    expect(mostLittered(litter, () => true, SWEEP_ABOVE)).toBe(1);
-    expect(mostLittered(litter, (tile) => tile !== 1, SWEEP_ABOVE)).toBe(2);
-    expect(mostLittered(litter, (tile) => tile === 0, SWEEP_ABOVE)).toBe(-1);
-    expect(mostLittered(litter, (tile) => tile === 3, SWEEP_ABOVE)).toBe(3);
+    expect(mostLittered(litter, () => true, FOULED_AT)).toBe(1);
+    expect(mostLittered(litter, (tile) => tile !== 1, FOULED_AT)).toBe(2);
+    expect(mostLittered(litter, (tile) => tile === 0, FOULED_AT)).toBe(-1);
+    expect(mostLittered(litter, (tile) => tile === 3, FOULED_AT)).toBe(3);
   });
 
   it('breaks ties towards the lower index', () => {
     const litter = createLitter(3, 1);
     litter.level.set([0.5, 0.75, 0.75]);
-    expect(mostLittered(litter, () => true, SWEEP_ABOVE)).toBe(1);
+    expect(mostLittered(litter, () => true, FOULED_AT)).toBe(1);
   });
 
   it('never picks a clean tile, even at a threshold of nothing', () => {
@@ -151,6 +152,32 @@ describe('binCoverFor', () => {
   it('is clipped to the grid', () => {
     const cover = binCoverFor([{ tileX: 0, tileZ: 0, tilesX: 1, tilesZ: 1, reach: 3 }], 2, 2);
     expect([...cover]).toEqual([1, 1, 1, 1]);
+  });
+});
+
+describe('dropAt', () => {
+  it('drops one piece on the tile', () => {
+    const litter = createLitter(2, 1);
+    expect(dropAt(litter, nowhere(2), 1, 0)).toBe(true);
+    expect(litterAt(litter, 1, 0)).toBe(PIECE);
+    expect(litterAt(litter, 0, 0)).toBe(0);
+    expect(litter.version).toBe(1);
+  });
+
+  it('drops nothing on a tile a bin covers, or off the grid', () => {
+    const litter = createLitter(2, 1);
+    const cover = binCoverFor([{ tileX: 0, tileZ: 0, tilesX: 1, tilesZ: 1, reach: 0 }], 2, 1);
+    expect(dropAt(litter, cover, 0, 0)).toBe(false);
+    expect(dropAt(litter, cover, 2, 0)).toBe(false);
+    expect(dropAt(litter, cover, 0, -1)).toBe(false);
+    expect([...litter.level]).toEqual([0, 0]);
+    expect(litter.version).toBe(0);
+  });
+
+  it('never fouls a tile past 1', () => {
+    const litter = createLitter(1, 1);
+    for (let piece = 0; piece < 6; piece++) dropAt(litter, nowhere(1), 0, 0);
+    expect(litterAt(litter, 0, 0)).toBe(1);
   });
 });
 

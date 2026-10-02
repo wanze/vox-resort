@@ -28,8 +28,12 @@ export const CARRY_NODES = 6;
 
 export const PIECE = 0.25;
 
-// Two pieces: a single wrapper is not worth a cleaner's walk.
-export const SWEEP_ABOVE = 0.5;
+// Two pieces: a single wrapper is not worth an advisor's warning.
+export const FOULED_AT = 0.5;
+
+// About one beach stay in seven leaves something behind: a full beach fouls over a day rather
+// than an hour, so a cleaner keeps up and a bin by the sand is worth placing.
+export const BEACH_LITTER = 0.15;
 
 // A fouled tile costs more than the prettiest tile gives: guests notice mess before flowers.
 export const LITTER_WEIGHT = 1;
@@ -90,10 +94,18 @@ export function stepWith(
     return;
   }
   carrying.nodes[person] = left - 1;
-  if (left > 1) return;
+  if (left === 1) dropAt(litter, cover, tileX, tileZ);
+}
+
+// Allocates nothing, for the reason stepWith does.
+export function dropAt(litter: Litter, cover: Uint8Array, tileX: number, tileZ: number): boolean {
+  if (!inGrid(litter, tileX, tileZ)) return false;
+  const tile = tileZ * litter.tilesX + tileX;
+  if (cover[tile] === 1) return false;
   const fouled = litter.level[tile]! + PIECE;
   litter.level[tile] = fouled > 1 ? 1 : fouled;
   litter.version++;
+  return true;
 }
 
 export function litterAt(litter: Litter, tileX: number, tileZ: number): number {
@@ -131,14 +143,13 @@ export interface LitterSummary {
   readonly fouled: number;
 }
 
-// Fouled at SWEEP_ABOVE, the line a cleaner walks to: advice observes the same mark.
 export function litterSummary(litter: Litter): LitterSummary {
   let worst = -1;
   let worstLevel = 0;
   let fouled = 0;
   for (let tile = 0; tile < litter.level.length; tile++) {
     const level = litter.level[tile]!;
-    if (level >= SWEEP_ABOVE) fouled++;
+    if (level >= FOULED_AT) fouled++;
     if (level <= worstLevel) continue;
     worst = tile;
     worstLevel = level;
@@ -148,7 +159,7 @@ export function litterSummary(litter: Litter): LitterSummary {
   return { worst: at, worstLevel, fouled };
 }
 
-// After an edit, litter on a tile that is no longer paving would never be swept.
+// After an edit, litter on a tile no cleaner can stand on any more would never be swept.
 export function pruneLitter(
   litter: Litter,
   keeps: (tileX: number, tileZ: number) => boolean,

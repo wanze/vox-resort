@@ -50,7 +50,7 @@ import {
   STAIRS_ID,
 } from '../features/layout/domain/resortPlan';
 import type { Shore } from '../features/layout/domain/shoreline';
-import { beachTilesOf, shoreFor } from '../features/layout/domain/shoreline';
+import { beachTilesOf, isBeach, shoreFor } from '../features/layout/domain/shoreline';
 import type { Terrain } from '../features/layout/domain/terrain';
 import { overlooksDrop, terrainFor } from '../features/layout/domain/terrain';
 import type { ResortParams } from '../features/layout/domain/resortGenerator';
@@ -140,9 +140,11 @@ import {
   type Breakdowns,
 } from '../features/sim/domain/breakdowns';
 import {
+  BEACH_LITTER,
   binCoverFor,
   createCarrying,
   createLitter,
+  dropAt,
   LITTER_WEIGHT,
   litterAt,
   litterSummary,
@@ -257,7 +259,7 @@ import {
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { depotForShift, depotsOn, type Depot } from '../features/sim/domain/depots';
 import { createRandom, type Random } from '../features/layout/domain/random';
-import { beachVenueFor } from '../features/sim/domain/beach';
+import { beachVenueFor, isBeach as isTheBeach } from '../features/sim/domain/beach';
 import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
 import {
   homesOfLodgings,
@@ -341,6 +343,7 @@ import {
   createCrowd,
   holdAt,
   MAX_STEP,
+  ON_SAND,
   putOnPlot,
   restoreCrowd,
   snapshotCrowd,
@@ -352,7 +355,11 @@ import {
   crowdSizeFor,
   crowdSizeForArea,
 } from '../features/crowd/domain/crowdSize';
-import { walkNetworkFor, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
+import {
+  BEACH_SURFACE,
+  walkNetworkFor,
+  type WalkNetwork,
+} from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
   createCast,
@@ -1000,7 +1007,8 @@ interface Resort {
   breakdowns: Breakdowns;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
-  // Kept across an edit, pruned to what is still paved: planting a hedge does not sweep the plot.
+  // Kept across an edit, pruned to what is still paved or open sand: planting a hedge does not
+  // sweep the plot.
   readonly litter: Litter;
   // Per node, so replaced empty on an edit, which renumbers nodes.
   footfall: Footfall;
@@ -1371,6 +1379,7 @@ function buildResort(
         venue.litter ?? 0,
         (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
       );
+      if (isTheBeach(venue)) leaveOnTheBeach(resort, person, parts.ticks());
       judgeVisit(resort, parts.ticks(), person, venue);
       riskTheWater(resort, parts.ticks(), person, venue);
       const earned = priceOf(venue.id);
@@ -1828,14 +1837,29 @@ function lightRooms(resort: Resort, last: number | null): number {
   return share;
 }
 
-// Off the graph, a guest is on the sand, which neither field covers.
+// Off the graph, a guest is on the sand, where only the litter counts: scenery there is not
+// fielded, so an unlittered beach reads as it always has.
 function surroundingsOf(resort: Resort, person: number): number {
   const { node, network } = resort.crowd.crowd;
-  const at = node[person] ?? -1;
-  if (at < 0 || at >= network.nodes.length) return 0;
-  const { tileX, tileZ } = network.nodes[at]!;
-  const around =
-    sceneryAt(resort.scenery, tileX, tileZ) - LITTER_WEIGHT * litterAt(resort.litter, tileX, tileZ);
+  const at = network.nodes[node[person] ?? -1];
+  if (at) {
+    return mindedAt(resort, at.tileX, at.tileZ, sceneryAt(resort.scenery, at.tileX, at.tileZ));
+  }
+  const tile = sandTileOf(resort, person);
+  const { tilesX } = resort.litter;
+  return tile < 0 ? 0 : mindedAt(resort, tile % tilesX, Math.floor(tile / tilesX), 0);
+}
+
+// The litter grid's index of the beach tile under the body, or -1 off the beach.
+function sandTileOf(resort: Resort, person: number): number {
+  const { x, z } = resort.crowd.crowd;
+  const tileX = Math.floor(x[person]! / TILE_VOXELS);
+  const tileZ = Math.floor(z[person]! / TILE_VOXELS);
+  return isBeach(resort.shore, tileX, tileZ) ? tileZ * resort.litter.tilesX + tileX : -1;
+}
+
+function mindedAt(resort: Resort, tileX: number, tileZ: number, scenery: number): number {
+  const around = scenery - LITTER_WEIGHT * litterAt(resort.litter, tileX, tileZ);
   return Math.min(1, Math.max(-1, around));
 }
 
@@ -1951,13 +1975,31 @@ function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | nu
 const hourTurned = (from: number, to: number): boolean =>
   Math.floor(to / TICKS_PER_HOUR) > Math.floor((from - 1) / TICKS_PER_HOUR);
 
-// Runs on every node every guest reaches, so it allocates nothing. The sand is off the graph
-// and never fouled, which keeps a cleaner off it.
+// Runs on every node and every sand leg every guest reaches, so it allocates nothing. At the
+// end of a leg the body stands on the waypoint, which is the tile a wrapper falls on.
 function stepLitterAt(resort: Resort, person: number, at: number): void {
-  const { nodes } = resort.crowd.crowd.network;
-  if (at < 0 || at >= nodes.length) return;
-  const { tileX, tileZ } = nodes[at]!;
-  stepWith(resort.litter, resort.carrying, resort.binCover, person, tileX, tileZ);
+  const tile = tileReachedAt(resort, person, at);
+  if (tile < 0) return;
+  const { litter } = resort;
+  const tileX = tile % litter.tilesX;
+  const tileZ = Math.floor(tile / litter.tilesX);
+  stepWith(litter, resort.carrying, resort.binCover, person, tileX, tileZ);
+}
+
+function tileReachedAt(resort: Resort, person: number, at: number): number {
+  if (at === ON_SAND) return sandTileOf(resort, person);
+  const node = resort.crowd.crowd.network.nodes[at];
+  return node ? node.tileZ * resort.litter.tilesX + node.tileX : -1;
+}
+
+// A hash with its own multiplier, so it is not the wrapper's draw for the same visit, and never
+// the router's stream, whose draws would move every seeded scene after it.
+function leaveOnTheBeach(resort: Resort, person: number, tick: number): void {
+  if ((mix(person * 40_503 + tick) % 1024) / 1024 >= BEACH_LITTER) return;
+  const tile = sandTileOf(resort, person);
+  if (tile < 0) return;
+  const { litter } = resort;
+  dropAt(litter, resort.binCover, tile % litter.tilesX, Math.floor(tile / litter.tilesX));
 }
 
 interface DrawnLitter {
@@ -1983,11 +2025,12 @@ function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
   if (drawn.litter === litter && drawn.version === litter.version) return drawn;
   const network = resort.crowd.crowd.network;
   const index = pavingIndexOf(network);
-  const nodeOnTile = (tileX: number, tileZ: number): { readonly y: number } | null => {
+  const groundOf = (tileX: number, tileZ: number): number | null => {
     const node = index.at(tileX, tileZ)?.[0];
-    return node === undefined ? null : network.nodes[node]!;
+    if (node !== undefined) return network.nodes[node]!.y;
+    return isBeach(resort.shore, tileX, tileZ) ? BEACH_SURFACE : null;
   };
-  resort.litterField.write(piecesFor(litter, nodeOnTile, LITTER_PIECES, LITTER_MODELS.length));
+  resort.litterField.write(piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length));
   return { litter, version: litter.version };
 }
 
@@ -2002,19 +2045,60 @@ function binsOn(placements: readonly Placement[]): BinSite[] {
   return bins;
 }
 
+interface TileAt {
+  readonly tileX: number;
+  readonly tileZ: number;
+}
+
+// The shore never moves with an edit, so a resort sweeps its sand once.
+const beachTileLists = new WeakMap<Shore, readonly TileAt[]>();
+
+function beachTilesFor(shore: Shore | null): readonly TileAt[] {
+  if (!shore) return [];
+  let tiles = beachTileLists.get(shore);
+  if (!tiles) {
+    tiles = beachTilesOf(shore).map(({ x, z }) => ({ tileX: x, tileZ: z }));
+    beachTileLists.set(shore, tiles);
+  }
+  return tiles;
+}
+
+const sandSlotLists = new WeakMap<WalkNetwork, readonly TileAt[]>();
+
+// The overlay's slots past the node count, in this order; sand a node stands on is drawn by it.
+function sandSlotsOf(network: WalkNetwork, shore: Shore | null): readonly TileAt[] {
+  let slots = sandSlotLists.get(network);
+  if (!slots) {
+    const index = pavingIndexOf(network);
+    slots = beachTilesFor(shore).filter(({ tileX, tileZ }) => !index.at(tileX, tileZ));
+    sandSlotLists.set(network, slots);
+  }
+  return slots;
+}
+
 // The first node on each tile stands for it, so a stair tile with two stands gets one quad.
-function overlayTilesOf(network: WalkNetwork): OverlayTile[] {
+function overlayTilesOf(network: WalkNetwork, shore: Shore | null): OverlayTile[] {
   const index = pavingIndexOf(network);
   const tiles: OverlayTile[] = [];
   for (const [node, { tileX, tileZ, y }] of network.nodes.entries()) {
     if (index.at(tileX, tileZ)?.[0] !== node) continue;
     tiles.push({ x: (tileX + 0.5) * TILE_VOXELS, y, z: (tileZ + 0.5) * TILE_VOXELS, node });
   }
-  return tiles;
+  return [...tiles, ...sandOverlayTilesOf(network, shore)];
 }
 
-function zonesOfNodes(zones: Zones, network: WalkNetwork): Int8Array {
-  return Int8Array.from(network.nodes, (node) => zoneAt(zones, node.tileX, node.tileZ));
+function sandOverlayTilesOf(network: WalkNetwork, shore: Shore | null): OverlayTile[] {
+  return sandSlotsOf(network, shore).map(({ tileX, tileZ }, k) => ({
+    x: (tileX + 0.5) * TILE_VOXELS,
+    y: BEACH_SURFACE,
+    z: (tileZ + 0.5) * TILE_VOXELS,
+    node: network.nodes.length + k,
+  }));
+}
+
+function zonesOfSlots(zones: Zones, network: WalkNetwork, shore: Shore | null): Int8Array {
+  const slots = [...network.nodes, ...sandSlotsOf(network, shore)];
+  return Int8Array.from(slots, (tile) => zoneAt(zones, tile.tileX, tile.tileZ));
 }
 
 // Per graph, which an edit replaces along with the venues, so a sweep is kept until the next
@@ -2036,13 +2120,16 @@ function hopsTo(resort: Resort, need: GuestNeed): Int32Array {
   return hops;
 }
 
+// Only litter is fielded on the sand; every other layer leaves the sand slots hidden.
 function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
-  const { nodes } = resort.crowd.crowd.network;
+  const { network } = resort.crowd.crowd;
+  const { nodes } = network;
   const { litter } = resort;
+  const sand = kind === 'litter' ? sandSlotsOf(network, resort.shore) : [];
   return overlayValuesFor(kind, {
     footfall: resort.footfall,
-    nodes: nodes.length,
-    tileOf: (node) => nodes[node]!,
+    nodes: nodes.length + sand.length,
+    tileOf: (node) => nodes[node] ?? sand[node - nodes.length]!,
     hopsTo: (need) => hopsTo(resort, need),
     scenery: resort.scenery,
     litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
@@ -2160,8 +2247,8 @@ function clockOnNodes(resort: Resort, starting: readonly number[]): readonly num
 }
 
 // A zone holds a workplace for a role wherever that role's task choice could send somebody, so
-// nobody is dealt to a zone with no work for them. Cleaners sweep paving and make up rooms, so
-// paving and lodgings count too.
+// nobody is dealt to a zone with no work for them. Cleaners sweep paving and sand and make up
+// rooms, so those count too.
 function rezone(resort: Resort): void {
   const { zones, venues, lodgings } = resort;
   if (!anyZone(zones)) {
@@ -2176,6 +2263,7 @@ function rezone(resort: Resort): void {
   const held = workplaceZones(zones, venues, resort.venueZones, {
     paved: network.nodes,
     towers: network.posts.map((seat) => tileUnder(network.seats[seat]!)),
+    beach: beachTilesFor(resort.shore),
   });
   held.cleaner = resort.lodgingZones.reduce((mask, each) => mask | each, held.cleaner);
   const roles = resort.staffPool.role.map((role) => STAFF_ROLES.indexOf(role));
@@ -3744,7 +3832,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const placeOverlay = (resort: Resort): WalkNetwork => {
     const network = resort.crowd.crowd.network;
     if (overlayPlacedOn !== network) {
-      resort.overlay.place(overlayTilesOf(network));
+      resort.overlay.place(overlayTilesOf(network, resort.shore));
       overlayPlacedOn = network;
     }
     return network;
@@ -3759,7 +3847,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return;
     }
     const network = placeOverlay(resort);
-    if (zoning) resort.overlay.paintZones(zonesOfNodes(resort.zones, network));
+    if (zoning) resort.overlay.paintZones(zonesOfSlots(resort.zones, network, resort.shore));
     else resort.overlay.paint(overlayValues(resort, overlayKind!));
   };
 
@@ -3921,7 +4009,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       plan.tilesZ,
     );
     const paving = nodeIndexFor(network);
-    pruneLitter(resort.litter, (tileX, tileZ) => paving.at(tileX, tileZ) !== undefined);
+    // Sand under a building just placed would never be swept.
+    pruneLitter(
+      resort.litter,
+      (x, z) =>
+        paving.at(x, z) !== undefined ||
+        (isBeach(shore, x, z) && resort.occupancy.keyAt({ x, z }) === undefined),
+    );
     resort.unreachable = strandedOn(resort.venues, network);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
     resort.staffRouter.rebuild(resort.venues, network, resort.lodgings, resort.depots);

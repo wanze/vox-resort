@@ -604,7 +604,7 @@ first, so its count matches the toolbar badge.
 | `unreachable`    | venues with no door node and no sand | 0.9                                  |
 | `broken`         | each broken venue, ticks down        | 0.3–0.9 over three hours             |
 | `hurt`           | guests here with health below 1      | 0.2–0.7 over ten guests              |
-| `littered`       | tiles at or above `SWEEP_ABOVE`      | worst level × tiles / 20             |
+| `littered`       | tiles at or above `FOULED_AT`        | worst level × tiles / 20             |
 | `far-from-home`  | lodging to nearest venue per need    | distance vs. `reach` (straight line) |
 | `unvisited`      | venues nobody visited today          | 0.2–0.4 by capacity                  |
 | `weather-closed` | needs whose venues are mostly closed |                                      |
@@ -712,7 +712,9 @@ has one where a first-aid post stood.
   that cannot be sold is lost money and turned-away guests), stands in its middle
   for a spell and makes up `BEDS_PER_SPELL` (4) beds; a hotel after a busy
   morning is several spells. With no room waiting, `staffRouter.ts` walks them to
-  the dirtiest unclaimed venue and holds them there for a spell. With no venue
+  the dirtiest unclaimed venue and holds them there for a spell; a building with
+  no door on the paving (a beach shower, a snack hut on the sand) is reached over
+  the sand from a gate, as a mechanic does, and competes on equal terms. With no venue
   below `NEEDS_CLEANING`, a cleaner sweeps litter instead (see [Litter](#litter)).
   Lodgings are not venues and get no cleanliness: `resort.homeOfLodging` maps a
   lodging to its home (homes are sorted by beds, lodgings stand in placement
@@ -727,7 +729,7 @@ has one where a first-aid post stood.
   not those in its line, by `SHOW_FUN_PER_HOUR` (0.3), which roughly doubles what a
   visit gives. Show claims are separate from cleaning claims, so a cleaner can
   scrub a stage mid-show. A stage reached only over the sand gets no animator
-  yet: only towers and mechanics have a sand leg.
+  yet: only towers, mechanics and cleaners have a sand leg.
 - **Lifeguards**: one per venue the art marks `bathing` (swimming pool, waterpark)
   and one per post, a seat the art marks `post: 'lifeguard'` (the tower's). The
   walk graph files a post on the sand in `network.posts`, never in a node's seats
@@ -762,7 +764,7 @@ areas do. A zone is a set of painted tiles on the plan's grid (`zones.ts`, up to
 being carried, and saved with the resort. The Zones shelf in the build palette
 arms a brush per zone and an eraser; `zonePointer.ts` paints along a drag through
 `createTileStroke`, as the terrain brush does. While the brush is armed the
-overlay field draws the zone of every walk tile in a categorical palette
+overlay field draws the zone of every walk tile and every beach tile in a categorical palette
 (`ZONE_COLOURS`, none of them a heat-ramp stop); arming it puts any map away and
 disarming brings none back.
 
@@ -772,7 +774,7 @@ disarming brings none back.
 - Staff are **dealt, not assigned**: `rezone` in `showcase.ts` deals each role's
   on-duty bodies round-robin over the zones, in zone order, that hold a workplace
   for that role (`dealZones`). What counts is what that role's task choice
-  considers: any venue, lodging or paved tile for cleaners, stages for animators, bathing
+  considers: any venue, lodging, paved or beach tile for cleaners, stages for animators, bathing
   venues and towers for lifeguards, venues that can break for mechanics. It runs
   on build, after every edit and every hire (`staffTheResort`), after a load, and
   on every tile a stroke changes.
@@ -820,8 +822,8 @@ worker wanders the graph and is asked again at every node.
   target's zone if anybody there is free) is reserved for it and claims it at
   their next step, before any choice of their own; one already busy finishes
   first, and somebody already on their way there serves it. A building with no door
-  on the paving is reached over the sand, as a mechanic does, whoever is sent;
-  a cleaner's own choices stay on the paving. An order ends when
+  on the paving, or a littered beach tile, is reached over the sand, as a
+  mechanic does, whoever is sent. An order ends when
   its worker finishes there, or when it no longer applies (mended, back above
   `NEEDS_CLEANING`, nothing left to sweep), which also lets a worker still walking there go. An edit
   carries orders across by key; they are saved as an optional `orders` field
@@ -911,21 +913,36 @@ scenery field, and a per-guest count of nodes left to carry (`Carrying`).
   without the crowd or the router knowing about litter. On a tile a bin covers
   the guest bins it; otherwise the count goes down, and at `CARRY_NODES` (6)
   without a bin they drop a `PIECE` (0.25) on that tile, clamped at 1.
-- The sand is off the graph, so nobody drops litter on it and no cleaner is ever
-  sent there. That is deliberate: it would foul for ever with nobody allowed to
-  sweep it.
+- **The beach gets litter two ways.** A wrapper in hand also counts down at the
+  end of every sand leg (the crowd calls `routeOf(person, ON_SAND)` with the body
+  on the waypoint) and falls on that beach tile. And when a beach stay ends, the
+  guest leaves a piece at their pitch with chance `BEACH_LITTER` (0.15), a `mix`
+  hash with its own multiplier (`leaveOnTheBeach`), unless a bin covers the tile
+  (`dropAt`). A bin on or near the sand catches both. Beach roamers drop
+  nothing: the crowd has no per-leg hook for them.
 - A newly admitted guest starts empty-handed. After an edit the bin cover is
-  rebuilt and litter on a tile that is no longer paved is cleared
-  (`pruneLitter`); the rest survives.
+  rebuilt and litter is cleared from every tile that is neither paved nor open
+  sand (`pruneLitter`); sand under a building just placed is cleared too, as no
+  cleaner could stand there. The rest survives.
 - Litter subtracts from the surroundings term scenery adds to: a guest's
   surroundings are scenery minus `LITTER_WEIGHT` (1) times the litter under them,
-  clamped to -1..1. A fouled tile costs more than the prettiest tile gives.
+  clamped to -1..1. A fouled tile costs more than the prettiest tile gives. A
+  guest on the sand minds the litter of the tile under them; scenery there stays
+  0, so an unlittered beach reads as before.
 - Cleaners take venues first. With none to clean, `mostLittered` picks the worst
-  unclaimed paved tile at or above `SWEEP_ABOVE` (0.5, two pieces); the cleaner
-  walks there on a flow field from the tile's node (memoised, at most 64, cleared
-  on a rebuild), sweeps for 4 to 8 ticks and zeroes it. `atWork` answers null
-  while sweeping.
-- Advice `littered` counts the tiles at or above `SWEEP_ABOVE` and names the
+  unclaimed paved or beach tile with any litter on it, down to a single `PIECE`;
+  the cleaner walks to a paved one on a flow field from the tile's node
+  (memoised, at most 64, cleared on a rebuild). A beach tile is reached as a
+  beach building is: `sandRoutesFor` from the tile's centre (or open sand beside
+  it, `feetOf`), memoised per tile like the node fields, walked from the gate.
+  They sweep for 4 to 8 ticks and zero it; on the sand they are then released to
+  the gate. `atWork` answers null while sweeping.
+- On every node a cleaner on duty reaches, litter on an unclaimed tile is swept
+  in passing, without stopping. A claimed tile is left to the cleaner walking to
+  it.
+- An order pulls a cleaner off a walk to litter they chose themselves; a venue
+  or a room they are on the way to is seen through first.
+- Advice `littered` counts the tiles at or above `FOULED_AT` and names the
   worst: "Litter is piling up on n tiles", "no bin within reach".
 
 On the reference plot (4 bins, reaching 4 of the 35 venues that make litter) a
@@ -977,7 +994,7 @@ them all.
 | Drink    | how far to something to drink | the same for thirst                                                            |
 | Wash     | how far to somewhere to wash  | the same for hygiene                                                           |
 | Scenery  | where the walk is plain       | 1 minus the scenery field under the node                                       |
-| Litter   | where litter lies             | the litter level under the node                                                |
+| Litter   | where litter lies             | the litter level under the node, and on every beach tile                       |
 
 `TOO_FAR_HOPS` is the family reach in tiles (20), where the advice starts saying
 far-from-home; a node no door reaches is 1. The reach layers are one multi-source

@@ -22,7 +22,8 @@ const SPAN = TILE_VOXELS - 2 * INSET + 1;
 // Hashed from the tile and the piece, not drawn, so a redraw leaves every piece where it lay.
 export function piecesFor(
   litter: Litter,
-  nodeOnTile: (tileX: number, tileZ: number) => { readonly y: number } | null,
+  // The height to lay a piece on; null for a tile not to draw.
+  groundOf: (tileX: number, tileZ: number) => number | null,
   capacity: number,
   variants: number,
 ): LitterPiece[] {
@@ -33,14 +34,14 @@ export function piecesFor(
     if (level <= 0) continue;
     const tileX = tile % litter.tilesX;
     const tileZ = Math.floor(tile / litter.tilesX);
-    const node = nodeOnTile(tileX, tileZ);
-    if (!node) continue;
+    const y = groundOf(tileX, tileZ);
+    if (y === null) continue;
     const count = Math.min(MOST_PER_TILE, Math.ceil(level / PIECE));
     for (let piece = 0; piece < count && pieces.length < capacity; piece++) {
       const hash = mix(tile * MOST_PER_TILE + piece + 1);
       pieces.push({
         x: tileX * TILE_VOXELS + INSET + (hash % SPAN),
-        y: node.y,
+        y,
         z: tileZ * TILE_VOXELS + INSET + ((hash >>> 8) % SPAN),
         variant: (hash >>> 16) % kinds,
         turns: (hash >>> 24) % 4,

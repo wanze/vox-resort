@@ -26,8 +26,8 @@ export interface Demand {
   readonly groups: { readonly [group in DemandGroup]: DemandLine };
 }
 
-// Past three quarters full, a night's arrivals (a quarter of the beds at most, as
-// `MAX_ARRIVALS_SHARE` sizes them) start to be turned away. A first cut, for tuning.
+// Past three quarters full, a night's arrivals (a seventh of the beds at most, as
+// `ARRIVALS_SHARE` sizes them) start to be turned away. A first cut, for tuning.
 const BEDS_COMFORTABLE = 0.75;
 
 const clamp = (value: number): number => (value < -1 ? -1 : value > 1 ? 1 : value);

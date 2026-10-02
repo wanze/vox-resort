@@ -13,9 +13,6 @@ export const START_LEVEL = { min: 0.45, max: 1 } as const;
 // Without a floor, everybody always chases their least-met need and nobody sits still.
 const CONTENT_URGENCY = 0.2;
 
-// Where an unweighted need stops sending a guest anywhere.
-export const SATISFIED_LEVEL = 1 - CONTENT_URGENCY;
-
 export interface Needs {
   readonly count: number;
   // 1 is content and 0 is desperate, so a relief amount adds to it.
@@ -109,16 +106,39 @@ export interface Urgency {
   readonly urgency: number;
 }
 
+function urgencyOf(
+  needs: Needs,
+  guests: Guests,
+  person: number,
+  need: GuestNeed,
+  effect: WeatherEffect,
+): number {
+  return (
+    archetypeOf(guests, person).weight[need] *
+    effect.weight[need] *
+    (1 - needs.level[need][person]!)
+  );
+}
+
+export function wouldGetUpFor(
+  needs: Needs,
+  guests: Guests,
+  person: number,
+  need: GuestNeed,
+  effect: WeatherEffect = CLEAR_EFFECT,
+): boolean {
+  return urgencyOf(needs, guests, person, need, effect) >= CONTENT_URGENCY;
+}
+
 export function strongestNeed(
   needs: Needs,
   guests: Guests,
   person: number,
   effect: WeatherEffect = CLEAR_EFFECT,
 ): Urgency | null {
-  const { weight } = archetypeOf(guests, person);
   let strongest: Urgency | null = null;
   for (const need of URGENCY_ORDER) {
-    const urgency = weight[need] * effect.weight[need] * (1 - needs.level[need][person]!);
+    const urgency = urgencyOf(needs, guests, person, need, effect);
     if (urgency < CONTENT_URGENCY) continue;
     if (strongest === null || urgency > strongest.urgency) strongest = { need, urgency };
   }

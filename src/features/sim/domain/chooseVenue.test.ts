@@ -118,6 +118,15 @@ describe('chooseVenue', () => {
     expect(decide(person, wanting(person, 'hunger'), venues)?.venue).toBe(0);
   });
 
+  it('sends a thirsty guest nowhere rather than back for a snack they barely want', () => {
+    const person = someone('couple');
+    const needs = wanting(person, 'thirst');
+    needs.level.hunger[person] = 0.95;
+    expect(decide(person, needs, [venue('bakery#0', HUNGER, 100)])).toBeNull();
+    needs.level.hunger[person] = 0.3;
+    expect(decide(person, needs, [venue('bakery#0', HUNGER, 100)])?.venue).toBe(0);
+  });
+
   it('will not send anybody somewhere that makes the need worse', () => {
     const person = someone('friends');
     const court = venue('court#0', [{ need: 'energy', amount: -0.4 }], 50);

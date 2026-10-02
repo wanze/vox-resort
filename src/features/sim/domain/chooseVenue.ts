@@ -3,7 +3,7 @@ import type { Guests } from '../../guests/domain/guests';
 import { appealOf, dominantNeedAt } from './appeal';
 import { archetypeOf } from './archetypes';
 import { MAX_QUEUE_SHOWN } from './queueLane';
-import { strongestNeed, type Needs } from './needs';
+import { strongestNeed, wouldGetUpFor, type Needs } from './needs';
 import type { Venue } from './venues';
 import type { WeatherEffect } from './weather';
 
@@ -71,6 +71,15 @@ function distanceTo(options: ChoiceOptions, index: number): number {
     : Math.hypot(venue.x - options.x, venue.z - options.z);
 }
 
+// A thirsty guest with nowhere to drink otherwise went back to the snack bar for the last crumb
+// of hunger, all day long.
+function servesAWant(options: ChoiceOptions, venue: Venue): boolean {
+  const { needs, guests, person, weather } = options;
+  return venue.satisfies.some(
+    (relief) => relief.amount > 0 && wouldGetUpFor(needs, guests, person, relief.need, weather),
+  );
+}
+
 function weigh(
   options: ChoiceOptions,
   index: number,
@@ -112,8 +121,9 @@ export function chooseVenue(options: ChoiceOptions): VenueChoice | null {
   let best = -1;
   let bestScore = 0;
   for (let index = 0; index < venues.length; index++) {
-    // Skipped here rather than in weigh so a closed venue's walk is never swept.
+    // Skipped here rather than in weigh so a closed or unwanted venue's walk is never swept.
     if (isOpen && !isOpen(index)) continue;
+    if (!servesAWant(options, venues[index]!)) continue;
     const score = weigh(options, index, reach, queueLimit, justLeft);
     if (score <= bestScore) continue;
     bestScore = score;

@@ -245,7 +245,7 @@ import {
 import {
   earn,
   maintenanceFor,
-  stayBill,
+  nightBill,
   takingsOf,
   type VenueTakings,
 } from '../features/sim/domain/takings';
@@ -277,7 +277,7 @@ import {
 import {
   arrivalsDueBy,
   checkInDue,
-  freeBedsOn,
+  bedsOn,
   runCheckIn,
   wavesDue,
 } from '../features/sim/domain/checkIn';
@@ -2508,6 +2508,9 @@ function payTheBills(resort: Resort): void {
   const billed = record(resort.ledger, 'wages', -wagesFor(resort.roster));
   resort.ledger = closeDay(record(billed, 'maintenance', -maintenanceFor(standing)));
   resort.takings.clear();
+  // Into the new day, so a lodging's takings show the morning's rent until the next one.
+  const rent = nightBill(resort.guests, (home) => nightlyRate(resort, home), resort.takings);
+  resort.ledger = record(resort.ledger, 'night', rent);
 }
 
 function nightlyRate(resort: Resort, home: number): number {
@@ -2546,7 +2549,7 @@ function closeTheDay(resort: Resort, day: number): void {
 // The rating comes first, so the morning coach is sized by the resort the current guests
 // experienced.
 function runDay(resort: Resort, day: number): void {
-  resort.arrivalsPlanned = arrivalsFor(resort.rating, freeBedsOn(resort.guests));
+  resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
   resort.arrivalsAdmitted = 0;
   admitWave(resort, day, 0);
   sendDepartures(resort, day);
@@ -2581,14 +2584,6 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     random: resort.arrivals,
     room,
   });
-  // At the bed, not the desk: a guest who never reaches reception has still paid.
-  const bill = stayBill(
-    arrived,
-    resort.guests,
-    (home) => nightlyRate(resort, home),
-    resort.takings,
-  );
-  resort.ledger = record(resort.ledger, 'night', bill);
   for (const person of arrived) {
     // The body was somebody else's, and so was whatever it was holding and thinking.
     resort.carrying.nodes[person] = 0;

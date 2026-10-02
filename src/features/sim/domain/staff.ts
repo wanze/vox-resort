@@ -38,12 +38,13 @@ export interface Workplaces {
 }
 
 // A lifeguard sits a whole day where a cleaner comes and goes, an animator is a performer, and a
-// mechanic is a trade.
+// mechanic is a trade. Twice these, the staff a game hall and a playground bring outcost every bed
+// of a twelve-bed start.
 export const WAGES: { readonly [role in StaffRole]: number } = {
-  cleaner: 80,
-  lifeguard: 100,
-  animator: 120,
-  mechanic: 110,
+  cleaner: 50,
+  lifeguard: 60,
+  animator: 70,
+  mechanic: 65,
 };
 
 // About what a fun venue gives over a whole visit, so a show roughly doubles a visit's fun and

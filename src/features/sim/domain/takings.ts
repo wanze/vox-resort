@@ -1,20 +1,20 @@
 import type { Guests } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
 
-// The whole stay on arrival: one transaction per wave instead of one per guest per night.
-export function stayBill(
-  arrived: readonly number[],
+// A night at a time, for everybody who slept here: billed whole on arrival, a day with no coach
+// showed wages over takings even in a resort that was making money.
+export function nightBill(
   guests: Guests,
   rateOf: (home: number) => number,
   takings?: VenueTakings,
 ): number {
   let bill = 0;
-  for (const person of arrived) {
+  for (let person = 0; person < guests.count; person++) {
     const home = guests.home[person]!;
-    if (home === NO_HOME) continue;
-    const stay = rateOf(home) * guests.nights[person]!;
-    bill += stay;
-    if (takings) earn(takings, guests.homes[home]!.key, stay);
+    if (guests.present[person] !== 1 || home === NO_HOME) continue;
+    const night = rateOf(home);
+    bill += night;
+    if (takings) earn(takings, guests.homes[home]!.key, night);
   }
   return bill;
 }

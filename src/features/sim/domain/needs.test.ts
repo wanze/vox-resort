@@ -12,6 +12,7 @@ import {
   resetNeeds,
   START_LEVEL,
   strongestNeed,
+  wouldGetUpFor,
   type Needs,
 } from './needs';
 import { weatherEffect } from './weather';
@@ -242,6 +243,19 @@ describe('strongestNeed', () => {
   });
 });
 
+describe('wouldGetUpFor', () => {
+  it('agrees with strongestNeed about which needs are worth getting up for', () => {
+    const guests = guestsOf();
+    const needs = createNeeds(guests, 7);
+    const person = someone(guests, 'family');
+    setAll(needs, person, 0.95);
+    needs.level.hunger[person] = 0.4;
+    expect(wouldGetUpFor(needs, guests, person, 'hunger')).toBe(true);
+    expect(wouldGetUpFor(needs, guests, person, 'thirst')).toBe(false);
+    expect(strongestNeed(needs, guests, person)?.need).toBe<GuestNeed>('hunger');
+  });
+});
+
 describe('the weather over the needs', () => {
   it('makes thirst the loudest need in a heatwave where a clear day would not', () => {
     const guests = guestsOf();
@@ -278,7 +292,7 @@ describe('the weather over the needs', () => {
     decayNeeds(needs, guests, 120);
     // Pinned against the literals rather than the table, so a change to either is a change to both.
     expect(levelsOf(needs, person)).toEqual(
-      [1 - 0.2 * 2, 1 - 0.16 * 2, 1 - 0.14 * 2, 1 - 0.12 * 2, 1 - 0.18 * 2].map((level) =>
+      [1 - 0.12 * 2, 1 - 0.096 * 2, 1 - 0.084 * 2, 1 - 0.102 * 2, 1 - 0.108 * 2].map((level) =>
         Math.fround(level),
       ),
     );

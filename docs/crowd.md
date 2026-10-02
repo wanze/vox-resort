@@ -238,8 +238,12 @@ score = gain * taste * recency
 ```
 
 - **gain** counts only what the guest can use: `min(amount, 1 - level)`, over
-  every need the venue serves, including negative ones. Levels are estimated for
-  arrival time, after the walk.
+  every need the venue serves, including negative ones. A cost counts only where
+  it leaves the need under `CONTENT_LEVEL` (0.5), so a rested guest plays tennis
+  for free. Levels are estimated for arrival time, after the walk.
+- A venue is a candidate only if it serves a need the guest would get up for
+  (`wouldGetUpFor`); otherwise a thirsty guest with nowhere to drink went back
+  to the snack bar for the last crumb of hunger all day.
 - **taste** is a stable per-guest, per-venue preference hashed from the venue key
   (`TASTE_SPREAD` 0.3).
 - **recency** halves the score of the place they just left (`REVISIT` 0.5).
@@ -574,15 +578,20 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
   party is forgotten at once (`Router.forget`).
 - **Gates** are declared on the art (`gateway: true`) and aren't venues. No gate
   means no arrivals or departures.
-- **Happiness** (`happiness.ts`) drifts toward the mean of the five needs at 0.15
-  an hour, minus 0.3 an hour while queuing. A need at or above `SATISFIED_LEVEL`
-  (0.8, where it stops sending an unweighted guest anywhere) counts as fully met.
+- **Happiness** (`happiness.ts`) drifts toward `contentmentOf` at 0.15 an hour,
+  minus 0.3 an hour while queuing. A need at or above `CONTENT_LEVEL` (0.5)
+  counts as fully met; below it the shortfall is squared and averaged (one minus
+  the root mean square), so one need run dry costs more than five half-met ones.
+  A fully served resort rates about 4.5 stars, one with no food about 3.4.
   `stay` follows the mood with a day's memory (`STAY_MEMORY_HOURS`), and is what a
   review is written from.
 - **Rating** (`rating.ts`) is three quarters mean happiness, one quarter share of
   guests with a bed, plus a small cleanliness term. An empty resort rates 3 stars.
-- **Arrivals** are sized at 11:00: none at 0 stars, up to a quarter of free beds
-  at 5 stars, never more than the free beds. They come in three waves
+- **Arrivals** are sized at 11:00 from all the beds, not the free ones:
+  `ARRIVALS_SHARE` (0.15) of them times an appetite that grows from nothing at 1
+  star to all of it at 5, at least one while anybody books, never more than the
+  free beds. Stays average eight and a half nights, so 5 stars keeps a resort
+  full and 3 stars about two thirds full. They come in three waves
   (`ARRIVAL_WAVES`): half at 11:00, 30% at 14:00, 20% at 17:00, so one desk is
   not flooded at once. A wave nobody could come in is not carried over.
 - **The check-in hour** pays the bills, rates the day, reports it, then lets the
@@ -1096,18 +1105,20 @@ Money moves in eight ways, each a `Reason` with its own column in the books:
 | dig         | the spade, `DIG_COST` (20) per tile changed                                   |
 | land        | the land tool, `LAND_PARCEL_COST` (1 500) a parcel; nothing in Free play      |
 | visit       | `onVisited`, the venue's price                                                |
-| night       | at check-in (`admitWave`), the whole stay: nights times the lodging's rate    |
+| night       | each check-in hour, `nightBill`: one night's rate for every housed guest here |
 | wages       | each check-in hour, `wagesFor(roster)`: the cleaners on duty, never the pool  |
 | maintenance | each check-in hour, 1% of the build cost of every placement and prop standing |
 
-A stay is billed at the bed, not the desk, so a guest who never reaches reception
-has still paid. A lodging's nightly rate is its price plus up to
+A night is billed for the bed slept in, so a guest who never reaches reception
+still pays; billed by the stay on arrival, a day with no coach read as a loss in a
+resort that was making money. A lodging's nightly rate is its price plus up to
 `SETTING_PREMIUM` (a quarter) for its surroundings (`nightPriceOf`, the
 inspector's Surroundings); that is a price, never a reason a party lodges
 anywhere. Paving and rails are not maintained, and rails, which the handrails lay
 on their own, cost nothing to stand. A day in the books runs from one check-in
 hour to the next: the bills are paid and the day closed just before the morning
-coach, so that coach's stays are the new day's. A resort that is **Closed** still
+coach, and the night just slept goes into the new day, so a lodging's takings
+show the morning's rent. A resort that is **Closed** still
 pays its staff and its upkeep and earns no nights, which is real pressure and
 needs no code. Balances are integers, and a balance below zero only stops
 building.
@@ -1124,9 +1135,11 @@ resort opens new books and restarts the clock at day 0. Free play is the players
 name for sandbox; the code keeps `sandbox`.
 
 On the reference plot (seed 3, density 0.7) what stands costs 341 870, of which
-paving is 47 700 (14%). Its wages are 1 200 a day and its maintenance 2 942,
-against 12 000 to 16 500 a day in visits and, once the opening guests have been
-replaced by billed ones, about 11 000 in stays.
+paving is 47 700 (14%). Its wages are 1 730 a day and its maintenance 3 036,
+against about 12 500 a day in visits and 10 000 in nights. Wages are sized
+against small starts: twelve beds earn about 240 a night, and the minimal start
+nets about 180 a day, with restrooms, a bar and a tower about 300, and still
+about 100 with a game hall and a playground (`pnpm sim:report` with `SIM_KEEP`).
 
 The HUD hears about money after a click that moved it (once a frame at most), at
 the check-in hour, once a simulated hour for the visits in between, and when a new

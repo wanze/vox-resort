@@ -14,12 +14,17 @@ const CLEAN_SHARE = 1 - HAPPINESS_SHARE - HOUSED_SHARE;
 // Arrivals follow the rating, so an empty plot rating zero could never fill.
 export const EMPTY_STARS = 3;
 
-// A quarter a night fills a good resort within a week, so the rating has time to mean something.
-export const MAX_ARRIVALS_SHARE = 0.25;
+// Stays average eight and a half nights, so a seventh of all beds a night keeps a five-star resort
+// full and a three-star one two thirds full. Of all beds, not the free ones: a share of the free
+// beds shrinks as the resort fills, which held even a five-star resort near two thirds.
+export const ARRIVALS_SHARE = 0.15;
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
 
 const oneDecimal = (value: number): number => Math.round(value * 10) / 10;
+
+// Nobody books a one-star resort; the appetite grows evenly from there to five.
+const appetiteFor = (stars: number): number => clamp((stars - 1) / 4);
 
 export function ratingFor(parts: {
   readonly happiness: number | null;
@@ -43,12 +48,16 @@ export function ratingFor(parts: {
   };
 }
 
-// The cap is at least 1, or a plot down to its last beds would never see another coach.
-export function arrivalsFor(rating: Rating, freeBeds: number): number {
-  const beds = Math.max(0, Math.floor(freeBeds));
-  if (beds === 0) return 0;
-  const cap = Math.max(1, Math.round(beds * MAX_ARRIVALS_SHARE));
-  return Math.min(beds, Math.round(cap * clamp(rating.stars / 5)));
+// At least 1 while anybody books at all, or a small plot rounding to nobody would never see a coach.
+export function arrivalsFor(
+  rating: Rating,
+  beds: { readonly free: number; readonly total: number },
+): number {
+  const free = Math.max(0, Math.floor(beds.free));
+  const appetite = appetiteFor(rating.stars);
+  if (free === 0 || appetite === 0) return 0;
+  const wanted = Math.max(1, Math.round(Math.max(0, beds.total) * ARRIVALS_SHARE * appetite));
+  return Math.min(free, wanted);
 }
 
 export type RatingPart = 'happiness' | 'housed' | 'cleanliness';

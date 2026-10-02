@@ -66,7 +66,7 @@ import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';
 import { beachVenueFor, isBeach, LOUNGER_RELIEF } from './beach';
 import { crowdScaleFor } from './crowdRate';
-import { arrivalsDueBy, checkInDue, freeBedsOn, runCheckIn, wavesDue } from './checkIn';
+import { arrivalsDueBy, bedsOn, checkInDue, runCheckIn, wavesDue } from './checkIn';
 import { createHappiness, meanHappiness } from './happiness';
 import { arrivalsFor, ratingFor } from './rating';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
@@ -2194,7 +2194,7 @@ describe('on the generated plot', () => {
       decayNeeds(needs, people, 1);
       router.tick(tick);
       for (const wave of wavesDue(tick, tick)) {
-        if (wave === 0) planned = arrivalsFor(rating, freeBedsOn(people));
+        if (wave === 0) planned = arrivalsFor(rating, bedsOn(people));
         const arrived = runCheckIn({
           guests: people,
           needs,
@@ -2668,7 +2668,7 @@ describe('on the generated plot', () => {
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual(['changing-cabins']);
+    expect(quiet).toEqual(['tennis-court']);
 
     // The beach sat right at 0.6 for energy, and resizing the staff pool reseeds the cleaners'
     // walk enough to tip it to 0.62; the bound guards against one venue taking a need over.

@@ -1,4 +1,10 @@
-import { checkInParty, checkOutParty, freeBodiesOf, type Guests } from '../../guests/domain/guests';
+import {
+  bedCount,
+  checkInParty,
+  checkOutParty,
+  freeBodiesOf,
+  type Guests,
+} from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
 import { welcome, type Happiness } from './happiness';
 import { resetNeeds, type Needs } from './needs';
@@ -44,6 +50,10 @@ export function arrivalsDueBy(planned: number, wave: number): number {
   return Math.min(planned, Math.max(0, Math.ceil(planned * share - SHARE_EPSILON)));
 }
 
+export function bedsOn(guests: Guests): { readonly free: number; readonly total: number } {
+  return { free: freeBedsOn(guests), total: bedCount(guests).beds };
+}
+
 export function freeBedsOn(guests: Guests): number {
   let free = 0;
   for (let home = 0; home < guests.freeBeds.length; home++) free += guests.freeBeds[home]!;
@@ -65,7 +75,7 @@ export function runCheckIn(parts: {
 }): readonly number[] {
   const { guests, needs, happiness, rating, day, random } = parts;
   const free = freeBodiesOf(guests);
-  let room = parts.room ?? arrivalsFor(rating, freeBedsOn(guests));
+  let room = parts.room ?? arrivalsFor(rating, bedsOn(guests));
   const arrived: number[] = [];
 
   while (room > 0) {

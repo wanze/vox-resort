@@ -46,6 +46,13 @@ pnpm dev        # http://localhost:5173
 | `pnpm lint` / `pnpm format`         | lint / format                           |
 | `pnpm fallow` / `pnpm fallow:audit` | dead code, duplication, boundaries      |
 | `pnpm bench`                        | measure the renderer (needs `pnpm dev`) |
+| `pnpm sim:report`                   | run the simulation headless for days    |
+
+`pnpm sim:report` prints each day's rating, visits, thoughts, demand, needs and
+books on a generated plot. `SIM_DAYS`, `SIM_SEED` and `SIM_PLOT` (`112x100`) pick
+the run; `SIM_KEEP=entrance,reception,bungalow:3,snack-bar` keeps only those
+buildings, `SIM_PATHS=30` charges upkeep on that many path tiles, `SIM_EMPTY=1`
+opens with nobody booked in, and `SIM_QUIET=1` drops the hourly beach lines.
 
 ## Structure
 

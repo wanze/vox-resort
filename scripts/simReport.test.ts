@@ -1,6 +1,8 @@
 import { it } from 'vitest';
+import { GUEST_NEEDS, type GuestNeed } from '../voxel-gen/voxelgen.ts';
 import { ORIGINAL_TYPES, venueOf } from '../src/features/catalog/domain/objectTypes';
 import { seatSiteOf } from '../src/features/catalog/domain/placementFacts';
+import { buildCostOf, priceOf } from '../src/features/catalog/domain/prices';
 import {
   createCrowd,
   isWaiting,
@@ -25,12 +27,17 @@ import {
 import { elevationFor, levelAt } from '../src/features/layout/domain/elevation';
 import { createRandom } from '../src/features/layout/domain/random';
 import { clampParams, generateResort } from '../src/features/layout/domain/resortGenerator';
-import { layoutResort, type LayoutItem } from '../src/features/layout/domain/resortLayout';
+import {
+  layoutResort,
+  type LayoutItem,
+  type Placement,
+} from '../src/features/layout/domain/resortLayout';
 import { shoreFor } from '../src/features/layout/domain/shoreline';
 import {
   arrivalsDueBy,
   CHECK_IN_TICK,
   checkInDue,
+  bedsOn,
   freeBedsOn,
   runCheckIn,
   wavesDue,
@@ -47,6 +54,7 @@ import {
   type Needs,
 } from '../src/features/sim/domain/needs';
 import { arrivalsFor, ratingFor } from '../src/features/sim/domain/rating';
+import { OPENING_BALANCE } from '../src/features/sim/domain/ledger';
 import { reviewFor } from '../src/features/sim/domain/reviews';
 import { createRouter, type Router } from '../src/features/sim/domain/router';
 import { SPEED_DAY_SECONDS, TICKS_PER_DAY } from '../src/features/sim/domain/simClock';
@@ -57,6 +65,8 @@ import {
   tallyInto,
   think,
 } from '../src/features/sim/domain/thoughts';
+import { rosterFor, wagesFor, workplacesOf } from '../src/features/sim/domain/staff';
+import { maintenanceFor, nightBill } from '../src/features/sim/domain/takings';
 import { createUpkeep } from '../src/features/sim/domain/upkeep';
 import { venuesOn, type Venue } from '../src/features/sim/domain/venues';
 
@@ -66,6 +76,12 @@ const [TILES_X, TILES_Z] = (process.env.SIM_PLOT ?? '112x100').split('x').map(Nu
 ];
 const SEED = Number(process.env.SIM_SEED ?? 1);
 const DAYS = Number(process.env.SIM_DAYS ?? 2);
+// `entrance,reception,bungalow:3,snack-bar` keeps only those, the nearest to the reception first,
+// so a small tycoon start can be run on the generated streets.
+const KEEP = process.env.SIM_KEEP ?? '';
+const PATH_TILES = process.env.SIM_PATHS === undefined ? null : Number(process.env.SIM_PATHS);
+const OPENS_EMPTY = process.env.SIM_EMPTY === '1';
+const QUIET = process.env.SIM_QUIET === '1';
 
 // The frames a normal-speed tick runs, so walks take as long as they do in the app.
 const FRAMES_PER_TICK = Math.round(
@@ -101,7 +117,8 @@ function plotOf() {
     TYPES,
     clampParams({ tilesX: TILES_X, tilesZ: TILES_Z, seed: SEED, density: 0.7 }),
   );
-  const layout = layoutResort(ITEMS, plan);
+  const laid = layoutResort(ITEMS, plan);
+  const layout = KEEP ? { ...laid, placements: kept(laid.placements), props: [] } : laid;
   const elevation = elevationFor(plan);
   const standing = [...layout.placements, ...layout.props];
   const network = walkNetworkFor({
@@ -122,7 +139,24 @@ function plotOf() {
       beds: venue!.beds!,
     }))
     .toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key));
-  return { layout, network, homes, population: crowdSizeFor(layout.paths.length) };
+  const paths = PATH_TILES ?? layout.paths.length;
+  const built = [
+    ...standing.map((placement) => buildCostOf(placement.id)),
+    paths * buildCostOf('path'),
+  ];
+  return { layout, network, homes, built, population: crowdSizeFor(layout.paths.length) };
+}
+
+function kept(placements: readonly Placement[]): Placement[] {
+  const desk = placements.find((placement) => placement.id === 'reception') ?? placements[0]!;
+  const distance = (placement: Placement) => Math.hypot(placement.x - desk.x, placement.z - desk.z);
+  return KEEP.split(',').flatMap((entry) => {
+    const [id, count] = entry.split(':');
+    return placements
+      .filter((placement) => placement.id === id)
+      .toSorted((a, b) => distance(a) - distance(b))
+      .slice(0, Number(count ?? 1));
+  });
 }
 
 interface BeachNow {
@@ -220,9 +254,51 @@ function demandNow(guests: Guests, needs: Needs, router: Router, venues: readonl
   return DEMAND_LINES.map((line) => `${line} ${demand.lines[line].pressure.toFixed(2)}`).join(', ');
 }
 
+interface NeedDay {
+  readonly level: Record<GuestNeed, number>;
+  samples: number;
+  dry: number;
+}
+
+const createNeedDay = (): NeedDay => ({
+  level: { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0, health: 0 },
+  samples: 0,
+  dry: 0,
+});
+
+// A need under this is as good as empty; a share of guests with one tells a resort that cannot
+// keep up from one that merely has long walks.
+const RUN_DRY = 0.05;
+
+function sampleNeeds(day: NeedDay, guests: Guests, needs: Needs, router: Router): void {
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1 || router.isAsleep(person)) continue;
+    day.samples++;
+    let dry = false;
+    for (const need of GUEST_NEEDS) {
+      day.level[need] += needs.level[need][person]!;
+      dry ||= needs.level[need][person]! < RUN_DRY;
+    }
+    if (dry) day.dry++;
+  }
+}
+
+function needDayLine(day: NeedDay): string {
+  const of = (total: number) => (day.samples > 0 ? total / day.samples : 0);
+  const levels = GUEST_NEEDS.map((need) => `${need} ${of(day.level[need]).toFixed(2)}`);
+  return `${levels.join(', ')}; ${Math.round(100 * of(day.dry))}% awake with one run dry`;
+}
+
 it('reports a few days on a generated plot', () => {
-  const { layout, network, homes, population } = plotOf();
+  const { layout, network, homes, built, population } = plotOf();
   const venues = venuesOn(layout.placements);
+  const lodgings = lodgingsOn(layout.placements);
+  const wages = wagesFor(rosterFor(workplacesOf(venues, network.posts, lodgings)));
+  const maintenance = maintenanceFor(built);
+  const buildCost = built.reduce((sum, cost) => sum + cost, 0);
+  let balance = OPENING_BALANCE.tycoon - buildCost;
+  const books = { nights: 0, visits: 0 };
+  const needDay = createNeedDay();
   const guests = createGuests({ count: population, homes, variants: 4, childVariant: 3, seed: 7 });
   const needs = createNeeds(guests, 13);
   const happiness = createHappiness(population);
@@ -238,7 +314,7 @@ it('reports a few days on a generated plot', () => {
     guests,
     needs,
     venues,
-    lodgings: lodgingsOn(layout.placements),
+    lodgings,
     gateways: gatewaysOn(layout.placements),
     network,
     onLeave: (person) => {
@@ -268,6 +344,9 @@ it('reports a few days on a generated plot', () => {
     onThought: (person, kind, subject) => {
       if (think(thoughts, person, kind, subject, tick)) tallyInto(heard, kind, subject);
     },
+    onVisited: (_person, venue) => {
+      books.visits += priceOf(venue.id);
+    },
     tickOfDay: () => tick % TICKS_PER_DAY,
     crowd: () => crowd!,
     upkeep: () => upkeep,
@@ -283,6 +362,8 @@ it('reports a few days on a generated plot', () => {
     paceOf: (person) => paceOf(guests, person),
     roamsBeach: false,
   });
+  if (OPENS_EMPTY)
+    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
   for (let person = 0; person < population; person++) {
     if (guests.present[person] === 1) continue;
     takeOffPlot(crowd, person, crowd.x[person]!, crowd.y[person]!, crowd.z[person]!);
@@ -291,6 +372,10 @@ it('reports a few days on a generated plot', () => {
   console.log(
     `Plot ${TILES_X}x${TILES_Z} seed ${SEED}: ${population} guests, ${bedCount(guests).beds} beds, ` +
       `${venues.length} venues, ${network.beachSeats.length} loungers, ${network.gates.length} gate tiles onto the beach`,
+  );
+  console.log(
+    `Books: built for ${buildCost}, wages ${wages} and maintenance ${maintenance} a day, ` +
+      `opening a tycoon game at ${balance}`,
   );
 
   const arrivals = createRandom(41);
@@ -344,14 +429,21 @@ it('reports a few days on a generated plot', () => {
               `p90 ${percentile(sorted, 0.9)} min; ${changedMind} changed their mind`,
             `  loudest thoughts: ${said.join(', ') || 'none'}`,
             `  demand: ${demandNow(guests, needs, router, venues)}`,
+            `  needs: ${needDayLine(needDay)}; beds ${beds.taken}/${beds.beds}`,
+            `  books: nights ${books.nights}, visits ${books.visits}, wages -${wages}, ` +
+              `maintenance -${maintenance}, net ${books.nights + books.visits - wages - maintenance}, ` +
+              `balance ${(balance += books.nights + books.visits - wages - maintenance)}`,
           ].join('\n'),
         );
       }
       trips.length = 0;
       changedMind = 0;
+      books.nights = nightBill(guests, (home) => priceOf(guests.homes[home]!.id));
+      books.visits = 0;
+      Object.assign(needDay, createNeedDay());
       router.forgetTheDay();
       heard = createDay();
-      planned = arrivalsFor(rating, freeBedsOn(guests));
+      planned = arrivalsFor(rating, bedsOn(guests));
       admitted = 0;
       for (let person = 0; person < guests.count; person++) {
         if (guests.present[person] !== 1) continue;
@@ -375,6 +467,8 @@ it('reports a few days on a generated plot', () => {
 
     const hour = hourOf(tick);
     if (tick % HOUR !== 0 || hour < 9 || hour > 20) continue;
+    sampleNeeds(needDay, guests, needs, router);
+    if (QUIET) continue;
     const beach = beachNow(guests, router, crowd);
     console.log(
       `  ${String(hour).padStart(2)}:00  on loungers ${beach.onLounger}, on sand ${beach.onSand}, ` +

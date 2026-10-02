@@ -1,6 +1,6 @@
 import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
-import { SATISFIED_LEVEL, type Needs } from './needs';
+import type { Needs } from './needs';
 import type { HappinessSnapshot } from './resortSnapshot';
 
 const TICKS_PER_HOUR = 60;
@@ -51,15 +51,20 @@ export function welcome(happiness: Happiness, person: number): void {
   happiness.stay[person] = ARRIVAL_MOOD;
 }
 
-// Unweighted on purpose: archetype weights decide where a guest walks, not whether
-// they enjoy their stay. Health scales the wants rather than joining them. A need a guest
-// would not get up for counts as met, or a well-served guest could never be happy.
-function contentmentOf(needs: Needs, person: number): number {
-  let total = 0;
+// Half full, not where a guest would get up for a snack: peckish is not unhappy, and crediting
+// only from there read a fully built resort as three stars.
+export const CONTENT_LEVEL = 0.5;
+
+// Unweighted on purpose: archetype weights decide where a guest walks, not whether they enjoy
+// their stay. The shortfall is squared, so one empty need costs more than five half-met ones and a
+// resort with no food cannot score like one with a long walk to lunch.
+export function contentmentOf(needs: Needs, person: number): number {
+  let shortfall = 0;
   for (const need of GUEST_NEEDS) {
-    total += Math.min(1, needs.level[need][person]! / SATISFIED_LEVEL);
+    const met = Math.min(1, needs.level[need][person]! / CONTENT_LEVEL);
+    shortfall += (1 - met) * (1 - met);
   }
-  const wants = total / GUEST_NEEDS.length;
+  const wants = 1 - Math.sqrt(shortfall / GUEST_NEEDS.length);
   const health = needs.level.health[person]!;
   return health >= 1 ? wants : wants * (HURT_FLOOR + (1 - HURT_FLOOR) * health);
 }

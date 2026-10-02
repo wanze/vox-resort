@@ -12,26 +12,55 @@ export interface Archetype {
 // most 1.5 x 1. Health never decays: only an incident lowers it.
 const HURT_WEIGHT = 3;
 
-// Rates stay at or below 0.2 per hour: any quicker and a guest is hungry again before walking
-// back from lunch. Reaches are in voxels; the reference plot is 112 x 100 tiles of 16.
+// At up to 0.2 an hour a guest spent the day walking to the next need, half of them always had one
+// run dry, and a fully built resort rated three stars. Fun runs down quickest, or the leisure
+// venues stand empty. Reaches are in voxels; the reference plot is 112 x 100 tiles of 16.
 export const ARCHETYPES: { readonly [kind in PartyKind]: Archetype } = {
   family: {
-    decayPerHour: { hunger: 0.2, thirst: 0.16, energy: 0.14, fun: 0.12, hygiene: 0.18, health: 0 },
+    decayPerHour: {
+      hunger: 0.12,
+      thirst: 0.096,
+      energy: 0.084,
+      fun: 0.102,
+      hygiene: 0.108,
+      health: 0,
+    },
     weight: { hunger: 1.4, thirst: 1.1, energy: 1, fun: 0.9, hygiene: 1.2, health: HURT_WEIGHT },
     reach: 320,
   },
   couple: {
-    decayPerHour: { hunger: 0.13, thirst: 0.13, energy: 0.1, fun: 0.12, hygiene: 0.1, health: 0 },
+    decayPerHour: {
+      hunger: 0.078,
+      thirst: 0.078,
+      energy: 0.06,
+      fun: 0.102,
+      hygiene: 0.06,
+      health: 0,
+    },
     weight: { hunger: 1.1, thirst: 1.1, energy: 1, fun: 1.1, hygiene: 0.9, health: HURT_WEIGHT },
     reach: 620,
   },
   friends: {
-    decayPerHour: { hunger: 0.11, thirst: 0.18, energy: 0.08, fun: 0.2, hygiene: 0.08, health: 0 },
+    decayPerHour: {
+      hunger: 0.066,
+      thirst: 0.108,
+      energy: 0.048,
+      fun: 0.17,
+      hygiene: 0.048,
+      health: 0,
+    },
     weight: { hunger: 1, thirst: 1.2, energy: 0.8, fun: 1.5, hygiene: 0.7, health: HURT_WEIGHT },
     reach: 900,
   },
   solo: {
-    decayPerHour: { hunger: 0.12, thirst: 0.12, energy: 0.06, fun: 0.17, hygiene: 0.09, health: 0 },
+    decayPerHour: {
+      hunger: 0.072,
+      thirst: 0.072,
+      energy: 0.036,
+      fun: 0.145,
+      hygiene: 0.054,
+      health: 0,
+    },
     weight: { hunger: 1.1, thirst: 1, energy: 0.8, fun: 1.3, hygiene: 0.9, health: HURT_WEIGHT },
     reach: 700,
   },

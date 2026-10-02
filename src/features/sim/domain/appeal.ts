@@ -1,5 +1,6 @@
 import { GUEST_NEEDS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
+import { CONTENT_LEVEL } from './happiness';
 import { archetypeOf } from './archetypes';
 import { WALK_VOXELS_PER_SIM_HOUR } from './crowdRate';
 import type { Needs } from './needs';
@@ -7,9 +8,12 @@ import type { Venue } from './venues';
 import { CLEAR_EFFECT, type WeatherEffect } from './weather';
 
 // A level is clamped at 1, so only the relief a guest has room for counts: crediting
-// the full amount made the biggest declared number win every choice.
+// the full amount made the biggest declared number win every choice. A cost counts only below
+// CONTENT_LEVEL, where the mood feels it: a rested guest does not mind a game of tennis.
 export function usableGain(amount: number, level: number): number {
-  return amount >= 0 ? Math.min(amount, 1 - level) : -Math.min(-amount, level);
+  if (amount >= 0) return Math.min(amount, 1 - level);
+  const after = Math.max(0, level + amount);
+  return after >= CONTENT_LEVEL ? 0 : -Math.min(level - after, CONTENT_LEVEL - after);
 }
 
 // Scored for the level on arrival, since a long walk deepens the need. Clamped at 0 as

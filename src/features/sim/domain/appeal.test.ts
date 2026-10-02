@@ -9,6 +9,7 @@ import { createGuests, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import type { PartyKind } from '../../guests/domain/parties';
 import { appealOf, dominantNeedAt, saltFor, tasteFor, usableGain } from './appeal';
+import { CONTENT_LEVEL } from './happiness';
 import { ARCHETYPES } from './archetypes';
 import { createNeeds, type Needs } from './needs';
 import type { Venue } from './venues';
@@ -64,8 +65,13 @@ describe('usableGain', () => {
     expect(usableGain(0.6, 0.5)).toBeCloseTo(0.5);
   });
 
+  it('charges a declared cost only where it leaves the need under content', () => {
+    expect(usableGain(-0.4, 1)).toBe(0);
+    expect(usableGain(-0.4, CONTENT_LEVEL + 0.4)).toBe(0);
+    expect(usableGain(-0.4, 0.7)).toBeCloseTo(-(CONTENT_LEVEL - 0.3));
+  });
+
   it('bounds a declared cost by what there is to take', () => {
-    expect(usableGain(-0.4, 1)).toBeCloseTo(-0.4);
     expect(usableGain(-0.4, 0.1)).toBeCloseTo(-0.1);
     expect(usableGain(-0.4, 0)).toBeCloseTo(0);
   });
@@ -92,12 +98,13 @@ describe('appealOf', () => {
       { need: 'fun', amount: 0.8 },
       { need: 'energy', amount: -0.4 },
     ]);
-    const rested = levels(person, { fun: 0, energy: 1 });
-    expect(appealOf(court, rested, guests, person)).toBeCloseTo(
-      weight.fun * 0.8 - weight.energy * 0.4,
+    const tired = levels(person, { fun: 0, energy: 0.6 });
+    const cost = CONTENT_LEVEL - (0.6 - 0.4);
+    expect(appealOf(court, tired, guests, person)).toBeCloseTo(
+      weight.fun * 0.8 - weight.energy * cost,
     );
-    const content = levels(person, { energy: 1 });
-    expect(appealOf(court, content, guests, person)).toBeCloseTo(-weight.energy * 0.4);
+    const content = levels(person, { energy: 0.6 });
+    expect(appealOf(court, content, guests, person)).toBeCloseTo(-weight.energy * cost);
   });
 
   it('is 0 for a venue serving nothing this person is short of', () => {
@@ -156,7 +163,7 @@ describe('appealOf over a walk', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('still charges a declared cost in full to somebody with a full tank', () => {
+  it('charges a rested guest nothing for a cost they can afford, however far the walk', () => {
     const person = someone('friends');
     const court = venue('court#0', [
       { need: 'fun', amount: 0.8 },
@@ -164,7 +171,7 @@ describe('appealOf over a walk', () => {
     ]);
     const rested = levels(person, { fun: 0 });
     expect(appealOf(court, rested, guests, person, 0)).toBeCloseTo(
-      ARCHETYPES.friends.weight.fun * 0.8 - ARCHETYPES.friends.weight.energy * 0.4,
+      ARCHETYPES.friends.weight.fun * 0.8,
     );
   });
 });

@@ -5,6 +5,8 @@ import type { Home } from '../../guests/domain/homes';
 import {
   ageHappiness,
   ARRIVAL_MOOD,
+  CONTENT_LEVEL,
+  contentmentOf,
   createHappiness,
   DRIFT_PER_HOUR,
   HURT_FLOOR,
@@ -15,7 +17,7 @@ import {
   welcome,
   type Happiness,
 } from './happiness';
-import { createNeeds, SATISFIED_LEVEL, type Needs } from './needs';
+import { createNeeds, type Needs } from './needs';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 60 }];
 
@@ -132,7 +134,7 @@ describe('ageHappiness with surroundings', () => {
     const guests = guestsOf();
     const happiness = createHappiness(guests.count);
     ageHappiness(happiness, needsAt(guests, 0.4), guests, NO_QUEUE, 100 * HOUR, () => -1);
-    expect(moodOf(happiness, 0)).toBeCloseTo(0.4 / SATISFIED_LEVEL - SURROUNDINGS_SHARE);
+    expect(moodOf(happiness, 0)).toBeCloseTo(0.4 / CONTENT_LEVEL - SURROUNDINGS_SHARE);
   });
 });
 
@@ -144,11 +146,12 @@ describe('a hurt guest', () => {
     ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR * 30);
     for (let person = 0; person < guests.count; person++) {
       if (guests.present[person] !== 1) continue;
-      let total = 0;
+      let shortfall = 0;
       for (const need of GUEST_NEEDS) {
-        total += Math.min(1, needs.level[need][person]! / SATISFIED_LEVEL);
+        shortfall += (1 - Math.min(1, needs.level[need][person]! / CONTENT_LEVEL)) ** 2;
       }
-      expect(moodOf(happiness, person)).toBe(Math.fround(total / GUEST_NEEDS.length));
+      const wants = 1 - Math.sqrt(shortfall / GUEST_NEEDS.length);
+      expect(moodOf(happiness, person)).toBeCloseTo(wants, 6);
     }
   });
 
@@ -159,17 +162,39 @@ describe('a hurt guest', () => {
     const happiness = createHappiness(guests.count);
     ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR * 30);
     const present = [...guests.present.keys()].find((person) => guests.present[person] === 1)!;
-    expect(moodOf(happiness, present)).toBeCloseTo((0.4 / SATISFIED_LEVEL) * HURT_FLOOR);
+    expect(moodOf(happiness, present)).toBeCloseTo((0.4 / CONTENT_LEVEL) * HURT_FLOOR);
     expect(HURT_FLOOR).toBe(0.5);
   });
 });
 
-describe('a need nobody would get up for', () => {
-  it('counts as met, so a guest served well enough is fully content', () => {
-    const guests = guestsOf();
+describe('how content the needs make a guest', () => {
+  const guests = guestsOf();
+  const person = 0;
+  const levels = (each: Partial<Record<(typeof GUEST_NEEDS)[number], number>>, rest = 1) => {
+    const needs = needsAt(guests, rest);
+    for (const [need, level] of Object.entries(each)) needs.level[need as 'fun'][person] = level;
+    return needs;
+  };
+
+  it('counts a need half full as met, so a guest served well enough is fully content', () => {
     const happiness = createHappiness(guests.count);
-    ageHappiness(happiness, needsAt(guests, SATISFIED_LEVEL), guests, NO_QUEUE, 30 * HOUR);
+    ageHappiness(happiness, needsAt(guests, CONTENT_LEVEL), guests, NO_QUEUE, 30 * HOUR);
     expect(moodOf(happiness, 0)).toBe(1);
+  });
+
+  it('costs more for one need run dry than for every need a little low', () => {
+    const oneDry = contentmentOf(levels({ hunger: 0 }), person);
+    const allLow = contentmentOf(needsAt(guests, CONTENT_LEVEL * 0.6), person);
+    expect(oneDry).toBeLessThan(allLow);
+    expect(oneDry).toBeCloseTo(1 - Math.sqrt(1 / GUEST_NEEDS.length));
+  });
+
+  it('drops further with every need that runs dry', () => {
+    const one = contentmentOf(levels({ hunger: 0 }), person);
+    const two = contentmentOf(levels({ hunger: 0, thirst: 0 }), person);
+    const all = contentmentOf(needsAt(guests, 0), person);
+    expect(two).toBeLessThan(one);
+    expect(all).toBe(0);
   });
 });
 

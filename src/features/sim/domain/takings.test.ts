@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createGuests } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
-import { earn, maintenanceFor, stayBill, takingsOf, type VenueTakings } from './takings';
+import { earn, maintenanceFor, nightBill, takingsOf, type VenueTakings } from './takings';
 
 const guestsIn = (homes: number) =>
   createGuests({
@@ -17,44 +17,42 @@ const guestsIn = (homes: number) =>
     seed: 1,
   });
 
-describe('stayBill', () => {
-  it('bills a party of four staying five nights the rate, four times, five times over', () => {
-    const guests = guestsIn(1);
-    const party = [0, 1, 2, 3];
-    for (const person of party) {
+describe('nightBill', () => {
+  const housed = (homes: number, people: readonly number[]) => {
+    const guests = guestsIn(homes);
+    guests.present.fill(0);
+    for (const person of people) {
+      guests.present[person] = 1;
       guests.home[person] = 0;
-      guests.nights[person] = 5;
     }
-    expect(stayBill(party, guests, () => 20)).toBe(20 * 4 * 5);
+    return guests;
+  };
+
+  it('bills a night for everybody here with a bed, and nobody else', () => {
+    const guests = housed(1, [0, 1, 2, 3]);
+    expect(nightBill(guests, () => 20)).toBe(20 * 4);
   });
 
   it('bills nothing for somebody with no bed on the plot', () => {
-    const guests = guestsIn(1);
+    const guests = housed(1, [0]);
     guests.home[0] = NO_HOME;
-    guests.nights[0] = 3;
-    expect(stayBill([0], guests, () => 20)).toBe(0);
+    expect(nightBill(guests, () => 20)).toBe(0);
   });
 
   it('rates each guest by their own home', () => {
-    const guests = guestsIn(2);
-    guests.home[0] = 0;
-    guests.nights[0] = 2;
+    const guests = housed(2, [0, 1]);
     guests.home[1] = 1;
-    guests.nights[1] = 3;
     const rates = [10, 30];
-    expect(stayBill([0, 1], guests, (home) => rates[home]!)).toBe(10 * 2 + 30 * 3);
+    expect(nightBill(guests, (home) => rates[home]!)).toBe(10 + 30);
   });
 
-  it('earns each stay on the lodging it sleeps in', () => {
-    const guests = guestsIn(2);
-    for (const person of [0, 1, 2]) {
-      guests.home[person] = person === 2 ? 1 : 0;
-      guests.nights[person] = 4;
-    }
+  it('earns each night on the lodging it was slept in', () => {
+    const guests = housed(2, [0, 1, 2]);
+    guests.home[2] = 1;
     const takings: VenueTakings = new Map();
-    stayBill([0, 1, 2], guests, () => 20, takings);
-    expect(takings.get('bungalow#0')).toBe(2 * 20 * 4);
-    expect(takings.get('bungalow#1')).toBe(20 * 4);
+    nightBill(guests, () => 20, takings);
+    expect(takings.get('bungalow#0')).toBe(2 * 20);
+    expect(takings.get('bungalow#1')).toBe(20);
   });
 });
 

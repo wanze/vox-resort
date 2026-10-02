@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   arrivalsFor,
+  ARRIVALS_SHARE,
   costliestPart,
   EMPTY_STARS,
-  MAX_ARRIVALS_SHARE,
   RATING_PARTS,
   ratingFor,
   starsLost,
@@ -34,7 +34,7 @@ describe('ratingFor', () => {
     expect(ratingFor({ happiness: null, present: 0, housed: 0, cleanliness: 0.4 }).stars).toBe(
       EMPTY_STARS,
     );
-    expect(arrivalsFor(rating, 100)).toBeGreaterThan(0);
+    expect(arrivalsFor(rating, { free: 100, total: 100 })).toBeGreaterThan(0);
   });
 
   it('keeps all three terms on the way out, and every one inside 0..1', () => {
@@ -93,30 +93,56 @@ describe('starsLost', () => {
   });
 });
 
+const empty = (beds: number) => ({ free: beds, total: beds });
+
+// Stays average eight and a half nights, so that share leaves each night.
+const occupancyAt = (stars: number): number => {
+  const total = 400;
+  let taken = 0;
+  for (let night = 0; night < 200; night++) {
+    taken -= taken / 8.5;
+    const rating = { stars, happiness: 1, housed: 1, cleanliness: 1 };
+    taken += arrivalsFor(rating, { free: total - taken, total });
+  }
+  return taken / total;
+};
+
 describe('arrivalsFor', () => {
-  it('takes nobody at no stars and the whole cap at five', () => {
+  it('takes nobody at one star and the whole share of the beds at five', () => {
     const none = ratingFor({ happiness: 0, present: 10, housed: 0, cleanliness: 0 });
     expect(none.stars).toBe(0);
-    expect(arrivalsFor(none, 400)).toBe(0);
+    expect(arrivalsFor(none, empty(400))).toBe(0);
+    expect(arrivalsFor({ ...none, stars: 1 }, empty(400))).toBe(0);
 
     const best = ratingFor({ happiness: 1, present: 10, housed: 10 });
-    expect(arrivalsFor(best, 400)).toBe(400 * MAX_ARRIVALS_SHARE);
+    expect(arrivalsFor(best, empty(400))).toBe(400 * ARRIVALS_SHARE);
+  });
+
+  it('books as many people into a nearly full resort as into an empty one', () => {
+    const good = ratingFor({ happiness: 0.8, present: 10, housed: 10 });
+    expect(arrivalsFor(good, { free: 100, total: 400 })).toBe(arrivalsFor(good, empty(400)));
+  });
+
+  it('fills a five-star resort and keeps a three-star one about two thirds full', () => {
+    expect(occupancyAt(5)).toBeGreaterThan(0.95);
+    expect(occupancyAt(3)).toBeGreaterThan(0.55);
+    expect(occupancyAt(3)).toBeLessThan(0.75);
   });
 
   it('never sends more people than there are beds standing free', () => {
     const best = ratingFor({ happiness: 1, present: 10, housed: 10 });
-    for (const beds of [0, 1, 2, 3, 7, 40, 401]) {
-      expect(arrivalsFor(best, beds)).toBeLessThanOrEqual(beds);
-      expect(arrivalsFor(best, beds)).toBeGreaterThanOrEqual(0);
+    for (const free of [0, 1, 2, 3, 7, 40, 401]) {
+      expect(arrivalsFor(best, { free, total: 401 })).toBeLessThanOrEqual(free);
+      expect(arrivalsFor(best, { free, total: 401 })).toBeGreaterThanOrEqual(0);
     }
-    expect(arrivalsFor(best, 0)).toBe(0);
-    expect(arrivalsFor(best, -5)).toBe(0);
-    expect(arrivalsFor(best, 3)).toBe(1);
+    expect(arrivalsFor(best, empty(0))).toBe(0);
+    expect(arrivalsFor(best, { free: -5, total: 10 })).toBe(0);
+    expect(arrivalsFor(best, empty(3))).toBe(1);
   });
 
   it('sends more people the better the resort is rated', () => {
     const stars = [0.5, 1, 2, 3, 4, 5].map((value) =>
-      arrivalsFor({ stars: value, happiness: 1, housed: 1, cleanliness: 1 }, 400),
+      arrivalsFor({ stars: value, happiness: 1, housed: 1, cleanliness: 1 }, empty(400)),
     );
     expect(stars).toEqual([...stars].toSorted((a, b) => a - b));
     expect(stars.at(-1)).toBeGreaterThan(stars[0]!);

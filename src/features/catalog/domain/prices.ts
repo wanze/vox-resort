@@ -1,3 +1,4 @@
+import type { GameMode } from '../../sim/domain/ledger';
 import { OBJECT_TYPES } from './objectTypes';
 
 // A path tile costs 20, so paving the reference plot is a seventh of what stands on it.
@@ -10,6 +11,9 @@ const MIN_COST = 10;
 const REFUND_SHARE = 0.5;
 
 export const DIG_COST = 20;
+
+// Flat on purpose until play says otherwise: a fifth of the tycoon opening balance per parcel.
+export const LAND_PARCEL_COST = 1_500;
 
 // Capped: a rate driven by flowerbeds would make a bungalow in a garden outearn a hotel.
 export const SETTING_PREMIUM = 0.25;
@@ -55,4 +59,8 @@ export function refundOf(id: string, stillBuilding: boolean): number {
 export function nightPriceOf(id: string, setting: number): number {
   const premium = SETTING_PREMIUM * Math.min(1, Math.max(0, setting));
   return Math.round(priceOf(id) * (1 + premium));
+}
+
+export function landPriceOf(mode: GameMode): number {
+  return mode === 'sandbox' ? 0 : LAND_PARCEL_COST;
 }

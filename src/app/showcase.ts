@@ -7,6 +7,7 @@ import {
   windowsByModelId,
   bedsOf,
   familyOf,
+  isGateway,
   materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
@@ -25,6 +26,7 @@ import {
   buildCostOf,
   costToStand,
   DIG_COST,
+  landPriceOf,
   nightPriceOf,
   priceOf,
   refundOf,
@@ -70,6 +72,23 @@ import {
   type ResortSource,
 } from '../features/resort-prep/domain/prepareResort';
 import { savedWorldOf } from '../features/resort-prep/domain/savedWorld';
+import { createOwnershipMask } from '../features/land/adapters/ownershipMask';
+import {
+  buyParcel,
+  facesUnowned,
+  forSale,
+  landViewOf,
+  ownedArea,
+  ownedBounds,
+  ownedSpan,
+  ownsTile,
+  rightsOf,
+  type LandRights,
+  type LandView,
+  type TileSpan,
+} from '../features/land/domain/landRights';
+import { widenGame } from '../features/saves/domain/widenGame';
+import type { TileRect } from '../features/layout/domain/parkShapes';
 import { restoreResort, snapshotResort } from '../features/sim/domain/resortState';
 import type { ClockSnapshot } from '../features/sim/domain/resortSnapshot';
 import {
@@ -90,11 +109,13 @@ import type { TerrainRules } from '../features/build/domain/terrainBrush';
 import {
   armedBrush,
   armedObject,
+  armedLand,
   armedRemove,
   armedZone,
   type BuildTool,
 } from '../features/build/domain/buildTool';
 import { createTerrainPointer } from '../features/build/adapters/terrainPointer';
+import { createLandPointer, type LandPointerOptions } from '../features/build/adapters/landPointer';
 import { createZonePointer } from '../features/build/adapters/zonePointer';
 import { createDemolishPointer } from '../features/build/adapters/demolishPointer';
 import type { TileOccupancy } from '../features/build/domain/tileOccupancy';
@@ -359,6 +380,7 @@ import {
   crowdOverrideFrom,
   crowdSizeFor,
   crowdSizeForArea,
+  crowdSizeForOwned,
 } from '../features/crowd/domain/crowdSize';
 import {
   BEACH_SURFACE,
@@ -638,7 +660,9 @@ export interface ShowcaseOptions {
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
-  readonly onRefused?: (message: string) => void;
+  // On every new resort and every parcel bought, as the money is told.
+  readonly onLandChange?: (land: LandView) => void;
+  readonly onRefused?: (note: BuildNote) => void;
   readonly onBuildNote?: (note: BuildNote) => void;
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
@@ -1000,6 +1024,8 @@ interface Resort {
   duty: Uint8Array;
   // Per tile of the plan, so it survives every edit without being carried; never replaced.
   readonly zones: Zones;
+  // Null on a plot that owns all of itself; bought into in place, and saved from here.
+  readonly rights: LandRights | null;
   // Dealt afresh by rezone, and read late by the staff router, as the duty is.
   zoneOf: Int8Array;
   venueZones: Int32Array;
@@ -1161,6 +1187,7 @@ function networkFor(parts: {
     levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
     shore: parts.shore,
     tilesX: parts.plan.tilesX,
+    span: spanOf(parts.plan),
     // Asked of the ground exactly as layoutResort asks, so the crowd walks the deck the layout
     // stood.
     bridged: (tileX, tileZ) =>
@@ -1172,10 +1199,13 @@ function networkFor(parts: {
 
 function balloonsFor(parts: {
   readonly shore: Shore | null;
+  readonly span: TileSpan;
   readonly sky: readonly ModelGeometry[];
   readonly lightVolume: BakedLightVolume | null;
 }): BalloonField {
-  const sites: ReleaseSite[] = beachTilesOf(parts.shore).map((tile) => ({
+  const { from, to } = parts.span;
+  const owned = beachTilesOf(parts.shore).filter((tile) => tile.x >= from && tile.x < to);
+  const sites: ReleaseSite[] = owned.map((tile) => ({
     x: (tile.x + 0.5) * TILE_VOXELS,
     z: (tile.z + 0.5) * TILE_VOXELS,
     y: SAND_LEVEL,
@@ -1277,11 +1307,27 @@ function keepAwayOffThePlot(guests: Guests, crowd: Crowd): void {
   }
 }
 
+// A load or a settle restores whoever is here, so the bodies a settle adds start away.
+const startsAway = (building: boolean, saved: number | undefined): boolean =>
+  building || saved !== undefined;
+
+// The plan's land, which is the live rights as they stood at the last settle.
+const spanOf = (plan: ResortPlan): TileSpan => ownedSpan(plan.land ?? null, plan);
+
+// The live rights, not the plan's: a path laid on land bought since the last settle gets litter too.
+const litterWindowOf = (resort: Pick<Resort, 'rights' | 'plan'>): TileRect | undefined =>
+  resort.rights ? ownedBounds(resort.rights, resort.plan) : undefined;
+
+const liveRightsOf = (plan: ResortPlan): LandRights | null =>
+  plan.land ? rightsOf(plan.land) : null;
+
 // The volume is wired up before the world, because the world's materials bind to it.
 // A save brings its own: a plot started empty but paved since would otherwise be sized again, and
 // every per-guest array would come out another length.
 function populationOf(plan: ResortPlan, plot: Plot, saved: number | undefined): number {
   if (saved !== undefined) return saved;
+  // Land, not paving: the guests a game expects grow as it buys, and a settle deals the newcomers.
+  if (plan.land) return crowdSizeForOwned(ownedArea(plan.land, plan), CROWD_OVERRIDE);
   return plot.layout.paths.length === 0
     ? crowdSizeForArea(plan.tilesX, plan.tilesZ, CROWD_OVERRIDE)
     : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
@@ -1314,7 +1360,7 @@ function buildResort(
     variants: parts.people.length,
     childVariant: CHILD_VARIANT,
     seed: GUEST_SEED,
-    away: building,
+    away: startsAway(building, parts.population),
   });
   const needs = createNeeds(guests, NEEDS_SEED);
   const happiness = createHappiness(population);
@@ -1334,7 +1380,11 @@ function buildResort(
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
   const places = placesFor(venues, byKey(plot.layout.placements), network);
-  const bathing = { shore, rental: rentalOf(shore, plot.layout.placements) };
+  const bathing = {
+    shore,
+    rental: rentalOf(shore, plot.layout.placements),
+    span: spanOf(plan),
+  };
   const cast = createCast(population, places, { sand: network.sand, swim: bathing });
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
@@ -1460,6 +1510,7 @@ function buildResort(
     weather: parts.weather,
     duty: () => resort.duty,
     litter: () => resort.litter,
+    litterWindow: () => litterWindowOf(resort),
     // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
     occupants: (venue) => resort.router.occupancyOf(resort.venues[venue]!.key)?.inside ?? 0,
     zones: () => staffZones,
@@ -1489,6 +1540,7 @@ function buildResort(
   }
   const balloons = balloonsFor({
     shore,
+    span: spanOf(plan),
     sky: parts.sky,
     lightVolume: lighting.volume,
   });
@@ -1561,6 +1613,7 @@ function buildResort(
     roster,
     duty,
     zones: createZones(plan.tilesX, plan.tilesZ),
+    rights: liveRightsOf(plan),
     zoneOf: new Int8Array(employed.count).fill(NO_ZONE),
     venueZones: new Int32Array(venues.length),
     lodgingZones: new Int32Array(lodgings.length),
@@ -2051,7 +2104,9 @@ function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
     if (node !== undefined) return network.nodes[node]!.y;
     return isBeach(resort.shore, tileX, tileZ) ? BEACH_SURFACE : null;
   };
-  resort.litterField.write(piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length));
+  resort.litterField.write(
+    piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length, litterWindowOf(resort)),
+  );
   return { litter, version: litter.version };
 }
 
@@ -2087,11 +2142,15 @@ function beachTilesFor(shore: Shore | null): readonly TileAt[] {
 const sandSlotLists = new WeakMap<WalkNetwork, readonly TileAt[]>();
 
 // The overlay's slots past the node count, in this order; sand a node stands on is drawn by it.
+// Only the sand guests may roam, which is the land owned.
 function sandSlotsOf(network: WalkNetwork, shore: Shore | null): readonly TileAt[] {
   let slots = sandSlotLists.get(network);
   if (!slots) {
     const index = pavingIndexOf(network);
-    slots = beachTilesFor(shore).filter(({ tileX, tileZ }) => !index.at(tileX, tileZ));
+    const span = network.beach?.span ?? { from: 0, to: 0 };
+    slots = beachTilesFor(shore).filter(
+      ({ tileX, tileZ }) => tileX >= span.from && tileX < span.to && !index.at(tileX, tileZ),
+    );
     sandSlotLists.set(network, slots);
   }
   return slots;
@@ -2417,7 +2476,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     entrance: router.arrivalNode >= 0,
     reception: router.receptionReachable,
     bedsTotal: resort.beds.total,
-    litter: litterSummary(resort.litter),
+    litter: litterSummary(resort.litter, litterWindowOf(resort)),
     // By key: advice names a building, and indices change on the next edit.
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
@@ -2777,6 +2836,9 @@ interface EditMode {
   abandon(): void;
   // Raises every open site at once, so what is saved is what stands.
   finishAll(): void;
+  // Carried over a settle, whose rebuild stands everything in the plot as finished.
+  openSites(): readonly ConstructionSite[];
+  reopen(open: readonly ConstructionSite[]): void;
   readonly ground: PickGround;
   placementOf(key: string): Placement | undefined;
   dispose(): void;
@@ -2803,9 +2865,9 @@ function createEditMode(parts: {
   readonly onCancel: () => void;
   readonly onLift: (placement: Placement) => void;
   readonly money: Purse;
-  // Null is the ground.
-  readonly onRefused: (id: string | null) => void;
+  readonly onRefused: (refusal: Refusal) => void;
   readonly onFallback: (fellBack: boolean) => void;
+  readonly land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'>;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -2857,6 +2919,18 @@ function createEditMode(parts: {
 
   // Standing rails come from the rail index: rails are not in occupancy, and scanning the plot per
   // edit is too slow on a drag.
+  const owns = (tileX: number, tileZ: number): boolean => {
+    const { rights, plan } = resort();
+    return ownsTile(rights, plan, tileX, tileZ);
+  };
+  const ownsFootprint = (placement: Placement): boolean =>
+    footprintTiles(placement).every((tile) => owns(tile.x, tile.z));
+  // Placing only: buying the land in front of a gate later is allowed, and it then stands inland.
+  const fitsEdge = (placement: Placement): boolean => {
+    const { rights, plan } = resort();
+    return rights === null || !isGateway(placement.id) || facesUnowned(rights, placement, plan);
+  };
+
   const handrails: HandrailRules = {
     pavedWith,
     levelOf: ground.levelOf,
@@ -2976,7 +3050,13 @@ function createEditMode(parts: {
   const stand = (placement: Placement, lifted?: Placement): void => {
     const due = costToStand(placement.id, lifted !== undefined);
     if (parts.money.canAfford(due)) standPaid(placement, due, lifted);
-    else parts.onRefused(placement.id);
+    else parts.onRefused({ kind: 'money', id: placement.id });
+  };
+
+  // Land first: a footprint off the edge says so, rather than complaining about the gate's facing.
+  const blocked = (placement: Placement): void => {
+    if (!ownsFootprint(placement)) parts.onRefused({ kind: 'land' });
+    else if (!fitsEdge(placement)) parts.onRefused({ kind: 'gate' });
   };
 
   const pointer = createBuildPointer({
@@ -2989,7 +3069,10 @@ function createEditMode(parts: {
     ground,
     paving,
     handrails,
+    owns: (tile) => owns(tile.x, tile.z),
+    fits: fitsEdge,
     onPlace: stand,
+    onBlocked: blocked,
     onRails: changeRails,
     onCancel,
     onFallback: parts.onFallback,
@@ -3000,6 +3083,7 @@ function createEditMode(parts: {
       return resort().terrain;
     },
     isClear: (tileX, tileZ) => occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
+    owns,
   };
 
   const spade = createTerrainPointer({
@@ -3013,7 +3097,7 @@ function createEditMode(parts: {
     onRails: changeRails,
     onDig(tile, next) {
       if (!parts.money.canAfford(DIG_COST)) {
-        parts.onRefused(null);
+        parts.onRefused({ kind: 'money', id: null });
         return;
       }
       resort().terrain.set(tile.x, tile.z, next);
@@ -3033,8 +3117,18 @@ function createEditMode(parts: {
     ghost,
     ground,
     onPaint(tile, zone) {
-      if (paintZone(resort().zones, tile.x, tile.z, zone)) parts.onZonesChange();
+      if (paintZone(resort().zones, tile.x, tile.z, zone, owns)) parts.onZonesChange();
     },
+    onCancel,
+  });
+
+  const surveyor = createLandPointer({
+    canvas,
+    camera: () => handle.camera,
+    takeLeftButton: lendLeftButton('land'),
+    ghost,
+    ground,
+    ...parts.land,
     onCancel,
   });
 
@@ -3084,6 +3178,7 @@ function createEditMode(parts: {
       spade.select(armedBrush(tool));
       zoneBrush.select(armedZone(tool));
       bulldozer.select(armedRemove(tool));
+      surveyor.select(armedLand(tool));
     },
     advance(dt) {
       if (sites.length === 0) return;
@@ -3107,6 +3202,19 @@ function createEditMode(parts: {
       }
       if (open.length > 0) onChange();
     },
+    openSites: () => sites,
+    // The inverse of raise, then the site drawn as it was.
+    reopen(open) {
+      const { world, lighting, shadows } = resort();
+      for (const site of open) {
+        world.remove(site.placement.key);
+        lighting.unlight(site.placement);
+        lighting.unshade(site.placement);
+        shadows.remove(site.placement.key);
+      }
+      sites = open;
+      redrawSites();
+    },
     ground,
     placementOf,
     dispose() {
@@ -3114,6 +3222,7 @@ function createEditMode(parts: {
       spade.dispose();
       zoneBrush.dispose();
       bulldozer.dispose();
+      surveyor.dispose();
       handle.scene.remove(ghost.group);
       ghost.dispose();
     },
@@ -3140,17 +3249,60 @@ export interface BuildNote {
   readonly message: string;
 }
 
+// Long enough for a strip of parcels bought one click at a time to settle once.
+const SETTLE_DELAY_MS = 2_000;
+
 const STAIRS_FALLBACK: BuildNote = {
   title: 'Stairs here',
   message: 'A ramp needs two straight tiles below the step.',
 };
 
-function refusalFor(id: string | null, balance: number): string {
+// A null id is the ground.
+type Refusal =
+  | { kind: 'money'; id: string | null }
+  | { kind: 'parcel'; price: number }
+  | { kind: 'land' }
+  | { kind: 'gate' };
+
+function moneyRefusalFor(id: string | null, balance: number): string {
   const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
   if (id === null) return `Reshaping a tile costs ${DIG_COST}, and ${bank}.`;
   const name = objectTypeById(id).label.toLowerCase();
   const article = /^[aeiou]/.test(name) ? 'An' : 'A';
   return `${article} ${name} costs ${buildCostOf(id).toLocaleString('en-US')}, and ${bank}.`;
+}
+
+const GATE_REFUSAL: BuildNote = {
+  title: 'Entrance away from the edge',
+  message: "An entrance must face land you don't own.",
+};
+
+function landRefusalFor(mode: GameMode): BuildNote {
+  return {
+    title: 'Not your land',
+    message: `${mode === 'sandbox' ? 'Claim' : 'Buy'} this land first.`,
+  };
+}
+
+function parcelRefusalFor(price: number, balance: number): string {
+  const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
+  return `A parcel of land costs ${price.toLocaleString('en-US')}, and ${bank}.`;
+}
+
+function refusalFor(refusal: Refusal, ledger: Ledger): BuildNote {
+  switch (refusal.kind) {
+    case 'land':
+      return landRefusalFor(ledger.mode);
+    case 'gate':
+      return GATE_REFUSAL;
+    case 'parcel':
+      return {
+        title: 'Not enough money',
+        message: parcelRefusalFor(refusal.price, ledger.balance),
+      };
+    default:
+      return { title: 'Not enough money', message: moneyRefusalFor(refusal.id, ledger.balance) };
+  }
 }
 
 // A benchmark gets the authored plan: runs only compare if the scene is the same.
@@ -3512,6 +3664,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
   const current = slot.current;
 
+  // Kept for the showcase's lifetime: the terrain materials read it, and a new one would recompile them.
+  const ownership = createOwnershipMask();
+  ownership.update(current().rights, current().plan);
+
   const handle = await createScene({
     canvas,
     width: canvas.clientWidth || globalThis.innerWidth,
@@ -3524,6 +3680,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     surfaces: first.surfaces,
     // The live occupancy, not a snapshot: the ground under a cottage is drawn square.
     isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
+    groundShade: ownership.shade,
     // Wall-clock times cap at the refresh rate; the GPU's timers keep discriminating.
     trackTimestamp: true,
     forceWebGL: bench?.forceWebGL ?? false,
@@ -3690,14 +3847,46 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
   };
 
-  const refused = (id: string | null): void =>
-    options.onRefused?.(refusalFor(id, current().ledger.balance));
+  const refused = (refusal: Refusal): void =>
+    options.onRefused?.(refusalFor(refusal, current().ledger));
 
   // Told once as the pointer comes onto such a tile, not on every move across it.
   let fellBack = false;
   const fallback = (now: boolean): void => {
     if (now && !fellBack) options.onBuildNote?.(STAIRS_FALLBACK);
     fellBack = now;
+  };
+
+  // Bumped by anything a settle's prepared world would miss, so a settle overtaken by an edit is
+  // thrown away rather than undoing it.
+  let edits = 0;
+
+  const landPrice = (): number => landPriceOf(current().ledger.mode);
+  const tellLand = (): void => options.onLandChange?.(landViewOf(current().rights, landPrice()));
+
+  // Money, the mask and the right to build move at once; the lighting, the beach and the guests
+  // wait for the settle.
+  const land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'> = {
+    canBuy(px, pz) {
+      const { rights } = current();
+      return rights !== null && forSale(rights, px, pz) && money.canAfford(landPrice());
+    },
+    onBuy(px, pz) {
+      const resort = current();
+      const { rights } = resort;
+      if (!rights || !forSale(rights, px, pz)) return;
+      const price = landPrice();
+      if (!money.canAfford(price)) {
+        refused({ kind: 'parcel', price });
+        return;
+      }
+      money.spend('land', price);
+      buyParcel(rights, px, pz);
+      ownership.update(rights, resort.plan);
+      edits++;
+      scheduleSettle();
+      tellLand();
+    },
   };
 
   const build = createEditMode({
@@ -3708,10 +3897,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onChange: () => {
       counted = true;
       walkStaleAt = performance.now();
+      edits++;
       options.onDirty?.();
     },
     onGroundChange: () => {
       ground = true;
+      edits++;
       options.onDirty?.();
     },
     onZonesChange: () => {
@@ -3730,14 +3921,17 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     money,
     onRefused: refused,
     onFallback: fallback,
+    land,
   });
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
     const wasZoning = armedZone(armedTool) !== null;
     const zoning = armedZone(tool) !== null;
+    const wasBuying = armedLand(armedTool);
     armedTool = tool;
     build.select(tool);
+    landToolChanged(wasBuying, armedLand(tool));
     // Arming puts any map away; disarming brings none back, the player picks it again.
     if (zoning && !wasZoning) overlayKind = null;
     if (zoning !== wasZoning) paintOverlay();
@@ -3947,6 +4141,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     report();
     tellHistory();
     tellMoney();
+    tellLand();
   };
 
   let requested = 0;
@@ -3954,6 +4149,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Told at once, so a save that fails to restore still leaves the next advice a baseline.
   const replaceResort = (prepared: PreparedResort, population?: number): Resort => {
     const resort = slot.replace(prepared, population);
+    ownership.update(resort.rights, resort.plan);
     options.onResortReplaced?.();
     return resort;
   };
@@ -3964,6 +4160,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     source: ResortSource,
     mode: GameMode,
   ): Promise<void> => {
+    cancelSettle();
     const request = ++requested;
     const prepared = await preparer.prepare(prepRequestFor(source, bench));
     if (request !== requested || !running) return;
@@ -3984,11 +4181,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const snapshot = (): GameSnapshot => {
     build.finishAll();
+    return gameNow();
+  };
+
+  // Without raising the open sites, which a settle carries over still going up.
+  const gameNow = (): GameSnapshot => {
     if (walkStaleAt !== null) reanchor();
-    const resort = current();
+    return gameOf(current());
+  };
+
+  const gameOf = (resort: Resort): GameSnapshot => {
     return {
       version: SAVE_VERSION,
-      world: savedWorldOf(resort.plan, resort.terrain, resort.plot),
+      world: savedWorldOf(resort.plan, resort.terrain, resort.plot, resort.rights),
       params,
       population: resort.guests.count,
       staffCount: resort.staffPool.count,
@@ -4006,22 +4211,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const announceLoaded = (resort: Resort): void => {
     rebuilt();
     options.onOpenChange?.(resort.open);
-    options.onSpeedChange?.('paused');
     options.onCameraChange?.(cameraView());
   };
 
-  // Mirrors regrow. A straight line: every module is restored in the order its readers expect,
-  // the guests before the routers that read them and the routers before the crowds they steer.
-  const load = async (saved: GameSnapshot): Promise<void> => {
-    const request = ++requested;
-    const prepared = await preparer.prepare(
-      prepRequestFor({ kind: 'saved', world: saved.world }, bench),
-    );
-    if (request !== requested || !running) return;
-    build.abandon();
-    select(null);
-    walkStaleAt = null;
-    const resort = replaceResort(prepared, saved.population);
+  // Every module in the order its readers expect: the guests before the routers that read them
+  // and the routers before the crowds they steer.
+  const restoreGame = (resort: Resort, saved: GameSnapshot): void => {
     restoreResort(resort, saved.resort);
     // Before the staff router's restore, which reads the duty.
     Object.assign(resort, rosterNow(resort));
@@ -4032,6 +4227,21 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));
     recastAll(resort);
     clock.restore(saved.clock);
+  };
+
+  // Mirrors regrow.
+  const load = async (saved: GameSnapshot): Promise<void> => {
+    cancelSettle();
+    const request = ++requested;
+    const prepared = await preparer.prepare(
+      prepRequestFor({ kind: 'saved', world: saved.world }, bench),
+    );
+    if (request !== requested || !running) return;
+    build.abandon();
+    select(null);
+    walkStaleAt = null;
+    const resort = replaceResort(prepared, saved.population);
+    restoreGame(resort, saved);
     clock.setSpeed('paused');
     drift = null;
     handle.controls.enabled = true;
@@ -4039,6 +4249,74 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     restoreCamera(handle, saved.camera);
     params = saved.params;
     announceLoaded(resort);
+    options.onSpeedChange?.('paused');
+  };
+
+  // Putting the land tool away settles at once rather than leaving the player to wait for it.
+  const landToolChanged = (was: boolean, now: boolean): void => {
+    ownership.showForSale(now);
+    if (was && !now && settleTimer !== null) void settle();
+  };
+
+  let settleTimer: ReturnType<typeof setTimeout> | null = null;
+  let settling = false;
+
+  const cancelSettle = (): void => {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    settleTimer = null;
+  };
+
+  const scheduleSettle = (): void => {
+    if (settleTimer !== null) clearTimeout(settleTimer);
+    settleTimer = setTimeout(() => void settle(), SETTLE_DELAY_MS);
+  };
+
+  // A rebuild that keeps the game, so the lighting, the beach and the guests catch up with the land
+  // bought. The world is prepared first and the game taken after, so nothing played meanwhile is lost.
+  // A load or a new game since the settle began has the last word.
+  const stillCurrent = (request: number, before: Resort): boolean =>
+    request === requested && current() === before && running;
+
+  // One at a time: a purchase made while one prepares moves `edits`, and that one reschedules.
+  const settle = async (): Promise<void> => {
+    cancelSettle();
+    if (settling) return;
+    settling = true;
+    const started = edits;
+    // Not bumped: a settle must never drop a load or a new game, only be dropped by one.
+    const request = requested;
+    const before = current();
+    const world = savedWorldOf(before.plan, before.terrain, before.plot, before.rights);
+    const prepared = await preparer
+      .prepare(prepRequestFor({ kind: 'saved', world }, bench))
+      .finally(() => {
+        settling = false;
+      });
+    if (!stillCurrent(request, before)) return;
+    if (edits === started) settleOnto(prepared);
+    else scheduleSettle();
+  };
+
+  const settleOnto = (prepared: PreparedResort): void => {
+    const replaceStarted = performance.now();
+    const saved = gameNow();
+    const camera = cameraOf(handle);
+    const sites = build.openSites();
+    const population = Math.max(
+      saved.population,
+      populationOf(prepared.plan, prepared.plot, undefined),
+    );
+    build.abandon();
+    select(null);
+    walkStaleAt = null;
+    const resort = replaceResort(prepared, population);
+    restoreGame(resort, population > saved.population ? widenGame(saved, gameOf(resort)) : saved);
+    build.reopen(sites);
+    restoreCamera(handle, camera);
+    announceLoaded(resort);
+    console.info(
+      `Settled the land in ${prepared.prepMs} ms on the worker and ${Math.round(performance.now() - replaceStarted)} ms here, for ${population} guests`,
+    );
   };
 
   // The walk graph and everything indexed by its nodes, rebuilt from the plot's lists after an
@@ -4327,6 +4605,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     load,
     dispose() {
       running = false;
+      cancelSettle();
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener('resize', resize);
       cameraKeys.dispose();
@@ -4336,6 +4615,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       rain.dispose();
       current().dispose();
       handle.dispose();
+      ownership.dispose();
       // Last: everything above is built over these.
       disposeCatalogue(catalogue);
     },

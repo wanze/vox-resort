@@ -17,8 +17,12 @@ export function crowdSizeForArea(
   tilesZ: number,
   override: number | null = null,
 ): number {
-  const paved = Math.round(Math.max(0, tilesX) * Math.max(0, tilesZ) * PAVED_SHARE);
-  return crowdSizeFor(paved, override);
+  return crowdSizeForOwned(Math.max(0, tilesX) * Math.max(0, tilesZ), override);
+}
+
+// Tiles owned, not a bounding box: an L of land holds the guests its parcels do.
+export function crowdSizeForOwned(area: number, override: number | null = null): number {
+  return crowdSizeFor(Math.round(Math.max(0, area) * PAVED_SHARE), override);
 }
 
 export function crowdOverrideFrom(search: string): number | null {

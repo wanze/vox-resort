@@ -5,8 +5,11 @@ import { TerrainShelf } from './TerrainShelf';
 import { ToolShelf } from './ToolShelf';
 import { ZoneShelf, zoneLabel } from './ZoneShelf';
 import { objectTypeById, objectTypeGroups } from '../../catalog/domain/objectTypes';
+import { LandShelf, landToolLabel } from '../../land/components/LandShelf';
+import type { LandView } from '../../land/domain/landRights';
 import {
   armedBrush,
+  armedLand,
   armedObject,
   armedRemove,
   armedZone,
@@ -23,8 +26,15 @@ import type { Roster } from '../../sim/domain/staff';
 // adapters.
 export type PreviewLookup = (modelId: string) => string | null;
 
-function armedLabel(tool: BuildTool | null): string | null {
+// The tools that are not objects or brushes.
+function toolLabel(tool: BuildTool | null, land: LandView | null): string | null {
   if (armedRemove(tool)) return BULLDOZER.label;
+  return armedLand(tool) ? landToolLabel(land ?? { price: 0 }) : null;
+}
+
+function armedLabel(tool: BuildTool | null, land: LandView | null): string | null {
+  const named = toolLabel(tool, land);
+  if (named) return named;
   const id = armedObject(tool);
   if (id) return objectTypeById(id).label;
   const zone = armedZone(tool);
@@ -41,6 +51,7 @@ export interface BuildPaletteProps {
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly ledger: Ledger | null;
+  readonly land: LandView | null;
   readonly focusSearch: boolean;
   readonly zoneStaff: readonly Roster[] | null;
 }
@@ -51,6 +62,7 @@ export function BuildPalette({
   tool,
   onToolChange,
   ledger,
+  land,
   focusSearch,
   zoneStaff,
 }: BuildPaletteProps) {
@@ -78,7 +90,7 @@ export function BuildPalette({
         query={query}
         onQueryChange={setQuery}
         focusSearch={focusSearch}
-        armed={armedLabel(tool)}
+        armed={armedLabel(tool, land)}
         onDisarm={() => onToolChange(null)}
         styles={styles}
         preview={preview}
@@ -107,6 +119,16 @@ export function BuildPalette({
           armed={armedRemove(tool)}
           onArm={(armed) => onToolChange(armed ? { kind: 'remove' } : null)}
         />
+
+        {land && land.forSale > 0 ? (
+          <LandShelf
+            open={!shut.has('land')}
+            onToggle={toggle('land')}
+            land={land}
+            armed={armedLand(tool)}
+            onArm={(armed) => onToolChange(armed ? { kind: 'land' } : null)}
+          />
+        ) : null}
 
         {shown.map((group) => (
           <BuildGroup

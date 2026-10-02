@@ -10,6 +10,7 @@ import {
 } from 'three/webgpu';
 import { color, mix, vertexColor } from 'three/tsl';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { TileRect } from '../../layout/domain/parkShapes';
 import type { Placement, Tile } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
@@ -26,6 +27,7 @@ export interface PlacementGhost {
   readonly group: Group;
   show(placement: Placement, blocked: boolean): void;
   showGround(tile: Tile, y: number, blocked: boolean): void;
+  showParcel(rect: TileRect, y: number, blocked: boolean): void;
   // Drawn through whatever stands on it, with no model: a translucent copy over the original would shimmer.
   showRemoval(placement: Placement): void;
   hide(): void;
@@ -118,6 +120,12 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
     },
     showGround(tile, y, blocked) {
       placePad({ tileX: tile.x, tileZ: tile.z, tilesX: 1, tilesZ: 1, y }, blocked);
+      ghost.visible = false;
+    },
+    showParcel(rect, y, blocked) {
+      const tilesX = rect.x1 - rect.x0 + 1;
+      const tilesZ = rect.z1 - rect.z0 + 1;
+      placePad({ tileX: rect.x0, tileZ: rect.z0, tilesX, tilesZ, y }, blocked);
       ghost.visible = false;
     },
     showRemoval(placement) {

@@ -26,6 +26,7 @@ import { hillEditsFor } from './hills';
 import { routeEdgeTiles, streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
 import { riverEditsFor } from './river';
 import { islandBayInset, islandEditsFor, islandSizeFor } from './island';
+import { startingLand } from '../../land/domain/landRights';
 import { clampLand, type LandConfig } from './landConfig';
 import {
   beachDepthAt,
@@ -2197,6 +2198,7 @@ export function emptyResortPlan(
     shore: shoreSpec,
     elevation: bareTerracesFor(shoreSpec, params),
     standsWholeCatalogue: false,
+    land: startingLand(params.tilesX, params.tilesZ, shoreSpec),
   };
   const shore = shoreFor(plan);
   const elevation = elevationFor(plan);

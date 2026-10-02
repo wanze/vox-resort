@@ -4,6 +4,7 @@ export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   build: 'Building',
   demolish: 'Refunds',
   dig: 'Earthworks',
+  land: 'Land',
   visit: 'Visits',
   night: 'Stays',
   wages: 'Wages',

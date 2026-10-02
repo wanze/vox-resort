@@ -2,6 +2,7 @@
 // a leg swept over beach tiles from a gate. A straight line is unsafe: props stand in
 // the way and the meandering coast can put sea between two sand points.
 
+import type { TileSpan } from '../../land/domain/landRights';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { clearLine } from '../../crowd/domain/sandGrid';
 import type { BeachBand, WalkNetwork } from '../../crowd/domain/walkNetwork';
@@ -137,7 +138,7 @@ function stepOffFrom(
   let best = -1;
   for (const [dx, dz] of NEIGHBOURS) {
     const tileX = gate.tileX + dx;
-    if (tileX < 0 || tileX >= beach.tilesX) continue;
+    if (!inSpan(beach, tileX)) continue;
     const index = byTile.get(tileKey(beach, tileX, gate.tileZ + dz));
     if (index === undefined) continue;
     if (best !== -1 && reached[index]!.depth >= reached[best]!.depth) continue;
@@ -203,6 +204,7 @@ function lengthOf(gate: SandPoint, waypoints: readonly SandPoint[]): number {
 // Cached per call: terrainAt re-evaluates the coast meander and dominated route cost.
 interface Band {
   readonly tilesX: number;
+  readonly span: TileSpan;
   readonly water: Int32Array;
   readonly depth: number;
 }
@@ -210,11 +212,14 @@ interface Band {
 function bandOf(beach: BeachBand): Band {
   const water = new Int32Array(beach.tilesX);
   for (let tileX = 0; tileX < beach.tilesX; tileX++) water[tileX] = waterStartZ(beach.shore, tileX);
-  return { tilesX: beach.tilesX, water, depth: beach.shore.spec.beach };
+  return { tilesX: beach.tilesX, span: beach.span, water, depth: beach.shore.spec.beach };
 }
 
+const inSpan = (band: Band, tileX: number): boolean =>
+  tileX >= band.span.from && tileX < band.span.to;
+
 const isBeach = (band: Band, tileX: number, tileZ: number): boolean => {
-  if (tileX < 0 || tileX >= band.tilesX) return false;
+  if (!inSpan(band, tileX)) return false;
   const water = band.water[tileX]!;
   return tileZ < water && tileZ >= water - band.depth;
 };

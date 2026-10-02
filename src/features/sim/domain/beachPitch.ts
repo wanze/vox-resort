@@ -1,7 +1,8 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { GROUND_SIT_RISE, RESTING } from '../../crowd/domain/crowd';
 import { blockedAt, clearLine } from '../../crowd/domain/sandGrid';
-import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
+import { BEACH_SURFACE, type BeachBand, type WalkNetwork } from '../../crowd/domain/walkNetwork';
+import type { TileSpan } from '../../land/domain/landRights';
 import { terrainAt, type Shore } from '../../layout/domain/shoreline';
 
 export interface PitchSpot {
@@ -72,7 +73,7 @@ export function pitchFor(input: PitchInput): Pitch | null {
   const node = network.nodes[gate];
   if (!beach || !node?.gate || members.length === 0) return null;
 
-  const context = contextFor(input, beach.shore, beach.tilesX);
+  const context = contextFor(input, beach);
   const adults = members.filter((member) => !member.child).length;
   const best = new Map<Tier, Pitch>();
   for (const tile of sweepFrom(context, node)) {
@@ -101,11 +102,12 @@ interface Context {
   readonly input: PitchInput;
   readonly shore: Shore;
   readonly tilesX: number;
+  readonly span: TileSpan;
   readonly paved: ReadonlySet<number>;
   readonly loungers: ReadonlyMap<number, readonly number[]>;
 }
 
-function contextFor(input: PitchInput, shore: Shore, tilesX: number): Context {
+function contextFor(input: PitchInput, { shore, tilesX, span }: BeachBand): Context {
   const { network } = input;
   const keyOf = (tileX: number, tileZ: number): number => tileZ * tilesX + tileX;
   const paved = new Set(network.nodes.map((each) => keyOf(each.tileX, each.tileZ)));
@@ -117,7 +119,7 @@ function contextFor(input: PitchInput, shore: Shore, tilesX: number): Context {
     if (here) here.push(seat);
     else loungers.set(key, [seat]);
   }
-  return { input, shore, tilesX, paved, loungers };
+  return { input, shore, tilesX, span, paved, loungers };
 }
 
 const keyIn = (context: Context, tileX: number, tileZ: number): number =>
@@ -130,7 +132,7 @@ const centreOf = (tileX: number, tileZ: number): { x: number; z: number } => ({
 
 function onBeach(context: Context, x: number, z: number): boolean {
   const tileX = Math.floor(x / TILE_VOXELS);
-  if (tileX < 0 || tileX >= context.tilesX) return false;
+  if (tileX < context.span.from || tileX >= context.span.to) return false;
   return terrainAt(context.shore, tileX, Math.floor(z / TILE_VOXELS)) === 'beach';
 }
 

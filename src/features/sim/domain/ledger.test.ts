@@ -55,6 +55,7 @@ describe('record', () => {
       ['build', -680],
       ['demolish', 340],
       ['dig', -20],
+      ['land', -1_500],
       ['wages', -80],
       ['maintenance', -35],
     ] as const;

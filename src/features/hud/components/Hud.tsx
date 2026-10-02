@@ -29,6 +29,7 @@ import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
 import { starsTrend } from '../../sim/domain/dayReport';
 import type { GameMode, Ledger } from '../../sim/domain/ledger';
+import type { LandView } from '../../land/domain/landRights';
 import type { StaffRole } from '../../sim/domain/staff';
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { OrderSpot } from '../domain/markers';
@@ -63,6 +64,7 @@ export interface HudProps {
   readonly onSelectWorker: (worker: number) => void;
   readonly onSelectAt: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
+  readonly land: LandView | null;
   readonly preview: PreviewLookup;
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
@@ -121,6 +123,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       tool={props.tool}
       onToolChange={props.onToolChange}
       ledger={props.ledger}
+      land={props.land}
       focusSearch={props.windows.layout.focus === 'build'}
       zoneStaff={props.stats?.staff.zones ?? null}
     />

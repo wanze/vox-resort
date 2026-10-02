@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { crowdOverrideFrom, crowdSizeFor, crowdSizeForArea, MAX_CROWD } from './crowdSize';
+import {
+  crowdOverrideFrom,
+  crowdSizeFor,
+  crowdSizeForArea,
+  crowdSizeForOwned,
+  MAX_CROWD,
+} from './crowdSize';
 
 describe('crowdSizeFor', () => {
   it('keeps the authored resort the crowd it was designed around', () => {
@@ -33,6 +39,17 @@ describe('crowdSizeForArea', () => {
 
   it('takes an override over the area', () => {
     expect(crowdSizeForArea(112, 100, 25)).toBe(25);
+  });
+});
+
+describe('crowdSizeForOwned', () => {
+  it('deals the land owned what a plot of that area holds', () => {
+    expect(crowdSizeForOwned(112 * 100)).toBe(crowdSizeForArea(112, 100));
+    expect(crowdSizeForOwned(64 * 80)).toBe(256);
+  });
+
+  it('grows with every parcel bought', () => {
+    expect(crowdSizeForOwned(64 * 80 + 16 * 16)).toBeGreaterThan(crowdSizeForOwned(64 * 80));
   });
 });
 

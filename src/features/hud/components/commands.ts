@@ -8,11 +8,14 @@ import { objectTypeGroups } from '../../catalog/domain/objectTypes';
 import { buildCostOf } from '../../catalog/domain/prices';
 import {
   armedBrush,
+  armedLand,
   armedObject,
   armedRemove,
   BULLDOZER,
   type BuildTool,
 } from '../../build/domain/buildTool';
+import { LAND_TOOL, landToolLabel } from '../../land/components/LandShelf';
+import type { LandView } from '../../land/domain/landRights';
 import { cycledTool, pickLabel, styleStripFor } from '../../build/domain/stylePick';
 import { TERRAIN_BRUSHES } from '../../build/domain/terrainBrush';
 import { COMPASS_DIRECTIONS, type CompassDirection } from '../../layout/domain/worldBounds';
@@ -58,6 +61,7 @@ export interface CommandContext {
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly ledger: Ledger | null;
+  readonly land: LandView | null;
   readonly preview: PreviewLookup;
 }
 
@@ -291,6 +295,24 @@ function priceNote(cost: number, ledger: Ledger | null): string {
   return ledger !== null && !canAfford(ledger, cost) ? `${price}, more than the bank holds` : price;
 }
 
+// None on a plot that owns all of itself, as on every generated one.
+function landCommands({ tool, onToolChange, land }: CommandContext): Command[] {
+  if (!land || land.forSale === 0) return [];
+  return [
+    {
+      id: 'tool:land',
+      label: landToolLabel(land),
+      group: 'Build',
+      keywords: 'land parcel buy claim plot expand grow',
+      note: LAND_TOOL.hint,
+      art: { glyph: LAND_TOOL.glyph },
+      shortcut: 'L',
+      checked: armedLand(tool),
+      run: () => onToolChange({ kind: 'land' }),
+    },
+  ];
+}
+
 function toolCommands({ tool, onToolChange }: CommandContext): Command[] {
   const brush = armedBrush(tool);
   const brushes: Command[] = TERRAIN_BRUSHES.map((entry) => ({
@@ -376,6 +398,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...resortCommands(context),
     ...windowCommands(context),
     ...toolCommands(context),
+    ...landCommands(context),
     ...styleCommands(context),
     ...objectCommands(context),
   ];

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { armedBrush, armedObject, armedRemove, armedZone, type BuildTool } from './buildTool';
+import {
+  armedBrush,
+  armedLand,
+  armedObject,
+  armedRemove,
+  armedZone,
+  type BuildTool,
+} from './buildTool';
 import { NO_ZONE } from '../../sim/domain/zones';
 
 const OBJECT: BuildTool = { kind: 'object', id: 'cottage' };
@@ -7,6 +14,7 @@ const BRUSH: BuildTool = { kind: 'terrain', brush: 'raise' };
 const REMOVE: BuildTool = { kind: 'remove' };
 const ZONE: BuildTool = { kind: 'zone', zone: 2 };
 const ERASER: BuildTool = { kind: 'zone', zone: NO_ZONE };
+const LAND: BuildTool = { kind: 'land' };
 
 describe('armedRemove', () => {
   it('is armed by the bulldozer and by nothing else', () => {
@@ -38,5 +46,19 @@ describe('armedZone', () => {
     ]);
     expect(armedBrush(ZONE)).toBeNull();
     expect(armedRemove(ZONE)).toBe(false);
+  });
+});
+
+describe('armedLand', () => {
+  it('is armed by the land tool and by nothing else', () => {
+    expect([LAND, REMOVE, OBJECT, BRUSH, ZONE, null].map(armedLand)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(armedRemove(LAND)).toBe(false);
   });
 });

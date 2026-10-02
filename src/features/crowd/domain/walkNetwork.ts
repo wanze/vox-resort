@@ -1,3 +1,4 @@
+import type { TileSpan } from '../../land/domain/landRights';
 import {
   BRIDGE_VOXELS,
   LEVEL_VOXELS,
@@ -53,6 +54,8 @@ export interface WalkEdge {
 export interface BeachBand {
   readonly shore: Shore;
   readonly tilesX: number;
+  // The columns guests may roam: the land owned, which may be less than the world's width.
+  readonly span: TileSpan;
 }
 
 // The heading comes from the art, not the last step walked, or half the sitters would face
@@ -91,6 +94,8 @@ export interface WalkNetworkInput {
   readonly levelOf: LevelProvider;
   readonly shore: Shore | null;
   readonly tilesX: number;
+  // The whole width when left out.
+  readonly span?: TileSpan;
   readonly seats?: readonly SeatSpot[];
   readonly bridged?: SpanProvider;
   readonly obstacles?: readonly ObstacleBox[];
@@ -171,13 +176,15 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     nodes,
     edges,
     gates,
-    beach: shore ? { shore, tilesX } : null,
+    beach: shore ? { shore, tilesX, span: spanOf(input) } : null,
     seats,
     beachSeats,
     posts,
     sand: sandOf(input, climbs),
   };
 }
+
+const spanOf = (input: WalkNetworkInput): TileSpan => input.span ?? { from: 0, to: input.tilesX };
 
 // Roamers cross the sand at its own height, and a ramp or flight rises out of it: walked through,
 // it would hide them to the waist.
@@ -194,6 +201,7 @@ function sandOf(input: WalkNetworkInput, climbs: ReadonlyMap<string, Climb>): Sa
   return sandGridFor({
     shore: input.shore,
     tilesX: input.tilesX,
+    span: spanOf(input),
     obstacles: [...(input.obstacles ?? []), ...raised],
   });
 }
@@ -536,9 +544,10 @@ export function beachPointAt(
 }
 
 function nearbyColumn(beach: BeachBand, random: () => number, fromX?: number): number {
-  const last = beach.tilesX - 1;
-  if (fromX === undefined) return Math.min(last, Math.floor(random() * beach.tilesX));
+  const { from, to } = beach.span;
+  const last = to - 1;
+  if (fromX === undefined) return Math.min(last, from + Math.floor(random() * (to - from)));
   const here = Math.floor(fromX / TILE_VOXELS);
   const drift = Math.round((random() * 2 - 1) * ROAM_COLUMNS);
-  return Math.min(last, Math.max(0, here + drift));
+  return Math.min(last, Math.max(from, here + drift));
 }

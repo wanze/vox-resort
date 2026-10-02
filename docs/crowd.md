@@ -143,6 +143,9 @@ demolished is re-housed whole (`homeWithRoom`, parties in index order), or left
 A plot with no paving is dealt its guests by area instead (`crowdSizeForArea`:
 the 20% of tiles a generated plot paves, at the usual 0.25 a tile) and starts
 `away`: nobody present, every bed free. The draws are the same as a full start.
+A bare game is dealt by the land it owns (`crowdSizeForOwned`), whatever is
+paved: 256 guests on the starting block. Buying land grows it at the next
+settle (see [Land](#land)), and it never shrinks.
 
 ## Inspector
 
@@ -488,6 +491,14 @@ lying on it.
 - Bedtime ends a stay early.
 - The resort's crowd doesn't wander the beach aimlessly (`roamsBeach: false`).
   Anyone left there by an edit walks back.
+- **The beach is the span of land owned.** `BeachBand.span` is a range of
+  columns: the whole plot without land, the owned bounding box's x range on a
+  bare game. Roaming points (`nearbyColumn`), the sand grid (columns outside are
+  blocked as past the plot's ends are), sand routes, pitches, buoys
+  (`swimAreaMoorings`, on the same columns whatever the span) and swimming
+  (`swimmableAt`) all keep inside it. It is a range, not a mask: owned land
+  reaching the sea twice leaves a stretch of unowned sand between, which guests
+  may roam.
 
 **Swimming is drawn only** (`seaSwim.ts`). The router still has a swimmer
 resting on their pitch: needs, mishaps and the lifeguard's watch never hear of
@@ -1076,13 +1087,14 @@ The art declares two numbers, both optional:
   minigolf, pedalos, game hall, beach club). Services and free activities declare
   none, which is 0. The beach's synthetic venue is not in the catalogue and earns 0.
 
-Money moves in seven ways, each a `Reason` with its own column in the books:
+Money moves in eight ways, each a `Reason` with its own column in the books:
 
 | Reason      | When                                                                          |
 | ----------- | ----------------------------------------------------------------------------- |
 | build       | the player stands something; a neighbour the paving re-lays is free           |
 | demolish    | the bulldozer gives half back, or all of it for a site still going up         |
 | dig         | the spade, `DIG_COST` (20) per tile changed                                   |
+| land        | the land tool, `LAND_PARCEL_COST` (1 500) a parcel; nothing in Free play      |
 | visit       | `onVisited`, the venue's price                                                |
 | night       | at check-in (`admitWave`), the whole stay: nights times the lodging's rate    |
 | wages       | each check-in hour, `wagesFor(roster)`: the cleaners on duty, never the pool  |
@@ -1101,8 +1113,9 @@ needs no code. Balances are integers, and a balance below zero only stops
 building.
 
 **Tycoon starts only from bare ground.** The New game panel offers no choice of
-ground for it (`groundOf` in `welcome/domain/newGame.ts`): it clears the plot like
-Free play's bare land and opens the books with `OPENING_BALANCE.tycoon`
+ground for it (`groundOf` in `welcome/domain/newGame.ts`): it starts on a
+256-tile world of parcels like Free play's bare land (see [Land](#land)) and
+opens the books with `OPENING_BALANCE.tycoon`
 (8 000, about twice a minimal start: a gate, the desk, thirty paths, three
 bungalows and a snack bar, 3 960). A generated resort is always sandbox: it is
 given, not bought, and refunding it would pay the player for nothing. The mode is
@@ -1121,6 +1134,43 @@ resort is built; never per visit. The top bar shows **Money** in tycoon only, an
 **Books** in both modes. A palette tile shows its cost and is dimmed, not
 disabled, when the bank cannot pay for it. The inspector shows a venue's
 **Takings today**.
+
+## Land
+
+A bare game (tycoon, or Free play on bare land) is a fixed world of
+`BARE_WORLD_TILES` (256) square, cut into parcels of 16 tiles
+(`land/domain/landRights.ts`). The New game panel asks no width or depth for it;
+a generated resort still does, and owns its whole plot. `ResortPlan.land` and
+`SavedWorld.land` are optional, and no land means everything is owned, so the
+authored plan, generated resorts and saves from before land behave as they did.
+
+- **The starting block** (`startingLand`) is four parcels wide, centred on the
+  south edge, and runs from the parcel row holding the water's edge less the
+  beach less 32 tiles down to the last row, so it owns its sea for piers: 4 × 5
+  on a 256 world, deeper when the island deepens the bay.
+- **For sale** is any parcel beside (not diagonal to) owned land, so owned land
+  stays one piece. One flat price, `LAND_PARCEL_COST` (1 500), recorded under
+  **Land** in the books; Free play claims parcels for nothing.
+- **Building only on land owned**: placing, paving, digging and zoning refuse
+  unowned tiles ("Not your land"). An entrance must have a long side on the edge
+  of owned land or the world when placed ("Entrance away from the edge"), as in
+  RollerCoaster Tycoon; buying the land in front of it later is allowed.
+- **A purchase applies at once** to the money, the mask and the right to build.
+  The lighting, the terrain mesh and framing, the beach span, the buoys and the
+  guest capacity follow at a **settle**, two seconds after the last purchase or
+  as soon as the land tool is put away. A settle prepares the world on the worker
+  first, then takes the game (`gameNow`, which leaves construction sites open
+  rather than finishing them) and restores it onto the rebuilt resort with
+  `load`'s own sequence (`restoreGame`), keeping the clock's speed, the camera
+  and the open sites. An edit made while the worker prepares throws the settle
+  away and schedules another. New guests are dealt by `widenGame`: every per-guest
+  column of the game is copied over the front of a freshly built resort's, whose
+  guests all start away, so the newcomers are free bodies for the next check-in.
+- **Prep cost** (worker, empty world): about 0.4 s on the starting block, 1.4 s
+  with all 256 parcels owned (cell 7 instead of 5, 3 277 guests). The main-thread
+  part is logged to the console on each settle.
+- The litter scans (`mostLittered`, `litterSummary`, `piecesFor`) look only inside
+  the owned bounding box: litter lands only where guests go.
 
 ## Saving
 

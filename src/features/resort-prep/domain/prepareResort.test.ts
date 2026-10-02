@@ -66,6 +66,52 @@ describe('prepareResort', () => {
     expect(bare.bounds).toMatchObject({ minX: 0, maxX: 48 * 16, height: 0 });
   });
 
+  it('lights and frames a bare world over the land it starts owning, not the whole world', () => {
+    const world = prepareResort({
+      source: { kind: 'clear', params: { ...PARAMS, tilesX: 256, tilesZ: 256 } },
+      repeat: 1,
+      view: null,
+    });
+    const owned = { minX: 96 * 16, maxX: 160 * 16, minZ: 176 * 16, maxZ: 256 * 16 };
+    expect(world.bounds).toMatchObject(owned);
+    const { origin, cellSize, dims } = world.lighting!.grid.spec;
+    expect(origin.x).toBeGreaterThan(owned.minX - 200);
+    expect(origin.x + cellSize * dims.x).toBeLessThan(owned.maxX + 200);
+    expect(origin.z).toBeGreaterThan(owned.minZ - 200);
+    expect(world.moorings.length).toBeGreaterThan(0);
+    for (const mooring of world.moorings) {
+      expect(mooring.x).toBeGreaterThan(owned.minX);
+      expect(mooring.x).toBeLessThan(owned.maxX);
+    }
+  });
+
+  it('frames a bare world over all the land it owns, however little stands on it', () => {
+    const asked = { ...PARAMS, tilesX: 256, tilesZ: 256 };
+    const plan = prepareResort({ source: { kind: 'clear', params: asked }, repeat: 1, view: null });
+    const hut = place(layoutItemFor(objectTypeById('bungalow')), 'bungalow#0', 128, 190, 0, 1);
+    const world = {
+      tilesX: 256,
+      tilesZ: 256,
+      shore: plan.plan.shore ?? null,
+      elevation: plan.plan.elevation ?? null,
+      terrain: [],
+      placements: [hut],
+      props: [],
+      paths: [],
+      rails: [],
+      land: plan.plan.land!,
+    };
+    const one = prepareResort({ source: { kind: 'saved', world }, repeat: 1, view: null });
+    expect(one.bounds).toMatchObject({ minX: 96 * 16, maxX: 160 * 16, minZ: 176 * 16 });
+  });
+
+  it('lights and frames a plot without land over its whole plot, as before land was sold', () => {
+    const { origin, cellSize, dims } = generated.lighting!.grid.spec;
+    expect(origin.x).toBeLessThanOrEqual(0);
+    expect(origin.x + cellSize * dims.x).toBeGreaterThanOrEqual(48 * 16);
+    expect(generated.plan).not.toHaveProperty('land');
+  });
+
   it('tiles the authored plan for a benchmark, and frames its preset', () => {
     const tiled = prepareResort({ source: { kind: 'authored' }, repeat: 2, view: 'street' });
     expect(tiled.plan).toBe(RESORT_PLAN);

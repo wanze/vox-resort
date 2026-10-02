@@ -22,7 +22,13 @@ import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
-import { armedZone, type BuildTool, type StylePick } from '../features/build/domain/buildTool';
+import {
+  armedLand,
+  armedZone,
+  type BuildTool,
+  type StylePick,
+} from '../features/build/domain/buildTool';
+import type { LandView } from '../features/land/domain/landRights';
 import type { OverlayKind } from '../features/overlays/domain/overlays';
 import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
@@ -145,6 +151,16 @@ function useHourly() {
   return { thoughts: useThoughts(), status: useStatus() };
 }
 
+// None while nothing is for sale, so the key does nothing on a plot that owns all of itself.
+function landToggle(
+  land: LandView | null,
+  tool: BuildTool | null,
+  selectTool: (tool: BuildTool | null) => void,
+): (() => void) | null {
+  if (!land || land.forSale === 0) return null;
+  return () => selectTool(armedLand(tool) ? null : { kind: 'land' });
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
@@ -175,7 +191,10 @@ export function App() {
     inspector.selection,
     playing,
     saves,
-    () => news.setStaffPins(!news.prefs.staff),
+    {
+      staffPins: () => news.setStaffPins(!news.prefs.staff),
+      land: landToggle(resort.money.land, tool, selectTool),
+    },
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
@@ -187,7 +206,7 @@ export function App() {
   const { adopt: adoptVoices } = thoughts;
   const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
-  const { adopt: adoptLedger, refuse, note } = money;
+  const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
 
   useEffect(() => {
@@ -214,7 +233,8 @@ export function App() {
       onWeatherChange: adoptWeather,
       onOpenChange: adoptOpen,
       onMoneyChange: adoptLedger,
-      onRefused: refuse,
+      onLandChange: adoptLand,
+      onRefused: note,
       onBuildNote: note,
       onFrame: overlay.update,
       onLoading: adoptLoading,
@@ -277,8 +297,8 @@ export function App() {
     adoptHistory,
     adoptWeather,
     adoptLedger,
+    adoptLand,
     adoptLoading,
-    refuse,
     note,
     markDirty,
     morning,
@@ -337,6 +357,7 @@ export function App() {
           error={error}
           refusal={money.refusal}
           ledger={money.ledger}
+          land={money.land}
           windows={windows}
           menu={menu}
           onMenuChange={setMenu}

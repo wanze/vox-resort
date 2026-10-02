@@ -1,5 +1,6 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { PIECE, type Litter } from '../../sim/domain/litter';
+import type { TileRect } from '../../layout/domain/parkShapes';
+import { PIECE, windowOf, type Litter } from '../../sim/domain/litter';
 import { mix } from '../../sim/domain/night';
 
 export interface LitterPiece {
@@ -26,26 +27,29 @@ export function piecesFor(
   groundOf: (tileX: number, tileZ: number) => number | null,
   capacity: number,
   variants: number,
+  window?: TileRect,
 ): LitterPiece[] {
   const pieces: LitterPiece[] = [];
   const kinds = Math.max(1, variants);
-  for (let tile = 0; tile < litter.level.length && pieces.length < capacity; tile++) {
-    const level = litter.level[tile]!;
-    if (level <= 0) continue;
-    const tileX = tile % litter.tilesX;
-    const tileZ = Math.floor(tile / litter.tilesX);
-    const y = groundOf(tileX, tileZ);
-    if (y === null) continue;
-    const count = Math.min(MOST_PER_TILE, Math.ceil(level / PIECE));
-    for (let piece = 0; piece < count && pieces.length < capacity; piece++) {
-      const hash = mix(tile * MOST_PER_TILE + piece + 1);
-      pieces.push({
-        x: tileX * TILE_VOXELS + INSET + (hash % SPAN),
-        y,
-        z: tileZ * TILE_VOXELS + INSET + ((hash >>> 8) % SPAN),
-        variant: (hash >>> 16) % kinds,
-        turns: (hash >>> 24) % 4,
-      });
+  const { x0, x1, z0, z1 } = windowOf(litter, window);
+  for (let tileZ = z0; tileZ <= z1 && pieces.length < capacity; tileZ++) {
+    for (let tileX = x0; tileX <= x1 && pieces.length < capacity; tileX++) {
+      const tile = tileZ * litter.tilesX + tileX;
+      const level = litter.level[tile]!;
+      if (level <= 0) continue;
+      const y = groundOf(tileX, tileZ);
+      if (y === null) continue;
+      const count = Math.min(MOST_PER_TILE, Math.ceil(level / PIECE));
+      for (let piece = 0; piece < count && pieces.length < capacity; piece++) {
+        const hash = mix(tile * MOST_PER_TILE + piece + 1);
+        pieces.push({
+          x: tileX * TILE_VOXELS + INSET + (hash % SPAN),
+          y,
+          z: tileZ * TILE_VOXELS + INSET + ((hash >>> 8) % SPAN),
+          variant: (hash >>> 16) % kinds,
+          turns: (hash >>> 24) % 4,
+        });
+      }
     }
   }
   return pieces;

@@ -48,6 +48,9 @@ const stepAt =
   (_tileX, tileZ) =>
     tileZ < z ? 1 : 0;
 
+const NOWHERE = (): boolean => false;
+const WEST_OF_2 = (tile: { readonly x: number }): boolean => tile.x < 2;
+
 describe('planAt', () => {
   it('stands the object on the tile it was dropped on', () => {
     const plan = planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy());
@@ -138,6 +141,14 @@ describe('planAt', () => {
     expect(planAt(PATH, island, createTileOccupancy(), 0, levelOf, isDry).blocked).toBe(false);
   });
 
+  it('is blocked where the placement does not fit, and fits anywhere by default', () => {
+    const occupancy = createTileOccupancy();
+    expect(planAt(COTTAGE, { x: 3, z: 5 }, occupancy).blocked).toBe(false);
+    expect(
+      planAt(COTTAGE, { x: 3, z: 5 }, occupancy, 0, undefined, undefined, NOWHERE).blocked,
+    ).toBe(true);
+  });
+
   it('asks the ground about every tile of the footprint, not only its corner', () => {
     expect(planAt(COTTAGE, { x: 3, z: 5 }, createTileOccupancy(), 0, undefined, dry).blocked).toBe(
       true,
@@ -192,6 +203,18 @@ describe('planStroke', () => {
       createTileOccupancy(),
     );
     expect(stroke.map((placement) => placement.key)).toEqual(['path@0,0', 'path@1,0', 'path@2,0']);
+  });
+
+  it('stops at the edge of the land owned', () => {
+    const stroke = planStroke(
+      PATH,
+      tilesBetween({ x: 0, z: 0 }, { x: 3, z: 0 }),
+      createTileOccupancy(),
+      0,
+      undefined,
+      WEST_OF_2,
+    );
+    expect(stroke.map((placement) => placement.key)).toEqual(['path@0,0', 'path@1,0']);
   });
 
   it('paves around what is in the way rather than stopping at it', () => {

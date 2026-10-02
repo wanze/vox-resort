@@ -1,5 +1,6 @@
 // Pure and renderer-free so it can run in a worker while the current resort keeps drawing.
 
+import { ownedBounds, ownedSpan } from '../../land/domain/landRights';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { benchFraming, type BenchStyles, type BenchView } from '../../bench/domain/benchConfig';
 import { repeatPlot } from '../../bench/domain/plotRepeat';
@@ -197,12 +198,13 @@ function plotOfWorld(world: SavedWorld): Plot {
 }
 
 // Paving is passed in so no buoy is moored in a pier: the sea lanes run jetty out through the line.
-function mooringsFor(shore: Shore | null, layout: ResortLayout): Mooring[] {
+function mooringsFor(plan: ResortPlan, shore: Shore | null, layout: ResortLayout): Mooring[] {
   const paved = new Set(layout.paths.map((placement) => tileKey(placement.tileX, placement.tileZ)));
   return swimAreaMoorings({
     shore,
     rental: rentalOf(shore, layout.placements),
     claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
+    span: ownedSpan(plan.land ?? null, plan),
   });
 }
 
@@ -212,8 +214,15 @@ function buoyLampsAt(moorings: readonly Mooring[]): LightAnchor[] {
   return buoyLampSites(moorings, buoy, SEA_LEVEL).flatMap((site) => anchorsFor(site, buoy.lights));
 }
 
+// The land owned rather than the world: a 256-tile world lit whole would coarsen every lamp.
 function groundOf(plan: ResortPlan): Ground {
-  return { minX: 0, maxX: plan.tilesX * TILE_VOXELS, minZ: 0, maxZ: plan.tilesZ * TILE_VOXELS };
+  const owned = ownedBounds(plan.land ?? null, plan);
+  return {
+    minX: owned.x0 * TILE_VOXELS,
+    maxX: (owned.x1 + 1) * TILE_VOXELS,
+    minZ: owned.z0 * TILE_VOXELS,
+    maxZ: (owned.z1 + 1) * TILE_VOXELS,
+  };
 }
 
 function bakeLighting(
@@ -241,9 +250,20 @@ function bakeLighting(
   };
 }
 
+// With land, the owned ground is always framed, so one hut does not shrink the view to itself.
+// Without, unchanged, so the benchmark and a generated plot frame as they always have.
 function boundsOf(plan: ResortPlan, everything: readonly Placement[]): WorldBounds {
   if (everything.length === 0) return { ...groundOf(plan), height: 0 };
-  return worldBoundsFor(everything, objectTypeTop);
+  const standing = worldBoundsFor(everything, objectTypeTop);
+  if (!plan.land) return standing;
+  const owned = groundOf(plan);
+  return {
+    minX: Math.min(standing.minX, owned.minX),
+    maxX: Math.max(standing.maxX, owned.maxX),
+    minZ: Math.min(standing.minZ, owned.minZ),
+    maxZ: Math.max(standing.maxZ, owned.maxZ),
+    height: standing.height,
+  };
 }
 
 export function prepareResort(request: PrepRequest): PreparedResort {
@@ -256,7 +276,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
   const shore = shoreFor(plan);
-  const moorings = mooringsFor(shore, plot.layout);
+  const moorings = mooringsFor(plan, shore, plot.layout);
   const anchors = [...claiming, ...plot.rails]
     .flatMap((placement) => anchorsFor(placement, lightsOf(placement)))
     .concat(buoyLampsAt(moorings));

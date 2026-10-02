@@ -1,3 +1,4 @@
+import type { TileRect } from '../../layout/domain/parkShapes';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   holdAt,
@@ -193,6 +194,8 @@ export function createStaffRouter(parts: {
   readonly duty?: () => Uint8Array;
   // Late-bound for the reason upkeep is. Omitted, nothing is ever swept.
   readonly litter?: () => Litter;
+  // Where litter can lie: the land owned. Undefined, or omitted, the whole grid is looked over.
+  readonly litterWindow?: () => TileRect | undefined;
   // Guests inside a venue, from the guests' router. Omitted, every stage and pool is as busy.
   readonly occupants?: (venue: number) => number;
   // Late-bound: painting or hiring deals the staff afresh. Omitted, nobody is zoned.
@@ -623,6 +626,7 @@ export function createStaffRouter(parts: {
           inZone(each % litter.tilesX, Math.floor(each / litter.tilesX)) &&
           (nodeOnTile(litter, each) >= 0 || onTheBeach(litter, each)),
         PIECE,
+        parts.litterWindow?.(),
       );
       if (tile < 0) return NOBODY;
       if (claimReachableTile(worker, at, litter, tile)) return tile;

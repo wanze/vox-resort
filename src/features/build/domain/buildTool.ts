@@ -25,7 +25,11 @@ export interface ZoneTool {
   readonly zone: number;
 }
 
-export type BuildTool = ObjectTool | TerrainTool | RemoveTool | ZoneTool;
+export interface LandTool {
+  readonly kind: 'land';
+}
+
+export type BuildTool = ObjectTool | TerrainTool | RemoveTool | ZoneTool | LandTool;
 
 export const BULLDOZER = {
   label: 'Bulldozer',
@@ -47,4 +51,8 @@ export function armedBrush(tool: BuildTool | null): TerrainBrush | null {
 
 export function armedZone(tool: BuildTool | null): number | null {
   return tool?.kind === 'zone' ? tool.zone : null;
+}
+
+export function armedLand(tool: BuildTool | null): boolean {
+  return tool?.kind === 'land';
 }

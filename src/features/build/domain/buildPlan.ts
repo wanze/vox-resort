@@ -18,6 +18,12 @@ export interface GroundRule {
 
 const ANY_GROUND: GroundRule = () => true;
 
+export interface FitRule {
+  (placement: Placement): boolean;
+}
+
+const FITS_ANYWHERE: FitRule = () => true;
+
 export function buildKey(item: LayoutItem, tile: Tile): string {
   return derivedKey(item.id, tile.x, tile.z);
 }
@@ -39,6 +45,7 @@ export function planAt(
   rotation: Rotation = 0,
   levelOf: LevelProvider = FLAT,
   standsOn: GroundRule = ANY_GROUND,
+  fits: FitRule = FITS_ANYWHERE,
 ): PlacementPlan {
   const placement = place(
     item,
@@ -51,7 +58,8 @@ export function planAt(
   const blocked =
     !occupancy.isFree(placement) ||
     straddledTile(levelOf, placement) !== null ||
-    !footprintTiles(placement).every(standsOn);
+    !footprintTiles(placement).every(standsOn) ||
+    !fits(placement);
   return { placement, blocked };
 }
 

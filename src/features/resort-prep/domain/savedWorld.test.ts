@@ -51,7 +51,7 @@ function played() {
 describe('a saved world', () => {
   it('prepares the plan, terrain, lists and walk network it was saved from', () => {
     const { prepared, terrain } = played();
-    const world = savedWorldOf(prepared.plan, terrain, prepared.plot);
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
     const loaded = prepareResort({ source: { kind: 'saved', world }, repeat: 1, view: null });
 
     expect(loaded.plan).toMatchObject({ tilesX: PARAMS.tilesX, tilesZ: PARAMS.tilesZ });
@@ -77,7 +77,7 @@ describe('a saved world', () => {
 
   it('gives the plot lists of its own, for the edit mode to push and splice', () => {
     const { prepared, terrain } = played();
-    const world = savedWorldOf(prepared.plan, terrain, prepared.plot);
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
     const { plot } = prepareResort({ source: { kind: 'saved', world }, repeat: 1, view: null });
     plot.paths.pop();
     expect(plot.layout.paths).toHaveLength(plot.paths.length + 1);
@@ -85,7 +85,7 @@ describe('a saved world', () => {
 
   it('parses as saved, and refuses an object the catalogue no longer has', () => {
     const { prepared, terrain } = played();
-    const world = savedWorldOf(prepared.plan, terrain, prepared.plot);
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
     expect(savedWorldSchema.safeParse(world).success).toBe(true);
     const gone = { ...world.props[0]!, id: 'retired-statue' };
     expect(savedWorldSchema.safeParse({ ...world, props: [gone] }).success).toBe(false);
@@ -93,6 +93,20 @@ describe('a saved world', () => {
       savedWorldSchema.safeParse({ ...world, paths: [{ ...world.paths[0]!, rotation: 5 }] })
         .success,
     ).toBe(false);
+  });
+
+  it('keeps the land it owned, and a save without land owns its whole plot', () => {
+    const { prepared, terrain } = played();
+    const land = { parcelsX: 3, parcelsZ: 3, owned: Uint8Array.of(0, 1, 0, 0, 1, 0, 1, 1, 1) };
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, land);
+    expect(savedWorldSchema.safeParse(world).success).toBe(true);
+    expect(planOfWorld(world).land).toEqual(land);
+    land.owned[0] = 1;
+    expect(world.land?.owned[0]).toBe(0);
+
+    const without = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
+    expect(without).not.toHaveProperty('land');
+    expect(planOfWorld(without)).not.toHaveProperty('land');
   });
 
   it('keeps a plan with no shore or hill without either', () => {

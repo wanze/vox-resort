@@ -49,6 +49,15 @@ describe('swimAreaMoorings', () => {
     expect(cut.map(tileOf)).not.toContainEqual(taken);
   });
 
+  it('keeps to the span of land owned, on the same columns as the whole coast', () => {
+    const whole = swimAreaMoorings({ shore: shore() }).map((mooring) => tileOf(mooring).x);
+    const owned = swimAreaMoorings({ shore: shore(), span: { from: 13, to: 31 } }).map(
+      (mooring) => tileOf(mooring).x,
+    );
+    expect(owned).toEqual(whole.filter((column) => column >= 13 && column < 31));
+    expect(owned.length).toBeGreaterThan(2);
+  });
+
   it('moors nothing past the southern edge of the plot', () => {
     const deep = shoreFor({
       tilesX: 20,
@@ -144,6 +153,13 @@ describe('swimmableAt', () => {
     expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x)).toBeNull();
     expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x + 3 * TILE_VOXELS)).toBeNull();
     expect(swimmableAt({ shore: bay }, RENTAL.x)).not.toBeNull();
+  });
+
+  it('gives nothing in front of land not owned', () => {
+    const owned = { shore: shore(), span: { from: 10, to: 20 } };
+    expect(swimmableAt(owned, 15 * TILE_VOXELS)).not.toBeNull();
+    expect(swimmableAt(owned, 25 * TILE_VOXELS)).toBeNull();
+    expect(swimmableAt(owned, 9 * TILE_VOXELS)).toBeNull();
   });
 
   it('gives nothing on a plot with no sea, or off the plot', () => {

@@ -128,6 +128,8 @@ const columnSchema = z.object({
   build: z.number(),
   demolish: z.number(),
   dig: z.number(),
+  // Saves from before land was sold have no column for it.
+  land: z.number().default(0),
   visit: z.number(),
   night: z.number(),
   wages: z.number(),

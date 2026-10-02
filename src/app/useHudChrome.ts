@@ -24,6 +24,12 @@ const always = (action: () => void) => (): boolean => {
   return true;
 };
 
+// Null for a key with nothing to do, which then passes on to whatever else listens for it.
+export interface HudToggles {
+  readonly staffPins: () => void;
+  readonly land: (() => void) | null;
+}
+
 export function useHudChrome(
   clock: ClockControls,
   tool: BuildTool | null,
@@ -31,7 +37,7 @@ export function useHudChrome(
   selection: SelectionView | null,
   playing: boolean,
   saves: SaveControls,
-  onToggleStaffPins: () => void,
+  toggles: HudToggles,
 ): HudChrome {
   const windows = useWindows();
   const [menu, setMenu] = useState<MenuId | null>(null);
@@ -55,7 +61,14 @@ export function useHudChrome(
     { key: '/', run: always(() => setPalette(true)) },
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },
-    { key: 's', run: always(onToggleStaffPins) },
+    { key: 's', run: always(toggles.staffPins) },
+    {
+      key: 'l',
+      run: () => {
+        toggles.land?.();
+        return toggles.land !== null;
+      },
+    },
     { key: 'f3', run: always(() => windows.toggle('debug')) },
     // Passed on unless the armed family has styles to cycle through.
     {

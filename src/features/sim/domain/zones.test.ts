@@ -13,6 +13,8 @@ import {
   ZONES,
 } from './zones';
 
+const WEST_HALF = (tileX: number): boolean => tileX < 2;
+
 describe('paintZone', () => {
   it('paints a tile and erases it again', () => {
     const zones = createZones(4, 3);
@@ -31,6 +33,12 @@ describe('paintZone', () => {
     expect(paintZone(zones, 0, 0, 1)).toBe(false);
     expect(paintZone(zones, 1, 1, NO_ZONE)).toBe(false);
     expect(zones.version).toBe(1);
+  });
+
+  it('leaves land not owned unzoned', () => {
+    const zones = createZones(4, 1);
+    for (let tileX = 0; tileX < 4; tileX++) paintZone(zones, tileX, 0, 2, WEST_HALF);
+    expect([...zones.zone]).toEqual([2, 2, NO_ZONE, NO_ZONE]);
   });
 
   it('ignores tiles off the grid and zones that do not exist', () => {

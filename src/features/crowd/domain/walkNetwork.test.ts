@@ -428,7 +428,7 @@ describe('beachPointAt', () => {
     tilesZ: 30,
     shore: { inset: 3, beach: 5, wave: 2, seed: 4 },
   })!;
-  const beach = { shore, tilesX: 40 };
+  const beach = { shore, tilesX: 40, span: { from: 0, to: 40 } };
 
   it('lands on sand, in every column, however the coast wanders', () => {
     const random = createRandom(12);
@@ -447,6 +447,18 @@ describe('beachPointAt', () => {
     const xs = new Set<number>();
     for (let draw = 0; draw < 50; draw++) xs.add(beachPointAt(beach, random).x % TILE_VOXELS);
     expect(xs.size).toBeGreaterThan(40);
+  });
+
+  it('keeps to the span of land owned, wandering from either end of it', () => {
+    const owned = { ...beach, span: { from: 12, to: 20 } };
+    const random = createRandom(3);
+    for (let draw = 0; draw < 200; draw++) {
+      for (const fromX of [undefined, 0, 39 * TILE_VOXELS]) {
+        const tileX = Math.floor(beachPointAt(owned, random, fromX).x / TILE_VOXELS);
+        expect(tileX).toBeGreaterThanOrEqual(12);
+        expect(tileX).toBeLessThan(20);
+      }
+    }
   });
 
   it('replays the same beach for the same seed', () => {

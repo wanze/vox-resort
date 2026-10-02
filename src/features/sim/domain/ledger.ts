@@ -1,12 +1,21 @@
 export type GameMode = 'sandbox' | 'tycoon';
 
 // 'maintenance', not 'upkeep': upkeep.ts is already the cleanliness of a venue.
-export type Reason = 'build' | 'demolish' | 'dig' | 'visit' | 'night' | 'wages' | 'maintenance';
+export type Reason =
+  | 'build'
+  | 'demolish'
+  | 'dig'
+  | 'land'
+  | 'visit'
+  | 'night'
+  | 'wages'
+  | 'maintenance';
 
 export const REASONS: readonly Reason[] = [
   'build',
   'demolish',
   'dig',
+  'land',
   'visit',
   'night',
   'wages',
@@ -32,6 +41,7 @@ const EMPTY: Column = {
   build: 0,
   demolish: 0,
   dig: 0,
+  land: 0,
   visit: 0,
   night: 0,
   wages: 0,

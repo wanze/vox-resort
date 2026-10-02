@@ -20,6 +20,7 @@ import {
 } from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { vec3 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { SkyState } from '../../lighting/domain/dayNight';
@@ -139,9 +140,28 @@ export interface SceneOptions {
   readonly terrain: Terrain;
   readonly isClear?: (tileX: number, tileZ: number) => boolean;
   readonly surfaces?: TerrainSurfaces | null;
+  // Applied to the land, never the water. Built once, so changing what it reads never recompiles.
+  readonly groundShade?: GroundShade;
   // Has to be requested when the renderer is built, not later.
   readonly trackTimestamp?: boolean;
   readonly forceWebGL?: boolean;
+}
+
+export type GroundShade = (color: Node<'vec3'>) => Node<'vec3'>;
+
+function landMaterial(
+  color: number,
+  lightVolume: BakedLightVolume | null,
+  shade: GroundShade | undefined,
+): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0 });
+  const albedo = vec3(...linearRgbOf(color));
+  if (shade) material.colorNode = shade(albedo);
+  if (lightVolume) {
+    material.emissiveNode = lightVolume.lampLight(albedo);
+    material.aoNode = lightVolume.skyVisibility();
+  }
+  return material;
 }
 
 interface Ground {
@@ -155,20 +175,13 @@ function layGround(
   framing: CameraFraming,
   worldExtent: number,
   lightVolume: BakedLightVolume | null,
+  shade: GroundShade | undefined,
 ): Ground {
   const geometry = new PlaneGeometry(
     worldExtent * TERRAIN_SPREAD * 2,
     worldExtent * TERRAIN_SPREAD * 2,
   );
-  const material = new MeshStandardNodeMaterial({
-    color: GROUND_COLOR,
-    roughness: 1,
-    metalness: 0,
-  });
-  if (lightVolume) {
-    material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(GROUND_COLOR)));
-    material.aoNode = lightVolume.skyVisibility();
-  }
+  const material = landMaterial(GROUND_COLOR, lightVolume, shade);
   const mesh = new Mesh(geometry, material);
   mesh.rotation.x = -Math.PI / 2;
   // A hair below y = 0: a path slab's underside sits exactly on it.
@@ -211,18 +224,6 @@ function toSurfaceGeometry(surface: SurfaceGeometry): BufferGeometry {
   return geometry;
 }
 
-function surfaceMaterial(
-  color: number,
-  lightVolume: BakedLightVolume | null,
-): MeshStandardNodeMaterial {
-  const material = new MeshStandardNodeMaterial({ color, roughness: 1, metalness: 0 });
-  if (lightVolume) {
-    material.emissiveNode = lightVolume.lampLight(vec3(...linearRgbOf(color)));
-    material.aoNode = lightVolume.skyVisibility();
-  }
-  return material;
-}
-
 type Disposable = { dispose(): void };
 
 // Kept across rebuilds: a new material is a shader compile, which stalled every
@@ -237,10 +238,13 @@ interface TerrainPalette {
 
 const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, RISER_COLOR, SAND_RISER_COLOR] as const;
 
-function createTerrainPalette(lightVolume: BakedLightVolume | null): TerrainPalette {
+function createTerrainPalette(
+  lightVolume: BakedLightVolume | null,
+  shade: GroundShade | undefined,
+): TerrainPalette {
   const sea = createSeaMaterial(lightVolume);
   const river = createRiverMaterial(lightVolume);
-  const flat = new Map(FLAT_TONES.map((tone) => [tone, surfaceMaterial(tone, lightVolume)]));
+  const flat = new Map(FLAT_TONES.map((tone) => [tone, landMaterial(tone, lightVolume, shade)]));
   return {
     sea,
     river,
@@ -334,6 +338,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const lightVolume = options.lightVolume ?? null;
   const trackTimestamp = options.trackTimestamp ?? false;
   const isClear = options.isClear ?? ((): boolean => true);
+  const shade = options.groundShade;
 
   const renderer = new WebGPURenderer({
     canvas,
@@ -435,11 +440,11 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
 
-  let ground = layGround(scene, framing, extent, lightVolume);
+  let ground = layGround(scene, framing, extent, lightVolume, shade);
   let terrain = options.terrain;
   let terrainFraming = framing;
   let terrainVolume = lightVolume;
-  let palette = createTerrainPalette(lightVolume);
+  let palette = createTerrainPalette(lightVolume, shade);
   let surfaces = layTerrain(
     scene,
     shore,
@@ -540,7 +545,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       extent = worldExtentOf(plot);
       ground.dispose();
       scene.remove(ground.mesh);
-      ground = layGround(scene, nextFraming, extent, nextVolume);
+      ground = layGround(scene, nextFraming, extent, nextVolume, shade);
       // The coast is rebuilt for the same reason the ground is: both are bound
       // to the light volume, and a new resort is a new bake in new textures.
       surfaces.dispose();
@@ -550,7 +555,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       terrainFraming = nextFraming;
       terrainVolume = nextVolume;
       coast = nextShore;
-      palette = createTerrainPalette(terrainVolume);
+      palette = createTerrainPalette(terrainVolume, shade);
       palette.setSky(sky.getHex());
       surfaces = layTerrain(
         scene,

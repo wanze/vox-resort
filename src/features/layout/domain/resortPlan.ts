@@ -1,3 +1,4 @@
+import type { LandGrid } from '../../land/domain/landRights';
 import type { ShoreSpec } from './shoreline';
 import type { ElevationSpec } from './elevation';
 import type { Rotation } from './rotation';
@@ -54,6 +55,8 @@ export interface ResortPlan {
   readonly neighbourhoods?: readonly Plaza[];
   // A catalogue type the authored plan forgot is a mistake, so layoutResort reports it.
   readonly standsWholeCatalogue?: boolean;
+  // Unset means the whole plot is owned. Plain data, so it crosses to the prep worker.
+  readonly land?: LandGrid;
 }
 
 export const PATH_ID = 'path';

@@ -26,6 +26,14 @@ describe('piecesFor', () => {
     );
   });
 
+  it('lays nothing outside a window, and all of it inside one', () => {
+    const inside = piecesFor(fouled(), everywhere, 100, 3, { x0: 0, x1: 1, z0: 0, z1: 2 });
+    expect(inside.every((piece) => piece.x < 2 * TILE_VOXELS)).toBe(true);
+    const whole = piecesFor(fouled(), everywhere, 100, 3);
+    expect(inside).toEqual(whole.filter((piece) => piece.x < 2 * TILE_VOXELS));
+    expect(inside.length).toBeLessThan(whole.length);
+  });
+
   it('never lays more than it has room for', () => {
     expect(piecesFor(fouled(), everywhere, 5, 2)).toHaveLength(5);
     expect(piecesFor(fouled(), everywhere, 0, 2)).toEqual([]);

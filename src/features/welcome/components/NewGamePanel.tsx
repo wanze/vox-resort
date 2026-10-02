@@ -12,7 +12,7 @@ import type { SaveMeta } from '../../saves/domain/snapshot';
 import { UnsavedWarning } from '../../saves/components/UnsavedWarning';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import type { IconName } from '../../hud/components/pixelIcons';
-import { groundOf, type Ground, type NewGame } from '../domain/newGame';
+import { groundOf, paramsFor, type Ground, type NewGame } from '../domain/newGame';
 import { MODE_LABELS } from './modeNames';
 import { ResortAdvanced } from './ResortAdvanced';
 
@@ -164,34 +164,36 @@ function PlotFields(props: {
   const { draft, grown, onChange } = props;
   return (
     <>
-      <Slider
-        label="Width"
-        aria="Plot width in tiles"
-        range={PLOT_TILES}
-        step={4}
-        value={draft.tilesX}
-        shown={String(draft.tilesX)}
-        onSlide={(tilesX) => onChange({ tilesX })}
-      />
-      <Slider
-        label="Depth"
-        aria="Plot depth in tiles"
-        range={PLOT_TILES}
-        step={4}
-        value={draft.tilesZ}
-        shown={String(draft.tilesZ)}
-        onSlide={(tilesZ) => onChange({ tilesZ })}
-      />
       {grown ? (
-        <Slider
-          label="Density"
-          aria="How built-up the plot is"
-          range={PLOT_DENSITY}
-          step={0.05}
-          value={draft.density}
-          shown={`${Math.round(draft.density * 100)}%`}
-          onSlide={(density) => onChange({ density })}
-        />
+        <>
+          <Slider
+            label="Width"
+            aria="Plot width in tiles"
+            range={PLOT_TILES}
+            step={4}
+            value={draft.tilesX}
+            shown={String(draft.tilesX)}
+            onSlide={(tilesX) => onChange({ tilesX })}
+          />
+          <Slider
+            label="Depth"
+            aria="Plot depth in tiles"
+            range={PLOT_TILES}
+            step={4}
+            value={draft.tilesZ}
+            shown={String(draft.tilesZ)}
+            onSlide={(tilesZ) => onChange({ tilesZ })}
+          />
+          <Slider
+            label="Density"
+            aria="How built-up the plot is"
+            range={PLOT_DENSITY}
+            step={0.05}
+            value={draft.density}
+            shown={`${Math.round(draft.density * 100)}%`}
+            onSlide={(density) => onChange({ density })}
+          />
+        </>
       ) : null}
       <div className="hud-resort-row hud-resort-seed">
         <span>Seed</span>
@@ -228,9 +230,8 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
 
   const start = (game: NewGame) => (): void => {
     // Shown back clamped, so the panel does not claim a size nobody can build.
-    const asked = clampParams(draft);
-    setDraft(asked);
-    onStart(asked, game);
+    setDraft(clampParams(draft));
+    onStart(clampParams(paramsFor(game, draft)), game);
   };
 
   return (

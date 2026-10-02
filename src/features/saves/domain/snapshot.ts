@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { crowdPerBody, crowdSnapshotSchema } from '../../crowd/domain/crowdSnapshot';
+import { fitsWorld } from '../../land/domain/landRights';
 import { BEACH_PRESETS, HOUSING_STYLES, VARIETIES } from '../../layout/domain/resortConfig';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
 import { COMPASS_DIRECTIONS } from '../../layout/domain/worldBounds';
@@ -99,6 +100,9 @@ function misfitsOf(game: GameShape): readonly string[] {
     ...(game.resort.zones.length === game.world.tilesX * game.world.tilesZ
       ? []
       : ['a zone grid of another size']),
+    ...(!game.world.land || fitsWorld(game.world.land, game.world)
+      ? []
+      : ['a land grid of another size']),
   ];
 }
 

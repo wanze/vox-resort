@@ -132,6 +132,10 @@ describe('generateResort', () => {
     expect(generateResort(TYPES, params())).toEqual(generateResort(TYPES, params()));
   });
 
+  it('owns its whole plot, so it carries no land grid', () => {
+    expect(generateResort(TYPES, params())).not.toHaveProperty('land');
+  });
+
   it('gives a different resort for a different seed', () => {
     const one = generateResort(TYPES, params({ seed: 1 }));
     const other = generateResort(TYPES, params({ seed: 2 }));
@@ -813,6 +817,13 @@ describe('emptyResortPlan', () => {
     expect(layout.placements).toEqual([]);
     expect(layout.paths).toEqual([]);
     expect(layout.props).toEqual([]);
+  });
+
+  it('starts owning a block four parcels wide and five deep on a bare world', () => {
+    const land = emptyResortPlan(256, 256, 1).land!;
+    expect(land.parcelsX).toBe(16);
+    expect(land.parcelsZ).toBe(16);
+    expect(land.owned.reduce((sum, owned) => sum + owned, 0)).toBe(20);
   });
 
   it('keeps its size, clamped to what the generator will work at', () => {

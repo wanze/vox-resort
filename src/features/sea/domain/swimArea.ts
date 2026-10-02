@@ -1,4 +1,5 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import type { TileSpan } from '../../land/domain/landRights';
 import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 
 const SWIM_TILES = 3;
@@ -45,7 +46,16 @@ export interface SwimAreaOptions {
   readonly rental?: Rental | null;
   // The pier lanes run straight through the buoy line.
   readonly claimed?: (tileX: number, tileZ: number) => boolean;
+  // The columns of land owned; the whole coast when left out.
+  readonly span?: TileSpan;
 }
+
+const spanOf = (options: SwimAreaOptions, shore: Shore): TileSpan =>
+  options.span ?? { from: 0, to: shore.tilesX };
+
+// On the same phase whatever the span, so buying land adds buoys rather than moving them.
+const firstBuoyFrom = (from: number): number =>
+  from + ((((Math.floor(BUOY_TILES / 2) - from) % BUOY_TILES) + BUOY_TILES) % BUOY_TILES);
 
 export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
   const { shore, claimed } = options;
@@ -53,7 +63,8 @@ export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
   if (!shore) return [];
 
   const moorings: Mooring[] = [];
-  for (let tileX = Math.floor(BUOY_TILES / 2); tileX < shore.tilesX; tileX += BUOY_TILES) {
+  const span = spanOf(options, shore);
+  for (let tileX = firstBuoyFrom(span.from); tileX < span.to; tileX += BUOY_TILES) {
     const tileZ = waterStartZ(shore, tileX) + SWIM_TILES;
     // The camera never frames past the plot's south edge, so a buoy there goes unseen.
     if (tileZ >= shore.tilesZ) continue;
@@ -71,7 +82,9 @@ export function swimmableAt(
   x: number,
 ): { readonly fromZ: number; readonly toZ: number } | null {
   const { shore } = options;
-  if (!shore || x < 0 || x >= shore.tilesX * TILE_VOXELS) return null;
+  if (!shore) return null;
+  const span = spanOf(options, shore);
+  if (x < span.from * TILE_VOXELS || x >= span.to * TILE_VOXELS) return null;
   if (offRental(options.rental ?? null, x) < CORRIDOR_TILES + CORRIDOR_FLARE) return null;
   const water = waterStartZ(shore, Math.floor(x / TILE_VOXELS));
   if (water >= shore.tilesZ) return null;

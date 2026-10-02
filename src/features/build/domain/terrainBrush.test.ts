@@ -21,9 +21,14 @@ const coastal = (): Terrain =>
     tilesZ: 20,
   });
 
-const rules = (terrain: Terrain, taken: readonly string[] = []): TerrainRules => ({
+const rules = (
+  terrain: Terrain,
+  taken: readonly string[] = [],
+  owns: TerrainRules['owns'] = () => true,
+): TerrainRules => ({
   terrain,
   isClear: (tileX, tileZ) => !taken.includes(`${tileX},${tileZ}`),
+  owns,
 });
 
 const change = (brush: TerrainBrush, terrain: Terrain, x: number, z: number, taken?: string[]) =>
@@ -46,6 +51,15 @@ describe('terrainChangeAt', () => {
     expect(change('raise', flat(), 4, 20).blocked).toBe(false);
     expect(change('raise', flat(), -13, 4).blocked).toBe(true);
     expect(change('sand', flat(), 4, 99).blocked).toBe(true);
+  });
+
+  it('refuses a tile on land not owned', () => {
+    const terrain = flat();
+    const westHalf = rules(terrain, [], (tileX) => tileX < 6);
+    for (const brush of TERRAIN_BRUSHES) {
+      expect(terrainChangeAt(brush.id, { x: 6, z: 5 }, westHalf).blocked).toBe(true);
+    }
+    expect(terrainChangeAt('raise', { x: 5, z: 5 }, westHalf).blocked).toBe(false);
   });
 
   it('refuses a tile something is standing on', () => {

@@ -1,3 +1,4 @@
+import type { TileSpan } from '../../land/domain/landRights';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { waterStartZ, type Shore } from '../../layout/domain/shoreline';
 
@@ -23,6 +24,8 @@ export interface SandGrid {
 export interface SandGridInput {
   readonly shore: Shore;
   readonly tilesX: number;
+  // Columns past it are blocked as the ends of the plot are. The whole width when left out.
+  readonly span?: TileSpan;
   readonly obstacles: readonly ObstacleBox[];
 }
 
@@ -39,6 +42,7 @@ export function sandGridFor(input: SandGridInput): SandGrid {
   const columns = Math.max(0, Math.ceil((tilesX * TILE_VOXELS) / SAND_CELL));
   const rows = Math.max(0, Math.ceil(((front - back) * TILE_VOXELS) / SAND_CELL));
   const cells = new Uint8Array(columns * rows);
+  if (input.span) blockOutside(cells, columns, rows, input.span);
 
   for (const box of obstacles) {
     const west = Math.max(0, Math.floor((box.x - BODY_RADIUS) / SAND_CELL));
@@ -53,6 +57,15 @@ export function sandGridFor(input: SandGridInput): SandGrid {
     }
   }
   return { originZ, columns, rows, cells };
+}
+
+function blockOutside(cells: Uint8Array, columns: number, rows: number, span: TileSpan): void {
+  const west = Math.min(columns, Math.max(0, Math.ceil((span.from * TILE_VOXELS) / SAND_CELL)));
+  const east = Math.min(columns, Math.max(west, Math.floor((span.to * TILE_VOXELS) / SAND_CELL)));
+  for (let row = 0; row < rows; row++) {
+    cells.fill(1, row * columns, row * columns + west);
+    cells.fill(1, row * columns + east, (row + 1) * columns);
+  }
 }
 
 // Past either end of the plot is blocked, or a roamer stepping aside at the end of the

@@ -41,8 +41,17 @@ export function createZones(tilesX: number, tilesZ: number): Zones {
 const inside = (zones: Zones, tileX: number, tileZ: number): boolean =>
   tileX >= 0 && tileZ >= 0 && tileX < zones.tilesX && tileZ < zones.tilesZ;
 
-export function paintZone(zones: Zones, tileX: number, tileZ: number, zone: number): boolean {
+const OWNS_ALL = (): boolean => true;
+
+export function paintZone(
+  zones: Zones,
+  tileX: number,
+  tileZ: number,
+  zone: number,
+  owns: (tileX: number, tileZ: number) => boolean = OWNS_ALL,
+): boolean {
   if (!inside(zones, tileX, tileZ) || zone < NO_ZONE || zone >= ZONES) return false;
+  if (!owns(tileX, tileZ)) return false;
   const at = tileZ * zones.tilesX + tileX;
   if (zones.zone[at] === zone) return false;
   zones.zone[at] = zone;

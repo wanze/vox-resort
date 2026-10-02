@@ -21,6 +21,7 @@ export interface TerrainRules {
   readonly terrain: Terrain;
   // Enough on its own: a handrail stands on the paving it guards, so a railed tile is a paved tile.
   readonly isClear: (tileX: number, tileZ: number) => boolean;
+  readonly owns: (tileX: number, tileZ: number) => boolean;
 }
 
 export interface TerrainChange {
@@ -86,7 +87,7 @@ export function terrainChangeAt(
   tile: Tile,
   rules: TerrainRules,
 ): TerrainChange {
-  if (!rules.terrain.holds(tile.x, tile.z)) return refused(tile);
+  if (!rules.terrain.holds(tile.x, tile.z) || !rules.owns(tile.x, tile.z)) return refused(tile);
   if (!rules.isClear(tile.x, tile.z)) return refused(tile);
   if (brush === 'raise' || brush === 'lower') return stepped(brush, tile, rules);
   return surfaced(brush, tile, rules);

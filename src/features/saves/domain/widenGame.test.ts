@@ -18,12 +18,13 @@ import { createStaffRouter } from '../../sim/domain/staffRouter';
 import { createDay, createThoughts } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
 import { createZones } from '../../sim/domain/zones';
-import { gameSnapshotSchema, metaOf, SAVE_VERSION, type GameSnapshot } from './snapshot';
+import { gameSnapshotSchema, SAVE_VERSION, type GameSnapshot } from './snapshot';
+import { resortPerPerson } from '../../sim/domain/resortSnapshot';
+import { crowdPerBody } from '../../crowd/domain/crowdSnapshot';
+import { widenGame } from './widenGame';
 
-const POPULATION = 12;
-
-// The smallest whole game: one street, nobody placed, every part snapshotted for real.
-function gameFixture(): GameSnapshot {
+// The smallest whole game, as in snapshot.test.ts, at any population.
+function gameOf(POPULATION: number, seed: number): GameSnapshot {
   const network = walkNetworkFor({
     paved: Array.from({ length: 4 }, (_, tileX) => ({ tileX, tileZ: 0, y: 0 })),
     levelOf: () => 0,
@@ -36,9 +37,9 @@ function gameFixture(): GameSnapshot {
     homes: [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: POPULATION }],
     variants: 2,
     childVariant: 1,
-    seed: 1,
+    seed,
   });
-  const needs = createNeeds(guests, 2);
+  const needs = createNeeds(guests, seed + 1);
   const upkeep = createUpkeep(0);
   const crowd = createCrowd({ network, count: POPULATION, variants: 2, seed: 3 });
   const employed = staffPool();
@@ -122,88 +123,52 @@ function gameFixture(): GameSnapshot {
   };
 }
 
-describe('gameSnapshotSchema', () => {
-  it('parses a whole game as snapshotted', () => {
-    const parsed = gameSnapshotSchema.safeParse(gameFixture());
+const SAVED = 12;
+const FRESH = 20;
+
+describe('widenGame', () => {
+  it('grows every guest column to the fresh population, and parses', () => {
+    const widened = widenGame(gameOf(SAVED, 1), gameOf(FRESH, 7));
+    expect(widened.population).toBe(FRESH);
+    expect(widened.resort.guests.count).toBe(FRESH);
+    for (const column of [...resortPerPerson(widened.resort), ...crowdPerBody(widened.crowd)]) {
+      expect(column.length).toBe(FRESH);
+    }
+    const parsed = gameSnapshotSchema.safeParse(widened);
     expect(parsed.error?.issues).toBeUndefined();
   });
 
-  it('refuses another version', () => {
-    expect(gameSnapshotSchema.safeParse({ ...gameFixture(), version: 2 }).success).toBe(false);
+  it('keeps every saved value at the front, and the fresh ones behind it', () => {
+    const saved = gameOf(SAVED, 1);
+    const fresh = gameOf(FRESH, 7);
+    const widened = widenGame(saved, fresh);
+    const pairs = [
+      [saved.resort.needs.hunger, fresh.resort.needs.hunger, widened.resort.needs.hunger],
+      [saved.resort.guests.people, fresh.resort.guests.people, widened.resort.guests.people],
+      [saved.crowd.x, fresh.crowd.x, widened.crowd.x],
+      [saved.router.goals.venue, fresh.router.goals.venue, widened.router.goals.venue],
+      [saved.resort.thoughts.stay, fresh.resort.thoughts.stay, widened.resort.thoughts.stay],
+    ] as const;
+    type Triple = readonly [ArrayLike<unknown>, ArrayLike<unknown>, ArrayLike<unknown>];
+    for (const [before, other, after] of pairs as readonly Triple[]) {
+      expect(Array.from(after).slice(0, before.length)).toEqual(Array.from(before));
+      expect(Array.from(after).slice(before.length)).toEqual(
+        Array.from(other).slice(before.length),
+      );
+    }
   });
 
-  it('refuses a hand-set role with a negative count, and takes a role on Auto', () => {
-    const game = gameFixture();
-    const hiredAs = (cleaner: number | null) => ({
-      ...game,
-      resort: { ...game.resort, hiring: { ...AUTO_HIRING, cleaner } },
-    });
-    expect(gameSnapshotSchema.safeParse(hiredAs(-1)).success).toBe(false);
-    expect(gameSnapshotSchema.safeParse(hiredAs(null)).success).toBe(true);
-  });
-
-  it('takes a hand-set role', () => {
-    const game = gameFixture();
-    const hired = { ...game, resort: { ...game.resort, hiring: { ...AUTO_HIRING, cleaner: 3 } } };
-    expect(gameSnapshotSchema.safeParse(hired).success).toBe(true);
-  });
-
-  it('refuses a save with a part missing', () => {
-    const { camera: _camera, ...missing } = gameFixture();
-    expect(gameSnapshotSchema.safeParse(missing).success).toBe(false);
-  });
-
-  it('refuses a per-person column one short of the population', () => {
-    const game = gameFixture();
-    const short = { ...game.resort.happiness, level: game.resort.happiness.level.slice(1) };
-    const broken = { ...game, resort: { ...game.resort, happiness: short } };
-    expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
-  });
-
-  it('refuses a staff column one short of the staff', () => {
-    const game = gameFixture();
-    const broken = { ...game, staff: { ...game.staff, x: game.staff.x.slice(1) } };
-    expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
-  });
-
-  it('refuses a zone grid of another size than the world', () => {
-    const game = gameFixture();
-    const broken = { ...game, resort: { ...game.resort, zones: game.resort.zones.slice(1) } };
-    expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
-  });
-
-  it('takes a land grid that covers the world, and refuses one of another size', () => {
-    const game = gameFixture();
-    const withLand = (parcelsX: number, owned: number) => ({
-      ...game,
-      world: { ...game.world, land: { parcelsX, parcelsZ: 1, owned: new Uint8Array(owned) } },
-    });
-    expect(gameSnapshotSchema.safeParse(withLand(1, 1)).success).toBe(true);
-    expect(gameSnapshotSchema.safeParse(withLand(1, 2)).success).toBe(false);
-    expect(gameSnapshotSchema.safeParse(withLand(2, 2)).success).toBe(false);
-  });
-
-  it('survives a structured clone, which is how IndexedDB stores it', () => {
-    const cloned: unknown = structuredClone(gameFixture());
-    expect(gameSnapshotSchema.safeParse(cloned).success).toBe(true);
-  });
-});
-
-describe('metaOf', () => {
-  it('sums the save up for the list', () => {
-    const meta = metaOf('a', 'Cove', gameFixture(), 1234);
-    expect(meta).toEqual({
-      id: 'a',
-      name: 'Cove',
-      savedAt: 1234,
-      version: SAVE_VERSION,
-      mode: 'tycoon',
-      day: 3,
-      balance: 8000,
-      stars: meta.stars,
-      guests: POPULATION,
-      tilesX: 4,
-      tilesZ: 3,
-    });
+  it('keeps everything that is not a guest column as saved, and writes to neither game', () => {
+    const saved = gameOf(SAVED, 1);
+    const fresh = gameOf(FRESH, 7);
+    const hunger = fresh.resort.needs.hunger.slice();
+    const widened = widenGame(saved, fresh);
+    expect(widened.resort.guests.parties).toBe(saved.resort.guests.parties);
+    expect(widened.resort.guests.freeBeds).toBe(saved.resort.guests.freeBeds);
+    expect(widened.resort.ledger).toEqual(saved.resort.ledger);
+    expect(widened.staff).toBe(saved.staff);
+    expect(widened.world).toBe(saved.world);
+    expect(fresh.resort.needs.hunger).toEqual(hunger);
+    expect(saved.resort.needs.hunger).toHaveLength(SAVED);
   });
 });

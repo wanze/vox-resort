@@ -45,6 +45,17 @@ describe('sandGridFor', () => {
     expect(blockedAt(bare, 20 * TILE_VOXELS + 1, z)).toBe(true);
     expect(blockedAt(bare, 40, z)).toBe(false);
   });
+
+  it('blocks the sand outside the span of land owned, as it blocks past the plot', () => {
+    const owned = sandGridFor({ shore, tilesX: 20, span: { from: 5, to: 10 }, obstacles: [] });
+    const z = owned.originZ + 4;
+    expect(blockedAt(owned, 5 * TILE_VOXELS - 1, z)).toBe(true);
+    expect(blockedAt(owned, 5 * TILE_VOXELS, z)).toBe(false);
+    expect(blockedAt(owned, 10 * TILE_VOXELS - 1, z)).toBe(false);
+    expect(blockedAt(owned, 10 * TILE_VOXELS, z)).toBe(true);
+    const whole = sandGridFor({ shore, tilesX: 20, span: { from: 0, to: 20 }, obstacles: [] });
+    expect(whole.cells.every((cell) => cell === 0)).toBe(true);
+  });
 });
 
 describe('clearLine', () => {

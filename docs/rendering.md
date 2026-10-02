@@ -114,6 +114,16 @@ Players only place `path`. The ground decides the actual paving (`paving.ts`):
 - The sea is its own surface out to the horizon (`seaMaterial.ts`). Pools and
   rivers use `poolWaterMaterial.ts` and `riverMaterial.ts`, sharing
   `waterSurface.ts`.
+- **Owned land** (`land/adapters/ownershipMask.ts`): on a bare game the ground and
+  riser materials, and the far plane, take their colour through `ownershipShade`.
+  An R8 texture holds a tile mask (unowned, owned, for sale). Land not owned is
+  dimmed and greyed, land for sale is tinted warm while the land tool is armed,
+  and a dashed chalk line runs inside owned tiles along any side that borders
+  land not owned. No geometry and no draw call. The mask exists from scene
+  creation, and a purchase or a new resort only rewrites its data or swaps the
+  texture node's `value`, so the materials never recompile. Without land (a
+  generated or authored plot) the shade is switched off by a uniform and the
+  ground draws exactly as before.
 
 ## Cameras
 
@@ -189,6 +199,12 @@ Escape to cancel.
 - **Terrain brushes**: raise, lower, grass, sand, water. The tile must be empty
   and neighbours can differ by at most one level. Brushes reach one plot-width
   beyond the plot.
+- **Owned land**: on a bare game, building, paving, digging and zoning stop at
+  the edge of the land owned (`ownsTile`), and the ghost turns red there; a click
+  says why. An entrance must face the edge when placed (`facesUnowned`). The
+  **land tool** (`landPointer.ts`, key `L`) shows the parcel under the pointer
+  and buys it, or every parcel a drag crosses. See
+  [crowd.md](crowd.md#land).
 
 ### Construction
 
@@ -208,7 +224,10 @@ A new building starts as a foundation and grows over a few seconds.
 
 - **Lamps**: `lightGrid.ts` bakes every lamp into a 3D texture at startup
   (irradiance plus direction), read through `emissiveNode`. The volume budget is
-  48 MB up to a 160-tile plot, growing to 128 MB. `liveLightGrid.ts` re-bakes only
+  48 MB up to a 160-tile plot, growing to 128 MB. The volume is reserved over
+  the plot, or over the bounding box of the land owned on a bare game, so a
+  256-tile world is lit at 5 voxels a cell while it owns its starting block and at
+  7 once it owns everything. `liveLightGrid.ts` re-bakes only
   the affected block when a lamp is placed or removed.
 - **Sky visibility**: `skyVisibility.ts` bakes how much sky each cell sees into
   the volume's alpha, used as ambient occlusion. Terrain isn't in it.

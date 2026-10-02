@@ -1,3 +1,4 @@
+import type { TileRect } from '../../layout/domain/parkShapes';
 // Like dirt, litter never fades on its own: the answer to it is a cleaner walking to it.
 
 export interface Litter {
@@ -120,19 +121,36 @@ export function sweep(litter: Litter, tileX: number, tileZ: number): void {
 }
 
 // Ties break towards the lower index so two runs of the same plot agree.
+// Litter only lands where guests go, which is land owned, so a window round it finds every dirty
+// tile in a fraction of a big world. Clipped to the grid; the whole grid when left out.
+export function windowOf(grid: Pick<Litter, 'tilesX' | 'tilesZ'>, window?: TileRect): TileRect {
+  const whole = window ?? { x0: 0, x1: grid.tilesX - 1, z0: 0, z1: grid.tilesZ - 1 };
+  return {
+    x0: Math.max(0, whole.x0),
+    x1: Math.min(grid.tilesX - 1, whole.x1),
+    z0: Math.max(0, whole.z0),
+    z1: Math.min(grid.tilesZ - 1, whole.z1),
+  };
+}
+
+// Row by row, in index order as the whole grid would be, so a window never changes who wins a tie.
 export function mostLittered(
   litter: Litter,
   eligible: (tile: number) => boolean,
   threshold: number,
+  window?: TileRect,
 ): number {
+  const { x0, x1, z0, z1 } = windowOf(litter, window);
   let worst = -1;
   let worstLevel = threshold;
-  for (let tile = 0; tile < litter.level.length; tile++) {
-    const level = litter.level[tile]!;
-    if (level <= 0 || level < worstLevel || (worst >= 0 && level === worstLevel)) continue;
-    if (!eligible(tile)) continue;
-    worst = tile;
-    worstLevel = level;
+  for (let z = z0; z <= z1; z++) {
+    for (let tile = z * litter.tilesX + x0; tile <= z * litter.tilesX + x1; tile++) {
+      const level = litter.level[tile]!;
+      if (level <= 0 || level < worstLevel || (worst >= 0 && level === worstLevel)) continue;
+      if (!eligible(tile)) continue;
+      worst = tile;
+      worstLevel = level;
+    }
   }
   return worst;
 }
@@ -143,16 +161,19 @@ export interface LitterSummary {
   readonly fouled: number;
 }
 
-export function litterSummary(litter: Litter): LitterSummary {
+export function litterSummary(litter: Litter, window?: TileRect): LitterSummary {
+  const { x0, x1, z0, z1 } = windowOf(litter, window);
   let worst = -1;
   let worstLevel = 0;
   let fouled = 0;
-  for (let tile = 0; tile < litter.level.length; tile++) {
-    const level = litter.level[tile]!;
-    if (level >= FOULED_AT) fouled++;
-    if (level <= worstLevel) continue;
-    worst = tile;
-    worstLevel = level;
+  for (let z = z0; z <= z1; z++) {
+    for (let tile = z * litter.tilesX + x0; tile <= z * litter.tilesX + x1; tile++) {
+      const level = litter.level[tile]!;
+      if (level >= FOULED_AT) fouled++;
+      if (level <= worstLevel) continue;
+      worst = tile;
+      worstLevel = level;
+    }
   }
   const at =
     worst < 0 ? null : { tileX: worst % litter.tilesX, tileZ: Math.floor(worst / litter.tilesX) };

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { OBJECT_TYPES } from '../../catalog/domain/objectTypes';
+import type { LandGrid } from '../../land/domain/landRights';
 import type { ElevationSpec } from '../../layout/domain/elevation';
 import type { Placement } from '../../layout/domain/resortLayout';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
@@ -49,6 +50,12 @@ const elevationSchema = z.object({
   seed: z.number(),
 }) satisfies z.ZodType<ElevationSpec>;
 
+const landSchema = z.object({
+  parcelsX: tile.positive(),
+  parcelsZ: tile.positive(),
+  owned: z.instanceof(Uint8Array),
+}) satisfies z.ZodType<LandGrid>;
+
 const terrainEditSchema = z.object({
   tileX: tile,
   tileZ: tile,
@@ -67,6 +74,8 @@ export const savedWorldSchema = z
     props: z.array(placementSchema),
     paths: z.array(placementSchema),
     rails: z.array(placementSchema),
+    // Absent from a save made before land was sold, which owns its whole plot.
+    land: landSchema.exactOptional(),
   })
   .superRefine((world, context) => {
     const lists = [world.placements, world.props, world.paths, world.rails];
@@ -86,8 +95,14 @@ interface PlacedLists {
 const copied = (list: readonly Placement[]): Placement[] =>
   list.map((placement) => ({ ...placement }));
 
-// The terrain's edits, not the plan's: the player's digs are written to the terrain alone.
-export function savedWorldOf(plan: ResortPlan, terrain: Terrain, plot: PlacedLists): SavedWorld {
+// The terrain's edits, not the plan's: the player's digs are written to the terrain alone. The
+// same goes for the land, which is bought on the live rights.
+export function savedWorldOf(
+  plan: ResortPlan,
+  terrain: Terrain,
+  plot: PlacedLists,
+  land: LandGrid | null,
+): SavedWorld {
   return {
     tilesX: plan.tilesX,
     tilesZ: plan.tilesZ,
@@ -98,6 +113,7 @@ export function savedWorldOf(plan: ResortPlan, terrain: Terrain, plot: PlacedLis
     props: copied(plot.props),
     paths: copied(plot.paths),
     rails: copied(plot.rails),
+    ...(land ? { land: { ...land, owned: land.owned.slice() } } : {}),
   };
 }
 
@@ -113,5 +129,6 @@ export function planOfWorld(world: SavedWorld): ResortPlan {
     ...(world.shore ? { shore: world.shore } : {}),
     ...(world.elevation ? { elevation: world.elevation } : {}),
     terrain: world.terrain,
+    ...(world.land ? { land: world.land } : {}),
   };
 }

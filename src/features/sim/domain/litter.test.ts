@@ -132,6 +132,14 @@ describe('mostLittered', () => {
     expect(mostLittered(litter, () => true, FOULED_AT)).toBe(1);
   });
 
+  it('looks only inside a window, breaking ties as the whole grid would', () => {
+    const litter = createLitter(3, 3);
+    litter.level.set([1, 0, 0, 0, 0.5, 0.5, 0, 0.5, 0]);
+    const window = { x0: 1, x1: 2, z0: 1, z1: 2 };
+    expect(mostLittered(litter, () => true, FOULED_AT)).toBe(0);
+    expect(mostLittered(litter, () => true, FOULED_AT, window)).toBe(4);
+  });
+
   it('never picks a clean tile, even at a threshold of nothing', () => {
     expect(mostLittered(createLitter(3, 3), () => true, 0)).toBe(-1);
   });
@@ -210,5 +218,15 @@ describe('litterSummary', () => {
 
   it('names nothing on clean paths', () => {
     expect(litterSummary(createLitter(2, 2))).toEqual({ worst: null, worstLevel: 0, fouled: 0 });
+  });
+
+  it('counts only inside a window', () => {
+    const litter = createLitter(3, 2);
+    litter.level.set([1, 0.5, 0, 0, 0.75, 0]);
+    expect(litterSummary(litter, { x0: 1, x1: 2, z0: 0, z1: 1 })).toEqual({
+      worst: { tileX: 1, tileZ: 1 },
+      worstLevel: 0.75,
+      fouled: 2,
+    });
   });
 });

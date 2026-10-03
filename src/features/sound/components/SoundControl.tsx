@@ -1,13 +1,9 @@
-import { HudDropdown } from '../../hud/components/HudDropdown';
 import { HudOption } from '../../hud/components/HudOption';
-import { PixelIcon } from '../../hud/components/PixelIcon';
 import { VOLUMES, type SoundPrefs, type Volume } from '../domain/soundPrefs';
 
-export interface SoundControlProps {
+export interface SoundOptionsProps {
   readonly prefs: SoundPrefs;
   readonly onChange: (prefs: SoundPrefs) => void;
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
 }
 
 const VOLUME_NAMES: { readonly [volume in Volume]: string } = {
@@ -40,16 +36,10 @@ function VolumeSlider(props: {
   );
 }
 
-// Stays open while sliding: a level is set by ear, a few tries at a time.
-export function SoundControl({ prefs, onChange, open, onOpenChange }: SoundControlProps) {
+// Nothing here closes the menu: a level is set by ear, a few tries at a time.
+export function SoundOptions({ prefs, onChange }: SoundOptionsProps) {
   return (
-    <HudDropdown
-      className="hud-sound"
-      open={open}
-      onOpenChange={onOpenChange}
-      title={prefs.on ? 'Sound' : 'Sound: muted'}
-      label={<PixelIcon name={prefs.on ? 'sound' : 'muted'} />}
-    >
+    <>
       <HudOption
         label="Sound"
         note="music, the resort and the buttons"
@@ -67,6 +57,6 @@ export function SoundControl({ prefs, onChange, open, onOpenChange }: SoundContr
           onChange={(value) => onChange({ ...prefs, [volume]: value })}
         />
       ))}
-    </HudDropdown>
+    </>
   );
 }

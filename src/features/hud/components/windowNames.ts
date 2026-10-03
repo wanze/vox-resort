@@ -1,15 +1,12 @@
 import type { IconName } from './pixelIcons';
-import type { WindowId } from '../domain/windowLayout';
+import type { PageId, WindowId } from '../domain/windowLayout';
+import { isTab, type TabId } from '../domain/windowTabs';
 
 export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   build: 'Build',
   overview: 'Overview',
-  advice: 'Advice',
-  messages: 'Messages',
-  report: 'Day report',
-  demand: 'Demand',
-  guests: 'Guests',
-  staff: 'Staff',
+  inbox: 'Inbox',
+  people: 'People',
   books: 'Books',
   camera: 'Camera',
   resort: 'New game',
@@ -22,20 +19,35 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
 export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
   build: 'build',
   overview: 'overview',
-  advice: 'advice',
-  messages: 'advice',
-  report: 'overview',
-  demand: 'overview',
-  guests: 'guests',
-  staff: 'guests',
+  inbox: 'inbox',
+  people: 'people',
   books: 'books',
   camera: 'camera',
   resort: 'resort',
-  name: 'resort',
-  // The books icon is a ledger, which is what a list of saves looks like too.
-  saves: 'books',
+  name: 'rename',
+  saves: 'saves',
   debug: 'debug',
-  inspect: 'guests',
+  inspect: 'inspect',
+};
+
+export const TAB_TITLES: { readonly [tab in TabId]: string } = {
+  summary: 'Resort',
+  report: 'Day report',
+  demand: 'Demand',
+  advice: 'Advice',
+  messages: 'Messages',
+  guests: 'Guests',
+  staff: 'Staff',
+};
+
+export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
+  summary: 'overview',
+  report: 'report',
+  demand: 'demand',
+  advice: 'advice',
+  messages: 'messages',
+  guests: 'guests',
+  staff: 'staff',
 };
 
 export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
@@ -44,13 +56,27 @@ export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
 };
 
 // The inspector follows the selection and the rest are reached from the menu.
-export const TOOLBAR_WINDOWS = [
+export const DOCK_WINDOWS = ['build', 'overview', 'inbox', 'people', 'books'] as const;
+
+// Every page the menu and the palette offer by name, in the dock's order.
+export const MENU_PAGES: readonly PageId[] = [
   'build',
-  'overview',
+  'summary',
+  'report',
+  'demand',
   'advice',
   'messages',
   'guests',
   'staff',
   'books',
   'camera',
-] as const;
+];
+
+export const pageTitle = (page: PageId): string =>
+  isTab(page) ? TAB_TITLES[page] : WINDOW_TITLES[page];
+
+export const pageIcon = (page: PageId): IconName =>
+  isTab(page) ? TAB_ICONS[page] : WINDOW_ICONS[page];
+
+export const pageKey = (page: PageId): string | undefined =>
+  isTab(page) ? undefined : WINDOW_KEYS[page];

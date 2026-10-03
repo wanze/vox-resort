@@ -208,6 +208,7 @@ input[type='text'] {
 
 .hud-chip,
 .hud-tool,
+.hud-tab,
 .hud-gates,
 .hud-window-close,
 .hud-camera-mode,
@@ -240,6 +241,7 @@ input[type='text'] {
 
 .hud-chip:hover,
 .hud-tool:hover,
+.hud-tab:hover,
 .hud-gates:hover,
 .hud-window-close:hover,
 .hud-camera-mode:hover:not(:disabled),
@@ -255,6 +257,7 @@ input[type='text'] {
 
 .hud-chip:active,
 .hud-tool:active,
+.hud-tab:active,
 .hud-gates:active,
 .hud-window-close:active,
 .hud-camera-mode:active:not(:disabled),
@@ -268,6 +271,7 @@ input[type='text'] {
 
 .hud-chip[aria-expanded='true'],
 .hud-tool[aria-pressed='true'],
+.hud-tab[aria-selected='true'],
 .hud-camera-mode[aria-pressed='true'],
 .hud-camera-point[aria-pressed='true'],
 .hud-resort-choice[aria-pressed='true'] {
@@ -366,7 +370,6 @@ input[type='checkbox'] {
 .hud-menu-heading,
 .build-group-label,
 .hud-palette-armed-label,
-.hud-chip-tag,
 .hud-resort-advanced > summary,
 .hud-stat dt,
 .hud-report-row dt,
@@ -430,7 +433,7 @@ input[type='checkbox'] {
   border-radius: 20px 14px 18px 13px / 14px 19px 13px 18px;
 }
 
-.hud-toolbar {
+.hud-dock {
   margin-left: auto;
 }
 
@@ -482,28 +485,13 @@ input[type='checkbox'] {
   color: var(--text-faint);
 }
 
-.hud-chip-tag {
-  padding: 2px 4px;
-  border-radius: var(--radius-sm);
-  background: rgb(80 58 34 / 10%);
-}
-
 .hud-speed .hud-chip-label {
   min-width: 6ch;
   text-align: left;
 }
 
-.hud-weather .hud-chip-label {
-  min-width: 7ch;
-  text-align: left;
-}
-
 .hud-dropdown {
   position: relative;
-}
-
-.hud-sound .hud-dropdown-panel {
-  min-width: 280px;
 }
 
 .hud-slider {
@@ -608,6 +596,27 @@ input[type='checkbox'] {
   color: var(--terracotta);
 }
 
+.hud-option-more {
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  color: var(--text-faint);
+}
+
+.hud-menu-back {
+  margin-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  border-radius: var(--radius-pebble) var(--radius-pebble) 0 0;
+}
+
+.hud-menu-back .hud-option-label {
+  color: var(--text-dim);
+}
+
+.hud-menu-back-mark {
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  text-align: center;
+  color: var(--text-dim);
+}
+
 .hud-rule {
   width: 100%;
   margin: var(--space-1) 0;
@@ -625,6 +634,23 @@ input[type='checkbox'] {
 
 .hud-menu .hud-dropdown-panel {
   min-width: 290px;
+}
+
+.hud-weather-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hud-weather-pin {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--terracotta-deep);
+  border-radius: 50%;
+  background: var(--terracotta);
 }
 
 /* Above the bar and every window: it takes the keyboard, so nothing may sit over it. */
@@ -770,14 +796,13 @@ input[type='checkbox'] {
 }
 
 @media (max-width: 1360px) {
-  .hud-tool-label {
+  .hud-dock .hud-tool-label {
     display: none;
   }
 }
 
 @media (max-width: 1060px) {
   .hud-wordmark,
-  .hud-chip-tag,
   .hud-status .hud-readout-label {
     display: none;
   }
@@ -1054,29 +1079,21 @@ input[type='checkbox'] {
 }
 
 .hud-window[data-window='overview'],
-.hud-window[data-window='advice'],
-.hud-window[data-window='guests'],
-.hud-window[data-window='staff'],
+.hud-window[data-window='inbox'],
+.hud-window[data-window='people'],
 .hud-window[data-window='books'],
 .hud-window[data-window='camera'] {
   right: calc(var(--palette-w) + var(--space-3) * 2);
-  width: 340px;
+  width: 380px;
 }
 
-.hud-window[data-window='advice'] {
+.hud-window[data-window='inbox'] {
   --window-top: calc(var(--window-floor) + 26px);
-  width: 380px;
   border-radius: 24px 18px 26px 20px / 20px 26px 18px 24px;
 }
 
-.hud-window[data-window='guests'] {
+.hud-window[data-window='people'] {
   --window-top: calc(var(--window-floor) + 52px);
-  width: 380px;
-}
-
-.hud-window[data-window='staff'] {
-  --window-top: calc(var(--window-floor) + 65px);
-  width: 380px;
 }
 
 .hud-window[data-window='books'] {
@@ -1094,20 +1111,6 @@ input[type='checkbox'] {
   --window-top: calc(var(--window-floor) + 40px);
   left: calc(50% - 170px);
   width: 340px;
-}
-
-.hud-window[data-window='report'] {
-  --window-top: calc(var(--window-floor) + 30px);
-  left: calc(50% - 180px);
-  width: 360px;
-  border-radius: 20px 24px 18px 22px / 24px 18px 22px 20px;
-}
-
-.hud-window[data-window='demand'] {
-  --window-top: calc(var(--window-floor) + 13px);
-  right: calc(var(--palette-w) + var(--space-3) * 2);
-  width: 340px;
-  border-radius: 22px 26px 18px 24px / 24px 18px 26px 22px;
 }
 
 .hud-window[data-window='name'] {
@@ -1158,6 +1161,30 @@ input[type='checkbox'] {
   min-height: 0;
   overflow: auto;
   padding: var(--space-1) var(--space-4) var(--space-4);
+}
+
+/* Bleeds over the body's side padding, so what scrolls under it is hidden edge to edge. */
+.hud-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 calc(var(--space-4) * -1) var(--space-3);
+  padding: var(--space-1) var(--space-4) var(--space-2);
+  border-bottom: 2px dotted var(--edge-soft);
+  background: var(--stone-100);
+}
+
+.hud-tab {
+  position: relative;
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+}
+
+.hud-tab:nth-child(even) {
+  border-radius: var(--radius-pebble-b);
 }
 
 .hud-window[data-window='build'] {

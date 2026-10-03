@@ -1,8 +1,8 @@
 import { PixelIcon } from './PixelIcon';
-import { TOOLBAR_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
+import { DOCK_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
 import { isOpen, type WindowId, type WindowLayout } from '../domain/windowLayout';
 
-export interface WindowToolbarProps {
+export interface WindowDockProps {
   readonly layout: WindowLayout;
   readonly onToggle: (id: WindowId) => void;
   readonly adviceCount: number;
@@ -13,10 +13,10 @@ const hintOf = (id: WindowId): string => {
   return key ? `${WINDOW_TITLES[id]} (${key})` : WINDOW_TITLES[id];
 };
 
-export function WindowToolbar({ layout, onToggle, adviceCount }: WindowToolbarProps) {
+export function WindowDock({ layout, onToggle, adviceCount }: WindowDockProps) {
   return (
-    <nav className="hud-plate hud-toolbar" aria-label="Windows">
-      {TOOLBAR_WINDOWS.map((id) => (
+    <nav className="hud-plate hud-dock" aria-label="Windows">
+      {DOCK_WINDOWS.map((id) => (
         <button
           key={id}
           type="button"
@@ -27,7 +27,7 @@ export function WindowToolbar({ layout, onToggle, adviceCount }: WindowToolbarPr
         >
           <PixelIcon name={WINDOW_ICONS[id]} />
           <span className="hud-tool-label">{WINDOW_TITLES[id]}</span>
-          {id === 'advice' && adviceCount > 0 ? (
+          {id === 'inbox' && adviceCount > 0 ? (
             <span className="hud-tool-badge" aria-label={`${adviceCount} to look at`}>
               {adviceCount}
             </span>

@@ -1,12 +1,17 @@
-const WINDOW_IDS = [
+import {
+  hostOfTab,
+  isTab,
+  isTabbed,
+  WINDOW_TABS,
+  type TabbedWindow,
+  type TabId,
+} from './windowTabs';
+
+export const WINDOW_IDS = [
   'build',
   'overview',
-  'advice',
-  'messages',
-  'report',
-  'demand',
-  'guests',
-  'staff',
+  'inbox',
+  'people',
   'books',
   'camera',
   'resort',
@@ -17,6 +22,13 @@ const WINDOW_IDS = [
 ] as const;
 
 export type WindowId = (typeof WINDOW_IDS)[number];
+
+// What callers ask for: a window, or a tab that stands for the window hosting it.
+export type PageId = WindowId | TabId;
+
+function hostOf(page: PageId): WindowId {
+  return isTab(page) ? hostOfTab(page) : page;
+}
 
 export interface WindowSpot {
   readonly x: number;
@@ -37,9 +49,17 @@ export interface WindowLayout {
   // The window the player last opened, which may take the keyboard. Never restored, so a
   // reload does not grab the keys before anything has been clicked.
   readonly focus: WindowId | null;
+  // Only tabs picked by hand or by an opener; the rest show their first.
+  readonly tabs: Readonly<Partial<Record<TabbedWindow, TabId>>>;
 }
 
-export const DEFAULT_LAYOUT: WindowLayout = { open: ['build'], stack: [], spots: {}, focus: null };
+export const DEFAULT_LAYOUT: WindowLayout = {
+  open: ['build'],
+  stack: [],
+  spots: {},
+  focus: null,
+  tabs: {},
+};
 
 const MARGIN = 6;
 // Enough of the title bar to grab, so a window pushed off an edge can always be pulled back.
@@ -49,23 +69,43 @@ export function isOpen(layout: WindowLayout, id: WindowId): boolean {
   return layout.open.includes(id);
 }
 
+export function tabOf(layout: WindowLayout, id: TabbedWindow): TabId {
+  return layout.tabs[id] ?? WINDOW_TABS[id][0];
+}
+
+// A tab counts as shown only while its window is open on it.
+export function isShown(layout: WindowLayout, page: PageId): boolean {
+  const host = hostOf(page);
+  if (!isOpen(layout, host)) return false;
+  return !isTab(page) || tabOf(layout, hostOfTab(page)) === page;
+}
+
 export function raiseWindow(layout: WindowLayout, id: WindowId): WindowLayout {
   if (layout.stack.at(-1) === id) return layout;
   return { ...layout, stack: [...layout.stack.filter((each) => each !== id), id] };
 }
 
-export function showWindow(layout: WindowLayout, id: WindowId, shown: boolean): WindowLayout {
+function pickTab(layout: WindowLayout, tab: TabId): WindowLayout {
+  const host = hostOfTab(tab);
+  if (layout.tabs[host] === tab) return layout;
+  return { ...layout, tabs: { ...layout.tabs, [host]: tab } };
+}
+
+// Hiding a tab hides its window, whichever tab that window is on.
+export function showWindow(layout: WindowLayout, page: PageId, shown: boolean): WindowLayout {
+  const id = hostOf(page);
   if (!shown) {
     if (!isOpen(layout, id)) return layout;
     const focus = layout.focus === id ? null : layout.focus;
     return { ...layout, open: layout.open.filter((each) => each !== id), focus };
   }
   const opened = isOpen(layout, id) ? layout : { ...layout, open: [...layout.open, id], focus: id };
-  return raiseWindow(opened, id);
+  return raiseWindow(isTab(page) ? pickTab(opened, page) : opened, id);
 }
 
-export function toggleWindow(layout: WindowLayout, id: WindowId): WindowLayout {
-  return showWindow(layout, id, !isOpen(layout, id));
+// A tab whose window is open on another tab is switched to, not closed.
+export function toggleWindow(layout: WindowLayout, page: PageId): WindowLayout {
+  return showWindow(layout, page, !isShown(layout, page));
 }
 
 export function moveWindow(layout: WindowLayout, id: WindowId, spot: WindowSpot): WindowLayout {
@@ -95,8 +135,46 @@ export function clampSpot(spot: WindowSpot, size: Box, viewport: Box, top: numbe
 const isWindowId = (value: unknown): value is WindowId =>
   typeof value === 'string' && (WINDOW_IDS as readonly string[]).includes(value);
 
-const idsOf = (value: unknown): readonly WindowId[] =>
-  Array.isArray(value) ? [...new Set(value.filter(isWindowId))] : [];
+// Windows an older build had before they became tabs, read back as the tab they are now.
+const LEGACY: Readonly<Record<string, TabId>> = {
+  advice: 'advice',
+  messages: 'messages',
+  report: 'report',
+  demand: 'demand',
+  guests: 'guests',
+  staff: 'staff',
+};
+
+const legacyTab = (value: unknown): TabId | null =>
+  typeof value === 'string' && Object.hasOwn(LEGACY, value) ? (LEGACY[value] ?? null) : null;
+
+// Fills in the tab of a window an older build stored as one of its tabs, unless it has one.
+function idsOf(value: unknown, tabs: Partial<Record<TabbedWindow, TabId>>): readonly WindowId[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<WindowId>();
+  for (const each of value) {
+    const tab = legacyTab(each);
+    if (tab !== null) {
+      const host = hostOfTab(tab);
+      tabs[host] ??= tab;
+      ids.add(host);
+    } else if (isWindowId(each)) {
+      ids.add(each);
+    }
+  }
+  return [...ids];
+}
+
+function tabsOf(value: unknown): Partial<Record<TabbedWindow, TabId>> {
+  if (typeof value !== 'object' || value === null) return {};
+  const tabs: Partial<Record<TabbedWindow, TabId>> = {};
+  for (const [host, tab] of Object.entries(value)) {
+    if (isTabbed(host) && typeof tab === 'string' && isTab(tab) && hostOfTab(tab) === host) {
+      tabs[host] = tab;
+    }
+  }
+  return tabs;
+}
 
 function spotOf(value: unknown): WindowSpot | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -118,7 +196,19 @@ function spotsOf(value: unknown): WindowLayout['spots'] {
 // Whatever was stored by an older build, or by hand, comes back as something usable.
 export function parseLayout(value: unknown): WindowLayout {
   if (typeof value !== 'object' || value === null) return DEFAULT_LAYOUT;
-  const { open, stack, spots } = value as { open?: unknown; stack?: unknown; spots?: unknown };
+  const { open, stack, spots, tabs } = value as {
+    open?: unknown;
+    stack?: unknown;
+    spots?: unknown;
+    tabs?: unknown;
+  };
   if (!Array.isArray(open)) return DEFAULT_LAYOUT;
-  return { open: idsOf(open), stack: idsOf(stack), spots: spotsOf(spots), focus: null };
+  const picked = tabsOf(tabs);
+  return {
+    open: idsOf(open, picked),
+    stack: idsOf(stack, picked),
+    spots: spotsOf(spots),
+    focus: null,
+    tabs: picked,
+  };
 }

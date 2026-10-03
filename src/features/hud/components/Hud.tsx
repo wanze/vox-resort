@@ -8,6 +8,7 @@ import { DayReportPanel } from './DayReportPanel';
 import { DemandPanel } from './DemandPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
+import { HudTabs } from './HudTabs';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
@@ -24,8 +25,9 @@ import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
-import { WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
-import { depthOf, isOpen, type WindowId } from '../domain/windowLayout';
+import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
+import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
+import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
 import type { BuildTool } from '../../build/domain/buildTool';
 import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
@@ -96,24 +98,10 @@ export interface HudProps {
   readonly refusal: { readonly title: string; readonly message: string } | null;
 }
 
-type Panel = Exclude<WindowId, 'inspect'>;
+type Panel = Exclude<PageId, 'inspect' | TabbedWindow>;
+type Framed = Exclude<WindowId, 'inspect'>;
 
-const PANELS: readonly Panel[] = [
-  'build',
-  'overview',
-  'advice',
-  'messages',
-  'report',
-  'demand',
-  'guests',
-  'staff',
-  'books',
-  'camera',
-  'resort',
-  'name',
-  'saves',
-  'debug',
-];
+const FRAMED = WINDOW_IDS.filter((id): id is Framed => id !== 'inspect');
 
 const modeOf = (ledger: Ledger | null): GameMode | null => ledger?.mode ?? null;
 
@@ -140,7 +128,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       zoneStaff={props.stats?.staff.zones ?? null}
     />
   ),
-  overview: (props) => (
+  summary: (props) => (
     <ResortStats
       stats={props.stats}
       status={props.status}
@@ -224,19 +212,42 @@ function frameOf(windows: WindowControls, id: WindowId, onClose: () => void): Hu
   };
 }
 
+function tabbedBody(props: HudProps, id: TabbedWindow): ReactNode {
+  const page = props.windows.tab(id);
+  const content = CONTENT[page](props);
+  if (content === null) return null;
+  return (
+    <>
+      <HudTabs<TabId>
+        tabs={WINDOW_TABS[id]}
+        current={page}
+        onPick={(tab) => props.windows.show(tab, true)}
+        titleOf={(tab) => TAB_TITLES[tab]}
+        iconOf={(tab) => TAB_ICONS[tab]}
+        badgeOf={(tab) => (tab === 'advice' ? props.advice.length : 0)}
+        label={WINDOW_TITLES[id]}
+      />
+      {content}
+    </>
+  );
+}
+
+const bodyOf = (props: HudProps, id: Framed): ReactNode =>
+  isTabbed(id) ? tabbedBody(props, id) : CONTENT[id](props);
+
 function Windows(props: HudProps) {
   const { windows } = props;
   return (
     <>
-      {PANELS.filter((panel) => isOpen(windows.layout, panel)).map((panel) => {
-        const content = CONTENT[panel](props);
+      {FRAMED.filter((id) => isOpen(windows.layout, id)).map((id) => {
+        const content = bodyOf(props, id);
         if (content === null) return null;
         return (
           <HudWindow
-            key={panel}
-            frame={frameOf(windows, panel, () => windows.show(panel, false))}
-            title={WINDOW_TITLES[panel]}
-            icon={WINDOW_ICONS[panel]}
+            key={id}
+            frame={frameOf(windows, id, () => windows.show(id, false))}
+            title={WINDOW_TITLES[id]}
+            icon={WINDOW_ICONS[id]}
           >
             {content}
           </HudWindow>
@@ -304,12 +315,14 @@ export function Hud(props: HudProps) {
         menu={props.menu}
         onMenuChange={props.onMenuChange}
         onFind={() => props.onPaletteChange(true)}
-        markers={props.news.prefs.markers}
-        onMarkersChange={props.news.setMarkers}
-        staffPins={props.news.prefs.staff}
-        onStaffPinsChange={props.news.setStaffPins}
-        signs={props.news.prefs.signs}
-        onSignsChange={props.news.setSigns}
+        view={{
+          markers: props.news.prefs.markers,
+          onMarkersChange: props.news.setMarkers,
+          staffPins: props.news.prefs.staff,
+          onStaffPinsChange: props.news.setStaffPins,
+          signs: props.news.prefs.signs,
+          onSignsChange: props.news.setSigns,
+        }}
         sound={props.sound}
       />
       <Windows {...props} />

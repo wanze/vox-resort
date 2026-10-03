@@ -1,5 +1,5 @@
 import { speedNote, WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
-import { TOOLBAR_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
+import { MENU_PAGES, pageIcon, pageKey, pageTitle } from './windowNames';
 import type { IconName } from './pixelIcons';
 import type { PreviewLookup } from './BuildPalette';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
@@ -23,7 +23,7 @@ import { SIM_SPEEDS, SPEED_LABELS } from '../../sim/domain/simClock';
 import { WEATHERS } from '../../sim/domain/weather';
 import { canAfford, type Ledger } from '../../sim/domain/ledger';
 import { footprintLabel } from '../domain/paletteFilter';
-import { isOpen } from '../domain/windowLayout';
+import { isOpen, isShown, type PageId } from '../domain/windowLayout';
 import type { Searchable } from '../domain/commandSearch';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
@@ -270,32 +270,36 @@ function resortCommands({ resort, windows }: CommandContext): Command[] {
   ];
 }
 
-function windowCommands({ windows, history }: CommandContext): Command[] {
-  const reportOpen = isOpen(windows.layout, 'report');
-  return [
-    ...TOOLBAR_WINDOWS.map((id) => ({
-      id: `window:${id}`,
-      label: WINDOW_TITLES[id],
-      group: 'Windows',
-      keywords: 'window panel show hide',
-      art: { icon: WINDOW_ICONS[id] },
-      shortcut: WINDOW_KEYS[id],
-      checked: isOpen(windows.layout, id),
-      run: () => windows.toggle(id),
-    })),
-    {
-      id: 'window:report',
-      label: WINDOW_TITLES.report,
-      group: 'Windows',
-      keywords: 'window summary yesterday history day check-in chart trend',
-      note: 'the last fourteen days, closed each morning at check-in',
-      art: { icon: WINDOW_ICONS.report },
-      checked: reportOpen,
-      run: () => {
-        if (!reportOpen) history.show(null);
-        windows.toggle('report');
-      },
+const PAGE_HINTS: { readonly [page in PageId]?: Pick<Command, 'keywords' | 'note'> } = {
+  report: {
+    keywords: 'window summary yesterday history day check-in chart trend',
+    note: 'the last fourteen days, closed each morning at check-in',
+  },
+};
+
+// The report opens on the newest day, as the Overview opens it, unless it is already showing.
+function pageCommand(page: PageId, { windows, history }: CommandContext): Command {
+  const shown = isShown(windows.layout, page);
+  return {
+    id: `window:${page}`,
+    label: pageTitle(page),
+    group: 'Windows',
+    keywords: 'window panel show hide',
+    ...PAGE_HINTS[page],
+    art: { icon: pageIcon(page) },
+    shortcut: pageKey(page),
+    checked: shown,
+    run: () => {
+      if (page === 'report' && !shown) history.show(null);
+      windows.toggle(page);
     },
+  };
+}
+
+function windowCommands(context: CommandContext): Command[] {
+  const { windows } = context;
+  return [
+    ...MENU_PAGES.map((page) => pageCommand(page, context)),
     {
       id: 'window:debug',
       label: 'Debug info',

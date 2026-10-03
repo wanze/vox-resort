@@ -1,15 +1,14 @@
 import type { RefObject } from 'react';
 import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
-import { MainMenu } from './MainMenu';
+import { MainMenu, type ViewToggles } from './MainMenu';
 import { PixelIcon } from './PixelIcon';
 import { RatingControl } from './RatingControl';
 import { SpeedControl } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
-import { WeatherControl } from './WeatherControl';
-import { WindowToolbar } from './WindowToolbar';
+import { WeatherBadge } from './WeatherBadge';
+import { WindowDock } from './WindowDock';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
-import { SoundControl } from '../../sound/components/SoundControl';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
@@ -19,7 +18,7 @@ import type { StatusView } from '../../../app/showcase';
 import type { WindowControls } from '../../../app/useWindows';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'sound' | 'rating';
+export type MenuId = 'main' | 'speed' | 'overlay' | 'rating';
 
 export interface TopBarProps {
   readonly timeElement: RefObject<HTMLInputElement | null>;
@@ -36,12 +35,7 @@ export interface TopBarProps {
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly onFind: () => void;
-  readonly markers: boolean;
-  readonly onMarkersChange: (shown: boolean) => void;
-  readonly signs: boolean;
-  readonly onSignsChange: (shown: boolean) => void;
-  readonly staffPins: boolean;
-  readonly onStaffPinsChange: (shown: boolean) => void;
+  readonly view: ViewToggles;
   readonly sound: SoundControls;
 }
 
@@ -113,6 +107,9 @@ export function TopBar(props: TopBarProps) {
           saves={props.saves}
           resortName={props.resort.name}
           onFind={props.onFind}
+          clock={clock}
+          sound={props.sound}
+          view={props.view}
         />
       </div>
 
@@ -128,33 +125,15 @@ export function TopBar(props: TopBarProps) {
           open={menu === 'speed'}
           onOpenChange={opener('speed')}
         />
+        <WeatherBadge weather={clock.weather} forced={clock.forcedWeather} />
       </div>
 
       <div className="hud-plate">
-        <WeatherControl
-          weather={clock.weather}
-          forced={clock.forcedWeather}
-          onWeatherChange={clock.setWeather}
-          open={menu === 'weather'}
-          onOpenChange={opener('weather')}
-        />
         <OverlayControl
           kind={overlay.kind}
           onKindChange={overlay.setOverlay}
           open={menu === 'overlay'}
           onOpenChange={opener('overlay')}
-          markers={props.markers}
-          onMarkersChange={props.onMarkersChange}
-          signs={props.signs}
-          onSignsChange={props.onSignsChange}
-          staff={props.staffPins}
-          onStaffChange={props.onStaffPinsChange}
-        />
-        <SoundControl
-          prefs={props.sound.prefs}
-          onChange={props.sound.setPrefs}
-          open={menu === 'sound'}
-          onOpenChange={opener('sound')}
         />
       </div>
 
@@ -175,7 +154,7 @@ export function TopBar(props: TopBarProps) {
         <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />
       </div>
 
-      <WindowToolbar
+      <WindowDock
         layout={windows.layout}
         onToggle={windows.toggle}
         adviceCount={props.adviceCount}

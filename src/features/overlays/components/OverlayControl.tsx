@@ -10,13 +10,6 @@ export interface OverlayControlProps {
   readonly onKindChange: (kind: OverlayKind | null) => void;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  // Not a layer: the markers stand over whichever layer is on, or none.
-  readonly markers: boolean;
-  readonly onMarkersChange: (shown: boolean) => void;
-  readonly signs: boolean;
-  readonly onSignsChange: (shown: boolean) => void;
-  readonly staff: boolean;
-  readonly onStaffChange: (shown: boolean) => void;
 }
 
 // Both ends of the one ramp, worded for the layer; the high end is always the bad one.
@@ -42,18 +35,7 @@ const cssColourAt = (value: number): string => {
 // Worked out once: the ramp is fixed, and the legend is read off the same stops the tiles are.
 const RAMP_GRADIENT = `linear-gradient(to right, ${cssColourAt(0)}, ${cssColourAt(0.5)}, ${cssColourAt(1)})`;
 
-export function OverlayControl({
-  kind,
-  onKindChange,
-  open,
-  onOpenChange,
-  markers,
-  onMarkersChange,
-  signs,
-  onSignsChange,
-  staff,
-  onStaffChange,
-}: OverlayControlProps) {
+export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
   const pick = (next: OverlayKind | null) => (): void => {
     onKindChange(next);
     onOpenChange(false);
@@ -68,7 +50,7 @@ export function OverlayControl({
         label={
           <>
             <PixelIcon name="overlay" />
-            <span className="hud-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Map view'}</span>
+            {kind ? <span className="hud-chip-label">{OVERLAY_NAMES[kind]}</span> : null}
           </>
         }
       >
@@ -88,28 +70,6 @@ export function OverlayControl({
             onSelect={pick(each)}
           />
         ))}
-        <hr className="hud-rule" />
-        <HudOption
-          label="Problem markers"
-          note="pin a sign over every building in trouble"
-          checked={markers}
-          many
-          onSelect={() => onMarkersChange(!markers)}
-        />
-        <HudOption
-          label="Building signs"
-          note="say what each building is, when zoomed in (N; hold Alt for names)"
-          checked={signs}
-          many
-          onSelect={() => onSignsChange(!signs)}
-        />
-        <HudOption
-          label="Staff"
-          note="pin every member of staff on duty (S)"
-          checked={staff}
-          many
-          onSelect={() => onStaffChange(!staff)}
-        />
       </HudDropdown>
       {kind ? (
         <p className="hud-overlay-legend">

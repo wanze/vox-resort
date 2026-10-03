@@ -5,19 +5,23 @@ import {
   raiseWindow,
   resetPlaces,
   showWindow,
+  tabOf,
   toggleWindow,
+  type PageId,
   type WindowId,
   type WindowLayout,
   type WindowSpot,
 } from '../features/hud/domain/windowLayout';
+import type { TabbedWindow, TabId } from '../features/hud/domain/windowTabs';
 
 export interface WindowControls {
   readonly layout: WindowLayout;
-  toggle(id: WindowId): void;
-  show(id: WindowId, shown: boolean): void;
+  toggle(page: PageId): void;
+  show(page: PageId, shown: boolean): void;
   raise(id: WindowId): void;
   move(id: WindowId, spot: WindowSpot): void;
   resetPlaces(): void;
+  readonly tab: (id: TabbedWindow) => TabId;
 }
 
 export function useWindows(): WindowControls {
@@ -27,9 +31,9 @@ export function useWindows(): WindowControls {
 
   return {
     layout,
-    toggle: useCallback((id: WindowId) => setLayout((now) => toggleWindow(now, id)), []),
+    toggle: useCallback((page: PageId) => setLayout((now) => toggleWindow(now, page)), []),
     show: useCallback(
-      (id: WindowId, shown: boolean) => setLayout((now) => showWindow(now, id, shown)),
+      (page: PageId, shown: boolean) => setLayout((now) => showWindow(now, page, shown)),
       [],
     ),
     raise: useCallback((id: WindowId) => setLayout((now) => raiseWindow(now, id)), []),
@@ -38,5 +42,6 @@ export function useWindows(): WindowControls {
       [],
     ),
     resetPlaces: useCallback(() => setLayout(resetPlaces), []),
+    tab: (id: TabbedWindow) => tabOf(layout, id),
   };
 }

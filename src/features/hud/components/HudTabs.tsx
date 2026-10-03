@@ -7,7 +7,7 @@ export interface HudTabsProps<T extends string> {
   readonly current: T;
   readonly onPick: (tab: T) => void;
   readonly titleOf: (tab: T) => string;
-  readonly iconOf: (tab: T) => IconName;
+  readonly iconOf?: (tab: T) => IconName;
   readonly badgeOf?: (tab: T) => number;
   readonly label?: string;
 }
@@ -18,7 +18,7 @@ const noBadge = (): number => 0;
 
 function HudTab(props: {
   readonly title: string;
-  readonly icon: IconName;
+  readonly icon: IconName | null;
   readonly badge: number;
   readonly selected: boolean;
   readonly onPick: () => void;
@@ -32,7 +32,7 @@ function HudTab(props: {
       tabIndex={props.selected ? 0 : -1}
       onClick={props.onPick}
     >
-      <PixelIcon name={props.icon} />
+      {props.icon ? <PixelIcon name={props.icon} /> : null}
       <span className="hud-tab-label">{props.title}</span>
       {props.badge > 0 ? (
         <span className="hud-tool-badge" aria-label={`${props.badge} to look at`}>
@@ -70,7 +70,7 @@ export function HudTabs<T extends string>({
         <HudTab
           key={tab}
           title={titleOf(tab)}
-          icon={iconOf(tab)}
+          icon={iconOf ? iconOf(tab) : null}
           badge={badgeOf(tab)}
           selected={tab === current}
           onPick={() => onPick(tab)}

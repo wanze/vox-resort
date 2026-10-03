@@ -52,11 +52,11 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
       type="button"
       className={className}
       aria-pressed={selected}
+      aria-label={type.label}
       title={`${type.label} — ${describe(type, price)}${note}`}
       onClick={() => onSelect(selected ? null : type.id)}
     >
       <TileArt type={type} preview={preview} />
-      <span className="build-tile-name">{type.label}</span>
       <span className="build-tile-badge">
         <span className="build-tile-cost">{price}</span>
       </span>

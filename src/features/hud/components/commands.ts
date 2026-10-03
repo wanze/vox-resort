@@ -14,10 +14,11 @@ import {
   BULLDOZER,
   type BuildTool,
 } from '../../build/domain/buildTool';
-import { LAND_TOOL, landToolLabel } from '../../land/components/LandShelf';
+import { LAND_TOOL, landToolLabel } from '../../land/components/landTool';
 import type { LandView } from '../../land/domain/landRights';
 import { cycledTool, pickLabel, styleStripFor } from '../../build/domain/stylePick';
 import { TERRAIN_BRUSHES } from '../../build/domain/terrainBrush';
+import { TOOL_ART, type ToolArtKey } from '../../build/domain/toolArt';
 import { COMPASS_DIRECTIONS, type CompassDirection } from '../../layout/domain/worldBounds';
 import { SIM_SPEEDS, SPEED_LABELS } from '../../sim/domain/simClock';
 import { WEATHERS } from '../../sim/domain/weather';
@@ -321,13 +322,19 @@ function windowCommands(context: CommandContext): Command[] {
   ];
 }
 
+// The glyph until `pnpm preview` has drawn the tool, as an object falls back to no picture.
+function toolArt(preview: PreviewLookup, key: ToolArtKey, glyph: string): CommandArt {
+  const picture = preview(TOOL_ART[key]);
+  return picture ? { picture } : { glyph };
+}
+
 function priceNote(cost: number, ledger: Ledger | null): string {
   const price = `costs ${cost.toLocaleString('en-US')}`;
   return ledger !== null && !canAfford(ledger, cost) ? `${price}, more than the bank holds` : price;
 }
 
 // None on a plot that owns all of itself, as on every generated one.
-function landCommands({ tool, onToolChange, land }: CommandContext): Command[] {
+function landCommands({ tool, onToolChange, land, preview }: CommandContext): Command[] {
   if (!land || land.forSale === 0) return [];
   return [
     {
@@ -336,7 +343,7 @@ function landCommands({ tool, onToolChange, land }: CommandContext): Command[] {
       group: 'Build',
       keywords: 'land parcel buy claim plot expand grow',
       note: LAND_TOOL.hint,
-      art: { glyph: LAND_TOOL.glyph },
+      art: toolArt(preview, 'land', LAND_TOOL.glyph),
       shortcut: 'L',
       checked: armedLand(tool),
       run: () => onToolChange({ kind: 'land' }),
@@ -344,7 +351,7 @@ function landCommands({ tool, onToolChange, land }: CommandContext): Command[] {
   ];
 }
 
-function toolCommands({ tool, onToolChange }: CommandContext): Command[] {
+function toolCommands({ tool, onToolChange, preview }: CommandContext): Command[] {
   const brush = armedBrush(tool);
   const brushes: Command[] = TERRAIN_BRUSHES.map((entry) => ({
     id: `terrain:${entry.id}`,
@@ -352,7 +359,7 @@ function toolCommands({ tool, onToolChange }: CommandContext): Command[] {
     group: 'Build',
     keywords: 'terrain ground brush',
     note: entry.hint,
-    art: { glyph: entry.glyph },
+    art: toolArt(preview, entry.id, entry.glyph),
     checked: brush === entry.id,
     run: () => onToolChange({ kind: 'terrain', brush: entry.id }),
   }));
@@ -362,7 +369,7 @@ function toolCommands({ tool, onToolChange }: CommandContext): Command[] {
     group: 'Build',
     keywords: 'remove delete demolish clear',
     note: BULLDOZER.hint,
-    art: { glyph: BULLDOZER.glyph },
+    art: toolArt(preview, 'remove', BULLDOZER.glyph),
     checked: armedRemove(tool),
     run: () => onToolChange({ kind: 'remove' }),
   };

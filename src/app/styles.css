@@ -100,7 +100,7 @@
   /* Plain pixels, not calc(): the window drag reads it back from script. */
   --window-floor: 62px;
   --palette-w: 284px;
-  --tile-min: 72px;
+  --tile-min: 60px;
 
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
   --quick: 120ms var(--ease);
@@ -217,7 +217,6 @@ input[type='text'] {
 .hud-resort-go,
 .hud-resort-clear,
 .hud-resort-choice,
-.build-group-toggle,
 .hud-palette-armed {
   appearance: none;
   display: inline-flex;
@@ -248,8 +247,7 @@ input[type='text'] {
 .hud-camera-point:hover:not(:disabled),
 .hud-resort-roll:hover:not(:disabled),
 .hud-resort-clear:hover:not(:disabled),
-.hud-resort-choice:hover,
-.build-group-toggle:hover {
+.hud-resort-choice:hover {
   filter: brightness(1.05);
   color: var(--terracotta-deep);
   transform: translateY(-1px);
@@ -2082,6 +2080,144 @@ input[type='checkbox'] {
   white-space: nowrap;
 }
 
+.hud-palette-armed-detail {
+  flex: none;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.build-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* 34 px and 3 px gaps keep seven tools and two rules on one line at --palette-w. */
+  gap: 3px;
+}
+
+.build-tool,
+.zone-chip {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background: linear-gradient(160deg, var(--stone-100), var(--stone-400));
+  box-shadow: var(--bevel);
+  color: var(--stone-700);
+  transition:
+    box-shadow var(--quick),
+    border-color var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.build-tool {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+
+.build-tool:nth-child(even) {
+  border-radius: var(--radius-pebble-b);
+}
+
+.build-tool:hover {
+  border-color: var(--stone-700);
+  color: var(--terracotta-deep);
+  transform: translateY(-1px);
+}
+
+.build-tool[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow: var(--bevel-in), var(--glow-accent);
+  color: var(--terracotta);
+  transform: none;
+}
+
+.build-tool-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: var(--emboss);
+}
+
+.build-tool-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.build-tool-mark {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--terracotta);
+  text-shadow:
+    0 0 2px var(--stone-50),
+    0 0 2px var(--stone-50);
+}
+
+.build-tool-zones {
+  display: grid;
+  grid-template-columns: repeat(2, 8px);
+  gap: 2px;
+}
+
+.build-tool-zones > span {
+  height: 8px;
+  border-radius: 2px;
+  box-shadow: var(--bevel);
+}
+
+.build-tools-rule {
+  width: 1px;
+  height: 24px;
+  background: var(--edge-soft);
+}
+
+.zone-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.zone-chip {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.zone-chip[aria-checked='true'] {
+  border-color: var(--terracotta);
+  box-shadow:
+    inset 0 0 0 2px var(--stone-50),
+    var(--glow-accent);
+}
+
+/* The window's tabs bleed over a wide body; the palette's body is narrow and scrolls below them.
+   No icons and tight padding, so the four categories fit one line at --palette-w. */
+.hud-palette .hud-tabs {
+  position: static;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 0 var(--space-1);
+}
+
+.hud-palette .hud-tab {
+  flex: 1 1 auto;
+  padding: 0 4px;
+}
+
 .hud-palette-armed-stop {
   margin-left: auto;
   opacity: 0.8;
@@ -2108,32 +2244,13 @@ input[type='checkbox'] {
   position: sticky;
   top: 0;
   z-index: 1;
+  display: flex;
+  align-items: center;
   margin: 0;
   /* Its own padding rather than the tray's, so the sticky heading covers the gap
      above the tiles. */
-  padding: var(--space-1) 0;
+  padding: var(--space-2) var(--space-1) var(--space-1);
   background: var(--tray);
-}
-
-.build-group-toggle {
-  justify-content: flex-start;
-  width: 100%;
-  height: 24px;
-  padding: 0 var(--space-2);
-  text-align: left;
-}
-
-.build-group-caret {
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 5px solid var(--text-dim);
-  transition: transform var(--quick);
-}
-
-.build-group-toggle[aria-expanded='true'] .build-group-caret {
-  transform: rotate(90deg);
 }
 
 .build-group-count {
@@ -2185,8 +2302,8 @@ input[type='checkbox'] {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* Lifted to clear the name plate; the zoom is a token so the hover state can lean on it. */
-  transform: translateY(-9%) scale(var(--art-zoom));
+  /* A token so the hover state can lean on it. */
+  transform: scale(var(--art-zoom));
   transition: transform var(--quick);
 }
 
@@ -2261,6 +2378,10 @@ input[type='checkbox'] {
 
 .terrain-tile[aria-pressed='true'] .terrain-tile-glyph {
   color: var(--terracotta);
+}
+
+.hud-staff + .hud-report-heading {
+  margin-top: var(--space-4);
 }
 
 .zone-staff {

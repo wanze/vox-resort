@@ -8,6 +8,7 @@ import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
+import { TOOL_SOURCES } from './tools/index.ts';
 import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
 import {
   buildModel,
@@ -417,6 +418,7 @@ async function chooseSources(
     ...SEA_SOURCES,
     ...LITTER_SOURCES,
     ...PROP_SOURCES,
+    ...TOOL_SOURCES,
   ];
   const missing = ids.filter((id) => !known.some((source) => source.id === id));
   if (missing.length) throw new Error(`Unknown model id(s): ${missing.join(', ')}`);
@@ -446,6 +448,7 @@ const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
   ['--sea', { sources: SEA_SOURCES, sheet: 'sea', sweeps: true }],
   ['--litter', { sources: LITTER_SOURCES, sheet: 'litter', sweeps: true }],
   ['--props', { sources: PROP_SOURCES, sheet: 'props', sweeps: true }],
+  ['--tools', { sources: TOOL_SOURCES, sheet: 'tools', sweeps: true }],
   ['--drafts', { sources: DRAFT_SOURCES, sheet: 'drafts', sweeps: false }],
 ]);
 
@@ -469,6 +472,10 @@ const CATALOGUE: Registry = {
   sweeps: true,
 };
 
+// Shown at 36 px on the palette's tool row, so a catalogue-sized render only bloats the bundle.
+const TOOL_IDS = new Set(TOOL_SOURCES.map((source) => source.id));
+const renderSize = (model: VoxelModel): number => (TOOL_IDS.has(model.id) ? 256 : 700);
+
 // Keeps ids from every registry, since other flags render into the same folder.
 // Anything left in out/ ships in the bundle, so drafts and removed models are swept.
 function sweepStale(outDir: string): void {
@@ -481,6 +488,7 @@ function sweepStale(outDir: string): void {
       ...SEA_SOURCES,
       ...LITTER_SOURCES,
       ...PROP_SOURCES,
+      ...TOOL_SOURCES,
     ].map((source) => `${source.id}.png`),
   );
   const stale = readdirSync(outDir, { withFileTypes: true })
@@ -570,15 +578,17 @@ async function main(): Promise<void> {
     console.info(`sheet -> ${file} (${models.length} models)`);
     return;
   }
-  for (const model of models) {
+  // Only a whole-registry run sweeps, so naming a few ids never deletes anything.
+  const whole = args.every((arg) => arg.startsWith('--'));
+  // Not in CATALOGUE itself, so --sheet and --lineup stay the catalogue's own.
+  const tools = registry === CATALOGUE && whole ? TOOL_SOURCES.map(buildModel) : [];
+  for (const model of [...models, ...tools]) {
     const file = path.join(outDir, `${model.id}.png`);
-    writeFileSync(file, renderModel(model, 700));
+    writeFileSync(file, renderModel(model, renderSize(model)));
     console.info(
       `${model.id}: ${model.width}x${model.height}x${model.depth} voxels=${model.voxels.length} -> ${file}`,
     );
   }
-  // Only a whole-registry run sweeps, so naming a few ids never deletes anything.
-  const whole = args.every((arg) => arg.startsWith('--'));
   if (registry.sweeps && whole) sweepStale(outDir);
   const icon = models.find((model) => model.id === ICON_MODEL);
   if (registry === CATALOGUE && whole && icon) writeIcons(icon, iconDir);

@@ -3,55 +3,40 @@ import type { PreviewLookup } from './BuildPalette';
 import type { ObjectTypeGroup } from '../../catalog/domain/objectTypes';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export interface BuildGroupProps {
+export interface BuildGridProps {
   readonly group: ObjectTypeGroup;
   readonly preview: PreviewLookup;
-  readonly open: boolean;
-  readonly onToggle: () => void;
   readonly selected: string | null;
   readonly ledger: Ledger | null;
   readonly onSelect: (typeId: string | null) => void;
 }
 
-// Shelves stack open rather than take turns: what is picked is a picture, and one
-// hidden in a drawer is no faster to find than a word.
-export function BuildGroup({
-  group,
-  preview,
-  open,
-  onToggle,
-  selected,
-  ledger,
-  onSelect,
-}: BuildGroupProps) {
+export function BuildGrid({ group, preview, selected, ledger, onSelect }: BuildGridProps) {
+  return (
+    <div className="build-grid">
+      {group.types.map((type) => (
+        <BuildTile
+          key={type.id}
+          type={type}
+          preview={preview}
+          selected={selected === type.id}
+          ledger={ledger}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  );
+}
+
+// Search hits stay under their category, so the player still sees what kind of thing each one is.
+export function BuildGroup(props: BuildGridProps) {
   return (
     <section className="build-group">
       <h3 className="build-group-head">
-        <button
-          type="button"
-          className="build-group-toggle"
-          aria-expanded={open}
-          onClick={onToggle}
-        >
-          <span className="build-group-caret" aria-hidden="true" />
-          <span className="build-group-label">{group.label}</span>
-          <span className="build-group-count">{group.types.length}</span>
-        </button>
+        <span className="build-group-label">{props.group.label}</span>
+        <span className="build-group-count">{props.group.types.length}</span>
       </h3>
-      {open ? (
-        <div className="build-grid">
-          {group.types.map((type) => (
-            <BuildTile
-              key={type.id}
-              type={type}
-              preview={preview}
-              selected={selected === type.id}
-              ledger={ledger}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      ) : null}
+      <BuildGrid {...props} />
     </section>
   );
 }

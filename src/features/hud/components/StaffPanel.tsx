@@ -1,7 +1,9 @@
 import type { ShowcaseStats } from '../../../app/showcase';
 import { STAFF_CAPS, STAFF_ROLES, WAGES, wagesFor, type StaffRole } from '../../sim/domain/staff';
 import type { RoleTally, StaffTally } from '../domain/staffPins';
+import { ZONE_COLOURS } from '../../overlays/domain/ramp';
 import { roleWord } from './staffWords';
+import { crewLine, cssColour, ZONE_IDS, zoneLabel } from './zoneWords';
 
 export interface StaffPanelProps {
   readonly staff: ShowcaseStats['staff'] | null;
@@ -79,20 +81,31 @@ export function StaffPanel({ staff, tally, onHire }: StaffPanelProps) {
   if (!staff) return <p className="hud-loading">Meshing the catalogue…</p>;
 
   return (
-    <dl className="hud-staff">
-      {STAFF_ROLES.map((role) => (
-        <StaffRow
-          key={role}
-          role={role}
-          staff={staff}
-          tally={tally?.[role] ?? null}
-          onHire={onHire}
-        />
-      ))}
-      <div className="hud-staff-row hud-staff-total">
-        <dt>Wages</dt>
-        <dd className="hud-staff-count">{formatNumber(wagesFor(staff.roster))}/day</dd>
-      </div>
-    </dl>
+    <>
+      <dl className="hud-staff">
+        {STAFF_ROLES.map((role) => (
+          <StaffRow
+            key={role}
+            role={role}
+            staff={staff}
+            tally={tally?.[role] ?? null}
+            onHire={onHire}
+          />
+        ))}
+        <div className="hud-staff-row hud-staff-total">
+          <dt>Wages</dt>
+          <dd className="hud-staff-count">{formatNumber(wagesFor(staff.roster))}/day</dd>
+        </div>
+      </dl>
+      <h3 className="hud-report-heading">Zone crews</h3>
+      <dl className="zone-staff">
+        {ZONE_IDS.map((zone) => (
+          <div key={zone} className="zone-staff-row">
+            <dt style={{ color: cssColour(ZONE_COLOURS[zone]!) }}>{zoneLabel(zone)}</dt>
+            <dd>{crewLine(staff.zones[zone]!)}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }

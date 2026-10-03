@@ -10,6 +10,7 @@ export interface BuildPaletteHeadProps {
   // Only when the player opened the palette; on page load the keys still belong to the game.
   readonly focusSearch: boolean;
   readonly armed: string | null;
+  readonly armedDetail: string | null;
   readonly onDisarm: () => void;
   readonly styles: Strip | null;
   readonly preview: PreviewLookup;
@@ -22,6 +23,7 @@ export function BuildPaletteHead({
   onQueryChange,
   focusSearch,
   armed,
+  armedDetail,
   onDisarm,
   styles,
   preview,
@@ -56,6 +58,7 @@ export function BuildPaletteHead({
         >
           <span className="hud-palette-armed-label">Placing</span>
           <span className="hud-palette-armed-name">{armed}</span>
+          {armedDetail ? <span className="hud-palette-armed-detail">· {armedDetail}</span> : null}
           <span className="hud-palette-armed-stop" aria-hidden="true">
             ✕
           </span>

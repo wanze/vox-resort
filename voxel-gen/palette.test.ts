@@ -4,6 +4,7 @@ import { PALETTE } from './palette.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
+import { TOOL_SOURCES } from './tools/index.ts';
 import { VARIANT_SOURCES } from './variants/index.ts';
 import { buildModel, type Color } from './voxelgen.ts';
 
@@ -14,6 +15,7 @@ const PAINTED = [
   ...PEOPLE_SOURCES,
   ...SKY_SOURCES,
   ...SEA_SOURCES,
+  ...TOOL_SOURCES,
 ];
 
 const families = (): [string, [string, Color][]][] =>

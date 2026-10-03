@@ -19,6 +19,7 @@ pnpm preview --sheet         # contact sheet of all models
 pnpm preview --audit         # how much of its footprint each model fills
 pnpm preview --people        # the crowd; --sky for balloons, --sea for boats
 pnpm preview --drafts        # models withheld from the app (DRAFT_SOURCES)
+pnpm preview --tools --sheet # the build palette's tool pictures
 pnpm preview --lineup        # models side by side at one scale, with a person
 pnpm preview --variants      # each variant beside the model it would replace
 ```
@@ -248,6 +249,10 @@ the basket, sea models from their waterline (nothing below it is drawn).
 seated guest. It is painted at the figure's scale with its seat
 `CHAIR_SEAT_VOXELS` up, and reaches as far behind the seat as the footrest does in
 front, so centring both on their footprints puts the figure over the seat.
+
+`tools/` holds the build palette's tool pictures (terrain brushes, bulldozer,
+land), rendered at 256 px by the default `pnpm preview`. The app finds them by id
+through `TOOL_ART` in `features/build/domain/toolArt.ts` and never imports them.
 
 ## Paving
 

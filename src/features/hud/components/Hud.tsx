@@ -125,7 +125,6 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       ledger={props.ledger}
       land={props.land}
       focusSearch={props.windows.layout.focus === 'build'}
-      zoneStaff={props.stats?.staff.zones ?? null}
     />
   ),
   summary: (props) => (

@@ -13,6 +13,7 @@ import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
+import { PlacementBar } from './PlacementBar';
 import { ProblemMarkers } from './ProblemMarkers';
 import { StaffPins } from './StaffPins';
 import { VenueSigns } from './VenueSigns';
@@ -80,6 +81,11 @@ export interface HudProps {
   readonly preview: PreviewLookup;
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
+  // A placement a finger left on the map, waiting for the bar's Place or Cancel.
+  readonly pending: boolean;
+  readonly onConfirm: () => void;
+  readonly onDismiss: () => void;
+  readonly onTurn: (quarters: number) => void;
   readonly selection: SelectionView | null;
   readonly inspectElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
@@ -124,6 +130,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       preview={props.preview}
       tool={props.tool}
       onToolChange={props.onToolChange}
+      onTurn={props.onTurn}
       ledger={props.ledger}
       land={props.land}
       // A focused field raises a phone's keyboard over half the screen, so a sheet waits for a tap.
@@ -344,6 +351,14 @@ export function Hud(props: HudProps) {
         sound={props.sound}
       />
       <Windows {...props} />
+      <PlacementBar
+        pending={props.pending}
+        tool={props.tool}
+        land={props.land}
+        onConfirm={props.onConfirm}
+        onDismiss={props.onDismiss}
+        onTurn={props.onTurn}
+      />
       <Toasts
         toasts={props.news.toasts}
         onUpdate={props.onUpdate}

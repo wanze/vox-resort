@@ -18,6 +18,7 @@ import { useHistory } from './useHistory';
 import { useNews } from './useNews';
 import { useStatus } from './useStatus';
 import { useThoughts } from './useThoughts';
+import { usePending } from './usePending';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
@@ -173,11 +174,23 @@ function useHourly() {
   return { thoughts: useThoughts(), status: useStatus() };
 }
 
+function usePlacement(showcase: RefObject<Showcase | null>) {
+  const { pending, adopt } = usePending();
+  const confirm = useCallback(() => showcase.current?.confirmPlacement(), [showcase]);
+  const dismiss = useCallback(() => showcase.current?.dismissPlacement(), [showcase]);
+  const turn = useCallback(
+    (quarters: number) => showcase.current?.turnPlacement(quarters),
+    [showcase],
+  );
+  return { pending, adopt, confirm, dismiss, turn };
+}
+
 function useControls(showcase: RefObject<Showcase | null>) {
   return {
     camera: useCameraControls(showcase),
     clock: useClockControls(showcase),
     inspector: useInspector(showcase),
+    placement: usePlacement(showcase),
   };
 }
 
@@ -227,7 +240,7 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector } = useControls(showcaseRef);
+  const { camera, clock, inspector, placement } = useControls(showcaseRef);
   const { news, history, replaced, advice, signs } = useAdviceNews(
     showcaseRef,
     clock.speed,
@@ -259,6 +272,7 @@ export function App() {
   const { adopt: adoptAdvice, show: showAdvice } = advice;
   const { adopt: adoptHistory } = history;
   const { adopt: adoptVoices } = thoughts;
+  const { adopt: adoptPending } = placement;
   const { adopt: adoptStatus } = status;
   const { adoptWeather, adoptSpeed } = clock;
   const { adopt: adoptLedger, adoptLand, note } = money;
@@ -296,6 +310,7 @@ export function App() {
       onLandChange: adoptLand,
       onRefused,
       onBuildNote: note,
+      onPendingChange: adoptPending,
       onFrame: overlay.update,
       onLoading: adoptLoading,
       onDirty: markDirty,
@@ -371,6 +386,7 @@ export function App() {
     onHear,
     adoptSpeed,
     adoptSigns,
+    adoptPending,
   ]);
 
   return (
@@ -421,6 +437,10 @@ export function App() {
           preview={previewUrl}
           tool={tool}
           onToolChange={selectTool}
+          pending={placement.pending}
+          onConfirm={placement.confirm}
+          onDismiss={placement.dismiss}
+          onTurn={placement.turn}
           selection={inspector.selection}
           inspectElement={hudNodes.inspect}
           onSelectPerson={inspector.selectPerson}

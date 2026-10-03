@@ -12,9 +12,49 @@ export interface BuildPaletteHeadProps {
   readonly armed: string | null;
   readonly armedDetail: string | null;
   readonly onDisarm: () => void;
+  // Only for an object: a phone has no R key, and nothing else armed has a facing.
+  readonly onTurn: (() => void) | null;
   readonly styles: Strip | null;
   readonly preview: PreviewLookup;
   readonly onStyle: (pick: StylePick) => void;
+}
+
+interface ArmedBarProps {
+  readonly armed: string;
+  readonly detail: string | null;
+  readonly onDisarm: () => void;
+  readonly onTurn: (() => void) | null;
+}
+
+function ArmedBar({ armed, detail, onDisarm, onTurn }: ArmedBarProps) {
+  return (
+    <div className="hud-palette-armed-row">
+      <button
+        type="button"
+        className="hud-palette-armed"
+        onClick={onDisarm}
+        aria-label={`Stop placing ${armed}`}
+      >
+        <span className="hud-palette-armed-label">Placing</span>
+        <span className="hud-palette-armed-name">{armed}</span>
+        {detail ? <span className="hud-palette-armed-detail">· {detail}</span> : null}
+        <span className="hud-palette-armed-stop" aria-hidden="true">
+          ✕
+        </span>
+      </button>
+      {onTurn ? (
+        <button
+          type="button"
+          className="hud-palette-turn"
+          onClick={onTurn}
+          title="Turn (R)"
+          aria-label="Turn"
+        >
+          ⟳
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 export function BuildPaletteHead({
@@ -25,6 +65,7 @@ export function BuildPaletteHead({
   armed,
   armedDetail,
   onDisarm,
+  onTurn,
   styles,
   preview,
   onStyle,
@@ -50,19 +91,7 @@ export function BuildPaletteHead({
       </div>
 
       {armed ? (
-        <button
-          type="button"
-          className="hud-palette-armed"
-          onClick={onDisarm}
-          aria-label={`Stop placing ${armed}`}
-        >
-          <span className="hud-palette-armed-label">Placing</span>
-          <span className="hud-palette-armed-name">{armed}</span>
-          {armedDetail ? <span className="hud-palette-armed-detail">· {armedDetail}</span> : null}
-          <span className="hud-palette-armed-stop" aria-hidden="true">
-            ✕
-          </span>
-        </button>
+        <ArmedBar armed={armed} detail={armedDetail} onDisarm={onDisarm} onTurn={onTurn} />
       ) : null}
       {styles ? <StyleStrip strip={styles} preview={preview} onStyle={onStyle} /> : null}
     </>

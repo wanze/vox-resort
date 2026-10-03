@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   armedBrush,
   armedLand,
@@ -90,25 +90,27 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
 
   return (
     <div className="build-tools" role="toolbar" aria-label="Tools">
-      {BRUSH_GROUPS.map((group) => [
-        ...group.map((each) => (
-          <ToolButton
-            key={each.id}
-            label={each.label}
-            title={`${each.label} — ${each.hint}, drag to work a run`}
-            pressed={brush === each.id}
-            onPress={toggle(brush === each.id, { kind: 'terrain', brush: each.id })}
-          >
-            <ToolPicture
-              preview={preview}
-              art={each.id}
-              glyph={each.glyph}
-              marked={SHAPING.has(each.id)}
-            />
-          </ToolButton>
-        )),
-        <span key={`${group[0]!.id}-rule`} className="build-tools-rule" />,
-      ])}
+      {BRUSH_GROUPS.map((group) => (
+        <Fragment key={group[0]!.id}>
+          {group.map((each) => (
+            <ToolButton
+              key={each.id}
+              label={each.label}
+              title={`${each.label} — ${each.hint}, drag to work a run`}
+              pressed={brush === each.id}
+              onPress={toggle(brush === each.id, { kind: 'terrain', brush: each.id })}
+            >
+              <ToolPicture
+                preview={preview}
+                art={each.id}
+                glyph={each.glyph}
+                marked={SHAPING.has(each.id)}
+              />
+            </ToolButton>
+          ))}
+          <span className="build-tools-rule" />
+        </Fragment>
+      ))}
       <ToolButton
         label="Zones"
         title="Zones — paint where staff work"

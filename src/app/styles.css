@@ -240,7 +240,9 @@ input[type='text'] {
 .hud-resort-go,
 .hud-resort-clear,
 .hud-resort-choice,
-.hud-palette-armed {
+.hud-palette-armed,
+.hud-palette-turn,
+.hud-placement-button {
   appearance: none;
   display: inline-flex;
   align-items: center;
@@ -270,7 +272,9 @@ input[type='text'] {
 .hud-camera-point:hover:not(:disabled),
 .hud-resort-roll:hover:not(:disabled),
 .hud-resort-clear:hover:not(:disabled),
-.hud-resort-choice:hover {
+.hud-resort-choice:hover,
+.hud-palette-turn:hover,
+.hud-placement-button:not(.hud-placement-place):hover {
   filter: brightness(1.05);
   color: var(--terracotta-deep);
   transform: translateY(-1px);
@@ -285,7 +289,9 @@ input[type='text'] {
 .hud-camera-point:active:not(:disabled),
 .hud-resort-go:active:not(:disabled),
 .hud-resort-clear:active:not(:disabled),
-.hud-palette-armed:active {
+.hud-palette-armed:active,
+.hud-palette-turn:active,
+.hud-placement-button:active {
   transform: translateY(1px);
   box-shadow: var(--bevel-in);
 }
@@ -1761,6 +1767,34 @@ input[type='checkbox'] {
   filter: brightness(1.08);
 }
 
+/* Above the toasts it may overlap on a phone, and under every window. */
+.hud-placement {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-5) + var(--safe-b));
+  z-index: 6;
+  height: auto;
+  padding: var(--space-1);
+  /* translate rather than transform, which the pop animation holds while it runs. */
+  translate: -50% 0;
+  animation: hud-pop var(--pop);
+}
+
+/* 44px: the smallest target a fingertip hits reliably. */
+.hud-placement-button {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 var(--space-3);
+  font-size: var(--size-body);
+  white-space: nowrap;
+}
+
+.hud-placement-price {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
 /* Over the canvas and under every window, which starts at z-index 10. */
 .hud-toasts {
   position: absolute;
@@ -1944,7 +1978,8 @@ input[type='checkbox'] {
 }
 
 .hud-resort-go,
-.hud-palette-armed {
+.hud-palette-armed,
+.hud-placement-place {
   border-color: var(--terracotta-deep);
   background-image: var(--slab-accent);
   color: var(--text-on-accent);
@@ -1952,7 +1987,8 @@ input[type='checkbox'] {
 }
 
 .hud-resort-go:hover:not(:disabled),
-.hud-palette-armed:hover {
+.hud-palette-armed:hover,
+.hud-placement-place:hover {
   filter: brightness(1.08);
   color: var(--text-on-accent);
 }
@@ -2091,6 +2127,24 @@ input[type='checkbox'] {
   justify-content: flex-start;
   height: var(--control-h);
   padding: 0 var(--space-3);
+}
+
+.hud-palette-armed-row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.hud-palette-armed-row .hud-palette-armed {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hud-palette-turn {
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  font-size: var(--size-body);
 }
 
 .hud-palette-armed-label {
@@ -3224,6 +3278,38 @@ input[type='checkbox'] {
 
 .app:not([data-layout='desk']) .hud-toast:nth-child(n + 3) {
   display: none;
+}
+
+/* A sheet covers the bottom: without anchors to sit on it, the bar goes under the strip instead. */
+.app[data-layout='bottom'] .hud-placement {
+  bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
+}
+
+.app[data-layout='bottom'] .hud:has(.hud-window[data-window]) .hud-placement {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  bottom: auto;
+}
+
+@supports (anchor-name: --sheet) {
+  .app[data-layout='bottom'] .hud-window[data-window] {
+    anchor-name: --sheet;
+  }
+
+  .app[data-layout='bottom'] .hud:has(.hud-window[data-window]) .hud-placement {
+    position-anchor: --sheet;
+    top: auto;
+    bottom: anchor(top, calc(var(--dock-h) + var(--safe-b)));
+    margin-bottom: var(--space-2);
+  }
+}
+
+.app[data-layout='rail'] .hud-placement {
+  left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
+}
+
+/* A peeking sheet hangs from the top and leaves the bottom free, so only a full one moves the bar. */
+.app[data-layout='rail'] .hud:has(.hud-window[data-window]:not([data-peek])) .hud-placement {
+  left: calc(50% + (var(--rail-w) + var(--safe-l) - var(--sheet-w) - var(--safe-r)) / 2);
 }
 
 /* Pinned under the strip, so the on-screen keyboard rising from below never covers the field. */

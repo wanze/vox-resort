@@ -66,6 +66,7 @@ export interface BuildPaletteProps {
   readonly preview: PreviewLookup;
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
+  readonly onTurn: (quarters: number) => void;
   readonly ledger: Ledger | null;
   readonly land: LandView | null;
   readonly focusSearch: boolean;
@@ -126,6 +127,7 @@ export function BuildPalette({
   preview,
   tool,
   onToolChange,
+  onTurn,
   ledger,
   land,
   focusSearch,
@@ -147,6 +149,7 @@ export function BuildPalette({
         armed={armedLabel(tool, land)}
         armedDetail={armedDetail(tool)}
         onDisarm={() => onToolChange(null)}
+        onTurn={objectId ? () => onTurn(1) : null}
         styles={styles}
         preview={preview}
         onStyle={(style) => styles && onToolChange({ kind: 'object', id: styles.family, style })}

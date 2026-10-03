@@ -700,6 +700,8 @@ export interface ShowcaseOptions {
   readonly onLandChange?: (land: LandView) => void;
   readonly onRefused?: (note: BuildNote) => void;
   readonly onBuildNote?: (note: BuildNote) => void;
+  // A placement shown on touch and waiting for the player to confirm it, or no longer.
+  readonly onPendingChange?: (pending: boolean) => void;
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
   readonly onMorning?: () => void;
@@ -758,6 +760,9 @@ export interface Showcase {
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
   selectTool(tool: BuildTool | null): void;
+  confirmPlacement(): void;
+  dismissPlacement(): void;
+  turnPlacement(quarters: number): void;
   setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
   setWeather(weather: Weather | null): void;
@@ -2901,6 +2906,10 @@ interface EditMode {
   reopen(open: readonly ConstructionSite[]): void;
   readonly ground: PickGround;
   placementOf(key: string): Placement | undefined;
+  // For the placement a finger left waiting, with whichever of objects or land is armed.
+  confirm(): void;
+  dismiss(): void;
+  turn(quarters: number): void;
   dispose(): void;
 }
 
@@ -2927,6 +2936,7 @@ function createEditMode(parts: {
   readonly money: Purse;
   readonly onRefused: (refusal: Refusal) => void;
   readonly onFallback: (fellBack: boolean) => void;
+  readonly onPending: (pending: boolean) => void;
   readonly land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'>;
   readonly onCue: (cue: BuildCue) => void;
 }): EditMode {
@@ -3143,6 +3153,7 @@ function createEditMode(parts: {
     onRails: changeRails,
     onCancel,
     onFallback: parts.onFallback,
+    onPending: parts.onPending,
   });
 
   const terrainRules: TerrainRules = {
@@ -3198,6 +3209,7 @@ function createEditMode(parts: {
     ground,
     ...parts.land,
     onCancel,
+    onPending: parts.onPending,
   });
 
   // A scan rather than a second key table, which every edit would have to keep in step.
@@ -3288,6 +3300,16 @@ function createEditMode(parts: {
     },
     ground,
     placementOf,
+    // Both are told: only the armed one holds a placement, and an idle stroke ignores it.
+    confirm() {
+      pointer.confirm();
+      surveyor.confirm();
+    },
+    dismiss() {
+      pointer.dismiss();
+      surveyor.dismiss();
+    },
+    turn: (quarters) => pointer.turn(quarters),
     dispose() {
       pointer.dispose();
       spade.dispose();
@@ -4146,6 +4168,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     money,
     onRefused: refused,
     onFallback: fallback,
+    onPending: (pending) => options.onPendingChange?.(pending),
     land,
     onCue: cue,
   });
@@ -4882,6 +4905,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return regrow(asked, { kind: 'clear', params: asked }, mode);
     },
     selectTool,
+    confirmPlacement: () => build.confirm(),
+    dismissPlacement: () => build.dismiss(),
+    turnPlacement: (quarters) => build.turn(quarters),
     setTime(time) {
       clock.setTime(time);
       options.onDirty?.();

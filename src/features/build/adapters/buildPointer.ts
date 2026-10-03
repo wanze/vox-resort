@@ -32,6 +32,8 @@ export interface BuildPointerOptions {
   // Told whether the tile under the pointer would be a path's fallback flight, so the player learns
   // before painting that it will not be step-free.
   readonly onFallback?: (fellBack: boolean) => void;
+  // Whether a placement waits for the player to confirm it, which only happens on touch.
+  readonly onPending?: (pending: boolean) => void;
 }
 
 // Asked for every placement, so a random style rolls afresh for each tile of a drag.
@@ -41,6 +43,9 @@ export interface BuildPointer {
   select(chooser: ItemChooser | null): void;
   // Another style of the same family: the rotation is kept.
   restyle(chooser: ItemChooser): void;
+  turn(quarters: number): void;
+  confirm(): void;
+  dismiss(): void;
   dispose(): void;
 }
 
@@ -52,6 +57,7 @@ function turnAsked(event: KeyboardEvent): number {
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   const { ghost, occupancy, ground, paving, handrails, owns, fits, onPlace, onRails } = options;
   const onFallback = options.onFallback ?? ((): void => {});
+  const onPending = options.onPending ?? ((): void => {});
 
   let chooser: ItemChooser | null = null;
   let item: LayoutItem | null = null;
@@ -73,12 +79,20 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     return { ...plan, fellBack: !plan.blocked && fellBackToStairs(laid, paving) };
   };
 
+  const turn = (quarters: number): void => {
+    rotation = normalizeRotation(rotation + quarters);
+    // Redrawn in place so the turn shows without nudging the mouse.
+    stroke.refresh();
+  };
+
   const stroke = createTileStroke({
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
     ground,
     paints: () => item !== null && isPaintable(item),
+    confirms: () => item !== null && !isPaintable(item),
+    onPending: (tile) => onPending(tile !== null),
     onHover(tile) {
       if (!item || !tile) {
         ghost.hide();
@@ -105,10 +119,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     },
     onKey(event) {
       const quarters = turnAsked(event);
-      if (quarters === 0) return;
-      rotation = normalizeRotation(rotation + quarters);
-      // Redrawn in place so the turn shows without nudging the mouse.
-      stroke.refresh();
+      if (quarters !== 0) turn(quarters);
     },
     onCancel: options.onCancel,
   });
@@ -125,6 +136,9 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       item = next();
       stroke.refresh();
     },
+    turn,
+    confirm: () => stroke.confirm(),
+    dismiss: () => stroke.dismiss(),
     dispose() {
       stroke.dispose();
     },

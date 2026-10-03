@@ -8,6 +8,9 @@ import type { InspectTarget } from '../domain/selection';
 // while no tool is armed: only a short, nearly still press counts as a click.
 const CLICK_SLOP = 4;
 
+// A still finger rolls on the glass further than a still mouse moves.
+const TOUCH_CLICK_SLOP = 10;
+
 const CLICK_MS = 400;
 
 export interface InspectPointerOptions {
@@ -37,7 +40,13 @@ export function createInspectPointer(options: InspectPointerOptions): InspectPoi
   const viewProjection = new Matrix4();
   const inverseViewProjection = new Matrix4();
 
-  let down: { readonly pointerId: number; x: number; y: number; at: number } | null = null;
+  let down: {
+    readonly pointerId: number;
+    readonly slop: number;
+    x: number;
+    y: number;
+    at: number;
+  } | null = null;
 
   const viewport = () => ({
     width: canvas.clientWidth || globalThis.innerWidth,
@@ -65,7 +74,13 @@ export function createInspectPointer(options: InspectPointerOptions): InspectPoi
   const onPointerDown = (event: PointerEvent): void => {
     down =
       armed() && event.button === 0
-        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp }
+        ? {
+            pointerId: event.pointerId,
+            slop: event.pointerType === 'touch' ? TOUCH_CLICK_SLOP : CLICK_SLOP,
+            x: event.clientX,
+            y: event.clientY,
+            at: event.timeStamp,
+          }
         : null;
   };
 
@@ -74,7 +89,7 @@ export function createInspectPointer(options: InspectPointerOptions): InspectPoi
     down = null;
     if (!start || event.pointerId !== start.pointerId) return false;
     const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-    return moved <= CLICK_SLOP && event.timeStamp - start.at <= CLICK_MS;
+    return moved <= start.slop && event.timeStamp - start.at <= CLICK_MS;
   };
 
   const onPointerUp = (event: PointerEvent): void => {

@@ -15,16 +15,21 @@ export interface LandPointerOptions {
   readonly canBuy: (px: number, pz: number) => boolean;
   readonly onBuy: (px: number, pz: number) => void;
   readonly onCancel: () => void;
+  // A parcel costs money and cannot be sold back, so a finger is asked to confirm it.
+  readonly onPending?: (pending: boolean) => void;
 }
 
 export interface LandPointer {
   select(armed: boolean): void;
+  confirm(): void;
+  dismiss(): void;
   dispose(): void;
 }
 
 // A drag buys each parcel it crosses, in order, so a strip can be bought in one stroke.
 export function createLandPointer(options: LandPointerOptions): LandPointer {
   const { ghost, ground, canBuy, onBuy } = options;
+  const onPending = options.onPending ?? ((): void => {});
   let armed = false;
 
   const stroke = createTileStroke({
@@ -33,6 +38,8 @@ export function createLandPointer(options: LandPointerOptions): LandPointer {
     takeLeftButton: options.takeLeftButton,
     ground,
     paints: () => true,
+    confirms: () => true,
+    onPending: (tile) => onPending(tile !== null),
     onHover(tile) {
       if (!armed || !tile) {
         ghost.hide();
@@ -59,6 +66,8 @@ export function createLandPointer(options: LandPointerOptions): LandPointer {
       armed = next;
       stroke.arm(next);
     },
+    confirm: () => stroke.confirm(),
+    dismiss: () => stroke.dismiss(),
     dispose() {
       stroke.dispose();
     },

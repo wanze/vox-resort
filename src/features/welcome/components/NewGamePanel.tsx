@@ -12,7 +12,8 @@ import type { SaveMeta } from '../../saves/domain/snapshot';
 import { UnsavedWarning } from '../../saves/components/UnsavedWarning';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import type { IconName } from '../../hud/components/pixelIcons';
-import { groundOf, paramsFor, type Ground, type NewGame } from '../domain/newGame';
+import { ResortNameField, useDraftName } from '../../naming/components/ResortNameField';
+import { groundOf, nameFor, paramsFor, type Ground, type NewGame } from '../domain/newGame';
 import { MODE_LABELS } from './modeNames';
 import { ResortAdvanced } from './ResortAdvanced';
 
@@ -226,17 +227,19 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
   const [draft, setDraft] = useState<ResortParams>(params);
   const [mode, setMode] = useState<GameMode | null>(null);
   const [ground, setGround] = useState<Ground>('grown');
+  const [name, setName] = useDraftName(draft.seed);
   const change = (patch: Partial<ResortParams>): void => setDraft({ ...draft, ...patch });
 
-  const start = (game: NewGame) => (): void => {
+  const start = (game: Omit<NewGame, 'name'>) => (): void => {
     // Shown back clamped, so the panel does not claim a size nobody can build.
     setDraft(clampParams(draft));
-    onStart(clampParams(paramsFor(game, draft)), game);
+    onStart(clampParams(paramsFor(game, draft)), { ...game, name: nameFor(name, draft.seed) });
   };
 
   return (
     <div className="hud-resort new-game">
       <UnsavedWarning unsaved={unsaved} onKeep={onKeepUnsaved} />
+      <ResortNameField value={name} onChange={setName} />
       <ModeChoice mode={mode} onPick={setMode} />
       {mode === null ? null : (
         <div className="new-game-options">

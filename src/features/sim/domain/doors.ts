@@ -29,6 +29,9 @@ export function doorsFor(
     for (const node of index.at(tile.x, tile.z) ?? []) found.add(node);
   }
   if (found.size > 0) return { nodes: sorted(found), declared: true, sand };
+  // A path that merely touches a doorless court on the sand is not its way in: taken as one, the
+  // court counted as off the beach and nobody lying on the sand ever walked over to play.
+  if (sand.length > 0) return { nodes: [], declared: false, sand };
   return { nodes: ringNodes(venue, index), declared: false, sand };
 }
 

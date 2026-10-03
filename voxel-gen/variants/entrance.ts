@@ -2,7 +2,7 @@
 import { PALETTE } from '../palette.ts';
 import { plinth } from '../parts/ground.ts';
 import { gableRoof, hipRoof } from '../parts/roof.ts';
-import { arcade } from '../parts/veranda.ts';
+import { arcade, arcadeTop } from '../parts/veranda.ts';
 import { defineModel, type VoxelBuilder } from '../voxelgen.ts';
 
 const NX = 63;
@@ -19,6 +19,11 @@ const PIER = { x0: 8, x1: 15, z0: 2, z1: 13 } as const;
 const ATTIC = { z0: 4, z1: 11 } as const;
 const PIER_TOP = 36;
 
+const ARCADE = { ...ARCH, y: GROUND, along: 'x', bays: 1 } as const;
+const CROWN = arcadeTop(ARCADE);
+const ATTIC_TOP = CROWN + 5;
+const PLATE = { x0: 23, x1: NX - 23, y0: CROWN + 1, y1: ATTIC_TOP - 1 } as const;
+
 const SCONCE = { x0: 11, x1: 12, y: 18 } as const;
 const HANG = { x0: 31, x1: 32, z0: 7, z1: 8, y: 18 } as const;
 
@@ -33,6 +38,14 @@ export default defineModel({
   tiles: { x: 4, z: 1 },
   gateway: true,
   emissive: [LANTERN],
+  nameplate: {
+    ...PLATE,
+    faces: [
+      { surface: ATTIC.z1 + 1, outward: 1 },
+      { surface: ATTIC.z0 - 1, outward: -1 },
+    ],
+    ink: PALETTE.teak.deep,
+  },
   lights: [
     // One per pier rather than per sconce: both faces of a pier are one lamp once baked.
     { x: 11, y: SCONCE.y + 1, z: 8, color: LANTERN, intensity: 60, distance: 40 },
@@ -46,14 +59,7 @@ export default defineModel({
     plinth(b, { x: 0, z: 0, w: NX + 1, d: NZ + 1, height: GROUND });
     box(ROAD.x0, ROAD.x1, GROUND - 1, GROUND - 1, 0, NZ, stone.light);
 
-    const crown = arcade(b, {
-      ...ARCH,
-      y: GROUND,
-      along: 'x',
-      bays: 1,
-      wall: sand,
-      trim: stone,
-    });
+    arcade(b, { ...ARCADE, wall: sand, trim: stone });
 
     const pier = (x0: number, x1: number): void => {
       box(x0 - 1, x1 + 1, GROUND, GROUND + 1, PIER.z0 - 1, PIER.z1 + 1, stone.shade);
@@ -73,24 +79,23 @@ export default defineModel({
     pier(PIER.x0, PIER.x1);
     pier(mirror(PIER.x1), mirror(PIER.x0));
 
-    const atticTop = crown + 5;
-    box(ROAD.x0, ROAD.x1, crown, atticTop, ATTIC.z0, ATTIC.z1, sand.base);
-    box(ROAD.x0, ROAD.x1, atticTop, atticTop, ATTIC.z0, ATTIC.z1, sand.light);
+    box(ROAD.x0, ROAD.x1, CROWN, ATTIC_TOP, ATTIC.z0, ATTIC.z1, sand.base);
+    box(ROAD.x0, ROAD.x1, ATTIC_TOP, ATTIC_TOP, ATTIC.z0, ATTIC.z1, sand.light);
     gableRoof(b, {
       x: ROAD.x0,
       z: ATTIC.z0,
       w: ROAD.x1 - ROAD.x0 + 1,
       d: ATTIC.z1 - ATTIC.z0 + 1,
-      y: atticTop + 1,
+      y: ATTIC_TOP + 1,
       ridge: 'x',
       overhang: 1,
       tile: terracotta,
     });
 
-    // The nameplate stands proud on the arch's ledge, blank because lettering does not fit the grid.
+    // The nameplate stands proud on the arch's ledge, left blank: the app letters the resort's name.
     for (const z of [ATTIC.z0 - 1, ATTIC.z1 + 1]) {
-      box(22, mirror(22), crown, atticTop, z, z, teak.shade);
-      box(23, mirror(23), crown + 1, atticTop - 1, z, z, stucco.light);
+      box(PLATE.x0 - 1, PLATE.x1 + 1, CROWN, ATTIC_TOP, z, z, teak.shade);
+      box(PLATE.x0, PLATE.x1, PLATE.y0, PLATE.y1, z, z, stucco.light);
     }
 
     for (const [x0, x1] of [
@@ -104,7 +109,7 @@ export default defineModel({
       }
     }
 
-    box(HANG.x0, HANG.x1, HANG.y + 4, crown - 3, HANG.z0, HANG.z1, metal.deep);
+    box(HANG.x0, HANG.x1, HANG.y + 4, CROWN - 3, HANG.z0, HANG.z1, metal.deep);
     box(HANG.x0 - 1, HANG.x1 + 1, HANG.y + 3, HANG.y + 3, HANG.z0 - 1, HANG.z1 + 1, metal.deep);
     box(HANG.x0, HANG.x1, HANG.y, HANG.y + 2, HANG.z0, HANG.z1, LANTERN);
     box(HANG.x0, HANG.x1, HANG.y - 1, HANG.y - 1, HANG.z0, HANG.z1, metal.deep);

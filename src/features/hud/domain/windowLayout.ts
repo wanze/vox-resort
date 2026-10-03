@@ -10,6 +10,7 @@ const WINDOW_IDS = [
   'books',
   'camera',
   'resort',
+  'name',
   'saves',
   'debug',
   'inspect',

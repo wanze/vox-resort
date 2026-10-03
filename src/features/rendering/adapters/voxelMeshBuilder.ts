@@ -14,7 +14,7 @@ export interface ModelGeometry {
   readonly coarse?: ModelGeometry | null;
 }
 
-function toGeometry(attributes: MeshAttributes): BufferGeometry {
+export function toGeometry(attributes: MeshAttributes): BufferGeometry {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new BufferAttribute(attributes.positions, 3));
   geometry.setAttribute('normal', new BufferAttribute(attributes.normals, 3));

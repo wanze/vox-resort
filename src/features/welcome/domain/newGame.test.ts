@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { groundOf, paramsFor } from './newGame';
+import { resortNameFor } from '../../naming/domain/resortName';
+import { groundOf, nameFor, paramsFor } from './newGame';
 
 describe('groundOf', () => {
   it('always starts a tycoon on bare ground', () => {
@@ -31,5 +32,12 @@ describe('paramsFor', () => {
 
   it('leaves a generated game the size it asked for', () => {
     expect(paramsFor({ mode: 'sandbox', ground: 'grown' }, draft)).toBe(draft);
+  });
+});
+
+describe('nameFor', () => {
+  it('takes the typed name, cleaned, and the seed name for an empty field', () => {
+    expect(nameFor('  Coral   Cove ', 7)).toBe('Coral Cove');
+    expect(nameFor(' ', 7)).toBe(resortNameFor(7));
   });
 });

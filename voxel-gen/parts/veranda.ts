@@ -55,22 +55,41 @@ function carveBay(
   }
 }
 
-export function arcade(b: VoxelBuilder, o: ArcadeOptions): number {
-  const alongX = o.along === 'x';
-  const length = alongX ? o.w : o.d;
-  const across = alongX ? o.d : o.w;
-  const pier = o.pier ?? 3;
-  const height = o.height ?? 8;
-  if (o.bays < 1) throw new Error('An arcade has at least one bay');
+type ArcadeShape = Pick<
+  ArcadeOptions,
+  'w' | 'd' | 'y' | 'along' | 'bays' | 'pier' | 'height' | 'rise'
+>;
+
+function checkArcade(bays: number, pier: number, across: number, height: number): void {
+  if (bays < 1) throw new Error('An arcade has at least one bay');
   if (pier < 1) throw new Error('An arcade stands on piers at least one voxel wide');
   if (across < 1) throw new Error('An arcade is at least one voxel deep');
   if (height < 1) throw new Error('An arcade has at least one clear layer under its arches');
+}
+
+function arcadeLayout(o: ArcadeShape) {
+  const alongX = o.along === 'x';
+  const [length, across] = alongX ? [o.w, o.d] : [o.d, o.w];
+  const pier = o.pier ?? 3;
+  const height = o.height ?? 8;
+  checkArcade(o.bays, pier, across, height);
 
   const bays = baySpans(length, pier, o.bays);
   const [from, to] = bays[0]!;
   // A third of the bay, not half: a small bay has few distinct widths, and rising
   // further repeats a width and reads as a stilted arch.
   const rise = o.rise ?? Math.max(1, Math.floor((to - from + 2) / 3));
+  return { alongX, across, bays, height, rise, springing: o.y + height };
+}
+
+// What arcade returns, known before building: a model can place work on the arcade by constant.
+export function arcadeTop(o: ArcadeShape): number {
+  const { springing, rise } = arcadeLayout(o);
+  return springing + rise + 2;
+}
+
+export function arcade(b: VoxelBuilder, o: ArcadeOptions): number {
+  const { alongX, across, bays, rise, springing } = arcadeLayout(o);
 
   const wall = o.wall ?? PALETTE.stucco;
   const trim = o.trim ?? PALETTE.stone;
@@ -78,7 +97,6 @@ export function arcade(b: VoxelBuilder, o: ArcadeOptions): number {
   const runOrigin = alongX ? o.x : o.z;
   const x1 = o.x + o.w - 1;
   const z1 = o.z + o.d - 1;
-  const springing = o.y + height;
   const crown = springing + rise;
 
   const course = (y: number, color: Color): void => b.box(o.x, x1, y, y, o.z, z1, color);

@@ -106,6 +106,7 @@ export function TopBar(props: TopBarProps) {
           onOpenChange={opener('main')}
           windows={windows}
           saves={props.saves}
+          resortName={props.resort.name}
           onFind={props.onFind}
         />
       </div>

@@ -19,16 +19,21 @@ function SaveStatus({ saves }: { readonly saves: SaveControls }) {
   );
 }
 
-// The name field is keyed on the game, so a load or a rename fills it afresh.
-export function SavesPanel({ saves }: { readonly saves: SaveControls }) {
+// The name field is keyed on the game, so a load or a rename fills it afresh. A game not saved
+// under a name yet is offered the resort's.
+export function SavesPanel(props: {
+  readonly saves: SaveControls;
+  readonly resortName: string | null;
+}) {
+  const { saves, resortName } = props;
   const [now] = useState(Date.now);
   const game = shownGame(saves.current);
   const busy = saves.status === 'saving' || !saves.available;
   return (
     <div className="saves-panel">
       <NameForm
-        key={`${game.id}:${game.name}`}
-        initial={game.name}
+        key={`${game.id}:${game.name}:${resortName}`}
+        initial={game.name || (resortName ?? '')}
         disabled={busy}
         actions={[
           { label: 'Save', run: saves.save },

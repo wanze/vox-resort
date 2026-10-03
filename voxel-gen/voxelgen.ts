@@ -265,6 +265,17 @@ export interface ModelVenue {
   readonly court?: ModelCourt;
 }
 
+// Where the app letters the resort's name: a board facing +z or -z, letters standing in the
+// layer in front of `surface`. Blank in the art, since the name is the player's.
+export interface ModelNameplate {
+  readonly x0: number;
+  readonly x1: number;
+  readonly y0: number;
+  readonly y1: number;
+  readonly faces: readonly { readonly surface: number; readonly outward: 1 | -1 }[];
+  readonly ink: Color;
+}
+
 export interface ModelDepot {
   readonly doors: readonly ModelDoor[];
 }
@@ -295,6 +306,7 @@ export interface VoxelModelSource {
   readonly seats?: readonly ModelSeat[];
   readonly placement?: ModelPlacement;
   readonly venue?: ModelVenue;
+  readonly nameplate?: ModelNameplate;
   // One voxel's edge in world voxels, for art painted finer than the world; the mesher grows or
   // shrinks it back, so width, height and depth stay in the model's own voxels.
   readonly scale?: number;
@@ -330,6 +342,7 @@ export interface VoxelModel {
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
   readonly placement: ModelPlacement;
   readonly venue: ModelVenue | null;
+  readonly nameplate: ModelNameplate | null;
   readonly scale?: number;
 }
 
@@ -436,6 +449,23 @@ function courtFrom(court: ModelCourt, minX: number, minY: number, minZ: number):
   };
 }
 
+function nameplateFrom(
+  plate: ModelNameplate | undefined,
+  minX: number,
+  minY: number,
+  minZ: number,
+): ModelNameplate | null {
+  if (!plate) return null;
+  return {
+    x0: plate.x0 - minX,
+    x1: plate.x1 - minX,
+    y0: plate.y0 - minY,
+    y1: plate.y1 - minY,
+    faces: plate.faces.map((face) => ({ ...face, surface: face.surface - minZ })),
+    ink: plate.ink,
+  };
+}
+
 export function buildModel(source: VoxelModelSource): VoxelModel {
   const builder = new VoxelBuilder();
   source.build(builder);
@@ -497,6 +527,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     seats: (source.seats ?? []).map((seat) => seatFrom(seat, minX, minY, minZ)),
     placement: source.placement ?? {},
     venue: source.venue ? venueFrom(source.venue, minX, minY, minZ) : null,
+    nameplate: nameplateFrom(source.nameplate, minX, minY, minZ),
   });
 }
 

@@ -240,6 +240,15 @@ function resortCommands({ resort, windows }: CommandContext): Command[] {
       art: { icon: 'resort' },
       run: () => windows.show('resort', true),
     },
+    {
+      id: 'resort:rename',
+      label: 'Rename resort…',
+      group: 'Resort',
+      keywords: 'name title sign',
+      note: resort.name ?? 'give the resort a name',
+      art: { icon: 'resort' },
+      run: () => windows.show('name', true),
+    },
   ];
 }
 

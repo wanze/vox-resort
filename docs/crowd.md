@@ -456,7 +456,9 @@ Nothing on sand is paved, so beach showers, cabins and clubs are reached over th
 sand.
 
 - `doorsFor` also returns **sand doors**: open beach tiles in front of the
-  building.
+  building. A doorless venue on the sand (the volleyball court) is entered only
+  from the sand, even where a path touches it; taken as a door, that path made
+  the court count as off the beach, and nobody on the sand ever went to play.
 - `sandRoute.ts` finds a route from each nearby gate to the building across the
   sand, string-pulled to straight lines.
 - The flow field leads to the gate; from there the router walks the guest along
@@ -484,6 +486,10 @@ lying on it.
   so a far lounger doesn't shorten it. A party shares one end: the first member
   to settle sets it, because the pitch keeps every member's lounger until the
   last one leaves.
+- **Errands off a pitch**: a guest whose loudest need reaches `FETCH_URGENCY`
+  (0.4) walks across the sand to a venue on the sand and back to the pitch. Fun
+  counts too, though the beach gives fun: its relief comes only when the stay
+  ends, so a bored guest gets up to play volleyball or hire a pedalo.
 - Adults take the loungers. Others lie (adults) or sit (children) on the sand
   facing the sea.
 - A guest on the beach whose strongest need the beach doesn't serve walks to a

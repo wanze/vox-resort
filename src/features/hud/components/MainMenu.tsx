@@ -16,10 +16,20 @@ export interface MainMenuProps {
   readonly onOpenChange: (open: boolean) => void;
   readonly windows: WindowControls;
   readonly saves: SaveControls;
+  // Null only before the scene is up, when the game's own name stands in.
+  readonly resortName: string | null;
   readonly onFind: () => void;
 }
 
-export function MainMenu({ open, onOpenChange, windows, saves, onFind }: MainMenuProps) {
+export function MainMenu({
+  open,
+  onOpenChange,
+  windows,
+  saves,
+  resortName,
+  onFind,
+}: MainMenuProps) {
+  const title = resortName ?? 'Vox Resort';
   const run = (action: () => void) => (): void => {
     action();
     onOpenChange(false);
@@ -34,7 +44,7 @@ export function MainMenu({ open, onOpenChange, windows, saves, onFind }: MainMen
       label={
         <>
           <PixelIcon name="menu" />
-          <span className="hud-wordmark">Vox Resort</span>
+          <span className="hud-wordmark">{title}</span>
         </>
       }
     >
@@ -44,6 +54,11 @@ export function MainMenu({ open, onOpenChange, windows, saves, onFind }: MainMen
         label="New game…"
         note="tycoon or free play, on bare land or a generated resort"
         onSelect={run(() => windows.show('resort', true))}
+      />
+      <HudOption
+        label="Rename resort…"
+        note={title}
+        onSelect={run(() => windows.show('name', true))}
       />
       <HudOption
         label="Save game"

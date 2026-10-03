@@ -458,7 +458,11 @@ input[type='checkbox'] {
 }
 
 .hud-wordmark {
+  max-width: 180px;
+  overflow: hidden;
   font: 400 16px / 1 var(--font-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   letter-spacing: 0.02em;
   color: var(--terracotta-deep);
   text-shadow: var(--emboss);
@@ -1081,6 +1085,13 @@ input[type='checkbox'] {
   right: calc(var(--palette-w) + var(--space-3) * 2);
   width: 340px;
   border-radius: 22px 26px 18px 24px / 24px 18px 26px 22px;
+}
+
+.hud-window[data-window='name'] {
+  --window-top: calc(var(--window-floor) + 60px);
+  left: calc(50% - 170px);
+  width: 340px;
+  border-radius: 20px 24px 18px 22px / 22px 18px 24px 20px;
 }
 
 .hud-window[data-window='saves'] {
@@ -1715,7 +1726,8 @@ input[type='checkbox'] {
   font-weight: 600;
 }
 
-.hud-resort-seed input[type='number'] {
+.hud-resort-seed input[type='number'],
+.hud-resort-name input[type='text'] {
   width: 100%;
 }
 

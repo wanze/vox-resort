@@ -77,6 +77,9 @@ the parts and the references.
 palette the model appears on. `placement` keeps a model on the `beach` or
 `shore` and caps how many a generated resort gets (`perResort`). `gateway: true`
 marks an entrance where guests arrive and leave.
+`nameplate` marks a blank board (`x0`-`x1`, `y0`-`y1`, each face's `surface`
+layer and `outward` side, and an `ink` colour) where the app letters the resort's
+name; paint the board blank and leave the layer in front of it empty.
 
 To place it on the authored plot, add it to `RESORT_PLAN` in
 `src/features/layout/domain/resortPlan.ts`, otherwise the layout tests fail. It

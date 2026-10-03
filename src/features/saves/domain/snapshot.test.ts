@@ -18,6 +18,7 @@ import { createStaffRouter } from '../../sim/domain/staffRouter';
 import { createDay, createThoughts } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
 import { createZones } from '../../sim/domain/zones';
+import { isReadable, listedOf } from './saveSlots';
 import { gameSnapshotSchema, metaOf, SAVE_VERSION, type GameSnapshot } from './snapshot';
 
 const POPULATION = 12;
@@ -104,6 +105,7 @@ function gameFixture(): GameSnapshot {
       rails: [],
     },
     params: { tilesX: 4, tilesZ: 3, density: 0.5, seed: 1 },
+    name: 'Coral Cove',
     population: POPULATION,
     staffCount: employed.count,
     resort,
@@ -183,6 +185,11 @@ describe('gameSnapshotSchema', () => {
     expect(gameSnapshotSchema.safeParse(withLand(2, 2)).success).toBe(false);
   });
 
+  it('takes a save from before resorts had names', () => {
+    const { name: _name, ...nameless } = gameFixture();
+    expect(gameSnapshotSchema.safeParse(nameless).success).toBe(true);
+  });
+
   it('survives a structured clone, which is how IndexedDB stores it', () => {
     const cloned: unknown = structuredClone(gameFixture());
     expect(gameSnapshotSchema.safeParse(cloned).success).toBe(true);
@@ -195,6 +202,7 @@ describe('metaOf', () => {
     expect(meta).toEqual({
       id: 'a',
       name: 'Cove',
+      resortName: 'Coral Cove',
       savedAt: 1234,
       version: SAVE_VERSION,
       mode: 'tycoon',
@@ -205,5 +213,12 @@ describe('metaOf', () => {
       tilesX: 4,
       tilesZ: 3,
     });
+  });
+
+  it('lists a save from before resorts had names as readable', () => {
+    const { name: _name, ...nameless } = gameFixture();
+    const { resortName: _resortName, ...meta } = metaOf('a', 'Cove', nameless, 1234);
+    expect(metaOf('a', 'Cove', nameless, 1234)).toEqual(meta);
+    expect(isReadable(listedOf(meta))).toBe(true);
   });
 });

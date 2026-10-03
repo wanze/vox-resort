@@ -13,6 +13,7 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   books: 'Books',
   camera: 'Camera',
   resort: 'New game',
+  name: 'Rename resort',
   saves: 'Saved games',
   debug: 'Debug',
   inspect: 'Inspector',
@@ -30,6 +31,7 @@ export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
   books: 'books',
   camera: 'camera',
   resort: 'resort',
+  name: 'resort',
   // The books icon is a ledger, which is what a list of saves looks like too.
   saves: 'books',
   debug: 'debug',

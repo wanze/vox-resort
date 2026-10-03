@@ -62,6 +62,8 @@ const gameShape = z.object({
   version: z.literal(SAVE_VERSION),
   world: savedWorldSchema,
   params: paramsSchema,
+  // Optional, so a save from before resorts had names still reads; it is named by its seed.
+  name: z.string().exactOptional(),
   population: count,
   staffCount: count,
   resort: resortSnapshotSchema,
@@ -115,6 +117,7 @@ export type GameSnapshot = z.infer<typeof gameSnapshotSchema>;
 export const saveMetaSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
+  resortName: z.string().exactOptional(),
   savedAt: z.number(),
   version: z.number(),
   mode: z.enum(['sandbox', 'tycoon']),
@@ -138,6 +141,7 @@ export function metaOf(
   return {
     id,
     name,
+    ...(snapshot.name === undefined ? {} : { resortName: snapshot.name }),
     savedAt: now,
     version: snapshot.version,
     mode: ledger.mode,

@@ -7,11 +7,14 @@ import { useMoney, type MoneyControls } from './useMoney';
 
 export interface ResortControls {
   readonly params: ResortParams | null;
+  readonly name: string | null;
   readonly building: boolean;
   readonly open: boolean;
   readonly money: MoneyControls;
   adopt(params: ResortParams): void;
   adoptOpen(open: boolean): void;
+  adoptName(name: string): void;
+  rename(name: string): void;
   setOpen(open: boolean): void;
   setHiring(role: StaffRole, count: number | null): void;
   // True once the new resort stands; false if it could not be built.
@@ -26,6 +29,7 @@ export function useResortControls(
   const [params, setParams] = useState<ResortParams | null>(null);
   const [building, setBuilding] = useState(false);
   const [open, adoptOpen] = useState(true);
+  const [name, adoptName] = useState<string | null>(null);
   const money = useMoney();
 
   const start = useCallback(
@@ -40,6 +44,8 @@ export function useResortControls(
           ? mounted.generate(next)
           : mounted.clear(next, game.mode));
         setParams(mounted.params);
+        // Before onStarted, so the first save already has it.
+        mounted.rename(game.name);
         onStarted();
         return true;
       } catch (cause: unknown) {
@@ -54,11 +60,15 @@ export function useResortControls(
 
   return {
     params,
+    name,
     building,
     open,
     money,
     adopt: setParams,
     adoptOpen,
+    adoptName,
+    // Answered through onNameChange, as setOpen is through onOpenChange.
+    rename: useCallback((next: string) => showcase.current?.rename(next), [showcase]),
     // The showcase answers through onOpenChange, so the state follows what it did.
     setOpen: useCallback((next: boolean) => showcase.current?.setOpen(next), [showcase]),
     setHiring: useCallback(

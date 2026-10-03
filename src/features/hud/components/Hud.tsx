@@ -15,6 +15,7 @@ import { MessagesPanel } from './MessagesPanel';
 import { ProblemMarkers } from './ProblemMarkers';
 import { StaffPins } from './StaffPins';
 import { RenderStats, type DebugElements } from './RenderStats';
+import { ResortNameForm } from './ResortNameForm';
 import { ResortStats } from './ResortStats';
 import { StaffPanel } from './StaffPanel';
 import { Toasts } from './Toasts';
@@ -101,6 +102,7 @@ const PANELS: readonly Panel[] = [
   'books',
   'camera',
   'resort',
+  'name',
   'saves',
   'debug',
 ];
@@ -155,12 +157,13 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onOpenReport={(day) => openReport(props, day)}
     />
   ),
-  report: ({ history, ledger }) => (
+  report: ({ history, ledger, resort }) => (
     <DayReportPanel
       history={history.history}
       shown={history.shown}
       onShow={history.show}
       mode={modeOf(ledger)}
+      resortName={resort.name}
     />
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
@@ -193,7 +196,12 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
         onKeepUnsaved={saves.nameUnsaved}
       />
     ) : null,
-  saves: ({ saves }) => <SavesPanel saves={saves} />,
+  // Keyed on the name, so a load or a rename elsewhere fills the field afresh.
+  name: ({ resort }) =>
+    resort.name === null ? null : (
+      <ResortNameForm key={resort.name} name={resort.name} onRename={resort.rename} />
+    ),
+  saves: ({ saves, resort }) => <SavesPanel saves={saves} resortName={resort.name} />,
   debug: (props) => <RenderStats stats={props.stats} elements={props.debugElements} />,
 };
 

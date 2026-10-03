@@ -40,6 +40,10 @@ authored plan is 112 × 100 tiles (448 × 400 m).
    (`overlays/adapters/overlayField.ts`) is one instanced quad per paved tile,
    coloured per instance, 2.1 voxels up over the blob shadows, and hidden (no
    draw call) while it is off.
+   The resort's name (`naming/adapters/nameplateField.ts`) is one plain lit
+   mesh per finished gate whose model declares a `nameplate`, set in a 5-pixel
+   font finer than the world grid and shared per model and name. It is left
+   out of the light bake and the blob shadows, and not drawn under a bench.
 
 Steps 2 and 8 and the terrain mesh run in a worker (see
 [Preparing a resort](#preparing-a-resort)).

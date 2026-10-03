@@ -25,6 +25,8 @@ const CORNICE = 34;
 const CAP = 36;
 
 const FRIEZE = { z0: 4, z1: 11 } as const;
+// Recessed a voxel into each face of the frieze, framed in teak, and left blank for the app to letter.
+const BOARD = { x0: 20, x1: NX - 20, y0: BEAM + 2, y1: CORNICE - 2 } as const;
 
 const NICHE = { x0: 8, x1: 9, y0: 18, y1: 20 } as const;
 const BEACON = { x0: 7, x1: 10, z0: 6, z1: 9 } as const;
@@ -42,6 +44,14 @@ export default defineModel({
   tiles: { x: 4, z: 1 },
   gateway: true,
   emissive: [LANTERN],
+  nameplate: {
+    ...BOARD,
+    faces: [
+      { surface: FRIEZE.z1 - 1, outward: 1 },
+      { surface: FRIEZE.z0 + 1, outward: -1 },
+    ],
+    ink: PALETTE.teak.deep,
+  },
   lights: [
     { x: 8, y: CAP + 2, z: 8, color: LANTERN, intensity: 110, distance: 60 },
     { x: mirror(8), y: CAP + 2, z: 8, color: LANTERN, intensity: 110, distance: 60 },
@@ -114,11 +124,11 @@ export default defineModel({
       [FRIEZE.z1, FRIEZE.z1 - 1],
       [FRIEZE.z0, FRIEZE.z0 + 1],
     ] as const) {
-      box(18, mirror(18), BEAM + 1, CORNICE - 1, face, face, teak.shade);
-      for (let x = 20; x <= mirror(20); x++) {
-        for (let y = BEAM + 2; y <= CORNICE - 2; y++) b.del(x, y, face);
+      box(BOARD.x0 - 2, BOARD.x1 + 2, BEAM + 1, CORNICE - 1, face, face, teak.shade);
+      for (let x = BOARD.x0; x <= BOARD.x1; x++) {
+        for (let y = BOARD.y0; y <= BOARD.y1; y++) b.del(x, y, face);
       }
-      box(20, mirror(20), BEAM + 2, CORNICE - 2, behind, behind, stucco.light);
+      box(BOARD.x0, BOARD.x1, BOARD.y0, BOARD.y1, behind, behind, stucco.light);
     }
 
     // Single-voxel bars are normally built solid, but a wrought-iron gate is bars, and a leaf drawn as

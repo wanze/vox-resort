@@ -37,6 +37,8 @@ import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 
+const GAME_TITLE = 'Vox Resort';
+
 // A benchmark measures the game itself, so it skips the welcome screen.
 const OPENS_ON_WELCOME = parseBenchConfig(globalThis.location?.search ?? '') === null;
 
@@ -103,6 +105,13 @@ function useWelcome(
   return { resort, loaded, ready: loaded.includes('scene'), adoptLoading, startGame, loadGame };
 }
 
+// The game's name alone behind the welcome screen, where no resort is being played yet.
+function useDocumentTitle(playing: boolean, name: string | null): void {
+  useEffect(() => {
+    document.title = playing && name !== null ? `${name} · ${GAME_TITLE}` : GAME_TITLE;
+  }, [playing, name]);
+}
+
 // The saves are made before the resort's controls, which tell them when a game starts, so the
 // params a load brings are handed over late.
 function useGame(
@@ -127,6 +136,7 @@ function useGame(
     adoptParamsRef.current = adoptParams;
   }, [adoptParams]);
   const onUpdate = useUpdate(saves.saveBeforeReload, setUpdate);
+  useDocumentTitle(playing, welcome.resort.name);
   return { playing, saves, welcome, onUpdate };
 }
 
@@ -206,7 +216,7 @@ export function App() {
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
-  const { adopt: adoptParams, adoptOpen, money } = resort;
+  const { adopt: adoptParams, adoptOpen, adoptName, money } = resort;
   const { adopt: adoptCamera } = camera;
   const { adopt: adoptSelection, adoptOrders } = inspector;
   const { adopt: adoptAdvice, show: showAdvice } = advice;
@@ -240,6 +250,7 @@ export function App() {
       onHistoryChange: adoptHistory,
       onWeatherChange: adoptWeather,
       onOpenChange: adoptOpen,
+      onNameChange: adoptName,
       onMoneyChange: adoptLedger,
       onLandChange: adoptLand,
       onRefused: note,
@@ -271,6 +282,7 @@ export function App() {
         adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
         adoptOpen(mounted.open);
+        adoptName(mounted.name);
         adoptLedger(mounted.ledger);
         // So the bar says what kind of day it is before midnight comes round.
         adoptWeather(mounted.stats.weather);
@@ -294,6 +306,7 @@ export function App() {
     toolRef,
     adoptParams,
     adoptOpen,
+    adoptName,
     adoptCamera,
     adoptSelection,
     adoptOrders,

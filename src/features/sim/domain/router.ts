@@ -55,7 +55,7 @@ import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './s
 import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
 import { isOpenIn, weatherEffect, type Weather } from './weather';
-import { reliefAt, shelterOf, type Venue } from './venues';
+import { shelterOf, type Venue } from './venues';
 
 // Duplicated rather than imported: simClock's constant is private to the clock.
 const TICK_SECONDS = 60;
@@ -709,8 +709,9 @@ export function createRouter(parts: {
       if (!dueAnotherLook(person, beach, people)) continue;
       // The weather too, or nobody on the sand wants a drink in a heatwave.
       const wanted = strongestNeed(needs, guests, person, weatherEffect(weatherNow()));
+      // Even for what the beach gives: its relief comes when the stay ends, and skipping it left a
+      // volleyball court on the sand with nobody bored enough to walk over.
       if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
-      if (reliefAt(venues[beach]!, wanted.need) > 0) continue;
       lookAgainAt[person] = now + LOOK_AGAIN_TICKS;
       // First aid is on the paving, and an errand would fetch whatever the sand sells: a hurt
       // guest would otherwise lie out the rest of a long stay.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
 import { SaveList } from '../../saves/components/SaveList';
 import { latestOf, listOrder, readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
+import { resortOf } from '../../saves/components/saveNames';
 import { titleOf } from '../../saves/domain/saveWords';
 import type { SaveMeta } from '../../saves/domain/snapshot';
 import type { SaveControls } from '../../../app/useSaves';
@@ -51,7 +52,7 @@ function ContinueButton(props: {
     >
       Continue
       <span className="welcome-button-note">
-        {titleOf(props.latest)}, day {props.latest.day}
+        {[...resortOf(props.latest), titleOf(props.latest)].join(' · ')}, day {props.latest.day}
       </span>
     </button>
   );

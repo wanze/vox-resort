@@ -14,6 +14,7 @@ export interface DayReportPanelProps {
   readonly onShow: (day: number) => void;
   // null before the first books are told.
   readonly mode: GameMode | null;
+  readonly resortName: string | null;
 }
 
 const whole = (value: number): string => value.toLocaleString('en-US');
@@ -33,10 +34,12 @@ function Stepper({
   history,
   at,
   onShow,
+  resortName,
 }: {
   readonly history: readonly DayReport[];
   readonly at: number;
   readonly onShow: (day: number) => void;
+  readonly resortName: string | null;
 }) {
   const before = history[at - 1];
   const after = history[at + 1];
@@ -51,7 +54,11 @@ function Stepper({
       >
         ‹
       </button>
-      <strong>{`Day ${history[at]!.day}`}</strong>
+      <strong>
+        {resortName === null
+          ? `Day ${history[at]!.day}`
+          : `${resortName} · Day ${history[at]!.day}`}
+      </strong>
       <button
         type="button"
         className="hud-camera-mode"
@@ -237,7 +244,7 @@ const indexOf = (history: readonly DayReport[], shown: number | null): number =>
   return at < 0 ? history.length - 1 : at;
 };
 
-export function DayReportPanel({ history, shown, onShow, mode }: DayReportPanelProps) {
+export function DayReportPanel({ history, shown, onShow, mode, resortName }: DayReportPanelProps) {
   if (history.length === 0) {
     return <p className="hud-loading">The first report comes at the next check-in.</p>;
   }
@@ -245,7 +252,7 @@ export function DayReportPanel({ history, shown, onShow, mode }: DayReportPanelP
   const report = history[at]!;
   return (
     <div className="hud-report">
-      <Stepper history={history} at={at} onShow={onShow} />
+      <Stepper history={history} at={at} onShow={onShow} resortName={resortName} />
       <RatingSection report={report} trend={trendOn(history, report.day)} />
       <GuestsSection report={report} />
       {mode === 'tycoon' ? <MoneySection report={report} /> : null}

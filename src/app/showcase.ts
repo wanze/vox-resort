@@ -477,6 +477,8 @@ import { createScene } from '../features/rendering/adapters/threeScene';
 import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
 import { startCameraDrift, type CameraDrift } from '../features/rendering/adapters/cameraDrift';
 import type { LoadingStep } from '../features/welcome/domain/loading';
+import { resortNameFor, savedResortName } from '../features/naming/domain/resortName';
+import { createNameplates, type Nameplates } from '../features/naming/adapters/nameplateField';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
@@ -659,6 +661,7 @@ export interface ShowcaseOptions {
   readonly onHistoryChange?: (history: readonly DayReport[]) => void;
   readonly onWeatherChange?: (weather: Weather) => void;
   readonly onOpenChange?: (open: boolean) => void;
+  readonly onNameChange?: (name: string) => void;
   readonly onMoneyChange?: (ledger: Ledger) => void;
   // On every new resort and every parcel bought, as the money is told.
   readonly onLandChange?: (land: LandView) => void;
@@ -691,10 +694,13 @@ export interface Showcase {
   readonly history: readonly DayReport[];
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
+  readonly name: string;
   readonly cameraView: CameraView;
   readonly open: boolean;
   readonly ledger: Ledger;
   setOpen(open: boolean): void;
+  // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
+  rename(name: string): void;
   setHiring(role: StaffRole, count: number | null): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
@@ -991,6 +997,8 @@ interface Resort {
   readonly shadows: BlobShadowField;
   // Per resort: its materials are bound to this plot's baked light volume.
   readonly construction: ConstructionField;
+  // Per resort for the same reason; lettered by the showcase, which holds the name.
+  readonly nameplates: Nameplates;
   readonly crowd: CrowdField;
   // A second crowd: a guest's variant indexes the guest models, and HUD counts are about guests.
   readonly staff: CrowdField;
@@ -1349,6 +1357,7 @@ function buildResort(
   });
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const construction = buildConstructionField(parts.geometries, lighting.volume);
+  const nameplates = createNameplates(lighting.volume, (id) => objectTypeById(id).model);
   const terrain = terrainFor(plan);
   // Only a plot with no paving is sized by its area and starts away: a generated plot's opening
   // scene and the benchmark stay as they were.
@@ -1572,6 +1581,7 @@ function buildResort(
     world,
     shadows,
     construction,
+    nameplates,
     crowd,
     staff,
     places,
@@ -1667,6 +1677,7 @@ function buildResort(
       world.dispose();
       shadows.dispose();
       construction.dispose();
+      nameplates.dispose();
       crowd.dispose();
       staff.dispose();
       balloons.dispose();
@@ -1766,6 +1777,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.remove(previous.world.group);
       scene?.scene.remove(previous.shadows.group);
       scene?.scene.remove(previous.construction.group);
+      scene?.scene.remove(previous.nameplates.group);
       scene?.scene.remove(previous.crowd.group);
       // Without this, the previous plot's cleaners keep walking over the new one.
       scene?.scene.remove(previous.staff.group);
@@ -1777,6 +1789,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.add(resort.world.group);
       scene?.scene.add(resort.shadows.group);
       scene?.scene.add(resort.construction.group);
+      scene?.scene.add(resort.nameplates.group);
       scene?.scene.add(resort.crowd.group);
       scene?.scene.add(resort.staff.group);
       scene?.scene.add(resort.balloons.group);
@@ -3636,6 +3649,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     forceMainThread: bench?.forceMainThreadMeshing ?? false,
   });
   let params = startingParams(bench);
+  let name = resortNameFor(params.seed);
   const [catalogue, first] = await Promise.all([
     meshModels(scratch, bench).then(loaded('models', options.onLoading)),
     preparer
@@ -3683,6 +3697,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().world.group);
   handle.scene.add(current().shadows.group);
   handle.scene.add(current().construction.group);
+  handle.scene.add(current().nameplates.group);
   handle.scene.add(current().crowd.group);
   handle.scene.add(current().staff.group);
   handle.scene.add(current().balloons.group);
@@ -3893,6 +3908,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       counted = true;
       walkStaleAt = performance.now();
       edits++;
+      letter();
       options.onDirty?.();
     },
     onGroundChange: () => {
@@ -3918,6 +3934,21 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onFallback: fallback,
     land,
   });
+
+  // Off under a bench, as the markers are, so every recorded figure is drawn without them. A gate
+  // still going up is lettered once it is raised.
+  const letter = (): void => {
+    if (bench) return;
+    const resort = current();
+    const building = new Set(build.openSites().map((site) => site.placement.key));
+    resort.nameplates.show(
+      resort.plot.placements.filter(
+        (placement) => isGateway(placement.id) && !building.has(placement.key),
+      ),
+      name,
+    );
+  };
+  letter();
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
@@ -4170,6 +4201,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     drift = null;
     handle.controls.enabled = true;
     clock.restart(INITIAL_TIME);
+    letter();
     rebuilt();
     options.onOpenChange?.(current().open);
   };
@@ -4190,6 +4222,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       version: SAVE_VERSION,
       world: savedWorldOf(resort.plan, resort.terrain, resort.plot, resort.rights),
       params,
+      name,
       population: resort.guests.count,
       staffCount: resort.staffPool.count,
       resort: snapshotResort(resort),
@@ -4204,6 +4237,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // Everything React shows is told again: the HUD still holds the game that was replaced.
   const announceLoaded = (resort: Resort): void => {
+    letter();
+    options.onNameChange?.(name);
     rebuilt();
     options.onOpenChange?.(resort.open);
     options.onCameraChange?.(cameraView());
@@ -4243,6 +4278,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // After the replace, whose reframe has put the camera back where a new plot is looked at from.
     restoreCamera(handle, saved.camera);
     params = saved.params;
+    name = savedResortName(saved.name, saved.params.seed);
     announceLoaded(resort);
     options.onSpeedChange?.('paused');
   };
@@ -4367,6 +4403,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     recastAfterEdit(resort, network);
     resort.footfall = createFootfall(network.nodes.length);
     paintOverlay();
+    letter();
     // Said now rather than tomorrow; the day's counters are left alone.
     advise();
     speak();
@@ -4519,6 +4556,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get params() {
       return params;
     },
+    get name() {
+      return name;
+    },
     get cameraView() {
       return cameraView();
     },
@@ -4535,6 +4575,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       options.onOpenChange?.(open);
       options.onDirty?.();
       advise();
+    },
+    rename(next) {
+      if (next === name) return;
+      name = next;
+      letter();
+      options.onNameChange?.(name);
+      options.onDirty?.();
     },
     setHiring(role, count) {
       const resort = current();

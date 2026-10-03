@@ -37,6 +37,7 @@ export default defineModel({
   lights: [{ x: 26, y: 12, z: 38, color: SIGN, intensity: 90, distance: 50 }],
   venue: {
     role: 'food',
+    sign: 'shop',
     satisfies: [
       { need: 'hunger', amount: 0.8 },
       { need: 'thirst', amount: 0.8 },

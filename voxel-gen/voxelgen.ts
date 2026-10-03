@@ -223,6 +223,37 @@ export type VenueRole = 'lodging' | 'food' | 'drink' | 'activity' | 'service';
 
 export type Shelter = 'open' | 'covered';
 
+export type SignKind =
+  | 'food'
+  | 'drink'
+  | 'fun'
+  | 'service'
+  | 'restaurant'
+  | 'bakery'
+  | 'snack'
+  | 'icecream'
+  | 'shop'
+  | 'coffee'
+  | 'bar'
+  | 'toilets'
+  | 'shower'
+  | 'cabins'
+  | 'first-aid'
+  | 'reception'
+  | 'club'
+  | 'games'
+  | 'gym'
+  | 'spa'
+  | 'kids'
+  | 'playground'
+  | 'boats'
+  | 'golf'
+  | 'pool'
+  | 'waterpark'
+  | 'tennis'
+  | 'basketball'
+  | 'volleyball';
+
 export interface NeedRelief {
   readonly need: GuestNeed;
   readonly amount: number;
@@ -230,6 +261,8 @@ export interface NeedRelief {
 
 export interface ModelVenue {
   readonly role: VenueRole;
+  // The sign the app hangs over the door; left out, the role's own sign is shown.
+  readonly sign?: SignKind;
   readonly satisfies?: readonly NeedRelief[];
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };

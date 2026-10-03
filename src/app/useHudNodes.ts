@@ -1,6 +1,7 @@
 import { useMemo, useRef, type RefObject } from 'react';
 import type { DebugElements } from '../features/hud/components/RenderStats';
 import { MAX_MARKERS } from '../features/hud/domain/markers';
+import { MAX_SIGNS } from '../features/hud/domain/signs';
 import { PINNED_STAFF } from '../features/hud/domain/staffPins';
 
 // Written by the render loop outside React: re-rendering the HUD every frame
@@ -11,6 +12,7 @@ export interface HudNodes extends DebugElements {
   readonly inspect: RefObject<HTMLSpanElement | null>;
   readonly markers: RefObject<(HTMLElement | null)[]>;
   readonly staffPins: RefObject<(HTMLButtonElement | null)[]>;
+  readonly signs: RefObject<(HTMLElement | null)[]>;
 }
 
 export function useHudNodes(): HudNodes {
@@ -29,6 +31,7 @@ export function useHudNodes(): HudNodes {
   const staffPins = useRef<(HTMLButtonElement | null)[]>(
     Array.from({ length: PINNED_STAFF.length }, () => null),
   );
+  const signs = useRef<(HTMLElement | null)[]>(Array.from({ length: MAX_SIGNS }, () => null));
   // One stable object, so the effect mounting the renderer runs exactly once.
   return useMemo(
     () => ({
@@ -45,6 +48,7 @@ export function useHudNodes(): HudNodes {
       activeLights,
       markers,
       staffPins,
+      signs,
     }),
     [
       time,
@@ -60,6 +64,7 @@ export function useHudNodes(): HudNodes {
       activeLights,
       markers,
       staffPins,
+      signs,
     ],
   );
 }

@@ -12,6 +12,7 @@ export default defineModel({
   tiles: { x: 2, z: 1 },
   venue: {
     role: 'food',
+    sign: 'snack',
     satisfies: [{ need: 'hunger', amount: 0.6 }],
     capacity: 10,
     dwellSeconds: { min: 300, max: 720 },

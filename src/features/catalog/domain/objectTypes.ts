@@ -12,13 +12,15 @@ import {
   type ModelCategory,
   type ModelDepot,
   type ModelVenue,
+  type SignKind,
+  type VenueRole,
   type VoxelModel,
   type VoxelModelSource,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
 export { TILE_VOXELS };
-export type { ModelVenue };
+export type { ModelVenue, SignKind };
 
 export interface ObjectTypeDefinition {
   readonly id: string;
@@ -147,6 +149,22 @@ export function objectTypeTop(id: string): number {
 export function venueOf(id: string): ModelVenue | null {
   return OBJECT_TYPES.find((type) => type.id === id)?.venue ?? null;
 }
+
+const ROLE_SIGNS: { readonly [role in VenueRole]: SignKind | null } = {
+  lodging: null,
+  food: 'food',
+  drink: 'drink',
+  activity: 'fun',
+  service: 'service',
+};
+
+export function signFor(venue: ModelVenue | null): SignKind | null {
+  if (!venue || venue.role === 'lodging') return null;
+  return venue.sign ?? ROLE_SIGNS[venue.role];
+}
+
+// The original's, as the label is: a variant is the same kind of place in another look.
+export const signOf = (id: string): SignKind | null => signFor(venueOf(familyOf(id)));
 
 export function venueTypes(): readonly ObjectTypeDefinition[] {
   return OBJECT_TYPES.filter((type) => type.venue !== null);

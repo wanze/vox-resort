@@ -13,6 +13,8 @@ export interface OverlayControlProps {
   // Not a layer: the markers stand over whichever layer is on, or none.
   readonly markers: boolean;
   readonly onMarkersChange: (shown: boolean) => void;
+  readonly signs: boolean;
+  readonly onSignsChange: (shown: boolean) => void;
   readonly staff: boolean;
   readonly onStaffChange: (shown: boolean) => void;
 }
@@ -47,6 +49,8 @@ export function OverlayControl({
   onOpenChange,
   markers,
   onMarkersChange,
+  signs,
+  onSignsChange,
   staff,
   onStaffChange,
 }: OverlayControlProps) {
@@ -91,6 +95,13 @@ export function OverlayControl({
           checked={markers}
           many
           onSelect={() => onMarkersChange(!markers)}
+        />
+        <HudOption
+          label="Building signs"
+          note="say what each building is, when zoomed in (N; hold Alt for names)"
+          checked={signs}
+          many
+          onSelect={() => onSignsChange(!signs)}
         />
         <HudOption
           label="Staff"

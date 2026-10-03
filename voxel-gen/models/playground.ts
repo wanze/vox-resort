@@ -103,6 +103,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'activity',
+    sign: 'playground',
     stage: true,
     satisfies: [
       { need: 'fun', amount: 0.9 },

@@ -35,6 +35,7 @@ export default defineModel({
   placement: { ground: 'beach' },
   venue: {
     role: 'service',
+    sign: 'cabins',
     satisfies: [{ need: 'hygiene', amount: 0.3 }],
     capacity: 2,
     dwellSeconds: { min: 60, max: 180 },

@@ -81,6 +81,7 @@ export default defineModel({
   ),
   venue: {
     role: 'activity',
+    sign: 'gym',
     satisfies: [
       { need: 'fun', amount: 0.4 },
       { need: 'energy', amount: -0.5 },

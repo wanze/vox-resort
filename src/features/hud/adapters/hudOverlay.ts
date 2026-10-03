@@ -35,6 +35,8 @@ export interface FrameUpdate {
     readonly inside: Uint8Array;
     readonly titles: readonly string[];
   };
+  // As markers, one per venue sign; count is 0 while zoomed out or turned off.
+  readonly signs: { readonly count: number; readonly spots: Float32Array };
 }
 
 // A React ref by shape, so this module stays free of React.
@@ -58,6 +60,8 @@ export interface HudOverlayParts {
   readonly markers: Slot<readonly (HTMLElement | null)[]>;
   // One per member of staff, in staff order.
   readonly staffPins: Slot<readonly (HTMLButtonElement | null)[]>;
+  // One per sign, in the order the showcase placed their anchors.
+  readonly signs: Slot<readonly (HTMLElement | null)[]>;
 }
 
 export interface HudOverlay {
@@ -139,8 +143,11 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     }
   };
 
-  const writeMarkers = (markers: FrameUpdate['markers']): void => {
-    const buttons = parts.markers.current ?? [];
+  const writeMarkers = (
+    slot: Slot<readonly (HTMLElement | null)[]>,
+    markers: FrameUpdate['markers'],
+  ): void => {
+    const buttons = slot.current ?? [];
     const scale = pixelScale();
     for (let index = 0; index < buttons.length; index++) {
       const button = buttons[index];
@@ -179,7 +186,8 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
 
   return {
     update(frame) {
-      writeMarkers(frame.markers);
+      writeMarkers(parts.signs, frame.signs);
+      writeMarkers(parts.markers, frame.markers);
       writeStaffPins(frame.staff);
       if (frame.sampled) writeDebug(frame);
       writeTime(frame.time);

@@ -60,6 +60,7 @@ export default defineModel({
   ],
   venue: {
     role: 'food',
+    sign: 'restaurant',
     satisfies: [
       { need: 'hunger', amount: 1 },
       { need: 'thirst', amount: 0.5 },

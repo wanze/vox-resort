@@ -48,6 +48,7 @@ export default defineModel({
   ],
   venue: {
     role: 'activity',
+    sign: 'games',
     stage: true,
     satisfies: [{ need: 'fun', amount: 0.8 }],
     capacity: 24,

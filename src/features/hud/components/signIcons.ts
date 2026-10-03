@@ -1,0 +1,35 @@
+import type { SignKind } from '../../catalog/domain/objectTypes';
+import type { IconName } from './pixelIcons';
+
+// A role's fallback borrows the sign of the place most like it.
+export const SIGN_ICONS = {
+  food: 'restaurant',
+  drink: 'bar',
+  fun: 'games',
+  service: 'reception',
+  restaurant: 'restaurant',
+  bakery: 'bakery',
+  snack: 'snack',
+  icecream: 'icecream',
+  shop: 'shop',
+  coffee: 'coffee',
+  bar: 'bar',
+  toilets: 'toilets',
+  shower: 'shower',
+  cabins: 'cabins',
+  'first-aid': 'first-aid',
+  reception: 'reception',
+  club: 'club',
+  games: 'games',
+  gym: 'gym',
+  spa: 'spa',
+  kids: 'kids',
+  playground: 'playground',
+  boats: 'boats',
+  golf: 'golf',
+  pool: 'pool',
+  waterpark: 'waterpark',
+  tennis: 'tennis',
+  basketball: 'basketball',
+  volleyball: 'volleyball',
+} as const satisfies Record<SignKind, IconName>;

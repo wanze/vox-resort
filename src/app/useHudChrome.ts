@@ -27,6 +27,7 @@ const always = (action: () => void) => (): boolean => {
 // Null for a key with nothing to do, which then passes on to whatever else listens for it.
 export interface HudToggles {
   readonly staffPins: () => void;
+  readonly signs: () => void;
   readonly land: (() => void) | null;
 }
 
@@ -62,6 +63,7 @@ export function useHudChrome(
     { key: ' ', run: always(clock.togglePause) },
     { key: 'b', run: always(() => windows.toggle('build')) },
     { key: 's', run: always(toggles.staffPins) },
+    { key: 'n', run: always(toggles.signs) },
     {
       key: 'l',
       run: () => {

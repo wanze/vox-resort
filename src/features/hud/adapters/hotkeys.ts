@@ -9,7 +9,7 @@ export interface Hotkeys {
   dispose(): void;
 }
 
-function inAField(target: EventTarget | null): boolean {
+export function inAField(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && target.matches('input, textarea, select');
 }
 

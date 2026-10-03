@@ -91,6 +91,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'activity',
+    sign: 'basketball',
     satisfies: [
       { need: 'fun', amount: 0.8 },
       { need: 'energy', amount: -0.4 },

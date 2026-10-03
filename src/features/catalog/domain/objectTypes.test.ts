@@ -24,6 +24,8 @@ import {
   PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
+  signFor,
+  signOf,
   SKY_MODELS,
   STAFF_MODELS,
   stylesOf,
@@ -273,6 +275,25 @@ describe('venues', () => {
     const hotel = venueOf('hotel');
     expect(hotel?.role).toBe('lodging');
     expect(hotel?.beds).toBe(40);
+  });
+
+  it('reads the sign a venue declares', () => {
+    expect(signOf('bakery')).toBe('bakery');
+    expect(signOf('hotel'), 'a lodging hangs no sign').toBeNull();
+    expect(signOf('bench')).toBeNull();
+  });
+
+  it('gives a variant the sign of its original', () => {
+    const variant = stylesOf('restaurant').find((type) => type.style > 0);
+    expect(variant).toBeDefined();
+    expect(objectTypeById(variant!.id).venue?.sign).toBeUndefined();
+    expect(signOf(variant!.id)).toBe('restaurant');
+  });
+
+  it("falls back to the role's sign where a venue declares none", () => {
+    const venue = { role: 'activity', capacity: 4, dwellSeconds: { min: 1, max: 2 } } as const;
+    expect(signFor(venue)).toBe('fun');
+    expect(signFor({ ...venue, role: 'service' })).toBe('service');
   });
 
   it('has nothing to offer at dressing', () => {

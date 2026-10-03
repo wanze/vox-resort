@@ -31,6 +31,7 @@ export interface NewsControls {
   setMuted(kind: ToastKind, muted: boolean): void;
   setMarkers(shown: boolean): void;
   setStaffPins(shown: boolean): void;
+  setSigns(shown: boolean): void;
   setUpdate(phase: UpdatePhase | null): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;
@@ -63,13 +64,17 @@ function usePrefs() {
       (shown: boolean) => change((was) => ({ ...was, staff: shown })),
       [change],
     ),
+    setSigns: useCallback(
+      (shown: boolean) => change((was) => ({ ...was, signs: shown })),
+      [change],
+    ),
   };
 }
 
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
-  const { prefs, change, setMarkers, setStaffPins } = usePrefs();
+  const { prefs, change, setMarkers, setStaffPins, setSigns } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
   // Read through refs so `hear` stays stable: the showcase holds it from its mount on.
@@ -129,6 +134,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     ),
     setMarkers,
     setStaffPins,
+    setSigns,
     setUpdate: useCallback(
       (phase: UpdatePhase | null) => setToasts((shown) => withUpdate(shown, phase)),
       [],

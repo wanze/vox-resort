@@ -1420,6 +1420,89 @@ input[type='checkbox'] {
   color: var(--foliage);
 }
 
+/* Under the staff pins and the problem markers: what a building is gives way to what is wrong there. */
+.hud-signs {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.hud-sign-spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.hud-sign-spot[hidden],
+.hud-sign-spot.is-under-marker {
+  display: none;
+}
+
+.hud-sign-spot:hover,
+.hud-sign-spot:focus-within {
+  z-index: 1;
+}
+
+/* Quieter than a marker: paper and ink, no colour of its own beyond the icon. */
+.hud-sign {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -34px 0 0 -14px;
+  padding: 0;
+  border: 2px solid var(--stone-700);
+  border-radius: var(--radius-pebble);
+  background: var(--stone-50);
+  box-shadow: var(--shadow-lift);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.hud-sign::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--stone-700);
+  border-bottom: 0;
+}
+
+.hud-sign:hover,
+.hud-sign:focus-visible {
+  filter: brightness(1.08);
+}
+
+/* Beside the plate, level with it, so it never covers the building's own sign. */
+.hud-sign-name {
+  position: absolute;
+  top: -32px;
+  left: 16px;
+  display: none;
+  padding: 2px var(--space-2);
+  border: 2px solid var(--stone-700);
+  border-radius: var(--radius-pebble-b);
+  background: var(--stone-50);
+  box-shadow: var(--shadow-lift);
+  color: var(--text);
+  font: var(--size-small) / 1.2 var(--font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hud-sign:hover + .hud-sign-name,
+.hud-sign:focus-visible + .hud-sign-name,
+.hud-signs-named .hud-sign-name {
+  display: block;
+}
+
 /* Under the toasts and every window; the render loop moves each marker with a transform. */
 .hud-markers {
   position: absolute;

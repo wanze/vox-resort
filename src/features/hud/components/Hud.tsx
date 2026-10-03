@@ -14,6 +14,7 @@ import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { ProblemMarkers } from './ProblemMarkers';
 import { StaffPins } from './StaffPins';
+import { VenueSigns } from './VenueSigns';
 import { RenderStats, type DebugElements } from './RenderStats';
 import { ResortNameForm } from './ResortNameForm';
 import { ResortStats } from './ResortStats';
@@ -33,7 +34,8 @@ import type { GameMode, Ledger } from '../../sim/domain/ledger';
 import type { LandView } from '../../land/domain/landRights';
 import type { StaffRole } from '../../sim/domain/staff';
 import type { OrderRole } from '../../sim/domain/staffRouter';
-import type { OrderSpot } from '../domain/markers';
+import { markersOf, type OrderSpot } from '../domain/markers';
+import type { SignSpot } from '../domain/signs';
 import type { UpdateAction } from '../domain/news';
 import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
@@ -64,6 +66,9 @@ export interface HudProps {
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly markerElements: RefObject<(HTMLElement | null)[]>;
   readonly staffPinElements: RefObject<(HTMLButtonElement | null)[]>;
+  readonly signs: readonly SignSpot[];
+  readonly signElements: RefObject<(HTMLElement | null)[]>;
+  readonly signsNamed: boolean;
   readonly onSelectWorker: (worker: number) => void;
   readonly onSelectAt: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly ledger: Ledger | null;
@@ -255,9 +260,21 @@ function Palette(props: HudProps) {
   );
 }
 
+// The same list ProblemMarkers draws, so a sign gives way only to a marker that is showing.
+const markedTiles = (props: HudProps) =>
+  props.news.prefs.markers ? markersOf(props.advice).map((marker) => marker.at) : [];
+
 export function Hud(props: HudProps) {
   return (
     <div className="hud">
+      <VenueSigns
+        spots={props.signs}
+        shown={props.news.prefs.signs}
+        named={props.signsNamed}
+        marked={markedTiles(props)}
+        elements={props.signElements}
+        onSelectAt={props.onSelectAt}
+      />
       <StaffPins elements={props.staffPinElements} onSelectWorker={props.onSelectWorker} />
       <ProblemMarkers
         advice={props.advice}
@@ -287,6 +304,8 @@ export function Hud(props: HudProps) {
         onMarkersChange={props.news.setMarkers}
         staffPins={props.news.prefs.staff}
         onStaffPinsChange={props.news.setStaffPins}
+        signs={props.news.prefs.signs}
+        onSignsChange={props.news.setSigns}
       />
       <Windows {...props} />
       <Toasts

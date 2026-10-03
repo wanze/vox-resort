@@ -141,6 +141,22 @@ Toggle with `C` or the View panel.
   normally does (shift-right pans).
 - Benchmarks always use perspective.
 
+### Venue signs
+
+Every venue but a lodging has a DOM sign over its first door, a storey up
+(`signAnchorOf`, `hud/domain/signs.ts`), or over its roof if it has no door. The
+icon is the model's `venue.sign`, else its role's, read off the family's
+original (`signOf`). The signs are positioned per frame like the problem markers
+(`createMarkerSpots`, capacity `MAX_SIGNS` 160), and only while a tile at the
+camera's target spans 20 CSS pixels (hidden again under 16), in either camera
+mode. Hovering a sign or holding Alt shows the venue's name; a click selects it.
+A sign gives way to a problem marker on the same building. "Building signs" in
+the Map view menu (or `N`) turns them off. They are never placed under a bench. Measured
+on the generated plot with the camera swaying so every sign moves each frame:
+about 0.5-0.9 ms a frame for 70-103 signs on screen. Each sign spot needs its
+`will-change: transform` layer: without it, the canvas repaints and the frame
+rate falls to 50-84 fps.
+
 ## Level of detail
 
 **Draw calls are the bottleneck, not triangles.** Three.js spends about 14 µs of

@@ -24,6 +24,7 @@ export default defineModel({
   ],
   venue: {
     role: 'service',
+    sign: 'first-aid',
     satisfies: [{ need: 'health', amount: 1 }],
     capacity: 4,
     dwellSeconds: { min: 300, max: 900 },

@@ -55,6 +55,7 @@ export default defineModel({
   ),
   venue: {
     role: 'service',
+    sign: 'reception',
     capacity: 12,
     dwellSeconds: { min: 120, max: 480 },
     spots: DESKS.map(([x0]) => ({ x: x0 + 3, y: GROUND, z: LOGGIA.z + 2, facing: 2 as const })),

@@ -36,6 +36,8 @@ export interface TopBarProps {
   readonly onFind: () => void;
   readonly markers: boolean;
   readonly onMarkersChange: (shown: boolean) => void;
+  readonly signs: boolean;
+  readonly onSignsChange: (shown: boolean) => void;
   readonly staffPins: boolean;
   readonly onStaffPinsChange: (shown: boolean) => void;
 }
@@ -140,6 +142,8 @@ export function TopBar(props: TopBarProps) {
           onOpenChange={opener('overlay')}
           markers={props.markers}
           onMarkersChange={props.onMarkersChange}
+          signs={props.signs}
+          onSignsChange={props.onSignsChange}
           staff={props.staffPins}
           onStaffChange={props.onStaffPinsChange}
         />

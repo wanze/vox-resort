@@ -18,6 +18,7 @@ import {
   PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
+  signOf,
   SKY_MODELS,
   STAFF_MODELS,
   TILE_VOXELS,
@@ -484,6 +485,13 @@ import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/fr
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
 import { MAX_MARKERS, type OrderSpot } from '../features/hud/domain/markers';
 import {
+  MAX_SIGNS,
+  signAnchorOf,
+  signsShown,
+  signSpotsOf,
+  type SignSpot,
+} from '../features/hud/domain/signs';
+import {
   createPinSpot,
   isPinned,
   roofOver,
@@ -674,6 +682,8 @@ export interface ShowcaseOptions {
   readonly onSpeedChange?: (speed: SimSpeed) => void;
   // Whenever an order is given, taken up or ended, for the markers to flag.
   readonly onOrdersChange?: (orders: readonly OrderSpot[]) => void;
+  // Whenever the venues are rebuilt, in the order the signs' anchors were placed.
+  readonly onSigns?: (spots: readonly SignSpot[]) => void;
   // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
   // the player's local time, until the first new game.
   readonly welcome?: boolean;
@@ -711,6 +721,8 @@ export interface Showcase {
   setMarkers(tiles: readonly { readonly tileX: number; readonly tileZ: number }[]): void;
   // A pin over every member of staff on duty; the one inspected is pinned either way.
   setStaffPins(shown: boolean): void;
+  // Over every venue's door while zoomed in; under a bench, never placed.
+  setSigns(shown: boolean): void;
   selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
@@ -3474,6 +3486,44 @@ function roofsNow(resort: Resort): Roofs {
   };
 }
 
+// Both axes, as either one looks end on from some camera.
+function tilePxAt(camera: SceneHandle['camera'], at: Vector3, width: number, height: number) {
+  projected.copy(at).project(camera);
+  const x = projected.x;
+  const y = projected.y;
+  projected.set(at.x + TILE_VOXELS, at.y, at.z).project(camera);
+  const alongX = Math.hypot((projected.x - x) * width, (projected.y - y) * height);
+  projected.set(at.x, at.y, at.z + TILE_VOXELS).project(camera);
+  const alongZ = Math.hypot((projected.x - x) * width, (projected.y - y) * height);
+  return Math.max(alongX, alongZ) / 2;
+}
+
+interface ViewSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+// Measured at the camera's target rather than per sign, so the signs come and go together.
+function createSignSpots() {
+  const spots = createMarkerSpots(MAX_SIGNS);
+  let placed = 0;
+  let shown = false;
+  return {
+    view: spots.view,
+    place(points: readonly Anchor[]): void {
+      spots.place(points);
+      placed = spots.view.count;
+    },
+    project(camera: SceneHandle['camera'], target: Vector3, wanted: boolean, size: ViewSize) {
+      const { width, height } = size;
+      shown = wanted && placed > 0 && signsShown(tilePxAt(camera, target, width, height), shown);
+      if (!shown) return spots.showing(0);
+      spots.showing(placed);
+      spots.project(camera, width, height);
+    },
+  };
+}
+
 // Pinned per worker: slot i is worker i, so a button's role never changes under it.
 function createStaffPinner(capacity: number) {
   const spots = createMarkerSpots(capacity);
@@ -3815,6 +3865,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const markerSpots = createMarkerSpots(MAX_MARKERS);
   const staffPins = createStaffPinner(current().staffPool.count);
   let staffPinsShown = false;
+  const signSpots = createSignSpots();
+  let signsWanted = false;
 
   const statsNow = createStatsReader({
     handle,
@@ -3949,6 +4001,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     );
   };
   letter();
+
+  // Off under a bench, as the markers are. Told again whenever the venues are rebuilt, so the
+  // HUD's buttons and the anchors line up.
+  const placeSigns = (): void => {
+    if (bench) return;
+    const resort = current();
+    const spots = signSpotsOf(resort.venues, signOf);
+    const venues = new Map(resort.venues.map((venue) => [venue.key, venue]));
+    const anchorOf = (spot: SignSpot): Anchor => {
+      const venue = venues.get(spot.key)!;
+      return signAnchorOf(venue, groundUnder(resort, venue), objectTypeById(venue.id).model.height);
+    };
+    signSpots.place(spots.map(anchorOf));
+    options.onSigns?.(spots);
+  };
+  placeSigns();
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
@@ -4202,6 +4270,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     handle.controls.enabled = true;
     clock.restart(INITIAL_TIME);
     letter();
+    placeSigns();
     rebuilt();
     options.onOpenChange?.(current().open);
   };
@@ -4238,6 +4307,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Everything React shows is told again: the HUD still holds the game that was replaced.
   const announceLoaded = (resort: Resort): void => {
     letter();
+    placeSigns();
     options.onNameChange?.(name);
     rebuilt();
     options.onOpenChange?.(resort.open);
@@ -4404,6 +4474,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.footfall = createFootfall(network.nodes.length);
     paintOverlay();
     letter();
+    placeSigns();
     // Said now rather than tomorrow; the day's counters are left alone.
     advise();
     speak();
@@ -4503,6 +4574,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;
 
+    signSpots.project(handle.camera, handle.controls.target, signsWanted, viewSize);
     markerSpots.project(handle.camera, viewSize.width, viewSize.height);
     staffPins.pin(current(), staffPinsShown, workerOf(selected));
     tellOrders();
@@ -4528,6 +4600,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       inspect: inspectLine(),
       markers: markerSpots.view,
       staff: staffPins.view,
+      signs: signSpots.view,
     });
 
     recorder?.record(elapsed * 1000);
@@ -4608,6 +4681,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Not refused under a bench as the markers are: a bench's fresh profile has them off.
     setStaffPins(shown) {
       staffPinsShown = shown;
+    },
+    setSigns(shown) {
+      signsWanted = shown;
     },
     selectAt(tile) {
       const key = current().occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });

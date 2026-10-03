@@ -23,6 +23,7 @@ import { useOverlay } from './useOverlay';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
+import { useSigns } from './useSigns';
 import { useUpdate } from './useUpdate';
 import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
 import {
@@ -142,7 +143,7 @@ function useGame(
 
 // Together because the advice and the day's report are what the news is heard from, and a new
 // resort is a baseline for both.
-// sceneUp, so the staff pins a preference read at startup asks for are not told to nobody.
+// sceneUp, so the staff pins and signs a preference read at startup asks for are not told to nobody.
 function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sceneUp: boolean) {
   const news = useNews(speed);
   const history = useHistory(news.closeDay);
@@ -162,7 +163,8 @@ function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sc
   useEffect(() => {
     if (sceneUp) showcase.current?.setStaffPins(staffPins);
   }, [showcase, sceneUp, staffPins]);
-  return { news, history, replaced, advice };
+  const signs = useSigns(showcase, sceneUp, news.prefs.signs);
+  return { news, history, replaced, advice, signs };
 }
 
 function useHourly() {
@@ -194,7 +196,7 @@ export function App() {
   const camera = useCameraControls(showcaseRef);
   const clock = useClockControls(showcaseRef);
   const inspector = useInspector(showcaseRef);
-  const { news, history, replaced, advice } = useAdviceNews(
+  const { news, history, replaced, advice, signs } = useAdviceNews(
     showcaseRef,
     clock.speed,
     stats !== null,
@@ -211,6 +213,7 @@ export function App() {
     saves,
     {
       staffPins: () => news.setStaffPins(!news.prefs.staff),
+      signs: () => news.setSigns(!news.prefs.signs),
       land: landToggle(resort.money.land, tool, selectTool),
     },
   );
@@ -226,6 +229,7 @@ export function App() {
   const { adoptWeather, adoptSpeed } = clock;
   const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
+  const { adopt: adoptSigns } = signs;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -243,6 +247,7 @@ export function App() {
       onCameraChange: adoptCamera,
       onSelectionChange: adoptSelection,
       onOrdersChange: adoptOrders,
+      onSigns: adoptSigns,
       onAdviceChange: adoptAdvice,
       onResortReplaced: replaced,
       onThoughtsChange: adoptVoices,
@@ -324,6 +329,7 @@ export function App() {
     markDirty,
     morning,
     adoptSpeed,
+    adoptSigns,
   ]);
 
   return (
@@ -366,6 +372,9 @@ export function App() {
           onShowOnPlot={advice.showOnPlot}
           markerElements={hudNodes.markers}
           staffPinElements={hudNodes.staffPins}
+          signs={signs.spots}
+          signElements={hudNodes.signs}
+          signsNamed={signs.named}
           onSelectWorker={inspector.selectWorker}
           onSelectAt={inspector.selectAt}
           preview={previewUrl}

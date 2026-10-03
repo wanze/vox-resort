@@ -203,6 +203,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'activity',
+    sign: 'waterpark',
     bathing: true,
     satisfies: [
       { need: 'fun', amount: 1 },

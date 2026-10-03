@@ -23,6 +23,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'service',
+    sign: 'shower',
     satisfies: [{ need: 'hygiene', amount: 0.6 }],
     capacity: 1,
     dwellSeconds: { min: 30, max: 90 },

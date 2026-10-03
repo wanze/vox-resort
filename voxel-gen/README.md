@@ -178,6 +178,7 @@ venue: {
 | `beds`         | lodging only, equal to `capacity`                                                 |
 | `doors`        | where guests enter, turned with the building                                      |
 | `shelter`      | `'open'` closes in rain; default `'covered'`                                      |
+| `sign`         | the icon the app hangs over the door (`SignKind`); default the role's own         |
 
 A negative `amount` makes a need worse (tennis costs energy). `venues.test.ts`
 lists the models deliberately without a venue, so every new model must be one or

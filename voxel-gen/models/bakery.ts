@@ -37,6 +37,7 @@ export default defineModel({
   ]),
   venue: {
     role: 'food',
+    sign: 'bakery',
     satisfies: [{ need: 'hunger', amount: 0.5 }],
     capacity: 8,
     dwellSeconds: { min: 240, max: 480 },

@@ -18,6 +18,7 @@ export default defineModel({
   windows: WINDOW_GLASS,
   venue: {
     role: 'service',
+    sign: 'toilets',
     satisfies: [{ need: 'hygiene', amount: 1 }],
     capacity: 4,
     dwellSeconds: { min: 60, max: 180 },

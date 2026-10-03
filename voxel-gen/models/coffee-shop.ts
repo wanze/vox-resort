@@ -46,6 +46,7 @@ export default defineModel({
   ),
   venue: {
     role: 'drink',
+    sign: 'coffee',
     satisfies: [
       { need: 'thirst', amount: 0.7 },
       { need: 'energy', amount: 0.2 },

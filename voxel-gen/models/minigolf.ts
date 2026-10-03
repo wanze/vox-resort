@@ -225,6 +225,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'activity',
+    sign: 'golf',
     satisfies: [{ need: 'fun', amount: 0.7 }],
     capacity: 16,
     dwellSeconds: { min: 1800, max: 3600 },

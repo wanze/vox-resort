@@ -12,6 +12,7 @@ export default defineModel({
   venue: {
     shelter: 'open',
     role: 'food',
+    sign: 'icecream',
     satisfies: [
       { need: 'hunger', amount: 0.25 },
       { need: 'fun', amount: 0.15 },

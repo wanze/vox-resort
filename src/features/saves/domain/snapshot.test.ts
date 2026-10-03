@@ -77,6 +77,7 @@ function gameFixture(): GameSnapshot {
     breakdowns: createBreakdowns(0),
     venues: [],
     takings: new Map([['bar#0', 40]]),
+    names: new Map([['bar#0', 'The Anchor']]),
     footfall: createFootfall(network.nodes.length),
     reviews: [],
     today: startDay(0),
@@ -188,6 +189,14 @@ describe('gameSnapshotSchema', () => {
   it('takes a save from before resorts had names', () => {
     const { name: _name, ...nameless } = gameFixture();
     expect(gameSnapshotSchema.safeParse(nameless).success).toBe(true);
+  });
+
+  it('takes a save from before venues had names, and reads it as naming none', () => {
+    const game = gameFixture();
+    const { names: _names, ...resort } = game.resort;
+    const parsed = gameSnapshotSchema.safeParse({ ...game, resort });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.resort.names).toEqual([]);
   });
 
   it('survives a structured clone, which is how IndexedDB stores it', () => {

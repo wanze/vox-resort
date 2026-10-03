@@ -44,6 +44,8 @@ export interface Advice {
   // A label is not an address: a plot stands many Changing Cabins, and the tile tells them apart.
   readonly at: { readonly tileX: number; readonly tileZ: number } | null;
   readonly need: GuestNeed | null;
+  // The venue's placement key, which a rename leaves alone where the subject changes.
+  readonly key?: string;
 }
 
 const tileOf = (place: { readonly tileX: number; readonly tileZ: number }) => ({
@@ -169,6 +171,7 @@ export function adviceFullLines(facts: ResortFacts): Advice | null {
         kind: 'full-lines',
         weight,
         subject: venue.label,
+        key: venue.key,
         count: balks,
         at: tileOf(venue),
         need: null,
@@ -190,6 +193,7 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
         kind: 'dirty',
         weight,
         subject: venue.label,
+        key: venue.key,
         // The percentage the inspector shows, so the two panels agree.
         count: Math.round(clean * 100),
         at: tileOf(venue),
@@ -213,6 +217,7 @@ export function adviceUnwatched(facts: ResortFacts): readonly Advice[] {
       kind: 'unwatched',
       weight: 0.1 + 0.6 * clamp(swam / SWIMMERS_LOUD),
       subject: venue?.label ?? 'the beach',
+      ...(venue ? { key: venue.key } : {}),
       count: swam,
       at: venue ? tileOf(venue) : null,
       need: null,
@@ -236,6 +241,7 @@ export function adviceBroken(facts: ResortFacts): readonly Advice[] {
         kind: 'broken' as const,
         weight: 0.3 + 0.6 * clamp(down / DOWN_LOUD),
         subject: venue.label,
+        key: venue.key,
         count: down,
         at: tileOf(venue),
         need: null,
@@ -280,6 +286,7 @@ export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
       kind: 'unreachable' as const,
       weight: 0.9,
       subject: venue.label,
+      key: venue.key,
       count: venue.capacity,
       at: tileOf(venue),
       need: null,
@@ -296,6 +303,7 @@ export function adviceNotStepFree(facts: ResortFacts): Advice | null {
     kind: 'not-step-free',
     weight: 0.3 + 0.3 * clamp(cutOff.length / Math.max(1, facts.venues.length)),
     subject: first.label,
+    key: first.key,
     count: cutOff.length,
     at: tileOf(first),
     need: null,
@@ -388,6 +396,7 @@ export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
       kind: 'unvisited' as const,
       weight: idleWeight(venue.capacity),
       subject: venue.label,
+      key: venue.key,
       count: venue.capacity,
       at: tileOf(venue),
       need: null,

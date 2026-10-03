@@ -77,6 +77,7 @@ function gameOf(POPULATION: number, seed: number): GameSnapshot {
     breakdowns: createBreakdowns(0),
     venues: [],
     takings: new Map([['bar#0', 40]]),
+    names: new Map([['bar#0', 'The Anchor']]),
     footfall: createFootfall(network.nodes.length),
     reviews: [],
     today: startDay(0),

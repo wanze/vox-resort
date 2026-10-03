@@ -525,6 +525,7 @@ describe('a guest at night', () => {
 describe('errandOf', () => {
   const BAKERY = { label: 'Bakery' };
   const BUNGALOW = { label: 'Bungalow' };
+  const SPOON = { label: 'The Salty Spoon', kind: 'Restaurant' };
   const none = { visit: null, goal: null, home: null, asleep: false, beach: null };
 
   it('is nothing for a guest with nowhere to be', () => {
@@ -542,6 +543,24 @@ describe('errandOf', () => {
       to: 'Bungalow',
       home: true,
     });
+  });
+
+  it('words a named venue by its name alone, and its kind with "the"', () => {
+    const guests = guestsOf();
+    const line = (errand: Errand) =>
+      activityLine(seatedStreet('sit'), contentNeeds(guests), guests, 0, errand);
+    const visit = (venue: { label: string; kind: string }) =>
+      errandOf({ ...none, visit: { venue, waiting: false, place: 0 } });
+    expect(line(visit(SPOON))).toBe('Inside The Salty Spoon');
+    expect(line(visit({ ...SPOON, label: 'Restaurant' }))).toBe('Inside the Restaurant');
+  });
+
+  it('walks to a named venue by its name', () => {
+    const errand = errandOf({ ...none, goal: SPOON });
+    expect(errand).toEqual({ kind: 'walking', to: 'The Salty Spoon', home: false, named: true });
+    const guests = guestsOf();
+    const line = activityLine(seatedStreet('sit'), contentNeeds(guests), guests, 0, errand);
+    expect(line.startsWith('Walking to The Salty Spoon · tile ')).toBe(true);
   });
 
   it('puts a visit ahead of a walk, and sleep ahead of everything', () => {

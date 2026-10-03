@@ -263,6 +263,9 @@ export interface ModelVenue {
   readonly role: VenueRole;
   // The sign the app hangs over the door; left out, the role's own sign is shown.
   readonly sign?: SignKind;
+  // Suggestions the game draws a venue's name from, in no order; left out, the venue goes by
+  // its type until the player names it.
+  readonly names?: readonly string[];
   readonly satisfies?: readonly NeedRelief[];
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };

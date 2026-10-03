@@ -127,6 +127,9 @@ export interface Router {
     gateways: readonly Gateway[],
     network: WalkNetwork,
   ): void;
+  // The same venues, renamed: unlike rebuild it keeps every field, lane and visit. Throws
+  // when the list differs in anything but labels' length or keys, which is a caller's bug.
+  relabel(venues: readonly Venue[]): void;
   // Nobody is dragged out of a venue or a line; they leave when the visit ends.
   sendHome(person: number): void;
   admit(person: number, node: number): void;
@@ -1171,6 +1174,14 @@ export function createRouter(parts: {
       if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
       callInForBed(at % TICKS_PER_DAY);
       sendOnErrands();
+    },
+
+    relabel(renamed) {
+      const next = withBeach(renamed, network);
+      const same =
+        next.length === venues.length && next.every((venue, at) => venue.key === venues[at]!.key);
+      if (!same) throw new Error('relabel was handed a different venue list; rebuild instead');
+      venues = next;
     },
 
     rebuild(nextVenues, nextLodgings, nextGateways, nextNetwork) {

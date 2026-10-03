@@ -166,6 +166,8 @@ export function signFor(venue: ModelVenue | null): SignKind | null {
 // The original's, as the label is: a variant is the same kind of place in another look.
 export const signOf = (id: string): SignKind | null => signFor(venueOf(familyOf(id)));
 
+export const namesOf = (id: string): readonly string[] => venueOf(familyOf(id))?.names ?? [];
+
 export function venueTypes(): readonly ObjectTypeDefinition[] {
   return OBJECT_TYPES.filter((type) => type.venue !== null);
 }

@@ -40,9 +40,10 @@ export const toastKey = (shown: Message | Toast): string => {
   return shown.kind === 'advice' ? shown.news.key : `day:${shown.report.day}`;
 };
 
-// Unique per building, not per model: two idle Changing Cabins are two rows.
+// Unique per building, not per model: two idle Changing Cabins are two rows. By the venue's key
+// where it has one, so renaming a broken bar does not toast its breakdown again.
 export const adviceKey = (advice: Advice): string =>
-  `${advice.kind}:${advice.subject}:${advice.at ? `${advice.at.tileX},${advice.at.tileZ}` : ''}`;
+  `${advice.kind}:${advice.key ?? advice.subject}:${advice.at ? `${advice.at.tileX},${advice.at.tileZ}` : ''}`;
 
 // The severity and the weight it takes to reach it; null stays in the panel. The weights are
 // first guesses, to be tuned by playing a few days at normal speed.

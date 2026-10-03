@@ -43,6 +43,20 @@ export default defineModel({
   venue: {
     role: 'activity',
     sign: 'spa',
+    names: [
+      'Serenity Spa',
+      'The Quiet Cove',
+      'Terme del Mare',
+      'Salt & Stone Spa',
+      'The Lotus Pavilion',
+      'Spa Aphrodite',
+      'Still Waters',
+      'The Healing Tide',
+      'Eucalyptus House',
+      'Spa Calma',
+      'The Warm Stone',
+      'Breeze Retreat',
+    ],
     satisfies: [
       { need: 'fun', amount: 0.6 },
       { need: 'energy', amount: 0.5 },

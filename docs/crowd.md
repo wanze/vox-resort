@@ -158,6 +158,19 @@ shows their needs, destination and a live status line, such as
 `Hungry · Third in the line at the Bakery`. A venue shows how many are inside and
 queuing.
 
+Venues have names. `naming/domain/venueNames.ts` draws one from the model's
+`names` the first time a venue stands (built, generated, or loaded from a save
+that has none), by a hash of its placement key and tile, avoiding names already
+held. A drawn name is never drawn again, so a second restaurant never renames
+the first. Models without `names` (services, courts, pools) go by their type
+until the player names them. The inspector renames a venue; an emptied name
+draws a fresh one. Names are saved by placement key in the resort snapshot.
+`Venue.label` is the name and `Venue.kind` the type, so thoughts, advice,
+toasts and staff tasks say the name with no wording of their own; a named
+venue reads without "the" (`isNamed`). A rename swaps the router's list
+through `relabel`, never `rebuild`, and toasts are keyed by the venue's key,
+so neither the crowd nor the news moves.
+
 ## Drawing
 
 - One `InstancedMesh` per person model, not chunked or frustum-culled. People

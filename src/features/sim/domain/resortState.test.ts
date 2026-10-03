@@ -35,6 +35,7 @@ function stateFor(seed: number): ResortState {
     breakdowns: createBreakdowns(VENUES.length),
     venues: VENUES,
     takings: new Map(),
+    names: new Map(),
     footfall: createFootfall(9),
     reviews: [],
     today: startDay(0),
@@ -65,6 +66,7 @@ function played(): ResortState {
   state.breakdowns.since[1] = 300;
   state.breakdowns.worn[1] = 40;
   earn(state.takings, 'bar#0', 120);
+  state.names = new Map([['bar#0', 'The Anchor']]);
   state.footfall.seen[2] = 11;
   state.footfall.mood[2] = 6.5;
   state.reviews = [

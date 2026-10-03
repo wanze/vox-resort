@@ -1937,6 +1937,24 @@ input[type='checkbox'] {
   gap: var(--space-2);
 }
 
+.hud-venue-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-venue-kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+
+.hud-venue-name-field {
+  width: 100%;
+}
+
 .hud-needs {
   display: grid;
   gap: var(--space-2);

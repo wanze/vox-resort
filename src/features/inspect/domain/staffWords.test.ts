@@ -31,6 +31,15 @@ describe('taskWords', () => {
     expect(taskWords(facts({ kind: 'venue', venue: 'Bar' }))).toBe('On the way to the Bar');
   });
 
+  it('names a venue with a name of its own without "the"', () => {
+    const named = (parts: Partial<TaskFacts>) =>
+      taskWords(facts({ kind: 'venue', venue: 'The Anchor', named: true, ...parts }));
+    expect(named({ working: true })).toBe('Cleaning The Anchor');
+    expect(named({ working: true, role: 'animator' })).toBe('Putting on a show at The Anchor');
+    expect(named({})).toBe('On the way to The Anchor');
+    expect(named({ ordered: true })).toBe('Sent to The Anchor');
+  });
+
   it('says a worker sent by an order was sent', () => {
     expect(taskWords(facts({ kind: 'venue', venue: 'Bar', ordered: true }))).toBe(
       'Sent to the Bar',

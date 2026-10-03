@@ -24,6 +24,7 @@ import {
   PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
+  namesOf,
   signFor,
   signOf,
   SKY_MODELS,
@@ -288,6 +289,18 @@ describe('venues', () => {
     expect(variant).toBeDefined();
     expect(objectTypeById(variant!.id).venue?.sign).toBeUndefined();
     expect(signOf(variant!.id)).toBe('restaurant');
+  });
+
+  it('gives a variant the names its original suggests', () => {
+    const variant = stylesOf('restaurant').find((type) => type.style > 0);
+    expect(objectTypeById(variant!.id).venue?.names).toBeUndefined();
+    expect(namesOf(variant!.id)).toEqual(namesOf('restaurant'));
+    expect(namesOf('restaurant').length).toBeGreaterThan(0);
+  });
+
+  it('suggests no names where a model declares none', () => {
+    expect(namesOf('restrooms')).toEqual([]);
+    expect(namesOf('bench')).toEqual([]);
   });
 
   it("falls back to the role's sign where a venue declares none", () => {

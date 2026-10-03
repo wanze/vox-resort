@@ -82,6 +82,20 @@ export default defineModel({
   venue: {
     role: 'activity',
     sign: 'gym',
+    names: [
+      'The Iron Pier',
+      'Shape & Shore',
+      'Palestra Mare',
+      'The Sweat Shack',
+      'Pulse Pavilion',
+      'The Strong Tide',
+      'Fit by the Sea',
+      'The Seaside Gym',
+      'The Workout Deck',
+      'Olympia Gym',
+      'Morning Reps',
+      'Muscle Beach Hall',
+    ],
     satisfies: [
       { need: 'fun', amount: 0.4 },
       { need: 'energy', amount: -0.5 },

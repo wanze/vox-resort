@@ -47,6 +47,21 @@ export default defineModel({
   venue: {
     role: 'drink',
     sign: 'coffee',
+    names: [
+      'Bean & Breeze',
+      'Café Marée',
+      'The Morning Tide',
+      'Espresso Point',
+      'Café Azzurro',
+      'The Sleepy Gull',
+      'Cup of Sun',
+      'Kafeneio Limani',
+      'Crema',
+      'The Roasted Shell',
+      'Café Sirocco',
+      'Little Harbour Café',
+      'The Slow Pour',
+    ],
     satisfies: [
       { need: 'thirst', amount: 0.7 },
       { need: 'energy', amount: 0.2 },

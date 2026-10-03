@@ -9,6 +9,7 @@ import {
   familyOf,
   isGateway,
   materialColorsById,
+  namesOf,
   OBJECT_TYPES,
   objectTypeById,
   objectTypeTop,
@@ -286,7 +287,19 @@ import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { depotForShift, depotsOn, type Depot } from '../features/sim/domain/depots';
 import { createRandom, type Random } from '../features/layout/domain/random';
 import { beachVenueFor, isBeach as isTheBeach } from '../features/sim/domain/beach';
-import { shelterOf, venuesOn, type Venue } from '../features/sim/domain/venues';
+import {
+  isNamed,
+  relabelled,
+  shelterOf,
+  venuesOn,
+  type Venue,
+} from '../features/sim/domain/venues';
+import {
+  assignNames,
+  namedPlacesOf,
+  renameTo,
+  type VenueNames,
+} from '../features/naming/domain/venueNames';
 import {
   homesOfLodgings,
   lodgingFor,
@@ -711,6 +724,8 @@ export interface Showcase {
   setOpen(open: boolean): void;
   // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
   rename(name: string): void;
+  // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
+  renameVenue(key: string, typed: string): void;
   setHiring(role: StaffRole, count: number | null): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
@@ -1055,6 +1070,8 @@ interface Resort {
   readonly happiness: Happiness;
   // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
   venues: readonly Venue[];
+  // Drawn once per venue and carried by key, so building a second bar never renames the first.
+  names: VenueNames;
   lodgings: readonly Lodging[];
   // Homes are sorted by beds, lodgings stand in placement order; rebuilt with both on an edit.
   homeOfLodging: Int32Array;
@@ -1396,7 +1413,8 @@ function buildResort(
     // Props too: the layout stands benches as props, so placements alone have nothing to sit on.
     standing: [...plot.layout.placements, ...plot.layout.props],
   });
-  const venues = venuesOn(plot.layout.placements);
+  const names = assignNames(new Map(), namedPlacesOf(plot.layout.placements));
+  const venues = venuesOn(plot.layout.placements, names);
   const lodgings = lodgingsOn(plot.layout.placements);
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
@@ -1643,6 +1661,7 @@ function buildResort(
     needs,
     happiness,
     venues,
+    names,
     lodgings,
     homeOfLodging: homesOfLodgings(lodgings, guests.homes),
     gateways,
@@ -3596,13 +3615,15 @@ const labelOf = (list: readonly { readonly label: string }[], index: number): st
   list[index]?.label ?? null;
 
 function taskFactsOf(resort: Resort, worker: number, task: StaffTask): TaskFacts {
+  const venue = resort.venues[task.venue];
   return {
     kind: task.kind,
     working: task.working,
     role: resort.staffPool.role[worker]!,
-    venue: labelOf(resort.venues, task.venue),
+    venue: venue?.label ?? null,
     lodging: labelOf(resort.lodgings, task.lodging),
     ordered: task.ordered,
+    named: venue !== undefined && isNamed(venue),
   };
 }
 
@@ -3634,6 +3655,20 @@ function sendToPlace(resort: Resort, role: OrderRole, key: string | null): void 
 function sendToTile(resort: Resort, at: { readonly tileX: number; readonly tileZ: number }) {
   resort.staffRouter.order('cleaner', { tile: at.tileZ * resort.litter.tilesX + at.tileX });
 }
+
+// A venue goes by its name, which the type's label in the view gives way to.
+const withNaming = (view: PlaceView, venue: Venue | undefined): PlaceView =>
+  venue === undefined
+    ? view
+    : {
+        ...view,
+        label: venue.label,
+        naming: {
+          kind: venue.kind ?? venue.label,
+          named: isNamed(venue),
+          suggested: namesOf(venue.id).length > 0,
+        },
+      };
 
 // Only a venue can be sent to; a fixture or a lodging has nothing for a mechanic or a cleaner.
 const withSends = (resort: Resort, view: PlaceView, venue: number): PlaceView =>
@@ -4061,12 +4096,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (!placement) return null;
     const resort = current();
     const { guests, router } = resort;
-    const label = objectTypeById(placement.id).label;
     // By key: the venue list is the router's numbering; -1 reads as spotless.
     const venue = resort.venues.findIndex((candidate) => candidate.key === placement.key);
     const view = placeView(
       placement,
-      label,
+      objectTypeById(placement.id).label,
       guests,
       router.occupancyOf(placement.key),
       sceneryOver(resort.scenery, placement),
@@ -4075,7 +4109,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.staffRouter.watching(venue),
       isBroken(resort.breakdowns, venue),
     );
-    return withSends(resort, view, venue);
+    return withNaming(withSends(resort, view, venue), resort.venues[venue]);
   };
 
   // Kept to tell when a worker's shift has changed under their open panel.
@@ -4318,6 +4352,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // and the routers before the crowds they steer.
   const restoreGame = (resort: Resort, saved: GameSnapshot): void => {
     restoreResort(resort, saved.resort);
+    // The resort was just built off the layout; a save from before venues had names draws them.
+    resort.names = assignNames(resort.names, namedPlacesOf(resort.plot.layout.placements));
+    resort.venues = relabelled(resort.venues, resort.names);
+    resort.router.relabel(resort.venues);
     // Before the staff router's restore, which reads the duty.
     Object.assign(resort, rosterNow(resort));
     rezone(resort);
@@ -4434,7 +4472,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       standing: [...plot.placements, ...plot.props],
     });
     const wasStanding = resort.venues;
-    resort.venues = venuesOn(plot.placements);
+    resort.names = assignNames(resort.names, namedPlacesOf(plot.placements));
+    resort.venues = venuesOn(plot.placements, resort.names);
     resort.lodgings = lodgingsOn(plot.placements);
     resort.gateways = gatewaysOn(plot.placements);
     resort.depots = depotsOn(plot.placements);
@@ -4654,6 +4693,20 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       name = next;
       letter();
       options.onNameChange?.(name);
+      options.onDirty?.();
+    },
+    renameVenue(key, typed) {
+      const resort = current();
+      const placement = build.placementOf(key);
+      const [place] = placement ? namedPlacesOf([placement]) : [];
+      if (!place) return;
+      resort.names = renameTo(resort.names, place, typed, Math.random);
+      // Not reanchored: that would rebuild the walk network and every flow field for a label.
+      resort.venues = relabelled(resort.venues, resort.names);
+      resort.router.relabel(resort.venues);
+      select(selected);
+      placeSigns();
+      advise();
       options.onDirty?.();
     },
     setHiring(role, count) {

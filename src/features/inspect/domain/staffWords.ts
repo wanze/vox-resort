@@ -25,24 +25,30 @@ export interface TaskFacts {
   // Labels of the venue and the lodging the task names, or null.
   readonly venue: string | null;
   readonly lodging: string | null;
+  // The venue goes by a name of its own, which reads without "the".
+  readonly named?: boolean;
   // Sent by an order, which the player wants to see being followed.
   readonly ordered?: boolean;
 }
 
-const AT_A_VENUE: { readonly [role in StaffRole]: (label: string) => string } = {
-  cleaner: (label) => `Cleaning the ${label}`,
-  lifeguard: (label) => `Watching the ${label}`,
-  animator: (label) => `Putting on a show at the ${label}`,
-  mechanic: (label) => `Mending the ${label}`,
+// Each takes the place as it is referred to: "the Bar", or "The Anchor".
+const AT_A_VENUE: { readonly [role in StaffRole]: (place: string) => string } = {
+  cleaner: (place) => `Cleaning ${place}`,
+  lifeguard: (place) => `Watching ${place}`,
+  animator: (place) => `Putting on a show at ${place}`,
+  mechanic: (place) => `Mending ${place}`,
 };
 
-const toThe = (label: string | null): string => (label ? `On the way to the ${label}` : 'Walking');
+const theOf = (label: string | null): string | null => (label ? `the ${label}` : null);
 
-const sentTo = (label: string | null): string => `Sent to the ${label ?? 'job'}`;
+const toThe = (place: string | null): string => (place ? `On the way to ${place}` : 'Walking');
+
+const sentTo = (place: string | null): string => `Sent to ${place ?? 'the job'}`;
 
 function venueWords(facts: TaskFacts): string {
-  if (!facts.working) return facts.ordered ? sentTo(facts.venue) : toThe(facts.venue);
-  return facts.venue ? AT_A_VENUE[facts.role](facts.venue) : 'At work';
+  const place = facts.named ? facts.venue : theOf(facts.venue);
+  if (!facts.working) return facts.ordered ? sentTo(place) : toThe(place);
+  return place ? AT_A_VENUE[facts.role](place) : 'At work';
 }
 
 export function taskWords(facts: TaskFacts): string {
@@ -52,7 +58,9 @@ export function taskWords(facts: TaskFacts): string {
   if (kind === 'idle') return 'Waiting for work';
   if (kind === 'venue') return venueWords(facts);
   if (kind === 'room') {
-    return working ? `Making up a room at the ${facts.lodging ?? 'lodging'}` : toThe(facts.lodging);
+    return working
+      ? `Making up a room at the ${facts.lodging ?? 'lodging'}`
+      : toThe(theOf(facts.lodging));
   }
   if (kind === 'sweep') return working ? 'Sweeping a path' : sweepWalk(facts);
   if (kind === 'restock') return working ? 'Restocking at the depot' : 'Fetching supplies';

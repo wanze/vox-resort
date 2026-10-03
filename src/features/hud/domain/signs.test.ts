@@ -83,6 +83,15 @@ describe('signSpotsOf', () => {
     ]);
   });
 
+  it('says what a named venue is beside its name', () => {
+    const named = { ...venue('a', 'bakery'), label: 'Forno Antico', kind: 'Bakery' };
+    const plain = { ...venue('b', 'bakery'), label: 'Bakery', kind: 'Bakery' };
+    expect(signSpotsOf([named, plain], signOf).map((spot) => spot.label)).toEqual([
+      'Forno Antico · Bakery',
+      'Bakery',
+    ]);
+  });
+
   it('stops at MAX_SIGNS', () => {
     const many = Array.from({ length: MAX_SIGNS + 5 }, (_, index) => venue(`v${index}`, 'bakery'));
     expect(signSpotsOf(many, signOf)).toHaveLength(MAX_SIGNS);

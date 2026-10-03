@@ -14,6 +14,7 @@ export interface InspectorControls {
   readonly adoptOrders: (orders: readonly OrderSpot[]) => void;
   send(role: OrderRole): void;
   sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
+  renameVenue(key: string, name: string): void;
   selectPerson(person: number): void;
   selectWorker(worker: number): void;
   showSelected(): void;
@@ -39,6 +40,12 @@ export function useInspector(showcase: RefObject<Showcase | null>): InspectorCon
     sendCleanerTo: useCallback(
       (tile: { readonly tileX: number; readonly tileZ: number }) => {
         showcase.current?.sendCleanerTo(tile);
+      },
+      [showcase],
+    ),
+    renameVenue: useCallback(
+      (key: string, name: string) => {
+        showcase.current?.renameVenue(key, name);
       },
       [showcase],
     ),

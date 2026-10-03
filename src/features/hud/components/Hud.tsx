@@ -83,6 +83,7 @@ export interface HudProps {
   readonly orders: readonly OrderSpot[];
   readonly onSend: (role: OrderRole) => void;
   readonly onSendCleanerTo: (at: { readonly tileX: number; readonly tileZ: number }) => void;
+  readonly onRenameVenue: (key: string, name: string) => void;
   readonly onClearSelection: () => void;
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
@@ -247,6 +248,7 @@ function Windows(props: HudProps) {
         onSelectPerson={props.onSelectPerson}
         onShow={props.onShowSelected}
         onSend={props.onSend}
+        onRenameVenue={props.onRenameVenue}
       />
     </>
   );

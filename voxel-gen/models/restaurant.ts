@@ -61,6 +61,22 @@ export default defineModel({
   venue: {
     role: 'food',
     sign: 'restaurant',
+    names: [
+      'The Salty Spoon',
+      'Trattoria Sole',
+      'Casa Marina',
+      'The Driftwood Table',
+      'La Terrazza',
+      'Olive & Vine',
+      'The Blue Shutter',
+      'Osteria del Porto',
+      'The Lemon Grove',
+      'Taverna Kima',
+      'The Fig Tree',
+      'Sea Salt Kitchen',
+      'Il Pescatore',
+      'The Long Lunch',
+    ],
     satisfies: [
       { need: 'hunger', amount: 1 },
       { need: 'thirst', amount: 0.5 },

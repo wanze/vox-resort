@@ -679,6 +679,36 @@ describe('a venue that holds only as many as it says', () => {
     ).toBe(true);
   });
 
+  it('names a renamed place in the next thought, and steers exactly as before', () => {
+    const network = networkOf([
+      { tileX: 7, tileZ: 0, y: 0 },
+      { tileX: 7, tileZ: 1, y: 0 },
+    ]);
+    const night = (onThought: Heard) => ({ lodgings: [], tickOfDay: () => NOON, onThought });
+    const renamed = hearing();
+    const kept = hearing();
+    const twins = [
+      routerOn(network, [shower(7)], grubby(), night(renamed.onThought)),
+      routerOn(network, [shower(7)], grubby(), night(kept.onThought)),
+    ];
+    const arrive = (person: number) =>
+      twins.map(({ router }) => [
+        router.step(person, nodeAt(network, 7, 1)),
+        router.step(person, nodeAt(network, 7, 0)),
+      ]);
+    for (const person of [0, 1]) arrive(person);
+    twins[0]!.router.relabel([{ ...shower(7), label: 'The Rinse', kind: 'Beach shower' }]);
+    for (const person of [2, 3, 4]) {
+      const [after, before] = arrive(person);
+      expect(after).toEqual(before);
+    }
+    expect(renamed.heard[0]).toEqual([4, 'queue-too-long', 'The Rinse']);
+    expect(kept.heard[0]).toEqual([4, 'queue-too-long', 'Beach shower']);
+    expect(renamed.heard.slice(1)).toEqual(kept.heard.slice(1));
+    expect(twins[0]!.router.snapshot()).toEqual(twins[1]!.router.snapshot());
+    expect(() => twins[0]!.router.relabel([{ ...shower(7), key: 'other' }])).toThrow();
+  });
+
   it('throws the lanes away with the fields, and lays new ones on the new graph', () => {
     const { router, crowd } = routerOn(networkOf(street(8)), [shower(7)], grubby());
     const queue = (network: WalkNetwork): void => {

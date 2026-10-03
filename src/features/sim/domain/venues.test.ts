@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Placement } from '../../layout/domain/resortLayout';
-import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
+import { isNamed, relabelled, reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 
 const at = (key: string, id: string, tileX = 0, tileZ = 0, tiles = 1): Placement => ({
   key,
@@ -34,6 +34,37 @@ describe('venuesOn', () => {
     expect(venue.satisfies).toEqual([{ need: 'hunger', amount: 0.5 }]);
     expect(venue.capacity).toBe(8);
     expect(venue.dwellSeconds).toEqual({ min: 240, max: 480 });
+  });
+
+  it('goes by its name where it has one, and keeps its kind beside it', () => {
+    const names = new Map([['restaurant#2', 'The Salty Spoon']]);
+    const [named, unnamed] = venuesOn(
+      [at('restaurant#2', 'restaurant'), at('bakery#0', 'bakery', 5)],
+      names,
+    );
+    expect(named).toMatchObject({ label: 'The Salty Spoon', kind: 'Restaurant' });
+    expect(unnamed).toMatchObject({ label: 'Bakery', kind: 'Bakery' });
+  });
+
+  it('relabels the same list, leaving a venue with no kind as it was', () => {
+    const [restaurant, bakery] = venuesOn([
+      at('restaurant', 'restaurant'),
+      at('bakery', 'bakery', 5),
+    ]);
+    const beach = { ...bakery!, key: 'beach', label: 'Beach', kind: undefined } as unknown as Venue;
+    const names = new Map([
+      ['restaurant', 'Casa Marina'],
+      ['beach', 'Sandy'],
+    ]);
+    const renamed = relabelled([restaurant!, bakery!, beach], names);
+    expect(renamed.map((venue) => venue.label)).toEqual(['Casa Marina', 'Bakery', 'Beach']);
+    expect(renamed[0]).toEqual({ ...restaurant, label: 'Casa Marina' });
+  });
+
+  it('tells a venue with a name from one going by its kind, and from a home', () => {
+    expect(isNamed({ label: 'Casa Marina', kind: 'Restaurant' })).toBe(true);
+    expect(isNamed({ label: 'Restaurant', kind: 'Restaurant' })).toBe(false);
+    expect(isNamed({ label: 'Bungalow' })).toBe(false);
   });
 
   it('measures to the middle of the footprint, not to the corner it was drawn from', () => {

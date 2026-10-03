@@ -229,6 +229,7 @@ describe('the advice rules', () => {
         count: 12,
         at: { tileX: 0, tileZ: 0 },
         need: null,
+        key: 'bar#0',
       },
     ]);
   });

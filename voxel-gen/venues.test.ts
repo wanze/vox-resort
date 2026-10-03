@@ -126,6 +126,21 @@ describe('the venues the catalogue declares', () => {
     }
   });
 
+  it('suggests names that are each different and fit the inspector', () => {
+    for (const { id, venue } of venues) {
+      const names = venue!.names ?? [];
+      if (venue!.role === 'lodging') expect(names, `${id} names a lodging`).toEqual([]);
+      const folded = names.map((name) => name.toLowerCase());
+      expect(new Set(folded).size, `${id} suggests a name twice`).toBe(names.length);
+      for (const name of names) {
+        expect(name.trim(), `${id} suggests a blank name`).not.toBe('');
+        expect(name.trim(), `${id} pads "${name}"`).toBe(name);
+        // MAX_VENUE_NAME in src/features/naming/domain/venueNames.ts.
+        expect(name.length, `${id} suggests "${name}"`).toBeLessThanOrEqual(24);
+      }
+    }
+  });
+
   it('never makes somewhere to go out of paving', () => {
     for (const source of SOURCES) {
       if (!source.groundDecides) continue;

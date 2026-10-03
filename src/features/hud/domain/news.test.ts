@@ -77,6 +77,15 @@ describe('severityOf', () => {
   });
 });
 
+describe('adviceKey', () => {
+  it('follows the venue, not its name, so a rename is not news', () => {
+    const named = { ...advice('broken'), subject: 'Casa Marina', key: 'restaurant#2' };
+    const renamed = { ...named, subject: 'The Salty Spoon' };
+    expect(adviceKey(renamed)).toBe(adviceKey(named));
+    expect(newsFrom([named], [renamed], NOTHING_HEARD, 100).news).toEqual([]);
+  });
+});
+
 describe('newsFrom', () => {
   it('takes a first look as a baseline, and puts what it saw on cooldown', () => {
     const broken = [advice('broken')];

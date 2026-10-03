@@ -16,6 +16,7 @@ import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from './PixelIcon';
 import { StatRow } from './StatRow';
 import { thoughtLine } from './thoughtWords';
+import { VenueName } from './VenueName';
 
 export interface InspectPanelProps {
   readonly frame: HudWindowFrame;
@@ -27,6 +28,7 @@ export interface InspectPanelProps {
   // Looks at the inspected worker where they are now: staff walk off while the panel is open.
   readonly onShow: () => void;
   readonly onSend: (role: OrderRole) => void;
+  readonly onRenameVenue: (key: string, name: string) => void;
 }
 
 const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
@@ -327,11 +329,13 @@ function PlaceDetails({
   advice,
   onSelectPerson,
   onSend,
+  onRenameVenue,
 }: {
   readonly place: PlaceView;
   readonly advice: readonly Advice[];
   readonly onSelectPerson: (person: number) => void;
   readonly onSend: (role: OrderRole) => void;
+  readonly onRenameVenue: (key: string, name: string) => void;
 }) {
   if (!place.venue) {
     return (
@@ -345,6 +349,15 @@ function PlaceDetails({
   }
   return (
     <>
+      {place.naming ? (
+        <VenueName
+          // Keyed, so a half-typed name is not carried over to the next place selected.
+          key={place.key}
+          name={place.label}
+          naming={place.naming}
+          onRename={(name) => onRenameVenue(place.key, name)}
+        />
+      ) : null}
       <Problems problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })} />
       <SendButtons place={place} onSend={onSend} />
       <VenueRows venue={place.venue} setting={place.setting} />
@@ -399,6 +412,7 @@ function Details({
   onSelectPerson,
   onShow,
   onSend,
+  onRenameVenue,
 }: Omit<InspectPanelProps, 'frame' | 'selection'> & { readonly selection: SelectionView }) {
   if (selection.kind === 'guest') {
     return (
@@ -418,6 +432,7 @@ function Details({
       advice={advice}
       onSelectPerson={onSelectPerson}
       onSend={onSend}
+      onRenameVenue={onRenameVenue}
     />
   );
 }

@@ -184,6 +184,11 @@ export const resortSnapshotSchema = z.object({
   upkeep: upkeepSnapshotSchema,
   breakdowns: breakdownsSnapshotSchema,
   takings: z.array(z.tuple([z.string(), z.number()])),
+  // Placement key to venue name; a save from before venues had names draws them on load.
+  names: z
+    .array(z.tuple([z.string(), z.string()]))
+    .optional()
+    .default([]),
   footfall: z.object({ seen: float32, mood: float32 }),
   reviews: z.array(reviewSchema),
   today: dayCountsSchema,

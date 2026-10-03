@@ -18,7 +18,7 @@ import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
 import { strongestNeed, type Needs } from '../../sim/domain/needs';
 import type { ThoughtKind } from '../../sim/domain/thoughts';
-import type { Venue } from '../../sim/domain/venues';
+import { isNamed, type Venue } from '../../sim/domain/venues';
 import { NO_ZONE } from '../../sim/domain/zones';
 import { roleTitle, staffName, taskWords, type TaskFacts } from './staffWords';
 
@@ -94,6 +94,15 @@ export interface PlaceView {
   readonly residents: readonly PartyMemberView[];
   // Who the player may send there; set by the showcase, which knows the roster and the orders.
   readonly send?: SendOffers;
+  // Set by the showcase on a venue, which the player may rename; `label` is then its name.
+  readonly naming?: VenueNaming;
+}
+
+export interface VenueNaming {
+  readonly kind: string;
+  readonly named: boolean;
+  // The model suggests names, so an emptied name draws another rather than going back to `kind`.
+  readonly suggested: boolean;
 }
 
 // Null where the role has nothing to do there.
@@ -299,13 +308,14 @@ export function placeWording(slot: number): string {
   return PLACES[slot] ?? `${slot + 1}th`;
 }
 
+// `named` only on a venue with a name of its own, which reads without "the".
 export type Errand =
-  | { readonly kind: 'walking'; readonly to: string; readonly home: boolean }
-  | { readonly kind: 'waiting'; readonly at: string; readonly place: number }
-  | { readonly kind: 'inside'; readonly at: string }
+  | { readonly kind: 'walking'; readonly to: string; readonly home: boolean; readonly named?: true }
+  | { readonly kind: 'waiting'; readonly at: string; readonly place: number; readonly named?: true }
+  | { readonly kind: 'inside'; readonly at: string; readonly named?: true }
   | { readonly kind: 'asleep'; readonly at: string }
   | { readonly kind: 'beach'; readonly stage: BeachStage }
-  | { readonly kind: 'checking-in'; readonly at: string }
+  | { readonly kind: 'checking-in'; readonly at: string; readonly named?: true }
   | null;
 
 type BeachStage = 'arriving' | 'resting' | 'leaving';
@@ -318,7 +328,13 @@ const BEACH_WALKS: { readonly [stage in BeachStage]: string } = {
 
 interface Named {
   readonly label: string;
+  readonly kind?: string;
 }
+
+const namedIf = (place: Named): { readonly named?: true } =>
+  isNamed(place) ? { named: true } : {};
+
+const refer = (label: string, named: true | undefined): string => (named ? label : `the ${label}`);
 
 // Typed structurally so this module never imports the router.
 export interface ErrandFacts {
@@ -342,20 +358,24 @@ export function errandOf(facts: ErrandFacts): Errand {
   if (facts.beach) return { kind: 'beach', stage: facts.beach };
   // The desk may be the goal or the visit; a walk home at night goes first either way.
   const desk = facts.checkingIn && !home ? (visit?.venue ?? goal) : null;
-  if (desk) return { kind: 'checking-in', at: desk.label };
-  if (visit?.waiting) return { kind: 'waiting', at: visit.venue.label, place: visit.place };
-  if (visit) return { kind: 'inside', at: visit.venue.label };
+  if (desk) return { kind: 'checking-in', at: desk.label, ...namedIf(desk) };
+  if (visit?.waiting) {
+    return { kind: 'waiting', at: visit.venue.label, place: visit.place, ...namedIf(visit.venue) };
+  }
+  if (visit) return { kind: 'inside', at: visit.venue.label, ...namedIf(visit.venue) };
   if (home) return { kind: 'walking', to: home.label, home: true };
-  return goal ? { kind: 'walking', to: goal.label, home: false } : null;
+  return goal ? { kind: 'walking', to: goal.label, home: false, ...namedIf(goal) } : null;
 }
 
 function errandWording(errand: NonNullable<Errand>): string {
-  if (errand.kind === 'walking') return `Walking ${errand.home ? 'home ' : ''}to the ${errand.to}`;
-  if (errand.kind === 'inside') return `Inside the ${errand.at}`;
+  if (errand.kind === 'walking') {
+    return `Walking ${errand.home ? 'home ' : ''}to ${refer(errand.to, errand.named)}`;
+  }
+  if (errand.kind === 'inside') return `Inside ${refer(errand.at, errand.named)}`;
   if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
   if (errand.kind === 'beach') return BEACH_WALKS[errand.stage];
-  if (errand.kind === 'checking-in') return `Checking in at the ${errand.at}`;
-  return `${placeWording(errand.place)} in the line at the ${errand.at}`;
+  if (errand.kind === 'checking-in') return `Checking in at ${refer(errand.at, errand.named)}`;
+  return `${placeWording(errand.place)} in the line at ${refer(errand.at, errand.named)}`;
 }
 
 function stillWording(

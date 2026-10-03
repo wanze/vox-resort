@@ -38,6 +38,21 @@ export default defineModel({
   venue: {
     role: 'food',
     sign: 'shop',
+    names: [
+      'Mercato Marina',
+      'The Corner Store',
+      'Bay Provisions',
+      'Sunny Pantry',
+      'The Market Basket',
+      'Bottega Blu',
+      'Island Grocer',
+      'The General Store',
+      'Harbour Market',
+      'Pantry by the Sea',
+      'Fresh & Local',
+      'Agora Market',
+      'The Little Larder',
+    ],
     satisfies: [
       { need: 'hunger', amount: 0.8 },
       { need: 'thirst', amount: 0.8 },

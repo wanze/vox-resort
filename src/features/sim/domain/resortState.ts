@@ -30,6 +30,8 @@ export interface ResortState {
   breakdowns: Breakdowns;
   readonly venues: readonly { readonly key: string }[];
   readonly takings: VenueTakings;
+  // Placement key to name, as naming/domain/venueNames.ts draws them.
+  names: ReadonlyMap<string, string>;
   readonly footfall: Footfall;
   reviews: readonly Review[];
   today: DayCounts;
@@ -64,6 +66,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     upkeep: snapshotUpkeep(state.upkeep, state.venues),
     breakdowns: snapshotBreakdowns(state.breakdowns, state.venues),
     takings: [...state.takings],
+    names: [...state.names],
     footfall: { seen: state.footfall.seen.slice(), mood: state.footfall.mood.slice() },
     reviews: state.reviews.map((review) => ({ ...review })),
     today: { ...state.today },
@@ -100,6 +103,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.breakdowns = restoreBreakdowns(snapshot.breakdowns, state.venues);
   state.takings.clear();
   for (const [key, amount] of snapshot.takings) state.takings.set(key, amount);
+  state.names = new Map(snapshot.names);
   state.footfall.seen.set(snapshot.footfall.seen);
   state.footfall.mood.set(snapshot.footfall.mood);
   state.reviews = snapshot.reviews.map((review) => ({ ...review }));

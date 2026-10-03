@@ -1,6 +1,7 @@
 export const MAX_RESORT_NAME = 24;
 
-const FIRSTS = [
+// Shared with the venues' fallback names, so both sound like the same place.
+export const FIRSTS = [
   'Coral',
   'Sunset',
   'Azure',
@@ -38,10 +39,12 @@ const SECONDS = [
   'Dunes',
 ] as const;
 
-export function cleanResortName(typed: string): string | null {
-  const cleaned = typed.trim().replace(/\s+/g, ' ').slice(0, MAX_RESORT_NAME).trimEnd();
+export function cleanName(typed: string, longest: number): string | null {
+  const cleaned = typed.trim().replace(/\s+/g, ' ').slice(0, longest).trimEnd();
   return cleaned === '' ? null : cleaned;
 }
+
+export const cleanResortName = (typed: string): string | null => cleanName(typed, MAX_RESORT_NAME);
 
 function hashOf(seed: number): number {
   const hash = Math.imul((seed | 0) ^ 0x9e37_79b9, 0x2c1b_3c6d);

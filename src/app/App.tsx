@@ -387,6 +387,7 @@ export function App() {
           orders={inspector.orders}
           onSend={inspector.send}
           onSendCleanerTo={inspector.sendCleanerTo}
+          onRenameVenue={inspector.renameVenue}
           onClearSelection={inspector.clear}
           error={error}
           refusal={money.refusal}

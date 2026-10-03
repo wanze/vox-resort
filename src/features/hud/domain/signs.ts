@@ -1,5 +1,5 @@
 import type { ModelDoor, SignKind } from '../../../../voxel-gen/voxelgen.ts';
-import type { Venue } from '../../sim/domain/venues';
+import { isNamed, type Venue } from '../../sim/domain/venues';
 import { roofOver, type Anchor, type Footprint } from './staffPins';
 
 // One storey: over the lintel of a doorway, under the eaves of most roofs.
@@ -56,7 +56,9 @@ export function signSpotsOf(
     if (spots.length === MAX_SIGNS) break;
     const sign = signOf(venue.id);
     if (sign === null) continue;
-    const { key, label, tileX, tileZ, tilesX, tilesZ } = venue;
+    const { key, tileX, tileZ, tilesX, tilesZ } = venue;
+    // A name alone does not say what the place is; the sign's icon may not either.
+    const label = isNamed(venue) ? `${venue.label} · ${venue.kind!}` : venue.label;
     spots.push({ key, sign, label, tileX, tileZ, tilesX, tilesZ });
   }
   return spots;

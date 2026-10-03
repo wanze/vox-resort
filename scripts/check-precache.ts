@@ -2,7 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const DIST = 'dist';
-const NOT_PRECACHED = /^(sw\.js|workbox-[^/]*\.js)$|\.map$/;
+// _headers is read by Cloudflare at deploy time and never served.
+const NOT_PRECACHED = /^(sw\.js|workbox-[^/]*\.js|_headers)$|\.map$/;
 // Without them the manifest points at nothing and the browser will not offer to install.
 const REQUIRED = [
   'icons/icon-192.png',

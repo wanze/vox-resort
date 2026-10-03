@@ -1,0 +1,8 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "vox-resort",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./dist" },
+  // Apex only: saves live in origin-scoped storage, so www should redirect here, not serve a copy.
+  "routes": [{ "pattern": "vox-resort.com", "custom_domain": true }],
+}

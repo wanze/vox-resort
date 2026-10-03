@@ -29,6 +29,7 @@ export default defineModel({
   id: 'pedalo-rental',
   label: 'Pedalo Rental',
   category: 'leisure',
+  sound: 'boats',
   placement: { ground: 'shore', perResort: { min: 1, max: 1 } },
   venue: {
     shelter: 'open',

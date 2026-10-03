@@ -64,6 +64,7 @@ export default defineModel({
   id: 'basketball-court',
   label: 'Basketball Court',
   category: 'leisure',
+  sound: 'ballcourt',
   tiles: { x: 8, z: 5 },
   emissive: [LANTERN],
   seats: Array.from({ length: TIERS }, (_, k) =>

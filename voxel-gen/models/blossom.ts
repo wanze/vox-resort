@@ -5,6 +5,7 @@ export default defineModel({
   id: 'blossom',
   label: 'Blossom Tree',
   category: 'grounds',
+  sound: 'trees',
   scenery: 0.5,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {

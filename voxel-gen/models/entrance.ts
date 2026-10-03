@@ -41,6 +41,7 @@ export default defineModel({
   id: 'entrance',
   label: 'Entrance',
   category: 'amenities',
+  sound: 'reception',
   tiles: { x: 4, z: 1 },
   gateway: true,
   emissive: [LANTERN],

@@ -34,6 +34,7 @@ export default defineModel({
   id: 'resort-bar',
   label: 'Resort Bar',
   category: 'amenities',
+  sound: 'bar',
   tiles: { x: 3, z: 2 },
   emissive: [LANTERN],
   seats: [

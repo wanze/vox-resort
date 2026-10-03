@@ -39,6 +39,7 @@ export default defineModel({
   id: 'game-hall',
   label: 'Game Hall',
   category: 'leisure',
+  sound: 'arcade',
   tiles: { x: 4, z: 4 },
   emissive: [NEON, SIGN, SCREEN],
   windows: WINDOW_GLASS,

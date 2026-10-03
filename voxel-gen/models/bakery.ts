@@ -27,6 +27,7 @@ export default defineModel({
   id: 'bakery',
   label: 'Bakery',
   category: 'amenities',
+  sound: 'cafe',
   tiles: { x: 2, z: 2 },
   emissive: [LANTERN],
   windows: WINDOW_GLASS,

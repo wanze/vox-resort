@@ -28,6 +28,7 @@ import {
   signFor,
   signOf,
   SKY_MODELS,
+  soundOf,
   STAFF_MODELS,
   stylesOf,
   venueOf,
@@ -451,6 +452,22 @@ describe('sceneryOf', () => {
 
   it('answers 0 for an unknown id rather than throwing', () => {
     expect(sceneryOf('not-a-model')).toBe(0);
+  });
+});
+
+describe('soundOf', () => {
+  it('reads what a model declares, and nothing for a model that declares none', () => {
+    expect(soundOf('coffee-shop')).toBe('cafe');
+    expect(soundOf('palm')).toBe('trees');
+    expect(soundOf('cottage')).toBeNull();
+    expect(soundOf('not-a-model')).toBeNull();
+  });
+
+  it("gives a variant its original's sound without declaring one", () => {
+    const variant = stylesOf('coffee-shop').find((type) => type.style > 0);
+    expect(variant).toBeDefined();
+    expect(objectTypeById(variant!.id).model.sound).toBeNull();
+    expect(soundOf(variant!.id)).toBe('cafe');
   });
 });
 

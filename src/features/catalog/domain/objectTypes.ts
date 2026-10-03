@@ -13,6 +13,7 @@ import {
   type ModelDepot,
   type ModelVenue,
   type SignKind,
+  type SoundKind,
   type VenueRole,
   type VoxelModel,
   type VoxelModelSource,
@@ -20,7 +21,7 @@ import {
 import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
 export { TILE_VOXELS };
-export type { ModelVenue, SignKind };
+export type { ModelVenue, SignKind, SoundKind };
 
 export interface ObjectTypeDefinition {
   readonly id: string;
@@ -187,6 +188,13 @@ export function depotOf(id: string): ModelDepot | null {
 export function sceneryOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.scenery ?? 0;
 }
+
+const SOUNDS: ReadonlyMap<string, SoundKind | null> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.sound]),
+);
+
+// The original's, as the sign is: a variant is the same kind of place in another look.
+export const soundOf = (id: string): SoundKind | null => SOUNDS.get(familyOf(id)) ?? null;
 
 export function binReachOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.binReach ?? 0;

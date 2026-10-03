@@ -24,8 +24,9 @@ import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
 import { useSigns } from './useSigns';
+import { useClickCues, useSound, useToastCues, type SoundControls } from './useSound';
 import { useUpdate } from './useUpdate';
-import { mountShowcase, type Showcase, type ShowcaseStats } from './showcase';
+import { mountShowcase, type BuildNote, type Showcase, type ShowcaseStats } from './showcase';
 import {
   armedLand,
   armedZone,
@@ -37,6 +38,7 @@ import type { OverlayKind } from '../features/overlays/domain/overlays';
 import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 import type { SimSpeed } from '../features/sim/domain/simClock';
+import type { Toast } from '../features/hud/domain/news';
 
 const GAME_TITLE = 'Vox Resort';
 
@@ -171,6 +173,38 @@ function useHourly() {
   return { thoughts: useThoughts(), status: useStatus() };
 }
 
+function useControls(showcase: RefObject<Showcase | null>) {
+  return {
+    camera: useCameraControls(showcase),
+    clock: useClockControls(showcase),
+    inspector: useInspector(showcase),
+  };
+}
+
+// The cues the showcase's own events carry, beside what they already do.
+function useSoundCues(
+  sound: SoundControls,
+  told: { readonly note: (note: BuildNote) => void; readonly morning: () => void },
+  toasts: readonly Toast[],
+) {
+  const { cue } = sound;
+  const { note, morning } = told;
+  useClickCues(cue);
+  useToastCues(cue, toasts);
+  const onRefused = useCallback(
+    (refusal: BuildNote) => {
+      note(refusal);
+      cue('refused');
+    },
+    [note, cue],
+  );
+  const onMorning = useCallback(() => {
+    morning();
+    cue('morning');
+  }, [morning, cue]);
+  return { onRefused, onMorning };
+}
+
 // None while nothing is for sale, so the key does nothing on a plot that owns all of itself.
 function landToggle(
   land: LandView | null,
@@ -193,9 +227,7 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const camera = useCameraControls(showcaseRef);
-  const clock = useClockControls(showcaseRef);
-  const inspector = useInspector(showcaseRef);
+  const { camera, clock, inspector } = useControls(showcaseRef);
   const { news, history, replaced, advice, signs } = useAdviceNews(
     showcaseRef,
     clock.speed,
@@ -204,6 +236,7 @@ export function App() {
   const { thoughts, status } = useHourly();
   const { playing, saves, welcome, onUpdate } = useGame(showcaseRef, clock, news.setUpdate);
   const { resort, adoptLoading } = welcome;
+  const sound = useSound(!playing);
   const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
     clock,
     tool,
@@ -214,6 +247,7 @@ export function App() {
     {
       staffPins: () => news.setStaffPins(!news.prefs.staff),
       signs: () => news.setSigns(!news.prefs.signs),
+      sound: sound.toggle,
       land: landToggle(resort.money.land, tool, selectTool),
     },
   );
@@ -230,6 +264,8 @@ export function App() {
   const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
   const { adopt: adoptSigns } = signs;
+  const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
+  const { cue: onCue, hear: onHear } = sound;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -258,12 +294,14 @@ export function App() {
       onNameChange: adoptName,
       onMoneyChange: adoptLedger,
       onLandChange: adoptLand,
-      onRefused: note,
+      onRefused,
       onBuildNote: note,
       onFrame: overlay.update,
       onLoading: adoptLoading,
       onDirty: markDirty,
-      onMorning: morning,
+      onMorning,
+      onCue,
+      onHear,
       onSpeedChange: adoptSpeed,
       welcome: OPENS_ON_WELCOME,
     };
@@ -326,8 +364,11 @@ export function App() {
     adoptLand,
     adoptLoading,
     note,
+    onRefused,
     markDirty,
-    morning,
+    onMorning,
+    onCue,
+    onHear,
     adoptSpeed,
     adoptSigns,
   ]);
@@ -398,6 +439,7 @@ export function App() {
           onMenuChange={setMenu}
           palette={palette}
           onPaletteChange={setPalette}
+          sound={sound}
         />
       </Screen>
     </div>

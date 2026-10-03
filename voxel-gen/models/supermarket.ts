@@ -31,6 +31,7 @@ export default defineModel({
   id: 'supermarket',
   label: 'Supermarket',
   category: 'amenities',
+  sound: 'shop',
   tiles: { x: 4, z: 3 },
   emissive: [SIGN],
   windows: WINDOW_GLASS,

@@ -14,6 +14,7 @@ export default defineModel({
   id: 'restrooms',
   label: 'Restrooms',
   category: 'amenities',
+  sound: 'restrooms',
   tiles: { x: 2, z: 1 },
   windows: WINDOW_GLASS,
   venue: {

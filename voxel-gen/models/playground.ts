@@ -90,6 +90,7 @@ export default defineModel({
   id: 'playground',
   label: 'Playground',
   category: 'leisure',
+  sound: 'kids',
   tiles: { x: 4, z: 3 },
   // The plank is at GROUND + 3, so hips rest on GROUND + 4; the back rail is on +z,
   // so everybody faces -z.

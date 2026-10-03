@@ -87,6 +87,10 @@ describe('VARIANTS', () => {
     }
   });
 
+  it('sounds like its original by declaring no sound of its own', () => {
+    for (const { source } of VARIANTS) expect(source.sound, source.id).toBeUndefined();
+  });
+
   it('fills the tiles it claims and no more', () => {
     for (const { source } of VARIANTS) {
       const model = buildModel(source);

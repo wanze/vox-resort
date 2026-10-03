@@ -185,6 +185,23 @@ A negative `amount` makes a need worse (tennis costs energy). `venues.test.ts`
 lists the models deliberately without a venue, so every new model must be one or
 the other.
 
+## Sound
+
+A model the player should hear declares `sound`, a `SoundKind` on the model
+itself rather than on its venue, since trees and fountains sound too:
+
+```ts
+sound: 'cafe',
+```
+
+Venues are heard when the camera is zoomed in close to them and they're open in
+the weather. `fountain` and `torch` (at night) are heard near them, and `trees`
+plays no sound itself: enough trees near the camera bring in birds by day,
+crickets at night and cicadas in a heatwave. A variant sounds like its original
+and declares nothing. A new `SoundKind` needs a slot in `SLOT_NAMES`
+(`src/features/sound/domain/bank.ts`) and the bank (`sounds/bank.ts`); see
+`docs/sound.md`.
+
 ## Scale
 
 **One tile is 16 voxels (`TILE_VOXELS`) and 4 m.**

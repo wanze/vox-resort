@@ -68,6 +68,7 @@ export default defineModel({
   id: 'tennis-court',
   label: 'Tennis Court',
   category: 'leisure',
+  sound: 'tennis',
   tiles: { x: 9, z: 5 },
   emissive: [LANTERN],
   // On the outermost tile row on purpose: a seat with no paving within a tile is never used.

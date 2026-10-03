@@ -39,6 +39,7 @@ export default defineModel({
   id: 'restaurant',
   label: 'Restaurant',
   category: 'amenities',
+  sound: 'restaurant',
   tiles: { x: 4, z: 3 },
   emissive: [LANTERN],
   // Terrace only: an indoor chair is out of reach of any paving, so the walk network

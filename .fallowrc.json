@@ -3,6 +3,7 @@
   "entry": [
     "src/main.tsx",
     "src/app/compare.tsx",
+    "src/app/soundBoard.tsx",
     "src/features/voxel-world/adapters/meshWorker.ts",
     "src/features/resort-prep/adapters/prepWorker.ts",
     "scripts/simReport.test.ts"
@@ -20,18 +21,26 @@
       { "name": "adapters", "patterns": ["src/features/*/adapters/**"] },
       { "name": "components", "patterns": ["src/features/*/components/**"] },
       { "name": "app", "patterns": ["src/app/**", "src/main.tsx"] },
-      { "name": "models", "patterns": ["voxel-gen/**"] }
+      { "name": "models", "patterns": ["voxel-gen/**"] },
+      { "name": "sounds", "patterns": ["sounds/**"] }
     ],
     "rules": [
-      { "from": "domain", "allow": ["domain", "models"] },
-      { "from": "adapters", "allow": ["domain", "adapters", "models"] },
+      { "from": "domain", "allow": ["domain", "models", "sounds"] },
+      { "from": "adapters", "allow": ["domain", "adapters", "models", "sounds"] },
       { "from": "components", "allow": ["domain", "components"], "allowTypeOnly": ["app"] },
-      { "from": "app", "allow": ["domain", "adapters", "components", "app", "models"] },
-      { "from": "models", "allow": ["models"] }
+      { "from": "app", "allow": ["domain", "adapters", "components", "app", "models", "sounds"] },
+      { "from": "models", "allow": ["models"] },
+      { "from": "sounds", "allow": ["sounds"], "allowTypeOnly": ["domain"] }
     ],
     "coverage": {
       "requireAllFiles": true,
-      "allowUnmatched": ["scripts/**", "vite.config.ts", "index.html", "compare.html"]
+      "allowUnmatched": [
+        "scripts/**",
+        "vite.config.ts",
+        "index.html",
+        "compare.html",
+        "sounds.html"
+      ]
     }
   }
 }

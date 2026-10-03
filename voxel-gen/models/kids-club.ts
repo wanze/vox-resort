@@ -91,6 +91,7 @@ export default defineModel({
   id: 'kids-club',
   label: 'Kids Club',
   category: 'leisure',
+  sound: 'kids',
   tiles: { x: 3, z: 3 },
   windows: WINDOW_GLASS,
   seats: [23, 27].map((x) => ({ x, y: BENCH_HIPS, z: BENCH.z + 1, facing: 2 as const })),

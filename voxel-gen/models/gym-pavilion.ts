@@ -70,6 +70,7 @@ export default defineModel({
   id: 'gym-pavilion',
   label: 'Gym Pavilion',
   category: 'leisure',
+  sound: 'gym',
   tiles: { x: 4, z: 3 },
   emissive: [LANTERN],
   windows: WINDOW_GLASS,

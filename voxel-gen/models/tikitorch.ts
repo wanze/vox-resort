@@ -4,6 +4,7 @@ export default defineModel({
   id: 'tikitorch',
   label: 'Tiki Torch',
   category: 'grounds',
+  sound: 'torch',
   tiles: { x: 1, z: 1 },
   // Drawn unlit so the flame still burns after dark.
   emissive: [0xf2c33c, 0xef7a2f, 0xe0473f],

@@ -9,15 +9,17 @@ import { TimeOfDay } from './TimeOfDay';
 import { WeatherControl } from './WeatherControl';
 import { WindowToolbar } from './WindowToolbar';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
+import { SoundControl } from '../../sound/components/SoundControl';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
+import type { SoundControls } from '../../../app/useSound';
 import type { StatusView } from '../../../app/showcase';
 import type { WindowControls } from '../../../app/useWindows';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'rating';
+export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'sound' | 'rating';
 
 export interface TopBarProps {
   readonly timeElement: RefObject<HTMLInputElement | null>;
@@ -40,6 +42,7 @@ export interface TopBarProps {
   readonly onSignsChange: (shown: boolean) => void;
   readonly staffPins: boolean;
   readonly onStaffPinsChange: (shown: boolean) => void;
+  readonly sound: SoundControls;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -146,6 +149,12 @@ export function TopBar(props: TopBarProps) {
           onSignsChange={props.onSignsChange}
           staff={props.staffPins}
           onStaffChange={props.onStaffPinsChange}
+        />
+        <SoundControl
+          prefs={props.sound.prefs}
+          onChange={props.sound.setPrefs}
+          open={menu === 'sound'}
+          onOpenChange={opener('sound')}
         />
       </div>
 

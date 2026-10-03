@@ -21,6 +21,7 @@ import {
   SEA_MODELS,
   signOf,
   SKY_MODELS,
+  soundOf,
   STAFF_MODELS,
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
@@ -521,6 +522,17 @@ import {
   taskWords,
   type TaskFacts,
 } from '../features/inspect/domain/staffWords';
+import { SOUND_KINDS } from '../features/sound/domain/bank';
+import type { BuildCue } from '../features/sound/domain/cues';
+import { hearingRadius, SURF_REACH, type HeardScene } from '../features/sound/domain/hearing';
+import {
+  gatherSources,
+  hearGuests,
+  shoreDistance,
+  soundSourcesOf,
+  type HeardGuests,
+  type SoundSources,
+} from '../features/sound/domain/sources';
 import { Vector3 } from 'three/webgpu';
 import { parseBenchConfig, type BenchConfig } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
@@ -691,6 +703,10 @@ export interface ShowcaseOptions {
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
   readonly onMorning?: () => void;
+  // Only for what the player does, never for a load or a settle laying the plot out again.
+  readonly onCue?: (cue: BuildCue) => void;
+  // At most five times a second of real time, with one scene object reused every time.
+  readonly onHear?: (scene: HeardScene) => void;
   // Only for a speed the showcase set itself, as a load does.
   readonly onSpeedChange?: (speed: SimSpeed) => void;
   // Whenever an order is given, taken up or ended, for the markers to flag.
@@ -2662,6 +2678,8 @@ interface Clock {
   readonly speed: SimSpeed;
   readonly litLamps: number;
   readonly balloonReadiness: number;
+  // Real seconds, as the lightning flashes by, so the thunder follows the same strikes.
+  readonly running: number;
   advance(elapsedSeconds: number): number;
   follow(time: number, elapsedSeconds: number): number;
   restart(time: number): void;
@@ -2748,6 +2766,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
     get balloonReadiness() {
       // Flights already in the air finish, so a shower at dusk empties the sky gradually.
       return isWet(weatherNow()) ? 0 : releaseStrength(time);
+    },
+    get running() {
+      return running;
     },
     relight,
     advance(elapsedSeconds) {
@@ -2907,6 +2928,7 @@ function createEditMode(parts: {
   readonly onRefused: (refusal: Refusal) => void;
   readonly onFallback: (fellBack: boolean) => void;
   readonly land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'>;
+  readonly onCue: (cue: BuildCue) => void;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -2933,6 +2955,7 @@ function createEditMode(parts: {
 
   const catalogue = OBJECT_TYPES.map(layoutItemFor);
   const pavingItems = catalogue.filter((item) => isPaving(item));
+  const pavingIds: ReadonlySet<string> = new Set(pavingItems.map((item) => item.id));
   const pavingItem = (id: string): LayoutItem | null =>
     pavingItems.find((item) => item.id === id) ?? null;
   const pavedWith = pavedGroundOf(occupancy, pavingItems);
@@ -3085,12 +3108,17 @@ function createEditMode(parts: {
     onChange();
   };
 
-  // Refused before anything moves: a tile left unpaved re-lays no neighbour.
-  const stand = (placement: Placement, lifted?: Placement): void => {
-    const due = costToStand(placement.id, lifted !== undefined);
-    if (parts.money.canAfford(due)) standPaid(placement, due, lifted);
-    else parts.onRefused({ kind: 'money', id: placement.id });
-  };
+  // Refused before anything moves: a tile left unpaved re-lays no neighbour. Uncued for the
+  // bulldozer's, which re-lays what a removal leaves behind.
+  const standing =
+    (cued: boolean) =>
+    (placement: Placement, lifted?: Placement): void => {
+      const due = costToStand(placement.id, lifted !== undefined);
+      if (!parts.money.canAfford(due)) return parts.onRefused({ kind: 'money', id: placement.id });
+      standPaid(placement, due, lifted);
+      if (cued) parts.onCue(pavingIds.has(placement.id) ? 'pave' : 'place');
+    };
+  const stand = standing(true);
 
   // Land first: a footprint off the edge says so, rather than complaining about the gate's facing.
   const blocked = (placement: Placement): void => {
@@ -3141,6 +3169,7 @@ function createEditMode(parts: {
       }
       resort().terrain.set(tile.x, tile.z, next);
       parts.money.spend('dig', DIG_COST);
+      parts.onCue('dig');
       // Separate from onChange: the HUD counts are unchanged, but the terrain meshes must be
       // rebuilt.
       parts.onGroundChange();
@@ -3198,8 +3227,9 @@ function createEditMode(parts: {
       parts.money.refund(refundOf(placement.id, stillBuilding));
       if (reshapesGround(placement)) parts.onGroundChange();
       onChange();
+      parts.onCue('demolish');
     },
-    onPlace: stand,
+    onPlace: standing(false),
     onRails: changeRails,
     onCancel,
   });
@@ -3228,7 +3258,9 @@ function createEditMode(parts: {
         cancelSite(site.placement.key);
         raise(site.placement);
       }
-      if (tick.finished.length > 0) onChange();
+      if (tick.finished.length === 0) return;
+      onChange();
+      parts.onCue('built');
     },
     abandon() {
       sites = [];
@@ -3540,6 +3572,89 @@ function createSignSpots() {
       spots.showing(placed);
       spots.project(camera, width, height);
     },
+  };
+}
+
+const HEAR_MS = 200;
+
+interface HearingParts {
+  readonly handle: SceneHandle;
+  readonly resort: () => Resort;
+  readonly clock: Clock;
+  readonly view: ViewSize;
+  readonly onHear: (scene: HeardScene) => void;
+}
+
+// The sources are listed again whenever the venues are replaced, which every new resort, settle
+// and reanchor does; scanning thousands of placements at 5 Hz would not be.
+function createHearing({ handle, resort, clock, view, onHear }: HearingParts) {
+  const scene: HeardScene = {
+    tilePx: 0,
+    targetX: 0,
+    targetZ: 0,
+    night: 0,
+    weather: clock.weather,
+    stormSeconds: 0,
+    shore: Infinity,
+    awake: 1,
+    guests: 0,
+    children: 0,
+    swimmers: 0,
+    near: new Float32Array(SOUND_KINDS.length),
+    open: new Float32Array(SOUND_KINDS.length),
+  };
+  const guests: HeardGuests = { guests: 0, children: 0, swimmers: 0 };
+  let sources: SoundSources | null = null;
+  let listedFor: readonly Venue[] | null = null;
+  let heardAt = -Infinity;
+
+  const sourcesOf = (now: Resort): SoundSources => {
+    if (sources === null || listedFor !== now.venues) {
+      sources = soundSourcesOf([...now.plot.placements, ...now.plot.paths], soundOf, now.venues);
+      listedFor = now.venues;
+    }
+    return sources;
+  };
+
+  return (timeMs: number): void => {
+    if (timeMs - heardAt < HEAR_MS) return;
+    heardAt = timeMs;
+    const now = resort();
+    const target = handle.controls.target;
+    const effect = weatherEffect(clock.weather);
+    scene.tilePx = tilePxAt(handle.camera, target, view.width, view.height);
+    const listener = {
+      x: target.x / TILE_VOXELS,
+      z: target.z / TILE_VOXELS,
+      radius: hearingRadius(scene.tilePx),
+    };
+    scene.targetX = listener.x;
+    scene.targetZ = listener.z;
+    scene.night = skyStateFor(clock.time).lampFactor;
+    scene.weather = clock.weather;
+    scene.stormSeconds = clock.running;
+    scene.shore = shoreDistance(now.shore, listener.x, listener.z, SURF_REACH);
+    const { crowd } = now.crowd;
+    const { cast } = now;
+    const heard = {
+      count: Math.min(crowd.count, now.guests.count),
+      x: crowd.x,
+      z: crowd.z,
+      shown: cast.shown,
+      placedX: cast.x,
+      placedZ: cast.z,
+      offPlot: crowd.offPlot,
+      present: now.guests.present,
+      child: now.guests.child,
+      isAsleep: (person: number) => now.router.isAsleep(person),
+    };
+    hearGuests(heard, now.shore, listener, guests);
+    Object.assign(scene, guests);
+    const present = presentCount(now.guests);
+    scene.awake = present > 0 ? 1 - Math.min(present, now.router.asleepCount) / present : 1;
+    const isOpen = (venue: number): boolean => isOpenIn(shelterOf(now.venues[venue]!), effect);
+    gatherSources(sourcesOf(now), listener, isOpen, scene.near, scene.open);
+    onHear(scene);
   };
 }
 
@@ -3903,6 +4018,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const signSpots = createSignSpots();
   let signsWanted = false;
 
+  const { onHear } = options;
+  const listen =
+    bench || !onHear
+      ? () => {}
+      : createHearing({ handle, resort: current, clock, view: viewSize, onHear });
+
   const statsNow = createStatsReader({
     handle,
     resort: current,
@@ -3958,6 +4079,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // thrown away rather than undoing it.
   let edits = 0;
 
+  // Never under a bench, whose runs place nothing a player did.
+  const cue = (played: BuildCue): void => {
+    if (!bench) options.onCue?.(played);
+  };
+
   const landPrice = (): number => landPriceOf(current().ledger.mode);
   const tellLand = (): void => options.onLandChange?.(landViewOf(current().rights, landPrice()));
 
@@ -3983,6 +4109,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       edits++;
       scheduleSettle();
       tellLand();
+      cue('land');
     },
   };
 
@@ -4020,6 +4147,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onRefused: refused,
     onFallback: fallback,
     land,
+    onCue: cue,
   });
 
   // Off under a bench, as the markers are, so every recorded figure is drawn without them. A gate
@@ -4596,6 +4724,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     advanceWeather(elapsed);
     build.advance(bench ? MAX_STEP : elapsed);
     moveCamera(elapsed);
+    listen(timeMs);
     chooseDetail();
     const renderStarted = performance.now();
     handle.renderer.render(handle.scene, handle.camera);

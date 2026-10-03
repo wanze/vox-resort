@@ -44,6 +44,7 @@ import type { NewsControls } from '../../../app/useNews';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
+import type { SoundControls } from '../../../app/useSound';
 import type { WindowControls } from '../../../app/useWindows';
 import type { ShowcaseStats, StatusView, VoicesView } from '../../../app/showcase';
 
@@ -90,6 +91,7 @@ export interface HudProps {
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly palette: boolean;
   readonly onPaletteChange: (open: boolean) => void;
+  readonly sound: SoundControls;
   readonly error: string | null;
   readonly refusal: { readonly title: string; readonly message: string } | null;
 }
@@ -308,6 +310,7 @@ export function Hud(props: HudProps) {
         onStaffPinsChange={props.news.setStaffPins}
         signs={props.news.prefs.signs}
         onSignsChange={props.news.setSigns}
+        sound={props.sound}
       />
       <Windows {...props} />
       <Toasts

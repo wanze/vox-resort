@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashAt, flashSky } from './lightning';
+import { flashAt, flashSky, strikesBetween } from './lightning';
 import { skyStateFor } from '../../lighting/domain/dayNight';
 
 function sample(seconds: number, step = 0.01): number[] {
@@ -70,5 +70,20 @@ describe('flashSky', () => {
   it('clamps a number from outside rather than overdriving the ambient', () => {
     expect(flashSky(sky, 40)).toEqual(flashSky(sky, 1));
     expect(flashSky(sky, -2)).toBe(sky);
+  });
+});
+
+describe('strikesBetween', () => {
+  it('names every strike the sky flashes for, at the moment it flashes', () => {
+    const strikes = strikesBetween(0, 120);
+    expect(strikes.length).toBeGreaterThan(5);
+    for (const strike of strikes) {
+      expect(flashAt(strike.at + 0.001)).toBeGreaterThan(0);
+      expect(flashAt(strike.at - 0.01)).toBe(0);
+      expect(strike.strength).toBeGreaterThanOrEqual(0.45);
+      expect(strike.strength).toBeLessThanOrEqual(1);
+    }
+    const split = [...strikesBetween(0, 55), ...strikesBetween(55, 120)];
+    expect(split).toEqual(strikes);
   });
 });

@@ -30,6 +30,7 @@ export default defineModel({
   id: 'poolside-bar',
   label: 'Poolside Bar',
   category: 'amenities',
+  sound: 'bar',
   tiles: { x: 2, z: 2 },
   emissive: [LANTERN],
   seats: [

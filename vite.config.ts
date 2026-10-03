@@ -31,7 +31,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2,mp3}'],
         // The main chunk is 1.75 MB against Workbox's 2 MiB default, and a file over the cap is
         // skipped with only a warning. scripts/check-precache.ts fails the build if one is.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,

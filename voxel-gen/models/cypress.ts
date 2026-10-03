@@ -5,6 +5,7 @@ export default defineModel({
   id: 'cypress',
   label: 'Cypress',
   category: 'grounds',
+  sound: 'trees',
   scenery: 0.4,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {

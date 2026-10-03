@@ -254,6 +254,27 @@ export type SignKind =
   | 'basketball'
   | 'volleyball';
 
+export type SoundKind =
+  | 'cafe'
+  | 'restaurant'
+  | 'bar'
+  | 'snack'
+  | 'shop'
+  | 'arcade'
+  | 'gym'
+  | 'spa'
+  | 'pool'
+  | 'kids'
+  | 'tennis'
+  | 'ballcourt'
+  | 'minigolf'
+  | 'boats'
+  | 'reception'
+  | 'restrooms'
+  | 'fountain'
+  | 'torch'
+  | 'trees';
+
 export interface NeedRelief {
   readonly need: GuestNeed;
   readonly amount: number;
@@ -329,6 +350,9 @@ export interface VoxelModelSource {
   // 0 to 1: how much nicer this makes the tiles around it. The reach is the simulation's,
   // so a model states only how strong it is.
   readonly scenery?: number;
+  // What the app plays near it; silent when absent. A variant sounds like its original, so only
+  // originals declare it.
+  readonly sound?: SoundKind;
   // Derived from the model's size in prices.ts when omitted; declare it only where that is wrong.
   readonly cost?: number;
   // Tiles a guest holding litter will look for this; 0 is not a bin.
@@ -365,6 +389,7 @@ export interface VoxelModel {
   readonly gateway: boolean;
   readonly depot: ModelDepot | null;
   readonly scenery: number;
+  readonly sound: SoundKind | null;
   readonly cost: number | null;
   readonly binReach: number;
   readonly width: number;
@@ -502,6 +527,18 @@ function nameplateFrom(
   };
 }
 
+function defaultsOf(source: VoxelModelSource) {
+  return {
+    groundDecides: source.groundDecides ?? false,
+    gateway: source.gateway ?? false,
+    depot: source.depot ?? null,
+    scenery: source.scenery ?? 0,
+    sound: source.sound ?? null,
+    cost: source.cost ?? null,
+    binReach: source.binReach ?? 0,
+  };
+}
+
 export function buildModel(source: VoxelModelSource): VoxelModel {
   const builder = new VoxelBuilder();
   source.build(builder);
@@ -539,12 +576,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     label: source.label,
     category: source.category,
     tiles: source.tiles,
-    groundDecides: source.groundDecides ?? false,
-    gateway: source.gateway ?? false,
-    depot: source.depot ?? null,
-    scenery: source.scenery ?? 0,
-    cost: source.cost ?? null,
-    binReach: source.binReach ?? 0,
+    ...defaultsOf(source),
     width: maxX - minX + 1,
     height: maxY - minY + 1,
     depth: maxZ - minZ + 1,

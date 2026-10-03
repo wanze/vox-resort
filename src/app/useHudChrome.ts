@@ -28,6 +28,7 @@ const always = (action: () => void) => (): boolean => {
 export interface HudToggles {
   readonly staffPins: () => void;
   readonly signs: () => void;
+  readonly sound: () => void;
   readonly land: (() => void) | null;
 }
 
@@ -64,6 +65,7 @@ export function useHudChrome(
     { key: 'b', run: always(() => windows.toggle('build')) },
     { key: 's', run: always(toggles.staffPins) },
     { key: 'n', run: always(toggles.signs) },
+    { key: 'm', run: always(toggles.sound) },
     {
       key: 'l',
       run: () => {

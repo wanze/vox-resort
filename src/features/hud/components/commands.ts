@@ -31,6 +31,7 @@ import type { HistoryControls } from '../../../app/useHistory';
 import type { OverlayControls } from '../../../app/useOverlay';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
+import type { SoundControls } from '../../../app/useSound';
 import { isReadable, listOrder, saveOrAsk } from '../../saves/domain/saveSlots';
 import { savedAgo, titleOf } from '../../saves/domain/saveWords';
 import { SAVE_SHORTCUT } from './MainMenu';
@@ -63,6 +64,7 @@ export interface CommandContext {
   readonly ledger: Ledger | null;
   readonly land: LandView | null;
   readonly preview: PreviewLookup;
+  readonly sound: SoundControls;
 }
 
 const CORNER_NAMES: { readonly [direction in CompassDirection]: string } = {
@@ -172,6 +174,22 @@ function cameraCommands({ camera }: CommandContext): Command[] {
       note: 'draw far objects coarse and leave out ones too small to see',
       checked: view.detail,
       run: () => camera.setDetail(!view.detail),
+    },
+  ];
+}
+
+function soundCommands({ sound }: CommandContext): Command[] {
+  const { on } = sound.prefs;
+  return [
+    {
+      id: 'sound:toggle',
+      label: on ? 'Mute sound' : 'Unmute sound',
+      group: 'Sound',
+      keywords: 'audio music volume mute quiet silence',
+      note: on ? 'silence the music, the resort and the buttons' : 'bring the sound back',
+      art: { icon: on ? 'muted' : 'sound' },
+      shortcut: 'M',
+      run: sound.toggle,
     },
   ];
 }
@@ -403,6 +421,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...weatherCommands(context),
     ...overlayCommands(context),
     ...cameraCommands(context),
+    ...soundCommands(context),
     ...gameCommands(context),
     ...resortCommands(context),
     ...windowCommands(context),

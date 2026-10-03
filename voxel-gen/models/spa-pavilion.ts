@@ -32,6 +32,7 @@ export default defineModel({
   id: 'spa-pavilion',
   label: 'Spa Pavilion',
   category: 'leisure',
+  sound: 'spa',
   tiles: { x: 3, z: 2 },
   emissive: [LANTERN],
   seats: DAYBEDS.map((bz) => ({ x: 20, y: 7, z: bz + 2, facing: 1, pose: 'lie' }) as const),

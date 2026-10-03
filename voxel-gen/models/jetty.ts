@@ -11,6 +11,7 @@ export default defineModel({
   id: 'jetty',
   label: 'Jetty',
   category: 'grounds',
+  sound: 'boats',
   groundDecides: true,
   tiles: { x: 1, z: 1 },
   build: (b: VoxelBuilder) => {

@@ -9,6 +9,7 @@ export default defineModel({
   id: 'snack-bar',
   label: 'Snack Bar',
   category: 'amenities',
+  sound: 'snack',
   tiles: { x: 2, z: 1 },
   venue: {
     role: 'food',

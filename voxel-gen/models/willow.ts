@@ -5,6 +5,7 @@ export default defineModel({
   id: 'willow',
   label: 'Willow',
   category: 'grounds',
+  sound: 'trees',
   scenery: 0.4,
   tiles: { x: 2, z: 2 },
   build: (b: VoxelBuilder) => {

@@ -185,6 +185,7 @@ export default defineModel({
   id: 'waterpark',
   label: 'Waterpark',
   category: 'leisure',
+  sound: 'pool',
   tiles: { x: 6, z: 6 },
   // Mostly water, which the size rule reads as cheap.
   cost: 8_000,

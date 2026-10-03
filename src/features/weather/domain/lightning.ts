@@ -17,6 +17,22 @@ const hash01 = (value: number): number => mix(value) / 4_294_967_296;
 const strikeAt = (n: number): number => n * STRIKE_GAP + hash01(n * 2) * STRIKE_SPREAD;
 const strikeStrength = (n: number): number => WEAKEST + (1 - WEAKEST) * hash01(n * 2 + 1);
 
+export interface Strike {
+  readonly at: number;
+  readonly strength: number;
+}
+
+// In (from, to], for the thunder to be scheduled off the same strikes the sky flashes for.
+export function strikesBetween(from: number, to: number): Strike[] {
+  const strikes: Strike[] = [];
+  const first = Math.max(0, Math.floor((from - STRIKE_SPREAD) / STRIKE_GAP));
+  for (let n = first; n * STRIKE_GAP <= to; n++) {
+    const at = strikeAt(n);
+    if (at > from && at <= to) strikes.push({ at, strength: strikeStrength(n) });
+  }
+  return strikes;
+}
+
 // Flickers on the decay: a bolt is a train of strokes, and a single clean fade reads as a dimmer.
 function shapeOf(through: number): number {
   return (1 - through) * (0.6 + 0.4 * Math.cos(through * Math.PI * 6));

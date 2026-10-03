@@ -8,6 +8,7 @@ export default defineModel({
   id: 'icecream',
   label: 'Ice Cream Cart',
   category: 'amenities',
+  sound: 'snack',
   tiles: { x: 1, z: 1 },
   venue: {
     shelter: 'open',

@@ -26,6 +26,7 @@ export default defineModel({
   id: 'fountain',
   label: 'Fountain',
   category: 'amenities',
+  sound: 'fountain',
   scenery: 1,
   tiles: { x: 2, z: 2 },
   // One flat tone: dithering a second blue defeats the water merge. There is no

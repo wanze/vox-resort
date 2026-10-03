@@ -44,6 +44,7 @@ export default defineModel({
   id: 'reception',
   label: 'Reception',
   category: 'amenities',
+  sound: 'reception',
   tiles: { x: 4, z: 3 },
   // Every tycoon resort must buy one, and it sells nothing.
   cost: 600,

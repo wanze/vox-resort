@@ -31,6 +31,7 @@ export default defineModel({
   id: 'coffee-shop',
   label: 'Coffee Shop',
   category: 'amenities',
+  sound: 'cafe',
   tiles: { x: 3, z: 3 },
   emissive: [LANTERN],
   windows: WINDOW_GLASS,

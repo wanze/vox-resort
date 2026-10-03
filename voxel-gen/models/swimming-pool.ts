@@ -51,6 +51,7 @@ export default defineModel({
   id: 'swimming-pool',
   label: 'Swimming Pool',
   category: 'leisure',
+  sound: 'pool',
   tiles: { x: 8, z: 6 },
   // Mostly water, which the size rule reads as cheap.
   cost: 5_000,

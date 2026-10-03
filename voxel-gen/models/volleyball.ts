@@ -58,6 +58,7 @@ export default defineModel({
   id: 'volleyball',
   label: 'Volleyball Court',
   category: 'leisure',
+  sound: 'ballcourt',
   placement: { ground: 'beach', perResort: { min: 1, max: 3 } },
   venue: {
     shelter: 'open',

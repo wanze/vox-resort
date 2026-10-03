@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react';
+import { useEffect, type ReactNode, type RefObject } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { CommandPalette } from './CommandPalette';
@@ -28,6 +28,7 @@ import { readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
+import { isCompact, type LayoutMode } from '../domain/layoutMode';
 import type { BuildTool } from '../../build/domain/buildTool';
 import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
@@ -89,6 +90,7 @@ export interface HudProps {
   readonly onRenameVenue: (key: string, name: string) => void;
   readonly onClearSelection: () => void;
   readonly windows: WindowControls;
+  readonly layout: LayoutMode;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly palette: boolean;
@@ -124,7 +126,8 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       onToolChange={props.onToolChange}
       ledger={props.ledger}
       land={props.land}
-      focusSearch={props.windows.layout.focus === 'build'}
+      // A focused field raises a phone's keyboard over half the screen, so a sheet waits for a tap.
+      focusSearch={props.windows.layout.focus === 'build' && !isCompact(props.layout)}
     />
   ),
   summary: (props) => (
@@ -200,9 +203,13 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
   debug: (props) => <RenderStats stats={props.stats} elements={props.debugElements} />,
 };
 
-function frameOf(windows: WindowControls, id: WindowId, onClose: () => void): HudWindowFrame {
+function frameOf(props: HudProps, id: WindowId, onClose: () => void): HudWindowFrame {
+  const { windows } = props;
+  const compact = isCompact(props.layout);
   return {
     id,
+    compact,
+    peek: compact && id === 'build' && props.tool !== null,
     spot: windows.layout.spots[id] ?? null,
     depth: depthOf(windows.layout, id),
     onRaise: () => windows.raise(id),
@@ -234,8 +241,20 @@ function tabbedBody(props: HudProps, id: TabbedWindow): ReactNode {
 const bodyOf = (props: HudProps, id: Framed): ReactNode =>
   isTabbed(id) ? tabbedBody(props, id) : CONTENT[id](props);
 
+const selectedKey = (selection: SelectionView | null): string | null => {
+  if (selection === null) return null;
+  if (selection.kind === 'place') return `place:${selection.key}`;
+  return selection.kind === 'guest' ? `guest:${selection.person}` : `staff:${selection.worker}`;
+};
+
 function Windows(props: HudProps) {
   const { windows } = props;
+  const selected = selectedKey(props.selection);
+  const { raise } = windows;
+  // A tap on the map never reaches the inspector, so a fresh pick would open under a raised sheet.
+  useEffect(() => {
+    if (selected !== null) raise('inspect');
+  }, [selected, raise]);
   return (
     <>
       {FRAMED.filter((id) => isOpen(windows.layout, id)).map((id) => {
@@ -244,7 +263,7 @@ function Windows(props: HudProps) {
         return (
           <HudWindow
             key={id}
-            frame={frameOf(windows, id, () => windows.show(id, false))}
+            frame={frameOf(props, id, () => windows.show(id, false))}
             title={WINDOW_TITLES[id]}
             icon={WINDOW_ICONS[id]}
           >
@@ -253,7 +272,7 @@ function Windows(props: HudProps) {
         );
       })}
       <InspectPanel
-        frame={frameOf(windows, 'inspect', props.onClearSelection)}
+        frame={frameOf(props, 'inspect', props.onClearSelection)}
         selection={props.selection}
         advice={props.advice}
         activityElement={props.inspectElement}

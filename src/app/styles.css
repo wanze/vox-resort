@@ -102,6 +102,18 @@
   --palette-w: 284px;
   --tile-min: 60px;
 
+  --strip-h: 40px;
+  --strip-control-h: 32px;
+  --dock-h: 56px;
+  --rail-w: 56px;
+  /* A share of the room between strip and dock, not a length: it multiplies that room. */
+  --sheet-half: 0.55;
+  --sheet-w: min(380px, 48vw);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
   --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
   --quick: 120ms var(--ease);
   --pop: 150ms var(--ease);
@@ -126,6 +138,7 @@ html,
 body,
 :where(#root) {
   height: 100%;
+  height: 100dvh;
   margin: 0;
 }
 
@@ -139,7 +152,16 @@ body {
   font: 500 var(--size-body) / 1.35 var(--font-ui);
   font-synthesis: none;
   overflow: hidden;
+  overscroll-behavior: none;
   user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A double tap on a control would otherwise zoom the page. */
+.hud button,
+.hud input,
+.hud select {
+  touch-action: manipulation;
 }
 
 button:not(:disabled),
@@ -169,6 +191,7 @@ input[type='text'] {
   height: 100%;
   width: 100%;
   touch-action: none;
+  -webkit-touch-callout: none;
 }
 
 .app-canvas[data-armed] {
@@ -527,7 +550,7 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 2px;
   min-width: 260px;
-  max-height: calc(100vh - var(--bar-h) - var(--space-5));
+  max-height: calc(100dvh - var(--bar-h) - var(--space-5));
   overflow: auto;
   padding: var(--space-2);
   border-radius: var(--radius-stone);
@@ -2917,4 +2940,306 @@ input[type='checkbox'] {
 .welcome-load-game .save-list {
   max-height: 50vh;
   overflow: auto;
+}
+
+.hud-window-toggle {
+  appearance: none;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.hud-window-grip {
+  position: absolute;
+  top: 4px;
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--edge-soft);
+}
+
+@keyframes hud-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes hud-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+/* The drag reads --window-floor back, so it grows with the bar: 8 px taller controls. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 40px;
+    --bar-h: 64px;
+    --window-floor: 70px;
+  }
+
+  .hud-option,
+  .hud-command-item {
+    min-height: 44px;
+  }
+
+  .build-tool {
+    width: 44px;
+    height: 44px;
+  }
+
+  .zone-chip {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* iOS zooms into any field set smaller than 16 px as soon as it takes focus. */
+  .hud input,
+  .hud select,
+  .welcome input,
+  .welcome select {
+    font-size: 16px;
+  }
+}
+
+@media (hover: none) {
+  .hud-option-key,
+  .hud-palette-styles-key {
+    display: none;
+  }
+}
+
+.app:not([data-layout='desk']) .hud-bar {
+  height: calc(var(--strip-h) + var(--safe-t));
+  padding: var(--safe-t) calc(var(--space-2) + var(--safe-r)) 0 calc(var(--space-2) + var(--safe-l));
+  /* The spare width goes between the groups, so a strip with room to spare spreads out evenly. */
+  justify-content: space-between;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--edge);
+  background-image: var(--slab);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  pointer-events: auto;
+}
+
+.app:not([data-layout='desk']) .hud-bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* One slab for the whole strip: a plate's own border, padding and gap cost about 40 px across a phone. */
+.app:not([data-layout='desk']) .hud-bar .hud-plate:not(.hud-dock) {
+  flex: none;
+  gap: var(--space-2);
+  height: var(--strip-h);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.app:not([data-layout='desk']) .hud-bar :is(.hud-chip, .hud-gates) {
+  height: var(--strip-control-h);
+  padding: 0 var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-gates {
+  padding: 0 var(--space-2);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-time {
+  padding-left: var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-readout-row {
+  gap: var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-readout-value {
+  font-size: var(--size-body);
+}
+
+.app:not([data-layout='desk'])
+  .hud-bar
+  :is(
+    .hud-wordmark,
+    .hud-chip-label,
+    .hud-chip-caret,
+    .hud-readout-label,
+    .hud-rating .hud-readout-row > .pixel-icon,
+    .hud-plate:has(> .hud-demand),
+    .hud-gates .hud-readout
+  ) {
+  display: none;
+}
+
+/* A phone held upright has no room for the slider; the clock beside it still shows the time. */
+.app[data-layout='bottom'] .hud-time input[type='range'] {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .app:not([data-layout='desk']) .hud-guests {
+    display: none;
+  }
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-dock {
+  position: fixed;
+  margin: 0;
+  border-radius: 0;
+}
+
+.app[data-layout='bottom'] .hud-bar .hud-dock {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  align-items: stretch;
+  height: calc(var(--dock-h) + var(--safe-b));
+  padding: var(--space-1) calc(var(--space-1) + var(--safe-r)) calc(var(--space-1) + var(--safe-b))
+    calc(var(--space-1) + var(--safe-l));
+}
+
+.app[data-layout='bottom'] .hud-dock .hud-tool {
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+}
+
+.app[data-layout='bottom'] .hud-dock .hud-tool-label {
+  display: block;
+  font-size: 11px;
+}
+
+.app[data-layout='rail'] .hud-bar .hud-dock {
+  top: calc(var(--strip-h) + var(--safe-t));
+  left: 0;
+  bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  width: calc(var(--rail-w) + var(--safe-l));
+  height: auto;
+  padding: var(--space-2) var(--space-1) var(--space-2) calc(var(--space-1) + var(--safe-l));
+}
+
+.app[data-layout='rail'] .hud-dock .hud-tool-label {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .hud-window[data-window] {
+  width: auto;
+  animation: hud-sheet-up var(--pop);
+}
+
+.app:not([data-layout='desk']) .hud-window-head {
+  position: relative;
+  padding-top: var(--space-4);
+  cursor: auto;
+}
+
+.app[data-layout='bottom'] .hud-window[data-window] {
+  --sheet-room: calc(
+    100% - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b) - var(--space-2)
+  );
+  top: auto;
+  right: var(--safe-r);
+  bottom: calc(var(--dock-h) + var(--safe-b));
+  left: var(--safe-l);
+  max-height: calc(var(--sheet-room) * var(--sheet-half));
+  border-radius: 20px 24px 0 0 / 18px 22px 0 0;
+}
+
+.app[data-layout='bottom'] .hud-window[data-window][data-expanded] {
+  max-height: var(--sheet-room);
+}
+
+.app[data-layout='rail'] .hud-window[data-window] {
+  top: calc(var(--strip-h) + var(--safe-t));
+  right: var(--safe-r);
+  bottom: 0;
+  left: auto;
+  width: var(--sheet-w);
+  max-height: none;
+  border-radius: 20px 0 0 24px / 18px 0 0 22px;
+  animation-name: hud-sheet-in;
+}
+
+/* Collapsed to its tools while one is armed, so it hangs from the top instead of filling the side. */
+.app[data-layout='rail'] .hud-window[data-window][data-peek]:not([data-expanded]) {
+  bottom: auto;
+}
+
+.app:not([data-layout='desk'])
+  .hud-window[data-peek]:not([data-expanded])
+  :is(.hud-palette-search, .hud-tabs, .hud-palette-shelves) {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-dropdown-panel {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: calc(var(--space-2) + var(--safe-r));
+  left: calc(var(--space-2) + var(--safe-l));
+  min-width: 0;
+  max-height: calc(
+    100dvh - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b) - var(--space-4)
+  );
+}
+
+.app[data-layout='rail'] .hud-bar .hud-dropdown-panel {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+  max-height: calc(100dvh - var(--strip-h) - var(--safe-t) - var(--safe-b) - var(--space-4));
+}
+
+.app:not([data-layout='desk']) .hud-overlay-legend {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.app:not([data-layout='desk']) .hud .hud-toasts {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: calc(var(--space-2) + var(--safe-r));
+  bottom: auto;
+  left: calc(var(--space-2) + var(--safe-l));
+  width: auto;
+}
+
+.app[data-layout='rail'] .hud .hud-toasts {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+}
+
+.app:not([data-layout='desk']) .hud-toast:nth-child(n + 3) {
+  display: none;
+}
+
+/* Pinned under the strip, so the on-screen keyboard rising from below never covers the field. */
+.app:not([data-layout='desk']) .hud-command-layer {
+  padding: calc(var(--strip-h) + var(--safe-t) + var(--space-2))
+    calc(var(--space-2) + var(--safe-r)) var(--space-2) calc(var(--space-2) + var(--safe-l));
+}
+
+/* Auto margins centre the column without cutting off its top when it is taller than the screen. */
+.app:not([data-layout='desk']) .welcome {
+  align-items: start;
+  padding: calc(var(--space-4) + var(--safe-t)) calc(var(--space-4) + var(--safe-r))
+    calc(var(--space-4) + var(--safe-b)) calc(var(--space-4) + var(--safe-l));
+}
+
+.app:not([data-layout='desk']) .welcome-column {
+  width: min(100%, 420px);
+  margin: auto;
 }

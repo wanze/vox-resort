@@ -9,7 +9,9 @@ import {
   raiseWindow,
   resetPlaces,
   showWindow,
+  soloWindow,
   tabOf,
+  toCompact,
   toggleWindow,
   type WindowLayout,
 } from './windowLayout';
@@ -90,6 +92,37 @@ describe('showWindow', () => {
   it('hands back the same layout when hiding a window that is shut', () => {
     const before = layout({ open: ['build'] });
     expect(showWindow(before, 'books', false)).toBe(before);
+  });
+});
+
+describe('soloWindow', () => {
+  it('shows a tab as the only window open', () => {
+    const next = soloWindow(
+      layout({ open: ['build', 'inbox'], stack: ['build', 'inbox'] }),
+      'staff',
+    );
+    expect(next.open).toEqual(['people']);
+    expect(tabOf(next, 'people')).toBe('staff');
+  });
+
+  it('keeps a window that is already open, alone', () => {
+    const next = soloWindow(layout({ open: ['build', 'books'], stack: ['build'] }), 'books');
+    expect(next.open).toEqual(['books']);
+    expect(next.stack.at(-1)).toBe('books');
+  });
+});
+
+describe('toCompact', () => {
+  it('keeps only the window raised last', () => {
+    const next = toCompact(
+      layout({ open: ['build', 'inbox', 'books'], stack: ['books', 'inbox', 'camera'] }),
+    );
+    expect(next.open).toEqual(['inbox']);
+  });
+
+  it('leaves an empty layout as it is', () => {
+    const empty = layout();
+    expect(toCompact(empty)).toBe(empty);
   });
 });
 

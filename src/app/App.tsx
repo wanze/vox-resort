@@ -237,7 +237,7 @@ export function App() {
   const { playing, saves, welcome, onUpdate } = useGame(showcaseRef, clock, news.setUpdate);
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
-  const { windows, menu, setMenu, palette, setPalette } = useHudChrome(
+  const { windows, layout, menu, setMenu, palette, setPalette } = useHudChrome(
     clock,
     tool,
     selectTool,
@@ -374,7 +374,7 @@ export function App() {
   ]);
 
   return (
-    <div className="app">
+    <div className="app" data-layout={layout}>
       <canvas ref={canvasRef} className="app-canvas" />
       <Screen
         playing={playing}
@@ -435,6 +435,7 @@ export function App() {
           ledger={money.ledger}
           land={money.land}
           windows={windows}
+          layout={layout}
           menu={menu}
           onMenuChange={setMenu}
           palette={palette}

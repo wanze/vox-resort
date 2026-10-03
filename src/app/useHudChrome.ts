@@ -10,9 +10,12 @@ import { escapeOutcome } from '../features/hud/domain/escape';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import { cycledTool } from '../features/build/domain/stylePick';
 import type { SelectionView } from '../features/inspect/domain/selection';
+import type { LayoutMode } from '../features/hud/domain/layoutMode';
+import { useLayoutMode } from './useLayoutMode';
 
 export interface HudChrome {
   readonly windows: WindowControls;
+  readonly layout: LayoutMode;
   readonly menu: MenuId | null;
   readonly setMenu: (menu: MenuId | null) => void;
   readonly palette: boolean;
@@ -41,7 +44,8 @@ export function useHudChrome(
   saves: SaveControls,
   toggles: HudToggles,
 ): HudChrome {
-  const windows = useWindows();
+  const layout = useLayoutMode();
+  const windows = useWindows(layout);
   const [menu, setMenu] = useState<MenuId | null>(null);
   const [palette, showPalette] = useState(false);
   // One thing on top at a time, so the palette never opens under a dropdown still listening for Escape.
@@ -96,5 +100,5 @@ export function useHudChrome(
   // None behind the welcome screen: there is no HUD for them to open.
   useHotkeys(playing ? hotkeys : []);
 
-  return { windows, menu, setMenu, palette, setPalette };
+  return { windows, layout, menu, setMenu, palette, setPalette };
 }

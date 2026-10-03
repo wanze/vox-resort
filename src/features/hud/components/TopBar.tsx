@@ -53,16 +53,18 @@ function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
 function GuestsReadout({ status }: { readonly status: StatusView | null }) {
   if (status === null) return null;
   return (
-    <HudReadout
-      icon={<PixelIcon name="guests" />}
-      label="Guests"
-      value={
-        <>
-          {status.present.toLocaleString('en-US')}
-          <span className="hud-figure-of"> / {status.beds.total.toLocaleString('en-US')}</span>
-        </>
-      }
-    />
+    <div className="hud-guests">
+      <HudReadout
+        icon={<PixelIcon name="guests" />}
+        label="Guests"
+        value={
+          <>
+            {status.present.toLocaleString('en-US')}
+            <span className="hud-figure-of"> / {status.beds.total.toLocaleString('en-US')}</span>
+          </>
+        }
+      />
+    </div>
   );
 }
 

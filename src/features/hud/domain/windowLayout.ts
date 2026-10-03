@@ -108,6 +108,21 @@ export function toggleWindow(layout: WindowLayout, page: PageId): WindowLayout {
   return showWindow(layout, page, !isShown(layout, page));
 }
 
+// On a small screen only one window fits: showing one hides the rest. The inspector is not in
+// `open` (the selection drives it), so it is never closed here.
+export function soloWindow(layout: WindowLayout, page: PageId): WindowLayout {
+  const shown = showWindow(layout, page, true);
+  return shown.open.length === 1 ? shown : { ...shown, open: [hostOf(page)] };
+}
+
+// Entering a small screen keeps the window raised last, or the first open one if none was raised.
+export function toCompact(layout: WindowLayout): WindowLayout {
+  if (layout.open.length <= 1) return layout;
+  const raised = layout.stack.findLast((id) => isOpen(layout, id));
+  const kept = raised ?? layout.open[0];
+  return kept === undefined ? layout : { ...layout, open: [kept] };
+}
+
 export function moveWindow(layout: WindowLayout, id: WindowId, spot: WindowSpot): WindowLayout {
   return { ...layout, spots: { ...layout.spots, [id]: spot } };
 }

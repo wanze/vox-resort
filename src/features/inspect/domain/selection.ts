@@ -96,6 +96,8 @@ export interface PlaceView {
   readonly send?: SendOffers;
   // Set by the showcase on a venue, which the player may rename; `label` is then its name.
   readonly naming?: VenueNaming;
+  // Set by the showcase on a stage: what is on next there this week, or null for nothing.
+  readonly programme?: { readonly next: string | null };
 }
 
 export interface VenueNaming {

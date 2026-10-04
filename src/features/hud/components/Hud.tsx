@@ -25,6 +25,7 @@ import { StaffPanel } from './StaffPanel';
 import { Toasts } from './Toasts';
 import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
+import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
@@ -47,6 +48,7 @@ import type { ClockControls } from '../../../app/useClockControls';
 import type { HistoryControls } from '../../../app/useHistory';
 import type { NewsControls } from '../../../app/useNews';
 import type { OverlayControls } from '../../../app/useOverlay';
+import type { ProgrammeControls } from '../../../app/useProgramme';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
 import type { SoundControls } from '../../../app/useSound';
@@ -103,6 +105,7 @@ export interface HudProps {
   readonly palette: boolean;
   readonly onPaletteChange: (open: boolean) => void;
   readonly sound: SoundControls;
+  readonly programme: ProgrammeControls;
   readonly error: string | null;
   readonly refusal: { readonly title: string; readonly message: string } | null;
 }
@@ -177,6 +180,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
   staff: ({ stats, status, resort }) => (
     <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />
   ),
+  programme: ({ programme }) => <ProgrammePanel programme={programme} />,
   books: (props) => <LedgerPanel ledger={props.ledger} />,
   camera: ({ camera }) => (
     <CameraPanel
@@ -288,6 +292,10 @@ function Windows(props: HudProps) {
         onShow={props.onShowSelected}
         onSend={props.onSend}
         onRenameVenue={props.onRenameVenue}
+        onOpenProgramme={(key) => {
+          props.programme.choose(key);
+          windows.show('programme', true);
+        }}
       />
     </>
   );

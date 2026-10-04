@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDay,
+  isComplaint,
   createThoughts,
   forgetStay,
   latestOf,
@@ -178,5 +179,23 @@ describe('widenThoughts', () => {
     expect(widened.heardAt).toEqual(old.heardAt);
     expect(widened.heardSubject).toEqual(old.heardSubject);
     expect(widenThoughts(old)).toBe(old);
+  });
+
+  it('pads a save from before the shows, two kinds short, and hears a show as praise', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 0, 'no-step-free', 'Pool', 5);
+    const kinds = THOUGHT_KINDS.length;
+    const old = snapshotThoughts(thoughts, new Map());
+    const saved = {
+      ...old,
+      stay: old.stay.filter((_, at) => at % kinds < kinds - 2),
+      heardAt: old.heardAt.filter((_, at) => at % kinds < kinds - 2),
+      heardSubject: old.heardSubject.filter((_, at) => at % kinds < kinds - 2),
+    };
+    const widened = widenThoughts(saved);
+    expect(widened.stay).toEqual(old.stay);
+    expect(widened.heardSubject).toEqual(old.heardSubject);
+    expect(isComplaint('great-show')).toBe(false);
+    expect(isComplaint('called-off')).toBe(true);
   });
 });

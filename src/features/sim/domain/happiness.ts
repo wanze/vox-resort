@@ -79,6 +79,7 @@ export function ageHappiness(
   waiting: (person: number) => boolean,
   ticks: number,
   surroundings?: (person: number) => number,
+  lift?: (person: number) => number,
 ): void {
   if (ticks <= 0) return;
   const hours = ticks / TICKS_PER_HOUR;
@@ -89,7 +90,9 @@ export function ageHappiness(
     if (guests.present[person] !== 1) continue;
     const level = happiness.level[person]!;
     const around = surroundings ? SURROUNDINGS_SHARE * surroundings(person) : 0;
-    const towards = clamp(contentmentOf(needs, person) + around) - level;
+    // The target, not the level: a bump to the level drifts back down within the hour.
+    const lifted = lift ? lift(person) : 0;
+    const towards = clamp(contentmentOf(needs, person) + around + lifted) - level;
     // Never past the target, so a long run of ticks settles instead of overshooting.
     const moved = towards < 0 ? Math.max(towards, -drift) : Math.min(towards, drift);
     const now = clamp(level + moved - (waiting(person) ? queued : 0));

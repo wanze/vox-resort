@@ -12,6 +12,7 @@ export const WINDOW_IDS = [
   'overview',
   'inbox',
   'people',
+  'programme',
   'books',
   'camera',
   'resort',

@@ -9,6 +9,7 @@ export type Reason =
   | 'visit'
   | 'night'
   | 'wages'
+  | 'events'
   | 'maintenance';
 
 export const REASONS: readonly Reason[] = [
@@ -19,6 +20,7 @@ export const REASONS: readonly Reason[] = [
   'visit',
   'night',
   'wages',
+  'events',
   'maintenance',
 ];
 
@@ -45,6 +47,7 @@ const EMPTY: Column = {
   visit: 0,
   night: 0,
   wages: 0,
+  events: 0,
   maintenance: 0,
 };
 

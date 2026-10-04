@@ -7,6 +7,7 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   overview: 'Overview',
   inbox: 'Inbox',
   people: 'People',
+  programme: 'Programme',
   books: 'Books',
   camera: 'Camera',
   resort: 'New game',
@@ -21,6 +22,7 @@ export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
   overview: 'overview',
   inbox: 'inbox',
   people: 'people',
+  programme: 'programme',
   books: 'books',
   camera: 'camera',
   resort: 'resort',
@@ -56,7 +58,7 @@ export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
 };
 
 // The inspector follows the selection and the rest are reached from the menu.
-export const DOCK_WINDOWS = ['build', 'overview', 'inbox', 'people', 'books'] as const;
+export const DOCK_WINDOWS = ['build', 'overview', 'inbox', 'people', 'programme', 'books'] as const;
 
 // Every page the menu and the palette offer by name, in the dock's order.
 export const MENU_PAGES: readonly PageId[] = [
@@ -68,6 +70,7 @@ export const MENU_PAGES: readonly PageId[] = [
   'messages',
   'guests',
   'staff',
+  'programme',
   'books',
   'camera',
 ];

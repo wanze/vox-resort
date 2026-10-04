@@ -411,6 +411,8 @@ const crewOn = (
     readonly dirt?: readonly number[];
     readonly zones?: StaffZones;
     readonly litter?: Litter;
+    readonly booked?: (venue: number) => boolean;
+    readonly hosting?: () => readonly { readonly venue: number; readonly until: number }[];
   } = {},
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
@@ -427,6 +429,8 @@ const crewOn = (
     ...(options.occupants ? { occupants: (venue: number) => options.occupants![venue] ?? 0 } : {}),
     ...(options.zones ? { zones: () => options.zones! } : {}),
     ...(options.litter ? { litter: () => options.litter! } : {}),
+    ...(options.booked ? { booked: options.booked } : {}),
+    ...(options.hosting ? { hosting: options.hosting } : {}),
     seed: 11,
   });
   crowd = createCrowd({
@@ -507,6 +511,72 @@ describe('an animator', () => {
     );
     for (let tick = 1; tick <= 130; tick++) router.tick(tick);
     expect(cleanliness(upkeep, 0), 'the animator scrubbed').toBeCloseTo(0.2);
+  });
+});
+
+describe('an animator and the programme', () => {
+  const venues = [stage('kids-club#0', 1), stage('game-hall#0', 7)];
+
+  it('puts no show of their own on a booked stage', () => {
+    const network = networkOf(street(8));
+    const { router } = crewOn(network, venues, ['animator'], {
+      occupants: [2, 9],
+      booked: (venue) => venue === 1,
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
+
+  it('walks to a hosted stage, however quiet, and works it until the event ends', () => {
+    const network = networkOf(street(8));
+    const { router } = crewOn(network, venues, ['animator'], {
+      occupants: [2, 9],
+      booked: (venue) => venue === 0,
+      hosting: () => [{ venue: 0, until: 300 }],
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.step(0, nodeAt(network, 1))).toBe(-1);
+    for (let tick = 1; tick < 300; tick++) router.tick(tick);
+    expect(router.performingAt(0)).toBe(true);
+    router.tick(300);
+    expect(router.performingAt(0)).toBe(false);
+  });
+
+  it('stretches a show already on into the event booked after it', () => {
+    const network = networkOf(street(8));
+    let hosting: { venue: number; until: number }[] = [];
+    const { router } = crewOn(network, venues, ['animator'], {
+      occupants: [2, 9],
+      hosting: () => hosting,
+    });
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 7));
+    expect(router.performingAt(1)).toBe(true);
+    hosting = [{ venue: 1, until: 400 }];
+    for (let tick = 1; tick < 400; tick++) router.tick(tick);
+    expect(router.performingAt(1)).toBe(true);
+    router.tick(400);
+    expect(router.performingAt(1)).toBe(false);
+  });
+
+  it('runs exactly as before with nothing booked', () => {
+    const network = networkOf(street(8));
+    const run = (options: Parameters<typeof crewOn>[3]) => {
+      const { router } = crewOn(network, venues, ['animator', 'animator', 'cleaner'], options);
+      for (let tick = 1; tick <= 400; tick++) {
+        for (let worker = 0; worker < 3; worker++)
+          router.step(worker, nodeAt(network, (tick + worker) % 8));
+        router.tick(tick);
+      }
+      return router.snapshot();
+    };
+    const bare = run({ occupants: [2, 9], dirt: [0.3, 0.5] });
+    const inert = run({
+      occupants: [2, 9],
+      dirt: [0.3, 0.5],
+      booked: () => false,
+      hosting: () => [],
+    });
+    expect(inert).toEqual(bare);
   });
 });
 

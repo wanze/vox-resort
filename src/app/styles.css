@@ -1134,6 +1134,13 @@ input[type='checkbox'] {
   width: 260px;
 }
 
+.hud-window[data-window='programme'] {
+  --window-top: calc(var(--window-floor) + 40px);
+  right: calc(var(--palette-w) + var(--space-3) * 2);
+  width: 440px;
+  border-radius: 22px 26px 18px 24px / 24px 18px 26px 20px;
+}
+
 .hud-window[data-window='resort'] {
   --window-top: calc(var(--window-floor) + 40px);
   left: calc(50% - 170px);
@@ -1856,6 +1863,10 @@ input[type='checkbox'] {
   border-left-color: var(--foliage);
 }
 
+.hud-toast[data-severity='event'] {
+  border-left-color: var(--terracotta);
+}
+
 .welcome + .hud-toasts {
   z-index: 301;
 }
@@ -2068,6 +2079,161 @@ input[type='checkbox'] {
 .hud-inspect-members {
   display: grid;
   gap: var(--space-2);
+}
+
+.hud-inspect-programme {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.hud-programme {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.hud-programme-sites,
+.hud-programme-actions,
+.hud-event-book {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-programme-actions > span {
+  flex: 1 1 100%;
+}
+
+/* Days as rows on every screen, so a phone's sheet reads as the desk window does. */
+.hud-programme-week {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: var(--space-1) var(--space-2);
+  align-items: start;
+}
+
+.hud-programme-day {
+  display: contents;
+}
+
+.hud-programme-part-head {
+  color: var(--text-faint);
+  font: var(--size-label) var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.hud-programme-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: 4px;
+  white-space: nowrap;
+}
+
+.hud-programme-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 2px;
+  border-radius: var(--radius-pebble);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+}
+
+.hud-programme-chip,
+.hud-programme-add {
+  appearance: none;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--size-small);
+}
+
+.hud-programme-chip {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-programme-chip[data-off] {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.hud-programme-add {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.hud-programme-chip[aria-pressed='true'],
+.hud-programme-add[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow: var(--glow-accent);
+}
+
+.hud-programme-heading {
+  margin: 0;
+  color: var(--text-dim);
+  font: var(--size-label) var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.hud-programme-upcoming,
+.hud-event-cards {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-event-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-pebble);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+}
+
+.hud-event-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.hud-event-blurb {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.hud-event-card .hud-stat-note {
+  margin: 0;
+}
+
+.hud-event-warning {
+  margin: 0;
+  color: var(--ink-red);
+  font-size: var(--size-small);
+}
+
+.hud-event-start {
+  min-height: var(--control-h);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background: var(--stone-50);
+  color: var(--text);
+  font: inherit;
 }
 
 .hud-venue-name {
@@ -3197,6 +3363,7 @@ input[type='checkbox'] {
 
 .app[data-layout='bottom'] .hud-dock .hud-tool {
   flex: 1;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
   height: auto;
@@ -3204,7 +3371,10 @@ input[type='checkbox'] {
 
 .app[data-layout='bottom'] .hud-dock .hud-tool-label {
   display: block;
+  overflow: hidden;
+  max-width: 100%;
   font-size: 11px;
+  text-overflow: ellipsis;
 }
 
 .app[data-layout='rail'] .hud-bar .hud-dock {

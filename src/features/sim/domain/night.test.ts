@@ -52,6 +52,14 @@ describe('isBedtime', () => {
     expect(isBedtime(PARTIES[0]!, sleepAt + 24 * HOUR)).toBe(true);
     expect(isBedtime(PARTIES[0]!, sleepAt - 24 * HOUR)).toBe(true);
   });
+
+  it('keeps a party up late out of bed, and sends it once that ends', () => {
+    const party = 3;
+    const late = bedtimeOf(party).sleepAt + 10;
+    expect(isBedtime(party, late)).toBe(true);
+    expect(isBedtime(party, late, true)).toBe(false);
+    expect(isBedtime(party, late, false)).toBe(true);
+  });
 });
 
 describe('occupiedShare', () => {

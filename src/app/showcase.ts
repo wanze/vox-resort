@@ -146,7 +146,13 @@ import {
   type SimClock,
   type SimSpeed,
 } from '../features/sim/domain/simClock';
-import { createNeeds, decayNeeds, strongestNeed, type Needs } from '../features/sim/domain/needs';
+import {
+  createNeeds,
+  decayNeeds,
+  relieve,
+  strongestNeed,
+  type Needs,
+} from '../features/sim/domain/needs';
 import {
   ageHappiness,
   createHappiness,
@@ -184,11 +190,12 @@ import {
   type Carrying,
   type Litter,
 } from '../features/sim/domain/litter';
-import { mix } from '../features/sim/domain/night';
+import { LATE_NIGHT_RELIEF, mix } from '../features/sim/domain/night';
 import { keepReview, reviewFor, type Review } from '../features/sim/domain/reviews';
 import {
   countArrivals,
   countDeparture,
+  countEvent,
   countReview,
   keepDay,
   reportOf,
@@ -202,6 +209,7 @@ import {
   forgetStay,
   latestOf,
   loudest,
+  stayCount,
   surroundingsThought,
   tallyInto,
   think,
@@ -310,6 +318,53 @@ import {
 } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
+import { partiesOf, partyMixOf } from '../features/events/domain/audience';
+import type { AudienceParty } from '../features/events/domain/catalogue';
+import {
+  advanceEvents,
+  bookedVenues,
+  callOffRun,
+  createEvents,
+  endRun,
+  entertain,
+  hostedShows,
+  inviteAudience,
+  isUpLate,
+  kindOf as eventKindOf,
+  runOfVisit,
+  showingVenues,
+  stayOf as eventStayOf,
+  visitLitter,
+  type CallOffStep,
+  type EventFacts,
+  type EventRun,
+  type EventStep,
+  type EventsState,
+} from '../features/events/domain/eventRuns';
+import { restoreEvents, snapshotEvents } from '../features/events/domain/eventsSnapshot';
+import { fadeGlow } from '../features/events/domain/glow';
+import {
+  book,
+  BUILT_INS,
+  keepStanding,
+  nextEvents,
+  rebook,
+  siteKey,
+  switchBuiltIn,
+  unbook,
+  withBuiltIns,
+  type BookingChange,
+  type BookingDraft,
+  type BookingRefusal,
+  type Programme,
+} from '../features/events/domain/programme';
+import {
+  nextAt,
+  type DayForecast,
+  type ProgrammeFacts,
+} from '../features/events/domain/programmeView';
+import { siteVenueOf, stageKeysOf } from '../features/events/domain/sites';
+import { eventNewsFrom, type EventNews } from '../features/hud/domain/news';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
 import {
@@ -717,6 +772,10 @@ export interface ShowcaseOptions {
   readonly onOrdersChange?: (orders: readonly OrderSpot[]) => void;
   // Whenever the venues are rebuilt, in the order the signs' anchors were placed.
   readonly onSigns?: (spots: readonly SignSpot[]) => void;
+  // An event announced, called off or put off; never told during a load.
+  readonly onEventNews?: (news: EventNews) => void;
+  // After a booking, an edit, a load, a new resort and every simulated hour.
+  readonly onProgrammeChange?: (facts: ProgrammeFacts) => void;
   // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
   // the player's local time, until the first new game.
   readonly welcome?: boolean;
@@ -777,6 +836,11 @@ export interface Showcase {
   sendStaff(role: OrderRole): void;
   sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
   clearSelection(): void;
+  readonly programme: ProgrammeFacts;
+  book(draft: BookingDraft): BookingRefusal | null;
+  unbook(id: number): void;
+  rebook(id: number, change: BookingChange): BookingRefusal | null;
+  switchBuiltIn(id: number, on: boolean): void;
   // Finishes what is being built first: the save is of a world with no scaffolding.
   snapshot(): GameSnapshot;
   // Opens paused. Rejects, with the resort already replaced, if the save does not fit its world.
@@ -1091,6 +1155,12 @@ interface Resort {
   readonly guests: Guests;
   readonly needs: Needs;
   readonly happiness: Happiness;
+  // Replaced by a load; an edit keeps it, dropping the bookings of a stage pulled down.
+  events: EventsState;
+  // Per venue, refreshed once a frame, so the staff router's question is an array read.
+  eventBooked: Uint8Array;
+  eventShowing: Uint8Array;
+  hosted: readonly { readonly venue: number; readonly until: number }[];
   // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
   venues: readonly Venue[];
   // Drawn once per venue and carried by key, so building a second bar never renames the first.
@@ -1505,21 +1575,14 @@ function buildResort(
     upkeep: () => resort.upkeep,
     breakdowns: () => resort.breakdowns,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
-    onVisited: (person, venue) => {
-      pickUp(
-        carrying,
-        person,
-        venue.litter ?? 0,
-        (mix(person * 2_654_435_761 + parts.ticks()) % 1024) / 1024,
-      );
-      if (isTheBeach(venue)) leaveOnTheBeach(resort, person, parts.ticks());
-      judgeVisit(resort, parts.ticks(), person, venue);
-      riskTheWater(resort, parts.ticks(), person, venue);
-      const earned = priceOf(venue.id);
-      resort.ledger = record(resort.ledger, 'visit', earned);
-      earn(resort.takings, venue.key, earned);
-    },
+    onVisited: (person, venue) => visitMade(resort, person, venue, parts.ticks()),
     onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
+    upLate: (party) => isUpLate(resort.events, party),
+    eventStay: (person, venue) =>
+      eventStayOf(resort.events, guests.party[person]!, venue, (run) => runVenueOf(resort, run)),
+    onWoke: (person) => {
+      if (resort.events.tired.has(guests.party[person]!)) relieve(needs, person, LATE_NIGHT_RELIEF);
+    },
     seed: DWELL_SEED,
   });
   const crowd = crowdFor({
@@ -1588,6 +1651,8 @@ function buildResort(
       const workers = staffField!.crowd;
       takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
     },
+    booked: (venue) => resort.eventBooked[venue] === 1,
+    hosting: () => resort.hosted,
     seed: STAFF_SEED,
   });
   const staff = staffCrowdFor({
@@ -1630,6 +1695,9 @@ function buildResort(
     people: parts.people,
     lightVolume: lighting.volume,
   });
+
+  const events = createEvents(population);
+  events.programme = withBuiltIns(events.programme, BUILT_INS, stageKeysOf(venues));
 
   const resort: Resort = {
     plan,
@@ -1687,6 +1755,10 @@ function buildResort(
     guests,
     needs,
     happiness,
+    events,
+    eventBooked: new Uint8Array(venues.length),
+    eventShowing: new Uint8Array(venues.length),
+    hosted: NO_HOSTED,
     venues,
     names,
     lodgings,
@@ -1779,7 +1851,10 @@ function recastAll(resort: Resort): void {
   recast(resort.cast, resort.casting, resort.crowd.crowd.seatBy);
   allowHire(resort);
   const { staffRouter, venues } = resort;
-  noteShows(resort.cast, (venue) => staffRouter.performingAt(venue));
+  noteShows(
+    resort.cast,
+    (venue) => staffRouter.performingAt(venue) || resort.eventShowing[venue] === 1,
+  );
   recastStaff(
     resort.staffCast,
     (worker) => {
@@ -2317,6 +2392,213 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
   });
 }
 
+const NO_HOSTED: readonly { readonly venue: number; readonly until: number }[] = [];
+
+const runVenueOf = (resort: Resort, run: EventRun): number =>
+  siteVenueOf(run.occurrence.site, resort.venues);
+
+// The event a visit was made to: the party was invited to it there, or the person watched it.
+const eventVisitOf = (resort: Resort, person: number, venue: Venue): EventRun | null =>
+  runOfVisit(
+    resort.events,
+    resort.guests.party[person]!,
+    person,
+    venueIndexOf(resort.venues, venue.key),
+    (run) => runVenueOf(resort, run),
+  );
+
+// A hash, not the router's stream: a draw from it would move every seeded scene after it.
+function visitMade(resort: Resort, person: number, venue: Venue, tick: number): void {
+  const show = eventVisitOf(resort, person, venue);
+  const draw = (mix(person * 2_654_435_761 + tick) % 1024) / 1024;
+  pickUp(resort.carrying, person, visitLitter(show, venue.litter ?? 0), draw);
+  if (isTheBeach(venue)) leaveOnTheBeach(resort, person, tick);
+  judgeVisit(resort, tick, person, venue);
+  riskTheWater(resort, tick, person, venue);
+  // An event is free to see.
+  if (!show) payForVisit(resort, venue);
+}
+
+function payForVisit(resort: Resort, venue: Venue): void {
+  const earned = priceOf(venue.id);
+  resort.ledger = record(resort.ledger, 'visit', earned);
+  earn(resort.takings, venue.key, earned);
+}
+
+// Today's weather is the clock's, which may be pinned; a pinned weather holds every day ahead too.
+function weatherOnDay(clock: Clock, day: number): Weather {
+  if (day === clock.day) return clock.weather;
+  return clock.forcedWeather ?? weatherOn(day, WEATHER_SEED);
+}
+
+function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
+  const { venues } = resort;
+  return {
+    mode: resort.ledger.mode,
+    weatherOn: (day) => weatherOnDay(clock, day),
+    hasSite: (site) => siteVenueOf(site, venues) >= 0,
+    // The router's own door rule, so an event is called off exactly when its stage is shut.
+    siteOpen: (site, weather) => {
+      const venue = venues[siteVenueOf(site, venues)];
+      return venue !== undefined && isOpenIn(shelterOf(venue), weatherEffect(weather));
+    },
+    hostOnDuty: resort.roster.animator > 0,
+    canPay: (fee) => canAfford(resort.ledger, fee),
+  };
+}
+
+function refreshEventVenues(resort: Resort, now: number): void {
+  const { events, venues } = resort;
+  if (resort.eventBooked.length !== venues.length) {
+    resort.eventBooked = new Uint8Array(venues.length);
+    resort.eventShowing = new Uint8Array(venues.length);
+  }
+  bookedVenues(events.runs, events.programme, venues, now, resort.eventBooked);
+  showingVenues(events.runs, venues, resort.eventShowing);
+  resort.hosted = events.runs.length === 0 ? NO_HOSTED : hostedShows(events.runs, venues);
+}
+
+function urgencyBesidesFun(resort: Resort, person: number): number {
+  const want = strongestNeed(resort.needs, resort.guests, person);
+  return want && want.need !== 'fun' ? want.urgency : 0;
+}
+
+function freePartiesOf(resort: Resort): () => readonly AudienceParty[] {
+  let free: readonly AudienceParty[] | null = null;
+  return () =>
+    (free ??= partiesOf(
+      resort.guests,
+      (person) => resort.router.isFree(person),
+      (person) => urgencyBesidesFun(resort, person),
+    ));
+}
+
+function inviteTo(resort: Resort, run: EventRun, free: () => readonly AudienceParty[]): void {
+  const venue = runVenueOf(resort, run);
+  const declared = resort.venues[venue];
+  if (!declared) return;
+  const { router } = resort;
+  const there = router.occupancyOf(declared.key) ?? { inside: 0, waiting: 0 };
+  inviteAudience(resort.events, run, {
+    guests: resort.guests,
+    room: declared.capacity - there.inside - there.waiting,
+    free,
+    isThere: (person) => router.venueIndexOf(person) === venue,
+    invite: (person) => router.invite(person, venue),
+  });
+}
+
+function endEvent(resort: Resort, run: EventRun, now: number): void {
+  const kind = eventKindOf(run.occurrence);
+  const ended = endRun(resort.events, run, resort.guests, (person) =>
+    stayCount(resort.thoughts, person, kind.praise),
+  );
+  for (const person of ended.people) hear(resort, now, person, kind.praise, kind.label);
+  resort.today = countEvent(resort.today, ended.tally);
+}
+
+function callOffEvent(resort: Resort, step: CallOffStep, now: number): void {
+  resort.ledger = record(resort.ledger, 'events', step.refund);
+  const { label } = eventKindOf(step.occurrence);
+  const called = callOffRun(step, resort.guests);
+  for (const person of called.people) hear(resort, now, person, 'called-off', label);
+  resort.today = countEvent(resort.today, called.tally);
+}
+
+type StepOf<Kind extends EventStep['kind']> = Extract<EventStep, { readonly kind: Kind }>;
+
+interface StepContext {
+  readonly resort: Resort;
+  readonly now: number;
+  readonly free: () => readonly AudienceParty[];
+}
+
+// What each step does to the resort; 076 draws its rockets from the start and the end.
+const EVENT_STEPS: {
+  readonly [kind in EventStep['kind']]: (step: StepOf<kind>, context: StepContext) => void;
+} = {
+  announce: (step, { resort, free }) => inviteTo(resort, step.run, free),
+  start: (step, { resort, free }) => {
+    resort.ledger = record(resort.ledger, 'events', -step.fee);
+    inviteTo(resort, step.run, free);
+  },
+  end: (step, { resort, now }) => endEvent(resort, step.run, now),
+  'call-off': (step, { resort, now }) => callOffEvent(resort, step, now),
+  postpone: () => {},
+};
+
+function applyEventSteps(resort: Resort, steps: readonly EventStep[], now: number): void {
+  const context: StepContext = { resort, now, free: freePartiesOf(resort) };
+  for (const step of steps) {
+    (EVENT_STEPS[step.kind] as (step: EventStep, context: StepContext) => void)(step, context);
+  }
+}
+
+// After the routers' ticks: the invitations and the end of a show act on where everybody now is.
+function runEvents(
+  resort: Resort,
+  clock: Clock,
+  ticks: number,
+  heard: (steps: readonly EventStep[]) => void,
+): void {
+  const { events } = resort;
+  const now = clock.ticks;
+  const advance = advanceEvents(events, now - ticks + 1, now, eventFactsOf(resort, clock));
+  events.programme = advance.programme;
+  events.runs = advance.runs;
+  applyEventSteps(resort, advance.steps, now);
+  if (advance.steps.length > 0) heard(advance.steps);
+  refreshEventVenues(resort, now);
+  const hours = ticks / TICKS_PER_HOUR;
+  const { router } = resort;
+  entertain(
+    events,
+    resort.needs,
+    resort.guests,
+    (person, venue) => router.venueIndexOf(person) === venue && !router.isWaitingAt(person),
+    (run) => runVenueOf(resort, run),
+    hours,
+  );
+  fadeGlow(events.glow, hours);
+}
+
+const WEEK_TICKS = 7 * TICKS_PER_DAY;
+
+// The first stage by key, so the line points at the same one from hour to hour.
+function idleStageOf(resort: Resort, now: number): Venue | null {
+  const stages = resort.venues.filter((venue) => venue.stage === true);
+  if (stages.length === 0) return null;
+  const [next] = nextEvents(resort.events.programme, now, 1);
+  if (next && next.start < now + WEEK_TICKS) return null;
+  return stages.toSorted((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))[0]!;
+}
+
+function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
+  const forecast: DayForecast[] = Array.from({ length: 7 }, (_, offset) => ({
+    day: clock.day + offset,
+    weather: weatherOnDay(clock, clock.day + offset),
+    pinned: clock.forcedWeather !== null,
+  }));
+  return {
+    programme: resort.events.programme,
+    stages: resort.venues.filter((venue) => venue.stage === true),
+    now: clock.ticks,
+    mode: resort.ledger.mode,
+    balance: resort.ledger.balance,
+    forecast,
+    mix: partyMixOf(resort.guests),
+    animators: resort.roster.animator,
+  };
+}
+
+// Edits drop the bookings of a stage pulled down and move a built-in to a stage left standing.
+function keepProgrammeStanding(resort: Resort, network: WalkNetwork): void {
+  const stages = stageKeysOf(resort.venues);
+  const sites = new Set(beachVenueFor(network) ? [...stages, siteKey({ kind: 'beach' })] : stages);
+  const kept: Programme = keepStanding(resort.events.programme, sites);
+  resort.events.programme = withBuiltIns(kept, BUILT_INS, stages);
+}
+
 function runTicks(
   resort: Resort,
   clock: Clock,
@@ -2324,6 +2606,7 @@ function runTicks(
   lastShare: number | null,
   morning: () => void,
   hourly: () => void,
+  heardEvents: (steps: readonly EventStep[]) => void,
 ): number {
   decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather), (person) =>
     resort.router.isAsleep(person),
@@ -2342,7 +2625,9 @@ function runTicks(
     resort.guests.present,
     resort.happiness.level,
   );
+  runEvents(resort, clock, ticks, heardEvents);
   // After the ticks, so a guest is charged for the line they were actually in.
+  const { glow } = resort.events;
   ageHappiness(
     resort.happiness,
     resort.needs,
@@ -2350,6 +2635,7 @@ function runTicks(
     (person) => resort.router.isWaitingAt(person),
     ticks,
     (person) => surroundingsOf(resort, person),
+    (person) => glow[person]!,
   );
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
@@ -2370,8 +2656,10 @@ function runTicks(
     hourly();
   }
   admitLaterWaves(resort, clock, ticks);
+  // A booked event cheers its own audience, so a show on the same stage does not cheer them twice.
   cheerTheAudience(resort.needs, resort.guests.present, {
-    performing: (venue) => resort.staffRouter.performingAt(venue),
+    performing: (venue) =>
+      resort.staffRouter.performingAt(venue) && resort.eventShowing[venue] !== 1,
     venueOf: (person) => resort.router.venueIndexOf(person),
     waiting: (person) => resort.router.isWaitingAt(person),
     venues: resort.venues.length,
@@ -2574,6 +2862,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
         .filter((venue) => !isOpenIn(shelterOf(venue), effect))
         .map((venue) => venue.key),
     ),
+    idleStage: idleStageOf(resort, now),
   };
 }
 
@@ -2627,6 +2916,8 @@ function closeTheDay(resort: Resort, day: number): void {
 // The rating comes first, so the morning coach is sized by the resort the current guests
 // experienced.
 function runDay(resort: Resort, day: number): void {
+  // Everybody kept up late has woken by now.
+  resort.events.tired.clear();
   resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
   resort.arrivalsAdmitted = 0;
   admitWave(resort, day, 0);
@@ -2666,6 +2957,7 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     // The body was somebody else's, and so was whatever it was holding and thinking.
     resort.carrying.nodes[person] = 0;
     forgetStay(resort.thoughts, person);
+    resort.events.glow[person] = 0;
     resort.router.admit(person, resort.router.arrivalNode);
   }
   resort.arrivalsAdmitted += arrived.length;
@@ -3839,6 +4131,12 @@ const withNaming = (view: PlaceView, venue: Venue | undefined): PlaceView =>
         },
       };
 
+// Only a stage has a programme to show.
+const withProgramme = (resort: Resort, view: PlaceView, venue: number, now: number): PlaceView =>
+  resort.venues[venue]?.stage === true
+    ? { ...view, programme: { next: nextAt(resort.events.programme, view.key, now) } }
+    : view;
+
 // Only a venue can be sent to; a fixture or a lodging has nothing for a mechanic or a cleaner.
 const withSends = (resort: Resort, view: PlaceView, venue: number): PlaceView =>
   venue < 0 ? view : { ...view, send: sendOffers(sendFactsOf(resort, venue)) };
@@ -4298,7 +4596,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.staffRouter.watching(venue),
       isBroken(resort.breakdowns, venue),
     );
-    return withNaming(withSends(resort, view, venue), resort.venues[venue]);
+    const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
+    return withNaming(offered, resort.venues[venue]);
   };
 
   // Kept to tell when a worker's shift has changed under their open panel.
@@ -4405,6 +4704,28 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const tellHistory = (): void => options.onHistoryChange?.(current().history);
 
+  const tellProgramme = (): void => options.onProgrammeChange?.(programmeFactsOf(current(), clock));
+
+  const heardEvents = (steps: readonly EventStep[]): void => {
+    for (const news of eventNewsFrom(steps, current().venues)) options.onEventNews?.(news);
+    // A fee or a refund may have moved the money, and a show put off moved the programme.
+    spent = true;
+    tellProgramme();
+    options.onDirty?.();
+  };
+
+  // A booking moves no money, but it does change the advice and what a save holds.
+  const programmeChanged = (programme: Programme): void => {
+    const resort = current();
+    resort.events.programme = programme;
+    refreshEventVenues(resort, clock.ticks);
+    tellProgramme();
+    // A stage open in the inspector says what is on next there.
+    select(selected);
+    options.onAdviceChange?.(refreshedWithin(dayAdvice, adviceAndDemand()), clock.ticks);
+    options.onDirty?.();
+  };
+
   let overlayKind: OverlayKind | null = null;
   // The graph the tiles were placed for: a new one, from an edit or a new plot, places them again.
   let overlayPlacedOn: WalkNetwork | null = null;
@@ -4436,6 +4757,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     speak();
     report();
     tellMoney();
+    tellProgramme();
     if (overlayKind !== null) paintOverlay();
     options.onDirty?.();
   };
@@ -4459,6 +4781,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     tellHistory();
     tellMoney();
     tellLand();
+    tellProgramme();
   };
 
   let requested = 0;
@@ -4520,6 +4843,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort: snapshotResort(resort),
       router: resort.router.snapshot(),
       staffRouter: resort.staffRouter.snapshot(),
+      events: snapshotEvents(resort.events),
       crowd: snapshotCrowd(resort.crowd.crowd),
       staff: snapshotCrowd(resort.staff.crowd),
       clock: clock.snapshot(),
@@ -4550,6 +4874,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     rezone(resort);
     resort.router.restore(saved.router);
     resort.staffRouter.restore(saved.staffRouter);
+    const { count } = resort.guests;
+    resort.events = saved.events ? restoreEvents(saved.events, count) : createEvents(count);
+    resort.events.programme = withBuiltIns(
+      resort.events.programme,
+      BUILT_INS,
+      stageKeysOf(resort.venues),
+    );
+    refreshEventVenues(resort, saved.clock.ticks);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
     resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));
     recastAll(resort);
@@ -4693,6 +5025,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         (isBeach(shore, x, z) && resort.occupancy.keyAt({ x, z }) === undefined),
     );
     resort.unreachable = strandedOn(resort.venues, network);
+    keepProgrammeStanding(resort, network);
+    refreshEventVenues(resort, clock.ticks);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
     resort.staffRouter.rebuild(resort.venues, network, resort.lodgings, resort.depots);
     crowd.relocate(network, (person) => resort.router.holds(person));
@@ -4707,6 +5041,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     advise();
     speak();
     report();
+    tellProgramme();
   };
 
   const recorder = bench
@@ -4762,7 +5097,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
-      lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly);
+      lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly, heardEvents);
       recastAll(current());
     }
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
@@ -4906,6 +5241,30 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       options.onDirty?.();
       onSceneChange?.(statsNow());
       advise();
+      tellProgramme();
+    },
+    get programme() {
+      return programmeFactsOf(current(), clock);
+    },
+    book(draft) {
+      const result = book(current().events.programme, draft, clock.ticks);
+      if (!result.refusal) programmeChanged(result.programme);
+      return result.refusal;
+    },
+    unbook(id) {
+      const { programme } = current().events;
+      const after = unbook(programme, id);
+      if (after !== programme) programmeChanged(after);
+    },
+    rebook(id, change) {
+      const result = rebook(current().events.programme, id, change);
+      if (!result.refusal) programmeChanged(result.programme);
+      return result.refusal;
+    },
+    switchBuiltIn(id, on) {
+      const { programme } = current().events;
+      const after = switchBuiltIn(programme, id, on);
+      if (after !== programme) programmeChanged(after);
     },
     setCameraMode,
     setIsoDirection,

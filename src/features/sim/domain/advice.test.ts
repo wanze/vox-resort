@@ -11,6 +11,7 @@ import {
   adviceDirty,
   adviceLittered,
   adviceNoDepot,
+  adviceNoEvents,
   adviceNotStepFree,
   adviceUnmade,
   adviceUnreachable,
@@ -670,6 +671,33 @@ describe('adviceNoDepot', () => {
     expect(adviceNoDepot(healthyFacts({ depots: 0, cleanersOnDuty: 0 }))).toBeNull();
     const advice = adviceFor(healthyFacts({ depots: 0, cleanersOnDuty: 2 }));
     expect(advice.some((each) => each.kind === 'no-depot')).toBe(true);
+  });
+});
+
+describe('adviceNoEvents', () => {
+  const stage = {
+    ...venueOf({ key: 'kids-club#0', label: 'Kids club', x: 64, z: 16 }),
+    stage: true,
+  };
+
+  it('points at a stage when nothing is on the programme, and is quiet otherwise', () => {
+    expect(adviceNoEvents(healthyFacts())).toBeNull();
+    expect(adviceNoEvents(healthyFacts({ idleStage: null }))).toBeNull();
+    expect(adviceNoEvents(healthyFacts({ idleStage: stage }))).toEqual({
+      kind: 'no-events',
+      weight: 0.2,
+      subject: 'Kids club',
+      key: 'kids-club#0',
+      count: 0,
+      at: { tileX: 4, tileZ: 1 },
+      need: null,
+    });
+  });
+
+  it('says it once for the whole plot, below the quiet venues', () => {
+    const advice = adviceFor(healthyFacts({ idleStage: stage }));
+    expect(advice.filter((each) => each.kind === 'no-events')).toHaveLength(1);
+    expect(markerIconOf('no-events')).toBeNull();
   });
 });
 

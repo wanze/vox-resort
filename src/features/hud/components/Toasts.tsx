@@ -1,5 +1,7 @@
+import { eventNewsLine } from '../../events/components/eventWords';
 import {
   toastKey,
+  type EventNews,
   type News,
   type Toast,
   type UpdateAction,
@@ -133,6 +135,36 @@ function ToastPlate({
   );
 }
 
+function EventPlate({
+  news,
+  onDismiss,
+  onShowOnPlot,
+}: { readonly news: EventNews } & Pick<NewsToastsProps, 'onDismiss' | 'onShowOnPlot'>) {
+  const { at } = news;
+  return (
+    <div className="hud-toast" data-severity="event" role="status">
+      <PixelIcon name="programme" />
+      <div className="hud-toast-body">
+        <strong>Programme</strong>
+        <p>{eventNewsLine(news)}</p>
+        {at ? (
+          <div className="hud-toast-actions">
+            <button
+              type="button"
+              className="hud-camera-mode hud-advice-show"
+              aria-label={`Show ${news.venue ?? news.label} at tile ${at.tileX}, ${at.tileZ}`}
+              onClick={() => onShowOnPlot(at)}
+            >
+              Show
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <DismissButton label="Programme" onDismiss={() => onDismiss(news.key)} />
+    </div>
+  );
+}
+
 const UPDATE_WORDS: {
   readonly [phase in UpdatePhase]: {
     readonly line: string;
@@ -199,14 +231,18 @@ function UpdatePlate({
   );
 }
 
+function NewsToast({
+  toast,
+  ...props
+}: { readonly toast: Exclude<Toast, { readonly kind: 'update' }> } & NewsToastsProps) {
+  if (toast.kind === 'day') return <DayPlate report={toast.report} {...props} />;
+  if (toast.kind === 'event') return <EventPlate news={toast.news} {...props} />;
+  return <ToastPlate news={toast.news} {...props} />;
+}
+
 function ToastOf({ toast, ...props }: { readonly toast: Toast } & ToastsProps) {
   if (toast.kind === 'update') return <UpdatePlate phase={toast.phase} onUpdate={props.onUpdate} />;
-  if (!props.news) return null;
-  return toast.kind === 'day' ? (
-    <DayPlate report={toast.report} {...props.news} />
-  ) : (
-    <ToastPlate news={toast.news} {...props.news} />
-  );
+  return props.news ? <NewsToast toast={toast} {...props.news} /> : null;
 }
 
 // Never pauses and never sounds: the corner is for the eye, the log keeps what scrolled past.

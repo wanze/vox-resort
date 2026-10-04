@@ -1,11 +1,16 @@
+import { EVENT_KINDS } from '../../events/domain/catalogue';
+import type { CallOff, EventStep } from '../../events/domain/eventRuns';
+import type { Occurrence } from '../../events/domain/programme';
+import { siteVenueOf } from '../../events/domain/sites';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { TICKS_PER_DAY, type SimSpeed } from '../../sim/domain/simClock';
+import type { Venue } from '../../sim/domain/venues';
 
 export type Severity = 'urgent' | 'warning';
 
-// What the player can mute: each severity of advice, and the report at check-in.
-export type ToastKind = Severity | 'day';
+// What the player can mute: each severity of advice, the report at check-in, and the programme.
+export type ToastKind = Severity | 'day' | 'event';
 
 export interface News {
   // adviceKey of the first advice; merged news keep the first one's key.
@@ -17,9 +22,23 @@ export interface News {
   readonly at: number;
 }
 
+export interface EventNews {
+  // `event:<booking>:<day>:<kind>`, so an announcement and its calling off are two messages.
+  readonly key: string;
+  readonly kind: 'announce' | 'call-off' | 'postpone';
+  readonly label: string;
+  // The stage's name; null for a site with no venue.
+  readonly venue: string | null;
+  // Absolute ticks.
+  readonly start: number;
+  readonly reason: CallOff | null;
+  readonly at: { readonly tileX: number; readonly tileZ: number } | null;
+}
+
 export type Message =
   | { readonly kind: 'advice'; readonly news: News }
-  | { readonly kind: 'day'; readonly report: DayReport };
+  | { readonly kind: 'day'; readonly report: DayReport }
+  | { readonly kind: 'event'; readonly news: EventNews };
 
 export type UpdatePhase = 'ready' | 'saving' | 'unsaved';
 
@@ -37,8 +56,48 @@ const isAdvice = (toast: Toast): toast is AdviceToast => toast.kind === 'advice'
 
 export const toastKey = (shown: Message | Toast): string => {
   if (shown.kind === 'update') return 'update';
-  return shown.kind === 'advice' ? shown.news.key : `day:${shown.report.day}`;
+  if (shown.kind === 'day') return `day:${shown.report.day}`;
+  return shown.news.key;
 };
+
+export const eventKey = (booking: number, day: number, kind: EventNews['kind']): string =>
+  `event:${booking}:${day}:${kind}`;
+
+type TellingStep = Extract<EventStep, { readonly kind: EventNews['kind'] }>;
+
+const isTelling = (step: EventStep): step is TellingStep =>
+  step.kind !== 'start' && step.kind !== 'end';
+
+const occurrenceOf = (step: TellingStep): Occurrence =>
+  step.kind === 'announce' ? step.run.occurrence : step.occurrence;
+
+// A show is only ever put off for the weather.
+const reasonOf = (step: TellingStep): CallOff | null => {
+  if (step.kind === 'announce') return null;
+  return step.kind === 'call-off' ? step.reason : 'weather';
+};
+
+// The start and the end of a show are not news: the announcement said it all.
+function newsOf(step: TellingStep, venues: readonly Venue[]): EventNews {
+  const occurrence = occurrenceOf(step);
+  const venue = venues[siteVenueOf(occurrence.site, venues)];
+  return {
+    key: eventKey(occurrence.booking, occurrence.day, step.kind),
+    kind: step.kind,
+    label: EVENT_KINDS[occurrence.kind].label,
+    venue: venue ? venue.label : null,
+    start: occurrence.start,
+    reason: reasonOf(step),
+    at: venue ? { tileX: venue.tileX, tileZ: venue.tileZ } : null,
+  };
+}
+
+export function eventNewsFrom(
+  steps: readonly EventStep[],
+  venues: readonly Venue[],
+): readonly EventNews[] {
+  return steps.filter(isTelling).map((step) => newsOf(step, venues));
+}
 
 // Unique per building, not per model: two idle Changing Cabins are two rows. By the venue's key
 // where it has one, so renaming a broken bar does not toast its breakdown again.
@@ -67,6 +126,7 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   'far-from-home': null,
   'no-depot': null,
   unvisited: null,
+  'no-events': null,
   'weather-closed': null,
 };
 
@@ -83,6 +143,8 @@ const MAX_TOASTS = 3;
 const WARNING_MS = 12_000;
 
 const DAY_MS = 10_000;
+
+const EVENT_MS = 10_000;
 
 const MESSAGES_KEPT = 50;
 
@@ -181,6 +243,17 @@ export function showDay(
   return [...update, { kind: 'day', report, until: nowMs + DAY_MS }, ...others.filter(isAdvice)];
 }
 
+// Like the day's toast, it takes none of the three places advice competes for.
+export function showEvent(
+  shown: readonly Toast[],
+  news: EventNews,
+  { muted, nowMs }: Omit<ToastOptions, 'speed'>,
+): readonly Toast[] {
+  if (muted.has('event')) return shown;
+  const others = shown.filter((toast) => toastKey(toast) !== news.key);
+  return [...others, { kind: 'event', news, until: nowMs + EVENT_MS }];
+}
+
 export const updateOnly = (shown: readonly Toast[]): readonly Toast[] =>
   shown.filter((toast) => toast.kind === 'update');
 
@@ -218,4 +291,8 @@ export function logNews(log: readonly Message[], news: readonly News[]): readonl
 
 export function logDay(log: readonly Message[], report: DayReport): readonly Message[] {
   return logged(log, [{ kind: 'day', report }]);
+}
+
+export function logEvent(log: readonly Message[], news: EventNews): readonly Message[] {
+  return logged(log, [{ kind: 'event', news }]);
 }

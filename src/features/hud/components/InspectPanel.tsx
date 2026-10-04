@@ -29,6 +29,7 @@ export interface InspectPanelProps {
   readonly onShow: () => void;
   readonly onSend: (role: OrderRole) => void;
   readonly onRenameVenue: (key: string, name: string) => void;
+  readonly onOpenProgramme: (key: string) => void;
 }
 
 const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
@@ -324,18 +325,38 @@ function SendButtons({
   );
 }
 
+function ProgrammeRow({
+  place,
+  onOpenProgramme,
+}: {
+  readonly place: PlaceView;
+  readonly onOpenProgramme: (key: string) => void;
+}) {
+  if (!place.programme) return null;
+  return (
+    <div className="hud-inspect-programme">
+      <span>{place.programme.next ?? 'Nothing on this week'}</span>
+      <button type="button" className="hud-camera-mode" onClick={() => onOpenProgramme(place.key)}>
+        Programme
+      </button>
+    </div>
+  );
+}
+
 function PlaceDetails({
   place,
   advice,
   onSelectPerson,
   onSend,
   onRenameVenue,
+  onOpenProgramme,
 }: {
   readonly place: PlaceView;
   readonly advice: readonly Advice[];
   readonly onSelectPerson: (person: number) => void;
   readonly onSend: (role: OrderRole) => void;
   readonly onRenameVenue: (key: string, name: string) => void;
+  readonly onOpenProgramme: (key: string) => void;
 }) {
   if (!place.venue) {
     return (
@@ -360,6 +381,7 @@ function PlaceDetails({
       ) : null}
       <Problems problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })} />
       <SendButtons place={place} onSend={onSend} />
+      <ProgrammeRow place={place} onOpenProgramme={onOpenProgramme} />
       <VenueRows venue={place.venue} setting={place.setting} />
       <Residents place={place} onSelectPerson={onSelectPerson} />
     </>
@@ -413,6 +435,7 @@ function Details({
   onShow,
   onSend,
   onRenameVenue,
+  onOpenProgramme,
 }: Omit<InspectPanelProps, 'frame' | 'selection'> & { readonly selection: SelectionView }) {
   if (selection.kind === 'guest') {
     return (
@@ -433,6 +456,7 @@ function Details({
       onSelectPerson={onSelectPerson}
       onSend={onSend}
       onRenameVenue={onRenameVenue}
+      onOpenProgramme={onOpenProgramme}
     />
   );
 }

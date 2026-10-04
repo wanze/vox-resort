@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { crowdPerBody, crowdSnapshotSchema } from '../../crowd/domain/crowdSnapshot';
+import { eventsSnapshotSchema } from '../../events/domain/eventsSnapshot';
 import { fitsWorld } from '../../land/domain/landRights';
 import { BEACH_PRESETS, HOUSING_STYLES, VARIETIES } from '../../layout/domain/resortConfig';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
@@ -69,6 +70,9 @@ const gameShape = z.object({
   resort: resortSnapshotSchema,
   router: routerSnapshotSchema,
   staffRouter: staffRouterSnapshotSchema,
+  // Beside the routers rather than in the resort, so sim/ needs nothing from events/. A save from
+  // before events loads with an empty programme.
+  events: eventsSnapshotSchema.exactOptional(),
   crowd: crowdSnapshotSchema,
   staff: crowdSnapshotSchema,
   clock: clockSnapshotSchema,
@@ -91,6 +95,7 @@ function misfitsOf(game: GameShape): readonly string[] {
     ),
     ...misfit(resortPerThought(game.resort), population * THOUGHT_KINDS.length, 'a thought column'),
     ...misfit(crowdPerBody(game.crowd), population, 'a guest body column'),
+    ...misfit(game.events ? [game.events.glow] : [], population, 'the event glow'),
     ...misfit(
       [...staffPerWorker(game.staffRouter), ...crowdPerBody(game.staff)],
       staffCount,

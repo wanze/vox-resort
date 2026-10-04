@@ -25,6 +25,8 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   broken: (subject) => (subject ? `${subject} was broken` : 'Things kept breaking'),
   hurt: (subject) => (subject ? `I got hurt at ${subject}` : 'I got sunburnt'),
   'no-step-free': (subject) => `Stairs everywhere, I could not get to ${subject ?? 'anything'}`,
+  'great-show': (subject) => (subject ? `${subject} was great fun` : 'What a show'),
+  'called-off': (subject) => (subject ? `${subject} was called off` : 'The show was called off'),
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -39,6 +41,8 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   broken: 'Repairs',
   hurt: 'Injuries',
   'no-step-free': 'Access',
+  'great-show': 'Shows',
+  'called-off': 'Called off',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

@@ -51,7 +51,7 @@ const RESTOCK_TICKS = { min: 5, max: 10 } as const;
 const SWEEP_TICKS = { min: 4, max: 8 } as const;
 
 // A show is an hour or two.
-const SHOW_TICKS = { min: 60, max: 120 } as const;
+export const SHOW_TICKS = { min: 60, max: 120 } as const;
 
 // About an hour: long enough that a breakdown is felt, short enough for one mechanic to see
 // several in a day.
@@ -213,6 +213,10 @@ export function createStaffRouter(parts: {
   readonly supplyNode?: () => number;
   // Omitted, a worker let go walks home and stays on the plot.
   readonly onClockedOff?: (worker: number) => void;
+  // A stage with an event coming up gets no spontaneous show, and an event an animator hosts
+  // is worked until it ends. Omitted, nothing is ever booked.
+  readonly booked?: (venue: number) => boolean;
+  readonly hosting?: () => readonly { readonly venue: number; readonly until: number }[];
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -364,8 +368,23 @@ export function createStaffRouter(parts: {
       inZone(venue) &&
       showBy[venue] === NOBODY &&
       !isBrokenDown(venue) &&
-      isOpenIn(shelterOf(place), effect)
+      isOpenIn(shelterOf(place), effect) &&
+      !(parts.booked?.(venue) ?? false)
     );
+  };
+
+  const hostedUntil = (venue: number): number => {
+    for (const show of parts.hosting?.() ?? []) if (show.venue === venue) return show.until;
+    return -1;
+  };
+
+  // Zones are ignored: a booked show beats a painted zone.
+  const pickHosted = (worker: number, at: number): number => {
+    for (const { venue } of parts.hosting?.() ?? []) {
+      if (venue >= venues.length || showBy[venue] !== NOBODY) continue;
+      if (fieldFor(venue).next[at]! >= 0) return claim(worker, venue);
+    }
+    return NOBODY;
   };
 
   // The last stage only when nothing else is free, so a show moves round the plot.
@@ -461,6 +480,9 @@ export function createStaffRouter(parts: {
     const role = staff.role[worker];
     if (role === 'lifeguard') return FOR_EVER;
     if (role === 'mechanic') return now + ticksIn(REPAIR_TICKS);
+    // Not drawn for a hosted show, so the stream is where it was whether or not one is booked.
+    const hosted = role === 'animator' ? hostedUntil(assigned[worker]!) : -1;
+    if (hosted >= 0) return Math.max(now + 1, hosted);
     return now + ticksIn(role === 'animator' ? SHOW_TICKS : SPELL_TICKS);
   };
 
@@ -957,7 +979,8 @@ export function createStaffRouter(parts: {
   };
 
   const animatorStep = (worker: number, at: number): number => {
-    const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickStage(worker, at);
+    const hosted = assigned[worker]! >= 0 ? assigned[worker]! : pickHosted(worker, at);
+    const venue = hosted >= 0 ? hosted : pickStage(worker, at);
     return venue < 0 ? -1 : venueStep(worker, at, venue);
   };
 
@@ -1267,6 +1290,14 @@ export function createStaffRouter(parts: {
     publish();
   };
 
+  // A show begun before the stage went quiet runs on into the booked one.
+  const stretchHostedShows = (): void => {
+    for (const { venue, until: end } of parts.hosting?.() ?? []) {
+      const worker = showBy[venue] ?? NOBODY;
+      if (worker >= 0 && working[worker] === 1 && until[worker]! < end) until[worker] = end;
+    }
+  };
+
   const claimedAndWorking = (claims: Int32Array, venue: number): boolean => {
     const worker = claims[venue] ?? NOBODY;
     return worker >= 0 && working[worker] === 1;
@@ -1286,6 +1317,7 @@ export function createStaffRouter(parts: {
       now = at;
       keepOrders();
       if (workingCount === 0) return;
+      stretchHostedShows();
       const effect = weatherEffect(weatherNow());
       for (let worker = 0; worker < staff.count; worker++) {
         if (working[worker] !== 1) continue;

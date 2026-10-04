@@ -8,6 +8,7 @@ export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   visit: 'Visits',
   night: 'Stays',
   wages: 'Wages',
+  events: 'Events',
   maintenance: 'Maintenance',
 };
 

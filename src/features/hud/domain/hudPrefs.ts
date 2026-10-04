@@ -15,7 +15,7 @@ export const DEFAULT_PREFS: HudPrefs = {
   signs: true,
 };
 
-const TOAST_KINDS: ReadonlySet<unknown> = new Set<ToastKind>(['urgent', 'warning', 'day']);
+const TOAST_KINDS: ReadonlySet<unknown> = new Set<ToastKind>(['urgent', 'warning', 'day', 'event']);
 
 const isToastKind = (value: unknown): value is ToastKind => TOAST_KINDS.has(value);
 

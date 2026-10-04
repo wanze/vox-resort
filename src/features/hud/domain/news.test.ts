@@ -1,19 +1,26 @@
 import { describe, expect, it } from 'vitest';
+import type { EventRun } from '../../events/domain/eventRuns';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import { startDay, reportOf, type DayReport } from '../../sim/domain/dayReport';
 import { createLedger } from '../../sim/domain/ledger';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   adviceKey,
+  eventKey,
+  eventNewsFrom,
   expireToasts,
+  logEvent,
   logNews,
   newDayIn,
   newsFrom,
   severityOf,
   showDay,
+  showEvent,
   showToasts,
+  toastKey,
   withoutResolved,
   withUpdate,
+  type EventNews,
   type Message,
   type News,
   type Severity,
@@ -219,6 +226,99 @@ describe('showDay', () => {
     const rush = { ...normally, speed: 'rush' } as const;
     expect(showDay([], reportOn(3), rush)).toHaveLength(1);
     expect(showDay([], reportOn(3), { ...rush, muted: new Set<ToastKind>(['day']) })).toEqual([]);
+  });
+});
+
+const eventNews = (kind: EventNews['kind'], booking = 1): EventNews => ({
+  key: eventKey(booking, 3, kind),
+  kind,
+  label: 'Live music',
+  venue: 'Coral Stage',
+  start: 3 * TICKS_PER_DAY + 20 * 60,
+  reason: kind === 'announce' ? null : 'weather',
+  at: { tileX: 4, tileZ: 9 },
+});
+
+describe('showEvent', () => {
+  it('shows an announcement beside the advice, taking none of its places', () => {
+    const urgent = [1, 2, 3].map((tileX) => newsOf('broken', 'urgent', tileX));
+    const shown = showEvent(showToasts([], urgent, normally), eventNews('announce'), normally);
+    expect(shown.map(kindOf)).toEqual(['broken', 'broken', 'broken', 'event']);
+    expect(shown.at(-1)).toMatchObject({ kind: 'event', until: 11_000 });
+  });
+
+  it('keys an announcement and its calling off apart, and shows each once', () => {
+    const announced = showEvent([], eventNews('announce'), normally);
+    const twice = showEvent(announced, eventNews('announce'), normally);
+    expect(twice).toHaveLength(1);
+    const called = showEvent(twice, eventNews('call-off'), normally);
+    expect(called.map(toastKey)).toEqual(['event:1:3:announce', 'event:1:3:call-off']);
+  });
+
+  it('logs a muted event but does not toast it', () => {
+    const muted = { ...normally, muted: new Set<ToastKind>(['event']) };
+    expect(showEvent([], eventNews('announce'), muted)).toEqual([]);
+    const log = logEvent([], eventNews('call-off'));
+    expect(log).toEqual([{ kind: 'event', news: eventNews('call-off') }]);
+  });
+});
+
+describe('eventNewsFrom', () => {
+  const stage = {
+    key: 'beach-club#0',
+    id: 'beach-club',
+    label: 'Coral Stage',
+    role: 'activity',
+    satisfies: [],
+    capacity: 25,
+    dwellSeconds: { min: 60, max: 120 },
+    stage: true,
+    x: 0,
+    z: 0,
+    tileX: 4,
+    tileZ: 9,
+    tilesX: 2,
+    tilesZ: 2,
+    doors: [],
+  } as const;
+  const occurrence = {
+    booking: 1,
+    kind: 'live-music',
+    site: { kind: 'stage', venue: 'beach-club#0' },
+    day: 3,
+    start: 3 * TICKS_PER_DAY + 20 * 60,
+    end: 3 * TICKS_PER_DAY + 21.5 * 60,
+  } as const;
+  const run: EventRun = {
+    occurrence,
+    phase: 'announced',
+    parties: [],
+    attended: new Set<number>(),
+    paid: 0,
+    salt: 1,
+  };
+
+  it('tells of an announcement, a calling off and a putting off, and not of a start or an end', () => {
+    const news = eventNewsFrom(
+      [
+        { kind: 'announce', run },
+        { kind: 'start', run, fee: 150 },
+        { kind: 'call-off', occurrence, reason: 'no-host', run: null, refund: 0 },
+        { kind: 'postpone', occurrence, day: 4 },
+        { kind: 'end', run },
+      ],
+      [stage],
+    );
+    expect(news).toEqual([
+      { ...eventNews('announce'), reason: null },
+      { ...eventNews('call-off'), reason: 'no-host' },
+      { ...eventNews('postpone'), reason: 'weather' },
+    ]);
+  });
+
+  it('names no stage for a site that is gone', () => {
+    const [news] = eventNewsFrom([{ kind: 'announce', run }], []);
+    expect(news).toMatchObject({ venue: null, at: null });
   });
 });
 

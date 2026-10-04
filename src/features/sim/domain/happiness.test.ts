@@ -218,4 +218,14 @@ describe('the mood of a stay', () => {
     expect(moodOf(happiness, 0)).toBeCloseTo(ARRIVAL_MOOD);
     expect(happiness.stay[0]!).toBeCloseTo(ARRIVAL_MOOD);
   });
+
+  it('settles a lifted guest higher, and the stay follows', () => {
+    const guests = guestsOf();
+    const plain = createHappiness(guests.count);
+    const lifted = createHappiness(guests.count);
+    ageHappiness(plain, needsAt(guests, 0.4), guests, NO_QUEUE, 100 * HOUR);
+    ageHappiness(lifted, needsAt(guests, 0.4), guests, NO_QUEUE, 100 * HOUR, undefined, () => 0.1);
+    expect(moodOf(lifted, 0)).toBeCloseTo(moodOf(plain, 0) + 0.1);
+    expect(lifted.stay[0]!).toBeGreaterThan(plain.stay[0]! + 0.05);
+  });
 });

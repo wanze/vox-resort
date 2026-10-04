@@ -39,8 +39,13 @@ export function bedtimeOf(party: number): { readonly sleepAt: number; readonly w
   return { sleepAt, wakeAt };
 }
 
-// The window can wrap past midnight.
-export function isBedtime(party: number, tickOfDay: number): boolean {
+// Applied after NIGHT_RELIEF, which fills energy to 1: a party kept up past ten by an event
+// wakes the worse for it.
+export const LATE_NIGHT_RELIEF: readonly NeedRelief[] = [{ need: 'energy', amount: -0.3 }];
+
+// The window can wrap past midnight. A party up late for an event is never in bed.
+export function isBedtime(party: number, tickOfDay: number, upLate = false): boolean {
+  if (upLate) return false;
   const { sleepAt, wakeAt } = bedtimeOf(party);
   const tick = ((tickOfDay % TICKS_PER_DAY) + TICKS_PER_DAY) % TICKS_PER_DAY;
   if (sleepAt < wakeAt) return tick >= sleepAt && tick < wakeAt;

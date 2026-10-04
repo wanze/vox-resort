@@ -160,6 +160,10 @@ export interface Router {
   readonly fieldCount: number;
   readonly asleepCount: number;
   isAsleep(person: number): boolean;
+  // Neither asleep, arriving, leaving, inside, in a line nor on the sand.
+  isFree(person: number): boolean;
+  // Sends the whole party to the venue as checking in does; false for anybody not free.
+  invite(person: number, venue: number): boolean;
   // One array lookup rather than an object: read per tick for every guest.
   isWaitingAt(person: number): boolean;
   // Inside or in the line, -1 otherwise; a lookup for the reason isWaitingAt is one.
@@ -213,6 +217,10 @@ export function createRouter(parts: {
   readonly breakdowns?: () => Breakdowns;
   readonly weather?: () => Weather;
   readonly seed: number;
+  // A party invited to an event stays up for it, and stays inside until it ends (-1 for no event).
+  readonly upLate?: (party: number) => boolean;
+  readonly eventStay?: (person: number, venue: number) => number;
+  readonly onWoke?: (person: number) => void;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -461,6 +469,16 @@ export function createRouter(parts: {
     return Math.max(1, Math.round((min + random() * (max - min)) / TICK_SECONDS));
   };
 
+  // Drawn even for an invited guest, so the stream is where it was whether or not anybody is.
+  const dwellFor = (person: number, venue: number): number => {
+    const drawn = dwellTicksFor(venues[venue]!);
+    const stay = parts.eventStay?.(person, venue) ?? -1;
+    return stay >= now ? Math.max(1, stay - now) : drawn;
+  };
+
+  const bedtime = (party: number, tickOfDay: number): boolean =>
+    isBedtime(party, tickOfDay, parts.upLate?.(party) ?? false);
+
   // Only from fields already built: sweeping just to score would make the lazy build eager.
   // Unvisited venues are scored on the straight line, except for a party in a wheelchair, whose
   // field is swept as it considers: a straight line would hide that the way there is all stairs.
@@ -531,8 +549,14 @@ export function createRouter(parts: {
       return 'balked';
     }
     visitCount[venue]!++;
-    const declared = venues[venue]!;
-    return arriveAt(occupancy, person, venue, declared.capacity, dwellTicksFor(declared), now);
+    return arriveAt(
+      occupancy,
+      person,
+      venue,
+      venues[venue]!.capacity,
+      dwellFor(person, venue),
+      now,
+    );
   };
 
   const choiceFor = (person: number, at: number, stepFree: boolean) => {
@@ -848,7 +872,7 @@ export function createRouter(parts: {
   };
 
   const dueInBed = (person: number): boolean =>
-    homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
+    homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
 
   const beachIndex = (): number => {
     const last = venues.length - 1;
@@ -943,7 +967,7 @@ export function createRouter(parts: {
     if (!venue || !isBeach(venue) || !(occupancy.inside[beach]! > 0)) return;
     for (let person = 0; person < guests.count; person++) {
       if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) continue;
-      if (homeLodging[person]! < 0 || !isBedtime(guests.party[person]!, tickOfDay)) continue;
+      if (homeLodging[person]! < 0 || !bedtime(guests.party[person]!, tickOfDay)) continue;
       leaveVenue(occupancy, person);
       leave(person, beach);
     }
@@ -1004,6 +1028,7 @@ export function createRouter(parts: {
       if (asleepCount === 0) break;
       if (asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
       relieve(needs, person, NIGHT_RELIEF);
+      parts.onWoke?.(person);
       getUp(person);
     }
   };
@@ -1089,6 +1114,15 @@ export function createRouter(parts: {
     return false;
   };
 
+  const isFree = (person: number): boolean =>
+    person >= 0 &&
+    person < goals.count &&
+    asleep[person] === 0 &&
+    leaving[person] === 0 &&
+    arriving[person] === 0 &&
+    occupancy.state[person] === VISIT.away &&
+    errands.venue[person] === -1;
+
   const dayStep = (person: number, at: number): number => {
     const hadGoal = goals.venue[person] !== NO_GOAL;
     if (arriveIfThere(person, at)) return -1;
@@ -1110,7 +1144,7 @@ export function createRouter(parts: {
     if (person < 0 || person >= goals.count) return -1;
     if (asleep[person] === 1) return -1;
     homeward[person] = 0;
-    if (!isBedtime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
+    if (!bedtime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
     return homewardStep(person, at);
   };
 
@@ -1215,7 +1249,7 @@ export function createRouter(parts: {
 
     offTheSand(person) {
       if (person < 0 || person >= goals.count || asleep[person] === 1) return false;
-      return homeLodging[person]! >= 0 && isBedtime(guests.party[person]!, parts.tickOfDay());
+      return homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
     },
 
     sendHome(person) {
@@ -1256,15 +1290,23 @@ export function createRouter(parts: {
       return arriving[person] === 1;
     },
 
+    isFree(person) {
+      return isFree(person);
+    },
+
+    invite(person, venue) {
+      if (!isFree(person) || venue < 0 || venue >= venues.length) return false;
+      homeward[person] = 0;
+      setPartyVenue(goals, guests, person, venue);
+      return true;
+    },
+
     tick(at) {
       now = at;
       const swept = sweepOccupancy(
         occupancy,
         (venue) => venues[venue]?.capacity ?? 0,
-        (venue) => {
-          const declared = venues[venue];
-          return declared ? dwellTicksFor(declared) : 1;
-        },
+        (venue, person) => (venues[venue] ? dwellFor(person, venue) : 1),
         at,
       );
       for (let each = 0; each < swept.left.length; each++) {

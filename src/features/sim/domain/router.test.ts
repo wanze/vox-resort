@@ -137,6 +137,8 @@ const spotless = (venues: number): (() => Upkeep) => {
 
 type Heard = NonNullable<Parameters<typeof createRouter>[0]['onThought']>;
 
+type EventParts = Pick<Parameters<typeof createRouter>[0], 'upLate' | 'eventStay' | 'onWoke'>;
+
 const hearing = (): { heard: [number, string, string | null][]; onThought: Heard } => {
   const heard: [number, string, string | null][] = [];
   return { heard, onThought: (person, kind, subject) => heard.push([person, kind, subject]) };
@@ -153,6 +155,7 @@ const routerOn = (
     readonly onLeave?: (person: number) => void;
     readonly onVisited?: (person: number, venue: Venue) => void;
     readonly onThought?: Heard;
+    readonly events?: EventParts;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -171,6 +174,7 @@ const routerOn = (
     onLeave: night.onLeave ?? (() => {}),
     onVisited: night.onVisited ?? (() => {}),
     ...(night.onThought ? { onThought: night.onThought } : {}),
+    ...night.events,
     network,
     tickOfDay: night.tickOfDay,
     crowd: () => crowd!,
@@ -1511,6 +1515,103 @@ describe('the night', () => {
   });
 });
 
+describe('invitations', () => {
+  const housed = [...Array(guests.count).keys()].find((person) => homeOf(guests, person))!;
+  const STAGE_AT = 6;
+
+  const stageAt = (tileX: number): Venue => ({
+    ...bakery(tileX),
+    key: 'kids-club#0',
+    id: 'kids-club',
+    label: 'Kids club',
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.3 }],
+    capacity: 20,
+    dwellSeconds: { min: 60, max: 120 },
+    stage: true,
+  });
+
+  const invited = (
+    events: EventParts,
+    clock = { tick: NOON },
+  ): { network: WalkNetwork; router: Router; needs: Needs; crowd: Crowd } => {
+    const network = networkOf(street(8));
+    const needs = wanting(housed, 'hunger');
+    const { router, crowd } = routerOn(network, [bakery(0), stageAt(STAGE_AT)], needs, {
+      lodgings: [hotel()],
+      tickOfDay: () => clock.tick,
+      events,
+    });
+    return { network, router, needs, crowd };
+  };
+
+  it('walks an invited party to the event instead of where they would have gone', () => {
+    const { network, router } = invited({});
+    const sibling = partyOf(guests, housed).find((member) => member !== housed);
+    expect(router.invite(housed, 1)).toBe(true);
+    expect(router.goalOf(housed)?.key).toBe('kids-club#0');
+    if (sibling !== undefined) expect(router.goalOf(sibling)?.key).toBe('kids-club#0');
+    expect(router.step(housed, nodeAt(network, 3))).toBe(nodeAt(network, 4));
+  });
+
+  it('keeps an invited guest inside until the event ends', () => {
+    const end = 300;
+    const { network, router } = invited({
+      eventStay: (person, venue) => (person === housed && venue === 1 ? end : -1),
+    });
+    router.invite(housed, 1);
+    expect(router.step(housed, nodeAt(network, STAGE_AT))).toBe(-1);
+    for (let tick = 1; tick < end; tick++) router.tick(tick);
+    expect(router.visitOf(housed)?.venue.key).toBe('kids-club#0');
+    router.tick(end);
+    expect(router.visitOf(housed)).toBeNull();
+  });
+
+  it('keeps an invited party up past its bedtime, and sends it home once that is over', () => {
+    const party = guests.party[housed]!;
+    const up = { late: true };
+    const clock = { tick: bedtimeOf(party).sleepAt + 5 };
+    const { network, router } = invited({ upLate: (each) => up.late && each === party }, clock);
+    expect(router.invite(housed, 1)).toBe(true);
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 5));
+    expect(router.offTheSand(housed)).toBe(false);
+    up.late = false;
+    expect(router.step(housed, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+    expect(router.homewardTo(housed)?.key).toBe('hotel#0');
+  });
+
+  it('tells of every guest who wakes, once', () => {
+    const woke: number[] = [];
+    const clock = { tick: bedtimeOf(guests.party[housed]!).sleepAt };
+    const { network, router } = invited({ onWoke: (person) => woke.push(person) }, clock);
+    router.step(housed, nodeAt(network, 1));
+    expect(router.isAsleep(housed)).toBe(true);
+    const { wakeAt } = bedtimeOf(guests.party[housed]!);
+    router.tick(TICKS_PER_DAY + wakeAt - 1);
+    expect(woke).toEqual([]);
+    router.tick(TICKS_PER_DAY + wakeAt);
+    router.tick(TICKS_PER_DAY + wakeAt + 1);
+    expect(woke).toEqual([housed]);
+  });
+
+  it('invites nobody asleep, inside a venue, or out of range', () => {
+    const clock = { tick: bedtimeOf(guests.party[housed]!).sleepAt };
+    const night = invited({}, clock);
+    night.router.step(housed, nodeAt(night.network, 1));
+    expect(night.router.isAsleep(housed)).toBe(true);
+    expect(night.router.invite(housed, 1)).toBe(false);
+
+    const day = invited({});
+    day.router.step(housed, nodeAt(day.network, 2));
+    expect(day.router.step(housed, nodeAt(day.network, 0))).toBe(-1);
+    expect(day.router.visitOf(housed)?.venue.key).toBe('bakery#0');
+    expect(day.router.isFree(housed)).toBe(false);
+    expect(day.router.invite(housed, 1)).toBe(false);
+    expect(day.router.invite(-1, 1)).toBe(false);
+    expect(day.router.invite(guests.count - 1, 9)).toBe(false);
+  });
+});
+
 interface Watch {
   readonly roamsBeach?: boolean;
   readonly step?: (router: Router, person: number, at: number) => number;
@@ -2448,7 +2549,7 @@ describe('on the generated plot', () => {
 
   // Everything a day on the plot changes, as showcase.ts wires it, so that a twin restored from
   // a snapshot can be run beside the plot it was taken from.
-  const livePlot = () => {
+  const livePlot = (events: EventParts = {}) => {
     const seated = walkNetworkFor({
       paved: layout.paths,
       levelOf: (x, z) => levelAt(elevation, x, z),
@@ -2492,6 +2593,7 @@ describe('on the generated plot', () => {
       crowd: () => crowd!,
       upkeep: () => upkeep,
       seed: 19,
+      ...events,
     });
     crowd = createCrowd({
       network: seated,
@@ -2634,6 +2736,14 @@ describe('on the generated plot', () => {
     const night = live.snapshot();
     expect(night.router.asleep.includes(1), 'nobody asleep').toBe(true);
     twinFrom(night);
+  });
+
+  it('runs a plot with no event on exactly as one with no event parts at all', () => {
+    const bare = livePlot();
+    const inert = livePlot({ upLate: () => false, eventStay: () => -1, onWoke: () => {} });
+    bare.runTo(20 * 60 + 30);
+    inert.runTo(20 * 60 + 30);
+    expect(inert.snapshot()).toEqual(bare.snapshot());
   });
 
   // What showcase.ts wires, with no cleaners: the bins alone decide where it lands.

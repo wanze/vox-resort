@@ -808,6 +808,7 @@ has one where a first-aid post stood.
   visit gives. Show claims are separate from cleaning claims, so a cleaner can
   scrub a stage mid-show. A stage reached only over the sand gets no animator
   yet: only towers, mechanics and cleaners have a sand leg.
+  A stage with an event coming up is kept for it (see [Events](#events)).
 - **Lifeguards**: one per venue the art marks `bathing` (swimming pool, waterpark)
   and one per post, a seat the art marks `post: 'lifeguard'` (the tower's). The
   walk graph files a post on the sand in `network.posts`, never in a node's seats
@@ -911,6 +912,60 @@ worker wanders the graph and is asked again at every node.
   nobody of the role is on duty or one is on the way; a litter marker has "Send
   a cleaner" on hover; an ordered target's marker carries a green pennant, and
   the worker's pin and panel say "Sent to ...".
+
+## Events
+
+The player books events on the **programme** (`src/features/events/`, the
+Programme window). The kinds are code, not art: `EVENT_KINDS` in
+`catalogue.ts` (in the evening live music, dance night, musical, quiz night and
+open-air cinema; in the afternoon the magic show, kids' games, painting club,
+puppet theatre, bingo and afternoon jazz), each with its host, fee, hours, appeal per party kind, fun per
+hour, lift, litter and praise thought. Every venue the art marks `stage` hosts,
+so a new stage model needs no app change.
+
+- **Programme** (`programme.ts`): bookings keyed by the stage's placement key, so
+  a rename, a save or an edit elsewhere leaves them put; an edit that pulls a
+  stage down drops its bookings (`keepStanding`). A booking repeats every day,
+  every week on a weekday (day 0 is a Monday) or once, starts on the half hour
+  inside the kind's hours and ends by midnight. Two on one stage may not overlap
+  or come within the 30-minute changeover; an overlap is refused, never
+  replaced. A built-in (`BUILT_INS`, empty for now) is moved or switched off,
+  never removed, and goes to the first stage left standing.
+- **Life of an event** (`eventRuns.ts`, `advanceEvents` once a frame after the
+  ticks): announced `ANNOUNCE_LEAD` (60 min) before the start, started, ended.
+  It is called off when its stage is shut in that day's weather (or an
+  open-air kind meets rain), when an animator kind finds nobody on duty at the
+  announcement, when a tycoon resort cannot pay the fee at the start, or when
+  its stage is gone. The fee is charged at the start under `events` in the
+  books and refunded in full if the weather stops it mid-show. No spontaneous
+  animator show starts on a booked stage from `QUIET_BEFORE` (the longest show)
+  before the start; an animator walks to a hosted show, zones aside, and one
+  already performing there works on to its end.
+- **Who comes** (`audience.ts`): at the announcement and topped up at the start,
+  free parties (all present members awake, not arriving or leaving, not inside
+  or in a line, and no need but fun at `INVITE_URGENCY` 0.5 or more) are asked
+  by a hash of party and occurrence against the kind's appeal, keenest first,
+  until the stage's room is taken. No seeded stream is drawn. A party is invited
+  to one show at a time. `router.invite` sets the party's goal as checking in
+  does, so `decide` leaves it alone; the dwell inside runs to the end
+  (`eventStay`), and the party stays up past its bedtime until then (`upLate`).
+- **What it does**: `fun` per hour to whoever is inside while it runs (instead
+  of the spontaneous show's cheer), a **glow** at the end (the lift added to the
+  happiness target, `GLOW_FADE_PER_HOUR` 0.005, the better of two shows rather
+  than both), the praise thought, a free visit and the kind's litter. An event
+  ending after 22:00 costs its audience 0.3 energy on waking
+  (`LATE_NIGHT_RELIEF`, after `NIGHT_RELIEF`). Toasts of kind `event` tell of
+  announcements and calls off, the day report counts events held, their
+  audience and those called off, and a `no-events` advice line points at a
+  stage when nothing is on in the week ahead.
+
+With an empty programme nothing above runs and no stream is drawn, so a plot
+nobody books plays exactly as before. The programme, the runs, the glow and the
+tired parties are saved as an optional top-level `events` (`SAVE_VERSION`
+unchanged); a save without it loads with an empty programme. A new kind is one
+entry in `EVENT_KINDS` and its id in `EVENT_KIND_IDS` (a new praise thought is
+appended to `THOUGHT_KINDS` with its words); a built-in is one entry in
+`BUILT_INS`.
 
 ## Breakdowns and injuries
 

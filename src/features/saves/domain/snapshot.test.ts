@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createCrowd, snapshotCrowd } from '../../crowd/domain/crowd';
 import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
+import { createEvents } from '../../events/domain/eventRuns';
+import { snapshotEvents } from '../../events/domain/eventsSnapshot';
 import { createGuests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
 import { createFootfall } from '../../overlays/domain/overlays';
@@ -161,6 +163,15 @@ describe('gameSnapshotSchema', () => {
     const short = { ...game.resort.happiness, level: game.resort.happiness.level.slice(1) };
     const broken = { ...game, resort: { ...game.resort, happiness: short } };
     expect(gameSnapshotSchema.safeParse(broken).success).toBe(false);
+  });
+
+  it('takes the events, or none from a save before them, and refuses a glow one short', () => {
+    const game = gameFixture();
+    expect(game).not.toHaveProperty('events');
+    const events = snapshotEvents(createEvents(POPULATION));
+    expect(gameSnapshotSchema.safeParse({ ...game, events }).success).toBe(true);
+    const short = { ...events, glow: events.glow.slice(1) };
+    expect(gameSnapshotSchema.safeParse({ ...game, events: short }).success).toBe(false);
   });
 
   it('refuses a staff column one short of the staff', () => {

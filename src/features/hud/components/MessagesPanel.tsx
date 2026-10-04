@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
+import { eventNewsLine } from '../../events/components/eventWords';
 import type { HudPrefs } from '../domain/hudPrefs';
-import { toastKey, type Message, type News, type ToastKind } from '../domain/news';
+import { toastKey, type EventNews, type Message, type News, type ToastKind } from '../domain/news';
 import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { GameMode } from '../../sim/domain/ledger';
@@ -27,6 +28,7 @@ const TOGGLES: readonly {
   { kind: 'urgent', label: 'Urgent', title: 'Toast urgent problems' },
   { kind: 'warning', label: 'Warnings', title: 'Toast warnings' },
   { kind: 'day', label: 'Day reports', title: "Toast each day's summary" },
+  { kind: 'event', label: 'Events', title: 'Toast the events announced and called off' },
 ];
 
 const whenOf = (ticks: number): string => {
@@ -107,6 +109,43 @@ function NewsLine({
   );
 }
 
+function EventLine({
+  news,
+  onShowOnPlot,
+}: {
+  readonly news: EventNews;
+  readonly onShowOnPlot: MessagesPanelProps['onShowOnPlot'];
+}) {
+  const { at } = news;
+  return (
+    <Line
+      label="Programme"
+      when={news.start}
+      says={eventNewsLine(news)}
+      action={
+        at ? (
+          <ActionButton
+            label="Show"
+            name={`Show ${news.venue ?? news.label} at tile ${at.tileX}, ${at.tileZ}`}
+            onClick={() => onShowOnPlot(at)}
+          />
+        ) : null
+      }
+    />
+  );
+}
+
+function MessageLine({ message, ...props }: { readonly message: Message } & MessagesPanelProps) {
+  if (message.kind === 'day') return <DayLine report={message.report} {...props} />;
+  if (message.kind === 'event') {
+    return <EventLine news={message.news} onShowOnPlot={props.onShowOnPlot} />;
+  }
+  return <NewsLine news={message.news} onShowOnPlot={props.onShowOnPlot} />;
+}
+
+const messageKey = (message: Message): string =>
+  message.kind === 'advice' ? `${message.news.at}:${message.news.key}` : toastKey(message);
+
 function DayLine({ report, ...props }: { readonly report: DayReport } & MessagesPanelProps) {
   return (
     <Line
@@ -123,7 +162,7 @@ function DayLine({ report, ...props }: { readonly report: DayReport } & Messages
 }
 
 export function MessagesPanel(props: MessagesPanelProps) {
-  const { log, prefs, onMutedChange, onShowOnPlot } = props;
+  const { log, prefs, onMutedChange } = props;
   return (
     <div className="hud-messages">
       <div className="hud-message-toggles" role="group" aria-label="Toasts">
@@ -147,17 +186,9 @@ export function MessagesPanel(props: MessagesPanelProps) {
         <p className="hud-loading">Nothing has happened yet.</p>
       ) : (
         <dl className="hud-message-list">
-          {log.map((message) =>
-            message.kind === 'day' ? (
-              <DayLine key={toastKey(message)} report={message.report} {...props} />
-            ) : (
-              <NewsLine
-                key={`${message.news.at}:${message.news.key}`}
-                news={message.news}
-                onShowOnPlot={onShowOnPlot}
-              />
-            ),
-          )}
+          {log.map((message) => (
+            <MessageLine key={messageKey(message)} message={message} {...props} />
+          ))}
         </dl>
       )}
     </div>

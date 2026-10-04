@@ -4,14 +4,17 @@ import type { HudPrefs } from '../features/hud/domain/hudPrefs';
 import {
   expireToasts,
   logDay,
+  logEvent,
   logNews,
   newsFrom,
   showDay,
+  showEvent,
   showToasts,
   toastKey,
   updateOnly,
   withoutResolved,
   withUpdate,
+  type EventNews,
   type Message,
   type Toast,
   type ToastKind,
@@ -27,6 +30,7 @@ export interface NewsControls {
   readonly prefs: HudPrefs;
   hear(advice: readonly Advice[], ticks: number): void;
   closeDay(report: DayReport): void;
+  hearEvent(news: EventNews): void;
   dismiss(key: string): void;
   setMuted(kind: ToastKind, muted: boolean): void;
   setMarkers(shown: boolean): void;
@@ -102,6 +106,12 @@ export function useNews(speed: SimSpeed): NewsControls {
     setLog((kept) => logDay(kept, report));
   }, []);
 
+  const hearEvent = useCallback((news: EventNews) => {
+    const options = { muted: new Set(latest.current.muted), nowMs: Date.now() };
+    setToasts((shown) => showEvent(shown, news, options));
+    setLog((kept) => logEvent(kept, news));
+  }, []);
+
   const fading = toasts.some((toast) => toast.until !== null);
   useEffect(() => {
     if (!fading) return;
@@ -118,6 +128,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     prefs,
     hear,
     closeDay,
+    hearEvent,
     dismiss: useCallback(
       (key: string) => setToasts((shown) => shown.filter((toast) => toastKey(toast) !== key)),
       [],

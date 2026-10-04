@@ -170,6 +170,14 @@ describe('snapshotResort', () => {
     expect(resortSnapshotSchema.safeParse(snapshotResort(state)).success).toBe(false);
   });
 
+  it('reads a save from before events with no events column and no events counted', () => {
+    const saved = snapshotResort(played());
+    const { events: _today, ...today } = saved.ledger.today;
+    const parsed = resortSnapshotSchema.parse({ ...saved, ledger: { ...saved.ledger, today } });
+    expect(parsed.ledger.today.events).toBe(0);
+    expect(parsed.today.events).toBeUndefined();
+  });
+
   it('refuses litter saved as a plain list', () => {
     const saved = snapshotResort(played());
     expect(resortSnapshotSchema.safeParse({ ...saved, litter: [...saved.litter] }).success).toBe(

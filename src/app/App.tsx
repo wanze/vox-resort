@@ -21,6 +21,7 @@ import { useThoughts } from './useThoughts';
 import { usePending } from './usePending';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
+import { useProgramme } from './useProgramme';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
@@ -191,6 +192,7 @@ function useControls(showcase: RefObject<Showcase | null>) {
     clock: useClockControls(showcase),
     inspector: useInspector(showcase),
     placement: usePlacement(showcase),
+    programme: useProgramme(showcase),
   };
 }
 
@@ -240,7 +242,7 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, placement } = useControls(showcaseRef);
+  const { camera, clock, inspector, placement, programme } = useControls(showcaseRef);
   const { news, history, replaced, advice, signs } = useAdviceNews(
     showcaseRef,
     clock.speed,
@@ -278,6 +280,8 @@ export function App() {
   const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
   const { adopt: adoptSigns } = signs;
+  const { adopt: adoptProgramme } = programme;
+  const { hearEvent } = news;
   const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
   const { cue: onCue, hear: onHear } = sound;
 
@@ -318,6 +322,8 @@ export function App() {
       onCue,
       onHear,
       onSpeedChange: adoptSpeed,
+      onEventNews: hearEvent,
+      onProgrammeChange: adoptProgramme,
       welcome: OPENS_ON_WELCOME,
     };
 
@@ -342,6 +348,7 @@ export function App() {
         adoptOpen(mounted.open);
         adoptName(mounted.name);
         adoptLedger(mounted.ledger);
+        adoptProgramme(mounted.programme);
         // So the bar says what kind of day it is before midnight comes round.
         adoptWeather(mounted.stats.weather);
       } catch (cause: unknown) {
@@ -387,6 +394,8 @@ export function App() {
     adoptSpeed,
     adoptSigns,
     adoptPending,
+    hearEvent,
+    adoptProgramme,
   ]);
 
   return (
@@ -461,6 +470,7 @@ export function App() {
           palette={palette}
           onPaletteChange={setPalette}
           sound={sound}
+          programme={programme}
         />
       </Screen>
     </div>

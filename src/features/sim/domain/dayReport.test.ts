@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   countArrivals,
   countDeparture,
+  countEvent,
   countReview,
   HISTORY_DAYS,
   keepDay,
@@ -48,6 +49,17 @@ describe('the day counts', () => {
     expect(counted).toEqual({ from: 2, arrived: 7, left: 5, reviews: 2, reviewStars: 6 });
     expect(start.arrived).toBe(0);
   });
+
+  it('add up the events held, their audience and those called off', () => {
+    const start = startDay(2);
+    const counted = countEvent(countEvent(start, { held: 1, audience: 34, called: 0 }), {
+      held: 0,
+      audience: 0,
+      called: 1,
+    });
+    expect(counted.events).toEqual({ held: 1, audience: 34, called: 1 });
+    expect(start.events).toBeUndefined();
+  });
 });
 
 describe('reportOf', () => {
@@ -74,6 +86,12 @@ describe('reportOf', () => {
   it('rounds the mean review to a tenth of a star', () => {
     const reviewed = countReview(countReview(countReview(startDay(0), 4), 4), 3);
     expect(reportFor(reviewed).meanReview).toBe(3.7);
+  });
+
+  it('carries the events over, and nothing on a day without any', () => {
+    const counted = countEvent(startDay(0), { held: 2, audience: 61, called: 0 });
+    expect(reportFor(counted).events).toEqual({ held: 2, audience: 61, called: 0 });
+    expect(reportFor(startDay(0))).not.toHaveProperty('events');
   });
 
   it('keeps only the loudest three thoughts', () => {

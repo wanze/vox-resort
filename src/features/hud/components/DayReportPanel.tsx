@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { tallyWords } from '../../events/components/eventWords';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { netOf, REASONS, type GameMode } from '../../sim/domain/ledger';
 import { trendOn, trendWords } from './dayWords';
@@ -170,6 +171,20 @@ function MoneySection({ report }: { readonly report: DayReport }) {
   );
 }
 
+function EventsSection({ report }: { readonly report: DayReport }) {
+  const words = tallyWords(report.events);
+  if (words === null) return null;
+  return (
+    <Section title="Programme">
+      <Rows layout="figures">
+        <Row label="Events">
+          <dd>{words}</dd>
+        </Row>
+      </Rows>
+    </Section>
+  );
+}
+
 function SaidSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="What guests said">
@@ -256,6 +271,7 @@ export function DayReportPanel({ history, shown, onShow, mode, resortName }: Day
       <RatingSection report={report} trend={trendOn(history, report.day)} />
       <GuestsSection report={report} />
       {mode === 'tycoon' ? <MoneySection report={report} /> : null}
+      <EventsSection report={report} />
       <SaidSection report={report} />
       <TrendSection history={history} mode={mode} />
     </div>

@@ -2,6 +2,12 @@ import type { Column, Ledger } from './ledger';
 import type { Rating } from './rating';
 import { loudest, type ThoughtTally } from './thoughts';
 
+export interface EventTally {
+  readonly held: number;
+  readonly audience: number;
+  readonly called: number;
+}
+
 export interface DayCounts {
   // The day this period started on; reports are labelled with it.
   readonly from: number;
@@ -9,6 +15,8 @@ export interface DayCounts {
   readonly left: number;
   readonly reviews: number;
   readonly reviewStars: number;
+  // Absent until the first event of the day, and in saves from before events.
+  readonly events?: EventTally;
 }
 
 export interface DayReport {
@@ -24,6 +32,7 @@ export interface DayReport {
   readonly money: Column;
   readonly balance: number;
   readonly loudest: readonly ThoughtTally[];
+  readonly events?: EventTally;
 }
 
 export const HISTORY_DAYS = 14;
@@ -49,6 +58,20 @@ export function countReview(counts: DayCounts, stars: number): DayCounts {
   return { ...counts, reviews: counts.reviews + 1, reviewStars: counts.reviewStars + stars };
 }
 
+const NO_EVENTS: EventTally = { held: 0, audience: 0, called: 0 };
+
+export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
+  const before = counts.events ?? NO_EVENTS;
+  return {
+    ...counts,
+    events: {
+      held: before.held + tally.held,
+      audience: before.audience + tally.audience,
+      called: before.called + tally.called,
+    },
+  };
+}
+
 // Called after closeDay, so the day that just ended is the ledger's yesterday.
 export function reportOf(parts: {
   readonly counts: DayCounts;
@@ -71,6 +94,7 @@ export function reportOf(parts: {
     money: ledger.yesterday,
     balance: ledger.balance,
     loudest: loudest(parts.thoughts, LOUDEST_KEPT),
+    ...(counts.events ? { events: counts.events } : {}),
   };
 }
 

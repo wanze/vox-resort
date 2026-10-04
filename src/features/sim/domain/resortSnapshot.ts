@@ -133,10 +133,15 @@ const columnSchema = z.object({
   visit: z.number(),
   night: z.number(),
   wages: z.number(),
+  // Saves from before events were booked have no column for them.
+  events: z.number().default(0),
   maintenance: z.number(),
 });
 
 const bedsSchema = z.object({ total: count, taken: count });
+
+// Absent in saves from before events, which read as none held.
+const eventTallySchema = z.object({ held: count, audience: count, called: count });
 
 const dayCountsSchema = z.object({
   from: count,
@@ -144,6 +149,7 @@ const dayCountsSchema = z.object({
   left: count,
   reviews: count,
   reviewStars: z.number(),
+  events: eventTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayCounts>;
 
 const dayReportSchema = z.object({
@@ -158,6 +164,7 @@ const dayReportSchema = z.object({
   money: columnSchema,
   balance: z.number(),
   loudest: z.array(tallySchema),
+  events: eventTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayReport>;
 
 const ledgerSchema = z.object({

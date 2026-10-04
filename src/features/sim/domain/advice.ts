@@ -30,6 +30,7 @@ const KIND_ORDER = [
   'far-from-home',
   'no-depot',
   'unvisited',
+  'no-events',
   // Last: the one line the player cannot fix today.
   'weather-closed',
 ] as const;
@@ -91,6 +92,9 @@ export interface ResortFacts {
   readonly cleanersOnDuty?: number;
   // Reached from the gates on foot but not in a wheelchair; absent means every one is step-free.
   readonly notStepFree?: readonly Venue[];
+  // A stage to point at when no stage has anything on in the next seven days; absent or null
+  // means something is booked, or there is no stage.
+  readonly idleStage?: Venue | null;
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -403,6 +407,21 @@ export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
     }));
 }
 
+// One line for the whole plot, not one per stage: four small stages should not nag four times.
+export function adviceNoEvents(facts: ResortFacts): Advice | null {
+  const stage = facts.idleStage;
+  if (!stage) return null;
+  return {
+    kind: 'no-events',
+    weight: 0.2,
+    subject: stage.label,
+    key: stage.key,
+    count: 0,
+    at: tileOf(stage),
+    need: null,
+  };
+}
+
 // Both halves: a beach building has no door node but is reachable over the sand.
 // Sand routes are not swept per building; that costs too much for too little.
 export function unreachableOn(
@@ -497,6 +516,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceFarFromHome(facts),
     adviceNoDepot(facts),
     ...adviceUnvisited(facts),
+    adviceNoEvents(facts),
     ...adviceWeatherClosed(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);
   return found.toSorted(louderFirst);

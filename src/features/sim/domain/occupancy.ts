@@ -92,7 +92,7 @@ export interface SweepResult {
 export function sweepOccupancy(
   occupancy: Occupancy,
   capacityOf: (venue: number) => number,
-  dwellTicksOf: (venue: number) => number,
+  dwellTicksOf: (venue: number, person: number) => number,
   tick: number,
 ): SweepResult {
   const { left, leftFrom, admitted, moved } = occupancy.swept;
@@ -119,7 +119,7 @@ function fillFrom(
   occupancy: Occupancy,
   venue: number,
   capacity: number,
-  dwellTicksOf: (venue: number) => number,
+  dwellTicksOf: (venue: number, person: number) => number,
   tick: number,
   admitted: number[],
   moved: number[],
@@ -129,7 +129,7 @@ function fillFrom(
   if (taking <= 0) return;
   for (let place = 0; place < taking; place++) {
     const person = queue[place]!;
-    admit(occupancy, person, venue, dwellTicksOf(venue), tick);
+    admit(occupancy, person, venue, dwellTicksOf(venue, person), tick);
     admitted.push(person);
   }
   queue.splice(0, taking);

@@ -57,6 +57,7 @@ describe('record', () => {
       ['dig', -20],
       ['land', -1_500],
       ['wages', -80],
+      ['events', -150],
       ['maintenance', -35],
     ] as const;
     const ledger = amounts.reduce(

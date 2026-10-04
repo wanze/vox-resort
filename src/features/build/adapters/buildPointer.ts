@@ -1,11 +1,28 @@
 import type { Camera } from 'three/webgpu';
-import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
+import {
+  derivedKey,
+  place,
+  type LayoutItem,
+  type Placement,
+  type Tile,
+} from '../../layout/domain/resortLayout';
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
 import { isPaintable, planAt, type FitRule, type GroundRule } from '../domain/buildPlan';
 import type { PickGround } from '../domain/groundPick';
-import { fellBackToStairs, pavingAt, relaidBy, standsOn, type PavingRules } from '../domain/paving';
+import {
+  fellBackToStairs,
+  mosaicStyleOf,
+  pavingAt,
+  relaidBy,
+  remosaicked,
+  repaves,
+  standsOn,
+  type Paving,
+  type PavingRules,
+  type Relaid,
+} from '../domain/paving';
 import { reRailAround, type HandrailRules } from '../domain/handrails';
-import { footprintTiles, type TileOccupancy } from '../domain/tileOccupancy';
+import { footprintTiles, type Footprint, type TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
 
@@ -24,6 +41,8 @@ export interface BuildPointerOptions {
   readonly owns: GroundRule;
   readonly fits: FitRule;
   readonly onPlace: (placement: Placement, lifted?: Placement) => void;
+  // A mosaic laid over paving that stands: charged as a new tile, with the old one refunded.
+  readonly onRepave: (placement: Placement, lifted: Placement) => void;
   // A click the plan refused, for the player to be told why when it is not plain to see.
   readonly onBlocked: (placement: Placement) => void;
   // Kept apart from onPlace: a rail claims no tile, so it must not enter the occupancy index or get
@@ -50,13 +69,24 @@ export interface BuildPointer {
   dispose(): void;
 }
 
+// The tile a repave lifts counts as free, so the ghost shows green over the paving it replaces.
+const freeing = (occupancy: TileOccupancy, key: string): TileOccupancy => ({
+  ...occupancy,
+  isFree: (footprint: Footprint) =>
+    footprintTiles(footprint).every((tile) => {
+      const at = occupancy.keyAt(tile);
+      return at === undefined || at === key;
+    }),
+});
+
 function turnAsked(event: KeyboardEvent): number {
   if (event.key.toLowerCase() !== 'r') return 0;
   return event.shiftKey ? -1 : 1;
 }
 
 export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
-  const { ghost, occupancy, ground, paving, handrails, owns, fits, onPlace, onRails } = options;
+  const { ghost, occupancy, ground, paving, handrails, owns, fits, onPlace, onRepave, onRails } =
+    options;
   const onFallback = options.onFallback ?? ((): void => {});
   const onPending = options.onPending ?? ((): void => {});
 
@@ -66,18 +96,41 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
   // Kept across placements so a row can face one way; reset when the type changes.
   let rotation: Rotation = 0;
 
+  const liftedBy = (picked: LayoutItem, tile: Tile, laid: Paving): Placement | null => {
+    const standing = paving.pavedWith(tile.x, tile.z);
+    if (!standing || !repaves(picked, standing, laid, paving)) return null;
+    const key = derivedKey(standing.id, tile.x, tile.z);
+    return place(standing, key, tile.x, tile.z, 0, ground.levelOf(tile.x, tile.z));
+  };
+
   const planOn = (picked: LayoutItem, tile: Tile) => {
     const laid = pavingAt(picked, tile, rotation, paving);
+    const lifted = liftedBy(picked, tile, laid);
     const plan = planAt(
       laid.item,
       tile,
-      occupancy,
+      lifted ? freeing(occupancy, lifted.key) : occupancy,
       laid.rotation,
       ground.levelOf,
       (under) => owns(under) && standsOn(laid.item, under, paving),
       fits,
     );
-    return { ...plan, fellBack: !plan.blocked && fellBackToStairs(laid, paving) };
+    return { ...plan, lifted, fellBack: !plan.blocked && fellBackToStairs(laid, paving) };
+  };
+
+  const relay = (relaid: readonly Relaid[]): void => {
+    for (const { placement, lifted } of relaid) onPlace(placement, lifted);
+  };
+
+  const settleAround = (tile: Tile, lifted: Placement | null): void => {
+    // Asked after the tile is standing: that is what turns the slab below a step into the flight up
+    // it. A repave leaves the tile paved, which is all a flight asks of it.
+    const climbs = lifted ? [] : relaidBy(tile, paving);
+    relay(climbs);
+    // After the climbs: a flight laid over a mosaic tile is a border to the mosaic beside it.
+    relay(remosaicked({ tile, before: mosaicStyleOf(lifted, paving) }, climbs, paving));
+    // Last, once paving and climbs are settled: a rail is a fact about the ground around a tile.
+    reRailAround(tile, handrails, onRails);
   };
 
   const covers = (anchor: Tile, tile: Tile): boolean => {
@@ -122,11 +175,10 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
         options.onBlocked(plan.placement);
         return;
       }
-      onPlace(plan.placement);
-      // Asked after the tile is standing: that is what turns the slab below a step into the flight up it.
-      for (const relaid of relaidBy(tile, paving)) onPlace(relaid.placement, relaid.lifted);
-      // Last, once paving and climbs are settled: a rail is a fact about the ground around a tile.
-      reRailAround(tile, handrails, onRails);
+      const { lifted } = plan;
+      if (lifted) onRepave(plan.placement, lifted);
+      else onPlace(plan.placement);
+      settleAround(tile, lifted);
       item = nextItem();
     },
     onKey(event) {

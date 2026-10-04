@@ -66,15 +66,43 @@ Steps 2 and 8 and the terrain mesh run in a worker (see
 
 ### Paving
 
-Players only place `path`. The ground decides the actual paving (`paving.ts`):
+Players place `path`, `staircase` or `mosaic`. The ground decides the actual
+paving (`paving.ts`):
 
-| Ground                                  | Paving                                |
-| --------------------------------------- | ------------------------------------- |
-| grass                                   | `path`                                |
-| sand                                    | `boardwalk`                           |
-| sea (edge declared `overWater`)         | `jetty`                               |
-| inland water                            | `bridge` / `bridge-ramp` (`spans.ts`) |
-| lower tile of a step, higher tile paved | `stairs`, facing up the step          |
+| Ground                                  | Paving                                             |
+| --------------------------------------- | -------------------------------------------------- |
+| grass                                   | `path`                                             |
+| grass, laid with a mosaic style         | the style's piece, by its neighbours (`mosaic.ts`) |
+| sand                                    | `boardwalk`                                        |
+| sea (edge declared `overWater`)         | `jetty`                                            |
+| inland water                            | `bridge` / `bridge-ramp` (`spans.ts`)              |
+| lower tile of a step, higher tile paved | `stairs`, facing up the step                       |
+
+#### Mosaic
+
+- Four styles (`voxel-gen/mosaics/`), each six generated pieces: `single`,
+  `end`, `strip`, `corner`, `edge` and `centre`. The style's own model is its
+  `single`; the other five are `groundDecides`. Each declares the sides it
+  borders unturned (`mosaic.borders`, north is `z = 0`).
+- A tile borders every side whose neighbour is not the same style: a plain
+  path, another style, a flight or bare ground. Only the four neighbours are
+  read, so a concave corner shows a notch where two bands meet.
+- `mosaicFit` picks the piece and the lowest turn whose borders match.
+  `remosaicked` re-lays a neighbour only where the edited tile, or a climb the
+  edit moved, joined or left its style, after `relaidBy` / `unlaidBy`: the turn
+  is not on the occupancy index, so it compares before and after.
+- A field turns with its piece, so every field is drawn four-fold symmetric.
+- A mosaic tool laid over a plain path or another style repaves it in one
+  click: the new tile's price, half the old one refunded.
+- Pieces are held to 128 triangles (`meshBudget.test.ts`; the plain path is
+  88). A plaza draws three buckets per chunk (corner, edge, centre) where a path
+  draws one.
+- The generator never stands a piece (the ids are in `DERIVED_IDS`). Instead
+  `prepareResort` dresses a generated plot after layout (`mosaicDressing`):
+  every path tile in a park, on a plaza holding a fountain, or within one tile
+  of a fountain or statue, one hashed style per area, parks first. A `classic`
+  plot and the authored plot stay plain, so the bench is unchanged; the sim
+  report lays out with `layoutResort` directly and stays plain too.
 
 ### Rails
 
@@ -334,6 +362,24 @@ budgets in plan 040 were exceeded (`mixed` +46% draw calls against 20%, startup
 +86% against 50%); the maintainer accepted them after the game held 120 fps.
 Meshing variants on first placement is the lever if startup matters later.
 
+Mosaic paving (`pnpm bench -- --mosaic`), same machine, `--no-vsync`,
+2026-10-04. `--mosaic` paves the authored plot's 2 353 path tiles wall to wall,
+one style per 16-tile cell, cycled so neighbouring chunks differ. Each run twice,
+in both orders; the second agreed, and the rows give the first:
+
+| Tree, `day-overview`            | Draw calls | Triangles | CPU median | GPU median | Startup | Mesher  |
+| ------------------------------- | ---------- | --------- | ---------- | ---------- | ------- | ------- |
+| before mosaic (`893ef24`)       | 292        | 1.19 M    | 1.30 ms    | 3.41 ms    | 5712 ms | 4994 ms |
+| mosaic, plot as authored        | 292        | 1.19 M    | 1.30 ms    | 3.41 ms    | 6075 ms | 5300 ms |
+| mosaic, `--mosaic` wall to wall | 372        | 1.14 M    | 1.50 ms    | 3.41 ms    | 5685 ms | 4971 ms |
+
+On `day-street`, `--mosaic` draws 527 against 436 and takes 2.00 ms of CPU
+against 1.70 ms. Draw calls and triangles before and after are identical in all
+four cases; startup and mesher agree within 7% (the second runs, 5604 and
+5673 ms startup, within 2%). Wall to wall mosaic costs +27% draw calls and
++0.2 ms CPU, inside plan 067's budgets of +50% and +1 ms; triangles fall, since
+most pieces are cheaper than the plain path's 88.
+
 The generator goes up to 480 × 480 tiles (`PLOT_TILES`): about 60 000
 placements and 8 000 people at full density.
 
@@ -350,8 +396,8 @@ placements and 8 000 people at full density.
    `pnpm bench` if it's placed a lot.
 
 Nothing in `src/` needs to change. A new style of an existing model goes in
-`voxel-gen/variants/` instead (see the README). The catalogue has 63 models plus
-51 variants, which roughly doubles the voxels meshed at load.
+`voxel-gen/variants/` instead (see the README). The catalogue has 93 models plus
+54 variants, which roughly doubles the voxels meshed at load.
 
 ## DVE integration
 

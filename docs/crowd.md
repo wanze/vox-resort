@@ -1032,10 +1032,13 @@ the litter changes.
 ## Scenery
 
 Dressing declares `scenery` on its `VoxelModelSource`, 0 to 1 (fountain 1, statue
-0.8, flowerbeds and blossom 0.5, trees 0.4, hedge 0.3); anything undeclared is 0.
-`sceneryOf` reads it, and there is no table of values in `src/`.
+0.8, flowerbeds and blossom 0.5, trees 0.4, hedge 0.3, mosaic paving 0.05);
+anything undeclared is 0. `sceneryOf` reads it, and there is no table of values in
+`src/`. Mosaic is low because paving is dense: a tile deep in a plaza of it sums
+dozens of tiles, so a plot paved wall to wall in mosaic gives 0.45, a 5 × 5 plaza's
+centre 0.30, and a test holds the first under 0.5.
 
-`scenery.ts` turns what stands on the plot (placements and props) into a per-tile
+`scenery.ts` turns what stands on the plot (placements, props and paving) into a per-tile
 field, row-major and sized to the plan. An item gives
 `strength * (1 - d / (SCENERY_REACH + 1))` to every tile within `SCENERY_REACH`
 (4) of its footprint, `d` the Chebyshev distance (0 under it). A tile's sum is

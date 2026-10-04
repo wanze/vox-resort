@@ -16,6 +16,12 @@ describe('listOf', () => {
     for (const id of PAVING_IDS) expect(listOf(id), id).toBe('paths');
   });
 
+  it('files every mosaic piece and style with the paths, asked by family as the build tools do', () => {
+    for (const id of ['mosaic', 'mosaic-calcada', 'mosaic-zellige-corner', 'mosaic-end']) {
+      expect(listOf(familyOf(id)), id).toBe('paths');
+    }
+  });
+
   it('files a styled prop with its family once asked by family', () => {
     expect(listOf(familyOf('street-lamp-b'))).toBe('props');
   });

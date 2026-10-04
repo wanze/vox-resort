@@ -12,11 +12,15 @@ import {
   STAIRCASE_ID,
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
+import { MOSAIC_PIECES } from '../../../../voxel-gen/mosaics/pieces.ts';
+import { mosaicFit, type MosaicKit } from '../../layout/domain/mosaic';
 import {
   isPaving,
   pavedGroundOf,
   pavingAt,
   relaidBy,
+  remosaicked,
+  repaves,
   standsOn,
   unlaidBy,
   type PavedGround,
@@ -71,6 +75,7 @@ const rules = (parts: Partial<PavingRules> = {}): PavingRules => ({
   rampFoot: RAMP_FOOT,
   rampHead: RAMP_HEAD,
   flagstones: PATH,
+  mosaic: null,
   ...parts,
 });
 
@@ -525,36 +530,50 @@ interface Laid {
   readonly rotation: number;
 }
 
-// Plays the pointers: what pavingAt lays, then what relaidBy or unlaidBy re-lays, on a live table.
-function sketchpad(levelOf: LevelProvider, start: Record<string, Laid> = {}) {
+// Plays the pointers: what pavingAt lays, then what relaidBy or unlaidBy re-lays, then the mosaic
+// beside it, on a live table.
+function sketchpad(
+  levelOf: LevelProvider,
+  start: Record<string, Laid> = {},
+  mosaic: MosaicKit | null = null,
+) {
   const items = new Map(
     [PATH, BOARDWALK, STAIRS, STAIRCASE, RAMP_FOOT, RAMP_HEAD].map((one) => [one.id, one]),
   );
   const table = new Map(Object.entries(start));
   const live = rules({
     levelOf,
+    mosaic,
     pavedWith: (x, z) => {
       const laid = table.get(`${x},${z}`);
-      return laid ? items.get(laid.id)! : null;
+      return laid ? (items.get(laid.id) ?? item(laid.id)) : null;
     },
   });
-  const apply = (relaid: readonly Relaid[]): void => {
+  const apply = (relaid: readonly Relaid[]): readonly Relaid[] => {
     for (const { placement } of relaid) {
       table.set(`${placement.tileX},${placement.tileZ}`, {
         id: placement.id,
         rotation: placement.rotation,
       });
     }
+    return relaid;
+  };
+  const styleOn = (x: number, z: number): string | null => {
+    const laid = live.pavedWith(x, z);
+    return laid && mosaic ? mosaic.styleOf(laid.id) : null;
   };
   return {
-    paint(x: number, z: number, picked = PATH): void {
+    paint(x: number, z: number, picked = PATH): readonly Relaid[] {
       const laid = pavingAt(picked, { x, z }, 0, live);
       table.set(`${x},${z}`, { id: laid.item.id, rotation: laid.rotation });
-      apply(relaidBy({ x, z }, live));
+      const climbs = apply(relaidBy({ x, z }, live));
+      return apply(remosaicked({ tile: { x, z }, before: null }, climbs, live));
     },
-    remove(x: number, z: number): void {
+    remove(x: number, z: number): readonly Relaid[] {
+      const before = styleOn(x, z);
       table.delete(`${x},${z}`);
-      apply(unlaidBy({ x, z }, live));
+      const climbs = apply(unlaidBy({ x, z }, live));
+      return apply(remosaicked({ tile: { x, z }, before }, climbs, live));
     },
     get state(): Record<string, Laid> {
       return Object.fromEntries([...table].toSorted(([a], [b]) => a.localeCompare(b)));
@@ -658,5 +677,139 @@ describe('drawing a path up a step', () => {
       );
       expect(pad.state).toEqual(expected);
     }
+  });
+});
+
+// Each style's own model is its single, as in the catalogue, so a lone tile is laid as the style.
+const mosaicKit = (styles: readonly string[]): MosaicKit => ({
+  styleOf: (id) => styles.find((style) => id === style || id.startsWith(`${style}-`)) ?? null,
+  pieceFor(style, bordered) {
+    const fit = mosaicFit(bordered, MOSAIC_PIECES);
+    const name = fit && MOSAIC_PIECES[fit.piece]!.name;
+    return (
+      fit && { item: item(fit.piece === 0 ? style : `${style}-${name}`), rotation: fit.rotation }
+    );
+  },
+});
+
+// Longest first, so a calçada piece is not taken for the terracotta style it prefixes.
+const TILES = item('mosaic');
+const OTHER = item('mosaic-calcada');
+const KIT = mosaicKit(['mosaic-calcada', 'mosaic']);
+const level = (): number => 0;
+const knoll: LevelProvider = (x, z) => (x === 1 && z === 1 ? 1 : 0);
+
+describe('laying mosaic', () => {
+  it('lays a lone tile as its style, unturned whatever the R key was left at', () => {
+    expect(pavingAt(TILES, { x: 2, z: 2 }, 3, rules({ mosaic: KIT }))).toEqual({
+      item: TILES,
+      rotation: 0,
+    });
+  });
+
+  it('lays a tile beside one of its style as an end open towards it', () => {
+    const laid = pavingAt(
+      TILES,
+      { x: 2, z: 2 },
+      0,
+      rules({ mosaic: KIT, pavedWith: paved({ '2,1': item('mosaic-centre') }) }),
+    );
+    expect(laid).toEqual({ item: item('mosaic-end'), rotation: 2 });
+  });
+
+  it('lays decking on sand and a flight on a step, as a path would', () => {
+    expect(pavingAt(TILES, { x: 2, z: 9 }, 0, rules({ mosaic: KIT, isSand: () => true }))).toEqual({
+      item: BOARDWALK,
+      rotation: 0,
+    });
+    const step = rules({ mosaic: KIT, pavedWith: paved({ '0,0': PATH }), levelOf: benchAt(1) });
+    expect(pavingAt(TILES, { x: 0, z: 1 }, 0, step)).toEqual({ item: STAIRS, rotation: 0 });
+  });
+
+  it('re-lays the first tile as an end once a second is laid beside it', () => {
+    const pad = sketchpad(level, {}, KIT);
+    pad.paint(0, 0, TILES);
+    pad.paint(1, 0, TILES);
+    expect(pad.state).toEqual({
+      '0,0': { id: 'mosaic-end', rotation: 1 },
+      '1,0': { id: 'mosaic-end', rotation: 3 },
+    });
+  });
+
+  it('re-lays nothing when a plain path or another style goes down beside it', () => {
+    const pad = sketchpad(level, {}, KIT);
+    pad.paint(0, 0, TILES);
+    expect(pad.paint(1, 0)).toEqual([]);
+    expect(pad.paint(0, 1, OTHER)).toEqual([]);
+    expect(pad.state).toEqual({
+      '0,0': { id: 'mosaic', rotation: 0 },
+      '0,1': { id: 'mosaic-calcada', rotation: 0 },
+      '1,0': { id: PATH_ID, rotation: 0 },
+    });
+  });
+
+  it('re-lays both ends of a strip as singles once its middle is taken up', () => {
+    const pad = sketchpad(level, {}, KIT);
+    for (const x of [0, 1, 2]) pad.paint(x, 0, TILES);
+    expect(pad.state['1,0']).toEqual({ id: 'mosaic-strip', rotation: 0 });
+    pad.remove(1, 0);
+    expect(pad.state).toEqual({
+      '0,0': { id: 'mosaic', rotation: 0 },
+      '2,0': { id: 'mosaic', rotation: 0 },
+    });
+  });
+
+  it('borders the mosaic beside a tile a flight is laid over', () => {
+    const pad = sketchpad(benchAt(1), {}, KIT);
+    pad.paint(0, 1, TILES);
+    pad.paint(1, 1, TILES);
+    pad.paint(0, 0);
+    expect(pad.state).toEqual({
+      '0,0': { id: PATH_ID, rotation: 0 },
+      '0,1': { id: STAIRS_ID, rotation: 0 },
+      '1,1': { id: 'mosaic', rotation: 0 },
+    });
+  });
+
+  it('re-lays a tile two flights border once', () => {
+    const pad = sketchpad(knoll, {}, KIT);
+    for (const [x, z] of [
+      [0, 0],
+      [1, 0],
+      [0, 1],
+    ] as const) {
+      pad.paint(x, z, TILES);
+    }
+    const relaid = pad.paint(1, 1);
+    expect(relaid.map(({ placement }) => placement.key)).toEqual(['mosaic@0,0']);
+    expect(pad.state['0,0']).toEqual({ id: 'mosaic', rotation: 0 });
+    expect([pad.state['1,0']!.id, pad.state['0,1']!.id]).toEqual([STAIRS_ID, STAIRS_ID]);
+  });
+});
+
+const flat = (laid: LayoutItem) => ({ item: laid, rotation: 0 as const });
+
+describe('repaves', () => {
+  const live = rules({ mosaic: KIT });
+
+  it('lays a mosaic over a plain path', () => {
+    expect(repaves(TILES, PATH, flat(item('mosaic-edge')), live)).toBe(true);
+  });
+
+  it('lays one mosaic style over another, but never over its own', () => {
+    expect(repaves(OTHER, item('mosaic-centre'), flat(OTHER), live)).toBe(true);
+    expect(repaves(TILES, item('mosaic-edge'), flat(TILES), live)).toBe(false);
+  });
+
+  it('never repaves with the path tool', () => {
+    expect(repaves(PATH, TILES, flat(PATH), live)).toBe(false);
+    expect(repaves(PATH, PATH, flat(PATH), live)).toBe(false);
+  });
+
+  it('never repaves a flight or decking, nor where the ground lays one', () => {
+    expect(repaves(TILES, STAIRS, flat(TILES), live)).toBe(false);
+    expect(repaves(TILES, BOARDWALK, flat(TILES), live)).toBe(false);
+    expect(repaves(TILES, PATH, flat(BOARDWALK), live)).toBe(false);
+    expect(repaves(TILES, PATH, { item: STAIRS, rotation: 2 }, live)).toBe(false);
   });
 });

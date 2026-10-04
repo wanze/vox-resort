@@ -39,6 +39,12 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&styles=gaudy')?.styles).toBeUndefined();
   });
 
+  it('can pave the authored plot in mosaic, so a run can price the pieces', () => {
+    expect(parseBenchConfig('?bench=1')?.mosaic).toBeUndefined();
+    expect(parseBenchConfig('?bench=1&mosaic=1')?.mosaic).toBe(true);
+    expect(parseBenchConfig('?bench=1&mosaic=0')?.mosaic).toBeUndefined();
+  });
+
   it('can pin the weather, so a run can price the rain', () => {
     expect(parseBenchConfig('?bench=1')?.weather).toBeNull();
     expect(parseBenchConfig('?bench=1&weather=storm')?.weather).toBe('storm');

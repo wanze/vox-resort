@@ -11,6 +11,7 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import { CLIMBS, type PavedProvider } from '../../layout/domain/stairs';
 import { CLIMB_REACH, climbKindAt, type ClimbKind } from '../../layout/domain/climbs';
 import { spanAt, type SpanProvider } from '../../layout/domain/spans';
+import { borderedSides, type MosaicKit } from '../../layout/domain/mosaic';
 import type { Rotation } from '../../layout/domain/rotation';
 import type { TileOccupancy } from './tileOccupancy';
 
@@ -48,6 +49,7 @@ export interface PavingRules {
   readonly rampFoot: LayoutItem | null;
   readonly rampHead: LayoutItem | null;
   readonly flagstones: LayoutItem | null;
+  readonly mosaic: MosaicKit | null;
 }
 
 export interface Paving {
@@ -91,7 +93,8 @@ function climbOn(
 }
 
 // The climb is asked first, as in layoutResort: a step's lower tile can be the landward row of sand,
-// and there the flight is right. Flat paving is laid unturned: a slab has no front.
+// and there the flight is right. Flat paving is laid unturned, a slab having no front, unless it is
+// a mosaic piece, turned to the sides it borders.
 export function pavingAt(
   item: LayoutItem,
   tile: Tile,
@@ -117,7 +120,40 @@ export function pavingAt(
   if (climb) return climb;
   const decking = rules.isSand(tile.x, tile.z) ? rules.decking : null;
   const flat = chosen ? (rules.flagstones ?? item) : item;
-  return { item: decking ?? flat, rotation: 0 };
+  if (decking) return { item: decking, rotation: 0 };
+  return mosaicOn(flat, tile, rules) ?? { item: flat, rotation: 0 };
+}
+
+const styleAtOf =
+  (kit: MosaicKit, pavedWith: PavedGround) =>
+  (tileX: number, tileZ: number): string | null => {
+    const standing = pavedWith(tileX, tileZ);
+    return standing && kit.styleOf(standing.id);
+  };
+
+// The one flat paving with a front: its piece and turn are the sides it borders.
+function mosaicOn(item: LayoutItem, tile: Tile, rules: PavingRules): Paving | null {
+  const kit = rules.mosaic;
+  const style = kit?.styleOf(item.id) ?? null;
+  if (kit === null || style === null) return null;
+  return kit.pieceFor(style, borderedSides(tile, style, styleAtOf(kit, rules.pavedWith)));
+}
+
+// Only a mosaic tool repaves, so a path drawn across a plaza cannot strip it; and only flat ground
+// laid in mosaic, so decking or a flight is never stood over the paving it would have replaced.
+export function repaves(
+  item: LayoutItem,
+  standing: LayoutItem | null,
+  laid: Paving,
+  rules: PavingRules,
+): boolean {
+  const kit = rules.mosaic;
+  const style = kit?.styleOf(item.id) ?? null;
+  if (!kit || style === null || standing === null || kit.styleOf(laid.item.id) === null) {
+    return false;
+  }
+  const under = kit.styleOf(standing.id);
+  return under === null ? standing.id === rules.flagstones?.id : under !== style;
 }
 
 export function fellBackToStairs(laid: Paving, rules: PavingRules): boolean {
@@ -293,4 +329,50 @@ function spanBeside(
   const crossing = spanAt(tile, isPaved, isRaised);
   const item = crossing.kind === 'ramp' ? (rules.bridgeRamp ?? bridge) : bridge;
   return { item, rotation: crossing.rotation };
+}
+
+export const mosaicStyleOf = (
+  paved: { readonly id: string } | null,
+  rules: PavingRules,
+): string | null => (paved && rules.mosaic ? rules.mosaic.styleOf(paved.id) : null);
+
+export interface Edited {
+  readonly tile: Tile;
+  // The mosaic style the tile stood in before the edit, null for anything else.
+  readonly before: string | null;
+}
+
+// Compared before and after, because a piece's turn is not on the index, as in climbMoved: a
+// neighbour is re-laid only where the changed tile joined or left its style, which moves its fit.
+export function remosaicked(
+  edited: Edited,
+  relaid: readonly Relaid[],
+  rules: PavingRules,
+): Relaid[] {
+  const kit = rules.mosaic;
+  if (kit === null) return [];
+  const styleAt = styleAtOf(kit, rules.pavedWith);
+  const changed: Edited[] = [
+    edited,
+    ...relaid.map(({ placement, lifted }) => ({
+      tile: { x: placement.tileX, z: placement.tileZ },
+      before: kit.styleOf(lifted.id),
+    })),
+  ];
+  const seen = new Set<string>();
+  const result: Relaid[] = [];
+  for (const { tile, before } of changed) {
+    const now = styleAt(tile.x, tile.z);
+    for (const { dx, dz } of CLIMBS) {
+      const beside: Tile = { x: tile.x + dx, z: tile.z + dz };
+      const standing = rules.pavedWith(beside.x, beside.z);
+      const style = standing && kit.styleOf(standing.id);
+      const key = `${beside.x},${beside.z}`;
+      if (!standing || !style || seen.has(key) || (before === style) === (now === style)) continue;
+      seen.add(key);
+      const fit = kit.pieceFor(style, borderedSides(beside, style, styleAt));
+      if (fit) result.push(relaidAs(fit, standing, beside, rules.levelOf(beside.x, beside.z)));
+    }
+  }
+  return result;
 }

@@ -1,9 +1,9 @@
 import type { Camera } from 'three/webgpu';
-import type { Placement, Tile } from '../../layout/domain/resortLayout';
+import type { LayoutItem, Placement, Tile } from '../../layout/domain/resortLayout';
 import { demolishAt } from '../domain/demolish';
 import type { PickGround } from '../domain/groundPick';
 import { reRailAround, type HandrailRules } from '../domain/handrails';
-import { unlaidBy, type PavingRules } from '../domain/paving';
+import { mosaicStyleOf, remosaicked, unlaidBy, type PavingRules } from '../domain/paving';
 import type { TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
@@ -41,8 +41,10 @@ export function createDemolishPointer(options: DemolishPointerOptions): Demolish
     return key === null ? undefined : placementOf(key);
   };
 
-  const settleAround = (tile: Tile): void => {
-    for (const relaid of unlaidBy(tile, paving)) onPlace(relaid.placement, relaid.lifted);
+  const settleAround = (tile: Tile, paved: LayoutItem): void => {
+    const climbs = unlaidBy(tile, paving);
+    const mosaic = remosaicked({ tile, before: mosaicStyleOf(paved, paving) }, climbs, paving);
+    for (const relaid of [...climbs, ...mosaic]) onPlace(relaid.placement, relaid.lifted);
     reRailAround(tile, handrails, onRails);
   };
 
@@ -64,9 +66,9 @@ export function createDemolishPointer(options: DemolishPointerOptions): Demolish
       if (!standing) return;
       // Asked before it goes, because afterwards the tile is bare either way; only
       // paving changes what the neighbouring flights and rails need.
-      const paved = paving.pavedWith(tile.x, tile.z) !== null;
+      const paved = paving.pavedWith(tile.x, tile.z);
       onDemolish(standing);
-      if (paved) settleAround(tile);
+      if (paved) settleAround(tile, paved);
     },
     onCancel: options.onCancel,
   });

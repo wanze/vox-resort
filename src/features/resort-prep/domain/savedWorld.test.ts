@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createTileOccupancy } from '../../build/domain/tileOccupancy';
-import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
+import { layoutItemFor } from '../../build/domain/buildPlan';
+import { mosaicKitOf } from '../../catalog/domain/mosaics';
+import { mosaicOf, OBJECT_TYPES, TILE_VOXELS } from '../../catalog/domain/objectTypes';
+import { layMosaic } from '../../layout/domain/mosaic';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
@@ -73,6 +76,19 @@ describe('a saved world', () => {
       before.nodes.map(({ x, y, z }) => [x, y, z]),
     );
     expect(after.seats).toEqual(before.seats);
+  });
+
+  it('keeps mosaic pieces turned as they were laid', () => {
+    const { prepared, terrain } = played();
+    const kit = mosaicKitOf(OBJECT_TYPES.map(layoutItemFor));
+    const half = PARAMS.tilesX / 2;
+    const paths = layMosaic(prepared.plot.paths, (x) => (x < half ? 'mosaic-zellige' : null), kit);
+    const world = savedWorldOf(prepared.plan, terrain, { ...prepared.plot, paths }, null);
+    expect(savedWorldSchema.safeParse(world).success).toBe(true);
+    const loaded = prepareResort({ source: { kind: 'saved', world }, repeat: 1, view: null });
+    expect(loaded.plot.paths).toEqual(paths);
+    const turned = paths.filter((one) => mosaicOf(one.id) !== null && one.rotation !== 0);
+    expect(turned.length).toBeGreaterThan(0);
   });
 
   it('gives the plot lists of its own, for the edit mode to push and splice', () => {

@@ -3,6 +3,9 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import zlib from 'node:zlib';
 import { LITTER_SOURCES } from './litter/index.ts';
+import { MOSAIC_STYLES } from './mosaics/index.ts';
+import { MOSAIC_PIECES, mosaicSources, turnVoxel } from './mosaics/pieces.ts';
+import { MOSAIC_SAMPLE } from './mosaics/sample.ts';
 import { PROP_SOURCES } from './props/index.ts';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
@@ -465,6 +468,35 @@ function renderVariants(ids: readonly string[]): Buffer {
   return renderSheet(pairs, 520, 2);
 }
 
+// The sample stamped in each style, its pieces turned as the app would lay them.
+function renderMosaics(): Buffer {
+  const samples = MOSAIC_STYLES.map((style) => {
+    const pieces = new Map(
+      mosaicSources(style).map((source, index) => [MOSAIC_PIECES[index]!.name, buildModel(source)]),
+    );
+    return buildModel({
+      id: `${style.id}-sample`,
+      label: style.label,
+      category: 'grounds',
+      tiles: { x: 1, z: 1 },
+      build: (b) => {
+        for (const cell of MOSAIC_SAMPLE) {
+          for (const voxel of pieces.get(cell.piece)!.voxels) {
+            const turned = turnVoxel(voxel.x, voxel.z, cell.turns);
+            b.set(
+              cell.x * TILE_VOXELS + turned.x,
+              voxel.y,
+              cell.z * TILE_VOXELS + turned.z,
+              voxel.color,
+            );
+          }
+        }
+      },
+    });
+  });
+  return renderSheet(samples, 900, 2);
+}
+
 // Variants too: the build palette's style strip shows each one's picture.
 const CATALOGUE: Registry = {
   sources: [...MODEL_SOURCES, ...VARIANT_SOURCES],
@@ -523,15 +555,23 @@ function writeIcons(model: VoxelModel, iconDir: string): void {
   }
 }
 
+interface Sheet {
+  readonly name: string;
+  readonly png: () => Buffer;
+}
+
+const FLAGGED_SHEETS: readonly (readonly [string, (ids: readonly string[]) => Sheet])[] = [
+  ['--mosaics', () => ({ name: 'mosaics', png: renderMosaics })],
+  ['--variants', (ids) => ({ name: 'variants', png: () => renderVariants(ids) })],
+];
+
 function sheetFor(
   args: readonly string[],
   registry: Registry,
   models: readonly VoxelModel[],
-): { readonly name: string; readonly png: () => Buffer } | null {
-  if (args.includes('--variants')) {
-    const ids = args.filter((arg) => !arg.startsWith('--'));
-    return { name: 'variants', png: () => renderVariants(ids) };
-  }
+): Sheet | null {
+  const flagged = FLAGGED_SHEETS.find(([flag]) => args.includes(flag));
+  if (flagged) return flagged[1](args.filter((arg) => !arg.startsWith('--')));
   if (args.includes('--lineup')) {
     const person = buildModel(PEOPLE_SOURCES[0]!);
     return { name: `${registry.sheet}-lineup`, png: () => renderLineup(models, person, 2400) };

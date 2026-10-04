@@ -53,6 +53,7 @@ import tennisCourt from './tennis-court.ts';
 import basketballCourt from './basketball-court.ts';
 import volleyball from './volleyball.ts';
 import minigolf from './minigolf.ts';
+import { MOSAIC_VARIANTS } from '../mosaics/index.ts';
 
 export interface ModelVariant {
   readonly of: string;
@@ -111,6 +112,7 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'basketball-court', source: basketballCourt },
   { of: 'volleyball', source: volleyball },
   { of: 'minigolf', source: minigolf },
+  ...MOSAIC_VARIANTS,
 ];
 
 export const VARIANT_SOURCES: readonly VoxelModelSource[] = VARIANTS.map(

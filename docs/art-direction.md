@@ -78,6 +78,9 @@ job. `faceCell` in `wall.ts` makes openings work on all four faces.
   all get expensive. Use geometry (a course, a recess, a band) or the shader.
 - **Keep mass-placed models cheap.** Cost is triangles times placements, so
   `path`, `hedge`, lamps and trees matter most.
+- **Draw a mosaic four-fold symmetric.** Its field turns with its piece, so
+  paint one quarter in shapes at least 2 voxels across and let it turn into the
+  other three; a pattern that runs one way breaks at every turned piece.
 - **Nothing tall in front of a façade.** The camera looks down at about 30°.
 - **Cut openings into walls**, don't paint them. Roofs overhang. Everything
   stands on a plinth. Put planting by the entrance.

@@ -10,10 +10,16 @@
   ],
   "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
   "health": {
-    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**", "**/*.test.ts", "**/*.test.tsx"]
+    "ignore": [
+      "voxel-gen/models/**",
+      "voxel-gen/variants/**",
+      "voxel-gen/mosaics/styles/**",
+      "**/*.test.ts",
+      "**/*.test.tsx"
+    ]
   },
   "duplicates": {
-    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**"]
+    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**", "voxel-gen/mosaics/styles/**"]
   },
   "boundaries": {
     "zones": [

@@ -74,6 +74,7 @@ import villa from './villa.ts';
 import volleyball from './volleyball.ts';
 import waterpark from './waterpark.ts';
 import willow from './willow.ts';
+import { MOSAIC_MODELS } from '../mosaics/index.ts';
 
 export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   path,
@@ -83,6 +84,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   bridge_ramp,
   stairs,
   staircase,
+  ...MOSAIC_MODELS,
   ramp_foot,
   ramp_head,
   railing,

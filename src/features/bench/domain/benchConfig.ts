@@ -32,6 +32,8 @@ export interface BenchConfig {
   readonly detail: boolean;
   readonly weather: Weather | null;
   readonly styles?: BenchStyles;
+  // Paves the authored plot wall to wall in mosaic, to price the pieces' draw calls.
+  readonly mosaic?: true;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -86,6 +88,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     detail: params.get('lod') !== '0',
     weather,
     ...(styles ? { styles } : {}),
+    ...(params.get('mosaic') === '1' ? { mosaic: true as const } : {}),
   };
 }
 

@@ -337,6 +337,13 @@ export interface ModelDepot {
   readonly doors: readonly ModelDoor[];
 }
 
+export type MosaicSide = 'n' | 'e' | 's' | 'w';
+
+export interface ModelMosaic {
+  readonly style: string;
+  readonly borders: readonly MosaicSide[];
+}
+
 export interface VoxelModelSource {
   readonly id: string;
   readonly label: string;
@@ -357,6 +364,9 @@ export interface VoxelModelSource {
   readonly cost?: number;
   // Tiles a guest holding litter will look for this; 0 is not a bin.
   readonly binReach?: number;
+  // The sides a mosaic piece borders when laid unturned, north being z = 0: the app picks a piece
+  // and its turn by which of its neighbours are another style.
+  readonly mosaic?: ModelMosaic;
   readonly emissive?: readonly Color[];
   readonly water?: readonly Color[];
   // Declared rather than inferred from the palette: lanterns and shelters are
@@ -392,6 +402,7 @@ export interface VoxelModel {
   readonly sound: SoundKind | null;
   readonly cost: number | null;
   readonly binReach: number;
+  readonly mosaic: ModelMosaic | null;
   readonly width: number;
   readonly height: number;
   readonly depth: number;
@@ -536,6 +547,7 @@ function defaultsOf(source: VoxelModelSource) {
     sound: source.sound ?? null,
     cost: source.cost ?? null,
     binReach: source.binReach ?? 0,
+    mosaic: source.mosaic ?? null,
   };
 }
 

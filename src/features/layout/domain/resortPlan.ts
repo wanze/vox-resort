@@ -1,3 +1,4 @@
+import { MOSAIC_IDS } from '../../../../voxel-gen/mosaics/index.ts';
 import type { LandGrid } from '../../land/domain/landRights';
 import type { ShoreSpec } from './shoreline';
 import type { ElevationSpec } from './elevation';
@@ -86,6 +87,7 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
+  ...MOSAIC_IDS,
 ]);
 
 export const LAMP_ID = 'street-lamp';
@@ -132,6 +134,8 @@ export const DERIVED_IDS: ReadonlySet<string> = new Set([
   JETTY_ID,
   BRIDGE_ID,
   BRIDGE_RAMP_ID,
+  // Laid only by the player: the generator and the authored plan never stand one.
+  ...MOSAIC_IDS,
   LAMP_ID,
   HEDGE_ID,
   BENCH_ID,

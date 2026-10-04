@@ -74,6 +74,15 @@ describe('costToStand', () => {
   });
 });
 
+describe('mosaic prices', () => {
+  it('charges 40 for a style and a piece alike, refunds half and re-lays a neighbour free', () => {
+    expect(buildCostOf('mosaic-zellige')).toBe(40);
+    expect(buildCostOf('mosaic-calcada-corner')).toBe(40);
+    expect(refundOf('mosaic-calcada-corner', false)).toBe(20);
+    expect(costToStand('mosaic-calcada-corner', true)).toBe(0);
+  });
+});
+
 describe('nightPriceOf', () => {
   it('is the price at setting 0, a quarter more at 1, and no more above it', () => {
     const base = priceOf('villa');

@@ -22,7 +22,7 @@ function hashOf(text: string): number {
 }
 
 // Hashed rather than drawn from a shared stream, so styling can never shift the generator's draws.
-const rollFor = (text: string): number => createRandom(hashOf(text))();
+export const rollFor = (text: string): number => createRandom(hashOf(text))();
 
 function regionOf(neighbourhoods: readonly Plaza[], tileX: number, tileZ: number): string {
   const index = neighbourhoods.findIndex(

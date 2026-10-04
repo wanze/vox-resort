@@ -1,4 +1,5 @@
 import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials';
+import { mosaicKitOf } from '../features/catalog/domain/mosaics';
 import {
   allMaterials,
   binReachOf,
@@ -1449,9 +1450,13 @@ function buildResort(
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
-  // Off the layout's lists, as the network is, and props too: the layout stands trees as either.
+  // Off the layout's lists, as the network is, props too since the layout stands trees as either,
+  // and paving, since a mosaic dresses a square.
   const scenery = sceneryFieldFor(
-    sceneryItemsOf([...plot.layout.placements, ...plot.layout.props], sceneryOf),
+    sceneryItemsOf(
+      [...plot.layout.placements, ...plot.layout.props, ...plot.layout.paths],
+      sceneryOf,
+    ),
     plan.tilesX,
     plan.tilesZ,
   );
@@ -2987,6 +2992,7 @@ function createEditMode(parts: {
     rampFoot: pavingItem(RAMP_FOOT_ID),
     rampHead: pavingItem(RAMP_HEAD_ID),
     flagstones: pavingItem(PATH_ID),
+    mosaic: mosaicKitOf(pavingItems),
   };
 
   // Standing rails come from the rail index: rails are not in occupancy, and scanning the plot per
@@ -3153,6 +3159,15 @@ function createEditMode(parts: {
     owns: (tile) => owns(tile.x, tile.z),
     fits: fitsEdge,
     onPlace: stand,
+    onRepave(placement, lifted) {
+      const due = buildCostOf(placement.id);
+      if (!parts.money.canAfford(due)) return parts.onRefused({ kind: 'money', id: placement.id });
+      // Asked before standPaid lifts it, which cancels the site, as the bulldozer does.
+      const stillBuilding = sites.some((site) => site.placement.key === lifted.key);
+      standPaid(placement, due, lifted);
+      parts.money.refund(refundOf(lifted.id, stillBuilding));
+      parts.onCue('pave');
+    },
     onBlocked: blocked,
     onRails: changeRails,
     onCancel,
@@ -3418,6 +3433,7 @@ function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRe
     repeat: bench.repeat,
     view: bench.view,
     ...(bench.styles ? { styles: bench.styles } : {}),
+    ...(bench.mosaic ? { mosaic: true } : {}),
   };
 }
 
@@ -4651,7 +4667,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
     resort.breakdowns = carryBreakdowns(resort.breakdowns, wasStanding, resort.venues);
     resort.scenery = sceneryFieldFor(
-      sceneryItemsOf([...plot.placements, ...plot.props], sceneryOf),
+      sceneryItemsOf([...plot.placements, ...plot.props, ...plot.paths], sceneryOf),
       plan.tilesX,
       plan.tilesZ,
     );

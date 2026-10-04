@@ -11,6 +11,7 @@ import {
   TILE_VOXELS,
   type ModelCategory,
   type ModelDepot,
+  type ModelMosaic,
   type ModelVenue,
   type SignKind,
   type SoundKind,
@@ -21,7 +22,7 @@ import {
 import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
 
 export { TILE_VOXELS };
-export type { ModelVenue, SignKind, SoundKind };
+export type { ModelMosaic, ModelVenue, SignKind, SoundKind };
 
 export interface ObjectTypeDefinition {
   readonly id: string;
@@ -185,9 +186,18 @@ export function depotOf(id: string): ModelDepot | null {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.depot ?? null;
 }
 
-export function sceneryOf(id: string): number {
-  return OBJECT_TYPES.find((type) => type.id === id)?.model.scenery ?? 0;
-}
+const SCENERY: ReadonlyMap<string, number> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.scenery]),
+);
+
+// A map, not a search: paving joins the scenery field, so this is asked once a path tile a rebuild.
+export const sceneryOf = (id: string): number => SCENERY.get(id) ?? 0;
+
+const MOSAICS: ReadonlyMap<string, ModelMosaic | null> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.mosaic]),
+);
+
+export const mosaicOf = (id: string): ModelMosaic | null => MOSAICS.get(id) ?? null;
 
 const SOUNDS: ReadonlyMap<string, SoundKind | null> = new Map(
   OBJECT_TYPES.map((type) => [type.id, type.model.sound]),

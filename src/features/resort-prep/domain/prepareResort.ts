@@ -14,7 +14,10 @@ import {
   SEA_MODELS,
   TILE_VOXELS,
 } from '../../catalog/domain/objectTypes';
+import { mosaicDressing, mosaicKitOf } from '../../catalog/domain/mosaics';
 import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
+import { MOSAIC_STYLES } from '../../../../voxel-gen/mosaics/index.ts';
+import { layMosaic } from '../../layout/domain/mosaic';
 import { ONE_OFF, styleMix } from '../../catalog/domain/styleMix';
 import { clampConfig } from '../../layout/domain/resortConfig';
 import {
@@ -90,6 +93,7 @@ export interface PrepRequest {
   readonly repeat: number;
   readonly view: BenchView | null;
   readonly styles?: BenchStyles;
+  readonly mosaic?: boolean;
 }
 
 export interface Plot {
@@ -170,8 +174,43 @@ export function styleOfFor(request: PrepRequest, plan: ResortPlan): StyleOf {
   });
 }
 
-function layOut(plan: ResortPlan, repeat: number, styleOf: StyleOf): Plot {
-  const layout = layoutResort(OBJECT_TYPES.map(layoutItemFor), plan, styleOf);
+// A style per render chunk, cycled so neighbouring chunks differ and each draws its own pieces.
+const MOSAIC_CELL_SHIFT = 4;
+
+const mosaicByCell = (tileX: number, tileZ: number): string => {
+  const cell = (tileX >> MOSAIC_CELL_SHIFT) + (tileZ >> MOSAIC_CELL_SHIFT);
+  return MOSAIC_STYLES[cell % MOSAIC_STYLES.length]!.id;
+};
+
+type MosaicStyleAt = (tileX: number, tileZ: number) => string | null;
+
+// Asked of the layout, since a monument's square is known only once it stands. A generated plot
+// dresses its parks and monuments unless it is built classic; the authored one only for the bench.
+function mosaicFor(
+  request: PrepRequest,
+  plan: ResortPlan,
+): ((layout: ResortLayout) => MosaicStyleAt) | null {
+  const { source } = request;
+  if (source.kind === 'authored') return request.mosaic ? () => mosaicByCell : null;
+  if (source.kind !== 'generate' || clampConfig(source.params.config).variety === 'classic') {
+    return null;
+  }
+  return (layout) => mosaicDressing(plan, layout.placements, source.params.seed);
+}
+
+// The mosaic is laid before the lists are tiled, so the layout and the lists still hold the same
+// placements in the same order.
+function layOut(
+  plan: ResortPlan,
+  repeat: number,
+  styleOf: StyleOf,
+  mosaic: ((layout: ResortLayout) => MosaicStyleAt) | null,
+): Plot {
+  const catalogue = OBJECT_TYPES.map(layoutItemFor);
+  const laid = layoutResort(catalogue, plan, styleOf);
+  const layout = mosaic
+    ? { ...laid, paths: layMosaic(laid.paths, mosaic(laid), mosaicKitOf(catalogue)) }
+    : laid;
   const tile = <T extends { key: string; x: number; z: number }>(items: readonly T[]): T[] =>
     repeatPlot(items, repeat, layout.tilesX * TILE_VOXELS, layout.tilesZ * TILE_VOXELS);
   return {
@@ -272,7 +311,7 @@ export function prepareResort(request: PrepRequest): PreparedResort {
   const plot =
     request.source.kind === 'saved'
       ? plotOfWorld(request.source.world)
-      : layOut(plan, request.repeat, styleOfFor(request, plan));
+      : layOut(plan, request.repeat, styleOfFor(request, plan), mosaicFor(request, plan));
   const everything = everythingOn(plot);
   const claiming = claimingOn(plot);
   const shore = shoreFor(plan);

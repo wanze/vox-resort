@@ -12,6 +12,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | Asset          | Footprint | W × H × D      | Real size                          |
 | -------------- | --------- | -------------- | ---------------------------------- |
 | path           | 1×1       | 16 × 2 × 16    | a 4 m paving tile                  |
+| mosaic         | 1×1       | 16 × 2 × 16    | a 4 m mosaic paving tile           |
 | jetty          | 1×1       | 16 × 2 × 16    | a 4 m tile of pier decking         |
 | bridge         | 1×1       | 16 × 6 × 16    | a 4 m deck 1 m over the water      |
 | bridge-ramp    | 1×1       | 16 × 6 × 16    | the 4 m climb onto that deck       |
@@ -265,4 +266,25 @@ voxel model of an open-air resort gym pavilion, finely detailed, small crisp vox
 
 # basketball-court
 voxel model of an outdoor basketball court, finely detailed, small crisp voxels, a blue hard court with red keys and straight white lines laid into a grey slab, a hoop on a padded pole behind each baseline, three tiers of timber bleachers along one long side and four floodlight masts at the corners, occupying an 8x5 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+```
+
+## Mosaic paving
+
+Each style is a 16 × 16 tile two voxels thick, a bed under a patterned field, drawn
+in one quarter and turned into the other three so a piece turned to fit shows the
+same field. A border band two voxels wide is laid along each side the tile borders;
+the pieces are generated from the style (`mosaics/pieces.ts`), not drawn.
+
+```
+# mosaic
+voxel model of a Mediterranean terracotta tile floor, small crisp voxels, four square quarry tiles to a 4 m tile in fired terracotta, a lighter square set in each, a small blue insert where the four meet at the centre and quarter inserts at the corners, framed by a darker terracotta band, flat neutral shading, no baked lighting or shadows, no text.
+
+# mosaic-calcada
+voxel model of a Portuguese calçada pavement, small crisp voxels, pale limestone setts with black basalt waves wound into a four-armed pinwheel turning about the tile's centre, framed by a basalt band, flat neutral shading, no baked lighting or shadows, no text.
+
+# mosaic-zellige
+voxel model of a Moroccan zellige floor, small crisp voxels, a pale ground with a blue eight-point star at the centre, a square crossed with a stepped diamond, an amber heart, framed by a deep teal band, flat neutral shading, no baked lighting or shadows, no text.
+
+# mosaic-terrazzo
+voxel model of a Venetian terrazzo floor, small crisp voxels, pale stone scattered with square chips of terracotta, grey slate and amber, a slate chip at the centre, framed by a darker stone band, flat neutral shading, no baked lighting or shadows, no text.
 ```

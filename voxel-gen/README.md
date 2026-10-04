@@ -267,7 +267,18 @@ the ramp courses and the balustrades for all of them, one model a flank
 `ramp-head-railing-left`/`-right`) laid along the edge like any rail, so a climb
 wider than a tile is railed down its outer flanks only. All paving is two voxels tall
 (`PAVING_VOXELS`). A new kind of paving is a model file plus an entry in
-`PAVING_IDS`.
+`PAVING_IDS`; mosaic ids join it from their registry.
+
+`mosaics/` holds the mosaic paving. A style is one file in `mosaics/styles/`, a
+`MosaicStyle` with a field colour, a border, a bed and the north-west quarter of
+its pattern, plus an entry in `MOSAIC_STYLES`. `mosaicSources` generates its six
+pieces (`single`, `end`, `strip`, `corner`, `edge`, `centre`): the field turned
+four-fold, with a two-voxel band of the border along each side the piece
+borders. The first style is the family's original and the others its variants;
+the pieces are families of their own, hidden by `groundDecides`, and the ids
+join `PAVING_IDS` and `DERIVED_IDS` from `MOSAIC_IDS`, so nothing in `src/`
+changes for a new style. `pnpm preview --mosaics` stamps `mosaics/sample.ts` in
+every style; `meshBudget.test.ts` holds each piece to 128 triangles.
 
 `model-prompts.md` holds the original prompts and dimension table the models were
 written from.

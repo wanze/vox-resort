@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { objectTypeById } from '../../catalog/domain/objectTypes';
+import { mosaicOf, objectTypeById } from '../../catalog/domain/objectTypes';
 import { place } from '../../layout/domain/resortLayout';
 import { RESORT_PLAN } from '../../layout/domain/resortPlan';
 import { shoreFor } from '../../layout/domain/shoreline';
@@ -167,6 +167,30 @@ describe('styleOfFor', () => {
   it('stands variants on a generated plot', () => {
     const ids = new Set(generated.plot.placements.map((placement) => placement.id));
     expect([...ids].some((id) => id.endsWith('-b'))).toBe(true);
+  });
+});
+
+const tiles = (prepared: PreparedResort) =>
+  prepared.plot.paths.map((path) => `${path.tileX},${path.tileZ}`);
+const laidInMosaic = (prepared: PreparedResort) =>
+  prepared.plot.paths.filter((path) => mosaicOf(path.id) !== null);
+
+describe('mosaic on a generated plot', () => {
+  it('dresses some of the paving in mosaic and paves the same tiles as a classic plot', () => {
+    const classic = prepareResort({
+      source: { kind: 'generate', params: { ...PARAMS, config: { variety: 'classic' } } },
+      repeat: 1,
+      view: null,
+    });
+    expect(laidInMosaic(generated).length).toBeGreaterThan(0);
+    expect(laidInMosaic(classic)).toEqual([]);
+    expect(tiles(generated)).toEqual(tiles(classic));
+    expect(generated.plot.layout.paths).toEqual(generated.plot.paths);
+  });
+
+  it('leaves the authored plot plain unless a benchmark asks', () => {
+    const authored = prepareResort({ source: { kind: 'authored' }, repeat: 1, view: null });
+    expect(laidInMosaic(authored)).toEqual([]);
   });
 });
 

@@ -3024,6 +3024,9 @@ function createEditMode(parts: {
       handle.takeLeftButton(holder !== null);
     };
 
+  // Only the armed tool's stroke ever lends it, and only while a finger holds its anchor.
+  const lendFinger = (taken: boolean): void => handle.takeFinger(taken);
+
   const changeRails = (stand: readonly Placement[], lift: readonly Placement[]): void => {
     const { world, lighting, railIndex } = resort();
     for (const rail of lift) {
@@ -3141,6 +3144,7 @@ function createEditMode(parts: {
     // Read per pick: the isometric view puts a different camera on screen.
     camera: () => handle.camera,
     takeLeftButton: lendLeftButton('object'),
+    takeFinger: lendFinger,
     ghost,
     occupancy,
     ground,
@@ -3168,6 +3172,7 @@ function createEditMode(parts: {
     canvas,
     camera: () => handle.camera,
     takeLeftButton: lendLeftButton('terrain'),
+    takeFinger: lendFinger,
     ghost,
     ground,
     rules: terrainRules,
@@ -3193,6 +3198,7 @@ function createEditMode(parts: {
     canvas,
     camera: () => handle.camera,
     takeLeftButton: lendLeftButton('zone'),
+    takeFinger: lendFinger,
     ghost,
     ground,
     onPaint(tile, zone) {
@@ -3205,6 +3211,7 @@ function createEditMode(parts: {
     canvas,
     camera: () => handle.camera,
     takeLeftButton: lendLeftButton('land'),
+    takeFinger: lendFinger,
     ghost,
     ground,
     ...parts.land,
@@ -3226,6 +3233,7 @@ function createEditMode(parts: {
     canvas,
     camera: () => handle.camera,
     takeLeftButton: lendLeftButton('remove'),
+    takeFinger: lendFinger,
     ghost,
     occupancy,
     ground,
@@ -3996,6 +4004,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     handle.setIsoDirection(direction);
   };
 
+  const openIsometric = (): void => {
+    if (drift === null) return;
+    setCameraMode('isometric');
+    options.onCameraChange?.(cameraView());
+  };
+
   // Off the live terrain, so a building on a terrace is looked at rather than through.
   const lookAtTile = (tile: { readonly tileX: number; readonly tileZ: number }): void => {
     if (bench) return;
@@ -4450,7 +4464,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     walkStaleAt = null;
     replaceResort(prepared);
     current().ledger = createLedger(mode, OPENING_BALANCE[mode]);
-    // After the replace, whose reframe has put the camera back where a new plot is looked at from.
+    openIsometric();
     drift = null;
     handle.controls.enabled = true;
     clock.restart(INITIAL_TIME);

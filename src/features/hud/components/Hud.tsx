@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode, type RefObject } from 'react';
 import { AdvicePanel } from './AdvicePanel';
+import { ArmedChip } from './ArmedChip';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { CommandPalette } from './CommandPalette';
 import { listCommands } from './commands';
@@ -358,6 +359,14 @@ export function Hud(props: HudProps) {
         onConfirm={props.onConfirm}
         onDismiss={props.onDismiss}
         onTurn={props.onTurn}
+      />
+      <ArmedChip
+        tool={props.tool}
+        land={props.land}
+        pending={props.pending}
+        paletteOpen={isOpen(props.windows.layout, 'build')}
+        onOpen={() => props.windows.show('build', true)}
+        onDisarm={() => props.onToolChange(null)}
       />
       <Toasts
         toasts={props.news.toasts}

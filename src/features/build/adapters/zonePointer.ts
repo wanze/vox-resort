@@ -9,6 +9,7 @@ export interface ZonePointerOptions {
   readonly canvas: HTMLCanvasElement;
   readonly camera: () => Camera;
   readonly takeLeftButton: (taken: boolean) => void;
+  readonly takeFinger: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   readonly ground: PickGround;
   readonly onPaint: (tile: Tile, zone: number) => void;
@@ -30,6 +31,8 @@ export function createZonePointer(options: ZonePointerOptions): ZonePointer {
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
+    takeFinger: options.takeFinger,
+    marker: options.ghost,
     ground,
     paints: () => true,
     onHover(tile) {

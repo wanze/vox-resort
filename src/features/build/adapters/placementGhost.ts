@@ -30,6 +30,8 @@ export interface PlacementGhost {
   showParcel(rect: TileRect, y: number, blocked: boolean): void;
   // Drawn through whatever stands on it, with no model: a translucent copy over the original would shimmer.
   showRemoval(placement: Placement): void;
+  // Where a finger's stroke can be picked up again, seen through the path already laid on it.
+  showAnchor(tile: Tile, y: number): void;
   hide(): void;
   dispose(): void;
 }
@@ -72,8 +74,10 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
     valid: padMaterial(VALID_TINT),
     blocked: padMaterial(BLOCKED_TINT),
     removal: padMaterial(BLOCKED_TINT),
+    anchor: padMaterial(VALID_TINT),
   };
   pads.removal.depthTest = false;
+  pads.anchor.depthTest = false;
 
   // A unit tile scaled to the footprint, so no size needs geometry of its own.
   const padGeometry = new PlaneGeometry(TILE_VOXELS, TILE_VOXELS).rotateX(-Math.PI / 2);
@@ -133,6 +137,11 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
       pad.material = pads.removal;
       ghost.visible = false;
     },
+    showAnchor(tile, y) {
+      placePad({ tileX: tile.x, tileZ: tile.z, tilesX: 1, tilesZ: 1, y }, false);
+      pad.material = pads.anchor;
+      ghost.visible = false;
+    },
     hide() {
       group.visible = false;
       ghost.visible = false;
@@ -148,6 +157,7 @@ export function createPlacementGhost(geometries: readonly ModelGeometry[]): Plac
         pads.valid,
         pads.blocked,
         pads.removal,
+        pads.anchor,
       ]) {
         material.dispose();
       }

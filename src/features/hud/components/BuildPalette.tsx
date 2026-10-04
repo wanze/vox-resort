@@ -38,7 +38,7 @@ function toolLabel(tool: BuildTool | null, land: LandView | null): string | null
   return armedLand(tool) ? landToolLabel(land ?? { price: 0 }) : null;
 }
 
-function armedLabel(tool: BuildTool | null, land: LandView | null): string | null {
+export function armedLabel(tool: BuildTool | null, land: LandView | null): string | null {
   const named = toolLabel(tool, land);
   if (named) return named;
   const id = armedObject(tool);

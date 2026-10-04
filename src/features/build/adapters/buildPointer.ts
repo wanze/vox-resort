@@ -5,7 +5,7 @@ import { isPaintable, planAt, type FitRule, type GroundRule } from '../domain/bu
 import type { PickGround } from '../domain/groundPick';
 import { fellBackToStairs, pavingAt, relaidBy, standsOn, type PavingRules } from '../domain/paving';
 import { reRailAround, type HandrailRules } from '../domain/handrails';
-import type { TileOccupancy } from '../domain/tileOccupancy';
+import { footprintTiles, type TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
 
@@ -14,6 +14,7 @@ export interface BuildPointerOptions {
   // Read afresh per pick: which camera is on screen changes with the mode.
   readonly camera: () => Camera;
   readonly takeLeftButton: (taken: boolean) => void;
+  readonly takeFinger: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   readonly occupancy: TileOccupancy;
   readonly ground: PickGround;
@@ -79,6 +80,12 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     return { ...plan, fellBack: !plan.blocked && fellBackToStairs(laid, paving) };
   };
 
+  const covers = (anchor: Tile, tile: Tile): boolean => {
+    if (!item) return false;
+    const { placement } = planOn(item, anchor);
+    return footprintTiles(placement).some((under) => under.x === tile.x && under.z === tile.z);
+  };
+
   const turn = (quarters: number): void => {
     rotation = normalizeRotation(rotation + quarters);
     // Redrawn in place so the turn shows without nudging the mouse.
@@ -89,10 +96,15 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
+    takeFinger: options.takeFinger,
+    marker: options.ghost,
     ground,
     paints: () => item !== null && isPaintable(item),
-    confirms: () => item !== null && !isPaintable(item),
-    onPending: (tile) => onPending(tile !== null),
+    placing: {
+      confirms: () => item !== null && !isPaintable(item),
+      onPending: (tile) => onPending(tile !== null),
+      covers,
+    },
     onHover(tile) {
       if (!item || !tile) {
         ghost.hide();

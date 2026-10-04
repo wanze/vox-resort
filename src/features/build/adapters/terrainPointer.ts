@@ -12,6 +12,7 @@ export interface TerrainPointerOptions {
   readonly canvas: HTMLCanvasElement;
   readonly camera: () => Camera;
   readonly takeLeftButton: (taken: boolean) => void;
+  readonly takeFinger: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   readonly ground: PickGround;
   readonly rules: TerrainRules;
@@ -35,6 +36,8 @@ export function createTerrainPointer(options: TerrainPointerOptions): TerrainPoi
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
+    takeFinger: options.takeFinger,
+    marker: options.ghost,
     ground: options.ground,
     paints: () => true,
     onHover(tile) {

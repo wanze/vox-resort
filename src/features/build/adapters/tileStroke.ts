@@ -1,7 +1,9 @@
 import { Matrix4, type Camera } from 'three/webgpu';
+import { levelHeight } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
 import { tilesBetween } from '../domain/buildPlan';
-import { pickTile, type PickGround } from '../domain/groundPick';
+import { pickTile, type PickGround, type PointerPosition } from '../domain/groundPick';
+import { grabsAnchor, tileOnScreen } from '../domain/touchAnchor';
 import {
   gateCancel,
   gateDown,
@@ -12,6 +14,7 @@ import {
   type TouchGate,
   type TouchPoint,
 } from '../domain/touchGate';
+import type { PlacementGhost } from './placementGhost';
 
 export interface TileStrokeOptions {
   readonly canvas: HTMLCanvasElement;
@@ -19,6 +22,9 @@ export interface TileStrokeOptions {
   readonly camera: () => Camera;
   // A left-drag that both moves the camera and works tiles is unusable, so a tool borrows it.
   readonly takeLeftButton: (taken: boolean) => void;
+  // Borrowed per touch, only for a finger that lands on the anchor.
+  readonly takeFinger: (taken: boolean) => void;
+  readonly marker: Pick<PlacementGhost, 'showAnchor'>;
   readonly ground: PickGround;
   readonly paints: () => boolean;
   readonly onHover: (tile: Tile | null) => void;
@@ -27,10 +33,16 @@ export interface TileStrokeOptions {
   readonly onTile: (tile: Tile) => void;
   readonly onCancel: () => void;
   readonly onKey?: (event: KeyboardEvent) => void;
+  readonly placing?: TouchPlacing;
+}
+
+export interface TouchPlacing {
   // Asked per touch gesture: a finger has no hover, so a building is shown first and placed on
   // confirm, while a path is painted.
-  readonly confirms?: () => boolean;
-  readonly onPending?: (tile: Tile | null) => void;
+  readonly confirms: () => boolean;
+  readonly onPending: (tile: Tile | null) => void;
+  // Whether a finger on this tile has hold of the anchor: a building is held by any of its tiles.
+  readonly covers: (anchor: Tile, tile: Tile) => boolean;
 }
 
 export interface TileStroke {
@@ -52,14 +64,29 @@ const pointOf = (event: PointerEvent): TouchPoint => ({
   y: event.clientY,
 });
 
+const PAINTS: TouchPlacing = {
+  confirms: () => false,
+  onPending: () => {},
+  covers: (anchor, tile) => anchor.x === tile.x && anchor.z === tile.z,
+};
+
+const offsetOf = (from: Tile | null, to: Tile | null): Tile =>
+  from && to ? { x: to.x - from.x, z: to.z - from.z } : { x: 0, z: 0 };
+
+const heightOf = (ground: PickGround, tile: Tile): number =>
+  levelHeight(ground.levelOf(tile.x, tile.z));
+
+// On touch, one finger moves the camera. A tap paints a tile, or shows a building, and leaves an
+// anchor there; only a drag that starts on the anchor works tiles, carrying on from it.
 export function createTileStroke(options: TileStrokeOptions): TileStroke {
   const { canvas, camera, ground, paints, onHover, onTile, onCancel, takeLeftButton } = options;
+  const { takeFinger, marker } = options;
   const onKey = options.onKey ?? (() => {});
-  const confirms = options.confirms ?? (() => false);
-  const onPending = options.onPending ?? (() => {});
+  const { confirms, onPending, covers } = options.placing ?? PAINTS;
 
   // Reused so picking does not allocate while the mouse is dragged.
   const inverseViewProjection = new Matrix4();
+  const viewProjection = new Matrix4();
 
   let armed = false;
   let painting: Tile | null = null;
@@ -68,26 +95,33 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
   let gate: TouchGate = IDLE;
   const fingers = new Set<number>();
   let pending: Tile | null = null;
+  // Where a painting tool's last touch stroke ended.
+  let mark: Tile | null = null;
   let downTile: Tile | null = null;
   let confirming = false;
+  let grabbing = false;
+  let grabOffset: Tile = { x: 0, z: 0 };
+  let fingerLent = false;
 
   const viewport = () => ({
     width: canvas.clientWidth || globalThis.innerWidth,
     height: canvas.clientHeight || globalThis.innerHeight,
   });
 
-  const tileUnder = (event: PointerEvent): Tile | null => {
+  const onCanvas = (event: PointerEvent): PointerPosition => {
+    const bounds = canvas.getBoundingClientRect();
+    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+  };
+
+  const viewProjectionNow = (): Matrix4 => {
     const eye = camera();
     eye.updateMatrixWorld();
-    inverseViewProjection.multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse).invert();
-    const bounds = canvas.getBoundingClientRect();
-    return pickTile(
-      { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
-      viewport(),
-      inverseViewProjection.elements,
-      undefined,
-      ground,
-    );
+    return viewProjection.multiplyMatrices(eye.projectionMatrix, eye.matrixWorldInverse);
+  };
+
+  const tileUnder = (event: PointerEvent): Tile | null => {
+    inverseViewProjection.copy(viewProjectionNow()).invert();
+    return pickTile(onCanvas(event), viewport(), inverseViewProjection.elements, undefined, ground);
   };
 
   const preview = (tile: Tile | null): void => {
@@ -134,47 +168,94 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
   };
 
-  // A finger leaves no hover behind: once it lifts, only a placement waiting to be confirmed shows.
+  const lendFinger = (lent: boolean): void => {
+    if (lent === fingerLent) return;
+    fingerLent = lent;
+    takeFinger(lent);
+  };
+
+  // What a lifted finger leaves on the map: the building waiting, or where to carry on from.
+  const rest = (): void => {
+    if (pending || !mark) return preview(pending);
+    hovered = null;
+    marker.showAnchor(mark, heightOf(ground, mark));
+  };
+
   const settle = (step: GateStep, event: PointerEvent): void => {
     gate = step.gate;
     if (gate.phase === 'stroke') return;
     release(event);
-    if (gate.phase !== 'pending') preview(pending);
+    if (gate.phase === 'idle') lendFinger(false);
+    if (gate.phase !== 'pending') rest();
   };
 
-  const onTouchDown = (event: PointerEvent): void => {
-    fingers.add(event.pointerId);
-    settle(gateDown(gate, pointOf(event), fingers.size), event);
-    if (gate.phase !== 'pending') return;
+  const grabs = (event: PointerEvent): boolean => {
+    const anchor = confirming ? pending : mark;
+    if (!anchor) return false;
+    const onAnchor = downTile !== null && covers(anchor, downTile);
+    const centre = tileOnScreen(
+      anchor,
+      heightOf(ground, anchor),
+      viewport(),
+      viewProjectionNow().elements,
+    );
+    return grabsAnchor(centre, onCanvas(event), onAnchor);
+  };
+
+  const pressed = (event: PointerEvent): void => {
     confirming = confirms();
     downTile = tileUnder(event);
-    if (confirming) preview(downTile);
+    grabbing = grabs(event);
+    // Held where it was grabbed, so a building picked up by its far corner does not jump.
+    grabOffset = offsetOf(downTile, pending);
+    if (grabbing && !confirming) painting = mark;
+    lendFinger(grabbing);
   };
 
-  const beginTouchStroke = (event: PointerEvent): void => {
-    if (confirming) setPending(null);
-    else if (downTile) startStroke(downTile, event.pointerId);
-    follow(event);
+  // Ahead of OrbitControls, which reads whether the finger is lent as the touch lands.
+  const onTouchDown = (event: PointerEvent): void => {
+    if (!armed || event.pointerType !== 'touch') return;
+    fingers.add(event.pointerId);
+    settle(gateDown(gate, pointOf(event), fingers.size), event);
+    if (gate.phase === 'pending') pressed(event);
   };
+
+  const carry = (tile: Tile | null): void => {
+    preview(tile && { x: tile.x + grabOffset.x, z: tile.z + grabOffset.z });
+  };
+
+  const holds = (event: PointerEvent): boolean =>
+    grabbing && gate.phase === 'stroke' && gate.id === event.pointerId;
 
   const onTouchMove = (event: PointerEvent): void => {
-    if (gate.phase === 'stroke' && gate.id === event.pointerId) return follow(event);
-    const step = gateMove(gate, pointOf(event));
-    gate = step.gate;
-    if (step.action === 'begin') beginTouchStroke(event);
+    gate = gateMove(gate, pointOf(event)).gate;
+    if (!holds(event)) return;
+    if (confirming) carry(tileUnder(event));
+    else follow(event);
   };
 
+  const tapPaint = (): void => {
+    if (!downTile) return;
+    onTile(downTile);
+    mark = downTile;
+  };
+
+  // A tap on the waiting building itself leaves it where it is.
   const tap = (): void => {
-    if (confirming) setPending(downTile);
-    else if (downTile) onTile(downTile);
+    if (!confirming) tapPaint();
+    else if (!grabbing) setPending(downTile);
+  };
+
+  const dropped = (): void => {
+    if (confirming) setPending(hovered);
+    else mark = painting;
   };
 
   const onTouchUp = (event: PointerEvent): void => {
     fingers.delete(event.pointerId);
     const step = gateUp(gate, pointOf(event), fingers.size);
     if (step.action === 'tap') tap();
-    // A dragged building stays where the finger let go of it.
-    if (step.action === 'end' && confirming) setPending(hovered);
+    if (step.action === 'end' && grabbing) dropped();
     settle(step, event);
   };
 
@@ -190,9 +271,7 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (!armed) return;
-    if (event.pointerType === 'touch') onTouchDown(event);
-    else onMouseDown(event);
+    if (armed && event.pointerType !== 'touch') onMouseDown(event);
   };
 
   const onPointerUp = (event: PointerEvent): void => {
@@ -220,6 +299,7 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
   };
 
   canvas.addEventListener('pointermove', onPointerMove);
+  canvas.addEventListener('pointerdown', onTouchDown, { capture: true });
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
@@ -235,6 +315,9 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
       painting = null;
       gate = IDLE;
       fingers.clear();
+      mark = null;
+      grabbing = false;
+      lendFinger(false);
       setPending(null);
       onHover(null);
       // A flag rather than a cursor, so the stylesheet owns the pointer art.
@@ -242,7 +325,8 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
       takeLeftButton(next);
     },
     refresh() {
-      preview(hovered);
+      if (hovered === null && mark) rest();
+      else preview(hovered);
     },
     confirm() {
       const tile = pending;
@@ -258,6 +342,7 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
     },
     dispose() {
       canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerdown', onTouchDown, { capture: true });
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerCancel);
@@ -265,6 +350,7 @@ export function createTileStroke(options: TileStrokeOptions): TileStroke {
       globalThis.removeEventListener('keydown', onKeyDown);
       canvas.removeAttribute('data-armed');
       takeLeftButton(false);
+      lendFinger(false);
     },
   };
 }

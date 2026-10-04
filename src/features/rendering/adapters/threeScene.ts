@@ -85,18 +85,24 @@ interface ControlProfile {
   readonly touches: OrbitControls['touches'];
 }
 
-function controlProfileFor(mode: CameraMode, leftLent: boolean): ControlProfile {
+// One finger moves the camera even with a tool armed: a tool borrows it only for a stroke picked
+// up where the last one ended, so a finger can pan to the far end of a path and carry on.
+function touchesFor(mode: CameraMode, fingerLent: boolean): OrbitControls['touches'] {
+  const finger = mode === 'isometric' ? TOUCH.PAN : TOUCH.ROTATE;
+  return { ONE: fingerLent ? null : finger, TWO: TOUCH.DOLLY_PAN };
+}
+
+function controlProfileFor(
+  mode: CameraMode,
+  leftLent: boolean,
+  fingerLent: boolean,
+): ControlProfile {
   const left = mode === 'isometric' ? MOUSE.PAN : MOUSE.ROTATE;
+  const touches = touchesFor(mode, fingerLent);
   if (leftLent) {
-    return {
-      mouseButtons: { LEFT: null, MIDDLE: MOUSE.DOLLY, RIGHT: left },
-      touches: { ONE: null, TWO: TOUCH.DOLLY_PAN },
-    };
+    return { mouseButtons: { LEFT: null, MIDDLE: MOUSE.DOLLY, RIGHT: left }, touches };
   }
-  return {
-    mouseButtons: { LEFT: left, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN },
-    touches: { ONE: mode === 'isometric' ? TOUCH.PAN : TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN },
-  };
+  return { mouseButtons: { LEFT: left, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }, touches };
 }
 
 export interface SceneHandle {
@@ -111,6 +117,8 @@ export interface SceneHandle {
   setIsoDirection(direction: CompassDirection): void;
   lookAt(spot: { readonly x: number; readonly y: number; readonly z: number }): void;
   takeLeftButton(taken: boolean): void;
+  // Must be called before OrbitControls sees the pointerdown, which reads it once per touch.
+  takeFinger(taken: boolean): void;
   applySky(state: SkyState): void;
   reframe(
     bounds: WorldBounds,
@@ -365,6 +373,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let direction: CompassDirection = 'southeast';
   let isoFraming: OrthographicFraming = isometricFramingFor(plot, direction);
   let leftButtonTaken = false;
+  let fingerTaken = false;
 
   // Orthographic fog distance is arbitrary, so the isometric view pushes the fog past
   // the far plane; removing scene.fog instead would recompile every material.
@@ -428,7 +437,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   const applyMode = (): void => {
     controls.enableRotate = mode !== 'isometric';
     applyFog();
-    const profile = controlProfileFor(mode, leftButtonTaken);
+    const profile = controlProfileFor(mode, leftButtonTaken, fingerTaken);
     controls.mouseButtons = profile.mouseButtons;
     controls.touches = profile.touches;
   };
@@ -533,6 +542,10 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     },
     takeLeftButton(taken) {
       leftButtonTaken = taken;
+      applyMode();
+    },
+    takeFinger(taken) {
+      fingerTaken = taken;
       applyMode();
     },
     retile() {

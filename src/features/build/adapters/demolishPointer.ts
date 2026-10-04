@@ -13,6 +13,7 @@ export interface DemolishPointerOptions {
   // Read afresh per pick: which camera is on screen changes with the mode.
   readonly camera: () => Camera;
   readonly takeLeftButton: (taken: boolean) => void;
+  readonly takeFinger: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   readonly occupancy: TileOccupancy;
   readonly ground: PickGround;
@@ -49,6 +50,8 @@ export function createDemolishPointer(options: DemolishPointerOptions): Demolish
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
+    takeFinger: options.takeFinger,
+    marker: options.ghost,
     ground: options.ground,
     paints: () => true,
     onHover(tile) {

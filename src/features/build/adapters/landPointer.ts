@@ -9,6 +9,7 @@ export interface LandPointerOptions {
   readonly canvas: HTMLCanvasElement;
   readonly camera: () => Camera;
   readonly takeLeftButton: (taken: boolean) => void;
+  readonly takeFinger: (taken: boolean) => void;
   readonly ghost: PlacementGhost;
   readonly ground: PickGround;
   // For sale and affordable, asked afresh per hover: a purchase puts its neighbours on sale.
@@ -36,10 +37,19 @@ export function createLandPointer(options: LandPointerOptions): LandPointer {
     canvas: options.canvas,
     camera: options.camera,
     takeLeftButton: options.takeLeftButton,
+    takeFinger: options.takeFinger,
+    marker: options.ghost,
     ground,
     paints: () => true,
-    confirms: () => true,
-    onPending: (tile) => onPending(tile !== null),
+    placing: {
+      confirms: () => true,
+      onPending: (tile) => onPending(tile !== null),
+      covers(anchor, tile) {
+        const held = parcelOf(anchor.x, anchor.z);
+        const under = parcelOf(tile.x, tile.z);
+        return held.px === under.px && held.pz === under.pz;
+      },
+    },
     onHover(tile) {
       if (!armed || !tile) {
         ghost.hide();

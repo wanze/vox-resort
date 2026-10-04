@@ -1789,6 +1789,32 @@ input[type='checkbox'] {
   white-space: nowrap;
 }
 
+.hud-armed-open {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud-armed-name {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-armed-hint {
+  font-size: var(--size-small);
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+/* A mouse has a hover ghost to show what a click will do. */
+@media (hover: hover) {
+  .hud-armed-hint {
+    display: none;
+  }
+}
+
 .hud-placement-price {
   font-family: var(--font-num);
   font-variant-numeric: tabular-nums;

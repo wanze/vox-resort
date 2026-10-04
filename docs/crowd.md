@@ -929,8 +929,8 @@ so a new stage model needs no app change.
   every week on a weekday (day 0 is a Monday) or once, starts on the half hour
   inside the kind's hours and ends by midnight. Two on one stage may not overlap
   or come within the 30-minute changeover; an overlap is refused, never
-  replaced. A built-in (`BUILT_INS`, empty for now) is moved or switched off,
-  never removed, and goes to the first stage left standing.
+  replaced. A built-in (`BUILT_INS`) is moved or switched off, never removed,
+  and goes to the biggest stage left standing (`stageRank`, ties by key).
 - **Life of an event** (`eventRuns.ts`, `advanceEvents` once a frame after the
   ticks): announced `ANNOUNCE_LEAD` (60 min) before the start, started, ended.
   It is called off when its stage is shut in that day's weather (or an
@@ -959,8 +959,39 @@ so a new stage model needs no app change.
   audience and those called off, and a `no-events` advice line points at a
   stage when nothing is on in the week ahead.
 
+**The welcome meeting** (`welcome` in `EVENT_KINDS`, the one entry in
+`BUILT_INS`) is the built-in example: every day at 10:00 for an hour, hosted
+by an animator and free, for the parties that checked in the day before
+(`audience`). The morning after reaches about three times as many as the
+evening of arrival did, when most were inside a venue or hungry for dinner.
+It may be moved between 08:00 and 10:00 only, so it ends by the 11:00
+check-in, which closes the report day those guests arrived in; a built-in
+saved outside its kind's hours goes back to the kind's start
+(`withBuiltIns`). A kind with `latecomers` also offers the parties checked in
+since the last check-in (`Resort.newcomers`, yesterday's until 11:00) the
+room left on every frame while it is announced or running, until
+`LATE_CALL_CUTOFF` (15 min) before the end (`latecomersFor`, then the same
+`inviteAudience`). One sitting: whoever finds the stage full is not welcomed.
+Its glow is 0.1 on top of `ARRIVAL_MOOD`; attenders think `welcomed` ("What a
+warm welcome"), which the inspector shows as "Welcome meeting: attended". New
+resorts get it on their biggest stage; a stage the player moved it to with
+`rebook` is kept, and a bigger stage built later does not take it over. Its
+weather rule is `'shelter'`: when its stage is shut in the day's weather at
+the announcement, that day's run moves to the first stage in
+`stagesByPreference` that is open and has no booking or run within the
+changeover (toasted as a move); with none free it is called off. Its daily
+announcement is logged, not toasted (`EventNews.quiet`). With no stage the
+booking stays on the old key and each day's run is called off as `'no-site'`
+without a toast, a thought or a place in the events tally; the `no-welcome`
+advice line says so instead. With no animator on duty it is called off and
+toasted. The day report's "Welcomed" row gives "n of m new guests" or why
+there was none (`WelcomeGap`: no stage, switched off, called off). The
+Programme window has a Morning column for it, where nothing else can be
+booked. `no-events` ignores built-ins.
+
 With an empty programme nothing above runs and no stream is drawn, so a plot
-nobody books plays exactly as before. The programme, the runs, the glow and the
+nobody books plays exactly as before; a plot with a stage always has the
+welcome. The programme, the runs, the glow and the
 tired parties are saved as an optional top-level `events` (`SAVE_VERSION`
 unchanged); a save without it loads with an empty programme. A new kind is one
 entry in `EVENT_KINDS` and its id in `EVENT_KIND_IDS` (a new praise thought is

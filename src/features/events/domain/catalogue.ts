@@ -14,6 +14,7 @@ export const EVENT_KIND_IDS = [
   'puppet-show',
   'bingo',
   'afternoon-jazz',
+  'welcome',
 ] as const;
 
 export type EventKindId = (typeof EVENT_KIND_IDS)[number];
@@ -22,7 +23,8 @@ export type SiteKind = 'stage' | 'beach';
 
 export type EventHost = 'animator' | 'performer';
 
-export type WeatherRule = 'cancel' | 'postpone';
+// 'shelter' moves the day's run to another stage open in the weather.
+export type WeatherRule = 'cancel' | 'postpone' | 'shelter';
 
 export interface EventTier {
   readonly id: string;
@@ -68,6 +70,8 @@ export interface EventKind {
   readonly novelty?: (timesBefore: number) => number;
   // Never offered as a card; comes from BUILT_INS.
   readonly builtIn?: boolean;
+  // Invites the newly arrived while it is announced or running, not only twice.
+  readonly latecomers?: boolean;
 }
 
 const HOUR = 60;
@@ -289,6 +293,30 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     lift: 0.07,
     litter: 0.2,
     praise: 'great-show',
+  },
+  // The morning after arriving, when few are hungry or already settled somewhere. It ends by the
+  // 11:00 check-in, which closes the day the guests arrived on, so the report counts them together.
+  welcome: {
+    id: 'welcome',
+    label: 'Welcome meeting',
+    blurb: "An animator greets yesterday's new guests with a coffee and the week's programme.",
+    sites: ['stage'],
+    duration: 1 * HOUR,
+    earliest: 8 * HOUR,
+    latest: 10 * HOUR,
+    start: 10 * HOUR,
+    host: 'animator',
+    fee: 0,
+    appeal: { family: 0.9, couple: 0.85, friends: 0.8, solo: 0.85 },
+    openAir: false,
+    weather: 'shelter',
+    fun: 0.3,
+    lift: 0.1,
+    litter: 0.25,
+    praise: 'welcomed',
+    audience: (party, day) => party.arrivedOn === day - 1,
+    builtIn: true,
+    latecomers: true,
   },
 };
 

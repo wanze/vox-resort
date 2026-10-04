@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { tallyWords } from '../../events/components/eventWords';
+import { tallyWords, welcomeWords } from '../../events/components/eventWords';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { netOf, REASONS, type GameMode } from '../../sim/domain/ledger';
 import { trendOn, trendWords } from './dayWords';
@@ -119,6 +119,16 @@ function Row({
   );
 }
 
+function WelcomedRow({ report }: { readonly report: DayReport }) {
+  const words = welcomeWords(report);
+  if (words === null) return null;
+  return (
+    <Row label="Welcomed">
+      <dd>{words}</dd>
+    </Row>
+  );
+}
+
 function GuestsSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Guests">
@@ -129,6 +139,7 @@ function GuestsSection({ report }: { readonly report: DayReport }) {
         <Row label="Arrived">
           <dd>{whole(report.arrived)}</dd>
         </Row>
+        <WelcomedRow report={report} />
         <Row label="Checked out">
           <dd>{whole(report.left)}</dd>
         </Row>

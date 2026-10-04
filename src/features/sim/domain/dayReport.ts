@@ -8,6 +8,14 @@ export interface EventTally {
   readonly called: number;
 }
 
+// Why no welcome meeting was held on a day with arrivals.
+export type WelcomeGap = 'no-stage' | 'off' | 'called-off';
+
+export interface WelcomeTally {
+  readonly welcomed: number;
+  readonly gap: WelcomeGap | null;
+}
+
 export interface DayCounts {
   // The day this period started on; reports are labelled with it.
   readonly from: number;
@@ -17,6 +25,8 @@ export interface DayCounts {
   readonly reviewStars: number;
   // Absent until the first event of the day, and in saves from before events.
   readonly events?: EventTally;
+  // Absent until the welcome meeting is held or missed, and in saves from before it.
+  readonly welcome?: WelcomeTally;
 }
 
 export interface DayReport {
@@ -33,6 +43,7 @@ export interface DayReport {
   readonly balance: number;
   readonly loudest: readonly ThoughtTally[];
   readonly events?: EventTally;
+  readonly welcome?: WelcomeTally;
 }
 
 export const HISTORY_DAYS = 14;
@@ -72,6 +83,19 @@ export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
   };
 }
 
+const NO_WELCOME: WelcomeTally = { welcomed: 0, gap: null };
+
+export function countWelcomed(counts: DayCounts, people: number): DayCounts {
+  const before = counts.welcome ?? NO_WELCOME;
+  return { ...counts, welcome: { ...before, welcomed: before.welcomed + people } };
+}
+
+// The first reason the day had is the one the report gives.
+export function noteWelcomeGap(counts: DayCounts, gap: WelcomeGap): DayCounts {
+  const before = counts.welcome ?? NO_WELCOME;
+  return before.gap === null ? { ...counts, welcome: { ...before, gap } } : counts;
+}
+
 // Called after closeDay, so the day that just ended is the ledger's yesterday.
 export function reportOf(parts: {
   readonly counts: DayCounts;
@@ -95,6 +119,7 @@ export function reportOf(parts: {
     balance: ledger.balance,
     loudest: loudest(parts.thoughts, LOUDEST_KEPT),
     ...(counts.events ? { events: counts.events } : {}),
+    ...(counts.welcome ? { welcome: counts.welcome } : {}),
   };
 }
 

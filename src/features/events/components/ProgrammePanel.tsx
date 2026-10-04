@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ProgrammeControls } from '../../../app/useProgramme';
-import type { Chip, ProgrammeView } from '../domain/programmeView';
+import { DAY_PARTS, type Chip, type ProgrammeView } from '../domain/programmeView';
 import { START_STEP } from '../domain/week';
 import { EventCards } from './EventCards';
 import { refusalWords } from './eventWords';
@@ -96,7 +96,7 @@ function Upcoming({ view }: { readonly view: ProgrammeView }) {
 
 const chipIn = (view: ProgrammeView, booking: number | null): Chip | undefined =>
   view.days
-    .flatMap((day) => [...day.parts.afternoon, ...day.parts.evening])
+    .flatMap((day) => DAY_PARTS.flatMap((part) => day.parts[part]))
     .find((chip) => chip.booking === booking);
 
 function Booking({ view, programme }: { readonly view: ProgrammeView } & ProgrammePanelProps) {
@@ -107,6 +107,7 @@ function Booking({ view, programme }: { readonly view: ProgrammeView } & Program
     <>
       <ProgrammeWeek
         days={view.days}
+        bookable={new Set(DAY_PARTS.filter((part) => view.cards[part].length > 0))}
         cell={cell}
         chip={booking}
         onCell={(next) => {

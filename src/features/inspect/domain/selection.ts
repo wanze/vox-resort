@@ -17,7 +17,7 @@ import { chooseVenue } from '../../sim/domain/chooseVenue';
 import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
 import { strongestNeed, type Needs } from '../../sim/domain/needs';
-import type { ThoughtKind } from '../../sim/domain/thoughts';
+import { stayCount, type ThoughtKind, type Thoughts } from '../../sim/domain/thoughts';
 import { isNamed, type Venue } from '../../sim/domain/venues';
 import { NO_ZONE } from '../../sim/domain/zones';
 import { roleTitle, staffName, taskWords, type TaskFacts } from './staffWords';
@@ -66,6 +66,7 @@ export interface GuestView {
   readonly wants: { readonly need: GuestNeed; readonly label: string } | null;
   readonly happiness: number;
   readonly thought: { readonly kind: ThoughtKind; readonly subject: string | null } | null;
+  readonly welcomed: boolean;
 }
 
 export interface PlaceView {
@@ -222,6 +223,7 @@ export function guestView(
   day: number,
   at: GuestSpot,
   thought: GuestView['thought'],
+  thoughts?: Thoughts,
 ): GuestView {
   const party = guests.parties[guests.party[person]!]!;
   const home = homeOf(guests, person);
@@ -241,6 +243,7 @@ export function guestView(
     wants: wantsOf({ guests, needs, venues, person, at }),
     happiness: happiness.level[person] ?? 0,
     thought,
+    welcomed: thoughts !== undefined && stayCount(thoughts, person, 'welcomed') > 0,
   };
 }
 

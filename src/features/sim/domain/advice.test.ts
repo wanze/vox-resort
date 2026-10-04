@@ -12,6 +12,7 @@ import {
   adviceLittered,
   adviceNoDepot,
   adviceNoEvents,
+  adviceNoWelcome,
   adviceNotStepFree,
   adviceUnmade,
   adviceUnreachable,
@@ -698,6 +699,26 @@ describe('adviceNoEvents', () => {
     const advice = adviceFor(healthyFacts({ idleStage: stage }));
     expect(advice.filter((each) => each.kind === 'no-events')).toHaveLength(1);
     expect(markerIconOf('no-events')).toBeNull();
+  });
+});
+
+describe('adviceNoWelcome', () => {
+  it('says nothing without arrivals to welcome', () => {
+    expect(adviceNoWelcome(healthyFacts())).toBeNull();
+    expect(adviceNoWelcome(healthyFacts({ welcomeless: 0 }))).toBeNull();
+  });
+
+  it("counts the day's arrivals when no stage stands", () => {
+    expect(adviceNoWelcome(healthyFacts({ welcomeless: 34 }))).toEqual({
+      kind: 'no-welcome',
+      weight: 0.15,
+      subject: 'welcome',
+      count: 34,
+      at: null,
+      need: null,
+    });
+    const advice = adviceFor(healthyFacts({ welcomeless: 34 }));
+    expect(advice.filter((each) => each.kind === 'no-welcome')).toHaveLength(1);
   });
 });
 

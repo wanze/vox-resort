@@ -17,6 +17,7 @@ import { shoreFor } from '../../layout/domain/shoreline';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { createHappiness } from '../../sim/domain/happiness';
 import { createNeeds, type Needs } from '../../sim/domain/needs';
+import { createThoughts, think } from '../../sim/domain/thoughts';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
   activityLine,
@@ -149,6 +150,20 @@ describe('guestView', () => {
     expect(view(0).nightsLeft).toBe(arrivedOn + nights);
     expect(view(4).nightsLeft).toBe(arrivedOn + nights - 4);
     expect(view(arrivedOn + nights + 2).nightsLeft).toBe(-2);
+  });
+
+  it('says whether the guest was welcomed this stay', () => {
+    const guests = guestsOf();
+    const needs = needsOf(guests);
+    const thoughts = createThoughts(guests.count);
+    think(thoughts, 2, 'welcomed', 'Welcome meeting', 10);
+    const view = (person: number) =>
+      guestView(guests, needs, moodOf(guests), NO_VENUES, person, 0, HERE, null, thoughts);
+    expect(view(2).welcomed).toBe(true);
+    expect(view(3).welcomed).toBe(false);
+    expect(guestView(guests, needs, moodOf(guests), NO_VENUES, 2, 0, HERE, null).welcomed).toBe(
+      false,
+    );
   });
 
   it('carries all five need levels, in the order the HUD lists them', () => {

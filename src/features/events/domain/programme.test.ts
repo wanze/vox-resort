@@ -121,6 +121,8 @@ describe('rebook', () => {
   });
 });
 
+const rank = (key: string): number => (key === STAGE.venue ? -25 : -20);
+
 describe('withBuiltIns', () => {
   it('adds a missing built-in on the first stage, re-sites it when that is gone, and is idempotent', () => {
     const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], ['kids-club#0', 'beach-club#0']);
@@ -138,6 +140,34 @@ describe('withBuiltIns', () => {
     const moved = withBuiltIns(added, [WELCOME], ['kids-club#0']);
     expect(moved.bookings[0]!.site).toEqual(OTHER);
     expect(withBuiltIns(added, [WELCOME], [])).toBe(added);
+  });
+
+  it('puts a new built-in on the lowest-ranked stage', () => {
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], ['kids-club#0', 'beach-club#0'], rank);
+    expect(added.bookings[0]!.site).toEqual(STAGE);
+    const sameRank = withBuiltIns(
+      EMPTY_PROGRAMME,
+      [WELCOME],
+      ['kids-club#0', 'beach-club#0'],
+      () => 0,
+    );
+    expect(sameRank.bookings[0]!.site).toEqual(STAGE);
+  });
+
+  it('puts a built-in kept from before its hours moved back to its kind’s start', () => {
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue]);
+    const stale: Programme = {
+      ...added,
+      bookings: [{ ...added.bookings[0]!, start: 12 * HOUR }],
+    };
+    expect(withBuiltIns(stale, [WELCOME], [STAGE.venue]).bookings[0]!.start).toBe(20 * HOUR);
+    expect(withBuiltIns(stale, [WELCOME], []).bookings[0]!.start).toBe(20 * HOUR);
+  });
+
+  it('leaves a built-in the player moved to another standing stage where it is', () => {
+    const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue, OTHER.venue], rank);
+    const moved = rebook(added, 1, { site: OTHER }).programme;
+    expect(withBuiltIns(moved, [WELCOME], [STAGE.venue, OTHER.venue], rank)).toBe(moved);
   });
 });
 

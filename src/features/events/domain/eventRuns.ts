@@ -18,11 +18,13 @@ import {
 import { glowOn } from './glow';
 import {
   ANNOUNCE_LEAD,
+  CHANGEOVER,
   dropPast,
   EMPTY_PROGRAMME,
   eventsDue,
   occurrencesOn,
   postponed,
+  siteKey,
   type EventSite,
   type Occurrence,
   type Programme,
@@ -55,7 +57,7 @@ export interface EventsState {
 export type CallOff = 'weather' | 'no-host' | 'unpaid' | 'no-site';
 
 export type EventStep =
-  | { readonly kind: 'announce'; readonly run: EventRun }
+  | { readonly kind: 'announce'; readonly run: EventRun; readonly movedFrom?: EventSite }
   | { readonly kind: 'start'; readonly run: EventRun; readonly fee: number }
   | { readonly kind: 'end'; readonly run: EventRun }
   | {
@@ -75,6 +77,8 @@ export interface EventFacts {
   siteOpen(site: EventSite, weather: Weather): boolean;
   readonly hostOnDuty: boolean;
   canPay(fee: number): boolean;
+  // In order of preference, for a kind that shelters from the weather.
+  readonly stages?: readonly EventSite[];
 }
 
 export interface EventAdvance {
@@ -130,16 +134,35 @@ function stepOf(run: EventRun, to: number, facts: EventFacts): EventStep | null 
   return { kind: 'start', run, fee };
 }
 
-function announced(occurrence: Occurrence, facts: EventFacts): EventStep {
-  if (!facts.hasSite(occurrence.site)) return callOff(occurrence, 'no-site', null);
-  const kind = kindOf(occurrence);
-  if (!playable(occurrence, facts)) {
-    return kind.weather === 'postpone'
-      ? { kind: 'postpone', occurrence, day: occurrence.day + 1 }
-      : callOff(occurrence, 'weather', null);
-  }
-  if (kind.host === 'animator' && !facts.hostOnDuty) return callOff(occurrence, 'no-host', null);
-  const run: EventRun = {
+const meets = (a: Occurrence, b: Occurrence): boolean =>
+  a.start < b.end + CHANGEOVER && b.start < a.end + CHANGEOVER;
+
+// Neither a booking nor a run may be on the stage then, as the booking's own overlap rule.
+function shelterSite(
+  occurrence: Occurrence,
+  programme: Programme,
+  runs: readonly EventRun[],
+  facts: EventFacts,
+): EventSite | null {
+  const booked = siteKey(occurrence.site);
+  const others = [
+    ...occurrencesOn(programme, occurrence.day),
+    ...runs.map((run) => run.occurrence),
+  ];
+  const free = (site: EventSite): boolean => {
+    const key = siteKey(site);
+    return (
+      key !== booked &&
+      facts.hasSite(site) &&
+      playable({ ...occurrence, site }, facts) &&
+      !others.some((other) => siteKey(other.site) === key && meets(other, occurrence))
+    );
+  };
+  return (facts.stages ?? []).find(free) ?? null;
+}
+
+function newRun(occurrence: Occurrence): EventRun {
+  return {
     occurrence,
     phase: 'announced',
     parties: [],
@@ -147,7 +170,37 @@ function announced(occurrence: Occurrence, facts: EventFacts): EventStep {
     paid: 0,
     salt: saltOf(occurrence),
   };
-  return { kind: 'announce', run };
+}
+
+// The occurrence as it will be held, or the step that says why it will not.
+function weathered(
+  occurrence: Occurrence,
+  programme: Programme,
+  runs: readonly EventRun[],
+  facts: EventFacts,
+): Occurrence | EventStep {
+  if (playable(occurrence, facts)) return occurrence;
+  const { weather } = kindOf(occurrence);
+  if (weather === 'postpone') return { kind: 'postpone', occurrence, day: occurrence.day + 1 };
+  const site = weather === 'shelter' ? shelterSite(occurrence, programme, runs, facts) : null;
+  return site ? { ...occurrence, site } : callOff(occurrence, 'weather', null);
+}
+
+function announced(
+  occurrence: Occurrence,
+  programme: Programme,
+  runs: readonly EventRun[],
+  facts: EventFacts,
+): EventStep {
+  if (!facts.hasSite(occurrence.site)) return callOff(occurrence, 'no-site', null);
+  const held = weathered(occurrence, programme, runs, facts);
+  if (!('booking' in held)) return held;
+  const kind = kindOf(occurrence);
+  if (kind.host === 'animator' && !facts.hostOnDuty) return callOff(occurrence, 'no-host', null);
+  const run = newRun(held);
+  return held.site === occurrence.site
+    ? { kind: 'announce', run }
+    : { kind: 'announce', run, movedFrom: occurrence.site };
 }
 
 export function advanceEvents(
@@ -167,7 +220,7 @@ export function advanceEvents(
   let programme = dropPast(state.programme, dayAt(from));
   for (const occurrence of eventsDue(programme, from, to, ANNOUNCE_LEAD)) {
     if (state.runs.some((run) => sameOccurrence(run.occurrence, occurrence))) continue;
-    const step = announced(occurrence, facts);
+    const step = announced(occurrence, programme, runs, facts);
     if (step.kind === 'announce') runs.push(step.run);
     if (step.kind === 'postpone') programme = postponed(programme, occurrence);
     steps.push(step);

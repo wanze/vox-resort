@@ -1,5 +1,5 @@
 import { PixelIcon } from '../../hud/components/PixelIcon';
-import type { Chip, DayColumn, DayPart } from '../domain/programmeView';
+import { DAY_PARTS, type Chip, type DayColumn, type DayPart } from '../domain/programmeView';
 
 export interface Cell {
   readonly day: number;
@@ -12,7 +12,15 @@ export interface ProgrammeWeekProps {
   readonly chip: number | null;
   readonly onCell: (cell: Cell) => void;
   readonly onChip: (booking: number) => void;
+  // Parts of the day with something to book; the morning holds only the welcome.
+  readonly bookable: ReadonlySet<DayPart>;
 }
+
+const PART_NAMES: { readonly [part in DayPart]: string } = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+};
 
 function DayHead({ day }: { readonly day: DayColumn }) {
   return (
@@ -66,31 +74,37 @@ function PartCell({
           onChip={props.onChip}
         />
       ))}
-      <button
-        type="button"
-        className="hud-programme-add"
-        aria-pressed={chosen}
-        aria-label={`Book something for ${day.name}, ${part}`}
-        onClick={() => props.onCell({ day: day.day, part })}
-      >
-        +
-      </button>
+      {props.bookable.has(part) ? (
+        <button
+          type="button"
+          className="hud-programme-add"
+          aria-pressed={chosen}
+          aria-label={`Book something for ${day.name}, ${part}`}
+          onClick={() => props.onCell({ day: day.day, part })}
+        >
+          +
+        </button>
+      ) : null}
     </div>
   );
 }
 
-// Days as rows and the two parts of the day as columns, so a phone's sheet shows it as a desk does.
+// Days as rows and the parts of the day as columns, so a phone's sheet shows it as a desk does.
 export function ProgrammeWeek({ days, ...props }: ProgrammeWeekProps) {
   return (
     <div className="hud-programme-week">
       <span className="hud-programme-part-head" aria-hidden="true" />
-      <span className="hud-programme-part-head">Afternoon</span>
-      <span className="hud-programme-part-head">Evening</span>
+      {DAY_PARTS.map((part) => (
+        <span key={part} className="hud-programme-part-head">
+          {PART_NAMES[part]}
+        </span>
+      ))}
       {days.map((day) => (
         <div key={day.day} className="hud-programme-day">
           <DayHead day={day} />
-          <PartCell day={day} part="afternoon" {...props} />
-          <PartCell day={day} part="evening" {...props} />
+          {DAY_PARTS.map((part) => (
+            <PartCell key={part} day={day} part={part} {...props} />
+          ))}
         </div>
       ))}
     </div>

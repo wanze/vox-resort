@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   EVENT_KIND_IDS,
@@ -73,7 +74,15 @@ describe('EVENT_KINDS', () => {
       'puppet-show',
       'bingo',
       'afternoon-jazz',
+      'welcome',
     ]);
+  });
+
+  it('welcomes only the parties that arrived the day before', () => {
+    const welcome = EVENT_KINDS.welcome;
+    expect(welcome.audience?.({ ...party(0), arrivedOn: 3 }, 4)).toBe(true);
+    expect(welcome.audience?.({ ...party(1), arrivedOn: 4 }, 4)).toBe(false);
+    expect(welcome.audience?.({ ...party(1), arrivedOn: 2 }, 4)).toBe(false);
   });
 });
 
@@ -81,6 +90,10 @@ describe('feeOf', () => {
   it('charges nothing in free play and the kind fee in tycoon', () => {
     expect(feeOf(EVENT_KINDS.musical, undefined, 'sandbox')).toBe(0);
     expect(feeOf(EVENT_KINDS.musical, undefined, 'tycoon')).toBe(300);
+  });
+
+  it('charges nothing for the welcome, even in tycoon', () => {
+    expect(feeOf(EVENT_KINDS.welcome, undefined, 'tycoon')).toBe(0);
   });
 
   it('takes a tier fee and lift over the kind', () => {
@@ -106,5 +119,11 @@ describe('runsLate', () => {
     const early = KINDS.filter((kind) => runsLate(kind, kind.earliest)).map((kind) => kind.id);
     expect(early).toEqual(['cinema']);
     expect(runsLate(EVENT_KINDS['live-music'], 20.5 * 60)).toBe(false);
+  });
+
+  it('ends the welcome by the check-in that closes its guests’ day, even from its latest start', () => {
+    const welcome = EVENT_KINDS.welcome;
+    expect(runsLate(welcome, welcome.start)).toBe(false);
+    expect(welcome.latest + welcome.duration).toBeLessThanOrEqual(CHECK_IN_TICK);
   });
 });

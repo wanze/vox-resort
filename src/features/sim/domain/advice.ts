@@ -31,6 +31,7 @@ const KIND_ORDER = [
   'no-depot',
   'unvisited',
   'no-events',
+  'no-welcome',
   // Last: the one line the player cannot fix today.
   'weather-closed',
 ] as const;
@@ -95,6 +96,8 @@ export interface ResortFacts {
   // A stage to point at when no stage has anything on in the next seven days; absent or null
   // means something is booked, or there is no stage.
   readonly idleStage?: Venue | null;
+  // Today's arrivals while no stage stands to welcome them on; absent or 0 says nothing.
+  readonly welcomeless?: number;
 }
 
 const clamp = (value: number): number => (value < 0 ? 0 : value > 1 ? 1 : value);
@@ -422,6 +425,19 @@ export function adviceNoEvents(facts: ResortFacts): Advice | null {
   };
 }
 
+export function adviceNoWelcome(facts: ResortFacts): Advice | null {
+  const arrived = facts.welcomeless ?? 0;
+  if (arrived <= 0) return null;
+  return {
+    kind: 'no-welcome',
+    weight: 0.15,
+    subject: 'welcome',
+    count: arrived,
+    at: null,
+    need: null,
+  };
+}
+
 // Both halves: a beach building has no door node but is reachable over the sand.
 // Sand routes are not swept per building; that costs too much for too little.
 export function unreachableOn(
@@ -517,6 +533,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceNoDepot(facts),
     ...adviceUnvisited(facts),
     adviceNoEvents(facts),
+    adviceNoWelcome(facts),
     ...adviceWeatherClosed(facts),
   ].filter((advice): advice is Advice => advice !== null && advice.weight > 0);
   return found.toSorted(louderFirst);

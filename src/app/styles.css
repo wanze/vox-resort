@@ -2109,7 +2109,7 @@ input[type='checkbox'] {
 /* Days as rows on every screen, so a phone's sheet reads as the desk window does. */
 .hud-programme-week {
   display: grid;
-  grid-template-columns: auto 1fr 1fr;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
   gap: var(--space-1) var(--space-2);
   align-items: start;
 }

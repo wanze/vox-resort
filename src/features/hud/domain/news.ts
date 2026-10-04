@@ -1,11 +1,12 @@
 import { EVENT_KINDS } from '../../events/domain/catalogue';
 import type { CallOff, EventStep } from '../../events/domain/eventRuns';
-import type { Occurrence } from '../../events/domain/programme';
+import type { EventSite, Occurrence } from '../../events/domain/programme';
 import { siteVenueOf } from '../../events/domain/sites';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { TICKS_PER_DAY, type SimSpeed } from '../../sim/domain/simClock';
 import type { Venue } from '../../sim/domain/venues';
+import type { Weather } from '../../sim/domain/weather';
 
 export type Severity = 'urgent' | 'warning';
 
@@ -33,6 +34,11 @@ export interface EventNews {
   readonly start: number;
   readonly reason: CallOff | null;
   readonly at: { readonly tileX: number; readonly tileZ: number } | null;
+  // The stage it was booked on, set when the weather moved it; null for a site with no venue.
+  readonly movedFrom?: string | null;
+  readonly weather?: Weather;
+  // Logged and not toasted: a built-in's daily announcement would be a toast every evening.
+  readonly quiet?: boolean;
 }
 
 export type Message =
@@ -65,8 +71,15 @@ export const eventKey = (booking: number, day: number, kind: EventNews['kind']):
 
 type TellingStep = Extract<EventStep, { readonly kind: EventNews['kind'] }>;
 
+// A built-in with no stage left is the advice's to tell, once, and not the toasts' every day.
 const isTelling = (step: EventStep): step is TellingStep =>
-  step.kind !== 'start' && step.kind !== 'end';
+  step.kind !== 'start' &&
+  step.kind !== 'end' &&
+  !(
+    step.kind === 'call-off' &&
+    step.reason === 'no-site' &&
+    EVENT_KINDS[step.occurrence.kind].builtIn === true
+  );
 
 const occurrenceOf = (step: TellingStep): Occurrence =>
   step.kind === 'announce' ? step.run.occurrence : step.occurrence;
@@ -77,8 +90,21 @@ const reasonOf = (step: TellingStep): CallOff | null => {
   return step.kind === 'call-off' ? step.reason : 'weather';
 };
 
+const labelOf = (site: EventSite, venues: readonly Venue[]): string | null =>
+  venues[siteVenueOf(site, venues)]?.label ?? null;
+
+function announceExtras(
+  step: TellingStep,
+  venues: readonly Venue[],
+  weather: Weather,
+): Pick<EventNews, 'movedFrom' | 'weather' | 'quiet'> {
+  if (step.kind !== 'announce') return {};
+  if (step.movedFrom) return { movedFrom: labelOf(step.movedFrom, venues), weather };
+  return EVENT_KINDS[step.run.occurrence.kind].builtIn === true ? { quiet: true } : {};
+}
+
 // The start and the end of a show are not news: the announcement said it all.
-function newsOf(step: TellingStep, venues: readonly Venue[]): EventNews {
+function newsOf(step: TellingStep, venues: readonly Venue[], weather: Weather): EventNews {
   const occurrence = occurrenceOf(step);
   const venue = venues[siteVenueOf(occurrence.site, venues)];
   return {
@@ -89,14 +115,17 @@ function newsOf(step: TellingStep, venues: readonly Venue[]): EventNews {
     start: occurrence.start,
     reason: reasonOf(step),
     at: venue ? { tileX: venue.tileX, tileZ: venue.tileZ } : null,
+    ...announceExtras(step, venues, weather),
   };
 }
 
+// `weather` is today's: a move is made at the announcement, an hour before, on the day itself.
 export function eventNewsFrom(
   steps: readonly EventStep[],
   venues: readonly Venue[],
+  weather: Weather = 'rain',
 ): readonly EventNews[] {
-  return steps.filter(isTelling).map((step) => newsOf(step, venues));
+  return steps.filter(isTelling).map((step) => newsOf(step, venues, weather));
 }
 
 // Unique per building, not per model: two idle Changing Cabins are two rows. By the venue's key
@@ -127,6 +156,7 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   'no-depot': null,
   unvisited: null,
   'no-events': null,
+  'no-welcome': null,
   'weather-closed': null,
 };
 
@@ -249,7 +279,7 @@ export function showEvent(
   news: EventNews,
   { muted, nowMs }: Omit<ToastOptions, 'speed'>,
 ): readonly Toast[] {
-  if (muted.has('event')) return shown;
+  if (muted.has('event') || news.quiet === true) return shown;
   const others = shown.filter((toast) => toastKey(toast) !== news.key);
   return [...others, { kind: 'event', news, until: nowMs + EVENT_MS }];
 }

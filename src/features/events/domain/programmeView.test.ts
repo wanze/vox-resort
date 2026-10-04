@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Venue } from '../../sim/domain/venues';
 import type { PartyMix } from './audience';
-import { book, EMPTY_PROGRAMME, type BookingDraft, type Programme } from './programme';
+import {
+  book,
+  BUILT_INS,
+  EMPTY_PROGRAMME,
+  rebook,
+  switchBuiltIn,
+  withBuiltIns,
+  type BookingDraft,
+  type Programme,
+} from './programme';
 import { programmeView, repeatWords, type ProgrammeFacts } from './programmeView';
 import { tickAt } from './week';
 
@@ -119,6 +128,22 @@ describe('programmeView', () => {
       'Mon 7 20:00',
     ]);
     expect(view.upcoming[0]).toMatchObject({ label: 'Live music', site: 'Coral Stage' });
+  });
+
+  it('shows the welcome in the morning, where nothing else can be booked', () => {
+    const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, ['beach-club#0']);
+    const earlier = rebook(welcome, 1, { start: 8 * HOUR }).programme;
+    const view = programmeView(facts({ programme: earlier }), null);
+    expect(view.days[0]!.parts.morning.map((chip) => [chip.time, chip.label])).toEqual([
+      ['08:00', 'Welcome meeting'],
+    ]);
+    expect(view.days[0]!.parts.afternoon).toEqual([]);
+    expect(view.cards.morning).toEqual([]);
+    expect(rebook(welcome, 1, { start: 10.5 * HOUR }).refusal).toBe('hours');
+    const off = switchBuiltIn(welcome, 1, false);
+    expect(programmeView(facts({ programme: off }), null).days[0]!.parts.morning[0]!.off).toBe(
+      true,
+    );
   });
 
   it('offers only the starts inside the part of the day', () => {

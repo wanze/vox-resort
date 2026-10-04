@@ -197,7 +197,9 @@ import {
   countDeparture,
   countEvent,
   countReview,
+  countWelcomed,
   keepDay,
+  noteWelcomeGap,
   reportOf,
   startDay,
   type DayCounts,
@@ -288,6 +290,7 @@ import {
 } from '../features/sim/domain/zones';
 import {
   arrivalsDueBy,
+  CHECK_IN_TICK,
   checkInDue,
   bedsOn,
   runCheckIn,
@@ -356,6 +359,7 @@ import {
   type BookingChange,
   type BookingDraft,
   type BookingRefusal,
+  type EventSite,
   type Programme,
 } from '../features/events/domain/programme';
 import {
@@ -364,6 +368,14 @@ import {
   type ProgrammeFacts,
 } from '../features/events/domain/programmeView';
 import { siteVenueOf, stageKeysOf } from '../features/events/domain/sites';
+import {
+  latecomersFor,
+  stageRank,
+  stagesByPreference,
+  welcomeGapOf,
+  withoutBuiltIns,
+} from '../features/events/domain/welcome';
+import { dayAt } from '../features/events/domain/week';
 import { eventNewsFrom, type EventNews } from '../features/hud/domain/news';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
@@ -1203,6 +1215,9 @@ interface Resort {
   // counted as admitted, so its share is not carried into the next one.
   arrivalsPlanned: number;
   arrivalsAdmitted: number;
+  // The parties checked in since the last 11:00 check-in, so yesterday's until then, for an event
+  // that calls latecomers.
+  newcomers: number[];
   // Per resort: two plots must not share a sequence.
   arrivals: Random;
   ledger: Ledger;
@@ -1697,7 +1712,12 @@ function buildResort(
   });
 
   const events = createEvents(population);
-  events.programme = withBuiltIns(events.programme, BUILT_INS, stageKeysOf(venues));
+  events.programme = withBuiltIns(
+    events.programme,
+    BUILT_INS,
+    stageKeysOf(venues),
+    stageRank(venues),
+  );
 
   const resort: Resort = {
     plan,
@@ -1786,6 +1806,7 @@ function buildResort(
     open: !building,
     arrivalsPlanned: 0,
     arrivalsAdmitted: 0,
+    newcomers: [],
     beds: { total: beds.beds, taken: beds.taken },
     router,
     arrivals,
@@ -2444,7 +2465,20 @@ function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
     },
     hostOnDuty: resort.roster.animator > 0,
     canPay: (fee) => canAfford(resort.ledger, fee),
+    stages: preferredStages(venues),
   };
+}
+
+// Keyed by the list itself, which an edit replaces wholesale, so it is sorted once per edit.
+const STAGE_PREFERENCE = new WeakMap<readonly Venue[], readonly EventSite[]>();
+
+function preferredStages(venues: readonly Venue[]): readonly EventSite[] {
+  let stages = STAGE_PREFERENCE.get(venues);
+  if (!stages) {
+    stages = stagesByPreference(venues);
+    STAGE_PREFERENCE.set(venues, stages);
+  }
+  return stages;
 }
 
 function refreshEventVenues(resort: Resort, now: number): void {
@@ -2495,11 +2529,26 @@ function endEvent(resort: Resort, run: EventRun, now: number): void {
   );
   for (const person of ended.people) hear(resort, now, person, kind.praise, kind.label);
   resort.today = countEvent(resort.today, ended.tally);
+  if (kind.id === 'welcome' && ended.tally.held > 0) {
+    resort.today = countWelcomed(resort.today, ended.tally.audience);
+  }
 }
 
+// Its stage gone only when no stage stands: one pulled down mid-meeting leaves others to use.
+function noteWelcomeCalledOff(resort: Resort, step: CallOffStep): void {
+  const gone = step.reason === 'no-site' && stageKeysOf(resort.venues).length === 0;
+  resort.today = noteWelcomeGap(resort.today, gone ? 'no-stage' : 'called-off');
+}
+
+// A built-in left with no stage is the advice's to tell: it would be called off every day.
+const quietCallOff = (step: CallOffStep): boolean =>
+  step.reason === 'no-site' && eventKindOf(step.occurrence).builtIn === true;
+
 function callOffEvent(resort: Resort, step: CallOffStep, now: number): void {
+  const { id, label } = eventKindOf(step.occurrence);
+  if (id === 'welcome') noteWelcomeCalledOff(resort, step);
+  if (quietCallOff(step)) return;
   resort.ledger = record(resort.ledger, 'events', step.refund);
-  const { label } = eventKindOf(step.occurrence);
   const called = callOffRun(step, resort.guests);
   for (const person of called.people) hear(resort, now, person, 'called-off', label);
   resort.today = countEvent(resort.today, called.tally);
@@ -2534,6 +2583,26 @@ function applyEventSteps(resort: Resort, steps: readonly EventStep[], now: numbe
   }
 }
 
+// Every frame, as a party comes off the desk free at no particular moment.
+function callLatecomers(resort: Resort, now: number): void {
+  if (resort.newcomers.length === 0) return;
+  for (const run of resort.events.runs) {
+    const kind = eventKindOf(run.occurrence);
+    if (kind.latecomers !== true) continue;
+    inviteTo(resort, run, () =>
+      latecomersFor({
+        run,
+        kind,
+        newcomers: resort.newcomers,
+        guests: resort.guests,
+        isFree: (person) => resort.router.isFree(person),
+        urgency: (person) => urgencyBesidesFun(resort, person),
+        now,
+      }),
+    );
+  }
+}
+
 // After the routers' ticks: the invitations and the end of a show act on where everybody now is.
 function runEvents(
   resort: Resort,
@@ -2547,6 +2616,7 @@ function runEvents(
   events.programme = advance.programme;
   events.runs = advance.runs;
   applyEventSteps(resort, advance.steps, now);
+  callLatecomers(resort, now);
   if (advance.steps.length > 0) heard(advance.steps);
   refreshEventVenues(resort, now);
   const hours = ticks / TICKS_PER_HOUR;
@@ -2568,7 +2638,8 @@ const WEEK_TICKS = 7 * TICKS_PER_DAY;
 function idleStageOf(resort: Resort, now: number): Venue | null {
   const stages = resort.venues.filter((venue) => venue.stage === true);
   if (stages.length === 0) return null;
-  const [next] = nextEvents(resort.events.programme, now, 1);
+  // The daily welcome would otherwise keep this line quiet for good.
+  const [next] = nextEvents(withoutBuiltIns(resort.events.programme), now, 1);
   if (next && next.start < now + WEEK_TICKS) return null;
   return stages.toSorted((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))[0]!;
 }
@@ -2596,7 +2667,7 @@ function keepProgrammeStanding(resort: Resort, network: WalkNetwork): void {
   const stages = stageKeysOf(resort.venues);
   const sites = new Set(beachVenueFor(network) ? [...stages, siteKey({ kind: 'beach' })] : stages);
   const kept: Programme = keepStanding(resort.events.programme, sites);
-  resort.events.programme = withBuiltIns(kept, BUILT_INS, stages);
+  resort.events.programme = withBuiltIns(kept, BUILT_INS, stages, stageRank(resort.venues));
 }
 
 function runTicks(
@@ -2863,6 +2934,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
         .map((venue) => venue.key),
     ),
     idleStage: idleStageOf(resort, now),
+    welcomeless: stageKeysOf(resort.venues).length === 0 ? resort.today.arrived : 0,
   };
 }
 
@@ -2900,6 +2972,7 @@ function rateTheDay(resort: Resort): void {
 // built that morning closes a period nobody played, so it only restarts the counts.
 function closeTheDay(resort: Resort, day: number): void {
   if (resort.today.from !== day) {
+    noteMissedWelcome(resort);
     const report = reportOf({
       counts: resort.today,
       rating: resort.rating,
@@ -2913,11 +2986,43 @@ function closeTheDay(resort: Resort, day: number): void {
   resort.today = startDay(day);
 }
 
+// A day with no welcome run or called off had no stage for it, or had it switched off.
+function noteMissedWelcome(resort: Resort): void {
+  if (resort.today.arrived === 0 || resort.today.welcome !== undefined) return;
+  const gap = welcomeGapOf({
+    programme: resort.events.programme,
+    stages: stageKeysOf(resort.venues).length,
+    held: false,
+    called: false,
+  });
+  if (gap) resort.today = noteWelcomeGap(resort.today, gap);
+}
+
+function partiesArrivedOn(guests: Guests, day: number): number[] {
+  const parties = new Set<number>();
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1 && guests.arrivedOn[person] === day) {
+      parties.add(guests.party[person]!);
+    }
+  }
+  return [...parties];
+}
+
+function noteArrivedParties(resort: Resort, arrived: readonly number[]): void {
+  const known = new Set(resort.newcomers);
+  for (const person of arrived) {
+    const party = resort.guests.party[person]!;
+    if (!known.has(party)) resort.newcomers.push(party);
+    known.add(party);
+  }
+}
+
 // The rating comes first, so the morning coach is sized by the resort the current guests
 // experienced.
 function runDay(resort: Resort, day: number): void {
   // Everybody kept up late has woken by now.
   resort.events.tired.clear();
+  resort.newcomers = [];
   resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
   resort.arrivalsAdmitted = 0;
   admitWave(resort, day, 0);
@@ -2960,6 +3065,7 @@ function admitWave(resort: Resort, day: number, wave: number): void {
     resort.events.glow[person] = 0;
     resort.router.admit(person, resort.router.arrivalNode);
   }
+  noteArrivedParties(resort, arrived);
   resort.arrivalsAdmitted += arrived.length;
   resort.today = countArrivals(resort.today, arrived.length);
   const beds = bedCount(resort.guests);
@@ -4564,7 +4670,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const drawn = cast.shown[person] === SHOWN.placed ? cast : crowd.crowd;
     const at = { x: drawn.x[person] ?? 0, z: drawn.z[person] ?? 0 };
     const thought = latestOf(thoughts, person);
-    return guestView(guests, needs, happiness, venues, person, clock.day, at, thought);
+    return guestView(guests, needs, happiness, venues, person, clock.day, at, thought, thoughts);
   };
 
   const workerAt = (worker: number): SelectionView | null => {
@@ -4707,7 +4813,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const tellProgramme = (): void => options.onProgrammeChange?.(programmeFactsOf(current(), clock));
 
   const heardEvents = (steps: readonly EventStep[]): void => {
-    for (const news of eventNewsFrom(steps, current().venues)) options.onEventNews?.(news);
+    for (const news of eventNewsFrom(steps, current().venues, clock.weather)) {
+      options.onEventNews?.(news);
+    }
     // A fee or a refund may have moved the money, and a show put off moved the programme.
     spent = true;
     tellProgramme();
@@ -4880,7 +4988,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       resort.events.programme,
       BUILT_INS,
       stageKeysOf(resort.venues),
+      stageRank(resort.venues),
     );
+    resort.newcomers = partiesArrivedOn(resort.guests, dayAt(saved.clock.ticks - CHECK_IN_TICK));
     refreshEventVenues(resort, saved.clock.ticks);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
     resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));

@@ -178,6 +178,17 @@ describe('snapshotResort', () => {
     expect(parsed.today.events).toBeUndefined();
   });
 
+  it('reads a day with a welcome and one from before it', () => {
+    const state = played();
+    state.today = { ...state.today, welcome: { welcomed: 7, gap: null } };
+    state.history = [{ ...reportedOn(state, 1), welcome: { welcomed: 0, gap: 'no-stage' } }];
+    const saved = snapshotResort(state);
+    expect(resortSnapshotSchema.parse(saved).history[0]!.welcome?.gap).toBe('no-stage');
+    expect(resortSnapshotSchema.parse(saved).today.welcome?.welcomed).toBe(7);
+    const { welcome: _welcome, ...before } = saved.today;
+    expect(resortSnapshotSchema.parse({ ...saved, today: before }).today.welcome).toBeUndefined();
+  });
+
   it('refuses litter saved as a plain list', () => {
     const saved = snapshotResort(played());
     expect(resortSnapshotSchema.safeParse({ ...saved, litter: [...saved.litter] }).success).toBe(

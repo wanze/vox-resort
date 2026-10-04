@@ -22,7 +22,15 @@ import {
   type EventRun,
   type EventsState,
 } from './eventRuns';
-import { book, EMPTY_PROGRAMME, type BookingDraft, type EventSite } from './programme';
+import {
+  book,
+  BUILT_INS,
+  EMPTY_PROGRAMME,
+  siteKey,
+  withBuiltIns,
+  type BookingDraft,
+  type EventSite,
+} from './programme';
 import { siteVenueOf } from './sites';
 import { partiesOf } from './audience';
 import { tickAt } from './week';
@@ -192,6 +200,79 @@ describe('advanceEvents', () => {
     const gone = facts({ hasSite: () => false, siteOpen: () => false });
     expect(run(state, start + 1, start + 1, gone)).toMatchObject([
       { kind: 'call-off', reason: 'no-site', refund: 0 },
+    ]);
+  });
+});
+
+describe('a welcome in the weather', () => {
+  const KIDS: EventSite = { kind: 'stage', venue: 'kids-club#0' };
+  const HALL: EventSite = { kind: 'stage', venue: 'game-hall#0' };
+  const venues = [...VENUES, stage(HALL.venue, 'covered')];
+  const rainy = (over: Partial<EventFacts> = {}): EventFacts =>
+    facts({
+      weatherOn: () => 'rain',
+      hasSite: (site) => siteVenueOf(site, venues) >= 0,
+      siteOpen: (site, weather) =>
+        siteVenueOf(site, venues) >= 0 && !(siteKey(site) === STAGE.venue && weather === 'rain'),
+      stages: [STAGE, KIDS, HALL],
+      ...over,
+    });
+  const welcomed = (...drafts: Partial<BookingDraft>[]): EventsState => {
+    const state = stateWith(...drafts);
+    state.programme = withBuiltIns(state.programme, BUILT_INS, [STAGE.venue]);
+    return state;
+  };
+  const announce = tickAt(2, 9 * HOUR);
+
+  it('moves to the first covered stage, says where from, and plays there', () => {
+    const state = welcomed();
+    const steps = run(state, announce, announce, rainy());
+    expect(steps).toMatchObject([{ kind: 'announce', movedFrom: STAGE }]);
+    expect(state.runs[0]!.occurrence.site).toEqual(KIDS);
+    expect(state.programme.bookings[0]!.site).toEqual(STAGE);
+    expect(kinds(run(state, announce + 60, announce + 60, rainy()))).toEqual(['start']);
+  });
+
+  // No booked kind starts this early, so a run held over on that stage stands in for one.
+  it('skips a stage with something on it too close to the meeting', () => {
+    const state = welcomed();
+    const held = tickAt(2, 11 * HOUR);
+    state.runs.push({
+      occurrence: { booking: 9, kind: 'bingo', site: KIDS, day: 2, start: held, end: held + 60 },
+      phase: 'announced',
+      parties: [],
+      attended: new Set(),
+      paid: 0,
+      salt: 1,
+    });
+    run(state, announce, announce, rainy());
+    expect(state.runs.find((each) => each.occurrence.kind === 'welcome')?.occurrence.site).toEqual(
+      HALL,
+    );
+  });
+
+  it('is called off for the weather with no stage free', () => {
+    const state = welcomed();
+    const steps = run(state, announce, announce, rainy({ stages: [STAGE] }));
+    expect(steps).toMatchObject([{ kind: 'call-off', reason: 'weather', run: null }]);
+    expect(state.runs).toEqual([]);
+  });
+
+  it('is called off as having no site when its stage is gone', () => {
+    const state = welcomed();
+    const gone = rainy({
+      weatherOn: () => 'clear',
+      hasSite: (site) => siteKey(site) !== STAGE.venue,
+    });
+    expect(run(state, announce, announce, gone)).toMatchObject([
+      { kind: 'call-off', reason: 'no-site' },
+    ]);
+  });
+
+  it('never moves a kind whose rule is to cancel', () => {
+    const state = stateWith({});
+    expect(run(state, start - 60, start - 60, rainy())).toMatchObject([
+      { kind: 'call-off', reason: 'weather' },
     ]);
   });
 });

@@ -26,34 +26,50 @@ export interface AudienceAsk {
 }
 
 // `urgency` leaves fun out: wanting some fun is the reason to come, not a reason to stay away.
+function freeParty(
+  guests: Guests,
+  index: number,
+  isFree: (person: number) => boolean,
+  urgency: (person: number) => number,
+): AudienceParty | null {
+  const party = guests.parties[index];
+  if (!party) return null;
+  let people = 0;
+  let children = 0;
+  for (const person of party.members) {
+    if (guests.present[person] !== 1 || guests.party[person] !== index) continue;
+    if (!isFree(person) || urgency(person) >= INVITE_URGENCY) return null;
+    people++;
+    children += guests.child[person]!;
+  }
+  if (people === 0) return null;
+  return {
+    party: index,
+    kind: party.kind,
+    people,
+    children,
+    arrivedOn: guests.arrivedOn[party.members[0]!]!,
+  };
+}
+
 export function partiesOf(
   guests: Guests,
   isFree: (person: number) => boolean,
   urgency: (person: number) => number,
 ): readonly AudienceParty[] {
+  return partiesAmong(guests, guests.parties.keys(), isFree, urgency);
+}
+
+export function partiesAmong(
+  guests: Guests,
+  parties: Iterable<number>,
+  isFree: (person: number) => boolean,
+  urgency: (person: number) => number,
+): readonly AudienceParty[] {
   const free: AudienceParty[] = [];
-  for (const [index, party] of guests.parties.entries()) {
-    let people = 0;
-    let children = 0;
-    let busy = false;
-    for (const person of party.members) {
-      if (guests.present[person] !== 1 || guests.party[person] !== index) continue;
-      if (!isFree(person) || urgency(person) >= INVITE_URGENCY) {
-        busy = true;
-        break;
-      }
-      people++;
-      children += guests.child[person]!;
-    }
-    if (busy || people === 0) continue;
-    const first = party.members[0]!;
-    free.push({
-      party: index,
-      kind: party.kind,
-      people,
-      children,
-      arrivedOn: guests.arrivedOn[first]!,
-    });
+  for (const index of parties) {
+    const party = freeParty(guests, index, isFree, urgency);
+    if (party) free.push(party);
   }
   return free;
 }

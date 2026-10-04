@@ -24,9 +24,12 @@ import {
   weekdayOf,
 } from './week';
 
-export type DayPart = 'afternoon' | 'evening';
+export const DAY_PARTS = ['morning', 'afternoon', 'evening'] as const;
+
+export type DayPart = (typeof DAY_PARTS)[number];
 
 const PART_HOURS: { readonly [part in DayPart]: { readonly from: number; readonly to: number } } = {
+  morning: { from: 0, to: 12 * 60 },
   afternoon: { from: 12 * 60, to: 18 * 60 },
   evening: { from: 18 * 60, to: 24 * 60 },
 };
@@ -127,7 +130,7 @@ export function repeatWords(repeat: Repeat): string {
 }
 
 const partOf = (minute: number): DayPart =>
-  minute >= PART_HOURS.evening.from ? 'evening' : 'afternoon';
+  DAY_PARTS.findLast((part) => minute >= PART_HOURS[part].from) ?? 'morning';
 
 // Switched-off bookings too, so a built-in can be switched back on from its day.
 function chipsOn(programme: Programme, key: string, day: number): readonly Chip[] {
@@ -236,6 +239,7 @@ function dayColumn(
     weather,
     pinned,
     parts: {
+      morning: chips.filter((chip) => partOf(chip.minute) === 'morning'),
       afternoon: chips.filter((chip) => partOf(chip.minute) === 'afternoon'),
       evening: chips.filter((chip) => partOf(chip.minute) === 'evening'),
     },
@@ -258,6 +262,7 @@ export function programmeView(facts: ProgrammeFacts, chosen: string | null): Pro
       dayColumn(facts.programme, key, today + offset, forecast),
     ),
     cards: {
+      morning: cardsFor(facts, capacity, 'morning'),
       afternoon: cardsFor(facts, capacity, 'afternoon'),
       evening: cardsFor(facts, capacity, 'evening'),
     },

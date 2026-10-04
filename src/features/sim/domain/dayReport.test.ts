@@ -4,9 +4,11 @@ import {
   countDeparture,
   countEvent,
   countReview,
+  countWelcomed,
   HISTORY_DAYS,
   keepDay,
   LOUDEST_KEPT,
+  noteWelcomeGap,
   reportOf,
   startDay,
   starsTrend,
@@ -92,6 +94,17 @@ describe('reportOf', () => {
     const counted = countEvent(startDay(0), { held: 2, audience: 61, called: 0 });
     expect(reportFor(counted).events).toEqual({ held: 2, audience: 61, called: 0 });
     expect(reportFor(startDay(0))).not.toHaveProperty('events');
+  });
+
+  it('counts the welcomed, and carries them over only on a day that had a welcome', () => {
+    const counted = countWelcomed(countWelcomed(startDay(0), 12), 9);
+    expect(reportFor(counted).welcome).toEqual({ welcomed: 21, gap: null });
+    expect(reportFor(startDay(0))).not.toHaveProperty('welcome');
+  });
+
+  it('keeps the first reason a welcome was missed', () => {
+    const noted = noteWelcomeGap(noteWelcomeGap(startDay(0), 'called-off'), 'no-stage');
+    expect(noted.welcome).toEqual({ welcomed: 0, gap: 'called-off' });
   });
 
   it('keeps only the loudest three thoughts', () => {

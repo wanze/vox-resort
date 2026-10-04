@@ -49,6 +49,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `${count} ${roleWord('cleaner', count)} ${count === 1 ? 'fetches' : 'fetch'} supplies from the entrance`,
   unvisited: ({ subject }) => `Nobody visited ${subject} today`,
   'no-events': () => 'Nothing is on the programme for the week ahead',
+  'no-welcome': () => 'New guests have no stage to be welcomed on',
   'weather-closed': ({ subject, need }) =>
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
@@ -75,6 +76,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   'no-depot': () => 'a staff house near their work saves the walk',
   unvisited: ({ count }) => `room for ${count}`,
   'no-events': ({ subject }) => `book live music or a show on ${subject}`,
+  'no-welcome': ({ count }) => `${count} arrived today`,
   'weather-closed': ({ count }) => `${count} of them have no roof`,
 };
 
@@ -98,6 +100,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'no-depot': 'Staff house',
   unvisited: 'Quiet',
   'no-events': 'Programme',
+  'no-welcome': 'Welcome',
   'weather-closed': 'Weather',
 };
 

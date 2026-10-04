@@ -198,4 +198,22 @@ describe('widenThoughts', () => {
     expect(isComplaint('great-show')).toBe(false);
     expect(isComplaint('called-off')).toBe(true);
   });
+
+  it('pads a save from before the welcome, three kinds short of a save from before the shows', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 1, 'hurt', 'Pool', 5);
+    const kinds = THOUGHT_KINDS.length;
+    const old = snapshotThoughts(thoughts, new Map());
+    const short = (column: ArrayLike<number | string | null>) =>
+      Array.from(column).filter((_, at) => at % kinds < kinds - 3);
+    const widened = widenThoughts({
+      ...old,
+      stay: Uint16Array.from(short(old.stay) as number[]),
+      heardAt: Int32Array.from(short(old.heardAt) as number[]),
+      heardSubject: short(old.heardSubject) as (string | null)[],
+    });
+    expect(widened.stay).toEqual(old.stay);
+    expect(widened.heardSubject).toEqual(old.heardSubject);
+    expect(isComplaint('welcomed')).toBe(false);
+  });
 });

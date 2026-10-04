@@ -62,14 +62,16 @@ export interface BookingResult {
   readonly refusal: BookingRefusal | null;
 }
 
-export const BUILT_INS: readonly BuiltIn[] = [];
+export const BUILT_INS: readonly BuiltIn[] = [
+  { id: 'welcome', kind: 'welcome', repeat: { every: 'day' }, start: 10 * 60 },
+];
 
 export const EMPTY_PROGRAMME: Programme = { bookings: [], nextId: 1 };
 
 export const ANNOUNCE_LEAD = 60;
 
 // Room to clear the stage and set up the next act.
-const CHANGEOVER = 30;
+export const CHANGEOVER = 30;
 
 const WEEK = 7;
 
@@ -163,19 +165,33 @@ function replaced(programme: Programme, booking: Booking): Programme {
   };
 }
 
+// A built-in kept from before its kind's hours moved goes back to the kind's start.
+function inItsHours(booking: Booking): Booking {
+  const kind = EVENT_KINDS[booking.kind];
+  if (booking.builtIn === undefined) return booking;
+  if (booking.start >= kind.earliest && booking.start <= kind.latest) return booking;
+  return { ...booking, start: kind.start };
+}
+
 // With no stage left, a built-in stays where it was and simply cannot run.
 export function withBuiltIns(
   programme: Programme,
   builtIns: readonly BuiltIn[],
   stages: readonly string[],
+  rank: (key: string) => number = () => 0,
 ): Programme {
-  const first = stages.toSorted()[0];
-  if (first === undefined) return programme;
+  let changed = false;
+  let bookings = programme.bookings.map((each) => {
+    const kept = inItsHours(each);
+    changed ||= kept !== each;
+    return kept;
+  });
+  const first = stages.toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
+  if (first === undefined) return changed ? { ...programme, bookings } : programme;
   const standing = new Set(stages);
   const site: EventSite = { kind: 'stage', venue: first };
-  let changed = false;
   let { nextId } = programme;
-  const bookings = programme.bookings.map((each) => {
+  bookings = bookings.map((each) => {
     if (each.builtIn === undefined || each.site.kind !== 'stage' || standing.has(each.site.venue)) {
       return each;
     }

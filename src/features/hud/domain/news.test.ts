@@ -261,6 +261,12 @@ describe('showEvent', () => {
     const log = logEvent([], eventNews('call-off'));
     expect(log).toEqual([{ kind: 'event', news: eventNews('call-off') }]);
   });
+
+  it('logs a quiet event but does not toast it', () => {
+    const quiet = { ...eventNews('announce'), quiet: true };
+    expect(showEvent([], quiet, normally)).toEqual([]);
+    expect(logEvent([], quiet)).toEqual([{ kind: 'event', news: quiet }]);
+  });
 });
 
 describe('eventNewsFrom', () => {
@@ -313,6 +319,27 @@ describe('eventNewsFrom', () => {
       { ...eventNews('announce'), reason: null },
       { ...eventNews('call-off'), reason: 'no-host' },
       { ...eventNews('postpone'), reason: 'weather' },
+    ]);
+  });
+
+  it("tells a built-in's announcement quietly, its move aloud, and its lost stage not at all", () => {
+    const welcome = { ...occurrence, kind: 'welcome' } as const;
+    const daily = { ...run, occurrence: welcome };
+    const hall = { kind: 'stage', venue: 'game-hall#0' } as const;
+    const news = eventNewsFrom(
+      [
+        { kind: 'announce', run: daily },
+        { kind: 'announce', run: daily, movedFrom: hall },
+        { kind: 'call-off', occurrence: welcome, reason: 'no-site', run: null, refund: 0 },
+        { kind: 'call-off', occurrence: welcome, reason: 'no-host', run: null, refund: 0 },
+      ],
+      [stage],
+      'storm',
+    );
+    expect(news.map((each) => [each.kind, each.quiet, each.movedFrom, each.weather])).toEqual([
+      ['announce', true, undefined, undefined],
+      ['announce', undefined, null, 'storm'],
+      ['call-off', undefined, undefined, undefined],
     ]);
   });
 

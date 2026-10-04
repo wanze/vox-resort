@@ -158,6 +158,7 @@ function GuestDetails({
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
         <StatRow label="Stay">{withFigures(stayLine(guest))}</StatRow>
+        {guest.welcomed ? <StatRow label="Welcome meeting">attended</StatRow> : null}
         <StatRow label="Mood">
           <Num>{Math.round(guest.happiness * 100)}%</Num>
         </StatRow>

@@ -6,6 +6,7 @@ import { EVENT_KINDS, type AudienceParty, type EventKind } from './catalogue';
 import {
   expectedAudience,
   INVITE_URGENCY,
+  partiesAmong,
   partiesOf,
   partyMixOf,
   pickAudience,
@@ -69,6 +70,23 @@ describe('partiesOf', () => {
     );
     expect(urgent.some((each) => each.party === 1)).toBe(false);
     expect(all.find((each) => each.party === 1)?.people).toBe(guests.parties[1]!.members.length);
+  });
+});
+
+describe('partiesAmong', () => {
+  it('looks only at the parties given, as partiesOf would see them', () => {
+    const among = partiesAmong(
+      guests,
+      [3, 1, 99],
+      () => true,
+      () => 0,
+    );
+    const all = partiesOf(
+      guests,
+      () => true,
+      () => 0,
+    );
+    expect(among).toEqual([3, 1].map((index) => all.find((each) => each.party === index)));
   });
 });
 

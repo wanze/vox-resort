@@ -143,6 +143,12 @@ const bedsSchema = z.object({ total: count, taken: count });
 // Absent in saves from before events, which read as none held.
 const eventTallySchema = z.object({ held: count, audience: count, called: count });
 
+// Absent in saves from before the welcome meeting.
+const welcomeTallySchema = z.object({
+  welcomed: count,
+  gap: z.enum(['no-stage', 'off', 'called-off']).nullable(),
+});
+
 const dayCountsSchema = z.object({
   from: count,
   arrived: count,
@@ -150,6 +156,7 @@ const dayCountsSchema = z.object({
   reviews: count,
   reviewStars: z.number(),
   events: eventTallySchema.exactOptional(),
+  welcome: welcomeTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayCounts>;
 
 const dayReportSchema = z.object({
@@ -165,6 +172,7 @@ const dayReportSchema = z.object({
   balance: z.number(),
   loudest: z.array(tallySchema),
   events: eventTallySchema.exactOptional(),
+  welcome: welcomeTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayReport>;
 
 const ledgerSchema = z.object({

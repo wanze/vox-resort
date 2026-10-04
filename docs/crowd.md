@@ -433,11 +433,14 @@ an edit simply recasts.
 - **Shows** (`shows.ts`): `noteShows` reads `performingAt` after the ticks.
   While a show is on, the kids club's tag players and the game hall's players
   run to rows of four in front of the animator and cheer and hop by turns,
-  and at a venue with a `floor` (the beach club's aisle) everybody sitting
-  gets up and dances on it: a hashed spot clear of the animator, `jog`,
-  `cheer` and `hop` steps, the heading swaying. Lying stays lying. After the
-  show they run back and sit down where they were. Where each set off from is
-  kept per person, so the run over is one straight line.
+  and at a venue with a `floor` (the beach club's aisle, the open-air stage's
+  dance floor) everybody sitting gets up and dances on it: a hashed spot clear
+  of the animator, `jog`, `cheer` and `hop` steps, the heading swaying. Lying
+  stays lying. After the show they run back and sit down where they were.
+  Where each set off from is kept per person, so the run over is one straight
+  line. At a venue with a `floor`, a visitor standing still with no game to
+  play (the open-air stage's standing rows) stays where they stand, turns to
+  the animator and cheers and hops by turns, then turns back after the show.
 - **Gym**: a spot's `station` is what its athlete does in place, facing the
   art's way: `run` jogs on the spot (the treadmills face the mirror), `jump`
   is jumping jacks (`cheer` and standing by turns), `lift` cycles `reach`,
@@ -797,7 +800,7 @@ has one where a first-aid post stood.
   Waiting beds get an `unmade` advice line (Housekeeping) and a note on the Beds
   row.
 - **Animators**: one per three venues the art marks `stage` (kids club,
-  playground, beach club, game hall), since a show moves between stages. An
+  playground, beach club, game hall, open-air stage), since a show moves between stages. An
   animator takes the open stage with the most guests inside that has no show on,
   performs for an hour or two (`SHOW_TICKS`), then moves to another stage.
   `cheerTheAudience` tops up the fun of every guest inside a venue with a show on,

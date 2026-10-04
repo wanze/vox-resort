@@ -32,4 +32,5 @@ export const SIGN_ICONS = {
   tennis: 'tennis',
   basketball: 'basketball',
   volleyball: 'volleyball',
+  stage: 'stage',
 } as const satisfies Record<SignKind, IconName>;

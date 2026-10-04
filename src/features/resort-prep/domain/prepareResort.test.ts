@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { mosaicOf, objectTypeById } from '../../catalog/domain/objectTypes';
-import { place } from '../../layout/domain/resortLayout';
+import { mosaicOf, OBJECT_TYPES, objectTypeById } from '../../catalog/domain/objectTypes';
+import { layoutResort, place } from '../../layout/domain/resortLayout';
 import { RESORT_PLAN } from '../../layout/domain/resortPlan';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { gridInterior } from '../../lighting/domain/lightGrid';
@@ -170,13 +170,14 @@ describe('styleOfFor', () => {
   });
 });
 
-const tiles = (prepared: PreparedResort) =>
-  prepared.plot.paths.map((path) => `${path.tileX},${path.tileZ}`);
+const tiles = (paths: readonly { readonly tileX: number; readonly tileZ: number }[]) =>
+  paths.map((path) => `${path.tileX},${path.tileZ}`);
 const laidInMosaic = (prepared: PreparedResort) =>
   prepared.plot.paths.filter((path) => mosaicOf(path.id) !== null);
 
 describe('mosaic on a generated plot', () => {
-  it('dresses some of the paving in mosaic and paves the same tiles as a classic plot', () => {
+  // Against the same styles laid plain, not a classic plot: a variant's door may sit elsewhere.
+  it('dresses some of the paving in mosaic and paves the same tiles as the plot laid plain', () => {
     const classic = prepareResort({
       source: { kind: 'generate', params: { ...PARAMS, config: { variety: 'classic' } } },
       repeat: 1,
@@ -184,7 +185,12 @@ describe('mosaic on a generated plot', () => {
     });
     expect(laidInMosaic(generated).length).toBeGreaterThan(0);
     expect(laidInMosaic(classic)).toEqual([]);
-    expect(tiles(generated)).toEqual(tiles(classic));
+    const plain = layoutResort(
+      OBJECT_TYPES.map(layoutItemFor),
+      generated.plan,
+      styleOfFor(request({ kind: 'generate', params: PARAMS }), generated.plan),
+    );
+    expect(tiles(generated.plot.paths)).toEqual(tiles(plain.paths));
     expect(generated.plot.layout.paths).toEqual(generated.plot.paths);
   });
 

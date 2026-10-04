@@ -342,6 +342,7 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('cottage', 30, 44, 4, 3),
     at('volleyball', 30, 48),
     at('resort-bar', 37, 48),
+    at('open-air-stage', 32, 52),
 
     at('beach-club', 45, 37),
     at('resort-bar', 51, 37),

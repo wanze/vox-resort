@@ -62,6 +62,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | villa          | 4×4       | 64 × 40 × 64   | 10.75 x 10 m, arcade, plunge pool  |
 | beach-club     | 6×5       | 96 × 27 × 80   | 23 x 16 m deck, thatched bar       |
 | swimming-pool  | 8×6       | 128 × 15 × 96  | 20 m pool + two, 32 x 24 m deck    |
+| open-air-stage | 8×6       | 128 × 29 × 96  | 18 m stage, dance floor, 12 tables |
 | minigolf       | 9×7       | 144 × 39 × 112 | 36 x 28 m, sixteen holes           |
 | waterpark      | 6×6       | 96 × 59 × 96   | draft: not in the app yet          |
 | hotel          | 10×5      | 160 × 80 × 80  | 37 x 14 m, five 3 m storeys        |
@@ -266,6 +267,9 @@ voxel model of an open-air resort gym pavilion, finely detailed, small crisp vox
 
 # basketball-court
 voxel model of an outdoor basketball court, finely detailed, small crisp voxels, a blue hard court with red keys and straight white lines laid into a grey slab, a hoop on a padded pole behind each baseline, three tiers of timber bleachers along one long side and four floodlight masts at the corners, occupying an 8x5 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# open-air-stage
+voxel model of an open-air stage on a resort plaza, finely detailed, small crisp voxels, a raised timber stage at the back with a plain stucco backdrop and one red band, a dark metal truss over it hung with amber lamps, a speaker stack either side, a timber dance floor inlaid in pale stone paving framed by a terracotta band, standing room in front of it and twelve small timber tables with four chairs each towards the front, clipped trees in terracotta pots at the corners and along the aisle, flowering planters along the foot of the stage and the front edge, four lamp posts along the front edge, on an 8x6 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```
 
 ## Mosaic paving

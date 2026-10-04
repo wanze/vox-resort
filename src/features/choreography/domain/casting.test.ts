@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { objectTypeById } from '../../catalog/domain/objectTypes';
 import { RESTING } from '../../crowd/domain/crowd';
 import type { StaffRole } from '../../sim/domain/staff';
+import { venuesOn } from '../../sim/domain/venues';
 import {
   createCast,
   insideAt,
@@ -11,7 +14,7 @@ import {
   whereDrawn,
   type Casting,
 } from './casting';
-import type { Place, PlaceKind, VenuePlaces } from './places';
+import { placesFor, type Place, type PlaceKind, type VenuePlaces } from './places';
 
 const place = (kind: PlaceKind, x: number, seat = -1): Place => ({
   x,
@@ -253,5 +256,37 @@ describe('recast, for somebody in a wheelchair', () => {
     ]);
     expect(cast.shown[0]).toBe(SHOWN.placed);
     expect(cast.x[0]).toBe(51);
+  });
+});
+
+const audienceAt = (id: string) => {
+  const { model } = objectTypeById(id);
+  const placement = {
+    key: `${id}#0`,
+    id,
+    tileX: 0,
+    tileZ: 0,
+    tilesX: model.tiles.x,
+    tilesZ: model.tiles.z,
+    rotation: 0 as const,
+    x: 0,
+    z: 0,
+    y: 0,
+    width: model.tiles.x * TILE_VOXELS,
+    depth: model.tiles.z * TILE_VOXELS,
+  };
+  const venuePlaces = placesFor(venuesOn([placement]), new Map([[placement.key, placement]]), {
+    seats: [],
+  });
+  return createCast(1, venuePlaces).audiences[0];
+};
+
+describe('the audience of a show', () => {
+  it('cheers where it stands only at a venue with a dance floor', () => {
+    const stage = audienceAt('open-air-stage')!;
+    expect(stage.cheering).toHaveLength(32);
+    expect(stage.dancing).toHaveLength(48);
+    expect(audienceAt('beach-club')?.cheering ?? []).toHaveLength(0);
+    expect(audienceAt('kids-club')?.cheering ?? []).toHaveLength(0);
   });
 });

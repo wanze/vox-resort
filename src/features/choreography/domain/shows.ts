@@ -13,13 +13,16 @@ export interface Floor {
 }
 
 // The places at a venue whose visitors leave what they are doing for its show: the ones who
-// gather in front of the animator, and the ones who get up and dance on the floor.
+// gather in front of the animator, the ones who get up and dance on the floor, and the ones who
+// cheer where they stand.
 export interface Audience {
   readonly venue: number;
   // The animator's place, flat; -1 for a stage with none.
   readonly animator: number;
   readonly gathering: Int32Array;
   readonly dancing: Int32Array;
+  // The still standing visitors, who watch from where they are.
+  readonly cheering: Int32Array;
   readonly floor: Floor | null;
 }
 
@@ -148,6 +151,13 @@ function faceAnimator(cast: Cast, person: number, animator: number): void {
   cast.heading[person] = Math.atan2(place.x - cast.x[person]!, place.z - cast.z[person]!);
 }
 
+// Cheer and hop by turns, each in the audience a beat apart from the next.
+function cheer(cast: Cast, person: number, animator: number, shown: number, slot: number): void {
+  faceAnimator(cast, person, animator);
+  const beat = Math.floor(shown / CHEER_BEAT) + slot;
+  cast.pose[person] = beat % 2 === 0 ? DRAWN_POSE.cheer : DRAWN_POSE.hop;
+}
+
 function gatherAll(cast: Cast, audience: Audience, clock: number): void {
   const { venue, animator } = audience;
   const since = cast.showFrom[venue]!;
@@ -160,16 +170,29 @@ function gatherAll(cast: Cast, audience: Audience, clock: number): void {
     if (!Number.isNaN(since)) {
       setOff(cast, person, since, clock);
       viaFor(cast, index, cast.fromShowX[person]!, cast.fromShowZ[person]!);
-      if (runOver(cast, person, clock)) {
-        faceAnimator(cast, person, animator);
-        const beat = Math.floor((clock - since) / CHEER_BEAT) + slot;
-        cast.pose[person] = beat % 2 === 0 ? DRAWN_POSE.cheer : DRAWN_POSE.hop;
-      }
+      if (runOver(cast, person, clock)) cheer(cast, person, animator, clock - since, slot);
     } else if (!Number.isNaN(ended)) {
       viaFor(cast, index, cast.x[person]!, cast.z[person]!);
       runBack(cast, person, ended, clock);
     }
     slot++;
+  }
+}
+
+// Turned to the animator on the beat while the show is on, and back as they were drawn after it.
+function cheerAll(cast: Cast, audience: Audience, clock: number): void {
+  const since = cast.showFrom[audience.venue]!;
+  const over = !Number.isNaN(cast.showTo[audience.venue]!);
+  for (let slot = 0; slot < audience.cheering.length; slot++) {
+    const index = audience.cheering[slot]!;
+    const person = cast.heldBy[index]!;
+    if (person < 0) continue;
+    const place = cast.places[index]!;
+    if (!Number.isNaN(since)) cheer(cast, person, audience.animator, clock - since, slot);
+    else if (over) {
+      cast.heading[person] = place.heading;
+      cast.pose[person] = place.pose;
+    }
   }
 }
 
@@ -211,6 +234,7 @@ export function playShows(cast: Cast, clock: number): void {
   watchShows(cast, clock);
   for (const audience of cast.audiences) {
     if (audience.animator >= 0) gatherAll(cast, audience, clock);
+    if (audience.animator >= 0 && audience.cheering.length > 0) cheerAll(cast, audience, clock);
     if (audience.floor) danceAll(cast, audience, audience.floor, clock);
   }
 }

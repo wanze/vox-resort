@@ -1110,8 +1110,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 4044561752],
-      [7, 1134888250],
+      [1, 699440517],
+      [7, 3218300897],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

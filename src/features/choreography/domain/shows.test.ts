@@ -118,6 +118,78 @@ describe('a show at the beach club', () => {
   });
 });
 
+const spectatorsOf = (cast: Cast) =>
+  [...cast.audiences[0]!.cheering].map((index) => cast.heldBy[index]!);
+const tableGuestsOf = (cast: Cast) =>
+  [...cast.audiences[0]!.dancing].map((index) => cast.heldBy[index]!);
+
+describe('a show at the open-air stage', () => {
+  it('cheers the standing crowd where it stands, facing the animator', () => {
+    const { cast } = venueFull('open-air-stage');
+    const spectators = spectatorsOf(cast);
+    expect(spectators).toHaveLength(32);
+    const animator = cast.places[cast.venues[0]!.animators.start]!;
+    noteShows(cast, () => true);
+    const poses = new Set<number>();
+    run(cast, 0, 10, () => {
+      for (const person of spectators) {
+        const spot = placeOf(cast, person);
+        expect([cast.x[person], cast.y[person], cast.z[person]]).toEqual([
+          Math.fround(spot.x),
+          Math.fround(spot.y),
+          Math.fround(spot.z),
+        ]);
+        const facing = Math.atan2(animator.x - spot.x, animator.z - spot.z);
+        expect(cast.heading[person]).toBeCloseTo(facing, 4);
+        poses.add(Math.floor(cast.pose[person]!));
+      }
+    });
+    expect(poses).toEqual(new Set([DRAWN_POSE.cheer, DRAWN_POSE.hop]));
+  });
+
+  it('turns the crowd back and sits the tables down once the show is over', () => {
+    const { cast } = venueFull('open-air-stage');
+    noteShows(cast, () => true);
+    run(cast, 0, 20);
+    noteShows(cast, () => false);
+    run(cast, 20, 50);
+    for (const person of spectatorsOf(cast)) {
+      const spot = placeOf(cast, person);
+      expect([cast.heading[person], cast.pose[person]]).toEqual([
+        Math.fround(spot.heading),
+        RESTING.standing,
+      ]);
+    }
+    for (const person of tableGuestsOf(cast)) {
+      const seat = placeOf(cast, person);
+      expect([cast.x[person], cast.y[person], cast.z[person], cast.pose[person]]).toEqual([
+        Math.fround(seat.x),
+        Math.fround(seat.y),
+        Math.fround(seat.z),
+        RESTING.sitting,
+      ]);
+    }
+  });
+
+  it('gathers nobody, and dances every table guest on the floor', () => {
+    const { cast, floor } = venueFull('open-air-stage');
+    expect(cast.audiences[0]!.gathering).toHaveLength(0);
+    const guests = tableGuestsOf(cast);
+    expect(guests).toHaveLength(48);
+    noteShows(cast, () => true);
+    run(cast, 0, 30, (time) => {
+      if (time < 25) return;
+      for (const person of guests) {
+        expect(cast.x[person]!).toBeGreaterThanOrEqual(floor!.minX);
+        expect(cast.x[person]!).toBeLessThanOrEqual(floor!.maxX);
+        expect(cast.z[person]!).toBeGreaterThanOrEqual(floor!.minZ);
+        expect(cast.z[person]!).toBeLessThanOrEqual(floor!.maxZ);
+        expect(cast.y[person]).toBe(floor!.ground);
+      }
+    });
+  });
+});
+
 describe('the game hall', () => {
   it('hammers the buttons facing the machine, and gathers round the animator for a show', () => {
     const { cast } = venueFull('game-hall');

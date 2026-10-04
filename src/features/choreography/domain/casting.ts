@@ -156,7 +156,16 @@ const gathers = (place: Place): boolean => place.act === 'tag' || place.act === 
 
 const dances = (place: Place): boolean => !isMoving(place) && place.pose === RESTING.sitting;
 
-// Who leaves off for a show: tag and the machines gather round the animator, sitters dance.
+// Somebody standing still with no game to play watches the show from where they are.
+const cheers = (place: Place): boolean =>
+  !isMoving(place) &&
+  (place.act ?? 'still') === 'still' &&
+  place.pose === RESTING.standing &&
+  !('side' in place && place.side !== undefined) &&
+  !('lane' in place && place.lane !== undefined);
+
+// Who leaves off for a show: tag and the machines gather round the animator, sitters dance. Only
+// a venue with a floor has a standing audience, or a minding parent would cheer at the kids club.
 function audienceOf(
   flat: readonly Place[],
   { visitors, animators }: VenueRanges,
@@ -167,13 +176,15 @@ function audienceOf(
   const animator = animators.count > 0 ? animators.start : -1;
   const gathering = animator >= 0 ? own.filter((index) => gathers(flat[index]!)) : [];
   const dancing = floor ? own.filter((index) => dances(flat[index]!)) : [];
-  if (gathering.length + dancing.length === 0) return [];
+  const cheering = floor && animator >= 0 ? own.filter((index) => cheers(flat[index]!)) : [];
+  if (gathering.length + dancing.length + cheering.length === 0) return [];
   return [
     {
       venue,
       animator,
       gathering: Int32Array.from(gathering),
       dancing: Int32Array.from(dancing),
+      cheering: Int32Array.from(cheering),
       floor: floor ?? null,
     },
   ];

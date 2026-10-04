@@ -181,6 +181,8 @@ venue: {
 | `shelter`      | `'open'` closes in rain; default `'covered'`                                      |
 | `sign`         | the icon the app hangs over the door (`SignKind`); default the role's own         |
 | `names`        | names the game draws a new venue's from, at most 24 characters; none, its type    |
+| `stage`        | an animator can put a show on here                                                |
+| `floor`        | seated visitors dance on it in a show, still standing ones cheer where they stand |
 
 A negative `amount` makes a need worse (tennis costs energy). `venues.test.ts`
 lists the models deliberately without a venue, so every new model must be one or

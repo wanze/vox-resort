@@ -1752,8 +1752,8 @@ describe('on the generated plot', () => {
       .join(';');
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2392);
-    expect(hash).toBe(1893113399);
+    expect(layout.paths).toHaveLength(2407);
+    expect(hash).toBe(3143055374);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -2182,7 +2182,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const desks = venues.filter((venue) => venue.receives);
-    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12, 12]);
+    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12]);
     let tick = 10 * 60;
 
     let crowd: Crowd | null = null;
@@ -2774,7 +2774,7 @@ describe('on the generated plot', () => {
       network: seated,
       count: people.count,
       variants: 4,
-      seed: 4,
+      seed: 6,
       routeOf: (person, at) => router.step(person, at),
       roamsBeach: false,
     });

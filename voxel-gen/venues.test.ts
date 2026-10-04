@@ -189,6 +189,7 @@ const SEEN: ReadonlySet<string> = new Set([
   'kids-club',
   'gym-pavilion',
   'beach-club',
+  'open-air-stage',
   'beach-shower',
   'icecream',
 ]);
@@ -311,6 +312,49 @@ describe('the places a venue draws its visitors in', () => {
             false,
           );
         }
+      }
+    }
+  });
+
+  // The dancers are drawn on the floor, and the standing audience cheers at the animator.
+  it('stands the spectators of a show clear, and off its dance floor', () => {
+    for (const model of models) {
+      const { floor, spots = [] } = model.venue!;
+      const animator = spots.find((spot) => spot.for === 'animator');
+      if (!floor || !animator) continue;
+      const painted = paintedOf(model);
+      const ahead = [
+        [0, 1],
+        [1, 0],
+        [0, -1],
+        [-1, 0],
+      ][animator.facing]!;
+      const spectators = spots.filter(
+        (spot) =>
+          spot.for === 'watcher' ||
+          ((spot.for ?? 'visitor') === 'visitor' &&
+            (spot.pose ?? 'stand') === 'stand' &&
+            spot.act === undefined &&
+            spot.station === undefined &&
+            spot.game === undefined &&
+            spot.lane === undefined),
+      );
+      for (const spot of spectators) {
+        const at = `${model.id} spectator at ${spot.x},${spot.y},${spot.z}`;
+        expect(painted.has(`${spot.x},${spot.y - 1},${spot.z}`), `${at} floats`).toBe(true);
+        for (const up of [0, 1, 2, 3]) {
+          expect(painted.has(`${spot.x},${spot.y + up},${spot.z}`), `${at} is walled in`).toBe(
+            false,
+          );
+        }
+        const onFloor =
+          spot.x >= floor.x &&
+          spot.x < floor.x + floor.w &&
+          spot.z >= floor.z &&
+          spot.z < floor.z + floor.d;
+        expect(onFloor, `${at} is on the dance floor`).toBe(false);
+        const along = (spot.x - animator.x) * ahead[0]! + (spot.z - animator.z) * ahead[1]!;
+        expect(along, `${at} is behind the animator`).toBeGreaterThan(0);
       }
     }
   });

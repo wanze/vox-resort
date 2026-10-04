@@ -36,6 +36,7 @@ import litter_bin from './litter-bin.ts';
 import minigolf from './minigolf.ts';
 import oak from './oak.ts';
 import olive from './olive.ts';
+import open_air_stage from './open-air-stage.ts';
 import palm from './palm.ts';
 import path from './path.ts';
 import pedalo_rental from './pedalo-rental.ts';
@@ -145,6 +146,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   game_hall,
   restaurant,
   beach_club,
+  open_air_stage,
   swimming_pool,
   tennis_court,
   basketball_court,

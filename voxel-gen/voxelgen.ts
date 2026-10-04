@@ -127,8 +127,8 @@ export interface ModelRect {
   readonly d: number;
 }
 
-// Open floor whose seated visitors get up and dance on it while a show is on; y is the layer the
-// feet stand in.
+// Open floor whose seated visitors get up and dance on it while a show is on, and whose venue's
+// standing visitors cheer where they stand; y is the layer the feet stand in.
 export interface ModelFloor extends ModelRect {
   readonly y: number;
 }
@@ -252,7 +252,8 @@ export type SignKind =
   | 'waterpark'
   | 'tennis'
   | 'basketball'
-  | 'volleyball';
+  | 'volleyball'
+  | 'stage';
 
 export type SoundKind =
   | 'cafe'

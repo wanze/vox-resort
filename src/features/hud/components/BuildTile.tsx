@@ -57,6 +57,9 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
       onClick={() => onSelect(selected ? null : type.id)}
     >
       <TileArt type={type} preview={preview} />
+      <span className="build-tile-name" aria-hidden="true">
+        {type.label}
+      </span>
       <span className="build-tile-badge">
         <span className="build-tile-cost">{price}</span>
       </span>

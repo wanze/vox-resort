@@ -2405,8 +2405,7 @@ input[type='checkbox'] {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* A token so the hover state can lean on it. */
-  transform: scale(var(--art-zoom));
+  transform: translateY(-9%) scale(var(--art-zoom));
   transition: transform var(--quick);
 }
 
@@ -2421,12 +2420,17 @@ input[type='checkbox'] {
   position: absolute;
   inset: auto 0 0;
   z-index: 1;
-  padding: var(--space-3) 5px 4px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: var(--space-2) 4px 3px;
   background: var(--plate);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  line-height: 1.05;
+  line-height: 1.1;
   text-align: left;
+  overflow-wrap: anywhere;
   color: var(--stone-800);
 }
 

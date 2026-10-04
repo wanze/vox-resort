@@ -7,7 +7,7 @@ import { createRandom, resumeRandom, type Random } from '../../layout/domain/ran
 import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
 import { PER_BODY_COLUMNS, type CrowdSnapshot } from './crowdSnapshot';
 import { nearestNodeTo, nodeIndexFor } from './nearestNode';
-import { blockedAt, clearLine } from './sandGrid';
+import { blockedAt, clearLine, clearWayOut } from './sandGrid';
 import {
   BEACH_SURFACE,
   beachPointAt,
@@ -502,8 +502,12 @@ function clearTo(crowd: Crowd, i: number, node: number): boolean {
   const sand = crowd.network.sand;
   if (!sand) return true;
   const target = crowd.network.nodes[node]!;
-  return clearLine(sand, crowd.fromX[i]!, crowd.fromZ[i]!, target.x, target.z, 0, GATE_CLEAR);
+  return lineOut(crowd)(sand, crowd.fromX[i]!, crowd.fromZ[i]!, target.x, target.z, 0, GATE_CLEAR);
 }
+
+// A roamer only stands in a box on a lounger, which SEAT_CLEAR gets them off. A crowd that does
+// not roam is on the sand where the sim held it, and an edit sets it roaming from there.
+const lineOut = (crowd: Crowd): typeof clearLine => (crowd.roamsBeach ? clearLine : clearWayOut);
 
 // A pause is a zero-length segment like a sit, so it costs the loop nothing.
 function roamTo(crowd: Crowd, i: number, skipStart = 0, towardX?: number): void {
@@ -560,7 +564,7 @@ function spotIsClear(
   const sand = crowd.network.sand;
   if (!sand) return true;
   if (blockedAt(sand, point.x, point.z)) return false;
-  return clearLine(sand, crowd.fromX[i]!, crowd.fromZ[i]!, point.x, point.z, skipStart);
+  return lineOut(crowd)(sand, crowd.fromX[i]!, crowd.fromZ[i]!, point.x, point.z, skipStart);
 }
 
 export function isSeated(crowd: Crowd, i: number): boolean {

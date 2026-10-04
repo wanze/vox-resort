@@ -89,13 +89,42 @@ export function clearLine(
   skipStart = 0,
   skipEnd = 0,
 ): boolean {
+  return lineIsClear(grid, ax, az, bx, bz, skipStart, skipEnd, false);
+}
+
+// For somebody the sim held inside a box, at a court or a bar on the sand: no line out of it is
+// clear, so the box they stand in is crossed, and only that one.
+export function clearWayOut(
+  grid: SandGrid,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  skipStart = 0,
+  skipEnd = 0,
+): boolean {
+  return lineIsClear(grid, ax, az, bx, bz, skipStart, skipEnd, true);
+}
+
+function lineIsClear(
+  grid: SandGrid,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  skipStart: number,
+  skipEnd: number,
+  leaving: boolean,
+): boolean {
   const length = Math.hypot(bx - ax, bz - az);
   const samples = Math.ceil(length / SAND_CELL);
+  let inside = leaving;
   for (let sample = 0; sample <= samples; sample++) {
     const along = samples === 0 ? 0 : (length * sample) / samples;
     if (along < skipStart || along > length - skipEnd) continue;
     const f = samples === 0 ? 0 : sample / samples;
-    if (blockedAt(grid, ax + (bx - ax) * f, az + (bz - az) * f)) return false;
+    if (!blockedAt(grid, ax + (bx - ax) * f, az + (bz - az) * f)) inside = false;
+    else if (!inside) return false;
   }
   return true;
 }

@@ -1439,5 +1439,29 @@ describe('reseatCrowd', () => {
       expect(reseated.node[lying]).toBe(-1);
       expect(reseated.seat[lying]).toBe(-1);
     });
+
+    it('walks somebody held inside what stands on the sand back to the paving', () => {
+      const court = { x: 4 * TILE_VOXELS, z: 13 * TILE_VOXELS, width: 32, depth: 32 };
+      const courtside = (): WalkNetwork =>
+        walkNetworkFor({
+          paved: boardwalk(8),
+          levelOf: FLAT,
+          shore,
+          tilesX: 20,
+          obstacles: [court],
+        });
+      const crowd = createCrowd({
+        network: courtside(),
+        count: 4,
+        variants: 1,
+        seed: 41,
+        roamsBeach: false,
+      });
+      holdAt(crowd, 0, court.x + 16, BEACH_SURFACE, court.z + 16, 0);
+      const reseated = reseatCrowd(crowd, courtside());
+      for (let step = 0; step < 2000; step++) stepCrowd(reseated, MAX_STEP);
+      expect(isRoaming(reseated, 0)).toBe(false);
+      expect(reseated.x[0]).not.toBe(Math.fround(court.x + 16));
+    });
   });
 });

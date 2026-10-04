@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { blockedAt, clearLine, sandGridFor } from './sandGrid';
+import { blockedAt, clearLine, clearWayOut, sandGridFor } from './sandGrid';
 
 // Water from z = 18, so z = 12..17 is beach.
 const shore = shoreFor({
@@ -75,5 +75,28 @@ describe('clearLine', () => {
     expect(clearLine(grid, inside.x, inside.z, east.x, east.z)).toBe(false);
     expect(clearLine(grid, inside.x, inside.z, east.x, east.z, 10)).toBe(true);
     expect(clearLine(grid, east.x, east.z, inside.x, inside.z, 0, 10)).toBe(true);
+  });
+});
+
+describe('clearWayOut', () => {
+  const inside = { x: BOX.x + 4, z: BOX.z + 2 };
+  const east = { x: BOX.x + 30, z: BOX.z + 2 };
+
+  it('crosses the box it starts in', () => {
+    expect(clearWayOut(grid, inside.x, inside.z, east.x, east.z)).toBe(true);
+  });
+
+  it('refuses a box it meets once out of the one it started in', () => {
+    const twoBoxes = sandGridFor({
+      shore,
+      tilesX: 20,
+      obstacles: [BOX, { ...BOX, x: BOX.x + 20 }],
+    });
+    expect(clearWayOut(twoBoxes, inside.x, inside.z, east.x + 10, east.z)).toBe(false);
+  });
+
+  it('is clearLine for a line starting in the open', () => {
+    const west = { x: BOX.x - 20, z: BOX.z + 2 };
+    expect(clearWayOut(grid, west.x, west.z, east.x, east.z)).toBe(false);
   });
 });

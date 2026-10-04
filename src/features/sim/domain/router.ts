@@ -94,6 +94,20 @@ const createErrands = (people: number): Errands => ({
   back: new Uint8Array(people),
 });
 
+// What a rebuild reads of the router it replaces, to carry over who stays put.
+interface Before {
+  readonly venues: readonly Venue[];
+  readonly lodgings: readonly Lodging[];
+  readonly network: WalkNetwork;
+  readonly occupancy: Occupancy;
+  readonly errands: Errands;
+  readonly doorOf: Int32Array;
+  readonly asleep: Uint8Array;
+  readonly homeward: Uint8Array;
+  readonly homeLodging: Int32Array;
+  readonly fetching: Int32Array;
+}
+
 interface Claim {
   readonly pitch: Pitch;
   readonly routes: readonly SandRoute[];
@@ -120,13 +134,16 @@ export interface Router {
   // goals: nearly every party always has an errand, and that emptied the beach by afternoon.
   offTheSand(person: number): boolean;
   tick(now: number): void;
-  // Node indices mean nothing across a rebuild; a stale field walks guests into walls.
+  // Node indices mean nothing across a rebuild; a stale field walks guests into walls. Whoever
+  // is in or queuing at a building that still stands, or asleep in one, stays put.
   rebuild(
     venues: readonly Venue[],
     lodgings: readonly Lodging[],
     gateways: readonly Gateway[],
     network: WalkNetwork,
   ): void;
+  // Asked by the crowd's reseat after a rebuild: everybody else is walked to the new graph.
+  holds(person: number): boolean;
   // The same venues, renamed: unlike rebuild it keeps every field, lane and visit. Throws
   // when the list differs in anything but labels' length or keys, which is a caller's bug.
   relabel(venues: readonly Venue[]): void;
@@ -1097,6 +1114,94 @@ export function createRouter(parts: {
     return homewardStep(person, at);
   };
 
+  // Only a building standing where it stood: one moved or turned has other doors and places.
+  // The beach is left out, as its pitches and loungers are renumbered under whoever stays there.
+  const carryOver = (before: Before): void => {
+    const venueAfter = venuesAfter(before.venues, venues);
+    for (let person = 0; person < guests.count; person++) carryInside(before, person, venueAfter);
+    for (const [old, queue] of before.occupancy.queues.entries()) {
+      const venue = venueAfter[old]!;
+      for (const person of queue) carryWaiting(before, person, old, venue);
+    }
+    for (let person = 0; person < guests.count; person++) {
+      if (before.asleep[person] === 1) carrySleeper(before, person);
+    }
+  };
+
+  // Not somebody fetching from the beach: the pitch they would go back to is not carried.
+  const carryInside = (before: Before, person: number, venueAfter: readonly number[]): void => {
+    if (before.occupancy.state[person] !== VISIT.inside || before.fetching[person]! >= 0) return;
+    const old = before.occupancy.at[person]!;
+    const venue = venueAfter[old]!;
+    if (venue < 0 || !findWayOut(before, person, old, venue)) return;
+    occupancy.state[person] = VISIT.inside;
+    occupancy.at[person] = venue;
+    occupancy.until[person] = before.occupancy.until[person]!;
+    occupancy.inside[venue]! += 1;
+  };
+
+  // Stood again: the line may be laid elsewhere on the new graph.
+  const carryWaiting = (before: Before, person: number, old: number, venue: number): void => {
+    if (venue < 0 || before.fetching[person]! >= 0) return;
+    if (!findWayOut(before, person, old, venue)) return;
+    const queue = occupancy.queues[venue]!;
+    occupancy.state[person] = VISIT.waiting;
+    occupancy.at[person] = venue;
+    occupancy.slot[person] = queue.length;
+    queue.push(person);
+    fieldFor(venue);
+    stand(person, venue, doorOf[person]!, true);
+  };
+
+  const carrySleeper = (before: Before, person: number): void => {
+    const lodging = homeLodging[person]!;
+    const was = before.lodgings[before.homeLodging[person]!];
+    const declared = lodgings[lodging];
+    if (!was || !declared || was.key !== declared.key || !sameFootprint(was, declared)) return;
+    const door = nearestNode(network, doorsFor(declared, index).nodes, before, person);
+    if (door < 0) return;
+    doorOf[person] = door;
+    asleep[person] = 1;
+    asleepCount++;
+    homeward[person] = before.homeward[person]!;
+  };
+
+  // The way they will leave by, on the new graph: the door nearest the old one, or the route
+  // over the sand that ends nearest where the old one did. False when there is none.
+  const findWayOut = (before: Before, person: number, old: number, venue: number): boolean => {
+    if (before.doorOf[person]! >= 0) {
+      const door = nearestNode(
+        network,
+        doorsFor(venues[venue]!, index, network).nodes,
+        before,
+        person,
+      );
+      doorOf[person] = door;
+      return door >= 0;
+    }
+    const route = before.errands.venue[person] === old ? before.errands.route[person] : null;
+    const end = route?.waypoints.at(-1);
+    if (!end) return false;
+    fieldFor(venue);
+    let best: SandRoute | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    for (const candidate of sandRoutes[venue] ?? []) {
+      const door = candidate.waypoints.at(-1)!;
+      const distance = Math.hypot(door.x - end.x, door.z - end.z);
+      if (distance < bestDistance) {
+        best = candidate;
+        bestDistance = distance;
+      }
+    }
+    if (!best) return false;
+    errands.venue[person] = venue;
+    errands.route[person] = best;
+    // Past the last waypoint, as reaching the door left them.
+    errands.leg[person] = best.waypoints.length;
+    errands.back[person] = 0;
+    return true;
+  };
+
   return {
     step(person, at) {
       if (at === ON_SAND) return alongTheSand(person);
@@ -1185,6 +1290,18 @@ export function createRouter(parts: {
     },
 
     rebuild(nextVenues, nextLodgings, nextGateways, nextNetwork) {
+      const before: Before = {
+        venues,
+        lodgings,
+        network,
+        occupancy,
+        errands,
+        doorOf,
+        asleep,
+        homeward,
+        homeLodging: homeLodging.slice(),
+        fetching,
+      };
       venues = withBeach(nextVenues, nextNetwork);
       lodgings = nextLodgings;
       gateways = nextGateways;
@@ -1205,7 +1322,6 @@ export function createRouter(parts: {
       leaving = new Uint8Array(guests.count);
       built = 0;
       findHomes();
-      // Everybody is woken: a guest asleep across a rebuild would be held forever.
       asleep = new Uint8Array(guests.count);
       asleepCount = 0;
       homeward = new Uint8Array(guests.count);
@@ -1228,7 +1344,11 @@ export function createRouter(parts: {
       salts = saltsFor(venues);
       justLeft = new Int32Array(guests.count).fill(-1);
       clearAllGoals(goals);
-      // Nobody is let go: `reseatCrowd` walks every held person to the nearest new node.
+      carryOver(before);
+    },
+
+    holds(person) {
+      return asleep[person] === 1 || (occupancy.state[person] ?? VISIT.away) !== VISIT.away;
     },
 
     get fieldCount() {
@@ -1396,6 +1516,41 @@ export function createRouter(parts: {
       random = resumeRandom(snapshot.random);
     },
   };
+}
+
+// Per venue before the rebuild, its index after, or -1 when it is not carried.
+function venuesAfter(before: readonly Venue[], after: readonly Venue[]): readonly number[] {
+  const byKey = new Map(after.map((venue, at) => [venue.key, at]));
+  return before.map((venue) => {
+    const at = byKey.get(venue.key) ?? -1;
+    return at >= 0 && !isBeach(venue) && sameFootprint(venue, after[at]!) ? at : -1;
+  });
+}
+
+type Footprint = Pick<Venue, 'tileX' | 'tileZ' | 'tilesX' | 'tilesZ'>;
+
+const sameFootprint = (a: Footprint, b: Footprint): boolean =>
+  a.tileX === b.tileX && a.tileZ === b.tileZ && a.tilesX === b.tilesX && a.tilesZ === b.tilesZ;
+
+function nearestNode(
+  network: WalkNetwork,
+  candidates: readonly number[],
+  before: Before,
+  person: number,
+): number {
+  const was = before.network.nodes[before.doorOf[person]!];
+  if (!was) return -1;
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    const node = network.nodes[candidate]!;
+    const distance = Math.hypot(node.x - was.x, node.z - was.z);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }
 
 function tallyOf(venues: readonly Venue[], counts: Int32Array): ReadonlyMap<string, number> {

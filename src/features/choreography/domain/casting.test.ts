@@ -5,6 +5,7 @@ import { RESTING } from '../../crowd/domain/crowd';
 import type { StaffRole } from '../../sim/domain/staff';
 import { venuesOn } from '../../sim/domain/venues';
 import {
+  carryPlaces,
   createCast,
   insideAt,
   keepSeats,
@@ -147,6 +148,50 @@ describe('recast', () => {
     recast(cast, casting, freeSeats());
     expect(cast.shown[0]).toBe(SHOWN.asCrowd);
     expect(cast.placeOf[0]).toBe(-1);
+  });
+});
+
+describe('carryPlaces', () => {
+  it('keeps whoever a standing venue held on the same place, wherever the venue now sits', () => {
+    const { venue, waiting, queue, casting } = world(4);
+    const cast = createCast(4, ALL);
+    venue.set([0, 0, 2, 0]);
+    waiting[3] = 1;
+    queue[3] = 1;
+    recast(cast, casting, freeSeats());
+    venue[0] = NONE;
+    recast(cast, casting, freeSeats());
+    expect([cast.x[1], cast.x[2], cast.x[3]]).toEqual([2, 21, 12]);
+
+    const reordered = createCast(4, [CAFE, COURT]);
+    carryPlaces(cast, reordered, (at) => (at === 0 ? 1 : at === 2 ? 0 : NONE));
+    venue.set([NONE, 1, 0, 1]);
+    recast(reordered, casting, freeSeats());
+    expect([reordered.x[1], reordered.x[2], reordered.x[3]]).toEqual([2, 21, 12]);
+    expect(Array.from(reordered.shown)).toEqual([0, 1, 1, 1]);
+  });
+
+  it('lets recast move on anybody the sim did not keep at the venue', () => {
+    const { venue, casting } = world(2);
+    const cast = createCast(2, ALL);
+    venue.set([0, 0]);
+    recast(cast, casting, freeSeats());
+    const next = createCast(2, ALL);
+    carryPlaces(cast, next, (at) => at);
+    venue[0] = NONE;
+    recast(next, casting, freeSeats());
+    expect(next.shown[0]).toBe(SHOWN.asCrowd);
+    expect(next.x[1]).toBe(2);
+  });
+
+  it('carries nobody onto a venue laid out with other places', () => {
+    const { venue, casting } = world(1);
+    const cast = createCast(1, ALL);
+    venue[0] = 0;
+    recast(cast, casting, freeSeats());
+    const next = createCast(1, [places({ visitors: [place('visitor', 7)] })]);
+    carryPlaces(cast, next, (at) => (at === 0 ? 0 : NONE));
+    expect(next.placeOf[0]).toBe(-1);
   });
 });
 

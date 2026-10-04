@@ -6,7 +6,7 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom, resumeRandom, type Random } from '../../layout/domain/random';
 import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
 import { PER_BODY_COLUMNS, type CrowdSnapshot } from './crowdSnapshot';
-import { nearestNodeTo, nodeIndexFor } from './nearestNode';
+import { nearestNodeTo, nodeIndexFor, type NodeIndex } from './nearestNode';
 import { blockedAt, clearLine, clearWayOut } from './sandGrid';
 import {
   BEACH_SURFACE,
@@ -256,11 +256,14 @@ function drawBody(
   crowd.gate[i] = -1;
 }
 
-// Node indices (node, cameFrom, gate, seat, seatBy) are stale after a rebuild;
-// everything about the person is kept. Seats are given up because their object may
-// be gone; roamers stay on the sand so an edit does not march the beach ashore.
-export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
-  const previous = crowd.network;
+// Node indices (node, cameFrom, gate, seat, seatBy) are stale after a rebuild; everything about
+// the person is kept. Seats are given up because their object may be gone; whoever `holds` keeps
+// held stands on, as no node or seat says where they are.
+export function reseatCrowd(
+  crowd: Crowd,
+  network: WalkNetwork,
+  holds?: (person: number) => boolean,
+): Crowd {
   const count = network.edges.length === 0 ? 0 : crowd.capacity;
   const reseated: Crowd = {
     ...crowd,
@@ -269,34 +272,37 @@ export function reseatCrowd(crowd: Crowd, network: WalkNetwork): Crowd {
     seatBy: new Int32Array(network.seats.length).fill(-1),
   };
   const index = nodeIndexFor(network);
-  const canRoam = network.beach !== null && network.gates.length > 0;
-
   for (let i = 0; i < count; i++) {
     // Re-anchoring off-plot bodies would stand every checked-out guest on the promenade.
     if (crowd.offPlot[i] === 1) continue;
-    const seat = crowd.seat[i]!;
-    const lounging = seat >= 0 && previous.seats[seat]?.node === OFF_THE_GRAPH;
-    crowd.seat[i] = -1;
-    // Undo the sidestep from where they actually stand, not from the old segment start.
-    const side = crowd.side[i]!;
-    crowd.fromX[i] = crowd.x[i]! - crowd.dirZ[i]! * side;
-    crowd.fromY[i] = crowd.y[i]!;
-    crowd.fromZ[i] = crowd.z[i]! + crowd.dirX[i]! * side;
-    crowd.cameFrom[i] = -1;
-
-    if (canRoam && (lounging || outOnSand(crowd, i))) {
-      crowd.gate[i] = network.gates[Math.floor(crowd.random() * network.gates.length)]!;
-      crowd.node[i] = ROAMING;
-      roamTo(reseated, i, lounging ? SEAT_CLEAR : 0);
-      continue;
-    }
-    crowd.gate[i] = -1;
-    // Held people are re-anchored like anyone: the router's record is discarded on
-    // rebuild too.
-    aim(reseated, i, nearestNodeTo(network, index, crowd.x[i]!, crowd.z[i]!, TILE_VOXELS));
+    if (crowd.node[i] === HELD && crowd.seat[i]! < 0 && holds?.(i) === true) continue;
+    reanchor(reseated, crowd.network, index, i);
   }
   crowd.seat.fill(-1, count);
   return reseated;
+}
+
+// Roamers stay on the sand so an edit does not march the beach ashore.
+function reanchor(crowd: Crowd, previous: WalkNetwork, index: NodeIndex, i: number): void {
+  const { network } = crowd;
+  const seat = crowd.seat[i]!;
+  const lounging = seat >= 0 && previous.seats[seat]?.node === OFF_THE_GRAPH;
+  crowd.seat[i] = -1;
+  // Undo the sidestep from where they actually stand, not from the old segment start.
+  const side = crowd.side[i]!;
+  crowd.fromX[i] = crowd.x[i]! - crowd.dirZ[i]! * side;
+  crowd.fromY[i] = crowd.y[i]!;
+  crowd.fromZ[i] = crowd.z[i]! + crowd.dirX[i]! * side;
+  crowd.cameFrom[i] = -1;
+
+  if (network.beach !== null && network.gates.length > 0 && (lounging || outOnSand(crowd, i))) {
+    crowd.gate[i] = network.gates[Math.floor(crowd.random() * network.gates.length)]!;
+    crowd.node[i] = ROAMING;
+    roamTo(crowd, i, lounging ? SEAT_CLEAR : 0);
+    return;
+  }
+  crowd.gate[i] = -1;
+  aim(crowd, i, nearestNodeTo(network, index, crowd.x[i]!, crowd.z[i]!, TILE_VOXELS));
 }
 
 export function snapshotCrowd(crowd: Crowd): CrowdSnapshot {

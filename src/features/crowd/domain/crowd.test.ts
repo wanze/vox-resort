@@ -1328,6 +1328,18 @@ describe('reseatCrowd', () => {
     for (let i = 0; i < reseated.count; i++) expect(isSeated(reseated, i)).toBe(false);
   });
 
+  it('leaves whoever the sim still holds exactly where it holds them, and only them', () => {
+    const crowd = walked(networkOf(street(20)), 42, 4);
+    holdAt(crowd, 0, 3 * TILE_VOXELS, walkingSurface(0), 2, 1, RESTING.sitting);
+    holdAt(crowd, 1, 6 * TILE_VOXELS, walkingSurface(0), 2, 1);
+    const reseated = reseatCrowd(crowd, networkOf(crossroads(20)), (person) => person === 0);
+    run(reseated, 10);
+    expect(isWaiting(reseated, 0)).toBe(true);
+    expect(restingOn(reseated, 0)).toBe(RESTING.sitting);
+    expect([reseated.x[0], reseated.z[0]]).toEqual([Math.fround(3 * TILE_VOXELS), 2]);
+    expect(isWaiting(reseated, 1)).toBe(false);
+  });
+
   it('puts everybody on the new graph', () => {
     const crowd = walked(networkOf(crossroads(20)), 34);
     const network = networkOf(street(12));

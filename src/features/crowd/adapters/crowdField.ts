@@ -40,7 +40,8 @@ export interface CrowdField {
   // A rebuild renumbers the places, so it hands over a new cast rather than a new field.
   drawAs(next: DrawnAs | null): void;
   readonly drawnCount: number;
-  relocate(network: WalkNetwork): void;
+  // `holds` names who the sim keeps where they stand; reseatCrowd says how.
+  relocate(network: WalkNetwork, holds?: (person: number) => boolean): void;
   // Takes a restored crowd as it is, where relocate would re-anchor everybody.
   adopt(crowd: Crowd): void;
   dispose(): void;
@@ -262,8 +263,8 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
       }
       writeAll();
     },
-    relocate(network) {
-      crowd = reseatCrowd(crowd, network);
+    relocate(network, holds) {
+      crowd = reseatCrowd(crowd, network, holds);
       // Now rather than next frame, so nobody is drawn where the old graph had them.
       writeAll();
     },

@@ -787,7 +787,34 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.occupancyOf('nothing#0')).toBeNull();
   });
 
-  it('empties every venue when the graph is rebuilt under it', () => {
+  it('keeps whoever is inside or in the line of a building the rebuild leaves standing', () => {
+    const network = networkOf(street(8));
+    const { router, crowd } = routerOn(network, [shower(7)], grubby());
+    const door = nodeAt(network, 7);
+    for (const person of [0, 1, 2]) {
+      router.step(person, nodeAt(network, 0));
+      router.step(person, door);
+    }
+    const visits = [0, 1, 2].map((person) => router.visitOf(person));
+
+    const rebuilt = networkOf(street(8).toReversed());
+    expect(nodeAt(rebuilt, 7)).not.toBe(door);
+    router.rebuild([shower(7)], [], [], rebuilt);
+    expect(router.occupancyTotals).toEqual({ inside: 1, waiting: 2 });
+    expect([0, 1, 2].map((person) => router.visitOf(person))).toEqual(visits);
+    const reseated = reseatCrowd(crowd, rebuilt, (person) => router.holds(person));
+    for (const person of [0, 1, 2]) {
+      expect(router.holds(person)).toBe(true);
+      expect(isWaiting(reseated, person)).toBe(true);
+    }
+
+    for (let tick = 1; tick <= 3 && router.visitOf(0); tick++) router.tick(tick);
+    expect(router.visitOf(0)).toBeNull();
+    expect(reseated.node[0], 'not let out of the door on the new graph').toBe(nodeAt(rebuilt, 7));
+    expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
+  });
+
+  it('empties a venue the rebuild moved, and lets go of everybody in it', () => {
     const network = networkOf(street(8));
     const { router, crowd } = routerOn(network, [shower(7)], grubby());
     const door = nodeAt(network, 7);
@@ -800,7 +827,7 @@ describe('a venue that holds only as many as it says', () => {
     const rebuilt = networkOf(street(10));
     router.rebuild([shower(9)], [], [], rebuilt);
     expect(router.occupancyTotals).toEqual({ inside: 0, waiting: 0 });
-    const reseated = reseatCrowd(crowd, rebuilt);
+    const reseated = reseatCrowd(crowd, rebuilt, (person) => router.holds(person));
     for (const person of [0, 1, 2]) expect(isWaiting(reseated, person)).toBe(false);
   });
 });
@@ -1296,6 +1323,29 @@ describe('a building on the beach', () => {
     expect(backAt, 'never came back onto the boardwalk').toBe(gate);
   });
 
+  it('keeps a guest in it through a rebuild, and walks them back over the sand after', () => {
+    const { router, crowd } = onTheBoardwalk(wanting(0, 'hygiene'), [0]);
+    let step = 0;
+    const inside = (people: Crowd): boolean =>
+      router.visitOf(0) !== null && isWaiting(people, 0) && inShower(people, 0);
+    for (; step < 4000 && !inside(crowd); step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
+    }
+    expect(inside(crowd), 'never stood in the shower').toBe(true);
+
+    router.rebuild([shower], [], [], network);
+    const reseated = reseatCrowd(crowd, network, (person) => router.holds(person));
+    expect(inside(reseated)).toBe(true);
+    let backAt = -1;
+    for (; step < 8000 && backAt === -1; step++) {
+      stepCrowd(reseated, MAX_STEP);
+      if (step % TICKS_EVERY === 0) router.tick(step / TICKS_EVERY);
+      if (router.visitOf(0) === null && reseated.node[0]! >= 0) backAt = reseated.node[0]!;
+    }
+    expect(backAt, 'never came back onto the boardwalk').toBe(gate);
+  });
+
   it('stands a second guest in a line on the sand, outside the shower', () => {
     const needs = wanting(0, 'hygiene');
     const second = [...Array(guests.count).keys()].find(
@@ -1436,13 +1486,28 @@ describe('the night', () => {
     expect(router.offTheSand(housed)).toBe(false);
   });
 
-  it('wakes everybody when the graph is rebuilt', () => {
+  it('leaves a guest asleep through a rebuild, and gets them up by the door on the new graph', () => {
+    const { network, clock, router, crowd } = nightOn(housed);
+    router.step(housed, nodeAt(network, 1));
+    const rebuilt = networkOf(street(8).toReversed());
+    expect(nodeAt(rebuilt, 1)).not.toBe(nodeAt(network, 1));
+    router.rebuild([bakery(7)], [hotel()], [], rebuilt);
+    expect(router.isAsleep(housed)).toBe(true);
+    expect(router.asleepCount).toBe(1);
+    expect(router.holds(housed)).toBe(true);
+    clock.tick = NOON;
+    router.tick(NOON);
+    expect(router.isAsleep(housed)).toBe(false);
+    expect(crowd.node[housed]).toBe(nodeAt(rebuilt, 1));
+  });
+
+  it('wakes a guest whose lodging the rebuild moved', () => {
     const { network, router } = nightOn(housed);
     router.step(housed, nodeAt(network, 1));
-    expect(router.asleepCount).toBe(1);
-    router.rebuild([bakery(9)], [hotel()], [], networkOf(street(10)));
+    router.rebuild([bakery(9)], [hotel(1)], [], networkOf(street(10)));
     expect(router.asleepCount).toBe(0);
     expect(router.isAsleep(housed)).toBe(false);
+    expect(router.holds(housed)).toBe(false);
   });
 });
 

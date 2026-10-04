@@ -405,6 +405,7 @@ import {
 } from '../features/crowd/domain/walkNetwork';
 import { seatSpotsFor } from '../features/crowd/domain/seating';
 import {
+  carryPlaces,
   createCast,
   insideAt,
   keepSeats,
@@ -1797,12 +1798,19 @@ const recastTask = createStaffTask();
 const isSweeping = (task: StaffTask): boolean => task.kind === 'sweep' && task.working;
 
 // Rebuilt with the venues and the network: a place points at a seat by its index there.
-function recastAfterEdit(resort: Resort, network: WalkNetwork): void {
+function recastAfterEdit(
+  resort: Resort,
+  network: WalkNetwork,
+  wasStanding: readonly Venue[],
+): void {
+  const was = resort.cast;
   resort.places = placesFor(resort.venues, byKey(resort.plot.placements), network);
   resort.cast = createCast(resort.guests.count, resort.places, {
     sand: network.sand,
     swim: resort.bathing,
   });
+  const standing = new Map(resort.venues.map((venue, at) => [venue.key, at]));
+  carryPlaces(was, resort.cast, (venue) => standing.get(wasStanding[venue]?.key ?? '') ?? -1);
   resort.staffCast = createCast(resort.staffPool.count, resort.places);
   recastAll(resort);
   resort.crowd.drawAs(resort.cast);
@@ -4687,10 +4695,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.unreachable = strandedOn(resort.venues, network);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
     resort.staffRouter.rebuild(resort.venues, network, resort.lodgings, resort.depots);
-    crowd.relocate(network);
+    crowd.relocate(network, (person) => resort.router.holds(person));
     resort.staff.relocate(network);
     staffTheResort(resort);
-    recastAfterEdit(resort, network);
+    recastAfterEdit(resort, network, wasStanding);
     resort.footfall = createFootfall(network.nodes.length);
     paintOverlay();
     letter();

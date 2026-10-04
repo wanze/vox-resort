@@ -462,6 +462,31 @@ export function recast(cast: Cast, casting: Casting, seatBy: Int32Array): void {
 
 export const insideAt = (cast: Cast, venue: number): number => cast.inside[venue] ?? 0;
 
+// Onto a cast built after an edit, before its first recast. A venue that still stands is laid
+// out from the same art, so whoever held one of its places holds the same one again; recast lets
+// go of anybody the sim did not keep there.
+export function carryPlaces(from: Cast, into: Cast, venueAfter: (venue: number) => number): void {
+  for (const [venue, ranges] of from.venues.entries()) {
+    const next = venueAfter(venue);
+    const onto = next >= 0 ? into.venues[next] : undefined;
+    if (!onto) continue;
+    carryRange(from, into, ranges.visitors, onto.visitors, next);
+    carryRange(from, into, ranges.watchers, onto.watchers, next);
+  }
+}
+
+function carryRange(from: Cast, into: Cast, range: Range, onto: Range, venue: number): void {
+  if (range.count !== onto.count) return;
+  for (let at = 0; at < range.count; at++) {
+    const person = from.heldBy[range.start + at]!;
+    if (person < 0 || person >= into.shown.length) continue;
+    hold(into, person, onto.start + at);
+    into.lastVenue[person] = venue;
+    into.lastWaiting[person] = from.lastWaiting[person]!;
+    into.chair[person] = from.chair[person]!;
+  }
+}
+
 // Every frame: a passer-by keeps sitting down on venue seats, and whoever was drawn there moves.
 export function keepSeats(cast: Cast, casting: Casting, seatBy: Int32Array): void {
   for (const index of cast.onSeats) {

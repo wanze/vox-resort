@@ -28,6 +28,8 @@ const SUITE: readonly BenchCase[] = [
   { name: 'night-street', view: 'street', time: 0.02, note: 'after dark, camera at eye level' },
 ];
 
+const PASSED = ['weather', 'styles', 'fireworks'] as const;
+
 interface BenchStats {
   readonly frames: number;
   readonly fps: number;
@@ -69,8 +71,8 @@ interface Cli {
   readonly webgl: boolean;
   readonly mainThread: boolean;
   readonly noDetail: boolean;
-  readonly weather: string;
-  readonly styles: string;
+  // Handed to the page as they were given: `--weather`, `--styles` and `--fireworks`.
+  readonly passed: ReadonlyMap<string, string>;
   readonly mosaic: boolean;
   readonly json: boolean;
   readonly label: string;
@@ -112,8 +114,7 @@ function parseCli(argv: readonly string[]): Cli {
     webgl: flags.get('webgl') !== undefined,
     mainThread: flags.get('no-worker') !== undefined,
     noDetail: flags.get('no-lod') !== undefined,
-    weather: flags.get('weather') ?? '',
-    styles: flags.get('styles') ?? '',
+    passed: new Map(PASSED.flatMap((name) => (flags.get(name) ? [[name, flags.get(name)!]] : []))),
     mosaic: flags.get('mosaic') !== undefined,
     json: flags.get('json') !== undefined,
     label: flags.get('label') ?? '',
@@ -286,8 +287,7 @@ async function runCase(
   if (cli.webgl) params.set('webgl', '1');
   if (cli.mainThread) params.set('worker', '0');
   if (cli.noDetail) params.set('lod', '0');
-  if (cli.weather) params.set('weather', cli.weather);
-  if (cli.styles) params.set('styles', cli.styles);
+  for (const [name, value] of cli.passed) params.set(name, value);
   if (cli.mosaic) params.set('mosaic', '1');
 
   await browser.navigate(`${cli.url}?${params.toString()}`);

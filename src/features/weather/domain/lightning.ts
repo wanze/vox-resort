@@ -55,12 +55,30 @@ const FLASH_LIGHT = 1.7;
 // routing the flash through lampFactor would blink every lit window. Ambient is added
 // to, not replaced, so a flash lights midnight as much as noon.
 export function flashSky(sky: SkyState, flash: number): SkyState {
-  const bolt = Math.min(1, Math.max(0, flash));
+  return litSky(sky, {
+    bolt: flash,
+    color: FLASH_WHITE,
+    ambient: FLASH_LIGHT,
+    ambientMix: 0.8,
+    skyMix: 0.7,
+  });
+}
+
+export interface SkyLight {
+  readonly bolt: number;
+  readonly color: number;
+  readonly ambient: number;
+  readonly ambientMix: number;
+  readonly skyMix: number;
+}
+
+export function litSky(sky: SkyState, light: SkyLight): SkyState {
+  const bolt = Math.min(1, Math.max(0, light.bolt));
   if (bolt === 0) return sky;
   return {
     ...sky,
-    ambientColor: mixColor(sky.ambientColor, FLASH_WHITE, bolt * 0.8),
-    ambientIntensity: sky.ambientIntensity + bolt * FLASH_LIGHT,
-    skyColor: mixColor(sky.skyColor, FLASH_WHITE, bolt * 0.7),
+    ambientColor: mixColor(sky.ambientColor, light.color, bolt * light.ambientMix),
+    ambientIntensity: sky.ambientIntensity + bolt * light.ambient,
+    skyColor: mixColor(sky.skyColor, light.color, bolt * light.skyMix),
   };
 }

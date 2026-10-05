@@ -1,8 +1,9 @@
-import { EVENT_KINDS } from '../../events/domain/catalogue';
+import { EVENT_KINDS, labelOf as eventLabelOf } from '../../events/domain/catalogue';
 import type { CallOff, EventStep } from '../../events/domain/eventRuns';
 import type { EventSite, Occurrence } from '../../events/domain/programme';
 import { siteVenueOf } from '../../events/domain/sites';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import { isBeach } from '../../sim/domain/beach';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { TICKS_PER_DAY, type SimSpeed } from '../../sim/domain/simClock';
 import type { Venue } from '../../sim/domain/venues';
@@ -26,7 +27,8 @@ export interface News {
 export interface EventNews {
   // `event:<booking>:<day>:<kind>`, so an announcement and its calling off are two messages.
   readonly key: string;
-  readonly kind: 'announce' | 'call-off' | 'postpone';
+  // 'tonight' is told at the morning check-in, for a show that keeps its audience up.
+  readonly kind: 'announce' | 'call-off' | 'postpone' | 'tonight';
   readonly label: string;
   // The stage's name; null for a site with no venue.
   readonly venue: string | null;
@@ -90,8 +92,16 @@ const reasonOf = (step: TellingStep): CallOff | null => {
   return step.kind === 'call-off' ? step.reason : 'weather';
 };
 
+const venueWords = (venue: Venue | undefined): string | null => {
+  if (!venue) return null;
+  return isBeach(venue) ? 'the beach' : venue.label;
+};
+
 const labelOf = (site: EventSite, venues: readonly Venue[]): string | null =>
-  venues[siteVenueOf(site, venues)]?.label ?? null;
+  venueWords(venues[siteVenueOf(site, venues)]);
+
+const showLabelOf = (occurrence: Occurrence): string =>
+  eventLabelOf(EVENT_KINDS[occurrence.kind], occurrence.tier);
 
 function announceExtras(
   step: TellingStep,
@@ -110,8 +120,8 @@ function newsOf(step: TellingStep, venues: readonly Venue[], weather: Weather): 
   return {
     key: eventKey(occurrence.booking, occurrence.day, step.kind),
     kind: step.kind,
-    label: EVENT_KINDS[occurrence.kind].label,
-    venue: venue ? venue.label : null,
+    label: showLabelOf(occurrence),
+    venue: venueWords(venue),
     start: occurrence.start,
     reason: reasonOf(step),
     at: venue ? { tileX: venue.tileX, tileZ: venue.tileZ } : null,
@@ -126,6 +136,19 @@ export function eventNewsFrom(
   weather: Weather = 'rain',
 ): readonly EventNews[] {
   return steps.filter(isTelling).map((step) => newsOf(step, venues, weather));
+}
+
+export function tonightNewsOf(occurrence: Occurrence, venues: readonly Venue[]): EventNews {
+  const venue = venues[siteVenueOf(occurrence.site, venues)];
+  return {
+    key: eventKey(occurrence.booking, occurrence.day, 'tonight'),
+    kind: 'tonight',
+    label: showLabelOf(occurrence),
+    venue: venueWords(venue),
+    start: occurrence.start,
+    reason: null,
+    at: venue ? { tileX: venue.tileX, tileZ: venue.tileZ } : null,
+  };
 }
 
 // Unique per building, not per model: two idle Changing Cabins are two rows. By the venue's key
@@ -157,6 +180,7 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   unvisited: null,
   'no-events': null,
   'no-welcome': null,
+  'no-fireworks': null,
   'weather-closed': null,
 };
 

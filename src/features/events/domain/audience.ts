@@ -49,6 +49,7 @@ function freeParty(
     people,
     children,
     arrivedOn: guests.arrivedOn[party.members[0]!]!,
+    ...(party.wheelchair >= 0 ? { stepFree: true } : {}),
   };
 }
 
@@ -78,15 +79,30 @@ export function partiesAmong(
 const keenness = (party: number, salt: number): number =>
   mix(Math.imul(party + 1, 0x9e37_79b1) ^ salt) / 2 ** 32;
 
+const keenEnough = (
+  party: AudienceParty,
+  kind: EventKind,
+  share: number,
+  day: number,
+  at: number,
+): boolean => (kind.audience?.(party, day) ?? true) && at < kind.appeal[party.kind] * share;
+
+export function isInterested(
+  party: AudienceParty,
+  kind: EventKind,
+  tier: string | undefined,
+  day: number,
+  salt: number,
+): boolean {
+  return keenEnough(party, kind, drawOf(kind, tier), day, keenness(party.party, salt));
+}
+
 export function pickAudience(ask: AudienceAsk): readonly number[] {
   const { kind, day, salt } = ask;
   const share = drawOf(kind, ask.tier);
   const keen = ask.parties
     .map((party) => ({ party, at: keenness(party.party, salt) }))
-    .filter(
-      ({ party, at }) =>
-        (kind.audience?.(party, day) ?? true) && at < kind.appeal[party.kind] * share,
-    )
+    .filter(({ party, at }) => keenEnough(party, kind, share, day, at))
     .toSorted((a, b) => a.at - b.at || a.party.party - b.party.party);
   const picked: number[] = [];
   let left = ask.room;
@@ -115,7 +131,12 @@ export function partyMixOf(guests: Guests): PartyMix {
 
 // A kind's audience rule is asked of one party with children and one without, arrived today,
 // as the mix keeps no more.
-export function expectedAudience(kind: EventKind, partyMix: PartyMix, capacity: number): number {
+export function expectedAudience(
+  kind: EventKind,
+  partyMix: PartyMix,
+  capacity: number,
+  draw = 1,
+): number {
   let people = 0;
   for (const partyKind of PARTY_KINDS) {
     const { people: all, withChildren } = partyMix[partyKind];
@@ -128,7 +149,7 @@ export function expectedAudience(kind: EventKind, partyMix: PartyMix, capacity: 
     });
     const welcome = (children: number): boolean => kind.audience?.(sample(children), 0) ?? true;
     const comes = (welcome(1) ? withChildren : 0) + (welcome(0) ? all - withChildren : 0);
-    people += comes * kind.appeal[partyKind];
+    people += comes * Math.min(1, kind.appeal[partyKind] * draw);
   }
   return Math.min(capacity, Math.round(FREE_SHARE * people));
 }

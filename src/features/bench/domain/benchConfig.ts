@@ -2,6 +2,7 @@ import { normalizeTime } from '../../lighting/domain/dayNight';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 import type { CameraFraming, WorldBounds } from '../../layout/domain/worldBounds';
 import { cameraFramingFor } from '../../layout/domain/worldBounds';
+import type { TierId } from '../../fireworks/domain/show';
 
 // Both are perspective only: docs/rendering.md was measured through that lens, and
 // an orthographic camera culls and fogs differently. `street` exists because
@@ -21,6 +22,8 @@ export type BenchStyles = (typeof STYLES)[number];
 
 const BENCH_STYLES: ReadonlySet<string> = new Set<string>(STYLES);
 
+const FIREWORKS: ReadonlySet<string> = new Set<TierId>(['small', 'medium', 'grand']);
+
 export interface BenchConfig {
   readonly view: BenchView;
   readonly time: number;
@@ -34,6 +37,8 @@ export interface BenchConfig {
   readonly styles?: BenchStyles;
   // Paves the authored plot wall to wall in mosaic, to price the pieces' draw calls.
   readonly mosaic?: true;
+  // Plays a show of this size over the sea, for its cost alone: no guests watch and nothing sounds.
+  readonly fireworks?: TierId;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -89,8 +94,12 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     weather,
     ...(styles ? { styles } : {}),
     ...(params.get('mosaic') === '1' ? { mosaic: true as const } : {}),
+    ...fireworksOf(params.get('fireworks')),
   };
 }
+
+const fireworksOf = (raw: string | null): { readonly fireworks?: TierId } =>
+  raw !== null && FIREWORKS.has(raw) ? { fireworks: raw as TierId } : {};
 
 const STREET_EYE_HEIGHT = 14;
 

@@ -2,20 +2,25 @@ import { describe, expect, it } from 'vitest';
 import { createGuests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import { createNeeds } from '../../sim/domain/needs';
-import type { Venue } from '../../sim/domain/venues';
-import type { Weather } from '../../sim/domain/weather';
+import { shelterOf, type Venue } from '../../sim/domain/venues';
+import { isOpenIn, weatherEffect, type Weather } from '../../sim/domain/weather';
 import { EVENT_KINDS } from './catalogue';
 import {
   advanceEvents,
   bookedVenues,
   callOffRun,
   createEvents,
+  createPartyRuns,
   endRun,
   entertain,
+  indexParties,
   inviteAudience,
   isUpLate,
+  markParty,
+  peopleThere,
   QUIET_BEFORE,
   runOfVisit,
+  saltOf,
   stayOf,
   visitLitter,
   type EventFacts,
@@ -105,6 +110,37 @@ describe('advanceEvents', () => {
     expect(kinds(steps)).toEqual(['announce']);
     expect(state.runs[0]!.phase).toBe('announced');
     expect(run(state, start - 48, start - 37)).toEqual([]);
+  });
+
+  it('salts a run by its occurrence alone, so its audience can be told before it is announced', () => {
+    const state = stateWith({});
+    run(state, start - 60, start - 60);
+    const [announced] = state.runs;
+    expect(announced!.salt).toBe(saltOf(announced!.occurrence));
+    expect(saltOf({ ...announced!.occurrence, day: 3 })).not.toBe(announced!.salt);
+  });
+
+  it('puts fireworks off to tomorrow when the open beach is shut, and holds them in a heatwave', () => {
+    const beach = { ...stage('beach', 'open'), stage: false };
+    const sand = [...VENUES, beach];
+    const onSand = facts({
+      hasSite: (site) => siteVenueOf(site, sand) >= 0,
+      siteOpen: (site, weather) => {
+        const venue = sand[siteVenueOf(site, sand)];
+        return venue !== undefined && isOpenIn(shelterOf(venue), weatherEffect(weather));
+      },
+    });
+    const booked = { kind: 'fireworks', site: { kind: 'beach' }, start: 22 * HOUR } as const;
+    const night = tickAt(2, 22 * HOUR);
+    for (const weather of ['rain', 'storm'] as const) {
+      const state = stateWith(booked);
+      const steps = run(state, night - 60, night - 60, { ...onSand, weatherOn: () => weather });
+      expect(steps).toMatchObject([{ kind: 'postpone', day: 3 }]);
+    }
+    const hot = stateWith(booked);
+    expect(
+      kinds(run(hot, night - 60, night - 60, { ...onSand, weatherOn: () => 'heatwave' })),
+    ).toEqual(['announce']);
   });
 
   it('charges the fee at the start', () => {
@@ -336,6 +372,23 @@ describe('the audience', () => {
     expect(isUpLate(createEvents(1), 0)).toBe(false);
     expect(EMPTY_PROGRAMME.bookings).toEqual([]);
   });
+
+  it('indexes by party what stayOf and isUpLate answer', () => {
+    const { state } = running();
+    const venueOf = (each: EventRun) => siteVenueOf(each.occurrence.site, VENUES);
+    const index = createPartyRuns(4);
+    index.end[3] = 7;
+    indexParties(state.runs, venueOf, index);
+    for (let party = 0; party < 4; party++) {
+      expect(index.end[party]! >= 0).toBe(isUpLate(state, party));
+      for (const venue of [0, 1]) {
+        const stay = index.venue[party] === venue ? index.end[party] : -1;
+        expect(stay).toBe(stayOf(state, party, venue, venueOf));
+      }
+    }
+    markParty(index, 9, 100, 1);
+    expect(index.end).toHaveLength(4);
+  });
 });
 
 describe('a run from start to end', () => {
@@ -408,6 +461,46 @@ describe('a run from start to end', () => {
     expect(state.glow[watcher]).toBeCloseTo(EVENT_KINDS['dance-night'].lift);
     expect([...state.tired]).toEqual([1]);
     expect(current.parties).toEqual([]);
+  });
+
+  it('has fireworks remembered by their watchers, less for a second show, and counted', () => {
+    const state = createEvents(guests.count);
+    const first = guests.parties[1]!.members[0]!;
+    const again = guests.parties[2]!.members[0]!;
+    const fireworks: EventRun = {
+      occurrence: {
+        booking: 4,
+        kind: 'fireworks',
+        site: { kind: 'beach' },
+        day: 2,
+        start: tickAt(2, 22 * HOUR),
+        end: tickAt(2, 22.5 * HOUR),
+        tier: 'grand',
+      },
+      phase: 'running',
+      parties: [1, 2],
+      attended: new Set([first, again]),
+      paid: 1_800,
+      salt: 1,
+    };
+    const remembered = new Map<number, number>();
+    const ended = endRun(
+      state,
+      fireworks,
+      guests,
+      (person) => (person === again ? 1 : 0),
+      (person, amount) => remembered.set(person, amount),
+    );
+    expect(ended.tally).toEqual({ held: 1, audience: 2, called: 0, fireworks: 1 });
+    expect(remembered.get(first)).toBeCloseTo(0.08);
+    expect(remembered.get(again)).toBeCloseTo(0.032);
+  });
+
+  it('counts the invited already there', () => {
+    const { current } = announced();
+    current.parties.push(1, 2);
+    const there = new Set([guests.parties[1]!.members[0]!, guests.parties[2]!.members[0]!, 59]);
+    expect(peopleThere(current, guests, (person) => there.has(person))).toBe(2);
   });
 
   it('holds nothing for a show that never started, and tells the invited when it is off', () => {

@@ -2,7 +2,15 @@ import type { GameMode } from '../../sim/domain/ledger';
 import type { Venue } from '../../sim/domain/venues';
 import type { Weather } from '../../sim/domain/weather';
 import { expectedAudience, type PartyMix } from './audience';
-import { EVENT_KIND_IDS, EVENT_KINDS, feeOf, type EventKind, type EventKindId } from './catalogue';
+import {
+  drawOf,
+  EVENT_KIND_IDS,
+  EVENT_KINDS,
+  feeOf,
+  labelOf,
+  type EventKind,
+  type EventKindId,
+} from './catalogue';
 import {
   nextEvents,
   occurrencesOn,
@@ -55,6 +63,8 @@ export interface ProgrammeFacts {
   readonly forecast: readonly DayForecast[];
   readonly mix: PartyMix;
   readonly animators: number;
+  // People the owned sand holds for a show; 0 with no beach, or no way onto it.
+  readonly beachRoom: number;
 }
 
 export interface SiteTab {
@@ -94,6 +104,14 @@ export interface StartChoice {
   readonly words: string;
 }
 
+export interface TierChoice {
+  readonly id: string;
+  readonly label: string;
+  readonly fee: string;
+  readonly audience: number;
+  readonly warning: string | null;
+}
+
 export interface Card {
   readonly kind: EventKindId;
   readonly label: string;
@@ -103,6 +121,8 @@ export interface Card {
   readonly audience: number;
   readonly starts: readonly StartChoice[];
   readonly warning: string | null;
+  // Absent for a kind that comes in one size; booked with the middle one unless another is chosen.
+  readonly tiers?: readonly TierChoice[];
 }
 
 export interface Upcoming {
@@ -141,7 +161,7 @@ function chipsOn(programme: Programme, key: string, day: number): readonly Chip[
       booking: booking.id,
       minute: booking.start,
       time: clockWords(booking.start),
-      label: EVENT_KINDS[booking.kind].label,
+      label: labelOf(EVENT_KINDS[booking.kind], booking.tier),
       repeat: repeatWords(booking.repeat),
       builtIn: booking.builtIn !== undefined,
       off: booking.off === true,
@@ -168,28 +188,54 @@ function feeWords(fee: number): string {
 const hostMissing = (kind: EventKind, facts: ProgrammeFacts): boolean =>
   kind.host === 'animator' && facts.animators <= 0;
 
-const tooDear = (kind: EventKind, facts: ProgrammeFacts): boolean =>
-  facts.mode === 'tycoon' && feeOf(kind, undefined, facts.mode) > facts.balance;
+const tooDear = (kind: EventKind, tier: string | undefined, facts: ProgrammeFacts): boolean =>
+  facts.mode === 'tycoon' && feeOf(kind, tier, facts.mode) > facts.balance;
 
-function warningFor(kind: EventKind, facts: ProgrammeFacts): string | null {
+function warningFor(
+  kind: EventKind,
+  facts: ProgrammeFacts,
+  tier: string | undefined = undefined,
+): string | null {
   if (hostMissing(kind, facts)) return 'No animator on duty';
-  return tooDear(kind, facts) ? 'Not enough money' : null;
+  return tooDear(kind, tier, facts) ? 'Not enough money' : null;
 }
 
-function cardsFor(facts: ProgrammeFacts, capacity: number, part: DayPart): readonly Card[] {
-  return KINDS.filter((kind) => kind.builtIn !== true && kind.sites.includes('stage'))
+function tiersOf(kind: EventKind, facts: ProgrammeFacts, capacity: number): readonly TierChoice[] {
+  return (kind.tiers ?? []).map((tier) => ({
+    id: tier.id,
+    label: tier.label,
+    fee: feeWords(feeOf(kind, tier.id, facts.mode)),
+    audience: expectedAudience(kind, facts.mix, capacity, drawOf(kind, tier.id)),
+    warning: warningFor(kind, facts, tier.id),
+  }));
+}
+
+function cardOf(
+  kind: EventKind,
+  starts: readonly StartChoice[],
+  facts: ProgrammeFacts,
+  capacity: number,
+): Card {
+  const tiers = tiersOf(kind, facts, capacity);
+  return {
+    kind: kind.id,
+    starts,
+    label: kind.label,
+    blurb: kind.blurb,
+    host: kind.host === 'animator' ? 'Hosted by an animator' : 'A visiting act',
+    fee: feeWords(feeOf(kind, undefined, facts.mode)),
+    audience: expectedAudience(kind, facts.mix, capacity),
+    warning: warningFor(kind, facts),
+    ...(tiers.length > 0 ? { tiers } : {}),
+  };
+}
+
+function cardsFor(facts: ProgrammeFacts, site: SiteTab | null, part: DayPart): readonly Card[] {
+  if (!site) return [];
+  return KINDS.filter((kind) => kind.builtIn !== true && kind.sites.includes(site.site.kind))
     .map((kind) => ({ kind, starts: startsIn(kind, part) }))
     .filter(({ starts }) => starts.length > 0)
-    .map(({ kind, starts }) => ({
-      kind: kind.id,
-      label: kind.label,
-      blurb: kind.blurb,
-      host: kind.host === 'animator' ? 'Hosted by an animator' : 'A visiting act',
-      fee: feeWords(feeOf(kind, undefined, facts.mode)),
-      audience: expectedAudience(kind, facts.mix, capacity),
-      starts,
-      warning: warningFor(kind, facts),
-    }));
+    .map(({ kind, starts }) => cardOf(kind, starts, facts, site.capacity));
 }
 
 function upcomingOf(facts: ProgrammeFacts, tabs: readonly SiteTab[]): readonly Upcoming[] {
@@ -197,16 +243,21 @@ function upcomingOf(facts: ProgrammeFacts, tabs: readonly SiteTab[]): readonly U
   return nextEvents(facts.programme, facts.now, UPCOMING).map((each: Occurrence) => ({
     key: `${each.booking}:${each.day}`,
     when: `${dayWords(each.day)} ${clockWords(minuteOf(each.start))}`,
-    label: EVENT_KINDS[each.kind].label,
+    label: labelOf(EVENT_KINDS[each.kind], each.tier),
     site: labels.get(siteKey(each.site)) ?? 'nowhere',
   }));
 }
 
-function tabsOf(stages: readonly Venue[]): readonly SiteTab[] {
+const BEACH_LABEL = 'Beach';
+
+// The beach after the stages, as sitesOf lists it, holding as many as the sand does.
+function tabsOf(stages: readonly Venue[], beachRoom: number): readonly SiteTab[] {
   const byKey = new Map(stages.map((stage) => [stage.key, stage]));
-  return sitesOf(stages, KINDS, false).flatMap((site) => {
-    const stage = byKey.get(siteKey(site));
-    return stage ? [{ key: stage.key, site, label: stage.label, capacity: stage.capacity }] : [];
+  return sitesOf(stages, KINDS, beachRoom > 0).flatMap((site): SiteTab[] => {
+    const key = siteKey(site);
+    if (site.kind === 'beach') return [{ key, site, label: BEACH_LABEL, capacity: beachRoom }];
+    const stage = byKey.get(key);
+    return stage ? [{ key, site, label: stage.label, capacity: stage.capacity }] : [];
   });
 }
 
@@ -248,11 +299,10 @@ function dayColumn(
 
 // `chosen` is a site key; one no longer standing falls back to the first stage.
 export function programmeView(facts: ProgrammeFacts, chosen: string | null): ProgrammeView {
-  const sites = tabsOf(facts.stages);
+  const sites = tabsOf(facts.stages, facts.beachRoom);
   const site = chosenTab(sites, chosen);
   // No booking sits on the empty key, so a plot with no stage shows an empty week.
   const key = site ? site.key : '';
-  const capacity = site ? site.capacity : 0;
   const today = dayAt(facts.now);
   const forecast = new Map(facts.forecast.map((each) => [each.day, each]));
   return {
@@ -262,9 +312,9 @@ export function programmeView(facts: ProgrammeFacts, chosen: string | null): Pro
       dayColumn(facts.programme, key, today + offset, forecast),
     ),
     cards: {
-      morning: cardsFor(facts, capacity, 'morning'),
-      afternoon: cardsFor(facts, capacity, 'afternoon'),
-      evening: cardsFor(facts, capacity, 'evening'),
+      morning: cardsFor(facts, site, 'morning'),
+      afternoon: cardsFor(facts, site, 'afternoon'),
+      evening: cardsFor(facts, site, 'evening'),
     },
     upcoming: upcomingOf(facts, sites),
   };

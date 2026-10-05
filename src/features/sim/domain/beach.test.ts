@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { walkNetworkFor, type PavedTile } from '../../crowd/domain/walkNetwork';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { beachVenueFor, isBeach } from './beach';
+import { beachVenueFor, isBeach, withBeach } from './beach';
 import { shelterOf, type Venue } from './venues';
 
 const shore = shoreFor({ tilesX: 20, tilesZ: 20, shore: { inset: 1, beach: 6, wave: 0, seed: 1 } });
@@ -62,5 +62,21 @@ describe('the beach and the lifeguards', () => {
   it('is somewhere people swim, so somebody should be watching it', () => {
     const network = walkNetworkFor({ paved: boardwalk(10), levelOf: () => 0, shore, tilesX: 20 });
     expect(beachVenueFor(network)!.bathing).toBe(true);
+  });
+});
+
+describe('withBeach', () => {
+  it('puts the beach after the buildings, and only when there is a way onto it', () => {
+    const network = walkNetworkFor({ paved: boardwalk(10), levelOf: () => 0, shore, tilesX: 20 });
+    const club: Venue = { ...beachVenueFor(network)!, key: 'beach-club#0', id: 'beach-club' };
+    const listed = withBeach([club], network);
+    expect(listed.map((venue) => venue.key)).toEqual(['beach-club#0', 'beach']);
+    const inland = walkNetworkFor({
+      paved: [{ tileX: 3, tileZ: 2, y: 0 }],
+      levelOf: () => 0,
+      shore,
+      tilesX: 20,
+    });
+    expect(withBeach([club], inland)).toEqual([club]);
   });
 });

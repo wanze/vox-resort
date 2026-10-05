@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { flashAt, flashSky, strikesBetween } from './lightning';
+import { flashAt, flashSky, litSky, strikesBetween } from './lightning';
 import { skyStateFor } from '../../lighting/domain/dayNight';
 
 function sample(seconds: number, step = 0.01): number[] {
@@ -85,5 +85,13 @@ describe('strikesBetween', () => {
     }
     const split = [...strikesBetween(0, 55), ...strikesBetween(55, 120)];
     expect(split).toEqual(strikes);
+  });
+});
+
+describe('litSky', () => {
+  it('leaves the sky as it is with no light', () => {
+    const sky = skyStateFor(0.02);
+    const light = { bolt: 0, color: 0xff0000, ambient: 1, ambientMix: 1, skyMix: 1 };
+    expect(litSky(sky, light)).toBe(sky);
   });
 });

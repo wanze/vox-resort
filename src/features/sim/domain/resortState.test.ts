@@ -178,6 +178,16 @@ describe('snapshotResort', () => {
     expect(parsed.today.events).toBeUndefined();
   });
 
+  it('reads a day with fireworks and one from before them', () => {
+    const state = played();
+    const tally = { held: 1, audience: 80, called: 0, fireworks: 1, postponed: 1 };
+    state.today = { ...state.today, events: tally };
+    state.history = [{ ...reportedOn(state, 1), events: { held: 2, audience: 9, called: 0 } }];
+    const parsed = resortSnapshotSchema.parse(snapshotResort(state));
+    expect(parsed.today.events).toEqual(tally);
+    expect(parsed.history[0]!.events?.fireworks ?? 0).toBe(0);
+  });
+
   it('reads a day with a welcome and one from before it', () => {
     const state = played();
     state.today = { ...state.today, welcome: { welcomed: 7, gap: null } };

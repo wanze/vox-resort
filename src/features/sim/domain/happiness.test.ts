@@ -12,6 +12,7 @@ import {
   HURT_FLOOR,
   meanHappiness,
   QUEUE_COST_PER_HOUR,
+  remember,
   STAY_MEMORY_HOURS,
   SURROUNDINGS_SHARE,
   welcome,
@@ -227,5 +228,20 @@ describe('the mood of a stay', () => {
     ageHappiness(lifted, needsAt(guests, 0.4), guests, NO_QUEUE, 100 * HOUR, undefined, () => 0.1);
     expect(moodOf(lifted, 0)).toBeCloseTo(moodOf(plain, 0) + 0.1);
     expect(lifted.stay[0]!).toBeGreaterThan(plain.stay[0]! + 0.05);
+  });
+});
+
+describe('remember', () => {
+  it('adds to the stay and nothing else, up to full', () => {
+    const happiness = createHappiness(3);
+    remember(happiness, 1, 0.08);
+    expect(happiness.stay[1]).toBeCloseTo(ARRIVAL_MOOD + 0.08);
+    expect(happiness.level[1]).toBeCloseTo(ARRIVAL_MOOD);
+    expect(happiness.stay[0]).toBeCloseTo(ARRIVAL_MOOD);
+    remember(happiness, 1, 5);
+    expect(happiness.stay[1]).toBe(1);
+    remember(happiness, 7, 0.1);
+    remember(happiness, -1, 0.1);
+    expect([...happiness.stay].filter((each) => each !== 1)).toHaveLength(2);
   });
 });

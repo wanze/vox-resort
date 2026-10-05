@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { skyStateFor } from '../../lighting/domain/dayNight';
 import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
@@ -6,7 +7,9 @@ import {
   EVENT_KINDS,
   feeOf,
   isEventKind,
+  labelOf,
   liftFor,
+  memoryFor,
   runsLate,
   type AudienceParty,
   type EventKind,
@@ -86,6 +89,55 @@ describe('EVENT_KINDS', () => {
   });
 });
 
+describe('fireworks', () => {
+  const fireworks = EVENT_KINDS.fireworks;
+  const tiers = fireworks.tiers ?? [];
+
+  it('starts after dark and is over by midnight, even from its latest start', () => {
+    expect(skyStateFor(fireworks.earliest / TICKS_PER_DAY).lampFactor).toBeGreaterThanOrEqual(0.9);
+    expect(fireworks.latest + fireworks.duration).toBeLessThanOrEqual(TICKS_PER_DAY);
+  });
+
+  it('orders its tiers by fee, lift, memory and draw', () => {
+    expect(tiers.map((tier) => tier.id)).toEqual(['small', 'medium', 'grand']);
+    for (const key of ['fee', 'lift', 'memory', 'draw'] as const) {
+      const values = tiers.map((tier) => tier[key] ?? 0);
+      expect(values, key).toEqual(values.toSorted((a, b) => a - b));
+      expect(new Set(values).size, key).toBe(3);
+    }
+  });
+
+  it('is free in sandbox, whatever the size', () => {
+    for (const tier of tiers) expect(feeOf(fireworks, tier.id, 'sandbox')).toBe(0);
+    expect(feeOf(fireworks, 'grand', 'tycoon')).toBe(1_800);
+  });
+
+  it('wears off with each show seen, but never to nothing', () => {
+    const novelty = fireworks.novelty!;
+    expect(novelty(0)).toBe(1);
+    for (let seen = 1; seen < 20; seen++) {
+      expect(novelty(seen)).toBeLessThanOrEqual(novelty(seen - 1));
+      expect(novelty(seen)).toBeGreaterThanOrEqual(0.1);
+    }
+    expect(novelty(1)).toBeLessThan(novelty(0));
+    expect(novelty(100)).toBe(0.1);
+  });
+
+  it('scales both the lift and the memory by the novelty', () => {
+    expect(memoryFor(fireworks, 'grand', 0)).toBeCloseTo(0.08);
+    expect(memoryFor(fireworks, 'grand', 1)).toBeCloseTo(0.032);
+    expect(liftFor(fireworks, 'grand', 1)).toBeCloseTo(0.072);
+    expect(memoryFor(fireworks, undefined, 0)).toBeCloseTo(0.05);
+    expect(memoryFor(EVENT_KINDS.musical, undefined, 0)).toBe(0);
+  });
+
+  it('names a tiered kind by its size', () => {
+    expect(labelOf(fireworks, 'grand')).toBe('Grand fireworks');
+    expect(labelOf(fireworks, undefined)).toBe('Fireworks');
+    expect(labelOf(EVENT_KINDS.musical, undefined)).toBe('Musical');
+  });
+});
+
 describe('feeOf', () => {
   it('charges nothing in free play and the kind fee in tycoon', () => {
     expect(feeOf(EVENT_KINDS.musical, undefined, 'sandbox')).toBe(0);
@@ -115,9 +167,16 @@ describe('liftFor', () => {
 describe('runsLate', () => {
   it('holds exactly for a kind still running after ten', () => {
     const late = KINDS.filter((kind) => runsLate(kind, kind.latest)).map((kind) => kind.id);
-    expect(late).toEqual(['live-music', 'dance-night', 'musical', 'quiz-night', 'cinema']);
+    expect(late).toEqual([
+      'live-music',
+      'dance-night',
+      'musical',
+      'quiz-night',
+      'cinema',
+      'fireworks',
+    ]);
     const early = KINDS.filter((kind) => runsLate(kind, kind.earliest)).map((kind) => kind.id);
-    expect(early).toEqual(['cinema']);
+    expect(early).toEqual(['cinema', 'fireworks']);
     expect(runsLate(EVENT_KINDS['live-music'], 20.5 * 60)).toBe(false);
   });
 

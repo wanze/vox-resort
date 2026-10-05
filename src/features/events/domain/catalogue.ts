@@ -15,6 +15,7 @@ export const EVENT_KIND_IDS = [
   'bingo',
   'afternoon-jazz',
   'welcome',
+  'fireworks',
 ] as const;
 
 export type EventKindId = (typeof EVENT_KIND_IDS)[number];
@@ -33,6 +34,7 @@ export interface EventTier {
   readonly lift: number;
   // Multiplies the appeal.
   readonly draw: number;
+  readonly memory?: number;
 }
 
 export interface AudienceParty {
@@ -41,6 +43,8 @@ export interface AudienceParty {
   readonly people: number;
   readonly children: number;
   readonly arrivedOn: number;
+  // Has a wheelchair along, so needs a way in without steps.
+  readonly stepFree?: boolean;
 }
 
 export interface EventKind {
@@ -62,6 +66,8 @@ export interface EventKind {
   // Per hour, while inside and running.
   readonly fun: number;
   readonly lift: number;
+  // Added to the stay a review is written from, when the show ends.
+  readonly memory?: number;
   readonly litter: number;
   readonly praise: ThoughtKind;
   readonly tiers?: readonly EventTier[];
@@ -72,9 +78,20 @@ export interface EventKind {
   readonly builtIn?: boolean;
   // Invites the newly arrived while it is announced or running, not only twice.
   readonly latecomers?: boolean;
+  // Kept up from noon, because bedtime comes before the announcement.
+  readonly keepsUp?: boolean;
 }
 
 const HOUR = 60;
+
+// The second show of a stay is worth 0.4 of the first, the third 0.25; never less than this.
+const NOVELTY_FLOOR = 0.1;
+
+const FIREWORKS_TIERS: readonly EventTier[] = [
+  { id: 'small', label: 'Small', fee: 400, lift: 0.1, memory: 0.03, draw: 0.8 },
+  { id: 'medium', label: 'Medium', fee: 900, lift: 0.14, memory: 0.05, draw: 1 },
+  { id: 'grand', label: 'Grand', fee: 1_800, lift: 0.18, memory: 0.08, draw: 1.25 },
+];
 
 // Past this an audience is kept up beyond any bedtime and wakes tired.
 const LATE_FROM = 22 * HOUR;
@@ -318,6 +335,32 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     builtIn: true,
     latecomers: true,
   },
+  // Launched from the sea, so a plot with no beach of its own is never offered them.
+  fireworks: {
+    id: 'fireworks',
+    label: 'Fireworks',
+    blurb: 'Rockets over the sea, watched from the sand.',
+    sites: ['beach'],
+    duration: 0.5 * HOUR,
+    earliest: 22 * HOUR,
+    latest: 23 * HOUR,
+    start: 22 * HOUR,
+    host: 'performer',
+    fee: 900,
+    appeal: { family: 0.7, couple: 0.9, friends: 0.9, solo: 0.6 },
+    openAir: true,
+    weather: 'postpone',
+    fun: 0.8,
+    lift: 0.14,
+    memory: 0.05,
+    litter: 0.4,
+    praise: 'fireworks',
+    tiers: FIREWORKS_TIERS,
+    // There is no step-free way onto the sand.
+    audience: (party) => party.stepFree !== true,
+    novelty: (timesBefore) => Math.max(NOVELTY_FLOOR, 1 / (1 + 1.5 * timesBefore)),
+    keepsUp: true,
+  },
 };
 
 export function isEventKind(value: string): value is EventKindId {
@@ -338,6 +381,16 @@ export function drawOf(kind: EventKind, tier: string | undefined): number {
 
 export function liftFor(kind: EventKind, tier: string | undefined, timesBefore: number): number {
   return (tierOf(kind, tier)?.lift ?? kind.lift) * (kind.novelty?.(timesBefore) ?? 1);
+}
+
+export function memoryFor(kind: EventKind, tier: string | undefined, timesBefore: number): number {
+  const memory = tierOf(kind, tier)?.memory ?? kind.memory ?? 0;
+  return memory * (kind.novelty?.(timesBefore) ?? 1);
+}
+
+export function labelOf(kind: EventKind, tier: string | undefined): string {
+  const chosen = tierOf(kind, tier);
+  return chosen ? `${chosen.label} ${kind.label.toLowerCase()}` : kind.label;
 }
 
 export function runsLate(kind: EventKind, start: number): boolean {

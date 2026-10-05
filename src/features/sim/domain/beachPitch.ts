@@ -3,7 +3,7 @@ import { GROUND_SIT_RISE, RESTING } from '../../crowd/domain/crowd';
 import { blockedAt, clearLine } from '../../crowd/domain/sandGrid';
 import { BEACH_SURFACE, type BeachBand, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { TileSpan } from '../../land/domain/landRights';
-import { terrainAt, type Shore } from '../../layout/domain/shoreline';
+import { beachDepthAt, terrainAt, type Shore } from '../../layout/domain/shoreline';
 
 export interface PitchSpot {
   readonly x: number;
@@ -28,6 +28,8 @@ export interface PitchInput {
   readonly members: readonly { readonly child: boolean }[];
   readonly taken: ReadonlySet<number>;
   readonly loungerFree: (seat: number) => boolean;
+  // Come for a show over the sea: standing, facing it, as near the water as there is room.
+  readonly watch?: boolean;
 }
 
 const PITCH_TILES = 12;
@@ -43,6 +45,9 @@ const ROW_LENGTH = 3;
 // Everybody coming onto the beach walks through the tile in front of the gate.
 // A preference, not a rule: a full beach still pitches there.
 const SAND_SET_BACK = 2;
+
+// The two rows nearest the water, counted from 0 at the edge.
+const WATCH_ROWS = 1;
 
 const GATE_CLEAR = TILE_VOXELS / 2 + 2;
 
@@ -74,6 +79,16 @@ export function pitchFor(input: PitchInput): Pitch | null {
   if (!beach || !node?.gate || members.length === 0) return null;
 
   const context = contextFor(input, beach);
+  return input.watch === true
+    ? watchPitch(context, node, members)
+    : restPitch(context, node, members);
+}
+
+function restPitch(
+  context: Context,
+  node: Parameters<typeof sweepFrom>[1],
+  members: PitchInput['members'],
+): Pitch | null {
   const adults = members.filter((member) => !member.child).length;
   const best = new Map<Tier, Pitch>();
   for (const tile of sweepFrom(context, node)) {
@@ -89,6 +104,23 @@ export function pitchFor(input: PitchInput): Pitch | null {
     if (pitch) return pitch;
   }
   return null;
+}
+
+function watchPitch(
+  context: Context,
+  gate: Parameters<typeof sweepFrom>[1],
+  members: PitchInput['members'],
+): Pitch | null {
+  let back: Pitch | null = null;
+  let atTheGate: Pitch | null = null;
+  for (const tile of sweepFrom(context, gate)) {
+    const pitch = pitchOn(context, tile, members, true);
+    if (!pitch) continue;
+    if (beachDepthAt(context.shore, tile.tileX, tile.tileZ) <= WATCH_ROWS) return pitch;
+    if (tile.depth >= SAND_SET_BACK) back ??= pitch;
+    else atTheGate ??= pitch;
+  }
+  return back ?? atTheGate;
 }
 
 function tierOf(pitch: Pitch, tile: Tile, adults: number): Tier {
@@ -163,18 +195,25 @@ function sweepFrom(
   return reached;
 }
 
-function pitchOn(context: Context, tile: Tile, members: PitchInput['members']): Pitch | null {
+function pitchOn(
+  context: Context,
+  tile: Tile,
+  members: PitchInput['members'],
+  watch = false,
+): Pitch | null {
   const key = keyIn(context, tile.tileX, tile.tileZ);
   if (context.input.taken.has(key) || context.paved.has(key)) return null;
   const centre = centreOf(tile.tileX, tile.tileZ);
-  const loungers = freeLoungersBeside(context, tile, centre);
+  const loungers = watch ? [] : freeLoungersBeside(context, tile, centre);
   const adults = members.filter((member) => !member.child).length;
   const lying = Math.min(adults, loungers.length);
 
   const sandSpots = sandSpotsAt(context, centre, members.length - lying);
   if (!sandSpots) return null;
   const onLoungers = loungers.slice(0, lying).map((seat) => loungerSpot(context, seat));
-  const onSand = members.slice(lying).map((member, index) => sandSpot(sandSpots[index]!, member));
+  const onSand = members
+    .slice(lying)
+    .map((member, index) => sandSpot(sandSpots[index]!, member, watch));
   return { x: centre.x, z: centre.z, tile: key, spots: [...onLoungers, ...onSand] };
 }
 
@@ -183,9 +222,11 @@ function loungerSpot(context: Context, seat: number): PitchSpot {
   return { x: spot.x, z: spot.z, y: spot.y, heading: spot.heading, seat, pose: RESTING.lying };
 }
 
+// Heading 0 faces +z, which is the sea everywhere.
 function sandSpot(
   point: { readonly x: number; readonly z: number },
   member: { readonly child: boolean },
+  watch: boolean,
 ): PitchSpot {
   return {
     x: point.x,
@@ -193,7 +234,7 @@ function sandSpot(
     y: member.child ? BEACH_SURFACE + GROUND_SIT_RISE : BEACH_SURFACE,
     heading: 0,
     seat: -1,
-    pose: member.child ? RESTING.sitting : RESTING.lying,
+    pose: member.child ? RESTING.sitting : watch ? RESTING.standing : RESTING.lying,
   };
 }
 

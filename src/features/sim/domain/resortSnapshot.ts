@@ -141,7 +141,14 @@ const columnSchema = z.object({
 const bedsSchema = z.object({ total: count, taken: count });
 
 // Absent in saves from before events, which read as none held.
-const eventTallySchema = z.object({ held: count, audience: count, called: count });
+const eventTallySchema = z.object({
+  held: count,
+  audience: count,
+  called: count,
+  // Absent in saves from before the fireworks, and on a day with none.
+  fireworks: count.exactOptional(),
+  postponed: count.exactOptional(),
+});
 
 // Absent in saves from before the welcome meeting.
 const welcomeTallySchema = z.object({

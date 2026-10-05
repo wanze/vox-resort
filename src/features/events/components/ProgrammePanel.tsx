@@ -75,7 +75,9 @@ function CellCards({
       key={`${cell.day}:${cell.part}`}
       cards={view.cards[cell.part]}
       repeats={day.repeats}
-      onBook={(kind, start, repeat) => programme.book({ kind, site: site.site, repeat, start })}
+      onBook={(kind, start, repeat, tier) =>
+        programme.book({ kind, site: site.site, repeat, start, ...(tier ? { tier } : {}) })
+      }
     />
   );
 }

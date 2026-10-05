@@ -11,6 +11,7 @@ import {
   EVENT_KINDS,
   feeOf,
   liftFor,
+  memoryFor,
   runsLate,
   type AudienceParty,
   type EventKind,
@@ -93,7 +94,7 @@ export function createEvents(people: number): EventsState {
 
 export const kindOf = (occurrence: Occurrence): EventKind => EVENT_KINDS[occurrence.kind];
 
-function saltOf(occurrence: Occurrence): number {
+export function saltOf(occurrence: Occurrence): number {
   return mix(
     Math.imul(occurrence.booking, 0x2545_f491) ^ Math.imul(occurrence.day + 1, 0x9e37_79b1),
   );
@@ -322,6 +323,36 @@ export function isUpLate(state: EventsState, party: number): boolean {
   return state.runs.some((run) => run.parties.includes(party));
 }
 
+// Per party, what stayOf and isUpLate answer, for the router to read per guest per tick: a
+// show on the sand invites a hundred parties, and scanning them each time was the frame's cost.
+export interface PartyRuns {
+  end: Int32Array;
+  venue: Int32Array;
+}
+
+export function createPartyRuns(parties: number): PartyRuns {
+  return { end: new Int32Array(parties).fill(-1), venue: new Int32Array(parties).fill(-1) };
+}
+
+export function indexParties(
+  runs: readonly EventRun[],
+  venueOf: (run: EventRun) => number,
+  into: PartyRuns,
+): void {
+  into.end.fill(-1);
+  into.venue.fill(-1);
+  for (const run of runs) {
+    const venue = venueOf(run);
+    for (const party of run.parties) markParty(into, party, run.occurrence.end, venue);
+  }
+}
+
+export function markParty(into: PartyRuns, party: number, end: number, venue: number): void {
+  if (party < 0 || party >= into.end.length) return;
+  into.end[party] = end;
+  into.venue[party] = venue;
+}
+
 export type CallOffStep = Extract<EventStep, { readonly kind: 'call-off' }>;
 
 export interface Invitation {
@@ -374,18 +405,23 @@ export function inviteAudience(state: EventsState, run: EventRun, invitation: In
     room,
     salt: run.salt,
   });
+  // On the run before the invitation, so a party invited where it already is can be told the end.
   for (const party of picked) {
     const [member] = membersOf(guests, party);
-    if (member !== undefined && invitation.invite(member)) run.parties.push(party);
+    if (member === undefined) continue;
+    run.parties.push(party);
+    if (!invitation.invite(member)) run.parties.pop();
   }
 }
 
 // `timesBefore` is asked before anybody hears of this one, so a novelty counts the shows before it.
+// `remember` is handed what a show adds straight to the stay a review is written from.
 export function endRun(
   state: EventsState,
   run: EventRun,
   guests: Guests,
   timesBefore: (person: number) => number,
+  remember: (person: number, amount: number) => void = () => {},
 ): RunOutcome {
   run.parties.length = 0;
   if (run.phase !== 'running') return { people: [], tally: NONE_HELD };
@@ -394,10 +430,27 @@ export function endRun(
   const late = runsLate(kind, minuteOf(occurrence.start));
   const people = [...run.attended].filter((person) => guests.present[person] === 1);
   for (const person of people) {
-    glowOn(state.glow, person, liftFor(kind, occurrence.tier, timesBefore(person)));
+    const seen = timesBefore(person);
+    glowOn(state.glow, person, liftFor(kind, occurrence.tier, seen));
+    const memory = memoryFor(kind, occurrence.tier, seen);
+    if (memory > 0) remember(person, memory);
     if (late) state.tired.add(guests.party[person]!);
   }
-  return { people, tally: { held: 1, audience: run.attended.size, called: 0 } };
+  const fireworks = kind.id === 'fireworks' ? { fireworks: 1 } : {};
+  return { people, tally: { held: 1, audience: run.attended.size, called: 0, ...fireworks } };
+}
+
+// The invited already there: room on the sand counts them, as a stage's door counts those inside.
+export function peopleThere(
+  run: EventRun,
+  guests: Guests,
+  isThere: (person: number) => boolean,
+): number {
+  let there = 0;
+  for (const party of run.parties) {
+    there += membersOf(guests, party).filter(isThere).length;
+  }
+  return there;
 }
 
 export function callOffRun(step: CallOffStep, guests: Guests): RunOutcome {

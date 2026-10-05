@@ -6,6 +6,9 @@ export interface EventTally {
   readonly held: number;
   readonly audience: number;
   readonly called: number;
+  // Of those held; absent when none, as in saves from before the fireworks.
+  readonly fireworks?: number;
+  readonly postponed?: number;
 }
 
 // Why no welcome meeting was held on a day with arrivals.
@@ -71,6 +74,12 @@ export function countReview(counts: DayCounts, stars: number): DayCounts {
 
 const NO_EVENTS: EventTally = { held: 0, audience: 0, called: 0 };
 
+// Only a count that is not 0 is written, so a day with no fireworks reads as it always has.
+function extra(key: 'fireworks' | 'postponed', before: EventTally, tally: EventTally) {
+  const sum = (before[key] ?? 0) + (tally[key] ?? 0);
+  return sum > 0 ? { [key]: sum } : {};
+}
+
 export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
   const before = counts.events ?? NO_EVENTS;
   return {
@@ -79,6 +88,8 @@ export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
       held: before.held + tally.held,
       audience: before.audience + tally.audience,
       called: before.called + tally.called,
+      ...extra('fireworks', before, tally),
+      ...extra('postponed', before, tally),
     },
   };
 }

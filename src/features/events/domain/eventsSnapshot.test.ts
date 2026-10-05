@@ -48,12 +48,10 @@ describe('events snapshots', () => {
         ...saved.programme,
         bookings: [
           ...saved.programme.bookings,
-          { ...saved.programme.bookings[0]!, id: 9, kind: 'fireworks' },
+          { ...saved.programme.bookings[0]!, id: 9, kind: 'regatta' },
         ],
       },
-      runs: [
-        { ...saved.runs[0]!, occurrence: { ...saved.runs[0]!.occurrence, kind: 'fireworks' } },
-      ],
+      runs: [{ ...saved.runs[0]!, occurrence: { ...saved.runs[0]!.occurrence, kind: 'regatta' } }],
     };
     const restored = restoreEvents(eventsSnapshotSchema.parse(later), 6);
     expect(restored.programme.bookings.map((booking) => booking.id)).toEqual([1]);

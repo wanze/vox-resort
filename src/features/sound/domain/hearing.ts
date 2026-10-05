@@ -1,4 +1,5 @@
 import type { SoundKind } from '../../../../voxel-gen/voxelgen.ts';
+import type { Show } from '../../fireworks/domain/show';
 import { SIGN_MIN_TILE_PX } from '../../hud/domain/signs';
 import type { Weather } from '../../sim/domain/weather';
 import { NATURE_SLOTS, SOUND_KINDS, VENUE_SLOTS, type SlotName } from './bank';
@@ -13,6 +14,9 @@ export interface HeardScene {
   weather: Weather;
   // The clock's real seconds, which the lightning flashes by.
   stormSeconds: number;
+  // The fireworks show with launches left, and its playhead.
+  show: Show | null;
+  showSeconds: number;
   // Tiles to the nearest water, or Infinity beyond SURF_REACH.
   shore: number;
   // Of the guests on the plot, the share awake; 1 with nobody here.
@@ -73,7 +77,11 @@ export function closeness(distanceTiles: number, radius: number): number {
   return left * left;
 }
 
-export const musicDuck = (weather: Weather): number => (weather === 'storm' ? 0.6 : 1);
+// A show over the sea takes the music down further than a storm does.
+export function musicDuck(weather: Weather, showing = false): number {
+  if (showing) return 0.5;
+  return weather === 'storm' ? 0.6 : 1;
+}
 
 const RAIN: { readonly [weather in Weather]: number } = {
   clear: 0,

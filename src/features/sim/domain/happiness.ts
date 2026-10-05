@@ -51,6 +51,12 @@ export function welcome(happiness: Happiness, person: number): void {
   happiness.stay[person] = ARRIVAL_MOOD;
 }
 
+// Straight onto the stay a review is written from; it fades with the rest of it, over about a day.
+export function remember(happiness: Happiness, person: number, amount: number): void {
+  if (person < 0 || person >= happiness.count) return;
+  happiness.stay[person] = clamp(happiness.stay[person]! + amount);
+}
+
 // Half full, not where a guest would get up for a snack: peckish is not unhappy, and crediting
 // only from there read a fully built resort as three stars.
 export const CONTENT_LEVEL = 0.5;

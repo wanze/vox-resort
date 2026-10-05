@@ -39,6 +39,17 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&styles=gaudy')?.styles).toBeUndefined();
   });
 
+  it('can play a show of any size, so a run can price the fireworks', () => {
+    expect(parseBenchConfig('?bench=1&fireworks=grand')?.fireworks).toBe('grand');
+    expect(parseBenchConfig('?bench=1&fireworks=small')?.fireworks).toBe('small');
+  });
+
+  it('plays no show unless one of the sizes is asked for', () => {
+    expect(parseBenchConfig('?bench=1')).not.toHaveProperty('fireworks');
+    expect(parseBenchConfig('?bench=1&fireworks=colossal')).not.toHaveProperty('fireworks');
+    expect(parseBenchConfig('?bench=1&fireworks=')).not.toHaveProperty('fireworks');
+  });
+
   it('can pave the authored plot in mosaic, so a run can price the pieces', () => {
     expect(parseBenchConfig('?bench=1')?.mosaic).toBeUndefined();
     expect(parseBenchConfig('?bench=1&mosaic=1')?.mosaic).toBe(true);

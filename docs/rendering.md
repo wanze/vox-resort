@@ -303,6 +303,44 @@ A new building starts as a foundation and grows over a few seconds.
 - Balloons aren't launched on wet days.
 - The weather can be pinned from the bar or `?weather=`; it isn't saved.
 
+## Fireworks
+
+A show (`fireworks/`) is a pure function of a seed and a playhead in real
+seconds, like the lightning, so it plays on while the game is paused and a
+load replays the same night.
+
+- **Plan** (`show.ts`): 60, 75 or 90 s by size. An opening of single shells,
+  a body with mirrored pairs from opposite sites, a finale at five a second,
+  closing with a ring from every site. Launched from up to five points eight
+  tiles out to sea over the middle of the owned beach (`launch.ts`), bursting
+  150 to 260 voxels up.
+- **Stars** (`stars.ts`): worked out from age, never integrated. A star fades by
+  shrinking and darkening, never by transparency, and one that would fall into
+  the sea is not drawn. `writeStars` walks only the shells alive (a binary
+  search), oldest first, and allocates nothing.
+- **Field** (`fireworksField.ts`): one never-culled `InstancedMesh` of unlit,
+  fogless cubes with per-instance colour, up to `MAX_INSTANCES` (4 096; a grand
+  finale peaks near 750): one draw call while a show is in the air, none
+  otherwise. Built once at mount, like the rain, and cleared on a new resort.
+  It follows the running fireworks run every frame (`syncFireworks`): a run
+  with no show starts one at the playhead its progress implies; a run gone
+  stops the launches and lets what is in the air burn out.
+- **Light** (`light.ts`): while anything is in the air a warm glow lifts the
+  ambient light (`AIRBORNE_GLOW`), so the crowd on the sand can be seen between
+  bursts, and each burst adds a flare in its own colour that fades over two
+  seconds. Both go through `litSky`, the function the lightning's `flashSky`
+  now calls, at up to about half a flash. Lamps and shadows are not touched.
+- **Show pace** (`pace.ts`): while a run's show plays, the simulated clock is
+  slowed so the run's 30 minutes last as long as the show on screen. It never
+  speeds the clock up, does nothing while paused, and leaves the lightning on
+  real seconds. `showPace` returning 1 is the alternative: no pace, and a show
+  cut short when its run ends.
+- The lanterns stay on the sand on a fireworks night.
+- **Bench**: `?fireworks=small|medium|grand` (`pnpm bench --fireworks grand`)
+  plays a show with no sim effect, no sound and no pace, timed so the last
+  measured frame is the finale's peak. The authored bench plot has no shore,
+  so it has nowhere to launch from and draws nothing.
+
 ## Benchmarks
 
 `pnpm bench` drives Chrome against a running dev server using `?bench=1`, which

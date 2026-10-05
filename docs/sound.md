@@ -146,6 +146,25 @@ copy from a leaky integrator) and loops it through filters:
   `weather/domain/lightning.ts`, read on the same real-seconds clock the flash
   uses, and are scheduled half a second ahead, so each one plays once.
 
+## Synthesized fireworks
+
+`fireworksSound.ts` turns each shell of the show into sounds: a launch thump, a
+whistle over the rise for a quarter of shells, a bang at the burst, and a
+crackle after a crackle shell's bang. Each is delayed by the distance from the
+camera's target to where it happens, at the speed of sound (343 m/s at the
+lanterns' four voxels a metre), and is quieter further off, but never below a
+quarter. `fireworksDue` works like `thunderDue`: the show's real-seconds
+playhead, half a second ahead, never a sound twice. Bangs within 40 ms merge
+into one louder bang, and at most eight come back a window, so a finale does
+not start fifty noise sources at once.
+
+The voices (`synthVoices.ts`) reuse the noise buffers: the thump is brown noise
+under 150 Hz, the bang a white crack over a brown body through the thunder's
+compressor, the whistle a sine gliding from 900 to 2 400 Hz, and the crackle one
+white-noise source through a 4 kHz band whose gain spikes at each of
+`crackleClicks`. The music is ducked to half while a show plays. The sound
+board has a button for each.
+
 ## Music
 
 `sound/domain/playlist.ts` picks the mood: the menu theme on the welcome

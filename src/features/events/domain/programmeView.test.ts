@@ -69,6 +69,7 @@ const facts = (over: Partial<ProgrammeFacts> = {}): ProgrammeFacts => ({
   forecast: [{ day: 3, weather: 'rain', pinned: false }],
   mix: MIX,
   animators: 1,
+  beachRoom: 0,
   ...over,
 });
 
@@ -183,5 +184,53 @@ describe('programmeView', () => {
     expect(warning('musical')).toBe('Not enough money');
     expect(warning('live-music')).toBeNull();
     expect(repeatWords({ every: 'once', day: 3 })).toBe('Once');
+  });
+});
+
+describe('the beach in the programme', () => {
+  const onSand = facts({ beachRoom: 160 });
+  const beachView = programmeView(onSand, 'beach');
+
+  it('opens a beach tab after the stages, with only the fireworks on it', () => {
+    expect(programmeView(facts(), null).sites.map((site) => site.label)).toEqual([
+      'Coral Stage',
+      'Kids club',
+    ]);
+    expect(beachView.sites.map((site) => site.label)).toEqual([
+      'Coral Stage',
+      'Kids club',
+      'Beach',
+    ]);
+    expect(beachView.site).toMatchObject({ key: 'beach', capacity: 160 });
+    expect(beachView.cards.morning).toEqual([]);
+    expect(beachView.cards.afternoon).toEqual([]);
+    expect(beachView.cards.evening.map((card) => card.kind)).toEqual(['fireworks']);
+    const stageView = programmeView(onSand, 'kids-club#0');
+    expect(stageView.cards.evening.map((card) => card.kind)).not.toContain('fireworks');
+  });
+
+  it('offers three sizes at rising fees, free in sandbox, and says which the money will not reach', () => {
+    const [fireworks] = beachView.cards.evening;
+    expect(fireworks!.tiers!.map((tier) => [tier.label, tier.fee, tier.warning])).toEqual([
+      ['Small', '400 a show', null],
+      ['Medium', '900 a show', null],
+      ['Grand', '1,800 a show', 'Not enough money'],
+    ]);
+    const audiences = fireworks!.tiers!.map((tier) => tier.audience);
+    expect(audiences).toEqual(audiences.toSorted((a, b) => a - b));
+    const free = programmeView({ ...onSand, mode: 'sandbox' }, 'beach').cards.evening[0]!;
+    expect(free.tiers!.map((tier) => tier.fee)).toEqual(['Free', 'Free', 'Free']);
+  });
+
+  it('names a booked show by its size', () => {
+    const programme = booked({
+      kind: 'fireworks',
+      site: { kind: 'beach' },
+      start: 22 * HOUR,
+      tier: 'grand',
+    });
+    const view = programmeView({ ...onSand, programme }, 'beach');
+    expect(view.days[0]!.parts.evening.map((chip) => chip.label)).toEqual(['Grand fireworks']);
+    expect(view.upcoming[0]).toMatchObject({ label: 'Grand fireworks', site: 'Beach' });
   });
 });

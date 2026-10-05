@@ -553,6 +553,47 @@ is drawn empty; the seat stays theirs in the crowd.
   in their way; on seed 3 only about 30% of resting guests have a clear line.
   Routing round obstacles would let the rest swim.
 
+## Watching fireworks
+
+Fireworks (`fireworks` in `EVENT_KINDS`, see [Events](#events)) are booked on
+the beach, the one site that is no stage. The beach pseudo-venue is in the
+router's list only (`withBeach`, last), so the showcase keeps that list as
+`Resort.siteVenues` and finds a run's venue in it.
+
+- **Room on the sand**: the beach's capacity has no door to count at, so a show
+  invites up to `watchRoom`: two people per owned beach tile, at most 360,
+  less those of its parties already there.
+- **Watch pitches**: a party invited to a show (`eventStay` on the beach at or
+  after now) is given a pitch with `watch` set: no loungers, adults standing
+  and children sitting, all facing the sea (heading 0), in the two rows nearest
+  the water while there is room there (`WATCH_ROWS`), then further back, then
+  at the gate.
+- **Invited in place**: a party resting on the sand when the invitation comes
+  is invited where it is (`Router.invite` on the beach): its stay is stretched
+  to the show's end, and it gets up to watch: adults stand, children and anybody
+  on a lounger sit, all facing the sea (`holdToWatch`, also used for a watcher
+  reaching their spot). Nobody watches lying down. The showcase marks the party
+  on the run's index before it asks the router, so the router can read the end.
+- **Asked again every tick**: a beach show's audience is topped up on every
+  tick while it is announced or running (`topUpTheSand`), not only at the
+  announcement and the start, so a keen party reaching the sand late is asked
+  too, while there is room.
+- **No swims or errands while invited**: `restingUntil` answers `NaN` for a
+  watcher, so 047's swims leave them be, and `dueAnotherLook` sends none of them
+  for a drink. Only once settled on the sand (`stayOf` resting) is somebody
+  watching, for the fun and the attendance.
+- **Keen parties stay up**: bedtimes run from 19:00, but the announcement is at
+  21:00. From noon on a show's day (`STAY_UP_FROM`) until it ends, every party
+  the run will pick (`isInterested`, through the run's own `saltOf`) counts as
+  up late (`markKeen`, refreshed hourly, at check-in, on a booking change and on
+  a load). One never invited goes to bed when the show is over. A show called
+  off or put off today is `settled` and keeps nobody up.
+- **Wheelchairs**: a party with one is not invited (`AudienceParty.stepFree`);
+  there is no step-free way onto the sand.
+- The router asks `upLate` and `eventStay` per guest per tick, so the showcase
+  answers from a per-party index of the runs (`indexParties`) rather than
+  scanning them.
+
 ## Night
 
 `night.ts` gives each party a bedtime (19:00 plus up to 2.5 h) and a wake time
@@ -988,6 +1029,20 @@ toasted. The day report's "Welcomed" row gives "n of m new guests" or why
 there was none (`WelcomeGap`: no stage, switched off, called off). The
 Programme window has a Morning column for it, where nothing else can be
 booked. `no-events` ignores built-ins.
+
+**Fireworks** (`fireworks`) are the one kind held on the beach and the one
+booked in sizes (`tiers`: small, medium and grand, rising in fee, lift,
+`memory` and draw). From 22:00 to 23:00, for half an hour; free in sandbox. At
+the end each attender's `stay` (what a review is written from) gains the
+size's `memory` (`remember`), and both it and the lift fall with every show
+seen this stay (`novelty`, read off the `fireworks` thought count). Their
+weather rule is `'postpone'`: shut out by rain or storm at the announcement,
+the night's show moves to the next day. Check-in toasts a show booked for
+that night (`'tonight'`); the day report counts the fireworks held and the
+shows moved; the `no-fireworks` line points at the beach after 14 reported days
+with none and none in the week ahead. The Programme window has a Beach tab,
+after the stages, while any owned beach has a gate. See
+[Watching fireworks](#watching-fireworks).
 
 With an empty programme nothing above runs and no stream is drawn, so a plot
 nobody books plays exactly as before; a plot with a stage always has the

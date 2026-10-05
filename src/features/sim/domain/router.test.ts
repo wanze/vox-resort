@@ -46,7 +46,7 @@ import { NO_HOME, type Home } from '../../guests/domain/homes';
 import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
 import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
 import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
-import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
+import { beachDepthAt, shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createNeeds, decayNeeds, restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
 import { doorsFor } from './doors';
@@ -1248,6 +1248,89 @@ describe('a visit to the beach', () => {
       back = reseated.node[0]! >= 0;
     }
     expect(back, 'a simulated minute and still out on the sand').toBe(true);
+  });
+
+  const showOn = (beach: number, guestsAt: readonly number[], end: { at: number }) => ({
+    lodgings: [],
+    tickOfDay: () => NOON,
+    events: {
+      eventStay: (person: number, venue: number) =>
+        venue === beach && guestsAt.includes(person) ? end.at : -1,
+    },
+  });
+
+  it('stands a party invited to a show facing the sea, the children sitting', () => {
+    const { router, crowd } = onTheBeach(family, { night: showOn(0, family, { at: 2_000 }) });
+    expect(untilSettled(crowd, family), 'the family never all settled').toBe(true);
+    for (const person of family) {
+      expect(router.stayOf(person)).toBe('resting');
+      const child = guests.child[person] === 1;
+      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.standing);
+      const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
+      expect(
+        beachDepthAt(shore, Math.floor(crowd.x[person]! / TILE_VOXELS), tileZ),
+      ).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('sends nobody invited to a show on an errand, however thirsty', () => {
+    const { needs, router, crowd } = onTheBeach([0], {
+      venues: [kiosk],
+      night: showOn(1, partyOf(guests, 0), { at: 2_000 }),
+    });
+    expect(untilSettled(crowd, [0])).toBe(true);
+    needs.level.fun[0] = 1;
+    needs.level.thirst[0] = 0;
+    const away = () => router.goalOf(0)?.key === kiosk.key;
+    expect(tickUntil(crowd, router, 1, 200, away)).toBeNull();
+  });
+
+  it('keeps a guest waiting for a show out of the sea', () => {
+    const watcher = onTheBeach([0], { night: showOn(0, partyOf(guests, 0), { at: 2_000 }) });
+    expect(untilSettled(watcher.crowd, [0])).toBe(true);
+    expect(watcher.router.restingUntil(0)).toBeNaN();
+    const plain = onTheBeach([0]);
+    expect(untilSettled(plain.crowd, [0])).toBe(true);
+    expect(plain.router.restingUntil(0)).toBeGreaterThan(0);
+  });
+
+  it('invites a party already on the sand where it is, gets it up, and keeps it there for the show', () => {
+    const show = { at: -1 };
+    const { router, crowd } = onTheBeach(family, { night: showOn(0, family, show) });
+    expect(untilSettled(crowd, family)).toBe(true);
+    const spots = family.map((person) => [crowd.x[person], crowd.z[person]]);
+    show.at = 2 * STAY_TICKS;
+    expect(router.invite(family[0]!, 0)).toBe(true);
+    for (let tick = 1; tick < show.at; tick++) router.tick(tick);
+    for (const [at, person] of family.entries()) {
+      expect(router.visitOf(person)?.venue.label).toBe('Beach');
+      const child = guests.child[person] === 1;
+      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.standing);
+      expect(crowd.heading[person]).toBe(0);
+      expect([crowd.x[person], crowd.z[person]]).toEqual(spots[at]);
+    }
+    router.tick(show.at);
+    expect(family.every((person) => router.visitOf(person) === null)).toBe(true);
+  });
+
+  it('sits a party on its loungers up for a show, and lies nobody down for one', () => {
+    const show = { at: -1 };
+    const walked = walkNetworkFor({ paved, levelOf: FLAT, shore, tilesX: 20, seats: loungers });
+    const { router, crowd } = onTheBeach(family, { walked, night: showOn(0, family, show) });
+    expect(untilSettled(crowd, family)).toBe(true);
+    expect(family.some((person) => restingOn(crowd, person) === RESTING.lying)).toBe(true);
+    show.at = 2 * STAY_TICKS;
+    expect(router.invite(family[0]!, 0)).toBe(true);
+    for (const person of family) {
+      expect(restingOn(crowd, person)).not.toBe(RESTING.lying);
+      expect(restingOn(crowd, person)).not.toBe(RESTING.none);
+    }
+  });
+
+  it('still refuses a party on the sand an invitation anywhere but the beach', () => {
+    const { router, crowd } = onTheBeach(family, { venues: [kiosk] });
+    expect(untilSettled(crowd, family)).toBe(true);
+    expect(router.invite(family[0]!, 0)).toBe(false);
   });
 
   it('is not a venue on a plot with no beach', () => {

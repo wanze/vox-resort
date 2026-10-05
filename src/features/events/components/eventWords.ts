@@ -54,17 +54,23 @@ const LINES: { readonly [kind in EventNews['kind']]: (news: EventNews) => string
   },
   'call-off': (news) => `${news.label}${at(news)} called off: ${reasonWords(news)}`,
   postpone: (news) => `${news.label} moved to tomorrow: ${reasonWords(news)}`,
+  tonight: (news) => `${news.label} tonight at ${clockWords(minuteOf(news.start))}`,
 };
 
 export const eventNewsLine = (news: EventNews): string => LINES[news.kind](news);
 
 export const refusalWords = (refusal: BookingRefusal): string => REFUSAL_WORDS[refusal];
 
-// Null for a day with no event held or called off, which the report leaves out.
+// Null for a day with no event held, called off or moved, which the report leaves out. The
+// fireworks and the moved are told only on a day that had some.
 export function tallyWords(tally: EventTally | undefined): string | null {
-  if (!tally || tally.held + tally.called === 0) return null;
+  const fireworks = tally?.fireworks ?? 0;
+  const moved = tally?.postponed ?? 0;
+  if (!tally || tally.held + tally.called + moved === 0) return null;
   const guests = tally.audience.toLocaleString('en-US');
-  return `${tally.held} held · ${guests} guests · ${tally.called} called off`;
+  const shows = fireworks > 0 ? ` · ${fireworks} fireworks` : '';
+  const later = moved > 0 ? ` · ${moved} moved` : '';
+  return `${tally.held} held${shows} · ${guests} guests · ${tally.called} called off${later}`;
 }
 
 const GAP_WORDS: { readonly [gap in WelcomeGap]: string } = {

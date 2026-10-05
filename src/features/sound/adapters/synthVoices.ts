@@ -1,3 +1,11 @@
+import type { Show } from '../../fireworks/domain/show';
+import {
+  crackleClicks,
+  fireworksDue,
+  type FireworkSound,
+  type FireworkVoice,
+  type Listener,
+} from '../domain/fireworksSound';
 import { rainVoice, surfAt, thunderDue, thunderOf, windVoice, type Thunder } from '../domain/synth';
 
 export type SynthLayer = 'rain' | 'wind' | 'surf';
@@ -8,6 +16,10 @@ export interface SynthVoices {
   tick(seconds: number, storming: boolean): void;
   // One thunder now, for the sound board.
   strike(strength: number): void;
+  // At 5 Hz with the show's playhead, which plays on in real seconds.
+  fireworks(show: Show | null, seconds: number, listener: Listener): void;
+  // One fireworks sound now, for the sound board.
+  pop(voice: FireworkVoice): void;
   dispose(): void;
 }
 
@@ -20,6 +32,15 @@ const THUNDER_GAIN = 2.4;
 // Thunder's audible body on laptop speakers, where the 200 Hz rumble alone is barely there.
 const THUNDER_BODY_HZ = 320;
 const RAMP_TAU = 0.25;
+const FIREWORKS_HORIZON = 0.5;
+// Like the thunder's, above 1 for the low thump and bang; the thunder's compressor holds it.
+const FIREWORKS_GAIN = 1.8;
+const BOARD_SOUNDS: { readonly [voice in FireworkVoice]: FireworkSound } = {
+  thump: { at: 0, voice: 'thump', gain: 0.35, seconds: 0.15, seed: 1 },
+  whistle: { at: 0, voice: 'whistle', gain: 0.2, seconds: 2, seed: 2 },
+  bang: { at: 0, voice: 'bang', gain: 1, seconds: 0.6, seed: 3 },
+  crackle: { at: 0, voice: 'crackle', gain: 0.5, seconds: 1, seed: 4 },
+};
 
 function noiseBuffers(context: BaseAudioContext): { white: AudioBuffer; brown: AudioBuffer } {
   const length = Math.round(context.sampleRate * NOISE_SECONDS);
@@ -142,6 +163,78 @@ export function createSynthVoices(
     if (thunder.crack) crack(thunder, when);
   };
 
+  // A noise burst through filters into the thunder's compressor, gone when it has played.
+  const noiseHit = (
+    buffer: AudioBuffer,
+    filters: readonly BiquadFilterNode[],
+    envelope: (gain: AudioParam) => void,
+    when: number,
+    until: number,
+  ): void => {
+    const gain = silent();
+    envelope(gain.gain);
+    const source = burst(buffer, when, until);
+    chain(source, ...filters, gain, thunderBus);
+    source.addEventListener('ended', () => gain.disconnect(), { once: true });
+  };
+
+  // Up in five milliseconds and away over the sound's length.
+  const hitShape =
+    (sound: FireworkSound, when: number) =>
+    (gain: AudioParam): void => {
+      gain.setValueAtTime(0, when);
+      gain.linearRampToValueAtTime(sound.gain * FIREWORKS_GAIN, when + 0.005);
+      gain.exponentialRampToValueAtTime(0.001, when + sound.seconds);
+    };
+
+  const thump = (sound: FireworkSound, when: number): void => {
+    const end = when + sound.seconds + 0.02;
+    noiseHit(noise.brown, [filter(context, 'lowpass', 150)], hitShape(sound, when), when, end);
+  };
+
+  // A white crack over a brown body: the white is the report, the brown its weight.
+  const bang = (sound: FireworkSound, when: number): void => {
+    const end = when + sound.seconds + 0.02;
+    noiseHit(noise.white, [filter(context, 'lowpass', 5000)], hitShape(sound, when), when, end);
+    noiseHit(noise.brown, [filter(context, 'lowpass', 400)], hitShape(sound, when), when, end);
+  };
+
+  const whistle = (sound: FireworkSound, when: number): void => {
+    const end = when + sound.seconds;
+    const tone = context.createOscillator();
+    tone.frequency.setValueAtTime(900, when);
+    tone.frequency.exponentialRampToValueAtTime(2400, end);
+    const gain = silent();
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(sound.gain, when + 0.1);
+    gain.gain.linearRampToValueAtTime(0, end);
+    chain(tone, gain, effects);
+    tone.start(when);
+    tone.stop(end + 0.02);
+    tone.addEventListener('ended', () => gain.disconnect(), { once: true });
+  };
+
+  // One source for the whole crackle, its gain spiked at each click.
+  const crackle = (sound: FireworkSound, when: number): void => {
+    const peak = sound.gain * FIREWORKS_GAIN;
+    const shape = (gain: AudioParam): void => {
+      gain.setValueAtTime(0, when);
+      for (const click of crackleClicks(sound.seed, sound.seconds)) {
+        gain.setValueAtTime(peak, when + click);
+        gain.setTargetAtTime(0, when + click + 0.002, 0.004);
+      }
+    };
+    const band = filter(context, 'bandpass', 4000, 0.9);
+    noiseHit(noise.white, [band], shape, when, when + sound.seconds + 0.05);
+  };
+
+  const VOICES: {
+    readonly [voice in FireworkVoice]: (sound: FireworkSound, when: number) => void;
+  } = { thump, bang, whistle, crackle };
+
+  let lastFireworks = -Infinity;
+  let heardShow: Show | null = null;
+
   return {
     set(layer, level) {
       levels[layer] = level;
@@ -169,6 +262,18 @@ export function createSynthVoices(
     },
     strike(strength) {
       thunderAt(thunderOf({ at: 0, strength }), context.currentTime + 0.05);
+    },
+    fireworks(show, seconds, listener) {
+      if (show !== heardShow) lastFireworks = -Infinity;
+      heardShow = show;
+      if (!show) return;
+      for (const sound of fireworksDue(show, lastFireworks, seconds, FIREWORKS_HORIZON, listener)) {
+        VOICES[sound.voice](sound, context.currentTime + (sound.at - seconds));
+      }
+      lastFireworks = seconds + FIREWORKS_HORIZON;
+    },
+    pop(voice) {
+      VOICES[voice](BOARD_SOUNDS[voice], context.currentTime + 0.05);
     },
     dispose() {
       for (const source of [rainSource, windSource, surfSource]) source.stop();

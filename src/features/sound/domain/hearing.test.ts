@@ -10,6 +10,7 @@ import {
   kindAt,
   LAYERS,
   MAX_VENUE_VOICES,
+  musicDuck,
   type HeardScene,
   type Layer,
 } from './hearing';
@@ -31,6 +32,8 @@ function scene(over: Partial<HeardScene> = {}, near: Partial<Record<SoundKind, n
     night: 0,
     weather: 'clear' as Weather,
     stormSeconds: 0,
+    show: null,
+    showSeconds: 0,
     shore: Infinity,
     awake: 1,
     guests: 0,
@@ -145,5 +148,18 @@ describe('approach', () => {
     expect(level).toBeGreaterThan(0.99);
     expect(approach(0.3, 0, 100, 0.8)).toBeCloseTo(0);
     expect(approach(0.3, 0, 100, 0.8)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('musicDuck', () => {
+  it('takes the music down in a storm, and further for a show', () => {
+    expect(musicDuck('clear')).toBe(1);
+    expect(musicDuck('storm')).toBe(0.6);
+    expect(musicDuck('clear', true)).toBe(0.5);
+  });
+
+  it('ducks for a show whatever the weather', () => {
+    expect(musicDuck('storm', true)).toBe(0.5);
+    expect(musicDuck('heatwave', true)).toBe(0.5);
   });
 });

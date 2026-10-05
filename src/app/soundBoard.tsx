@@ -13,6 +13,7 @@ import {
   type Candidate,
   type SlotName,
 } from '../features/sound/domain/bank';
+import type { FireworkVoice } from '../features/sound/domain/fireworksSound';
 import { hear, kindAt, LAYERS, type HeardScene } from '../features/sound/domain/hearing';
 import { DEFAULT_SOUND_PREFS } from '../features/sound/domain/soundPrefs';
 import { WEATHERS, type Weather } from '../features/sim/domain/weather';
@@ -22,6 +23,7 @@ import '@fontsource-variable/rubik/index.css';
 import './soundBoard.css';
 
 const HEAR_MS = 200;
+const FIREWORK_VOICES: readonly FireworkVoice[] = ['thump', 'whistle', 'bang', 'crackle'];
 const FULL = { ...DEFAULT_SOUND_PREFS, master: 1, music: 1, ambience: 1, effects: 1, interface: 1 };
 
 // One element for every file and candidate: the board plays one thing at a time.
@@ -228,6 +230,11 @@ function SynthPanel({ engine }: { readonly engine: RefObject<AudioEngine | null>
       <button type="button" onClick={() => engine.current?.strike(strength)}>
         Strike
       </button>
+      {FIREWORK_VOICES.map((voice) => (
+        <button key={voice} type="button" onClick={() => engine.current?.pop(voice)}>
+          {voice[0]!.toUpperCase() + voice.slice(1)}
+        </button>
+      ))}
       <p className="board-none">The scene panel drives the same voices while it runs.</p>
     </section>
   );
@@ -269,6 +276,8 @@ function sceneOf(controls: SceneControls, seconds: number): HeardScene {
     targetX: 0,
     targetZ: 0,
     stormSeconds: seconds,
+    show: null,
+    showSeconds: 0,
     // The board has no bedtimes: the night slider stands in for the guests gone to bed.
     awake: 1 - controls.night,
     shore: controls.shore >= 40 ? Infinity : controls.shore,

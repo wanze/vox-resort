@@ -157,6 +157,7 @@ import {
   ageHappiness,
   createHappiness,
   meanHappiness,
+  remember,
   type Happiness,
 } from '../features/sim/domain/happiness';
 import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
@@ -299,7 +300,7 @@ import {
 import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
 import { depotForShift, depotsOn, type Depot } from '../features/sim/domain/depots';
 import { createRandom, type Random } from '../features/layout/domain/random';
-import { beachVenueFor, isBeach as isTheBeach } from '../features/sim/domain/beach';
+import { beachVenueFor, isBeach as isTheBeach, withBeach } from '../features/sim/domain/beach';
 import {
   isNamed,
   relabelled,
@@ -322,27 +323,30 @@ import {
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
 import { partiesOf, partyMixOf } from '../features/events/domain/audience';
-import type { AudienceParty } from '../features/events/domain/catalogue';
+import { labelOf as eventLabelOf, type AudienceParty } from '../features/events/domain/catalogue';
 import {
   advanceEvents,
   bookedVenues,
   callOffRun,
   createEvents,
+  createPartyRuns,
   endRun,
   entertain,
   hostedShows,
+  indexParties,
   inviteAudience,
-  isUpLate,
   kindOf as eventKindOf,
+  markParty,
+  peopleThere,
   runOfVisit,
   showingVenues,
-  stayOf as eventStayOf,
   visitLitter,
   type CallOffStep,
   type EventFacts,
   type EventRun,
   type EventStep,
   type EventsState,
+  type PartyRuns,
 } from '../features/events/domain/eventRuns';
 import { restoreEvents, snapshotEvents } from '../features/events/domain/eventsSnapshot';
 import { fadeGlow } from '../features/events/domain/glow';
@@ -351,6 +355,7 @@ import {
   BUILT_INS,
   keepStanding,
   nextEvents,
+  occurrencesOn,
   rebook,
   siteKey,
   switchBuiltIn,
@@ -360,6 +365,7 @@ import {
   type BookingDraft,
   type BookingRefusal,
   type EventSite,
+  type Occurrence,
   type Programme,
 } from '../features/events/domain/programme';
 import {
@@ -375,8 +381,16 @@ import {
   welcomeGapOf,
   withoutBuiltIns,
 } from '../features/events/domain/welcome';
+import {
+  bookingDayKey,
+  keenParties,
+  showToTell,
+  tonightsShow,
+} from '../features/events/domain/stayingUp';
 import { dayAt } from '../features/events/domain/week';
-import { eventNewsFrom, type EventNews } from '../features/hud/domain/news';
+import { sandOf, watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
+import { fireworksDrought, isFireworksNight } from '../features/fireworks/domain/nights';
+import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
 import {
@@ -386,6 +400,19 @@ import {
   rainfallFor,
 } from '../features/weather/domain/rainfall';
 import { buildRainField, type RainField } from '../features/weather/adapters/rainField';
+import {
+  buildFireworksField,
+  type FireworksField,
+} from '../features/fireworks/adapters/fireworksField';
+import { fireworksSky, type ShowLight } from '../features/fireworks/domain/light';
+import { showPace } from '../features/fireworks/domain/pace';
+import {
+  benchShow,
+  planShow,
+  playheadFor,
+  showSeed,
+  tierIdOf,
+} from '../features/fireworks/domain/show';
 import type { RainView } from '../features/weather/domain/rainfall';
 import { pixelsPerVoxel } from '../features/rendering/domain/levelOfDetail';
 import {
@@ -1173,8 +1200,22 @@ interface Resort {
   eventBooked: Uint8Array;
   eventShowing: Uint8Array;
   hosted: readonly { readonly venue: number; readonly until: number }[];
+  // Per party, the run it is invited to: the router asks per guest per tick.
+  invited: PartyRuns;
+  // Per party, kept up from noon for tonight's show.
+  keen: Uint8Array;
+  keenShow: Occurrence | null;
+  // Today's runs called off or put off, so nobody is kept up for them; cleared at check-in.
+  readonly settled: Set<string>;
+  // The lanterns stay on the sand on a fireworks night.
+  fireworksNight: boolean;
   // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
   venues: readonly Venue[];
+  // The venues as the router lists them, the beach last: where an event can be held.
+  siteVenues: readonly Venue[];
+  // The owned sand, and the points out at sea a show is launched from.
+  beachTiles: number;
+  launchSites: readonly LaunchSite[];
   // Drawn once per venue and carried by key, so building a second bar never renames the first.
   names: VenueNames;
   lodgings: readonly Lodging[];
@@ -1592,9 +1633,11 @@ function buildResort(
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, parts.ticks()),
     onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
-    upLate: (party) => isUpLate(resort.events, party),
-    eventStay: (person, venue) =>
-      eventStayOf(resort.events, guests.party[person]!, venue, (run) => runVenueOf(resort, run)),
+    upLate: (party) => resort.invited.end[party]! >= 0 || resort.keen[party] === 1,
+    eventStay: (person, venue) => {
+      const party = guests.party[person]!;
+      return resort.invited.venue[party] === venue ? resort.invited.end[party]! : -1;
+    },
     onWoke: (person) => {
       if (resort.events.tired.has(guests.party[person]!)) relieve(needs, person, LATE_NIGHT_RELIEF);
     },
@@ -1779,7 +1822,14 @@ function buildResort(
     eventBooked: new Uint8Array(venues.length),
     eventShowing: new Uint8Array(venues.length),
     hosted: NO_HOSTED,
+    invited: createPartyRuns(guests.parties.length),
+    keen: new Uint8Array(guests.parties.length),
+    keenShow: null,
+    settled: new Set(),
+    fireworksNight: false,
     venues,
+    siteVenues: withBeach(venues, network),
+    ...sandOf(network.beach),
     names,
     lodgings,
     homeOfLodging: homesOfLodgings(lodgings, guests.homes),
@@ -2002,8 +2052,9 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
   readonly weather: Weather;
   readonly rain: RainField;
+  readonly fireworks: FireworksField;
 }): ShowcaseStats {
-  const { handle, scratch, catalogue, rain } = parts;
+  const { handle, scratch, catalogue, rain, fireworks } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
   const { sea, lighting, ballField } = parts.resort;
@@ -2027,7 +2078,8 @@ function sceneStats(parts: {
       ballField.drawCalls +
       overlay.drawCalls +
       sea.drawCalls +
-      rain.drawCalls,
+      rain.drawCalls +
+      fireworks.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
@@ -2042,7 +2094,8 @@ function sceneStats(parts: {
       ballField.triangleCount +
       overlay.triangleCount +
       sea.triangleCount +
-      rain.triangleCount,
+      rain.triangleCount +
+      fireworks.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -2416,7 +2469,16 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
 const NO_HOSTED: readonly { readonly venue: number; readonly until: number }[] = [];
 
 const runVenueOf = (resort: Resort, run: EventRun): number =>
-  siteVenueOf(run.occurrence.site, resort.venues);
+  siteVenueOf(run.occurrence.site, resort.siteVenues);
+
+function relabelVenues(resort: Resort): void {
+  resort.venues = relabelled(resort.venues, resort.names);
+  resort.siteVenues = withBeach(resort.venues, resort.crowd.crowd.network);
+  resort.router.relabel(resort.venues);
+}
+
+const beachIndexOf = (resort: Resort): number =>
+  resort.siteVenues.length > resort.venues.length ? resort.venues.length : -1;
 
 // The event a visit was made to: the party was invited to it there, or the person watched it.
 const eventVisitOf = (resort: Resort, person: number, venue: Venue): EventRun | null =>
@@ -2424,7 +2486,7 @@ const eventVisitOf = (resort: Resort, person: number, venue: Venue): EventRun | 
     resort.events,
     resort.guests.party[person]!,
     person,
-    venueIndexOf(resort.venues, venue.key),
+    venueIndexOf(resort.siteVenues, venue.key),
     (run) => runVenueOf(resort, run),
   );
 
@@ -2453,7 +2515,7 @@ function weatherOnDay(clock: Clock, day: number): Weather {
 }
 
 function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
-  const { venues } = resort;
+  const venues = resort.siteVenues;
   return {
     mode: resort.ledger.mode,
     weatherOn: (day) => weatherOnDay(clock, day),
@@ -2465,7 +2527,7 @@ function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
     },
     hostOnDuty: resort.roster.animator > 0,
     canPay: (fee) => canAfford(resort.ledger, fee),
-    stages: preferredStages(venues),
+    stages: preferredStages(resort.venues),
   };
 }
 
@@ -2507,27 +2569,100 @@ function freePartiesOf(resort: Resort): () => readonly AudienceParty[] {
     ));
 }
 
+// A party resting on the sand is free to watch from where it lies.
+function freeOnTheSandOf(resort: Resort): () => readonly AudienceParty[] {
+  const { router } = resort;
+  return () =>
+    partiesOf(
+      resort.guests,
+      (person) => router.isFree(person) || router.stayOf(person) === 'resting',
+      (person) => urgencyBesidesFun(resort, person),
+    );
+}
+
+function stageRoomOf(resort: Resort, venue: number): number {
+  const declared = resort.siteVenues[venue]!;
+  const there = resort.router.occupancyOf(declared.key) ?? { inside: 0, waiting: 0 };
+  return declared.capacity - there.inside - there.waiting;
+}
+
+// The sand's own room on the beach, whose capacity has no door to count at.
+function roomAt(resort: Resort, run: EventRun, venue: number): number {
+  if (venue !== beachIndexOf(resort)) return stageRoomOf(resort, venue);
+  const there = (person: number): boolean => resort.router.venueIndexOf(person) === venue;
+  return watchRoom(resort.beachTiles) - peopleThere(run, resort.guests, there);
+}
+
+// On the index before the router is asked, so a party invited where it lies is told the end.
+function inviteParty(resort: Resort, run: EventRun, person: number, venue: number): boolean {
+  const party = resort.guests.party[person]!;
+  markParty(resort.invited, party, run.occurrence.end, venue);
+  if (resort.router.invite(person, venue)) return true;
+  markParty(resort.invited, party, -1, -1);
+  return false;
+}
+
 function inviteTo(resort: Resort, run: EventRun, free: () => readonly AudienceParty[]): void {
   const venue = runVenueOf(resort, run);
-  const declared = resort.venues[venue];
-  if (!declared) return;
+  if (!resort.siteVenues[venue]) return;
   const { router } = resort;
-  const there = router.occupancyOf(declared.key) ?? { inside: 0, waiting: 0 };
   inviteAudience(resort.events, run, {
     guests: resort.guests,
-    room: declared.capacity - there.inside - there.waiting,
-    free,
+    room: roomAt(resort, run, venue),
+    free: venue === beachIndexOf(resort) ? freeOnTheSandOf(resort) : free,
     isThere: (person) => router.venueIndexOf(person) === venue,
-    invite: (person) => router.invite(person, venue),
+    invite: (person) => inviteParty(resort, run, person, venue),
   });
+}
+
+// Not only twice: a keen party reaching the sand after the start would lie down on a pitch of its
+// own, so the sand is asked again on every tick until the end, while there is room.
+function topUpTheSand(resort: Resort): void {
+  const beach = beachIndexOf(resort);
+  if (beach < 0) return;
+  for (const run of resort.events.runs) {
+    if (runVenueOf(resort, run) === beach) inviteTo(resort, run, freeOnTheSandOf(resort));
+  }
+}
+
+function refreshInvited(resort: Resort): void {
+  const parties = resort.guests.parties.length;
+  if (resort.invited.end.length < parties) resort.invited = createPartyRuns(parties);
+  indexParties(resort.events.runs, (run) => runVenueOf(resort, run), resort.invited);
+}
+
+// Hourly, at check-in, on a booking and on a load: the keen are those tonight's show will invite.
+function refreshKeen(resort: Resort, clock: Clock): void {
+  const { programme } = resort.events;
+  const facts = eventFactsOf(resort, clock);
+  resort.keenShow = tonightsShow({
+    programme,
+    now: clock.ticks,
+    open: (site) => facts.siteOpen(site, clock.weather),
+    settled: resort.settled,
+  });
+  resort.fireworksNight = isFireworksNight(programme, clock.day);
+  resort.keen = keenParties(resort.guests, resort.keenShow, resort.keen);
+}
+
+// The keen go to bed with the show over, whether or not they were ever invited.
+function sendTheKeenToBed(resort: Resort, now: number): void {
+  if (!resort.keenShow || now < resort.keenShow.end) return;
+  resort.keen.fill(0);
+  resort.keenShow = null;
 }
 
 function endEvent(resort: Resort, run: EventRun, now: number): void {
   const kind = eventKindOf(run.occurrence);
-  const ended = endRun(resort.events, run, resort.guests, (person) =>
-    stayCount(resort.thoughts, person, kind.praise),
+  const ended = endRun(
+    resort.events,
+    run,
+    resort.guests,
+    (person) => stayCount(resort.thoughts, person, kind.praise),
+    (person, amount) => remember(resort.happiness, person, amount),
   );
-  for (const person of ended.people) hear(resort, now, person, kind.praise, kind.label);
+  const label = eventLabelOf(kind, run.occurrence.tier);
+  for (const person of ended.people) hear(resort, now, person, kind.praise, label);
   resort.today = countEvent(resort.today, ended.tally);
   if (kind.id === 'welcome' && ended.tally.held > 0) {
     resort.today = countWelcomed(resort.today, ended.tally.audience);
@@ -2545,8 +2680,10 @@ const quietCallOff = (step: CallOffStep): boolean =>
   step.reason === 'no-site' && eventKindOf(step.occurrence).builtIn === true;
 
 function callOffEvent(resort: Resort, step: CallOffStep, now: number): void {
-  const { id, label } = eventKindOf(step.occurrence);
-  if (id === 'welcome') noteWelcomeCalledOff(resort, step);
+  const kind = eventKindOf(step.occurrence);
+  const label = eventLabelOf(kind, step.occurrence.tier);
+  resort.settled.add(bookingDayKey(step.occurrence));
+  if (kind.id === 'welcome') noteWelcomeCalledOff(resort, step);
   if (quietCallOff(step)) return;
   resort.ledger = record(resort.ledger, 'events', step.refund);
   const called = callOffRun(step, resort.guests);
@@ -2562,7 +2699,8 @@ interface StepContext {
   readonly free: () => readonly AudienceParty[];
 }
 
-// What each step does to the resort; 076 draws its rockets from the start and the end.
+// What each step does to the resort. The rockets are not drawn from here but from the runs, so a
+// load or a dragged clock plays the same show.
 const EVENT_STEPS: {
   readonly [kind in EventStep['kind']]: (step: StepOf<kind>, context: StepContext) => void;
 } = {
@@ -2573,8 +2711,13 @@ const EVENT_STEPS: {
   },
   end: (step, { resort, now }) => endEvent(resort, step.run, now),
   'call-off': (step, { resort, now }) => callOffEvent(resort, step, now),
-  postpone: () => {},
+  postpone: (step, { resort }) => {
+    resort.settled.add(bookingDayKey(step.occurrence));
+    resort.today = countEvent(resort.today, { held: 0, audience: 0, called: 0, postponed: 1 });
+  },
 };
+
+const settles = (step: EventStep): boolean => step.kind === 'call-off' || step.kind === 'postpone';
 
 function applyEventSteps(resort: Resort, steps: readonly EventStep[], now: number): void {
   const context: StepContext = { resort, now, free: freePartiesOf(resort) };
@@ -2617,15 +2760,24 @@ function runEvents(
   events.runs = advance.runs;
   applyEventSteps(resort, advance.steps, now);
   callLatecomers(resort, now);
+  topUpTheSand(resort);
+  refreshInvited(resort);
+  if (advance.steps.some(settles)) refreshKeen(resort, clock);
+  sendTheKeenToBed(resort, now);
   if (advance.steps.length > 0) heard(advance.steps);
   refreshEventVenues(resort, now);
   const hours = ticks / TICKS_PER_HOUR;
   const { router } = resort;
+  const beach = beachIndexOf(resort);
+  // On the sand only once settled: somebody still walking out is not yet watching.
   entertain(
     events,
     resort.needs,
     resort.guests,
-    (person, venue) => router.venueIndexOf(person) === venue && !router.isWaitingAt(person),
+    (person, venue) =>
+      router.venueIndexOf(person) === venue &&
+      !router.isWaitingAt(person) &&
+      (venue !== beach || router.stayOf(person) === 'resting'),
     (run) => runVenueOf(resort, run),
     hours,
   );
@@ -2633,6 +2785,65 @@ function runEvents(
 }
 
 const WEEK_TICKS = 7 * TICKS_PER_DAY;
+
+const runningShowOf = (resort: Resort): EventRun | null =>
+  resort.events.runs.find(
+    (run) => run.phase === 'running' && eventKindOf(run.occurrence).id === 'fireworks',
+  ) ?? null;
+
+// Follows the run rather than its start and end steps, so a load mid-show, a call-off and a
+// dragged clock all come out right with no case of their own.
+function syncFireworks(resort: Resort, field: FireworksField, now: number): void {
+  const run = runningShowOf(resort);
+  if (!run) {
+    field.stop();
+    return;
+  }
+  const key = bookingDayKey(run.occurrence);
+  if (field.key === key) return;
+  const { occurrence } = run;
+  const show = planShow({
+    tier: tierIdOf(occurrence.tier),
+    seed: showSeed(occurrence),
+    sites: resort.launchSites,
+  });
+  field.play(show, playheadFor(occurrence, now, show.length), key);
+}
+
+// Timed from the first frame, which the recorder also counts from; played again should a run
+// outlast it.
+function playBenchShow(resort: Resort, field: FireworksField, bench: BenchConfig): void {
+  if (!bench.fireworks || field.show) return;
+  if (resort.launchSites.length === 0) console.warn('bench: no beach to launch fireworks from');
+  const seconds = (bench.warmupFrames + bench.measureFrames) * MAX_STEP;
+  const { show, from } = benchShow(bench.fireworks, resort.launchSites, seconds);
+  field.play(show, from, 'bench');
+}
+
+// While a run's show plays, its half hour lasts as long as the show on screen.
+function showPaceOf(resort: Resort, field: FireworksField, clock: Clock): number {
+  const run = runningShowOf(resort);
+  if (!run || !field.show || field.key !== bookingDayKey(run.occurrence)) return 1;
+  return showPace({
+    speed: clock.speed,
+    ticksLeft: run.occurrence.end - clock.ticks,
+    secondsLeft: field.show.length - field.playhead,
+  });
+}
+
+// Flights already up finish, as in a shower.
+const lanternsOf = (resort: Resort, clock: Clock): number =>
+  resort.fireworksNight ? 0 : clock.balloonReadiness;
+
+function quietBeachOf(resort: Resort, now: number): Venue | null {
+  const beach = resort.siteVenues[beachIndexOf(resort)];
+  if (!beach || resort.beachTiles === 0) return null;
+  const day = dayAt(now);
+  const week = Array.from({ length: 7 }, (_, offset) =>
+    occurrencesOn(resort.events.programme, day + offset),
+  ).flat();
+  return fireworksDrought(resort.history, week) ? beach : null;
+}
 
 // The first stage by key, so the line points at the same one from hour to hour.
 function idleStageOf(resort: Resort, now: number): Venue | null {
@@ -2659,13 +2870,15 @@ function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
     forecast,
     mix: partyMixOf(resort.guests),
     animators: resort.roster.animator,
+    beachRoom: beachIndexOf(resort) >= 0 ? watchRoom(resort.beachTiles) : 0,
   };
 }
 
 // Edits drop the bookings of a stage pulled down and move a built-in to a stage left standing.
-function keepProgrammeStanding(resort: Resort, network: WalkNetwork): void {
+// The beach's stay while any sand is owned, so paving over its gates calls a show off instead.
+function keepProgrammeStanding(resort: Resort): void {
   const stages = stageKeysOf(resort.venues);
-  const sites = new Set(beachVenueFor(network) ? [...stages, siteKey({ kind: 'beach' })] : stages);
+  const sites = new Set(resort.beachTiles > 0 ? [...stages, siteKey({ kind: 'beach' })] : stages);
   const kept: Programme = keepStanding(resort.events.programme, sites);
   resort.events.programme = withBuiltIns(kept, BUILT_INS, stages, stageRank(resort.venues));
 }
@@ -2714,6 +2927,8 @@ function runTicks(
     rateTheDay(resort);
     closeTheDay(resort, clock.day);
     runDay(resort, clock.day);
+    resort.settled.clear();
+    refreshKeen(resort, clock);
     // After the coaches and before the counters are wiped, which the advice reads.
     morning();
     resort.router.forgetTheDay();
@@ -2724,6 +2939,7 @@ function runTicks(
   if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
     hearSurroundings(resort, clock.ticks);
     burnOnTheBeach(resort, clock);
+    refreshKeen(resort, clock);
     hourly();
   }
   admitLaterWaves(resort, clock, ticks);
@@ -2934,6 +3150,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
         .map((venue) => venue.key),
     ),
     idleStage: idleStageOf(resort, now),
+    quietBeach: quietBeachOf(resort, now),
     welcomeless: stageKeysOf(resort.venues).length === 0 ? resort.today.arrived : 0,
   };
 }
@@ -3096,7 +3313,8 @@ interface Clock {
   readonly balloonReadiness: number;
   // Real seconds, as the lightning flashes by, so the thunder follows the same strikes.
   readonly running: number;
-  advance(elapsedSeconds: number): number;
+  // `pace` slows the simulated time alone, for a show on screen; the lightning keeps real time.
+  advance(elapsedSeconds: number, pace?: number): number;
   follow(time: number, elapsedSeconds: number): number;
   restart(time: number): void;
   relight(): void;
@@ -3108,7 +3326,16 @@ interface Clock {
   restore(saved: ClockSnapshot): void;
 }
 
-function createClock(handle: SceneHandle, resort: () => Resort, startTime: number): Clock {
+// Each a number, so a still frame is told apart from a changed one without a branch per input.
+const sameSkyInputs = (a: readonly number[], b: readonly number[] | null): boolean =>
+  b !== null && a.every((value, index) => value === b[index]);
+
+function createClock(
+  handle: SceneHandle,
+  resort: () => Resort,
+  startTime: number,
+  glow: () => ShowLight,
+): Clock {
   let clock: SimClock = createSimClock(0, startTime);
   let time = timeOf(clock);
   let forced: Weather | null = null;
@@ -3118,34 +3345,31 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
   let running = 0;
   const flashNow = (): number => (weatherNow() === 'storm' ? flashAt(running) : 0);
   let sky = flashSky(overcastSky(skyStateFor(time), overcastNow()), flashNow());
-  let applied: number | null = null;
-  let appliedOvercast: number | null = null;
-  let appliedFlash = 0;
+  let applied: readonly number[] | null = null;
 
   const apply = (): void => {
     time = timeOf(clock);
     const overcast = overcastNow();
     const flash = flashNow();
-    // Overcast and flash are in the guard too: the weather turns at midnight even while paused,
-    // and a flash lasts under half a second.
-    if (time === applied && overcast === appliedOvercast && flash === appliedFlash) return;
-    sky = flashSky(overcastSky(skyStateFor(time), overcast), flash);
+    const lit = glow();
+    // Overcast, flash and glow are in the guard too: the weather turns at midnight even while
+    // paused, and a flash or a burst lasts under a second.
+    const inputs = [time, overcast, flash, lit.strength, lit.color];
+    if (sameSkyInputs(inputs, applied)) return;
+    sky = fireworksSky(flashSky(overcastSky(skyStateFor(time), overcast), flash), lit);
     handle.applySky(sky);
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
     resort().world.setLampFactor(sky.lampFactor);
     resort().shadows.applySky(sky);
     // The pools use the sea's shader, so they need the sky too.
     resort().world.setSky(sky.skyColor);
-    applied = time;
-    appliedOvercast = overcast;
-    appliedFlash = flash;
+    applied = inputs;
   };
   apply();
 
   const relight = (): void => {
     // A new resort's volume and blobs start at zero whatever the time of day.
     applied = null;
-    appliedOvercast = null;
     apply();
     // Otherwise its windows open on the previous plot's sleeping share.
     lightRooms(resort(), null);
@@ -3187,9 +3411,9 @@ function createClock(handle: SceneHandle, resort: () => Resort, startTime: numbe
       return running;
     },
     relight,
-    advance(elapsedSeconds) {
+    advance(elapsedSeconds, pace = 1) {
       running += elapsedSeconds;
-      const advanced = advanceClock(clock, elapsedSeconds);
+      const advanced = advanceClock(clock, elapsedSeconds * pace);
       clock = advanced.clock;
       apply();
       return advanced.ticks;
@@ -3235,6 +3459,7 @@ function createStatsReader(parts: {
   readonly mountStarted: number;
   readonly weather: () => Weather;
   readonly rain: RainField;
+  readonly fireworks: FireworksField;
 }): () => ShowcaseStats {
   const startup: StartupCost = {
     startupMs: Math.round(performance.now() - parts.mountStarted),
@@ -3864,8 +4089,8 @@ function startTimeOf(bench: BenchConfig | null, welcome: boolean): number {
 }
 
 // A wall clock rather than a speed: behind the welcome screen the resort shows the player's hour.
-function stepClock(clock: Clock, welcome: boolean, elapsed: number): number {
-  return welcome ? clock.follow(wallTimeOf(new Date()), elapsed) : clock.advance(elapsed);
+function stepClock(clock: Clock, welcome: boolean, elapsed: number, pace: number): number {
+  return welcome ? clock.follow(wallTimeOf(new Date()), elapsed) : clock.advance(elapsed, pace);
 }
 
 function loaded<T>(step: LoadingStep, onLoading?: (step: LoadingStep) => void) {
@@ -4034,12 +4259,13 @@ interface HearingParts {
   readonly resort: () => Resort;
   readonly clock: Clock;
   readonly view: ViewSize;
+  readonly fireworks: FireworksField;
   readonly onHear: (scene: HeardScene) => void;
 }
 
 // The sources are listed again whenever the venues are replaced, which every new resort, settle
 // and reanchor does; scanning thousands of placements at 5 Hz would not be.
-function createHearing({ handle, resort, clock, view, onHear }: HearingParts) {
+function createHearing({ handle, resort, clock, view, fireworks, onHear }: HearingParts) {
   const scene: HeardScene = {
     tilePx: 0,
     targetX: 0,
@@ -4047,6 +4273,8 @@ function createHearing({ handle, resort, clock, view, onHear }: HearingParts) {
     night: 0,
     weather: clock.weather,
     stormSeconds: 0,
+    show: null,
+    showSeconds: 0,
     shore: Infinity,
     awake: 1,
     guests: 0,
@@ -4085,6 +4313,9 @@ function createHearing({ handle, resort, clock, view, onHear }: HearingParts) {
     scene.night = skyStateFor(clock.time).lampFactor;
     scene.weather = clock.weather;
     scene.stormSeconds = clock.running;
+    // Only what is still to launch: a show stopped mid-air is not heard bursting on.
+    scene.show = fireworks.playing ? fireworks.show : null;
+    scene.showSeconds = fireworks.playhead;
     scene.shore = shoreDistance(now.shore, listener.x, listener.z, SURF_REACH);
     const { crowd } = now.crowd;
     const { cast } = now;
@@ -4366,6 +4597,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Not per resort: rain falls over the camera, not the plot.
   const rain = buildRainField(createRaindrops(MAX_DROPS, RAIN_SEED));
   handle.scene.add(rain.group);
+  // Not per resort either: a new plot clears it rather than building another.
+  const fireworks = buildFireworksField();
+  handle.scene.add(fireworks.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -4381,7 +4615,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let drift = driftFor(options, bench, handle);
   handle.controls.enabled = drift === null;
   let drawnFirst = false;
-  const clock = createClock(handle, current, startTimeOf(bench, drift !== null));
+  const clock = createClock(
+    handle,
+    current,
+    startTimeOf(bench, drift !== null),
+    () => fireworks.light,
+  );
   let lastWeather: Weather = clock.weather;
 
   // Cached: drawingBufferSize() allocates a vector per call; the resize handler updates it.
@@ -4399,6 +4638,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       rise: view.y - target.y,
       distance,
     };
+  };
+
+  // Its own step for the same reason as the weather's. A bench plays only the show it asks for.
+  const advanceFireworks = (elapsedSeconds: number): void => {
+    if (bench) playBenchShow(current(), fireworks, bench);
+    else syncFireworks(current(), fireworks, clock.ticks);
+    fireworks.advance(bench ? MAX_STEP : elapsedSeconds);
   };
 
   // Its own step to keep the render loop's branching down, which fallow:audit measures.
@@ -4486,7 +4732,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const listen =
     bench || !onHear
       ? () => {}
-      : createHearing({ handle, resort: current, clock, view: viewSize, onHear });
+      : createHearing({ handle, resort: current, clock, view: viewSize, fireworks, onHear });
 
   const statsNow = createStatsReader({
     handle,
@@ -4497,6 +4743,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     mountStarted,
     weather: () => clock.weather,
     rain,
+    fireworks,
   });
 
   // A flag rather than a rebuild per spadeful: the rebuild is coalesced to one per frame.
@@ -4813,7 +5060,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const tellProgramme = (): void => options.onProgrammeChange?.(programmeFactsOf(current(), clock));
 
   const heardEvents = (steps: readonly EventStep[]): void => {
-    for (const news of eventNewsFrom(steps, current().venues, clock.weather)) {
+    for (const news of eventNewsFrom(steps, current().siteVenues, clock.weather)) {
       options.onEventNews?.(news);
     }
     // A fee or a refund may have moved the money, and a show put off moved the programme.
@@ -4827,6 +5074,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const resort = current();
     resort.events.programme = programme;
     refreshEventVenues(resort, clock.ticks);
+    refreshKeen(resort, clock);
     tellProgramme();
     // A stage open in the inspector says what is on next there.
     select(selected);
@@ -4870,7 +5118,21 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     options.onDirty?.();
   };
 
+  // At the check-in, for a show that keeps its audience up from noon.
+  const tellTonight = (): void => {
+    const resort = current();
+    const facts = eventFactsOf(resort, clock);
+    const show = showToTell({
+      programme: resort.events.programme,
+      day: clock.day,
+      open: (site) => facts.siteOpen(site, clock.weather),
+      settled: resort.settled,
+    });
+    if (show) options.onEventNews?.(tonightNewsOf(show, resort.siteVenues));
+  };
+
   const morning = (): void => {
+    tellTonight();
     advise();
     report();
     tellHistory();
@@ -4897,6 +5159,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Told at once, so a save that fails to restore still leaves the next advice a baseline.
   const replaceResort = (prepared: PreparedResort, population?: number): Resort => {
     const resort = slot.replace(prepared, population);
+    fireworks.clear();
     ownership.update(resort.rights, resort.plan);
     options.onResortReplaced?.();
     return resort;
@@ -4975,8 +5238,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     restoreResort(resort, saved.resort);
     // The resort was just built off the layout; a save from before venues had names draws them.
     resort.names = assignNames(resort.names, namedPlacesOf(resort.plot.layout.placements));
-    resort.venues = relabelled(resort.venues, resort.names);
-    resort.router.relabel(resort.venues);
+    relabelVenues(resort);
     // Before the staff router's restore, which reads the duty.
     Object.assign(resort, rosterNow(resort));
     rezone(resort);
@@ -4991,11 +5253,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       stageRank(resort.venues),
     );
     resort.newcomers = partiesArrivedOn(resort.guests, dayAt(saved.clock.ticks - CHECK_IN_TICK));
+    resort.settled.clear();
     refreshEventVenues(resort, saved.clock.ticks);
+    refreshInvited(resort);
     resort.crowd.adopt(restoreCrowd(resort.crowd.crowd, saved.crowd));
     resort.staff.adopt(restoreCrowd(resort.staff.crowd, saved.staff));
     recastAll(resort);
     clock.restore(saved.clock);
+    refreshKeen(resort, clock);
   };
 
   // Mirrors regrow.
@@ -5135,7 +5400,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         (isBeach(shore, x, z) && resort.occupancy.keyAt({ x, z }) === undefined),
     );
     resort.unreachable = strandedOn(resort.venues, network);
-    keepProgrammeStanding(resort, network);
+    resort.siteVenues = withBeach(resort.venues, network);
+    Object.assign(resort, sandOf(network.beach));
+    keepProgrammeStanding(resort);
+    refreshInvited(resort);
     refreshEventVenues(resort, clock.ticks);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);
     resort.staffRouter.rebuild(resort.venues, network, resort.lodgings, resort.depots);
@@ -5204,7 +5472,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     lastTimeMs = timeMs;
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
     // of two runs.
-    const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed);
+    const pace = showPaceOf(current(), fireworks, clock);
+    const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed, pace);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
       lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly, heardEvents);
@@ -5224,7 +5493,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     current().ballField.write(current().cast.played);
     current().crowd.advance(walked, crowdScale);
     current().staff.advance(walked, crowdScale);
-    current().balloons.advance(bench ? MAX_STEP : elapsed, clock.balloonReadiness);
+    current().balloons.advance(bench ? MAX_STEP : elapsed, lanternsOf(current(), clock));
+    advanceFireworks(elapsed);
     drawnLitter = drawLitter(current(), drawnLitter);
     current().sea.advance(bench ? MAX_STEP : elapsed, walked * crowdScale);
     advanceWeather(elapsed);
@@ -5337,8 +5607,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       if (!place) return;
       resort.names = renameTo(resort.names, place, typed, Math.random);
       // Not reanchored: that would rebuild the walk network and every flow field for a label.
-      resort.venues = relabelled(resort.venues, resort.names);
-      resort.router.relabel(resort.venues);
+      relabelVenues(resort);
       select(selected);
       placeSigns();
       advise();
@@ -5446,6 +5715,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       build.dispose();
       preparer.dispose();
       rain.dispose();
+      fireworks.dispose();
       current().dispose();
       handle.dispose();
       ownership.dispose();

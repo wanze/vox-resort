@@ -1,4 +1,6 @@
 import { BUSES, SLOT_BUS, slotFiles, type Bank, type Bus, type SlotName } from '../domain/bank';
+import type { Show } from '../../fireworks/domain/show';
+import type { FireworkVoice, Listener } from '../domain/fireworksSound';
 import { pickVariant } from '../domain/cues';
 import { MOOD_SLOT, type Mood } from '../domain/playlist';
 import { busGain, type SoundPrefs } from '../domain/soundPrefs';
@@ -32,6 +34,9 @@ export interface AudioEngine {
   // The sound board's: a gain to try in place of the bank's.
   trim(slot: SlotName, gain: number): void;
   strike(strength: number): void;
+  // At 5 Hz, with the show's own playhead.
+  fireworks(show: Show | null, seconds: number, listener: Listener): void;
+  pop(voice: FireworkVoice): void;
   dispose(): void;
 }
 
@@ -258,6 +263,12 @@ export function createAudioEngine(
     },
     strike(strength) {
       state.live?.voices.strike(strength);
+    },
+    fireworks(show, seconds, listener) {
+      state.live?.voices.fireworks(show, seconds, listener);
+    },
+    pop(voice) {
+      state.live?.voices.pop(voice);
     },
     dispose() {
       stopListening();

@@ -6,6 +6,7 @@ import { EVENT_KINDS, type AudienceParty, type EventKind } from './catalogue';
 import {
   expectedAudience,
   INVITE_URGENCY,
+  isInterested,
   partiesAmong,
   partiesOf,
   partyMixOf,
@@ -73,6 +74,35 @@ describe('partiesOf', () => {
   });
 });
 
+describe('stepFree', () => {
+  const many = createGuests({ count: 400, homes: HOMES, variants: 4, childVariant: 3, seed: 9 });
+  const all = partiesOf(
+    many,
+    () => true,
+    () => 0,
+  );
+
+  it('marks the parties with a wheelchair along, and only those', () => {
+    const marked = all.filter((each) => each.stepFree === true).map((each) => each.party);
+    const wheeled = all
+      .filter((each) => many.parties[each.party]!.wheelchair >= 0)
+      .map((each) => each.party);
+    expect(wheeled.length).toBeGreaterThan(0);
+    expect(wheeled.length).toBeLessThan(all.length);
+    expect(marked).toEqual(wheeled);
+  });
+
+  it('keeps such a party away from the fireworks, which have no way onto the sand', () => {
+    const wheeled = all.find((each) => each.stepFree === true)!;
+    const keen = {
+      ...EVENT_KINDS.fireworks,
+      appeal: { family: 1, couple: 1, friends: 1, solo: 1 },
+    };
+    expect(isInterested(wheeled, keen, 'grand', 0, 7)).toBe(false);
+    expect(isInterested({ ...wheeled, stepFree: false }, keen, 'grand', 0, 7)).toBe(true);
+  });
+});
+
 describe('partiesAmong', () => {
   it('looks only at the parties given, as partiesOf would see them', () => {
     const among = partiesAmong(
@@ -136,6 +166,14 @@ describe('expectedAudience', () => {
     expect(expectedAudience(EVERYONE, counts, 100)).toBe(24);
     expect(expectedAudience(EVERYONE, counts, 10)).toBe(10);
     expect(expectedAudience(EVENT_KINDS['kids-show'], counts, 100)).toBe(Math.round(0.4 * 36));
+    expect(expectedAudience(EVENT_KINDS.fireworks, counts, 100, 1.25)).toBeGreaterThan(
+      expectedAudience(EVENT_KINDS.fireworks, counts, 100),
+    );
+    expect(expectedAudience(EVENT_KINDS.fireworks, counts, 100, 0.8)).toBeLessThan(
+      expectedAudience(EVENT_KINDS.fireworks, counts, 100),
+    );
+    expect(expectedAudience(EVERYONE, counts, 100, 3)).toBe(24);
+    expect(expectedAudience(EVERYONE, counts, 10, 3)).toBe(10);
     const mixed = partyMixOf(guests);
     const people = Object.values(mixed).reduce((sum, each) => sum + each.people, 0);
     expect(people).toBe(60);

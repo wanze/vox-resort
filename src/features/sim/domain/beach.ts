@@ -57,3 +57,9 @@ export function beachVenueFor(network: WalkNetwork): Venue | null {
 export function isBeach(venue: Venue): boolean {
   return venue.key === BEACH_KEY;
 }
+
+// The beach goes last so every building keeps the index `venuesOn` gave it.
+export function withBeach(venues: readonly Venue[], network: WalkNetwork): readonly Venue[] {
+  const beach = beachVenueFor(network);
+  return beach ? [...venues, beach] : venues;
+}

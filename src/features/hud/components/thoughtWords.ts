@@ -28,6 +28,7 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   'great-show': (subject) => (subject ? `${subject} was great fun` : 'What a show'),
   'called-off': (subject) => (subject ? `${subject} was called off` : 'The show was called off'),
   welcomed: () => 'What a warm welcome',
+  fireworks: (subject) => (subject ? `${subject} lit up the night` : 'What a fireworks show'),
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -45,6 +46,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   'great-show': 'Shows',
   'called-off': 'Called off',
   welcomed: 'Welcome',
+  fireworks: 'Fireworks',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

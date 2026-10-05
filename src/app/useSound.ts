@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import { BANK } from '../../sounds/bank.ts';
+import { TILE_VOXELS } from '../../voxel-gen/voxelgen.ts';
 import { parseBenchConfig } from '../features/bench/domain/benchConfig';
 import { createAudioEngine, type AudioEngine } from '../features/sound/adapters/audioEngine';
 import { loadSoundPrefs, saveSoundPrefs } from '../features/sound/adapters/prefsStore';
@@ -72,7 +73,9 @@ function tellEngine(
     sound.setLayer(layer, level);
   });
   sound.tick(scene.stormSeconds, scene.weather === 'storm');
-  sound.setMusic(moodAt(scene.night, step.welcome), musicDuck(scene.weather));
+  const listener = { x: scene.targetX * TILE_VOXELS, y: 0, z: scene.targetZ * TILE_VOXELS };
+  sound.fireworks(scene.show, scene.showSeconds, listener);
+  sound.setMusic(moodAt(scene.night, step.welcome), musicDuck(scene.weather, scene.show !== null));
 }
 
 export function useHearing(engine: RefObject<AudioEngine | null>, welcome: boolean) {

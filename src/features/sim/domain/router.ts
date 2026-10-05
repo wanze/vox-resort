@@ -36,8 +36,8 @@ import { type Gateway } from './gateways';
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
-import { beachVenueFor, isBeach, LOUNGER_RELIEF } from './beach';
-import { pitchFor, type Pitch } from './beachPitch';
+import { isBeach, LOUNGER_RELIEF, withBeach } from './beach';
+import { pitchFor, type Pitch, type PitchSpot } from './beachPitch';
 import {
   arriveAt,
   createOccupancy,
@@ -162,7 +162,8 @@ export interface Router {
   isAsleep(person: number): boolean;
   // Neither asleep, arriving, leaving, inside, in a line nor on the sand.
   isFree(person: number): boolean;
-  // Sends the whole party to the venue as checking in does; false for anybody not free.
+  // Sends the whole party to the venue as checking in does; false for anybody not free. A party
+  // resting on the beach, invited to the beach, stays where it is until the event's end.
   invite(person: number, venue: number): boolean;
   // One array lookup rather than an object: read per tick for every guest.
   isWaitingAt(person: number): boolean;
@@ -654,17 +655,17 @@ export function createRouter(parts: {
   const settleOnSand = (person: number, gate: number): boolean => {
     const party = guests.party[person]!;
     const members = partyOf(guests, person);
-    partyPitches[party] ??= claimPitch(gate, members);
+    partyPitches[party] ??= claimPitch(gate, members, watching(person));
     const shared = partyPitches[party];
     if (shared && stayAt(person, shared, members.indexOf(person), gate)) return true;
     if (shared) dropIfEmpty(shared, party);
-    const own = claimPitch(gate, [person]);
+    const own = claimPitch(gate, [person], watching(person));
     if (own && stayAt(person, own, 0, gate)) return true;
     if (own) dropIfEmpty(own, party);
     return false;
   };
 
-  const claimPitch = (gate: number, members: readonly number[]): Claim | null => {
+  const claimPitch = (gate: number, members: readonly number[], watch: boolean): Claim | null => {
     const people = crowd();
     const pitch = pitchFor({
       network,
@@ -672,6 +673,7 @@ export function createRouter(parts: {
       members: members.map((member) => ({ child: guests.child[member] === 1 })),
       taken: pitched,
       loungerFree: (seat) => !promised.has(seat) && seatIsFree(people, seat),
+      ...(watch ? { watch } : {}),
     });
     if (!pitch) return null;
     pitched.add(pitch.tile);
@@ -729,12 +731,22 @@ export function createRouter(parts: {
     dropIfEmpty(claim, guests.party[person]!);
   };
 
+  // Nobody watches a show lying down: up on the sand, or sat up on the lounger, facing the sea.
+  const holdToWatch = (people: Crowd, person: number, spot: PitchSpot): void => {
+    const sitting = guests.child[person] === 1 || spot.seat >= 0;
+    holdAt(people, person, spot.x, spot.y, spot.z, 0, sitting ? RESTING.sitting : RESTING.standing);
+  };
+
   const restAtSpot = (person: number, claim: Claim): void => {
     // The spot is the last waypoint, so the walk back starts with the one before.
     errands.leg[person]! -= 1;
     const people = crowd();
     const spot = claim.pitch.spots[spotOf[person]!]!;
     lookAgainAt[person] = now + SETTLE_TICKS;
+    if (watching(person)) {
+      holdToWatch(people, person, spot);
+      return;
+    }
     if (spot.seat >= 0 && holdOnSeat(people, person, spot.seat)) return;
     if (spot.seat >= 0) {
       holdAt(people, person, claim.pitch.x, BEACH_SURFACE, claim.pitch.z, 0, RESTING.lying);
@@ -764,9 +776,10 @@ export function createRouter(parts: {
     }
   };
 
+  // Last, as it asks the events: it runs per guest per tick while anybody is on the sand.
   const dueAnotherLook = (person: number, beach: number, people: Crowd): boolean => {
     if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) return false;
-    return isWaiting(people, person) && now >= lookAgainAt[person]!;
+    return isWaiting(people, person) && now >= lookAgainAt[person]! && !watching(person);
   };
 
   // Everything off the sand scores Infinity: leaving the beach is a separate decision,
@@ -877,6 +890,31 @@ export function createRouter(parts: {
   const beachIndex = (): number => {
     const last = venues.length - 1;
     return last >= 0 && isBeach(venues[last]!) ? last : -1;
+  };
+
+  // Invited to a show on the sand: no swim, no errand, and a pitch facing the sea.
+  const watching = (person: number): boolean => {
+    const beach = beachIndex();
+    return beach >= 0 && (parts.eventStay?.(person, beach) ?? -1) >= now;
+  };
+
+  const restingOnBeach = (person: number, beach: number): boolean =>
+    occupancy.state[person] === VISIT.inside &&
+    occupancy.at[person] === beach &&
+    fetching[person]! < 0;
+
+  const inviteInPlace = (person: number, beach: number): boolean => {
+    const members = partyOf(guests, person);
+    if (!members.every((member) => restingOnBeach(member, beach))) return false;
+    const people = crowd();
+    for (const member of members) {
+      const stay = parts.eventStay?.(member, beach) ?? -1;
+      occupancy.until[member] = Math.max(occupancy.until[member]!, stay);
+      const spot = stays[member]?.pitch.spots[spotOf[member]!];
+      // One still walking out is posed when it reaches the spot.
+      if (spot && isWaiting(people, member)) holdToWatch(people, member, spot);
+    }
+    return true;
   };
 
   const setOffOverSand = (
@@ -1295,6 +1333,7 @@ export function createRouter(parts: {
     },
 
     invite(person, venue) {
+      if (venue >= 0 && venue === beachIndex() && inviteInPlace(person, venue)) return true;
       if (!isFree(person) || venue < 0 || venue >= venues.length) return false;
       homeward[person] = 0;
       setPartyVenue(goals, guests, person, venue);
@@ -1459,7 +1498,8 @@ export function createRouter(parts: {
     },
 
     restingUntil(person) {
-      return this.stayOf(person) === 'resting' ? occupancy.until[person]! : Number.NaN;
+      if (this.stayOf(person) !== 'resting' || watching(person)) return Number.NaN;
+      return occupancy.until[person]!;
     },
 
     isSunbathing(person) {
@@ -1602,12 +1642,6 @@ function tallyOf(venues: readonly Venue[], counts: Int32Array): ReadonlyMap<stri
     if (count > 0) tally.set(venues[venue]!.key, count);
   }
   return tally;
-}
-
-// The beach goes last so every building keeps the index `venuesOn` gave it.
-function withBeach(venues: readonly Venue[], network: WalkNetwork): readonly Venue[] {
-  const beach = beachVenueFor(network);
-  return beach ? [...venues, beach] : venues;
 }
 
 function longestSandLane(network: WalkNetwork, routes: readonly SandRoute[]): readonly QueueSpot[] {

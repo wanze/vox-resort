@@ -62,6 +62,15 @@ describe('the day counts', () => {
     expect(counted.events).toEqual({ held: 1, audience: 34, called: 1 });
     expect(start.events).toBeUndefined();
   });
+
+  it('add up the fireworks and the shows moved, writing them only once there are some', () => {
+    const fireworks = countEvent(startDay(2), { held: 1, audience: 120, called: 0, fireworks: 1 });
+    const moved = countEvent(fireworks, { held: 0, audience: 0, called: 0, postponed: 1 });
+    expect(moved.events).toEqual({ held: 1, audience: 120, called: 0, fireworks: 1, postponed: 1 });
+    expect(countEvent(startDay(2), { held: 1, audience: 3, called: 0 }).events).not.toHaveProperty(
+      'fireworks',
+    );
+  });
 });
 
 describe('reportOf', () => {

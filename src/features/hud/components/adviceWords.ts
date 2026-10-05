@@ -50,6 +50,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   unvisited: ({ subject }) => `Nobody visited ${subject} today`,
   'no-events': () => 'Nothing is on the programme for the week ahead',
   'no-welcome': () => 'New guests have no stage to be welcomed on',
+  'no-fireworks': () => 'Nothing to celebrate in two weeks',
   'weather-closed': ({ subject, need }) =>
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
@@ -77,6 +78,7 @@ const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null 
   unvisited: ({ count }) => `room for ${count}`,
   'no-events': ({ subject }) => `book live music or a show on ${subject}`,
   'no-welcome': ({ count }) => `${count} arrived today`,
+  'no-fireworks': () => 'book fireworks over the sea',
   'weather-closed': ({ count }) => `${count} of them have no roof`,
 };
 
@@ -101,6 +103,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   unvisited: 'Quiet',
   'no-events': 'Programme',
   'no-welcome': 'Welcome',
+  'no-fireworks': 'Fireworks',
   'weather-closed': 'Weather',
 };
 

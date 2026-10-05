@@ -9,7 +9,7 @@ import {
   type PavedTile,
   type WalkNetwork,
 } from '../../crowd/domain/walkNetwork';
-import { shoreFor, terrainAt } from '../../layout/domain/shoreline';
+import { beachDepthAt, shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { pitchFor, type PitchInput } from './beachPitch';
 
 const shore = shoreFor({
@@ -137,5 +137,47 @@ describe('pitchFor', () => {
   it('gives the same pitch for the same beach twice', () => {
     const network = beachOf([lounger(9, 13), lounger(12, 14)]);
     expect(pitchFor(inputOn(network))).toEqual(pitchFor(inputOn(network)));
+  });
+});
+
+describe('a watch pitch', () => {
+  const watching = (network: WalkNetwork, overrides: Partial<PitchInput> = {}) =>
+    pitchFor(inputOn(network, { watch: true, ...overrides }))!;
+
+  it('stands the grown-ups and sits the children, all facing the sea', () => {
+    const pitch = watching(beachOf());
+    expect(pitch.spots.map((spot) => spot.pose)).toEqual([
+      RESTING.standing,
+      RESTING.standing,
+      RESTING.sitting,
+    ]);
+    expect(pitch.spots.every((spot) => spot.heading === 0)).toBe(true);
+    expect(pitch.spots[0]!.y).toBe(BEACH_SURFACE);
+  });
+
+  it('takes the front rows while there is room, and further back once they are full', () => {
+    const network = beachOf();
+    const front = watching(network);
+    const { tileX, tileZ } = tileOf(front);
+    expect(beachDepthAt(shore, tileX, tileZ)).toBeLessThanOrEqual(1);
+    const taken = new Set<number>();
+    for (let x = 0; x < 20; x++) for (const z of [16, 17]) taken.add(z * 20 + x);
+    const back = tileOf(watching(network, { taken }));
+    expect(beachDepthAt(shore, back.tileX, back.tileZ)).toBeGreaterThan(1);
+  });
+
+  it('leaves the loungers beside it to those come to lie on them', () => {
+    const network = beachOf([lounger(9, 16), lounger(11, 16)]);
+    const pitch = watching(network);
+    expect(pitch.spots.every((spot) => spot.seat === -1)).toBe(true);
+  });
+
+  it('stands a party of five in two rows, the second further from the water', () => {
+    const five = [...FAMILY, { child: false }, { child: false }];
+    const pitch = watching(beachOf(), { members: five });
+    const rows = [...new Set(pitch.spots.map((spot) => spot.z))].toSorted((a, b) => b - a);
+    expect(rows).toHaveLength(2);
+    expect(pitch.spots.slice(0, 3).every((spot) => spot.z === rows[0])).toBe(true);
+    expect(pitch.spots.slice(3).every((spot) => spot.z === rows[1])).toBe(true);
   });
 });

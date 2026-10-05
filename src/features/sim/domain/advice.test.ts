@@ -12,6 +12,7 @@ import {
   adviceLittered,
   adviceNoDepot,
   adviceNoEvents,
+  adviceNoFireworks,
   adviceNoWelcome,
   adviceNotStepFree,
   adviceUnmade,
@@ -719,6 +720,32 @@ describe('adviceNoWelcome', () => {
     });
     const advice = adviceFor(healthyFacts({ welcomeless: 34 }));
     expect(advice.filter((each) => each.kind === 'no-welcome')).toHaveLength(1);
+  });
+});
+
+describe('adviceNoFireworks', () => {
+  const beach = {
+    ...venueOf({ key: 'beach', label: 'Beach', x: 160, z: 320 }),
+    shelter: 'open' as const,
+  };
+
+  it('says nothing while the beach has had fireworks, or has some booked', () => {
+    expect(adviceNoFireworks(healthyFacts())).toBeNull();
+    expect(adviceNoFireworks(healthyFacts({ quietBeach: null }))).toBeNull();
+  });
+
+  it('points at the beach after two quiet weeks, once and quietly', () => {
+    expect(adviceNoFireworks(healthyFacts({ quietBeach: beach }))).toEqual({
+      kind: 'no-fireworks',
+      weight: 0.1,
+      subject: 'Beach',
+      key: 'beach',
+      count: 0,
+      at: { tileX: 10, tileZ: 20 },
+      need: null,
+    });
+    const advice = adviceFor(healthyFacts({ quietBeach: beach }));
+    expect(advice.filter((each) => each.kind === 'no-fireworks')).toHaveLength(1);
   });
 });
 

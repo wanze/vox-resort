@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { EventNews } from '../../hud/domain/news';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
-import { eventNewsLine, welcomeWords } from './eventWords';
+import { eventNewsLine, tallyWords, welcomeWords } from './eventWords';
 
 const news = (over: Partial<EventNews> = {}): EventNews => ({
   key: 'event:1:3:announce',
@@ -32,6 +32,37 @@ describe('eventNewsLine', () => {
     expect(eventNewsLine(news({ kind: 'call-off', reason: 'no-host' }))).toBe(
       'Welcome meeting at Sunset Stage called off: no animator on duty',
     );
+  });
+});
+
+describe('eventNewsLine for fireworks', () => {
+  it('tells of them by size, at the beach', () => {
+    const grand = news({
+      label: 'Grand fireworks',
+      venue: 'the beach',
+      start: 3 * TICKS_PER_DAY + 22 * 60,
+    });
+    expect(eventNewsLine(grand)).toBe('Tonight 22:00: Grand fireworks at the beach');
+    expect(eventNewsLine({ ...grand, kind: 'tonight' })).toBe('Grand fireworks tonight at 22:00');
+    expect(eventNewsLine({ ...grand, kind: 'postpone', reason: 'weather' })).toBe(
+      'Grand fireworks moved to tomorrow: rain',
+    );
+  });
+});
+
+describe('tallyWords', () => {
+  it('tells of the fireworks and the shows moved only on a day that had some', () => {
+    expect(tallyWords({ held: 2, audience: 61, called: 0 })).toBe(
+      '2 held · 61 guests · 0 called off',
+    );
+    expect(tallyWords({ held: 1, audience: 140, called: 0, fireworks: 1, postponed: 1 })).toBe(
+      '1 held · 1 fireworks · 140 guests · 0 called off · 1 moved',
+    );
+    expect(tallyWords({ held: 0, audience: 0, called: 0, postponed: 1 })).toBe(
+      '0 held · 0 guests · 0 called off · 1 moved',
+    );
+    expect(tallyWords({ held: 0, audience: 0, called: 0 })).toBeNull();
+    expect(tallyWords(undefined)).toBeNull();
   });
 });
 

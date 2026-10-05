@@ -7,25 +7,26 @@ import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   adviceKey,
   eventKey,
+  type EventNews,
   eventNewsFrom,
   expireToasts,
   logEvent,
   logNews,
+  type Message,
   newDayIn,
+  type News,
   newsFrom,
+  type Severity,
   severityOf,
   showDay,
   showEvent,
   showToasts,
+  type Toast,
   toastKey,
+  type ToastKind,
+  tonightNewsOf,
   withoutResolved,
   withUpdate,
-  type EventNews,
-  type Message,
-  type News,
-  type Severity,
-  type Toast,
-  type ToastKind,
 } from './news';
 
 const advice = (kind: AdviceKind, weight = 0.9, tileX = 0): Advice => ({
@@ -346,6 +347,30 @@ describe('eventNewsFrom', () => {
   it('names no stage for a site that is gone', () => {
     const [news] = eventNewsFrom([{ kind: 'announce', run }], []);
     expect(news).toMatchObject({ venue: null, at: null });
+  });
+
+  it('names fireworks by their size, at the beach, and tells of them in the morning', () => {
+    const beach = { ...stage, key: 'beach', id: 'beach', label: 'Beach', stage: false } as const;
+    const fireworks = {
+      ...occurrence,
+      kind: 'fireworks',
+      site: { kind: 'beach' },
+      tier: 'grand',
+    } as const;
+    const [announced] = eventNewsFrom(
+      [{ kind: 'announce', run: { ...run, occurrence: fireworks } }],
+      [stage, beach],
+    );
+    expect(announced).toMatchObject({ label: 'Grand fireworks', venue: 'the beach' });
+    expect(tonightNewsOf(fireworks, [stage, beach])).toEqual({
+      key: eventKey(1, 3, 'tonight'),
+      kind: 'tonight',
+      label: 'Grand fireworks',
+      venue: 'the beach',
+      start: fireworks.start,
+      reason: null,
+      at: { tileX: 4, tileZ: 9 },
+    });
   });
 });
 

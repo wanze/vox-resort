@@ -216,4 +216,23 @@ describe('widenThoughts', () => {
     expect(widened.heardSubject).toEqual(old.heardSubject);
     expect(isComplaint('welcomed')).toBe(false);
   });
+
+  it('pads a save from before the fireworks, and hears them as praise', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 0, 'welcomed', 'Welcome meeting', 5);
+    const kinds = THOUGHT_KINDS.length;
+    const old = snapshotThoughts(thoughts, new Map());
+    const short = (column: ArrayLike<number | string | null>) =>
+      Array.from(column).filter((_, at) => at % kinds < kinds - 1);
+    const widened = widenThoughts({
+      ...old,
+      stay: Uint16Array.from(short(old.stay) as number[]),
+      heardAt: Int32Array.from(short(old.heardAt) as number[]),
+      heardSubject: short(old.heardSubject) as (string | null)[],
+    });
+    expect(widened.stay).toEqual(old.stay);
+    expect(widened.heardSubject).toEqual(old.heardSubject);
+    expect(THOUGHT_KINDS.at(-1)).toBe('fireworks');
+    expect(isComplaint('fireworks')).toBe(false);
+  });
 });

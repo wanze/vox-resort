@@ -1,7 +1,7 @@
 # Art direction
 
-What the models should look like and what they're built from. The authoring API
-and scale are in [voxel-gen/README.md](../voxel-gen/README.md).
+What the models look like and what they're built from. The authoring API and
+scale are in [voxel-gen/README.md](../voxel-gen/README.md).
 
 ## References
 
@@ -18,19 +18,17 @@ and photoreal renders for massing and dressing only, never for colour.
 `#c9a05a` · `sand` `#dcbe95` · `stone` `#cfc3b8` · `slate` `#9aa0a3` · `grass`
 `#7d9a3c` · `foliage` `#4f7f3a` · `glass` `#8fb8c4` · `metal` `#474d57` · `water`
 `#4fc6de` · `bloom` `#d2483c` · `amber` `#e8a33c`. `skin` has four complexions
-instead of a ramp: `#f6c4b0`, `#d9a173`, `#a9704a`, `#6b4034`.
+instead of a ramp.
 
-- Colours are flat albedo. No light or shadow painted in.
-- Use a different ramp step for a different material (kerb vs. paving, shutter
-  vs. wall), not for shading.
-- Colours from different families must stay distinct (`palette.test.ts`).
-- Prefer an existing ramp step over a new family; each colour costs a DVE voxel
-  and a material.
-- Max **250 colours** in the catalogue. Colour 251 silently renders with the
-  wrong material.
+- Colours are flat albedo, with no light or shadow painted in.
+- A different ramp step means a different material (kerb vs. paving), not
+  shading.
+- Families must stay distinct (`palette.test.ts`).
+- Prefer an existing step over a new family: each colour costs a DVE voxel and
+  a material. Max **250 colours**; colour 251 silently renders wrong.
 
-`LEGACY` in `voxel-gen/palette.test.ts` lists models that haven't had their style
-pass yet and are exempt from the palette check. The list should only shrink.
+`LEGACY` in `palette.test.ts` lists models exempt from the palette check until
+their style pass. It should only shrink.
 
 ## Parts
 
@@ -44,55 +42,40 @@ gableRoof(b, { ...BODY, y: eaves, ridge: 'z' });
 doorway(b, { face: 'z+', at: FRONT, along: 14, y: ground });
 ```
 
-| Part                                                       | Draws                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------- |
-| `ground.plinth`                                            | slab with a lip (also a teak deck)                      |
-| `ground.steps`                                             | solid flight, 1 rise to 2 going                         |
-| `wall.stuccoWall`                                          | wall body with skirting, string course, quoins, cornice |
-| `wall.shutteredWindow`                                     | recessed pane with sill, lintel, shutters               |
-| `wall.doorway`                                             | door recessed into a stone frame                        |
-| `wall.awning`                                              | awning off one wall, with a valance                     |
-| `roof.gableRoof`                                           | pitched roof with ridge and two gables                  |
-| `roof.hipRoof`                                             | roof sloping on four sides                              |
-| `roof.flatRoof`                                            | slab with a parapet                                     |
-| `roof.thatchRoof`                                          | steep hipped palm roof                                  |
-| `veranda.arcade`                                           | piers with round arches                                 |
-| `veranda.balustrade`                                       | balusters between rail and coping                       |
-| `pool.poolWater`                                           | basin sunk into a deck                                  |
-| `props.pottedPlant`                                        | plant in a terracotta pot                               |
-| `props.flowerBox`                                          | planter, flowering or green                             |
-| `props.parasol`                                            | square canopy on a pole                                 |
-| `span.spanDeck`, `spanPiles`, `spanParapet`, `spanLantern` | bridge deck, trestles, rails, lantern                   |
-| `boat.hull`, `boat.pedalo`                                 | boat hulls                                              |
+| Module    | Parts                                                 |
+| --------- | ----------------------------------------------------- |
+| `ground`  | `plinth`, `steps`                                     |
+| `wall`    | `stuccoWall`, `shutteredWindow`, `doorway`, `awning`  |
+| `roof`    | `gableRoof`, `hipRoof`, `flatRoof`, `thatchRoof`      |
+| `veranda` | `arcade`, `balustrade`                                |
+| `pool`    | `poolWater`                                           |
+| `props`   | `pottedPlant`, `flowerBox`, `parasol`                 |
+| `span`    | `spanDeck`, `spanPiles`, `spanParapet`, `spanLantern` |
+| `boat`    | `hull`, `pedalo`                                      |
 
-Parts are pure and tested. Only write a new part once a second model needs it,
-and check first whether an existing part in another material already does the
-job. `faceCell` in `wall.ts` makes openings work on all four faces.
+Parts are pure and tested. Write a new one only once a second model needs it.
+`faceCell` in `wall.ts` makes openings work on all four faces.
 
 ## Rules
 
 - **Fill the footprint.** Underfilled models look like the wrong scale.
 - **Fixed scale.** 16 voxels per 4 m tile, 12 per storey, 8 per terrain level.
-- **Don't dither patterns across a face.** The mesher merges flat single-colour
-  rectangles, so checkerboards, stripes, grid-drawn curves and single-voxel frames
-  all get expensive. Use geometry (a course, a recess, a band) or the shader.
-- **Keep mass-placed models cheap.** Cost is triangles times placements, so
-  `path`, `hedge`, lamps and trees matter most.
-- **Draw a mosaic four-fold symmetric.** Its field turns with its piece, so
-  paint one quarter in shapes at least 2 voxels across and let it turn into the
-  other three; a pattern that runs one way breaks at every turned piece.
+- **No dithered patterns.** The mesher merges flat single-colour rectangles, so
+  checkerboards, stripes and single-voxel frames get expensive. Use geometry or
+  the shader.
+- **Keep mass-placed models cheap.** Cost is triangles × placements, so paths,
+  hedges, lamps and trees matter most.
+- **Mosaics are four-fold symmetric.** A field turns with its piece: paint one
+  quarter in shapes at least 2 voxels across.
 - **Nothing tall in front of a façade.** The camera looks down at about 30°.
-- **Cut openings into walls**, don't paint them. Roofs overhang. Everything
-  stands on a plinth. Put planting by the entrance.
+- **Cut openings, don't paint them.** Roofs overhang, everything stands on a
+  plinth, planting goes by the entrance.
 - **Declare water, don't paint it.** Colours listed in `water` get the water
-  shader everywhere in that model, so a blue flume needs a different colour
-  (`water.light`, `glass`). Water must be horizontal; the shader can't do falling
-  water, so cascade between tiers.
-- **Light surfaces from above.** Lamps are baked as points. A floodlight puts its
-  light over the surface it lights, not at the fitting.
+  shader, which only does horizontal water, so cascade between tiers.
+- **Light surfaces from above.** Lamps are baked as points, so a floodlight's
+  light sits over what it lights.
 - **Bridges own their rails**, on trestles, each with a lantern.
-- **Seats need room.** Legs reach about three voxels forward at knee height;
-  `seats.test.ts` checks clearance.
+- **Seats need room.** Legs reach about three voxels forward (`seats.test.ts`).
 
 ## Workflow
 
@@ -100,16 +83,9 @@ job. `faceCell` in `wall.ts` makes openings work on all four faces.
 pnpm preview --sheet    # all models on one sheet
 pnpm preview cottage    # one model
 pnpm preview --audit    # footprint fill and voxel counts
-pnpm test
 pnpm bench              # when changing something mass-placed
 ```
 
-Work in passes by family (roofs, then walls, then ground, then props) and
-compare models against each other.
-
-## Status
-
-- **Done**: palette, building parts and most buildings and amenities.
-- **Draft** (`DRAFT_SOURCES`, not in the app): `waterpark`.
-- **To do**: everything on the `LEGACY` list, mostly 1×1 props, trees and ground
-  tiles.
+Work in passes by family (roofs, walls, ground, props) and compare models
+against each other. Still to do: everything on the `LEGACY` list, mostly 1×1
+props, trees and ground tiles. `waterpark` is a draft (`DRAFT_SOURCES`).

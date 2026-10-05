@@ -1,8 +1,23 @@
 # Vox Resort
 
-A voxel resort-builder prototype. Hand-authored voxel buildings are laid out on a
-plot, meshed with Divine Voxel Engine and drawn instanced with the Three.js
-WebGPU renderer. Guests walk the paths, visit venues, sleep, check in and out.
+![Vox Resort](vox-resort.png)
+
+A voxel game where you build your own beach resort. Lay out paths, put up
+hotels, bars and pools, and watch your guests arrive, enjoy their holiday, sleep
+and leave a review when they check out.
+
+- 🏗️ **Build**: place buildings, paths, stairs, ramps and plazas, shape the
+  terrain, buy land and bulldoze what you no longer need
+- 🧑‍🤝‍🧑 **Guests**: families with needs, thoughts and reviews who walk, swim,
+  play, eat and sleep across the resort
+- 🧹 **Staff**: hire cleaners, lifeguards, animators and housekeeping, and give
+  them zones
+- 💰 **Tycoon mode**: manage money, demand and ratings, or build freely
+- 🎉 **Programme**: welcome events, acts and fireworks
+- ☀️ **Day and weather**: calendar, sunsets, lamp light and changing weather
+- 🚤 **Sea and beach**: boats, pedalos, balloons and a beach that gets dirty
+- 💾 **Saves**: save and load resorts, installable as a PWA, touch friendly
+- 🎵 **Sound**: music and ambient sounds
 
 ## Stack
 
@@ -36,23 +51,20 @@ pnpm preview    # render model thumbnails for the build palette
 pnpm dev        # http://localhost:5173
 ```
 
-| Script                              | Does                                    |
-| ----------------------------------- | --------------------------------------- |
-| `pnpm dev`                          | dev server                              |
-| `pnpm build`                        | production build                        |
-| `pnpm preview`                      | render model previews                   |
-| `pnpm test`                         | unit tests                              |
-| `pnpm typecheck`                    | type check                              |
-| `pnpm lint` / `pnpm format`         | lint / format                           |
-| `pnpm fallow` / `pnpm fallow:audit` | dead code, duplication, boundaries      |
-| `pnpm bench`                        | measure the renderer (needs `pnpm dev`) |
-| `pnpm sim:report`                   | run the simulation headless for days    |
-
-`pnpm sim:report` prints each day's rating, visits, thoughts, demand, needs and
-books on a generated plot. `SIM_DAYS`, `SIM_SEED` and `SIM_PLOT` (`112x100`) pick
-the run; `SIM_KEEP=entrance,reception,bungalow:3,snack-bar` keeps only those
-buildings, `SIM_PATHS=30` charges upkeep on that many path tiles, `SIM_EMPTY=1`
-opens with nobody booked in, and `SIM_QUIET=1` drops the hourly beach lines.
+| Script                              | Does                                          |
+| ----------------------------------- | --------------------------------------------- |
+| `pnpm dev`                          | dev server                                    |
+| `pnpm build`                        | previews, type check, production build        |
+| `pnpm preview`                      | render model previews                         |
+| `pnpm preview:dist`                 | serve the production build                    |
+| `pnpm test` / `pnpm test:watch`     | unit tests                                    |
+| `pnpm typecheck`                    | type check                                    |
+| `pnpm lint` / `pnpm lint:fix`       | oxlint, comment and sound checks              |
+| `pnpm format` / `pnpm format:check` | format / check formatting                     |
+| `pnpm fallow` / `pnpm fallow:audit` | dead code, duplication, boundaries            |
+| `pnpm bench`                        | measure the renderer (needs `pnpm dev`)       |
+| `pnpm sim:report`                   | run the simulation headless for days          |
+| `pnpm sounds:fetch`                 | download and encode sounds (ffmpeg and unzip) |
 
 ## Structure
 
@@ -71,5 +83,6 @@ derives everything from the model registry, so adding a model needs no change in
   tools, lighting, weather rendering, benchmarks.
 - [docs/crowd.md](docs/crowd.md): guests, staff, boats and the simulation behind
   them.
+- [docs/sound.md](docs/sound.md): music, ambience, guests and UI cues in Web Audio.
 - [docs/art-direction.md](docs/art-direction.md): references, palette, parts and
   modelling rules.

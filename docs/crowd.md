@@ -1,226 +1,110 @@
 # Crowd and simulation
 
-Guests, staff, boats and balloons, and the simulation that drives them.
+Guests, staff, boats and balloons, and the simulation behind them.
 
-|          |                                                                                                        |
-| -------- | ------------------------------------------------------------------------------------------------------ |
-| People   | 0.25 per paved tile, max 10 000 (`crowdSize.ts`), `?people=n` overrides. Three adult models, one child |
-| Poses    | walk, stand, sit, lie; drawn only: swim, wade, hop, cheer, jog, strike, reach                          |
-| Boats    | 12 (`CRAFT_COUNT`), plus buoys and rental boats                                                        |
-| Balloons | 36 (`BALLOON_COUNT`)                                                                                   |
+|          |                                                                               |
+| -------- | ----------------------------------------------------------------------------- |
+| People   | 0.25 per paved tile, max 10,000 (`crowdSize.ts`), `?people=n` overrides       |
+| Poses    | walk, stand, sit, lie; drawn only: swim, wade, hop, cheer, jog, strike, reach |
+| Boats    | 12 (`CRAFT_COUNT`), plus buoys and rental boats                               |
+| Balloons | 36 (`BALLOON_COUNT`)                                                          |
 
 ## Code
 
-| What                            | Where                                                                |
-| ------------------------------- | -------------------------------------------------------------------- |
-| Walk network                    | `crowd/domain/walkNetwork.ts`                                        |
-| Crowd state and step            | `crowd/domain/crowd.ts`                                              |
-| Avoidance                       | `crowd/domain/avoidance.ts`                                          |
-| Crowd speed per clock speed     | `sim/domain/crowdRate.ts`                                            |
-| Obstacles on the sand           | `crowd/domain/sandGrid.ts`                                           |
-| Seats in world space            | `crowd/domain/seating.ts`                                            |
-| Re-placing people after an edit | `crowd/domain/nearestNode.ts`, `reseatCrowd`                         |
-| Venue doors                     | `sim/domain/doors.ts`                                                |
-| Flow fields                     | `sim/domain/flowField.ts`                                            |
-| Choosing a venue                | `sim/domain/chooseVenue.ts`, `appeal.ts`                             |
-| Routing and arriving            | `sim/domain/router.ts`                                               |
-| Queues and visits               | `sim/domain/occupancy.ts`                                            |
-| Beach                           | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`               |
-| Needs, happiness, rating        | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                   |
-| Night, weather, check-in        | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                    |
-| Cleanliness and staff           | `sim/domain/upkeep.ts`, `staffRouter.ts`                             |
-| Advice                          | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`             |
-| Money                           | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`     |
-| Guests, parties, beds, names    | `guests/domain/`                                                     |
-| Inspector                       | `inspect/`, `hud/components/InspectPanel.tsx`                        |
-| Drawing the crowd               | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts`  |
-| Places in a venue               | `choreography/domain/places.ts`, `casting.ts`                        |
-| Swimming in the sea             | `choreography/domain/seaSwim.ts`, `sea/domain/swimArea.ts`           |
-| Ball games                      | `choreography/domain/games.ts`, `courts.ts`, `adapters/ballField.ts` |
-| Boats and passengers            | `sea/domain/piers.ts`, `passengers.ts`                               |
+| What                        | Where                                                               |
+| --------------------------- | ------------------------------------------------------------------- |
+| Walk network, crowd, step   | `crowd/domain/walkNetwork.ts`, `crowd.ts`, `avoidance.ts`           |
+| Sand obstacles, seats       | `crowd/domain/sandGrid.ts`, `seating.ts`                            |
+| Doors, flow fields, routing | `sim/domain/doors.ts`, `flowField.ts`, `router.ts`                  |
+| Choosing a venue            | `sim/domain/chooseVenue.ts`, `appeal.ts`                            |
+| Queues and visits           | `sim/domain/occupancy.ts`                                           |
+| Beach                       | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`              |
+| Needs, happiness, rating    | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                  |
+| Night, weather, check-in    | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                   |
+| Cleanliness and staff       | `sim/domain/upkeep.ts`, `staffRouter.ts`                            |
+| Advice                      | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`            |
+| Money                       | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`    |
+| Guests, parties, beds       | `guests/domain/`                                                    |
+| Events                      | `events/`                                                           |
+| Inspector                   | `inspect/`, `hud/components/InspectPanel.tsx`                       |
+| Drawing                     | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
+| Places and acts in a venue  | `choreography/domain/`                                              |
+| Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                     |
+
+## Principles
+
+- **Seeded streams must not move.** All randomness uses `createRandom`. Anything
+  added later (wheelchairs, litter, breakdowns, acts, events) draws from a `mix`
+  hash instead, so existing seeded scenes and bench runs replay unchanged.
+- **Visual only means visual only.** The cast, acts, games, swimming and boats
+  for hire are drawn on top of the sim. Nothing in the sim reads them and none
+  of it is saved.
+- **Observers don't steer.** Advice, thoughts, reviews and overlays only report
+  what the sim already decided. If a rule needs a change in `chooseVenue` or
+  `occupancy`, that's a bug there.
+- **Features off means unchanged.** No zones, no orders, no events booked and no
+  wheelchair users each behave exactly as before the feature existed.
 
 ## Walk network
 
-Built from the layout, and rebuilt after every hand edit.
+Built from the layout, rebuilt a quarter second after the last hand edit
+(`REANCHOR_DELAY_MS`). Everyone is then put back on it (`reseatCrowd`), keeping
+position and identity but losing their seat.
 
-- **Nodes**: one per paved tile. Stairs, ramps and bridge ramps get two (foot and
-  head). The climbs are read off the pieces laid (`id` and `rotation` on each
-  paved tile), so an old save's flights are what the graph walks. A ramp's foot
-  rises half a level and its head the other half; the head's low node is the
-  foot's high one. Nobody steps onto a ramp's head from the side.
-- **Edges**: between neighbouring paved tiles at most one level apart; a
-  one-level difference only via stairs or a ramp's head. The two edges up and
-  down a flight's treads are `stepped`, the one thing a wheelchair cannot use.
-- **Seats** from the art (`ModelSeat`) are placed in world space by `seating.ts`
-  and attached to the nearest paved node within reach. Seats with no paving
-  nearby are dropped. Seats on sand go into `network.beachSeats`.
+- **Nodes**: one per paved tile; stairs and ramps get a foot and a head node.
+  Climbs are read off the laid pieces, so old saves walk what they show.
+- **Edges**: between neighbours at most one level apart, a one-level step only
+  via stairs or a ramp. Stair edges are `stepped`, the one thing a wheelchair
+  can't use.
+- **Seats** from the art are attached to the nearest node. Seats on sand go to
+  `beachSeats`, lifeguard posts to `posts`, which guests never look in.
 - The per-frame step never reads terrain, occupancy or layout.
 
-A quarter second after the last hand edit (`REANCHOR_DELAY_MS`), the network is
-rebuilt and everyone is put back on it (`reseatCrowd`). People keep their
-position and identity but lose their seat. Crowd size doesn't change.
+## Movement and storage
 
-## Movement
+- A person moves along a segment `from → to` at `t`; sitting or lying is a
+  zero-length segment with a duration. `cameFrom` prevents doubling back.
+- **Avoidance**: a spatial hash rebuilt each frame. Walkers step right and slow
+  down; at a crossing the higher index waits. On sand, walkers check a clear
+  line against `sandGrid.ts`.
+- **Speed follows the clock**: crossing the plot takes a tenth of a sim day at
+  every speed. Long frames split into `MAX_STEP` substeps, capped at 112 so
+  `rush` fits.
+- **Boats** steer clear of piers and each other. Hire boats go out one per two
+  pedalo visitors, on crowd time.
 
-- A person moves along a segment `from → to` at parameter `t`. Sitting or lying
-  is a zero-length segment with a duration (`SIT_SECONDS`, `LIE_SECONDS`).
-- `cameFrom` stops people doubling back at junctions.
-- **Avoidance**: a spatial hash rebuilt each frame. Walkers step right (up to four
-  voxels) and slow down (not below 15%). At a crossing the higher index waits.
-- **On sand**, `sandGrid.ts` rasterises obstacles once per resort and walkers
-  check for a clear line.
-- **Speed follows the clock**: `crowdScaleFor(speed)` makes crossing the
-  reference plot take a tenth of a simulated day at every speed. Long frames are
-  split into `MAX_STEP` substeps, capped at 112 (`MAX_SUBSTEPS`), which `rush`
-  (107) fits under: at the old cap of 32 its guests walked a third as fast as the
-  clock and a fully built resort rated three stars. Paused means standing still.
-- **Boats** look ahead, steer away from piers and each other, and stay inside the
-  bay.
-- **Hire boats** go out only while the pedalo rental has visitors, one boat for
-  every two (`HIRERS_PER_BOAT`), read from the cast after each recast
-  (`insideAt`), and always with two aboard. A hire is two resort hours out,
-  then the trip home; a boat out when the visitors leave finishes its hire, and
-  none is called back early. This is drawn only: the visit, its dwell and its
-  price are the router's.
-- Hire boats keep the **crowd's time** (`walked * crowdScale`), not real time:
-  they pedal at 0.6 of walking pace and stop when the crowd stops. Long frames are split into substeps of a
-  quarter of a crowd second, so a boat never steps over its berth.
+The crowd is a structure of arrays with fixed capacity and no per-frame
+allocation (position, segment, speed, node, seat, avoidance, lane, spatial
+hash). New attributes are new columns; `node` is -1 on sand. A plot with no
+paving keeps the capacity with everyone off the plot until paving arrives.
 
-## Storage
+## Drawing and inspecting
 
-Structure of arrays, fixed capacity, no per-frame allocation:
-
-```
-Float32Array  x, y, z, heading, phase        // position and facing
-Float32Array  fromX/Y/Z, toX/Y/Z, t, rate    // current segment
-Float32Array  speed
-Int32Array    node, cameFrom, gate, variant
-Int32Array    seat                           // held seat, or -1
-Float32Array  dirX, dirZ, side, pace         // avoidance
-Uint8Array    lane                           // resting, to a seat, paving, sand
-Int32Array    cellHead (4 096), cellNext     // spatial hash
-```
-
-`node` is `-1` on the sand. New attributes are new columns.
-
-A crowd keeps its capacity on a graph with no edges: `count` is 0 and every body
-waits off the plot (`offPlot`), with its variant, phase and speed drawn as on a
-paved plot. The first paving brings `count` up to capacity, and `putOnPlot` lets
-bodies in one at a time. The field's meshes are sized by capacity, so they exist
-from the start; `drawCalls` and `triangleCount` read 0 while nobody is drawn.
-
-## Guests
-
-`createGuests` builds a registry parallel to the crowd: guest `i` is the walker
-at index `i`. It's separate from `Crowd` because none of it is read per frame.
-
-Guests come in parties (`PARTY_MIX`):
-
-| Kind    | Share | Adults | Children |
-| ------- | ----- | ------ | -------- |
-| family  | 0.40  | 2      | 1–3      |
-| couple  | 0.30  | 2      | 0        |
-| friends | 0.18  | 3–4    | 0        |
-| solo    | 0.12  | 1      | 0        |
-
-About one party in 14 (`WHEELCHAIR_SHARE`, 0.07) has an adult in a wheelchair
-(`Party.wheelchair`, the person index or -1). It is drawn from its own stream
-salted off the party index, so no other draw moves. A wheelchair rolls at 0.8 of
-its user's drawn speed (`paceOf`, asked per edge). Saves from before load with
-nobody in one.
-
-Children use the `child` model. Beds come from the art (`bedsOf`); the biggest
-parties get the biggest lodgings first. A party without room gets `NO_HOME` and
-starts away, as check-in would have turned it away: a plot paved for more guests
-than it sleeps opens with only the housed ones on it.
-
-Homes follow the plot. After an edit, `rehome` rebuilds the free beds from the
-lodgings standing and remaps each guest's home **by key**, so an edit that leaves
-the lodgings alone leaves everybody where they sleep. A party whose lodging was
-demolished is re-housed whole (`homeWithRoom`, parties in index order), or left
-`NO_HOME` if nothing fits; the advice's `no-beds` then says so.
-
-A plot with no paving is dealt its guests by area instead (`crowdSizeForArea`:
-the 20% of tiles a generated plot paves, at the usual 0.25 a tile) and starts
-`away`: nobody present, every bed free. The draws are the same as a full start.
-A bare game is dealt by the land it owns (`crowdSizeForOwned`), whatever is
-paved: 256 guests on the starting block. Buying land grows it at the next
-settle (see [Land](#land)), and it never shrinks.
-
-## Inspector
-
-Clicking without a build tool selects what's under the pointer. A click is a
-press and release within 4 px and 400 ms; anything else is a camera drag.
-
-`pickPerson` tries people first, by screen distance at hip height. Otherwise the
-tile's placement is selected. `selection.ts` turns the pick into HUD text. A guest
-shows their needs, destination and a live status line, such as
-`Hungry · Third in the line at the Bakery`. A venue shows how many are inside and
-queuing.
-
-Venues have names. `naming/domain/venueNames.ts` draws one from the model's
-`names` the first time a venue stands (built, generated, or loaded from a save
-that has none), by a hash of its placement key and tile, avoiding names already
-held. A drawn name is never drawn again, so a second restaurant never renames
-the first. Models without `names` (services, courts, pools) go by their type
-until the player names them. The inspector renames a venue; an emptied name
-draws a fresh one. Names are saved by placement key in the resort snapshot.
-`Venue.label` is the name and `Venue.kind` the type, so thoughts, advice,
-toasts and staff tasks say the name with no wording of their own; a named
-venue reads without "the" (`isNamed`). A rename swaps the router's list
-through `relabel`, never `rebuild`, and toasts are keyed by the venue's key,
-so neither the crowd nor the news moves.
-
-## Drawing
-
-- One `InstancedMesh` per person model, not chunked or frustum-culled. People
-  under `HIDDEN_PIXELS` are packed out of the draw but keep walking.
-- A wheelchair user is drawn sitting wherever they are (`DrawnAs.chair`, from
-  `Casting.inChair`), the hips a seat's height (`CHAIR_SEAT_VOXELS`) above where
-  anything but a sitting pose stood them, and the `wheelchair` prop under them
-  from `crowd/adapters/chairField.ts`: one preallocated mesh, one draw call.
-  Casting gives them a still spot to stand at, then a seat, never a lounger, a
-  game or the water; a venue with none of those has them at a watcher's place.
-- The CPU writes position and yaw. Every pose is done in the vertex shader
-  from one per-vertex `figure` vec4 and one per-instance `pose` vec4. These are
-  packed because WebGPU allows only eight vertex buffers; `crowdField.test.ts`
-  counts them.
-- People are painted at half a world voxel (`FIGURE_SCALE`, the model
-  source's `scale`), which the mesher shrinks back, so a figure stays 3 wide,
-  2 deep and 7 tall in the world while its arms and legs are half a voxel
-  across. The arms hang from `shoulderHeight` to `handHeight`, beside the
-  thighs: one voxel of sleeve, two of forearm.
-- `figure.x` is one weight channel for both limbs. A leg's weight tapers from
-  the foot to the hip; an arm carries only its side at `ARM_WEIGHT`, past any
-  leg's, since it turns whole about the shoulder. Arms are found per triangle,
-  from the centroid, which relies on the mesher giving every quad its own
-  vertices.
-- The mesher culls the faces where an arm touches the body, so
-  `rendering/domain/figureLimbs.ts` adds them back: the arm's inner side and
-  the chest and thigh behind it, coloured from the part they close. Without
-  them a swinging arm would open a see-through slit.
-- `pose.z` is `code + progress`. Codes 0 to 3 are the crowd's `RESTING`; 4 to
-  10 are `DRAWN_POSE` in `rendering/domain/poses.ts`, only ever drawn, set
-  through `DrawnAs.pose`. Cyclic poses run on the field's clock; timed ones
-  (strike, reach) read `progress`, set with `poseWith`.
-- People use the lit material (so lamps light them) and get no blob shadow.
-- Passengers are a separate figure field posed in the boat's frame.
-- The field draws a `DrawnAs` (the cast, see Places) over the crowd: a placed
-  person is drawn at their place and pose, a hidden one not at all. The crowd's
-  own state is never written.
+- One `InstancedMesh` per person model, not chunked or culled. The CPU writes
+  position and yaw; every pose is done in the vertex shader from a packed
+  `figure` and `pose` vec4, because WebGPU allows only eight vertex buffers
+  (`crowdField.test.ts` counts them).
+- People are painted at half a voxel (`FIGURE_SCALE`) so limbs can be thin.
+  The mesher culls faces where an arm touches the body, so `figureLimbs.ts`
+  adds them back.
+- The field draws a `DrawnAs` (the cast) over the crowd and never writes the
+  crowd's state. Wheelchair users are drawn sitting on a `wheelchair` prop.
+- **Inspector**: a click without a build tool picks the nearest person on
+  screen, else the tile's placement. Guests show needs, destination and a live
+  status line; venues show who's inside and queuing.
+- **Venue names** (`naming/domain/venueNames.ts`) are drawn from the model's
+  `names` by hash, never reused, renamable in the inspector, saved by placement
+  key.
 
 ## Determinism
 
-Bench runs must replay the same scene. All randomness uses a seeded PRNG
-(`createRandom`), bench mode uses a fixed timestep and real-time crowd speed, and
-outside bench mode the frame delta is clamped to `MAX_STEP`.
+Bench runs must replay the same scene: seeded PRNG, fixed timestep and real-time
+crowd speed under bench, frame delta clamped to `MAX_STEP` otherwise.
 
 ## Clock
 
-`sim/domain/simClock.ts`. State is `ticks` (simulated minutes since opening), the
-speed and a carry. One tick is a minute; a day is 1 440 ticks. One frame
-advances at most 12 ticks, so under load the clock falls behind. The resort opens
-paused.
+`sim/domain/simClock.ts`. One tick is a minute, a day 1,440 ticks, at most 12
+ticks a frame (so the clock falls behind under load). The resort opens paused.
 
 | Speed  | Real seconds per day |
 | ------ | -------------------- |
@@ -229,20 +113,39 @@ paused.
 | Fast   | 120                  |
 | Rush   | 30                   |
 
-Needs run on ticks. The crowd and the hire boats run on frame time scaled by
-speed. Balloons, the rest of the sea and construction run at real time.
+Needs run on ticks; the crowd and hire boats on frame time scaled by speed;
+balloons, the sea and construction on real time.
+
+## Guests
+
+`createGuests` builds a registry parallel to the crowd (guest `i` is walker
+`i`), kept apart because none of it is read per frame. Guests come in parties
+(`PARTY_MIX`):
+
+| Kind    | Share | Adults | Children |
+| ------- | ----- | ------ | -------- |
+| family  | 0.40  | 2      | 1–3      |
+| couple  | 0.30  | 2      | 0        |
+| friends | 0.18  | 3–4    | 0        |
+| solo    | 0.12  | 1      | 0        |
+
+- About 7% of parties have an adult in a wheelchair, rolling at 0.8 speed.
+- Beds come from the art (`bedsOf`), biggest parties into the biggest lodgings.
+  A party without room gets `NO_HOME` and starts away.
+- After an edit, `rehome` remaps homes by key, so untouched lodgings keep their
+  guests. A party whose lodging was demolished is re-housed whole if possible.
+- A bare game is dealt guests by the land it owns (256 on the starting block),
+  growing as land is bought.
 
 ## Needs and choosing a venue
 
-`needs.ts` holds five levels per guest (hunger, thirst, energy, fun, hygiene),
-from 1 (content) to 0 (desperate), and a sixth, health, that is not a want (see
-[Breakdowns and injuries](#breakdowns-and-injuries)). `decayNeeds` lowers them each tick at rates
-from `archetypes.ts`: families get hungry fastest and won't walk far, friends get
-bored fastest and walk anywhere. A sleeping guest's needs hold where they went to
-bed; at these rates a night would otherwise empty every one of them by morning.
+Five needs per guest (hunger, thirst, energy, fun, hygiene) from 1 content to 0
+desperate, decaying per tick at rates from `archetypes.ts`. A sixth, health, is
+not a want (see [Breakdowns and injuries](#breakdowns-and-injuries)). Sleeping
+guests' needs hold.
 
-`strongestNeed` decides **whether** a guest goes somewhere. `chooseVenue` decides
-**where**, scoring every venue:
+`strongestNeed` decides **whether** a guest goes somewhere, `chooseVenue`
+**where**:
 
 ```
 score = gain * taste * recency
@@ -250,367 +153,80 @@ score = gain * taste * recency
         (1 + distance / reach) * (1 + CROWDING * busy / capacity)
 ```
 
-- **gain** counts only what the guest can use: `min(amount, 1 - level)`, over
-  every need the venue serves, including negative ones. A cost counts only where
-  it leaves the need under `CONTENT_LEVEL` (0.5), so a rested guest plays tennis
-  for free. Levels are estimated for arrival time, after the walk.
-- A venue is a candidate only if it serves a need the guest would get up for
-  (`wouldGetUpFor`); otherwise a thirsty guest with nowhere to drink went back
-  to the snack bar for the last crumb of hunger all day.
-- **taste** is a stable per-guest, per-venue preference hashed from the venue key
-  (`TASTE_SPREAD` 0.3).
-- **recency** halves the score of the place they just left (`REVISIT` 0.5).
-- **busy** is everyone inside plus everyone queuing (`CROWDING` 2).
+- **gain** counts only what the guest can use, estimated for arrival time. A
+  cost counts only below `CONTENT_LEVEL` (0.5), so a rested guest plays tennis
+  for free.
+- A venue is a candidate only if it serves a need the guest would get up for.
+- **taste** is a stable hashed per-guest preference, **recency** halves the
+  place just left, **busy** is inside plus queuing.
 
 Tune `archetypes.ts` first.
 
-## Routing
+## Routing, visits and queues
 
-`router.ts` is the only thing the crowd calls. Guests who want nothing wander.
+`router.ts` is the only thing the crowd calls (`routeOf`); guests who want
+nothing wander.
 
-- **One flow field per venue**, swept breadth-first from its doors
-  (`flowFieldFor`). Built on demand and dropped on every edit. The Debug window's
-  `Routes` row counts them.
-- The crowd knows nothing about venues: `createCrowd` takes an optional
-  `routeOf(person, at)` and falls back to wandering.
-- **Parties move together.** Whoever decides sets the goal for the whole party.
-- **Step-free fields.** A party with a wheelchair user routes as a whole on
-  fields that skip stepped edges (`flowFieldFor(..., { stepFree: true })`), for
-  venues, beds, the desk and the way out. Each is swept only when such a party
-  first asks, and always when it considers a venue: a straight line would hide
-  that the way there is all stairs. The beach and every venue reached over the
-  sand are out of their reach. Nobody else ever sweeps one, so a resort with no
-  wheelchair users routes exactly as before. The saved router lists them in
-  `stepFreeFieldsBuilt`.
+- **One flow field per venue**, swept breadth-first from its doors, built on
+  demand and dropped on every edit.
+- **Parties move together**: whoever decides sets the goal for all.
+- **Step-free fields** skip stepped edges for parties with a wheelchair user,
+  built only when such a party asks. The beach is out of their reach.
+- A visit lasts the art's `dwellSeconds`; the need is satisfied on the way out.
+- **Doors** are declared on the art and rotate with the building.
+- A full venue grows a queue along the paving from its door. Guests skip venues
+  whose queue is full and are turned away if it fills before they arrive.
 
-## Visits and queues
+## Places and acts
 
-`occupancy.ts` tracks who's inside and who's waiting, updated once per tick.
+The sim holds a visitor at the middle of the footprint. The **cast**
+(`casting.ts`) draws them somewhere better: a seat or spot the art declares
+(`placesFor`). It is recast after each frame's ticks and rebuilt on every edit.
 
-- A visit lasts the art's `dwellSeconds`, at least one tick. The need is satisfied
-  on the way **out**.
-- **Doors** are declared on the art (`ModelVenue.doors`) and rotate with the
-  building. The layout orients buildings so doors face paving where it can. A
-  venue without a reachable door can be entered from any side.
-- A full venue grows a queue back along the paving from its door, one person every
-  six voxels. People are placed on their spot, not walked there.
-- A short path means a short queue. Guests won't pick a venue whose queue is full
-  (`MAX_QUEUE_SHOWN` 12 or the lane length), and are turned away if it fills
-  before they arrive.
-- Each tick: people leave, then the front of the queue enters, then the queue
-  moves up.
+- **Visitors** fill spots, then seats, then areas and loops, in the venue's
+  `order`. Parties sit side by side; children take places marked `child` first,
+  so parents end up on the benches.
+- **Watchers**: at courts, the queue is drawn on spectator seats.
+- **Hidden**: a visitor with no free place, or a guest asleep, isn't drawn and
+  can't be picked.
+- **Staff** at work are drawn on their role's spot (`recastStaff`).
+- **Acts** (`acts.ts`, `perform` each frame) animate visitors in `areas`
+  (swimming, wading) and on `loops` (ladders, slides). Positions are a pure
+  function of act, place, person and time on the choreography's own clock,
+  which advances with the crowd.
+- **Games** (`games.ts`, `courts.ts`): tennis, basketball and volleyball replay
+  hashed rallies; watchers follow the ball. The ball field draws the balls.
+- **Minigolf** (`golf.ts`), **playground** (`play.ts`), **kids club**
+  (`tag.ts`), **shows** (`shows.ts`), gym stations, game hall and showers each
+  have their own act, declared on the art.
+- **Staff at work** (`work.ts`): animators perform, lifeguards scan the water,
+  cleaners sweep, mechanics hammer.
 
-## Places
+## Beach
 
-A **place** is where somebody at a venue is drawn: a seat or a spot the art
-declares (`placesFor`). The sim holds a visitor at the middle of the
-footprint. The **cast** (`casting.ts`) draws them somewhere better. This is
-**visual only**: nothing in the sim reads it, nothing is saved, and a load or
-an edit simply recasts.
-
-- **Visitors** fill a venue's visitor spots in declaration order, then its
-  seats (those without `watches` or `post`), then its areas and loops. A
-  venue's `order` changes which kind comes first: the pools list
-  `['areas', 'loops', 'spots', 'seats']`, so the loungers fill last. A party
-  admitted together takes places side by side. The first two tennis places
-  are the singles players.
-- **Children's places**: an area or loop marked `for: 'child'` (the paddling
-  pool, the spa of the second pool, the playground's tower and bars, the kids
-  club's slide) and a spot marked `child` (the swings, the sandpit, the kids
-  club's play spots) take children first. A child takes the first free
-  child's place, else any free place; an adult takes the first free place not
-  marked for children, else one that is, so parents end up on the benches.
-- **Watchers**: at the tennis, basketball and volleyball courts, the line is
-  drawn on the spectator seats (`watches`) and watcher spots, by queue rank,
-  instead of on the path. The simulated queue itself is unchanged. With no
-  watcher place left, a waiting guest stays on the lane.
-- **Hidden inside**: a visitor with no free place is not drawn at all, and
-  neither is a guest asleep in a lodging. That covers the restrooms, the
-  supermarket, and the overflow of a restaurant with more capacity than
-  seats. A hidden person cannot be picked.
-- **Staff**: a worker the staff router has at work at a venue (`atWork`) is
-  drawn there by `recastStaff`: an animator on its `animator` spot, a
-  lifeguard on its `lifeguard` spot, and a cleaner or a mechanic on its
-  `for: 'staff'` spot (tennis, basketball, volleyball, pool, minigolf,
-  playground), or, at a venue with none, where the router holds them. A
-  cleaner making up a room or restocking is at no venue, so stays where the
-  sim hides them indoors. What they do there is under **Staff at work**.
-- **The seat pop**: passers-by still sit down on venue seats, since keeping
-  them off would change every seeded replay. When one claims a seat a visitor
-  is drawn on, `keepSeats` moves the visitor to another place in the same frame.
-- The cast is recast once after a frame's ticks. It is rebuilt with the
-  network on every edit, because places point at network seats by index.
-- **Areas and loops**: a venue can declare `areas` (water visitors move about
-  in, each holding `places` visitors) and `loops` (a polyline its riders go
-  round). A visitor on one is **acting**: `perform` (`acts.ts`) draws them
-  every frame, after `keepSeats`. In a `swim` area they swim from one hashed
-  point to the next and stand in the water for 1 to 4 s between legs; with `laps`
-  they swim the long way in a lane of their own and turn at each end; in a
-  `wade` area children walk, wade and hop. A loop rider goes round at a speed
-  set by each leg's pose: slowly up a ladder (`climb`, drawn jogging), fast
-  down a slide (`slide`, drawn sitting), swimming and walking. Riders are
-  spread over the loop's time, so they keep their spacing on every leg. The
-  mix at a pool is its declaration order, so tuning it is art.
-- **The acts clock** is the choreography's own, advanced every frame by
-  exactly the crowd's scaled step (`advanceActs`), so acts pause, hurry and
-  replay under the bench with the crowd. Where somebody is is a pure function
-  of the act, the place, the person and the time: leg targets are hashed with
-  `mix`, never drawn from a seeded stream. The cast caches only the current
-  leg, so a frame does not replay every leg since the cast.
-- **None of this is saved.** Like the rest of the cast it is visual only: the
-  simulation never reads where a swimmer is, and a seeded draw here would
-  move every replay. After a load or a rebuild everybody starts a fresh leg.
-  When a visit ends the place is released and the swimmer pops back to where
-  the crowd has them.
-- **Games**: at the tennis, basketball and volleyball courts the players
-  play (`games.ts`), and the watchers follow the ball (`courts.ts`). A game
-  belongs to the venue, not to a person: each frame `perform` replays the
-  court's current **rally** from its start, a pure function of the game, who
-  is playing and where they stood as it began, the rally's number and the
-  time into it. Every choice in it (shot lengths, targets, apexes, who
-  receives, how many touches) is hashed with `mix`. A rally plays for a
-  hashed 6 to 20 s, the last ball is a winner nobody reaches, and a 2 to 4 s
-  pause follows; only the rally's start and length are cached on the court.
-  - **Tennis**: one player practises serves, each ball bouncing in the far
-    service box and rolling on to the back. One a side is singles from the
-    baselines, two a side is doubles with a player at the net who volleys.
-    With three, the odd one waits by the net post and hops now and then.
-    Every ball clears the net, bounces inside the lines and is struck as it
-    reaches the receiver, the swing halfway through.
-  - **Basketball**: up to four shoot around at the hoop nearer most of them,
-    each from a place of their own on its half, rebounding the shot before
-    their own. Five or more, at least two a side, play a possession a rally:
-    the attackers take the defenders' places mirrored through the middle,
-    pass about, shoot, and the defence rebounds; the next rally the other
-    team attacks the other hoop. The ball is always in somebody's hands
-    (held or dribbled) or in the air.
-  - **Volleyball**: with somebody on both sides, each side touches the ball
-    one to three times before it goes back over, the third touch sometimes
-    a spike. Alone on one side, the ball is bumped up and down until dropped.
-  - Players move to meet the ball at jog speed, never further than a jog
-    covers in time, and stay on their own side of the net (in basketball, in
-    the half being played). They face the ball, and in their own hands face
-    where they mean to send it.
-  - **Watchers** turn towards the ball at 3 rad/s, at most 1.4 rad from
-    facing the court. In the pause after a point a hashed half of them cheer
-    (a seated watcher stands up on the seat to do it). A court nobody plays
-    on has no game, no ball, and watchers facing the court.
-  - Whoever is cast mid-rally stands at their place, following the ball, and
-    joins at the next rally. Somebody walking off mid-rally breaks it off:
-    the ball drops where it was and the next rally starts 1.5 s later with
-    whoever is left.
-  - **The ball** is a prop drawn by the ball field
-    (`choreography/adapters/ballField.ts`), one slot per court and per
-    minigolf party (`cast.played`), rewritten every frame after `perform`.
-    All of it is drawn only: the simulation never reads a game, and nothing
-    of it is saved.
-- **Minigolf** (`golf.ts`): the art declares `lanes`, each a ball `line` from
-  tee to cup bent round the lane's hedges and corner, the `walk` from its cup
-  to the `next` lane's tee by the sand walks, and the layer `y` the players
-  stand on; a spot's `lane` makes it a waiting place, the first beside the
-  tee, the second beside the cup. The holders of a lane's spots are a party.
-  Every party moves on a lane each **slot** at once (82 s on the catalogue
-  course, the slowest lane's walk and turns), so no two share a lane. A slot
-  is the walk over in file, then each member's turn: up to the tee, 1 to 3
-  hashed putts (`strike` with its progress swept, the ball rolling and
-  slowing along the line), down the lane to the cup, and to wait beside it.
-  The others wait beside the tee or the cup, facing the putter.
-- **Playground** (`play.ts`): a spot with `act: 'swing'` swings as a pendulum
-  from the bar on layer `pivot`, 3 voxels out at the top, period hashed 2 to
-  3 s, and one swing in four the child stands up cheering at the front of the
-  arc (the painted seat stays where it is). `act: 'dig'` is a child kneeling
-  in the sandpit, drawn as a slow `strike` sunk a voxel into the sand, since a
-  figure holds one pose. The tower is a loop up the ladder, over the deck and
-  down the chute; the monkey bars a loop that climbs inside the end ladder,
-  goes hand over hand (`hang`, drawn reaching up) and lets go (`drop`). A
-  parent sitting at a venue with children's places turns towards their own
-  party's child, eased at 1.5 rad/s and at most 1.4 rad from facing.
-- **Kids club** (`tag.ts`): the yard spots carry `act: 'tag'` and the `yard`
-  rectangle they share. Every player runs 3 s legs between hashed points,
-  jogging there and hopping for the rest; the hashed "it" (a new one every
-  24 s) wanders, and the others take the one of three hashed points furthest
-  from where it is heading. The slide is a loop as on the playground.
-- **Shows** (`shows.ts`): `noteShows` reads `performingAt` after the ticks.
-  While a show is on, the kids club's tag players and the game hall's players
-  run to rows of four in front of the animator and cheer and hop by turns,
-  and at a venue with a `floor` (the beach club's aisle, the open-air stage's
-  dance floor) everybody sitting gets up and dances on it: a hashed spot clear
-  of the animator, `jog`, `cheer` and `hop` steps, the heading swaying. Lying
-  stays lying. After the show they run back and sit down where they were.
-  Where each set off from is kept per person, so the run over is one straight
-  line. At a venue with a `floor`, a visitor standing still with no game to
-  play (the open-air stage's standing rows) stays where they stand, turns to
-  the animator and cheers and hops by turns, then turns back after the show.
-- **Gym**: a spot's `station` is what its athlete does in place, facing the
-  art's way: `run` jogs on the spot (the treadmills face the mirror), `jump`
-  is jumping jacks (`cheer` and standing by turns), `lift` cycles `reach`,
-  and `mat` lies with a sit-up a cycle.
-- **Game hall**: `act: 'play'` hammers the machine's buttons, a fast
-  `strike`, heading fixed on it; for a show the players back out of the bay
-  before running round.
-- **Beach shower**: `act: 'rinse'` turns slowly on the spot under the rose,
-  hands up (`cheer`) and down (`wade`) by turns.
-- **Staff at work** (`work.ts`, `performWork` on the staff cast every frame):
-  an animator plays in hashed 2.4 s phrases of `cheer`, `hop` and `strike`,
-  facing the mean of the venue's drawn visitors; a lifeguard's heading sweeps
-  0.7 rad either side of the water, and one 20 s window in three raises the
-  whistle; a cleaner sweeps with a slow `strike`, shuffling 0.6 voxels either
-  side; a mechanic kneels (sunk by an adult's legs) and hammers in bursts.
-- **A cleaner sweeping a path** is no venue's: `recastStaff` takes a `sweeping`
-  callback (the showcase reads `taskOf`: `sweep` and `working`) and draws them
-  where the router holds them on the litter's node, with `WORK.sweep`. On the
-  way to the tile they walk as the crowd has them; making up a room and
-  restocking stay hidden indoors.
-- Every act above is drawn only and hashed with `mix`; none is saved. The
-  variants declare the same acts except the minigolf's lanes, the playground's
-  and the kids club's loops, and the staff spots; where the art declares
-  nothing, visitors stand at their places as before.
-
-## Beach buildings
-
-Nothing on sand is paved, so beach showers, cabins and clubs are reached over the
-sand.
-
-- `doorsFor` also returns **sand doors**: open beach tiles in front of the
-  building. A doorless venue on the sand (the volleyball court) is entered only
-  from the sand, even where a path touches it; taken as a door, that path made
-  the court count as off the beach, and nobody on the sand ever went to play.
-- `sandRoute.ts` finds a route from each nearby gate to the building across the
-  sand, string-pulled to straight lines.
-- The flow field leads to the gate; from there the router walks the guest along
-  the sand route with `walkSandTo`. Queues form on open sand.
-- A rebuild forgets all routes; anyone out on the sand walks back to the paving.
-- Known gap: a bar on a raised sand terrace (level 3) isn't reachable.
-
-## Staying on the beach
-
-The beach is one venue (`beach.ts`): fun 0.7, energy 0.5, two to four hours,
+The beach is one pseudo-venue (`beach.ts`): fun and energy, two to four hours,
 effectively unlimited capacity. Its values live in code because sand has no
-model. The stay is long because the trip is: crossing the plot takes 2.4
-simulated hours, and a short stay left more guests walking to the beach than
-lying on it.
+model. Nothing on sand is paved, so beach buildings are reached over it.
 
-- **Each party picks a pitch** from the gate it arrives at (`beachPitch.ts`):
-  preferring a lounger per adult, then any lounger, then open sand. Loungers are
-  counted across the nine surrounding tiles. Sand is pitched within 12 tiles of
-  the gate, loungers within 32 (under `SAND_ROUTE_TILES`), so free loungers fill
-  before the sand beside the gate does.
-- A stay on a lounger restores `LOUNGER_RELIEF` (energy 0.3) on top of the
-  beach's own, and a lounger stands under a parasol, so nobody on one is
-  sunburnt (`Router.isSunbathing`).
-- The stay is timed from the gate, plus the walk to the spot (`walkingTicks`),
-  so a far lounger doesn't shorten it. A party shares one end: the first member
-  to settle sets it, because the pitch keeps every member's lounger until the
-  last one leaves.
-- **Errands off a pitch**: a guest whose loudest need reaches `FETCH_URGENCY`
-  (0.4) walks across the sand to a venue on the sand and back to the pitch. Fun
-  counts too, though the beach gives fun: its relief comes only when the stay
-  ends, so a bored guest gets up to play volleyball or hire a pedalo.
-- Adults take the loungers. Others lie (adults) or sit (children) on the sand
-  facing the sea.
-- A guest on the beach whose strongest need the beach doesn't serve walks to a
-  beach building that does (snack bars and ice-cream carts are placed there for
-  this), then returns to their spot. Not in the first `SETTLE_TICKS` (45) after
-  lying down, or a grubby guest walks from the gate to the shower and only ever
-  passes the lounger. A hurt guest ends the stay instead: first aid is on the
-  paving.
-- Bedtime ends a stay early.
-- The resort's crowd doesn't wander the beach aimlessly (`roamsBeach: false`).
-  Anyone left there by an edit walks back.
-- **The beach is the span of land owned.** `BeachBand.span` is a range of
-  columns: the whole plot without land, the owned bounding box's x range on a
-  bare game. Roaming points (`nearbyColumn`), the sand grid (columns outside are
-  blocked as past the plot's ends are), sand routes, pitches, buoys
-  (`swimAreaMoorings`, on the same columns whatever the span) and swimming
-  (`swimmableAt`) all keep inside it. It is a range, not a mask: owned land
-  reaching the sea twice leaves a stretch of unowned sand between, which guests
-  may roam.
-
-**Swimming is drawn only** (`seaSwim.ts`). The router still has a swimmer
-resting on their pitch: needs, mishaps and the lifeguard's watch never hear of
-it, and nothing is saved. `recast` lists the resting beach guests
-(`Router.restingUntil`), and `performAtSea` runs after `perform` every frame.
-A swimmer walks straight to the water, wades in over a tile, swims a leg or
-two to hashed points within two tiles of their pitch's x, stands in the water 10 to
-40 s after each, and comes back the same way. While they are away their lounger
-is drawn empty; the seat stays theirs in the crowd.
-
-- **The share**: about a quarter of resting adults and a third of resting
-  children are in the water at any moment (`SWIM_SHARE`). The acts clock is cut
-  into `SWIM_WINDOW` (240 crowd seconds), and the chance to swim in a window is
-  scaled by the trip's length, so short trips from the front row don't drag the
-  share down. A trip lasts 40 to 200 crowd seconds, about half an hour to an
-  hour of sim time.
-- **Where**: inside the buoy line, one tile short of it, off the tile-rounded
-  edge where the sand stops being drawn (`swimmableAt`). Nobody swims in the
-  pedalo corridor or its flare, where craft come in short of the buoys.
-- **Why the stay must have room**: a trip is started only when the stay
-  outlasts it (`walkingTicks` of the trip's length, swimming counted at its
-  speed). The stay ends in the router, and a swimmer whose stay ends mid-swim
-  pops back to wherever the crowd has them. Rain and storm end it the same way.
-- **A straight line, or no swim**: the walk is `clearLine` on the sand. Lounger
-  columns repeat every two tiles, so most lounger holders have another lounger
-  in their way; on seed 3 only about 30% of resting guests have a clear line.
-  Routing round obstacles would let the rest swim.
-
-## Watching fireworks
-
-Fireworks (`fireworks` in `EVENT_KINDS`, see [Events](#events)) are booked on
-the beach, the one site that is no stage. The beach pseudo-venue is in the
-router's list only (`withBeach`, last), so the showcase keeps that list as
-`Resort.siteVenues` and finds a run's venue in it.
-
-- **Room on the sand**: the beach's capacity has no door to count at, so a show
-  invites up to `watchRoom`: two people per owned beach tile, at most 360,
-  less those of its parties already there.
-- **Watch pitches**: a party invited to a show (`eventStay` on the beach at or
-  after now) is given a pitch with `watch` set: no loungers, adults standing
-  and children sitting, all facing the sea (heading 0), in the two rows nearest
-  the water while there is room there (`WATCH_ROWS`), then further back, then
-  at the gate.
-- **Invited in place**: a party resting on the sand when the invitation comes
-  is invited where it is (`Router.invite` on the beach): its stay is stretched
-  to the show's end, and it gets up to watch: adults stand, children and anybody
-  on a lounger sit, all facing the sea (`holdToWatch`, also used for a watcher
-  reaching their spot). Nobody watches lying down. The showcase marks the party
-  on the run's index before it asks the router, so the router can read the end.
-- **Asked again every tick**: a beach show's audience is topped up on every
-  tick while it is announced or running (`topUpTheSand`), not only at the
-  announcement and the start, so a keen party reaching the sand late is asked
-  too, while there is room.
-- **No swims or errands while invited**: `restingUntil` answers `NaN` for a
-  watcher, so 047's swims leave them be, and `dueAnotherLook` sends none of them
-  for a drink. Only once settled on the sand (`stayOf` resting) is somebody
-  watching, for the fun and the attendance.
-- **Keen parties stay up**: bedtimes run from 19:00, but the announcement is at
-  21:00. From noon on a show's day (`STAY_UP_FROM`) until it ends, every party
-  the run will pick (`isInterested`, through the run's own `saltOf`) counts as
-  up late (`markKeen`, refreshed hourly, at check-in, on a booking change and on
-  a load). One never invited goes to bed when the show is over. A show called
-  off or put off today is `settled` and keeps nobody up.
-- **Wheelchairs**: a party with one is not invited (`AudienceParty.stepFree`);
-  there is no step-free way onto the sand.
-- The router asks `upLate` and `eventStay` per guest per tick, so the showcase
-  answers from a per-party index of the runs (`indexParties`) rather than
-  scanning them.
+- `doorsFor` returns **sand doors** for beach buildings. `sandRoute.ts` finds a
+  string-pulled route from each nearby gate; the router walks the guest along it.
+- **Pitches** (`beachPitch.ts`): each party prefers a lounger per adult, then
+  any lounger, then open sand. A lounger adds energy and stops sunburn.
+- **Errands**: a guest with a pressing need walks to a beach venue and back,
+  but not in the first `SETTLE_TICKS` after lying down.
+- **The beach is the owned span** (`BeachBand.span`): roaming, routes, pitches,
+  buoys and swimming stay inside it.
+- **Swimming** is drawn only (`seaSwim.ts`): about a quarter of resting adults
+  and a third of children are in the water, inside the buoy line. A trip only
+  starts if the stay outlasts it and the walk is a clear line.
+- Known gap: a bar on a raised sand terrace isn't reachable.
 
 ## Night
 
-`night.ts` gives each party a bedtime (19:00 plus up to 2.5 h) and a wake time
-(07:00 plus up to 2 h), hashed from the party index. Nothing is stored.
-
-- Sunset is 21:30 (`SUNSET_TIME`), so everyone sets off home before dark.
-- Going home uses a flow field per lodging, from its doors. Lodgings aren't
-  venues (`lodgingsOn` vs. `venuesOn`).
-- Asleep guests are held inside the lodging until morning, then wake with full
-  energy and some hygiene back.
-- Guests without a reachable bed wander all night.
-- Lit windows at night follow the resort-wide share of beds in use
-  (`0.5 * asleep / beds`), not per building.
-- Parasols furl one by one between 18:30 and 20:00 and open again between 07:30
-  and 09:00 (`canopyFurl.ts`), by the clock rather than by who is asleep: guests
-  reach their beds after sunset, too dark to watch. Rain and storm furl them all
-  day.
+`night.ts` hashes a bedtime (from 19:00) and wake time (from 07:00) per party.
+Sunset is 21:30. Guests walk home on a flow field per lodging and are held
+inside until morning; those without a bed wander. Lit windows follow the share
+of beds in use. Parasols furl in the evening and in rain (`canopyFurl.ts`).
 
 ## Weather
 
@@ -624,785 +240,234 @@ stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
 | `storm`    | fun ×1.2, hygiene ×0.8 | energy ×1.2              | `open` | 0.85     |
 | `heatwave` | thirst ×1.6            | thirst ×1.8, energy ×1.3 | none   | 0        |
 
-- Multipliers stay within 0.5..2 (`weather.test.ts`) and apply on top of
-  `archetypes.ts`, including in `appeal.ts`.
-- `ModelVenue.shelter` is `'open'` or `'covered'` (default). Closed venues aren't
-  chosen and turn guests away at the door; guests already inside finish. Cleaners
-  skip them too.
-- `overcastSky` greys and dims daylight and turns lamps on early, without dimming
-  lamplight.
-- The rain itself is drawn in `features/weather/`; see
-  [rendering.md](rendering.md#weather).
-- `advice.ts` warns when most venues for a need are closed.
+`ModelVenue.shelter` is `'open'` or `'covered'` (default). Closed venues aren't
+chosen and turn guests away; those inside finish. Drawing is in
+[rendering.md](rendering.md#weather).
 
 ## Arrivals and departures
 
-- **Bodies are fixed, guests change.** The crowd's instance slots are assigned
-  once by model, so the registry has a `present` flag. Check-out empties a slot;
-  check-in fills free slots of the right shape. `crowd.offPlot` hides empty ones.
-- **Check-out** is once a day: guests past their stay walk to the nearest gate.
-  It's checked before bedtime. Guests finish their current visit first. The whole
-  party is forgotten at once (`Router.forget`).
-- **Gates** are declared on the art (`gateway: true`) and aren't venues. No gate
-  means no arrivals or departures.
-- **Happiness** (`happiness.ts`) drifts toward `contentmentOf` at 0.15 an hour,
-  minus 0.3 an hour while queuing. A need at or above `CONTENT_LEVEL` (0.5)
-  counts as fully met; below it the shortfall is squared and averaged (one minus
-  the root mean square), so one need run dry costs more than five half-met ones.
-  A fully served resort rates about 4.5 stars, one with no food about 3.4.
-  `stay` follows the mood with a day's memory (`STAY_MEMORY_HOURS`), and is what a
-  review is written from.
-- **Rating** (`rating.ts`) is three quarters mean happiness, one quarter share of
-  guests with a bed, plus a small cleanliness term. An empty resort rates 3 stars.
-- **Arrivals** are sized at 11:00 from all the beds, not the free ones:
-  `ARRIVALS_SHARE` (0.15) of them times an appetite that grows from nothing at 1
-  star to all of it at 5, at least one while anybody books, never more than the
-  free beds. Stays average eight and a half nights, so 5 stars keeps a resort
-  full and 3 stars about two thirds full. They come in three waves
-  (`ARRIVAL_WAVES`): half at 11:00, 30% at 14:00, 20% at 17:00, so one desk is
-  not flooded at once. A wave nobody could come in is not carried over.
-- **The check-in hour** pays the bills, rates the day, reports it, then lets the
-  morning coach in (`rateTheDay`, `closeTheDay`, `runDay`). The report
-  (`dayReport.ts`) is labelled with the day its period started on and keeps the
-  rating, the guests, the arrivals, check-outs and reviews counted since the last
-  check-in, the ledger's `yesterday` and the three loudest thoughts. The last 14
-  are kept, oldest first. The morning coach already counts towards the new day.
-  The first check-in of a resort built that morning closes nothing anybody
-  played, so it only restarts the counts.
-- **Open and closed.** A resort gates arrivals only; a closed one still rates its
-  guests and sends them home. A plot with no paving starts closed (a building
-  site), a generated one open. The Gates button in the top bar switches it.
-- **Check-in at reception.** An arriving party appears at the first gate and
-  walks to the nearest reachable venue that `receives` (declared on the art:
-  `reception.ts`). They queue there like anywhere; a balk sends them back to it
-  at the next node, so a full desk makes a crowd around it. The first member out
-  of the desk checks the party in. With no desk reachable from the gate nobody is
-  admitted, and one reachable from the gate but not from where a guest stands lets
-  that guest go on unchecked. The bed is taken at arrival, not at the desk, and
-  check-out does not pass it. The reference plot's one desk (capacity 12) sees a
-  five-star opening day of 171 arrivals through by 21:00, with a line of 12 at
-  worst (`router.test.ts`).
-- **Turnover.** A party leaving through the gate (`onLeave`) checks out with
-  `checkOutParty(..., true)`: its beds go to `guests.unmade`, not `freeBeds`, and
-  an unmade bed is given to nobody (check-in, `arrivalsFor`'s free beds and
-  re-housing after an edit all read `freeBeds` only) until a cleaner has made it
-  up (`makeBeds`). Departures are sent at 11:00, after the morning wave, so the
-  beds freed that morning can only go to the 14:00 and 17:00 waves, and only if
-  the cleaners got to them first. A party turned away at the desk had no bed, so
-  its check-out keeps the default. A `rehome` carries unmade beds by key, before
-  the evicted are re-housed; a demolished lodging's go with it. Invariant per
-  home: `freeBeds + unmade + beds taken = beds`.
+- **Bodies are fixed, guests change.** Slots are assigned once by model; the
+  registry has a `present` flag that check-in and check-out flip.
+- **Gates** are declared on the art (`gateway: true`). No gate, no arrivals.
+- **Check-in at reception**: arriving parties walk to the nearest venue that
+  `receives` and queue there. No reachable desk, nobody admitted.
+- **Arrivals** are sized at 11:00 from all beds times an appetite that grows
+  with the rating, in three waves (11:00, 14:00, 17:00). Stays average eight and
+  a half nights.
+- **Check-out** is daily before bedtime. Leaving parties' beds become `unmade`
+  until a cleaner makes them up. Invariant per home:
+  `freeBeds + unmade + taken = beds`.
+- **The check-in hour** pays the bills, rates the day, writes the day report
+  (last 14 kept) and lets the morning coach in.
+- **Open and closed** gate arrivals only. A bare plot starts closed.
 
-Overview rows: `Rating`, `Guests`, `Beds`, `Asleep`, `Staff`, `Clean`, `Venues`;
-the weather sits in the top bar. The inspector's `Mood` is one guest's happiness.
+**Happiness** (`happiness.ts`) drifts towards `contentmentOf`, lower while
+queuing. Needs below `CONTENT_LEVEL` count squared, so one empty need costs more
+than five half-met ones. **Rating** (`rating.ts`) is three quarters happiness,
+one quarter guests with a bed, plus cleanliness. An empty resort rates 3 stars,
+a fully served one about 4.5.
 
 ## Advice
 
-`advice.ts` ranks the resort's problems; the Advice panel lists them all, loudest
-first, so its count matches the toolbar badge.
+`advice.ts` ranks the resort's problems, one function and one test per rule,
+each taking a `ResortFacts` literal. Rules include `closed`, `no-entrance`,
+`no-reception`, `no-beds`, `unserved-need`, `full-lines`, `unreachable`,
+`not-step-free`, `broken`, `hurt`, `littered`, `far-from-home`, `unvisited`,
+`weather-closed`, `unwatched`, `short-staffed`, `unmade`, `no-depot`,
+`no-events` and `no-welcome`.
 
-- **It only observes.** Every number comes from something already counted. If a
-  rule needs a change in `chooseVenue.ts` or `occupancy.ts`, that's a bug there.
-- One function and one test per rule, each taking a `ResortFacts` literal:
-
-| Rule             | Reads                                 | Weight                               |
-| ---------------- | ------------------------------------- | ------------------------------------ |
-| `closed`         | closed, with at least one bed         | 1                                    |
-| `no-entrance`    | open, no gate                         | 1                                    |
-| `no-reception`   | open, no desk the gate reaches        | 1                                    |
-| `no-beds`        | guests with `NO_HOME`                 | share of guests                      |
-| `unserved-need`  | needs no venue serves                 | share wanting it                     |
-| `full-lines`     | the day's turn-aways per venue        | share refused × count                |
-| `unreachable`    | venues with no door node and no sand  | 0.9                                  |
-| `not-step-free`  | venues reached on foot, not step-free | 0.3–0.6 by share of venues, one line |
-| `broken`         | each broken venue, ticks down         | 0.3–0.9 over three hours             |
-| `hurt`           | guests here with health below 1       | 0.2–0.7 over ten guests              |
-| `littered`       | tiles at or above `FOULED_AT`         | worst level × tiles / 20             |
-| `far-from-home`  | lodging to nearest venue per need     | distance vs. `reach` (straight line) |
-| `unvisited`      | venues nobody visited today           | 0.2–0.4 by capacity                  |
-| `weather-closed` | needs whose venues are mostly closed  |                                      |
-
-- The first three are asked even with nobody present, since a new plot never has
-  anybody; every other rule stays silent on an empty resort.
-- Recomputed once a day after arrivals, after an edit, and on opening or closing.
-- `not-step-free`, the step-free overlay and the top bar's step-free line all read
-  one sweep pair from the gates (`stepFree.ts`), kept per walk graph. Only venues
-  with a door on the paving count. The line, "Step-free: 14 of 17 venues", sits
-  under the rating's parts and counts toward no star: a wheelchair guest who
-  cannot get somewhere is unhappy, which reaches the rating already.
-- Advice about a building includes its tile and a **Show** button that pans the
-  camera there. Wording lives in `AdvicePanel.tsx` and only states what was
-  measured.
-- Not done: heatmap overlays for footfall, coverage and queues.
+- The setup rules speak on an empty resort; the rest stay silent until guests
+  arrive.
+- Recomputed daily after arrivals, after an edit and on opening or closing.
+- Building advice has a **Show** button. Wording lives in `AdvicePanel.tsx`.
 
 ## Thoughts and reviews
 
-`thoughts.ts` remembers what each guest last thought, and counts a stay's worth
-per kind; `reviews.ts` turns a party's stay into one line on check-out.
+`thoughts.ts` remembers each guest's last thought and counts a stay's worth per
+kind; `reviews.ts` turns a stay into one line at check-out.
 
-- **It only listens.** A thought reports something the simulation already
-  decided. Nothing in `chooseVenue`, needs, happiness or the rating reads one
-  back. The router emits through an optional `onThought` and imports nothing
-  from `thoughts.ts`.
+- The router emits through an optional `onThought` and imports nothing from
+  `thoughts.ts`. Nothing reads a thought back.
+- Kinds include `queue-too-long`, `closed`, `nothing-for`, `no-bed`, `filthy`,
+  `enjoyed`, `lovely`, `littered`, `no-step-free`, `hurt`, `broken` and event
+  praise. The same thought within two sim hours is ignored.
+- A review's stars are `round(5 × mean stay mood)`, its complaint the most
+  frequent thought, its praise `enjoyed` or `lovely`.
+- Wording lives in `hud/components/thoughtWords.ts`.
+- `THOUGHT_KINDS` is append-only: saves keep a slot per kind.
 
-| Kind             | Heard where                                                  | Subject     |
-| ---------------- | ------------------------------------------------------------ | ----------- |
-| `queue-too-long` | `admitAt`, a full line                                       | venue label |
-| `closed`         | `admitAt`, a door the weather shut (the beach too)           | venue label |
-| `nothing-for`    | `decide`, `chooseVenue` found nothing but a need is pressing | need        |
-| `no-bed`         | `homewardStep`, at night with no reachable bed               | none        |
-| `filthy`         | end of a visit, venue below 0.4 clean                        | venue label |
-| `enjoyed`        | end of a visit to an activity at or above 0.8 clean          | venue label |
-| `lovely`         | hourly, surroundings above 0.6                               | none        |
-| `littered`       | hourly, surroundings below -0.3                              | none        |
-| `no-step-free`   | `decide`, the wheelchair user, where on foot they would go   | venue label |
+## Cleanliness
 
-- The same person, kind and subject within `REPEAT_TICKS` (120, two simulated
-  hours) is ignored. That window is per kind, so a homeless guest who also has
-  nothing to do still says `no-bed` once, not once per node.
-- The day's tally is cleared at check-in, with the router's counters. The Guests
-  panel shows its five loudest and is pushed at most once a simulated hour.
-- A body's memory is forgotten when a new guest checks into it.
-- **The review** is written in `onLeave`, before `checkOutParty` clears the
-  party. Stars are `round(5 × mean stay mood)`, at least 1, so a hungry morning at
-  check-out does not outweigh the stay. The complaint is
-  the one the party thought most (ties to the earlier kind), its subject from
-  the spokesperson (first adult) or else the first member who had it; the
-  praise is `enjoyed` or `lovely`, whichever came up more. `REVIEWS_KEPT` (12)
-  are kept, newest first.
-- Wording lives in `hud/components/thoughtWords.ts`; the domain only owns kinds
-  and counts.
-- `THOUGHT_KINDS` is only ever appended to: a save keeps a slot per person and
-  kind, and `widenThoughts` pads an older save's rows on load.
-- `no-step-free` is not said of the beach or a venue on the sand, which no
-  paving fixes: there the wheelchair user still thinks `nothing-for`.
+`upkeep.ts` keeps cleanliness per venue, 1 spotless to 0 filthy. Each visit
+wears it, a cleaning spell restores it, and below `NEEDS_CLEANING` (0.7) a
+cleaner comes. Nothing recovers on its own. Dirt lowers a venue's score to a
+floor and adds a small rating term.
 
-## Cleanliness and staff
+## Staff
 
-`upkeep.ts` keeps a cleanliness value per venue, 1 spotless to 0 filthy.
+Staff are a second population with their own registry (`STAFF_SOURCES`, kept out
+of `PEOPLE_SOURCES` so guest draws don't shift), crowd field and router, on the
+same `crowd.ts`. A resort meshes a fixed pool (`STAFF_CAPS`); the roster
+(`rosterFor`) decides how many are on duty.
 
-- Each visit wears it by `WEAR_PER_VISIT` (0.02) divided by capacity.
-- A cleaning spell restores `SCRUB_PER_SPELL` (0.35). One cleaner handles two or
-  three busy venues.
-- Below `NEEDS_CLEANING` (0.7) a cleaner will come and advice mentions it.
-- Nothing recovers on its own. Dirt survives edits (`carryUpkeep`); new buildings
-  start clean.
-- Dirt lowers a venue's score down to a floor of `DIRT_FLOOR` (0.25), and adds a
-  small term to the rating.
+| Role      | Count                                   | Does                                          |
+| --------- | --------------------------------------- | --------------------------------------------- |
+| Cleaner   | one per six venues plus one per 60 beds | rooms first, then dirtiest venue, then litter |
+| Animator  | one per three `stage` venues            | an hour or two per stage, then moves on       |
+| Lifeguard | one per `bathing` venue and tower post  | stays at a pool, or walks the sand to a tower |
+| Mechanic  | one per five venues with `reliability`  | repairs the longest-broken venue              |
 
-**Staff** are a second population: their own registry (`STAFF_SOURCES`, kept out
-of `PEOPLE_SOURCES` so guest variants and seeded draws don't shift), crowd field
-and router. The figures are in `STAFF_ROLES` order, since a body's variant is its
-role's index; `showcase.ts` throws if they are not. A resort meshes a standing
-pool once (`staffPool`, `STAFF_CAPS`: 18 cleaners, 8 lifeguards, 8 animators, 6
-mechanics, 40 bodies); the roster (`rosterFor`, fed by `workplacesOf`) follows the plot. After
-an edit or a hire the roster is recounted (see the staff house below for where
-bodies come on and go off). The staff router sends nobody off duty to work, and
-somebody let go mid-spell finishes it so the claim is released. They use the same
-`crowd.ts` as guests; the crowd was not changed for any of the roles or for the
-staff house.
-
-**The staff house** (`staff-house`, a 2 × 2 amenity) is a depot: the art declares
-`depot: { doors }` instead of a venue, and `depotsOn` lists depots apart from
-venues and gateways, so no guest is ever sent in. A second depot model is art
-only. The generator stands one to three per plot (`perResort`); the authored plan
-has one where a first-aid post stood.
-
-- **Clocking on**: a body coming on duty enters at a depot's first door node,
-  dealt round the depots in turn (`depotForShift`); a zoned worker starts at a
-  depot in their zone when there is one. With no depot, at the entrance (node 0
-  with no entrance yet; with no paving at all, at the next edit that lays some).
-- **Clocking off**: a body let go (`clockOff`, idempotent) drops its tasks, walks
-  to the nearest depot, or the entrance with none, and leaves the plot there
-  (`onClockedOff`). One taken back on during the walk goes back to work. Cut off
-  from the depot, or out on the sand, they leave where they stand, and with
-  neither a depot nor an entrance at once.
-- **Supplies**: a cleaner carries `SPELLS_PER_LOAD` (4) cleaning spells; scrubbing
-  a venue or making up a room takes one, a sweep takes none. Empty and between
-  tasks, they walk to the nearest depot, stand inside for `RESTOCK_TICKS` (5-10)
-  and come out full. **With no depot, supplies come in at the entrance**, so a
-  depot near the work saves cleaning time; with no entrance either, or cut off
-  from both, the cart is refilled where they stand. The load is per body, kept
-  through an edit and saved; restocking is dropped by an edit like any spell.
-- A plot with cleaners on duty and no staff house gets a quiet `no-depot` advice
-  line (Staff house).
-- Deferred: a hiring cap per depot, breaks and energy, staff happiness, spare
-  parts for mechanics, and litter carried back to the depot.
-
-- **Cleaners**: one per six venues plus one per `BEDS_PER_CLEANER` (60) beds,
-  at least one wherever anything stands. Rooms before venues before litter: an
-  idle cleaner first takes the unclaimed lodging with the most unmade beds (a bed
-  that cannot be sold is lost money and turned-away guests), stands in its middle
-  for a spell and makes up `BEDS_PER_SPELL` (4) beds; a hotel after a busy
-  morning is several spells. With no room waiting, `staffRouter.ts` walks them to
-  the dirtiest unclaimed venue and holds them there for a spell; a building with
-  no door on the paving (a beach shower, a snack hut on the sand) is reached over
-  the sand from a gate, as a mechanic does, and competes on equal terms. With no venue
-  below `NEEDS_CLEANING`, a cleaner sweeps litter instead (see [Litter](#litter)).
-  Lodgings are not venues and get no cleanliness: `resort.homeOfLodging` maps a
-  lodging to its home (homes are sorted by beds, lodgings stand in placement
-  order), and the router reads and makes beds through a late-bound `beds` part.
-  Waiting beds get an `unmade` advice line (Housekeeping) and a note on the Beds
-  row.
-- **Animators**: one per three venues the art marks `stage` (kids club,
-  playground, beach club, game hall, open-air stage), since a show moves between stages. An
-  animator takes the open stage with the most guests inside that has no show on,
-  performs for an hour or two (`SHOW_TICKS`), then moves to another stage.
-  `cheerTheAudience` tops up the fun of every guest inside a venue with a show on,
-  not those in its line, by `SHOW_FUN_PER_HOUR` (0.3), which roughly doubles what a
-  visit gives. Show claims are separate from cleaning claims, so a cleaner can
-  scrub a stage mid-show. A stage reached only over the sand gets no animator
-  yet: only towers, mechanics and cleaners have a sand leg.
-  A stage with an event coming up is kept for it (see [Events](#events)).
-- **Lifeguards**: one per venue the art marks `bathing` (swimming pool, waterpark)
-  and one per post, a seat the art marks `post: 'lifeguard'` (the tower's). The
-  walk graph files a post on the sand in `network.posts`, never in a node's seats
-  or `beachSeats`, which are the only lists guests look in, so no guest ever sits
-  there. A post inland is dropped. A lifeguard takes the busiest unwatched pool and stays there;
-  their spell never runs out. When the rain shuts the pool they wait at its door
-  and go back in when it reopens. A lifeguard with no pool left takes an unmanned
-  tower: the leg is planned once with `sandRoutesFor`, walked to the route's gate
-  on the graph, then one `walkSandTo` per waypoint, each ending in `step(worker,
-ON_SAND)`, and finally `holdOnSeat`. The seat is inside the tower's footprint,
-  which the sand grid blocks, so the leg ends on open sand beside it. A lifeguard
-  stays up the tower through a storm. None of `router.ts`'s errand bookkeeping is
-  used.
-
-An unwatched bathing venue, and the beach once a tower stands, gets an
-`unwatched` advice line weighted by today's swimmers and a Lifeguard row in the
-inspector; the consequence is ten times the mishaps (next section).
-
-**Hiring** is the player's, with the plot's count as the default. The roster is
-`rosterOf(hiring, rosterFor(...))`: every role starts on Auto (`AUTO_HIRING`,
-`null`), which is exactly `rosterFor`'s recommendation and follows the plot. A
-role the player sets by hand in the Staff window (`hire`) keeps that number
-through every edit until it is switched back to Auto. Nobody is hired past
-`STAFF_CAPS`: hiring changes the roster, never the pool. A hand-set role below
-the recommendation gets a `short-staffed` advice line (`shortOf`), ranked above
-the dirty, unwatched and broken lines it causes, with a Hire button that tops the
-role up to the recommendation and keeps it hand-set. An Auto role is never short.
-
-**Zones** let the player paint where staff work, as RollerCoaster Tycoon's patrol
-areas do. A zone is a set of painted tiles on the plan's grid (`zones.ts`, up to
-`ZONES` = 4, one colour each), kept per tile so it survives every edit without
-being carried, and saved with the resort. The Zones shelf in the build palette
-arms a brush per zone and an eraser; `zonePointer.ts` paints along a drag through
-`createTileStroke`, as the terrain brush does. While the brush is armed the
-overlay field draws the zone of every walk tile and every beach tile in a categorical palette
-(`ZONE_COLOURS`, none of them a heat-ramp stop); arming it puts any map away and
-disarming brings none back.
-
-- A workplace is **in a zone** if any tile of its footprint, or the tile of any of
-  its door nodes, is painted in it (`zonesOf`, a bitmask, so a building on a
-  border is in both). A tower is in the zone of the tile under its seat.
-- Staff are **dealt, not assigned**: `rezone` in `showcase.ts` deals each role's
-  on-duty bodies round-robin over the zones, in zone order, that hold a workplace
-  for that role (`dealZones`). What counts is what that role's task choice
-  considers: any venue, lodging, paved or beach tile for cleaners, stages for animators, bathing
-  venues and towers for lifeguards, venues that can break for mechanics. It runs
-  on build, after every edit and every hire (`staffTheResort`), after a load, and
-  on every tile a stroke changes.
-- A zoned worker only takes tasks inside their zone: every choice in
-  `staffRouter.ts` adds the zone to its `eligible` test. With nothing there, they
-  wait where they are. A role with no zoned workplace works the whole plot, so
-  **no zones painted is exactly the behaviour without zones**. Zones never reach
-  the guests.
-- Deferred: per-person assignment (the Staff window is per role) and patrolling,
-  idle staff walking their zone. A lifeguard already posted keeps the post when a
-  paint moves them to another zone, until the next edit rebuilds the router.
-
-**What a worker is doing** is one read, `staffRouter.taskOf(worker, into?)`,
-which changes nothing: a kind (`off`, `home`, `idle`, `venue`, `room`, `sweep`,
-`restock`, `tower`), the venue, lodging, litter tile, seat or depot it names,
-whether they are at it or on the way, the cart load and whether an order sent
-them. An empty cart with nothing on hand reads as `restock` on the way. An idle
-worker wanders the graph and is asked again at every node.
-
-- **Uniforms**: every staff figure wears a cap, the top voxel of the head, in a
-  role colour (cleaner teal, lifeguard red, animator yellow, mechanic slate),
-  and no staff shirt is a colour of a guest's `WARDROBE` ramp: the cleaner is in
-  stone white, the lifeguard in thatch over red, the animator in lime, the
-  mechanic in terracotta. Same geometry as before, so no extra triangles.
-- **Pins**: "Staff" in the Map view menu (or `S`, off by default, kept with the
-  HUD prefs) pins every member of staff on duty with a DOM button, positioned
-  per frame as the problem markers are (`createMarkerSpots` with a capacity of
-  the pool, slot = worker). `staffPinOf` (`hud/domain/staffPins.ts`) puts the pin
-  over the head of whoever is drawn, and over the roof (`roofOver`) of a covered
-  venue, a lodging or a depot for whoever is at work inside one, with a dot that
-  says so. The title is worded again only when the task changes. The inspected
-  worker keeps their pin with the rest put away (`isPinned`). Off, no pin is
-  computed. The Staff window adds, per role and hourly with the status, how many
-  are working, walking and idle (`tallyStaff`).
-- **Inspecting staff**: a click picks the nearer on screen of a guest and a
-  worker (`pickGuestOrWorker`); anybody off the plot is not pickable. A pin
-  click selects too. The panel (`StaffView`) names them within their role
-  ("Cleaner 7"), their zone or Everywhere, the shift and the wage, with "Show"
-  to turn the camera on them; the live line (`staffLine`) says what they are
-  doing (`staffWords.ts`), a cleaner's cart and their tile. A change of shift
-  words the panel again.
-- **Orders**: `order(role, { venue } | { tile })` sends a mechanic to a broken
-  venue or a cleaner to a dirty venue or a littered tile; at most eight are open
-  and one per role and target. The nearest free worker of the role (in the
-  target's zone if anybody there is free) is reserved for it and claims it at
-  their next step, before any choice of their own; one already busy finishes
-  first, and somebody already on their way there serves it. A building with no door
-  on the paving, or a littered beach tile, is reached over the sand, as a
-  mechanic does, whoever is sent. An order ends when
-  its worker finishes there, or when it no longer applies (mended, back above
-  `NEEDS_CLEANING`, nothing left to sweep), which also lets a worker still walking there go. An edit
-  carries orders across by key; they are saved as an optional `orders` field
-  (`SAVE_VERSION` unchanged). With none open nothing runs, so a resort nobody
-  orders about behaves exactly as before. The inspector of a broken or dirty
-  venue has "Send a mechanic" or "Send a cleaner", disabled with the reason when
-  nobody of the role is on duty or one is on the way; a litter marker has "Send
-  a cleaner" on hover; an ordered target's marker carries a green pennant, and
-  the worker's pin and panel say "Sent to ...".
+- **Staff house** (`staff-house`): a depot declared on the art. Staff clock on
+  and off there; cleaners restock there every four spells. Without one, the
+  entrance serves.
+- **Hiring**: every role defaults to Auto (the plot's recommendation). A role
+  set by hand in the Staff window keeps its number through edits. Below the
+  recommendation, advice says `short-staffed`.
+- **Zones** (`zones.ts`, up to 4): painted tiles that restrict where staff work.
+  Staff are dealt round-robin over zones holding a workplace for their role. A
+  role with no zoned workplace works the whole plot.
+- **Tasks**: `staffRouter.taskOf(worker)` reports what someone is doing, used by
+  the pins (`S`), the inspector and the Staff window's tallies.
+- **Orders**: send a mechanic or cleaner to a specific venue or tile from the
+  inspector. The nearest free worker claims it at their next step.
+- **Uniforms**: a cap in a role colour, and no shirt in a guest colour.
 
 ## Events
 
-The player books events on the **programme** (`src/features/events/`, the
-Programme window). The kinds are code, not art: `EVENT_KINDS` in
-`catalogue.ts` (in the evening live music, dance night, musical, quiz night and
-open-air cinema; in the afternoon the magic show, kids' games, painting club,
-puppet theatre, bingo and afternoon jazz), each with its host, fee, hours, appeal per party kind, fun per
-hour, lift, litter and praise thought. Every venue the art marks `stage` hosts,
-so a new stage model needs no app change.
+The player books events on the **programme** (`events/`, the Programme window).
+Kinds live in `EVENT_KINDS` (`catalogue.ts`): evening shows like live music,
+quiz night and cinema; afternoon ones like magic, bingo and kids' games. Each
+has a host, fee, hours, appeal per party kind, fun, lift and litter. Every
+`stage` venue hosts.
 
-- **Programme** (`programme.ts`): bookings keyed by the stage's placement key, so
-  a rename, a save or an edit elsewhere leaves them put; an edit that pulls a
-  stage down drops its bookings (`keepStanding`). A booking repeats every day,
-  every week on a weekday (day 0 is a Monday) or once, starts on the half hour
-  inside the kind's hours and ends by midnight. Two on one stage may not overlap
-  or come within the 30-minute changeover; an overlap is refused, never
-  replaced. A built-in (`BUILT_INS`) is moved or switched off, never removed,
-  and goes to the biggest stage left standing (`stageRank`, ties by key).
-- **Life of an event** (`eventRuns.ts`, `advanceEvents` once a frame after the
-  ticks): announced `ANNOUNCE_LEAD` (60 min) before the start, started, ended.
-  It is called off when its stage is shut in that day's weather (or an
-  open-air kind meets rain), when an animator kind finds nobody on duty at the
-  announcement, when a tycoon resort cannot pay the fee at the start, or when
-  its stage is gone. The fee is charged at the start under `events` in the
-  books and refunded in full if the weather stops it mid-show. No spontaneous
-  animator show starts on a booked stage from `QUIET_BEFORE` (the longest show)
-  before the start; an animator walks to a hosted show, zones aside, and one
-  already performing there works on to its end.
-- **Who comes** (`audience.ts`): at the announcement and topped up at the start,
-  free parties (all present members awake, not arriving or leaving, not inside
-  or in a line, and no need but fun at `INVITE_URGENCY` 0.5 or more) are asked
-  by a hash of party and occurrence against the kind's appeal, keenest first,
-  until the stage's room is taken. No seeded stream is drawn. A party is invited
-  to one show at a time. `router.invite` sets the party's goal as checking in
-  does, so `decide` leaves it alone; the dwell inside runs to the end
-  (`eventStay`), and the party stays up past its bedtime until then (`upLate`).
-- **What it does**: `fun` per hour to whoever is inside while it runs (instead
-  of the spontaneous show's cheer), a **glow** at the end (the lift added to the
-  happiness target, `GLOW_FADE_PER_HOUR` 0.005, the better of two shows rather
-  than both), the praise thought, a free visit and the kind's litter. An event
-  ending after 22:00 costs its audience 0.3 energy on waking
-  (`LATE_NIGHT_RELIEF`, after `NIGHT_RELIEF`). Toasts of kind `event` tell of
-  announcements and calls off, the day report counts events held, their
-  audience and those called off, and a `no-events` advice line points at a
-  stage when nothing is on in the week ahead.
+- **Programme** (`programme.ts`): bookings keyed by placement key, repeating
+  daily, weekly or once, with a 30-minute changeover between them.
+- **Runs** (`eventRuns.ts`): announced an hour ahead, then started and ended.
+  Called off for weather, no animator, no money (tycoon) or no stage. The fee is
+  refunded if weather stops a show.
+- **Audience** (`audience.ts`): free parties are invited by hash against the
+  kind's appeal until the stage is full. Invited parties stay up late.
+- **Effect**: fun while it runs, a happiness glow afterwards, a praise thought
+  and litter. Late events cost energy next morning.
+- **Welcome meeting**: the one built-in (`BUILT_INS`), daily at 10:00 for those
+  who checked in the day before. It moves to a sheltered stage in bad weather.
+- **Fireworks**: held on the beach in three sizes, 22:00 to 23:00. Rain
+  postpones them a day. Repeat shows in one stay are worth less. On the beach,
+  watchers get pitches in the front rows facing the sea; parties already there
+  are invited in place. Wheelchair parties aren't invited, since the sand isn't
+  step-free.
 
-**The welcome meeting** (`welcome` in `EVENT_KINDS`, the one entry in
-`BUILT_INS`) is the built-in example: every day at 10:00 for an hour, hosted
-by an animator and free, for the parties that checked in the day before
-(`audience`). The morning after reaches about three times as many as the
-evening of arrival did, when most were inside a venue or hungry for dinner.
-It may be moved between 08:00 and 10:00 only, so it ends by the 11:00
-check-in, which closes the report day those guests arrived in; a built-in
-saved outside its kind's hours goes back to the kind's start
-(`withBuiltIns`). A kind with `latecomers` also offers the parties checked in
-since the last check-in (`Resort.newcomers`, yesterday's until 11:00) the
-room left on every frame while it is announced or running, until
-`LATE_CALL_CUTOFF` (15 min) before the end (`latecomersFor`, then the same
-`inviteAudience`). One sitting: whoever finds the stage full is not welcomed.
-Its glow is 0.1 on top of `ARRIVAL_MOOD`; attenders think `welcomed` ("What a
-warm welcome"), which the inspector shows as "Welcome meeting: attended". New
-resorts get it on their biggest stage; a stage the player moved it to with
-`rebook` is kept, and a bigger stage built later does not take it over. Its
-weather rule is `'shelter'`: when its stage is shut in the day's weather at
-the announcement, that day's run moves to the first stage in
-`stagesByPreference` that is open and has no booking or run within the
-changeover (toasted as a move); with none free it is called off. Its daily
-announcement is logged, not toasted (`EventNews.quiet`). With no stage the
-booking stays on the old key and each day's run is called off as `'no-site'`
-without a toast, a thought or a place in the events tally; the `no-welcome`
-advice line says so instead. With no animator on duty it is called off and
-toasted. The day report's "Welcomed" row gives "n of m new guests" or why
-there was none (`WelcomeGap`: no stage, switched off, called off). The
-Programme window has a Morning column for it, where nothing else can be
-booked. `no-events` ignores built-ins.
-
-**Fireworks** (`fireworks`) are the one kind held on the beach and the one
-booked in sizes (`tiers`: small, medium and grand, rising in fee, lift,
-`memory` and draw). From 22:00 to 23:00, for half an hour; free in sandbox. At
-the end each attender's `stay` (what a review is written from) gains the
-size's `memory` (`remember`), and both it and the lift fall with every show
-seen this stay (`novelty`, read off the `fireworks` thought count). Their
-weather rule is `'postpone'`: shut out by rain or storm at the announcement,
-the night's show moves to the next day. Check-in toasts a show booked for
-that night (`'tonight'`); the day report counts the fireworks held and the
-shows moved; the `no-fireworks` line points at the beach after 14 reported days
-with none and none in the week ahead. The Programme window has a Beach tab,
-after the stages, while any owned beach has a gate. See
-[Watching fireworks](#watching-fireworks).
-
-With an empty programme nothing above runs and no stream is drawn, so a plot
-nobody books plays exactly as before; a plot with a stage always has the
-welcome. The programme, the runs, the glow and the
-tired parties are saved as an optional top-level `events` (`SAVE_VERSION`
-unchanged); a save without it loads with an empty programme. A new kind is one
-entry in `EVENT_KINDS` and its id in `EVENT_KIND_IDS` (a new praise thought is
-appended to `THOUGHT_KINDS` with its words); a built-in is one entry in
-`BUILT_INS`.
+A new kind is one entry in `EVENT_KINDS` and `EVENT_KIND_IDS`.
 
 ## Breakdowns and injuries
 
-**Breakdowns.** The art declares `venue.reliability`, visits between breakdowns
-on average (waterpark 60, pedalo rental 40, swimming pool 120, game hall 80); a
-venue without it never breaks. `breakdowns.ts` keeps `broken`, `since` and
-`worn` per venue in `upkeep.ts`'s shape, carried across edits by key
-(`carryBreakdowns`) and saved. The router calls `wear` beside `soil` on both ways
-out of a visit; one chance in `reliability` per visit, drawn by `mix` over the
-venue's salt and its visit count, so no seeded stream moves.
-
-- **One closed predicate.** The router's `isOpen` is the weather's `isOpenIn`
-  _and_ not broken, and it is what `chooseVenue` and the door both read, so a
-  broken venue is skipped and a guest already walking there is turned away (they
-  think `broken`, not `closed`). Cleaners and animators skip a broken venue; a
-  lifeguard at a broken pool stays. The advice's `weather-closed` still reads
-  the weather alone: the rain is not to blame for a breakdown.
-- **Mechanics**: one per five venues that declare `reliability`
-  (`RELIABLE_PER_MECHANIC`). A mechanic takes the longest-broken unclaimed venue
-  (`brokenFirst`, whose `eligible` stays a parameter for zones), walks there,
-  holds for `REPAIR_TICKS` (30–60) and `repair`s it. The weather is no bar. A
-  building with no door on the paving (the pedalo rental) is reached over the
-  sand with the tower's leg machinery, and the mechanic is released to the gate
-  afterwards. With nothing broken a mechanic stands where they are.
-
-**Health** is a need but not a want. `GuestNeed` includes `'health'`,
-`GUEST_NEEDS` does not: the column starts at 1, is never drawn (so the five
-seeded draws are unchanged), never decays, and `resetNeeds` sets it back to 1.
-`strongestNeed` looks at it after the five with weight 3 for every archetype,
-which beats any want at its worst, so a hurt guest heads for first aid through
-the ordinary `appealOf`; the `first-aid` model relieves `health` by 1.
-`contentmentOf` stays over the five wants and is scaled by
-`HURT_FLOOR + (1 - HURT_FLOOR) * health` (`HURT_FLOOR` 0.5); at health 1 it is
-unscaled.
-
-**Incidents** (`incidents.ts`) set health to `HURT_LEVEL` (0.35), never raising
-it, and are drawn by hash:
-
-- **Sunburn**: once a simulated hour on a heatwave day, every guest resting on
-  the open sand (not a lounger) has `SUNBURN_PER_HOUR` (0.04) of a burn (`burnTheSunbathers`).
-- **Mishaps**: on every visit to a `bathing` venue, the beach included,
-  `MISHAP_UNWATCHED` (0.02), or `MISHAP_WATCHED` (0.002) while a lifeguard is on
-  watch there (a tower for the beach). That tenfold is what a lifeguard buys.
-
-The guest thinks `hurt` (`I got hurt at …` / `I got sunburnt`). The advice adds
-`broken` (each broken venue, louder the longer it is down) and `hurt` (how many
-are hurt now). `hurt` says nothing about first aid: with no first-aid post,
-`unserved-need` already says "Nothing on the plot serves first aid". The
-inspector shows a Repairs row on a broken venue and a health bar only on a guest
-who is hurt.
-
-Three days on the reference plot (seed 3, 600 guests, day two a heatwave;
-`router.test.ts`): 0, 3 and 6 breakdowns (the first day's crowd goes to the
-beach), all mended within 55–188 minutes; 1, 8 and 1 guests hurt; 7 of the
-heatwave's 118 sunbathers burnt; half of those hurt in the heatwave treated that
-day.
+- **Breakdowns** (`breakdowns.ts`): `venue.reliability` on the art is the mean
+  visits between breakdowns. A broken venue fails the router's one `isOpen`
+  predicate, so it's skipped and turns guests away. Mechanics repair it.
+- **Health** is a need but not a want: never drawn, never decays, weight 3 in
+  `strongestNeed`, so a hurt guest heads for first aid. It scales contentment.
+- **Incidents** (`incidents.ts`): sunburn on the open sand in a heatwave, and
+  mishaps at `bathing` venues, ten times likelier without a lifeguard.
 
 ## Litter
 
-Two declarations on the art, nothing in `src/`:
+Declared on the art: `venue.litter` (chance a visit leaves the guest holding
+something) and `binReach` (makes a model a bin).
 
-- `venue.litter`, 0 to 1: the chance a visit sends the guest off holding
-  something to throw away. Ice cream 0.06, snack bar 0.05, bakery 0.035, coffee
-  shop and supermarket 0.03, poolside bar 0.02, resort bar 0.015; the restaurant
-  and everything else 0.
-- `binReach` on a model makes it a bin: the tiles it covers around its footprint
-  (Chebyshev, as scenery). The litter bin has 3. `binReachOf` reads it.
-
-`litter.ts` keeps a per-tile level, row-major and sized to the plan like the
-scenery field, and a per-guest count of nodes left to carry (`Carrying`).
-
-- The router calls `onVisited(person, venue)` once per visit that ran its course,
-  on both ways out (the ordinary one and an errand off a beach pitch), never for
-  a beach visit that found no room. `showcase.ts` answers with `pickUp`, drawing
-  from a hash of the person and the tick, not the router's seeded stream, so no
-  seeded scene moves.
-- The guest crowd's `routeOf` is wrapped, so every node a guest reaches is seen
-  without the crowd or the router knowing about litter. On a tile a bin covers
-  the guest bins it; otherwise the count goes down, and at `CARRY_NODES` (6)
-  without a bin they drop a `PIECE` (0.25) on that tile, clamped at 1.
-- **The beach gets litter two ways.** A wrapper in hand also counts down at the
-  end of every sand leg (the crowd calls `routeOf(person, ON_SAND)` with the body
-  on the waypoint) and falls on that beach tile. And when a beach stay ends, the
-  guest leaves a piece at their pitch with chance `BEACH_LITTER` (0.15), a `mix`
-  hash with its own multiplier (`leaveOnTheBeach`), unless a bin covers the tile
-  (`dropAt`). A bin on or near the sand catches both. Beach roamers drop
-  nothing: the crowd has no per-leg hook for them.
-- A newly admitted guest starts empty-handed. After an edit the bin cover is
-  rebuilt and litter is cleared from every tile that is neither paved nor open
-  sand (`pruneLitter`); sand under a building just placed is cleared too, as no
-  cleaner could stand there. The rest survives.
-- Litter subtracts from the surroundings term scenery adds to: a guest's
-  surroundings are scenery minus `LITTER_WEIGHT` (1) times the litter under them,
-  clamped to -1..1. A fouled tile costs more than the prettiest tile gives. A
-  guest on the sand minds the litter of the tile under them; scenery there stays
-  0, so an unlittered beach reads as before.
-- Cleaners take venues first. With none to clean, `mostLittered` picks the worst
-  unclaimed paved or beach tile with any litter on it, down to a single `PIECE`;
-  the cleaner walks to a paved one on a flow field from the tile's node
-  (memoised, at most 64, cleared on a rebuild). A beach tile is reached as a
-  beach building is: `sandRoutesFor` from the tile's centre (or open sand beside
-  it, `feetOf`), memoised per tile like the node fields, walked from the gate.
-  They sweep for 4 to 8 ticks and zero it; on the sand they are then released to
-  the gate. `atWork` answers null while sweeping.
-- On every node a cleaner on duty reaches, litter on an unclaimed tile is swept
-  in passing, without stopping. A claimed tile is left to the cleaner walking to
-  it.
-- An order pulls a cleaner off a walk to litter they chose themselves; a venue
-  or a room they are on the way to is seen through first.
-- Advice `littered` counts the tiles at or above `FOULED_AT` and names the
-  worst: "Litter is piling up on n tiles", "no bin within reach".
-
-On the reference plot (4 bins, reaching 4 of the 35 venues that make litter) a
-first day with no cleaners drops 113 pieces, bins 13 and fouls 23 tiles; the
-test holds it between 5 and 40.
-
-Litter is drawn as small voxel models from `voxel-gen/litter/` (a cup and a
-wrapper), up to four per tile at hashed spots inside it, by `litterField.ts` on
-the balloons' moving-field path: 512 slots, two draw calls, rewritten only when
-the litter changes.
+- `litter.ts` keeps a level per tile. A guest carrying litter drops it after
+  `CARRY_NODES` (6) nodes without a bin. Beach stays leave litter on the pitch.
+- Litter subtracts from a guest's surroundings, more than the prettiest scenery
+  gives.
+- Cleaners sweep the worst tile when no venue needs cleaning, and sweep in
+  passing on any node they reach.
+- After an edit, litter is cleared from tiles that are no longer paved or open
+  sand.
+- Drawn as small models from `voxel-gen/litter/`, up to four per tile.
 
 ## Scenery
 
-Dressing declares `scenery` on its `VoxelModelSource`, 0 to 1 (fountain 1, statue
-0.8, flowerbeds and blossom 0.5, trees 0.4, hedge 0.3, mosaic paving 0.05);
-anything undeclared is 0. `sceneryOf` reads it, and there is no table of values in
-`src/`. Mosaic is low because paving is dense: a tile deep in a plaza of it sums
-dozens of tiles, so a plot paved wall to wall in mosaic gives 0.45, a 5 × 5 plaza's
-centre 0.30, and a test holds the first under 0.5.
-
-`scenery.ts` turns what stands on the plot (placements, props and paving) into a per-tile
-field, row-major and sized to the plan. An item gives
-`strength * (1 - d / (SCENERY_REACH + 1))` to every tile within `SCENERY_REACH`
-(4) of its footprint, `d` the Chebyshev distance (0 under it). A tile's sum is
-saturated to `sum / (sum + SATURATION)`, `SATURATION` 2, so a row of hedges never
-reads as a fountain and nothing reaches 1. On the reference plot the paved tiles
-average 0.29 and 12% of them are below 0.1. The field is built with the resort
-and rebuilt after every edit, never per frame.
-
-A guest's happiness target is their contentment plus `SURROUNDINGS_SHARE` (0.1)
-times the scenery of the tile their walk node stands on (0 off the graph, on the
-sand). `ageHappiness` only knows it as signed surroundings, so litter can
-subtract from the same term. Scenery never changes where anybody walks: choosing
-a venue, appeal and routing do not read it.
-
-The inspector shows a place's **Surroundings**, `sceneryOver`: the mean over its
-footprint and the ring around it.
+Dressing declares `scenery` (0 to 1) on its model: fountain 1, statue 0.8,
+flowerbeds 0.5, trees 0.4, hedge 0.3, mosaic 0.05. `scenery.ts` sums it into a
+per-tile field within 4 tiles, saturated so nothing reaches 1, rebuilt after
+every edit. A guest's happiness target adds 0.1 × the scenery under them.
+Scenery never changes where anybody walks.
 
 ## Overlays
 
-The **Overlay** picker in the top bar tints each paved tile by one question
-(`overlays/domain/overlays.ts`). Every layer is a value from 0 to 1 per walk node,
-or `NaN` for no data (drawn as nothing), and **the high end is always the bad
-one**, so one ramp (`ramp.ts`: teal, yellow, magenta-red) and one legend serve
-them all.
+The **Overlay** picker tints paved tiles by one question
+(`overlays/domain/overlays.ts`). Every layer is 0 to 1 per node, or `NaN` for no
+data, and **high is always bad**, so one ramp and legend serve all.
 
-| Layer     | Asks                          | Value                                                                          |
-| --------- | ----------------------------- | ------------------------------------------------------------------------------ |
-| Footfall  | where guests walk             | sightings over the busiest node's; `NaN` where nobody walked                   |
-| Mood      | where guests are unhappy      | 1 minus the mean mood seen there; `NaN` below `MIN_SEEN` (5) sightings         |
-| Food      | how far to something to eat   | hops to the nearest door of a venue easing hunger, over `TOO_FAR_HOPS`, capped |
-| Drink     | how far to something to drink | the same for thirst                                                            |
-| Wash      | how far to somewhere to wash  | the same for hygiene                                                           |
-| Step-free | where a wheelchair can go     | 0 reached from the gates step-free, 1 only by stairs, `NaN` unreached          |
-| Scenery   | where the walk is plain       | 1 minus the scenery field under the node                                       |
-| Litter    | where litter lies             | the litter level under the node, and on every beach tile                       |
+| Layer     | Shows                          |
+| --------- | ------------------------------ |
+| Footfall  | where guests walk              |
+| Mood      | where guests are unhappy       |
+| Food      | distance to something to eat   |
+| Drink     | distance to something to drink |
+| Wash      | distance to somewhere to wash  |
+| Step-free | where a wheelchair can't go    |
+| Scenery   | where the walk is plain        |
+| Litter    | where litter lies              |
 
-`TOO_FAR_HOPS` is the family reach in tiles (20), where the advice starts saying
-far-from-home; a node no door reaches is 1. The reach layers are one multi-source
-sweep (`reach.ts`) from every serving door, about 0.2 ms on the reference plot,
-kept per walk graph until the next edit. A building on the sand has no door on the
-graph, so it is seeded as the router reaches it: at the gate of each of its sand
-routes, already that route's length in tiles away.
-
-Footfall is the one running sample: once a frame, every present guest adds 1 and
-their mood to the node they are at. It is halved every morning, so the map shows
-the last few days, and replaced empty on an edit, which renumbers nodes.
-
-A layer is worked out when it is switched on, once a simulated hour while it is
-on, and after an edit's rebuild; never per frame. The simulation never reads an
-overlay, and a benchmark refuses to switch one on.
+Distance layers come from one multi-source sweep (`reach.ts`), kept per walk
+graph. Footfall is sampled per frame and halved every morning. Layers update
+hourly while on, never per frame. The sim never reads one.
 
 ## Money
 
-Everything has a price, and one simulation runs in both game modes. Sandbox and
-tycoon differ in exactly one predicate, `canAfford` in `ledger.ts`, which is
-always true in sandbox and compares against the balance in tycoon. It is the only
-function that reads the mode. **The ledger records in both modes**: sandbox means
-nobody is ever short of money, not that the books are blank, so a sandbox resort
-still pays wages and maintenance and the Books window shows what it earns and
-costs. Do not "fix" wages to 0 in sandbox.
+One simulation runs in both modes. Sandbox and tycoon differ only in
+`canAfford` (`ledger.ts`). **The ledger records in both modes**: sandbox still
+pays wages and maintenance, it's just never short. Don't "fix" wages to 0 in
+sandbox.
 
-**No guest behaves differently because of a price.** Choosing a venue, appeal,
-routing, needs, thoughts, reviews and the advice never read one; a price is
-something the resort takes, not something a guest weighs.
+**No guest behaves differently because of a price.** Choosing, routing, needs,
+thoughts and advice never read one.
 
-The art declares two numbers, both optional:
-
-- `cost` on `VoxelModelSource`, what standing it costs. Undeclared, `prices.ts`
-  derives it from the model's size: voxels / 25, rounded to tens, at least 10. A
-  path tile is 20, a bungalow 680, a house 1 870. Declared only where the rule
-  is plainly wrong: `hotel` 12 000 (its facade detail would ask 22 430),
-  `swimming-pool` 5 000 and the draft `waterpark` 8 000 (mostly water, which the
-  rule reads as cheap) and `reception` 600 (every tycoon resort must buy one, and
-  it sells nothing).
-- `price` on the venue, what one visit takes, or one guest-night at a lodging.
-  Every lodging, food and drink venue declares one, and the paid activities (spa,
-  minigolf, pedalos, game hall, beach club). Services and free activities declare
-  none, which is 0. The beach's synthetic venue is not in the catalogue and earns 0.
-
-Money moves in eight ways, each a `Reason` with its own column in the books:
-
-| Reason      | When                                                                          |
-| ----------- | ----------------------------------------------------------------------------- |
-| build       | the player stands something; a neighbour the paving re-lays is free           |
-| demolish    | the bulldozer gives half back, or all of it for a site still going up         |
-| dig         | the spade, `DIG_COST` (20) per tile changed                                   |
-| land        | the land tool, `LAND_PARCEL_COST` (1 500) a parcel; nothing in Free play      |
-| visit       | `onVisited`, the venue's price                                                |
-| night       | each check-in hour, `nightBill`: one night's rate for every housed guest here |
-| wages       | each check-in hour, `wagesFor(roster)`: the cleaners on duty, never the pool  |
-| maintenance | each check-in hour, 1% of the build cost of every placement and prop standing |
-
-A night is billed for the bed slept in, so a guest who never reaches reception
-still pays; billed by the stay on arrival, a day with no coach read as a loss in a
-resort that was making money. A lodging's nightly rate is its price plus up to
-`SETTING_PREMIUM` (a quarter) for its surroundings (`nightPriceOf`, the
-inspector's Surroundings); that is a price, never a reason a party lodges
-anywhere. Paving and rails are not maintained, and rails, which the handrails lay
-on their own, cost nothing to stand. A day in the books runs from one check-in
-hour to the next: the bills are paid and the day closed just before the morning
-coach, and the night just slept goes into the new day, so a lodging's takings
-show the morning's rent. A resort that is **Closed** still
-pays its staff and its upkeep and earns no nights, which is real pressure and
-needs no code. Balances are integers, and a balance below zero only stops
-building.
-
-**Tycoon starts only from bare ground.** The New game panel offers no choice of
-ground for it (`groundOf` in `welcome/domain/newGame.ts`): it starts on a
-256-tile world of parcels like Free play's bare land (see [Land](#land)) and
-opens the books with `OPENING_BALANCE.tycoon`
-(8 000, about twice a minimal start: a gate, the desk, thirty paths, three
-bungalows and a snack bar, 3 960). A generated resort is always sandbox: it is
-given, not bought, and refunding it would pay the player for nothing. The mode is
-chosen when a resort is created, lives on its ledger and never changes; every new
-resort opens new books and restarts the clock at day 0. Free play is the players'
-name for sandbox; the code keeps `sandbox`.
-
-On the reference plot (seed 3, density 0.7) what stands costs 341 870, of which
-paving is 47 700 (14%). Its wages are 1 730 a day and its maintenance 3 036,
-against about 12 500 a day in visits and 10 000 in nights. Wages are sized
-against small starts: twelve beds earn about 240 a night, and the minimal start
-nets about 180 a day, with restrooms, a bar and a tower about 300, and still
-about 100 with a game hall and a playground (`pnpm sim:report` with `SIM_KEEP`).
-
-The HUD hears about money after a click that moved it (once a frame at most), at
-the check-in hour, once a simulated hour for the visits in between, and when a new
-resort is built; never per visit. The top bar shows **Money** in tycoon only, and
-**Books** in both modes. A palette tile shows its cost and is dimmed, not
-disabled, when the bank cannot pay for it. The inspector shows a venue's
-**Takings today**.
+- `cost` on a model is what standing it costs; undeclared, it's derived from
+  voxel count.
+- `price` on a venue is what a visit or a guest-night takes.
+- Money moves for build, demolish (half back), dig, land, visits, nights, wages
+  and maintenance (1% of build cost a day), each with its own column in the
+  Books.
+- Nights are billed for the bed slept in. A lodging's rate rises up to a quarter
+  with its surroundings.
+- **Tycoon starts on bare ground** with 8,000. Generated resorts are always
+  sandbox. "Free play" is the player-facing name for sandbox.
 
 ## Land
 
-A bare game (tycoon, or Free play on bare land) is a fixed world of
-`BARE_WORLD_TILES` (256) square, cut into parcels of 16 tiles
-(`land/domain/landRights.ts`). The New game panel asks no width or depth for it;
-a generated resort still does, and owns its whole plot. `ResortPlan.land` and
-`SavedWorld.land` are optional, and no land means everything is owned, so the
-authored plan, generated resorts and saves from before land behave as they did.
+A bare game is a 256-tile world cut into 16-tile parcels
+(`land/domain/landRights.ts`). No land data means everything is owned, so
+generated and authored plots are unaffected.
 
-- **The starting block** (`startingLand`) is four parcels wide, centred on the
-  south edge, and runs from the parcel row holding the water's edge less the
-  beach less 32 tiles down to the last row, so it owns its sea for piers: 4 × 5
-  on a 256 world, deeper when the island deepens the bay.
-- **For sale** is any parcel beside (not diagonal to) owned land, so owned land
-  stays one piece. One flat price, `LAND_PARCEL_COST` (1 500), recorded under
-  **Land** in the books; Free play claims parcels for nothing.
-- **Building only on land owned**: placing, paving, digging and zoning refuse
-  unowned tiles ("Not your land"). An entrance must have a long side on the edge
-  of owned land or the world when placed ("Entrance away from the edge"), as in
-  RollerCoaster Tycoon; buying the land in front of it later is allowed.
-- **A purchase applies at once** to the money, the mask and the right to build.
-  The lighting, the terrain mesh and framing, the beach span, the buoys and the
-  guest capacity follow at a **settle**, two seconds after the last purchase or
-  as soon as the land tool is put away. A settle prepares the world on the worker
-  first, then takes the game (`gameNow`, which leaves construction sites open
-  rather than finishing them) and restores it onto the rebuilt resort with
-  `load`'s own sequence (`restoreGame`), keeping the clock's speed, the camera
-  and the open sites. An edit made while the worker prepares throws the settle
-  away and schedules another. New guests are dealt by `widenGame`: every per-guest
-  column of the game is copied over the front of a freshly built resort's, whose
-  guests all start away, so the newcomers are free bodies for the next check-in.
-- **Prep cost** (worker, empty world): about 0.4 s on the starting block, 1.4 s
-  with all 256 parcels owned (cell 7 instead of 5, 3 277 guests). The main-thread
-  part is logged to the console on each settle.
-- The litter scans (`mostLittered`, `litterSummary`, `piecesFor`) look only inside
-  the owned bounding box: litter lands only where guests go.
+- **Starting block**: four parcels wide on the south edge, down to the sea.
+- **For sale**: any parcel beside owned land, at 1,500 (free in Free play).
+- **Building only on owned land**; an entrance must face the edge.
+- A purchase applies at once to money and building rights. Lighting, terrain,
+  beach span and guest capacity follow at a **settle** two seconds later, which
+  rebuilds the world on the worker and restores the game onto it.
 
 ## Saving
 
-A save is the whole simulation, not the world and the money: every guest keeps
-their place, needs, visit, queue place, pitch, errand and sleep, and every member
-of staff their post, so a loaded game carries on as the saved one would have.
-`Showcase.snapshot()` assembles it from one snapshot per module (`snapshotGuests`,
-`router.snapshot()`, `snapshotCrowd`, ...) and `load()` restores them in a
-straight line onto a resort rebuilt from the saved placements, in their saved
-order, which renumbers nodes, seats and venues exactly as before. Saves live in
-IndexedDB and are parsed with zod on the way back (`saves/domain/snapshot.ts`).
+A save is the whole simulation: every guest and worker resumes exactly where
+they were. `Showcase.snapshot()` assembles one snapshot per module, and `load()`
+restores them onto a resort rebuilt from the saved placements in saved order.
+Saves live in IndexedDB and are parsed with zod (`saves/domain/snapshot.ts`).
 
-**Every piece of new simulation state must be added to its module's snapshot and
-schema, or `SAVE_VERSION` bumped.** There are no migrations: a save of another
-version is listed as unreadable. Unmade beds are saved with the guests beside
-`freeBeds` (per home, like it), and a cleaner making up a room as `roomOf` in the
-staff router's snapshot. The hiring is saved with the resort; a load
-recomputes the roster and the duty from it without a shift change, since the
-staff crowd comes back from the save as it was. The day's counts and the 14-day
-report history are saved with the resort. The twin-run tests (`crowd.test.ts`,
+**Every new piece of simulation state must be added to its module's snapshot and
+schema.** There are no migrations. The twin-run tests (`crowd.test.ts`,
 `router.test.ts`) restore a snapshot into a second resort and run both side by
-side, so they catch a missed field, but only if their scenario exercises it.
-Reordering `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels
-changes what a saved number means, and needs a version bump too.
+side, catching missed fields their scenario exercises. Reordering
+`THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels changes
+what saved numbers mean.
 
 ## Where the art lives
 
-- People: `voxel-gen/people/`, a registry separate from `MODEL_SOURCES`.
-  `figure.ts` has the shared builder, `hipHeight`, `shoulderHeight` and
-  `handHeight`. Every person passes `sleeves` to `figure()`, the upper arm, a
-  shade darker than the shirt (the forearm is skin), and `scale: FIGURE_SCALE`
-  on its source. Preview with `pnpm preview --people`.
-- Staff: `voxel-gen/people/{cleaner,lifeguard,animator,mechanic}.ts`, via
-  `STAFF_SOURCES`, in `STAFF_ROLES` order.
-- Boats and buoys: `voxel-gen/sea/`. Balloons: `voxel-gen/sky/`. Litter:
-  `voxel-gen/litter/`, preview with `pnpm preview --litter`. Balls:
-  `voxel-gen/props/` (`PROP_SOURCES`), preview with `pnpm preview --props`.
-- `PAINTED_MODELS` in `objectTypes.ts` joins catalogue, people, staff, sky, sea,
-  litter and props. `dveEngine.test.ts` meshes all of it.
-- People paint from the palette; `skin` is the only family they add.
-- How pleasant dressing is: `scenery` on the model's own source.
-- How much litter a visit leaves, and what is a bin: `venue.litter` and
-  `binReach`.
-- How often a venue breaks: `venue.reliability`. What first aid treats: its
-  `satisfies`, `health`.
-- What it costs to stand and what a visit or a night takes: `cost` on the
-  source (optional, derived from its size otherwise) and `venue.price`.
-- Where visitors are drawn: `venue.spots` and seats; `watches` for spectators.
-- A game: `game` and `side` on each player's spot (side 0 the low-x half),
-  `venue.court` (the outer lines, the net's column and top, the hoops' middles,
-  read from the model's own constants) and `venue.ball` (the prop and the layer
-  it is struck at). A court's length runs along x.
+- People: `voxel-gen/people/`, with the shared `figure.ts` builder. Staff in
+  `STAFF_ROLES` order. Preview with `pnpm preview --people`.
+- Boats and buoys `voxel-gen/sea/`, balloons `voxel-gen/sky/`, litter
+  `voxel-gen/litter/`, balls `voxel-gen/props/`.
+- `PAINTED_MODELS` joins them all; `dveEngine.test.ts` meshes everything.
+- On a model: `scenery`, `venue.litter`, `binReach`, `venue.reliability`,
+  `cost`, `venue.price`, `venue.spots`, seats with `watches`, and `game`,
+  `side`, `venue.court` and `venue.ball` for courts.

@@ -519,6 +519,7 @@ import {
 import { placesFor, type VenuePlaces } from '../features/choreography/domain/places';
 import { advanceActs, perform } from '../features/choreography/domain/acts';
 import { performAtSea } from '../features/choreography/domain/seaSwim';
+import { performOnSand } from '../features/choreography/domain/sandCastles';
 import { performWork } from '../features/choreography/domain/work';
 import {
   bedCount,
@@ -5504,6 +5505,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     actSeconds = advanceActs(actSeconds, walked, crowdScale);
     perform(current().cast, actSeconds);
     performAtSea(current().cast, actSeconds, clock.ticks);
+    performOnSand(current().cast, actSeconds, clock.ticks);
     performWork(current().staffCast, current().cast, actSeconds);
     current().ballField.write(current().cast.played);
     current().crowd.advance(walked, crowdScale);

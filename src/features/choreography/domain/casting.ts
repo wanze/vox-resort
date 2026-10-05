@@ -1,3 +1,4 @@
+import { SANDCASTLE_IDS } from '../../../../voxel-gen/props/sandcastle.ts';
 import { RESTING } from '../../crowd/domain/crowd';
 import type { StaffRole } from '../../sim/domain/staff';
 import { isMoving } from './acts';
@@ -6,6 +7,7 @@ import { createGolfPlay, type GolfPlay } from './golf';
 import type { Audience, Floor } from './shows';
 import type { TagGame, Yard } from './tag';
 import type { Place, VenuePlaces } from './places';
+import type { CastleGroup } from './sandCastles';
 import type { SeaShore, SwimTrip } from './seaSwim';
 
 export const SHOWN = { asCrowd: 0, placed: 1, hidden: 2 } as const;
@@ -50,6 +52,17 @@ export interface Bathers {
   readonly trips: (SwimTrip | null)[];
 }
 
+export interface SandCastles {
+  window: number;
+  groups: readonly CastleGroup[];
+  readonly groupOf: Int32Array;
+  readonly builderOf: Int32Array;
+  readonly stages: readonly (readonly DrawnBall[])[];
+}
+
+// Within the ball field's room for each model, which every stage is.
+const CASTLES = 12;
+
 interface Range {
   readonly start: number;
   readonly count: number;
@@ -88,6 +101,7 @@ export interface Cast extends DrawnAs {
   // -1 until perform starts the first leg.
   readonly legNo: Int32Array;
   readonly bathers: Bathers;
+  readonly castles: SandCastles;
   // One for each venue with a game, in venue order.
   readonly courts: readonly CourtGame[];
   readonly golf: readonly GolfPlay[];
@@ -115,7 +129,7 @@ export interface Cast extends DrawnAs {
   readonly joinedAt: Float64Array;
   readonly fromShowX: Float32Array;
   readonly fromShowZ: Float32Array;
-  // Every ball in play, the courts' and the courses', for the ball field to draw.
+  // Every ball in play, the courts' and the courses', and the sand castles, for the ball field to draw.
   readonly played: readonly { readonly ball: DrawnBall }[];
   // Per venue, as recast last saw it: its visitors, not those waiting outside.
   readonly inside: Int32Array;
@@ -223,6 +237,9 @@ export function createCast(
     );
     return [createGolfPlay(venue.golf, parties)];
   });
+  const castles = Array.from({ length: CASTLES }, () =>
+    SANDCASTLE_IDS.map((model) => ({ model, x: 0, y: 0, z: 0, shown: false })),
+  );
   const onSeats: number[] = [];
   const moving: number[] = [];
   for (const [index, place] of flat.entries()) {
@@ -283,6 +300,13 @@ export function createCast(
       window: new Float64Array(capacity).fill(Number.NaN),
       trips: Array.from({ length: capacity }, () => null),
     },
+    castles: {
+      window: Number.NaN,
+      groups: [],
+      groupOf: new Int32Array(capacity).fill(-1),
+      builderOf: new Int32Array(capacity),
+      stages: castles,
+    },
     courts,
     golf,
     party: new Int32Array(capacity).fill(-1),
@@ -303,7 +327,11 @@ export function createCast(
     shows: new Uint8Array(venues.length),
     showFrom: new Float64Array(venues.length).fill(Number.NaN),
     showTo: new Float64Array(venues.length).fill(Number.NaN),
-    played: [...courts, ...golf.flatMap((play) => play.balls.map((ball) => ({ ball })))],
+    played: [
+      ...courts,
+      ...golf.flatMap((play) => play.balls.map((ball) => ({ ball }))),
+      ...castles.flatMap((stages) => stages.map((ball) => ({ ball }))),
+    ],
     inside: new Int32Array(venues.length),
   };
 }

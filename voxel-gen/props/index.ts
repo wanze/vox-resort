@@ -6,6 +6,7 @@ import ball_basket from './ball-basket.ts';
 import ball_golf from './ball-golf.ts';
 import ball_tennis from './ball-tennis.ts';
 import ball_volley from './ball-volley.ts';
+import { SANDCASTLE_SOURCES } from './sandcastle.ts';
 import wheelchair from './wheelchair.ts';
 
 export const PROP_SOURCES: readonly VoxelModelSource[] = [
@@ -14,4 +15,5 @@ export const PROP_SOURCES: readonly VoxelModelSource[] = [
   ball_basket,
   ball_golf,
   wheelchair,
+  ...SANDCASTLE_SOURCES,
 ];

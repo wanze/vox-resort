@@ -133,7 +133,7 @@ describe('PAINTED_MODELS', () => {
     }
   });
 
-  it('keeps the balls and the wheelchair out of the catalogue, which is what they are apart from', () => {
+  it('keeps the balls, the wheelchair and the sand castles out of the catalogue, which is what they are apart from', () => {
     const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
     expect(PROP_MODELS.map((prop) => prop.id)).toEqual([
       'ball-tennis',
@@ -141,6 +141,10 @@ describe('PAINTED_MODELS', () => {
       'ball-basket',
       'ball-golf',
       'wheelchair',
+      'sandcastle-mound',
+      'sandcastle-walls',
+      'sandcastle-towers',
+      'sandcastle-keep',
     ]);
     for (const prop of PROP_MODELS) {
       expect(catalogue.has(prop.id), `${prop.id} is in the catalogue too`).toBe(false);

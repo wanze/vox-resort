@@ -6,6 +6,7 @@ export default defineModel({
   id: 'street-lamp',
   label: 'Street Lamp',
   category: 'grounds',
+  scenery: 0.2,
   tiles: { x: 1, z: 1 },
   emissive: [GLOW],
   lights: [{ x: 7, y: 18, z: 7, color: GLOW, intensity: 90, distance: 46 }],

@@ -385,6 +385,37 @@ describe('the gates onto the beach', () => {
     expect(network.gates).toHaveLength(2);
   });
 
+  it('opens no gate on a path along the top of a dune, a level above the sand', () => {
+    const network = walkNetworkFor({
+      paved: [4, 5, 6].map((tileX) => ({ tileX, tileZ: 4, y: LEVEL_VOXELS })),
+      levelOf: (_x, z) => (z <= 4 ? 1 : 0),
+      shore,
+      tilesX: 10,
+    });
+    expect(network.gates).toEqual([]);
+  });
+
+  it('opens no gate onto sand raised into a dune, and keeps roamers out of it', () => {
+    const network = walkNetworkFor({
+      paved: flat([[5, 4]]),
+      levelOf: (x, z) => (x === 5 && z === 5 ? 1 : 0),
+      shore,
+      tilesX: 10,
+    });
+    expect(network.nodes[nodeAt(network, 5, 4)]!.gate).toBe(true);
+    const middle = (tileX: number, tileZ: number) =>
+      blockedAt(network.sand!, (tileX + 0.5) * TILE_VOXELS, (tileZ + 0.5) * TILE_VOXELS);
+    expect([middle(5, 5), middle(3, 5)]).toEqual([true, false]);
+
+    const onDune = walkNetworkFor({
+      paved: [{ tileX: 5, tileZ: 4, y: LEVEL_VOXELS }],
+      levelOf: (x, z) => (x === 5 && z <= 5 ? 1 : 0),
+      shore,
+      tilesX: 10,
+    });
+    expect(onDune.gates).toEqual([]);
+  });
+
   const rampToSand = (order: readonly number[]): WalkNetwork =>
     walkNetworkFor({
       paved: order.map((tileZ) => ({

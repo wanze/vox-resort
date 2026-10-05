@@ -17,7 +17,7 @@ import {
 } from '../../layout/domain/resortPlan';
 import type { Rotation } from '../../layout/domain/rotation';
 import { spanTilesFor, type SpanKind, type SpanProvider } from '../../layout/domain/spans';
-import { terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
+import { beachTilesOf, terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
 import type { SeatPose } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSpot } from './seating';
@@ -109,6 +109,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
 
   const climbs = climbsAmong(paved, levelOf);
   const spans = spansAmong(paved, input.bridged);
+  const sandAt = openSandOf(shore, levelOf);
 
   const nodes: WalkNode[] = [];
   const exits: number[][] = [];
@@ -151,7 +152,9 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
     edges.push({ from, to, length: Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), stepped });
   };
 
-  const stands = paved.map((tile) => standFor(tile, climbs, spans, shore, indexOf, standAt));
+  const stands = paved.map((tile) =>
+    standFor(tile, climbs, spans, adjoinsOpenSand(tile, sandAt, levelOf, indexOf), standAt),
+  );
   for (const stand of stands) {
     if (stand.kind !== 'flight') continue;
     link(stand.low, stand.high, stand.stepped);
@@ -170,7 +173,7 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
   };
   for (const [index, tile] of paved.entries()) linkNeighbours(index, tile);
 
-  const { seats, beachSeats, posts } = seatsAmong(input.seats ?? [], nodes, seatsOf, shore);
+  const { seats, beachSeats, posts } = seatsAmong(input.seats ?? [], nodes, seatsOf, sandAt);
 
   return {
     nodes,
@@ -186,23 +189,37 @@ export function walkNetworkFor(input: WalkNetworkInput): WalkNetwork {
 
 const spanOf = (input: WalkNetworkInput): TileSpan => input.span ?? { from: 0, to: input.tilesX };
 
+type SandProvider = (tileX: number, tileZ: number) => boolean;
+
+// Roamers walk the sand as one flat sheet at sea level, so a dune raised on the beach is not sand
+// anybody can stand on.
+const openSandOf =
+  (shore: Shore | null, levelOf: LevelProvider): SandProvider =>
+  (tileX, tileZ) =>
+    shore !== null && terrainAt(shore, tileX, tileZ) === 'beach' && levelOf(tileX, tileZ) === 0;
+
+const tileBox = (tileX: number, tileZ: number): ObstacleBox => ({
+  x: tileX * TILE_VOXELS,
+  z: tileZ * TILE_VOXELS,
+  width: TILE_VOXELS,
+  depth: TILE_VOXELS,
+});
+
 // Roamers cross the sand at its own height, and a ramp or flight rises out of it: walked through,
 // it would hide them to the waist.
 function sandOf(input: WalkNetworkInput, climbs: ReadonlyMap<string, Climb>): SandGrid | null {
   if (!input.shore) return null;
   const raised: ObstacleBox[] = input.paved
     .filter((tile) => climbs.has(tileKey(tile.tileX, tile.tileZ)))
-    .map((tile) => ({
-      x: tile.tileX * TILE_VOXELS,
-      z: tile.tileZ * TILE_VOXELS,
-      width: TILE_VOXELS,
-      depth: TILE_VOXELS,
-    }));
+    .map((tile) => tileBox(tile.tileX, tile.tileZ));
+  const dunes: ObstacleBox[] = beachTilesOf(input.shore)
+    .filter((tile) => input.levelOf(tile.x, tile.z) !== 0)
+    .map((tile) => tileBox(tile.x, tile.z));
   return sandGridFor({
     shore: input.shore,
     tilesX: input.tilesX,
     span: spanOf(input),
-    obstacles: [...(input.obstacles ?? []), ...raised],
+    obstacles: [...(input.obstacles ?? []), ...raised, ...dunes],
   });
 }
 
@@ -214,7 +231,7 @@ function seatsAmong(
   spots: readonly SeatSpot[],
   nodes: readonly WalkNode[],
   seatsOf: readonly number[][],
-  shore: Shore | null,
+  sandAt: SandProvider,
 ): { readonly seats: WalkSeat[]; readonly beachSeats: number[]; readonly posts: number[] } {
   const seats: WalkSeat[] = [];
   const beachSeats: number[] = [];
@@ -225,13 +242,13 @@ function seatsAmong(
   for (const spot of spots) {
     // Only on sand: a lifeguard reaches a post over the beach, never from the paving.
     if (spot.post) {
-      if (!onOpenSand(spot, shore)) continue;
+      if (!sandAt(spot.tileX, spot.tileZ)) continue;
       posts.push(seats.length);
       seats.push(walkSeatAt(spot, OFF_THE_GRAPH));
       continue;
     }
     const node = nodeFor(spot, nodes, byTile);
-    const sand = node === OFF_THE_GRAPH && onOpenSand(spot, shore);
+    const sand = node === OFF_THE_GRAPH && sandAt(spot.tileX, spot.tileZ);
     if (node === OFF_THE_GRAPH && !sand) continue;
     if (sand) beachSeats.push(seats.length);
     else seatsOf[node]!.push(seats.length);
@@ -248,10 +265,6 @@ const walkSeatAt = (spot: SeatSpot, node: number): WalkSeat => ({
   pose: spot.pose,
   node,
 });
-
-function onOpenSand(spot: SeatSpot, shore: Shore | null): boolean {
-  return shore !== null && terrainAt(shore, spot.tileX, spot.tileZ) === 'beach';
-}
 
 function nodesByTile(nodes: readonly WalkNode[]): ReadonlyMap<string, number[]> {
   const byTile = new Map<string, number[]>();
@@ -324,8 +337,7 @@ function standFor(
   tile: PavedTile,
   climbs: ReadonlyMap<string, Climb>,
   spans: ReadonlyMap<string, Span>,
-  shore: Shore | null,
-  paved: ReadonlyMap<string, number>,
+  gate: boolean,
   standAt: (x: number, y: number, z: number, tile: PavedTile, gate?: boolean) => number,
 ): TileStand {
   const { x, z, foot } = middleOf(tile);
@@ -337,7 +349,6 @@ function standFor(
   }
   if (span) return slopeOn(tile, span.climb, BRIDGE_SLOPE, standAt);
   const climb = climbs.get(key);
-  const gate = adjoinsOpenSand(tile, shore, paved);
   if (!climb) return { kind: 'centre', node: standAt(x, foot, z, tile, gate) };
   // The foot of a ramp can be the last tile before the sand, as the slab it replaced was. A head's
   // low end is half a level up, and shared with its foot: a gate there walks people into the ramp.
@@ -504,17 +515,19 @@ function walkable(
   return climb.dx === towardsX && climb.dz === towardsZ;
 }
 
+// Paving up on a dune overlooks the beach but is a level above it: a gate there walks people
+// off the edge.
 function adjoinsOpenSand(
   tile: PavedTile,
-  shore: Shore | null,
+  sandAt: SandProvider,
+  levelOf: LevelProvider,
   paved: ReadonlyMap<string, number>,
 ): boolean {
-  if (!shore) return false;
+  if (levelOf(tile.tileX, tile.tileZ) !== 0) return false;
   return NEIGHBOURS.some(([dx, dz]) => {
     const x = tile.tileX + dx;
     const z = tile.tileZ + dz;
-    if (paved.has(tileKey(x, z))) return false;
-    return terrainAt(shore, x, z) === 'beach';
+    return !paved.has(tileKey(x, z)) && sandAt(x, z);
   });
 }
 

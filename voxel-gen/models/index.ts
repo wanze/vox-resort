@@ -5,7 +5,6 @@ import bakery from './bakery.ts';
 import basketball_court from './basketball-court.ts';
 import beach_club from './beach-club.ts';
 import beach_shower from './beach-shower.ts';
-import beach_umbrella from './beach-umbrella.ts';
 import bench from './bench.ts';
 import blossom from './blossom.ts';
 import boardwalk from './boardwalk.ts';
@@ -115,7 +114,6 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   sun_lounger,
   bench,
   picnic_table,
-  beach_umbrella,
   tikitorch,
   icecream,
   entrance,

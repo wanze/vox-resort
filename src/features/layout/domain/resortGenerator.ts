@@ -506,7 +506,6 @@ function isBuildableSand(shore: Shore, tileX: number, tileZ: number): boolean {
 }
 
 const LOUNGER_ID = 'sun-lounger';
-const UMBRELLA_ID = 'beach-umbrella';
 
 const LIFEGUARD_ID = 'lifeguard-tower';
 
@@ -535,12 +534,8 @@ const BEACH_BACK: readonly string[] = [
 
 const BEACH_LINES = { count: 3, first: 1, spacing: 2 } as const;
 
-const BEACH_SET: readonly ('lounger' | 'umbrella' | null)[] = [
-  'lounger',
-  'umbrella',
-  'lounger',
-  null,
-];
+// Every other column: each lounger brings its own parasol, whose canopy fills the tile.
+const BEACH_SET: readonly ('lounger' | null)[] = ['lounger', null, 'lounger', null];
 
 const BEACH_BAY = 5;
 
@@ -673,8 +668,7 @@ function standLifeguards(parts: BeachParts): void {
 
 function layBeachLines(parts: BeachParts): void {
   const lounger = parts.types.get(LOUNGER_ID);
-  const umbrella = parts.types.get(UMBRELLA_ID);
-  if (!lounger || !umbrella) return;
+  if (!lounger) return;
   const { shore, site, plots, missing } = parts;
   const kept = keptSets(parts.density);
   const first = Math.floor((BEACH_BAY - kept) / 2);
@@ -687,13 +681,7 @@ function layBeachLines(parts: BeachParts): void {
       const set = BEACH_SET.flatMap((item, offset) => {
         if (item === null) return [];
         const tileX = start + offset;
-        return [
-          {
-            type: item === 'umbrella' ? umbrella : lounger,
-            tileX,
-            tileZ: waterStartZ(shore, tileX) - 1 - depth,
-          },
-        ];
+        return [{ tileX, tileZ: waterStartZ(shore, tileX) - 1 - depth }];
       });
       const clear = set.every(
         ({ tileX, tileZ }) =>
@@ -702,11 +690,11 @@ function layBeachLines(parts: BeachParts): void {
           !site.taken.has(tileKey(tileX, tileZ)),
       );
       if (!clear) continue;
-      for (const { type, tileX, tileZ } of set) {
+      for (const { tileX, tileZ } of set) {
         // Unturned: a lounger's backrest is at its northern end, so it faces the water.
         site.taken.add(tileKey(tileX, tileZ));
-        plots.push({ id: type.id, tileX, tileZ, rotation: 0 });
-        missing.delete(type.id);
+        plots.push({ id: lounger.id, tileX, tileZ, rotation: 0 });
+        missing.delete(lounger.id);
       }
     }
   }

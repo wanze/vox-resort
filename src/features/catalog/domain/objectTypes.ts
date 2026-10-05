@@ -6,7 +6,9 @@ import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
 import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
 import {
+  allVoxelsOf,
   buildModel,
+  dayVoxelsOf,
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
@@ -39,7 +41,9 @@ export interface ObjectTypeDefinition {
 
 function dominantColor(model: VoxelModel): number {
   const counts = new Map<number, number>();
-  for (const voxel of model.voxels) counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
+  for (const voxel of dayVoxelsOf(model)) {
+    counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
+  }
   let best = 0;
   let bestCount = -1;
   for (const [color, count] of counts) {
@@ -212,7 +216,7 @@ export function binReachOf(id: string): number {
 
 export function allMaterials(): readonly MaterialDefinition[] {
   return materialsForColors(
-    PAINTED_MODELS.flatMap((model) => model.voxels.map((voxel) => voxel.color)),
+    PAINTED_MODELS.flatMap((model) => allVoxelsOf(model).map((voxel) => voxel.color)),
   );
 }
 

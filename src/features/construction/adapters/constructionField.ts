@@ -3,7 +3,7 @@
 // whole wall. The height rides on each mesh's userData so one material draws every site.
 
 import { DoubleSide, Group, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
-import { floor, fract, positionGeometry, sin, userData, vertexStage } from 'three/tsl';
+import { attribute, floor, fract, positionGeometry, sin, userData, vertexStage } from 'three/tsl';
 import type { BufferGeometry, Node, NodeMaterial } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import type { Placement } from '../../layout/domain/resortLayout';
@@ -30,7 +30,7 @@ const userFloat = (name: string): Node<'float'> =>
 // The hashes are subtracted from the line, so the reveal must travel past the model top
 // before a building is whole. maskNode rather than an alpha test: it discards early and
 // the shadow pass honours it.
-function cut<T extends NodeMaterial>(material: T): T {
+function cut<T extends NodeMaterial>(material: T, keep: Node<'bool'> | null = null): T {
   // Model space, so one material serves every building at every rotation.
   const local = vertexStage(positionGeometry);
   const column = floor(local.xz);
@@ -44,18 +44,21 @@ function cut<T extends NodeMaterial>(material: T): T {
     .sub(grain.mul(GRAIN_VOXELS))
     // The slab is never held back, or the first second of a build reads as a misclick.
     .max(FOUNDATION_VOXELS);
-  material.maskNode = local.y.lessThan(line);
+  const below = local.y.lessThan(line);
+  material.maskNode = keep ? below.and(keep) : below;
   // The mesher never emitted faces inside a wall, so a cut shell is see-through from above.
   material.side = DoubleSide;
   return material;
 }
 
 // A site has no lit windows or water yet, so only the shaded surface needs the resort material.
+// A parasol goes up open, whatever the hour: furling is the finished world's business.
 const SURFACES = [
   { kind: 'lit', of: (model: ModelGeometry) => model.lit, shaded: true },
   { kind: 'glow', of: (model: ModelGeometry) => model.emissive, shaded: false },
   { kind: 'water', of: (model: ModelGeometry) => model.water, shaded: false },
   { kind: 'window', of: (model: ModelGeometry) => model.window, shaded: false },
+  { kind: 'canopy', of: (model: ModelGeometry) => model.canopy, shaded: true },
 ] as const;
 
 const trianglesOf = (geometry: BufferGeometry): number => (geometry.getIndex()?.count ?? 0) / 3;
@@ -69,6 +72,9 @@ export function buildConstructionField(
 
   const lit = cut(litMaterial(lightVolume));
   const unlit = cut(new MeshBasicNodeMaterial({ vertexColors: true }));
+  const open = cut(litMaterial(lightVolume), attribute<'float'>('furled', 'float').lessThan(0.5));
+  const materialOf = (surface: (typeof SURFACES)[number]) =>
+    surface.kind === 'canopy' ? open : surface.shaded ? lit : unlit;
 
   const modelById = new Map(geometries.map((entry) => [entry.id, entry]));
   const sites = new Map<string, Mesh[]>();
@@ -81,7 +87,7 @@ export function buildConstructionField(
     height: number,
     reveal: number,
   ): Mesh => {
-    const mesh = new Mesh(geometry, surface.shaded ? lit : unlit);
+    const mesh = new Mesh(geometry, materialOf(surface));
     mesh.name = `building-${placement.key}-${surface.kind}`;
     // Written before the first draw: a reference node infers its uniform type from the first
     // object the material is compiled for.
@@ -137,6 +143,7 @@ export function buildConstructionField(
       triangleCount = 0;
       lit.dispose();
       unlit.dispose();
+      open.dispose();
       // Never dispose these geometries: they are shared with the instanced world, and Three.js
       // frees buffers by attribute identity, which would pull every finished building of the type.
     },

@@ -8,7 +8,7 @@ import {
   nextPick,
   pickLabel,
   resolveStyle,
-  rollsStyle,
+  startsOnOriginal,
   styleIdsOf,
   styleStripFor,
 } from './stylePick';
@@ -45,14 +45,6 @@ describe('nextPick', () => {
     expect(walked).toEqual([null, 'bakery', 'bakery-b', 'bakery-c', null]);
   });
 
-  it('skips random for a family that is drawn in runs', () => {
-    const walked: StylePick[] = [null];
-    for (let step = 0; step < STYLES.length + 1; step++) {
-      walked.push(nextPick(STYLES, walked.at(-1)!, false));
-    }
-    expect(walked).toEqual([null, 'bakery', 'bakery-b', 'bakery-c', 'bakery']);
-  });
-
   it('stays on random for a family of one', () => {
     expect(nextPick(['hotel'], null)).toBeNull();
     expect(nextPick(['hotel'], 'hotel')).toBeNull();
@@ -70,11 +62,16 @@ describe('armWithMemory', () => {
     });
   });
 
-  it('arms a family drawn in runs on its original, never on random', () => {
-    expect(armed({ kind: 'object', id: 'hedge' }).tool).toMatchObject({ style: 'hedge' });
+  it('arms a family drawn in runs on its original the first time', () => {
+    expect(armed({ kind: 'object', id: 'palm' }).tool).toMatchObject({ style: 'palm' });
     expect(armed({ kind: 'object', id: 'street-lamp' }).tool).toMatchObject({
       style: 'street-lamp',
     });
+  });
+
+  it('remembers random for a family drawn in runs once the player picks it', () => {
+    const { memory } = armed({ kind: 'object', id: 'palm', style: null });
+    expect(armed({ kind: 'object', id: 'palm' }, memory).tool).toMatchObject({ style: null });
   });
 
   it('remembers a style the player named', () => {
@@ -148,14 +145,15 @@ describe('cycledTool', () => {
     });
   });
 
-  it('cycles a family drawn in runs between its styles only', () => {
-    const hedge = { kind: 'object', id: 'hedge', style: 'hedge-b' } as const;
-    expect(cycledTool(hedge)).toMatchObject({ style: 'hedge' });
-    expect(cycledTool({ ...hedge, style: 'hedge' })).toMatchObject({ style: 'hedge-b' });
+  it('cycles a family drawn in runs through random too', () => {
+    const palm = { kind: 'object', id: 'palm', style: 'palm' } as const;
+    expect(cycledTool(palm)).toMatchObject({ style: 'palm-b' });
+    expect(cycledTool({ ...palm, style: 'palm-b' })).toMatchObject({ style: null });
   });
 
   it('has nothing to cycle for a family of one, terrain, the bulldozer or nothing', () => {
     expect(cycledTool({ kind: 'object', id: 'path', style: null })).toBeNull();
+    expect(cycledTool({ kind: 'object', id: 'hedge', style: null })).toBeNull();
     expect(cycledTool({ kind: 'terrain', brush: 'raise' })).toBeNull();
     expect(cycledTool({ kind: 'remove' })).toBeNull();
     expect(cycledTool(null)).toBeNull();
@@ -176,11 +174,10 @@ describe('styleStripFor', () => {
     expect(strip?.styles.map((type) => type.id)).toEqual(['bakery', 'bakery-b']);
   });
 
-  it('offers random only to a family that is not drawn in runs', () => {
-    expect(styleStripFor({ kind: 'object', id: 'bakery' })?.rolls).toBe(true);
-    expect(styleStripFor({ kind: 'object', id: 'hedge' })?.rolls).toBe(false);
-    expect(rollsStyle('flowerbed')).toBe(false);
-    expect(rollsStyle('hotel')).toBe(true);
+  it('starts only a family drawn in runs on its original', () => {
+    expect(startsOnOriginal('flowerbed')).toBe(true);
+    expect(startsOnOriginal('palm')).toBe(true);
+    expect(startsOnOriginal('hotel')).toBe(false);
   });
 
   it('offers nothing for a family of one, or with no object armed', () => {

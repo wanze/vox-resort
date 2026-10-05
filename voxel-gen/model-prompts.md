@@ -27,7 +27,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | street-lamp    | 1×1       | 16 × 21 × 16   | a 5.25 m lamp post                 |
 | flowerbed      | 1×1       | 16 × 7 × 16    | a 3 m bed on a 4 m tile            |
 | hedge          | 1×1       | 16 × 7 × 16    | a 3 m run, 1.25 m tall             |
-| sun-lounger    | 1×1       | 16 × 8 × 16    | lounger + folded parasol           |
+| sun-lounger    | 1×1       | 16 × 15 × 16   | lounger under an open parasol      |
 | bench          | 1×1       | 16 × 7 × 16    | a 4 m seat for three               |
 | lifeguard-tw.  | 1×1       | 16 × 19 × 16   | a 4.75 m tower, deck 2 m up        |
 | buoy           | —         | 5 × 11 × 5     | a 2.75 m marker, afloat            |

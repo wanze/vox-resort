@@ -53,6 +53,7 @@ function personGeometry(id: string, height: number): ModelGeometry {
     emissive: null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: 8,
     unmergedTriangleCount: 8,
   };
@@ -85,6 +86,7 @@ function meshedPerson(source: VoxelModelSource): ModelGeometry {
     emissive: null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: lit.indices.length / 3,
     unmergedTriangleCount: lit.indices.length / 3,
   };

@@ -1,7 +1,7 @@
 // Merged per colour, as the game's mesher merges, so the triangle count is one the two
 // takes can be compared on.
 
-import type { VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
+import { dayVoxelsOf, type VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import { greedyMesh, quadCorners, quadNormal } from '../../rendering/domain/greedyMesh';
 
@@ -80,9 +80,10 @@ function toSurface(soup: PaintedSoup): SurfaceMesh | null {
 }
 
 export function meshVoxelModel(model: VoxelModel): VoxelMesh {
-  const filled = new Set(model.voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
+  const voxels = dayVoxelsOf(model);
+  const filled = new Set(voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
   const byColor = new Map<number, Soup>();
-  for (const voxel of model.voxels) {
+  for (const voxel of voxels) {
     for (const side of SIDES) {
       if (filled.has(`${voxel.x + side[0]},${voxel.y + side[1]},${voxel.z + side[2]}`)) continue;
       let soup = byColor.get(voxel.color);

@@ -108,5 +108,6 @@ export function letteringFor(line: SetLine, plate: ModelNameplate): MeshAttribut
     indices,
     triangleCount: quadCount * 2,
     panes: null,
+    furled: null,
   };
 }

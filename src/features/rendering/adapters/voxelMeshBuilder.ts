@@ -9,6 +9,7 @@ export interface ModelGeometry {
   readonly emissive: BufferGeometry | null;
   readonly water: BufferGeometry | null;
   readonly window: BufferGeometry | null;
+  readonly canopy: BufferGeometry | null;
   readonly triangleCount: number;
   readonly unmergedTriangleCount: number;
   readonly coarse?: ModelGeometry | null;
@@ -23,6 +24,9 @@ export function toGeometry(attributes: MeshAttributes): BufferGeometry {
   if (attributes.panes) {
     geometry.setAttribute('pane', new BufferAttribute(attributes.panes, 1));
   }
+  if (attributes.furled) {
+    geometry.setAttribute('furled', new BufferAttribute(attributes.furled, 1));
+  }
   geometry.setIndex(new BufferAttribute(attributes.indices, 1));
   geometry.computeBoundingSphere();
   return geometry;
@@ -35,6 +39,7 @@ function geometryOf(model: ModelAttributes, coarse: ModelGeometry | null): Model
     emissive: model.emissive ? toGeometry(model.emissive) : null,
     water: model.water ? toGeometry(model.water) : null,
     window: model.window ? toGeometry(model.window) : null,
+    canopy: model.canopy ? toGeometry(model.canopy) : null,
     triangleCount: model.triangleCount,
     unmergedTriangleCount: model.unmergedTriangleCount,
     coarse,

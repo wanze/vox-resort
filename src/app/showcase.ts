@@ -451,7 +451,11 @@ import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibili
 import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import type { ScratchLayout } from '../features/voxel-world/domain/modelScratch';
-import { scratchLayoutFor } from '../features/voxel-world/domain/modelScratch';
+import {
+  canopyScratchModelsOf,
+  scratchLayoutFor,
+} from '../features/voxel-world/domain/modelScratch';
+import { furledShareAt } from '../features/rendering/domain/canopyFurl';
 import { coarseScratchModelOf } from '../features/voxel-world/domain/coarseVoxels';
 import { DEFAULT_WORLD_SCALE, sectionSizeOf } from '../features/voxel-world/adapters/dveEngine';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
@@ -911,7 +915,11 @@ function trackStartupFrames(): StartupTracker {
 
 function scratchForModels(): ScratchLayout {
   const scratch = scratchLayoutFor(
-    [...PAINTED_MODELS, ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model))],
+    [
+      ...PAINTED_MODELS,
+      ...PAINTED_MODELS.flatMap(canopyScratchModelsOf),
+      ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model)),
+    ],
     (color) => voxelIdFor(materialKeyFor(color)),
     sectionSizeOf(DEFAULT_WORLD_SCALE),
   );
@@ -3360,6 +3368,8 @@ function createClock(
     handle.applySky(sky);
     resort().lighting.volume?.setLampFactor(sky.lampFactor);
     resort().world.setLampFactor(sky.lampFactor);
+    resort().world.setFurledShare(furledShareAt(time));
+    resort().world.setWet(isWet(weatherNow()));
     resort().shadows.applySky(sky);
     // The pools use the sea's shader, so they need the sky too.
     resort().world.setSky(sky.skyColor);
@@ -3986,6 +3996,7 @@ function disposeCatalogue(catalogue: MeshedCatalogue): void {
         copy?.emissive?.dispose();
         copy?.water?.dispose();
         copy?.window?.dispose();
+        copy?.canopy?.dispose();
       }
     }
   }

@@ -9,7 +9,6 @@ import palm from './palm.ts';
 import poolsideBar from './poolside-bar.ts';
 import snackBar from './snack-bar.ts';
 import villa from './villa.ts';
-import hedge from './hedge.ts';
 import streetLamp from './street-lamp.ts';
 import litterBin from './litter-bin.ts';
 import signPost from './sign-post.ts';
@@ -24,7 +23,6 @@ import statue from './statue.ts';
 import sunLounger from './sun-lounger.ts';
 import bench from './bench.ts';
 import picnicTable from './picnic-table.ts';
-import beachUmbrella from './beach-umbrella.ts';
 import tikitorch from './tikitorch.ts';
 import beachShower from './beach-shower.ts';
 import lifeguardTower from './lifeguard-tower.ts';
@@ -69,7 +67,6 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'bungalow', source: bungalow },
   { of: 'cottage', source: cottage },
   { of: 'villa', source: villa },
-  { of: 'hedge', source: hedge },
   { of: 'street-lamp', source: streetLamp },
   { of: 'litter-bin', source: litterBin },
   { of: 'sign-post', source: signPost },
@@ -84,7 +81,6 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'sun-lounger', source: sunLounger },
   { of: 'bench', source: bench },
   { of: 'picnic-table', source: picnicTable },
-  { of: 'beach-umbrella', source: beachUmbrella },
   { of: 'tikitorch', source: tikitorch },
   { of: 'beach-shower', source: beachShower },
   { of: 'lifeguard-tower', source: lifeguardTower },

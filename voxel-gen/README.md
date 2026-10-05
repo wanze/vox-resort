@@ -92,8 +92,8 @@ street.
 `variants/` holds other styles of catalogue models, each naming the original it
 belongs with (`VARIANTS` in `variants/index.ts`). An original and its variants
 are a _family_. Variants are in the game: the player picks a style in the build
-palette (or lets it roll, except for 1 × 1 models drawn in runs, such as hedges
-and lamps), and generated resorts style their neighbourhoods.
+palette or lets it roll (1 × 1 models drawn in runs, such as palms and lamps,
+start on the original), and generated resorts style their neighbourhoods.
 
 A new variant is one entry in `VARIANTS`, and nothing in `src/` changes. It must
 pass the family contract in `variants.test.ts`: the same tiles, category,
@@ -133,6 +133,23 @@ export default defineModel({
 - `water` faces ripple and reflect like the sea. Paint them in one flat tone.
 
 Positions are in model coordinates, so they follow the object when it's placed.
+
+## Canopies
+
+```ts
+export default defineModel({
+  id: 'my-parasol',
+  // ...
+  canopy: { open: paintOpen, furled: paintFurled },
+  build: paintPole,
+});
+```
+
+`canopy` paints two states of a parasol apart from the model. By day `open` is
+drawn; in the evening, through the night and all day in rain or storm, `furled`
+takes its place. Each state is meshed on its own, so it may touch the model (a furled
+canopy hugging its pole) but must not fill a voxel the model fills. Previews
+and the compare page show it open.
 
 ## Seats
 

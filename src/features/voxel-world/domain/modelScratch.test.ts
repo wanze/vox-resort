@@ -1,6 +1,11 @@
 import type { PaintedVoxel } from '../../../../voxel-gen/voxelgen.ts';
 import { describe, expect, it } from 'vitest';
-import { regionOwning, scratchLayoutFor, type ScratchModel } from './modelScratch';
+import {
+  canopyScratchModelsOf,
+  regionOwning,
+  scratchLayoutFor,
+  type ScratchModel,
+} from './modelScratch';
 
 const SECTION = { x: 16, y: 16, z: 16 };
 const voxelIdOf = (color: number): string => `vox_${color}`;
@@ -163,5 +168,41 @@ describe('regionOwning', () => {
 
   it('finds nothing in the padding between two models', () => {
     expect(regionOwning(regions, 16)).toBeUndefined();
+  });
+});
+
+const voxel = (x: number): PaintedVoxel => ({ x, y: 0, z: 0, color: 0x112233 });
+
+describe('canopyScratchModelsOf', () => {
+  const canopy = { open: [voxel(1), voxel(2)], furled: [voxel(3)] };
+
+  it('gives each canopy state a strip of its own, owned by the model', () => {
+    const strips = canopyScratchModelsOf({ id: 'lounger', width: 13, canopy });
+    expect(strips).toEqual([
+      {
+        id: 'lounger~open',
+        width: 13,
+        voxels: canopy.open,
+        source: 'lounger',
+        canopyState: 'open',
+      },
+      {
+        id: 'lounger~furled',
+        width: 13,
+        voxels: canopy.furled,
+        source: 'lounger',
+        canopyState: 'furled',
+      },
+    ]);
+  });
+
+  it('carries the state onto the region, so meshing can tell the strips apart', () => {
+    const strips = canopyScratchModelsOf({ id: 'lounger', width: 13, canopy });
+    const { regions } = scratchLayoutFor(strips, voxelIdOf, SECTION);
+    expect(regions.map((region) => region.canopyState)).toEqual(['open', 'furled']);
+  });
+
+  it('has nothing to add for a model without a canopy', () => {
+    expect(canopyScratchModelsOf({ id: 'bench', width: 16, canopy: null })).toEqual([]);
   });
 });

@@ -607,6 +607,10 @@ router's list only (`withBeach`, last), so the showcase keeps that list as
 - Guests without a reachable bed wander all night.
 - Lit windows at night follow the resort-wide share of beds in use
   (`0.5 * asleep / beds`), not per building.
+- Parasols furl one by one between 18:30 and 20:00 and open again between 07:30
+  and 09:00 (`canopyFurl.ts`), by the clock rather than by who is asleep: guests
+  reach their beds after sunset, too dark to watch. Rain and storm furl them all
+  day.
 
 ## Weather
 

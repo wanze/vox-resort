@@ -19,6 +19,7 @@ function model(id: string, triangles: number, glowing = false): ModelGeometry {
     emissive: glowing ? geometryOf(2) : null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: triangles + (glowing ? 2 : 0),
     unmergedTriangleCount: triangles,
   };

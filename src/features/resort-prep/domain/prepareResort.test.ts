@@ -133,7 +133,7 @@ describe('styleOfFor', () => {
       const styleOf = styleOfFor(asked, RESORT_PLAN);
       let variants = 0;
       for (let x = 0; x < 16; x++) {
-        for (let z = 0; z < 16; z++) if (styleOf('hedge', x, z) !== 'hedge') variants++;
+        for (let z = 0; z < 16; z++) if (styleOf('palm', x, z) !== 'palm') variants++;
       }
       return Math.min(variants, 256 - variants) / 256;
     };

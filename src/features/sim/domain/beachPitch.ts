@@ -59,8 +59,8 @@ const NEIGHBOURS = [
   [-1, 0],
 ] as const;
 
-// The whole square of nine, not the four neighbours: the beach is laid lounger,
-// parasol, lounger, so direct neighbours alone seat almost nobody.
+// The whole square of nine, not the four neighbours: the beach lays a lounger in
+// every other column, so direct neighbours alone seat almost nobody.
 const AROUND = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dz) => [dx, dz] as const));
 
 const TIER = { loungers: 0, someLoungers: 1, sand: 2, atTheGate: 3 } as const;

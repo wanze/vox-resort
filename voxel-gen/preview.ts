@@ -15,8 +15,10 @@ import { TOOL_SOURCES } from './tools/index.ts';
 import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
 import {
   buildModel,
+  dayVoxelsOf,
   TILE_VOXELS,
   type Color,
+  type ModelCanopy,
   type PaintedVoxel,
   type VoxelModel,
   type VoxelModelSource,
@@ -101,7 +103,11 @@ const FACES: readonly Face[] = [
 
 const hexRgb = (hex: Color): Vec3 => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
 
-function buildTriangles({ voxels, scale = 1 }: Pick<VoxelModel, 'voxels' | 'scale'>): Triangle[] {
+function buildTriangles(
+  model: Pick<VoxelModel, 'voxels' | 'scale'> & { readonly canopy?: ModelCanopy | null },
+): Triangle[] {
+  const { scale = 1 } = model;
+  const voxels = dayVoxelsOf(model);
   const filled = new Set(voxels.map((voxel) => `${voxel.x},${voxel.y},${voxel.z}`));
   const triangles: Triangle[] = [];
   for (const voxel of voxels) {
@@ -339,7 +345,7 @@ const LINEUP_ROW = 420;
 const LINEUP_GAP = 14;
 
 const shifted = (from: VoxelModel, dx: number, dz: number): PaintedVoxel[] =>
-  from.voxels.map((voxel) => ({ ...voxel, x: voxel.x + dx, z: voxel.z + dz }));
+  dayVoxelsOf(from).map((voxel) => ({ ...voxel, x: voxel.x + dx, z: voxel.z + dz }));
 
 function lineupOrigins(models: readonly VoxelModel[]): (readonly [number, number])[] {
   const origins: (readonly [number, number])[] = [];

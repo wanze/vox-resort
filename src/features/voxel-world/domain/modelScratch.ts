@@ -1,5 +1,7 @@
-import type { PaintedVoxel } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelCanopy, PaintedVoxel } from '../../../../voxel-gen/voxelgen.ts';
 import type { VolumeSize } from './sectionGrid';
+
+export type CanopyState = 'open' | 'furled';
 
 export interface ScratchModel {
   readonly id: string;
@@ -7,6 +9,7 @@ export interface ScratchModel {
   readonly voxels: readonly PaintedVoxel[];
   readonly scale?: number;
   readonly source?: string;
+  readonly canopyState?: CanopyState;
 }
 
 export interface ScratchRegion {
@@ -15,6 +18,7 @@ export interface ScratchRegion {
   readonly endX: number;
   readonly scale?: number;
   readonly source?: string;
+  readonly canopyState?: CanopyState;
 }
 
 // Packed into typed arrays so ~750k writes transfer to the worker instead of being
@@ -76,6 +80,7 @@ export function scratchLayoutFor(
       endX: cursor + span,
       ...(model.scale === undefined ? {} : { scale: model.scale }),
       ...(model.source === undefined ? {} : { source: model.source }),
+      ...(model.canopyState === undefined ? {} : { canopyState: model.canopyState }),
     });
     for (const voxel of model.voxels) {
       positions[write * 3] = cursor + voxel.x;
@@ -95,4 +100,22 @@ export function regionOwning(
   originX: number,
 ): ScratchRegion | undefined {
   return regions.find((region) => originX >= region.x && originX < region.endX);
+}
+
+// Each state in a strip of its own: meshed with the model, the faces where a canopy touches the
+// pole would be culled, and hiding it would show the pole hollow.
+export function canopyScratchModelsOf(model: {
+  readonly id: string;
+  readonly width: number;
+  readonly canopy: ModelCanopy | null;
+}): ScratchModel[] {
+  const { canopy } = model;
+  if (!canopy) return [];
+  return (['open', 'furled'] as const).map((state) => ({
+    id: `${model.id}~${state}`,
+    width: model.width,
+    voxels: canopy[state],
+    source: model.id,
+    canopyState: state,
+  }));
 }

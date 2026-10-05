@@ -24,7 +24,6 @@ const venues = SOURCES.filter((source) => source.venue !== undefined);
 
 // A list rather than a rule, so promoting a model to a venue is a deliberate edit here.
 const NOT_VENUES: ReadonlySet<string> = new Set([
-  'beach-umbrella',
   'bench',
   'blossom',
   'boardwalk',
@@ -67,7 +66,6 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'sun-lounger',
   'tikitorch',
   'willow',
-  'hedge-b',
   'street-lamp-b',
   'litter-bin-b',
   'sign-post-b',
@@ -82,7 +80,6 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'sun-lounger-b',
   'bench-b',
   'picnic-table-b',
-  'beach-umbrella-b',
   'tikitorch-b',
   'lifeguard-tower-b',
   'entrance-b',

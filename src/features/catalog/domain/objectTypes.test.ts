@@ -3,7 +3,7 @@ import { DRAFT_SOURCES } from '../../../../voxel-gen/models/index.ts';
 import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
-import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { allVoxelsOf, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
 import {
   allMaterials,
@@ -195,10 +195,12 @@ describe('emissiveByModelId', () => {
   });
 });
 
+const keyOf = (voxel: { x: number; y: number; z: number }) => `${voxel.x},${voxel.y},${voxel.z}`;
+
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(ORIGINAL_TYPES.length).toBe(94);
-    expect(OBJECT_TYPES.length).toBe(94 + VARIANTS.length);
+    expect(ORIGINAL_TYPES.length).toBe(93);
+    expect(OBJECT_TYPES.length).toBe(93 + VARIANTS.length);
   });
 
   it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {
@@ -215,6 +217,22 @@ describe('OBJECT_TYPES', () => {
     expect(new Set(OBJECT_TYPES.map((type) => type.styleLabel)).size).toBe(OBJECT_TYPES.length);
   });
 
+  it('paints each canopy state beside the model, never into a voxel the model fills', () => {
+    const canopied = OBJECT_TYPES.filter((type) => type.model.canopy !== null);
+    expect(canopied.map((type) => type.id)).toContain('sun-lounger');
+    for (const { id, model } of canopied) {
+      const filled = new Set(model.voxels.map(keyOf));
+      for (const state of ['open', 'furled'] as const) {
+        const painted = model.canopy![state];
+        expect(painted.length, `${id} ${state}`).toBeGreaterThan(0);
+        expect(
+          painted.filter((voxel) => filled.has(keyOf(voxel))),
+          `${id} ${state}`,
+        ).toEqual([]);
+      }
+    }
+  });
+
   it('starts every model at its own corner', () => {
     // Reduced rather than spread: hundreds of thousands of Math.min arguments overflow the stack.
     for (const type of OBJECT_TYPES) {
@@ -222,7 +240,7 @@ describe('OBJECT_TYPES', () => {
       expect(model.voxels.length).toBeGreaterThan(0);
       const lo = { x: Infinity, y: Infinity, z: Infinity };
       const hi = { x: -Infinity, y: -Infinity, z: -Infinity };
-      for (const voxel of model.voxels) {
+      for (const voxel of allVoxelsOf(model)) {
         for (const axis of ['x', 'y', 'z'] as const) {
           lo[axis] = Math.min(lo[axis], voxel[axis]);
           hi[axis] = Math.max(hi[axis], voxel[axis]);
@@ -388,7 +406,7 @@ describe('objectTypeGroups', () => {
 describe('materials', () => {
   it('registers one material per distinct colour the app paints with', () => {
     const colors = new Set(
-      PAINTED_MODELS.flatMap((model) => model.voxels.map((voxel) => voxel.color)),
+      PAINTED_MODELS.flatMap((model) => allVoxelsOf(model).map((voxel) => voxel.color)),
     );
     expect(allMaterials()).toHaveLength(colors.size);
     expect(new Set(allMaterials().map((material) => material.key)).size).toBe(colors.size);

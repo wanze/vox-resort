@@ -16,6 +16,8 @@ export interface MeshAttributes {
   readonly indices: Uint32Array | Uint16Array;
   readonly triangleCount: number;
   readonly panes: Float32Array | null;
+  // 1 on the furled canopy's vertices, 0 on the open one's; only the canopy surface has it.
+  readonly furled: Float32Array | null;
 }
 
 // Hashed from the pane position, not counted, so an edit does not renumber every window
@@ -30,8 +32,9 @@ export function paneSeed(x: number, y: number, z: number): number {
   return (hash >>> 0) / 4294967296;
 }
 
-// Split by colour here, where it is free, so the whole scene shares four materials.
-type SurfaceKind = 'lit' | 'emissive' | 'water' | 'window';
+// Split by colour here, where it is free, so the whole scene shares a handful of materials.
+// The canopy is split by region instead: its two states are meshed apart from the model.
+type SurfaceKind = 'lit' | 'emissive' | 'water' | 'window' | 'canopy';
 
 export interface ModelAttributes {
   readonly id: string;
@@ -39,6 +42,7 @@ export interface ModelAttributes {
   readonly emissive: MeshAttributes | null;
   readonly water: MeshAttributes | null;
   readonly window: MeshAttributes | null;
+  readonly canopy: MeshAttributes | null;
   readonly triangleCount: number;
   readonly unmergedTriangleCount: number;
 }
@@ -74,11 +78,13 @@ class AttributeBatch {
   private readonly colors: number[] = [];
   private readonly indices: number[] = [];
   private readonly panes: number[] | null;
+  private readonly furled: number[] | null;
   private vertexCount = 0;
   private sourceTriangles = 0;
 
-  constructor(tracksPanes: boolean) {
-    this.panes = tracksPanes ? [] : null;
+  constructor(tracks: 'panes' | 'furled' | null = null) {
+    this.panes = tracks === 'panes' ? [] : null;
+    this.furled = tracks === 'furled' ? [] : null;
   }
 
   get triangleCount(): number {
@@ -100,6 +106,7 @@ class AttributeBatch {
     offset: { x: number; y: number; z: number },
     color: readonly [number, number, number],
     scale: number,
+    furled = 0,
   ): void {
     const merged = greedyMesh({ positions, normals, indices: section.indices });
     this.sourceTriangles += merged.sourceTriangleCount;
@@ -117,6 +124,7 @@ class AttributeBatch {
         this.normals.push(nx, ny, nz);
         this.colors.push(color[0], color[1], color[2]);
         this.panes?.push(seed);
+        this.furled?.push(furled);
       }
       this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
       this.vertexCount += 4;
@@ -144,6 +152,7 @@ class AttributeBatch {
             positions[vertex * 3 + 2]! + offset.z,
           ),
         );
+        this.furled?.push(furled);
       }
       this.indices.push(base, base + 1, base + 2);
       this.vertexCount += 3;
@@ -160,6 +169,7 @@ class AttributeBatch {
       indices: needsThirtyTwoBitIndices(indices) ? indices : Uint16Array.from(indices),
       triangleCount: this.triangleCount,
       panes: this.panes ? Float32Array.from(this.panes) : null,
+      furled: this.furled ? Float32Array.from(this.furled) : null,
     };
   }
 }
@@ -186,11 +196,13 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
 
   const batches = new Map<string, Record<SurfaceKind, AttributeBatch>>();
   for (const region of regions) {
+    if (region.canopyState) continue;
     batches.set(region.id, {
-      lit: new AttributeBatch(false),
-      emissive: new AttributeBatch(false),
-      water: new AttributeBatch(false),
-      window: new AttributeBatch(true),
+      lit: new AttributeBatch(),
+      emissive: new AttributeBatch(),
+      water: new AttributeBatch(),
+      window: new AttributeBatch('panes'),
+      canopy: new AttributeBatch('furled'),
     });
   }
 
@@ -204,7 +216,7 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
   for (const section of sections) {
     const region = regionOwning(regions, section.origin.x);
     if (!region) throw new Error(`Meshed section at x=${section.origin.x} belongs to no model`);
-    const batch = batches.get(region.id)!;
+    const batch = batches.get(region.canopyState ? region.source! : region.id)!;
     const raw = colorsByMaterialId.get(section.materialId) ?? MISSING_COLOR;
     const { positions, normals } = deinterleaveVertices(section.vertices, section.vertexCount);
     const offset = {
@@ -213,25 +225,29 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
       z: section.origin.z,
     };
     // A coarse copy is painted small and grown back here, so it fills the full model's space.
-    batch[kindOf(region.source ?? region.id, raw)].add(
+    batch[region.canopyState ? 'canopy' : kindOf(region.source ?? region.id, raw)].add(
       section,
       positions,
       normals,
       offset,
       colorFor(section.materialId),
       region.scale ?? 1,
+      region.canopyState === 'furled' ? 1 : 0,
     );
   }
 
-  return regions.map((region) => {
-    const { lit, emissive, water, window } = batches.get(region.id)!;
-    const all = [lit, emissive, water, window];
+  return regions.flatMap((region) => {
+    const surfaces = batches.get(region.id);
+    if (!surfaces) return [];
+    const { lit, emissive, water, window, canopy } = surfaces;
+    const all = [lit, emissive, water, window, canopy];
     return {
       id: region.id,
       lit: lit.isEmpty ? null : lit.toAttributes(),
       emissive: emissive.isEmpty ? null : emissive.toAttributes(),
       water: water.isEmpty ? null : water.toAttributes(),
       window: window.isEmpty ? null : window.toAttributes(),
+      canopy: canopy.isEmpty ? null : canopy.toAttributes(),
       triangleCount: all.reduce((total, batch) => total + batch.triangleCount, 0),
       unmergedTriangleCount: all.reduce((total, batch) => total + batch.unmergedTriangleCount, 0),
     };
@@ -241,7 +257,7 @@ export function buildModelAttributes(input: ModelAttributeInput): ModelAttribute
 export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer[] {
   const buffers: ArrayBuffer[] = [];
   for (const model of models) {
-    for (const attributes of [model.lit, model.emissive, model.water, model.window]) {
+    for (const attributes of [model.lit, model.emissive, model.water, model.window, model.canopy]) {
       if (!attributes) continue;
       buffers.push(
         attributes.positions.buffer as ArrayBuffer,
@@ -250,6 +266,7 @@ export function transferablesOf(models: readonly ModelAttributes[]): ArrayBuffer
         attributes.indices.buffer as ArrayBuffer,
       );
       if (attributes.panes) buffers.push(attributes.panes.buffer as ArrayBuffer);
+      if (attributes.furled) buffers.push(attributes.furled.buffer as ArrayBuffer);
     }
   }
   return buffers;

@@ -514,11 +514,11 @@ describe('standsOn', () => {
       isSea: (_x, tileZ) => tileZ >= 5,
       isSand: (_x, tileZ) => tileZ >= 2 && tileZ < 5,
     });
-    const parasol = { ...item('beach-umbrella'), ground: 'beach' as const };
+    const lounger = { ...item('sun-lounger'), ground: 'beach' as const };
     const hut = { ...item('pedalo-rental', 2, 2), ground: 'shore' as const };
-    expect(standsOn(parasol, { x: 0, z: 1 }, beach)).toBe(false);
-    expect(standsOn(parasol, { x: 0, z: 2 }, beach)).toBe(true);
-    expect(standsOn(parasol, { x: 0, z: 5 }, beach)).toBe(false);
+    expect(standsOn(lounger, { x: 0, z: 1 }, beach)).toBe(false);
+    expect(standsOn(lounger, { x: 0, z: 2 }, beach)).toBe(true);
+    expect(standsOn(lounger, { x: 0, z: 5 }, beach)).toBe(false);
     expect(standsOn(hut, { x: 0, z: 2 }, beach)).toBe(true);
     expect(standsOn(hut, { x: 0, z: 4 }, beach)).toBe(true);
     expect(standsOn(COTTAGE, { x: 0, z: 1 }, beach)).toBe(true);

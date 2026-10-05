@@ -258,6 +258,59 @@ describe('buildModelAttributes', () => {
   });
 });
 
+describe('buildModelAttributes with a canopy', () => {
+  const lounger: ScratchRegion[] = [
+    { id: 'lounger', x: 0, endX: 16 },
+    { id: 'lounger~open', x: 32, endX: 48, source: 'lounger', canopyState: 'open' },
+    { id: 'lounger~furled', x: 64, endX: 80, source: 'lounger', canopyState: 'furled' },
+  ];
+  const meshed = () =>
+    buildModelAttributes({
+      sections: [
+        sectionOf('teak', { x: 0, y: 0, z: 0 }, flat(1)),
+        sectionOf('canvas', { x: 32, y: 8, z: 0 }, flat(1)),
+        // A voxel apart, so the merge cannot join them into one quad.
+        sectionOf('canvas', { x: 64, y: 4, z: 0 }, [
+          { axis: 1, slice: 0, u: 0, v: 0 },
+          { axis: 1, slice: 0, u: 2, v: 0 },
+        ]),
+      ],
+      regions: lounger,
+      colorsByMaterialId: new Map([
+        ['teak', 0x8a5a33],
+        ['canvas', 0xf3ece0],
+      ]),
+      emissiveByModelId: new Map(),
+      waterByModelId: new Map(),
+      windowsByModelId: new Map(),
+    });
+
+  it('folds both states into the model they belong to, not into models of their own', () => {
+    const models = meshed();
+    expect(models.map((model) => model.id)).toEqual(['lounger']);
+    expect(models[0]!.lit!.triangleCount).toBe(2);
+    expect(models[0]!.canopy!.triangleCount).toBe(6);
+    expect(models[0]!.triangleCount).toBe(8);
+  });
+
+  it('marks each canopy vertex with the state it is drawn in', () => {
+    const { canopy, lit } = meshed()[0]!;
+    expect(lit!.furled).toBeNull();
+    expect([...canopy!.furled!]).toEqual([0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it('rebases each state onto its own strip, so both stand where the model does', () => {
+    const { canopy } = meshed()[0]!;
+    expect(Array.from(canopy!.positions.slice(0, 3))).toEqual([0, 8, 0]);
+    expect(Array.from(canopy!.positions.slice(12, 15))).toEqual([0, 4, 0]);
+  });
+
+  it('hands the furled marks over with the canopy geometry', () => {
+    const models = meshed();
+    expect(transferablesOf(models)).toContain(models[0]!.canopy!.furled!.buffer);
+  });
+});
+
 describe('transferablesOf', () => {
   it('lists every buffer a worker would hand over', () => {
     const models = buildModelAttributes({

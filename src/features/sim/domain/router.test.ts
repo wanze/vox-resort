@@ -2780,13 +2780,15 @@ describe('on the generated plot', () => {
     };
 
     live.runTo(15 * 60);
-    const cleaning = () => {
-      const { working } = live.snapshot().staff;
-      return role.some((kind, worker) => kind === 'cleaner' && working[worker] === 1);
+    const working = (wanted: string) => {
+      const { working: on } = live.snapshot().staff;
+      return role.some((kind, worker) => kind === wanted && on[worker] === 1);
     };
-    // On to the next tick with a line somewhere and a cleaner at work, or the snapshot would not
-    // prove queues and cleaning survive.
-    while ((live.router.occupancyTotals.waiting === 0 || !cleaning()) && live.ticks < 17 * 60) {
+    // On to the next tick with a line somewhere, a cleaner at work and a show on, or the snapshot
+    // would not prove queues, cleaning and shows survive.
+    const ready = () =>
+      live.router.occupancyTotals.waiting > 0 && working('cleaner') && working('animator');
+    while (!ready() && live.ticks < 17 * 60) {
       live.runTo(live.ticks + 1);
     }
     const afternoon = live.snapshot();
@@ -3127,11 +3129,11 @@ describe('on the generated plot', () => {
     ].join('\n');
     console.log(report);
 
-    // The first day may pass quietly: wear builds with visits, and the beach takes a day's crowd.
-    for (const [day, count] of brokeOn.entries()) {
-      if (day > 0) expect(count, report).toBeGreaterThanOrEqual(1);
-      expect(count, report).toBeLessThanOrEqual(6);
-    }
+    // One day may pass quietly: wear builds with visits, and which day that is moves with the plot.
+    for (const count of brokeOn) expect(count, report).toBeLessThanOrEqual(6);
+    expect(brokeOn.filter((count) => count > 0).length, report).toBeGreaterThanOrEqual(
+      brokeOn.length - 1,
+    );
     expect(
       brokeOn.reduce((sum, count) => sum + count, 0),
       report,

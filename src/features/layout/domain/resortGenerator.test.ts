@@ -354,19 +354,19 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('fills the sand with loungers, parasols and a club to walk to', () => {
+  it('fills the sand with loungers and a club to walk to', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
     const shore = shoreFor(plan)!;
     const onSand = plan.plots.filter(
       (plot) => terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
     );
     expect(onSand.length).toBeGreaterThan(100);
-    for (const id of ['sun-lounger', 'beach-umbrella', 'beach-club', 'poolside-bar']) {
+    for (const id of ['sun-lounger', 'beach-club', 'poolside-bar']) {
       expect({ id, stood: onSand.some((plot) => plot.id === id) }).toEqual({ id, stood: true });
     }
   });
 
-  it('lays the loungers and the parasols out in three lines along the water', () => {
+  it('lays the loungers out in three lines along the water', () => {
     for (const set of SWEEP) {
       const plan = planOf(set);
       const shore = shoreFor(plan)!;
@@ -374,8 +374,7 @@ describe('the shore a generated plot gets', () => {
         plan.plots
           .filter(
             (plot) =>
-              (plot.id === 'sun-lounger' || plot.id === 'beach-umbrella') &&
-              terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
+              plot.id === 'sun-lounger' && terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
           )
           .map((plot) => beachDepthAt(shore, plot.tileX, plot.tileZ)),
       );
@@ -613,31 +612,23 @@ describe('the shore a generated plot gets', () => {
     }
   });
 
-  it('lays the loungers and parasols out as a grid, a parasol behind a parasol', () => {
+  it('lays the loungers out as a grid, a lounger behind a lounger', () => {
     const plan = generateResort(TYPES, params({ tilesX: 112, tilesZ: 100 }));
-    const rows = plan.plots.filter((plot) => plot.id === 'beach-umbrella').map((p) => p.tileZ);
+    const shore = shoreFor(plan)!;
     // The beach rows only: a pool's loungers stand inland in whatever column the pool left them.
-    const onBeach = (tileZ: number) =>
-      tileZ >= Math.min(...rows) - 1 && tileZ <= Math.max(...rows) + 1;
-    const columns = (id: string) =>
-      new Set(
-        plan.plots
-          .filter((plot) => plot.id === id && onBeach(plot.tileZ))
-          .map((plot) => plot.tileX),
-      );
-    const parasols = columns('beach-umbrella');
-    const loungers = columns('sun-lounger');
-    expect(parasols.size).toBeGreaterThan(3);
-    for (const x of parasols) {
-      expect({ x, flanked: loungers.has(x - 1) && loungers.has(x + 1) }).toEqual({
-        x,
-        flanked: true,
-      });
-      expect({ x, inLounger: loungers.has(x) }).toEqual({ x, inLounger: false });
+    const loungers = plan.plots.filter(
+      (plot) => plot.id === 'sun-lounger' && terrainAt(shore, plot.tileX, plot.tileZ) === 'beach',
+    );
+    const lines = Map.groupBy(loungers, (plot) => beachDepthAt(shore, plot.tileX, plot.tileZ));
+    const columns = [...lines.values()].map((line) => new Set(line.map((plot) => plot.tileX)));
+    const all = new Set(loungers.map((plot) => plot.tileX));
+    expect(all.size).toBeGreaterThan(3);
+    for (const x of all) {
+      const behind = columns.filter((line) => line.has(x)).length;
+      expect({ x, behind }).toEqual({ x, behind: columns.length });
+      expect({ x, alone: !all.has(x - 1) && !all.has(x + 1) }).toEqual({ x, alone: true });
     }
-    for (const plot of plan.plots.filter((p) => p.id === 'beach-umbrella')) {
-      expect(plot.rotation).toBe(0);
-    }
+    for (const plot of loungers) expect(plot.rotation).toBe(0);
   });
 
   it('lays no flight anywhere on the beach but the row it climbs off', () => {
@@ -1110,8 +1101,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 699440517],
-      [7, 3218300897],
+      [1, 4125744109],
+      [7, 1030147952],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

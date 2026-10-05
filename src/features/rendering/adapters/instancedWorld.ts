@@ -18,11 +18,13 @@ import {
   type NodeMaterial,
 } from 'three/webgpu';
 import {
+  abs,
   attribute,
   float,
   fract,
   instanceIndex,
   mat4,
+  max,
   positionLocal,
   sin,
   smoothstep,
@@ -73,6 +75,8 @@ export interface InstancedWorld {
   setSky(sky: number): void;
   setLampFactor(factor: number): void;
   setOccupiedShare(share: number): void;
+  setFurledShare(share: number): void;
+  setWet(wet: boolean): void;
   add(placement: Placement): void;
   remove(key: string): boolean;
   setPlacements(placements: readonly Placement[]): void;
@@ -156,6 +160,39 @@ function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
   };
 }
 
+// Above zero: step() at an edge of exactly 0 would furl a parasol at noon.
+const FURL_EDGE = { min: 0.02, spread: 0.96 } as const;
+
+interface CanopyMaterial {
+  readonly material: MeshStandardNodeMaterial;
+  setFurledShare(share: number): void;
+  setWet(wet: boolean): void;
+}
+
+// Both states are in one geometry and the mask keeps one: no remesh and no extra bucket when
+// the beach closes. Each parasol furls at its own share, so they go one by one.
+function canopyMaterial(volume: BakedLightVolume | null): CanopyMaterial {
+  const share = uniform(0);
+  const wet = uniform(0);
+  const material = litMaterial(volume);
+
+  const parasol = fract(float(instanceIndex).mul(0.6180339887));
+  const edge = hashOf(parasol.mul(12.9898).add(78.233)).mul(FURL_EDGE.spread).add(FURL_EDGE.min);
+  const furledNow = vertexStage(max(wet, step(edge, share)));
+  const furled = attribute<'float'>('furled', 'float');
+  material.maskNode = abs(furled.sub(furledNow)).lessThan(0.5);
+
+  return {
+    material,
+    setFurledShare(value) {
+      share.value = Math.min(1, Math.max(0, value));
+    },
+    setWet(isWet) {
+      wet.value = isWet ? 1 : 0;
+    },
+  };
+}
+
 export function instancesByType(
   placements: readonly Placement[],
 ): ReadonlyMap<string, readonly Placement[]> {
@@ -171,7 +208,7 @@ export function instancesByType(
   return byType;
 }
 
-type MaterialKind = 'lit' | 'glow' | 'water' | 'window';
+type MaterialKind = 'lit' | 'glow' | 'water' | 'window' | 'canopy';
 
 interface ModelPart {
   readonly kind: MaterialKind;
@@ -373,7 +410,7 @@ function dropInstance(bucket: Bucket, key: string, live: ReadonlyMap<string, Pla
 
 function extentOf(model: ModelGeometry): number {
   let extent = 0;
-  for (const geometry of [model.lit, model.emissive, model.water, model.window]) {
+  for (const geometry of [model.lit, model.emissive, model.water, model.window, model.canopy]) {
     if (!geometry) continue;
     if (!geometry.boundingBox) geometry.computeBoundingBox();
     const box = geometry.boundingBox!;
@@ -387,6 +424,7 @@ const SURFACES = [
   ['glow', 'emissive'],
   ['water', 'water'],
   ['window', 'window'],
+  ['canopy', 'canopy'],
 ] as const;
 
 const trianglesIn = (geometry: BufferGeometry): number => (geometry.getIndex()?.count ?? 0) / 3;
@@ -404,7 +442,8 @@ function modelPartsFor(
     parts.push({
       kind,
       geometry,
-      far: coarse ? coarse[surface] : geometry,
+      // A canopy is never coarsened: it is a few dozen quads, and the coarse copy has no states.
+      far: coarse && surface !== 'canopy' ? coarse[surface] : geometry,
       material: materials[kind],
       triangles: trianglesIn(geometry),
       extent,
@@ -452,7 +491,8 @@ export function buildInstancedWorld(
   const glow = glowMaterial();
   const poolWater = createPoolWaterMaterial(options.lightVolume ?? null);
   const windows = windowMaterial(options.lightVolume ?? null);
-  for (const material of [lit, glow, poolWater.material, windows.material]) {
+  const canopies = canopyMaterial(options.lightVolume ?? null);
+  for (const material of [lit, glow, poolWater.material, windows.material, canopies.material]) {
     standOnInstances(material);
   }
   const chunkVoxels = options.chunkVoxels ?? CHUNK_VOXELS;
@@ -463,6 +503,7 @@ export function buildInstancedWorld(
     glow,
     water: poolWater.material,
     window: windows.material,
+    canopy: canopies.material,
   };
   const partsById = new Map<string, readonly ModelPart[]>(
     geometries.map((model) => [model.id, modelPartsFor(model, materials)]),
@@ -758,6 +799,12 @@ export function buildInstancedWorld(
     setOccupiedShare(share) {
       windows.setOccupiedShare(share);
     },
+    setFurledShare(share) {
+      canopies.setFurledShare(share);
+    },
+    setWet(wet) {
+      canopies.setWet(wet);
+    },
     add,
     remove,
     setPlacements(next) {
@@ -780,6 +827,7 @@ export function buildInstancedWorld(
       glow.dispose();
       poolWater.dispose();
       windows.material.dispose();
+      canopies.material.dispose();
       // The geometries belong to the meshed catalogue and are shared with the world that
       // replaces this one; the showcase frees them.
     },

@@ -259,7 +259,7 @@ export const RESORT_PLAN: ResortPlan = {
     at('changing-cabins', 38, 14),
     at('beach-shower', 40, 14),
     ...row('sun-lounger', 30, 18, 4, 1),
-    ...row('beach-umbrella', 34, 18, 2, 2),
+    ...row('sun-lounger', 34, 18, 2, 2),
     at('willow', 39, 17),
     at('beach-club', 30, 20),
     at('resort-bar', 37, 20),

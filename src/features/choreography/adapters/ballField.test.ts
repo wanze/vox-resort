@@ -25,6 +25,7 @@ function ballGeometry(id: string, size: number): ModelGeometry {
     emissive: null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: 12,
     unmergedTriangleCount: 12,
   };

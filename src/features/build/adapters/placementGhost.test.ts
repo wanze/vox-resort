@@ -18,6 +18,7 @@ function model(id: string, lit: BufferGeometry | null): ModelGeometry {
     emissive: null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: 1,
     unmergedTriangleCount: 2,
   };

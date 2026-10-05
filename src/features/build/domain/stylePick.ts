@@ -11,7 +11,6 @@ export interface StyleStrip {
   readonly family: string;
   readonly pick: StylePick;
   readonly styles: readonly ObjectTypeDefinition[];
-  readonly rolls: boolean;
 }
 
 export interface ArmedWithMemory {
@@ -31,22 +30,21 @@ export function resolveStyle(
   return rolled;
 }
 
-// A family drawn in runs never rolls: a hedge or a row of lamps reads as one piece.
-export function rollsStyle(family: string): boolean {
+// A family drawn in runs starts on its original: a row of lamps reads as one piece unless the
+// player asks for a mix.
+export function startsOnOriginal(family: string): boolean {
   const original = stylesOf(family)[0];
-  return original !== undefined && !isPaintable(layoutItemFor(original));
+  return original !== undefined && isPaintable(layoutItemFor(original));
 }
 
 function firstPick(family: string): StylePick {
-  return rollsStyle(family) ? null : (stylesOf(family)[0]?.id ?? null);
+  return startsOnOriginal(family) ? (stylesOf(family)[0]?.id ?? null) : null;
 }
 
-export function nextPick(styles: readonly string[], pick: StylePick, rolls = true): StylePick {
+export function nextPick(styles: readonly string[], pick: StylePick): StylePick {
   if (styles.length < 2) return null;
   if (pick === null) return styles[0]!;
-  const next = styles[styles.indexOf(pick) + 1];
-  if (next !== undefined) return next;
-  return rolls ? null : styles[0]!;
+  return styles[styles.indexOf(pick) + 1] ?? null;
 }
 
 // Only the style strip and V name a style; a palette tile or command arms the family as it was left,
@@ -57,7 +55,8 @@ export function armWithMemory(
 ): ArmedWithMemory {
   if (next?.kind !== 'object') return { tool: next, memory };
   if (next.style === undefined) {
-    return { tool: { ...next, style: memory.get(next.id) ?? firstPick(next.id) }, memory };
+    const style = memory.has(next.id) ? memory.get(next.id)! : firstPick(next.id);
+    return { tool: { ...next, style }, memory };
   }
   return { tool: next, memory: new Map(memory).set(next.id, next.style) };
 }
@@ -82,14 +81,14 @@ export function styleStripFor(tool: BuildTool | null): StyleStrip | null {
   if (tool?.kind !== 'object') return null;
   const styles = stylesOf(tool.id);
   if (styles.length < 2) return null;
-  return { family: tool.id, pick: tool.style ?? null, styles, rolls: rollsStyle(tool.id) };
+  return { family: tool.id, pick: tool.style ?? null, styles };
 }
 
 export function cycledTool(tool: BuildTool | null): BuildTool | null {
   const strip = styleStripFor(tool);
   if (!strip) return null;
   const styles = strip.styles.map((type) => type.id);
-  return { kind: 'object', id: strip.family, style: nextPick(styles, strip.pick, strip.rolls) };
+  return { kind: 'object', id: strip.family, style: nextPick(styles, strip.pick) };
 }
 
 export function styleLetter(index: number): string {

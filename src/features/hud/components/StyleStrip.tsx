@@ -35,7 +35,7 @@ function RandomTile({
 export function StyleStrip({ strip, preview, onStyle }: StyleStripProps) {
   return (
     <div className="hud-palette-styles" role="group" aria-label="Style">
-      {strip.rolls ? <RandomTile pressed={strip.pick === null} onStyle={onStyle} /> : null}
+      <RandomTile pressed={strip.pick === null} onStyle={onStyle} />
       {strip.styles.map((type, index) => (
         <button
           key={type.id}

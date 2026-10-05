@@ -48,6 +48,7 @@ function personGeometry(id: string, height: number): ModelGeometry {
     emissive: null,
     water: null,
     window: null,
+    canopy: null,
     triangleCount: 8,
     unmergedTriangleCount: 8,
   };

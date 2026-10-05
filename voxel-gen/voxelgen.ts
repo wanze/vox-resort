@@ -373,6 +373,12 @@ export interface VoxelModelSource {
   // Declared rather than inferred from the palette: lanterns and shelters are
   // glass too but have no room behind them.
   readonly windows?: readonly Color[];
+  // Painted apart from the model and meshed on their own, so hiding one leaves no hole in what it
+  // touches: open while guests are up, furled at bedtime and in the rain.
+  readonly canopy?: {
+    readonly open: (builder: VoxelBuilder) => void;
+    readonly furled: (builder: VoxelBuilder) => void;
+  };
   readonly lights?: readonly ModelLight[];
   readonly seats?: readonly ModelSeat[];
   readonly placement?: ModelPlacement;
@@ -389,6 +395,11 @@ export interface PaintedVoxel {
   readonly y: number;
   readonly z: number;
   readonly color: Color;
+}
+
+export interface ModelCanopy {
+  readonly open: readonly PaintedVoxel[];
+  readonly furled: readonly PaintedVoxel[];
 }
 
 export interface VoxelModel {
@@ -411,6 +422,7 @@ export interface VoxelModel {
   readonly emissive: readonly Color[];
   readonly water: readonly Color[];
   readonly windows: readonly Color[];
+  readonly canopy: ModelCanopy | null;
   readonly lights: readonly ModelLight[];
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
   readonly placement: ModelPlacement;
@@ -552,21 +564,28 @@ function defaultsOf(source: VoxelModelSource) {
   };
 }
 
-export function buildModel(source: VoxelModelSource): VoxelModel {
+const paintedBy = (build: (builder: VoxelBuilder) => void): PaintedVoxel[] => {
   const builder = new VoxelBuilder();
-  source.build(builder);
-  if (builder.voxels.size === 0) throw new Error(`Model "${source.id}" painted no voxels`);
+  build(builder);
+  return [...builder.voxels].map(([key, color]) => {
+    const [x, y, z] = key.split(',').map(Number) as [number, number, number];
+    return { x, y, z, color };
+  });
+};
 
-  const painted: PaintedVoxel[] = [];
+export function buildModel(source: VoxelModelSource): VoxelModel {
+  const painted = paintedBy(source.build);
+  if (painted.length === 0) throw new Error(`Model "${source.id}" painted no voxels`);
+  const open = source.canopy ? paintedBy(source.canopy.open) : [];
+  const furled = source.canopy ? paintedBy(source.canopy.furled) : [];
+
   let minX = Infinity;
   let minY = Infinity;
   let minZ = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   let maxZ = -Infinity;
-  for (const [key, color] of builder.voxels) {
-    const [x, y, z] = key.split(',').map(Number) as [number, number, number];
-    painted.push({ x, y, z, color });
+  for (const { x, y, z } of [...painted, ...open, ...furled]) {
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);
     minZ = Math.min(minZ, z);
@@ -575,14 +594,16 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     maxZ = Math.max(maxZ, z);
   }
 
-  const voxels = painted
-    .map((voxel) => ({
-      x: voxel.x - minX,
-      y: voxel.y - minY,
-      z: voxel.z - minZ,
-      color: voxel.color,
-    }))
-    .toSorted((a, b) => a.y - b.y || a.z - b.z || a.x - b.x);
+  const shifted = (voxels: readonly PaintedVoxel[]): PaintedVoxel[] =>
+    voxels
+      .map((voxel) => ({
+        x: voxel.x - minX,
+        y: voxel.y - minY,
+        z: voxel.z - minZ,
+        color: voxel.color,
+      }))
+      .toSorted((a, b) => a.y - b.y || a.z - b.z || a.x - b.x);
+  const voxels = shifted(painted);
 
   return withScale(source, {
     id: source.id,
@@ -597,6 +618,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     emissive: [...new Set(source.emissive ?? [])],
     water: [...new Set(source.water ?? [])],
     windows: [...new Set(source.windows ?? [])],
+    canopy: source.canopy ? { open: shifted(open), furled: shifted(furled) } : null,
     lights: (source.lights ?? []).map((light) => ({
       x: light.x - minX,
       y: light.y - minY,
@@ -614,3 +636,12 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
 
 const withScale = (source: VoxelModelSource, model: VoxelModel): VoxelModel =>
   source.scale === undefined ? model : { ...model, scale: source.scale };
+
+// As it stands by day; the furled canopy is only ever drawn in its place.
+export const dayVoxelsOf = (
+  model: Pick<VoxelModel, 'voxels'> & { readonly canopy?: ModelCanopy | null },
+): readonly PaintedVoxel[] =>
+  model.canopy ? [...model.voxels, ...model.canopy.open] : model.voxels;
+
+export const allVoxelsOf = (model: VoxelModel): readonly PaintedVoxel[] =>
+  model.canopy ? [...model.voxels, ...model.canopy.open, ...model.canopy.furled] : model.voxels;

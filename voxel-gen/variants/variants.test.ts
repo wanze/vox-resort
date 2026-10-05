@@ -91,11 +91,15 @@ describe('VARIANTS', () => {
     for (const { source } of VARIANTS) expect(source.sound, source.id).toBeUndefined();
   });
 
-  it('fills the tiles it claims and no more', () => {
-    for (const { source } of VARIANTS) {
+  // Or spans what its original spans: a lounger on bare sand fills no tile edge to edge.
+  it('fills the tiles it claims and no more, or exactly as much as its original', () => {
+    for (const { of, source } of VARIANTS) {
       const model = buildModel(source);
-      expect(model.width, source.id).toBe(source.tiles.x * TILE_VOXELS);
-      expect(model.depth, source.id).toBe(source.tiles.z * TILE_VOXELS);
+      const original = buildModel(catalogue.get(of)!);
+      const fills = { width: source.tiles.x * TILE_VOXELS, depth: source.tiles.z * TILE_VOXELS };
+      const spans = { width: model.width, depth: model.depth };
+      const matches = spans.width === original.width && spans.depth === original.depth;
+      expect(spans, source.id).toEqual(matches ? spans : fills);
     }
   });
 

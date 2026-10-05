@@ -1,5 +1,32 @@
 /* Only the token block introduces colours, radii and shadows; everything after it spends them. */
 
+/* Scaled here once rather than in every rule: 14px of HUD text is set at the 16px Jersey reads
+   well at, and every size and line height in the sheet keeps its proportions. */
+@font-face {
+  font-family: 'Jersey HUD';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/jersey-15/files/jersey-15-latin-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  size-adjust: 114.286%;
+}
+
+@font-face {
+  font-family: 'Jersey HUD';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/jersey-15/files/jersey-15-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+  size-adjust: 114.286%;
+}
+
 :root {
   color-scheme: light;
 
@@ -70,9 +97,9 @@
   --text-faint: #917e66;
   --text-on-accent: #fff6ea;
 
-  --font-ui: 'Pixelify Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  /* Pixel digits blur into each other at small sizes, so every number gets a plain face. */
-  --font-num: 'Rubik Variable', ui-sans-serif, system-ui, sans-serif;
+  /* One face for words and figures alike: Jersey's digits stay apart even at note size. */
+  --font-ui: 'Jersey HUD', ui-sans-serif, system-ui, sans-serif;
+  --font-title: 'Pixelify Sans Variable', ui-sans-serif, system-ui, sans-serif;
   /* Drawn on an 8px grid, so it stays crisp only at 8 or 16. */
   --font-label: 'Silkscreen', 'Pixelify Sans Variable', ui-monospace, monospace;
   --size-label: 8px;
@@ -87,12 +114,11 @@
   --space-4: 14px;
   --space-5: 20px;
 
-  /* Unequal corners on each axis, so no two edges curve alike and a panel reads as a
-     worn stone rather than a rounded rectangle. */
-  --radius-stone: 22px 28px 18px 26px / 26px 18px 28px 20px;
-  --radius-slab: 16px 20px 13px 18px / 18px 13px 20px 15px;
-  --radius-pebble: 9px 12px 8px 11px / 11px 8px 12px 9px;
-  --radius-pebble-b: 12px 8px 11px 9px / 8px 11px 9px 12px;
+  /* Unequal corners on each axis, so no two edges curve alike and a panel or button reads as
+     a worn stone rather than a rounded rectangle. */
+  --radius-pebble: 12px 8px 11px 9px / 8px 11px 9px 12px;
+  /* The menus' pixel caret, in the dim text brown. */
+  --select-caret: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%236b5a45' d='M0 0h10v2H8v2H6v2H4V4H2V2H0z'/%3E%3C/svg%3E");
   --radius-sm: 4px;
 
   --control-h: 32px;
@@ -374,7 +400,7 @@ input[type='text'] {
   height: var(--control-h);
   padding: 0 var(--space-3);
   border: 1px solid var(--edge);
-  border-radius: var(--radius-pebble-b);
+  border-radius: var(--radius-pebble);
   background-image: var(--sunken);
   box-shadow: var(--bevel-in);
   color: var(--text);
@@ -382,7 +408,7 @@ input[type='text'] {
 }
 
 input[type='number'] {
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
 }
 
 input::placeholder {
@@ -399,6 +425,7 @@ input[type='checkbox'] {
 .hud-palette-armed-label,
 .hud-resort-advanced > summary,
 .hud-stat dt,
+.hud-advice-subject,
 .hud-report-row dt,
 .hud-message dt,
 .hud-staff dt {
@@ -452,12 +479,8 @@ input[type='checkbox'] {
   gap: var(--space-2);
   height: calc(var(--control-h) + 12px);
   padding: 0 var(--space-2);
-  border-radius: var(--radius-slab);
+  border-radius: var(--radius-pebble);
   pointer-events: auto;
-}
-
-.hud-plate:nth-child(even) {
-  border-radius: 20px 14px 18px 13px / 14px 19px 13px 18px;
 }
 
 .hud-dock {
@@ -466,6 +489,11 @@ input[type='checkbox'] {
 
 .hud-status {
   gap: var(--space-3);
+}
+
+/* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
+.hud-status > * {
+  flex: none;
 }
 
 .hud-readout-row {
@@ -482,7 +510,8 @@ input[type='checkbox'] {
 }
 
 .hud-readout-value {
-  font: 600 var(--size-lead) / 1 var(--font-num);
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: var(--ochre);
 }
@@ -535,7 +564,7 @@ input[type='checkbox'] {
 }
 
 .hud-slider-value {
-  font: 600 var(--size-small) / 1 var(--font-num);
+  font: 600 var(--size-small) / 1 var(--font-ui);
   color: var(--text-dim);
   text-align: right;
 }
@@ -559,7 +588,7 @@ input[type='checkbox'] {
   max-height: calc(100dvh - var(--bar-h) - var(--space-5));
   overflow: auto;
   padding: var(--space-2);
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   pointer-events: auto;
   animation: hud-pop var(--pop);
   transform-origin: top left;
@@ -615,7 +644,7 @@ input[type='checkbox'] {
   border-radius: var(--radius-sm);
   background: rgb(255 255 255 / 40%);
   box-shadow: 0 1px 0 var(--edge-soft);
-  font: 600 10px / 1.2 var(--font-num);
+  font: 600 10px / 1.2 var(--font-ui);
   color: var(--text-dim);
 }
 
@@ -663,6 +692,20 @@ input[type='checkbox'] {
   min-width: 290px;
 }
 
+/* An option's layout without its hover: the days are read, not picked. */
+.hud-forecast-day {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+}
+
+.hud-weather .hud-dropdown-panel {
+  min-width: 260px;
+}
+
 .hud-weather-badge {
   position: relative;
   display: inline-flex;
@@ -705,7 +748,7 @@ input[type='checkbox'] {
   width: min(560px, 100%);
   max-height: min(560px, 76vh);
   padding: var(--space-2);
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   animation: hud-pop var(--pop);
 }
 
@@ -770,28 +813,11 @@ input[type='checkbox'] {
   padding-left: var(--space-2);
 }
 
-.hud-time input[type='range'] {
-  width: 128px;
-}
-
-.hud-time {
-  --track: linear-gradient(
-    90deg,
-    #1d2a44 0%,
-    #3d5078 18%,
-    var(--terracotta) 28%,
-    #f0c46a 48%,
-    #8ecfe6 58%,
-    var(--terracotta) 82%,
-    #3d5078 88%,
-    #1d2a44 100%
-  );
-}
-
 /* Fixed width, so the bar does not shift as the minutes tick over. */
 .hud-time-clock {
   min-width: 11ch;
-  font: 600 var(--size-body) / 1 var(--font-num);
+  /* As large as the guest count beside it, so the bar's figures read as one row. */
+  font: 600 var(--size-lead) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: pre;
   color: var(--ochre);
@@ -803,10 +829,6 @@ input[type='checkbox'] {
   padding: 0 var(--space-2);
 }
 
-.hud-tool:nth-child(even) {
-  border-radius: var(--radius-pebble-b);
-}
-
 .hud-tool-badge {
   position: absolute;
   top: -6px;
@@ -816,7 +838,7 @@ input[type='checkbox'] {
   border: 1px solid var(--terracotta-deep);
   border-radius: 6px 8px 5px 7px;
   background: var(--terracotta);
-  font: 700 10px / 1 var(--font-num);
+  font: 700 10px / 1 var(--font-ui);
   text-align: center;
   color: var(--text-on-accent);
   box-shadow: var(--shadow-lift);
@@ -828,8 +850,15 @@ input[type='checkbox'] {
   }
 }
 
-@media (max-width: 1060px) {
+@media (max-width: 1240px) {
   .hud-wordmark,
+  .hud-speed .hud-chip-label,
+  .hud-overlay .hud-chip-label {
+    display: none;
+  }
+}
+
+@media (max-width: 1060px) {
   .hud-status .hud-readout-label {
     display: none;
   }
@@ -864,8 +893,7 @@ input[type='checkbox'] {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  /* Most of the plate, which is 12px taller than a control, so the bars stand as tall as the rating. */
-  height: calc(var(--control-h) + 6px);
+  height: var(--control-h);
   padding: 0 var(--space-2);
   border: 0;
   background: none;
@@ -895,8 +923,8 @@ input[type='checkbox'] {
   position: relative;
   display: block;
   width: 9px;
-  /* With the initial under it, this fills the button's height and no more. */
-  height: 26px;
+  /* With the initial under it, this stays inside the button with room above and below. */
+  height: 18px;
   border-radius: 2px;
   background: var(--sunken);
   box-shadow: inset 0 0 0 1px var(--edge-soft);
@@ -959,7 +987,7 @@ input[type='checkbox'] {
 
 .hud-demand-group-heading {
   grid-column: 1 / -1;
-  margin: var(--space-2) 0 0;
+  margin: var(--space-5) 0 var(--space-1);
 }
 
 .hud-demand-row {
@@ -984,7 +1012,7 @@ input[type='checkbox'] {
 }
 
 .hud-demand-figure {
-  font: 400 var(--size-small) / 1.2 var(--font-num);
+  font: 400 var(--size-small) / 1.2 var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -993,6 +1021,16 @@ input[type='checkbox'] {
 
 .hud-rating .hud-dropdown-panel {
   min-width: 280px;
+}
+
+.hud-stars {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.hud-stars-trend {
+  font-size: var(--size-small);
 }
 
 .hud-rating-parts {
@@ -1010,7 +1048,7 @@ input[type='checkbox'] {
 
 .hud-rating-parts dd {
   margin: 0;
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -1076,7 +1114,7 @@ input[type='checkbox'] {
   display: flex;
   flex-direction: column;
   max-height: max(160px, calc(100% - var(--window-top) - var(--space-3)));
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   pointer-events: auto;
   animation: hud-pop var(--pop);
 }
@@ -1091,7 +1129,6 @@ input[type='checkbox'] {
 .hud-window[data-window='build'] {
   right: var(--space-3);
   width: var(--palette-w);
-  border-radius: 26px 20px 24px 18px / 18px 26px 20px 24px;
 }
 
 .hud-window[data-window='inspect'],
@@ -1102,7 +1139,6 @@ input[type='checkbox'] {
 
 .hud-window[data-window='debug'] {
   width: 370px;
-  border-radius: 18px 24px 22px 16px / 22px 16px 24px 18px;
 }
 
 .hud-window[data-window='overview'],
@@ -1116,7 +1152,6 @@ input[type='checkbox'] {
 
 .hud-window[data-window='inbox'] {
   --window-top: calc(var(--window-floor) + 26px);
-  border-radius: 24px 18px 26px 20px / 20px 26px 18px 24px;
 }
 
 .hud-window[data-window='people'] {
@@ -1126,7 +1161,6 @@ input[type='checkbox'] {
 .hud-window[data-window='books'] {
   --window-top: calc(var(--window-floor) + 78px);
   width: 300px;
-  border-radius: 20px 26px 22px 18px / 26px 20px 18px 22px;
 }
 
 .hud-window[data-window='camera'] {
@@ -1138,7 +1172,6 @@ input[type='checkbox'] {
   --window-top: calc(var(--window-floor) + 40px);
   right: calc(var(--palette-w) + var(--space-3) * 2);
   width: 440px;
-  border-radius: 22px 26px 18px 24px / 24px 18px 26px 20px;
 }
 
 .hud-window[data-window='resort'] {
@@ -1151,14 +1184,12 @@ input[type='checkbox'] {
   --window-top: calc(var(--window-floor) + 60px);
   left: calc(50% - 170px);
   width: 340px;
-  border-radius: 20px 24px 18px 22px / 22px 18px 24px 20px;
 }
 
 .hud-window[data-window='saves'] {
   --window-top: calc(var(--window-floor) + 60px);
   left: calc(50% - 190px);
   width: 380px;
-  border-radius: 22px 18px 24px 20px / 18px 24px 20px 22px;
 }
 
 .hud-window-head {
@@ -1187,7 +1218,7 @@ input[type='checkbox'] {
   width: 26px;
   height: 26px;
   padding: 0;
-  border-radius: var(--radius-pebble-b);
+  border-radius: var(--radius-pebble);
 }
 
 .hud-window-body {
@@ -1206,7 +1237,7 @@ input[type='checkbox'] {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin: 0 calc(var(--space-4) * -1) var(--space-3);
-  padding: var(--space-1) var(--space-4) var(--space-2);
+  padding: var(--space-2) var(--space-4);
   border-bottom: 2px dotted var(--edge-soft);
   background: var(--stone-100);
 }
@@ -1215,10 +1246,6 @@ input[type='checkbox'] {
   position: relative;
   height: var(--control-h);
   padding: 0 var(--space-2);
-}
-
-.hud-tab:nth-child(even) {
-  border-radius: var(--radius-pebble-b);
 }
 
 .hud-window[data-window='build'] {
@@ -1273,8 +1300,17 @@ input[type='checkbox'] {
   display: block;
 }
 
+.hud-ledger-trend {
+  margin-left: var(--space-2);
+  color: var(--foliage);
+}
+
+.hud-ledger-trend[data-way='down'] {
+  color: var(--ink-red);
+}
+
 .hud-figures dd {
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-size: 13px;
 }
 
@@ -1290,12 +1326,6 @@ input[type='checkbox'] {
 
 .hud-figure-aside {
   margin-left: var(--space-2);
-}
-
-/* Counts in running text: pixel digits blur into each other at note size. */
-.hud-num {
-  font-family: var(--font-num);
-  font-variant-numeric: tabular-nums;
 }
 
 .hud-debug dd {
@@ -1332,7 +1362,7 @@ input[type='checkbox'] {
 .hud-staff-count {
   min-width: 2ch;
   padding-right: var(--space-1);
-  font: 600 13px / 1 var(--font-num);
+  font: 600 13px / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -1351,7 +1381,7 @@ input[type='checkbox'] {
 
 .hud-staff-note {
   color: var(--text-faint);
-  font: 500 var(--size-small) / 1 var(--font-num);
+  font: 500 var(--size-small) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -1361,13 +1391,38 @@ input[type='checkbox'] {
   grid-column: 1 / -1;
   margin-top: calc(-1 * var(--space-1));
   color: var(--text-faint);
-  font: 500 var(--size-small) / 1 var(--font-num);
+  font: 500 var(--size-small) / 1 var(--font-ui);
 }
 
 /* Rows are sentences here; .hud-stats keeps every line on one line, which would
    make the panel too wide. */
 .hud-advice {
   white-space: normal;
+}
+
+/* Subject, what is wrong and what to do about it in three columns, so every row's parts line up. */
+.hud-advice-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-advice-row {
+  display: contents;
+}
+
+.hud-advice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.hud-advice-actions .hud-advice-show {
+  margin-left: 0;
 }
 
 .hud-advice-show {
@@ -1409,7 +1464,7 @@ input[type='checkbox'] {
 .hud-message-when {
   display: block;
   margin-top: var(--space-1);
-  font: 500 var(--size-small) / 1 var(--font-num);
+  font: 500 var(--size-small) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   letter-spacing: normal;
   text-transform: none;
@@ -1467,7 +1522,7 @@ input[type='checkbox'] {
 
 .hud-report-row dd {
   margin: 0;
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
@@ -1572,7 +1627,7 @@ input[type='checkbox'] {
   display: none;
   padding: 2px var(--space-2);
   border: 2px solid var(--stone-700);
-  border-radius: var(--radius-pebble-b);
+  border-radius: var(--radius-pebble);
   background: var(--stone-50);
   box-shadow: var(--shadow-lift);
   color: var(--text);
@@ -1620,7 +1675,7 @@ input[type='checkbox'] {
   display: none;
   padding: var(--space-1) var(--space-2);
   border: 2px solid var(--ochre);
-  border-radius: var(--radius-pebble-b);
+  border-radius: var(--radius-pebble);
   background-image: var(--slab-raised);
   box-shadow: var(--shadow-lift), var(--bevel);
   font: inherit;
@@ -1823,7 +1878,7 @@ input[type='checkbox'] {
 }
 
 .hud-placement-price {
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
 }
@@ -1846,7 +1901,7 @@ input[type='checkbox'] {
   gap: var(--space-3);
   padding: var(--space-3);
   border-left-width: 4px;
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   pointer-events: auto;
   animation: hud-pop var(--pop);
 }
@@ -1920,11 +1975,6 @@ input[type='checkbox'] {
   letter-spacing: var(--track-label);
 }
 
-.hud-camera-point:nth-child(even),
-.hud-camera-mode:nth-child(even) {
-  border-radius: var(--radius-pebble-b);
-}
-
 .hud-resort {
   display: flex;
   flex-direction: column;
@@ -1945,7 +1995,7 @@ input[type='checkbox'] {
 
 .hud-resort-value {
   text-align: right;
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   color: var(--ochre);
   font-weight: 600;
@@ -2081,7 +2131,8 @@ input[type='checkbox'] {
   gap: var(--space-2);
 }
 
-.hud-inspect-programme {
+.hud-inspect-programme,
+.hud-programme-form-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2090,10 +2141,11 @@ input[type='checkbox'] {
 
 .hud-programme {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
-.hud-programme-sites,
+.hud-programme-types,
+.hud-programme-filters,
 .hud-programme-actions,
 .hud-event-tiers,
 .hud-event-book {
@@ -2105,6 +2157,54 @@ input[type='checkbox'] {
 
 .hud-programme-actions > span {
   flex: 1 1 100%;
+}
+
+.hud-programme-picker {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px dotted var(--edge-soft);
+}
+
+/* The kind's name over the list of its stages, as a field's label sits over the field. */
+.hud-programme-site {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.hud-programme-type {
+  position: relative;
+  min-width: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0;
+}
+
+/* Set apart from the week above it, so it reads as one form for one cell or one booking. */
+.hud-programme-form {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-pebble);
+  scroll-margin: var(--space-2);
+}
+
+.hud-programme-filters > select {
+  flex: 1 1 140px;
+}
+
+.hud-programme-upcoming-day {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.hud-forecast,
+.hud-programme-upcoming-day > ol {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 /* Days as rows on every screen, so a phone's sheet reads as the desk window does. */
@@ -2228,13 +2328,49 @@ input[type='checkbox'] {
   font-size: var(--size-small);
 }
 
-.hud-event-start {
-  min-height: var(--control-h);
+.hud-event-card[data-full] {
+  opacity: 0.6;
+}
+
+.hud-event-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-faint);
+  font-size: var(--size-small);
+}
+
+.hud-event-refusal {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pebble);
+  background: var(--ink-red);
+  color: var(--text-on-accent);
+  font-size: var(--size-small);
+}
+
+/* Dressed as the buttons beside it; the caret is drawn in, since the native one ignores the theme. */
+.hud-select {
+  appearance: none;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 calc(var(--space-3) * 2 + 10px) 0 var(--space-3);
   border: 1px solid var(--edge);
   border-radius: var(--radius-pebble);
-  background: var(--stone-50);
+  background:
+    var(--select-caret) right var(--space-3) center / 10px 6px no-repeat,
+    var(--slab-raised);
+  box-shadow:
+    var(--bevel),
+    0 1px 0 rgb(90 64 38 / 25%);
   color: var(--text);
-  font: inherit;
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  cursor: var(--cursor-hand);
+}
+
+.hud-select:hover:not(:disabled) {
+  filter: brightness(1.05);
+  color: var(--terracotta-deep);
 }
 
 .hud-venue-name {
@@ -2283,12 +2419,14 @@ input[type='checkbox'] {
   overflow: hidden;
 }
 
+/* The hue runs red through yellow to green as the need fills, so an empty one shows from afar. */
 .hud-need-fill {
+  --hue: calc(var(--level, 1) * 90);
   display: block;
   height: 100%;
   background:
     repeating-linear-gradient(90deg, transparent 0 8px, rgb(0 0 0 / 18%) 8px 10px),
-    linear-gradient(180deg, #9fd35c, var(--foliage));
+    linear-gradient(180deg, hsl(var(--hue) 68% 60%), hsl(var(--hue) 62% 42%));
 }
 
 .hud-palette {
@@ -2311,7 +2449,7 @@ input[type='checkbox'] {
 
 .hud-palette-count {
   min-width: 3ch;
-  font: 600 var(--size-small) / 1 var(--font-num);
+  font: 600 var(--size-small) / 1 var(--font-ui);
   text-align: right;
   color: var(--text-faint);
 }
@@ -2352,7 +2490,7 @@ input[type='checkbox'] {
 
 .hud-palette-armed-detail {
   flex: none;
-  font-family: var(--font-num);
+  font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   opacity: 0.8;
@@ -2388,10 +2526,6 @@ input[type='checkbox'] {
   position: relative;
   width: 34px;
   height: 34px;
-}
-
-.build-tool:nth-child(even) {
-  border-radius: var(--radius-pebble-b);
 }
 
 .build-tool:hover {
@@ -2498,7 +2632,7 @@ input[type='checkbox'] {
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--space-2) var(--space-2);
-  border-radius: 14px 10px 16px 12px / 10px 14px 12px 16px;
+  border-radius: var(--radius-pebble);
   background: var(--tray);
   box-shadow:
     var(--bevel-in),
@@ -2525,7 +2659,7 @@ input[type='checkbox'] {
 
 .build-group-count {
   margin-left: auto;
-  font: 600 11px / 1 var(--font-num);
+  font: 600 11px / 1 var(--font-ui);
   color: var(--text-faint);
 }
 
@@ -2552,14 +2686,6 @@ input[type='checkbox'] {
     box-shadow var(--quick),
     border-color var(--quick),
     transform var(--quick);
-}
-
-.build-tile:nth-child(3n + 2) {
-  border-radius: var(--radius-pebble-b);
-}
-
-.build-tile:nth-child(3n) {
-  border-radius: 11px 9px 12px 8px / 8px 12px 9px 11px;
 }
 
 .build-tile-art {
@@ -2609,7 +2735,7 @@ input[type='checkbox'] {
   padding: 2px 4px;
   border-radius: 5px 6px 4px 6px;
   background: rgb(58 46 34 / 78%);
-  font: 500 10px / 1.2 var(--font-num);
+  font: 500 10px / 1.2 var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   color: var(--stone-200);
@@ -2729,7 +2855,7 @@ input[type='checkbox'] {
   max-width: 520px;
   padding: var(--space-4);
   border-color: var(--terracotta);
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   pointer-events: auto;
   animation: hud-pop var(--pop);
 }
@@ -2790,7 +2916,7 @@ input[type='checkbox'] {
 
 .welcome-wordmark {
   margin: 0 0 var(--space-2);
-  font: 700 clamp(46px, 8vw, 92px) / 0.95 var(--font-ui);
+  font: 700 clamp(46px, 8vw, 92px) / 0.95 var(--font-title);
   letter-spacing: 0.01em;
   color: var(--stone-50);
   text-shadow: var(--extrude);
@@ -2809,7 +2935,7 @@ input[type='checkbox'] {
   gap: var(--space-4);
   padding: var(--space-5);
   border: 1px solid var(--edge);
-  border-radius: var(--radius-stone);
+  border-radius: var(--radius-pebble);
   background-image: var(--slab);
   box-shadow: var(--shadow-slab), var(--bevel);
   animation: hud-pop var(--pop);
@@ -2860,12 +2986,8 @@ input[type='checkbox'] {
   justify-content: space-between;
   height: 60px;
   padding: 0 var(--space-5);
-  border-radius: var(--radius-slab);
+  border-radius: var(--radius-pebble);
   font: 700 24px / 1 var(--font-ui);
-}
-
-.welcome-button:nth-child(even) {
-  border-radius: 20px 14px 18px 13px / 14px 19px 13px 18px;
 }
 
 .welcome-button-main {
@@ -2899,6 +3021,19 @@ input[type='checkbox'] {
 
 .welcome-button-main:disabled {
   opacity: 0.45;
+}
+
+/* Full strength while it works, so the one pressed reads apart from the ones merely waiting. */
+:is(.welcome-button, .save-button)[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+  animation: welcome-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes welcome-busy {
+  to {
+    filter: brightness(0.85);
+  }
 }
 
 .welcome-loading {
@@ -2997,13 +3132,9 @@ input[type='checkbox'] {
 .new-game-mode {
   gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-slab);
+  border-radius: var(--radius-pebble);
   text-align: left;
   font: 500 var(--size-small) / 1.35 var(--font-ui);
-}
-
-.new-game-mode:nth-child(even) {
-  border-radius: var(--radius-pebble-b);
 }
 
 .new-game-mode[aria-checked='true'] {
@@ -3054,6 +3185,10 @@ input[type='checkbox'] {
 
   .welcome::before {
     transition: none;
+  }
+
+  :is(.welcome-button, .save-button)[aria-busy='true'] {
+    animation: none;
   }
 }
 
@@ -3133,7 +3268,7 @@ input[type='checkbox'] {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--edge-soft);
-  border-radius: var(--radius-pebble-b);
+  border-radius: var(--radius-pebble);
   background-image: var(--sunken);
 }
 
@@ -3302,11 +3437,7 @@ input[type='checkbox'] {
 
 .app:not([data-layout='desk']) .hud-bar :is(.hud-chip, .hud-gates) {
   height: var(--strip-control-h);
-  padding: 0 var(--space-1);
-}
-
-.app:not([data-layout='desk']) .hud-bar .hud-gates {
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-3);
 }
 
 .app:not([data-layout='desk']) .hud-bar .hud-time {
@@ -3317,7 +3448,7 @@ input[type='checkbox'] {
   gap: var(--space-1);
 }
 
-.app:not([data-layout='desk']) .hud-bar .hud-readout-value {
+.app:not([data-layout='desk']) .hud-bar :is(.hud-readout-value, .hud-time-clock) {
   font-size: var(--size-body);
 }
 
@@ -3326,22 +3457,17 @@ input[type='checkbox'] {
   :is(
     .hud-wordmark,
     .hud-chip-label,
-    .hud-chip-caret,
+    .hud-menu .hud-chip-caret,
     .hud-readout-label,
-    .hud-rating .hud-readout-row > .pixel-icon,
     .hud-plate:has(> .hud-demand),
-    .hud-gates .hud-readout
+    .hud-gates-state
   ) {
   display: none;
 }
 
-/* A phone held upright has no room for the slider; the clock beside it still shows the time. */
-.app[data-layout='bottom'] .hud-time input[type='range'] {
-  display: none;
-}
-
-@media (max-width: 480px) {
-  .app:not([data-layout='desk']) .hud-guests {
+/* The forecast is also in the programme, so a narrow phone gives its room to the counts. */
+@media (max-width: 580px) {
+  .hud-bar .hud-weather {
     display: none;
   }
 }
@@ -3413,7 +3539,7 @@ input[type='checkbox'] {
   bottom: calc(var(--dock-h) + var(--safe-b));
   left: var(--safe-l);
   max-height: calc(var(--sheet-room) * var(--sheet-half));
-  border-radius: 20px 24px 0 0 / 18px 22px 0 0;
+  border-radius: 12px 8px 0 0 / 8px 11px 0 0;
 }
 
 .app[data-layout='bottom'] .hud-window[data-window][data-expanded] {
@@ -3427,7 +3553,7 @@ input[type='checkbox'] {
   left: auto;
   width: var(--sheet-w);
   max-height: none;
-  border-radius: 20px 0 0 24px / 18px 0 0 22px;
+  border-radius: 12px 0 0 9px / 8px 0 0 12px;
   animation-name: hud-sheet-in;
 }
 

@@ -84,7 +84,7 @@ function RatingSection({
   return (
     <Section title="Rating">
       <p className="hud-report-stars">
-        <span className="hud-num">{starsOf(report.rating.stars)}</span>
+        {starsOf(report.rating.stars)}
         {change ? <span className="hud-figure-aside">{`${change} on the day before`}</span> : null}
       </p>
       <RatingBreakdown rating={report.rating} />

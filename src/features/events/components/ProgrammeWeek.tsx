@@ -12,11 +12,9 @@ export interface ProgrammeWeekProps {
   readonly chip: number | null;
   readonly onCell: (cell: Cell) => void;
   readonly onChip: (booking: number) => void;
-  // Parts of the day with something to book; the morning holds only the welcome.
-  readonly bookable: ReadonlySet<DayPart>;
 }
 
-const PART_NAMES: { readonly [part in DayPart]: string } = {
+export const PART_NAMES: { readonly [part in DayPart]: string } = {
   morning: 'Morning',
   afternoon: 'Afternoon',
   evening: 'Evening',
@@ -53,7 +51,7 @@ function ChipButton({
       title={`${chip.label}, ${chip.repeat.toLowerCase()}`}
       onClick={() => onChip(chip.booking)}
     >
-      <span className="hud-num">{chip.time}</span> {chip.label}
+      {chip.time} {chip.label}
     </button>
   );
 }
@@ -74,7 +72,8 @@ function PartCell({
           onChip={props.onChip}
         />
       ))}
-      {props.bookable.has(part) ? (
+      {/* None where nothing more fits, such as a past evening or the welcome's morning. */}
+      {day.open[part] ? (
         <button
           type="button"
           className="hud-programme-add"

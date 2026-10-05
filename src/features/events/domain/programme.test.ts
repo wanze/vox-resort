@@ -3,6 +3,7 @@ import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   ANNOUNCE_LEAD,
   book,
+  bookingRefusal,
   EMPTY_PROGRAMME,
   eventOn,
   eventsDue,
@@ -62,6 +63,13 @@ describe('book', () => {
     expect(book(EMPTY_PROGRAMME, tonight, tickAt(2, 19 * HOUR)).refusal).toBeNull();
     expect(book(EMPTY_PROGRAMME, tonight, tickAt(2, 19 * HOUR) + 1).refusal).toBe('past');
     expect(book(EMPTY_PROGRAMME, draft({ builtIn: 'welcome' }), 0).refusal).toBe('built-in');
+  });
+
+  it('answers as book would without booking anything', () => {
+    const programme = booked(draft());
+    expect(bookingRefusal(programme, draft(), 0)).toBe('overlap');
+    expect(bookingRefusal(programme, draft({ site: OTHER }), 0)).toBeNull();
+    expect(programme.bookings).toHaveLength(1);
   });
 
   it('refuses a daily booking over a weekly one on the same stage, but not on another', () => {

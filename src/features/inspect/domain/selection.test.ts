@@ -331,12 +331,10 @@ describe('activityLine', () => {
 
   const TO_BAKERY: Errand = { kind: 'walking', to: 'Bakery', home: false };
 
-  it('says somebody on the paving is walking, and where', () => {
+  it('says somebody on the paving is walking', () => {
     const crowd = seatedStreet('sit');
     const line = doing(crowd, content, 0);
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
-    expect(line).toBe(`Walking · tile ${tileX}, ${tileZ}`);
+    expect(line).toBe('Walking');
   });
 
   it('has nowhere to walk for somebody the paving no longer carries', () => {
@@ -349,9 +347,7 @@ describe('activityLine', () => {
     const crowd = seatedStreet('sit');
     const hungry = contentNeeds(guests);
     hungry.level.hunger[0] = 0;
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
-    expect(doing(crowd, hungry, 0)).toBe(`Hungry · Walking · tile ${tileX}, ${tileZ}`);
+    expect(doing(crowd, hungry, 0)).toBe('Hungry · Walking');
   });
 
   it('words each need as the one thing it is felt as', () => {
@@ -368,20 +364,14 @@ describe('activityLine', () => {
     const crowd = seatedStreet('sit');
     const hungry = contentNeeds(guests);
     hungry.level.hunger[0] = 0;
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
-    expect(doing(crowd, hungry, 0, TO_BAKERY)).toBe(
-      `Hungry · Walking to the Bakery · tile ${tileX}, ${tileZ}`,
-    );
+    expect(doing(crowd, hungry, 0, TO_BAKERY)).toBe('Hungry · Walking to the Bakery');
   });
 
   it('is the line plan 016 wrote, to the byte, for anybody with nowhere to be', () => {
     const crowd = seatedStreet('sit');
     const hungry = contentNeeds(guests);
     hungry.level.hunger[0] = 0;
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
-    expect(doing(crowd, hungry, 0, null)).toBe(`Hungry · Walking · tile ${tileX}, ${tileZ}`);
+    expect(doing(crowd, hungry, 0, null)).toBe('Hungry · Walking');
     const sitting = seatedStreet('sit');
     const sitter = until(sitting, (i) => restingOn(sitting, i) === RESTING.sitting);
     expect(doing(sitting, content, sitter, TO_BAKERY).split(' · ')[0]).toBe('Sitting');
@@ -425,7 +415,7 @@ describe('a guest the simulation is holding still', () => {
     const beach = beachCrowd();
     const roamer = until(beach, (i) => isRoaming(beach, i));
     const line = doing(beach, content, roamer, { kind: 'inside', at: 'Beach' });
-    expect(line.startsWith('On the beach · tile ')).toBe(true);
+    expect(line).toBe('On the beach');
   });
 
   it('says they are inside, and drops the tile there too', () => {
@@ -528,12 +518,8 @@ describe('a guest at night', () => {
 
   it('says a guest heading for bed is walking home, not merely walking there', () => {
     const crowd = seatedStreet('sit');
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
     const bedward: Errand = { kind: 'walking', to: 'Bungalow', home: true };
-    expect(activityLine(crowd, content, guests, 0, bedward)).toBe(
-      `Walking home to the Bungalow · tile ${tileX}, ${tileZ}`,
-    );
+    expect(activityLine(crowd, content, guests, 0, bedward)).toBe('Walking home to the Bungalow');
   });
 });
 
@@ -575,7 +561,7 @@ describe('errandOf', () => {
     expect(errand).toEqual({ kind: 'walking', to: 'The Salty Spoon', home: false, named: true });
     const guests = guestsOf();
     const line = activityLine(seatedStreet('sit'), contentNeeds(guests), guests, 0, errand);
-    expect(line.startsWith('Walking to The Salty Spoon · tile ')).toBe(true);
+    expect(line).toBe('Walking to The Salty Spoon');
   });
 
   it('puts a visit ahead of a walk, and sleep ahead of everything', () => {
@@ -645,19 +631,17 @@ describe('a guest staying on the beach', () => {
     expect(lineFor(RESTING.sitting, bored)).toBe('Bored · Sitting on the beach');
   });
 
-  it('says they are walking to the beach, and where they have got to', () => {
+  it('says they are walking to the beach, without naming the tile they are on', () => {
     const crowd = seatedStreet('sit');
-    const tileX = Math.floor(crowd.x[0]! / TILE_VOXELS);
-    const tileZ = Math.floor(crowd.z[0]! / TILE_VOXELS);
     expect(activityLine(crowd, content, guests, 0, { kind: 'beach', stage: 'arriving' })).toBe(
-      `Walking to the beach · tile ${tileX}, ${tileZ}`,
+      'Walking to the beach',
     );
   });
 
-  it('says they are walking back from the beach, and where they have got to', () => {
+  it('says they are walking back from the beach, without naming the tile they are on', () => {
     const crowd = seatedStreet('sit');
     const line = activityLine(crowd, content, guests, 0, { kind: 'beach', stage: 'leaving' });
-    expect(line.startsWith('Walking back from the beach · tile ')).toBe(true);
+    expect(line).toBe('Walking back from the beach');
   });
 });
 

@@ -8,7 +8,6 @@ export interface ClockControls {
   readonly speed: SimSpeed;
   readonly weather: Weather;
   readonly forcedWeather: Weather | null;
-  setTime(time: number): void;
   setSpeed(speed: SimSpeed): void;
   togglePause(): void;
   setWeather(weather: Weather | null): void;
@@ -41,12 +40,6 @@ export function useClockControls(showcase: RefObject<Showcase | null>): ClockCon
     speed,
     weather,
     forcedWeather,
-    setTime: useCallback(
-      (time: number) => {
-        showcase.current?.setTime(time);
-      },
-      [showcase],
-    ),
     setSpeed: changeSpeed,
     togglePause: useCallback(
       () => changeSpeed(current.current === 'paused' ? running.current : 'paused'),

@@ -1,20 +1,13 @@
 import type { Advice } from '../../sim/domain/advice';
 import { isStaffRole, type StaffRole } from '../../sim/domain/staff';
 import { adviceKey } from '../domain/news';
-import { adviceLabel, adviceMeans, adviceSays } from './adviceWords';
-import { StatRow } from './StatRow';
+import { adviceLabel, adviceSays } from './adviceWords';
 import { roleWord } from './staffWords';
 
 export interface AdvicePanelProps {
   readonly advice: readonly Advice[];
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly onHire?: (role: StaffRole) => void;
-}
-
-function noteOf(advice: Advice): string | null {
-  const means = adviceMeans(advice);
-  const where = advice.at ? `tile ${advice.at.tileX}, ${advice.at.tileZ}` : null;
-  return [means, where].filter(Boolean).join(' · ') || null;
 }
 
 function HireButton({
@@ -49,20 +42,23 @@ function AdviceRow({
 }) {
   const { at } = advice;
   return (
-    <StatRow label={adviceLabel(advice.kind)} note={noteOf(advice)}>
-      {adviceSays(advice)}
-      {at ? (
-        <button
-          type="button"
-          className="hud-camera-mode hud-advice-show"
-          aria-label={`Show ${advice.subject} at tile ${at.tileX}, ${at.tileZ}`}
-          onClick={() => onShowOnPlot(at)}
-        >
-          Show
-        </button>
-      ) : null}
-      <HireButton advice={advice} onHire={onHire} />
-    </StatRow>
+    <li className="hud-advice-row">
+      <span className="hud-advice-subject">{adviceLabel(advice.kind)}</span>
+      <span>{adviceSays(advice)}</span>
+      <span className="hud-advice-actions">
+        {at ? (
+          <button
+            type="button"
+            className="hud-camera-mode hud-advice-show"
+            aria-label={`Show ${advice.subject} at tile ${at.tileX}, ${at.tileZ}`}
+            onClick={() => onShowOnPlot(at)}
+          >
+            Show
+          </button>
+        ) : null}
+        <HireButton advice={advice} onHire={onHire} />
+      </span>
+    </li>
   );
 }
 
@@ -71,7 +67,7 @@ export function AdvicePanel({ advice, onShowOnPlot, onHire }: AdvicePanelProps) 
     return <p className="hud-loading">Nothing needs attention.</p>;
   }
   return (
-    <dl className="hud-stats hud-advice">
+    <ul className="hud-advice-list">
       {advice.map((each) => (
         <AdviceRow
           key={adviceKey(each)}
@@ -80,6 +76,6 @@ export function AdvicePanel({ advice, onShowOnPlot, onHire }: AdvicePanelProps) 
           onHire={onHire}
         />
       ))}
-    </dl>
+    </ul>
   );
 }

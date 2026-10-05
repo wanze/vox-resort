@@ -113,15 +113,23 @@ function refusalOf(draft: BookingDraft, others: readonly Booking[]): BookingRefu
   return null;
 }
 
-export function book(programme: Programme, draft: BookingDraft, now: number): BookingResult {
-  if (draft.builtIn !== undefined || EVENT_KINDS[draft.kind].builtIn === true) {
-    return { programme, refusal: 'built-in' };
-  }
-  const refusal =
+// What book would answer, without building the programme it would make.
+export function bookingRefusal(
+  programme: Programme,
+  draft: BookingDraft,
+  now: number,
+): BookingRefusal | null {
+  if (draft.builtIn !== undefined || EVENT_KINDS[draft.kind].builtIn === true) return 'built-in';
+  return (
     refusalOf(draft, programme.bookings) ??
     (draft.repeat.every === 'once' && tickAt(draft.repeat.day, draft.start) - ANNOUNCE_LEAD < now
       ? 'past'
-      : null);
+      : null)
+  );
+}
+
+export function book(programme: Programme, draft: BookingDraft, now: number): BookingResult {
+  const refusal = bookingRefusal(programme, draft, now);
   if (refusal) return { programme, refusal };
   const booking: Booking = { ...draft, id: programme.nextId };
   return {

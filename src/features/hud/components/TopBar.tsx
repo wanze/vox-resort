@@ -6,7 +6,7 @@ import { PixelIcon } from './PixelIcon';
 import { RatingControl } from './RatingControl';
 import { SpeedControl } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
-import { WeatherBadge } from './WeatherBadge';
+import { WeatherForecast } from './WeatherForecast';
 import { WindowDock } from './WindowDock';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
 import type { ClockControls } from '../../../app/useClockControls';
@@ -16,12 +16,12 @@ import type { SaveControls } from '../../../app/useSaves';
 import type { SoundControls } from '../../../app/useSound';
 import type { StatusView } from '../../../app/showcase';
 import type { WindowControls } from '../../../app/useWindows';
+import type { DayForecast } from '../../events/domain/programmeView';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export type MenuId = 'main' | 'speed' | 'overlay' | 'rating';
+export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'rating';
 
 export interface TopBarProps {
-  readonly timeElement: RefObject<HTMLInputElement | null>;
   readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
   readonly resort: ResortControls;
@@ -37,6 +37,7 @@ export interface TopBarProps {
   readonly onFind: () => void;
   readonly view: ViewToggles;
   readonly sound: SoundControls;
+  readonly forecast: readonly DayForecast[];
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -56,7 +57,6 @@ function GuestsReadout({ status }: { readonly status: StatusView | null }) {
     <div className="hud-guests">
       <HudReadout
         icon={<PixelIcon name="guests" />}
-        label="Guests"
         value={
           <>
             {status.present.toLocaleString('en-US')}
@@ -84,9 +84,8 @@ function GatesToggle({
       onClick={() => onOpenChange(!open)}
     >
       <span className="hud-gates-lamp" aria-hidden="true" />
-      <span className="hud-readout">
-        <span className="hud-readout-label">Gates</span>
-        <span className="hud-readout-value">{open ? 'Open' : 'Closed'}</span>
+      <span className="hud-readout-value">
+        Gates<span className="hud-gates-state"> {open ? 'open' : 'closed'}</span>
       </span>
     </button>
   );
@@ -116,18 +115,20 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <div className="hud-plate">
-        <TimeOfDay
-          timeElement={props.timeElement}
-          clockElement={props.clockElement}
-          onTimeChange={clock.setTime}
-        />
+        <TimeOfDay clockElement={props.clockElement} />
         <SpeedControl
           speed={clock.speed}
           onSpeedChange={clock.setSpeed}
           open={menu === 'speed'}
           onOpenChange={opener('speed')}
         />
-        <WeatherBadge weather={clock.weather} forced={clock.forcedWeather} />
+        <WeatherForecast
+          weather={clock.weather}
+          forced={clock.forcedWeather}
+          forecast={props.forecast}
+          open={menu === 'weather'}
+          onOpenChange={opener('weather')}
+        />
       </div>
 
       <div className="hud-plate">
@@ -151,9 +152,9 @@ export function TopBar(props: TopBarProps) {
             onOpenChange={opener('rating')}
           />
         ) : null}
-        <GuestsReadout status={status} />
-        <MoneyReadout ledger={ledger} />
         <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />
+        <MoneyReadout ledger={ledger} />
+        <GuestsReadout status={status} />
       </div>
 
       <WindowDock

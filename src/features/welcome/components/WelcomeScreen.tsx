@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
 import { SaveList } from '../../saves/components/SaveList';
-import { latestOf, listOrder, readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
+import {
+  latestOf,
+  listOrder,
+  readableById,
+  slotsBusy,
+  UNSAVED_ID,
+} from '../../saves/domain/saveSlots';
 import { resortOf } from '../../saves/components/saveNames';
 import { titleOf } from '../../saves/domain/saveWords';
 import type { SaveMeta } from '../../saves/domain/snapshot';
@@ -41,16 +47,18 @@ function useWallClock(): string {
 function ContinueButton(props: {
   readonly latest: SaveMeta;
   readonly ready: boolean;
+  readonly loading: boolean;
   readonly onLoad: (id: string) => void;
 }) {
   return (
     <button
       type="button"
       className="welcome-button welcome-button-main welcome-continue"
-      disabled={!props.ready}
+      disabled={!props.ready || props.loading}
+      aria-busy={props.loading}
       onClick={() => props.onLoad(props.latest.id)}
     >
-      Continue
+      {props.loading ? 'Loading…' : 'Continue'}
       <span className="welcome-button-note">
         {[...resortOf(props.latest), titleOf(props.latest)].join(' · ')}, day {props.latest.day}
       </span>
@@ -60,18 +68,27 @@ function ContinueButton(props: {
 
 function Menu(props: {
   readonly ready: boolean;
+  readonly loading: string | null;
   readonly latest: SaveMeta | null;
   readonly onChoose: (choice: Choice) => void;
   readonly onLoad: (id: string) => void;
 }) {
   const { latest } = props;
+  const free = props.ready && props.loading === null;
   return (
     <nav className="welcome-menu" aria-label="Main menu">
-      {latest ? <ContinueButton latest={latest} ready={props.ready} onLoad={props.onLoad} /> : null}
+      {latest ? (
+        <ContinueButton
+          latest={latest}
+          ready={props.ready}
+          loading={props.loading !== null}
+          onLoad={props.onLoad}
+        />
+      ) : null}
       <button
         type="button"
         className={latest ? 'welcome-button' : 'welcome-button welcome-button-main'}
-        disabled={!props.ready}
+        disabled={!free}
         onClick={() => props.onChoose('new')}
       >
         New game
@@ -79,7 +96,7 @@ function Menu(props: {
       <button
         type="button"
         className="welcome-button"
-        disabled={!props.ready}
+        disabled={!free}
         onClick={() => props.onChoose('load')}
       >
         Load game
@@ -104,6 +121,7 @@ function Card(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) 
     <>
       <Menu
         ready={props.ready}
+        loading={props.saves.loading}
         latest={latestOf(props.saves.saves)}
         onChoose={props.onChoose}
         onLoad={props.onLoad}
@@ -164,15 +182,16 @@ function LoadGameCard(props: {
 }) {
   const { saves } = props;
   const [now] = useState(Date.now);
-  const blocked = props.busy || !props.ready || saves.status === 'saving';
+  const blocked = props.busy || !props.ready || slotsBusy(saves);
   return (
     <section className="welcome-card welcome-load-game" aria-label="Load game">
-      <CardHead title="Load game" busy={props.busy} onBack={props.onBack} />
+      <CardHead title="Load game" busy={blocked} onBack={props.onBack} />
       {saves.available ? (
         <SaveList
           saves={listOrder(saves.saves)}
           currentId={null}
           busy={blocked}
+          loading={saves.loading}
           now={now}
           onLoad={props.onLoad}
           onDelete={(id) => void saves.remove(id)}

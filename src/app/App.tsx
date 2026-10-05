@@ -422,7 +422,6 @@ export function App() {
         <Hud
           stats={stats}
           debugElements={hudNodes}
-          timeElement={hudNodes.time}
           clockElement={hudNodes.clock}
           clock={clock}
           camera={camera}

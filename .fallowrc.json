@@ -9,6 +9,7 @@
     "scripts/simReport.test.ts"
   ],
   "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
+  "ignoreDependencies": ["@fontsource/jersey-15"],
   "health": {
     "ignore": [
       "voxel-gen/models/**",

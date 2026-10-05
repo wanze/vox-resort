@@ -70,6 +70,7 @@ export interface BuildPaletteProps {
   readonly ledger: Ledger | null;
   readonly land: LandView | null;
   readonly focusSearch: boolean;
+  readonly onObjectPicked: () => void;
 }
 
 // Something armed from the command palette turns to its tab, so its tile shows pressed.
@@ -131,6 +132,7 @@ export function BuildPalette({
   ledger,
   land,
   focusSearch,
+  onObjectPicked,
 }: BuildPaletteProps) {
   const groups = useMemo(() => objectTypeGroups(), []);
   const [query, setQuery] = useState('');
@@ -166,7 +168,10 @@ export function BuildPalette({
           preview,
           selected: objectId,
           ledger,
-          onSelect: (next) => onToolChange(next === null ? null : { kind: 'object', id: next }),
+          onSelect: (next) => {
+            onToolChange(next === null ? null : { kind: 'object', id: next });
+            if (next !== null) onObjectPicked();
+          },
         }}
       />
     </div>

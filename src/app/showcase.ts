@@ -5527,7 +5527,6 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onFrame({
       sampled: sample.updated,
       fps: fpsState.fps,
-      time: clock.time,
       clock: clock.label,
       activeLights: clock.litLamps,
       drawCalls: handle.renderer.info.render.drawCalls,

@@ -50,7 +50,7 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
         label={
           <>
             <PixelIcon name="overlay" />
-            {kind ? <span className="hud-chip-label">{OVERLAY_NAMES[kind]}</span> : null}
+            <span className="hud-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Maps'}</span>
           </>
         }
       >

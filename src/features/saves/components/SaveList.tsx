@@ -8,6 +8,8 @@ export interface SaveListProps {
   readonly saves: readonly ListedSave[];
   readonly currentId: string | null;
   readonly busy: boolean;
+  // The save being opened, whose button says so until the game shows.
+  readonly loading?: string | null;
   readonly now: number;
   readonly onLoad: (id: string) => void;
   readonly onDelete: (id: string) => void;
@@ -66,9 +68,10 @@ function SaveRow(
           type="button"
           className="hud-resort-go save-button"
           disabled={props.busy}
+          aria-busy={props.loading === meta.id}
           onClick={() => props.onLoad(meta.id)}
         >
-          Load
+          {props.loading === meta.id ? 'Loading…' : 'Load'}
         </button>
         <DeleteButton disabled={props.busy} onDelete={() => props.onDelete(meta.id)} />
       </span>

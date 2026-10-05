@@ -58,7 +58,6 @@ import type { ShowcaseStats, StatusView, VoicesView } from '../../../app/showcas
 export interface HudProps {
   readonly stats: ShowcaseStats | null;
   readonly debugElements: DebugElements;
-  readonly timeElement: RefObject<HTMLInputElement | null>;
   readonly clockElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
   readonly camera: CameraControls;
@@ -139,6 +138,10 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       land={props.land}
       // A focused field raises a phone's keyboard over half the screen, so a sheet waits for a tap.
       focusSearch={props.windows.layout.focus === 'build' && !isCompact(props.layout)}
+      // A phone's sheet covers the map, so it is put away once there is something to place.
+      onObjectPicked={() => {
+        if (isCompact(props.layout)) props.windows.show('build', false);
+      }}
     />
   ),
   summary: (props) => (
@@ -335,7 +338,6 @@ export function Hud(props: HudProps) {
         onSendCleaner={props.onSendCleanerTo}
       />
       <TopBar
-        timeElement={props.timeElement}
         clockElement={props.clockElement}
         clock={props.clock}
         resort={props.resort}
@@ -358,6 +360,7 @@ export function Hud(props: HudProps) {
           onSignsChange: props.news.setSigns,
         }}
         sound={props.sound}
+        forecast={props.programme.forecast}
       />
       <Windows {...props} />
       <PlacementBar

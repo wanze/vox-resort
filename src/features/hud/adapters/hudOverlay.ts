@@ -5,7 +5,6 @@ export interface FrameUpdate {
   // True on the frames the frame rate is re-measured, which is when the debug readouts move.
   readonly sampled: boolean;
   readonly fps: number;
-  readonly time: number;
   readonly clock: string;
   readonly activeLights: number;
   readonly drawCalls: number;
@@ -45,7 +44,6 @@ interface Slot<T> {
 }
 
 export interface HudOverlayParts {
-  readonly time: Slot<HTMLInputElement>;
   readonly clock: Slot<HTMLSpanElement>;
   readonly inspect: Slot<HTMLSpanElement>;
   readonly fps: Slot<HTMLSpanElement>;
@@ -110,13 +108,6 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     );
     writeText(parts.shaders, formatCount(frame.shaderBuilds));
     writeText(parts.activeLights, formatCount(frame.activeLights));
-  };
-
-  const writeTime = (time: number): void => {
-    const element = parts.time.current;
-    // Unless it is being dragged, in which case the clock follows the slider.
-    if (!element || document.activeElement === element) return;
-    element.value = time.toFixed(3);
   };
 
   // In whole device pixels: CSS pixels step 2 at a time on a Retina screen, which reads as a
@@ -190,7 +181,6 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
       writeMarkers(parts.markers, frame.markers);
       writeStaffPins(frame.staff);
       if (frame.sampled) writeDebug(frame);
-      writeTime(frame.time);
       writeText(parts.clock, frame.clock);
       // Blanked rather than left standing, so a guest's last activity is never read as somebody else's.
       writeText(parts.inspect, frame.inspect ?? '');

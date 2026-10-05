@@ -49,6 +49,8 @@ export interface SaveControls {
   readonly available: boolean;
   readonly status: SaveStatus;
   readonly lastSavedAt: number | null;
+  // The save being opened: a load takes seconds before the resort shows.
+  readonly loading: string | null;
   // No name overwrites a named game; a name names or renames it. A clash is asked about first.
   save(name?: string, overwrite?: boolean): Promise<SaveOutcome>;
   saveAs(name: string, overwrite?: boolean): Promise<SaveOutcome>;
@@ -297,6 +299,10 @@ function useWriter(showcaseRef: RefObject<Showcase | null>, session: Session, pl
   return { write, autosave, saveBeforeReload };
 }
 
+// Building the world holds the main thread, so the button that says so must be painted first.
+const afterPaint = (): Promise<void> =>
+  new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
 function useLoader(
   showcaseRef: RefObject<Showcase | null>,
   session: Session,
@@ -306,13 +312,17 @@ function useLoader(
   const { store, savesRef, dirtyRef, lastSavedRef, follow } = session;
   const { fail, broke } = store;
   const loadedRef = useLatest(onLoaded);
-  return useCallback(
+  const [loading, setLoading] = useState<string | null>(null);
+  const load = useCallback(
     async (id: string): Promise<boolean> => {
       const meta = readableById(savesRef.current, id);
       const mounted = showcaseRef.current;
       if (!meta || !mounted) return false;
+      setLoading(id);
+      await afterPaint();
       await autosave('hidden');
       const snapshot = await settled(openGame(mounted, meta), fail);
+      setLoading(null);
       if (!snapshot) {
         broke(meta.id);
         return false;
@@ -325,6 +335,7 @@ function useLoader(
     },
     [savesRef, showcaseRef, autosave, fail, broke, dirtyRef, lastSavedRef, follow, loadedRef],
   );
+  return { load, loading };
 }
 
 function useSlots(session: Session, autosave: (trigger: AutosaveTrigger) => Promise<void>) {
@@ -375,7 +386,7 @@ export function useSaves(
   const session = useSession();
   const { store, currentRef, savesRef, dirtyRef } = session;
   const { write, autosave, saveBeforeReload } = useWriter(showcaseRef, session, playing);
-  const load = useLoader(showcaseRef, session, autosave, onLoaded);
+  const { load, loading } = useLoader(showcaseRef, session, autosave, onLoaded);
   const { remove, nameUnsaved } = useSlots(session, autosave);
 
   const saveWith = useCallback(
@@ -408,6 +419,7 @@ export function useSaves(
     available: store.available,
     status: store.status,
     lastSavedAt: store.lastSavedAt,
+    loading,
     save: useCallback((name, overwrite = false) => saveWith(name, false, overwrite), [saveWith]),
     saveAs: useCallback((name, overwrite = false) => saveWith(name, true, overwrite), [saveWith]),
     load,

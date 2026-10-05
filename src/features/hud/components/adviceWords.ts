@@ -55,33 +55,6 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `The weather shut most of what serves ${NEED_NAMES[need ?? subject] ?? subject}`,
 };
 
-const MEANS: { readonly [kind in AdviceKind]: (advice: Advice) => string | null } = {
-  closed: () => 'open the gates in the top bar',
-  'no-entrance': () => null,
-  'no-reception': () => null,
-  'no-beds': () => 'build more lodgings, or they walk all night until they leave',
-  unmade: () => 'no guest can be given them until a cleaner has been',
-  hurt: () => null,
-  'unserved-need': ({ count }) => `${count} ${guests(count)} it now`,
-  'full-lines': () => 'the line was already full',
-  unreachable: ({ count }) => `${count} places standing idle`,
-  'not-step-free': ({ subject }) => `stairs and no ramp on the way to ${subject}`,
-  'short-staffed': () => 'hired by hand, so the roster does not follow the plot',
-  broken: ({ count }) =>
-    count < 60 ? 'down under an hour' : `down for ${Math.round(count / 60)} h`,
-  dirty: ({ count }) => `${count}% clean`,
-  unwatched: ({ count }) => `${count} swam there today`,
-  // Supported: a guest drops litter only where no bin covered six tiles in a row.
-  littered: () => 'no bin within reach',
-  'far-from-home': () => 'straight line, not walking distance',
-  'no-depot': () => 'a staff house near their work saves the walk',
-  unvisited: ({ count }) => `room for ${count}`,
-  'no-events': ({ subject }) => `book live music or a show on ${subject}`,
-  'no-welcome': ({ count }) => `${count} arrived today`,
-  'no-fireworks': () => 'book fireworks over the sea',
-  'weather-closed': ({ count }) => `${count} of them have no roof`,
-};
-
 const LABELS: { readonly [kind in AdviceKind]: string } = {
   closed: 'Closed',
   'no-entrance': 'Entrance',
@@ -108,8 +81,6 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
 };
 
 export const adviceSays = (advice: Advice): string => SAYS[advice.kind](advice);
-
-export const adviceMeans = (advice: Advice): string | null => MEANS[advice.kind](advice);
 
 export const adviceLabel = (kind: AdviceKind): string => LABELS[kind];
 

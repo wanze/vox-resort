@@ -1,5 +1,4 @@
 import { HudDropdown } from './HudDropdown';
-import { HudReadout } from './HudReadout';
 import { PixelIcon } from './PixelIcon';
 import { trendArrow, trendWords } from './dayWords';
 import {
@@ -62,6 +61,16 @@ function StepFreeLine({ reached, venues }: RatingControlProps['stepFree']) {
   );
 }
 
+function StarFigure({ stars, arrow }: { readonly stars: string; readonly arrow: string }) {
+  return (
+    <span className="hud-stars">
+      <PixelIcon name="star" scale={1} />
+      <span className="hud-readout-value">{stars}</span>
+      {arrow ? <span className="hud-stars-trend">{arrow}</span> : null}
+    </span>
+  );
+}
+
 export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: RatingControlProps) {
   const stars = rating.stars.toFixed(1);
   const arrow = trendArrow(trend);
@@ -74,13 +83,7 @@ export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: R
       title={
         change ? `Rating: ${stars} stars, ${change} since the day before` : `Rating: ${stars} stars`
       }
-      label={
-        <HudReadout
-          icon={<PixelIcon name="star" />}
-          label="Rating"
-          value={arrow ? `${stars} ★ ${arrow}` : `${stars} ★`}
-        />
-      }
+      label={<StarFigure stars={stars} arrow={arrow} />}
     >
       <RatingBreakdown rating={rating} />
       <StepFreeLine {...stepFree} />

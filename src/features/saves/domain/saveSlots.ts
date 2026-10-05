@@ -139,6 +139,12 @@ export function readableById(saves: readonly ListedSave[], id: string): SaveMeta
   return found && isReadable(found) ? found : null;
 }
 
+// A write or a load under way, either of which the slots must be left alone through.
+export const slotsBusy = (saves: {
+  readonly status: string;
+  readonly loading: string | null;
+}): boolean => saves.status === 'saving' || saves.loading !== null;
+
 // The quick save: a named game is written over, and an unnamed one is sent to be named.
 export async function saveOrAsk(
   save: () => Promise<SaveOutcome>,

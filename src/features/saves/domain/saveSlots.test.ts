@@ -13,6 +13,7 @@ import {
   planSave,
   readableById,
   saveOrAsk,
+  slotsBusy,
   targetOf,
   UNSAVED_ID,
   withUnreadable,
@@ -181,6 +182,15 @@ describe('finding a save to load', () => {
     const listed = withUnreadable(SAVES, new Set(['b']));
     expect(listed.find((save) => save.id === 'b')).toEqual({ id: 'b', unreadable: true });
     expect(listed.filter(isReadable)).toHaveLength(2);
+  });
+});
+
+describe('slotsBusy', () => {
+  it('holds the slots while a save is written or opened', () => {
+    expect(slotsBusy({ status: 'idle', loading: null })).toBe(false);
+    expect(slotsBusy({ status: 'saved', loading: null })).toBe(false);
+    expect(slotsBusy({ status: 'saving', loading: null })).toBe(true);
+    expect(slotsBusy({ status: 'idle', loading: 'save-1' })).toBe(true);
   });
 });
 

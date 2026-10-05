@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from 'react';
+import type { RefObject } from 'react';
 import type {
   GuestView,
   PartyMemberView,
@@ -57,23 +57,6 @@ const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: strin
   service: 'Service',
 };
 
-// Pixel digits blur into each other, so every figure in the panel is set in the plain face.
-const Num = ({ children }: { readonly children: ReactNode }) => (
-  <span className="hud-num">{children}</span>
-);
-
-// Keyed by where the figure starts in the text, which is what tells two figures apart.
-const withFigures = (text: string): ReactNode => {
-  const parts: ReactNode[] = [];
-  let from = 0;
-  for (const match of text.matchAll(/\d[\d,.]*%?/g)) {
-    parts.push(text.slice(from, match.index), <Num key={match.index}>{match[0]}</Num>);
-    from = match.index + match[0].length;
-  }
-  parts.push(text.slice(from));
-  return parts;
-};
-
 const nightsOf = (count: number): string => `${count} ${count === 1 ? 'night' : 'nights'}`;
 
 function stayLine({ nights, nightsLeft }: GuestView): string {
@@ -117,7 +100,10 @@ function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
             className="hud-need-track"
             aria-label={`${NEED_LABELS[need]} ${Math.round(level * 100)}%`}
           >
-            <span className="hud-need-fill" style={{ width: `${level * 100}%` }} />
+            <span
+              className="hud-need-fill"
+              style={{ width: `${level * 100}%`, ['--level' as string]: level }}
+            />
           </span>
         </div>
       ))}
@@ -157,11 +143,9 @@ function GuestDetails({
       <dl className="hud-stats">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
-        <StatRow label="Stay">{withFigures(stayLine(guest))}</StatRow>
+        <StatRow label="Stay">{stayLine(guest)}</StatRow>
         {guest.welcomed ? <StatRow label="Welcome meeting">attended</StatRow> : null}
-        <StatRow label="Mood">
-          <Num>{Math.round(guest.happiness * 100)}%</Num>
-        </StatRow>
+        <StatRow label="Mood">{Math.round(guest.happiness * 100)}%</StatRow>
         <WantsRow wants={guest.wants} />
       </dl>
       <NeedBars needs={guest.needs} />
@@ -179,11 +163,7 @@ function GuestDetails({
 type Venue = NonNullable<PlaceView['venue']>;
 
 function SurroundingsRow({ setting }: { readonly setting: number }) {
-  return (
-    <StatRow label="Surroundings">
-      <Num>{Math.round(setting * 100)}%</Num>
-    </StatRow>
-  );
+  return <StatRow label="Surroundings">{Math.round(setting * 100)}%</StatRow>;
 }
 
 function LifeguardRow({ watched }: { readonly watched: boolean | null }) {
@@ -201,31 +181,19 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
     <dl className="hud-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
       <BrokenRow broken={venue.broken} />
-      <StatRow label="Capacity">
-        <Num>{venue.capacity}</Num>
-      </StatRow>
+      <StatRow label="Capacity">{venue.capacity}</StatRow>
       {venue.role === 'lodging' ? (
-        <StatRow label="Beds">
-          <Num>{venue.beds}</Num>
-        </StatRow>
+        <StatRow label="Beds">{venue.beds}</StatRow>
       ) : (
         <StatRow label="Serves">{venue.serves.join(', ') || '—'}</StatRow>
       )}
       <StatRow label="Typical stay">{venue.dwell}</StatRow>
       <StatRow label="Inside">
-        <Num>
-          {venue.inside} / {venue.capacity}
-        </Num>
+        {venue.inside} / {venue.capacity}
       </StatRow>
-      <StatRow label="Waiting">
-        {venue.waiting === 0 ? 'Nobody' : <Num>{venue.waiting}</Num>}
-      </StatRow>
-      <StatRow label="Cleanliness">
-        <Num>{Math.round(venue.cleanliness * 100)}%</Num>
-      </StatRow>
-      <StatRow label="Takings today">
-        <Num>{venue.takings.toLocaleString('en-US')}</Num>
-      </StatRow>
+      <StatRow label="Waiting">{venue.waiting === 0 ? 'Nobody' : venue.waiting}</StatRow>
+      <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
+      <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watched={venue.watched} />
       <SurroundingsRow setting={setting} />
     </dl>
@@ -267,7 +235,7 @@ function Problems({ problems }: { readonly problems: readonly Advice[] }) {
             <span className="hud-inspect-problem-icon">
               {icon ? <PixelIcon name={icon} /> : null}
             </span>
-            <span>{withFigures(adviceSays(advice))}</span>
+            <span>{adviceSays(advice)}</span>
           </li>
         );
       })}
@@ -407,9 +375,7 @@ function StaffDetails({
         <StatRow label="Role">{worker.roleTitle}</StatRow>
         <StatRow label="Works">{worker.zone}</StatRow>
         <StatRow label="Shift">{worker.onDuty ? 'On duty' : 'Off duty'}</StatRow>
-        <StatRow label="Wage">
-          <Num>{worker.wage.toLocaleString('en-US')}</Num>/day
-        </StatRow>
+        <StatRow label="Wage">{worker.wage.toLocaleString('en-US')}/day</StatRow>
       </dl>
       {worker.onDuty ? (
         <div className="hud-inspect-members">

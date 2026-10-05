@@ -422,10 +422,7 @@ export function activityLine(
   const still = stillWording(crowd, person, resting, errand);
   if (still !== null) return `${mood}${still}`;
 
-  const doing = doingNow(crowd, person, resting, errand);
-  const tileX = Math.floor(crowd.x[person]! / TILE_VOXELS);
-  const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
-  return `${mood}${doing} · tile ${tileX}, ${tileZ}`;
+  return `${mood}${doingNow(crowd, person, resting, errand)}`;
 }
 
 // Per frame for the inspected worker, as activityLine is for a guest. The cart is a cleaner's

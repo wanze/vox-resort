@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { listOrder, shownGame } from '../domain/saveSlots';
+import { listOrder, shownGame, slotsBusy } from '../domain/saveSlots';
 import { statusLine } from '../domain/saveWords';
 import { clockTime } from './saveNames';
 import { NameForm } from './NameForm';
@@ -28,7 +28,7 @@ export function SavesPanel(props: {
   const { saves, resortName } = props;
   const [now] = useState(Date.now);
   const game = shownGame(saves.current);
-  const busy = saves.status === 'saving' || !saves.available;
+  const busy = slotsBusy(saves) || !saves.available;
   return (
     <div className="saves-panel">
       <NameForm
@@ -45,6 +45,7 @@ export function SavesPanel(props: {
         saves={listOrder(saves.saves)}
         currentId={game.id}
         busy={busy}
+        loading={saves.loading}
         now={now}
         onLoad={(id) => void saves.load(id)}
         onDelete={(id) => void saves.remove(id)}

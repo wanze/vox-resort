@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createFlotilla, poseOf, stepFlotilla, type Flotilla } from './flotilla';
+import type { PierBox } from './piers';
 import type { Mooring, Rental, SailingGround } from './swimArea';
 
 const MOORINGS: Mooring[] = [
@@ -539,5 +540,81 @@ describe('a hire allowance', () => {
     run(full, 60);
     expect([...full.x]).toEqual([...plain.x]);
     expect([...full.age]).toEqual([...plain.age]);
+  });
+});
+
+const column = (minX: number, maxZ: number): PierBox => ({
+  minX,
+  maxX: minX + 16,
+  minZ: 480,
+  maxZ,
+});
+
+describe('a hire boat and the piers in its way', () => {
+  const REACH = 10;
+
+  const blocked = (piers: PierBox[], islands: PierBox[] = [], seed = 1): Flotilla =>
+    createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1],
+      hire: { count: 6, variant: 3, rental: RENTAL },
+      ground: GROUND,
+      radii: [8, 8, 8, REACH],
+      piers,
+      islands,
+      waterline: WATERLINE,
+      seed,
+    });
+
+  const fewestTies = (flotilla: Flotilla, seconds: number): number => {
+    const slots = hireSlots(flotilla);
+    const ties = slots.map(() => 0);
+    const tied = slots.map((index) => flotilla.age[index]! < 0);
+    for (let tick = 0; tick < seconds * 10; tick++) {
+      stepFlotilla(flotilla, 0.1, GROUND);
+      for (const [boat, index] of slots.entries()) {
+        const lying = flotilla.age[index]! < 0;
+        if (lying && !tied[boat]) ties[boat]!++;
+        tied[boat] = lying;
+      }
+    }
+    return Math.min(...ties);
+  };
+
+  it('brings every boat home round the seaward end of a pier between it and its berth', () => {
+    const layouts = [
+      [column(184, 620)],
+      [column(56, 900)],
+      [column(184, 900), column(200, 900)],
+      [column(40, 800), column(200, 800)],
+    ];
+    for (const piers of layouts) {
+      for (const seed of [1, 2, 3]) {
+        expect(fewestTies(blocked(piers, [], seed), 2000), `seed ${seed}`).toBeGreaterThanOrEqual(
+          3,
+        );
+      }
+    }
+  });
+
+  it('brings every boat home round an island lying off the hut', () => {
+    const island = { minX: 20, maxX: 260, minZ: 620, maxZ: 660 };
+    expect(fewestTies(blocked([], [island]), 2000)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('berths the boats clear of a pier built across the hut’s front', () => {
+    const piers = [column(112, 900), column(128, 900)];
+    const flotilla = blocked(piers);
+    const columns = hireSlots(flotilla).map((index) => flotilla.berthX[index]!);
+    expect(columns).toHaveLength(6);
+    for (const x of columns) expect(x < 112 - REACH || x > 144 + REACH, `berth at ${x}`).toBe(true);
+    expect(fewestTies(flotilla, 2000)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('ties a boat up at last when nothing can reach its berth, rather than keeping it out all night', () => {
+    const walled = { minX: 0, maxX: 400, minZ: 520, maxZ: 620 };
+    expect(fewestTies(blocked([], [walled]), 3000)).toBeGreaterThanOrEqual(2);
   });
 });

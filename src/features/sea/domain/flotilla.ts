@@ -20,6 +20,8 @@ const SWING_RATE = 0.09;
 // crowd does, and a hire is the same share of the resort day at every speed.
 const CROWD_SECONDS_PER_HOUR = WALK_VOXELS_PER_SIM_HOUR / WALK_SPEED;
 const HIRE_SECONDS = 2 * CROWD_SECONDS_PER_HOUR;
+// A berth no route reaches would keep its boat out, and the hire it holds taken, for good.
+const GIVE_UP_SECONDS = 3 * HIRE_SECONDS;
 
 const PEDAL_SHARE_OF_WALK = 0.6;
 
@@ -46,6 +48,13 @@ const BERTH_VOXELS = 4;
 const BERTH_SPACING = 12;
 
 const BERTH_OUT = 4;
+
+// A turning circle and a bit clear of an obstacle's corner, so a boat rounding it never clips it.
+const DETOUR_VOXELS = 4;
+// A boat shoved out of a pier sits exactly its reach away, and must still see along that side.
+const WALL_SLACK = 0.5;
+// Enough for a pier, an island past it and a pier past that between a boat and its berth.
+const MAX_DETOURS = 3;
 
 const LOOK_SECONDS = 6;
 const AVOID_RADIANS = 0.6;
@@ -106,6 +115,8 @@ export interface Flotilla {
   readonly radius: Float32Array;
   readonly piers: readonly PierBox[];
   readonly islands: readonly PierBox[];
+  // Piers and islands merged wherever a hire boat could not pass between them, to route home round.
+  readonly obstacles: readonly PierBox[];
   readonly waterline: number;
   // How many hire boats may be out at once; lowering it lets a boat finish its hire.
   hireAllowed: number;
@@ -127,14 +138,81 @@ const clamp = (value: number, low: number, high: number): number =>
 const wrapAngle = (radians: number): number =>
   radians - Math.PI * 2 * Math.round(radians / (Math.PI * 2));
 
-function berthFor(
+interface Berth {
+  readonly x: number;
+  readonly z: number;
+  readonly heading: number;
+}
+
+const distanceToBox = (box: PierBox, x: number, z: number): number =>
+  Math.hypot(x - clamp(x, box.minX, box.maxX), z - clamp(z, box.minZ, box.maxZ));
+
+// Slots under a pier give way to spares further along the row, nearest the hut first; a boat
+// berthed in the decking could never get within reach of its berth to tie up.
+function layBerths(
   hire: HireOptions,
   ground: SailingGround,
-  berth: number,
-): { x: number; z: number; heading: number } {
-  const x = hire.rental.x + (berth - (hire.count - 1) / 2) * BERTH_SPACING;
-  const z = ground.landwardZ(x) + BERTH_OUT;
-  return { x, z, heading: Math.atan2(hire.rental.x - x, hire.rental.z - z) };
+  obstacles: readonly PierBox[],
+  reach: number,
+): Berth[] {
+  const slots: { x: number; blocked: boolean }[] = [];
+  // A whole row spare past each end, so even a pier across the hut's front leaves a row clear.
+  for (let slot = -hire.count; slot < hire.count * 2; slot++) {
+    const x = hire.rental.x + (slot - (hire.count - 1) / 2) * BERTH_SPACING;
+    const z = ground.landwardZ(x) + BERTH_OUT;
+    const blocked = obstacles.some((box) => distanceToBox(box, x, z) < reach + DETOUR_VOXELS);
+    slots.push({ x, blocked });
+  }
+  return slots
+    .toSorted(
+      (a, b) =>
+        Number(a.blocked) - Number(b.blocked) ||
+        Math.abs(a.x - hire.rental.x) - Math.abs(b.x - hire.rental.x),
+    )
+    .slice(0, hire.count)
+    .toSorted((a, b) => a.x - b.x)
+    .map(({ x }) => {
+      const z = ground.landwardZ(x) + BERTH_OUT;
+      return { x, z, heading: Math.atan2(hire.rental.x - x, hire.rental.z - z) };
+    });
+}
+
+// Boxes closer than a hull's width are one wall to a boat: routing between them would
+// aim it at a gap it cannot pass.
+function mergeObstacles(boxes: readonly PierBox[], width: number): PierBox[] {
+  const merged = [...boxes];
+  for (let one = 0; one < merged.length; one++) {
+    for (let other = one + 1; other < merged.length; other++) {
+      const a = merged[one]!;
+      const b = merged[other]!;
+      const apart =
+        a.minX - width >= b.maxX ||
+        b.minX - width >= a.maxX ||
+        a.minZ - width >= b.maxZ ||
+        b.minZ - width >= a.maxZ;
+      if (apart) continue;
+      merged[one] = {
+        minX: Math.min(a.minX, b.minX),
+        maxX: Math.max(a.maxX, b.maxX),
+        minZ: Math.min(a.minZ, b.minZ),
+        maxZ: Math.max(a.maxZ, b.maxZ),
+      };
+      merged.splice(other, 1);
+      // The grown box may now reach one already passed over.
+      other = one;
+    }
+  }
+  return merged;
+}
+
+function hireWaters(
+  options: FlotillaOptions,
+  boxes: readonly PierBox[],
+): { obstacles: PierBox[]; berths: Berth[] } {
+  const hire = options.hire;
+  const reach = (hire && options.radii?.[hire.variant]) ?? DEFAULT_RADIUS;
+  const obstacles = mergeObstacles(boxes, reach * 2);
+  return { obstacles, berths: hire ? layBerths(hire, options.ground, obstacles, reach) : [] };
 }
 
 // Buoys come first and in mooring order, so the field draws one instance per mooring.
@@ -145,6 +223,9 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
   const hired = hire ? Math.max(0, hire.count) : 0;
   const count = moorings.length + craft + hired;
   const random = createRandom(options.seed);
+  const piers = options.piers ?? [];
+  const islands = options.islands ?? [];
+  const { obstacles, berths } = hireWaters(options, [...piers, ...islands]);
 
   const flotilla: Flotilla = {
     count,
@@ -163,8 +244,9 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     berthHeading: new Float32Array(count),
     gap: new Float32Array(count),
     radius: new Float32Array(count),
-    piers: options.piers ?? [],
-    islands: options.islands ?? [],
+    piers,
+    islands,
+    obstacles,
     waterline: options.waterline,
     hireAllowed: options.hireAllowed ?? hired,
     clock: 0,
@@ -198,7 +280,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
 
   for (let boat = 0; boat < hired; boat++) {
     const index = moorings.length + craft + boat;
-    const berth = berthFor(hire!, ground, boat);
+    const berth = berths[boat]!;
     flotilla.variant[index] = hire!.variant;
     flotilla.hired[index] = 1;
     flotilla.berthX[index] = berth.x;
@@ -296,7 +378,8 @@ function stepHire(flotilla: Flotilla, index: number, dt: number, ground: Sailing
     flotilla.berthZ[index]! - flotilla.z[index]!,
   );
   if (age >= HIRE_SECONDS) {
-    if (away <= BERTH_VOXELS) tieUp(flotilla, index, -flotilla.gap[index]!);
+    if (away <= BERTH_VOXELS || age >= GIVE_UP_SECONDS)
+      tieUp(flotilla, index, -flotilla.gap[index]!);
     else steerHome(flotilla, index, dt, ground);
     return;
   }
@@ -322,14 +405,159 @@ function drift(flotilla: Flotilla, index: number, dt: number, ground: SailingGro
 }
 
 function steerHome(flotilla: Flotilla, index: number, dt: number, ground: SailingGround): void {
-  const bearing = Math.atan2(
-    flotilla.berthX[index]! - flotilla.x[index]!,
-    flotilla.berthZ[index]! - flotilla.z[index]!,
-  );
+  routeHome(flotilla, index, ground);
+  const bearing = Math.atan2(routeX - flotilla.x[index]!, routeZ - flotilla.z[index]!);
   const off = wrapAngle(bearing - flotilla.heading[index]!);
   const helm = (flotilla.speed[index]! / HELM_VOXELS) * dt;
   const over = Math.sign(off) * Math.min(Math.abs(off), helm);
   hold(flotilla, index, wrapAngle(flotilla.heading[index]! + over), dt, ground);
+}
+
+// Module-level so a homing step allocates nothing; only meaningful straight after routeHome.
+let routeX = 0;
+let routeZ = 0;
+
+// Steering straight for the berth pins a boat to any pier in the way: the helm turns it back
+// faster than avoid turns it off. So it makes for a corner of the first thing in the way instead.
+function routeHome(flotilla: Flotilla, index: number, ground: SailingGround): void {
+  const x = flotilla.x[index]!;
+  const z = flotilla.z[index]!;
+  const wall = flotilla.radius[index]! - WALL_SLACK;
+  const clear = flotilla.radius[index]! + DETOUR_VOXELS;
+  routeX = flotilla.berthX[index]!;
+  routeZ = flotilla.berthZ[index]!;
+  for (let detour = 0; detour < MAX_DETOURS; detour++) {
+    const box = firstInWay(flotilla.obstacles, wall, x, z);
+    if (!box || !roundBox(box, wall, clear, x, z, ground)) return;
+  }
+}
+
+// One the boat is inside is passed over: it is being shoved out of it, and is better steered home.
+function firstInWay(
+  obstacles: readonly PierBox[],
+  wall: number,
+  x: number,
+  z: number,
+): PierBox | null {
+  let first: PierBox | null = null;
+  let firstAt = Infinity;
+  for (const box of obstacles) {
+    const inside =
+      x > box.minX - wall && x < box.maxX + wall && z > box.minZ - wall && z < box.maxZ + wall;
+    if (inside) continue;
+    const at = entryAlong(box, wall, x, z, routeX, routeZ);
+    if (at < firstAt) {
+      first = box;
+      firstAt = at;
+    }
+  }
+  return first;
+}
+
+let enter = 0;
+let leave = 1;
+
+// Open at the faces, so a boat slid along a side at its reach still sees along it.
+function clip(from: number, delta: number, low: number, high: number): void {
+  if (delta === 0) {
+    if (from <= low || from >= high) leave = -1;
+    return;
+  }
+  const one = (low - from) / delta;
+  const two = (high - from) / delta;
+  enter = Math.max(enter, Math.min(one, two));
+  leave = Math.min(leave, Math.max(one, two));
+}
+
+function entryAlong(
+  box: PierBox,
+  wall: number,
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+): number {
+  enter = 0;
+  leave = 1;
+  clip(fromX, toX - fromX, box.minX - wall, box.maxX + wall);
+  clip(fromZ, toZ - fromZ, box.minZ - wall, box.maxZ + wall);
+  return enter < leave ? enter : Infinity;
+}
+
+// The box's four corners and the route's end, searched shortest first. A corner off the
+// sailing ground is dropped, so a pier is only ever rounded by its seaward end.
+const nodeX = new Float64Array(5);
+const nodeZ = new Float64Array(5);
+const usable = new Uint8Array(5);
+const cost = new Float64Array(5);
+const firstHop = new Int8Array(5);
+const settled = new Uint8Array(5);
+const END = 4;
+
+function roundBox(
+  box: PierBox,
+  wall: number,
+  clear: number,
+  x: number,
+  z: number,
+  ground: SailingGround,
+): boolean {
+  placeNodes(box, clear, ground);
+  for (let node = 0; node <= END; node++) {
+    const open = usable[node] === 1 && sees(box, wall, x, z, node);
+    cost[node] = open ? Math.hypot(nodeX[node]! - x, nodeZ[node]! - z) : Infinity;
+    firstHop[node] = node;
+    settled[node] = 0;
+  }
+  for (let next = cheapestUnsettled(); next >= 0 && next !== END; next = cheapestUnsettled()) {
+    settled[next] = 1;
+    relaxFrom(box, wall, next);
+  }
+  if (cost[END] === Infinity) return false;
+  routeX = nodeX[firstHop[END]!]!;
+  routeZ = nodeZ[firstHop[END]!]!;
+  return true;
+}
+
+function placeNodes(box: PierBox, clear: number, ground: SailingGround): void {
+  nodeX[0] = nodeX[3] = box.minX - clear;
+  nodeX[1] = nodeX[2] = box.maxX + clear;
+  nodeZ[0] = nodeZ[1] = box.minZ - clear;
+  nodeZ[2] = nodeZ[3] = box.maxZ + clear;
+  nodeX[END] = routeX;
+  nodeZ[END] = routeZ;
+  for (let node = 0; node < END; node++) {
+    const x = nodeX[node]!;
+    const z = nodeZ[node]!;
+    const afloat = x >= ground.westX && x <= ground.eastX && z <= ground.seawardZ;
+    usable[node] = Number(afloat && z >= ground.landwardZ(x));
+  }
+  usable[END] = 1;
+}
+
+const sees = (box: PierBox, wall: number, x: number, z: number, node: number): boolean =>
+  entryAlong(box, wall, x, z, nodeX[node]!, nodeZ[node]!) === Infinity;
+
+function cheapestUnsettled(): number {
+  let cheapest = -1;
+  for (let node = 0; node <= END; node++) {
+    if (settled[node] === 1 || cost[node] === Infinity) continue;
+    if (cheapest < 0 || cost[node]! < cost[cheapest]!) cheapest = node;
+  }
+  return cheapest;
+}
+
+function relaxFrom(box: PierBox, wall: number, from: number): void {
+  const x = nodeX[from]!;
+  const z = nodeZ[from]!;
+  for (let node = 0; node <= END; node++) {
+    if (settled[node] === 1 || usable[node] === 0 || !sees(box, wall, x, z, node)) continue;
+    const through = cost[from]! + Math.hypot(nodeX[node]! - x, nodeZ[node]! - z);
+    if (through < cost[node]!) {
+      cost[node] = through;
+      firstHop[node] = firstHop[from]!;
+    }
+  }
 }
 
 // Order matters: avoid what is ahead, then shove out of overlaps so no hull shows

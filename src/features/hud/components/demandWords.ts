@@ -52,5 +52,5 @@ export function pressureNote(line: DemandLine, pressure: Pressure, present: numb
     return `${whole(wanting - without)} of ${whole(places)} beds taken, ${whole(without)} without one`;
   }
   const away = `${Math.round(turnedAway * 100)}% turned away`;
-  return `${whole(wanting)} want it, ${whole(places)} places, ${away}`;
+  return `${whole(wanting)} want it, room for ${whole(places)} each half hour, ${away}`;
 }

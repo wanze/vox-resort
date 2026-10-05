@@ -4,7 +4,15 @@ import { demandFor } from './demand';
 import type { Venue } from './venues';
 import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 
-function venueOf(key: string, needs: readonly GuestNeed[], capacity: number): Venue {
+// An hour at the table, so each place lets in only the one guest in the half hour counted.
+const AN_HOUR = { min: 3600, max: 3600 };
+
+function venueOf(
+  key: string,
+  needs: readonly GuestNeed[],
+  capacity: number,
+  dwellSeconds = AN_HOUR,
+): Venue {
   const satisfies: readonly NeedRelief[] = needs.map((need) => ({ need, amount: 0.5 }));
   return {
     key,
@@ -13,7 +21,7 @@ function venueOf(key: string, needs: readonly GuestNeed[], capacity: number): Ve
     role: 'food',
     satisfies,
     capacity,
-    dwellSeconds: { min: 600, max: 1200 },
+    dwellSeconds,
     x: 0,
     z: 0,
     tileX: 0,
@@ -122,6 +130,21 @@ describe('the demand for each need', () => {
     expect(demand.lines.hunger.places).toBe(20);
     expect(demand.lines.thirst.places).toBe(20);
     expect(demand.lines.fun.places).toBe(0);
+  });
+
+  it('counts a place freed every two minutes as fifteen in the half hour', () => {
+    const restrooms = venueOf('restrooms#0', ['hygiene'], 4, { min: 60, max: 180 });
+    const demand = demandFor(factsOf({ venues: [restrooms], wanting: wanting({ hygiene: 87 }) }));
+    expect(demand.lines.hygiene.places).toBe(60);
+    expect(demand.lines.hygiene.pressure).toBeCloseTo(87 / 60 - 1);
+  });
+
+  it('adds the quick places and the slow ones together', () => {
+    const venues = [
+      venueOf('shower#0', ['hygiene'], 1, { min: 30, max: 90 }),
+      venueOf('spa#0', ['hygiene'], 10),
+    ];
+    expect(demandFor(factsOf({ venues })).lines.hygiene.places).toBe(40);
   });
 
   it('ignores a venue that makes the need worse', () => {

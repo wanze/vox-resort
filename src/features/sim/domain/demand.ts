@@ -37,16 +37,26 @@ const usable = (facts: ResortFacts, venue: Venue): boolean =>
   !facts.broken?.has(venue.key) &&
   !facts.unreachable.has(venue.key);
 
+// The wanting are a headcount at this moment, so a place counts everyone it lets in within half
+// an hour: a toilet free again in two minutes is fifteen, a table held longer still the one.
+const SERVED_WITHIN = 30 * 60;
+
+function turnsOf(venue: Venue): number {
+  const { min, max } = venue.dwellSeconds;
+  return Math.max(1, SERVED_WITHIN / ((min + max) / 2));
+}
+
 function needPressure(facts: ResortFacts, need: GuestNeed): Pressure {
-  let places = 0;
+  let room = 0;
   let balks = 0;
   let visits = 0;
   for (const venue of facts.venues) {
     if (reliefAt(venue, need) <= 0 || !usable(facts, venue)) continue;
-    places += venue.capacity;
+    room += venue.capacity * turnsOf(venue);
     balks += facts.balks.get(venue.key) ?? 0;
     visits += facts.visits.get(venue.key) ?? 0;
   }
+  const places = Math.round(room);
   const wanting = facts.wanting[need];
   const turnedAway = balks + visits > 0 ? balks / (balks + visits) : 0;
   return {

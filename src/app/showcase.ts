@@ -359,6 +359,7 @@ import {
   rebook,
   siteKey,
   switchBuiltIn,
+  toNewStage,
   unbook,
   withBuiltIns,
   type BookingChange,
@@ -2884,11 +2885,14 @@ function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
 
 // Edits drop the bookings of a stage pulled down and move a built-in to a stage left standing.
 // The beach's stay while any sand is owned, so paving over its gates calls a show off instead.
-function keepProgrammeStanding(resort: Resort): void {
+function keepProgrammeStanding(resort: Resort, wasStanding: readonly Venue[]): void {
   const stages = stageKeysOf(resort.venues);
   const sites = new Set(resort.beachTiles > 0 ? [...stages, siteKey({ kind: 'beach' })] : stages);
   const kept: Programme = keepStanding(resort.events.programme, sites);
-  resort.events.programme = withBuiltIns(kept, BUILT_INS, stages, stageRank(resort.venues));
+  const rank = stageRank(resort.venues);
+  const before = new Set(stageKeysOf(wasStanding));
+  const built = stages.filter((key) => !before.has(key));
+  resort.events.programme = toNewStage(withBuiltIns(kept, BUILT_INS, stages, rank), built, rank);
 }
 
 function runTicks(
@@ -5413,7 +5417,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.unreachable = strandedOn(resort.venues, network);
     resort.siteVenues = withBeach(resort.venues, network);
     Object.assign(resort, sandOf(network.beach));
-    keepProgrammeStanding(resort);
+    keepProgrammeStanding(resort, wasStanding);
     refreshInvited(resort);
     refreshEventVenues(resort, clock.ticks);
     resort.router.rebuild(resort.venues, resort.lodgings, resort.gateways, network);

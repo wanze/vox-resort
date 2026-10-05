@@ -136,6 +136,37 @@ function EndButton({ chip, programme }: { readonly chip: Chip } & ProgrammePanel
   );
 }
 
+// Follows the booking to its new stage, where its chip is shown.
+function SiteSelect(props: {
+  readonly chip: Chip;
+  readonly programme: ProgrammeControls;
+  readonly onRefusal: (refusal: BookingRefusal | null) => void;
+}) {
+  const { chip, programme } = props;
+  const here = chip.sites.find((each) => each.here);
+  if (!here) return null;
+  return (
+    <select
+      className="hud-select"
+      aria-label="Move to"
+      value={here.key}
+      onChange={(event) => {
+        const to = chip.sites.find((each) => each.key === event.target.value);
+        if (!to || to.here) return;
+        const refusal = programme.rebook(chip.booking, { site: to.site });
+        props.onRefusal(refusal);
+        if (refusal === null) programme.choose(to.key);
+      }}
+    >
+      {chip.sites.map((each) => (
+        <option key={each.key} value={each.key} disabled={!each.allowed}>
+          {each.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function ChipActions({ chip, programme }: { readonly chip: Chip } & ProgrammePanelProps) {
   const [refusal, setRefusal] = useState<BookingRefusal | null>(null);
   const move = (by: number) => () =>
@@ -153,6 +184,7 @@ function ChipActions({ chip, programme }: { readonly chip: Chip } & ProgrammePan
           onPress={move(-START_STEP)}
         />
         <ActionButton label="Later" allowed={chip.later} why={BLOCKED} onPress={move(START_STEP)} />
+        <SiteSelect chip={chip} programme={programme} onRefusal={setRefusal} />
         <EndButton chip={chip} programme={programme} />
       </div>
       <Refusal refusal={refusal} />

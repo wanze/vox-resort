@@ -250,6 +250,28 @@ describe('booking only what can be booked', () => {
     expect(morning(welcome).canSwitch).toBe(true);
     expect(morning(off).canSwitch).toBe(true);
   });
+
+  it('offers the other stages to move to, but not one already taken then', () => {
+    const programme = booked(
+      { site: { kind: 'stage', venue: 'kids-club#0' } },
+      { site: { kind: 'stage', venue: 'beach-club#0' }, start: 18 * HOUR, kind: 'musical' },
+    );
+    const evening = (chosen: string) =>
+      programmeView(facts({ programme }), chosen).days[0]!.parts.evening[0]!;
+    expect(
+      evening('kids-club#0').sites.map(({ key, here, allowed }) => [key, here, allowed]),
+    ).toEqual([
+      ['beach-club#0', false, false],
+      ['kids-club#0', true, true],
+    ]);
+    expect(evening('beach-club#0').sites.map((each) => each.allowed)).toEqual([true, false]);
+  });
+
+  it('offers nowhere to move to with a single stage', () => {
+    const programme = booked({});
+    const view = programmeView(facts({ programme, stages: [STAGES[1]!] }), null);
+    expect(view.days[0]!.parts.evening[0]!.sites).toEqual([]);
+  });
 });
 
 describe('stage kinds', () => {

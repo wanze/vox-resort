@@ -20,6 +20,7 @@ import {
   rebook,
   siteKey,
   switchBuiltIn,
+  type Booking,
   type BookingRefusal,
   type EventSite,
   type Occurrence,
@@ -91,6 +92,15 @@ export interface SiteType {
   readonly sites: readonly SiteTab[];
 }
 
+export interface ChipSite {
+  readonly key: string;
+  readonly site: EventSite;
+  readonly label: string;
+  // The site the booking is on now.
+  readonly here: boolean;
+  readonly allowed: boolean;
+}
+
 export interface Chip {
   readonly booking: number;
   readonly minute: number;
@@ -103,6 +113,8 @@ export interface Chip {
   readonly earlier: boolean;
   readonly later: boolean;
   readonly canSwitch: boolean;
+  // Every site its kind may be held at, its own included; empty when there is nowhere else.
+  readonly sites: readonly ChipSite[];
 }
 
 export interface RepeatChoice {
@@ -184,8 +196,32 @@ const partOf = (minute: number): DayPart =>
 const movable = (programme: Programme, id: number, start: number): boolean =>
   rebook(programme, id, { start }).refusal === null;
 
+function sitesFor(
+  programme: Programme,
+  booking: Booking,
+  tabs: readonly SiteTab[],
+): readonly ChipSite[] {
+  const own = siteKey(booking.site);
+  const choices = tabs
+    .filter((tab) => EVENT_KINDS[booking.kind].sites.includes(tab.site.kind))
+    .map((tab) => ({
+      key: tab.key,
+      site: tab.site,
+      label: tab.label,
+      here: tab.key === own,
+      allowed:
+        tab.key === own || rebook(programme, booking.id, { site: tab.site }).refusal === null,
+    }));
+  return choices.length > 1 ? choices : [];
+}
+
 // Switched-off bookings too, so a built-in can be switched back on from its day.
-function chipsOn(programme: Programme, key: string, day: number): readonly Chip[] {
+function chipsOn(
+  programme: Programme,
+  key: string,
+  day: number,
+  tabs: readonly SiteTab[],
+): readonly Chip[] {
   return programme.bookings
     .filter((booking) => siteKey(booking.site) === key && occursOn(booking.repeat, day))
     .toSorted((a, b) => a.start - b.start || a.id - b.id)
@@ -202,6 +238,7 @@ function chipsOn(programme: Programme, key: string, day: number): readonly Chip[
       canSwitch:
         booking.builtIn !== undefined &&
         switchBuiltIn(programme, booking.id, booking.off === true) !== programme,
+      sites: sitesFor(programme, booking, tabs),
     }));
 }
 
@@ -452,14 +489,16 @@ function openParts(slot: Slot | null): DayColumn['open'] {
   };
 }
 
-function dayColumn(
-  facts: ProgrammeFacts,
-  site: SiteTab | null,
-  day: number,
-  forecast: ReadonlyMap<number, DayForecast>,
-): DayColumn {
+interface Week {
+  readonly facts: ProgrammeFacts;
+  readonly tabs: readonly SiteTab[];
+  readonly site: SiteTab | null;
+  readonly forecast: ReadonlyMap<number, DayForecast>;
+}
+
+function dayColumn({ facts, tabs, site, forecast }: Week, day: number): DayColumn {
   // No booking sits on the empty key, so a plot with no stage shows an empty week.
-  const chips = chipsOn(facts.programme, site ? site.key : '', day);
+  const chips = chipsOn(facts.programme, site ? site.key : '', day, tabs);
   const { weather, pinned } = forecast.get(day) ?? UNKNOWN_WEATHER;
   return {
     day,
@@ -480,14 +519,17 @@ export function programmeView(facts: ProgrammeFacts, chosen: string | null): Pro
   const sites = tabsOf(facts.stages, facts.beachRoom);
   const site = chosenTab(sites, chosen);
   const today = dayAt(facts.now);
-  const forecast = new Map(facts.forecast.map((each) => [each.day, each]));
+  const week: Week = {
+    facts,
+    tabs: sites,
+    site,
+    forecast: new Map(facts.forecast.map((each) => [each.day, each])),
+  };
   return {
     sites,
     types: typesOf(sites, facts.stages),
     site,
-    days: Array.from({ length: DAYS_SHOWN }, (_, offset) =>
-      dayColumn(facts, site, today + offset, forecast),
-    ),
+    days: Array.from({ length: DAYS_SHOWN }, (_, offset) => dayColumn(week, today + offset)),
     upcoming: upcomingOf(facts, sites),
   };
 }

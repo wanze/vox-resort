@@ -216,6 +216,25 @@ export function withBuiltIns(
   return changed ? { bookings, nextId } : programme;
 }
 
+// Only a stage just built draws a built-in over, so one the player moved stays where it was put.
+export function toNewStage(
+  programme: Programme,
+  built: readonly string[],
+  rank: (key: string) => number,
+): Programme {
+  const best = built.toSorted((a, b) => rank(a) - rank(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
+  if (best === undefined) return programme;
+  const site: EventSite = { kind: 'stage', venue: best };
+  let moved = programme;
+  for (const booking of programme.bookings) {
+    if (booking.builtIn === undefined || booking.site.kind !== 'stage') continue;
+    if (rank(best) >= rank(booking.site.venue)) continue;
+    const result = rebook(moved, booking.id, { site });
+    if (result.refusal === null) moved = result.programme;
+  }
+  return moved;
+}
+
 export function keepStanding(programme: Programme, sites: ReadonlySet<string>): Programme {
   const bookings = programme.bookings.filter(
     (each) => each.builtIn !== undefined || sites.has(siteKey(each.site)),

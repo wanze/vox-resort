@@ -13,6 +13,7 @@ import {
   postponed,
   rebook,
   switchBuiltIn,
+  toNewStage,
   unbook,
   withBuiltIns,
   type BookingDraft,
@@ -176,6 +177,26 @@ describe('withBuiltIns', () => {
     const added = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue, OTHER.venue], rank);
     const moved = rebook(added, 1, { site: OTHER }).programme;
     expect(withBuiltIns(moved, [WELCOME], [STAGE.venue, OTHER.venue], rank)).toBe(moved);
+  });
+});
+
+describe('toNewStage', () => {
+  const onOther = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [OTHER.venue], rank);
+
+  it('moves a built-in to a bigger stage just built', () => {
+    const moved = toNewStage(onOther, [STAGE.venue], rank);
+    expect(moved.bookings[0]!.site).toEqual(STAGE);
+  });
+
+  it('leaves it put with nothing built, or nothing bigger', () => {
+    expect(toNewStage(onOther, [], rank)).toBe(onOther);
+    const onStage = withBuiltIns(EMPTY_PROGRAMME, [WELCOME], [STAGE.venue], rank);
+    expect(toNewStage(onStage, [OTHER.venue], rank)).toBe(onStage);
+  });
+
+  it('leaves the bookings that are not built-ins where they are', () => {
+    const programme = booked(draft({ site: OTHER }));
+    expect(toNewStage(programme, [STAGE.venue], rank)).toBe(programme);
   });
 });
 

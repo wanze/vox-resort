@@ -156,7 +156,8 @@ score = gain * taste * recency
 - **gain** counts only what the guest can use, estimated for arrival time. A
   cost counts only below `CONTENT_LEVEL` (0.5), so a rested guest plays tennis
   for free.
-- A venue is a candidate only if it serves a need the guest would get up for.
+- A venue is a candidate only if it serves a need the guest would get up for,
+  and only while it is open: the weather and its `hours` (`hours.ts`) can shut it.
 - **taste** is a stable hashed per-guest preference, **recency** halves the
   place just left, **busy** is inside plus queuing.
 
@@ -244,6 +245,14 @@ Sunset is 21:30. Guests walk home on a flow field per lodging and are held
 inside until morning; those without a bed wander. Lit windows follow the share
 of beds in use. Parasols furl in the evening and in rain (`canopyFurl.ts`).
 
+A venue may declare `hours` (the night club, 20:00-02:00). On a night when one
+is open late, reachable and dry enough, a hashed share of parties without
+children goes out (`nightOut.ts`) and stays up until a late bedtime between
+23:00 and 01:30. Past its usual bedtime such a party is **out late** and only
+chooses venues with hours; when none serves it, the night is over and it goes
+home early. Whoever is still up at 22:00 wakes tired. The walk home is long, so
+the last revellers are often still on the paths at 03:00; that is accepted.
+
 ## Weather
 
 `weather.ts` picks one weather per day from a hash of day and seed, so it isn't
@@ -329,7 +338,7 @@ same `crowd.ts`. A resort meshes a fixed pool (`STAFF_CAPS`); the roster
 | Role      | Count                                   | Does                                          |
 | --------- | --------------------------------------- | --------------------------------------------- |
 | Cleaner   | one per six venues plus one per 60 beds | rooms first, then dirtiest venue, then litter |
-| Animator  | one per three `stage` venues            | an hour or two per stage, then moves on       |
+| Animator  | one per three `stage` or `dj` venues    | an hour or two per stage, then moves on       |
 | Lifeguard | one per `bathing` venue and tower post  | stays at a pool, or walks the sand to a tower |
 | Mechanic  | one per five venues with `reliability`  | repairs the longest-broken venue              |
 

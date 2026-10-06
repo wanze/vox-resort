@@ -63,17 +63,28 @@ export interface Listener {
   readonly radius: number;
 }
 
-// Writes `near` and `open` per SoundKind, as HeardScene holds them.
+export interface HeardVenues {
+  readonly isOpen: (venue: number) => boolean;
+  readonly keepsHours: (venue: number) => boolean;
+}
+
+// Per SoundKind, as HeardScene holds them.
+export interface Gathered {
+  readonly near: Float32Array;
+  readonly open: Float32Array;
+  readonly late: Float32Array;
+}
+
 export function gatherSources(
   sources: SoundSources,
   listener: Listener,
-  isOpen: (venue: number) => boolean,
-  near: Float32Array,
-  open: Float32Array,
+  venues: HeardVenues,
+  { near, open, late }: Gathered,
 ): void {
   const { x, z, radius } = listener;
   near.fill(0);
   open.fill(0);
+  late.fill(0);
   for (let at = 0; at < sources.count; at++) {
     const dx = sources.x[at]! - x;
     const dz = sources.z[at]! - z;
@@ -84,10 +95,27 @@ export function gatherSources(
     const kind = sources.kind[at]!;
     near[kind] = near[kind]! + heard;
     const venue = sources.venue[at]!;
-    if (venue < 0 || isOpen(venue)) open[kind] = open[kind]! + heard;
+    if (venue < 0) open[kind] = open[kind]! + heard;
+    else hearVenue(venues, venue, heard, kind, { open, late });
   }
+  shareOfNear(near, open);
+  shareOfNear(near, late);
+}
+
+function hearVenue(
+  venues: HeardVenues,
+  venue: number,
+  heard: number,
+  kind: number,
+  { open, late }: Omit<Gathered, 'near'>,
+): void {
+  if (venues.isOpen(venue)) open[kind] = open[kind]! + heard;
+  if (venues.keepsHours(venue)) late[kind] = late[kind]! + heard;
+}
+
+function shareOfNear(near: Float32Array, summed: Float32Array): void {
   for (let kind = 0; kind < near.length; kind++) {
-    open[kind] = near[kind]! > 0 ? open[kind]! / near[kind]! : 0;
+    summed[kind] = near[kind]! > 0 ? summed[kind]! / near[kind]! : 0;
   }
 }
 

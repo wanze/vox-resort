@@ -18,6 +18,7 @@ import { hear, kindAt, LAYERS, type HeardScene } from '../features/sound/domain/
 import { DEFAULT_SOUND_PREFS } from '../features/sound/domain/soundPrefs';
 import { WEATHERS, type Weather } from '../features/sim/domain/weather';
 import type { SoundKind } from '../../voxel-gen/voxelgen.ts';
+import { MODEL_SOURCES } from '../../voxel-gen/models/index.ts';
 import { useHearing } from './useSound';
 import '@fontsource-variable/rubik/index.css';
 import './soundBoard.css';
@@ -266,11 +267,17 @@ const START: SceneControls = {
   near: 1,
 };
 
+const KEEPS_HOURS = new Set(
+  MODEL_SOURCES.flatMap((source) => (source.venue?.hours && source.sound ? [source.sound] : [])),
+);
+
 function sceneOf(controls: SceneControls, seconds: number): HeardScene {
   const near = new Float32Array(SOUND_KINDS.length);
   const open = new Float32Array(SOUND_KINDS.length).fill(1);
+  const late = new Float32Array(SOUND_KINDS.length);
   near[kindAt('trees')] = controls.trees;
   near[kindAt(controls.kind)] = controls.near;
+  late[kindAt(controls.kind)] = KEEPS_HOURS.has(controls.kind) ? 1 : 0;
   return {
     ...controls,
     targetX: 0,
@@ -283,6 +290,7 @@ function sceneOf(controls: SceneControls, seconds: number): HeardScene {
     shore: controls.shore >= 40 ? Infinity : controls.shore,
     near,
     open,
+    late,
   };
 }
 

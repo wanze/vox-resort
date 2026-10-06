@@ -499,6 +499,23 @@ export const BANK: Bank = {
       },
     ],
   },
+  club: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'club.mp3',
+        source: {
+          page: 'https://freesound.org/people/arrogantwhiteboys/sounds/417949/',
+          fetch: 'https://cdn.freesound.org/previews/417/417949_8198569-hq.mp3',
+          author: 'arrogantwhiteboys',
+          licence: 'CC0',
+        },
+        cut: { start: 2, length: 20, loudness: -24 },
+      },
+    ],
+  },
   fountain: {
     bus: 'ambience',
     loop: true,

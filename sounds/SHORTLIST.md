@@ -234,6 +234,15 @@ Play them on the sound board: `pnpm dev`, then `/sounds.html`.
 |             | [Jetski.wav](https://freesound.org/people/wjauch/sounds/212441/)                                                                                                       | wjauch          | CC0     | 42 s   | 4.4 (29) | A real jet ski: started at a dock, away, round and back, then shut off; the level swings 20 dB as it goes and comes, so it loops less evenly                  |
 |             | [Summer beach sounds 1](https://freesound.org/people/peterjohncooper/sounds/580707/)                                                                                   | peterjohncooper | CC0     | 99 s   |          | A crowded beach with children in the waves and jet skis in the distance; very even, but more beach than boats                                                 |
 
+## club (ambience)
+
+|             | Title                                                                                   | Author            | Licence | Length | Rating   | Why                                                                                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------- | ----------------- | ------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **In bank** | [through the walls bass](https://freesound.org/people/arrogantwhiteboys/sounds/417949/) | arrogantwhiteboys | CC0     | 284 s  | 4.9 (8)  | A track through a wall, recorded hot; the opening minute is even (under 1 dB) before a quiet break at 60 s                                                                      |
+|             | [Distant Dance Club.wav](https://freesound.org/people/DeVern/sounds/586173/)            | DeVern            | CC0     | 24 s   | 4.9 (33) | Dance music muffled by a wall, made as a seamless loop, so the cut is the whole file rather than 20 s; kick and bass, no vocals, no crowd; 5 dB per-second RMS spread, the beat |
+|             | [Outside an urban rave](https://freesound.org/people/OSFX/sounds/410592/)               | OSFX              | CC0     | 50 s   | 4.9 (56) | A rave heard from the street, built in software; very even (0.7 dB over the cut) but darker and droning, more city than beach                                                   |
+|             | [Outside the club](https://freesound.org/people/EKVelika/sounds/170370/)                | EKVelika          | CC0     | 32 s   | 4.0 (25) | Boomy bass from outside a club, lo-fi; dead even (0.7 dB) and no voices, but little more than the low end                                                                       |
+
 ## fountain (ambience)
 
 |             | Title                                                                       | Author   | Licence | Length | Rating   | Why                                                             |

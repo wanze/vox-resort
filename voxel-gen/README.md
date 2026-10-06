@@ -204,6 +204,8 @@ venue: {
 | `names`        | names the game draws a new venue's from, at most 24 characters; none, its type    |
 | `stage`        | an animator can put a show on here                                                |
 | `floor`        | seated visitors dance on it in a show, still standing ones cheer where they stand |
+| `hours`        | `{ opens, closes }` in minutes of the day, past midnight if closes < opens        |
+| `dj`           | music plays whenever it is open, so it dances and cheers without an animator      |
 
 A hut that puts craft on the sea declares `hire` beside its venue, its fleets in
 the order it lets them out; the app finds every rental and builds its fleets from

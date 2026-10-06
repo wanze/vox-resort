@@ -29,6 +29,8 @@ export interface HeardScene {
   near: Float32Array;
   // Per SoundKind: the closeness-weighted share of those that are open, 0..1.
   open: Float32Array;
+  // Per SoundKind: the closeness-weighted share of those that keep opening hours, 0..1.
+  late: Float32Array;
 }
 
 export const LAYERS = [
@@ -58,6 +60,9 @@ const CLOSE_RADIUS = 8;
 export const SURF_REACH = 40;
 const SURF_FLOOR = 0.15;
 export const MAX_VENUE_VOICES = 3;
+// Venues playing music of their own: two tunes at once are a clash, so the game's gives way.
+const VENUE_MUSIC: readonly Layer[] = ['club'];
+const VENUE_MUSIC_DUCK = 0.7;
 
 const smoothstep = (from: number, to: number, value: number): number => {
   const through = Math.min(1, Math.max(0, (value - from) / (to - from)));
@@ -78,9 +83,15 @@ export function closeness(distanceTiles: number, radius: number): number {
 }
 
 // A show over the sea takes the music down further than a storm does.
-export function musicDuck(weather: Weather, showing = false): number {
-  if (showing) return 0.5;
-  return weather === 'storm' ? 0.6 : 1;
+export function musicDuck(weather: Weather, showing = false, venueMusic = 0): number {
+  const duck = showing ? 0.5 : weather === 'storm' ? 0.6 : 1;
+  return Math.min(duck, 1 - VENUE_MUSIC_DUCK * venueMusic);
+}
+
+export function venueMusicOf(levels: Float32Array): number {
+  let loudest = 0;
+  for (const layer of VENUE_MUSIC) loudest = Math.max(loudest, levels[layerAt(layer)]!);
+  return Math.min(1, loudest);
 }
 
 const RAIN: { readonly [weather in Weather]: number } = {
@@ -133,9 +144,12 @@ function loudestLeft(into: Float32Array, kept: ReadonlySet<number>): number {
 }
 
 // Only the loudest few: a street of six venues heard at once is a din, not a place.
-function hearVenues(scene: HeardScene, into: Float32Array, gate: number): void {
+// A recording of a busy bar is wrong once the resort has gone to bed, though the bar is still open;
+// a venue keeping its own hours is busy within them, whoever else is asleep.
+function hearVenues(scene: HeardScene, into: Float32Array, zoom: number): void {
   for (const { layer, kind } of VENUE_LAYERS) {
-    into[layer] = Math.min(1, scene.near[kind]!) * scene.open[kind]! * gate;
+    const awake = scene.awake + (1 - scene.awake) * scene.late[kind]!;
+    into[layer] = Math.min(1, scene.near[kind]!) * scene.open[kind]! * zoom * awake;
   }
   const kept = new Set<number>();
   for (let loudest = loudestLeft(into, kept); loudest >= 0 && kept.size < MAX_VENUE_VOICES;) {
@@ -154,8 +168,7 @@ export function hear(scene: HeardScene, into: Float32Array): void {
   into[layerAt('wind')] = WIND[scene.weather];
   into[layerAt('surf')] = surf;
   hearNature(scene, into, surf);
-  // A recording of a busy bar is wrong once the resort has gone to bed, though the bar is still open.
-  hearVenues(scene, into, smoothstep(0.55, 0.85, zoom) * scene.awake);
+  hearVenues(scene, into, smoothstep(0.55, 0.85, zoom));
 }
 
 // Exponential, so a level set at 5 Hz glides there without overshooting.

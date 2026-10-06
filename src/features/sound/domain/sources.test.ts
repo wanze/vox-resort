@@ -5,8 +5,14 @@ import { SOUND_KINDS } from './bank';
 import { kindAt } from './hearing';
 import { gatherSources, hearGuests, shoreDistance, soundSourcesOf } from './sources';
 
-const SOUNDS: { readonly [id: string]: SoundKind } = { cafe: 'cafe', palm: 'trees' };
+const SOUNDS: { readonly [id: string]: SoundKind } = { cafe: 'cafe', club: 'club', palm: 'trees' };
 const soundOf = (id: string): SoundKind | null => SOUNDS[id] ?? null;
+
+const gathered = () => ({
+  near: new Float32Array(SOUND_KINDS.length),
+  open: new Float32Array(SOUND_KINDS.length),
+  late: new Float32Array(SOUND_KINDS.length),
+});
 
 const placed = (key: string, id: string, tileX: number, tileZ: number, tilesX = 1, tilesZ = 1) => ({
   key,
@@ -45,14 +51,28 @@ describe('soundSourcesOf', () => {
       soundOf,
       [{ key: 'b' }, { key: 'd' }],
     );
-    const near = new Float32Array(SOUND_KINDS.length);
-    const open = new Float32Array(SOUND_KINDS.length);
-    gatherSources(sources, { x: 4.5, z: 4.5, radius: 8 }, (venue) => venue === 1, near, open);
+    const into = gathered();
+    const { near, open } = into;
+    const venues = { isOpen: (venue: number) => venue === 1, keepsHours: () => false };
+    gatherSources(sources, { x: 4.5, z: 4.5, radius: 8 }, venues, into);
     expect(near[kindAt('cafe')]).toBeGreaterThan(1);
     expect(open[kindAt('cafe')]).toBeGreaterThan(0);
     expect(open[kindAt('cafe')]).toBeLessThan(0.5);
-    gatherSources(sources, { x: 40, z: 40, radius: 8 }, () => true, near, open);
+    gatherSources(sources, { x: 40, z: 40, radius: 8 }, { ...venues, isOpen: () => true }, into);
     expect(near[kindAt('cafe')]).toBe(0);
+  });
+
+  it('weighs the venues keeping opening hours by closeness', () => {
+    const sources = soundSourcesOf(
+      [placed('b', 'club', 4, 4), placed('d', 'club', 12, 4)],
+      soundOf,
+      [{ key: 'b' }, { key: 'd' }],
+    );
+    const into = gathered();
+    const venues = { isOpen: () => true, keepsHours: (venue: number) => venue === 0 };
+    gatherSources(sources, { x: 4.5, z: 4.5, radius: 16 }, venues, into);
+    expect(into.late[kindAt('club')]).toBeGreaterThan(0.5);
+    expect(into.late[kindAt('club')]).toBeLessThan(1);
   });
 });
 

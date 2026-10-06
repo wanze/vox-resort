@@ -285,6 +285,7 @@ export type SoundKind =
   | 'restrooms'
   | 'watersports'
   | 'bonfire'
+  | 'club'
   | 'fountain'
   | 'torch'
   | 'trees';

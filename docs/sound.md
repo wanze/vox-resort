@@ -66,10 +66,14 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
 - **Sea**: surf by closeness to the shore, gulls by day in the dry.
 - **Nature**: birds by day, crickets at night, cicadas in a heatwave.
 - **Guests**: crowd murmur, children and swimmers by count in reach.
-- **Venues**: only when zoomed in, scaled by how open and awake they are. Only
-  the three loudest kinds play. A fire pit counts as open only while its
-  bonfire burns. The water sports hut's engines are heard at the hut; the craft
-  out on the water are silent.
+- **Venues**: only when zoomed in, scaled by how open they are and by the share
+  of guests awake. Only the three loudest kinds play. A fire pit counts as open
+  only while its bonfire burns. A venue with `hours` (the night club) is heard
+  only within them, and at full strength however many have gone to bed. The
+  water sports hut's engines are heard at the hut; the craft out on the water
+  are silent.
+- **Music**: ducks in a storm and for fireworks, and gives way to a club's own
+  music as it is heard (`VENUE_MUSIC`), down to 30%.
 
 Sound sources are listed once per resort and after every edit, not scanned at
 5 Hz. One fill with 3,000 guests costs about 0.2 ms.

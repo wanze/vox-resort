@@ -64,6 +64,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | reception      | 4×3       | 64 × 26 × 48   | 13 x 8 m check-in hall and loggia  |
 | gym-pavilion   | 4×3       | 64 × 25 × 48   | open gym pavilion, training yard   |
 | restaurant     | 4×3       | 64 × 24 × 48   | arcaded hall + terrace, 16 x 12 m  |
+| night-club     | 4×3       | 64 × 19 × 48   | dance floor, DJ booth, bar, neon   |
 | villa          | 4×4       | 64 × 40 × 64   | 10.75 x 10 m, arcade, plunge pool  |
 | beach-club     | 6×5       | 96 × 27 × 80   | 23 x 16 m deck, thatched bar       |
 | swimming-pool  | 8×6       | 128 × 15 × 96  | 20 m pool + two, 32 x 24 m deck    |
@@ -278,6 +279,9 @@ voxel model of an outdoor basketball court, finely detailed, small crisp voxels,
 
 # open-air-stage
 voxel model of an open-air stage on a resort plaza, finely detailed, small crisp voxels, a raised timber stage at the back with a plain stucco backdrop and one red band, a dark metal truss over it hung with amber lamps, a speaker stack either side, a timber dance floor inlaid in pale stone paving framed by a terracotta band, standing room in front of it and twelve small timber tables with four chairs each towards the front, clipped trees in terracotta pots at the corners and along the aisle, flowering planters along the foot of the stage and the front edge, four lamp posts along the front edge, on an 8x6 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# night-club
+voxel model of a small resort night club, finely detailed, small crisp voxels, dark stucco walls full height down both sides and a low front wall under a gateway with a lit sign panel, a pink and a cyan neon band along the façade, inside a teak floor with an inlaid dance floor open to the sky, a roofed strip along the back over a DJ booth with two glowing decks, a bar counter with stools down one side and two L-shaped lounge sofas down the other, a dark stone apron in front for the queue, raised on a low plinth, on a 4x3 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```
 
 ## Mosaic paving

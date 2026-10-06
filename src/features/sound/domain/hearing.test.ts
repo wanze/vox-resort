@@ -11,6 +11,7 @@ import {
   LAYERS,
   MAX_VENUE_VOICES,
   musicDuck,
+  venueMusicOf,
   type HeardScene,
   type Layer,
 } from './hearing';
@@ -41,6 +42,7 @@ function scene(over: Partial<HeardScene> = {}, near: Partial<Record<SoundKind, n
     swimmers: 0,
     near: nearBy,
     open,
+    late: new Float32Array(SOUND_KINDS.length),
     ...over,
   };
 }
@@ -83,6 +85,20 @@ describe('hear: venues', () => {
     const shut = scene({}, { watersports: 1 });
     shut.open[kindAt('watersports')] = 0;
     expect(heard(shut).watersports).toBe(0);
+  });
+
+  it('thumps from the night club while it is open, and not outside its hours', () => {
+    expect(heard(scene({ night: 1 }, { club: 0.8 })).club).toBeGreaterThan(0);
+    const shut = scene({ night: 1 }, { club: 1 });
+    shut.open[kindAt('club')] = 0;
+    expect(heard(shut).club).toBe(0);
+  });
+
+  it('keeps a venue with opening hours loud while the rest of the resort sleeps', () => {
+    const late = scene({ night: 1, awake: 0.15 }, { club: 1, bar: 1 });
+    late.late[kindAt('club')] = 1;
+    expect(heard(late).club).toBeCloseTo(1);
+    expect(heard(late).bar).toBeCloseTo(0.15);
   });
 
   it(`plays at most ${MAX_VENUE_VOICES} venue kinds, the loudest`, () => {
@@ -175,5 +191,19 @@ describe('musicDuck', () => {
   it('ducks for a show whatever the weather', () => {
     expect(musicDuck('storm', true)).toBe(0.5);
     expect(musicDuck('heatwave', true)).toBe(0.5);
+  });
+
+  it("gives way to a club's own music as it is heard", () => {
+    expect(musicDuck('clear', false, 1)).toBeCloseTo(0.3);
+    expect(musicDuck('clear', false, 0.5)).toBeCloseTo(0.65);
+    expect(musicDuck('storm', false, 0.2)).toBe(0.6);
+  });
+
+  it('hears venue music only from the club', () => {
+    const levels = new Float32Array(LAYERS.length);
+    levels[LAYERS.indexOf('bar')] = 1;
+    expect(venueMusicOf(levels)).toBe(0);
+    levels[LAYERS.indexOf('club')] = 0.4;
+    expect(venueMusicOf(levels)).toBeCloseTo(0.4);
   });
 });

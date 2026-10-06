@@ -4514,6 +4514,7 @@ function createHearing({ handle, resort, clock, view, fireworks, onHear }: Heari
     swimmers: 0,
     near: new Float32Array(SOUND_KINDS.length),
     open: new Float32Array(SOUND_KINDS.length),
+    late: new Float32Array(SOUND_KINDS.length),
   };
   const guests: HeardGuests = { guests: 0, children: 0, swimmers: 0 };
   let sources: SoundSources | null = null;
@@ -4567,8 +4568,11 @@ function createHearing({ handle, resort, clock, view, fireworks, onHear }: Heari
     Object.assign(scene, guests);
     const present = presentCount(now.guests);
     scene.awake = present > 0 ? 1 - Math.min(present, now.router.asleepCount) / present : 1;
-    const isOpen = (venue: number): boolean => heardOpen(now, venue, effect, clock.tickOfDay);
-    gatherSources(sourcesOf(now), listener, isOpen, scene.near, scene.open);
+    const venues = {
+      isOpen: (venue: number): boolean => heardOpen(now, venue, effect, clock.tickOfDay),
+      keepsHours: (venue: number): boolean => now.venues[venue]!.hours !== undefined,
+    };
+    gatherSources(sourcesOf(now), listener, venues, scene);
     onHear(scene);
   };
 }

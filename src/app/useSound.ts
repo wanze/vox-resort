@@ -18,6 +18,7 @@ import {
   hear as hearScene,
   LAYERS,
   musicDuck,
+  venueMusicOf,
   type HeardScene,
 } from '../features/sound/domain/hearing';
 import { moodAt } from '../features/sound/domain/playlist';
@@ -75,7 +76,8 @@ function tellEngine(
   sound.tick(scene.stormSeconds, scene.weather === 'storm');
   const listener = { x: scene.targetX * TILE_VOXELS, y: 0, z: scene.targetZ * TILE_VOXELS };
   sound.fireworks(scene.show, scene.showSeconds, listener);
-  sound.setMusic(moodAt(scene.night, step.welcome), musicDuck(scene.weather, scene.show !== null));
+  const duck = musicDuck(scene.weather, scene.show !== null, venueMusicOf(layers.levels));
+  sound.setMusic(moodAt(scene.night, step.welcome), duck);
 }
 
 export function useHearing(engine: RefObject<AudioEngine | null>, welcome: boolean) {

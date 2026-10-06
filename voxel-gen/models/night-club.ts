@@ -69,7 +69,7 @@ export default defineModel({
   id: 'night-club',
   label: 'Night Club',
   category: 'leisure',
-  sound: 'bar',
+  sound: 'club',
   tiles: { x: 4, z: 3 },
   cost: 2_400,
   placement: { perResort: { min: 1, max: 1 } },

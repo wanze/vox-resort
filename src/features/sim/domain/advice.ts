@@ -67,6 +67,7 @@ export interface ResortFacts {
   readonly wanting: { readonly [need in GuestNeed]: number };
   readonly balks: ReadonlyMap<string, number>;
   readonly visits: ReadonlyMap<string, number>;
+  // Venue and lodging keys alike.
   readonly unreachable: ReadonlySet<string>;
   // A key with no entry is spotless.
   readonly cleanliness: ReadonlyMap<string, number>;
@@ -292,16 +293,21 @@ export function adviceLittered(facts: ResortFacts): Advice | null {
   };
 }
 
+// A stranded lodging's count is its beds, which check-in leaves empty until a path reaches it.
 export function adviceUnreachable(facts: ResortFacts): readonly Advice[] {
-  return facts.venues
-    .filter((venue) => facts.unreachable.has(venue.key))
-    .map((venue) => ({
+  const places = [
+    ...facts.venues.map((venue) => ({ place: venue, count: venue.capacity })),
+    ...facts.lodgings.map((lodging) => ({ place: lodging, count: lodging.beds })),
+  ];
+  return places
+    .filter(({ place }) => facts.unreachable.has(place.key))
+    .map(({ place, count }) => ({
       kind: 'unreachable' as const,
       weight: 0.9,
-      subject: venue.label,
-      key: venue.key,
-      count: venue.capacity,
-      at: tileOf(venue),
+      subject: place.label,
+      key: place.key,
+      count,
+      at: tileOf(place),
       need: null,
     }));
 }
@@ -340,6 +346,7 @@ export function adviceFarFromHome(facts: ResortFacts): Advice | null {
   let furthest = 0;
   let worst: { readonly lodging: Lodging; readonly need: GuestNeed } | null = null;
   for (const lodging of facts.lodgings) {
+    if (facts.unreachable.has(lodging.key)) continue;
     for (const need of GUEST_NEEDS) {
       const distance = nearestServing(facts.venues, need, lodging);
       if (distance === null || distance <= TOO_FAR || distance <= furthest) continue;
@@ -460,14 +467,14 @@ export function adviceNoFireworks(facts: ResortFacts): Advice | null {
 
 // Both halves: a beach building has no door node but is reachable over the sand.
 // Sand routes are not swept per building; that costs too much for too little.
-export function unreachableOn(
-  venues: readonly Venue[],
-  doorsOf: (venue: Venue) => VenueDoors,
+export function unreachableOn<Place extends { readonly key: string }>(
+  places: readonly Place[],
+  doorsOf: (place: Place) => VenueDoors,
 ): ReadonlySet<string> {
   const stranded = new Set<string>();
-  for (const venue of venues) {
-    const doors = doorsOf(venue);
-    if (doors.nodes.length === 0 && doors.sand.length === 0) stranded.add(venue.key);
+  for (const place of places) {
+    const doors = doorsOf(place);
+    if (doors.nodes.length === 0 && doors.sand.length === 0) stranded.add(place.key);
   }
   return stranded;
 }

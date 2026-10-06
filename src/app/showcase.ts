@@ -1328,10 +1328,11 @@ interface Resort {
 }
 
 // Off the layout's placements: a benchmark tiles the plan ninefold and would sleep nine times its
-// guests.
-function homesOn(placements: readonly Placement[]): Home[] {
+// guests. A stranded lodging houses nobody, or its guests would be checked in to walk all night.
+function homesOn(placements: readonly Placement[], stranded: ReadonlySet<string>): Home[] {
   return (
     placements
+      .filter((placement) => !stranded.has(placement.key))
       .map((placement) => ({
         key: placement.key,
         id: placement.id,
@@ -1620,17 +1621,6 @@ function buildResort(
   // scene and the benchmark stay as they were.
   const building = plot.layout.paths.length === 0;
   const population = populationOf(plan, plot, parts.population);
-  const guests = createGuests({
-    count: population,
-    homes: homesOn(plot.layout.placements),
-    variants: parts.people.length,
-    childVariant: CHILD_VARIANT,
-    seed: GUEST_SEED,
-    away: startsAway(building, parts.population),
-  });
-  const needs = createNeeds(guests, NEEDS_SEED);
-  const happiness = createHappiness(population);
-  const arrivals = createRandom(ARRIVALS_SEED);
   // Off the layout's paving, not the plot's: a benchmark tiles the plan ninefold onto ground
   // the elevation and the shore know nothing about.
   const network = networkFor({
@@ -1644,13 +1634,24 @@ function buildResort(
   const names = assignNames(new Map(), namedPlacesOf(plot.layout.placements));
   const venues = venuesOn(plot.layout.placements, names);
   const lodgings = lodgingsOn(plot.layout.placements);
+  const unreachable = strandedOn(venues, lodgings, network);
+  const guests = createGuests({
+    count: population,
+    homes: homesOn(plot.layout.placements, unreachable),
+    variants: parts.people.length,
+    childVariant: CHILD_VARIANT,
+    seed: GUEST_SEED,
+    away: startsAway(building, parts.population),
+  });
+  const needs = createNeeds(guests, NEEDS_SEED);
+  const happiness = createHappiness(population);
+  const arrivals = createRandom(ARRIVALS_SEED);
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
   const places = placesFor(venues, byKey(plot.layout.placements), network);
   const rentals = rentalsOf(shore, plot.layout.placements, hireOf);
   const bathing = { shore, rentals, span: spanOf(plan) };
   const cast = createCast(population, places, { sand: network.sand, swim: bathing });
-  const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
   // Off the layout's lists, as the network is, props too since the layout stands trees as either,
@@ -3279,9 +3280,17 @@ function rosterNow(resort: Resort): {
   return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
 }
 
-function strandedOn(venues: readonly Venue[], network: WalkNetwork): ReadonlySet<string> {
+// A lodging is reached by its doors alone, never over the sand, as the router walks guests home.
+function strandedOn(
+  venues: readonly Venue[],
+  lodgings: readonly Lodging[],
+  network: WalkNetwork,
+): ReadonlySet<string> {
   const index = nodeIndexFor(network);
-  return unreachableOn(venues, (venue) => doorsFor(venue, index, network));
+  return new Set([
+    ...unreachableOn(venues, (venue) => doorsFor(venue, index, network)),
+    ...unreachableOn(lodgings, (lodging) => doorsFor(lodging, index)),
+  ]);
 }
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
@@ -5617,8 +5626,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.lodgings = lodgingsOn(plot.placements);
     resort.gateways = gatewaysOn(plot.placements);
     resort.depots = depotsOn(plot.placements);
+    resort.unreachable = strandedOn(resort.venues, resort.lodgings, network);
     // Before the router's rebuild, whose findHomes maps the new home indices.
-    rehome(resort.guests, homesOn(plot.placements));
+    rehome(resort.guests, homesOn(plot.placements, resort.unreachable));
     resort.homeOfLodging = homesOfLodgings(resort.lodgings, resort.guests.homes);
     const beds = bedCount(resort.guests);
     resort.beds = { total: beds.beds, taken: beds.taken };
@@ -5643,7 +5653,6 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         paving.at(x, z) !== undefined ||
         (isBeach(shore, x, z) && resort.occupancy.keyAt({ x, z }) === undefined),
     );
-    resort.unreachable = strandedOn(resort.venues, network);
     resort.siteVenues = withBeach(resort.venues, network);
     Object.assign(resort, sandOf(network.beach));
     keepProgrammeStanding(resort, wasStanding);

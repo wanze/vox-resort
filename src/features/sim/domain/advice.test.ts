@@ -237,6 +237,36 @@ describe('the advice rules', () => {
     ]);
   });
 
+  it('names a lodging nothing can walk to, with the beds standing empty in it', () => {
+    const bungalow = lodgingOf({ key: 'bungalow#0', label: 'Bungalow', x: 32, z: 48 });
+    const advice = adviceUnreachable(
+      healthyFacts({ lodgings: [bungalow], unreachable: new Set(['bungalow#0']) }),
+    );
+    expect(advice).toEqual([
+      {
+        kind: 'unreachable',
+        weight: 0.9,
+        subject: 'Bungalow',
+        count: 4,
+        at: { tileX: 2, tileZ: 3 },
+        need: null,
+        key: 'bungalow#0',
+      },
+    ]);
+  });
+
+  it('says nothing of how far a stranded lodging is from anything', () => {
+    const food = venueOf({ key: 'bakery#0', satisfies: [{ need: 'hunger', amount: 0.5 }] });
+    const advice = adviceFarFromHome(
+      healthyFacts({
+        venues: [food],
+        lodgings: [lodgingOf({ key: 'hotel#0', x: 640, z: 0 })],
+        unreachable: new Set(['hotel#0']),
+      }),
+    );
+    expect(advice).toBeNull();
+  });
+
   it('names the lodging furthest from anything serving a need, in tiles', () => {
     const food = venueOf({
       key: 'bakery#0',
@@ -389,6 +419,11 @@ describe('unreachableOn', () => {
   it('leaves a venue with a door node alone', () => {
     const bakery = venueOf({ key: 'bakery#0' });
     expect([...unreachableOn([bakery], () => doorsOf([4], []))]).toEqual([]);
+  });
+
+  it('strands a lodging by the same rule', () => {
+    const bungalow = lodgingOf({ key: 'bungalow#0' });
+    expect([...unreachableOn([bungalow], () => doorsOf([], []))]).toEqual(['bungalow#0']);
   });
 });
 

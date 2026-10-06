@@ -253,7 +253,8 @@ export type SignKind =
   | 'tennis'
   | 'basketball'
   | 'volleyball'
-  | 'stage';
+  | 'stage'
+  | 'nightclub';
 
 export type SoundKind =
   | 'cafe'
@@ -300,12 +301,16 @@ export interface ModelVenue {
   // Defaults to 'covered': a venue wrongly left open in a storm carries on,
   // one wrongly shut goes dark.
   readonly shelter?: Shelter;
+  // Minutes of the day; closes before opens runs past midnight. Left out, it never shuts.
+  readonly hours?: { readonly opens: number; readonly closes: number };
   // Arriving guests check in here before anything else.
   readonly receives?: boolean;
   // The chance, 0 to 1, that a visit sends somebody off holding something to throw away.
   readonly litter?: number;
   // An animator can put a show on here.
   readonly stage?: boolean;
+  // Music plays whenever it is open: its visitors dance and cheer with or without an animator.
+  readonly dj?: true;
   // Guests swim here, so somebody should be watching.
   readonly bathing?: boolean;
   // Visits between breakdowns, on average; absent, it never breaks.

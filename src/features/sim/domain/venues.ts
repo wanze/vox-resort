@@ -1,6 +1,7 @@
 import type {
   GuestNeed,
   ModelDoor,
+  ModelVenue,
   NeedRelief,
   Shelter,
   VenueRole,
@@ -8,6 +9,7 @@ import type {
 import { objectTypeById, venueOf } from '../../catalog/domain/objectTypes';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { placedDoors } from '../../layout/domain/doorStep';
+import type { Hours } from './hours';
 
 export interface Venue {
   readonly key: string;
@@ -21,9 +23,11 @@ export interface Venue {
   readonly capacity: number;
   readonly dwellSeconds: { readonly min: number; readonly max: number };
   readonly shelter?: Shelter;
+  readonly hours?: Hours;
   readonly receives?: boolean;
   readonly litter?: number;
   readonly stage?: boolean;
+  readonly dj?: boolean;
   readonly bathing?: boolean;
   readonly reliability?: number;
   readonly x: number;
@@ -34,6 +38,18 @@ export interface Venue {
   readonly tilesZ: number;
   readonly doors: readonly ModelDoor[];
 }
+
+// Spread in only when declared: an undefined key is not the same as a missing one here.
+const traitsOf = (venue: ModelVenue) => ({
+  shelter: venue.shelter ?? 'covered',
+  ...(venue.hours === undefined ? {} : { hours: venue.hours }),
+  receives: venue.receives ?? false,
+  litter: venue.litter ?? 0,
+  stage: venue.stage ?? false,
+  dj: venue.dj ?? false,
+  bathing: venue.bathing ?? false,
+  ...(venue.reliability === undefined ? {} : { reliability: venue.reliability }),
+});
 
 // Derived on demand rather than cached, since placements change under hand edits.
 // Lodging is left out: `guests/domain/homes.ts` owns where everybody sleeps.
@@ -56,12 +72,7 @@ export function venuesOn(
       satisfies: venue.satisfies ?? [],
       capacity: venue.capacity,
       dwellSeconds: venue.dwellSeconds,
-      shelter: venue.shelter ?? 'covered',
-      receives: venue.receives ?? false,
-      litter: venue.litter ?? 0,
-      stage: venue.stage ?? false,
-      bathing: venue.bathing ?? false,
-      ...(venue.reliability === undefined ? {} : { reliability: venue.reliability }),
+      ...traitsOf(venue),
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
       tileX: placement.tileX,

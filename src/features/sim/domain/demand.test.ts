@@ -112,6 +112,14 @@ describe('the demand for each need', () => {
     expect(demand.lines.hunger.pressure).toBe(0);
   });
 
+  it('counts no places at a venue shut by its hours, and every place once it opens', () => {
+    const venues = [venueOf('club#0', ['fun'], 40), venueOf('golf#0', ['fun'], 10)];
+    const at = (shut: ReadonlySet<string>) =>
+      demandFor(factsOf({ venues, wanting: wanting({ fun: 10 }), shut })).lines.fun.places;
+    expect(at(new Set(['club#0']))).toBe(10);
+    expect(at(new Set())).toBe(50);
+  });
+
   it('lifts a roomy line above zero once guests are turned away at the door', () => {
     const demand = demandFor(
       factsOf({

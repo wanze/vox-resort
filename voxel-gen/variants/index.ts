@@ -52,6 +52,7 @@ import basketballCourt from './basketball-court.ts';
 import volleyball from './volleyball.ts';
 import minigolf from './minigolf.ts';
 import openAirStage from './open-air-stage.ts';
+import nightClub from './night-club.ts';
 import { MOSAIC_VARIANTS } from '../mosaics/index.ts';
 
 export interface ModelVariant {
@@ -110,6 +111,7 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'volleyball', source: volleyball },
   { of: 'minigolf', source: minigolf },
   { of: 'open-air-stage', source: openAirStage },
+  { of: 'night-club', source: nightClub },
   ...MOSAIC_VARIANTS,
 ];
 

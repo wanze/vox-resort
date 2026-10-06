@@ -33,6 +33,7 @@ import kids_club from './kids-club.ts';
 import lifeguard_tower from './lifeguard-tower.ts';
 import litter_bin from './litter-bin.ts';
 import minigolf from './minigolf.ts';
+import night_club from './night-club.ts';
 import oak from './oak.ts';
 import olive from './olive.ts';
 import open_air_stage from './open-air-stage.ts';
@@ -144,6 +145,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   game_hall,
   restaurant,
   beach_club,
+  night_club,
   open_air_stage,
   swimming_pool,
   tennis_court,

@@ -8,6 +8,7 @@ import { MOSAIC_PIECES, mosaicSources, turnVoxel } from './mosaics/pieces.ts';
 import { MOSAIC_SAMPLE } from './mosaics/sample.ts';
 import { PROP_SOURCES } from './props/index.ts';
 import { DRAFT_SOURCES, MODEL_SOURCES } from './models/index.ts';
+import { PALETTE } from './palette.ts';
 import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
@@ -540,8 +541,45 @@ function sweepStale(outDir: string): void {
   }
 }
 
-const ICON_MODEL = 'palm';
-// The sea's water colour; the palm's trunk and base are sand and vanish on a sand ground.
+const ICON_PLACEMENTS = [
+  { id: 'bungalow', x: 0, y: 3, z: 0 },
+  // Sunk by its planter's height so the trunk grows straight out of the beach.
+  { id: 'palm', x: 46, y: 1, z: 6 },
+  { id: 'sun-lounger', x: 48, y: 3, z: 24 },
+] as const;
+const ICON_SCENE = { width: 64, depth: 48, sand: 3 } as const;
+
+// The sea is in front: the camera looks from +z, so a sea behind the bungalow would be hidden.
+const shoreAt = (x: number): number => 39 + Math.round(2 * Math.sin(x / 7));
+
+function iconScene(): VoxelModel {
+  const placed = ICON_PLACEMENTS.map((placement) => {
+    const source = MODEL_SOURCES.find((candidate) => candidate.id === placement.id);
+    if (!source) throw new Error(`The icon model ${placement.id} is not in the registry`);
+    return { placement, model: buildModel(source) };
+  });
+  return buildModel({
+    id: 'icon',
+    label: 'Icon',
+    category: 'grounds',
+    tiles: { x: 1, z: 1 },
+    build: (b) => {
+      for (const { placement, model } of placed) {
+        for (const { x, y, z, color } of dayVoxelsOf(model)) {
+          b.set(x + placement.x, y + placement.y, z + placement.z, color);
+        }
+      }
+      // Painted after the models so the sand buries the palm's planter.
+      const { width, depth, sand } = ICON_SCENE;
+      for (let x = 0; x < width; x++) {
+        b.box(x, x, 0, sand - 1, 0, shoreAt(x) - 1, PALETTE.sand.base);
+        b.box(x, x, 0, 0, shoreAt(x), depth - 1, PALETTE.water.light);
+      }
+    },
+  });
+}
+
+// The open sea, so the scene reads as an island; its own strip is the lighter shallows.
 const ICON_BACKGROUND: Vec3 = [79, 198, 222];
 const ICONS = [
   { file: 'icon-192.png', size: 192, fill: 0.84 },
@@ -594,11 +632,9 @@ async function main(): Promise<void> {
   const outDir = process.env.VOXELGEN_OUT ?? path.join(here, 'out');
   mkdirSync(outDir, { recursive: true });
   const iconDir = path.join(here, '..', 'public', 'icons');
-  const iconSource = MODEL_SOURCES.find((source) => source.id === ICON_MODEL);
-  if (!iconSource) throw new Error(`The icon model ${ICON_MODEL} is not in the registry`);
   // CI renders only the icons: the whole catalogue is the ~30 s it skips.
   if (args.includes('--icons')) {
-    writeIcons(buildModel(iconSource), iconDir);
+    writeIcons(iconScene(), iconDir);
     return;
   }
 
@@ -636,8 +672,7 @@ async function main(): Promise<void> {
     );
   }
   if (registry.sweeps && whole) sweepStale(outDir);
-  const icon = models.find((model) => model.id === ICON_MODEL);
-  if (registry === CATALOGUE && whole && icon) writeIcons(icon, iconDir);
+  if (registry === CATALOGUE && whole) writeIcons(iconScene(), iconDir);
 }
 
 await main();

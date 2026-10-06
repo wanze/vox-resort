@@ -183,7 +183,7 @@ export function workplacesOf(
     venues: venues.length,
     bathing: venues.filter((venue) => venue.bathing === true).length,
     posts: posts.length,
-    stages: venues.filter((venue) => venue.stage === true).length,
+    stages: venues.filter((venue) => venue.stage === true || venue.dj === true).length,
     reliable: venues.filter((venue) => venue.reliability !== undefined).length,
   };
 }

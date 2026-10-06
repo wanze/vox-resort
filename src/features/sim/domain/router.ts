@@ -54,8 +54,9 @@ import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './qu
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
-import { isOpenIn, weatherEffect, type Weather } from './weather';
-import { shelterOf, type Venue } from './venues';
+import { openNow } from './hours';
+import { weatherEffect, type Weather } from './weather';
+import { type Venue } from './venues';
 
 // Duplicated rather than imported: simClock's constant is private to the clock.
 const TICK_SECONDS = 60;
@@ -220,6 +221,10 @@ export function createRouter(parts: {
   readonly seed: number;
   // A party invited to an event stays up for it, and stays inside until it ends (-1 for no event).
   readonly upLate?: (party: number) => boolean;
+  // Up past its own bedtime for a night out, not for an event.
+  readonly outLate?: (party: number) => boolean;
+  // Out late with nothing open that serves it: the party goes to bed, and says nothing.
+  readonly onNightOver?: (party: number) => void;
   readonly eventStay?: (person: number, venue: number) => number;
   readonly onWoke?: (person: number) => void;
 }): Router {
@@ -525,7 +530,7 @@ export function createRouter(parts: {
   const isOpen = (venue: number): boolean => {
     const declared = venues[venue];
     if (!declared || isBrokenDown(venue)) return false;
-    return isOpenIn(shelterOf(declared), weatherEffect(weatherNow()));
+    return openNow(declared, weatherEffect(weatherNow()), parts.tickOfDay());
   };
 
   const wearOut = (venue: number): void => {
@@ -560,6 +565,12 @@ export function createRouter(parts: {
     );
   };
 
+  // Past midnight the minigolf is no night out: only a venue that keeps hours is.
+  const isOpenLate = (venue: number): boolean =>
+    isOpen(venue) && venues[venue]!.hours !== undefined;
+
+  const isOutLate = (person: number): boolean => parts.outLate?.(guests.party[person]!) ?? false;
+
   const choiceFor = (person: number, at: number, stepFree: boolean) => {
     const people = crowd();
     return chooseVenue({
@@ -576,7 +587,7 @@ export function createRouter(parts: {
       affinity: affinityOf(person),
       justLeft: justLeft[person]!,
       cleanliness: cleanOf,
-      isOpen,
+      isOpen: isOutLate(person) ? isOpenLate : isOpen,
       weather: weatherEffect(weatherNow()),
     });
   };
@@ -586,6 +597,10 @@ export function createRouter(parts: {
     const choice = choiceFor(person, at, stepFree);
     if (choice) {
       setPartyGoal(goals, guests, person, choice);
+      return;
+    }
+    if (isOutLate(person)) {
+      parts.onNightOver?.(guests.party[person]!);
       return;
     }
     // Only here: chooseVenue's null also means content, which is no complaint.

@@ -137,7 +137,10 @@ const spotless = (venues: number): (() => Upkeep) => {
 
 type Heard = NonNullable<Parameters<typeof createRouter>[0]['onThought']>;
 
-type EventParts = Pick<Parameters<typeof createRouter>[0], 'upLate' | 'eventStay' | 'onWoke'>;
+type EventParts = Pick<
+  Parameters<typeof createRouter>[0],
+  'upLate' | 'eventStay' | 'onWoke' | 'outLate' | 'onNightOver'
+>;
 
 const hearing = (): { heard: [number, string, string | null][]; onThought: Heard } => {
   const heard: [number, string, string | null][] = [];
@@ -1695,6 +1698,57 @@ describe('invitations', () => {
   });
 });
 
+describe('a night out', () => {
+  const party = guests.party[0]!;
+  const LATE = 23 * 60;
+
+  const funAt = (tileX: number, key: string): Venue => ({
+    ...bakery(tileX),
+    key,
+    id: key.split('#')[0]!,
+    label: key,
+    role: 'activity',
+    satisfies: [{ need: 'fun', amount: 0.8 }],
+  });
+  const club = { ...funAt(7, 'night-club#0'), hours: { opens: 20 * 60, closes: 2 * 60 } };
+
+  const outOn = (tick: number, outLate: boolean) => {
+    const network = networkOf(street(8));
+    const { heard, onThought } = hearing();
+    const over: number[] = [];
+    const { router } = routerOn(network, [funAt(1, 'minigolf#0'), club], wanting(0, 'fun'), {
+      lodgings: [],
+      tickOfDay: () => tick,
+      onThought,
+      events: {
+        outLate: (each) => outLate && each === party,
+        onNightOver: (each) => over.push(each),
+      },
+    });
+    router.step(0, nodeAt(network, 0));
+    return { router, heard, over };
+  };
+
+  it('takes a party out late past the closer minigolf, to the venue that keeps late hours', () => {
+    const { router, over } = outOn(LATE, true);
+    expect(router.goalOf(0)?.key).toBe('night-club#0');
+    expect(over).toEqual([]);
+  });
+
+  it('ends the night of a party out late once nothing late is open, without a complaint', () => {
+    const { router, heard, over } = outOn(3 * 60, true);
+    expect(router.goalOf(0)).toBeNull();
+    expect(over).toEqual([party]);
+    expect(heard.filter(([, kind]) => kind === 'nothing-for')).toEqual([]);
+  });
+
+  it('leaves the choice of a party not out late as it was', () => {
+    const { router, over } = outOn(LATE, false);
+    expect(router.goalOf(0)?.key).toBe('minigolf#0');
+    expect(over).toEqual([]);
+  });
+});
+
 interface Watch {
   readonly roamsBeach?: boolean;
   readonly step?: (router: Router, person: number, at: number) => number;
@@ -2001,8 +2055,8 @@ describe('on the generated plot', () => {
       .join(';');
     for (let at = 0; at < key.length; at++)
       hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2407);
-    expect(hash).toBe(3143055374);
+    expect(layout.paths).toHaveLength(2403);
+    expect(hash).toBe(3128744629);
   });
 
   it('sends grubby guests over the sand to wash on the beach', () => {
@@ -2431,7 +2485,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const desks = venues.filter((venue) => venue.receives);
-    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12]);
+    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12]);
     let tick = 10 * 60;
 
     let crowd: Crowd | null = null;

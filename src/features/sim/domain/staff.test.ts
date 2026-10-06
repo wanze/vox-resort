@@ -212,6 +212,12 @@ describe('workplacesOf', () => {
     });
   });
 
+  it('counts a venue with a resident DJ as a stage, so it is given an animator', () => {
+    const venues = [venueAt('night-club#0', { dj: true }), venueAt('bakery#0', {})];
+    expect(workplacesOf(venues, []).stages).toBe(1);
+    expect(rosterFor(workplacesOf(venues, [])).animator).toBe(1);
+  });
+
   it('sums the beds of the lodgings it is given', () => {
     const places = workplacesOf([venueAt('bakery#0', {})], [], [{ beds: 4 }, { beds: 40 }]);
     expect(places.beds).toBe(44);

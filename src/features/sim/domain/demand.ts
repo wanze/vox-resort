@@ -34,6 +34,7 @@ const clamp = (value: number): number => (value < -1 ? -1 : value > 1 ? 1 : valu
 
 const usable = (facts: ResortFacts, venue: Venue): boolean =>
   !facts.closed?.has(venue.key) &&
+  !facts.shut?.has(venue.key) &&
   !facts.broken?.has(venue.key) &&
   !facts.unreachable.has(venue.key);
 

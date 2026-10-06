@@ -191,7 +191,8 @@ import {
   type Carrying,
   type Litter,
 } from '../features/sim/domain/litter';
-import { LATE_NIGHT_RELIEF, mix } from '../features/sim/domain/night';
+import { isBedtime, LATE_NIGHT_RELIEF, mix } from '../features/sim/domain/night';
+import { isPastTen, nightOf, planNightsOut } from '../features/sim/domain/nightOut';
 import { keepReview, reviewFor, type Review } from '../features/sim/domain/reviews';
 import {
   countArrivals,
@@ -393,6 +394,7 @@ import { sandOf, watchRoom, type LaunchSite } from '../features/fireworks/domain
 import { fireworksDrought, isFireworksNight } from '../features/fireworks/domain/nights';
 import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
 import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
+import { djPlays, openAt, openNow } from '../features/sim/domain/hours';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
 import {
   createRaindrops,
@@ -1209,12 +1211,21 @@ interface Resort {
   // Per venue, refreshed once a frame, so the staff router's question is an array read.
   eventBooked: Uint8Array;
   eventShowing: Uint8Array;
+  // A resident DJ plays while the venue is open: a show with or without an animator. Refreshed
+  // with the clock, as the first resort is built before the clock exists.
+  djOn: Uint8Array;
   hosted: readonly { readonly venue: number; readonly until: number }[];
   // Per party, the run it is invited to: the router asks per guest per tick.
   invited: PartyRuns;
   // Per party, kept up from noon for tonight's show.
   keen: Uint8Array;
   keenShow: Occurrence | null;
+  // Per party, the tick its night out ends, or -1: hashed afresh every hour, so never saved.
+  nightOutUntil: Int32Array;
+  // Out tonight, but nothing late served them; cleared at check-in.
+  readonly homeEarly: Set<number>;
+  // Still out at ten, so they wake tired; cleared at check-in.
+  readonly nightOwls: Set<number>;
   // Today's runs called off or put off, so nobody is kept up for them; cleared at check-in.
   readonly settled: Set<string>;
   // The lanterns stay on the sand on a fireworks night.
@@ -1643,13 +1654,26 @@ function buildResort(
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, parts.ticks()),
     onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
-    upLate: (party) => resort.invited.end[party]! >= 0 || resort.keen[party] === 1,
+    upLate: (party) =>
+      resort.invited.end[party]! >= 0 ||
+      resort.keen[party] === 1 ||
+      isOutTonight(resort, party, parts.ticks()),
+    // An invited or keen party is the event's, and chooses as it always did.
+    outLate: (party) =>
+      isOutTonight(resort, party, parts.ticks()) &&
+      isBedtime(party, parts.tickOfDay()) &&
+      resort.invited.end[party]! < 0 &&
+      resort.keen[party] !== 1,
+    onNightOver: (party) => resort.homeEarly.add(party),
     eventStay: (person, venue) => {
       const party = guests.party[person]!;
       return resort.invited.venue[party] === venue ? resort.invited.end[party]! : -1;
     },
     onWoke: (person) => {
-      if (resort.events.tired.has(guests.party[person]!)) relieve(needs, person, LATE_NIGHT_RELIEF);
+      const party = guests.party[person]!;
+      if (resort.events.tired.has(party) || resort.nightOwls.has(party)) {
+        relieve(needs, person, LATE_NIGHT_RELIEF);
+      }
     },
     seed: DWELL_SEED,
   });
@@ -1705,6 +1729,7 @@ function buildResort(
     breakdowns: () => resort.breakdowns,
     crowd: () => staffField!.crowd,
     weather: parts.weather,
+    tickOfDay: parts.tickOfDay,
     duty: () => resort.duty,
     litter: () => resort.litter,
     litterWindow: () => litterWindowOf(resort),
@@ -1831,10 +1856,14 @@ function buildResort(
     events,
     eventBooked: new Uint8Array(venues.length),
     eventShowing: new Uint8Array(venues.length),
+    djOn: new Uint8Array(venues.length),
     hosted: NO_HOSTED,
     invited: createPartyRuns(guests.parties.length),
     keen: new Uint8Array(guests.parties.length),
     keenShow: null,
+    nightOutUntil: new Int32Array(guests.parties.length).fill(-1),
+    homeEarly: new Set(),
+    nightOwls: new Set(),
     settled: new Set(),
     fireworksNight: false,
     venues,
@@ -1934,7 +1963,10 @@ function recastAll(resort: Resort): void {
   const { staffRouter, venues } = resort;
   noteShows(
     resort.cast,
-    (venue) => staffRouter.performingAt(venue) || resort.eventShowing[venue] === 1,
+    (venue) =>
+      staffRouter.performingAt(venue) ||
+      resort.eventShowing[venue] === 1 ||
+      resort.djOn[venue] === 1,
   );
   recastStaff(
     resort.staffCast,
@@ -2655,6 +2687,57 @@ function refreshKeen(resort: Resort, clock: Clock): void {
   resort.keen = keenParties(resort.guests, resort.keenShow, resort.keen);
 }
 
+function refreshDj(resort: Resort, clock: Clock): void {
+  const { venues } = resort;
+  if (resort.djOn.length !== venues.length) resort.djOn = new Uint8Array(venues.length);
+  const effect = weatherEffect(clock.weather);
+  for (const [index, venue] of venues.entries()) {
+    const broken = isBroken(resort.breakdowns, index);
+    resort.djOn[index] = Number(djPlays(venue, effect, clock.tickOfDay, broken));
+  }
+}
+
+const isOutTonight = (resort: Resort, party: number, now: number): boolean =>
+  (resort.nightOutUntil[party] ?? -1) > now && !resort.homeEarly.has(party);
+
+// Last orders: a venue that is shut by then is no reason to stay out.
+const LATE_CHECK = 23 * TICKS_PER_HOUR;
+
+function lateVenueTonight(resort: Resort, clock: Clock): boolean {
+  const effect = weatherEffect(clock.weather);
+  return resort.venues.some(
+    (venue, index) =>
+      venue.hours !== undefined &&
+      !resort.unreachable.has(venue.key) &&
+      !isBroken(resort.breakdowns, index) &&
+      openNow(venue, effect, LATE_CHECK),
+  );
+}
+
+function refreshNightOut(resort: Resort, clock: Clock): void {
+  const { parties, child } = resort.guests;
+  if (resort.nightOutUntil.length < parties.length) {
+    resort.nightOutUntil = new Int32Array(parties.length);
+  }
+  if (lateVenueTonight(resort, clock)) {
+    planNightsOut(parties, child, nightOf(clock.ticks), resort.nightOutUntil);
+  } else resort.nightOutUntil.fill(-1);
+}
+
+const isOutAndUp = (resort: Resort, party: number, now: number): boolean =>
+  isOutTonight(resort, party, now) &&
+  resort.guests.parties[party]!.members.some(
+    (member) => resort.guests.present[member] === 1 && !resort.router.isAsleep(member),
+  );
+
+// Hourly: whoever is still out and awake past ten wakes the worse for it.
+function markNightOwls(resort: Resort, clock: Clock): void {
+  if (!isPastTen(clock.tickOfDay)) return;
+  for (let party = 0; party < resort.guests.parties.length; party++) {
+    if (isOutAndUp(resort, party, clock.ticks)) resort.nightOwls.add(party);
+  }
+}
+
 // The keen go to bed with the show over, whether or not they were ever invited.
 function sendTheKeenToBed(resort: Resort, now: number): void {
   if (!resort.keenShow || now < resort.keenShow.end) return;
@@ -2942,6 +3025,7 @@ function runTicks(
     runDay(resort, clock.day);
     resort.settled.clear();
     refreshKeen(resort, clock);
+    refreshNightOut(resort, clock);
     // After the coaches and before the counters are wiped, which the advice reads.
     morning();
     resort.router.forgetTheDay();
@@ -2953,13 +3037,17 @@ function runTicks(
     hearSurroundings(resort, clock.ticks);
     burnOnTheBeach(resort, clock);
     refreshKeen(resort, clock);
+    refreshNightOut(resort, clock);
+    markNightOwls(resort, clock);
     hourly();
   }
   admitLaterWaves(resort, clock, ticks);
+  refreshDj(resort, clock);
   // A booked event cheers its own audience, so a show on the same stage does not cheer them twice.
   cheerTheAudience(resort.needs, resort.guests.present, {
     performing: (venue) =>
-      resort.staffRouter.performingAt(venue) && resort.eventShowing[venue] !== 1,
+      (resort.staffRouter.performingAt(venue) || resort.djOn[venue] === 1) &&
+      resort.eventShowing[venue] !== 1,
     venueOf: (person) => resort.router.venueIndexOf(person),
     waiting: (person) => resort.router.isWaitingAt(person),
     venues: resort.venues.length,
@@ -3162,6 +3250,11 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
         .filter((venue) => !isOpenIn(shelterOf(venue), effect))
         .map((venue) => venue.key),
     ),
+    shut: new Set(
+      resort.venues
+        .filter((venue) => !openAt(venue.hours, now % TICKS_PER_DAY))
+        .map((venue) => venue.key),
+    ),
     idleStage: idleStageOf(resort, now),
     quietBeach: quietBeachOf(resort, now),
     welcomeless: stageKeysOf(resort.venues).length === 0 ? resort.today.arrived : 0,
@@ -3252,6 +3345,8 @@ function noteArrivedParties(resort: Resort, arrived: readonly number[]): void {
 function runDay(resort: Resort, day: number): void {
   // Everybody kept up late has woken by now.
   resort.events.tired.clear();
+  resort.homeEarly.clear();
+  resort.nightOwls.clear();
   resort.newcomers = [];
   resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
   resort.arrivalsAdmitted = 0;
@@ -4351,7 +4446,7 @@ function createHearing({ handle, resort, clock, view, fireworks, onHear }: Heari
     Object.assign(scene, guests);
     const present = presentCount(now.guests);
     scene.awake = present > 0 ? 1 - Math.min(present, now.router.asleepCount) / present : 1;
-    const isOpen = (venue: number): boolean => isOpenIn(shelterOf(now.venues[venue]!), effect);
+    const isOpen = (venue: number): boolean => openNow(now.venues[venue]!, effect, clock.tickOfDay);
     gatherSources(sourcesOf(now), listener, isOpen, scene.near, scene.open);
     onHear(scene);
   };
@@ -5091,6 +5186,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     resort.events.programme = programme;
     refreshEventVenues(resort, clock.ticks);
     refreshKeen(resort, clock);
+    refreshNightOut(resort, clock);
     tellProgramme();
     // A stage open in the inspector says what is on next there.
     select(selected);
@@ -5277,6 +5373,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     recastAll(resort);
     clock.restore(saved.clock);
     refreshKeen(resort, clock);
+    // Not saved: a party sent home early may go out again once, which is harmless.
+    resort.homeEarly.clear();
+    resort.nightOwls.clear();
+    refreshNightOut(resort, clock);
   };
 
   // Mirrors regrow.

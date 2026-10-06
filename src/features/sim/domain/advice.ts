@@ -72,6 +72,8 @@ export interface ResortFacts {
   readonly cleanliness: ReadonlyMap<string, number>;
   // Absent means a clear day.
   readonly closed?: ReadonlySet<string>;
+  // Shut by their hours now; absent means none.
+  readonly shut?: ReadonlySet<string>;
   // Absent means the resort is open, reachable and checking guests in.
   readonly open?: boolean;
   readonly entrance?: boolean;

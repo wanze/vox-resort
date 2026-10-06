@@ -23,6 +23,8 @@ function simFacts(model: VoxelModel) {
       litter: venue.litter,
       receives: venue.receives,
       stage: venue.stage,
+      hours: venue.hours,
+      dj: venue.dj,
       bathing: venue.bathing,
       reliability: venue.reliability,
     },

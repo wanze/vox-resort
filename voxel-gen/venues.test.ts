@@ -140,6 +140,17 @@ describe('the venues the catalogue declares', () => {
     }
   });
 
+  it('keeps its hours inside the day', () => {
+    for (const { id, venue } of venues) {
+      if (!venue!.hours) continue;
+      for (const minute of [venue!.hours.opens, venue!.hours.closes]) {
+        expect(Number.isInteger(minute), `${id} opens or closes between minutes`).toBe(true);
+        expect(minute, id).toBeGreaterThanOrEqual(0);
+        expect(minute, id).toBeLessThan(24 * 60);
+      }
+    }
+  });
+
   it('never makes somewhere to go out of paving', () => {
     for (const source of SOURCES) {
       if (!source.groundDecides) continue;
@@ -186,6 +197,7 @@ const SEEN: ReadonlySet<string> = new Set([
   'kids-club',
   'gym-pavilion',
   'beach-club',
+  'night-club',
   'open-air-stage',
   'beach-shower',
   'icecream',

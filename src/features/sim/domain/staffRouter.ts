@@ -17,6 +17,7 @@ import { brokenFirst, isBroken, repair, type Breakdowns } from './breakdowns';
 import type { Depot } from './depots';
 import { doorsFor } from './doors';
 import { flowFieldFor, type FlowField } from './flowField';
+import { openNow } from './hours';
 import type { Lodging } from './lodgings';
 import { litterAt, mostLittered, PIECE, sweep, type Litter } from './litter';
 import { SAND_ROUTE_TILES } from './router';
@@ -82,6 +83,8 @@ const COMPASS = [
 ] as const;
 
 const NOBODY = -1;
+
+const NOON = 12 * 60;
 
 export interface StaffZones {
   readonly zoneOf: Int8Array;
@@ -188,6 +191,8 @@ export function createStaffRouter(parts: {
   readonly crowd: () => Crowd;
   // A venue the rain has shut gets no cleaner; it is scrubbed when it reopens.
   readonly weather?: () => Weather;
+  // Omitted, it is always noon, inside any sensible opening hours.
+  readonly tickOfDay?: () => number;
   // Late-bound for the reason upkeep is. Omitted, nothing is ever broken.
   readonly breakdowns?: () => Breakdowns;
   // Late-bound: the roster follows the plot. Omitted, everybody is on duty.
@@ -223,6 +228,7 @@ export function createStaffRouter(parts: {
   const { staff } = parts;
   let random = createRandom(parts.seed);
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
+  const tickOfDay = parts.tickOfDay ?? ((): number => NOON);
   const isOnDuty = (worker: number): boolean => (parts.duty?.()[worker] ?? 1) === 1;
   const isBrokenDown = (venue: number): boolean => {
     const breakdowns = parts.breakdowns?.();
@@ -332,6 +338,7 @@ export function createStaffRouter(parts: {
           !passedOver.has(each) &&
           inZone(each) &&
           !isBrokenDown(each) &&
+          // Hours are not asked: a club is best cleaned in the morning, while it is shut.
           isOpenIn(shelterOf(venues[each]!), effect),
         NEEDS_CLEANING,
       );
@@ -364,11 +371,11 @@ export function createStaffRouter(parts: {
   ): boolean => {
     const place = venues[venue]!;
     return (
-      place.stage === true &&
+      (place.stage === true || place.dj === true) &&
       inZone(venue) &&
       showBy[venue] === NOBODY &&
       !isBrokenDown(venue) &&
-      isOpenIn(shelterOf(place), effect) &&
+      openNow(place, effect, tickOfDay()) &&
       !(parts.booked?.(venue) ?? false)
     );
   };
@@ -409,7 +416,7 @@ export function createStaffRouter(parts: {
         place.bathing === true &&
         watchedBy[venue] === NOBODY &&
         inZone(venue) &&
-        isOpenIn(shelterOf(place), effect)
+        openNow(place, effect, tickOfDay())
       );
     };
     return claim(worker, busiest(at, unwatched));
@@ -888,7 +895,7 @@ export function createStaffRouter(parts: {
   const mindTheWeather = (worker: number, effect: WeatherEffect): void => {
     const venue = assigned[worker]!;
     if (towerOf[worker]! >= 0 || venue < 0) return;
-    const open = isOpenIn(shelterOf(venues[venue]!), effect);
+    const open = openNow(venues[venue]!, effect, tickOfDay());
     if (open === (sheltering[worker] === 0)) return;
     const door = doorOf[worker]!;
     if (open) standInside(worker, venue, door);

@@ -120,7 +120,7 @@ function encode(input: string, sound: SoundFile, out: string): number {
     '44100',
     '-codec:a',
     'libmp3lame',
-    // Music too, at 8 MiB for the whole bank: 96 kbps put the five tracks alone at 6 MiB.
+    // Music too: 96 kbps put the five tracks alone at 6 MiB, half the budget.
     '-b:a',
     '64k',
     '-map_metadata',

@@ -32,7 +32,7 @@ surf, thunder and fireworks are synthesized.
    effects and interface −18, music −16) and encodes 64 kbps MP3. Only changed
    entries are re-encoded (`sounds/files/.hashes.json`).
 4. `scripts/check-sounds.ts` (in `pnpm lint`) checks licences and sizes (max
-   1.5 MiB per file, 8 MiB total).
+   1.5 MiB per file, 12 MiB total).
 5. Vite hashes every MP3 into `dist/assets` and the service worker precaches it.
 
 Licences: CC0, Sonniss GDC and Pixabay, none needing credit. No CC-BY, no BBC

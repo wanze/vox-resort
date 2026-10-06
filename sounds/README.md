@@ -24,7 +24,7 @@ generated in Web Audio (`src/features/sound/adapters/synthVoices.ts`).
 4. Listen on the sound board: `pnpm dev`, then `/sounds.html`. Set the slot's
    `gain` there and copy it into `bank.ts`.
 5. `pnpm lint` runs `scripts/check-sounds.ts`: every file named once, every
-   licence allowed, no file over 1.5 MiB and all of them within 8 MiB.
+   licence allowed, no file over 1.5 MiB and all of them within 12 MiB.
 6. Commit the MP3 and `bank.ts` together.
 
 A slot with no files plays nothing and logs once with `console.info`, so a

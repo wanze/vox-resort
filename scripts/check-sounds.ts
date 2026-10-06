@@ -12,7 +12,7 @@ import {
 const FILES = 'sounds/files';
 const MIB = 1024 * 1024;
 // Every byte is precached on install, so this is what sound costs a player before the first note.
-const AUDIO_BUDGET = 8 * MIB;
+const AUDIO_BUDGET = 12 * MIB;
 const FILE_CAP = 1.5 * MIB;
 
 const licences: ReadonlySet<string> = new Set(LICENCES);

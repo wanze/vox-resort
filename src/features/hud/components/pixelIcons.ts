@@ -1082,6 +1082,20 @@ export const ICONS = {
     'nNn......nNn',
     '............',
   ],
+  watersports: [
+    '............',
+    '............',
+    '......D.....',
+    '.....DD.....',
+    '..rrrrrrr...',
+    '.rrrrrrrrrr.',
+    '..wwwwwwwww.',
+    '............',
+    '.c..c..c..c.',
+    'cbbcbbcbbcbb',
+    'bbcbbcbbcbbc',
+    '............',
+  ],
 } as const satisfies { readonly [name: string]: readonly string[] };
 
 export type IconName = keyof typeof ICONS;

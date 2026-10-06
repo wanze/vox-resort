@@ -95,8 +95,7 @@ export const HEDGE_ID = 'hedge';
 
 export const BENCH_ID = 'bench';
 
-// Named here because the bay steers its hire craft home to wherever it stands.
-export const PEDALO_RENTAL_ID = 'pedalo-rental';
+const PEDALO_RENTAL_ID = 'pedalo-rental';
 
 export const RAILING_ID = 'railing';
 
@@ -275,9 +274,10 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('sun-lounger', 44, 30, 4, 1),
     at('changing-cabins', 53, 26),
     at('beach-shower', 55, 26),
-    // This plan has no sand, so the hire hut and the fire pit stand by the pool instead.
-    at('pedalo-rental', 53, 29),
+    // This plan has no sand, so the hire huts and the fire pit stand by the pool instead.
+    at(PEDALO_RENTAL_ID, 53, 29),
     at('fire-pit', 55, 30),
+    at('water-sports', 49, 32),
 
     at('beach-club', 58, 11),
     at('villa', 65, 11),

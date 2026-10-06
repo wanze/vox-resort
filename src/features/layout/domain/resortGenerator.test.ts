@@ -623,7 +623,16 @@ describe('the shore a generated plot gets', () => {
     const columns = [...lines.values()].map((line) => new Set(line.map((plot) => plot.tileX)));
     const all = new Set(loungers.map((plot) => plot.tileX));
     expect(all.size).toBeGreaterThan(3);
+    // Both shore huts want the first sea lane, so the second stands in a bay and skips the set it
+    // touches on its line only; a set is four columns.
+    const huts = plan.plots.filter((plot) => {
+      const placement = BY_ID.get(plot.id)?.placement;
+      return placement?.ground === 'shore' && placement.perResort !== undefined;
+    });
+    const byHut = (x: number): boolean =>
+      huts.some((hut) => x >= hut.tileX - 4 && x < hut.tileX + footprintOf(hut).x + 4);
     for (const x of all) {
+      if (byHut(x)) continue;
       const behind = columns.filter((line) => line.has(x)).length;
       expect({ x, behind }).toEqual({ x, behind: columns.length });
       expect({ x, alone: !all.has(x - 1) && !all.has(x + 1) }).toEqual({ x, alone: true });
@@ -1101,8 +1110,8 @@ describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 2950243039],
-      [7, 692887041],
+      [1, 1770609279],
+      [7, 547404113],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

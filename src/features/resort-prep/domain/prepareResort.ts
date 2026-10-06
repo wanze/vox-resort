@@ -7,7 +7,7 @@ import { repeatPlot } from '../../bench/domain/plotRepeat';
 import { layoutItemFor } from '../../build/domain/buildPlan';
 import { createTileOccupancy } from '../../build/domain/tileOccupancy';
 import {
-  familyOf,
+  hireOf,
   OBJECT_TYPES,
   objectTypeTop,
   ORIGINAL_TYPES,
@@ -17,6 +17,7 @@ import {
 import { mosaicDressing, mosaicKitOf } from '../../catalog/domain/mosaics';
 import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
 import { MOSAIC_STYLES } from '../../../../voxel-gen/mosaics/index.ts';
+import type { ModelHire } from '../../../../voxel-gen/voxelgen.ts';
 import { layMosaic } from '../../layout/domain/mosaic';
 import { ONE_OFF, styleMix } from '../../catalog/domain/styleMix';
 import { clampConfig } from '../../layout/domain/resortConfig';
@@ -34,7 +35,7 @@ import {
   type ResortLayout,
   type StyleOf,
 } from '../../layout/domain/resortLayout';
-import { PEDALO_RENTAL_ID, RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
+import { RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
 import { levelHeight } from '../../layout/domain/elevation';
@@ -68,7 +69,8 @@ import {
   type TerrainSurfaces,
 } from '../../rendering/domain/terrainSurface';
 import { buoyLampSites } from '../../sea/domain/buoyLamps';
-import { swimAreaMoorings, type Mooring, type Rental } from '../../sea/domain/swimArea';
+import type { RentalHut } from '../../sea/domain/fleets';
+import { swimAreaMoorings, type Mooring } from '../../sea/domain/swimArea';
 import { planOfWorld, type SavedWorld } from './savedWorld';
 
 // Originals only: the generator stands every type at least once, so styles would double the plot.
@@ -133,14 +135,21 @@ export function claimingOn(
   return [...plot.placements, ...plot.props, ...plot.paths];
 }
 
-export function rentalOf(shore: Shore | null, placements: readonly Placement[]): Rental | null {
-  if (!shore) return null;
-  const hut = placements.find((placement) => familyOf(placement.id) === PEDALO_RENTAL_ID);
-  if (!hut) return null;
-  return {
-    x: (hut.tileX + hut.tilesX / 2) * TILE_VOXELS,
-    z: (hut.tileZ + hut.tilesZ / 2) * TILE_VOXELS,
-  };
+// Every hut that hires craft out, in placement order, which is the order their fleets go in.
+export function rentalsOf(
+  shore: Shore | null,
+  placements: readonly Placement[],
+  hire: (id: string) => ModelHire | null,
+): RentalHut[] {
+  if (!shore) return [];
+  return placements
+    .filter((placement) => hire(placement.id) !== null)
+    .map((hut) => ({
+      x: (hut.tileX + hut.tilesX / 2) * TILE_VOXELS,
+      z: (hut.tileZ + hut.tilesZ / 2) * TILE_VOXELS,
+      key: hut.key,
+      id: hut.id,
+    }));
 }
 
 function planOf(source: ResortSource): ResortPlan {
@@ -241,7 +250,7 @@ function mooringsFor(plan: ResortPlan, shore: Shore | null, layout: ResortLayout
   const paved = new Set(layout.paths.map((placement) => tileKey(placement.tileX, placement.tileZ)));
   return swimAreaMoorings({
     shore,
-    rental: rentalOf(shore, layout.placements),
+    rentals: rentalsOf(shore, layout.placements, hireOf),
     claimed: (tileX, tileZ) => paved.has(tileKey(tileX, tileZ)),
     span: ownedSpan(plan.land ?? null, plan),
   });

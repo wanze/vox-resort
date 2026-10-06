@@ -101,7 +101,7 @@ describe('the corridor in front of the hire hut', () => {
 
   it('leaves a gap in the line of buoys, and only there', () => {
     const open = swimAreaMoorings({ shore: bay });
-    const cut = swimAreaMoorings({ shore: bay, rental: RENTAL });
+    const cut = swimAreaMoorings({ shore: bay, rentals: [RENTAL] });
     expect(cut.length).toBeLessThan(open.length);
     const gone = open.filter((mooring) => !cut.some((kept) => kept.x === mooring.x));
     expect(gone.length).toBeGreaterThan(0);
@@ -112,14 +112,30 @@ describe('the corridor in front of the hire hut', () => {
 
   it('lets the craft in to the shallows in front of the hut, and nowhere else', () => {
     const open = sailingGroundFor(bay);
-    const corridor = sailingGroundFor(bay, RENTAL);
+    const corridor = sailingGroundFor(bay, [RENTAL]);
     expect(corridor.landwardZ(RENTAL.x)).toBeLessThan(open.landwardZ(RENTAL.x) - 3 * TILE_VOXELS);
     const far = RENTAL.x + 20 * TILE_VOXELS;
     expect(corridor.landwardZ(far)).toBe(open.landwardZ(far));
   });
 
+  it('cuts a gap of its own for each of two huts', () => {
+    const second: Rental = { x: 8 * TILE_VOXELS, z: 20 * TILE_VOXELS };
+    const open = swimAreaMoorings({ shore: bay });
+    const one = swimAreaMoorings({ shore: bay, rentals: [RENTAL] });
+    const both = swimAreaMoorings({ shore: bay, rentals: [RENTAL, second] });
+    const gone = open.filter((mooring) => !both.some((kept) => kept.x === mooring.x));
+    expect(both.length).toBeLessThan(one.length);
+    for (const hut of [RENTAL, second]) {
+      expect(gone.some((mooring) => Math.abs(mooring.x - hut.x) <= 2 * TILE_VOXELS)).toBe(true);
+    }
+    for (const mooring of gone) {
+      const off = Math.min(Math.abs(mooring.x - RENTAL.x), Math.abs(mooring.x - second.x));
+      expect(off).toBeLessThanOrEqual(2 * TILE_VOXELS);
+    }
+  });
+
   it('ramps the limit out rather than stepping it', () => {
-    const corridor = sailingGroundFor(bay, RENTAL);
+    const corridor = sailingGroundFor(bay, [RENTAL]);
     const across = Array.from({ length: 9 }, (_, step) =>
       corridor.landwardZ(RENTAL.x + (2 + step * 0.25) * TILE_VOXELS),
     );
@@ -135,13 +151,13 @@ describe('swimmableAt', () => {
   const RENTAL: Rental = { x: 24 * TILE_VOXELS, z: 20 * TILE_VOXELS };
 
   it('gives a band from the water to short of the buoys, where no craft comes', () => {
-    const ground = sailingGroundFor(bay, RENTAL);
-    const moorings = swimAreaMoorings({ shore: bay, rental: RENTAL });
+    const ground = sailingGroundFor(bay, [RENTAL]);
+    const moorings = swimAreaMoorings({ shore: bay, rentals: [RENTAL] });
     // Past the flare: in it the craft come in short of the buoys.
     const clear = moorings.filter((mooring) => Math.abs(mooring.x - RENTAL.x) >= 4 * TILE_VOXELS);
     expect(clear.length).toBeGreaterThan(6);
     for (const mooring of clear) {
-      const band = swimmableAt({ shore: bay, rental: RENTAL }, mooring.x)!;
+      const band = swimmableAt({ shore: bay, rentals: [RENTAL] }, mooring.x)!;
       expect(band.fromZ).toBe(waterStartZ(bay, Math.floor(mooring.x / TILE_VOXELS)) * TILE_VOXELS);
       expect(band.toZ).toBeGreaterThan(band.fromZ);
       expect(band.toZ).toBeLessThan(mooring.z);
@@ -150,9 +166,18 @@ describe('swimmableAt', () => {
   });
 
   it('gives nothing in front of the hire hut, where the pedalos land', () => {
-    expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x)).toBeNull();
-    expect(swimmableAt({ shore: bay, rental: RENTAL }, RENTAL.x + 3 * TILE_VOXELS)).toBeNull();
+    expect(swimmableAt({ shore: bay, rentals: [RENTAL] }, RENTAL.x)).toBeNull();
+    expect(swimmableAt({ shore: bay, rentals: [RENTAL] }, RENTAL.x + 3 * TILE_VOXELS)).toBeNull();
     expect(swimmableAt({ shore: bay }, RENTAL.x)).not.toBeNull();
+  });
+
+  it('turns a swimmer away from the front of either of two huts', () => {
+    const second: Rental = { x: 8 * TILE_VOXELS, z: 20 * TILE_VOXELS };
+    const both = { shore: bay, rentals: [RENTAL, second] };
+    expect(swimmableAt(both, RENTAL.x)).toBeNull();
+    expect(swimmableAt(both, second.x)).toBeNull();
+    expect(swimmableAt({ shore: bay, rentals: [RENTAL] }, second.x)).not.toBeNull();
+    expect(swimmableAt(both, 16 * TILE_VOXELS)).not.toBeNull();
   });
 
   it('gives nothing in front of land not owned', () => {

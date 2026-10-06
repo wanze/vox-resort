@@ -13,6 +13,7 @@ import {
   TILE_VOXELS,
   type ModelCategory,
   type ModelDepot,
+  type ModelHire,
   type ModelMosaic,
   type ModelVenue,
   type SignKind,
@@ -173,6 +174,13 @@ export function signFor(venue: ModelVenue | null): SignKind | null {
 export const signOf = (id: string): SignKind | null => signFor(venueOf(familyOf(id)));
 
 export const namesOf = (id: string): readonly string[] => venueOf(familyOf(id))?.names ?? [];
+
+const HIRES: ReadonlyMap<string, ModelHire | null> = new Map(
+  OBJECT_TYPES.map((type) => [type.id, type.model.hire]),
+);
+
+// The original's, as a variant hires out the same craft in another look.
+export const hireOf = (id: string): ModelHire | null => HIRES.get(familyOf(id)) ?? null;
 
 export function venueTypes(): readonly ObjectTypeDefinition[] {
   return OBJECT_TYPES.filter((type) => type.venue !== null);

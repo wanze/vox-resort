@@ -25,7 +25,7 @@ export interface SeaField {
   readonly triangleCount: number;
   // `crowdDt` is the crowd's scaled time, which the hire boats keep.
   advance(dt: number, crowdDt: number): void;
-  allowHire(boats: number): void;
+  allowHire(fleet: number, boats: number): void;
   dispose(): void;
 }
 
@@ -116,8 +116,8 @@ export function buildSeaField(options: SeaFieldOptions): SeaField {
       // After the hulls: a passenger sits in the boat as it is this frame, not last frame.
       crew.write();
     },
-    allowHire(boats) {
-      flotilla.hireAllowed = boats;
+    allowHire(fleet, boats) {
+      flotilla.hireAllowed[fleet] = boats;
     },
     dispose() {
       crew.dispose();

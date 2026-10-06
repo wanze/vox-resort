@@ -70,8 +70,8 @@ position and identity but losing their seat.
 - **Speed follows the clock**: crossing the plot takes a tenth of a sim day at
   every speed. Long frames split into `MAX_STEP` substeps, capped at 112 so
   `rush` fits.
-- **Boats** steer clear of piers and each other. Hire boats go out one per two
-  pedalo visitors, on crowd time.
+- **Boats** steer clear of piers and each other. Hire boats go out as the
+  hut's visitors fill them, on crowd time.
 
 The crowd is a structure of arrays with fixed capacity and no per-frame
 allocation (position, segment, speed, node, seat, avoidance, lane, spatial
@@ -219,6 +219,22 @@ model. Nothing on sand is paved, so beach buildings are reached over it.
 - **Swimming** is drawn only (`seaSwim.ts`): about a quarter of resting adults
   and a third of children are in the water, inside the buoy line. A trip only
   starts if the stay outlasts it and the walk is a clear line.
+- **Rentals and fleets are declared on the model** (`hire`): a hut lists its
+  fleets in the order it lets them out, each a sea model, a count, riders per
+  craft and a pace. Every such hut is a rental (`rentalsOf`), cuts its own
+  corridor through the buoys and keeps swimmers out of it. `fleetAllowances`
+  sends a fleet's craft out only full, the last fleet taking the remainder, so
+  three at the water sports hut take two jet skis and four take the banana. A
+  fleet with `tows` pulls a towed craft on a 14-voxel rope behind each craft
+  (`towAlong`), held like a trailer, so it cuts inside its tug's turns.
+- **Water sports** (`water-sports`) is `bathing`: auto hiring adds a lifeguard
+  for its watch chair, and every visit risks a mishap, a tenth as likely
+  watched. It breaks every 30 visits on average and leaves its visitors wet
+  (hygiene -0.2), which sends them to the beach shower.
+- **Built in play**: an edit that adds or pulls down a hut rebuilds the fleets
+  (`refleetAfterEdit`); the buoys, swim area and sailing ground keep the layout
+  they were built with until the next load, so a new hut's boats berth outside
+  the buoys.
 - Known gap: a bar on a raised sand terrace isn't reachable.
 
 ## Night

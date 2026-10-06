@@ -7,7 +7,7 @@ import {
   type InstancedMesh,
 } from 'three/webgpu';
 import { ADULT_VOXELS, CHILD_VOXELS } from '../../../../voxel-gen/people/figure.ts';
-import { RESTING } from '../../crowd/domain/crowd';
+import { RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import { createFlotilla, type Flotilla } from '../domain/flotilla';
 import { createPassengers, poseAboard, type Berth, type Passengers } from '../domain/passengers';
@@ -65,7 +65,7 @@ const bay = (craft: number, hire = 0): Flotilla =>
     buoyVariant: 0,
     craft,
     craftVariants: [BOAT],
-    hire: hire > 0 ? { count: hire, variant: HIRE, rental: { x: 120, z: 500 } } : null,
+    fleets: [{ rental: { x: 120, z: 500 }, variant: HIRE, count: hire, pace: 0.6 * WALK_SPEED }],
     ground: GROUND,
     waterline: 0.5,
     seed: 7,

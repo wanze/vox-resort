@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { WALK_SPEED } from '../../crowd/domain/crowd';
+import { WALK_VOXELS_PER_SIM_HOUR } from '../../sim/domain/crowdRate';
 import { createFlotilla, poseOf, stepFlotilla, type Flotilla } from './flotilla';
 import type { PierBox } from './piers';
 import type { Mooring, Rental, SailingGround } from './swimArea';
@@ -20,6 +22,10 @@ const WATERLINE = 0.1;
 
 const RENTAL: Rental = { x: 120, z: 500 };
 
+const PEDALO_PACE = 0.6 * WALK_SPEED;
+
+const PEDALOS = { rental: RENTAL, variant: 3, count: 6, pace: PEDALO_PACE };
+
 const bay = (craft = 8, seed = 11): Flotilla =>
   createFlotilla({
     moorings: MOORINGS,
@@ -37,7 +43,7 @@ const hiring = (hire = 4, craft = 4, seed = 11): Flotilla =>
     buoyVariant: 0,
     craft,
     craftVariants: [1, 2],
-    hire: { count: hire, variant: 3, rental: RENTAL },
+    fleets: [{ rental: RENTAL, variant: 3, count: hire, pace: PEDALO_PACE }],
     ground: GROUND,
     waterline: WATERLINE,
     seed,
@@ -349,6 +355,31 @@ describe('the rental’s own boats', () => {
   });
 });
 
+describe('the hire step', () => {
+  it('keeps the pedalos to the step and the cap they have always had', () => {
+    const flotilla = hiring(6, 0);
+    expect(flotilla.hireStep).toBe(0.25);
+    expect(flotilla.hireSteps).toBe(16);
+  });
+
+  it('gives a faster fleet shorter steps, and more of them, all under a voxel at its pace', () => {
+    const pace = 2.6 * WALK_SPEED;
+    const flotilla = createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1],
+      fleets: [PEDALOS, { rental: { x: 280, z: 500 }, variant: 4, count: 4, pace }],
+      ground: GROUND,
+      waterline: WATERLINE,
+      seed: 3,
+    });
+    expect(flotilla.hireStep * pace).toBeLessThan(1);
+    expect(flotilla.hireSteps).toBeGreaterThan(16);
+    expect(flotilla.hireSteps).toBeLessThanOrEqual(64);
+  });
+});
+
 describe('a hire boat’s round trip', () => {
   const trips = (
     flotilla: Flotilla,
@@ -378,8 +409,9 @@ describe('a hire boat’s round trip', () => {
     return slots.map((_, boat) => ({ away: away[boat]!, ties: ties[boat]! }));
   };
 
+  // Two whole hires and the gaps between them, wherever in its cycle each boat was dealt.
   it('takes every boat out and brings every one of them home again', () => {
-    for (const trip of trips(hiring(6, 0, 5), 600)) {
+    for (const trip of trips(hiring(6, 0, 5), 900)) {
       expect(trip.away).toBeGreaterThan(60);
       expect(trip.ties).toBeGreaterThanOrEqual(2);
     }
@@ -392,7 +424,7 @@ describe('a hire boat’s round trip', () => {
       buoyVariant: 0,
       craft: 0,
       craftVariants: [1],
-      hire: { count: 6, variant: 3, rental: RENTAL },
+      fleets: [PEDALOS],
       ground: wide,
       waterline: WATERLINE,
       seed: 5,
@@ -481,8 +513,8 @@ describe('a hire allowance', () => {
       buoyVariant: 0,
       craft: 0,
       craftVariants: [1, 2],
-      hire: { count: 6, variant: 3, rental: RENTAL },
-      hireAllowed,
+      fleets: [PEDALOS],
+      hireAllowed: [hireAllowed],
       ground: GROUND,
       waterline: WATERLINE,
       seed,
@@ -503,7 +535,7 @@ describe('a hire allowance', () => {
   it('launches as many as it is raised to, and no more', () => {
     const flotilla = allowed(0);
     run(flotilla, 60);
-    flotilla.hireAllowed = 2;
+    flotilla.hireAllowed[0] = 2;
     stepFlotilla(flotilla, 0.05, GROUND);
     expect(out(flotilla)).toBe(2);
     run(flotilla, 30);
@@ -516,7 +548,7 @@ describe('a hire allowance', () => {
     const boats = hireSlots(flotilla).filter((index) => flotilla.age[index]! >= 0);
     const ages = boats.map((index) => flotilla.age[index]!);
     expect(ages.some((age) => age < 100)).toBe(true);
-    flotilla.hireAllowed = 0;
+    flotilla.hireAllowed[0] = 0;
     run(flotilla, 10);
     for (const [boat, index] of boats.entries()) {
       if (ages[boat]! < 100) expect(flotilla.age[index]).toBeGreaterThan(ages[boat]!);
@@ -530,8 +562,8 @@ describe('a hire allowance', () => {
       buoyVariant: 0,
       craft: 4,
       craftVariants: [1, 2],
-      hire: { count: 6, variant: 3, rental: RENTAL },
-      hireAllowed: 6,
+      fleets: [PEDALOS],
+      hireAllowed: [6],
       ground: GROUND,
       waterline: WATERLINE,
       seed: 7,
@@ -559,7 +591,7 @@ describe('a hire boat and the piers in its way', () => {
       buoyVariant: 0,
       craft: 0,
       craftVariants: [1],
-      hire: { count: 6, variant: 3, rental: RENTAL },
+      fleets: [PEDALOS],
       ground: GROUND,
       radii: [8, 8, 8, REACH],
       piers,
@@ -616,5 +648,152 @@ describe('a hire boat and the piers in its way', () => {
   it('ties a boat up at last when nothing can reach its berth, rather than keeping it out all night', () => {
     const walled = { minX: 0, maxX: 400, minZ: 520, maxZ: 620 };
     expect(fewestTies(blocked([], [walled]), 3000)).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('a towed craft', () => {
+  const TUG = 5;
+  const TOW = 6;
+  const RADII = [8, 8, 8, 6, 5, 9, 10];
+  const ROPE = 14;
+  const OPEN: SailingGround = { ...GROUND, westX: -1500, eastX: 1500, seawardZ: 1500 };
+  const HIRE_SECONDS = (2 * WALK_VOXELS_PER_SIM_HOUR) / WALK_SPEED;
+
+  const towing = (seed = 4, ground = OPEN): Flotilla =>
+    createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1],
+      fleets: [{ rental: RENTAL, variant: TUG, count: 1, pace: 2.2 * WALK_SPEED, tows: TOW }],
+      ground,
+      radii: RADII,
+      waterline: WATERLINE,
+      seed,
+    });
+
+  const rope = (flotilla: Flotilla): number => {
+    const heading = flotilla.heading[0]!;
+    const hitchX = flotilla.x[0]! - Math.sin(heading) * RADII[TUG]!;
+    const hitchZ = flotilla.z[0]! - Math.cos(heading) * RADII[TUG]!;
+    return Math.hypot(flotilla.x[1]! - hitchX, flotilla.z[1]! - hitchZ) - RADII[TOW]!;
+  };
+
+  it('follows its tug on a rope that stays the length it is', () => {
+    for (const seed of [1, 2, 4]) {
+      const flotilla = towing(seed);
+      expect([...flotilla.variant]).toEqual([TUG, TOW]);
+      expect(flotilla.towedBy[1]).toBe(0);
+      let out = 0;
+      for (let tick = 0; tick < 6000; tick++) {
+        stepFlotilla(flotilla, 0.1, OPEN);
+        if (flotilla.age[0]! < 0) continue;
+        out++;
+        expect(Math.abs(rope(flotilla) - ROPE), `seed ${seed}`).toBeLessThanOrEqual(0.5);
+      }
+      expect(out).toBeGreaterThan(1000);
+    }
+  });
+
+  it('swings inside its tug’s turning circle once round', () => {
+    const flotilla = towing();
+    const centre = { x: 200, z: 900 };
+    const radius = 40;
+    const lap = 20;
+    flotilla.age[0] = 0;
+    flotilla.speed[0] = 0;
+    flotilla.turn[0] = 0;
+    let widest = 0;
+    for (let tick = 0; tick < (2 * lap) / 0.05; tick++) {
+      const angle = (2 * Math.PI * tick * 0.05) / lap;
+      flotilla.x[0] = centre.x + radius * Math.sin(angle);
+      flotilla.z[0] = centre.z + radius * Math.cos(angle);
+      flotilla.heading[0] = Math.atan2(Math.cos(angle), -Math.sin(angle));
+      stepFlotilla(flotilla, 0.05, OPEN);
+      if (tick * 0.05 < lap) continue;
+      widest = Math.max(widest, Math.hypot(flotilla.x[1]! - centre.x, flotilla.z[1]! - centre.z));
+    }
+    expect(widest).toBeGreaterThan(0);
+    expect(widest).toBeLessThan(radius);
+  });
+
+  it('comes home tied up behind its tug once nobody is at the hut', () => {
+    const seed = [1, 2, 3, 4, 5, 6].find((each) => towing(each, GROUND).age[0]! >= 0)!;
+    const flotilla = towing(seed, GROUND);
+    flotilla.hireAllowed[0] = 0;
+    const walkHome = 480 / (2.2 * WALK_SPEED * 0.55);
+    let tied = false;
+    for (let tick = 0; tick < (HIRE_SECONDS + walkHome) / 0.1 && !tied; tick++) {
+      stepFlotilla(flotilla, 0.1, GROUND);
+      tied = flotilla.age[0]! < 0;
+    }
+    expect(tied).toBe(true);
+    expect(flotilla.age[1]).toBe(flotilla.age[0]);
+    expect(flotilla.x[1]).toBe(flotilla.berthX[1]);
+    expect(flotilla.z[1]).toBe(flotilla.berthZ[1]);
+    expect(flotilla.berthZ[1]).toBeGreaterThan(flotilla.berthZ[0]!);
+    run(flotilla, 60);
+    expect(flotilla.age[0]).toBeLessThan(0);
+  });
+});
+
+describe('a fast hire craft beside a pier', () => {
+  const BAY: SailingGround = { ...GROUND, eastX: 600, seawardZ: 900 };
+  const HUT: Rental = { x: 300, z: 500 };
+  const RADII = [8, 8, 8, 6, 5, 9, 10];
+  const FLEETS = [
+    { rental: HUT, variant: 3, count: 6, pace: 0.6 * WALK_SPEED },
+    { rental: HUT, variant: 4, count: 4, pace: 2.6 * WALK_SPEED },
+    { rental: HUT, variant: 5, count: 1, pace: 2.2 * WALK_SPEED, tows: 6 },
+  ];
+
+  // Out on a hire rather than homing, which may round a long pier; 6 voxels in 5 s is pinned.
+  const longestPinned = (fleet: (typeof FLEETS)[number], pier: PierBox, seed: number): number => {
+    const flotilla = createFlotilla({
+      moorings: [],
+      buoyVariant: 0,
+      craft: 0,
+      craftVariants: [1],
+      fleets: [fleet],
+      ground: BAY,
+      radii: RADII,
+      piers: [pier],
+      waterline: WATERLINE,
+      seed,
+    });
+    const tugs = hireSlots(flotilla).filter((index) => flotilla.towedBy[index]! < 0);
+    const since = tugs.map(() => 0);
+    const fromX = tugs.map((index) => flotilla.x[index]!);
+    const fromZ = tugs.map((index) => flotilla.z[index]!);
+    let longest = 0;
+    for (let tick = 0; tick < 12_000; tick++) {
+      stepFlotilla(flotilla, 0.1, BAY);
+      for (const [boat, index] of tugs.entries()) {
+        const moved = Math.hypot(
+          flotilla.x[index]! - fromX[boat]!,
+          flotilla.z[index]! - fromZ[boat]!,
+        );
+        if (flotilla.age[index]! < 0 || flotilla.age[index]! > 260 || moved > 6) {
+          since[boat] = 0;
+          fromX[boat] = flotilla.x[index]!;
+          fromZ[boat] = flotilla.z[index]!;
+          continue;
+        }
+        since[boat]! += 0.1;
+        longest = Math.max(longest, since[boat]!);
+      }
+    }
+    return longest;
+  };
+
+  it('is never held against it, nor against the shore beside it, for long', () => {
+    for (const fleet of FLEETS) {
+      for (const pier of [column(200, 700), column(330, 620), column(380, 800)]) {
+        for (const seed of [1, 4]) {
+          const at = `variant ${fleet.variant}, pier at ${pier.minX}, seed ${seed}`;
+          expect(longestPinned(fleet, pier, seed), at).toBeLessThan(20);
+        }
+      }
+    }
   });
 });

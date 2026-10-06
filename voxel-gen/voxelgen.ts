@@ -263,7 +263,8 @@ export type SignKind =
   | 'volleyball'
   | 'stage'
   | 'nightclub'
-  | 'bonfire';
+  | 'bonfire'
+  | 'watersports';
 
 export type SoundKind =
   | 'cafe'
@@ -282,6 +283,7 @@ export type SoundKind =
   | 'boats'
   | 'reception'
   | 'restrooms'
+  | 'watersports'
   | 'bonfire'
   | 'fountain'
   | 'torch'
@@ -321,7 +323,7 @@ export interface ModelVenue {
   readonly stage?: boolean;
   // Music plays whenever it is open: its visitors dance and cheer with or without an animator.
   readonly dj?: true;
-  // Guests swim here, so somebody should be watching.
+  // Guests go in the water here, so somebody should be watching.
   readonly bathing?: boolean;
   // Visits between breakdowns, on average; absent, it never breaks.
   readonly reliability?: number;
@@ -363,6 +365,23 @@ export interface ModelMosaic {
   readonly borders: readonly MosaicSide[];
 }
 
+export interface ModelFleet {
+  // Sea model ids: craft never stand on a tile.
+  readonly craft: string;
+  readonly count: number;
+  // A craft goes out only with a full crew, so these are its seats, or its tow's when it tows one.
+  readonly riders: number;
+  // A share of the crowd's walking speed, so a hire is the same part of the day at every speed.
+  readonly pace: number;
+  // Pulled on a rope behind each craft.
+  readonly tows?: string;
+}
+
+export interface ModelHire {
+  // In the order the hut lets them out: the first fleet is filled first.
+  readonly fleets: readonly ModelFleet[];
+}
+
 export interface VoxelModelSource {
   readonly id: string;
   readonly label: string;
@@ -401,6 +420,9 @@ export interface VoxelModelSource {
   readonly seats?: readonly ModelSeat[];
   readonly placement?: ModelPlacement;
   readonly venue?: ModelVenue;
+  // The craft the app puts on the sea in front of it, out while its visitors are. Only originals
+  // declare it: a variant hires out its original's.
+  readonly hire?: ModelHire;
   readonly nameplate?: ModelNameplate;
   // One voxel's edge in world voxels, for art painted finer than the world; the mesher grows or
   // shrinks it back, so width, height and depth stay in the model's own voxels.
@@ -445,6 +467,7 @@ export interface VoxelModel {
   readonly seats: readonly (ModelSeat & { readonly pose: SeatPose })[];
   readonly placement: ModelPlacement;
   readonly venue: ModelVenue | null;
+  readonly hire: ModelHire | null;
   readonly nameplate: ModelNameplate | null;
   readonly scale?: number;
 }
@@ -649,6 +672,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     seats: (source.seats ?? []).map((seat) => seatFrom(seat, minX, minY, minZ)),
     placement: source.placement ?? {},
     venue: source.venue ? venueFrom(source.venue, minX, minY, minZ) : null,
+    hire: source.hire ?? null,
     nameplate: nameplateFrom(source.nameplate, minX, minY, minZ),
   });
 }

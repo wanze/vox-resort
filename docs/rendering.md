@@ -83,6 +83,12 @@ Rails claim no tile and are left out of occupancy and shadows.
   half a second on a 400-tile plot), at most once per frame.
 - The sea is its own surface to the horizon (`seaMaterial.ts`); pools and rivers
   share `waterSurface.ts`.
+- **The flotilla** (`flotilla.ts`, drawn by `seaField.ts`) is buoys, drifting
+  craft, then each rental's fleets in placement order. Hire craft step on crowd
+  time, in steps short enough to stay under a voxel at the fastest fleet's pace
+  (more of them, up to 64, for jet skis). A towed craft follows right after its
+  tug and is placed by the rope, never steered. Fleets alone are rebuilt after
+  an edit that changes the huts.
 - **Owned land** (`ownershipMask.ts`): an R8 tile mask dims unowned land, tints
   land for sale and draws a chalk line at the boundary. No geometry, and
   purchases only rewrite the texture, so materials never recompile.

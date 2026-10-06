@@ -78,6 +78,13 @@ describe('hear: venues', () => {
     expect(heard(cold).bonfire).toBe(0);
   });
 
+  it('revs at the water sports hut while it is open, and not while it is shut', () => {
+    expect(heard(scene({}, { watersports: 0.6 })).watersports).toBeGreaterThan(0);
+    const shut = scene({}, { watersports: 1 });
+    shut.open[kindAt('watersports')] = 0;
+    expect(heard(shut).watersports).toBe(0);
+  });
+
   it(`plays at most ${MAX_VENUE_VOICES} venue kinds, the loudest`, () => {
     const levels = heard(scene({}, { cafe: 0.9, bar: 0.8, gym: 0.2, spa: 0.6, tennis: 0.4 }));
     const playing = (['cafe', 'bar', 'gym', 'spa', 'tennis'] as const).filter(

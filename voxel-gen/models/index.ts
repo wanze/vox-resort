@@ -40,6 +40,7 @@ import open_air_stage from './open-air-stage.ts';
 import palm from './palm.ts';
 import path from './path.ts';
 import pedalo_rental from './pedalo-rental.ts';
+import water_sports from './water-sports.ts';
 import pier_railing from './pier-railing.ts';
 import picnic_table from './picnic-table.ts';
 import pine from './pine.ts';
@@ -135,6 +136,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   playground,
   kids_club,
   pedalo_rental,
+  water_sports,
   bungalow,
   house,
   cottage,

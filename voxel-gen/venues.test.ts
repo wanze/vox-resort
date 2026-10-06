@@ -518,3 +518,28 @@ describe('the games a court is played on', () => {
     }
   });
 });
+
+describe('the craft a hut hires out', () => {
+  const sea = new Map(SEA_SOURCES.map((source) => [source.id, buildModel(source)]));
+  const hires = SOURCES.filter((source) => source.hire !== undefined);
+
+  it('is declared on an original, a variant hiring out its original’s', () => {
+    expect(hires.length).toBeGreaterThan(0);
+    for (const source of hires) expect(originalOf.has(source.id), source.id).toBe(false);
+  });
+
+  it('names sea models, each going out full: one rider to a seat, and at some pace', () => {
+    for (const source of hires) {
+      for (const fleet of source.hire!.fleets) {
+        const at = `${source.id}: ${fleet.craft}`;
+        const craft = sea.get(fleet.craft);
+        expect(craft, at).toBeDefined();
+        const seated = fleet.tows === undefined ? craft : sea.get(fleet.tows);
+        expect(seated, `${at} tows ${fleet.tows}`).toBeDefined();
+        expect(fleet.count, at).toBeGreaterThanOrEqual(1);
+        expect(fleet.riders, at).toBe(seated!.seats.length);
+        expect(fleet.pace, at).toBeGreaterThan(0);
+      }
+    }
+  });
+});

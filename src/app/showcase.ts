@@ -8,6 +8,7 @@ import {
   windowsByModelId,
   bedsOf,
   familyOf,
+  hireOf,
   isGateway,
   materialColorsById,
   namesOf,
@@ -53,7 +54,6 @@ import {
   BRIDGE_RAMP_ID,
   JETTY_ID,
   PATH_ID,
-  PEDALO_RENTAL_ID,
   STAIRS_ID,
   STAIRCASE_ID,
   RAMP_FOOT_ID,
@@ -70,7 +70,7 @@ import { itemChooser } from '../features/build/domain/stylePick';
 import {
   claimingOn,
   everythingOn,
-  rentalOf,
+  rentalsOf,
   type Plot,
   type PrepRequest,
   type PreparedResort,
@@ -500,6 +500,7 @@ import {
   restoreCrowd,
   snapshotCrowd,
   takeOffPlot,
+  WALK_SPEED,
   type Crowd,
 } from '../features/crowd/domain/crowd';
 import {
@@ -583,17 +584,13 @@ import {
 import type { SeaField } from '../features/sea/adapters/seaField';
 import { buildSeaField } from '../features/sea/adapters/seaField';
 import { createFlotilla } from '../features/sea/domain/flotilla';
-import { pierBoxesFor } from '../features/sea/domain/piers';
+import { pierBoxesFor, type PierBox } from '../features/sea/domain/piers';
 import { islandBoxesFor } from '../features/sea/domain/islands';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
-import type {
-  Mooring,
-  Rental,
-  SailingGround,
-  SwimAreaOptions,
-} from '../features/sea/domain/swimArea';
+import { fleetsFor, hutAllowances, type RentalHut } from '../features/sea/domain/fleets';
+import type { Mooring, SailingGround, SwimAreaOptions } from '../features/sea/domain/swimArea';
 import { sailingGroundFor } from '../features/sea/domain/swimArea';
-import { BUOY_INDEX, PEDALO_INDEX } from '../../voxel-gen/sea/index.ts';
+import { BUOY_INDEX } from '../../voxel-gen/sea/index.ts';
 import type {
   CameraFraming,
   CameraMode,
@@ -671,12 +668,6 @@ const LITTER_PIECES = 512;
 const BALLS_PER_KIND = 16;
 
 const CRAFT_COUNT = 12;
-
-// Capped by the hut: a wider rack would moor boats among the swimmers.
-const HIRE_COUNT = 6;
-
-// A pedalo seats two, and goes out full.
-const HIRERS_PER_BOAT = 2;
 
 const SEA_SEED = 3;
 
@@ -1198,8 +1189,11 @@ interface Resort {
   cast: Cast;
   staffCast: Cast;
   readonly casting: Casting;
-  // Off the rental the sea was built with, which an edit does not move either.
+  // Off the rentals the resort was built with: an edit puts new fleets out, but moves no buoy.
   readonly bathing: SwimAreaOptions;
+  // The huts whose fleets are on the sea, in the fleets' order.
+  rentals: readonly RentalHut[];
+  readonly waters: SeaWaters;
   // Allocated once, for a click to merge the crowd with the cast into.
   readonly drawnAt: {
     readonly x: Float32Array;
@@ -1319,7 +1313,8 @@ interface Resort {
   readonly flames: FlamesField;
   // The keys of the fires burning, so their flames and light change only when the fires do.
   burning: string;
-  readonly sea: SeaField;
+  // Replaced when an edit adds or pulls down a hut that hires craft out.
+  sea: SeaField;
   readonly occupancy: TileOccupancy;
   readonly plan: ResortPlan;
   // The only writer of plot.rails; rails claim no tile, so they are indexed here instead of in
@@ -1459,9 +1454,9 @@ function balloonsFor(parts: {
 }
 
 // An empty ground rather than null, so nothing downstream needs a case for an inland resort.
-function seaGroundOf(shore: Shore | null, rental: Rental | null): SailingGround {
+function seaGroundOf(shore: Shore | null, rentals: readonly RentalHut[]): SailingGround {
   if (!shore) return { westX: 0, eastX: 0, seawardZ: 0, landwardZ: () => 0 };
-  return sailingGroundFor(shore, rental);
+  return sailingGroundFor(shore, rentals);
 }
 
 const SEA_BERTHS = SEA_MODELS.map(berthsOf);
@@ -1469,54 +1464,89 @@ const SEA_BERTHS = SEA_MODELS.map(berthsOf);
 // Half the longer side, since a hull turns.
 const SEA_RADII = SEA_MODELS.map((model) => Math.max(model.width, model.depth) / 2);
 
+const HIRED_CRAFT: ReadonlySet<string> = new Set(
+  OBJECT_TYPES.flatMap((type) =>
+    (type.model.hire?.fleets ?? []).flatMap((fleet) => [fleet.craft, fleet.tows ?? fleet.craft]),
+  ),
+);
+
+const seaIndexOf = (id: string): number => SEA_MODELS.findIndex((model) => model.id === id);
+
+// Hire craft only ever leave their berths with somebody aboard.
 const driftingVariants = (sea: readonly ModelGeometry[]): number[] =>
   sea
     .map((_, variant) => variant)
-    .filter((variant) => variant !== BUOY_INDEX && variant !== PEDALO_INDEX);
+    .filter((variant) => variant !== BUOY_INDEX && !HIRED_CRAFT.has(sea[variant]!.id));
+
+// Everything the sea is built on but its fleets, kept so an edit can put new fleets on the same
+// water. The ground keeps the corridors it was built with, as the buoys and the swim area do.
+interface SeaWaters {
+  readonly shore: Shore | null;
+  readonly ground: SailingGround;
+  readonly moorings: readonly Mooring[];
+  readonly piers: readonly PierBox[];
+  readonly islands: readonly PierBox[];
+  readonly sea: readonly ModelGeometry[];
+  readonly people: readonly ModelGeometry[];
+  readonly lightVolume: BakedLightVolume | null;
+}
 
 // Moorings are worked out beforehand because the lamp bake needs them before there is a sea.
-function seaFor(parts: {
+function seaWatersFor(parts: {
   readonly shore: Shore | null;
   readonly terrain: Terrain;
   readonly paved: readonly Placement[];
-  readonly placements: readonly Placement[];
+  readonly rentals: readonly RentalHut[];
   readonly moorings: readonly Mooring[];
   readonly sea: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly lightVolume: BakedLightVolume | null;
-}): SeaField {
-  const shore = parts.shore;
-  const rental = rentalOf(shore, parts.placements);
-  const ground = seaGroundOf(shore, rental);
-  const flotilla = createFlotilla({
+}): SeaWaters {
+  const { shore } = parts;
+  return {
+    shore,
+    ground: seaGroundOf(shore, parts.rentals),
     moorings: parts.moorings,
-    buoyVariant: BUOY_INDEX,
-    craft: shore ? CRAFT_COUNT : 0,
-    craftVariants: driftingVariants(parts.sea),
-    hire: rental ? { count: HIRE_COUNT, variant: PEDALO_INDEX, rental } : null,
-    // Nobody is at the hut before the first recast, which sets the real allowance.
-    hireAllowed: 0,
-    ground,
-    radii: SEA_RADII,
     piers: pierBoxesFor(shore, parts.paved),
     // Off the terrain as it stands when the resort is built: an island raised later is sailed
     // round from the next load.
     islands: islandBoxesFor(parts.terrain),
+    sea: parts.sea,
+    people: parts.people,
+    lightVolume: parts.lightVolume,
+  };
+}
+
+function seaFor(waters: SeaWaters, rentals: readonly RentalHut[]): SeaField {
+  const { ground } = waters;
+  const fleets = fleetsFor(rentals, hireOf, seaIndexOf, WALK_SPEED);
+  const flotilla = createFlotilla({
+    moorings: waters.moorings,
+    buoyVariant: BUOY_INDEX,
+    craft: waters.shore ? CRAFT_COUNT : 0,
+    craftVariants: driftingVariants(waters.sea),
+    fleets,
+    // Nobody is at the hut before the first recast, which sets the real allowance.
+    hireAllowed: fleets.map(() => 0),
+    ground,
+    radii: SEA_RADII,
+    piers: waters.piers,
+    islands: waters.islands,
     waterline: SEA_LEVEL,
     seed: SEA_SEED,
   });
   const passengers = createPassengers({
     flotilla,
     berths: SEA_BERTHS,
-    variants: parts.people.length,
+    variants: waters.people.length,
     seed: CREW_SEED,
   });
   return buildSeaField({
     flotilla,
     ground,
-    models: parts.sea,
-    crew: { passengers, models: parts.people },
-    lightVolume: parts.lightVolume,
+    models: waters.sea,
+    crew: { passengers, models: waters.people },
+    lightVolume: waters.lightVolume,
   });
 }
 
@@ -1617,11 +1647,8 @@ function buildResort(
   const gateways = gatewaysOn(plot.layout.placements);
   const depots = depotsOn(plot.layout.placements);
   const places = placesFor(venues, byKey(plot.layout.placements), network);
-  const bathing = {
-    shore,
-    rental: rentalOf(shore, plot.layout.placements),
-    span: spanOf(plan),
-  };
+  const rentals = rentalsOf(shore, plot.layout.placements, hireOf);
+  const bathing = { shore, rentals, span: spanOf(plan) };
   const cast = createCast(population, places, { sand: network.sand, swim: bathing });
   const unreachable = strandedOn(venues, network);
   const upkeep = createUpkeep(venues.length);
@@ -1807,16 +1834,17 @@ function buildResort(
     lightVolume: lighting.volume,
   });
   const flames = buildFlamesField();
-  const sea = seaFor({
+  const waters = seaWatersFor({
     shore,
     terrain,
     paved: plot.layout.paths,
-    placements: plot.layout.placements,
+    rentals,
     moorings,
     sea: parts.sea,
     people: parts.people,
     lightVolume: lighting.volume,
   });
+  const sea = seaFor(waters, rentals);
 
   const events = createEvents(population);
   events.programme = withBuiltIns(
@@ -1858,6 +1886,8 @@ function buildResort(
       },
     },
     bathing,
+    rentals,
+    waters,
     drawnAt: {
       x: new Float32Array(population),
       y: new Float32Array(population),
@@ -1956,7 +1986,7 @@ function buildResort(
       ballField.dispose();
       flames.dispose();
       overlay.dispose();
-      sea.dispose();
+      resort.sea.dispose();
       lighting.volume?.dispose();
     },
   };
@@ -1968,24 +1998,30 @@ function buildResort(
 const byKey = (placements: readonly Placement[]): ReadonlyMap<string, Placement> =>
   new Map(placements.map((placement) => [placement.key, placement]));
 
-const rentalIndices = new WeakMap<readonly Venue[], number>();
+const rentalIndices = new WeakMap<readonly Venue[], ReadonlyMap<string, number>>();
 
-// The first hut, as rentalOf picks it for the berths. Built once per venue list, as venueIndexOf is.
-function rentalVenueOf(venues: readonly Venue[]): number {
-  let index = rentalIndices.get(venues);
-  if (index === undefined) {
-    index = venues.findIndex((venue) => familyOf(venue.id) === PEDALO_RENTAL_ID);
-    rentalIndices.set(venues, index);
+// Built once per venue list, as venueIndexOf is.
+function rentalVenuesOf(venues: readonly Venue[]): ReadonlyMap<string, number> {
+  let indices = rentalIndices.get(venues);
+  if (indices === undefined) {
+    indices = new Map(
+      venues.flatMap((venue, index) => (hireOf(venue.id) ? [[venue.key, index] as const] : [])),
+    );
+    rentalIndices.set(venues, indices);
   }
-  return index;
+  return indices;
 }
 
-// Drawn only: the visit is the router's, and the boats keep the crowd's time. A hut pulled down
-// keeps its boats in, since the sea is not rebuilt on an edit.
+// Drawn only: the visit is the router's, and the boats keep the crowd's time.
 function allowHire(resort: Resort): void {
-  const rental = rentalVenueOf(resort.venues);
-  const hirers = rental >= 0 ? insideAt(resort.cast, rental) : 0;
-  resort.sea.allowHire(Math.min(HIRE_COUNT, Math.ceil(hirers / HIRERS_PER_BOAT)));
+  const venues = rentalVenuesOf(resort.venues);
+  const hirersAt = (key: string): number => {
+    const venue = venues.get(key);
+    return venue === undefined ? 0 : insideAt(resort.cast, venue);
+  };
+  for (const [fleet, boats] of hutAllowances(resort.rentals, hireOf, hirersAt).entries()) {
+    resort.sea.allowHire(fleet, boats);
+  }
 }
 
 // After the ticks, never inside them: the cast only reads what the routers decided.
@@ -2042,6 +2078,21 @@ function recastAll(resort: Resort): void {
 const recastTask = createStaffTask();
 
 const isSweeping = (task: StaffTask): boolean => task.kind === 'sweep' && task.working;
+
+const hutsKey = (rentals: readonly RentalHut[]): string =>
+  rentals.map((hut) => `${hut.key}@${hut.x},${hut.z}`).join();
+
+// Only the fleets, on the water the sea was built on: the buoys and the swim area keep their
+// layout until the next load, so a hut built in play berths its boats outside the buoys.
+function refleetAfterEdit(resort: Resort, handle: SceneHandle): void {
+  const rentals = rentalsOf(resort.shore, resort.plot.placements, hireOf);
+  if (hutsKey(rentals) === hutsKey(resort.rentals)) return;
+  handle.scene.remove(resort.sea.group);
+  resort.sea.dispose();
+  resort.rentals = rentals;
+  resort.sea = seaFor(resort.waters, rentals);
+  handle.scene.add(resort.sea.group);
+}
 
 // Rebuilt with the venues and the network: a place points at a seat by its index there.
 function recastAfterEdit(
@@ -5599,6 +5650,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     crowd.relocate(network, (person) => resort.router.holds(person));
     resort.staff.relocate(network);
     staffTheResort(resort);
+    // Before the recast, which sets the new fleets' allowances.
+    refleetAfterEdit(resort, handle);
     recastAfterEdit(resort, network, wasStanding);
     resort.footfall = createFootfall(network.nodes.length);
     paintOverlay();

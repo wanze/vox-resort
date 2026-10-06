@@ -68,7 +68,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
 - **Guests**: crowd murmur, children and swimmers by count in reach.
 - **Venues**: only when zoomed in, scaled by how open and awake they are. Only
   the three loudest kinds play. A fire pit counts as open only while its
-  bonfire burns.
+  bonfire burns. The water sports hut's engines are heard at the hut; the craft
+  out on the water are silent.
 
 Sound sources are listed once per resort and after every edit, not scanned at
 5 Hz. One fill with 3,000 guests costs about 0.2 ms.

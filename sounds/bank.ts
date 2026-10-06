@@ -482,6 +482,23 @@ export const BANK: Bank = {
       },
     ],
   },
+  watersports: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'watersports.mp3',
+        source: {
+          page: 'https://freesound.org/people/kyles/sounds/451458/',
+          fetch: 'https://cdn.freesound.org/previews/451/451458_612689-hq.mp3',
+          author: 'kyles',
+          licence: 'CC0',
+        },
+        cut: { start: 20, length: 20, loudness: -24 },
+      },
+    ],
+  },
   fountain: {
     bus: 'ambience',
     loop: true,

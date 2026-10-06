@@ -31,6 +31,8 @@ export default defineModel({
   category: 'leisure',
   sound: 'boats',
   placement: { ground: 'shore', perResort: { min: 1, max: 1 } },
+  // Six, not more: a wider rack would moor boats among the swimmers.
+  hire: { fleets: [{ craft: 'pedalo', count: 6, riders: 2, pace: 0.6 }] },
   venue: {
     shelter: 'open',
     role: 'activity',

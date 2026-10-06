@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WALK_SPEED } from '../../crowd/domain/crowd';
 import type { VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
 import { createFlotilla, poseOf, stepFlotilla, type Flotilla } from './flotilla';
 import {
@@ -49,7 +50,7 @@ const bay = (craft = 6, hire = 4, seed = 7): Flotilla =>
     buoyVariant: BUOY,
     craft,
     craftVariants: [BOAT],
-    hire: { count: hire, variant: HIRE, rental: RENTAL },
+    fleets: [{ rental: RENTAL, variant: HIRE, count: hire, pace: 0.6 * WALK_SPEED }],
     ground: GROUND,
     waterline: WATERLINE,
     seed,

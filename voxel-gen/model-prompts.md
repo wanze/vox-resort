@@ -34,6 +34,9 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | rowboat        | —         | 11 × 5 × 16    | a 4 m open boat with oars          |
 | sailboat       | —         | 7 × 21 × 20    | a 5 m dinghy, 3.5 m of rig         |
 | pedalo         | —         | 9 × 5 × 12     | a 2.25 x 3 m pedal boat            |
+| jet-ski        | —         | 5 × 5 × 10     | a 2.5 m jet ski for two astride    |
+| speedboat      | —         | 7 × 6 × 18     | a 4.5 m tow boat with a windscreen |
+| banana         | —         | 5 × 5 × 20     | a 5 m banana for four astride      |
 | picnic-table   | 2×1       | 32 × 6 × 16    | a 4 m table seating eight          |
 | beach-shower   | 1×1       | 16 × 12 × 16   | a 3 m rinse post and a towel rail  |
 | volleyball     | 6×4       | 96 × 12 × 64   | 16 x 8 m court + 4 m run-off       |
@@ -44,6 +47,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | entrance       | 4×1       | 64 × 41 × 16   | a 16 m gate, 10 m to the lanterns  |
 | fountain       | 2×2       | 32 × 15 × 32   | an 8 m plaza fountain, three tiers |
 | pedalo-rental  | 2×2       | 32 × 24 × 32   | hire hut + three boats, 8 x 8 m    |
+| water-sports   | 3×2       | 48 × 25 × 32   | hut, racked craft, lifeguard deck  |
 | first-aid      | 2×2       | 32 × 17 × 32   | 6 x 5 m hut on an 8 x 8 m plot     |
 | bakery         | 2×2       | 32 × 27 × 32   | 6.5 x 4 m shop, oven chimney       |
 | poolside-bar   | 2×2       | 32 × 24 × 32   | 5 m palapa bar, 6 m to the ridge   |

@@ -23,12 +23,13 @@ const HIRE_SECONDS = 2 * CROWD_SECONDS_PER_HOUR;
 // A berth no route reaches would keep its boat out, and the hire it holds taken, for good.
 const GIVE_UP_SECONDS = 3 * HIRE_SECONDS;
 
-const PEDAL_SHARE_OF_WALK = 0.6;
-
-// Under a voxel a step at pedal pace, so a boat coming home cannot step over its berth.
+// Under a voxel a step at the fastest fleet's pace, so a boat coming home cannot step over its berth.
+const STEP_VOXELS = 0.9;
 const HIRE_STEP = 0.25;
-// Bounds a long frame at rush the way the crowd's substeps do; the rest is dropped.
+// Bounds a long frame at rush the way the crowd's substeps do; the rest is dropped. A fleet whose
+// steps are shorter is given more of them, so it covers as much of a long frame.
 const MAX_HIRE_STEPS = 16;
+const MOST_HIRE_STEPS = 64;
 
 // Just short of launching, so a boat held for want of a hirer goes out the frame one turns up.
 const HELD_AGE = -1e-3;
@@ -49,6 +50,11 @@ const BERTH_SPACING = 12;
 
 const BERTH_OUT = 4;
 
+// From the tow post to the towed craft's nose: 3.5 m.
+const ROPE = 14;
+// Off its tug's, so the two never heave as one.
+const TOW_RIDE = 2.4;
+
 // A turning circle and a bit clear of an obstacle's corner, so a boat rounding it never clips it.
 const DETOUR_VOXELS = 4;
 // A boat shoved out of a pier sits exactly its reach away, and must still see along that side.
@@ -57,7 +63,15 @@ const WALL_SLACK = 0.5;
 const MAX_DETOURS = 3;
 
 const LOOK_SECONDS = 6;
+// Under a tile, the narrowest a pier is, so no probe steps over one.
+const PROBE_VOXELS = 12;
 const AVOID_RADIANS = 0.6;
+// A probe inside a pier is its own threat, dead ahead to within rounding; without a band the
+// rounding chose the side, and a boat facing a pier dithered against it.
+const DEAD_AHEAD = 0.02;
+// Held to under half its stride for this long, a boat is pinned rather than brushing past.
+const BLOCKED_SHARE = 0.5;
+const BLOCKED_SECONDS = 1;
 
 const DEFAULT_RADIUS = 8;
 
@@ -74,9 +88,9 @@ export interface FlotillaOptions {
   readonly buoyVariant: number;
   readonly craft: number;
   readonly craftVariants: readonly number[];
-  readonly hire?: HireOptions | null;
-  // Left out, every hire boat may be out at once.
-  readonly hireAllowed?: number;
+  readonly fleets?: readonly FleetOptions[];
+  // Per fleet; left out, every hire boat may be out at once.
+  readonly hireAllowed?: readonly number[];
   readonly ground: SailingGround;
   // Half the length, since a hull turns.
   readonly radii?: readonly number[];
@@ -86,10 +100,14 @@ export interface FlotillaOptions {
   readonly seed: number;
 }
 
-export interface HireOptions {
-  readonly count: number;
-  readonly variant: number;
+export interface FleetOptions {
   readonly rental: Rental;
+  readonly variant: number;
+  readonly count: number;
+  // Voxels per crowd second.
+  readonly pace: number;
+  // The variant pulled behind each craft.
+  readonly tows?: number | undefined;
 }
 
 export interface Flotilla {
@@ -103,7 +121,13 @@ export interface Flotilla {
   readonly turn: Float32Array;
   readonly swing: Float32Array;
   readonly ride: Float32Array;
+  // Seconds it has been held back from going where it steered.
+  readonly blocked: Float32Array;
   readonly hired: Uint8Array;
+  // -1 for whatever is not hired out on its own: a buoy, a drifting craft, a towed one.
+  readonly fleet: Int32Array;
+  // The craft pulling it, -1 for the rest; a towed craft comes right after its tug.
+  readonly towedBy: Int32Array;
   // Seconds into the hire, negative while tied up: one number for three states keeps
   // the per-frame loop to compares.
   readonly age: Float32Array;
@@ -118,8 +142,10 @@ export interface Flotilla {
   // Piers and islands merged wherever a hire boat could not pass between them, to route home round.
   readonly obstacles: readonly PierBox[];
   readonly waterline: number;
-  // How many hire boats may be out at once; lowering it lets a boat finish its hire.
-  hireAllowed: number;
+  // Per fleet, how many of its boats may be out at once; lowering it lets a boat finish its hire.
+  readonly hireAllowed: Int32Array;
+  readonly hireStep: number;
+  readonly hireSteps: number;
   clock: number;
 }
 
@@ -150,30 +176,31 @@ const distanceToBox = (box: PierBox, x: number, z: number): number =>
 // Slots under a pier give way to spares further along the row, nearest the hut first; a boat
 // berthed in the decking could never get within reach of its berth to tie up.
 function layBerths(
-  hire: HireOptions,
+  fleet: FleetOptions,
   ground: SailingGround,
   obstacles: readonly PierBox[],
   reach: number,
 ): Berth[] {
+  const { count, rental } = fleet;
   const slots: { x: number; blocked: boolean }[] = [];
   // A whole row spare past each end, so even a pier across the hut's front leaves a row clear.
-  for (let slot = -hire.count; slot < hire.count * 2; slot++) {
-    const x = hire.rental.x + (slot - (hire.count - 1) / 2) * BERTH_SPACING;
+  for (let slot = -count; slot < count * 2; slot++) {
+    const x = rental.x + (slot - (count - 1) / 2) * BERTH_SPACING;
     const z = ground.landwardZ(x) + BERTH_OUT;
-    const blocked = obstacles.some((box) => distanceToBox(box, x, z) < reach + DETOUR_VOXELS);
+    const blocked = obstacles.some((box) => distanceToBox(box, x, z) < reach * 2 + DETOUR_VOXELS);
     slots.push({ x, blocked });
   }
   return slots
     .toSorted(
       (a, b) =>
         Number(a.blocked) - Number(b.blocked) ||
-        Math.abs(a.x - hire.rental.x) - Math.abs(b.x - hire.rental.x),
+        Math.abs(a.x - rental.x) - Math.abs(b.x - rental.x),
     )
-    .slice(0, hire.count)
+    .slice(0, count)
     .toSorted((a, b) => a.x - b.x)
     .map(({ x }) => {
       const z = ground.landwardZ(x) + BERTH_OUT;
-      return { x, z, heading: Math.atan2(hire.rental.x - x, hire.rental.z - z) };
+      return { x, z, heading: Math.atan2(rental.x - x, rental.z - z) };
     });
 }
 
@@ -205,27 +232,46 @@ function mergeObstacles(boxes: readonly PierBox[], width: number): PierBox[] {
   return merged;
 }
 
+const reachOf = (options: FlotillaOptions, variant: number): number =>
+  options.radii?.[variant] ?? DEFAULT_RADIUS;
+
+// Merged for the widest hull out, as every homing boat routes round the same boxes; each fleet
+// berths clear of them by its own.
 function hireWaters(
   options: FlotillaOptions,
+  fleets: readonly FleetOptions[],
   boxes: readonly PierBox[],
-): { obstacles: PierBox[]; berths: Berth[] } {
-  const hire = options.hire;
-  const reach = (hire && options.radii?.[hire.variant]) ?? DEFAULT_RADIUS;
-  const obstacles = mergeObstacles(boxes, reach * 2);
-  return { obstacles, berths: hire ? layBerths(hire, options.ground, obstacles, reach) : [] };
+): { obstacles: PierBox[]; berths: Berth[][] } {
+  const reaches = fleets.map((fleet) => reachOf(options, fleet.variant));
+  const widest = reaches.length === 0 ? DEFAULT_RADIUS : Math.max(...reaches);
+  const obstacles = mergeObstacles(boxes, widest * 2);
+  const berths = fleets.map((fleet, at) =>
+    layBerths(fleet, options.ground, obstacles, reaches[at]!),
+  );
+  return { obstacles, berths };
+}
+
+function hireStepFor(fleets: readonly FleetOptions[]): number {
+  const fastest = Math.max(0, ...fleets.map((fleet) => fleet.pace));
+  return fastest > 0 ? Math.min(HIRE_STEP, STEP_VOXELS / fastest) : HIRE_STEP;
 }
 
 // Buoys come first and in mooring order, so the field draws one instance per mooring.
 export function createFlotilla(options: FlotillaOptions): Flotilla {
   const { moorings, ground, craftVariants } = options;
   const craft = craftVariants.length === 0 ? 0 : Math.max(0, options.craft);
-  const hire = options.hire ?? null;
-  const hired = hire ? Math.max(0, hire.count) : 0;
+  const fleets = options.fleets ?? [];
+  const counts = fleets.map((fleet) => Math.max(0, fleet.count));
+  const hired = fleets.reduce(
+    (sum, fleet, at) => sum + counts[at]! * (fleet.tows === undefined ? 1 : 2),
+    0,
+  );
   const count = moorings.length + craft + hired;
   const random = createRandom(options.seed);
   const piers = options.piers ?? [];
   const islands = options.islands ?? [];
-  const { obstacles, berths } = hireWaters(options, [...piers, ...islands]);
+  const { obstacles, berths } = hireWaters(options, fleets, [...piers, ...islands]);
+  const hireStep = hireStepFor(fleets);
 
   const flotilla: Flotilla = {
     count,
@@ -237,7 +283,10 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     turn: new Float32Array(count),
     swing: new Float32Array(count),
     ride: new Float32Array(count),
+    blocked: new Float32Array(count),
     hired: new Uint8Array(count),
+    fleet: new Int32Array(count).fill(-1),
+    towedBy: new Int32Array(count).fill(-1),
     age: new Float32Array(count),
     berthX: new Float32Array(count),
     berthZ: new Float32Array(count),
@@ -248,7 +297,9 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     islands,
     obstacles,
     waterline: options.waterline,
-    hireAllowed: options.hireAllowed ?? hired,
+    hireAllowed: Int32Array.from(counts, (boats, at) => options.hireAllowed?.[at] ?? boats),
+    hireStep,
+    hireSteps: Math.min(MOST_HIRE_STEPS, Math.ceil((MAX_HIRE_STEPS * HIRE_STEP) / hireStep)),
     clock: 0,
   };
 
@@ -278,48 +329,101 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     launchClear(flotilla, index);
   }
 
-  for (let boat = 0; boat < hired; boat++) {
-    const index = moorings.length + craft + boat;
-    const berth = berths[boat]!;
-    flotilla.variant[index] = hire!.variant;
-    flotilla.hired[index] = 1;
-    flotilla.berthX[index] = berth.x;
-    flotilla.berthZ[index] = berth.z;
-    flotilla.berthHeading[index] = berth.heading;
-    flotilla.gap[index] = TIED_SECONDS + random() * TIED_SPREAD;
-    helm(index);
-    flotilla.speed[index]! *= (PEDAL_SHARE_OF_WALK * WALK_SPEED) / SPEED_VOXELS;
-    // Dropped anywhere in the cycle, so the berths fill and empty from the first minute.
-    const age = random() * (HIRE_SECONDS + flotilla.gap[index]!) - flotilla.gap[index]!;
-    flotilla.age[index] = age;
-    if (age < 0) {
-      tieUp(flotilla, index, age);
-    } else {
-      const bearing = random() * Math.PI * 2;
-      const off = random() * HIRE_REACH;
-      const x = clamp(berth.x + Math.sin(bearing) * off, ground.westX, ground.eastX);
-      const landward = ground.landwardZ(x);
-      flotilla.x[index] = x;
-      flotilla.z[index] = clamp(berth.z + Math.cos(bearing) * off, landward, ground.seawardZ);
-      flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
-      launchClear(flotilla, index);
+  const deal: Dealer = { random, helm, ground };
+  let next = moorings.length + craft;
+  for (const [at, fleet] of fleets.entries()) {
+    for (const berth of berths[at]!) {
+      flotilla.fleet[next] = at;
+      dealHire(flotilla, next++, fleet, berth, deal);
+      if (fleet.tows !== undefined) tether(flotilla, next++, fleet.tows);
     }
+  }
+
+  for (let index = 0; index < count; index++) {
+    flotilla.radius[index] = reachOf(options, flotilla.variant[index]!);
   }
 
   // Only once every draw is dealt, so an allowance never moves the seeded ones.
   holdBeyondAllowance(flotilla, count - hired);
-
-  for (let index = 0; index < count; index++) {
-    flotilla.radius[index] = options.radii?.[flotilla.variant[index]!] ?? DEFAULT_RADIUS;
-  }
+  settleTows(flotilla, ground);
   return flotilla;
 }
 
+interface Dealer {
+  readonly random: () => number;
+  readonly helm: (index: number) => void;
+  readonly ground: SailingGround;
+}
+
+function dealHire(
+  flotilla: Flotilla,
+  index: number,
+  fleet: FleetOptions,
+  berth: Berth,
+  { random, helm, ground }: Dealer,
+): void {
+  flotilla.variant[index] = fleet.variant;
+  flotilla.hired[index] = 1;
+  flotilla.berthX[index] = berth.x;
+  flotilla.berthZ[index] = berth.z;
+  flotilla.berthHeading[index] = berth.heading;
+  flotilla.gap[index] = TIED_SECONDS + random() * TIED_SPREAD;
+  helm(index);
+  flotilla.speed[index]! *= fleet.pace / SPEED_VOXELS;
+  // Dropped anywhere in the cycle, so the berths fill and empty from the first minute.
+  const age = random() * (HIRE_SECONDS + flotilla.gap[index]!) - flotilla.gap[index]!;
+  flotilla.age[index] = age;
+  if (age < 0) {
+    tieUp(flotilla, index, age);
+    return;
+  }
+  const bearing = random() * Math.PI * 2;
+  const off = random() * HIRE_REACH;
+  const x = clamp(berth.x + Math.sin(bearing) * off, ground.westX, ground.eastX);
+  const landward = ground.landwardZ(x);
+  flotilla.x[index] = x;
+  flotilla.z[index] = clamp(berth.z + Math.cos(bearing) * off, landward, ground.seawardZ);
+  flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
+  launchClear(flotilla, index);
+}
+
+function settleTows(flotilla: Flotilla, ground: SailingGround): void {
+  for (let index = 0; index < flotilla.count; index++) {
+    if (flotilla.towedBy[index]! < 0) continue;
+    berthAstern(flotilla, index);
+    towAlong(flotilla, index, ground);
+  }
+}
+
+// Draws nothing, so a fleet with a tow leaves the seeded stream as one without would.
+function tether(flotilla: Flotilla, index: number, variant: number): void {
+  const tug = index - 1;
+  flotilla.variant[index] = variant;
+  flotilla.hired[index] = 1;
+  flotilla.towedBy[index] = tug;
+  flotilla.ride[index] = flotilla.ride[tug]! + TOW_RIDE;
+  flotilla.heading[index] = flotilla.heading[tug]!;
+  // Just behind the tug, wherever it is; the first towAlong pays out the rope.
+  flotilla.x[index] = flotilla.x[tug]! - Math.sin(flotilla.heading[tug]!);
+  flotilla.z[index] = flotilla.z[tug]! - Math.cos(flotilla.heading[tug]!);
+}
+
+// On the rope, out to sea of the tug's berth, so it is already in line when the tug sets off.
+function berthAstern(flotilla: Flotilla, index: number): void {
+  const tug = flotilla.towedBy[index]!;
+  const heading = flotilla.berthHeading[tug]!;
+  const astern = flotilla.radius[tug]! + ROPE + flotilla.radius[index]!;
+  flotilla.berthX[index] = flotilla.berthX[tug]! - Math.sin(heading) * astern;
+  flotilla.berthZ[index] = flotilla.berthZ[tug]! - Math.cos(heading) * astern;
+  flotilla.berthHeading[index] = heading;
+}
+
 function holdBeyondAllowance(flotilla: Flotilla, firstHire: number): void {
-  let out = 0;
+  const out = new Int32Array(flotilla.hireAllowed.length);
   for (let index = firstHire; index < flotilla.count; index++) {
-    if (flotilla.age[index]! < 0) continue;
-    if (out < flotilla.hireAllowed) out++;
+    const fleet = flotilla.fleet[index]!;
+    if (fleet < 0 || flotilla.age[index]! < 0) continue;
+    if (out[fleet]! < flotilla.hireAllowed[fleet]!) out[fleet]!++;
     else tieUp(flotilla, index, HELD_AGE);
   }
 }
@@ -340,6 +444,35 @@ function tieUp(flotilla: Flotilla, index: number, age: number): void {
   flotilla.heading[index] = flotilla.berthHeading[index]!;
 }
 
+// A trailer on a hitch: pulled straight towards the tug's stern, so it cuts inside the tug's turn
+// as a towed float does.
+function towAlong(flotilla: Flotilla, index: number, ground: SailingGround): void {
+  const tug = flotilla.towedBy[index]!;
+  if (flotilla.age[tug]! < 0) {
+    tieUp(flotilla, index, flotilla.age[tug]!);
+    return;
+  }
+  flotilla.age[index] = flotilla.age[tug]!;
+  const heading = flotilla.heading[tug]!;
+  const behind = flotilla.radius[tug]!;
+  const reach = ROPE + flotilla.radius[index]!;
+  const hitchX = flotilla.x[tug]! - Math.sin(heading) * behind;
+  const hitchZ = flotilla.z[tug]! - Math.cos(heading) * behind;
+  const rx = flotilla.x[index]! - hitchX;
+  const rz = flotilla.z[index]! - hitchZ;
+  const apart = Math.hypot(rx, rz);
+  const x = apart === 0 ? hitchX - Math.sin(heading) * reach : hitchX + (rx / apart) * reach;
+  const z = apart === 0 ? hitchZ - Math.cos(heading) * reach : hitchZ + (rz / apart) * reach;
+  // Kept off the sand and out of the decking, at the cost of a slack rope for a moment.
+  shovedX = clamp(x, ground.westX, ground.eastX);
+  shovedZ = clamp(z, ground.landwardZ(shovedX), ground.seawardZ);
+  for (const pier of flotilla.piers) outOfPier(pier, flotilla.radius[index]!);
+  for (const island of flotilla.islands) outOfIsland(island, flotilla.radius[index]!);
+  flotilla.x[index] = shovedX;
+  flotilla.z[index] = shovedZ;
+  flotilla.heading[index] = Math.atan2(hitchX - shovedX, hitchZ - shovedZ);
+}
+
 // `hireDt` is the crowd's time this frame; left out, the hire boats keep real time with the rest.
 export function stepFlotilla(
   flotilla: Flotilla,
@@ -354,11 +487,13 @@ export function stepFlotilla(
     }
   }
   if (!(hireDt > 0)) return;
-  const steps = Math.min(MAX_HIRE_STEPS, Math.ceil(hireDt / HIRE_STEP));
-  const step = Math.min(HIRE_STEP, hireDt / steps);
+  const steps = Math.min(flotilla.hireSteps, Math.ceil(hireDt / flotilla.hireStep));
+  const step = Math.min(flotilla.hireStep, hireDt / steps);
   for (let at = 0; at < steps; at++) {
     for (let index = 0; index < flotilla.count; index++) {
-      if (flotilla.hired[index] === 1) stepHire(flotilla, index, step, ground);
+      if (flotilla.hired[index] === 0 || flotilla.towedBy[index]! >= 0) continue;
+      stepHire(flotilla, index, step, ground);
+      if (flotilla.towedBy[index + 1] === index) towAlong(flotilla, index + 1, ground);
     }
   }
 }
@@ -366,7 +501,8 @@ export function stepFlotilla(
 function stepHire(flotilla: Flotilla, index: number, dt: number, ground: SailingGround): void {
   const tied = flotilla.age[index]! < 0;
   const age = flotilla.age[index]! + dt;
-  if (tied && age >= 0 && hiresOut(flotilla) >= flotilla.hireAllowed) {
+  const fleet = flotilla.fleet[index]!;
+  if (tied && age >= 0 && hiresOut(flotilla, fleet) >= flotilla.hireAllowed[fleet]!) {
     flotilla.age[index] = HELD_AGE;
     return;
   }
@@ -388,10 +524,10 @@ function stepHire(flotilla: Flotilla, index: number, dt: number, ground: Sailing
 }
 
 // Counted afresh rather than kept, so it cannot drift from the ages; only a boat due out asks.
-function hiresOut(flotilla: Flotilla): number {
+function hiresOut(flotilla: Flotilla, fleet: number): number {
   let out = 0;
   for (let index = 0; index < flotilla.count; index++) {
-    if (flotilla.hired[index] === 1 && flotilla.age[index]! >= 0) out++;
+    if (flotilla.fleet[index] === fleet && flotilla.age[index]! >= 0) out++;
   }
   return out;
 }
@@ -580,26 +716,44 @@ function hold(
   let x = shovedX;
   let z = shovedZ;
 
-  // Negating the heading mirrors x and keeps z; taking it from pi mirrors z and keeps x.
+  // Negating the heading mirrors x and keeps z; twice a limit's own bearing less the heading
+  // mirrors about that limit.
   if (x < ground.westX || x > ground.eastX) {
     x = Math.min(ground.eastX, Math.max(ground.westX, x));
     heading = -heading;
   }
   const landward = ground.landwardZ(x);
   if (z < landward || z > ground.seawardZ) {
+    const limit = z > ground.seawardZ ? Math.PI / 2 : shoreBearing(ground, x);
     z = Math.min(ground.seawardZ, Math.max(landward, z));
-    heading = wrapAngle(Math.PI - heading);
+    heading = wrapAngle(2 * limit - heading);
   }
 
+  const stride = speed * dt;
+  const moved = Math.hypot(x - flotilla.x[index]!, z - flotilla.z[index]!);
+  flotilla.blocked[index] = moved < stride * BLOCKED_SHARE ? flotilla.blocked[index]! + dt : 0;
   flotilla.heading[index] = heading;
   flotilla.x[index] = x;
   flotilla.z[index] = z;
 }
 
+// Along the curve, not across the plot: mirrored as if the shore were straight, a boat sliding
+// along a rising stretch was turned back into it every step.
+const shoreBearing = (ground: SailingGround, x: number): number =>
+  Math.atan2(2, ground.landwardZ(x + 1) - ground.landwardZ(x - 1));
+
+function letThrough(flotilla: Flotilla, one: number, other: number): boolean {
+  if (flotilla.hired[one] === 0 || flotilla.hired[other] === 0) return false;
+  return roped(flotilla, one, other) || berthedTogether(flotilla, one, other);
+}
+
+// On one rope: the tug's swing would otherwise shove it off its own tow.
+const roped = (flotilla: Flotilla, one: number, other: number): boolean =>
+  flotilla.towedBy[one] === other || flotilla.towedBy[other] === one;
+
 // Berths are closer than two boats' reach, so holding hire boats apart would
 // keep them off their berths.
 function berthedTogether(flotilla: Flotilla, one: number, other: number): boolean {
-  if (flotilla.hired[one] === 0 || flotilla.hired[other] === 0) return false;
   const oneIn = nearBerth(flotilla, one);
   const otherIn = nearBerth(flotilla, other);
   // A homing boat is let through the row, or the boats already tied up would turn it into circles.
@@ -636,22 +790,35 @@ function avoid(flotilla: Flotilla, index: number, heading: number, dt: number): 
 
   const bearing = Math.atan2(threatX - flotilla.x[index]!, threatZ - flotilla.z[index]!);
   const off = wrapAngle(bearing - heading);
-  return wrapAngle(heading + (off > 0 ? -1 : 1) * AVOID_RADIANS * dt);
+  return wrapAngle(heading + dodgeSide(flotilla, index, off, heading) * AVOID_RADIANS * dt);
+}
+
+// Towards the sea, which is +z on every plot, for a pier dead ahead and for a boat held where it
+// is: wedged between a pier, the shore and another boat, dodging each in turn undid every dodge.
+function dodgeSide(flotilla: Flotilla, index: number, off: number, heading: number): number {
+  const pinned = flotilla.blocked[index]! > BLOCKED_SECONDS;
+  if (pinned || (threatIsBox && Math.abs(off) <= DEAD_AHEAD)) return Math.sin(heading) > 0 ? -1 : 1;
+  return off > 0 ? -1 : 1;
 }
 
 // Module-level so a frame allocates nothing; only meaningful inside one call of avoid.
 let nearest = Infinity;
 let threatX = 0;
 let threatZ = 0;
+let threatIsBox = false;
 
 const lookOf = (flotilla: Flotilla, index: number): number =>
   flotilla.radius[index]! + flotilla.speed[index]! * LOOK_SECONDS;
 
-// Tested halfway along the look and at its end: enough for a tile-wide pier against a short look.
+// Probed every PROBE_VOXELS along the look, the first within reach of the bow: probing only half
+// way and at the end let a fast boat's look reach past a pier it was already pressed against.
 function piersAhead(flotilla: Flotilla, index: number, aheadX: number, aheadZ: number): void {
   const look = lookOf(flotilla, index);
-  for (const pier of flotilla.piers) boxAhead(flotilla, index, pier, aheadX, aheadZ, look);
-  for (const island of flotilla.islands) boxAhead(flotilla, index, island, aheadX, aheadZ, look);
+  const probes = Math.max(2, Math.ceil(look / PROBE_VOXELS));
+  for (const pier of flotilla.piers) boxAhead(flotilla, index, pier, aheadX, aheadZ, look, probes);
+  for (const island of flotilla.islands) {
+    boxAhead(flotilla, index, island, aheadX, aheadZ, look, probes);
+  }
 }
 
 function boxAhead(
@@ -661,9 +828,10 @@ function boxAhead(
   aheadX: number,
   aheadZ: number,
   look: number,
+  probes: number,
 ): void {
-  for (let half = 1; half <= 2; half++) {
-    const along = (look * half) / 2;
+  for (let probe = 1; probe <= probes; probe++) {
+    const along = (look * probe) / probes;
     const px = flotilla.x[index]! + aheadX * along;
     const pz = flotilla.z[index]! + aheadZ * along;
     const cx = clamp(px, box.minX, box.maxX);
@@ -672,24 +840,29 @@ function boxAhead(
     nearest = along;
     threatX = cx;
     threatZ = cz;
+    threatIsBox = true;
   }
 }
 
+// Only past the bow: one lying alongside is shoved off, and dodging it as well set boats packed
+// against a pier dodging each other in turn, on the spot.
 function craftAhead(flotilla: Flotilla, index: number, aheadX: number, aheadZ: number): void {
   const look = lookOf(flotilla, index);
   for (let other = 0; other < flotilla.count; other++) {
-    if (other === index || berthedTogether(flotilla, index, other)) continue;
+    if (other === index || letThrough(flotilla, index, other)) continue;
     const rx = flotilla.x[other]! - flotilla.x[index]!;
     const rz = flotilla.z[other]! - flotilla.z[index]!;
     const along = rx * aheadX + rz * aheadZ;
     const at = Math.min(along, look);
     const off = Math.hypot(rx - aheadX * at, rz - aheadZ * at);
-    if (along <= 0 || along >= nearest || off > flotilla.radius[index]! + flotilla.radius[other]!) {
+    const beside = along <= flotilla.radius[index]!;
+    if (beside || along >= nearest || off > flotilla.radius[index]! + flotilla.radius[other]!) {
       continue;
     }
     nearest = along;
     threatX = flotilla.x[other]!;
     threatZ = flotilla.z[other]!;
+    threatIsBox = false;
   }
 }
 
@@ -703,7 +876,7 @@ function shoveClear(flotilla: Flotilla, index: number, x: number, z: number): vo
   shovedZ = z;
   const reach = flotilla.radius[index]!;
   for (let other = 0; other < flotilla.count; other++) {
-    if (other === index || berthedTogether(flotilla, index, other)) continue;
+    if (other === index || letThrough(flotilla, index, other)) continue;
     const rx = shovedX - flotilla.x[other]!;
     const rz = shovedZ - flotilla.z[other]!;
     const apart = Math.hypot(rx, rz);

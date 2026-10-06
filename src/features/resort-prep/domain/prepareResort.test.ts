@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { mosaicOf, OBJECT_TYPES, objectTypeById } from '../../catalog/domain/objectTypes';
+import { hireOf, mosaicOf, OBJECT_TYPES, objectTypeById } from '../../catalog/domain/objectTypes';
 import { layoutResort, place } from '../../layout/domain/resortLayout';
 import { RESORT_PLAN } from '../../layout/domain/resortPlan';
 import { shoreFor } from '../../layout/domain/shoreline';
@@ -10,7 +10,7 @@ import {
   everythingOn,
   prepareResort,
   preparedTransferables,
-  rentalOf,
+  rentalsOf,
   styleOfFor,
   type PrepRequest,
   type PreparedResort,
@@ -200,12 +200,12 @@ describe('mosaic on a generated plot', () => {
   });
 });
 
-describe('rentalOf', () => {
+describe('rentalsOf', () => {
   it('finds the pedalos a rental in another style', () => {
     const hut = place(layoutItemFor(objectTypeById('pedalo-rental-b')), 'hut', 4, 6);
     const shore = shoreFor(generated.plan);
     expect(shore).not.toBeNull();
-    expect(rentalOf(shore, [hut])).not.toBeNull();
+    expect(rentalsOf(shore, [hut], hireOf)).toMatchObject([{ key: hut.key, id: hut.id }]);
   });
 });
 

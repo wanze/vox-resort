@@ -3012,7 +3012,7 @@ describe('on the generated plot', () => {
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
     const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual(['gym-pavilion']);
+    expect(quiet).toEqual([]);
 
     // The beach sat right at 0.6 for energy, and resizing the staff pool reseeds the cleaners'
     // walk enough to tip it to 0.62; the bound guards against one venue taking a need over.

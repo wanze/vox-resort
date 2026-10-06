@@ -205,6 +205,23 @@ venue: {
 | `stage`        | an animator can put a show on here                                                |
 | `floor`        | seated visitors dance on it in a show, still standing ones cheer where they stand |
 
+A hut that puts craft on the sea declares `hire` beside its venue, its fleets in
+the order it lets them out; the app finds every rental and builds its fleets from
+this, so a new rental needs no change in `src/`:
+
+```ts
+hire: {
+  fleets: [
+    { craft: 'speedboat', count: 1, riders: 4, pace: 2.2, tows: 'banana' },
+    { craft: 'jet-ski', count: 4, riders: 2, pace: 2.6 },
+  ],
+},
+```
+
+`craft` and `tows` are `sea/` model ids, `riders` the seats of the craft (of the
+towed one when it tows), `pace` a share of walking speed. Only originals declare
+it; `venues.test.ts` holds every fleet to those rules.
+
 A negative `amount` makes a need worse (tennis costs energy). `venues.test.ts`
 lists the models deliberately without a venue, so every new model must be one or
 the other.

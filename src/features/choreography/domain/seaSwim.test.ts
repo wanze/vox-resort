@@ -25,10 +25,10 @@ const RENTAL: Rental = { x: 24 * TILE_VOXELS, z: 30 * TILE_VOXELS };
 
 const seaWith = (
   obstacles: readonly ObstacleBox[] = [],
-  rental: Rental | null = null,
+  rentals: readonly Rental[] = [],
 ): SeaShore => ({
   sand: sandGridFor({ shore: BAY, tilesX: BAY.tilesX, obstacles }),
-  swim: { shore: BAY, rental },
+  swim: { shore: BAY, rentals },
 });
 
 const SEA = seaWith();
@@ -104,7 +104,7 @@ describe('planSwim and swimAt', () => {
   });
 
   it('keeps out of the pedalo corridor', () => {
-    const sea = seaWith([], RENTAL);
+    const sea = seaWith([], [RENTAL]);
     let swum = 0;
     for (let person = 0; person < 200; person++) {
       const x = (14.5 + (person % 20)) * TILE_VOXELS;

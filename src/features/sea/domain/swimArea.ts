@@ -29,13 +29,17 @@ export interface Rental {
   readonly z: number;
 }
 
-// Shared by the buoy gap and the craft limit so both agree on where the corridor is.
-const offRental = (rental: Rental | null, x: number): number =>
-  rental ? Math.abs(x - rental.x) / TILE_VOXELS : Infinity;
+// Shared by the buoy gap and the craft limit so both agree on where the corridors are. The
+// nearest hut's, so each hut cuts its own.
+function offRental(rentals: readonly Rental[], x: number): number {
+  let off = Infinity;
+  for (const rental of rentals) off = Math.min(off, Math.abs(x - rental.x) / TILE_VOXELS);
+  return off;
+}
 
-function clearanceAt(rental: Rental | null, x: number): number {
+function clearanceAt(rentals: readonly Rental[], x: number): number {
   const open = SWIM_TILES + KEEP_CLEAR_TILES;
-  const off = offRental(rental, x);
+  const off = offRental(rentals, x);
   if (off <= CORRIDOR_TILES) return LANDING_TILES;
   if (off >= CORRIDOR_TILES + CORRIDOR_FLARE) return open;
   return LANDING_TILES + ((open - LANDING_TILES) * (off - CORRIDOR_TILES)) / CORRIDOR_FLARE;
@@ -43,7 +47,7 @@ function clearanceAt(rental: Rental | null, x: number): number {
 
 export interface SwimAreaOptions {
   readonly shore: Shore | null;
-  readonly rental?: Rental | null;
+  readonly rentals?: readonly Rental[];
   // The pier lanes run straight through the buoy line.
   readonly claimed?: (tileX: number, tileZ: number) => boolean;
   // The columns of land owned; the whole coast when left out.
@@ -59,7 +63,7 @@ const firstBuoyFrom = (from: number): number =>
 
 export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
   const { shore, claimed } = options;
-  const rental = options.rental ?? null;
+  const rentals = options.rentals ?? [];
   if (!shore) return [];
 
   const moorings: Mooring[] = [];
@@ -68,14 +72,14 @@ export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
     const tileZ = waterStartZ(shore, tileX) + SWIM_TILES;
     // The camera never frames past the plot's south edge, so a buoy there goes unseen.
     if (tileZ >= shore.tilesZ) continue;
-    if (offRental(rental, (tileX + 0.5) * TILE_VOXELS) <= CORRIDOR_TILES) continue;
+    if (offRental(rentals, (tileX + 0.5) * TILE_VOXELS) <= CORRIDOR_TILES) continue;
     if (claimed?.(tileX, tileZ)) continue;
     moorings.push({ x: (tileX + 0.5) * TILE_VOXELS, z: (tileZ + 0.5) * TILE_VOXELS });
   }
   return moorings;
 }
 
-// Where a guest may swim: inside the buoy line and clear of the pedalo corridor, flare and all,
+// Where a guest may swim: inside the buoy line and clear of every hire corridor, flare and all,
 // since craft are let in short of the buoys there. Off the tile-rounded edge, where the sand stops.
 export function swimmableAt(
   options: SwimAreaOptions,
@@ -85,7 +89,7 @@ export function swimmableAt(
   if (!shore) return null;
   const span = spanOf(options, shore);
   if (x < span.from * TILE_VOXELS || x >= span.to * TILE_VOXELS) return null;
-  if (offRental(options.rental ?? null, x) < CORRIDOR_TILES + CORRIDOR_FLARE) return null;
+  if (offRental(options.rentals ?? [], x) < CORRIDOR_TILES + CORRIDOR_FLARE) return null;
   const water = waterStartZ(shore, Math.floor(x / TILE_VOXELS));
   if (water >= shore.tilesZ) return null;
   // One tile short of the buoys, which are moored mid-tile.
@@ -101,11 +105,11 @@ export interface SailingGround {
   landwardZ(x: number): number;
 }
 
-export function sailingGroundFor(shore: Shore, rental: Rental | null = null): SailingGround {
+export function sailingGroundFor(shore: Shore, rentals: readonly Rental[] = []): SailingGround {
   return {
     westX: 0,
     eastX: shore.tilesX * TILE_VOXELS,
     seawardZ: (shore.tilesZ + OFFING_TILES) * TILE_VOXELS,
-    landwardZ: (x) => (waterEdgeZ(shore, x / TILE_VOXELS) + clearanceAt(rental, x)) * TILE_VOXELS,
+    landwardZ: (x) => (waterEdgeZ(shore, x / TILE_VOXELS) + clearanceAt(rentals, x)) * TILE_VOXELS,
   };
 }

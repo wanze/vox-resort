@@ -465,6 +465,23 @@ export const BANK: Bank = {
       },
     ],
   },
+  bonfire: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'bonfire.mp3',
+        source: {
+          page: 'https://freesound.org/people/florianreichelt/sounds/563764/',
+          fetch: 'https://cdn.freesound.org/previews/563/563764_6253486-hq.mp3',
+          author: 'florianreichelt',
+          licence: 'CC0',
+        },
+        cut: { start: 27, length: 20, loudness: -24 },
+      },
+    ],
+  },
   fountain: {
     bus: 'ambience',
     loop: true,

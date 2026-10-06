@@ -372,6 +372,17 @@ describe('eventNewsFrom', () => {
       at: { tileX: 4, tileZ: 9 },
     });
   });
+
+  it('names a bonfire booked on the beach after its fire pit, and points at the pit', () => {
+    const pit = { ...stage, key: 'fire-pit#0', id: 'fire-pit', label: 'Moonfire', stage: false };
+    const venues = [stage, { ...pit, tileX: 20, tileZ: 30, hearth: true }];
+    const bonfire = { ...occurrence, kind: 'bonfire', site: { kind: 'beach' } } as const;
+    const [announced] = eventNewsFrom(
+      [{ kind: 'announce', run: { ...run, occurrence: bonfire } }],
+      venues,
+    );
+    expect(announced).toMatchObject({ label: 'Bonfire', venue: 'Moonfire', at: { tileX: 20 } });
+  });
 });
 
 describe('withUpdate', () => {

@@ -1,6 +1,6 @@
 import type { Guests } from '../../guests/domain/guests';
 import { isInterested, partiesOf } from './audience';
-import { EVENT_KINDS, type AudienceParty } from './catalogue';
+import { EVENT_KINDS, type AudienceParty, type EventKindId } from './catalogue';
 import { saltOf } from './eventRuns';
 import { occurrencesOn, type EventSite, type Occurrence, type Programme } from './programme';
 import { dayAt, tickAt } from './week';
@@ -10,7 +10,7 @@ export const STAY_UP_FROM = 12 * 60;
 export interface ShowTonight {
   readonly programme: Programme;
   readonly now: number;
-  readonly open: (site: EventSite) => boolean;
+  readonly open: (site: EventSite, kind: EventKindId) => boolean;
   // Today's occurrences called off or postponed, by bookingDayKey.
   readonly settled: ReadonlySet<string>;
 }
@@ -27,7 +27,7 @@ export function tonightsShow(ask: ShowTonight): Occurrence | null {
       (occurrence) =>
         EVENT_KINDS[occurrence.kind].keepsUp === true &&
         now < occurrence.end &&
-        ask.open(occurrence.site) &&
+        ask.open(occurrence.site, occurrence.kind) &&
         !ask.settled.has(bookingDayKey(occurrence)),
     ) ?? null
   );

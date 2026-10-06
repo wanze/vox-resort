@@ -38,6 +38,7 @@ import {
 import {
   blobOf,
   casterOf,
+  hearthOf,
   lightsOf,
   occluderOf,
   seatSiteOf,
@@ -375,7 +376,7 @@ import {
   type DayForecast,
   type ProgrammeFacts,
 } from '../features/events/domain/programmeView';
-import { siteVenueOf, stageKeysOf } from '../features/events/domain/sites';
+import { heldAt, stageKeysOf } from '../features/events/domain/sites';
 import {
   latecomersFor,
   stageRank,
@@ -393,7 +394,13 @@ import { dayAt } from '../features/events/domain/week';
 import { sandOf, watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
 import { fireworksDrought, isFireworksNight } from '../features/fireworks/domain/nights';
 import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
-import { isOpenIn, weatherEffect, weatherOn, type Weather } from '../features/sim/domain/weather';
+import {
+  isOpenIn,
+  weatherEffect,
+  weatherOn,
+  type Weather,
+  type WeatherEffect,
+} from '../features/sim/domain/weather';
 import { djPlays, openAt, openNow } from '../features/sim/domain/hours';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
 import {
@@ -444,11 +451,13 @@ import {
 } from '../features/overlays/adapters/overlayField';
 import { nodeIndexFor, type NodeIndex } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
-import { anchorsFor } from '../features/lighting/domain/lightAnchors';
+import { anchorsFor, type LightAnchor } from '../features/lighting/domain/lightAnchors';
+import { buildFlamesField, type FlamesField } from '../features/bonfire/adapters/flamesField';
+import { LIGHT_RISE, relit } from '../features/bonfire/domain/flames';
 import type { LightGridSpec } from '../features/lighting/domain/lightGrid';
 import { cellCount, gridByteSize } from '../features/lighting/domain/lightGrid';
 import type { LiveLightGrid } from '../features/lighting/domain/liveLightGrid';
-import { createLiveLightGrid } from '../features/lighting/domain/liveLightGrid';
+import { createLiveLightGrid, type LightGridEdit } from '../features/lighting/domain/liveLightGrid';
 import type { LiveSkyVisibility } from '../features/lighting/domain/skyVisibility';
 import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibility';
 import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
@@ -1051,17 +1060,18 @@ interface BakedLighting {
 }
 
 // A lamp outside the grid re-bakes nothing and is left out of litCount, which the HUD reads.
+function rebake(baked: BakedLighting, edit: LightGridEdit): void {
+  if (edit.region) baked.volume.update(edit.region, edit.scale);
+}
+
 function splatLights(baked: BakedLighting, placement: Placement): void {
-  for (const anchor of anchorsFor(placement, lightsOf(placement))) {
-    const edit = baked.live.add(anchor);
-    if (edit.region) baked.volume.update(edit.region, edit.scale);
-  }
+  for (const anchor of anchorsFor(placement, lightsOf(placement)))
+    rebake(baked, baked.live.add(anchor));
 }
 
 function unsplatLights(baked: BakedLighting, placement: Placement): void {
   for (const anchor of anchorsFor(placement, lightsOf(placement))) {
-    const edit = baked.live.remove(anchor.key);
-    if (edit.region) baked.volume.update(edit.region, edit.scale);
+    rebake(baked, baked.live.remove(anchor.key));
   }
 }
 
@@ -1090,6 +1100,8 @@ interface Lighting {
   light(placement: Placement): void;
   unlight(placement: Placement): void;
   unshade(placement: Placement): void;
+  // The fires burning now; a fire's light comes and goes with its evening, not with the pit.
+  burn(fires: readonly LightAnchor[]): void;
 }
 
 function unlitLighting(anchorCount: number): Lighting {
@@ -1105,6 +1117,7 @@ function unlitLighting(anchorCount: number): Lighting {
     light() {},
     unlight() {},
     unshade() {},
+    burn() {},
   };
 }
 
@@ -1122,6 +1135,7 @@ function createLighting(prepared: PreparedResort, claiming: readonly Placement[]
   };
 
   let anchorCount = anchors.length;
+  const burning = new Set<string>();
   return {
     spec,
     bakeMs,
@@ -1151,6 +1165,17 @@ function createLighting(prepared: PreparedResort, claiming: readonly Placement[]
     },
     unshade(placement) {
       unsplatSkyVisibility(baked, placement);
+    },
+    burn(fires) {
+      const { out, lit } = relit(burning, fires);
+      for (const key of out) {
+        burning.delete(key);
+        rebake(baked, baked.live.remove(key));
+      }
+      for (const fire of lit) {
+        burning.add(fire.key);
+        rebake(baked, baked.live.add(fire));
+      }
     },
   };
 }
@@ -1291,6 +1316,9 @@ interface Resort {
   readonly balloons: BalloonField;
   readonly litterField: LitterField;
   readonly ballField: BallField;
+  readonly flames: FlamesField;
+  // The keys of the fires burning, so their flames and light change only when the fires do.
+  burning: string;
   readonly sea: SeaField;
   readonly occupancy: TileOccupancy;
   readonly plan: ResortPlan;
@@ -1778,6 +1806,7 @@ function buildResort(
     capacity: BALLS_PER_KIND,
     lightVolume: lighting.volume,
   });
+  const flames = buildFlamesField();
   const sea = seaFor({
     shore,
     terrain,
@@ -1904,6 +1933,8 @@ function buildResort(
     balloons,
     litterField,
     ballField,
+    flames,
+    burning: '',
     sea,
     shore,
     terrain,
@@ -1923,6 +1954,7 @@ function buildResort(
       balloons.dispose();
       litterField.dispose();
       ballField.dispose();
+      flames.dispose();
       overlay.dispose();
       sea.dispose();
       lighting.volume?.dispose();
@@ -1957,6 +1989,32 @@ function allowHire(resort: Resort): void {
 }
 
 // After the ticks, never inside them: the cast only reads what the routers decided.
+// A placement's fire, as the light it casts; its flames rise from below the light.
+function fireOf(resort: Resort, key: string): LightAnchor | null {
+  const placement = resort.plot.placements.find((each) => each.key === key);
+  const hearth = placement ? hearthOf(placement) : null;
+  if (!placement || !hearth) return null;
+  const [fire] = anchorsFor({ ...placement, key: `${key}:fire` }, [hearth]);
+  return { ...fire!, y: fire!.y + LIGHT_RISE };
+}
+
+// At the pits a bonfire is held at, for as long as it is running.
+const firesOf = (resort: Resort): LightAnchor[] =>
+  resort.venues.flatMap((venue, index) => {
+    const lit = venue.hearth === true && resort.eventShowing[index] === 1;
+    const fire = lit ? fireOf(resort, venue.key) : null;
+    return fire ? [fire] : [];
+  });
+
+function lightTheFires(resort: Resort): void {
+  const fires = firesOf(resort);
+  const burning = fires.map((fire) => fire.key).join();
+  if (burning === resort.burning) return;
+  resort.burning = burning;
+  resort.flames.burn(fires.map((fire) => ({ ...fire, y: fire.y - LIGHT_RISE })));
+  resort.lighting.burn(fires);
+}
+
 function recastAll(resort: Resort): void {
   recast(resort.cast, resort.casting, resort.crowd.crowd.seatBy);
   allowHire(resort);
@@ -2037,6 +2095,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.remove(previous.balloons.group);
       scene?.scene.remove(previous.litterField.group);
       scene?.scene.remove(previous.ballField.group);
+      scene?.scene.remove(previous.flames.group);
       scene?.scene.remove(previous.overlay.group);
       scene?.scene.remove(previous.sea.group);
       scene?.scene.add(resort.world.group);
@@ -2048,6 +2107,7 @@ function createResortSlot(parts: ResortArt & { readonly prepared: PreparedResort
       scene?.scene.add(resort.balloons.group);
       scene?.scene.add(resort.litterField.group);
       scene?.scene.add(resort.ballField.group);
+      scene?.scene.add(resort.flames.group);
       scene?.scene.add(resort.overlay.group);
       scene?.scene.add(resort.sea.group);
       scene?.reframe(
@@ -2099,7 +2159,7 @@ function sceneStats(parts: {
   const { handle, scratch, catalogue, rain, fireworks } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
-  const { sea, lighting, ballField } = parts.resort;
+  const { sea, lighting, ballField, flames } = parts.resort;
   const totals = plotTotals(plot);
   return {
     backend: handle.backend,
@@ -2118,6 +2178,7 @@ function sceneStats(parts: {
       balloons.drawCalls +
       litterField.drawCalls +
       ballField.drawCalls +
+      flames.drawCalls +
       overlay.drawCalls +
       sea.drawCalls +
       rain.drawCalls +
@@ -2134,6 +2195,7 @@ function sceneStats(parts: {
       balloons.triangleCount +
       litterField.triangleCount +
       ballField.triangleCount +
+      flames.triangleCount +
       overlay.triangleCount +
       sea.triangleCount +
       rain.triangleCount +
@@ -2511,7 +2573,7 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
 const NO_HOSTED: readonly { readonly venue: number; readonly until: number }[] = [];
 
 const runVenueOf = (resort: Resort, run: EventRun): number =>
-  siteVenueOf(run.occurrence.site, resort.siteVenues);
+  heldAt(run.occurrence.site, run.occurrence.kind, resort.siteVenues);
 
 function relabelVenues(resort: Resort): void {
   resort.venues = relabelled(resort.venues, resort.names);
@@ -2561,10 +2623,10 @@ function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
   return {
     mode: resort.ledger.mode,
     weatherOn: (day) => weatherOnDay(clock, day),
-    hasSite: (site) => siteVenueOf(site, venues) >= 0,
+    hasSite: (site, kind) => heldAt(site, kind, venues) >= 0,
     // The router's own door rule, so an event is called off exactly when its stage is shut.
-    siteOpen: (site, weather) => {
-      const venue = venues[siteVenueOf(site, venues)];
+    siteOpen: (site, weather, kind) => {
+      const venue = venues[heldAt(site, kind, venues)];
       return venue !== undefined && isOpenIn(shelterOf(venue), weatherEffect(weather));
     },
     hostOnDuty: resort.roster.animator > 0,
@@ -2680,7 +2742,7 @@ function refreshKeen(resort: Resort, clock: Clock): void {
   resort.keenShow = tonightsShow({
     programme,
     now: clock.ticks,
-    open: (site) => facts.siteOpen(site, clock.weather),
+    open: (site, kind) => facts.siteOpen(site, clock.weather, kind),
     settled: resort.settled,
   });
   resort.fireworksNight = isFireworksNight(programme, clock.day);
@@ -2964,6 +3026,7 @@ function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
     mix: partyMixOf(resort.guests),
     animators: resort.roster.animator,
     beachRoom: beachIndexOf(resort) >= 0 ? watchRoom(resort.beachTiles) : 0,
+    fireRoom: resort.venues[heldAt({ kind: 'beach' }, 'bonfire', resort.venues)]?.capacity ?? 0,
   };
 }
 
@@ -4374,6 +4437,13 @@ interface HearingParts {
   readonly onHear: (scene: HeardScene) => void;
 }
 
+// A fire pit crackles only while its bonfire burns, not whenever it could take guests.
+function heardOpen(resort: Resort, venue: number, effect: WeatherEffect, tickOfDay: number) {
+  const declared = resort.venues[venue]!;
+  if (declared.hearth === true) return resort.eventShowing[venue] === 1;
+  return openNow(declared, effect, tickOfDay);
+}
+
 // The sources are listed again whenever the venues are replaced, which every new resort, settle
 // and reanchor does; scanning thousands of placements at 5 Hz would not be.
 function createHearing({ handle, resort, clock, view, fireworks, onHear }: HearingParts) {
@@ -4446,7 +4516,7 @@ function createHearing({ handle, resort, clock, view, fireworks, onHear }: Heari
     Object.assign(scene, guests);
     const present = presentCount(now.guests);
     scene.awake = present > 0 ? 1 - Math.min(present, now.router.asleepCount) / present : 1;
-    const isOpen = (venue: number): boolean => openNow(now.venues[venue]!, effect, clock.tickOfDay);
+    const isOpen = (venue: number): boolean => heardOpen(now, venue, effect, clock.tickOfDay);
     gatherSources(sourcesOf(now), listener, isOpen, scene.near, scene.open);
     onHear(scene);
   };
@@ -4703,6 +4773,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   handle.scene.add(current().balloons.group);
   handle.scene.add(current().litterField.group);
   handle.scene.add(current().ballField.group);
+  handle.scene.add(current().flames.group);
   handle.scene.add(current().overlay.group);
   handle.scene.add(current().sea.group);
   // Not per resort: rain falls over the camera, not the plot.
@@ -4755,7 +4826,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const advanceFireworks = (elapsedSeconds: number): void => {
     if (bench) playBenchShow(current(), fireworks, bench);
     else syncFireworks(current(), fireworks, clock.ticks);
-    fireworks.advance(bench ? MAX_STEP : elapsedSeconds);
+    const step = bench ? MAX_STEP : elapsedSeconds;
+    fireworks.advance(step);
+    current().flames.advance(step);
   };
 
   // Its own step to keep the render loop's branching down, which fallow:audit measures.
@@ -5237,7 +5310,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const show = showToTell({
       programme: resort.events.programme,
       day: clock.day,
-      open: (site) => facts.siteOpen(site, clock.weather),
+      open: (site, kind) => facts.siteOpen(site, clock.weather, kind),
       settled: resort.settled,
     });
     if (show) options.onEventNews?.(tonightNewsOf(show, resort.siteVenues));
@@ -5594,6 +5667,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (ticks > 0) {
       lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly, heardEvents);
       recastAll(current());
+      lightTheFires(current());
     }
     // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
     // clock is paused. Outside one, handing over zero time is what stops a paused crowd;

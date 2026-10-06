@@ -4,7 +4,7 @@ import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import { shoreFor } from '../../layout/domain/shoreline';
 import type { Venue } from '../../sim/domain/venues';
 import { EVENT_KINDS, type EventKind } from './catalogue';
-import { siteVenueOf, sitesOf } from './sites';
+import { heldAt, siteVenueOf, sitesOf } from './sites';
 
 const venue = (key: string, label: string, stage: boolean): Venue => ({
   key,
@@ -60,6 +60,21 @@ describe('siteVenueOf', () => {
     expect(beachVenueFor(network)).not.toBeNull();
     const listed = withBeach(VENUES, network);
     expect(siteVenueOf({ kind: 'beach' }, listed)).toBe(VENUES.length);
+  });
+});
+
+describe('heldAt', () => {
+  const pits = [...VENUES, { ...venue('fire-pit#0', 'Moonfire', false), hearth: true }];
+
+  it('lights a bonfire booked on the beach at the fire pit, not on the sand', () => {
+    expect(heldAt({ kind: 'beach' }, 'bonfire', pits)).toBe(3);
+    expect(heldAt({ kind: 'beach' }, 'bonfire', VENUES)).toBe(-1);
+    expect(heldAt({ kind: 'stage', venue: 'kids-club#0' }, 'bonfire', pits)).toBe(-1);
+  });
+
+  it('holds every other kind where it was booked', () => {
+    expect(heldAt({ kind: 'stage', venue: 'kids-club#0' }, 'bingo', pits)).toBe(1);
+    expect(heldAt({ kind: 'beach' }, 'fireworks', pits)).toBe(-1);
   });
 });
 

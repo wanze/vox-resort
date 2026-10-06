@@ -72,6 +72,8 @@ export interface ProgrammeFacts {
   readonly animators: number;
   // People the owned sand holds for a show; 0 with no beach, or no way onto it.
   readonly beachRoom: number;
+  // Places round the fire pit a bonfire is lit at; 0 with none on the beach.
+  readonly fireRoom: number;
 }
 
 export interface SiteTab {
@@ -308,6 +310,9 @@ function feeWords(fee: number): string {
 const hostMissing = (kind: EventKind, facts: ProgrammeFacts): boolean =>
   kind.host === 'animator' && facts.animators <= 0;
 
+const hearthMissing = (kind: EventKind, facts: ProgrammeFacts): boolean =>
+  kind.hearth === true && facts.fireRoom <= 0;
+
 const tooDear = (kind: EventKind, tier: string | undefined, facts: ProgrammeFacts): boolean =>
   facts.mode === 'tycoon' && feeOf(kind, tier, facts.mode) > facts.balance;
 
@@ -317,6 +322,7 @@ function warningFor(
   tier: string | undefined = undefined,
 ): string | null {
   if (hostMissing(kind, facts)) return 'No animator on duty';
+  if (hearthMissing(kind, facts)) return 'No fire pit on the beach';
   return tooDear(kind, tier, facts) ? 'Not enough money' : null;
 }
 
@@ -364,7 +370,9 @@ export function cardsAt(
   const slot = { facts, site: site.site, day };
   return bookableOn(site.site)
     .filter((kind) => minutesIn(kind, part).length > 0)
-    .map((kind) => cardOf(kind, startsIn(slot, kind, part), facts, site.capacity))
+    .map((kind) =>
+      cardOf(kind, startsIn(slot, kind, part), facts, kind.hearth ? facts.fireRoom : site.capacity),
+    )
     .toSorted((a, b) => Number(a.starts.length === 0) - Number(b.starts.length === 0));
 }
 

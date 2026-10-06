@@ -15,6 +15,7 @@ import {
   runsLate,
   type AudienceParty,
   type EventKind,
+  type EventKindId,
 } from './catalogue';
 import { glowOn } from './glow';
 import {
@@ -30,7 +31,7 @@ import {
   type Occurrence,
   type Programme,
 } from './programme';
-import { siteVenueOf } from './sites';
+import { heldAt } from './sites';
 import { dayAt, minuteOf } from './week';
 
 // No spontaneous show begins on a booked stage this long before the start: the longest show
@@ -73,9 +74,10 @@ export type EventStep =
 export interface EventFacts {
   readonly mode: GameMode;
   weatherOn(day: number): Weather;
-  hasSite(site: EventSite): boolean;
+  // The kind too, as a bonfire booked on the beach needs a fire pit there.
+  hasSite(site: EventSite, kind: EventKindId): boolean;
   // False for a site with no venue.
-  siteOpen(site: EventSite, weather: Weather): boolean;
+  siteOpen(site: EventSite, weather: Weather, kind: EventKindId): boolean;
   readonly hostOnDuty: boolean;
   canPay(fee: number): boolean;
   // In order of preference, for a kind that shelters from the weather.
@@ -105,7 +107,8 @@ const rains = (weather: Weather): boolean => !isOpenIn('open', weatherEffect(wea
 function playable(occurrence: Occurrence, facts: EventFacts): boolean {
   const weather = facts.weatherOn(occurrence.day);
   return (
-    facts.siteOpen(occurrence.site, weather) && !(kindOf(occurrence).openAir && rains(weather))
+    facts.siteOpen(occurrence.site, weather, occurrence.kind) &&
+    !(kindOf(occurrence).openAir && rains(weather))
   );
 }
 
@@ -124,7 +127,9 @@ function callOff(
 // Null keeps the run going with nothing to say this frame.
 function stepOf(run: EventRun, to: number, facts: EventFacts): EventStep | null {
   const { occurrence } = run;
-  if (!facts.hasSite(occurrence.site)) return callOff(occurrence, 'no-site', run);
+  if (!facts.hasSite(occurrence.site, occurrence.kind)) {
+    return callOff(occurrence, 'no-site', run);
+  }
   if (!playable(occurrence, facts)) return callOff(occurrence, 'weather', run, run.paid);
   if (occurrence.end <= to) return { kind: 'end', run };
   if (run.phase !== 'announced' || occurrence.start > to) return null;
@@ -154,7 +159,7 @@ function shelterSite(
     const key = siteKey(site);
     return (
       key !== booked &&
-      facts.hasSite(site) &&
+      facts.hasSite(site, occurrence.kind) &&
       playable({ ...occurrence, site }, facts) &&
       !others.some((other) => siteKey(other.site) === key && meets(other, occurrence))
     );
@@ -193,7 +198,9 @@ function announced(
   runs: readonly EventRun[],
   facts: EventFacts,
 ): EventStep {
-  if (!facts.hasSite(occurrence.site)) return callOff(occurrence, 'no-site', null);
+  if (!facts.hasSite(occurrence.site, occurrence.kind)) {
+    return callOff(occurrence, 'no-site', null);
+  }
   const held = weathered(occurrence, programme, runs, facts);
   if (!('booking' in held)) return held;
   const kind = kindOf(occurrence);
@@ -237,14 +244,14 @@ export function bookedVenues(
   into: Uint8Array,
 ): void {
   into.fill(0);
-  const mark = (site: EventSite): void => {
-    const venue = siteVenueOf(site, venues);
+  const mark = (occurrence: Occurrence): void => {
+    const venue = heldAt(occurrence.site, occurrence.kind, venues);
     if (venue >= 0 && venue < into.length) into[venue] = 1;
   };
-  for (const run of runs) mark(run.occurrence.site);
+  for (const run of runs) mark(run.occurrence);
   for (let day = dayAt(now); day <= dayAt(now + QUIET_BEFORE); day++) {
     for (const occurrence of occurrencesOn(programme, day)) {
-      if (occurrence.start - QUIET_BEFORE <= now && now < occurrence.end) mark(occurrence.site);
+      if (occurrence.start - QUIET_BEFORE <= now && now < occurrence.end) mark(occurrence);
     }
   }
 }
@@ -257,7 +264,7 @@ export function showingVenues(
   into.fill(0);
   for (const run of runs) {
     if (run.phase !== 'running') continue;
-    const venue = siteVenueOf(run.occurrence.site, venues);
+    const venue = heldAt(run.occurrence.site, run.occurrence.kind, venues);
     if (venue >= 0 && venue < into.length) into[venue] = 1;
   }
 }
@@ -269,7 +276,7 @@ export function hostedShows(
   const hosted: { venue: number; until: number }[] = [];
   for (const run of runs) {
     if (kindOf(run.occurrence).host !== 'animator') continue;
-    const venue = siteVenueOf(run.occurrence.site, venues);
+    const venue = heldAt(run.occurrence.site, run.occurrence.kind, venues);
     if (venue >= 0) hosted.push({ venue, until: run.occurrence.end });
   }
   return hosted;

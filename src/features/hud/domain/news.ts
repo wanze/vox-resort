@@ -1,7 +1,7 @@
 import { EVENT_KINDS, labelOf as eventLabelOf } from '../../events/domain/catalogue';
 import type { CallOff, EventStep } from '../../events/domain/eventRuns';
 import type { EventSite, Occurrence } from '../../events/domain/programme';
-import { siteVenueOf } from '../../events/domain/sites';
+import { heldAt, siteVenueOf } from '../../events/domain/sites';
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
 import { isBeach } from '../../sim/domain/beach';
 import type { DayReport } from '../../sim/domain/dayReport';
@@ -116,7 +116,7 @@ function announceExtras(
 // The start and the end of a show are not news: the announcement said it all.
 function newsOf(step: TellingStep, venues: readonly Venue[], weather: Weather): EventNews {
   const occurrence = occurrenceOf(step);
-  const venue = venues[siteVenueOf(occurrence.site, venues)];
+  const venue = venues[heldAt(occurrence.site, occurrence.kind, venues)];
   return {
     key: eventKey(occurrence.booking, occurrence.day, step.kind),
     kind: step.kind,
@@ -139,7 +139,7 @@ export function eventNewsFrom(
 }
 
 export function tonightNewsOf(occurrence: Occurrence, venues: readonly Venue[]): EventNews {
-  const venue = venues[siteVenueOf(occurrence.site, venues)];
+  const venue = venues[heldAt(occurrence.site, occurrence.kind, venues)];
   return {
     key: eventKey(occurrence.booking, occurrence.day, 'tonight'),
     kind: 'tonight',

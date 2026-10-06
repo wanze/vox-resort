@@ -73,6 +73,7 @@ import tennis_court from './tennis-court.ts';
 import tikitorch from './tikitorch.ts';
 import villa from './villa.ts';
 import volleyball from './volleyball.ts';
+import fire_pit from './fire-pit.ts';
 import waterpark from './waterpark.ts';
 import willow from './willow.ts';
 import { MOSAIC_MODELS } from '../mosaics/index.ts';
@@ -151,6 +152,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   tennis_court,
   basketball_court,
   volleyball,
+  fire_pit,
   minigolf,
 ];
 

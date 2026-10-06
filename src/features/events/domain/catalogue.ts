@@ -16,6 +16,7 @@ export const EVENT_KIND_IDS = [
   'afternoon-jazz',
   'welcome',
   'fireworks',
+  'bonfire',
 ] as const;
 
 export type EventKindId = (typeof EVENT_KIND_IDS)[number];
@@ -80,6 +81,8 @@ export interface EventKind {
   readonly latecomers?: boolean;
   // Kept up from noon, because bedtime comes before the announcement.
   readonly keepsUp?: boolean;
+  // Held round a fire pit on the sand, not out on the open beach.
+  readonly hearth?: boolean;
 }
 
 const HOUR = 60;
@@ -360,6 +363,29 @@ export const EVENT_KINDS: { readonly [id in EventKindId]: EventKind } = {
     audience: (party) => party.stepFree !== true,
     novelty: (timesBefore) => Math.max(NOVELTY_FLOOR, 1 / (1 + 1.5 * timesBefore)),
     keepsUp: true,
+  },
+  // Not before 20:00, or the flames are lost in the daylight; an hour and a half, so one lit at
+  // eight is out a changeover before the earliest fireworks and a night can have both.
+  bonfire: {
+    id: 'bonfire',
+    label: 'Bonfire',
+    blurb: 'A fire on the sand and a guitarist who knows every song.',
+    sites: ['beach'],
+    duration: 1.5 * HOUR,
+    earliest: 20 * HOUR,
+    latest: 21.5 * HOUR,
+    start: 20 * HOUR,
+    host: 'performer',
+    fee: 120,
+    appeal: { family: 0.8, couple: 0.7, friends: 0.8, solo: 0.5 },
+    openAir: true,
+    weather: 'cancel',
+    fun: 0.4,
+    lift: 0.08,
+    litter: 0.2,
+    praise: 'great-show',
+    audience: (party) => party.stepFree !== true,
+    hearth: true,
   },
 };
 

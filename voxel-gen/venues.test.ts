@@ -199,6 +199,7 @@ const SEEN: ReadonlySet<string> = new Set([
   'beach-club',
   'night-club',
   'open-air-stage',
+  'fire-pit',
   'beach-shower',
   'icecream',
 ]);

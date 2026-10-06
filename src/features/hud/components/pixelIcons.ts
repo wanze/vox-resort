@@ -1068,6 +1068,20 @@ export const ICONS = {
     '.PP....PP...',
     '.PP....PP...',
   ],
+  bonfire: [
+    '............',
+    '.....y......',
+    '....yy......',
+    '....yoy.....',
+    '...yoooy....',
+    '...yorroy...',
+    '..yorrrroy..',
+    '..yorrrroy..',
+    '...nNNNNn...',
+    '.nNNn..nNNn.',
+    'nNn......nNn',
+    '............',
+  ],
 } as const satisfies { readonly [name: string]: readonly string[] };
 
 export type IconName = keyof typeof ICONS;

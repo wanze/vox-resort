@@ -26,6 +26,15 @@ export function lightsOf(placement: Placement): readonly ModelLight[] {
   return rotateLights(model.lights, model.width, model.depth, placement.rotation);
 }
 
+// A fire pit's light, at its hearth and turned as lightsOf turns a lamp; null for anything else.
+export function hearthOf(placement: Placement): ModelLight | null {
+  const { model } = objectTypeById(placement.id);
+  const hearth = model.venue?.hearth;
+  if (!hearth) return null;
+  const light = { x: hearth.x, y: hearth.y, z: hearth.z, ...hearth.light };
+  return rotateLights([light], model.width, model.depth, placement.rotation)[0]!;
+}
+
 // The model's own size, for the same reason as in lightsOf.
 export function seatSiteOf(placement: Placement): SeatSite {
   const { model } = objectTypeById(placement.id);

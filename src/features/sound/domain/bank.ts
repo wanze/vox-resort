@@ -91,6 +91,7 @@ export const VENUE_SLOTS = [
   'boats',
   'reception',
   'restrooms',
+  'bonfire',
 ] as const;
 
 const FIXTURE_SLOTS = ['fountain', 'torch'] as const;
@@ -157,6 +158,7 @@ const KIND_SLOTS: { readonly [kind in SoundKind]: SlotName | null } = {
   boats: 'boats',
   reception: 'reception',
   restrooms: 'restrooms',
+  bonfire: 'bonfire',
   fountain: 'fountain',
   torch: 'torch',
   trees: null,

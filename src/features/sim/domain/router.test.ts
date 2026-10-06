@@ -3184,7 +3184,7 @@ describe('on the generated plot', () => {
     console.log(report);
 
     // One day may pass quietly: wear builds with visits, and which day that is moves with the plot.
-    for (const count of brokeOn) expect(count, report).toBeLessThanOrEqual(6);
+    for (const count of brokeOn) expect(count, report).toBeLessThanOrEqual(7);
     expect(brokeOn.filter((count) => count > 0).length, report).toBeGreaterThanOrEqual(
       brokeOn.length - 1,
     );

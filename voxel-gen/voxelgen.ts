@@ -136,6 +136,14 @@ export interface ModelFloor extends ModelRect {
 export type GameKind = 'tennis' | 'basketball' | 'volleyball';
 
 // Its length runs along x, so a net is a column of x and the hoops sit at either end.
+// The voxel the flames rise from, and the light they cast once lit.
+export interface ModelHearth {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly light: { readonly color: Color; readonly intensity: number; readonly distance: number };
+}
+
 export interface ModelCourt {
   // The outer lines, as inclusive voxel columns.
   readonly x0: number;
@@ -254,7 +262,8 @@ export type SignKind =
   | 'basketball'
   | 'volleyball'
   | 'stage'
-  | 'nightclub';
+  | 'nightclub'
+  | 'bonfire';
 
 export type SoundKind =
   | 'cafe'
@@ -273,6 +282,7 @@ export type SoundKind =
   | 'boats'
   | 'reception'
   | 'restrooms'
+  | 'bonfire'
   | 'fountain'
   | 'torch'
   | 'trees';
@@ -326,6 +336,9 @@ export interface ModelVenue {
   // The prop a game here is played with, and the layer it is struck at.
   readonly ball?: { readonly model: string; readonly y: number };
   readonly court?: ModelCourt;
+  // Where a fire burns while an event is held here: the app draws its flames and its light then,
+  // and only then, so the pit stands cold by day and on a night with nothing booked.
+  readonly hearth?: ModelHearth;
 }
 
 // Where the app letters the resort's name: a board facing +z or -z, letters standing in the
@@ -517,6 +530,7 @@ function venueFrom(venue: ModelVenue, minX: number, minY: number, minZ: number):
     ...(venue.floor ? { floor: { ...moved(venue.floor), y: venue.floor.y - minY } } : {}),
     ...(venue.ball ? { ball: { ...venue.ball, y: venue.ball.y - minY } } : {}),
     ...(venue.court ? { court: courtFrom(venue.court, minX, minY, minZ) } : {}),
+    ...(venue.hearth ? { hearth: { ...moved(venue.hearth), y: venue.hearth.y - minY } } : {}),
   };
 }
 

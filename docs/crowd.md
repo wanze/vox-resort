@@ -356,6 +356,14 @@ has a host, fee, hours, appeal per party kind, fun, lift and litter. Every
   watchers get pitches in the front rows facing the sea; parties already there
   are invited in place. Wheelchair parties aren't invited, since the sand isn't
   step-free.
+- **Bonfire**: the beach's second event, 20:00 to 21:30 starts, 90 minutes long,
+  a visiting guitarist's fee. Booked on the Beach tab, but held at the first
+  fire pit there (`heldAt` in `sites.ts`, the kind's `hearth`), so its room is
+  the pit's sixteen log places, and with no pit it is called off as
+  `'no-site'`. Rain calls it off. The pit is a venue that satisfies nothing, so
+  nobody but the invited ever goes; its flames, light and crackle come only
+  while the bonfire runs. From its first start it is out a changeover before
+  the earliest fireworks, so a night can have both.
 
 A new kind is one entry in `EVENT_KINDS` and `EVENT_KIND_IDS`.
 

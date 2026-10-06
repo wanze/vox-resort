@@ -34,7 +34,7 @@ export interface FireworksField {
 }
 
 // Scale on the diagonal and position in the last column; the rest stays the identity it was made.
-function writeMatrices(mesh: InstancedMesh, stars: StarBuffer, count: number): void {
+export function writeMatrices(mesh: InstancedMesh, stars: StarBuffer, count: number): void {
   const matrices = mesh.instanceMatrix.array;
   const colours = mesh.instanceColor!.array;
   for (let index = 0; index < count; index++) {

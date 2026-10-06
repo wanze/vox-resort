@@ -5,7 +5,7 @@ import { PATH_ID } from '../../layout/domain/resortPlan';
 import { rotateLights, type Rotation } from '../../layout/domain/rotation';
 import { MIN_CAST_HEIGHT } from '../../rendering/domain/blobShadows';
 import { OBJECT_TYPES, objectTypeById, type ObjectTypeDefinition } from './objectTypes';
-import { blobOf, casterOf, lightsOf, occluderOf, seatSiteOf } from './placementFacts';
+import { blobOf, casterOf, hearthOf, lightsOf, occluderOf, seatSiteOf } from './placementFacts';
 
 function standing(type: ObjectTypeDefinition, rotation: Rotation = 0): Placement {
   return place(layoutItemFor(type), `${type.id}#1`, 3, 5, rotation, 1);
@@ -43,6 +43,23 @@ describe('lightsOf', () => {
   it('returns no lights for a model that declares none', () => {
     const dark = typeWhere((type) => type.model.lights.length === 0);
     expect(lightsOf(standing(dark, 2))).toHaveLength(0);
+  });
+});
+
+describe('hearthOf', () => {
+  const pit = typeWhere((type) => type.model.venue?.hearth !== undefined);
+
+  it('lights a fire pit at the middle of its hearth, whichever way it is turned', () => {
+    const { width, depth } = pit.model;
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const light = hearthOf(standing(pit, rotation))!;
+      expect([light.x + 0.5, light.z + 0.5]).toEqual([width / 2, depth / 2]);
+      expect(light.intensity).toBeGreaterThan(0);
+    }
+  });
+
+  it('has no hearth for anything that burns no fire', () => {
+    expect(hearthOf(standing(LIT))).toBeNull();
   });
 });
 

@@ -80,6 +80,7 @@ const facts = (over: Partial<ProgrammeFacts> = {}): ProgrammeFacts => ({
   mix: MIX,
   animators: 1,
   beachRoom: 0,
+  fireRoom: 0,
   ...over,
 });
 
@@ -324,7 +325,7 @@ describe('the beach in the programme', () => {
   const onSand = facts({ beachRoom: 160 });
   const beachView = programmeView(onSand, 'beach');
 
-  it('opens a beach tab after the stages, with only the fireworks on it', () => {
+  it('opens a beach tab after the stages, with the fireworks and the bonfire on it', () => {
     expect(programmeView(facts(), null).sites.map((site) => site.label)).toEqual([
       'Coral Stage',
       'Kids club',
@@ -337,9 +338,23 @@ describe('the beach in the programme', () => {
     expect(beachView.site).toMatchObject({ key: 'beach', capacity: 160 });
     expect(cardsOf(onSand, 'beach', 'morning')).toEqual([]);
     expect(cardsOf(onSand, 'beach', 'afternoon')).toEqual([]);
-    expect(cardsOf(onSand, 'beach', 'evening').map((card) => card.kind)).toEqual(['fireworks']);
+    expect(cardsOf(onSand, 'beach', 'evening').map((card) => card.kind)).toEqual([
+      'fireworks',
+      'bonfire',
+    ]);
     const onStage = cardsOf(onSand, 'kids-club#0', 'evening').map((card) => card.kind);
     expect(onStage).not.toContain('fireworks');
+    expect(onStage).not.toContain('bonfire');
+  });
+
+  it('seats a bonfire round the fire pit, and says when there is none', () => {
+    const bonfireOf = (from: ProgrammeFacts) =>
+      cardsOf(from, 'beach', 'evening').find((card) => card.kind === 'bonfire')!;
+    expect(bonfireOf(onSand)).toMatchObject({ audience: 0, warning: 'No fire pit on the beach' });
+    const lit = bonfireOf({ ...onSand, fireRoom: 16 });
+    expect(lit.warning).toBeNull();
+    expect(lit.audience).toBeGreaterThan(0);
+    expect(lit.audience).toBeLessThanOrEqual(16);
   });
 
   it('offers three sizes at rising fees, free in sandbox, and says which the money will not reach', () => {

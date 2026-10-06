@@ -67,7 +67,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
 - **Nature**: birds by day, crickets at night, cicadas in a heatwave.
 - **Guests**: crowd murmur, children and swimmers by count in reach.
 - **Venues**: only when zoomed in, scaled by how open and awake they are. Only
-  the three loudest kinds play.
+  the three loudest kinds play. A fire pit counts as open only while its
+  bonfire burns.
 
 Sound sources are listed once per resort and after every edit, not scanned at
 5 Hz. One fill with 3,000 guests costs about 0.2 ms.

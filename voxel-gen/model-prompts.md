@@ -37,6 +37,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | picnic-table   | 2×1       | 32 × 6 × 16    | a 4 m table seating eight          |
 | beach-shower   | 1×1       | 16 × 12 × 16   | a 3 m rinse post and a towel rail  |
 | volleyball     | 6×4       | 96 × 12 × 64   | 16 x 8 m court + 4 m run-off       |
+| fire-pit       | 2×2       | 32 × 6 × 32    | 8 x 8 m ring of logs round a pit   |
 | restrooms      | 2×1       | 32 × 17 × 16   | two-WC block, 8 x 4 m              |
 | changing-cab.  | 2×1       | 32 × 16 × 16   | three 2 m huts on an 8 x 4 m walk  |
 | snack-bar      | 2×1       | 32 × 19 × 16   | kiosk + serving counter, 8 x 4 m   |
@@ -215,6 +216,9 @@ voxel model of a beach lifeguard tower, finely detailed, small crisp voxels, fou
 
 # volleyball
 voxel model of a beach volleyball court, finely detailed, small crisp voxels, a single course of raked sand with a pale taped boundary running to the very edge of its footprint, no plinth and no kerb of any kind, a thin net strung between two timber posts across the middle, and a ball lying on the sand, the court lying flat in the beach rather than standing on it, occupying a 4x2 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# fire-pit
+voxel model of a fire pit on the beach, finely detailed, small crisp voxels, a single course of sand trampled darker round the middle and running to the very edge of its footprint, a ring of grey stones two high with a bed of ash inside and last night's charred sticks leaning together, four driftwood logs lying on the sand round it, one on each side, to sit on facing the pit, a small stack of firewood and a bucket of water in the corners, no flames, the pit cold, occupying a 2x2 footprint, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```
 
 ## The bathing beach

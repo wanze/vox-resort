@@ -14,6 +14,7 @@ import {
   type AudienceParty,
   type EventKind,
 } from './catalogue';
+import { CHANGEOVER } from './programme';
 import { START_STEP } from './week';
 
 const KINDS = EVENT_KIND_IDS.map((id) => EVENT_KINDS[id]);
@@ -164,6 +165,24 @@ describe('liftFor', () => {
   });
 });
 
+describe('bonfire', () => {
+  const bonfire = EVENT_KINDS.bonfire;
+
+  it('is out from its first start a changeover before the earliest fireworks', () => {
+    expect(bonfire.start + bonfire.duration + CHANGEOVER).toBeLessThanOrEqual(
+      EVENT_KINDS.fireworks.earliest,
+    );
+    expect(runsLate(bonfire, bonfire.start)).toBe(false);
+  });
+
+  it('is lit at a fire pit on the beach, which a wheelchair cannot reach', () => {
+    expect(bonfire.sites).toEqual(['beach']);
+    expect(bonfire.hearth).toBe(true);
+    expect(bonfire.audience?.({ ...party(1), stepFree: true }, 0)).toBe(false);
+    expect(bonfire.audience?.(party(1), 0)).toBe(true);
+  });
+});
+
 describe('runsLate', () => {
   it('holds exactly for a kind still running after ten', () => {
     const late = KINDS.filter((kind) => runsLate(kind, kind.latest)).map((kind) => kind.id);
@@ -174,6 +193,7 @@ describe('runsLate', () => {
       'quiz-night',
       'cinema',
       'fireworks',
+      'bonfire',
     ]);
     const early = KINDS.filter((kind) => runsLate(kind, kind.earliest)).map((kind) => kind.id);
     expect(early).toEqual(['cinema', 'fireworks']);

@@ -131,6 +131,10 @@ export default defineModel({
   column, as a seat's do, and the light hangs in that column's middle; `y` is a
   plain height.
 - `water` faces ripple and reflect like the sea. Paint them in one flat tone.
+- `venue.hearth` is a fire that is not always lit (`fire-pit.ts`). Paint the
+  cold pit; the app draws flames rising from the hearth, and adds its light,
+  only while an event is held there. `x`/`z` may be halves, to sit between
+  columns.
 
 Positions are in model coordinates, so they follow the object when it's placed.
 

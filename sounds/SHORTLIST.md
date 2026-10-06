@@ -217,6 +217,14 @@ Play them on the sound board: `pnpm dev`, then `/sounds.html`.
 | **In bank** | [hand_dryer.wav](https://freesound.org/people/4estaciones/sounds/186453/)                                         | 4estaciones    | CC0     | 33 s   | 4.7 (3) | Continuous hand dryer in a public toilet                                                 |
 |             | [Toilet Atmosphere in Restaurant or Bar 1](https://freesound.org/people/leonelmail/sounds/427853/)                | leonelmail     | CC0     | 224 s  | 5.0 (5) | Restaurant toilet: flush system, drips, air-conditioning bed                             |
 
+## bonfire (ambience)
+
+|             | Title                                                                                           | Author          | Licence | Length | Rating   | Why                                                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------- | --------------- | ------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **In bank** | [bonfire flames sizzling](https://freesound.org/people/florianreichelt/sounds/563764/)          | florianreichelt | CC0     | 50 s   | 4.3 (59) | A bonfire by name: steady crackle and sizzle; the steadiest 20 s of the three (1.1 dB RMS spread)                          |
+|             | [Campfire 02](https://freesound.org/people/HECKFRICKER/sounds/729396/)                          | HECKFRICKER     | CC0     | 268 s  |          | Close campfire in a tyre rim, a low roar under the crackle; bigger than the torch; quiet, so it leans on the loudness pass |
+|             | [Campfire Close Crackling Sticks.mp3](https://freesound.org/people/FunWithSound/sounds/588401/) | FunWithSound    | CC0     | 186 s  | 4.5 (46) | Close stick fire, busy with crackles and pops; a pocket recorder, so a little hiss                                         |
+
 ## fountain (ambience)
 
 |             | Title                                                                       | Author   | Licence | Length | Rating   | Why                                                             |

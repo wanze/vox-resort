@@ -36,7 +36,7 @@ import {
   type BookingDraft,
   type EventSite,
 } from './programme';
-import { siteVenueOf } from './sites';
+import { heldAt, siteVenueOf } from './sites';
 import { partiesOf } from './audience';
 import { tickAt } from './week';
 
@@ -141,6 +141,36 @@ describe('advanceEvents', () => {
     expect(
       kinds(run(hot, night - 60, night - 60, { ...onSand, weatherOn: () => 'heatwave' })),
     ).toEqual(['announce']);
+  });
+
+  it('lights a bonfire at the fire pit, and calls it off with no pit on the beach', () => {
+    const beach = { ...stage('beach', 'open'), stage: false };
+    const pit = { ...stage('fire-pit#0', 'open'), stage: false, hearth: true };
+    const onSand = (venues: readonly Venue[]) =>
+      facts({
+        hasSite: (site, kind) => heldAt(site, kind, venues) >= 0,
+        siteOpen: (site, weather, kind) => {
+          const venue = venues[heldAt(site, kind, venues)];
+          return venue !== undefined && isOpenIn(shelterOf(venue), weatherEffect(weather));
+        },
+      });
+    const booked = { kind: 'bonfire', site: { kind: 'beach' }, start: 20 * HOUR } as const;
+    const lit = stateWith(booked);
+    expect(kinds(run(lit, start - 60, start - 60, onSand([...VENUES, pit, beach])))).toEqual([
+      'announce',
+    ]);
+    const into = new Uint8Array(4);
+    bookedVenues(lit.runs, lit.programme, [...VENUES, pit, beach], start, into);
+    expect([...into]).toEqual([0, 0, 1, 0]);
+    const cold = stateWith(booked);
+    expect(run(cold, start - 60, start - 60, onSand([...VENUES, beach]))).toMatchObject([
+      { kind: 'call-off', reason: 'no-site' },
+    ]);
+    const wet = stateWith(booked);
+    const rain = { ...onSand([...VENUES, pit, beach]), weatherOn: (): Weather => 'rain' };
+    expect(run(wet, start - 60, start - 60, rain)).toMatchObject([
+      { kind: 'call-off', reason: 'weather' },
+    ]);
   });
 
   it('charges the fee at the start', () => {

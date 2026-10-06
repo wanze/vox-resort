@@ -185,6 +185,19 @@ it plays on while paused and a load replays the same night.
   long as the show.
 - `?fireworks=small|medium|grand` benches a show.
 
+## Fires
+
+A fire pit's flames (`bonfire/`) burn only while a bonfire event runs there, so
+they are not part of its model: the pit is cold logs and ash.
+
+- **Hearth**: the model's `venue.hearth` names where the flames rise and the
+  light they cast (`hearthOf` turns it with the placement).
+- **Flames** (`flames.ts`): tongues and sparks, each a function of real time,
+  catching and burning down over four seconds. One `InstancedMesh` of unlit
+  cubes per resort, one draw call while a fire burns, none otherwise.
+- **Light**: added to the baked light volume when the fire is lit and taken out
+  when it is put out (`Lighting.burn`), the way a placed lamp is.
+
 ## Benchmarks
 
 `pnpm bench` drives Chrome against a running dev server with `?bench=1`, which

@@ -15,6 +15,7 @@ import bridge_ramp_railing_right from './bridge-ramp-railing-right.ts';
 import bridge_railing from './bridge-railing.ts';
 import bungalow from './bungalow.ts';
 import changing_cabins from './changing-cabins.ts';
+import massage_tent from './massage-tent.ts';
 import coffee_shop from './coffee-shop.ts';
 import cottage from './cottage.ts';
 import cypress from './cypress.ts';
@@ -124,6 +125,7 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   snack_bar,
   restrooms,
   changing_cabins,
+  massage_tent,
   beach_shower,
   first_aid,
   staff_house,

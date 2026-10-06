@@ -264,7 +264,8 @@ export type SignKind =
   | 'stage'
   | 'nightclub'
   | 'bonfire'
-  | 'watersports';
+  | 'watersports'
+  | 'massage';
 
 export type SoundKind =
   | 'cafe'
@@ -283,6 +284,7 @@ export type SoundKind =
   | 'boats'
   | 'reception'
   | 'restrooms'
+  | 'massage'
   | 'watersports'
   | 'bonfire'
   | 'club'

@@ -41,6 +41,7 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | beach-shower   | 1×1       | 16 × 12 × 16   | a 3 m rinse post and a towel rail  |
 | volleyball     | 6×4       | 96 × 12 × 64   | 16 x 8 m court + 4 m run-off       |
 | fire-pit       | 2×2       | 32 × 6 × 32    | 8 x 8 m ring of logs round a pit   |
+| massage-tent   | 2×2       | 32 × 25 × 32   | 7 x 6 m tent, two tables, a bench  |
 | restrooms      | 2×1       | 32 × 17 × 16   | two-WC block, 8 x 4 m              |
 | changing-cab.  | 2×1       | 32 × 16 × 16   | three 2 m huts on an 8 x 4 m walk  |
 | snack-bar      | 2×1       | 32 × 19 × 16   | kiosk + serving counter, 8 x 4 m   |
@@ -234,6 +235,9 @@ voxel model of a row of three beach changing huts, finely detailed, small crisp 
 
 # beach-shower
 voxel model of an open-air beach shower, finely detailed, small crisp voxels, a square timber post on a slatted duckboard with an arm cantilevered out over it, a metal rose hanging under the end of the arm and a short fall of water under that, the boards beneath it darker where they are wet, a towel rail with two towels over it standing alongside, on its own low sand-coloured square platform/base, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# massage-tent
+voxel model of an open-sided canvas massage tent on the beach, finely detailed, small crisp voxels, four teak posts at the corners of a low teak deck carrying a pitched cream canvas roof edged with a red valance, cream side curtains drawn halfway back and tied to the front posts, two padded massage tables side by side under the roof with a headrest at one end and a folded blue towel at the other, rolled towels on a low shelf against the canvas back wall, a teak bench on the sand in front for whoever is waiting, a potted plant by each front post, standing on a low sand-coloured slab that fills a 2x2 footprint, no people, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```
 
 ## The bay (Phase 3.6)

@@ -274,7 +274,8 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('sun-lounger', 44, 30, 4, 1),
     at('changing-cabins', 53, 26),
     at('beach-shower', 55, 26),
-    // This plan has no sand, so the hire huts and the fire pit stand by the pool instead.
+    // This plan has no sand, so the tent, the hire huts and the fire pit stand by the pool instead.
+    at('massage-tent', 53, 27),
     at(PEDALO_RENTAL_ID, 53, 29),
     at('fire-pit', 55, 30),
     at('water-sports', 49, 32),

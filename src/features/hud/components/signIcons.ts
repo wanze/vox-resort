@@ -36,4 +36,5 @@ export const SIGN_ICONS = {
   nightclub: 'nightclub',
   bonfire: 'bonfire',
   watersports: 'watersports',
+  massage: 'massage',
 } as const satisfies Record<SignKind, IconName>;

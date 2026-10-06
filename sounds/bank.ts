@@ -516,6 +516,23 @@ export const BANK: Bank = {
       },
     ],
   },
+  massage: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'massage.mp3',
+        source: {
+          page: 'https://freesound.org/people/Headphaze/sounds/697041/',
+          fetch: 'https://cdn.freesound.org/previews/697/697041_847303-hq.mp3',
+          author: 'Headphaze',
+          licence: 'CC0',
+        },
+        cut: { start: 124, length: 20, loudness: -24 },
+      },
+    ],
+  },
   fountain: {
     bus: 'ambience',
     loop: true,

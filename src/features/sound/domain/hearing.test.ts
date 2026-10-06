@@ -87,6 +87,13 @@ describe('hear: venues', () => {
     expect(heard(shut).watersports).toBe(0);
   });
 
+  it('rings from the massage tent while it is open, and not while it is shut', () => {
+    expect(heard(scene({}, { massage: 0.5 })).massage).toBeGreaterThan(0);
+    const shut = scene({}, { massage: 1 });
+    shut.open[kindAt('massage')] = 0;
+    expect(heard(shut).massage).toBe(0);
+  });
+
   it('thumps from the night club while it is open, and not outside its hours', () => {
     expect(heard(scene({ night: 1 }, { club: 0.8 })).club).toBeGreaterThan(0);
     const shut = scene({ night: 1 }, { club: 1 });

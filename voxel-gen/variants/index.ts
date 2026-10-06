@@ -30,6 +30,7 @@ import entrance from './entrance.ts';
 import fountain from './fountain.ts';
 import restrooms from './restrooms.ts';
 import changingCabins from './changing-cabins.ts';
+import massageTent from './massage-tent.ts';
 import firstAid from './first-aid.ts';
 import bakery from './bakery.ts';
 import coffeeShop from './coffee-shop.ts';
@@ -89,6 +90,7 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'fountain', source: fountain },
   { of: 'restrooms', source: restrooms },
   { of: 'changing-cabins', source: changingCabins },
+  { of: 'massage-tent', source: massageTent },
   { of: 'first-aid', source: firstAid },
   { of: 'bakery', source: bakery },
   { of: 'coffee-shop', source: coffeeShop },

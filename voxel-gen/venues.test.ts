@@ -202,6 +202,7 @@ const SEEN: ReadonlySet<string> = new Set([
   'fire-pit',
   'beach-shower',
   'icecream',
+  'massage-tent',
 ]);
 
 const originalOf = new Map(VARIANTS.map(({ of, source }) => [source.id, of]));

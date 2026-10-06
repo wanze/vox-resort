@@ -1096,6 +1096,20 @@ export const ICONS = {
     'bbcbbcbbcbbc',
     '............',
   ],
+  massage: [
+    '............',
+    '.....pp.....',
+    '....pppp....',
+    '....pp.p....',
+    '............',
+    '..pp........',
+    '.pppwwwwwww.',
+    '.NNNNNNNNNN.',
+    '.n........n.',
+    '.n........n.',
+    '............',
+    '............',
+  ],
 } as const satisfies { readonly [name: string]: readonly string[] };
 
 export type IconName = keyof typeof ICONS;

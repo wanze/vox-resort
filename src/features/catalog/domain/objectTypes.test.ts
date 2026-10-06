@@ -203,8 +203,8 @@ const keyOf = (voxel: { x: number; y: number; z: number }) => `${voxel.x},${voxe
 
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
-    expect(ORIGINAL_TYPES.length).toBe(96);
-    expect(OBJECT_TYPES.length).toBe(96 + VARIANTS.length);
+    expect(ORIGINAL_TYPES.length).toBe(97);
+    expect(OBJECT_TYPES.length).toBe(97 + VARIANTS.length);
   });
 
   it('keeps the drafts out of the catalogue, so nothing offers or places them', () => {

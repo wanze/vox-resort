@@ -71,7 +71,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
   only while its bonfire burns. A venue with `hours` (the night club) is heard
   only within them, and at full strength however many have gone to bed. The
   water sports hut's engines are heard at the hut; the craft out on the water
-  are silent.
+  are silent. The massage tent plays singing bowls of its own, not the spa's
+  chimes, and is covered, so it carries on in the rain.
 - **Music**: ducks in a storm and for fireworks, and gives way to a club's own
   music as it is heard (`VENUE_MUSIC`), down to 30%.
 

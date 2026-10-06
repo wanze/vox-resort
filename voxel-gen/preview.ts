@@ -317,11 +317,64 @@ function renderModel(model: VoxelModel, size: number): Buffer {
   return encodePng(pixels, width, height);
 }
 
+function paintGradient(fb: Framebuffer, stops: readonly Vec3[]): void {
+  for (let y = 0; y < fb.height; y++) {
+    const at = (y / (fb.height - 1)) * (stops.length - 1);
+    const from = stops[Math.min(Math.floor(at), stops.length - 2)]!;
+    const to = stops[Math.min(Math.floor(at) + 1, stops.length - 1)]!;
+    const t = at - Math.min(Math.floor(at), stops.length - 2);
+    const rgb = from.map((channel, index) => channel + (to[index]! - channel) * t);
+    for (let x = 0; x < fb.width; x++) fb.pixels.set(rgb, (y * fb.width + x) * 3);
+  }
+}
+
+// Placed in the scene's viewport rather than the frame, so the maskable icon's smaller
+// scene keeps the sun half hidden behind the bungalow's roof.
+const ICON_SUN = { x: 0.37, y: 0.34, radius: 0.2, rays: 18, rgb: [255, 240, 184] as Vec3 };
+// Stepped like the voxels rather than a smooth falloff: [outer edge in radii, mix towards the sun].
+const SUN_HALO = [
+  [1.22, 0.5],
+  [1.48, 0.28],
+  [1.8, 0.14],
+] as const;
+const SUN_RAY_REACH = 4.4;
+const SUN_RAY_MIX = 0.22;
+
+function rayMix(distance: number, angle: number): number {
+  const onRay = Math.floor((angle / (2 * Math.PI)) * ICON_SUN.rays * 2) % 2 === 0;
+  return onRay ? SUN_RAY_MIX * Math.max(0, 1 - (distance - 1) / (SUN_RAY_REACH - 1)) : 0;
+}
+
+function sunMix(distance: number, angle: number): number {
+  if (distance <= 1) return 1;
+  const halo = SUN_HALO.find(([edge]) => distance <= edge)?.[1] ?? 0;
+  return Math.max(halo, rayMix(distance, angle));
+}
+
+function paintSun(fb: Framebuffer, inset: number, inner: number): void {
+  const cx = inset + ICON_SUN.x * inner;
+  const cy = inset + ICON_SUN.y * inner;
+  const radius = ICON_SUN.radius * inner;
+  for (let y = 0; y < fb.height; y++) {
+    for (let x = 0; x < fb.width; x++) {
+      const [dx, dy] = [x + 0.5 - cx, y + 0.5 - cy];
+      const mix = sunMix(Math.hypot(dx, dy) / radius, Math.atan2(dy, dx) + Math.PI);
+      const index = (y * fb.width + x) * 3;
+      for (let channel = 0; channel < 3; channel++) {
+        const sky = fb.pixels[index + channel]!;
+        fb.pixels[index + channel] = sky + (ICON_SUN.rgb[channel]! - sky) * mix;
+      }
+    }
+  }
+}
+
 // Rounded: the rasterizer walks whole pixels from the viewport's corner.
-function renderIcon(model: VoxelModel, size: number, fill: number, background: Vec3): Buffer {
-  const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE, background);
+function renderIcon(model: VoxelModel, size: number, fill: number, sky: readonly Vec3[]): Buffer {
+  const fb = createFramebuffer(size * SUPERSAMPLE, size * SUPERSAMPLE);
+  paintGradient(fb, sky);
   const inner = Math.round(size * fill * SUPERSAMPLE);
   const inset = Math.round((fb.width - inner) / 2);
+  paintSun(fb, inset, inner);
   drawTriangles(fb, buildTriangles(model), { x: inset, y: inset, width: inner, height: inner });
   const { pixels, width, height } = downsample(fb, SUPERSAMPLE, false);
   return encodePng(pixels, width, height);
@@ -545,7 +598,6 @@ const ICON_PLACEMENTS = [
   { id: 'bungalow', x: 0, y: 3, z: 0 },
   // Sunk by its planter's height so the trunk grows straight out of the beach.
   { id: 'palm', x: 46, y: 1, z: 6 },
-  { id: 'sun-lounger', x: 48, y: 3, z: 24 },
 ] as const;
 const ICON_SCENE = { width: 64, depth: 48, sand: 3 } as const;
 
@@ -573,14 +625,19 @@ function iconScene(): VoxelModel {
       const { width, depth, sand } = ICON_SCENE;
       for (let x = 0; x < width; x++) {
         b.box(x, x, 0, sand - 1, 0, shoreAt(x) - 1, PALETTE.sand.base);
-        b.box(x, x, 0, 0, shoreAt(x), depth - 1, PALETTE.water.light);
+        b.box(x, x, 0, 0, shoreAt(x), depth - 1, PALETTE.water.base);
       }
     },
   });
 }
 
-// The open sea, so the scene reads as an island; its own strip is the lighter shallows.
-const ICON_BACKGROUND: Vec3 = [79, 198, 222];
+// Top to bottom: dusk overhead down to the glow at the horizon.
+const ICON_SKY: readonly Vec3[] = [
+  [74, 52, 120],
+  [196, 84, 122],
+  [244, 138, 86],
+  [252, 196, 112],
+];
 const ICONS = [
   { file: 'icon-192.png', size: 192, fill: 0.84 },
   { file: 'icon-512.png', size: 512, fill: 0.84 },
@@ -594,7 +651,7 @@ function writeIcons(model: VoxelModel, iconDir: string): void {
   mkdirSync(iconDir, { recursive: true });
   for (const icon of ICONS) {
     const file = path.join(iconDir, icon.file);
-    writeFileSync(file, renderIcon(model, icon.size, icon.fill, ICON_BACKGROUND));
+    writeFileSync(file, renderIcon(model, icon.size, icon.fill, ICON_SKY));
     console.info(`icon -> ${file}`);
   }
 }

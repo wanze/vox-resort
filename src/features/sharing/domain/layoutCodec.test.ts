@@ -1,13 +1,16 @@
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import referenceJson from '../../../../fixtures/reference-resort.json';
 import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
 import { terrainFor } from '../../layout/domain/terrain';
 import { MAX_VENUE_NAME } from '../../naming/domain/venueNames';
 import { prepareResort } from '../../resort-prep/domain/prepareResort';
+import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { savedWorldOf } from '../../resort-prep/domain/savedWorld';
 import { packShared, ShareError, unpackShared, type ShareFailure } from './layoutCodec';
 import { formatLink } from './shareLink';
 import type { SharedResort } from './sharedResort';
+import { worldMisfits } from './worldFits';
 
 function sharedFor(kind: 'generate' | 'clear', tiles: number, tilesZ: number, seed: number) {
   const params = { tilesX: tiles, tilesZ, density: 0.6, seed };
@@ -24,6 +27,12 @@ function sharedFor(kind: 'generate' | 'clear', tiles: number, tilesZ: number, se
 // Shared because the bake is not free.
 const GROWN = sharedFor('generate', 112, 100, 1);
 const BARE = sharedFor('clear', 256, 256, 4);
+const REFERENCE: SharedResort = {
+  world: referenceWorldOf(referenceJson),
+  params: { tilesX: 256, tilesZ: 256, density: 0.6, seed: 4 },
+  name: 'Coral Cove',
+  names: [],
+};
 
 function refusal(bytes: Uint8Array): ShareFailure {
   try {
@@ -90,6 +99,12 @@ describe('packShared and unpackShared', () => {
     expect(unpackShared(packShared(BARE))).toEqual(BARE);
   });
 
+  it('give back the reference resort whole, as a hand-built resort that fits its plot', () => {
+    const back = unpackShared(packShared(REFERENCE));
+    expect(back).toEqual(REFERENCE);
+    expect(worldMisfits(back.world)).toEqual([]);
+  });
+
   it('give back terrain edits past the plot and a key of no usual form', () => {
     const [first, ...rest] = GROWN.world.placements;
     const world = {
@@ -114,6 +129,12 @@ describe('packShared and unpackShared', () => {
   it('keep a link to a generated plot small', () => {
     const link = formatLink('', deflateRawSync(packShared(GROWN)));
     expect(link.length).toBeLessThan(14_000);
+  });
+
+  it('keep a link to the reference resort small', () => {
+    const link = formatLink('', deflateRawSync(packShared(REFERENCE)));
+    // Measured at 6 998 characters.
+    expect(link.length).toBeLessThan(8_000);
   });
 });
 

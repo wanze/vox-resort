@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest';
+import referenceJson from '../../../../fixtures/reference-resort.json';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { hireOf, mosaicOf, OBJECT_TYPES, objectTypeById } from '../../catalog/domain/objectTypes';
+import {
+  hireOf,
+  mosaicOf,
+  OBJECT_TYPES,
+  objectTypeById,
+  TILE_VOXELS,
+} from '../../catalog/domain/objectTypes';
 import { layoutResort, place } from '../../layout/domain/resortLayout';
 import { RESORT_PLAN } from '../../layout/domain/resortPlan';
 import { shoreFor } from '../../layout/domain/shoreline';
+import { terrainFor } from '../../layout/domain/terrain';
+import { ownedBounds } from '../../land/domain/landRights';
 import { gridInterior } from '../../lighting/domain/lightGrid';
+import { islandBoxesFor } from '../../sea/domain/islands';
+import { pierBoxesFor } from '../../sea/domain/piers';
 import {
   claimingOn,
   everythingOn,
@@ -15,6 +26,7 @@ import {
   type PrepRequest,
   type PreparedResort,
 } from './prepareResort';
+import { referenceWorldOf } from './referenceResort';
 
 const PARAMS = { tilesX: 48, tilesZ: 48, density: 0.6, seed: 5 };
 
@@ -206,6 +218,51 @@ describe('rentalsOf', () => {
     const shore = shoreFor(generated.plan);
     expect(shore).not.toBeNull();
     expect(rentalsOf(shore, [hut], hireOf)).toMatchObject([{ key: hut.key, id: hut.id }]);
+  });
+});
+
+describe('on the reference resort', () => {
+  const reference = prepareResort({
+    source: { kind: 'saved', world: referenceWorldOf(referenceJson) },
+    repeat: 1,
+    view: null,
+  });
+  const { plan, plot } = reference;
+  const shore = shoreFor(plan);
+  const edge = { x: plan.tilesX * TILE_VOXELS, z: plan.tilesZ * TILE_VOXELS };
+  const onPlot = (point: { readonly x: number; readonly z: number }): boolean =>
+    point.x >= 0 && point.x <= edge.x && point.z >= 0 && point.z <= edge.z;
+
+  it('moors buoys out in the sea, each with its lamp among the light anchors', () => {
+    const lit = new Set(
+      reference.anchors
+        .filter((anchor) => anchor.key.startsWith('mooring:'))
+        .map((anchor) => anchor.key.split(':')[1]),
+    );
+    const owned = ownedBounds(plan.land ?? null, plan);
+    const offOwned = reference.moorings.filter(
+      (mooring) =>
+        !onPlot(mooring) ||
+        mooring.x < owned.x0 * TILE_VOXELS ||
+        mooring.x > (owned.x1 + 1) * TILE_VOXELS,
+    );
+    expect(reference.moorings.length).toBeGreaterThan(0);
+    expect(offOwned).toEqual([]);
+    expect(lit.size).toBe(reference.moorings.length);
+  });
+
+  it('finds the rental huts, the piers and the island on the plot', () => {
+    const huts = rentalsOf(shore, plot.placements, hireOf);
+    const piers = pierBoxesFor(shore, plot.paths);
+    const islands = islandBoxesFor(terrainFor(plan));
+    expect(huts.length).toBeGreaterThan(0);
+    expect(huts.filter((hut) => !onPlot(hut))).toEqual([]);
+    expect(piers.length).toBeGreaterThan(0);
+    expect(islands.length).toBeGreaterThan(0);
+    for (const box of [...piers, ...islands]) {
+      expect(onPlot({ x: box.minX, z: box.minZ }), JSON.stringify(box)).toBe(true);
+      expect(onPlot({ x: box.maxX, z: box.maxZ }), JSON.stringify(box)).toBe(true);
+    }
   });
 });
 

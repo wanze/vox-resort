@@ -3,6 +3,8 @@ import { WEATHERS, type Weather } from '../../sim/domain/weather';
 import type { CameraFraming, WorldBounds } from '../../layout/domain/worldBounds';
 import { cameraFramingFor } from '../../layout/domain/worldBounds';
 import type { TierId } from '../../fireworks/domain/show';
+import { MAX_STEP } from '../../crowd/domain/crowd';
+import type { SimSpeed } from '../../sim/domain/simClock';
 
 // Both are perspective only: docs/rendering.md was measured through that lens, and
 // an orthographic camera culls and fogs differently. `street` exists because
@@ -21,6 +23,12 @@ const STYLES = ['mixed', 'scatter'] as const;
 export type BenchStyles = (typeof STYLES)[number];
 
 const BENCH_STYLES: ReadonlySet<string> = new Set<string>(STYLES);
+
+const SPEEDS = ['normal', 'fast', 'rush'] as const satisfies readonly SimSpeed[];
+
+type BenchSpeed = (typeof SPEEDS)[number];
+
+const BENCH_SPEEDS: ReadonlySet<string> = new Set<string>(SPEEDS);
 
 const FIREWORKS: ReadonlySet<string> = new Set<TierId>(['small', 'medium', 'grand']);
 
@@ -41,6 +49,8 @@ export interface BenchConfig {
   readonly fireworks?: TierId;
   // The authored plot has no shore, so the sea, its boats and the beach crowd are measured here.
   readonly plot?: 'reference';
+  // Runs the clock, so the sim, both routers and the crowd at its real scale are measured too.
+  readonly speed?: BenchSpeed;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -106,6 +116,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     ...(params.get('mosaic') === '1' ? { mosaic: true as const } : {}),
     ...fireworksOf(params.get('fireworks')),
     ...(params.get('plot') === 'reference' ? { plot: 'reference' as const } : {}),
+    ...speedOf(params.get('speed')),
   };
 }
 
@@ -120,6 +131,17 @@ export function benchRefusal(config: BenchConfig): string | null {
 
 const fireworksOf = (raw: string | null): { readonly fireworks?: TierId } =>
   raw !== null && FIREWORKS.has(raw) ? { fireworks: raw as TierId } : {};
+
+const speedOf = (raw: string | null): { readonly speed?: BenchSpeed } =>
+  raw !== null && BENCH_SPEEDS.has(raw) ? { speed: raw as BenchSpeed } : {};
+
+// A 60 Hz player's frame. MAX_STEP would hand a running sim six times that and measure a frame
+// rate nobody plays at; paused runs keep it, so every paused number recorded still compares.
+const RUNNING_STEP = 1 / 60;
+
+export function benchStep(config: BenchConfig): number {
+  return config.speed ? RUNNING_STEP : MAX_STEP;
+}
 
 const STREET_EYE_HEIGHT = 14;
 

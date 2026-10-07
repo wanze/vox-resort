@@ -1,9 +1,12 @@
+import { measureBoot } from './app/bootTimings';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import '@fontsource-variable/pixelify-sans/index.css';
 import '@fontsource/silkscreen/latin-400.css';
 import './app/styles.css';
+
+measureBoot();
 
 const WELCOME_FONTS = [
   '16px "Jersey HUD"',

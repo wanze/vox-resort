@@ -207,7 +207,8 @@ they are not part of its model: the pit is cold logs and ash.
 ## Benchmarks
 
 `pnpm bench` drives Chrome against a running dev server with `?bench=1`, which
-pins the camera and clock. Everything in a bench run must be deterministic.
+pins the camera, and the clock unless `--speed` is given. Everything in a bench
+run must be deterministic.
 
 ```bash
 pnpm dev &                         # bench doesn't start the server
@@ -220,6 +221,8 @@ pnpm bench -- --weather storm      # pin the weather
 pnpm bench -- --styles mixed       # model variants
 pnpm bench -- --mosaic             # mosaic paving everywhere
 pnpm bench -- --plot reference     # the reference resort, with its shore
+pnpm bench -- --speed rush         # run the clock: sim, routers, crowd at its real scale
+pnpm bench -- --people 5000        # guest slots (capped at 10 000)
 pnpm bench -- --no-vsync           # uncapped frame rate
 pnpm bench -- --webgl              # WebGL2 fallback
 pnpm bench -- --shots ./shots      # screenshot per case
@@ -230,6 +233,16 @@ The authored plot has no shore; `--plot reference` runs the reference resort
 ([fixtures/README.md](../fixtures/README.md)) instead, with the sea, its boats
 and the beach crowd. `--repeat`, `--styles` and `--mosaic` remake the authored
 plot and are refused with it.
+
+A running case (`--speed normal|fast|rush`) steps exactly 1/60 s a frame
+(paused ones keep 0.1 s), so runs replay: the same command on the same build
+ends on the same clock and guest numbers. The `cpu per frame` block is the
+whole animation-loop callback (median, p95, p99, max); the frame columns above
+it are the interval between frames, which under vsync reads the refresh rate.
+The timings block lists the `vox:` measures: `vox:boot:*` always,
+`vox:frame:sim` (with ms per tick) and `vox:frame:crowd` under a bench.
+`vox:retile` fires on terrain edits only and is read in DevTools
+(`performance.getEntriesByName('vox:retile')`).
 
 Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 
@@ -248,6 +261,19 @@ lamps to the authored plot's 628:
 | day-street     | 397        | 674 k     | 1.70 ms      | 1.97 ms      |
 | night-overview | 346        | 767 k     | 1.50 ms      | 3.67–3.93 ms |
 | night-street   | 397        | 674 k     | 1.60–1.70 ms | 1.97 ms      |
+
+Running, `day-overview`, `--no-vsync`, same machine and resolution, one run
+each (CPU per frame):
+
+| Speed  | Median  | p95     | p99      | Max      | Sim per tick |
+| ------ | ------- | ------- | -------- | -------- | ------------ |
+| paused | 1.50 ms | 4.73 ms | 16.61 ms | 20.70 ms | -            |
+| normal | 1.80 ms | 3.31 ms | 18.50 ms | 31.20 ms | 0.42 ms      |
+| fast   | 2.20 ms | 3.40 ms | 4.00 ms  | 6.20 ms  | 0.43 ms      |
+| rush   | 3.50 ms | 5.00 ms | 6.00 ms  | 7.30 ms  | 0.30 ms      |
+
+`--speed rush --plot reference --people 5000`: 6.00 ms median, 11.10 ms max;
+the crowd takes 2.5 ms of it and the sim 0.97 ms a tick.
 
 Variants (`--styles mixed`) cost about +46% draw calls and nearly double
 startup; wall-to-wall mosaic about +27% draw calls and +0.2 ms CPU. Meshing

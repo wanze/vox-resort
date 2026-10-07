@@ -509,7 +509,6 @@ import {
 import {
   createCrowd,
   holdAt,
-  MAX_STEP,
   ON_SAND,
   putOnPlot,
   restoreCrowd,
@@ -663,10 +662,13 @@ import {
 import { Vector3 } from 'three/webgpu';
 import {
   benchRefusal,
+  benchStep,
   parseBenchConfig,
   type BenchConfig,
 } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
+import { summarizeTimings, type TimingStats } from '../features/bench/domain/timings';
+import { createFrameTimer } from '../features/bench/adapters/frameTimer';
 
 // Precomputed: read once per object placed, and a drag places one per pointer move.
 const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxels.length]));
@@ -781,6 +783,10 @@ export interface BenchResult {
   readonly stats: FrameStats;
   // GPU timestamps keep meaning something once frames come in under the refresh interval.
   readonly gpu: FrameStats | null;
+  // The whole loop callback, which `stats` cannot show: under vsync it reads the refresh rate.
+  readonly cpu: FrameStats;
+  readonly clock: string;
+  readonly timings: Readonly<Record<string, TimingStats>>;
 }
 
 export type { FrameUpdate };
@@ -947,6 +953,7 @@ function trackStartupFrames(): StartupTracker {
 }
 
 function scratchForModels(): ScratchLayout {
+  const started = performance.now();
   const scratch = scratchLayoutFor(
     [
       ...PAINTED_MODELS,
@@ -961,6 +968,7 @@ function scratchForModels(): ScratchLayout {
       `The models need ${scratch.extentX} voxels of scratch space, the world allows ${DEFAULT_WORLD_SCALE.horizontalExtent}`,
     );
   }
+  performance.measure('vox:boot:scratch', { start: started });
   return scratch;
 }
 
@@ -3062,7 +3070,7 @@ function syncFireworks(resort: Resort, field: FireworksField, now: number): void
 function playBenchShow(resort: Resort, field: FireworksField, bench: BenchConfig): void {
   if (!bench.fireworks || field.show) return;
   if (resort.launchSites.length === 0) console.warn('bench: no beach to launch fireworks from');
-  const seconds = (bench.warmupFrames + bench.measureFrames) * MAX_STEP;
+  const seconds = (bench.warmupFrames + bench.measureFrames) * benchStep(bench);
   const { show, from } = benchShow(bench.fireworks, resort.launchSites, seconds);
   field.play(show, from, 'bench');
 }
@@ -3755,7 +3763,7 @@ function createStatsReader(parts: {
 }
 
 interface BenchRecorder {
-  readonly record: (frameMs: number) => void;
+  readonly record: (frameMs: number, cpuMs: number) => void;
   readonly recordGpu: (durationMs: number) => void;
   readonly result: () => BenchResult | null;
 }
@@ -3766,19 +3774,26 @@ function createBenchRecorder(parts: {
   readonly handle: SceneHandle;
   readonly stats: () => ShowcaseStats;
   readonly litLamps: () => number;
+  readonly clockLabel: () => string;
 }): BenchRecorder {
   const { bench, handle, stats, litLamps } = parts;
   const frames: number[] = [];
+  const cpuFrames: number[] = [];
   const gpuFrames: number[] = [];
   let seen = 0;
+  let measuredFrom = 0;
   let result: BenchResult | null = null;
 
   return {
-    record(frameMs) {
+    record(frameMs, cpuMs) {
       if (result) return;
       seen++;
-      if (seen <= bench.warmupFrames) return;
+      if (seen <= bench.warmupFrames) {
+        measuredFrom = performance.now();
+        return;
+      }
       frames.push(frameMs);
+      cpuFrames.push(cpuMs);
       if (frames.length < bench.measureFrames) return;
       result = {
         config: bench,
@@ -3793,6 +3808,9 @@ function createBenchRecorder(parts: {
         },
         stats: roundStats(summarizeFrames(frames)),
         gpu: gpuFrames.length > 0 ? roundStats(summarizeFrames(gpuFrames)) : null,
+        cpu: roundStats(summarizeFrames(cpuFrames)),
+        clock: parts.clockLabel(),
+        timings: summarizeTimings(performance.getEntriesByType('measure'), measuredFrom),
       };
       (globalThis as Record<string, unknown>).__voxBench = result;
     },
@@ -4371,9 +4389,22 @@ function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRe
   };
 }
 
-function crowdStep(bench: boolean, walking: boolean, elapsed: number): number {
-  if (bench) return MAX_STEP;
+const fixedStepOf = (bench: BenchConfig | null): number | null => (bench ? benchStep(bench) : null);
+
+function crowdStep(fixedStep: number | null, walking: boolean, elapsed: number): number {
+  if (fixedStep !== null) return fixedStep;
   return walking ? elapsed : 0;
+}
+
+// Pressed as a player would press it, and told to the HUD, so its buttons read what runs.
+function startBenchClock(
+  clock: Clock,
+  bench: BenchConfig | null,
+  tell?: (speed: SimSpeed) => void,
+): void {
+  if (!bench?.speed) return;
+  clock.setSpeed(bench.speed);
+  tell?.(bench.speed);
 }
 
 // Never under a benchmark: a drifting camera would draw a different frame on every run.
@@ -4941,6 +4972,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   let drift = driftFor(options, bench, handle);
+  const fixedStep = fixedStepOf(bench);
+  const timer = createFrameTimer(bench !== null);
   handle.controls.enabled = drift === null;
   let drawnFirst = false;
   const clock = createClock(
@@ -4968,19 +5001,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     };
   };
 
-  // Its own step for the same reason as the weather's. A bench plays only the show it asks for.
+  // Its own function for the same reason as the weather's. A bench plays only the show it asks for.
   const advanceFireworks = (elapsedSeconds: number): void => {
     if (bench) playBenchShow(current(), fireworks, bench);
     else syncFireworks(current(), fireworks, clock.ticks);
-    const step = bench ? MAX_STEP : elapsedSeconds;
-    fireworks.advance(step);
-    current().flames.advance(step);
+    fireworks.advance(elapsedSeconds);
+    current().flames.advance(elapsedSeconds);
   };
 
-  // Its own step to keep the render loop's branching down, which fallow:audit measures.
+  // Its own function to keep the render loop's branching down, which fallow:audit measures.
   const advanceWeather = (elapsedSeconds: number): void => {
     const target = handle.controls.target;
-    rain.advance(bench ? MAX_STEP : elapsedSeconds, rainfallFor(clock.weather, rainView()), target);
+    rain.advance(elapsedSeconds, rainfallFor(clock.weather, rainView()), target);
     if (clock.weather === lastWeather) return;
     lastWeather = clock.weather;
     options.onWeatherChange?.(lastWeather);
@@ -4990,6 +5022,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Through the same door the HUD uses, so the measured frame is what somebody watching a storm
   // gets.
   if (bench?.weather) clock.setWeather(bench.weather);
+  startBenchClock(clock, bench, options.onSpeedChange);
 
   let detail = detailFrom(bench);
 
@@ -5793,6 +5826,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         handle,
         stats: statsNow,
         litLamps: () => clock.litLamps,
+        clockLabel: () => clock.label,
       })
     : null;
 
@@ -5805,6 +5839,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const tellDrawn = (): void => {
     if (drawnFirst) return;
     drawnFirst = true;
+    performance.measure('vox:boot:first-frame');
     options.onLoading?.('scene');
   };
 
@@ -5836,21 +5871,23 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
     lastTimeMs = timeMs;
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
-    // of two runs.
+    // of two runs, and a running bench would tick a different number of times.
+    const step = fixedStep ?? elapsed;
     const pace = showPaceOf(current(), fireworks, clock);
-    const ticks = stepClock(clock, drift !== null, bench ? MAX_STEP : elapsed, pace);
+    const ticks = stepClock(clock, drift !== null, step, pace);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
+      const simStarted = timer.start();
       lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly, heardEvents);
       recastAll(current());
       lightTheFires(current());
+      timer.end('vox:frame:sim', simStarted, ticks);
     }
-    // Pinned to real time under a bench so runs replay; the crowd still walks though the bench
-    // clock is paused. Outside one, handing over zero time is what stops a paused crowd;
-    // crowdScaleFor is 1 while paused.
-    const walked = crowdStep(bench !== null, drift !== null || clock.speed !== 'paused', elapsed);
+    // Fixed under a bench so runs replay; a paused bench still walks the crowd. Outside one,
+    // handing over zero time is what stops a paused crowd; crowdScaleFor is 1 while paused.
+    const walked = crowdStep(fixedStep, drift !== null || clock.speed !== 'paused', elapsed);
     keepSeats(current().cast, current().casting, current().crowd.crowd.seatBy);
-    const crowdScale = bench ? 1 : crowdScaleFor(clock.speed);
+    const crowdScale = crowdScaleFor(clock.speed);
     // Before the crowd writes its instances, which draw the cast where perform left it.
     actSeconds = advanceActs(actSeconds, walked, crowdScale);
     perform(current().cast, actSeconds);
@@ -5858,14 +5895,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     performOnSand(current().cast, actSeconds, clock.ticks);
     performWork(current().staffCast, current().cast, actSeconds);
     current().ballField.write(current().cast.played);
+    const crowdStarted = timer.start();
     current().crowd.advance(walked, crowdScale);
     current().staff.advance(walked, crowdScale);
-    current().balloons.advance(bench ? MAX_STEP : elapsed, lanternsOf(current(), clock));
-    advanceFireworks(elapsed);
+    timer.end('vox:frame:crowd', crowdStarted);
+    current().balloons.advance(step, lanternsOf(current(), clock));
+    advanceFireworks(step);
     drawnLitter = drawLitter(current(), drawnLitter);
-    current().sea.advance(bench ? MAX_STEP : elapsed, walked * crowdScale);
-    advanceWeather(elapsed);
-    build.advance(bench ? MAX_STEP : elapsed);
+    current().sea.advance(step, walked * crowdScale);
+    advanceWeather(step);
+    build.advance(step);
     moveCamera(elapsed);
     listen(timeMs);
     chooseDetail();
@@ -5914,7 +5953,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       signs: signSpots.view,
     });
 
-    recorder?.record(elapsed * 1000);
+    recorder?.record(elapsed * 1000, performance.now() - frameStarted);
   });
 
   return {

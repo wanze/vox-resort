@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldBounds } from '../../layout/domain/worldBounds';
-import { benchFraming, benchRefusal, DEFAULT_BENCH, parseBenchConfig } from './benchConfig';
+import {
+  benchFraming,
+  benchRefusal,
+  benchStep,
+  DEFAULT_BENCH,
+  parseBenchConfig,
+} from './benchConfig';
 
 const refused = (search: string) => benchRefusal(parseBenchConfig(search)!);
 
@@ -75,6 +81,20 @@ describe('parseBenchConfig', () => {
     expect(refused('?bench=1&repeat=2&styles=mixed&mosaic=1')).toBeNull();
   });
 
+  it('can run the clock at any playing speed, so a run can price the sim', () => {
+    expect(parseBenchConfig('?bench=1&speed=normal')?.speed).toBe('normal');
+    expect(parseBenchConfig('?bench=1&speed=fast')?.speed).toBe('fast');
+    expect(parseBenchConfig('?bench=1&speed=rush')?.speed).toBe('rush');
+  });
+
+  it('keeps the clock paused unless a playing speed is asked for', () => {
+    expect(parseBenchConfig('?bench=1')).not.toHaveProperty('speed');
+    expect(parseBenchConfig('?bench=1&speed=paused')).not.toHaveProperty('speed');
+    expect(parseBenchConfig('?bench=1&speed=slow')).not.toHaveProperty('speed');
+    expect(parseBenchConfig('?bench=1&speed=warp')).not.toHaveProperty('speed');
+    expect(parseBenchConfig('?bench=1&speed=')).not.toHaveProperty('speed');
+  });
+
   it('can pin the weather, so a run can price the rain', () => {
     expect(parseBenchConfig('?bench=1')?.weather).toBeNull();
     expect(parseBenchConfig('?bench=1&weather=storm')?.weather).toBe('storm');
@@ -112,6 +132,18 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&repeat=10')?.repeat).toBe(10);
     expect(parseBenchConfig('?bench=1&repeat=11')?.repeat).toBe(DEFAULT_BENCH.repeat);
     expect(parseBenchConfig('?bench=1&repeat=1000000')?.repeat).toBe(DEFAULT_BENCH.repeat);
+  });
+});
+
+describe('benchStep', () => {
+  it('keeps the paused step, so paused numbers still compare', () => {
+    expect(benchStep(DEFAULT_BENCH)).toBe(0.1);
+  });
+
+  it("steps a running clock by a 60 Hz player's frame", () => {
+    for (const speed of ['normal', 'fast', 'rush']) {
+      expect(benchStep(parseBenchConfig(`?bench=1&speed=${speed}`)!)).toBeCloseTo(1 / 60, 9);
+    }
   });
 });
 

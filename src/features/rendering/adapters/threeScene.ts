@@ -549,9 +549,11 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       applyMode();
     },
     retile() {
+      const started = performance.now();
       surfaces.dispose();
       scene.remove(surfaces.group);
       surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
+      performance.measure('vox:retile', { start: started });
     },
     reframe(nextBounds, nextFraming, nextVolume, nextShore, nextTerrain, nextSurfaces) {
       plot = nextBounds;

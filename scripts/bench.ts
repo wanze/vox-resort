@@ -28,7 +28,7 @@ const SUITE: readonly BenchCase[] = [
   { name: 'night-street', view: 'street', time: 0.02, note: 'after dark, camera at eye level' },
 ];
 
-const PASSED = ['weather', 'styles', 'fireworks', 'plot'] as const;
+const PASSED = ['weather', 'styles', 'fireworks', 'plot', 'speed', 'people'] as const;
 
 interface BenchStats {
   readonly frames: number;
@@ -40,7 +40,17 @@ interface BenchStats {
   readonly medianFps: number;
 }
 
+interface TimingStats {
+  readonly count: number;
+  readonly totalMs: number;
+  readonly medianMs: number;
+  readonly p95Ms: number;
+  readonly maxMs: number;
+  readonly detailTotal: number;
+}
+
 interface BenchReport {
+  readonly config: { readonly speed?: string };
   readonly backend: string;
   readonly pixelRatio: number;
   readonly drawingBufferSize: { readonly width: number; readonly height: number };
@@ -55,10 +65,20 @@ interface BenchReport {
     readonly startupMs: number;
     readonly meshedInWorker: boolean;
     readonly startupFrames: number;
+    readonly guests: { readonly present: number; readonly capacity: number };
   };
   readonly drawn?: { readonly drawCalls: number; readonly triangles: number };
   readonly stats: BenchStats;
   readonly gpu: BenchStats | null;
+  readonly cpu: BenchStats;
+  readonly clock: string;
+  readonly timings: Readonly<Record<string, TimingStats>>;
+}
+
+interface Row {
+  readonly case: string;
+  readonly repeat: number;
+  readonly report: BenchReport;
 }
 
 interface Cli {
@@ -71,7 +91,8 @@ interface Cli {
   readonly webgl: boolean;
   readonly mainThread: boolean;
   readonly noDetail: boolean;
-  // Handed to the page as they were given: `--weather`, `--styles`, `--fireworks` and `--plot`.
+  // Handed to the page as they were given: `--weather`, `--styles`, `--fireworks`, `--plot`,
+  // `--speed` and `--people`.
   readonly passed: ReadonlyMap<string, string>;
   readonly mosaic: boolean;
   readonly json: boolean;
@@ -309,11 +330,74 @@ async function runCase(
 
 const pad = (value: string, width: number): string => value.padEnd(width);
 const padStart = (value: string, width: number): string => value.padStart(width);
+const ms = (value: number, width = 9): string => padStart(`${value.toFixed(2)}ms`, width);
+const caseOf = (row: Row): string => `${row.case} ${row.report.config.speed ?? 'paused'}`;
+
+function printCpu(rows: readonly Row[]): void {
+  const header =
+    pad('cpu per frame', 24) +
+    padStart('median', 9) +
+    padStart('p95', 9) +
+    padStart('p99', 9) +
+    padStart('max', 9) +
+    '  ' +
+    pad('clock', 16) +
+    'guests';
+  console.info(header);
+  console.info('-'.repeat(header.length));
+  for (const row of rows) {
+    const { cpu, clock, scene } = row.report;
+    const guests = scene ? `${scene.guests.present}/${scene.guests.capacity}` : '-';
+    console.info(
+      pad(caseOf(row), 24) +
+        ms(cpu.medianMs) +
+        ms(cpu.p95Ms) +
+        ms(cpu.p99Ms) +
+        ms(cpu.maxMs) +
+        '  ' +
+        pad(clock, 16) +
+        guests,
+    );
+  }
+  console.info('');
+}
+
+// Per tick only where a measure carries ticks in its detail, which only the sim's does.
+const perTick = (stats: TimingStats): string =>
+  stats.detailTotal > 0 ? ms(stats.totalMs / stats.detailTotal, 10) : padStart('-', 10);
+
+function printTimings(rows: readonly Row[]): void {
+  for (const row of rows) {
+    console.info(
+      pad(caseOf(row), 26) +
+        padStart('count', 7) +
+        padStart('median', 11) +
+        padStart('p95', 11) +
+        padStart('max', 11) +
+        padStart('total', 11) +
+        padStart('per tick', 10),
+    );
+    for (const [name, stats] of Object.entries(row.report.timings).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      console.info(
+        `  ${pad(name, 24)}` +
+          padStart(String(stats.count), 7) +
+          ms(stats.medianMs, 11) +
+          ms(stats.p95Ms, 11) +
+          ms(stats.maxMs, 11) +
+          ms(stats.totalMs, 11) +
+          perTick(stats),
+      );
+    }
+    console.info('');
+  }
+}
 
 async function main(): Promise<void> {
   const cli = parseCli(process.argv.slice(2));
   const browser = await launch(cli);
-  const rows: { case: string; repeat: number; report: BenchReport }[] = [];
+  const rows: Row[] = [];
 
   try {
     for (const benchCase of cli.cases) {
@@ -387,6 +471,8 @@ async function main(): Promise<void> {
     );
   }
   console.info('');
+  printCpu(rows);
+  printTimings(rows);
 }
 
 await main();

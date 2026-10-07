@@ -1,6 +1,7 @@
 import type { RefObject } from 'react';
 import type {
   GuestView,
+  LifeguardWatch,
   PartyMemberView,
   PlaceView,
   SelectionView,
@@ -12,6 +13,7 @@ import type { Advice } from '../../sim/domain/advice';
 import { adviceAt, markerIconOf } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
 import { adviceSays } from './adviceWords';
+import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from './PixelIcon';
 import { StatRow } from './StatRow';
@@ -28,6 +30,7 @@ export interface InspectPanelProps {
   // Looks at the inspected worker where they are now: staff walk off while the panel is open.
   readonly onShow: () => void;
   readonly onSend: (role: OrderRole) => void;
+  readonly hire?: HireControls;
   readonly onRenameVenue: (key: string, name: string) => void;
   readonly onOpenProgramme: (key: string) => void;
 }
@@ -166,9 +169,15 @@ function SurroundingsRow({ setting }: { readonly setting: number }) {
   return <StatRow label="Surroundings">{Math.round(setting * 100)}%</StatRow>;
 }
 
-function LifeguardRow({ watched }: { readonly watched: boolean | null }) {
-  if (watched === null) return null;
-  return <StatRow label="Lifeguard">{watched ? 'On watch' : 'Nobody watching'}</StatRow>;
+const LIFEGUARD_WORDS: { readonly [watch in LifeguardWatch]: string } = {
+  watching: 'On watch',
+  coming: 'On the way',
+  nobody: 'Nobody watching',
+};
+
+function LifeguardRow({ watch }: { readonly watch: LifeguardWatch | null }) {
+  if (watch === null) return null;
+  return <StatRow label="Lifeguard">{LIFEGUARD_WORDS[watch]}</StatRow>;
 }
 
 function BrokenRow({ broken }: { readonly broken: boolean }) {
@@ -194,7 +203,7 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
       <StatRow label="Waiting">{venue.waiting === 0 ? 'Nobody' : venue.waiting}</StatRow>
       <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
-      <LifeguardRow watched={venue.watched} />
+      <LifeguardRow watch={venue.lifeguard} />
       <SurroundingsRow setting={setting} />
     </dl>
   );
@@ -220,7 +229,13 @@ function Residents({
 }
 
 // The same icon as the marker over the roof, so a click on one explains itself here.
-function Problems({ problems }: { readonly problems: readonly Advice[] }) {
+function Problems({
+  problems,
+  hire,
+}: {
+  readonly problems: readonly Advice[];
+  readonly hire: HireControls | undefined;
+}) {
   if (problems.length === 0) return null;
   return (
     <ul className="hud-inspect-problems" aria-label="Problems">
@@ -236,6 +251,7 @@ function Problems({ problems }: { readonly problems: readonly Advice[] }) {
               {icon ? <PixelIcon name={icon} /> : null}
             </span>
             <span>{adviceSays(advice)}</span>
+            <HireButton advice={advice} hire={hire} />
           </li>
         );
       })}
@@ -317,6 +333,7 @@ function PlaceDetails({
   advice,
   onSelectPerson,
   onSend,
+  hire,
   onRenameVenue,
   onOpenProgramme,
 }: {
@@ -324,6 +341,7 @@ function PlaceDetails({
   readonly advice: readonly Advice[];
   readonly onSelectPerson: (person: number) => void;
   readonly onSend: (role: OrderRole) => void;
+  readonly hire: HireControls | undefined;
   readonly onRenameVenue: (key: string, name: string) => void;
   readonly onOpenProgramme: (key: string) => void;
 }) {
@@ -348,7 +366,10 @@ function PlaceDetails({
           onRename={(name) => onRenameVenue(place.key, name)}
         />
       ) : null}
-      <Problems problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })} />
+      <Problems
+        problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })}
+        hire={hire}
+      />
       <SendButtons place={place} onSend={onSend} />
       <ProgrammeRow place={place} onOpenProgramme={onOpenProgramme} />
       <VenueRows venue={place.venue} setting={place.setting} />
@@ -401,6 +422,7 @@ function Details({
   onSelectPerson,
   onShow,
   onSend,
+  hire,
   onRenameVenue,
   onOpenProgramme,
 }: Omit<InspectPanelProps, 'frame' | 'selection'> & { readonly selection: SelectionView }) {
@@ -422,6 +444,7 @@ function Details({
       advice={advice}
       onSelectPerson={onSelectPerson}
       onSend={onSend}
+      hire={hire}
       onRenameVenue={onRenameVenue}
       onOpenProgramme={onOpenProgramme}
     />

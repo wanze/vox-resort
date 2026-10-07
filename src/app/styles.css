@@ -2236,6 +2236,11 @@ input[type='checkbox'] {
   height: 24px;
 }
 
+.hud-inspect-problem .hud-advice-show {
+  flex: none;
+  margin-left: auto;
+}
+
 .hud-inspect-activity {
   margin: 0;
   font-weight: 600;

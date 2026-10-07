@@ -10,6 +10,7 @@ import { DemandPanel } from './DemandPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
 import { HudTabs } from './HudTabs';
+import type { HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
@@ -39,8 +40,8 @@ import type { Advice } from '../../sim/domain/advice';
 import { starsTrend } from '../../sim/domain/dayReport';
 import type { GameMode, Ledger } from '../../sim/domain/ledger';
 import type { LandView } from '../../land/domain/landRights';
-import type { StaffRole } from '../../sim/domain/staff';
 import type { OrderRole } from '../../sim/domain/staffRouter';
+import { hireOffer } from '../domain/hireOffer';
 import { markersOf, type OrderSpot } from '../domain/markers';
 import type { SignSpot } from '../domain/signs';
 import type { UpdateAction } from '../domain/news';
@@ -121,9 +122,11 @@ const FRAMED = WINDOW_IDS.filter((id): id is Framed => id !== 'inspect');
 
 const modeOf = (ledger: Ledger | null): GameMode | null => ledger?.mode ?? null;
 
-// Tops the role up to what the plot wants and keeps it hand-set.
-const hireUpTo = (props: HudProps, role: StaffRole): void =>
-  props.resort.setHiring(role, props.stats?.staff.recommended[role] ?? null);
+// Read at render, so a toast raised before the hire offers nothing once the role is enough.
+const hireControls = (props: HudProps): HireControls => ({
+  offerFor: (advice) => hireOffer(advice, props.stats?.staff ?? null),
+  onHire: (offer) => props.resort.setHiring(offer.role, offer.count),
+});
 
 // null for the newest, which is where the Overview and the palette open it.
 const openReport = (props: Pick<HudProps, 'history' | 'windows'>, day: number | null): void => {
@@ -160,7 +163,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
     <AdvicePanel
       advice={props.advice}
       onShowOnPlot={props.onShowOnPlot}
-      onHire={(role) => hireUpTo(props, role)}
+      hire={hireControls(props)}
     />
   ),
   messages: (props) => (
@@ -302,6 +305,7 @@ function Windows(props: HudProps) {
         onSelectPerson={props.onSelectPerson}
         onShow={props.onShowSelected}
         onSend={props.onSend}
+        hire={hireControls(props)}
         onRenameVenue={props.onRenameVenue}
         onOpenProgramme={(key) => {
           props.programme.choose(key);
@@ -396,7 +400,7 @@ export function Hud(props: HudProps) {
           history: props.history.history,
           mode: modeOf(props.ledger),
           onShowOnPlot: props.onShowOnPlot,
-          onHire: (role) => hireUpTo(props, role),
+          hire: hireControls(props),
           onOpenAdvice: () => props.windows.show('advice', true),
           onOpenReport: (day) => openReport(props, day),
           onDismiss: props.news.dismiss,

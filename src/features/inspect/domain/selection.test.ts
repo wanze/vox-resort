@@ -495,11 +495,13 @@ describe('placeView with a venue that is being used', () => {
 describe('placeView and the lifeguards', () => {
   it('says whether a pool is watched, and nothing for a place nobody swims in', () => {
     const pool = at('swimming-pool#0', 'swimming-pool');
-    const watched = placeView(pool, 'Swimming Pool', guestsOf(), null, 0, null, 0, true);
-    expect(watched.venue?.watched).toBe(true);
-    expect(placeView(pool, 'Swimming Pool', guestsOf(), null, 0).venue?.watched).toBe(false);
+    const watched = placeView(pool, 'Swimming Pool', guestsOf(), null, 0, null, 0, 'watching');
+    expect(watched.venue?.lifeguard).toBe('watching');
+    const coming = placeView(pool, 'Swimming Pool', guestsOf(), null, 0, null, 0, 'coming');
+    expect(coming.venue?.lifeguard).toBe('coming');
+    expect(placeView(pool, 'Swimming Pool', guestsOf(), null, 0).venue?.lifeguard).toBe('nobody');
     const dry = placeView(at('restaurant#0', 'restaurant'), 'Restaurant', guestsOf(), null, 0);
-    expect(dry.venue?.watched).toBeNull();
+    expect(dry.venue?.lifeguard).toBeNull();
   });
 });
 
@@ -650,7 +652,7 @@ describe('breakdowns and injuries', () => {
     const guests = guestsOf();
     const aid = at('first-aid#0', 'first-aid');
     expect(placeView(aid, 'First Aid', guests, null, 0).venue?.broken).toBe(false);
-    const broken = placeView(aid, 'First Aid', guests, null, 0, null, 0, false, true);
+    const broken = placeView(aid, 'First Aid', guests, null, 0, null, 0, 'nobody', true);
     expect(broken.venue?.broken).toBe(true);
     expect(broken.venue?.serves).toEqual(['Health']);
   });

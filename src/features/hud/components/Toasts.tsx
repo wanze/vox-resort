@@ -9,16 +9,16 @@ import {
 } from '../domain/news';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { GameMode } from '../../sim/domain/ledger';
-import { isStaffRole, type StaffRole } from '../../sim/domain/staff';
 import { adviceLabel, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
+import { HireButton, type HireControls } from './HireButton';
 import { PixelIcon } from './PixelIcon';
 
 interface NewsToastsProps {
   readonly history: readonly DayReport[];
   readonly mode: GameMode | null;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
-  readonly onHire: (role: StaffRole) => void;
+  readonly hire: HireControls;
   readonly onOpenAdvice: () => void;
   readonly onOpenReport: (day: number) => void;
   readonly onDismiss: (key: string) => void;
@@ -31,12 +31,11 @@ export interface ToastsProps {
   readonly news: NewsToastsProps | null;
 }
 
-type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'onHire' | 'onOpenAdvice'>;
+type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'hire' | 'onOpenAdvice'>;
 
 function ToastActions({ news, ...props }: { readonly news: News } & ToastActionsProps) {
   const { advice } = news;
   const { at } = advice;
-  const role = advice.subject;
   return (
     <div className="hud-toast-actions">
       {at ? (
@@ -49,15 +48,7 @@ function ToastActions({ news, ...props }: { readonly news: News } & ToastActions
           Show
         </button>
       ) : null}
-      {advice.kind === 'short-staffed' && isStaffRole(role) ? (
-        <button
-          type="button"
-          className="hud-camera-mode hud-advice-show"
-          onClick={() => props.onHire(role)}
-        >
-          Hire
-        </button>
-      ) : null}
+      <HireButton advice={advice} hire={props.hire} />
       <button
         type="button"
         className="hud-camera-mode hud-advice-show"

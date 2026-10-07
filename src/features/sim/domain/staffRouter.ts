@@ -172,6 +172,9 @@ export interface StaffRouter {
   performingAt(venue: number): boolean;
   watching(venue: number): boolean;
   readonly watchingBeach: boolean;
+  // A lifeguard is sat there or on the way: water somebody is coming to is not a gap to report.
+  guarded(venue: number): boolean;
+  readonly beachGuarded: boolean;
   readonly workingCount: number;
   snapshot(): StaffRouterSnapshot;
   // Onto a router built on the venues and network the snapshot was taken on; throws otherwise.
@@ -243,6 +246,10 @@ export function createStaffRouter(parts: {
   // Apart from the cleaners' claims: a cleaner may scrub a venue while a show is on.
   let showBy = new Int32Array(venues.length).fill(NOBODY);
   let watchedBy = new Int32Array(venues.length).fill(NOBODY);
+  // Per lifeguard, the venue or tower they watched before the last edit; spent on their next
+  // choice, and counted as watched till then so an edit does not raise the alarm.
+  let keptWater = new Int32Array(staff.count).fill(NOBODY);
+  let keptTower = new Uint8Array(staff.count);
   let repairBy = new Int32Array(venues.length).fill(NOBODY);
   let assigned = new Int32Array(staff.count).fill(NOBODY);
   let until = new Int32Array(staff.count);
@@ -351,13 +358,17 @@ export function createStaffRouter(parts: {
 
   // The busiest first: a show or a watch is worth most where most guests are. Guests are counted
   // before the field is swept, so only a better candidate costs a sweep.
-  const busiest = (at: number, eligible: (venue: number) => boolean): number => {
+  const busiest = (
+    at: number,
+    eligible: (venue: number) => boolean,
+    reaches: (venue: number) => boolean = (venue) => fieldFor(venue).next[at]! >= 0,
+  ): number => {
     let best = NOBODY;
     let most = -1;
     for (let venue = 0; venue < venues.length; venue++) {
       if (!eligible(venue)) continue;
       const inside = parts.occupants?.(venue) ?? 0;
-      if (inside <= most || fieldFor(venue).next[at]! < 0) continue;
+      if (inside <= most || !reaches(venue)) continue;
       best = venue;
       most = inside;
     }
@@ -407,6 +418,8 @@ export function createStaffRouter(parts: {
     );
   };
 
+  // Over the sand too, as water sports on the beach has no door on the paving. The water watched
+  // before an edit comes first, or every edit would shuffle the lifeguards round the pools.
   const pickWater = (worker: number, at: number): number => {
     const effect = weatherEffect(weatherNow());
     const inZone = venueInZone(worker);
@@ -419,7 +432,13 @@ export function createStaffRouter(parts: {
         openNow(place, effect, tickOfDay())
       );
     };
-    return claim(worker, busiest(at, unwatched));
+    const reaches = (venue: number): boolean =>
+      fieldFor(venue).next[at]! >= 0 || sandRouteTo(venue, at) !== undefined;
+    const kept = keptWater[worker]!;
+    keptWater[worker] = NOBODY;
+    const venue =
+      kept >= 0 && unwatched(kept) && reaches(kept) ? kept : busiest(at, unwatched, reaches);
+    return venue >= 0 && claimReachable(worker, venue, at) ? venue : NOBODY;
   };
 
   // A beach building has no door on the paving, so a worker walks the last leg over the sand.
@@ -890,11 +909,11 @@ export function createStaffRouter(parts: {
     if (door >= 0 && door < network.nodes.length) releaseTo(parts.crowd(), worker, door);
   };
 
-  // A tower is kept through a storm: nobody is in the water to leave for, and a walk back over
-  // the sand every storm is a lot of motion for nothing. A pool is waited out at its door.
+  // A post on the sand is kept through a storm: nobody is in the water to leave for, and a walk
+  // back over the sand every storm is a lot of motion for nothing. A pool is waited out at its door.
   const mindTheWeather = (worker: number, effect: WeatherEffect): void => {
     const venue = assigned[worker]!;
-    if (towerOf[worker]! >= 0 || venue < 0) return;
+    if (towerOf[worker]! >= 0 || legRoute[worker] || venue < 0) return;
     const open = openNow(venues[venue]!, effect, tickOfDay());
     if (open === (sheltering[worker] === 0)) return;
     const door = doorOf[worker]!;
@@ -1002,8 +1021,10 @@ export function createStaffRouter(parts: {
   // The water inside the resort first; a tower only for a lifeguard with no pool left to watch.
   const lifeguardStep = (worker: number, at: number): number => {
     if (towerOf[worker]! >= 0) return towardsTheSand(worker, at);
+    keptTower[worker] = 0;
     const venue = assigned[worker]! >= 0 ? assigned[worker]! : pickWater(worker, at);
-    if (venue >= 0) return venueStep(worker, at, venue);
+    if (venue >= 0)
+      return legRoute[worker] ? towardsTheSand(worker, at) : venueStep(worker, at, venue);
     return pickTower(worker, at) >= 0 ? towardsTheSand(worker, at) : -1;
   };
 
@@ -1297,6 +1318,16 @@ export function createStaffRouter(parts: {
     publish();
   };
 
+  // By key, as an order is carried; read before the edit drops who was assigned where.
+  const keepWater = (was: readonly Venue[]): void => {
+    const indexOf = new Map(venues.map((venue, at) => [venue.key, at]));
+    keptWater = Int32Array.from(assigned, (venue, worker) => {
+      const key = staff.role[worker] === 'lifeguard' ? was[venue]?.key : undefined;
+      return key === undefined ? NOBODY : (indexOf.get(key) ?? NOBODY);
+    });
+    keptTower = Uint8Array.from(towerOf, (seat) => (seat >= 0 ? 1 : 0));
+  };
+
   // A show begun before the stage went quiet runs on into the booked one.
   const stretchHostedShows = (): void => {
     for (const { venue, until: end } of parts.hosting?.() ?? []) {
@@ -1349,6 +1380,7 @@ export function createStaffRouter(parts: {
       showBy = new Int32Array(venues.length).fill(NOBODY);
       watchedBy = new Int32Array(venues.length).fill(NOBODY);
       repairBy = new Int32Array(venues.length).fill(NOBODY);
+      keepWater(wasStanding);
       assigned = new Int32Array(staff.count).fill(NOBODY);
       until = new Int32Array(staff.count);
       working = new Uint8Array(staff.count);
@@ -1379,6 +1411,8 @@ export function createStaffRouter(parts: {
     },
 
     clockOff(worker) {
+      keptWater[worker] = NOBODY;
+      keptTower[worker] = 0;
       if (goingHome[worker] === 1) return;
       goingHome[worker] = 1;
       if (!supplyField()) clockedOff(worker);
@@ -1413,6 +1447,14 @@ export function createStaffRouter(parts: {
     get watchingBeach() {
       for (const worker of towerBy.values()) if (working[worker] === 1) return true;
       return false;
+    },
+
+    guarded(venue) {
+      return venue >= 0 && ((watchedBy[venue] ?? NOBODY) !== NOBODY || keptWater.includes(venue));
+    },
+
+    get beachGuarded() {
+      return towerBy.size > 0 || keptTower.includes(1);
     },
 
     get workingCount() {
@@ -1461,6 +1503,8 @@ export function createStaffRouter(parts: {
       goingHome = snapshot.goingHome.slice();
       now = snapshot.now;
       random = resumeRandom(snapshot.random);
+      keptWater = new Int32Array(staff.count).fill(NOBODY);
+      keptTower = new Uint8Array(staff.count);
       reclaim();
       const known = (worker: number): boolean => worker >= 0 && worker < staff.count;
       orders = (snapshot.orders ?? []).map(({ role, venue, tile, worker, taken }) => ({

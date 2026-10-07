@@ -580,6 +580,7 @@ import {
   workerOf,
   type Errand,
   type InspectTarget,
+  type LifeguardWatch,
   type SelectionView,
   type PlaceView,
   type SendFacts,
@@ -3343,15 +3344,26 @@ function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
   return counted;
 }
 
-// The beach last, as the guests' router lists it.
-function unwatchedOn(resort: Resort): ReadonlySet<string> {
+// The beach last, as the guests' router lists it. Water a lifeguard is walking to is not
+// reported: right after an edit every lifeguard is on the way.
+function unwatchedOn(
+  resort: Resort,
+  effect: WeatherEffect,
+  tickOfDay: number,
+): ReadonlySet<string> {
   const { staffRouter, venues } = resort;
   const { network } = resort.crowd.crowd;
   const beach = beachVenueFor(network);
   const water = beach ? [...venues, beach] : venues;
-  const watching = (venue: number): boolean =>
-    venue < venues.length ? staffRouter.watching(venue) : staffRouter.watchingBeach;
-  return unwatched(water, watching, network.posts.length);
+  const guarded = (venue: number): boolean =>
+    venue < venues.length ? staffRouter.guarded(venue) : staffRouter.beachGuarded;
+  const open = (venue: number): boolean => openNow(water[venue]!, effect, tickOfDay);
+  return unwatched(water, guarded, network.posts.length, open);
+}
+
+function lifeguardAt(router: StaffRouter, venue: number): LifeguardWatch {
+  if (router.watching(venue)) return 'watching';
+  return router.guarded(venue) ? 'coming' : 'nobody';
 }
 
 function brokenOn(resort: Resort, now: number): ReadonlyMap<string, number> {
@@ -3397,7 +3409,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
     ),
-    unwatched: unwatchedOn(resort),
+    unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
     broken: brokenOn(resort, now),
     shortStaffed: shortOf(resort.hiring, resort.recommended),
     hurt: hurtCount(resort),
@@ -5285,7 +5297,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       sceneryOver(resort.scenery, placement),
       cleanliness(resort.upkeep, venue),
       takingsOf(resort.takings, placement.key),
-      resort.staffRouter.watching(venue),
+      lifeguardAt(resort.staffRouter, venue),
       isBroken(resort.breakdowns, venue),
     );
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);

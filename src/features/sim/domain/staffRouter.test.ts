@@ -600,9 +600,14 @@ describe('a lifeguard at the pool', () => {
     const { router } = crewOn(network, venues, ['lifeguard'], { occupants: [0, 5] });
     router.step(0, nodeAt(network, 4));
     router.step(0, nodeAt(network, 7));
-    expect(unwatched(venues, (venue) => router.watching(venue), 0)).toEqual(
-      new Set(['swimming-pool#0']),
-    );
+    expect(
+      unwatched(
+        venues,
+        (venue) => router.watching(venue),
+        0,
+        () => true,
+      ),
+    ).toEqual(new Set(['swimming-pool#0']));
   });
 
   it('waits out a storm at the door and goes back in when it clears', () => {
@@ -622,6 +627,43 @@ describe('a lifeguard at the pool', () => {
     weather = 'clear';
     router.tick(2);
     expect(crowd.z[0]).toBeCloseTo(inside);
+  });
+
+  it('counts a pool as guarded while its lifeguard is still on the way', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 7)];
+    const { router } = crewOn(network, venues, ['lifeguard']);
+    expect(router.guarded(0)).toBe(false);
+    router.step(0, nodeAt(network, 4));
+    expect(router.guarded(0)).toBe(true);
+    expect(router.watching(0), 'safer before anybody arrived').toBe(false);
+  });
+
+  it('goes back to the same pool after an edit, however busy the other one is', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 1), pool('swimming-pool#1', 7)];
+    const occupants = [0, 5];
+    const { router } = crewOn(network, venues, ['lifeguard'], { occupants });
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 7));
+    expect(router.watching(1)).toBe(true);
+    occupants[0] = 20;
+    router.rebuild(venues, network);
+    expect(router.watching(1)).toBe(false);
+    expect(router.guarded(1), 'reported unwatched the moment the plot was edited').toBe(true);
+    expect(router.step(0, nodeAt(network, 7))).toBe(-1);
+    expect(router.watching(1)).toBe(true);
+  });
+
+  it('forgets the pool kept across an edit for a lifeguard let go', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 7)];
+    const { router } = crewOn(network, venues, ['lifeguard']);
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 7));
+    router.rebuild(venues, network);
+    router.clockOff(0);
+    expect(router.guarded(0)).toBe(false);
   });
 });
 
@@ -702,7 +744,7 @@ describe('a lifeguard on a tower', () => {
     expect(untilSeated(router, crowd)).toBe(true);
     const water = [{ ...pool('beach', 0), key: 'beach' }, pool('swimming-pool#0', 7)];
     const watching = (venue: number): boolean => venue === 0 && router.watchingBeach;
-    expect(unwatched(water, watching, 1)).toEqual(new Set(['swimming-pool#0']));
+    expect(unwatched(water, watching, 1, () => true)).toEqual(new Set(['swimming-pool#0']));
     weather = 'storm';
     for (let tick = 1; tick <= 10; tick++) router.tick(tick);
     expect(router.watchingBeach).toBe(true);
@@ -886,6 +928,33 @@ describe('a mechanic on the beach', () => {
   });
   const { reliability: _reliable, ...shower } = { ...pedalos, key: 'beach-shower#0' };
   const kiosk: Venue = { ...shop('kiosk#0', 11), tileZ: 5, z: 5.5 * TILE_VOXELS };
+
+  it('walks a lifeguard over the sand to water sports, and keeps the post through a storm', () => {
+    const { reliability: _motors, ...base } = { ...pedalos, key: 'water-sports#0' };
+    const waterSports: Venue = { ...base, shelter: 'open', bathing: true };
+    let weather: Weather = 'clear';
+    const { router, crowd } = crewOn(beach, [waterSports], ['lifeguard'], {
+      weather: () => weather,
+    });
+    let wentOnSand = false;
+    walkUntil(
+      router,
+      crowd,
+      () => router.watching(0),
+      () => {
+        if (crowd.z[0]! > 12 * TILE_VOXELS) wentOnSand = true;
+      },
+    );
+    expect(router.watching(0), 'nobody came').toBe(true);
+    expect(wentOnSand, 'watched it from the paving').toBe(true);
+    expect(router.atWork(0)?.key).toBe('water-sports#0');
+    const post = { x: crowd.x[0]!, z: crowd.z[0]! };
+    weather = 'storm';
+    for (let tick = 10_000; tick < 10_010; tick++) router.tick(tick);
+    expect(router.watching(0)).toBe(true);
+    expect(crowd.x[0]).toBeCloseTo(post.x);
+    expect(crowd.z[0]).toBeCloseTo(post.z);
+  });
 
   it('walks a cleaner sent there over the sand too, and scrubs it', () => {
     const upkeep = createUpkeep(1);

@@ -189,14 +189,16 @@ export function workplacesOf(
 }
 
 // The beach counts only once a tower stands: with none, there is nowhere to watch it from.
+// Shut water is no gap either, as no lifeguard is sent to water nobody may swim in.
 export function unwatched(
   venues: readonly Venue[],
   watching: (venue: number) => boolean,
   towers: number,
+  open: (venue: number) => boolean,
 ): ReadonlySet<string> {
   const keys = new Set<string>();
   for (const [index, venue] of venues.entries()) {
-    if (venue.bathing !== true || watching(index)) continue;
+    if (venue.bathing !== true || watching(index) || !open(index)) continue;
     if (isBeach(venue) && towers <= 0) continue;
     keys.add(venue.key);
   }

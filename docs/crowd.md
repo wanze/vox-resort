@@ -355,7 +355,7 @@ same `crowd.ts`. A resort meshes a fixed pool (`STAFF_CAPS`); the roster
 | --------- | --------------------------------------- | --------------------------------------------- |
 | Cleaner   | one per six venues plus one per 60 beds | rooms first, then dirtiest venue, then litter |
 | Animator  | one per three `stage` or `dj` venues    | an hour or two per stage, then moves on       |
-| Lifeguard | one per `bathing` venue and tower post  | stays at a pool, or walks the sand to a tower |
+| Lifeguard | one per `bathing` venue and tower post  | stays at the water, or walks the sand to it   |
 | Mechanic  | one per five venues with `reliability`  | repairs the longest-broken venue              |
 
 - **Staff house** (`staff-house`): a depot declared on the art. Staff clock on
@@ -363,10 +363,19 @@ same `crowd.ts`. A resort meshes a fixed pool (`STAFF_CAPS`); the roster
   entrance serves.
 - **Hiring**: every role defaults to Auto (the plot's recommendation). A role
   set by hand in the Staff window keeps its number through edits. Below the
-  recommendation, advice says `short-staffed`.
+  recommendation, advice says `short-staffed`, with a Hire button that tops the
+  role up. While a hand-set role is short, a place's own staff problem
+  (`unwatched`, `broken`, `dirty`, `unmade`) offers "Hire <role>", which adds
+  one (`hireOffer.ts`), in the advice, its toast and the inspector.
 - **Zones** (`zones.ts`, up to 4): painted tiles that restrict where staff work.
   Staff are dealt round-robin over zones holding a workplace for their role. A
   role with no zoned workplace works the whole plot.
+- **Lifeguards**: the busiest open, unwatched `bathing` venue first, reached
+  over the sand when it has no door on the paving (water sports); a tower only
+  with no venue left. An edit sends each back to the water they watched before.
+  Water only counts as watched once they are sat (`watching`, which sets the
+  mishap odds); the advice and inspector also accept one on the way (`guarded`)
+  and leave shut water out.
 - **Tasks**: `staffRouter.taskOf(worker)` reports what someone is doing, used by
   the pins (`S`), the inspector and the Staff window's tallies.
 - **Orders**: send a mechanic or cleaner to a specific venue or tile from the

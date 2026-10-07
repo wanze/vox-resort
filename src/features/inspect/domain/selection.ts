@@ -88,7 +88,7 @@ export interface PlaceView {
     readonly cleanliness: number;
     readonly takings: number;
     // Null where nobody swims, so the inspector has nothing to say about a lifeguard.
-    readonly watched: boolean | null;
+    readonly lifeguard: LifeguardWatch | null;
     // Broken is closed: guests are turned away until a mechanic has been.
     readonly broken: boolean;
   } | null;
@@ -247,6 +247,9 @@ export function guestView(
   };
 }
 
+// Coming is a lifeguard on the way, who does not yet make the water any safer.
+export type LifeguardWatch = 'watching' | 'coming' | 'nobody';
+
 export interface PlaceOccupancy {
   readonly inside: number;
   readonly waiting: number;
@@ -261,7 +264,7 @@ export function placeView(
   // Null means spotless: a fixture, or a venue so new the router has not seen it.
   cleanliness: number | null = null,
   takings = 0,
-  watched = false,
+  lifeguard: LifeguardWatch = 'nobody',
   broken = false,
 ): PlaceView {
   const venue = venueOf(placement.id);
@@ -290,7 +293,7 @@ export function placeView(
           waiting: occupancy?.waiting ?? 0,
           cleanliness: cleanliness ?? 1,
           takings,
-          watched: venue.bathing === true ? watched : null,
+          lifeguard: venue.bathing === true ? lifeguard : null,
           broken,
         }
       : null,

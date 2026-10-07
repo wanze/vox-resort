@@ -177,6 +177,8 @@ describe('wagesFor', () => {
   });
 });
 
+const allOpen = (): boolean => true;
+
 describe('unwatched', () => {
   const venues = [
     venueAt('swimming-pool#0', { bathing: true }),
@@ -186,12 +188,27 @@ describe('unwatched', () => {
   ];
 
   it('names the water nobody watches, and nothing that is not water', () => {
-    expect(unwatched(venues, (venue) => venue === 0, 1)).toEqual(new Set(['waterpark#0', 'beach']));
-    expect(unwatched(venues, () => true, 1).size).toBe(0);
+    expect(unwatched(venues, (venue) => venue === 0, 1, allOpen)).toEqual(
+      new Set(['waterpark#0', 'beach']),
+    );
+    expect(unwatched(venues, () => true, 1, allOpen).size).toBe(0);
   });
 
   it('leaves the beach out while no tower stands to watch it from', () => {
-    expect(unwatched(venues, () => false, 0)).toEqual(new Set(['swimming-pool#0', 'waterpark#0']));
+    expect(unwatched(venues, () => false, 0, allOpen)).toEqual(
+      new Set(['swimming-pool#0', 'waterpark#0']),
+    );
+  });
+
+  it('leaves out water that is shut, where nobody may swim to be watched', () => {
+    expect(
+      unwatched(
+        venues,
+        () => false,
+        1,
+        (venue) => venue === 2,
+      ),
+    ).toEqual(new Set(['waterpark#0']));
   });
 });
 

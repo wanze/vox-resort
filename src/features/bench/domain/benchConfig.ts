@@ -39,6 +39,8 @@ export interface BenchConfig {
   readonly mosaic?: true;
   // Plays a show of this size over the sea, for its cost alone: no guests watch and nothing sounds.
   readonly fireworks?: TierId;
+  // The authored plot has no shore, so the sea, its boats and the beach crowd are measured here.
+  readonly plot?: 'reference';
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -95,7 +97,17 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     ...(styles ? { styles } : {}),
     ...(params.get('mosaic') === '1' ? { mosaic: true as const } : {}),
     ...fireworksOf(params.get('fireworks')),
+    ...(params.get('plot') === 'reference' ? { plot: 'reference' as const } : {}),
   };
+}
+
+// Each of these remakes the authored plot; the reference resort is measured as it was built.
+export function benchRefusal(config: BenchConfig): string | null {
+  if (config.plot !== 'reference') return null;
+  const remade = config.repeat > 1 || config.styles !== undefined || config.mosaic === true;
+  return remade
+    ? 'Repeat, styles and mosaic remake the authored plot, not the reference resort'
+    : null;
 }
 
 const fireworksOf = (raw: string | null): { readonly fireworks?: TierId } =>

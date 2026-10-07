@@ -101,6 +101,12 @@ paving keeps the capacity with everyone off the plot until paving arrives.
 Bench runs must replay the same scene: seeded PRNG, fixed timestep and real-time
 crowd speed under bench, frame delta clamped to `MAX_STEP` otherwise.
 
+`pnpm sim:report` runs the sim headless for `SIM_DAYS` days on the reference
+resort ([fixtures/README.md](../fixtures/README.md)), which only moves when
+somebody edits it, so its numbers compare across changes. `SIM_PLOT=112x100
+SIM_SEED=1` runs a generated plot instead, and `SIM_SAVE=<save JSON>` a whole
+save.
+
 ## Clock
 
 `sim/domain/simClock.ts`. One tick is a minute, a day 1,440 ticks, at most 12

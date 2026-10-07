@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
+import referenceJson from '../fixtures/reference-resort.json';
 import { GUEST_NEEDS, type GuestNeed } from '../voxel-gen/voxelgen.ts';
 import { ORIGINAL_TYPES, venueOf } from '../src/features/catalog/domain/objectTypes';
 import { seatSiteOf } from '../src/features/catalog/domain/placementFacts';
@@ -12,7 +13,7 @@ import {
   takeOffPlot,
   type Crowd,
 } from '../src/features/crowd/domain/crowd';
-import { crowdSizeFor } from '../src/features/crowd/domain/crowdSize';
+import { crowdSizeFor, crowdSizeForOwned } from '../src/features/crowd/domain/crowdSize';
 import { seatSpotsFor } from '../src/features/crowd/domain/seating';
 import { walkNetworkFor, type WalkNetwork } from '../src/features/crowd/domain/walkNetwork';
 import {
@@ -36,8 +37,9 @@ import {
 import type { ResortPlan } from '../src/features/layout/domain/resortPlan';
 import { shoreFor } from '../src/features/layout/domain/shoreline';
 import { terrainFor } from '../src/features/layout/domain/terrain';
-import { ownedSpan, type TileSpan } from '../src/features/land/domain/landRights';
-import { planOfWorld } from '../src/features/resort-prep/domain/savedWorld';
+import { ownedArea, ownedSpan, type TileSpan } from '../src/features/land/domain/landRights';
+import { referenceWorldOf } from '../src/features/resort-prep/domain/referenceResort';
+import { planOfWorld, type SavedWorld } from '../src/features/resort-prep/domain/savedWorld';
 import {
   arrivalsDueBy,
   CHECK_IN_TICK,
@@ -93,6 +95,9 @@ const OPENS_EMPTY = process.env.SIM_EMPTY === '1';
 const QUIET = process.env.SIM_QUIET === '1';
 // The JSON a save exports to: runs the player's own resort instead of a generated one.
 const SAVE = process.env.SIM_SAVE ?? '';
+// A generated plot moves with every model added to the catalogue; the reference resort only
+// moves when somebody edits it, so a report stays comparable across plans.
+const REFERENCE = !SAVE && process.env.SIM_PLOT === undefined && process.env.SIM_SEED === undefined;
 // Rush caps the crowd's substeps, so guests there walk slower against the clock than at normal.
 const SPEED = (process.env.SIM_SPEED ?? 'normal') as SimSpeed;
 
@@ -144,12 +149,8 @@ function generatedGround(): Ground {
   return { plan, ...layoutResort(ITEMS, plan), levelOf: (x, z) => levelAt(elevation, x, z) };
 }
 
-// The save's own snapshot as exported from IndexedDB, typed arrays written out as plain arrays.
-function savedGround(path: string): Ground {
-  const snapshot = JSON.parse(readFileSync(path, 'utf8'));
-  const world = snapshot.world;
-  const land = world.land && { ...world.land, owned: Uint8Array.from(world.land.owned) };
-  const plan = planOfWorld({ ...world, ...(land ? { land } : {}) });
+function worldGround(world: SavedWorld): Ground {
+  const plan = planOfWorld(world);
   const terrain = terrainFor(plan);
   return {
     plan,
@@ -158,12 +159,35 @@ function savedGround(path: string): Ground {
     paths: world.paths,
     levelOf: (x, z) => terrain.levelOf(x, z),
     span: ownedSpan(plan.land ?? null, plan),
-    population: snapshot.population,
   };
 }
 
+// The save's own snapshot as exported from IndexedDB, typed arrays written out as plain arrays.
+function savedGround(path: string): Ground {
+  const snapshot = JSON.parse(readFileSync(path, 'utf8'));
+  return { ...worldGround(referenceWorldOf(snapshot.world)), population: snapshot.population };
+}
+
+// Started as a fresh game starts a saved world: the guests are the land's, not a snapshot's.
+function referenceGround(): Ground {
+  const ground = worldGround(referenceWorldOf(referenceJson));
+  const land = ground.plan.land;
+  return land ? { ...ground, population: crowdSizeForOwned(ownedArea(land, ground.plan)) } : ground;
+}
+
+function groundOf(): Ground {
+  if (SAVE) return savedGround(SAVE);
+  return REFERENCE ? referenceGround() : generatedGround();
+}
+
+function plotLabel(plan: ResortPlan): string {
+  if (SAVE) return `Saved resort ${SAVE}`;
+  if (REFERENCE) return `Reference resort ${plan.tilesX}x${plan.tilesZ}`;
+  return `Plot ${TILES_X}x${TILES_Z} seed ${SEED}`;
+}
+
 function plotOf() {
-  const ground = SAVE ? savedGround(SAVE) : generatedGround();
+  const ground = groundOf();
   const { plan } = ground;
   const layout = KEEP ? { ...ground, placements: kept(ground.placements), props: [] } : ground;
   const standing = [...layout.placements, ...layout.props];
@@ -418,7 +442,7 @@ it('reports a few days on a generated plot', () => {
   }
 
   console.log(
-    `${SAVE ? `Saved resort ${SAVE}` : `Plot ${TILES_X}x${TILES_Z} seed ${SEED}`} at ${SPEED}: ` +
+    `${plotLabel(layout.plan)} at ${SPEED}: ` +
       `${population} guests, ${bedCount(guests).beds} beds, ` +
       `${venues.length} venues, ${network.beachSeats.length} loungers, ${network.gates.length} gate tiles onto the beach`,
   );

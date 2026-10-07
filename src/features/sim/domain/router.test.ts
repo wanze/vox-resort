@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import referenceJson from '../../../../fixtures/reference-resort.json';
 import type { GuestNeed, Shelter } from '../../../../voxel-gen/voxelgen.ts';
-import { binReachOf, ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
+import { binReachOf } from '../../catalog/domain/objectTypes';
 import { seatSiteOf } from '../../catalog/domain/placementFacts';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import {
@@ -42,10 +43,12 @@ import {
   type Guests,
 } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
+import { ownedSpan } from '../../land/domain/landRights';
+import { terrainFor } from '../../layout/domain/terrain';
+import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
+import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { NO_HOME, type Home } from '../../guests/domain/homes';
-import { elevationFor, levelAt, type LevelProvider } from '../../layout/domain/elevation';
-import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
-import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
+import type { LevelProvider } from '../../layout/domain/elevation';
 import { beachDepthAt, shoreFor, terrainAt } from '../../layout/domain/shoreline';
 import { createNeeds, decayNeeds, restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import { nodeIndexFor } from '../../crowd/domain/nearestNode';
@@ -1844,34 +1847,18 @@ const shareOutOf = (
   return { ranked, busiest, ignored };
 };
 
-describe('on the generated plot', () => {
-  const TYPES = ORIGINAL_TYPES.map((type) => ({
-    id: type.id,
-    tilesX: type.model.tiles.x,
-    tilesZ: type.model.tiles.z,
-    category: type.category,
-    placement: type.model.placement,
-  }));
-  const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
-    id: type.id,
-    tilesX: type.model.tiles.x,
-    tilesZ: type.model.tiles.z,
-    width: type.model.width,
-    depth: type.model.depth,
-    category: type.category,
-    doors: type.venue?.doors ?? [],
-  }));
-  const plan = generateResort(
-    TYPES,
-    clampParams({ tilesX: 112, tilesZ: 100, seed: 3, density: 0.7 }),
-  );
-  const layout = layoutResort(ITEMS, plan);
-  const elevation = elevationFor(plan);
+describe('on the reference resort', () => {
+  const layout = referenceWorldOf(referenceJson);
+  const plan = planOfWorld(layout);
+  const terrain = terrainFor(plan);
+  const levelOf: LevelProvider = (x, z) => terrain.levelOf(x, z);
+  const span = ownedSpan(plan.land ?? null, plan);
   const network = walkNetworkFor({
     paved: layout.paths,
-    levelOf: (x, z) => levelAt(elevation, x, z),
+    levelOf,
     shore: shoreFor(plan),
     tilesX: plan.tilesX,
+    span,
   });
   const venues = venuesOn(layout.placements);
 
@@ -1995,7 +1982,7 @@ describe('on the generated plot', () => {
     });
 
     const food = standing.filter((venue) => venue.satisfies.some((relief) => relief.need === need));
-    expect(food.length, `a generated plot with nothing for ${need} on it`).toBeGreaterThan(0);
+    expect(food.length, `a plot with nothing for ${need} on it`).toBeGreaterThan(0);
     const served = new Set<string>();
 
     let queued = 0;
@@ -2038,9 +2025,10 @@ describe('on the generated plot', () => {
 
   const furnished = walkNetworkFor({
     paved: layout.paths,
-    levelOf: (x, z) => levelAt(elevation, x, z),
+    levelOf,
     shore: shoreFor(plan),
     tilesX: plan.tilesX,
+    span,
     obstacles: layout.placements,
   });
   const furnishedIndex = nodeIndexFor(furnished);
@@ -2093,17 +2081,6 @@ describe('on the generated plot', () => {
     expect(off).toBeNull();
   });
 
-  it('paves nothing new for the doors the beach buildings declare', () => {
-    let hash = 2166136261;
-    const key = layout.paths
-      .map((tile) => `${tile.tileX},${tile.tileZ},${tile.y},${tile.id}`)
-      .join(';');
-    for (let at = 0; at < key.length; at++)
-      hash = Math.imul(hash ^ key.charCodeAt(at), 16777619) >>> 0;
-    expect(layout.paths).toHaveLength(2397);
-    expect(hash).toBe(3452511199);
-  });
-
   it('sends grubby guests over the sand to wash on the beach', () => {
     const run = starving((venue) => venue.capacity, 'hygiene', furnished, {
       framesPerTick: NORMAL_FRAMES_PER_TICK,
@@ -2122,9 +2099,10 @@ describe('on the generated plot', () => {
   it('settles bored guests on the beach in parties, and nobody roams it', () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -2407,7 +2385,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const gateways = gatewaysOn(layout.placements);
-    expect(gateways.length, 'the generator stands no gate at all').toBeGreaterThan(0);
+    expect(gateways.length, 'the plot has no gate at all').toBeGreaterThan(0);
 
     let crowd: Crowd | null = null;
     const arrivals = createRandom(41);
@@ -2512,9 +2490,10 @@ describe('on the generated plot', () => {
   it("checks a whole opening day's arrivals in at the desks by evening", () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -2530,7 +2509,7 @@ describe('on the generated plot', () => {
     const needs = createNeeds(people, 13);
     const happiness = createHappiness(people.count);
     const desks = venues.filter((venue) => venue.receives);
-    expect(desks.map((venue) => venue.capacity)).toEqual([12, 12, 12]);
+    expect(desks.map((venue) => venue.capacity)).toEqual([12]);
     let tick = 10 * 60;
 
     let crowd: Crowd | null = null;
@@ -2611,9 +2590,10 @@ describe('on the generated plot', () => {
   const aDayOnThePlot = () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -2734,9 +2714,10 @@ describe('on the generated plot', () => {
   const livePlot = (events: EventParts = {}) => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -2934,9 +2915,10 @@ describe('on the generated plot', () => {
   it('litters the plot over a day where no bin is in reach, but not into a landfill', () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -3016,7 +2998,7 @@ describe('on the generated plot', () => {
     const { fouled } = litterSummary(litter);
     const report = `${bins.length} bins; ${dropped} pieces dropped, ${binned} binned, ${fouled} tiles fouled`;
     console.log(report);
-    expect(bins.length, 'the generator stood no litter bin').toBeGreaterThan(0);
+    expect(bins.length, 'the plot has no litter bin').toBeGreaterThan(0);
     expect(dropped, report).toBeGreaterThan(0);
     expect(binned, report).toBeGreaterThan(0);
     expect(fouled, report).toBeGreaterThanOrEqual(5);
@@ -3056,13 +3038,14 @@ describe('on the generated plot', () => {
 
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
-    // The gym drains energy, so it is the venue at the edge: one of three goes unvisited with the tents.
-    const quiet = [...new Set(share.ignored.map((key) => key.split('#')[0]!))];
-    expect(quiet).toEqual([]);
+    // The gym drains energy, so it is the venue at the edge: both go unvisited on the reference
+    // resort. A saved key is `id@x,z`, a generated one `id#n`.
+    const quiet = [...new Set(share.ignored.map((key) => key.split(/[#@]/)[0]!))];
+    expect(quiet).toEqual(['gym-pavilion-b', 'gym-pavilion']);
 
-    // The beach sat right at 0.6 for energy, and resizing the staff pool reseeds the cleaners'
-    // walk enough to tip it to 0.62; the bound guards against one venue taking a need over.
-    const BUSIEST_SHARE = 0.65;
+    // The beach takes 0.65 of the visits for energy on the reference resort; the bound guards
+    // against one venue taking a need over.
+    const BUSIEST_SHARE = 0.68;
     for (const [need, most] of share.busiest) {
       expect(
         most.share,
@@ -3076,9 +3059,10 @@ describe('on the generated plot', () => {
   it('breaks things and hurts people over three days, and the staff keep up', () => {
     const seated = walkNetworkFor({
       paved: layout.paths,
-      levelOf: (x, z) => levelAt(elevation, x, z),
+      levelOf,
       shore: shoreFor(plan),
       tilesX: plan.tilesX,
+      span,
       obstacles: layout.placements,
       seats: seatSpotsFor(layout.placements.map(seatSiteOf)),
     });
@@ -3230,8 +3214,8 @@ describe('on the generated plot', () => {
     console.log(report);
 
     // One day may pass quietly: wear builds with visits, and which day that is moves with the plot.
-    // Up to nine: a plot with two busy game halls breaks that often, and two mechanics still clear it.
-    for (const count of brokeOn) expect(count, report).toBeLessThanOrEqual(9);
+    // Up to seven: the reference resort's worst day breaks five, and its one mechanic clears it.
+    for (const count of brokeOn) expect(count, report).toBeLessThanOrEqual(7);
     expect(brokeOn.filter((count) => count > 0).length, report).toBeGreaterThanOrEqual(
       brokeOn.length - 1,
     );

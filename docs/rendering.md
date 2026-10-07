@@ -219,19 +219,35 @@ pnpm bench -- --no-lod             # disable level of detail
 pnpm bench -- --weather storm      # pin the weather
 pnpm bench -- --styles mixed       # model variants
 pnpm bench -- --mosaic             # mosaic paving everywhere
+pnpm bench -- --plot reference     # the reference resort, with its shore
 pnpm bench -- --no-vsync           # uncapped frame rate
 pnpm bench -- --webgl              # WebGL2 fallback
 pnpm bench -- --shots ./shots      # screenshot per case
 ```
 
 The options also work as URL parameters; `?people=n` sets the crowd size.
+The authored plot has no shore; `--plot reference` runs the reference resort
+([fixtures/README.md](../fixtures/README.md)) instead, with the sea, its boats
+and the beach crowd. `--repeat`, `--styles` and `--mosaic` remake the authored
+plot and are refused with it.
 
 Last measured on an M2 Pro at 2880 × 1626, `day-overview`, `--no-vsync`:
 
 | Weather | Draw calls | Triangles | CPU median | GPU median |
 | ------- | ---------- | --------- | ---------- | ---------- |
-| clear   | 282        | 1.16 M    | 1.70 ms    | 4.78 ms    |
-| storm   | 283        | 1.22 M    | 2.60 ms    | 5.24 ms    |
+| clear   | 310        | 1.22 M    | 1.60 ms    | 3.54 ms    |
+| storm   | 311        | 1.27 M    | 1.80 ms    | 3.60 ms    |
+
+`--plot reference`, same machine and resolution, `--no-vsync`, two runs. The
+sea's boats, swimmers, buoy lamps and the beach crowd are in it; it has 237
+lamps to the authored plot's 628:
+
+| Case           | Draw calls | Triangles | CPU median   | GPU median   |
+| -------------- | ---------- | --------- | ------------ | ------------ |
+| day-overview   | 346        | 767 k     | 1.60 ms      | 3.60–3.67 ms |
+| day-street     | 397        | 674 k     | 1.70 ms      | 1.97 ms      |
+| night-overview | 346        | 767 k     | 1.50 ms      | 3.67–3.93 ms |
+| night-street   | 397        | 674 k     | 1.60–1.70 ms | 1.97 ms      |
 
 Variants (`--styles mixed`) cost about +46% draw calls and nearly double
 startup; wall-to-wall mosaic about +27% draw calls and +0.2 ms CPU. Meshing
@@ -246,6 +262,9 @@ variants on first placement is the lever if startup matters.
 3. Check it with `pnpm preview <id>` and `pnpm preview --audit`.
 4. Run `pnpm test` (`dveEngine.test.ts` meshes the whole catalogue), and
    `pnpm bench` if it's placed a lot.
+5. Put it on the reference resort and re-export it, or add it to
+   `NOT_IN_REFERENCE` in `referenceResort.test.ts`
+   ([fixtures/README.md](../fixtures/README.md)).
 
 Nothing in `src/` needs to change. Styles of an existing model go in
 `voxel-gen/variants/`.

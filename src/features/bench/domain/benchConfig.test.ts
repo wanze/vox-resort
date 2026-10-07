@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WorldBounds } from '../../layout/domain/worldBounds';
-import { benchFraming, DEFAULT_BENCH, parseBenchConfig } from './benchConfig';
+import { benchFraming, benchRefusal, DEFAULT_BENCH, parseBenchConfig } from './benchConfig';
+
+const refused = (search: string) => benchRefusal(parseBenchConfig(search)!);
 
 const BOUNDS: WorldBounds = { minX: 0, minZ: 0, maxX: 960, maxZ: 832, height: 40 };
 
@@ -54,6 +56,23 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1')?.mosaic).toBeUndefined();
     expect(parseBenchConfig('?bench=1&mosaic=1')?.mosaic).toBe(true);
     expect(parseBenchConfig('?bench=1&mosaic=0')?.mosaic).toBeUndefined();
+  });
+
+  it('can run the reference resort, so a run can price the sea and the beach', () => {
+    expect(parseBenchConfig('?bench=1&plot=reference')?.plot).toBe('reference');
+  });
+
+  it('keeps the authored plot unless the reference resort is asked for', () => {
+    expect(parseBenchConfig('?bench=1')).not.toHaveProperty('plot');
+    expect(parseBenchConfig('?bench=1&plot=island')).not.toHaveProperty('plot');
+  });
+
+  it('refuses to tile, style or pave the reference resort, which runs as it was built', () => {
+    expect(refused('?bench=1&plot=reference')).toBeNull();
+    expect(refused('?bench=1&plot=reference&repeat=2')).not.toBeNull();
+    expect(refused('?bench=1&plot=reference&styles=mixed')).not.toBeNull();
+    expect(refused('?bench=1&plot=reference&mosaic=1')).not.toBeNull();
+    expect(refused('?bench=1&repeat=2&styles=mixed&mosaic=1')).toBeNull();
   });
 
   it('can pin the weather, so a run can price the rain', () => {

@@ -11,6 +11,7 @@
     "bench": "node scripts/bench.ts",
     "sounds:fetch": "node scripts/fetch-sounds.ts",
     "sim:report": "vitest run --config scripts/simReport.config.ts",
+    "fixture:refresh": "node scripts/reference-resort.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint && node scripts/check-comments.ts && node scripts/check-sounds.ts",
     "lint:fix": "oxlint --fix",

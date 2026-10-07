@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ORIGINAL_TYPES, sceneryOf } from '../../catalog/domain/objectTypes';
-import { clampParams, generateResort } from '../../layout/domain/resortGenerator';
-import { layoutResort, type LayoutItem } from '../../layout/domain/resortLayout';
+import referenceJson from '../../../../fixtures/reference-resort.json';
+import { sceneryOf } from '../../catalog/domain/objectTypes';
+import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import {
   SATURATION,
   SCENERY_REACH,
@@ -80,33 +80,13 @@ describe('sceneryOver', () => {
   });
 });
 
-describe('on the generated plot', () => {
-  const TYPES = ORIGINAL_TYPES.map((type) => ({
-    id: type.id,
-    tilesX: type.model.tiles.x,
-    tilesZ: type.model.tiles.z,
-    category: type.category,
-    placement: type.model.placement,
-  }));
-  const ITEMS: LayoutItem[] = ORIGINAL_TYPES.map((type) => ({
-    id: type.id,
-    tilesX: type.model.tiles.x,
-    tilesZ: type.model.tiles.z,
-    width: type.model.width,
-    depth: type.model.depth,
-    category: type.category,
-    doors: type.venue?.doors ?? [],
-  }));
-  const plan = generateResort(
-    TYPES,
-    clampParams({ tilesX: 112, tilesZ: 100, seed: 3, density: 0.7 }),
-  );
-  const layout = layoutResort(ITEMS, plan);
+describe('on the reference resort', () => {
+  const world = referenceWorldOf(referenceJson);
 
   it('is pleasant in places, and plain enough elsewhere to leave the player something to do', () => {
-    const items = sceneryItemsOf([...layout.placements, ...layout.props], sceneryOf);
-    const field = sceneryFieldFor(items, plan.tilesX, plan.tilesZ);
-    const paved = layout.paths.map((tile) => sceneryAt(field, tile.tileX, tile.tileZ));
+    const items = sceneryItemsOf([...world.placements, ...world.props], sceneryOf);
+    const field = sceneryFieldFor(items, world.tilesX, world.tilesZ);
+    const paved = world.paths.map((tile) => sceneryAt(field, tile.tileX, tile.tileZ));
     const mean = paved.reduce((sum, value) => sum + value, 0) / paved.length;
     const plain = paved.filter((value) => value < 0.1).length / paved.length;
     const measured = `mean ${mean.toFixed(3)}, plain ${(plain * 100).toFixed(1)}% of ${paved.length}`;

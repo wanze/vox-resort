@@ -64,6 +64,7 @@ pnpm dev        # http://localhost:5173
 | `pnpm fallow` / `pnpm fallow:audit` | dead code, duplication, boundaries            |
 | `pnpm bench`                        | measure the renderer (needs `pnpm dev`)       |
 | `pnpm sim:report`                   | run the simulation headless for days          |
+| `pnpm fixture:refresh`              | rewrite the reference resort from its save    |
 | `pnpm sounds:fetch`                 | download and encode sounds (ffmpeg and unzip) |
 
 ## Structure

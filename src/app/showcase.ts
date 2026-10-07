@@ -77,6 +77,7 @@ import {
   type PreparedResort,
   type ResortSource,
 } from '../features/resort-prep/domain/prepareResort';
+import { referenceWorldOf } from '../features/resort-prep/domain/referenceResort';
 import { savedWorldOf } from '../features/resort-prep/domain/savedWorld';
 import { createOwnershipMask } from '../features/land/adapters/ownershipMask';
 import {
@@ -659,7 +660,11 @@ import {
   type SoundSources,
 } from '../features/sound/domain/sources';
 import { Vector3 } from 'three/webgpu';
-import { parseBenchConfig, type BenchConfig } from '../features/bench/domain/benchConfig';
+import {
+  benchRefusal,
+  parseBenchConfig,
+  type BenchConfig,
+} from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
 
 // Precomputed: read once per object placed, and a drag places one per pointer move.
@@ -4321,9 +4326,26 @@ function refusalFor(refusal: Refusal, ledger: Ledger): BuildNote {
   }
 }
 
-// A benchmark gets the authored plan: runs only compare if the scene is the same.
-function startingSource(bench: BenchConfig | null, params: ResortParams): ResortSource {
-  return bench ? { kind: 'authored' } : { kind: 'generate', params };
+// Served by `pnpm dev` from the repository root, which is the only server a benchmark runs against.
+const REFERENCE_RESORT = '/fixtures/reference-resort.json';
+
+// A benchmark gets a fixed plot, authored or the reference resort: runs only compare if the scene
+// is the same.
+async function startingSource(
+  bench: BenchConfig | null,
+  params: ResortParams,
+): Promise<ResortSource> {
+  if (!bench) return { kind: 'generate', params };
+  return bench.plot === 'reference' ? referenceSource(bench) : { kind: 'authored' };
+}
+
+// Thrown, so the bench's error reaches `.hud-error` and scripts/bench.ts stops on it.
+async function referenceSource(bench: BenchConfig): Promise<ResortSource> {
+  const refusal = benchRefusal(bench);
+  if (refusal) throw new Error(refusal);
+  const response = await fetch(REFERENCE_RESORT);
+  if (!response.ok) throw new Error(`No reference resort at ${REFERENCE_RESORT}`);
+  return { kind: 'saved', world: referenceWorldOf(await response.json()) };
 }
 
 function prepRequestFor(source: ResortSource, bench: BenchConfig | null): PrepRequest {
@@ -4831,8 +4853,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let name = resortNameFor(params.seed);
   const [catalogue, first] = await Promise.all([
     meshModels(scratch, bench).then(loaded('models', options.onLoading)),
-    preparer
-      .prepare(prepRequestFor(startingSource(bench, params), bench))
+    startingSource(bench, params)
+      .then((source) => preparer.prepare(prepRequestFor(source, bench)))
       .then(loaded('resort', options.onLoading)),
   ]);
 

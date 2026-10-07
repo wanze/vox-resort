@@ -14,7 +14,8 @@ export interface PrepMessage {
 
 export type PrepAnswer =
   | { readonly id: number; readonly prepared: PreparedResort }
-  | { readonly id: number; readonly error: string };
+  | { readonly id: number; readonly error: string }
+  | { readonly ready: true };
 
 self.addEventListener('message', (event: MessageEvent<PrepMessage>) => {
   const { id, request } = event.data;
@@ -30,3 +31,8 @@ self.addEventListener('message', (event: MessageEvent<PrepMessage>) => {
     self.postMessage(answer);
   }
 });
+
+// Sent once the imports above have built the catalogue: an error before it is a worker that could
+// not start, one after it a job that crashed.
+const ready: PrepAnswer = { ready: true };
+self.postMessage(ready);

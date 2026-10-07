@@ -138,7 +138,7 @@ export function place(
   };
 }
 
-function placeOnEdge(
+export function placeOnEdge(
   item: LayoutItem,
   key: string,
   tileX: number,

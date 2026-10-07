@@ -31,8 +31,13 @@ export function createResortPreparer(
 
   function start(): Worker {
     const started = new Worker(new URL('./prepWorker.ts', import.meta.url), { type: 'module' });
+    let ready = false;
     started.addEventListener('message', (event: MessageEvent<PrepAnswer>) => {
       const answer = event.data;
+      if ('ready' in answer) {
+        ready = true;
+        return;
+      }
       const waiting = pending.get(answer.id);
       if (!waiting) return;
       pending.delete(answer.id);
@@ -40,10 +45,15 @@ export function createResortPreparer(
       else waiting.resolve(answer.prepared);
     });
     started.addEventListener('error', (event) => {
-      unavailable = true;
       started.terminate();
       worker = null;
-      failAll(new WorkerUnavailable(event.message || 'The resort worker failed'));
+      const message = event.message || 'The resort worker failed';
+      if (ready) {
+        failAll(new Error(message));
+        return;
+      }
+      unavailable = true;
+      failAll(new WorkerUnavailable(message));
     });
     return started;
   }

@@ -1,6 +1,7 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { levelHeight, type LevelProvider } from '../../layout/domain/elevation';
 import type { Tile } from '../../layout/domain/resortLayout';
+import { MAX_TERRAIN_LEVEL } from '../../layout/domain/terrain';
 
 export interface Viewport {
   readonly width: number;
@@ -83,7 +84,8 @@ export function pickTile(
   tileVoxels: number = TILE_VOXELS,
   ground: PickGround | null = null,
 ): Tile | null {
-  for (let level = ground?.maxLevel ?? 0; level >= 0; level--) {
+  // Capped even past the schema: this runs on the main thread on every pointer move.
+  for (let level = Math.min(ground?.maxLevel ?? 0, MAX_TERRAIN_LEVEL); level >= 0; level--) {
     const point = groundPointAt(pointer, viewport, inverseViewProjection, levelHeight(level));
     if (!point) continue;
     const tile = tileOf(point, tileVoxels);

@@ -6,11 +6,15 @@ import type { Placement } from '../../layout/domain/resortLayout';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
 import { ROTATIONS } from '../../layout/domain/rotation';
 import type { ShoreSpec } from '../../layout/domain/shoreline';
-import type { Terrain, TerrainEdit } from '../../layout/domain/terrain';
+import { MAX_TERRAIN_LEVEL, type Terrain, type TerrainEdit } from '../../layout/domain/terrain';
 
 const KNOWN_IDS: ReadonlySet<string> = new Set(OBJECT_TYPES.map((type) => type.id));
 
 const tile = z.number().int();
+const level = z.number().int().min(0).max(MAX_TERRAIN_LEVEL);
+
+// A terrace steps one level from the one before: this is up to the ceiling and back down.
+const MOST_TERRACES = 2 * MAX_TERRAIN_LEVEL;
 
 // Every field, not the id and tile: a key cannot always be derived, and a rail sits off its tile.
 const placementSchema = z.object({
@@ -39,13 +43,14 @@ const elevationSchema = z.object({
   terraces: z
     .array(
       z.object({
-        level: z.number(),
+        level,
         inset: z.number(),
         anchor: z.enum(['water', 'plot']).exactOptional(),
         wave: z.number(),
         surface: z.enum(['grass', 'sand']).exactOptional(),
       }),
     )
+    .max(MOST_TERRACES)
     .readonly(),
   seed: z.number(),
 }) satisfies z.ZodType<ElevationSpec>;
@@ -59,7 +64,7 @@ const landSchema = z.object({
 const terrainEditSchema = z.object({
   tileX: tile,
   tileZ: tile,
-  level: z.number(),
+  level,
   surface: z.enum(['grass', 'sand', 'water']),
 }) satisfies z.ZodType<TerrainEdit>;
 

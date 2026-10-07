@@ -55,10 +55,18 @@ export const DEFAULT_BENCH: BenchConfig = {
   weather: null,
 };
 
-const integerParam = (raw: string | null, fallback: number, min: number): number => {
+// The plot is built `repeat` squared times, and `?bench=` is read in production too.
+const MAX_BENCH_REPEAT = 10;
+
+const integerParam = (
+  raw: string | null,
+  fallback: number,
+  min: number,
+  max = Number.POSITIVE_INFINITY,
+): number => {
   if (raw === null) return fallback;
   const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value >= min ? value : fallback;
+  return Number.isFinite(value) && value >= min && value <= max ? value : fallback;
 };
 
 export function parseBenchConfig(search: string): BenchConfig | null {
@@ -89,7 +97,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     time,
     warmupFrames: integerParam(params.get('warmup'), DEFAULT_BENCH.warmupFrames, 0),
     measureFrames: integerParam(params.get('frames'), DEFAULT_BENCH.measureFrames, 1),
-    repeat: integerParam(params.get('repeat'), DEFAULT_BENCH.repeat, 1),
+    repeat: integerParam(params.get('repeat'), DEFAULT_BENCH.repeat, 1, MAX_BENCH_REPEAT),
     forceWebGL: params.get('webgl') === '1',
     forceMainThreadMeshing: params.get('worker') === '0',
     detail: params.get('lod') !== '0',

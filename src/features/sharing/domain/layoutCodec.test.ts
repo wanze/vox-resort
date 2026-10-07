@@ -111,7 +111,7 @@ describe('packShared and unpackShared', () => {
       ...GROWN.world,
       terrain: [
         ...GROWN.world.terrain,
-        { tileX: -256, tileZ: -3, level: -2, surface: 'water' as const },
+        { tileX: -256, tileZ: -3, level: 2, surface: 'water' as const },
         { tileX: 300, tileZ: 2, level: 3, surface: 'sand' as const },
       ],
       placements: [{ ...first!, key: 'hand-laid gate' }, ...rest],
@@ -182,6 +182,23 @@ describe('unpackShared refuses', () => {
     const off = { ...first!, tileX: GROWN.world.tilesX };
     const world = { ...GROWN.world, placements: [off, ...rest] };
     expect(refusal(packShared({ ...GROWN, world }))).toBe('misfit');
+  });
+
+  it('terrain higher than any ground the game makes', () => {
+    const terrain = [{ tileX: 3, tileZ: 3, level: 2 ** 40, surface: 'grass' as const }];
+    expect(refusal(packShared({ ...GROWN, world: { ...GROWN.world, terrain } }))).toBe('invalid');
+  });
+
+  it('a placement far from where its model stands', () => {
+    const [first, ...rest] = GROWN.world.placements;
+    const moved = { ...first!, x: first!.x + 2 ** 40 };
+    const world = { ...GROWN.world, placements: [moved, ...rest] };
+    expect(refusal(packShared({ ...GROWN, world }))).toBe('misfit');
+  });
+
+  it('a rail laid twice', () => {
+    const rails = [GROWN.world.rails[0]!, ...GROWN.world.rails];
+    expect(refusal(packShared({ ...GROWN, world: { ...GROWN.world, rails } }))).toBe('misfit');
   });
 });
 

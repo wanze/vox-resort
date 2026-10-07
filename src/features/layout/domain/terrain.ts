@@ -9,8 +9,8 @@ import { shoreFor, waterStartZ } from './shoreline';
 
 export type { Ground };
 
-// Above the tallest ground bare land is given (a dune of three, a hill of ten above it): a ceiling
-// on the tool, not the terrain.
+// Above the tallest ground bare land is given (a dune of four, a hill of ten above it). The brush
+// stops here, and a save or a link that goes higher is refused.
 export const MAX_TERRAIN_LEVEL = 16;
 
 // One plot's width all round: an island at the far edge reads as out in the bay, and the renderer's

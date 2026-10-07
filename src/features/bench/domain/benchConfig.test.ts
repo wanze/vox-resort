@@ -107,6 +107,12 @@ describe('parseBenchConfig', () => {
     const config = parseBenchConfig('?bench=1&view=orbit&time=x&warmup=-5&frames=0&repeat=0');
     expect(config).toEqual(DEFAULT_BENCH);
   });
+
+  it('falls back on a repeat too large to build', () => {
+    expect(parseBenchConfig('?bench=1&repeat=10')?.repeat).toBe(10);
+    expect(parseBenchConfig('?bench=1&repeat=11')?.repeat).toBe(DEFAULT_BENCH.repeat);
+    expect(parseBenchConfig('?bench=1&repeat=1000000')?.repeat).toBe(DEFAULT_BENCH.repeat);
+  });
 });
 
 describe('benchFraming', () => {

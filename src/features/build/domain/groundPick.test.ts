@@ -7,6 +7,7 @@ import {
   WebGPUCoordinateSystem,
   type CoordinateSystem,
 } from 'three/webgpu';
+import { MAX_TERRAIN_LEVEL } from '../../layout/domain/terrain';
 import type { CompassDirection } from '../../layout/domain/worldBounds';
 import { isometricFramingFor } from '../../layout/domain/worldBounds';
 import type { GroundPoint, PointerPosition } from './groundPick';
@@ -283,6 +284,19 @@ describe('pickTile over terraced ground', () => {
     const everywhere: PickGround = { levelOf: () => 2, maxLevel: 2 };
     const tile = pickTile({ x: 400, y: 200 }, VIEWPORT, topDown(400, 64), 16, everywhere);
     expect(tile).not.toBeNull();
+  });
+
+  it('tries no more levels than terrain can reach, however tall the ground claims to be', () => {
+    let asked = 0;
+    const towering: PickGround = {
+      levelOf: () => {
+        asked++;
+        return 0;
+      },
+      maxLevel: 2 ** 60,
+    };
+    expect(pickTile({ x: 400, y: 200 }, VIEWPORT, topDown(400, 64), 16, towering)).not.toBeNull();
+    expect(asked).toBeLessThanOrEqual(MAX_TERRAIN_LEVEL + 1);
   });
 });
 

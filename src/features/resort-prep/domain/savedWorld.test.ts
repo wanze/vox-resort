@@ -9,7 +9,7 @@ import { seatSpotsFor } from '../../crowd/domain/seating';
 import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import type { ResortPlan } from '../../layout/domain/resortPlan';
 import { shoreFor } from '../../layout/domain/shoreline';
-import { terrainFor, type Terrain } from '../../layout/domain/terrain';
+import { MAX_TERRAIN_LEVEL, terrainFor, type Terrain } from '../../layout/domain/terrain';
 import { claimingOn, prepareResort, type Plot } from './prepareResort';
 import { planOfWorld, savedWorldOf, savedWorldSchema } from './savedWorld';
 
@@ -109,6 +109,32 @@ describe('a saved world', () => {
       savedWorldSchema.safeParse({ ...world, paths: [{ ...world.paths[0]!, rotation: 5 }] })
         .success,
     ).toBe(false);
+  });
+
+  it('refuses terrain no brush or generator could raise', () => {
+    const { prepared, terrain } = played();
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
+    const editedTo = (level: number) => ({
+      ...world,
+      terrain: [{ tileX: 1, tileZ: 1, level, surface: 'grass' as const }],
+    });
+    expect(savedWorldSchema.safeParse(editedTo(MAX_TERRAIN_LEVEL)).success).toBe(true);
+    for (const level of [-1, MAX_TERRAIN_LEVEL + 1, 1.5, 2 ** 53]) {
+      expect(savedWorldSchema.safeParse(editedTo(level)).success).toBe(false);
+    }
+  });
+
+  it('refuses more terraces than climb to the ceiling and back, or one above it', () => {
+    const { prepared, terrain } = played();
+    const world = savedWorldOf(prepared.plan, terrain, prepared.plot, null);
+    const terraced = (levels: readonly number[]) => ({
+      ...world,
+      elevation: { terraces: levels.map((level) => ({ level, inset: 2, wave: 0 })), seed: 1 },
+    });
+    expect(savedWorldSchema.safeParse(terraced([1, 2, 1])).success).toBe(true);
+    const many = Array.from({ length: MAX_TERRAIN_LEVEL * 2 + 1 }, () => 1);
+    expect(savedWorldSchema.safeParse(terraced(many)).success).toBe(false);
+    expect(savedWorldSchema.safeParse(terraced([MAX_TERRAIN_LEVEL + 1])).success).toBe(false);
   });
 
   it('keeps the land it owned, and a save without land owns its whole plot', () => {

@@ -260,8 +260,11 @@ export const RESORT_PLAN: ResortPlan = {
     ...row('sun-lounger', 30, 18, 4, 1),
     ...row('sun-lounger', 34, 18, 2, 2),
     at('willow', 39, 17),
+    // This plan has no sand, so the sail shades the grass beside the pool's loungers.
+    at('shade-sail', 37, 18),
     at('beach-club', 30, 20),
     at('resort-bar', 37, 20),
+    at('misting-pavilion', 37, 25),
     ...row('cottage', 30, 28, 4, 3),
 
     at('minigolf', 44, 11),

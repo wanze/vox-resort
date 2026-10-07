@@ -41,6 +41,7 @@ export const LAYERS = [
   ...VENUE_SLOTS,
   'fountain',
   'torch',
+  'sail',
 ] as const satisfies readonly SlotName[];
 
 export type Layer = (typeof LAYERS)[number];
@@ -130,6 +131,8 @@ function hearNature(scene: HeardScene, into: Float32Array, surf: number): void {
   into[layerAt('swimmers')] = Math.min(1, scene.swimmers / 10);
   into[layerAt('fountain')] = Math.min(1, scene.near[kindAt('fountain')]!);
   into[layerAt('torch')] = Math.min(1, scene.near[kindAt('torch')]!) * scene.night;
+  // By day only, so a beach of sails does not flap all night.
+  into[layerAt('sail')] = Math.min(1, scene.near[kindAt('sail')]!) * day;
 }
 
 const VENUE_LAYERS = VENUE_SLOTS.map((venue) => ({ layer: layerAt(venue), kind: kindAt(venue) }));

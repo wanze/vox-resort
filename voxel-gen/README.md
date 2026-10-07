@@ -77,7 +77,10 @@ the parts and the references.
 (`MODEL_CATEGORIES` in `voxelgen.ts`) and decides which shelf of the build
 palette the model appears on. `placement` keeps a model on the `beach` or
 `shore` and caps how many a generated resort gets (`perResort`). `gateway: true`
-marks an entrance where guests arrive and leave.
+marks an entrance where guests arrive and leave. `shade: true` shades the sand
+under the model: it is no obstacle there, nobody resting under it burns, and in
+a heatwave parties look for it, so stand its posts in the corners, clear of the
+towels.
 `nameplate` marks a blank board (`x0`-`x1`, `y0`-`y1`, each face's `surface`
 layer and `outward` side, and an `ink` colour) where the app letters the resort's
 name; paint the board blank and leave the layer in front of it empty.
@@ -206,6 +209,7 @@ venue: {
 | `floor`        | seated visitors dance on it in a show, still standing ones cheer where they stand |
 | `hours`        | `{ opens, closes }` in minutes of the day, past midnight if closes < opens        |
 | `dj`           | music plays whenever it is open, so it dances and cheers without an animator      |
+| `cools`        | its appeal is multiplied by the day's `cooling`, 1.6 in a heatwave                |
 
 A hut that puts craft on the sea declares `hire` beside its venue, its fleets in
 the order it lets them out; the app finds every rental and builds its fleets from
@@ -238,7 +242,7 @@ sound: 'cafe',
 ```
 
 Venues are heard when the camera is zoomed in close to them and they're open in
-the weather. `fountain` and `torch` (at night) are heard near them, and `trees`
+the weather. `fountain`, `torch` (at night) and `sail` (by day) are heard near them, and `trees`
 plays no sound itself: enough trees near the camera bring in birds by day,
 crickets at night and cicadas in a heatwave. A variant sounds like its original
 and declares nothing. A new `SoundKind` needs a slot in `SLOT_NAMES`

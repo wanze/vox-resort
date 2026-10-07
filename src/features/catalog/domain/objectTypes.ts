@@ -205,6 +205,12 @@ const SCENERY: ReadonlyMap<string, number> = new Map(
 // A map, not a search: paving joins the scenery field, so this is asked once a path tile a rebuild.
 export const sceneryOf = (id: string): number => SCENERY.get(id) ?? 0;
 
+const SHADES: ReadonlySet<string> = new Set(
+  OBJECT_TYPES.filter((type) => type.model.shade).map((type) => type.id),
+);
+
+export const shadeOf = (id: string): boolean => SHADES.has(id);
+
 const MOSAICS: ReadonlyMap<string, ModelMosaic | null> = new Map(
   OBJECT_TYPES.map((type) => [type.id, type.model.mosaic]),
 );

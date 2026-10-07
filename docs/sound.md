@@ -65,6 +65,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
 - **Weather**: rain and wind rise with rain and storm; music ducks in a storm.
 - **Sea**: surf by closeness to the shore, gulls by day in the dry.
 - **Nature**: birds by day, crickets at night, cicadas in a heatwave.
+- **Fixtures**: a fountain near the camera, a tiki torch at night, and a shade
+  sail's canvas and rope by day only, so a beach of sails is quiet at night.
 - **Guests**: crowd murmur, children and swimmers by count in reach.
 - **Venues**: only when zoomed in, scaled by how open they are and by the share
   of guests awake. Only the three loudest kinds play. A fire pit counts as open
@@ -72,7 +74,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
   only within them, and at full strength however many have gone to bed. The
   water sports hut's engines are heard at the hut; the craft out on the water
   are silent. The massage tent plays singing bowls of its own, not the spa's
-  chimes, and is covered, so it carries on in the rain.
+  chimes, and is covered, so it carries on in the rain. The misting pavilion
+  hisses with spray over a trickle (`mist`), covered too.
 - **Music**: ducks in a storm and for fireworks, and gives way to a club's own
   music as it is heard (`VENUE_MUSIC`), down to 30%.
 

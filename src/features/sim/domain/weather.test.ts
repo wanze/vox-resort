@@ -59,6 +59,15 @@ describe('weatherEffect', () => {
     }
   });
 
+  it('keeps cooling inside the same bounds, and worth nothing extra but in a heatwave', () => {
+    for (const kind of WEATHERS) {
+      const { cooling } = weatherEffect(kind);
+      expect(cooling, kind).toBeGreaterThanOrEqual(MAX_EFFECT.min);
+      expect(cooling, kind).toBeLessThanOrEqual(MAX_EFFECT.max);
+      expect(cooling > 1, kind).toBe(kind === 'heatwave');
+    }
+  });
+
   it('shuts what has no roof in the rain, and nothing on a dry day', () => {
     expect(weatherEffect('rain').closes).toBe('open');
     expect(weatherEffect('storm').closes).toBe('open');

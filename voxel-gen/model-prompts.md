@@ -42,11 +42,13 @@ balloons and the bay's craft — so there is nothing for it to fill.
 | volleyball     | 6×4       | 96 × 12 × 64   | 16 x 8 m court + 4 m run-off       |
 | fire-pit       | 2×2       | 32 × 6 × 32    | 8 x 8 m ring of logs round a pit   |
 | massage-tent   | 2×2       | 32 × 25 × 32   | 7 x 6 m tent, two tables, a bench  |
+| shade-sail     | 2×2       | 32 × 20 × 32   | 7 m canvas on posts, 3.5-4.5 m up  |
 | restrooms      | 2×1       | 32 × 17 × 16   | two-WC block, 8 x 4 m              |
 | changing-cab.  | 2×1       | 32 × 16 × 16   | three 2 m huts on an 8 x 4 m walk  |
 | snack-bar      | 2×1       | 32 × 19 × 16   | kiosk + serving counter, 8 x 4 m   |
 | entrance       | 4×1       | 64 × 41 × 16   | a 16 m gate, 10 m to the lanterns  |
 | fountain       | 2×2       | 32 × 15 × 32   | an 8 m plaza fountain, three tiers |
+| misting-pav.   | 2×2       | 32 × 18 × 32   | 8 m pergola, misting pipes, basin  |
 | pedalo-rental  | 2×2       | 32 × 24 × 32   | hire hut + three boats, 8 x 8 m    |
 | water-sports   | 3×2       | 48 × 25 × 32   | hut, racked craft, lifeguard deck  |
 | first-aid      | 2×2       | 32 × 17 × 32   | 6 x 5 m hut on an 8 x 8 m plot     |
@@ -238,6 +240,12 @@ voxel model of an open-air beach shower, finely detailed, small crisp voxels, a 
 
 # massage-tent
 voxel model of an open-sided canvas massage tent on the beach, finely detailed, small crisp voxels, four teak posts at the corners of a low teak deck carrying a pitched cream canvas roof edged with a red valance, cream side curtains drawn halfway back and tied to the front posts, two padded massage tables side by side under the roof with a headrest at one end and a folded blue towel at the other, rolled towels on a low shelf against the canvas back wall, a teak bench on the sand in front for whoever is waiting, a potted plant by each front post, standing on a low sand-coloured slab that fills a 2x2 footprint, no people, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# shade-sail
+voxel model of a shade sail on the beach, finely detailed, small crisp voxels, four teak posts at the corners of a 2x2 footprint, the two at the front taller than the two at the back, a tensioned canvas stretched between their tops as two triangles meeting along the diagonal, one cream and one pale blue, its hems pulled in between the posts, high enough to see the sand under it, no floor, no people, flat neutral shading, no baked lighting or shadows, no text, no lettering.
+
+# misting-pavilion
+voxel model of a misting pavilion, finely detailed, small crisp voxels, a timber pergola on four posts with a slatted roof of spaced beams, thin metal misting pipes along the inside of the two long beams with a small nozzle every few voxels, a round stone basin with a spout pillar in the middle as a drinking fountain, four timber benches facing the basin, the paving under the pergola a shade darker where the mist keeps it wet, two potted plants by the entrance, on a low stone plinth that fills a 2x2 footprint, no mist drawn, no people, flat neutral shading, no baked lighting or shadows, no text, no lettering.
 ```
 
 ## The bay (Phase 3.6)

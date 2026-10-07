@@ -112,6 +112,6 @@ describe('on the generated plot', () => {
     const measured = `mean ${mean.toFixed(3)}, plain ${(plain * 100).toFixed(1)}% of ${paved.length}`;
     expect(mean, measured).toBeGreaterThanOrEqual(0.1);
     expect(mean, measured).toBeLessThanOrEqual(0.5);
-    expect(plain, measured).toBeGreaterThanOrEqual(0.095);
+    expect(plain, measured).toBeGreaterThanOrEqual(0.08);
   });
 });

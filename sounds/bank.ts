@@ -533,6 +533,23 @@ export const BANK: Bank = {
       },
     ],
   },
+  mist: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'mist.mp3',
+        source: {
+          page: 'https://freesound.org/people/DreamArtSoundDesigners/sounds/699278/',
+          fetch: 'https://cdn.freesound.org/previews/699/699278_6746039-hq.mp3',
+          author: 'DreamArtSoundDesigners',
+          licence: 'CC0',
+        },
+        cut: { start: 71, length: 20, loudness: -24 },
+      },
+    ],
+  },
   fountain: {
     bus: 'ambience',
     loop: true,
@@ -564,6 +581,23 @@ export const BANK: Bank = {
           licence: 'CC0',
         },
         cut: { length: 20, loudness: -24 },
+      },
+    ],
+  },
+  sail: {
+    bus: 'ambience',
+    loop: true,
+    gain: 1,
+    files: [
+      {
+        file: 'sail.mp3',
+        source: {
+          page: 'https://freesound.org/people/bmacphail/sounds/569537/',
+          fetch: 'https://cdn.freesound.org/previews/569/569537_12816528-hq.mp3',
+          author: 'bmacphail',
+          licence: 'CC0',
+        },
+        cut: { start: 1, length: 20, loudness: -24 },
       },
     ],
   },

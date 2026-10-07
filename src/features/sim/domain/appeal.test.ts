@@ -13,6 +13,7 @@ import { CONTENT_LEVEL } from './happiness';
 import { ARCHETYPES } from './archetypes';
 import { createNeeds, type Needs } from './needs';
 import type { Venue } from './venues';
+import { weatherEffect } from './weather';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 40 }];
 
@@ -172,6 +173,43 @@ describe('appealOf over a walk', () => {
     const rested = levels(person, { fun: 0 });
     expect(appealOf(court, rested, guests, person, 0)).toBeCloseTo(
       ARCHETYPES.friends.weight.fun * 0.8,
+    );
+  });
+});
+
+describe('appealOf in the heat', () => {
+  const pavilion: Venue = {
+    ...venue('misting-pavilion#0', [
+      { need: 'energy', amount: 0.3 },
+      { need: 'fun', amount: 0.2 },
+    ]),
+    cools: true,
+  };
+  const tired = (person: number): Needs => levels(person, { energy: 0.4, fun: 0.4 });
+
+  it('raises a cooling venue by the heatwave cooling, and leaves it on a clear day', () => {
+    const person = someone('friends');
+    const plain = appealOf({ ...pavilion, cools: false }, tired(person), guests, person);
+    expect(plain).toBeGreaterThan(0);
+    const hot = weatherEffect('heatwave');
+    expect(appealOf(pavilion, tired(person), guests, person, 0, hot)).toBeCloseTo(
+      plain * hot.cooling,
+    );
+    expect(hot.cooling).toBeCloseTo(1.6);
+    expect(appealOf(pavilion, tired(person), guests, person, 0, weatherEffect('clear'))).toBe(
+      plain,
+    );
+  });
+
+  it('leaves a venue that does not cool as it was in a heatwave', () => {
+    const person = someone('friends');
+    const court = venue('court#0', [
+      { need: 'energy', amount: 0.3 },
+      { need: 'fun', amount: 0.2 },
+    ]);
+    const hot = weatherEffect('heatwave');
+    expect(appealOf(court, tired(person), guests, person, 0, hot)).toBe(
+      appealOf(court, tired(person), guests, person),
     );
   });
 });

@@ -23,6 +23,7 @@ import entrance from './entrance.ts';
 import first_aid from './first-aid.ts';
 import flowerbed from './flowerbed.ts';
 import fountain from './fountain.ts';
+import misting_pavilion from './misting-pavilion.ts';
 import game_hall from './game-hall.ts';
 import gym_pavilion from './gym-pavilion.ts';
 import hedge from './hedge.ts';
@@ -68,6 +69,7 @@ import staircase from './staircase.ts';
 import stairs from './stairs.ts';
 import statue from './statue.ts';
 import street_lamp from './street-lamp.ts';
+import shade_sail from './shade-sail.ts';
 import sun_lounger from './sun-lounger.ts';
 import supermarket from './supermarket.ts';
 import swimming_pool from './swimming-pool.ts';
@@ -116,12 +118,14 @@ export const MODEL_SOURCES: readonly VoxelModelSource[] = [
   willow,
   statue,
   sun_lounger,
+  shade_sail,
   bench,
   picnic_table,
   tikitorch,
   icecream,
   entrance,
   fountain,
+  misting_pavilion,
   snack_bar,
   restrooms,
   changing_cabins,

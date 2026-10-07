@@ -45,10 +45,11 @@ export function appealOf(
     );
     gain += weight[relief.need] * effect.weight[relief.need] * usableGain(relief.amount, level);
   }
-  return gain;
+  return venue.cools ? gain * effect.cooling : gain;
 }
 
-// Ties break in GUEST_NEEDS order, independent of the order a model lists its reliefs.
+// Ties break in GUEST_NEEDS order, independent of the order a model lists its reliefs. Cooling is
+// left out: it scales every need's gain alike, so the loudest is the same.
 export function dominantNeedAt(
   venue: Venue,
   needs: Needs,

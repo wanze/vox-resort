@@ -94,6 +94,14 @@ describe('hear: venues', () => {
     expect(heard(shut).massage).toBe(0);
   });
 
+  it('hisses from the misting pavilion while it is open, and in the rain too', () => {
+    expect(heard(scene({}, { mist: 0.5 })).mist).toBeGreaterThan(0);
+    expect(heard(scene({ weather: 'rain' }, { mist: 0.5 })).mist).toBeGreaterThan(0);
+    const shut = scene({}, { mist: 1 });
+    shut.open[kindAt('mist')] = 0;
+    expect(heard(shut).mist).toBe(0);
+  });
+
   it('thumps from the night club while it is open, and not outside its hours', () => {
     expect(heard(scene({ night: 1 }, { club: 0.8 })).club).toBeGreaterThan(0);
     const shut = scene({ night: 1 }, { club: 1 });
@@ -139,6 +147,11 @@ describe('hear: weather', () => {
     const wet = heard(scene({ weather: 'rain' }, { trees: 6 }));
     expect(wet.birds).toBe(0);
     expect(wet.crickets).toBe(0);
+  });
+
+  it('flaps the sails by day only', () => {
+    expect(heard(scene({}, { sail: 0.6 })).sail).toBeGreaterThan(0);
+    expect(heard(scene({ night: 1 }, { sail: 0.6 })).sail).toBe(0);
   });
 
   it('has cicadas only in a heatwave', () => {

@@ -521,6 +521,8 @@ const BEACH_BACK: readonly string[] = [
   'changing-cabins',
   'beach-shower',
   'beach-shower',
+  'shade-sail',
+  'shade-sail',
   'palm',
   'palm',
   'palm',

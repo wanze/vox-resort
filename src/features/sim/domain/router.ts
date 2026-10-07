@@ -36,7 +36,7 @@ import { type Gateway } from './gateways';
 import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
-import { isBeach, LOUNGER_RELIEF, withBeach } from './beach';
+import { isBeach, LOUNGER_RELIEF, SHADE_RELIEF, withBeach } from './beach';
 import { pitchFor, type Pitch, type PitchSpot } from './beachPitch';
 import {
   arriveAt,
@@ -52,6 +52,7 @@ import {
 import { routerVenuesMatch, type RouterSnapshot } from './routerSnapshot';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
+import { shadedAt, type ShadeMap } from './shade';
 import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
 import { openNow } from './hours';
@@ -183,7 +184,7 @@ export interface Router {
   stayOf(person: number): BeachStay | null;
   // When a resting beach stay ends, in ticks; NaN for anybody not resting there.
   restingUntil(person: number): number;
-  // Resting on the open sand: a lounger stands under a parasol.
+  // Resting on the open sand: a lounger stands under a parasol, and a sail shades a towel.
   isSunbathing(person: number): boolean;
   snapshot(): RouterSnapshot;
   // Onto a router built from the lists the snapshot was taken on, in the same order: every
@@ -218,6 +219,8 @@ export function createRouter(parts: {
   // Late-bound for the same reason. Omitted, nothing ever breaks.
   readonly breakdowns?: () => Breakdowns;
   readonly weather?: () => Weather;
+  // Late-bound for the same reason. Omitted, the sand has no shade.
+  readonly shade?: () => ShadeMap | null;
   readonly seed: number;
   // A party invited to an event stays up for it, and stays inside until it ends (-1 for no event).
   readonly upLate?: (party: number) => boolean;
@@ -688,6 +691,8 @@ export function createRouter(parts: {
       members: members.map((member) => ({ child: guests.child[member] === 1 })),
       taken: pitched,
       loungerFree: (seat) => !promised.has(seat) && seatIsFree(people, seat),
+      shaded: (tile) => parts.shade?.()?.tiles.has(tile) === true,
+      hot: weatherNow() === 'heatwave',
       ...(watch ? { watch } : {}),
     });
     if (!pitch) return null;
@@ -725,6 +730,14 @@ export function createRouter(parts: {
     const spot = stays[person]?.pitch.spots[spotOf[person]!];
     if (venue !== beachIndex() || !spot || spot.seat < 0) return;
     relieve(needs, person, LOUNGER_RELIEF);
+  };
+
+  const restInShade = (person: number, venue: number): void => {
+    const pitch = stays[person]?.pitch;
+    const spot = pitch?.spots[spotOf[person]!];
+    if (venue !== beachIndex() || !pitch || !spot || spot.seat >= 0) return;
+    if (weatherNow() !== 'heatwave' || parts.shade?.()?.tiles.has(pitch.tile) !== true) return;
+    relieve(needs, person, SHADE_RELIEF);
   };
 
   // One end for the party: a pitch holds every member's lounger until the last one leaves, so
@@ -884,6 +897,7 @@ export function createRouter(parts: {
     const beach = beachIndex();
     if (beach >= 0) relieve(needs, person, venues[beach]!.satisfies);
     restOnLounger(person, beach);
+    restInShade(person, beach);
     leaveStay(person);
     fetching[person] = -1;
     stayRoutes[person] = null;
@@ -1039,6 +1053,7 @@ export function createRouter(parts: {
     }
     endVisit(person, venue);
     restOnLounger(person, venue);
+    restInShade(person, venue);
     clearPartyGoal(goals, guests, person);
     const door = doorOf[person]!;
     doorOf[person] = -1;
@@ -1518,7 +1533,8 @@ export function createRouter(parts: {
     },
 
     isSunbathing(person) {
-      return this.stayOf(person) === 'resting' && crowd().seat[person]! < 0;
+      if (this.stayOf(person) !== 'resting' || crowd().seat[person]! >= 0) return false;
+      return !shadedAt(parts.shade?.() ?? null, crowd().x[person]!, crowd().z[person]!);
     },
 
     occupancyOf(venueKey) {

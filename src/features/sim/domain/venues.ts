@@ -29,6 +29,7 @@ export interface Venue {
   readonly stage?: boolean;
   readonly dj?: boolean;
   readonly bathing?: boolean;
+  readonly cools?: boolean;
   readonly reliability?: number;
   // A fire pit: a bonfire booked on the beach is held here.
   readonly hearth?: boolean;
@@ -50,6 +51,7 @@ const traitsOf = (venue: ModelVenue) => ({
   stage: venue.stage ?? false,
   dj: venue.dj ?? false,
   bathing: venue.bathing ?? false,
+  cools: venue.cools === true,
   ...(venue.reliability === undefined ? {} : { reliability: venue.reliability }),
   hearth: venue.hearth !== undefined,
 });

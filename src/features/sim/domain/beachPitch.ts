@@ -30,6 +30,9 @@ export interface PitchInput {
   readonly loungerFree: (seat: number) => boolean;
   // Come for a show over the sea: standing, facing it, as near the water as there is room.
   readonly watch?: boolean;
+  // Both needed for shade to count: on any other day a towel goes where it always did.
+  readonly shaded?: (tile: number) => boolean;
+  readonly hot?: boolean;
 }
 
 const PITCH_TILES = 12;
@@ -63,7 +66,7 @@ const NEIGHBOURS = [
 // every other column, so direct neighbours alone seat almost nobody.
 const AROUND = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dz) => [dx, dz] as const));
 
-const TIER = { loungers: 0, someLoungers: 1, sand: 2, atTheGate: 3 } as const;
+const TIER = { loungers: 0, someLoungers: 1, shade: 2, sand: 3, atTheGate: 4 } as const;
 type Tier = (typeof TIER)[keyof typeof TIER];
 
 interface Tile {
@@ -94,12 +97,12 @@ function restPitch(
   for (const tile of sweepFrom(context, node)) {
     const pitch = pitchOn(context, tile, members);
     if (!pitch) continue;
-    const tier = tierOf(pitch, tile, adults);
+    const tier = tierOf(context.input, pitch, tile, adults);
     if (tier === TIER.loungers) return pitch;
     if (tier !== TIER.someLoungers && tile.depth > PITCH_TILES) continue;
     if (!best.has(tier)) best.set(tier, pitch);
   }
-  for (const tier of [TIER.someLoungers, TIER.sand, TIER.atTheGate] as const) {
+  for (const tier of [TIER.someLoungers, TIER.shade, TIER.sand, TIER.atTheGate] as const) {
     const pitch = best.get(tier);
     if (pitch) return pitch;
   }
@@ -123,11 +126,12 @@ function watchPitch(
   return back ?? atTheGate;
 }
 
-function tierOf(pitch: Pitch, tile: Tile, adults: number): Tier {
+function tierOf(input: PitchInput, pitch: Pitch, tile: Tile, adults: number): Tier {
   const onLoungers = pitch.spots.filter((spot) => spot.seat >= 0).length;
   if (onLoungers >= adults && adults > 0) return TIER.loungers;
   if (onLoungers > 0) return TIER.someLoungers;
-  return tile.depth >= SAND_SET_BACK ? TIER.sand : TIER.atTheGate;
+  if (tile.depth < SAND_SET_BACK) return TIER.atTheGate;
+  return input.hot === true && input.shaded?.(pitch.tile) === true ? TIER.shade : TIER.sand;
 }
 
 interface Context {

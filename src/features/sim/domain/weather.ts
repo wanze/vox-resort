@@ -13,6 +13,8 @@ export interface WeatherEffect {
   readonly decay: PerNeed;
   readonly closes: Shelter | null;
   readonly overcast: number;
+  // What a venue that cools is worth beside one that does not.
+  readonly cooling: number;
 }
 
 // Beyond this range the weather would outweigh the archetypes and become the tuning
@@ -24,18 +26,20 @@ const NO_CHANGE: PerNeed = { hunger: 1, thirst: 1, energy: 1, fun: 1, hygiene: 1
 // Every day moves both weight and decay: moving only one makes guests thirsty without
 // wanting a drink, or the reverse.
 const WEATHER_EFFECTS: { readonly [kind in Weather]: WeatherEffect } = {
-  clear: { weight: NO_CHANGE, decay: NO_CHANGE, closes: null, overcast: 0 },
+  clear: { weight: NO_CHANGE, decay: NO_CHANGE, closes: null, overcast: 0, cooling: 1 },
   rain: {
     weight: { ...NO_CHANGE, fun: 1.2, hygiene: 0.8 },
     decay: NO_CHANGE,
     closes: 'open',
     overcast: 0.55,
+    cooling: 1,
   },
   storm: {
     weight: { ...NO_CHANGE, fun: 1.2, hygiene: 0.8 },
     decay: { ...NO_CHANGE, energy: 1.2 },
     closes: 'open',
     overcast: 0.85,
+    cooling: 1,
   },
   // Decay runs ahead of weight so guests are already parched when the weight decides.
   heatwave: {
@@ -43,6 +47,8 @@ const WEATHER_EFFECTS: { readonly [kind in Weather]: WeatherEffect } = {
     decay: { ...NO_CHANGE, thirst: 1.8, energy: 1.3 },
     closes: null,
     overcast: 0,
+    // The thirst weight's, so the pull of the cool rises with the heat as a drink's does.
+    cooling: 1.6,
   },
 };
 

@@ -17,6 +17,9 @@ const BEACH_RELIEF: readonly NeedRelief[] = [
 // building loungers worth it. Energy is the need least else on the plot restores.
 export const LOUNGER_RELIEF: readonly NeedRelief[] = [{ need: 'energy', amount: 0.3 }];
 
+// The lounger's, for a towel in the shade on a day it matters.
+export const SHADE_RELIEF: readonly NeedRelief[] = [{ need: 'energy', amount: 0.3 }];
+
 const BEACH_DWELL_SECONDS = { min: 120 * 60, max: 240 * 60 } as const;
 
 // Effectively unlimited: the beach has no door to queue at.

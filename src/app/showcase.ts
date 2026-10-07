@@ -21,6 +21,7 @@ import {
   PROP_MODELS,
   sceneryOf,
   SEA_MODELS,
+  shadeOf,
   signOf,
   SKY_MODELS,
   soundOf,
@@ -324,6 +325,7 @@ import {
 } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
+import { shadeMapOf, type ShadeMap } from '../features/sim/domain/shade';
 import { partiesOf, partyMixOf } from '../features/events/domain/audience';
 import { labelOf as eventLabelOf, type AudienceParty } from '../features/events/domain/catalogue';
 import {
@@ -1270,6 +1272,8 @@ interface Resort {
   breakdowns: Breakdowns;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
+  // Replaced on an edit, as the scenery is.
+  shade: ShadeMap;
   // Kept across an edit, pruned to what is still paved or open sand: planting a hedge does not
   // sweep the plot.
   readonly litter: Litter;
@@ -1424,7 +1428,8 @@ function networkFor(parts: {
     bridged: (tileX, tileZ) =>
       parts.terrain.surfaceOf(tileX, tileZ) === 'water' && !parts.terrain.isSea(tileX, tileZ),
     seats: seatSpotsFor(parts.standing.map(seatSiteOf)),
-    obstacles: parts.standing,
+    // The sand under a sail is walked and lain on: only its posts stand, clear of every pitch.
+    obstacles: parts.standing.filter((placement) => !shadeOf(placement.id)),
   });
 }
 
@@ -1664,6 +1669,7 @@ function buildResort(
     plan.tilesX,
     plan.tilesZ,
   );
+  const shade = shadeMapOf(plot.layout.placements, shadeOf, plan.tilesX);
   const litter = createLitter(plan.tilesX, plan.tilesZ);
   const overlay = buildOverlayField();
   const carrying = createCarrying(population);
@@ -1707,6 +1713,7 @@ function buildResort(
     // stand.
     upkeep: () => resort.upkeep,
     breakdowns: () => resort.breakdowns,
+    shade: () => resort.shade,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, parts.ticks()),
     onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
@@ -1937,6 +1944,7 @@ function buildResort(
     upkeep,
     breakdowns,
     scenery,
+    shade,
     litter,
     footfall: createFootfall(network.nodes.length),
     overlay,
@@ -5640,6 +5648,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       plan.tilesX,
       plan.tilesZ,
     );
+    resort.shade = shadeMapOf(plot.placements, shadeOf, plan.tilesX);
     resort.binCover = binCoverFor(
       binsOn([...plot.placements, ...plot.props]),
       plan.tilesX,

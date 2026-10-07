@@ -265,7 +265,8 @@ export type SignKind =
   | 'nightclub'
   | 'bonfire'
   | 'watersports'
-  | 'massage';
+  | 'massage'
+  | 'mist';
 
 export type SoundKind =
   | 'cafe'
@@ -285,11 +286,13 @@ export type SoundKind =
   | 'reception'
   | 'restrooms'
   | 'massage'
+  | 'mist'
   | 'watersports'
   | 'bonfire'
   | 'club'
   | 'fountain'
   | 'torch'
+  | 'sail'
   | 'trees';
 
 export interface NeedRelief {
@@ -328,6 +331,8 @@ export interface ModelVenue {
   readonly dj?: true;
   // Guests go in the water here, so somebody should be watching.
   readonly bathing?: boolean;
+  // Worth more to a guest the hotter the day.
+  readonly cools?: true;
   // Visits between breakdowns, on average; absent, it never breaks.
   readonly reliability?: number;
   // In declaration order, the order visitors fill them in.
@@ -398,6 +403,9 @@ export interface VoxelModelSource {
   // 0 to 1: how much nicer this makes the tiles around it. The reach is the simulation's,
   // so a model states only how strong it is.
   readonly scenery?: number;
+  // Shades the sand under it: nobody resting there burns, and in a heatwave they look for it.
+  // Not an obstacle on the sand, so its posts must stand clear of every pitch spot.
+  readonly shade?: true;
   // What the app plays near it; silent when absent. A variant sounds like its original, so only
   // originals declare it.
   readonly sound?: SoundKind;
@@ -454,6 +462,7 @@ export interface VoxelModel {
   readonly gateway: boolean;
   readonly depot: ModelDepot | null;
   readonly scenery: number;
+  readonly shade: boolean;
   readonly sound: SoundKind | null;
   readonly cost: number | null;
   readonly binReach: number;
@@ -602,6 +611,7 @@ function defaultsOf(source: VoxelModelSource) {
     gateway: source.gateway ?? false,
     depot: source.depot ?? null,
     scenery: source.scenery ?? 0,
+    shade: source.shade === true,
     sound: source.sound ?? null,
     cost: source.cost ?? null,
     binReach: source.binReach ?? 0,

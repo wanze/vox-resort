@@ -1110,6 +1110,20 @@ export const ICONS = {
     '............',
     '............',
   ],
+  mist: [
+    '.....c......',
+    '....cc......',
+    '...cccc.....',
+    '...cbbc.....',
+    '....cc......',
+    '............',
+    '..y..y..y...',
+    '...yyyyy....',
+    '.yyYYYYYyy..',
+    '...yyyyy....',
+    '..y..y..y...',
+    '............',
+  ],
 } as const satisfies { readonly [name: string]: readonly string[] };
 
 export type IconName = keyof typeof ICONS;

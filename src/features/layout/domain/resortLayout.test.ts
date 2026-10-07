@@ -1150,7 +1150,7 @@ describe('turning a building to open its door onto paving', () => {
       generateResort(TYPES, clampParams({ tilesX: 112, tilesZ: 100, seed, density: 0.7 }));
     // A seed whose packing leaves every door a free side: some seeds wall a pavilion in on both
     // sides its footprint lets it turn to, which no turn can fix.
-    const plan = planFor(1);
+    const plan = planFor(2);
 
     it('opens every door-declaring building on the grass onto paving', () => {
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);

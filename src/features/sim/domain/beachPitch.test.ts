@@ -39,7 +39,7 @@ const lounger = (tileX: number, tileZ: number): SeatSpot => ({
 
 const FAMILY = [{ child: false }, { child: false }, { child: true }];
 
-const inputOn = (network: WalkNetwork, overrides: Partial<PitchInput> = {}): PitchInput => ({
+const inputFor = (network: WalkNetwork, overrides: Partial<PitchInput> = {}): PitchInput => ({
   network,
   gate: network.gates[0]!,
   members: FAMILY,
@@ -53,7 +53,16 @@ const tileOf = (point: { readonly x: number; readonly z: number }) => ({
   tileZ: Math.floor(point.z / TILE_VOXELS),
 });
 
-describe('pitchFor', () => {
+// Shade counts only in a heatwave, so every other day must pitch as if there were none.
+const MILD_DAYS = [
+  { name: 'with no shade', day: {} },
+  { name: 'with shade everywhere on a mild day', day: { shaded: () => true, hot: false } },
+] as const satisfies readonly { name: string; day: Partial<PitchInput> }[];
+
+describe.each(MILD_DAYS)('pitchFor $name', ({ day }) => {
+  const inputOn = (network: WalkNetwork, overrides: Partial<PitchInput> = {}): PitchInput =>
+    inputFor(network, { ...day, ...overrides });
+
   it('pitches out of the walkway on an open beach, a spot of sand each', () => {
     const network = beachOf();
     expect(network.gates).toHaveLength(1);
@@ -140,7 +149,9 @@ describe('pitchFor', () => {
   });
 });
 
-describe('a watch pitch', () => {
+describe.each(MILD_DAYS)('a watch pitch $name', ({ day }) => {
+  const inputOn = (network: WalkNetwork, overrides: Partial<PitchInput> = {}): PitchInput =>
+    inputFor(network, { ...day, ...overrides });
   const watching = (network: WalkNetwork, overrides: Partial<PitchInput> = {}) =>
     pitchFor(inputOn(network, { watch: true, ...overrides }))!;
 
@@ -179,5 +190,31 @@ describe('a watch pitch', () => {
     expect(rows).toHaveLength(2);
     expect(pitch.spots.slice(0, 3).every((spot) => spot.z === rows[0])).toBe(true);
     expect(pitch.spots.slice(3).every((spot) => spot.z === rows[1])).toBe(true);
+  });
+});
+
+describe('a pitch in a heatwave', () => {
+  const OPEN = 14 * 20 + 10;
+  const SHADED = 14 * 20 + 13;
+  const hot = { hot: true, shaded: (tile: number) => tile === SHADED };
+
+  it('walks past open sand to a shaded tile three tiles further', () => {
+    const network = beachOf();
+    expect(pitchFor(inputFor(network))!.tile).toBe(OPEN);
+    const pitch = pitchFor(inputFor(network, hot))!;
+    expect(pitch.tile).toBe(SHADED);
+    expect(pitch.spots.map((spot) => spot.seat)).toEqual([-1, -1, -1]);
+  });
+
+  it('still takes a free lounger before the shade', () => {
+    const network = beachOf([lounger(9, 12), lounger(11, 12)]);
+    const pitch = pitchFor(inputFor(network, hot))!;
+    expect(pitch.tile).not.toBe(SHADED);
+    expect(pitch.spots.filter((spot) => spot.seat >= 0)).toHaveLength(2);
+  });
+
+  it('pitches on open sand when no tile is shaded', () => {
+    const network = beachOf();
+    expect(pitchFor(inputFor(network, { hot: true, shaded: () => false }))!.tile).toBe(OPEN);
   });
 });

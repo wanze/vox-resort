@@ -213,6 +213,14 @@ model. Nothing on sand is paved, so beach buildings are reached over it.
   string-pulled route from each nearby gate; the router walks the guest along it.
 - **Pitches** (`beachPitch.ts`): each party prefers a lounger per adult, then
   any lounger, then open sand. A lounger adds energy and stops sunburn.
+- **Shade** (`shade.ts`) is declared on the model (`shade: true`, the shade
+  sail): every tile under a placed one is shaded, and the model is no obstacle
+  on the sand, so towels lie under it. Nobody resting on a shaded tile burns
+  (`isSunbathing`). In a heatwave a shaded tile is a tier of its own, after
+  any lounger and before open sand, within the same `PITCH_TILES`; on any
+  other day, or with no shade, pitches are exactly as without it. A towel in
+  the shade on a heatwave also gets `SHADE_RELIEF` (energy +0.3, the
+  lounger's) when the stay ends.
 - **Errands**: a guest with a pressing need walks to a beach venue and back,
   but not in the first `SETTLE_TICKS` after lying down.
 - **The beach is the owned span** (`BeachBand.span`): roaming, routes, pitches,
@@ -258,15 +266,17 @@ the last revellers are often still on the paths at 03:00; that is accepted.
 `weather.ts` picks one weather per day from a hash of day and seed, so it isn't
 stored. Of 24 days, 16 are clear, 4 rain, 2 heatwave, 2 storm.
 
-| Day        | Need weights           | Decay                    | Closes | Overcast |
-| ---------- | ---------------------- | ------------------------ | ------ | -------- |
-| `clear`    | all 1                  | all 1                    | none   | 0        |
-| `rain`     | fun ×1.2, hygiene ×0.8 | all 1                    | `open` | 0.55     |
-| `storm`    | fun ×1.2, hygiene ×0.8 | energy ×1.2              | `open` | 0.85     |
-| `heatwave` | thirst ×1.6            | thirst ×1.8, energy ×1.3 | none   | 0        |
+| Day        | Need weights           | Decay                    | Closes | Overcast | Cooling |
+| ---------- | ---------------------- | ------------------------ | ------ | -------- | ------- |
+| `clear`    | all 1                  | all 1                    | none   | 0        | 1       |
+| `rain`     | fun ×1.2, hygiene ×0.8 | all 1                    | `open` | 0.55     | 1       |
+| `storm`    | fun ×1.2, hygiene ×0.8 | energy ×1.2              | `open` | 0.85     | 1       |
+| `heatwave` | thirst ×1.6            | thirst ×1.8, energy ×1.3 | none   | 0        | 1.6     |
 
 `ModelVenue.shelter` is `'open'` or `'covered'` (default). Closed venues aren't
-chosen and turn guests away; those inside finish. Drawing is in
+chosen and turn guests away; those inside finish. A venue that `cools` (the
+misting pavilion) has its appeal multiplied by `cooling`: it changes where
+guests go on a hot day, not what a visit gives. Drawing is in
 [rendering.md](rendering.md#weather).
 
 ## Arrivals and departures

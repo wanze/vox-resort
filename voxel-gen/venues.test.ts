@@ -55,6 +55,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'ramp-head',
   'ramp-head-railing-left',
   'ramp-head-railing-right',
+  'shade-sail',
   'sign-post',
   'staff-house',
   'stair-railing-left',
@@ -203,6 +204,7 @@ const SEEN: ReadonlySet<string> = new Set([
   'beach-shower',
   'icecream',
   'massage-tent',
+  'misting-pavilion',
 ]);
 
 const originalOf = new Map(VARIANTS.map(({ of, source }) => [source.id, of]));

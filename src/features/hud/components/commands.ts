@@ -241,7 +241,7 @@ function savesWindow(id: string, label: string, note: string, windows: WindowCon
     group: 'Game',
     keywords: 'save load saved game file',
     note,
-    art: { icon: 'books' },
+    art: { icon: 'saves' },
     run: () => windows.show('saves', true),
   };
 }
@@ -257,7 +257,7 @@ function gameCommands({ saves, windows }: CommandContext): Command[] {
       group: 'Game',
       keywords: 'load saved game continue open',
       note: `day ${meta.day}, saved ${savedAgo(meta.savedAt, now)}`,
-      art: { icon: 'books' as const },
+      art: { icon: 'saves' as const },
       run: () => void saves.load(meta.id),
     }));
   return [
@@ -267,7 +267,7 @@ function gameCommands({ saves, windows }: CommandContext): Command[] {
       group: 'Game',
       keywords: 'save keep write',
       note: saves.current?.name ?? 'name it first',
-      art: { icon: 'books' },
+      art: { icon: 'saves' },
       shortcut: SAVE_SHORTCUT,
       run: () => void saveOrAsk(saves.save, () => windows.show('saves', true)),
     },

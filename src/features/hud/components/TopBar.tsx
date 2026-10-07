@@ -48,11 +48,7 @@ export interface TopBarProps {
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
   if (ledger?.mode !== 'tycoon') return null;
   return (
-    <HudReadout
-      icon={<PixelIcon name="books" />}
-      label="Money"
-      value={ledger.balance.toLocaleString('en-US')}
-    />
+    <HudReadout icon={<PixelIcon name="money" />} value={ledger.balance.toLocaleString('en-US')} />
   );
 }
 
@@ -157,12 +153,7 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <div className="hud-plate hud-status">
-        <DemandMeter
-          status={status}
-          open={menu === 'demand'}
-          onOpenChange={opener('demand')}
-          onShowWindow={() => windows.show('demand', true)}
-        />
+        <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
         {status ? (
           <RatingControl
             rating={status.rating}

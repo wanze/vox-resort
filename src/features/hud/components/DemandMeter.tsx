@@ -4,14 +4,12 @@ import { DemandBar } from './DemandBar';
 import { DemandPanel } from './DemandPanel';
 import { GROUP_NAMES, GROUP_TITLES, LINE_NAMES, pressureWord } from './demandWords';
 import { HudDropdown } from './HudDropdown';
-import { HudOption } from './HudOption';
 
 export interface DemandMeterProps {
   // null before the first facts are counted, which shows flat bars.
   readonly status: StatusView | null;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
-  readonly onShowWindow: () => void;
 }
 
 const GROUPS = Object.keys(DEMAND_GROUPS) as readonly DemandGroup[];
@@ -29,7 +27,7 @@ function titleOf(demand: Demand | null): string {
 }
 
 // The bars are the chip, so the meter reads at a glance; the dropdown says what is behind them.
-export function DemandMeter({ status, open, onOpenChange, onShowWindow }: DemandMeterProps) {
+export function DemandMeter({ status, open, onOpenChange }: DemandMeterProps) {
   const demand = status?.demand ?? null;
   return (
     <HudDropdown
@@ -51,15 +49,6 @@ export function DemandMeter({ status, open, onOpenChange, onShowWindow }: Demand
       }
     >
       <DemandPanel status={status} />
-      <hr className="hud-rule" />
-      <HudOption
-        label="Open the demand window"
-        note="keep the figures in view while you build"
-        onSelect={() => {
-          onShowWindow();
-          onOpenChange(false);
-        }}
-      />
     </HudDropdown>
   );
 }

@@ -113,6 +113,7 @@
   --space-3: 10px;
   --space-4: 14px;
   --space-5: 20px;
+  --dropdown-inset: var(--space-1) var(--space-2);
 
   /* Unequal corners on each axis, so no two edges curve alike and a panel or button reads as
      a worn stone rather than a rounded rectangle. */
@@ -942,6 +943,10 @@ input[type='checkbox'] {
   min-width: 320px;
 }
 
+.hud-demand-menu .hud-demand-grid {
+  padding: var(--dropdown-inset);
+}
+
 .hud-demand-group {
   display: flex;
   flex-direction: column;
@@ -1022,9 +1027,13 @@ input[type='checkbox'] {
   align-items: center;
 }
 
-.hud-demand-group-heading {
+.hud-demand-grid > .hud-demand-group-heading {
   grid-column: 1 / -1;
-  margin: var(--space-5) 0 var(--space-1);
+  margin: calc(var(--space-2) + var(--space-1) * 2) 0 var(--space-1);
+}
+
+.hud-demand-grid > .hud-demand-group-heading:first-of-type {
+  margin-top: 0;
 }
 
 .hud-demand-row {
@@ -1076,7 +1085,7 @@ input[type='checkbox'] {
   grid-template-columns: 1fr auto auto;
   gap: var(--space-2) var(--space-4);
   margin: 0;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--dropdown-inset);
   white-space: nowrap;
 }
 
@@ -1105,14 +1114,14 @@ input[type='checkbox'] {
   justify-content: space-between;
   gap: var(--space-4);
   margin: 0;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--dropdown-inset);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
 .hud-rating-note {
   margin: 0;
-  padding: var(--space-1) var(--space-2);
+  padding: var(--dropdown-inset);
   font-size: var(--size-small);
   color: var(--text-faint);
 }

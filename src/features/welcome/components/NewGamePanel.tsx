@@ -33,7 +33,7 @@ const MODES: readonly {
 }[] = [
   {
     mode: 'tycoon',
-    icon: 'books',
+    icon: 'money',
     note: 'Start on bare land with a budget. Every path, building and spadeful costs money.',
   },
   {

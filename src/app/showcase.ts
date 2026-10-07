@@ -800,6 +800,8 @@ export interface ShowcaseOptions {
   readonly onFrame: (update: FrameUpdate) => void;
   readonly onSceneChange?: (stats: ShowcaseStats) => void;
   readonly onToolChange?: (tool: BuildTool | null) => void;
+  // A double tap on the resort while no tool is armed.
+  readonly onDoubleTap?: () => void;
   readonly onCameraChange?: (view: CameraView) => void;
   readonly onSelectionChange?: (selection: SelectionView | null) => void;
   readonly onAdviceChange?: (advice: readonly Advice[], ticks: number) => void;
@@ -5340,6 +5342,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     ground: build.ground,
     keyAt: (tile) => current().occupancy.keyAt(tile),
     onSelect: select,
+    onDoubleTap: () => options.onDoubleTap?.(),
   });
 
   let dayAdvice: readonly Advice[] = [];

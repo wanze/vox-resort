@@ -278,7 +278,7 @@ export function App() {
   const { adopt: adoptVoices } = thoughts;
   const { adopt: adoptPending } = placement;
   const { adopt: adoptStatus } = status;
-  const { adoptWeather, adoptSpeed } = clock;
+  const { adoptWeather, adoptSpeed, togglePause } = clock;
   const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
   const { adopt: adoptSigns } = signs;
@@ -326,6 +326,7 @@ export function App() {
       onCue,
       onHear,
       onSpeedChange: adoptSpeed,
+      onDoubleTap: togglePause,
       onEventNews: hearEvent,
       onProgrammeChange: adoptProgramme,
       welcome: OPENS_ON_WELCOME,
@@ -396,6 +397,7 @@ export function App() {
     onCue,
     onHear,
     adoptSpeed,
+    togglePause,
     adoptSigns,
     adoptHighlights,
     adoptPending,

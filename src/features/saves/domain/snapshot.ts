@@ -24,7 +24,7 @@ export const SAVE_VERSION = 1;
 const count = z.number().int().nonnegative();
 const point = z.object({ x: z.number(), y: z.number(), z: z.number() });
 
-const paramsSchema = z.object({
+export const paramsSchema = z.object({
   tilesX: count,
   tilesZ: count,
   density: z.number(),

@@ -18,6 +18,7 @@ export const WINDOW_IDS = [
   'resort',
   'name',
   'saves',
+  'share',
   'debug',
   'inspect',
 ] as const;

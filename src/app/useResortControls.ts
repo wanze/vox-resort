@@ -2,6 +2,7 @@ import { useCallback, useState, type RefObject } from 'react';
 import type { ResortParams } from '../features/layout/domain/resortGenerator';
 import { groundOf, type NewGame } from '../features/welcome/domain/newGame';
 import type { StaffRole } from '../features/sim/domain/staff';
+import type { SharedResort } from '../features/sharing/domain/sharedResort';
 import type { Showcase } from './showcase';
 import { useMoney, type MoneyControls } from './useMoney';
 
@@ -19,6 +20,8 @@ export interface ResortControls {
   setHiring(role: StaffRole, count: number | null): void;
   // True once the new resort stands; false if it could not be built.
   start(params: ResortParams, game: NewGame): Promise<boolean>;
+  // As start: true once the shared resort stands, false if it could not be built.
+  openShared(shared: SharedResort): Promise<boolean>;
 }
 
 // onStarted is told once the new resort stands, so its first save can be written at once.
@@ -58,6 +61,26 @@ export function useResortControls(
     [showcase, onStarted],
   );
 
+  const openShared = useCallback(
+    async (shared: SharedResort): Promise<boolean> => {
+      const mounted = showcase.current;
+      if (!mounted) return false;
+      setBuilding(true);
+      try {
+        await mounted.openShared(shared);
+        setParams(mounted.params);
+        onStarted();
+        return true;
+      } catch (cause: unknown) {
+        console.error(cause);
+        return false;
+      } finally {
+        setBuilding(false);
+      }
+    },
+    [showcase, onStarted],
+  );
+
   return {
     params,
     name,
@@ -76,5 +99,6 @@ export function useResortControls(
       [showcase],
     ),
     start,
+    openShared,
   };
 }

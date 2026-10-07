@@ -617,6 +617,7 @@ import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
 import { startCameraDrift, type CameraDrift } from '../features/rendering/adapters/cameraDrift';
 import type { LoadingStep } from '../features/welcome/domain/loading';
 import { resortNameFor, savedResortName } from '../features/naming/domain/resortName';
+import type { SharedResort } from '../features/sharing/domain/sharedResort';
 import { createNameplates, type Nameplates } from '../features/naming/adapters/nameplateField';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
@@ -885,6 +886,8 @@ export interface Showcase {
   selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
+  // Always sandbox: tycoon pays for everything that stands, and this resort was not built here.
+  openShared(shared: SharedResort): Promise<void>;
   selectTool(tool: BuildTool | null): void;
   confirmPlacement(): void;
   dismissPlacement(): void;
@@ -2655,6 +2658,8 @@ const NO_HOSTED: readonly { readonly venue: number; readonly until: number }[] =
 
 const runVenueOf = (resort: Resort, run: EventRun): number =>
   heldAt(run.occurrence.site, run.occurrence.kind, resort.siteVenues);
+
+const undressed = (): void => {};
 
 function relabelVenues(resort: Resort): void {
   resort.venues = relabelled(resort.venues, resort.names);
@@ -5485,6 +5490,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     asked: ResortParams,
     source: ResortSource,
     mode: GameMode,
+    dress: (resort: Resort) => void = undressed,
   ): Promise<void> => {
     cancelSettle();
     const request = ++requested;
@@ -5495,8 +5501,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // The person index and the placement key both name something on the old plot.
     select(null);
     walkStaleAt = null;
-    replaceResort(prepared);
-    current().ledger = createLedger(mode, OPENING_BALANCE[mode]);
+    const resort = replaceResort(prepared);
+    resort.ledger = createLedger(mode, OPENING_BALANCE[mode]);
+    // Before the lettering and the signs, so they show what dress gave the resort.
+    dress(resort);
     openIsometric();
     drift = null;
     handle.controls.enabled = true;
@@ -6004,6 +6012,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       const asked = clampParams(next);
       // The seed goes along, so clearing gives a random landscape.
       return regrow(asked, { kind: 'clear', params: asked }, mode);
+    },
+    openShared(shared) {
+      const named = (resort: Resort): void => {
+        resort.names = assignNames(
+          new Map(shared.names),
+          namedPlacesOf(resort.plot.layout.placements),
+        );
+        relabelVenues(resort);
+        name = shared.name;
+        options.onNameChange?.(name);
+      };
+      const source = { kind: 'saved', world: shared.world } as const;
+      return regrow(clampParams(shared.params), source, 'sandbox', named);
     },
     selectTool,
     confirmPlacement: () => build.confirm(),

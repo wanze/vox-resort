@@ -504,6 +504,19 @@ side, catching missed fields their scenario exercises. Reordering
 `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels changes
 what saved numbers mean.
 
+A resort can also be shared as a link (`features/sharing/`, the Share resort
+window, from the menu's Game page or the command palette). A link carries the
+layout only: the `SavedWorld`, the `ResortParams`, the resort's name and its
+venue names, packed in columns by `layoutCodec.ts`, deflated and put after
+`#resort=`, so no server ever sees it. Whoever opens it starts that world in
+sandbox on day one, with the guests its beds give. The link has its own
+`LINK_VERSION`, its first byte, apart from `SAVE_VERSION`; like a save, it stops
+opening once the catalogue drops an id it uses. A link comes from outside, so
+beyond its schema `worldMisfits` checks that the layout fits its plot and its
+models. **A new field on `SavedWorld` must be added to `layoutCodec.ts`**, or the
+codec's round-trip test fails. Bump `LINK_VERSION` only when an old reader would
+misread a new link.
+
 ## Where the art lives
 
 - People: `voxel-gen/people/`, with the shared `figure.ts` builder. Staff in

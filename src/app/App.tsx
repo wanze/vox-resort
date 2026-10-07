@@ -29,6 +29,8 @@ import { useSigns } from './useSigns';
 import { useHighlights } from './useHighlights';
 import { useClickCues, useSound, useToastCues, type SoundControls } from './useSound';
 import { useUpdate } from './useUpdate';
+import { useIncomingLink, useShareLink } from './useSharing';
+import type { SharedResort } from '../features/sharing/domain/sharedResort';
 import { mountShowcase, type BuildNote, type Showcase, type ShowcaseStats } from './showcase';
 import {
   armedLand,
@@ -95,8 +97,11 @@ function useWelcome(
   setPlaying: (playing: boolean) => void,
 ) {
   const resort = useResortControls(showcase, saves.started);
-  const { start } = resort;
+  const { start, openShared: openResort } = resort;
   const { load } = saves;
+  const incoming = useIncomingLink(OPENS_ON_WELCOME);
+  const { dismiss: dismissShared } = incoming;
+  const [sharedFailed, setSharedFailed] = useState(false);
   const [loaded, setLoaded] = useState<readonly LoadingStep[]>([]);
   const adoptLoading = useCallback((step: LoadingStep) => setLoaded((done) => [...done, step]), []);
   const startGame = useCallback(
@@ -108,7 +113,31 @@ function useWelcome(
     (id: string) => void load(id).then((running) => running && setPlaying(true)),
     [load, setPlaying],
   );
-  return { resort, loaded, ready: loaded.includes('scene'), adoptLoading, startGame, loadGame };
+  const openShared = useCallback(
+    (shared: SharedResort) => {
+      setSharedFailed(false);
+      void openResort(shared).then((built) => {
+        if (!built) {
+          setSharedFailed(true);
+          return;
+        }
+        dismissShared();
+        setPlaying(true);
+      });
+    },
+    [openResort, dismissShared, setPlaying],
+  );
+  return {
+    resort,
+    loaded,
+    ready: loaded.includes('scene'),
+    adoptLoading,
+    startGame,
+    loadGame,
+    incoming,
+    sharedFailed,
+    openShared,
+  };
 }
 
 // The game's name alone behind the welcome screen, where no resort is being played yet.
@@ -142,8 +171,9 @@ function useGame(
     adoptParamsRef.current = adoptParams;
   }, [adoptParams]);
   const onUpdate = useUpdate(saves.saveBeforeReload, setUpdate);
+  const share = useShareLink(showcase);
   useDocumentTitle(playing, welcome.resort.name);
-  return { playing, saves, welcome, onUpdate };
+  return { playing, saves, welcome, onUpdate, share };
 }
 
 // Together because the advice and the day's report are what the news is heard from, and a new
@@ -251,7 +281,7 @@ export function App() {
     stats !== null,
   );
   const { thoughts, status } = useHourly();
-  const { playing, saves, welcome, onUpdate } = useGame(showcaseRef, clock, news.setUpdate);
+  const { playing, saves, welcome, onUpdate, share } = useGame(showcaseRef, clock, news.setUpdate);
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
   const { windows, layout, menu, setMenu, palette, setPalette } = useHudChrome(
@@ -421,6 +451,10 @@ export function App() {
               onStart={welcome.startGame}
               saves={saves}
               onLoad={welcome.loadGame}
+              shared={welcome.incoming.share}
+              sharedFailed={welcome.sharedFailed}
+              onOpenShared={welcome.openShared}
+              onDismissShared={welcome.incoming.dismiss}
             />
             <Toasts toasts={updateOnly(news.toasts)} onUpdate={onUpdate} news={null} />
           </>
@@ -434,6 +468,7 @@ export function App() {
           camera={camera}
           resort={resort}
           saves={saves}
+          onShare={share}
           overlay={mapOverlay}
           highlights={highlights}
           advice={advice.advice}

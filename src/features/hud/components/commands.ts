@@ -307,6 +307,15 @@ function resortCommands({ resort, windows }: CommandContext): Command[] {
       art: { icon: 'resort' },
       run: () => windows.show('name', true),
     },
+    {
+      id: 'resort:share',
+      label: 'Share resort…',
+      group: 'Resort',
+      keywords: 'link copy send layout friend url',
+      note: 'a link to its layout',
+      art: { icon: 'share' },
+      run: () => windows.show('share', true),
+    },
   ];
 }
 

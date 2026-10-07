@@ -27,7 +27,8 @@ import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
 import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
-import { readableById, UNSAVED_ID } from '../../saves/domain/saveSlots';
+import { readableById, slotsBusy, UNSAVED_ID } from '../../saves/domain/saveSlots';
+import { SharePanel } from '../../sharing/components/SharePanel';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
@@ -64,6 +65,8 @@ export interface HudProps {
   readonly camera: CameraControls;
   readonly resort: ResortControls;
   readonly saves: SaveControls;
+  // Makes a link to the resort's layout; the Share window copies or sends it.
+  readonly onShare: () => Promise<string>;
   readonly overlay: OverlayControls;
   readonly highlights: HighlightControls;
   readonly advice: readonly Advice[];
@@ -217,6 +220,9 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
       <ResortNameForm key={resort.name} name={resort.name} onRename={resort.rename} />
     ),
   saves: ({ saves, resort }) => <SavesPanel saves={saves} resortName={resort.name} />,
+  share: ({ saves, resort, onShare }) => (
+    <SharePanel onShare={onShare} title={resort.name} busy={slotsBusy(saves)} />
+  ),
   debug: (props) => <RenderStats stats={props.stats} elements={props.debugElements} />,
 };
 

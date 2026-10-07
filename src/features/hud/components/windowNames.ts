@@ -13,6 +13,7 @@ export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   resort: 'New game',
   name: 'Rename resort',
   saves: 'Saved games',
+  share: 'Share resort',
   debug: 'Debug',
   inspect: 'Inspector',
 };
@@ -28,6 +29,7 @@ export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
   resort: 'resort',
   name: 'rename',
   saves: 'saves',
+  share: 'share',
   debug: 'debug',
   inspect: 'inspect',
 };

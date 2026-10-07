@@ -144,7 +144,7 @@ function RootPage(props: PageProps) {
       <HudOption
         icon="resort"
         label="Game"
-        note="start, load or rename"
+        note="start, load, rename or share"
         more
         onSelect={() => onOpen('game')}
       />
@@ -205,6 +205,12 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         label="Rename resort…"
         note={title}
         onSelect={run(() => windows.show('name', true))}
+      />
+      <HudOption
+        icon="share"
+        label="Share resort…"
+        note="a link to its layout"
+        onSelect={run(() => windows.show('share', true))}
       />
     </>
   ),

@@ -11,7 +11,10 @@ import {
 import { resortOf } from '../../saves/components/saveNames';
 import { titleOf } from '../../saves/domain/saveWords';
 import type { SaveMeta } from '../../saves/domain/snapshot';
+import { SharedResortCard } from '../../sharing/components/SharedResortCard';
+import type { SharedResort } from '../../sharing/domain/sharedResort';
 import type { SaveControls } from '../../../app/useSaves';
+import type { IncomingShare } from '../../../app/useSharing';
 import type { LoadingStep } from '../domain/loading';
 import type { NewGame } from '../domain/newGame';
 import { LoadingProgress } from './LoadingProgress';
@@ -26,6 +29,11 @@ export interface WelcomeScreenProps {
   readonly onStart: (params: ResortParams, game: NewGame) => void;
   readonly saves: SaveControls;
   readonly onLoad: (id: string) => void;
+  // A resort link the page was opened with, if any.
+  readonly shared: IncomingShare | null;
+  readonly sharedFailed: boolean;
+  readonly onOpenShared: (shared: SharedResort) => void;
+  readonly onDismissShared: () => void;
 }
 
 type Choice = 'menu' | 'new' | 'load';
@@ -115,10 +123,43 @@ function Failure({ message }: { readonly message: string }) {
   );
 }
 
-function Card(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) => void }) {
-  if (props.error) return <Failure message={props.error} />;
+const LINK_NOTICES: { readonly [kind in IncomingShare['kind']]: string | null } = {
+  loading: null,
+  ready: null,
+  unreadable: 'This resort link could not be read.',
+  newer: 'This resort link was made by a newer version of the game. Reload to update.',
+};
+
+function LinkNotice({ shared }: { readonly shared: IncomingShare }) {
+  const notice = LINK_NOTICES[shared.kind];
+  return notice === null ? null : (
+    <p className="welcome-link-notice" role="alert">
+      {notice}
+    </p>
+  );
+}
+
+// A link opened with the page takes the menu's place, so a player who already chose to start
+// or load is not pulled away.
+function Choices(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) => void }) {
+  const { shared } = props;
+  if (shared?.kind === 'ready') {
+    return (
+      <SharedResortCard
+        shared={shared.shared}
+        ready={props.ready}
+        busy={props.busy}
+        failed={props.sharedFailed}
+        unsaved={readableById(props.saves.saves, UNSAVED_ID)}
+        onKeepUnsaved={props.saves.nameUnsaved}
+        onOpen={props.onOpenShared}
+        onBack={props.onDismissShared}
+      />
+    );
+  }
   return (
     <>
+      {shared ? <LinkNotice shared={shared} /> : null}
       <Menu
         ready={props.ready}
         loading={props.saves.loading}
@@ -126,6 +167,15 @@ function Card(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) 
         onChoose={props.onChoose}
         onLoad={props.onLoad}
       />
+    </>
+  );
+}
+
+function Card(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) => void }) {
+  if (props.error) return <Failure message={props.error} />;
+  return (
+    <>
+      <Choices {...props} />
       {props.ready ? null : <LoadingProgress done={props.loaded} />}
     </>
   );

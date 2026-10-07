@@ -1296,6 +1296,12 @@ input[type='checkbox'] {
   width: 340px;
 }
 
+.hud-window[data-window='share'] {
+  --window-top: calc(var(--window-floor) + 60px);
+  left: calc(50% - 170px);
+  width: 340px;
+}
+
 .hud-window[data-window='saves'] {
   --window-top: calc(var(--window-floor) + 60px);
   left: calc(50% - 190px);
@@ -3566,6 +3572,42 @@ input[type='checkbox'] {
 .welcome-load-game .save-list {
   max-height: 50vh;
   overflow: auto;
+}
+
+.share-panel,
+.shared-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.share-note {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.share-link {
+  width: 100%;
+  min-width: 0;
+}
+
+.shared-summary {
+  gap: 2px;
+}
+
+.shared-summary strong {
+  font: 700 var(--size-lead) / 1.2 var(--font-ui);
+}
+
+.shared-summary span {
+  color: var(--text-dim);
+}
+
+.welcome-link-notice {
+  margin: 0;
+  font-weight: 600;
+  color: var(--terracotta-deep);
 }
 
 .hud-window-toggle {

@@ -167,7 +167,7 @@ export function staffView(
   };
 }
 
-const NEED_LABELS: { readonly [need in GuestNeed]: string } = {
+export const NEED_LABELS: { readonly [need in GuestNeed]: string } = {
   hunger: 'Hunger',
   thirst: 'Thirst',
   energy: 'Energy',
@@ -179,7 +179,7 @@ const NEED_LABELS: { readonly [need in GuestNeed]: string } = {
 const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 
-function dwellWording({ min, max }: ModelVenue['dwellSeconds']): string {
+export function dwellWording({ min, max }: ModelVenue['dwellSeconds']): string {
   const [unit, suffix] = min >= HOUR ? [HOUR, 'h'] : [MINUTE, 'min'];
   const from = Math.round(min / unit);
   const to = Math.round(max / unit);

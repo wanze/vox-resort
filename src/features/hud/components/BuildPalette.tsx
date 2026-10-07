@@ -150,6 +150,7 @@ export function BuildPalette({
         focusSearch={focusSearch}
         armed={armedLabel(tool, land)}
         armedDetail={armedDetail(tool)}
+        armedObject={objectId}
         onDisarm={() => onToolChange(null)}
         onTurn={objectId ? () => onTurn(1) : null}
         styles={styles}

@@ -3,6 +3,7 @@ import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { buildCostOf } from '../../catalog/domain/prices';
 import { canAfford, type Ledger } from '../../sim/domain/ledger';
 import type { PreviewLookup } from './BuildPalette';
+import { ObjectInfo } from './ObjectInfo';
 
 export interface BuildTileProps {
   readonly type: ObjectTypeDefinition;
@@ -47,22 +48,26 @@ export function TileArt({ type, preview }: { type: ObjectTypeDefinition; preview
 export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTileProps) {
   const { price, className, note } = moneyOf(type, ledger);
 
+  // A sibling, not a child: a button may not hold another, and the tap on it must not arm the tile.
   return (
-    <button
-      type="button"
-      className={className}
-      aria-pressed={selected}
-      aria-label={type.label}
-      title={`${type.label} — ${describe(type, price)}${note}`}
-      onClick={() => onSelect(selected ? null : type.id)}
-    >
-      <TileArt type={type} preview={preview} />
-      <span className="build-tile-name" aria-hidden="true">
-        {type.label}
-      </span>
-      <span className="build-tile-badge">
-        <span className="build-tile-cost">{price}</span>
-      </span>
-    </button>
+    <div className="build-tile-slot">
+      <button
+        type="button"
+        className={className}
+        aria-pressed={selected}
+        aria-label={type.label}
+        title={`${type.label} — ${describe(type, price)}${note}`}
+        onClick={() => onSelect(selected ? null : type.id)}
+      >
+        <TileArt type={type} preview={preview} />
+        <span className="build-tile-name" aria-hidden="true">
+          {type.label}
+        </span>
+        <span className="build-tile-badge">
+          <span className="build-tile-cost">{price}</span>
+        </span>
+      </button>
+      <ObjectInfo typeId={type.id} className="build-tile-info" mode="hover" />
+    </div>
   );
 }

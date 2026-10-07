@@ -3,6 +3,7 @@ import { armedLand, armedObject, type BuildTool } from '../../build/domain/build
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import type { LandView } from '../../land/domain/landRights';
 import { armedLabel } from './BuildPalette';
+import { ObjectInfo } from './ObjectInfo';
 
 export interface ArmedChipProps {
   readonly tool: BuildTool | null;
@@ -22,6 +23,13 @@ function hintOf(tool: BuildTool | null): string {
   return 'Tap to start, drag from the mark';
 }
 
+function ArmedInfo({ tool }: { readonly tool: BuildTool | null }) {
+  const id = armedObject(tool);
+  return id ? (
+    <ObjectInfo typeId={id} className="hud-placement-button" mode="toggle" scale={2} />
+  ) : null;
+}
+
 // Without it, a tool armed with its sheet closed would take the next tap with no sign of being there.
 export function ArmedChip(props: ArmedChipProps) {
   const { tool, land, onOpen, onDisarm } = props;
@@ -35,6 +43,7 @@ export function ArmedChip(props: ArmedChipProps) {
         <span className="hud-armed-name">{label}</span>
         <span className="hud-armed-hint">{hintOf(tool)}</span>
       </button>
+      <ArmedInfo tool={tool} />
       <button
         type="button"
         className="hud-placement-button"

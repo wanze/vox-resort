@@ -1,6 +1,7 @@
 import type { StylePick } from '../../build/domain/buildTool';
 import type { StyleStrip as Strip } from '../../build/domain/stylePick';
 import type { PreviewLookup } from './BuildPalette';
+import { ObjectInfo } from './ObjectInfo';
 import { StyleStrip } from './StyleStrip';
 
 export interface BuildPaletteHeadProps {
@@ -11,6 +12,7 @@ export interface BuildPaletteHeadProps {
   readonly focusSearch: boolean;
   readonly armed: string | null;
   readonly armedDetail: string | null;
+  readonly armedObject: string | null;
   readonly onDisarm: () => void;
   // Only for an object: a phone has no R key, and nothing else armed has a facing.
   readonly onTurn: (() => void) | null;
@@ -22,11 +24,12 @@ export interface BuildPaletteHeadProps {
 interface ArmedBarProps {
   readonly armed: string;
   readonly detail: string | null;
+  readonly object: string | null;
   readonly onDisarm: () => void;
   readonly onTurn: (() => void) | null;
 }
 
-function ArmedBar({ armed, detail, onDisarm, onTurn }: ArmedBarProps) {
+function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
   return (
     <div className="hud-palette-armed-row">
       <button
@@ -42,6 +45,9 @@ function ArmedBar({ armed, detail, onDisarm, onTurn }: ArmedBarProps) {
           ✕
         </span>
       </button>
+      {object ? (
+        <ObjectInfo typeId={object} className="hud-palette-info" mode="toggle" scale={2} />
+      ) : null}
       {onTurn ? (
         <button
           type="button"
@@ -64,6 +70,7 @@ export function BuildPaletteHead({
   focusSearch,
   armed,
   armedDetail,
+  armedObject,
   onDisarm,
   onTurn,
   styles,
@@ -91,7 +98,13 @@ export function BuildPaletteHead({
       </div>
 
       {armed ? (
-        <ArmedBar armed={armed} detail={armedDetail} onDisarm={onDisarm} onTurn={onTurn} />
+        <ArmedBar
+          armed={armed}
+          detail={armedDetail}
+          object={armedObject}
+          onDisarm={onDisarm}
+          onTurn={onTurn}
+        />
       ) : null}
       {styles ? <StyleStrip strip={styles} preview={preview} onStyle={onStyle} /> : null}
     </>

@@ -250,6 +250,7 @@ input[type='text'] {
 .hud-overlay-legend,
 .hud-highlight-legend,
 .hud-toast,
+.object-info-card,
 .hud-error {
   border: 1px solid var(--edge);
   background-image: var(--slab);
@@ -270,6 +271,7 @@ input[type='text'] {
 .hud-resort-choice,
 .hud-palette-armed,
 .hud-palette-turn,
+.hud-palette-info,
 .hud-placement-button {
   appearance: none;
   display: inline-flex;
@@ -302,6 +304,7 @@ input[type='text'] {
 .hud-resort-clear:hover:not(:disabled),
 .hud-resort-choice:hover,
 .hud-palette-turn:hover,
+.hud-palette-info:hover,
 .hud-placement-button:not(.hud-placement-place):hover {
   filter: brightness(1.05);
   color: var(--terracotta-deep);
@@ -319,6 +322,7 @@ input[type='text'] {
 .hud-resort-clear:active:not(:disabled),
 .hud-palette-armed:active,
 .hud-palette-turn:active,
+.hud-palette-info:active,
 .hud-placement-button:active {
   transform: translateY(1px);
   box-shadow: var(--bevel-in);
@@ -329,7 +333,9 @@ input[type='text'] {
 .hud-tab[aria-selected='true'],
 .hud-camera-mode[aria-pressed='true'],
 .hud-camera-point[aria-pressed='true'],
-.hud-resort-choice[aria-pressed='true'] {
+.hud-resort-choice[aria-pressed='true'],
+.hud-palette-info[aria-expanded='true'],
+.hud-placement-button.object-info-button[aria-expanded='true'] {
   background-image: var(--sunken);
   box-shadow: var(--bevel-in);
   border-color: rgb(80 58 34 / 65%);
@@ -2568,7 +2574,8 @@ input[type='checkbox'] {
   min-width: 0;
 }
 
-.hud-palette-turn {
+.hud-palette-turn,
+.hud-palette-info {
   flex: none;
   width: var(--control-h);
   height: var(--control-h);
@@ -2852,6 +2859,134 @@ input[type='checkbox'] {
   color: #ff9a78;
 }
 
+.build-tile-slot {
+  position: relative;
+}
+
+/* A button shrinks to its content even as a block, and everything in a tile is positioned. */
+.build-tile-slot > .build-tile {
+  width: 100%;
+}
+
+/* A finger reads the facts from the armed bar instead: a corner this small is missed into the tile. */
+.build-tile-info {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgb(255 246 234 / 35%);
+  border-radius: 50%;
+  background: rgb(58 46 34 / 78%);
+  color: var(--stone-200);
+  opacity: 0;
+  transition:
+    opacity var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+@media (hover: hover) {
+  .build-tile-info {
+    display: flex;
+  }
+
+  .build-tile-slot:hover .build-tile-info,
+  .build-tile-info:focus-visible,
+  .build-tile-info[aria-expanded='true'] {
+    opacity: 1;
+  }
+
+  .build-tile-slot:hover .build-tile-info {
+    transform: translateY(-2px);
+  }
+
+  .build-tile-info:hover {
+    color: #f7d58a;
+  }
+}
+
+.object-info-host {
+  display: contents;
+}
+
+.object-info-button {
+  anchor-name: var(--object-info-anchor);
+}
+
+/* Centred by the browser's own popover rules wherever anchors are missing. */
+.object-info {
+  width: min(250px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  pointer-events: auto;
+}
+
+/* A pointing card must never take the hover from the icon it belongs to. */
+.object-info[data-mode='hover'] {
+  pointer-events: none;
+}
+
+@supports (anchor-name: --object-info) {
+  .object-info {
+    position-anchor: var(--object-info-anchor);
+    position-area: bottom;
+    position-try-fallbacks: flip-block;
+    inset: auto;
+    margin: var(--space-1) 0;
+  }
+}
+
+.object-info-card {
+  max-height: inherit;
+  overflow: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-pebble);
+  animation: hud-pop var(--pop);
+}
+
+.object-info-title {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  font: 700 var(--size-body) / 1.2 var(--font-ui);
+  color: var(--stone-800);
+}
+
+.object-info-facts {
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--size-small);
+  white-space: normal;
+}
+
+.object-info-facts dt {
+  padding-top: 0;
+  color: var(--text-dim);
+}
+
+.object-info-notes {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) 0 0 var(--space-4);
+  border-top: 2px dotted var(--edge-soft);
+  font-size: var(--size-small);
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
+.object-info-notes li + li {
+  margin-top: 2px;
+}
+
 .terrain-tile {
   background: linear-gradient(160deg, var(--stone-100), var(--stone-400));
 }
@@ -2904,7 +3039,8 @@ input[type='checkbox'] {
   color: var(--text-dim);
 }
 
-.build-tile:hover {
+.build-tile:hover,
+.build-tile-slot:hover > .build-tile {
   border-color: var(--stone-700);
   box-shadow: var(--bevel), var(--shadow-lift);
   transform: translateY(-2px);

@@ -48,6 +48,7 @@ import type { ClockControls } from '../../../app/useClockControls';
 import type { HistoryControls } from '../../../app/useHistory';
 import type { NewsControls } from '../../../app/useNews';
 import type { OverlayControls } from '../../../app/useOverlay';
+import type { HighlightControls } from '../../../app/useHighlights';
 import type { ProgrammeControls } from '../../../app/useProgramme';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
@@ -64,6 +65,7 @@ export interface HudProps {
   readonly resort: ResortControls;
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
+  readonly highlights: HighlightControls;
   readonly advice: readonly Advice[];
   readonly news: NewsControls;
   readonly onUpdate: (action: UpdateAction) => void;
@@ -343,6 +345,8 @@ export function Hud(props: HudProps) {
         resort={props.resort}
         saves={props.saves}
         overlay={props.overlay}
+        highlights={props.highlights}
+        compact={isCompact(props.layout)}
         ledger={props.ledger}
         status={props.status}
         trend={starsTrend(props.history.history)}

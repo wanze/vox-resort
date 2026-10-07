@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { DEMAND_GROUPS, type DemandGroup } from '../../sim/domain/demand';
 import type { StatusView } from '../../../app/showcase';
-import { DemandBar } from './DemandMeter';
+import { DemandBar } from './DemandBar';
 import {
   GROUP_TITLES,
   LINE_NAMES,

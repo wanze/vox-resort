@@ -4,6 +4,8 @@ import type { IconName } from './pixelIcons';
 import type { PreviewLookup } from './BuildPalette';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
 import { OVERLAY_KINDS } from '../../overlays/domain/overlays';
+import { highlightIconOf } from '../../highlights/components/highlightIcons';
+import { canPick, HIGHLIGHT_COLOURS } from '../../highlights/domain/highlights';
 import { objectTypeGroups } from '../../catalog/domain/objectTypes';
 import { buildCostOf } from '../../catalog/domain/prices';
 import {
@@ -30,6 +32,7 @@ import type { CameraControls } from '../../../app/useCameraControls';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { HistoryControls } from '../../../app/useHistory';
 import type { OverlayControls } from '../../../app/useOverlay';
+import type { HighlightControls } from '../../../app/useHighlights';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
 import type { SoundControls } from '../../../app/useSound';
@@ -58,6 +61,7 @@ export interface CommandContext {
   readonly resort: ResortControls;
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
+  readonly highlights: HighlightControls;
   readonly windows: WindowControls;
   readonly history: HistoryControls;
   readonly tool: BuildTool | null;
@@ -137,6 +141,41 @@ function overlayCommands({ overlay }: CommandContext): Command[] {
       checked: overlay.kind === kind,
       run: () => overlay.setOverlay(kind),
     })),
+  ];
+}
+
+// A full set says so rather than greying the row out: the palette has no disabled rows.
+function highlightCommands({ highlights }: CommandContext): Command[] {
+  const { types, picks } = highlights;
+  const room = canPick(picks);
+  const clear: Command = {
+    id: 'highlight:clear',
+    label: 'Clear highlights',
+    group: 'Highlight',
+    keywords: 'highlight reset none off remove all',
+    note: 'show every building alike',
+    art: { icon: 'inspect' },
+    checked: picks.length === 0,
+    run: highlights.clear,
+  };
+  return [
+    clear,
+    ...types.map((type) => {
+      const picked = picks.some((pick) => pick.family === type.family);
+      return {
+        id: `highlight:${type.family}`,
+        label: `Highlight ${type.label}`,
+        group: 'Highlight',
+        keywords: `find where show mark ${type.family} ${type.sign ?? 'lodging'}`,
+        note:
+          picked || room
+            ? `${type.count} built`
+            : `${HIGHLIGHT_COLOURS.length} kinds are highlighted already`,
+        art: { icon: highlightIconOf(type) },
+        checked: picked,
+        run: () => highlights.toggle(type.family),
+      };
+    }),
   ];
 }
 
@@ -431,6 +470,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...speedCommands(context),
     ...weatherCommands(context),
     ...overlayCommands(context),
+    ...highlightCommands(context),
     ...cameraCommands(context),
     ...soundCommands(context),
     ...gameCommands(context),

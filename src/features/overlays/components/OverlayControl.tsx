@@ -35,12 +35,40 @@ const cssColourAt = (value: number): string => {
 // Worked out once: the ramp is fixed, and the legend is read off the same stops the tiles are.
 const RAMP_GRADIENT = `linear-gradient(to right, ${cssColourAt(0)}, ${cssColourAt(0.5)}, ${cssColourAt(1)})`;
 
-export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
+export interface OverlayOptionsProps {
+  readonly kind: OverlayKind | null;
+  readonly onKindChange: (kind: OverlayKind | null) => void;
+  readonly onDone: () => void;
+}
+
+export function OverlayOptions({ kind, onKindChange, onDone }: OverlayOptionsProps) {
   const pick = (next: OverlayKind | null) => (): void => {
     onKindChange(next);
-    onOpenChange(false);
+    onDone();
   };
+  return (
+    <>
+      <HudOption
+        label="Off"
+        note="show the resort as it is"
+        checked={kind === null}
+        onSelect={pick(null)}
+      />
+      <hr className="hud-rule" />
+      {OVERLAY_KINDS.map((each) => (
+        <HudOption
+          key={each}
+          label={OVERLAY_NAMES[each]}
+          note={OVERLAY_QUESTIONS[each]}
+          checked={kind === each}
+          onSelect={pick(each)}
+        />
+      ))}
+    </>
+  );
+}
 
+export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
   return (
     <div className="hud-overlay">
       <HudDropdown
@@ -54,22 +82,11 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
           </>
         }
       >
-        <HudOption
-          label="Off"
-          note="show the resort as it is"
-          checked={kind === null}
-          onSelect={pick(null)}
+        <OverlayOptions
+          kind={kind}
+          onKindChange={onKindChange}
+          onDone={() => onOpenChange(false)}
         />
-        <hr className="hud-rule" />
-        {OVERLAY_KINDS.map((each) => (
-          <HudOption
-            key={each}
-            label={OVERLAY_NAMES[each]}
-            note={OVERLAY_QUESTIONS[each]}
-            checked={kind === each}
-            onSelect={pick(each)}
-          />
-        ))}
       </HudDropdown>
       {kind ? (
         <p className="hud-overlay-legend">

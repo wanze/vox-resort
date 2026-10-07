@@ -1,12 +1,5 @@
-import {
-  DynamicDrawUsage,
-  Group,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  MeshBasicNodeMaterial,
-  PlaneGeometry,
-} from 'three/webgpu';
-import { capacityFor } from '../../rendering/domain/spatialChunks';
+import type { Group } from 'three/webgpu';
+import { buildGroundQuads } from '../../rendering/adapters/groundQuads';
 import { rampInto, zoneColourInto } from '../domain/ramp';
 import { NO_ZONE } from '../../sim/domain/zones';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
@@ -38,49 +31,21 @@ export interface OverlayField {
   dispose(): void;
 }
 
-function quadGeometry(): PlaneGeometry {
-  const geometry = new PlaneGeometry(QUAD_SIZE, QUAD_SIZE);
-  geometry.rotateX(-Math.PI / 2);
-  return geometry;
-}
-
-// The colour attribute is made up front: the material's shader is built on the first draw, and
-// one built without instance colours would never read them.
-function createMesh(
-  geometry: PlaneGeometry,
-  material: MeshBasicNodeMaterial,
-  capacity: number,
-): InstancedMesh {
-  const mesh = new InstancedMesh(geometry, material, capacity);
-  mesh.name = 'overlay';
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage);
-  mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
-  mesh.instanceColor.setUsage(DynamicDrawUsage);
-  mesh.count = 0;
-  mesh.visible = false;
-  // After the blob shadows' 1, so the tint is laid over them.
-  mesh.renderOrder = 2;
-  return mesh;
-}
-
 export function buildOverlayField(): OverlayField {
-  const group = new Group();
-  group.name = 'overlay';
-
-  const geometry = quadGeometry();
-  const material = new MeshBasicNodeMaterial({
-    transparent: true,
-    depthWrite: false,
+  // After the blob shadows' 1, so the tint is laid over them.
+  const quads = buildGroundQuads({
+    name: 'overlay',
+    size: QUAD_SIZE,
     opacity: OPACITY,
+    renderOrder: 2,
   });
-  let mesh = createMesh(geometry, material, capacityFor(0));
-  group.add(mesh);
 
   let placed: readonly OverlayTile[] = [];
   const colour = { r: 0, g: 0, b: 0 };
 
   // A slot with no data is scaled to nothing, as a waiting balloon is, so no second mesh is needed.
   function writeSlot(slot: number, shown: boolean): void {
+    const { mesh } = quads;
     const matrices = mesh.instanceMatrix.array;
     const at = slot * 16;
     matrices.fill(0, at, at + 16);
@@ -100,6 +65,7 @@ export function buildOverlayField(): OverlayField {
   }
 
   function paintSlots(on: boolean, colourOf: (node: number) => boolean): void {
+    const { mesh } = quads;
     mesh.visible = on && placed.length > 0;
     if (!on) return;
     for (let slot = 0; slot < placed.length; slot++) writeSlot(slot, colourOf(placed[slot]!.node));
@@ -109,28 +75,18 @@ export function buildOverlayField(): OverlayField {
     if (placed.length > 0) mesh.computeBoundingSphere();
   }
 
-  function grow(capacity: number): void {
-    const previous = mesh;
-    mesh = createMesh(geometry, material, capacity);
-    group.remove(previous);
-    previous.dispose();
-    group.add(mesh);
-  }
-
   return {
-    group,
+    group: quads.group,
     get drawCalls() {
-      return mesh.visible && mesh.count > 0 ? 1 : 0;
+      return quads.mesh.visible && quads.mesh.count > 0 ? 1 : 0;
     },
     get triangleCount() {
-      return mesh.visible ? mesh.count * 2 : 0;
+      return quads.mesh.visible ? quads.mesh.count * 2 : 0;
     },
     place(tiles) {
-      const capacity = capacityFor(tiles.length, mesh.instanceMatrix.count);
-      if (capacity !== mesh.instanceMatrix.count) grow(capacity);
+      quads.fit(tiles.length);
       placed = tiles;
-      mesh.count = tiles.length;
-      mesh.visible = false;
+      quads.mesh.visible = false;
     },
     paint(values) {
       paintSlots(values !== null, (node) => rampInto(values![node] ?? Number.NaN, colour));
@@ -140,11 +96,6 @@ export function buildOverlayField(): OverlayField {
         zoneColourInto(zoneOfNode![node] ?? NO_ZONE, colour),
       );
     },
-    dispose() {
-      mesh.dispose();
-      group.clear();
-      geometry.dispose();
-      material.dispose();
-    },
+    dispose: quads.dispose,
   };
 }

@@ -451,6 +451,18 @@ import {
   type OverlayField,
   type OverlayTile,
 } from '../features/overlays/adapters/overlayField';
+import {
+  highlightBoxesOf,
+  highlightTypesOf,
+  ringWidthAt,
+  type HighlightKind,
+  type HighlightPick,
+  type HighlightType,
+} from '../features/highlights/domain/highlights';
+import {
+  buildHighlightField,
+  type HighlightField,
+} from '../features/highlights/adapters/highlightField';
 import { nodeIndexFor, type NodeIndex } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor, type LightAnchor } from '../features/lighting/domain/lightAnchors';
@@ -821,6 +833,8 @@ export interface ShowcaseOptions {
   readonly onOrdersChange?: (orders: readonly OrderSpot[]) => void;
   // Whenever the venues are rebuilt, in the order the signs' anchors were placed.
   readonly onSigns?: (spots: readonly SignSpot[]) => void;
+  // Whenever the venues are rebuilt: the kinds of building standing, and how many of each.
+  readonly onHighlightTypes?: (types: readonly HighlightType[]) => void;
   // An event announced, called off or put off; never told during a load.
   readonly onEventNews?: (news: EventNews) => void;
   // After a booking, an edit, a load, a new resort and every simulated hour.
@@ -877,6 +891,8 @@ export interface Showcase {
   setSpeed(speed: SimSpeed): void;
   setWeather(weather: Weather | null): void;
   setOverlay(kind: OverlayKind | null): void;
+  // Rings every building of the picked kinds; under a bench, never drawn.
+  setHighlights(picks: readonly HighlightPick[]): void;
   selectPerson(person: number): void;
   selectWorker(worker: number): void;
   // Turns the camera on the inspected member of staff, wherever they have walked to since.
@@ -2215,8 +2231,9 @@ function sceneStats(parts: {
   readonly weather: Weather;
   readonly rain: RainField;
   readonly fireworks: FireworksField;
+  readonly highlights: HighlightField;
 }): ShowcaseStats {
-  const { handle, scratch, catalogue, rain, fireworks } = parts;
+  const { handle, scratch, catalogue, rain, fireworks, highlights } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
   const { sea, lighting, ballField, flames } = parts.resort;
@@ -2242,7 +2259,8 @@ function sceneStats(parts: {
       overlay.drawCalls +
       sea.drawCalls +
       rain.drawCalls +
-      fireworks.drawCalls,
+      fireworks.drawCalls +
+      highlights.drawCalls,
     chunkCount: world.chunkCount,
     uniqueTriangleCount: world.uniqueTriangleCount,
     unmergedTriangleCount: world.unmergedTriangleCount,
@@ -2259,7 +2277,8 @@ function sceneStats(parts: {
       overlay.triangleCount +
       sea.triangleCount +
       rain.triangleCount +
-      fireworks.triangleCount,
+      fireworks.triangleCount +
+      highlights.triangleCount,
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
@@ -3701,6 +3720,7 @@ function createStatsReader(parts: {
   readonly weather: () => Weather;
   readonly rain: RainField;
   readonly fireworks: FireworksField;
+  readonly highlights: HighlightField;
 }): () => ShowcaseStats {
   const startup: StartupCost = {
     startupMs: Math.round(performance.now() - parts.mountStarted),
@@ -4387,6 +4407,16 @@ function markerAnchorOf(
   return roofOver(venue, groundUnder(resort, venue), objectTypeById(venue.id).model.height);
 }
 
+// Venues only, lodging among them: a bench or a lamp is not a place anyone looks for.
+const HIGHLIGHT_KINDS: ReadonlyMap<string, HighlightKind> = new Map(
+  OBJECT_TYPES.filter((type) => type.venue !== null).map((type) => [
+    type.id,
+    { family: type.family, label: type.label, sign: signOf(type.id) },
+  ]),
+);
+
+const highlightKindOf = (id: string): HighlightKind | null => HIGHLIGHT_KINDS.get(id) ?? null;
+
 const groundUnder = (
   resort: Resort,
   place: { readonly tileX: number; readonly tileZ: number },
@@ -4854,6 +4884,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Not per resort either: a new plot clears it rather than building another.
   const fireworks = buildFireworksField();
   handle.scene.add(fireworks.group);
+  // Not per resort either: the picks outlast a new plot, and the rings are placed again for it.
+  const highlights = buildHighlightField();
+  handle.scene.add(highlights.group);
   slot.attach(handle);
 
   let fpsState = createFpsState();
@@ -5000,6 +5033,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     weather: () => clock.weather,
     rain,
     fireworks,
+    highlights,
   });
 
   // A flag rather than a rebuild per spadeful: the rebuild is coalesced to one per frame.
@@ -5148,6 +5182,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     options.onSigns?.(spots);
   };
   placeSigns();
+
+  let highlightPicks: readonly HighlightPick[] = [];
+  const placeHighlights = (): void => {
+    if (bench) return;
+    const resort = current();
+    const { placements } = resort.plot.layout;
+    options.onHighlightTypes?.(highlightTypesOf(placements, highlightKindOf));
+    highlights.show(
+      highlightBoxesOf(placements, highlightPicks, familyOf, (placement) =>
+        groundUnder(resort, placement),
+      ),
+    );
+  };
+  placeHighlights();
+
+  const widenHighlights = (): void => {
+    if (highlightPicks.length === 0) return;
+    const { width, height } = viewSize;
+    highlights.widen(ringWidthAt(tilePxAt(handle.camera, handle.controls.target, width, height)));
+  };
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
@@ -5401,6 +5455,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const rebuilt = (): void => {
     clock.relight();
     paintOverlay();
+    placeHighlights();
     onSceneChange?.(statsNow());
     advise();
     speak();
@@ -5679,6 +5734,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     paintOverlay();
     letter();
     placeSigns();
+    placeHighlights();
     // Said now rather than tomorrow; the day's counters are left alone.
     advise();
     speak();
@@ -5785,6 +5841,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     fpsState = sample.state;
 
     signSpots.project(handle.camera, handle.controls.target, signsWanted, viewSize);
+    widenHighlights();
     markerSpots.project(handle.camera, viewSize.width, viewSize.height);
     staffPins.pin(current(), staffPinsShown, workerOf(selected));
     tellOrders();
@@ -5962,6 +6019,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       paintOverlay();
       onSceneChange?.(statsNow());
     },
+    setHighlights(picks) {
+      if (bench) return;
+      highlightPicks = picks;
+      placeHighlights();
+      onSceneChange?.(statsNow());
+    },
     selectPerson: (person) => select({ person }),
     selectWorker: (worker) => select({ worker }),
     showSelected: () => lookAtWorker(handle, current(), workerOf(selected)),
@@ -5981,6 +6044,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       preparer.dispose();
       rain.dispose();
       fireworks.dispose();
+      highlights.dispose();
       current().dispose();
       handle.dispose();
       ownership.dispose();

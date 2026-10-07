@@ -18,6 +18,11 @@ describe('layoutModeFor', () => {
     expect(layoutModeFor(820, 1180)).toBe('bottom');
   });
 
+  it('docks at the bottom once the desk bar would overflow', () => {
+    expect(layoutModeFor(1010, 800)).toBe('bottom');
+    expect(layoutModeFor(1011, 800)).toBe('desk');
+  });
+
   it('keeps the desk layout on a tablet held sideways', () => {
     expect(layoutModeFor(1180, 820)).toBe('desk');
   });

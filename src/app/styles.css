@@ -128,7 +128,8 @@
   --palette-w: 284px;
   --tile-min: 60px;
 
-  --strip-h: 40px;
+  /* Taller than the plates, so they float with a little of the map showing above and below. */
+  --strip-h: 48px;
   --strip-control-h: 32px;
   --dock-h: 56px;
   --rail-w: 56px;
@@ -247,6 +248,7 @@ input[type='text'] {
 .hud-command,
 .hud-window,
 .hud-overlay-legend,
+.hud-highlight-legend,
 .hud-toast,
 .hud-error {
   border: 1px solid var(--edge);
@@ -844,16 +846,23 @@ input[type='checkbox'] {
   box-shadow: var(--shadow-lift);
 }
 
-@media (max-width: 1360px) {
+@media (max-width: 1510px) {
   .hud-dock .hud-tool-label {
     display: none;
   }
 }
 
+/* The name goes first: the menu still opens on its icon, and the resort's name is on its gates. */
+@media (max-width: 1650px) {
+  .hud-wordmark {
+    display: none;
+  }
+}
+
 @media (max-width: 1240px) {
-  .hud-wordmark,
   .hud-speed .hud-chip-label,
-  .hud-overlay .hud-chip-label {
+  .hud-overlay .hud-chip-label,
+  .hud-highlight .hud-chip-label {
     display: none;
   }
 }
@@ -867,6 +876,29 @@ input[type='checkbox'] {
 .hud-gates {
   height: var(--control-h);
   padding: 0 var(--space-3) 0 var(--space-2);
+}
+
+/* The gates leave the bar for the menu before anything else does: they are rarely changed. */
+.hud-menu-gates {
+  display: none;
+}
+
+@media (max-width: 1120px) {
+  .hud-bar .hud-gates {
+    display: none;
+  }
+
+  .hud-menu-gates {
+    display: contents;
+  }
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-gates {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .hud-menu-gates {
+  display: contents;
 }
 
 .hud-gates-lamp {
@@ -889,20 +921,14 @@ input[type='checkbox'] {
 }
 
 .hud-demand {
-  appearance: none;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  height: var(--control-h);
-  padding: 0 var(--space-2);
-  border: 0;
-  background: none;
-  color: var(--text-dim);
-  cursor: var(--cursor-hand);
 }
 
-.hud-demand:hover {
-  color: var(--terracotta-deep);
+/* Bars run up and down, so the panel wants room for the grid's bar column to read as a scale. */
+.hud-demand-menu .hud-dropdown-panel {
+  min-width: 320px;
 }
 
 .hud-demand-group {
@@ -923,8 +949,8 @@ input[type='checkbox'] {
   position: relative;
   display: block;
   width: 9px;
-  /* With the initial under it, this stays inside the button with room above and below. */
-  height: 18px;
+  /* With the initial under it, this sits centred in the chip with room above and below. */
+  height: 14px;
   border-radius: 2px;
   background: var(--sunken);
   box-shadow: inset 0 0 0 1px var(--edge-soft);
@@ -1098,6 +1124,78 @@ input[type='checkbox'] {
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.hud-highlight {
+  position: relative;
+}
+
+/* The list scrolls under the search rather than the whole panel, so the field stays in reach. */
+.hud-dropdown-panel:has(.hud-highlight-list) {
+  overflow: hidden;
+}
+
+.hud-highlight .hud-dropdown-panel {
+  min-width: 280px;
+  max-height: min(420px, calc(100dvh - var(--bar-h) - var(--space-5)));
+}
+
+.hud-highlight-search {
+  display: flex;
+  flex: none;
+  padding-bottom: var(--space-2);
+}
+
+.hud-highlight-search input {
+  flex: 1;
+}
+
+.hud-highlight-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.hud-highlight-empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}
+
+.hud-highlight-legend {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border-radius: var(--radius-pebble);
+  font-size: var(--size-small);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hud-highlight-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-highlight-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: var(--space-1);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px var(--edge-soft);
+  vertical-align: -0.1em;
 }
 
 .hud-overlay-ramp {
@@ -3408,31 +3506,27 @@ input[type='checkbox'] {
 
 .app:not([data-layout='desk']) .hud-bar {
   height: calc(var(--strip-h) + var(--safe-t));
-  padding: var(--safe-t) calc(var(--space-2) + var(--safe-r)) 0 calc(var(--space-2) + var(--safe-l));
-  /* The spare width goes between the groups, so a strip with room to spare spreads out evenly. */
-  justify-content: space-between;
-  gap: var(--space-1);
+  padding: calc(var(--safe-t) + var(--space-1)) calc(var(--space-2) + var(--safe-r)) 0
+    calc(var(--space-2) + var(--safe-l));
+  align-items: flex-start;
+  /* Packed from the left, with the gap growing a little with the screen: spread evenly, the groups
+     drifted apart on a wide tablet and read as unrelated. */
+  justify-content: flex-start;
+  gap: clamp(var(--space-1), 1.5vw, var(--space-4));
   overflow-x: auto;
   scrollbar-width: none;
-  border-bottom: 1px solid var(--edge);
-  background-image: var(--slab);
-  box-shadow: var(--shadow-slab), var(--bevel);
-  pointer-events: auto;
 }
 
 .app:not([data-layout='desk']) .hud-bar::-webkit-scrollbar {
   display: none;
 }
 
-/* One slab for the whole strip: a plate's own border, padding and gap cost about 40 px across a phone. */
+/* Each group on its own plate, as on a desk, but slimmer: the side padding is what a phone runs out of. */
 .app:not([data-layout='desk']) .hud-bar .hud-plate:not(.hud-dock) {
   flex: none;
-  gap: var(--space-2);
-  height: var(--strip-h);
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
+  gap: var(--space-1);
+  height: calc(var(--strip-control-h) + 10px);
+  padding: 0 var(--space-1);
 }
 
 .app:not([data-layout='desk']) .hud-bar :is(.hud-chip, .hud-gates) {
@@ -3459,16 +3553,55 @@ input[type='checkbox'] {
     .hud-chip-label,
     .hud-menu .hud-chip-caret,
     .hud-readout-label,
-    .hud-plate:has(> .hud-demand),
     .hud-gates-state
   ) {
   display: none;
 }
 
-/* The forecast is also in the programme, so a narrow phone gives its room to the counts. */
-@media (max-width: 580px) {
+/* The status keeps the right edge, so the strip's spare width is one gap rather than several. */
+.app:not([data-layout='desk']) .hud-bar .hud-status {
+  margin-left: auto;
+}
+
+.hud-menu-highlight,
+.hud-menu-maps {
+  display: none;
+}
+
+/* The highlight picker is the first chip to leave for the menu's View page; its legend is fixed, so
+   it stays. */
+@media (max-width: 739px) {
+  .hud-bar .hud-highlight {
+    display: contents;
+  }
+
+  .hud-bar .hud-highlight > .hud-dropdown {
+    display: none;
+  }
+
+  .hud-menu-highlight {
+    display: contents;
+  }
+}
+
+/* A narrow phone gives the room to the counts and the demand bars. The forecast is also in the
+   programme, and the map views move to the menu's View page; their legends are fixed, so they stay. */
+@media (max-width: 639px) {
   .hud-bar .hud-weather {
     display: none;
+  }
+
+  .hud-bar .hud-maps-plate,
+  .hud-bar .hud-maps-plate .hud-overlay {
+    display: contents;
+  }
+
+  .hud-bar .hud-maps-plate .hud-overlay > .hud-dropdown {
+    display: none;
+  }
+
+  .hud-menu-maps {
+    display: contents;
   }
 }
 
@@ -3589,6 +3722,22 @@ input[type='checkbox'] {
   top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
   left: 50%;
   transform: translateX(-50%);
+}
+
+.app:not([data-layout='desk']) .hud-highlight-legend {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: auto;
+  left: calc(var(--space-2) + var(--safe-l));
+}
+
+.app[data-layout='rail'] .hud-highlight-legend {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+}
+
+/* Under the map's legend, which takes the middle of the same row on a narrow screen. */
+.app:not([data-layout='desk']) .hud-bar:has(.hud-overlay-legend) .hud-highlight-legend {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2) * 2 + 2.6em);
 }
 
 .app:not([data-layout='desk']) .hud .hud-toasts {

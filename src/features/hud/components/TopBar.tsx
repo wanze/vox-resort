@@ -9,8 +9,10 @@ import { TimeOfDay } from './TimeOfDay';
 import { WeatherForecast } from './WeatherForecast';
 import { WindowDock } from './WindowDock';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
+import { HighlightControl } from '../../highlights/components/HighlightControl';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { OverlayControls } from '../../../app/useOverlay';
+import type { HighlightControls } from '../../../app/useHighlights';
 import type { ResortControls } from '../../../app/useResortControls';
 import type { SaveControls } from '../../../app/useSaves';
 import type { SoundControls } from '../../../app/useSound';
@@ -19,7 +21,7 @@ import type { WindowControls } from '../../../app/useWindows';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { Ledger } from '../../sim/domain/ledger';
 
-export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'rating';
+export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'highlight' | 'demand' | 'rating';
 
 export interface TopBarProps {
   readonly clockElement: RefObject<HTMLSpanElement | null>;
@@ -27,6 +29,7 @@ export interface TopBarProps {
   readonly resort: ResortControls;
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
+  readonly highlights: HighlightControls;
   readonly ledger: Ledger | null;
   readonly status: StatusView | null;
   readonly trend: number | null;
@@ -36,6 +39,8 @@ export interface TopBarProps {
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly onFind: () => void;
   readonly view: ViewToggles;
+  // A touch layout: no field takes focus by itself there.
+  readonly compact: boolean;
   readonly sound: SoundControls;
   readonly forecast: readonly DayForecast[];
 }
@@ -68,6 +73,7 @@ function GuestsReadout({ status }: { readonly status: StatusView | null }) {
   );
 }
 
+// The stylesheet hands it to the menu on a narrow bar: there is no room, and it is rarely changed.
 function GatesToggle({
   open,
   onOpenChange,
@@ -111,6 +117,9 @@ export function TopBar(props: TopBarProps) {
           clock={clock}
           sound={props.sound}
           view={props.view}
+          highlights={props.highlights}
+          overlay={overlay}
+          gates={{ open: resort.open, onOpenChange: resort.setOpen }}
         />
       </div>
 
@@ -131,7 +140,14 @@ export function TopBar(props: TopBarProps) {
         />
       </div>
 
-      <div className="hud-plate">
+      {/* Highlight first: its legend hangs to the left, the map's to the right, so both fit. */}
+      <div className="hud-plate hud-maps-plate">
+        <HighlightControl
+          highlights={props.highlights}
+          open={menu === 'highlight'}
+          onOpenChange={opener('highlight')}
+          focusSearch={!props.compact}
+        />
         <OverlayControl
           kind={overlay.kind}
           onKindChange={overlay.setOverlay}
@@ -140,9 +156,13 @@ export function TopBar(props: TopBarProps) {
         />
       </div>
 
-      <DemandMeter demand={status?.demand ?? null} onOpen={() => windows.show('demand', true)} />
-
       <div className="hud-plate hud-status">
+        <DemandMeter
+          status={status}
+          open={menu === 'demand'}
+          onOpenChange={opener('demand')}
+          onShowWindow={() => windows.show('demand', true)}
+        />
         {status ? (
           <RatingControl
             rating={status.rating}

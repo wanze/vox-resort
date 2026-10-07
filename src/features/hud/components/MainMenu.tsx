@@ -9,6 +9,11 @@ import { MENU_PAGES, pageIcon, pageKey, pageTitle, WINDOW_KEYS } from './windowN
 import { isOpen, isShown } from '../domain/windowLayout';
 import { SoundOptions } from '../../sound/components/SoundControl';
 import { saveOrAsk } from '../../saves/domain/saveSlots';
+import { HighlightOptions } from '../../highlights/components/HighlightControl';
+import type { HighlightControls } from '../../../app/useHighlights';
+import type { OverlayControls } from '../../../app/useOverlay';
+import { OverlayOptions } from '../../overlays/components/OverlayControl';
+import { OVERLAY_NAMES } from '../../overlays/components/overlayNames';
 import type { ClockControls } from '../../../app/useClockControls';
 import type { SaveControls } from '../../../app/useSaves';
 import type { SoundControls } from '../../../app/useSound';
@@ -38,9 +43,12 @@ export interface MainMenuProps {
   readonly clock: ClockControls;
   readonly sound: SoundControls;
   readonly view: ViewToggles;
+  readonly highlights: HighlightControls;
+  readonly overlay: OverlayControls;
+  readonly gates: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void };
 }
 
-type SubPage = 'game' | 'windows' | 'view' | 'weather' | 'sound';
+type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'sound';
 
 interface PageContext extends MainMenuProps {
   readonly title: string;
@@ -51,6 +59,8 @@ const PAGE_TITLES: { readonly [page in SubPage]: string } = {
   game: 'Game',
   windows: 'Windows',
   view: 'View',
+  highlight: 'Highlight buildings',
+  maps: 'Map view',
   weather: 'Weather',
   sound: 'Sound',
 };
@@ -63,7 +73,61 @@ const SOUND_ROWS = {
   off: { icon: 'muted', note: 'muted' },
 } as const;
 
-function RootPage(props: PageContext & { readonly onOpen: (page: SubPage) => void }) {
+interface PageProps extends PageContext {
+  readonly onOpen: (page: SubPage) => void;
+}
+
+// Back from a page goes to the page that opened it, not always to the root.
+const PAGE_PARENTS: { readonly [page in SubPage]?: SubPage } = { highlight: 'view', maps: 'view' };
+
+// What a narrow strip has given up, each row shown by the stylesheet from the width its chip leaves
+// the strip at; the map views leave later than the highlight picker.
+function NarrowViewRows({
+  highlights,
+  overlay,
+  onOpen,
+}: Pick<PageProps, 'highlights' | 'overlay' | 'onOpen'>) {
+  const picked = highlights.picks.length;
+  return (
+    <>
+      <div className="hud-menu-highlight">
+        <hr className="hud-rule" />
+        <HudOption
+          icon="inspect"
+          label="Highlight buildings"
+          note={picked > 0 ? `${picked} kinds ringed` : 'ring every building of a kind'}
+          more
+          onSelect={() => onOpen('highlight')}
+        />
+      </div>
+      <div className="hud-menu-maps">
+        <HudOption
+          icon="overlay"
+          label="Map view"
+          note={overlay.kind ? OVERLAY_NAMES[overlay.kind] : 'off'}
+          more
+          onSelect={() => onOpen('maps')}
+        />
+      </div>
+    </>
+  );
+}
+
+// Shown by the stylesheet only where the bar has given up its own gates switch.
+function GatesOption({ gates, run }: Pick<PageContext, 'gates' | 'run'>) {
+  return (
+    <div className="hud-menu-gates">
+      <HudOption
+        icon="guests"
+        label={gates.open ? 'Close the gates' : 'Open the gates'}
+        note={gates.open ? 'turn new guests away' : 'let new guests in'}
+        onSelect={run(() => gates.onOpenChange(!gates.open))}
+      />
+    </div>
+  );
+}
+
+function RootPage(props: PageProps) {
   const { saves, windows, clock, sound, run, onOpen } = props;
   const soundRow = SOUND_ROWS[sound.prefs.on ? 'on' : 'off'];
   return (
@@ -75,6 +139,7 @@ function RootPage(props: PageContext & { readonly onOpen: (page: SubPage) => voi
         disabled={!saves.available}
         onSelect={run(() => void saveOrAsk(saves.save, () => windows.show('saves', true)))}
       />
+      <GatesOption gates={props.gates} run={run} />
       <hr className="hud-rule" />
       <HudOption
         icon="resort"
@@ -121,7 +186,7 @@ function RootPage(props: PageContext & { readonly onOpen: (page: SubPage) => voi
   );
 }
 
-const PAGES: { readonly [page in SubPage]: (props: PageContext) => ReactNode } = {
+const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
   game: ({ windows, run, title }) => (
     <>
       <HudOption
@@ -174,7 +239,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageContext) => ReactNode } =
     </>
   ),
   // Not layers: these stand over whichever layer the map view has on, or none.
-  view: ({ view }) => (
+  view: ({ view, highlights, overlay, onOpen }) => (
     <>
       <HudOption
         label="Problem markers"
@@ -197,7 +262,22 @@ const PAGES: { readonly [page in SubPage]: (props: PageContext) => ReactNode } =
         many
         onSelect={() => view.onStaffPinsChange(!view.staffPins)}
       />
+      <NarrowViewRows highlights={highlights} overlay={overlay} onOpen={onOpen} />
     </>
+  ),
+  maps: ({ overlay, onOpenChange }) => (
+    <OverlayOptions
+      kind={overlay.kind}
+      onKindChange={overlay.setOverlay}
+      onDone={() => onOpenChange(false)}
+    />
+  ),
+  highlight: ({ highlights, onOpenChange }) => (
+    <HighlightOptions
+      highlights={highlights}
+      focusSearch={false}
+      onDone={() => onOpenChange(false)}
+    />
   ),
   weather: ({ clock, onOpenChange }) => (
     <WeatherOptions
@@ -216,8 +296,8 @@ function MenuPages(props: PageContext) {
   const [page, setPage] = useState<SubPage | null>(null);
   if (page === null) return <RootPage {...props} onOpen={setPage} />;
   return (
-    <MenuPage title={PAGE_TITLES[page]} onBack={() => setPage(null)}>
-      {PAGES[page](props)}
+    <MenuPage title={PAGE_TITLES[page]} onBack={() => setPage(PAGE_PARENTS[page] ?? null)}>
+      {PAGES[page]({ ...props, onOpen: setPage })}
     </MenuPage>
   );
 }

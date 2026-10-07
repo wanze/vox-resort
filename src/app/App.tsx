@@ -26,6 +26,7 @@ import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
 import { useSaves, type SaveControls } from './useSaves';
 import { useSigns } from './useSigns';
+import { useHighlights } from './useHighlights';
 import { useClickCues, useSound, useToastCues, type SoundControls } from './useSound';
 import { useUpdate } from './useUpdate';
 import { mountShowcase, type BuildNote, type Showcase, type ShowcaseStats } from './showcase';
@@ -147,7 +148,7 @@ function useGame(
 
 // Together because the advice and the day's report are what the news is heard from, and a new
 // resort is a baseline for both.
-// sceneUp, so the staff pins and signs a preference read at startup asks for are not told to nobody.
+// sceneUp, so the staff pins, signs and highlights asked for at startup are not told to nobody.
 function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sceneUp: boolean) {
   const news = useNews(speed);
   const history = useHistory(news.closeDay);
@@ -168,7 +169,8 @@ function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sc
     if (sceneUp) showcase.current?.setStaffPins(staffPins);
   }, [showcase, sceneUp, staffPins]);
   const signs = useSigns(showcase, sceneUp, news.prefs.signs);
-  return { news, history, replaced, advice, signs };
+  const highlights = useHighlights(showcase, sceneUp);
+  return { news, history, replaced, advice, signs, highlights };
 }
 
 function useHourly() {
@@ -243,7 +245,7 @@ export function App() {
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
   const { camera, clock, inspector, placement, programme } = useControls(showcaseRef);
-  const { news, history, replaced, advice, signs } = useAdviceNews(
+  const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
     clock.speed,
     stats !== null,
@@ -280,6 +282,7 @@ export function App() {
   const { adopt: adoptLedger, adoptLand, note } = money;
   const { markDirty, morning } = saves;
   const { adopt: adoptSigns } = signs;
+  const { adopt: adoptHighlights } = highlights;
   const { adopt: adoptProgramme } = programme;
   const { hearEvent } = news;
   const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
@@ -302,6 +305,7 @@ export function App() {
       onSelectionChange: adoptSelection,
       onOrdersChange: adoptOrders,
       onSigns: adoptSigns,
+      onHighlightTypes: adoptHighlights,
       onAdviceChange: adoptAdvice,
       onResortReplaced: replaced,
       onThoughtsChange: adoptVoices,
@@ -393,6 +397,7 @@ export function App() {
     onHear,
     adoptSpeed,
     adoptSigns,
+    adoptHighlights,
     adoptPending,
     hearEvent,
     adoptProgramme,
@@ -428,6 +433,7 @@ export function App() {
           resort={resort}
           saves={saves}
           overlay={mapOverlay}
+          highlights={highlights}
           advice={advice.advice}
           news={news}
           onUpdate={onUpdate}

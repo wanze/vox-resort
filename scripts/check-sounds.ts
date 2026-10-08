@@ -8,10 +8,11 @@ import {
   type SlotName,
   type SoundFile,
 } from '../src/features/sound/domain/bank.ts';
+import { STREAMED_MUSIC } from '../src/features/pwa/domain/precacheRules.ts';
 
 const FILES = 'sounds/files';
 const MIB = 1024 * 1024;
-// Every byte is precached on install, so this is what sound costs a player before the first note.
+// All but the music is precached on install; the music is fetched as it is first heard.
 const AUDIO_BUDGET = 12 * MIB;
 const FILE_CAP = 1.5 * MIB;
 
@@ -43,11 +44,20 @@ function sourceProblems({ file, source }: SoundFile): string[] {
   return problems;
 }
 
+// A track named otherwise would go back into the precache; a loop named music- would leave it.
+function busProblems(slot: SlotName, { file, cut }: SoundFile): string[] {
+  const music = SLOT_BUS[slot] === 'music';
+  const problems: string[] = [];
+  if (cut.stereo && !music) problems.push(`${file}: only music is stereo`);
+  if (music !== STREAMED_MUSIC.test(file))
+    problems.push(`${file}: music, and only music, is named music-*.mp3`);
+  return problems;
+}
+
 function fileProblems(slot: SlotName, sound: SoundFile): string[] {
-  const { file, cut } = sound;
-  const problems = sourceProblems(sound);
-  if (cut.stereo && SLOT_BUS[slot] !== 'music') problems.push(`${file}: only music is stereo`);
-  if (!onDisk.includes(file)) problems.push(`${file}: named in the bank, not in ${FILES}`);
+  const problems = [...sourceProblems(sound), ...busProblems(slot, sound)];
+  if (!onDisk.includes(sound.file))
+    problems.push(`${sound.file}: named in the bank, not in ${FILES}`);
   return problems;
 }
 

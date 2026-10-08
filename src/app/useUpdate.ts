@@ -11,12 +11,16 @@ import type { UpdateAction, UpdatePhase } from '../features/hud/domain/news';
 export function useUpdate(
   saveBeforeReload: () => Promise<boolean>,
   setUpdate: (phase: UpdatePhase | null) => void,
+  ready: boolean,
 ): (action: UpdateAction) => void {
   const worker = useRef<ServiceWorkerControls | null>(null);
   const checks = useRef({ found: false, lastCheckedAt: 0 });
 
   useEffect(() => {
-    // Registering is itself a check, so the hour runs from the mount.
+    // Not before the first frame: a first visit's worker downloads the whole build, and that
+    // must not compete with what draws the resort.
+    if (!ready) return;
+    // Registering is itself a check, so the hour runs from the registration.
     checks.current.lastCheckedAt = Date.now();
     const controls = startServiceWorker(() => {
       checks.current.found = true;
@@ -41,7 +45,7 @@ export function useUpdate(
       globalThis.clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
     };
-  }, [setUpdate]);
+  }, [setUpdate, ready]);
 
   return useCallback(
     (action: UpdateAction) => {

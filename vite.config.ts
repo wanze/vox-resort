@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { MUSIC_CACHE, STREAMED_MUSIC } from './src/features/pwa/domain/precacheRules.ts';
 
 const SAND = '#dccdb1';
 
@@ -36,6 +37,29 @@ export default defineConfig({
         // skipped with only a warning. scripts/check-precache.ts fails the build if one is.
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         cleanupOutdatedCaches: true,
+        manifestTransforms: [
+          (entries) => ({ manifest: entries.filter((entry) => !STREAMED_MUSIC.test(entry.url)) }),
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: STREAMED_MUSIC,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: MUSIC_CACHE,
+              expiration: { maxEntries: 10, purgeOnQuotaError: true },
+              cacheableResponse: { statuses: [200] },
+              rangeRequests: true,
+              plugins: [
+                {
+                  // <audio> asks for byte ranges, and a 206 cannot be cached: fetch the whole track.
+                  // Copied into sw.js as source text, so it may use nothing from this file.
+                  requestWillFetch: async ({ request }) =>
+                    new Request(request.url, { credentials: 'same-origin' }),
+                },
+              ],
+            },
+          },
+        ],
       },
     }),
   ],

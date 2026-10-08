@@ -33,7 +33,10 @@ surf, thunder and fireworks are synthesized.
    entries are re-encoded (`sounds/files/.hashes.json`).
 4. `scripts/check-sounds.ts` (in `pnpm lint`) checks licences and sizes (max
    1.5 MiB per file, 12 MiB total).
-5. Vite hashes every MP3 into `dist/assets` and the service worker precaches it.
+5. Vite hashes every MP3 into `dist/assets`. The service worker precaches all
+   of them but the music (`pwa/domain/precacheRules.ts`), which it keeps once a
+   track has been heard on a visit it controls. Offline, only the music heard
+   before plays.
 
 Licences: CC0, Sonniss GDC and Pixabay, none needing credit. No CC-BY, no BBC
 archive. See `sounds/README.md`.

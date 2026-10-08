@@ -157,6 +157,7 @@ function useGame(
   hud: HudStore,
   clock: ClockControls,
   setUpdate: (phase: UpdatePhase | null) => void,
+  failed: boolean,
 ) {
   const [playing, setPlaying] = useState(!OPENS_ON_WELCOME);
   const { adoptForced } = clock;
@@ -174,7 +175,7 @@ function useGame(
   useEffect(() => {
     adoptParamsRef.current = adoptParams;
   }, [adoptParams]);
-  const onUpdate = useUpdate(saves.saveBeforeReload, setUpdate);
+  const onUpdate = useUpdate(saves.saveBeforeReload, setUpdate, welcome.ready || failed);
   const share = useShareLink(showcase);
   useDocumentTitle(playing, welcome.resort.name);
   return { playing, saves, welcome, onUpdate, share };
@@ -308,6 +309,7 @@ export function App() {
     hud,
     clock,
     news.setUpdate,
+    error !== null,
   );
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);

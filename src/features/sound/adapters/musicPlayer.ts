@@ -70,6 +70,8 @@ export function createMusicPlayer(
     wait(gapSeconds(Math.random));
   };
   element.addEventListener('ended', onEnded);
+  // Offline, a track never heard is not cached: move on as if it had ended.
+  element.addEventListener('error', onEnded);
 
   return {
     want(mood) {
@@ -87,6 +89,7 @@ export function createMusicPlayer(
     dispose() {
       if (waiting !== null) clearTimeout(waiting);
       element.removeEventListener('ended', onEnded);
+      element.removeEventListener('error', onEnded);
       element.pause();
       element.removeAttribute('src');
       fade.disconnect();

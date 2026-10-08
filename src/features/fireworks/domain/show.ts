@@ -1,5 +1,5 @@
 import { createRandom, type Random } from '../../layout/domain/random';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 import type { LaunchSite } from './launch';
 import { LONGEST_LIFE, MAX_RISE, STARS, type ShellKind } from './shells';
 

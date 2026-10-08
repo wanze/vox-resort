@@ -3,6 +3,7 @@ import { derivedKey, type LayoutItem, type Placement, type Tile } from './resort
 import { PATH_ID } from './resortPlan';
 import { ROTATIONS, type Rotation } from './rotation';
 import { CLIMBS } from './stairs';
+import { tileKey } from './tileKey';
 
 export interface MosaicFit {
   readonly piece: number;
@@ -66,12 +67,12 @@ export function layMosaic(
   const styles = new Map<string, string | null>();
   for (const placement of paths) {
     styles.set(
-      `${placement.tileX},${placement.tileZ}`,
+      tileKey(placement.tileX, placement.tileZ),
       chosen(placement) ?? kit.styleOf(placement.id),
     );
   }
   const styleAt = (tileX: number, tileZ: number): string | null =>
-    styles.get(`${tileX},${tileZ}`) ?? null;
+    styles.get(tileKey(tileX, tileZ)) ?? null;
   return paths.map((placement) => {
     const style = chosen(placement);
     const tile = { x: placement.tileX, z: placement.tileZ };

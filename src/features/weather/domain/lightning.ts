@@ -2,7 +2,7 @@
 // strikes and two bench runs flash on the same frames.
 
 import { mixColor, type SkyState } from '../../lighting/domain/dayNight';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 
 // STRIKE_SPREAD plus FLASH_SECONDS must stay inside the gap, so flashAt only needs the current window.
 const STRIKE_GAP = 11;
@@ -12,7 +12,7 @@ const FLASH_SECONDS = 0.45;
 
 const WEAKEST = 0.45;
 
-const hash01 = (value: number): number => mix(value) / 4_294_967_296;
+const hash01 = (value: number): number => unitOf(mix(value));
 
 const strikeAt = (n: number): number => n * STRIKE_GAP + hash01(n * 2) * STRIKE_SPREAD;
 const strikeStrength = (n: number): number => WEAKEST + (1 - WEAKEST) * hash01(n * 2 + 1);

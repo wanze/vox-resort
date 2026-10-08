@@ -16,7 +16,7 @@ import {
   pickUp,
   stepWith,
 } from '../../sim/domain/litter';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 import { type Review, reviewFor } from '../../sim/domain/reviews';
 import { sceneryAt } from '../../sim/domain/scenery';
 import { earn } from '../../sim/domain/takings';

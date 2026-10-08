@@ -1,6 +1,7 @@
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import type { Rotation } from './rotation';
+import { pavedLookup } from './tileKey';
 
 // Order matters: an ambiguous corner is resolved north first.
 export const CLIMBS: readonly {
@@ -39,8 +40,7 @@ export function climbAt(
 }
 
 export function stairTilesFor(paved: readonly Tile[], levelOf: LevelProvider): StairTile[] {
-  const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
-  const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
+  const isPaved = pavedLookup(paved);
   const stairs: StairTile[] = [];
   for (const tile of paved) {
     const rotation = climbAt(tile, isPaved, levelOf);

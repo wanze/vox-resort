@@ -18,7 +18,7 @@ interface SnapshotRow {
 }
 
 // IndexedDB is missing in some embedded browsers and refuses to open in a private window or with
-// site data blocked, as localStorage throws for layoutStore.ts. The failure is kept, so every call
+// site data blocked, as localStorage throws for jsonStore.ts. The failure is kept, so every call
 // after it rejects alike and the game plays on unsaved.
 let opened: Promise<IDBDatabase> | null = null;
 

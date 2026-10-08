@@ -5,7 +5,7 @@ import { cheer, type Needs } from '../../sim/domain/needs';
 import { SHOW_TICKS } from '../../sim/domain/staffRouter';
 import type { Venue } from '../../sim/domain/venues';
 import { isOpenIn, weatherEffect, type Weather } from '../../sim/domain/weather';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 import { pickAudience } from './audience';
 import {
   EVENT_KINDS,

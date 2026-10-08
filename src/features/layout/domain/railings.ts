@@ -4,6 +4,7 @@ import { spanAt, type SpanProvider } from './spans';
 import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import { normalizeRotation, type Rotation } from './rotation';
+import { pavedLookup } from './tileKey';
 
 export interface WaterProvider {
   (tileX: number, tileZ: number): boolean;
@@ -94,7 +95,6 @@ export function railTilesFor(
   isSpan: SpanProvider = NO_SPAN,
   wantsStairs: PavedProvider = NO_RAMPS,
 ): RailTile[] {
-  const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
-  const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
+  const isPaved = pavedLookup(paved);
   return paved.flatMap((tile) => railsAt(tile, isPaved, levelOf, isWater, isSpan, wantsStairs));
 }

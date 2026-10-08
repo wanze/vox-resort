@@ -1,4 +1,5 @@
 import type { NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
+import { mix } from '../../random/domain/hash';
 import { TICKS_PER_DAY } from './simClock';
 
 // A tick is a simulated minute.
@@ -16,14 +17,6 @@ export const NIGHT_RELIEF: readonly NeedRelief[] = [
   { need: 'energy', amount: 1 },
   { need: 'hygiene', amount: 0.5 },
 ];
-
-// Mixed rather than taken modulo, so neighbouring party indices do not get
-// neighbouring bedtimes.
-export function mix(value: number): number {
-  let hash = Math.imul(value ^ (value >>> 16), 0x85eb_ca6b);
-  hash = Math.imul(hash ^ (hash >>> 13), 0xc2b2_ae35);
-  return (hash ^ (hash >>> 16)) >>> 0;
-}
 
 // Derived from a hash of the party index rather than stored, so a save holds nothing
 // and two runs of the same plot agree.

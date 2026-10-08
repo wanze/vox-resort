@@ -1,5 +1,5 @@
 import type { PartyKind } from '../../guests/domain/parties';
-import { mix } from './night';
+import { mix, unitOf } from '../../random/domain/hash';
 import { TICKS_PER_DAY } from './simClock';
 
 // Every family has children, and no child is taken to a club.
@@ -24,7 +24,7 @@ const drawOf = (party: number, day: number, salt: number): number =>
 
 export function goesOut(party: number, day: number, kind: PartyKind, children: number): boolean {
   if (children > 0) return false;
-  return drawOf(party, day, 3) / 2 ** 32 < NIGHT_OUT_SHARE[kind];
+  return unitOf(drawOf(party, day, 3)) < NIGHT_OUT_SHARE[kind];
 }
 
 export function lateBedtimeOf(party: number, day: number): number {

@@ -1,4 +1,4 @@
-import { mix } from './night';
+import { mix } from '../../random/domain/hash';
 import type { BreakdownsSnapshot } from './resortSnapshot';
 
 export interface Breakdowns {

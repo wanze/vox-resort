@@ -1,4 +1,5 @@
 import { createRandom } from '../../layout/domain/random';
+import { fnv } from '../../random/domain/hash';
 import type { StyleOf } from '../../layout/domain/resortLayout';
 import type { Plaza } from '../../layout/domain/resortPlan';
 import { familyOf, stylesOf } from './objectTypes';
@@ -15,14 +16,8 @@ export interface StyleMixOptions {
   readonly oneOff: number;
 }
 
-function hashOf(text: string): number {
-  let hash = 2166136261;
-  for (let at = 0; at < text.length; at++) hash = Math.imul(hash ^ text.charCodeAt(at), 16777619);
-  return hash | 0;
-}
-
 // Hashed rather than drawn from a shared stream, so styling can never shift the generator's draws.
-export const rollFor = (text: string): number => createRandom(hashOf(text))();
+export const rollFor = (text: string): number => createRandom(fnv(text))();
 
 function regionOf(neighbourhoods: readonly Plaza[], tileX: number, tileZ: number): string {
   const index = neighbourhoods.findIndex(

@@ -1,6 +1,6 @@
 import { RESTING } from '../../crowd/domain/crowd';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Cast } from './casting';
 import type { SpotActPlace } from './places';
 
@@ -37,10 +37,8 @@ const CHEER = 3;
 const hashOf = (person: number, place: SpotActPlace, channel: number): number =>
   mix(mix(mix(person) + Math.round(place.x * 2) + Math.round(place.z * 2) * 1024) + channel);
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
 const cycles = (person: number, place: SpotActPlace, clock: number, period: number): number =>
-  clock / period + unit(hashOf(person, place, PHASE));
+  clock / period + unitOf(hashOf(person, place, PHASE));
 
 // How far through its current cycle a person's act is, 0 to 1.
 const shareOf = (person: number, place: SpotActPlace, clock: number, period: number): number => {
@@ -51,7 +49,7 @@ const shareOf = (person: number, place: SpotActPlace, clock: number, period: num
 // A pendulum hung from the bar, along the way the seat faces.
 function swing(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
   const length = Math.max((place.pivot ?? place.y) - place.y, 1);
-  const spread = unit(hashOf(person, place, PERIOD));
+  const spread = unitOf(hashOf(person, place, PERIOD));
   const turns = cycles(
     person,
     place,
@@ -112,7 +110,7 @@ function rinse(cast: Cast, person: number, place: SpotActPlace, clock: number): 
   cast.y[person] = place.y;
   cast.z[person] = place.z;
   cast.heading[person] =
-    place.heading + clock * RINSE_TURN + unit(hashOf(person, place, PHASE)) * 2 * Math.PI;
+    place.heading + clock * RINSE_TURN + unitOf(hashOf(person, place, PHASE)) * 2 * Math.PI;
   const up = shareOf(person, place, clock, RINSE_PERIOD) < HANDS_UP_SHARE;
   cast.pose[person] = up ? DRAWN_POSE.cheer : DRAWN_POSE.wade;
 }

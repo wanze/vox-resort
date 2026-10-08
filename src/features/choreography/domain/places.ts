@@ -18,7 +18,7 @@ import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotatePoint } from '../../layout/domain/rotation';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 import type { Venue } from '../../sim/domain/venues';
 import { rideLoop, SWIM_SINK, type AreaAct, type RideLoop, type WaterArea } from './acts';
 import type { CourtFrame, Game } from './games';

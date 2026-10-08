@@ -16,6 +16,7 @@ import {
   STAIRS_ID,
 } from '../../layout/domain/resortPlan';
 import type { Rotation } from '../../layout/domain/rotation';
+import { tileKey } from '../../layout/domain/tileKey';
 import { spanTilesFor, type SpanKind, type SpanProvider } from '../../layout/domain/spans';
 import { beachTilesOf, terrainAt, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 import { SAND_LEVEL } from '../../rendering/domain/terrainSurface';
@@ -82,8 +83,6 @@ export interface WalkNetwork {
   readonly posts: readonly number[];
   readonly sand: SandGrid | null;
 }
-
-const tileKey = (x: number, z: number): string => `${x},${z}`;
 
 const NEIGHBOURS = CLIMBS.map(({ dx, dz }) => [dx, dz] as const);
 

@@ -1,6 +1,6 @@
 import { WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Cast } from './casting';
 
 export interface Floor {
@@ -47,8 +47,6 @@ const ALONG = 1;
 const ACROSS = 2;
 const STEP = 3;
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
 // Written into, so a show allocates nothing.
 const spot = { x: 0, z: 0 };
 const via = { x: 0, z: 0 };
@@ -79,11 +77,11 @@ function inFront(cast: Cast, animator: number, slot: number): void {
 // Somewhere on the floor of its own, clear of the animator.
 function onFloor(cast: Cast, floor: Floor, animator: number, index: number): void {
   const width = Math.max(floor.maxX - floor.minX - 2 * MARGIN - 2 * CLEAR, 0);
-  spot.x = floor.minX + MARGIN + unit(mix(mix(index) + ALONG)) * width;
+  spot.x = floor.minX + MARGIN + unitOf(mix(mix(index) + ALONG)) * width;
   spot.z =
     floor.minZ +
     MARGIN +
-    unit(mix(mix(index) + ACROSS)) * Math.max(floor.maxZ - floor.minZ - 2 * MARGIN, 0);
+    unitOf(mix(mix(index) + ACROSS)) * Math.max(floor.maxZ - floor.minZ - 2 * MARGIN, 0);
   const middle = animator >= 0 ? cast.places[animator]!.x : (floor.minX + floor.maxX) / 2;
   if (spot.x >= middle - CLEAR) spot.x += 2 * CLEAR;
 }

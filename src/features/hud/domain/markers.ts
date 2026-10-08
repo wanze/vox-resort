@@ -63,7 +63,7 @@ export function markersOf(advice: readonly Advice[]): readonly Marker[] {
     if (markers.length === MAX_MARKERS) break;
     const icon = markerIconOf(each.kind);
     if (!icon || !each.at) continue;
-    const tile = `${each.at.tileX},${each.at.tileZ}`;
+    const tile = tileKey(each.at);
     if (taken.has(tile)) continue;
     taken.add(tile);
     markers.push({ key: adviceKey(each), icon, at: each.at, advice: each });

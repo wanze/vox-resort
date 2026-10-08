@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ORIGINAL_TYPES } from '../../catalog/domain/objectTypes';
 import { layoutItemFor } from '../../build/domain/buildPlan';
-import { layoutResort, streetTiles, tileKey } from './resortLayout';
+import { layoutResort, streetTiles } from './resortLayout';
+import { tileKey } from './tileKey';
 import {
   BOARDWALK_ID,
   BRIDGE_ID,

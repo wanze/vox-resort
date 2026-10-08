@@ -1,6 +1,6 @@
 import type { Guests } from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
-import { mix } from '../../sim/domain/night';
+import { unitAt } from '../../random/domain/hash';
 import { drawOf, type AudienceParty, type EventKind } from './catalogue';
 
 // A guest this hungry or tired goes to see to that first; a show is no answer to an empty stomach.
@@ -88,8 +88,7 @@ export function partiesAmong(
 }
 
 // Hashed rather than drawn, so the router's seeded stream is never touched by an invitation.
-const keenness = (party: number, salt: number): number =>
-  mix(Math.imul(party + 1, 0x9e37_79b1) ^ salt) / 2 ** 32;
+const keenness = (party: number, salt: number): number => unitAt(salt, party);
 
 const keenEnough = (
   party: AudienceParty,

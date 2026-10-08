@@ -2,7 +2,7 @@
 // only writer of the plot's rail array, so the two can never disagree.
 
 import type { Placement } from '../../layout/domain/resortLayout';
-import { tileKey } from '../../layout/domain/resortLayout';
+import { tileKey } from '../../layout/domain/tileKey';
 
 export interface RailIndex {
   at(tileX: number, tileZ: number): readonly Placement[];

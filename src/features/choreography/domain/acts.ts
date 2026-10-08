@@ -1,7 +1,7 @@
 import type { LoopPose } from '../../../../voxel-gen/voxelgen.ts';
 import { MAX_STEP, RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Cast } from './casting';
 import { playGames } from './courts';
 import { playRounds } from './golf';
@@ -75,17 +75,15 @@ const PARITY = 5;
 const hashOf = (person: number, n: number, salt: number, channel: number): number =>
   mix(mix(mix(person + salt) + n) + channel);
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
 const spread = (min: number, max: number, hash: number): number =>
-  min + MARGIN + unit(hash) * Math.max(max - min - 2 * MARGIN, 0);
+  min + MARGIN + unitOf(hash) * Math.max(max - min - 2 * MARGIN, 0);
 
 // Written into, so performing allocates nothing.
 const point = { x: 0, z: 0 };
 
 function wanderPoint(area: WaterArea, person: number, n: number): void {
-  const u = unit(hashOf(person, n, area.salt, ALONG));
-  const v = unit(hashOf(person, n, area.salt, ACROSS));
+  const u = unitOf(hashOf(person, n, area.salt, ALONG));
+  const v = unitOf(hashOf(person, n, area.salt, ACROSS));
   if (!area.round) {
     point.x = area.minX + MARGIN + u * Math.max(area.maxX - area.minX - 2 * MARGIN, 0);
     point.z = area.minZ + MARGIN + v * Math.max(area.maxZ - area.minZ - 2 * MARGIN, 0);
@@ -125,7 +123,8 @@ const speedOf = (place: AreaPlace): number => (place.act === 'wade' ? WADE_SPEED
 function legSeconds(cast: Cast, person: number, place: AreaPlace, n: number): number {
   const dx = cast.toX[person]! - cast.fromX[person]!;
   const dz = cast.toZ[person]! - cast.fromZ[person]!;
-  const rest = PAUSE.min + unit(hashOf(person, n, place.area.salt, REST)) * (PAUSE.max - PAUSE.min);
+  const rest =
+    PAUSE.min + unitOf(hashOf(person, n, place.area.salt, REST)) * (PAUSE.max - PAUSE.min);
   return Math.hypot(dx, dz) / speedOf(place) + rest;
 }
 

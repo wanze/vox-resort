@@ -1,4 +1,4 @@
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import { strikesBetween, type Strike } from '../../weather/domain/lightning';
 
 export interface Thunder {
@@ -14,7 +14,7 @@ const FARTHEST_DELAY = 3.5;
 // Of the delay, the share left to chance, so two strikes of a strength do not sound a ruler apart.
 const DELAY_JITTER = 0.2;
 
-const hash01 = (value: number): number => mix(value) / 4_294_967_296;
+const hash01 = (value: number): number => unitOf(mix(value));
 
 // Sound travels a kilometre in three seconds: a strong strike reads as a near one, so it comes
 // sooner, louder, and with a crack.

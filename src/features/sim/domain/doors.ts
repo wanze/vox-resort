@@ -3,6 +3,7 @@ import { blockedAt } from '../../crowd/domain/sandGrid';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { doorStepTile } from '../../layout/domain/doorStep';
 import { terrainAt } from '../../layout/domain/shoreline';
+import { tileKey } from '../../layout/domain/tileKey';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Venue } from './venues';
 
@@ -86,7 +87,7 @@ function uniqueTiles(
 ): { readonly x: number; readonly z: number }[] {
   const seen = new Set<string>();
   return tiles.filter((tile) => {
-    const key = `${tile.x},${tile.z}`;
+    const key = tileKey(tile.x, tile.z);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

@@ -11,7 +11,7 @@ import {
   type TileRect,
 } from './districtLayouts';
 import { rectTiles, runTiles, tableTiles } from './parkShapes';
-import { tileKey } from './resortLayout';
+import { tileKey } from './tileKey';
 
 const rect = (x0: number, z0: number, width: number, depth: number): TileRect => ({
   x0,

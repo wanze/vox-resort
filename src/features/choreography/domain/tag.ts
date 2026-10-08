@@ -1,6 +1,6 @@
 import { RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Cast } from './casting';
 
 // A yard tag is played on, in world voxels.
@@ -33,12 +33,11 @@ const PHASE = 1;
 const ALONG = 2;
 const ACROSS = 3;
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
 const hashOf = (yard: Yard, person: number, n: number, channel: number): number =>
   mix(mix(mix(person + yard.salt) + n) + channel);
 
-const phaseOf = (yard: Yard, person: number): number => unit(hashOf(yard, person, 0, PHASE)) * LEG;
+const phaseOf = (yard: Yard, person: number): number =>
+  unitOf(hashOf(yard, person, 0, PHASE)) * LEG;
 
 const legAt = (yard: Yard, person: number, time: number): number =>
   Math.floor((time + phaseOf(yard, person)) / LEG);
@@ -49,8 +48,8 @@ const legStart = (yard: Yard, person: number, n: number): number => n * LEG - ph
 const at = { x: 0, z: 0 };
 
 function wander(yard: Yard, person: number, n: number, candidate: number): void {
-  const u = unit(hashOf(yard, person, n * CANDIDATES + candidate, ALONG));
-  const v = unit(hashOf(yard, person, n * CANDIDATES + candidate, ACROSS));
+  const u = unitOf(hashOf(yard, person, n * CANDIDATES + candidate, ALONG));
+  const v = unitOf(hashOf(yard, person, n * CANDIDATES + candidate, ACROSS));
   at.x = yard.minX + MARGIN + u * Math.max(yard.maxX - yard.minX - 2 * MARGIN, 0);
   at.z = yard.minZ + MARGIN + v * Math.max(yard.maxZ - yard.minZ - 2 * MARGIN, 0);
 }

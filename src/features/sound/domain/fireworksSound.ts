@@ -1,6 +1,6 @@
 import { firstLaunchedFrom, type Show, type Shell } from '../../fireworks/domain/show';
 import { MAX_RISE } from '../../fireworks/domain/shells';
-import { mix } from '../../sim/domain/night';
+import { unitAt } from '../../random/domain/hash';
 
 // The lanterns' scale, four voxels to the metre.
 const VOXELS_PER_METRE = 4;
@@ -131,16 +131,13 @@ export function fireworksDue(
   return [...due, ...mergedBangs(bangs)].toSorted((a, b) => a.at - b.at);
 }
 
-const hash01 = (seed: number, index: number): number =>
-  mix(Math.imul(index + 1, 0x9e37_79b1) ^ seed) / 4_294_967_296;
-
 // Thinning towards the end, as the last sparks burn out.
 export function crackleClicks(seed: number, seconds: number): number[] {
   const clicks: number[] = [];
   let index = 0;
   for (let at = 0; at < seconds; index++) {
-    if (hash01(seed, index * 2) >= (at / seconds) * 0.8) clicks.push(at);
-    at += 0.015 + 0.03 * hash01(seed, index * 2 + 1);
+    if (unitAt(seed, index * 2) >= (at / seconds) * 0.8) clicks.push(at);
+    at += 0.015 + 0.03 * unitAt(seed, index * 2 + 1);
   }
   return clicks;
 }

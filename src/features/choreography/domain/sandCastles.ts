@@ -5,7 +5,7 @@ import { BEACH_SURFACE } from '../../crowd/domain/walkNetwork';
 import { terrainAt } from '../../layout/domain/shoreline';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
 import { walkingTicks } from '../../sim/domain/crowdRate';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import { SHOWN, type Cast, type SandCastles } from './casting';
 import { SWIM_WINDOW, type SeaShore } from './seaSwim';
 
@@ -72,7 +72,7 @@ interface Point {
 }
 
 const unit = (person: number, window: number, channel: number): number =>
-  mix(mix(mix(person) + window) + channel) / 4_294_967_296;
+  unitOf(mix(mix(mix(person) + window) + channel));
 
 function onSand(sea: SeaShore, x: number, z: number): boolean {
   const shore = sea.swim.shore;

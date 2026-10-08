@@ -1,6 +1,6 @@
 import { RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Cast } from './casting';
 import type { DrawnBall } from './courts';
 
@@ -73,8 +73,6 @@ export function createGolfPlay(course: GolfCourse, parties: readonly Int32Array[
 
 const hashOf = (course: GolfCourse, lane: number, slot: number, n: number, channel: number) =>
   mix(mix(mix(mix(course.salt + lane) + slot) + n) + channel);
-
-const unit = (hash: number): number => hash / 4_294_967_296;
 
 const lengthOf = (points: readonly Point[]): number => {
   let length = 0;
@@ -249,7 +247,7 @@ function address(person: number, distance: number, pose: number): void {
 function stopAfter(member: number, putt: number, putts: number, from: number): number {
   const { lane, course, laneIndex, slotNo } = scene;
   if (putt === putts - 1) return lane.length;
-  const short = unit(hashOf(course, laneIndex, slotNo, member * PUTTS + putt, SHORT));
+  const short = unitOf(hashOf(course, laneIndex, slotNo, member * PUTTS + putt, SHORT));
   return from + (lane.length - from) * (0.55 + 0.35 * short);
 }
 

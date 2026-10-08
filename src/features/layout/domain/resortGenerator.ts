@@ -23,7 +23,8 @@ import { neighbourPairs, spreadPairs, uncutRuns, type LaneCut } from './district
 import { SHORE_REACH } from './placementGround';
 import { createTerrain, type TerrainEdit } from './terrain';
 import { hillEditsFor } from './hills';
-import { routeEdgeTiles, streetTiles, tileKey, widthOffsets, type Tile } from './resortLayout';
+import { routeEdgeTiles, streetTiles, widthOffsets, type Tile } from './resortLayout';
+import { tileKey } from './tileKey';
 import { riverEditsFor } from './river';
 import { islandBayInset, islandEditsFor, islandSizeFor } from './island';
 import { startingLand } from '../../land/domain/landRights';

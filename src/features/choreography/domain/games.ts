@@ -1,7 +1,7 @@
 import type { GameKind } from '../../../../voxel-gen/voxelgen.ts';
 import { RESTING, WALK_SPEED } from '../../crowd/domain/crowd';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 
 export interface Hoop {
   readonly u: number;
@@ -131,10 +131,8 @@ const SPIKE = 13;
 const hashIn = (game: Game, rally: number, n: number, channel: number): number =>
   mix(mix(mix(game.salt + rally) + n) + channel);
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
 const between = (range: Range, hash: number): number =>
-  range.min + unit(hash) * (range.max - range.min);
+  range.min + unitOf(hash) * (range.max - range.min);
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -160,7 +158,7 @@ let r: Replay;
 const hash = (n: number, channel: number): number => hashIn(r.game, r.rally, n, channel);
 const draw = (range: Range, n: number, channel: number): number => between(range, hash(n, channel));
 const spread = (half: number, n: number, channel: number): number =>
-  (unit(hash(n, channel)) * 2 - 1) * half;
+  (unitOf(hash(n, channel)) * 2 - 1) * half;
 
 // Module scratch, so a replay allocates nothing. Per player: the move they are on.
 let room = 0;
@@ -418,7 +416,7 @@ function hopsWaiting(slot: number, time: number): boolean {
   if (waits[slot] !== 1 || !Number.isFinite(time)) return false;
   const window = Math.floor(time / WAIT_WINDOW);
   if (time - window * WAIT_WINDOW >= WAIT_HOPPING) return false;
-  return unit(hash(slot * 977 + window, WAIT_HOP)) < WAIT_SHARE;
+  return unitOf(hash(slot * 977 + window, WAIT_HOP)) < WAIT_SHARE;
 }
 
 function poseAt(slot: number, time: number): number {
@@ -516,8 +514,8 @@ const land = { u: 0, v: 0 };
 // In the back half of the box: from the baseline, a serve landing short would have to be lobbed.
 function serviceBox(n: number, side: number, deuce: number): void {
   const deepest = r.game.court.halfLength * TENNIS.service - 1;
-  land.u = ownU(side, deepest * (0.5 + unit(hash(n, BOUNCE)) * 0.5));
-  land.v = -deuce * (1.5 + unit(hash(n, TARGET_V)) * (singlesHalf() - 3));
+  land.u = ownU(side, deepest * (0.5 + unitOf(hash(n, BOUNCE)) * 0.5));
+  land.v = -deuce * (1.5 + unitOf(hash(n, TARGET_V)) * (singlesHalf() - 3));
 }
 
 // Ahead of where the receiver meets the ball, on its line, inside the lines.
@@ -566,7 +564,7 @@ function driveTo(n: number, side: number, receiver: number, end: number, width: 
 // Through the air to the bounce, or straight to the receiver on a volley. Returns when.
 function tennisFlight(n: number, end: number, volley: boolean): number {
   const { strike } = r.game;
-  const apex = 2 + unit(hash(n, APEX)) * 3;
+  const apex = 2 + unitOf(hash(n, APEX)) * 3;
   pathFrom(stroke.start, stroke.u, stroke.v, stroke.y);
   if (volley)
     return pathTo(end, meet.u, meet.v, strike, clearing(stroke.u, stroke.y, meet.u, strike, apex));
@@ -602,7 +600,7 @@ function endShot(landsAt: number): void {
 
 // One ball from the stroke under way to whoever on the other side plays it.
 function tennisBall(n: number, doubles: boolean, deuce: number): void {
-  const pairs = doubles && n > 0 && unit(hash(n, RECEIVER)) < TENNIS.volleys;
+  const pairs = doubles && n > 0 && unitOf(hash(n, RECEIVER)) < TENNIS.volleys;
   const length = draw(n === 0 ? TENNIS.serve : TENNIS.drive, n, STROKE_LENGTH);
   shot.n = n;
   shot.side = 1 - stroke.side;
@@ -642,7 +640,7 @@ function tennisMatch(): void {
 // Bounces in the box, bounces again, and rolls on to the back. Returns when it lies still.
 function practiceBall(n: number, side: number, deuce: number): number {
   serviceBox(n, side, deuce);
-  const apex = 2 + unit(hash(n, APEX)) * 2;
+  const apex = 2 + unitOf(hash(n, APEX)) * 2;
   const flight = draw(TENNIS.serve, n, STROKE_LENGTH) * 0.6;
   pathFrom(stroke.start, stroke.u, stroke.v, stroke.y);
   const landsAt = stroke.start + flight;
@@ -701,17 +699,18 @@ const VOLLEY = {
 const visit = { touch: 1, touches: 1 };
 
 const touchesFor = (n: number, side: number): number =>
-  1 + Math.floor(unit(hash(n, TOUCHES)) * Math.min(3, sideCount[side]! + 1));
+  1 + Math.floor(unitOf(hash(n, TOUCHES)) * Math.min(3, sideCount[side]! + 1));
 
 // Only a third touch is spiked.
-const spikes = (n: number): boolean => visit.touches === 3 && unit(hash(n, SPIKE)) < VOLLEY.spikes;
+const spikes = (n: number): boolean =>
+  visit.touches === 3 && unitOf(hash(n, SPIKE)) < VOLLEY.spikes;
 
 function teammateOf(n: number, side: number, hitter: number): number {
   const count = sideCount[side]!;
   if (count < 2) return hitter;
   let at = 0;
   while (playerOn(side, at) !== hitter) at++;
-  const step = 1 + Math.floor(unit(hash(n, RECEIVER)) * (count - 1));
+  const step = 1 + Math.floor(unitOf(hash(n, RECEIVER)) * (count - 1));
   return playerOn(side, (at + step) % count);
 }
 
@@ -728,7 +727,7 @@ function overTheNet(n: number): void {
   const end =
     stroke.start +
     draw(n === 0 ? VOLLEY.serve : spike ? VOLLEY.spike : VOLLEY.over, n, STROKE_LENGTH);
-  const receiver = playerOn(side, Math.floor(unit(hash(n, RECEIVER)) * sideCount[side]!));
+  const receiver = playerOn(side, Math.floor(unitOf(hash(n, RECEIVER)) * sideCount[side]!));
   const winner = end >= r.play;
   volleyMeet(n, receiver, 3, end);
   const y = winner ? 0 : r.game.strike;
@@ -867,7 +866,7 @@ function nearestTo(slots: Int32Array, count: number, u: number, v: number, time:
 // From the stroke under way to the hoop, and down into the rebounder's hands. Returns when.
 function shoot(n: number, hoop: Hoop, rebounder: number): number {
   const atRim = stroke.start + draw(BASKET.shot, n, STROKE_LENGTH);
-  const made = unit(hash(n, MADE)) < BASKET.makes;
+  const made = unitOf(hash(n, MADE)) < BASKET.makes;
   const caught = atRim + (made ? BASKET.drop + BASKET.bounce : BASKET.offRim);
   const inward = -Math.sign(hoop.u) || 1;
   const u = hoop.u + inward * draw(BASKET.rebound, n, TARGET_U);

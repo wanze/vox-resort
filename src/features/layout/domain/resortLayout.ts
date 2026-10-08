@@ -45,6 +45,7 @@ import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
 import { rotateExtent, ROTATIONS, type Extent, type Rotation } from './rotation';
+import { tileKey } from './tileKey';
 
 const LAMP_SPACING = 5;
 
@@ -102,8 +103,6 @@ export interface ResortLayout {
   readonly tilesX: number;
   readonly tilesZ: number;
 }
-
-export const tileKey = (x: number, z: number): string => `${x},${z}`;
 
 const NEIGHBOURS = [
   [1, 0],

@@ -1,5 +1,5 @@
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
-import { mix } from '../../sim/domain/night';
+import { mix, unitAt } from '../../random/domain/hash';
 
 export interface Fire {
   // World voxels: the middle of the bed the flames rise from.
@@ -65,9 +65,6 @@ const YELLOW = linearRgbOf(0xf2c33c);
 const ORANGE = linearRgbOf(0xef7a2f);
 const RED = linearRgbOf(0xe0473f);
 
-const unit = (seed: number, index: number): number =>
-  mix(Math.imul(index + 1, 0x9e37_79b1) ^ seed) / 4_294_967_296;
-
 const seedOf = (fire: Pick<Fire, 'x' | 'z'>): number =>
   mix(Math.imul(Math.round(fire.x), 73_856_093) ^ Math.imul(Math.round(fire.z), 19_349_663));
 
@@ -130,7 +127,7 @@ function paint(out: FlameBuffer, at: number, rise: number): void {
 // Where a flame is `seconds` in: how far up its rise, and which rise it is on.
 function phaseOf(seed: number, index: number, seconds: number, rise: Rise): [number, number] {
   const through =
-    seconds / (rise.min + unit(seed, 3 * index) * rise.spread) + unit(seed, 3 * index + 1);
+    seconds / (rise.min + unitAt(seed, 3 * index) * rise.spread) + unitAt(seed, 3 * index + 1);
   const cycle = Math.floor(through);
   return [through - cycle, cycle];
 }
@@ -146,9 +143,9 @@ function writeTongue(
 ): void {
   const [rise, cycle] = phaseOf(seed, index, seconds, RISE);
   const fresh = mix(seed ^ Math.imul(cycle + 1, 0x2545_f491));
-  const angle = unit(fresh, index) * 2 * Math.PI;
-  const reach = BED * Math.sqrt(unit(fresh, index + TONGUES)) * (1 - 0.8 * rise);
-  const tall = 0.6 + 0.4 * unit(seed, 3 * index + 2);
+  const angle = unitAt(fresh, index) * 2 * Math.PI;
+  const reach = BED * Math.sqrt(unitAt(fresh, index + TONGUES)) * (1 - 0.8 * rise);
+  const tall = 0.6 + 0.4 * unitAt(seed, 3 * index + 2);
   out.x[at] = fire.x + Math.cos(angle) * reach;
   out.z[at] = fire.z + Math.sin(angle) * reach;
   out.y[at] = fire.y + rise * HEIGHT * tall * fire.strength;
@@ -166,7 +163,7 @@ function writeSpark(
 ): void {
   const [rise, cycle] = phaseOf(seed, index, seconds, SPARK_RISE);
   const fresh = mix(seed ^ Math.imul(cycle + 1, 0x27d4_eb2f));
-  const angle = unit(fresh, index) * 2 * Math.PI;
+  const angle = unitAt(fresh, index) * 2 * Math.PI;
   const drift = rise * SPARK_DRIFT;
   out.x[at] = fire.x + Math.cos(angle) * drift;
   out.z[at] = fire.z + Math.sin(angle) * drift;

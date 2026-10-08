@@ -1,6 +1,7 @@
 import type { Tile } from './resortLayout';
 import type { Rotation } from './rotation';
 import { CLIMBS, type PavedProvider } from './stairs';
+import { pavedLookup } from './tileKey';
 
 // Inland water only: a span over the sea lies flat on it and needs no ramps.
 export interface SpanProvider {
@@ -34,8 +35,7 @@ export function spanAt(tile: Tile, isPaved: PavedProvider, isSpan: SpanProvider)
 }
 
 export function spanTilesFor(paved: readonly Tile[], isSpan: SpanProvider): SpanTile[] {
-  const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
-  const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
+  const isPaved = pavedLookup(paved);
   return paved
     .filter((tile) => isSpan(tile.x, tile.z))
     .map((tile) => spanAt(tile, isPaved, isSpan));

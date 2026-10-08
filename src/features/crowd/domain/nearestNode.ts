@@ -1,4 +1,5 @@
 // Nodes with no exits are left out: a person put on one would stand on it for ever.
+import { tileKey } from '../../layout/domain/tileKey';
 import type { WalkNetwork } from './walkNetwork';
 
 // A ceiling on the search, not on the answer: past it the scan still finds the true nearest node.
@@ -12,12 +13,12 @@ export function nodeIndexFor(network: WalkNetwork): NodeIndex {
   const byTile = new Map<string, number[]>();
   for (const [index, node] of network.nodes.entries()) {
     if (node.exits.length === 0) continue;
-    const key = `${node.tileX},${node.tileZ}`;
+    const key = tileKey(node.tileX, node.tileZ);
     const list = byTile.get(key);
     if (list) list.push(index);
     else byTile.set(key, [index]);
   }
-  return { at: (tileX, tileZ) => byTile.get(`${tileX},${tileZ}`) };
+  return { at: (tileX, tileZ) => byTile.get(tileKey(tileX, tileZ)) };
 }
 
 export function nearestNodeTo(

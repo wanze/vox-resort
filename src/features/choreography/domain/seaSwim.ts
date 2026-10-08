@@ -6,7 +6,7 @@ import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { SEA_LEVEL } from '../../rendering/domain/terrainSurface';
 import { swimmableAt, type SwimAreaOptions } from '../../sea/domain/swimArea';
 import { walkingTicks } from '../../sim/domain/crowdRate';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import { SWIM_SINK, SWIM_SPEED, TREAD_SINK } from './acts';
 import { SHOWN, type Cast } from './casting';
 
@@ -67,7 +67,7 @@ interface Band {
 }
 
 const unit = (person: number, window: number, channel: number): number =>
-  mix(mix(mix(person) + window) + channel) / 4_294_967_296;
+  unitOf(mix(mix(mix(person) + window) + channel));
 
 // Every column from west to east, so a leg between two points in it never crosses a sandbar.
 function bandAcross(swim: SwimAreaOptions, west: number, east: number): Band | null {

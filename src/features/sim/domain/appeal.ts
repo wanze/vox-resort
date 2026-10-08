@@ -1,5 +1,6 @@
 import { GUEST_NEEDS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
+import { fnv } from '../../random/domain/hash';
 import { CONTENT_LEVEL } from './happiness';
 import { archetypeOf } from './archetypes';
 import { WALK_VOXELS_PER_SIM_HOUR } from './crowdRate';
@@ -84,9 +85,7 @@ export function dominantNeedAt(
 
 // Keyed on the venue key, never its index: the index changes whenever anything is built.
 export function saltFor(key: string): number {
-  let hash = 2166136261;
-  for (let at = 0; at < key.length; at++) hash = Math.imul(hash ^ key.charCodeAt(at), 16777619);
-  return hash | 0;
+  return fnv(key);
 }
 
 // A fixed taste per pair rather than a random draw, so benchmark replays stay comparable

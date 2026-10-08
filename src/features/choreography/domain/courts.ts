@@ -1,5 +1,5 @@
 import { DRAWN_POSE } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 import type { Cast } from './casting';
 import {
   createGameState,

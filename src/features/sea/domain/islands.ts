@@ -1,5 +1,6 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { AROUND, type Terrain } from '../../layout/domain/terrain';
+import { tileKey } from '../../layout/domain/tileKey';
 import type { PierBox } from './piers';
 
 interface Tile {
@@ -7,13 +8,11 @@ interface Tile {
   readonly z: number;
 }
 
-const keyOf = (x: number, z: number): string => `${x},${z}`;
-
 function raisedSeaOf(terrain: Pick<Terrain, 'edits' | 'isSea'>): Map<string, Tile> {
   const raised = new Map<string, Tile>();
   for (const edit of terrain.edits) {
     if (edit.level <= 0 || !terrain.isSea(edit.tileX, edit.tileZ)) continue;
-    raised.set(keyOf(edit.tileX, edit.tileZ), { x: edit.tileX, z: edit.tileZ });
+    raised.set(tileKey(edit.tileX, edit.tileZ), { x: edit.tileX, z: edit.tileZ });
   }
   return raised;
 }
@@ -22,11 +21,11 @@ function raisedSeaOf(terrain: Pick<Terrain, 'edits' | 'isSea'>): Map<string, Til
 function islandAt(start: Tile, raised: ReadonlyMap<string, Tile>, seen: Set<string>): Tile[] {
   const island: Tile[] = [];
   const queue = [start];
-  seen.add(keyOf(start.x, start.z));
+  seen.add(tileKey(start.x, start.z));
   for (let tile = queue.pop(); tile; tile = queue.pop()) {
     island.push(tile);
     for (const [dx, dz] of AROUND) {
-      const key = keyOf(tile.x + dx, tile.z + dz);
+      const key = tileKey(tile.x + dx, tile.z + dz);
       const next = raised.get(key);
       if (!next || seen.has(key)) continue;
       seen.add(key);

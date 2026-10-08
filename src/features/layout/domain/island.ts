@@ -4,6 +4,7 @@
 import { createRandom } from './random';
 import { waterStartZ, type Shore } from './shoreline';
 import { AROUND, type TerrainEdit } from './terrain';
+import { tileKey } from './tileKey';
 
 // The buoys moor three rows out and boats keep two rows beyond them, so nine leaves a channel
 // a boat can pass through between the swimmers and the island.
@@ -51,8 +52,6 @@ export interface IslandParts {
   readonly seed: number;
 }
 
-const keyOf = (x: number, z: number): string => `${x},${z}`;
-
 interface Outline {
   readonly centre: { readonly x: number; readonly z: number };
   readonly size: IslandSize;
@@ -90,17 +89,17 @@ function landOf(outline: Outline): { x: number; z: number }[] {
 
 // Rings in from the rim, counting diagonals, since the level rule counts them too.
 function depthsOf(tiles: readonly { x: number; z: number }[]): Map<string, number> {
-  const land = new Set(tiles.map((tile) => keyOf(tile.x, tile.z)));
+  const land = new Set(tiles.map((tile) => tileKey(tile.x, tile.z)));
   const depths = new Map<string, number>();
   let ring = tiles.filter((tile) =>
-    AROUND.some(([dx, dz]) => !land.has(keyOf(tile.x + dx, tile.z + dz))),
+    AROUND.some(([dx, dz]) => !land.has(tileKey(tile.x + dx, tile.z + dz))),
   );
-  for (const tile of ring) depths.set(keyOf(tile.x, tile.z), 1);
+  for (const tile of ring) depths.set(tileKey(tile.x, tile.z), 1);
   for (let depth = 2; ring.length > 0; depth++) {
     const next: { x: number; z: number }[] = [];
     for (const tile of ring) {
       for (const [dx, dz] of AROUND) {
-        const key = keyOf(tile.x + dx, tile.z + dz);
+        const key = tileKey(tile.x + dx, tile.z + dz);
         if (!land.has(key) || depths.has(key)) continue;
         depths.set(key, depth);
         next.push({ x: tile.x + dx, z: tile.z + dz });
@@ -117,7 +116,7 @@ export function islandEditsFor(parts: IslandParts): TerrainEdit[] {
   const tiles = landOf(outline);
   const depths = depthsOf(tiles);
   return tiles.map((tile): TerrainEdit => {
-    const depth = depths.get(keyOf(tile.x, tile.z)) ?? 1;
+    const depth = depths.get(tileKey(tile.x, tile.z)) ?? 1;
     return {
       tileX: tile.x,
       tileZ: tile.z,

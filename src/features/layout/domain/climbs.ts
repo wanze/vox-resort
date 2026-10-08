@@ -2,6 +2,7 @@ import type { LevelProvider } from './elevation';
 import type { Tile } from './resortLayout';
 import type { Rotation } from './rotation';
 import { climbAt, CLIMBS, type PavedProvider } from './stairs';
+import { pavedLookup } from './tileKey';
 
 export type ClimbKind = 'stairs' | 'ramp-foot' | 'ramp-head';
 
@@ -87,8 +88,7 @@ export function climbTilesFor(
   levelOf: LevelProvider,
   wantsStairs: PavedProvider,
 ): ClimbTile[] {
-  const pavedKeys = new Set(paved.map((tile) => `${tile.x},${tile.z}`));
-  const isPaved: PavedProvider = (tileX, tileZ) => pavedKeys.has(`${tileX},${tileZ}`);
+  const isPaved = pavedLookup(paved);
   const climbs: ClimbTile[] = [];
   for (const tile of paved) {
     const climb = climbKindAt(tile, isPaved, levelOf, wantsStairs);

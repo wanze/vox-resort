@@ -13,6 +13,7 @@ import { CLIMB_REACH, climbKindAt, type ClimbKind } from '../../layout/domain/cl
 import { spanAt, type SpanProvider } from '../../layout/domain/spans';
 import { borderedSides, type MosaicKit } from '../../layout/domain/mosaic';
 import type { Rotation } from '../../layout/domain/rotation';
+import { tileKey } from '../../layout/domain/tileKey';
 import type { TileOccupancy } from './tileOccupancy';
 
 export interface PavedGround {
@@ -293,7 +294,7 @@ function relaidAs(laid: Paving, standing: LayoutItem, tile: Tile, level: number)
 function remembered(pavedWith: PavedGround): PavedGround {
   const known = new Map<string, LayoutItem | null>();
   return (tileX, tileZ) => {
-    const key = `${tileX},${tileZ}`;
+    const key = tileKey(tileX, tileZ);
     let item = known.get(key);
     if (item === undefined) {
       item = pavedWith(tileX, tileZ);
@@ -367,7 +368,7 @@ export function remosaicked(
       const beside: Tile = { x: tile.x + dx, z: tile.z + dz };
       const standing = rules.pavedWith(beside.x, beside.z);
       const style = standing && kit.styleOf(standing.id);
-      const key = `${beside.x},${beside.z}`;
+      const key = tileKey(beside.x, beside.z);
       if (!standing || !style || seen.has(key) || (before === style) === (now === style)) continue;
       seen.add(key);
       const fit = kit.pieceFor(style, borderedSides(beside, style, styleAt));

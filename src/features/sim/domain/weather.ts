@@ -1,6 +1,6 @@
 import type { GuestNeed } from '../../../../voxel-gen/voxelgen.ts';
 import type { Shelter } from '../../../../voxel-gen/voxelgen.ts';
-import { mix } from './night';
+import { mix } from '../../random/domain/hash';
 
 export const WEATHERS = ['clear', 'rain', 'storm', 'heatwave'] as const;
 

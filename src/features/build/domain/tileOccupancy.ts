@@ -1,4 +1,5 @@
-import { tileKey, type Placement, type Tile } from '../../layout/domain/resortLayout';
+import type { Placement, Tile } from '../../layout/domain/resortLayout';
+import { tileKey } from '../../layout/domain/tileKey';
 
 export interface Footprint {
   readonly tileX: number;

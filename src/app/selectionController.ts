@@ -131,7 +131,17 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
     const drawn = cast.shown[person] === SHOWN.placed ? cast : crowd.crowd;
     const at = { x: drawn.x[person] ?? 0, z: drawn.z[person] ?? 0 };
     const thought = latestOf(thoughts, person);
-    return guestView(guests, needs, happiness, venues, person, clock.day, at, thought, thoughts);
+    return guestView({
+      guests,
+      needs,
+      happiness,
+      venues,
+      person,
+      day: clock.day,
+      at,
+      thought,
+      thoughts,
+    });
   };
 
   const workerAt = (worker: number): SelectionView | null => {
@@ -152,17 +162,17 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
     const { guests, router } = resort;
     // By key: the venue list is the router's numbering; -1 reads as spotless.
     const venue = venueIndexOf(resort, placement.key);
-    const view = placeView(
+    const view = placeView({
       placement,
-      objectTypeById(placement.id).label,
+      label: objectTypeById(placement.id).label,
       guests,
-      router.occupancyOf(placement.key),
-      sceneryOver(resort.scenery, placement),
-      cleanliness(resort.upkeep, venue),
-      takingsOf(resort.takings, placement.key),
-      lifeguardAt(resort.staffRouter, venue),
-      isBroken(resort.breakdowns, venue),
-    );
+      occupancy: router.occupancyOf(placement.key),
+      setting: sceneryOver(resort.scenery, placement),
+      cleanliness: cleanliness(resort.upkeep, venue),
+      takings: takingsOf(resort.takings, placement.key),
+      lifeguard: lifeguardAt(resort.staffRouter, venue),
+      broken: isBroken(resort.breakdowns, venue),
+    });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
     return withNaming(offered, resort.venues[venue]);
   };

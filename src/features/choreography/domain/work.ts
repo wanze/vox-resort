@@ -1,6 +1,6 @@
 import { RESTING } from '../../crowd/domain/crowd';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
-import { mix } from '../../sim/domain/night';
+import { mix, unitOf } from '../../random/domain/hash';
 import { WORK, type Cast } from './casting';
 
 // An animator's phrase: a few seconds of one move, then another, hashed.
@@ -26,9 +26,7 @@ const BURST_EVERY = 2;
 const BURST_FOR = 0.8;
 const HAMMER_BEAT = 0.25;
 
-const unit = (hash: number): number => hash / 4_294_967_296;
-
-const phaseOf = (worker: number): number => unit(mix(mix(worker) + 1));
+const phaseOf = (worker: number): number => unitOf(mix(mix(worker) + 1));
 
 const share = (time: number, period: number): number => {
   const turns = time / period;

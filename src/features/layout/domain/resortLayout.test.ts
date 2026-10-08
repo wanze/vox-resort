@@ -15,11 +15,11 @@ import {
   plotsWithoutPathAccess,
   routeEdgeTiles,
   streetTiles,
-  tileKey,
   widthOffsets,
   type LayoutItem,
   type ResortLayout,
 } from './resortLayout';
+import { tileKey } from './tileKey';
 import {
   BENCH_ID,
   BOARDWALK_ID,

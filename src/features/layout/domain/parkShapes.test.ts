@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tileKey } from './resortLayout';
+import { tileKey } from './tileKey';
 import {
   blobTiles,
   mirrorRun,

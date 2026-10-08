@@ -1,5 +1,6 @@
 import type { Rotation } from './rotation';
-import { tileKey, type Tile } from './resortLayout';
+import type { Tile } from './resortLayout';
+import { tileKey } from './tileKey';
 import {
   blobTiles,
   mirrorRun,

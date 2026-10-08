@@ -1,5 +1,5 @@
 import { SEA_LEVEL } from '../../rendering/domain/terrainSurface';
-import { mix } from '../../sim/domain/night';
+import { unitAt } from '../../random/domain/hash';
 import {
   DRAG,
   GRAVITY,
@@ -55,9 +55,6 @@ export function createStarBuffer(): StarBuffer {
   };
 }
 
-const hash01 = (seed: number, index: number): number =>
-  mix(Math.imul(index + 1, 0x9e37_79b1) ^ seed) / 4_294_967_296;
-
 // Reused per star, so a frame allocates nothing.
 const direction = { x: 0, y: 0, z: 0 };
 
@@ -65,15 +62,15 @@ const direction = { x: 0, y: 0, z: 0 };
 function sphereDirection(shell: Shell, star: number): void {
   const y = 1 - (2 * (star + 0.5)) / shell.stars;
   const across = Math.sqrt(Math.max(0, 1 - y * y));
-  const turn = star * GOLDEN_ANGLE + hash01(shell.seed, star) * 0.4;
+  const turn = star * GOLDEN_ANGLE + unitAt(shell.seed, star) * 0.4;
   direction.x = Math.cos(turn) * across;
   direction.y = y;
   direction.z = Math.sin(turn) * across;
 }
 
 function ringDirection(shell: Shell, star: number): void {
-  const tilt = (hash01(shell.seed, -1) - 0.5) * Math.PI * 0.7;
-  const yaw = hash01(shell.seed, -2) * Math.PI;
+  const tilt = (unitAt(shell.seed, -1) - 0.5) * Math.PI * 0.7;
+  const yaw = unitAt(shell.seed, -2) * Math.PI;
   const turn = (2 * Math.PI * star) / shell.stars;
   const x = Math.cos(turn);
   const y = Math.sin(turn) * Math.sin(tilt);
@@ -119,7 +116,7 @@ function writeRising(shell: Shell, age: number, out: StarBuffer, count: number):
 }
 
 function starScale(shell: Shell, star: number, t: number): number {
-  const life = LIFE_SECONDS[shell.kind] * (1 - LIFE_JITTER * hash01(shell.seed, star + 7_919));
+  const life = LIFE_SECONDS[shell.kind] * (1 - LIFE_JITTER * unitAt(shell.seed, star + 7_919));
   return t >= life ? 0 : STAR_SIZE * (1 - (t / life) ** 2);
 }
 
@@ -162,10 +159,10 @@ function writeSparks(shell: Shell, t: number, out: StarBuffer, count: number): n
   let written = count;
   const blink = Math.floor(t / BLINK_SECONDS);
   for (let spark = 0; spark < SPARKS && written < MAX_INSTANCES; spark++) {
-    const from = SPARKS_FROM + SPARKS_SPREAD * hash01(shell.seed, spark + 104_729);
+    const from = SPARKS_FROM + SPARKS_SPREAD * unitAt(shell.seed, spark + 104_729);
     if (t < from || t >= from + SPARK_LIFE) continue;
-    if (hash01(shell.seed ^ blink, spark) < 0.4) continue;
-    const star = Math.floor(hash01(shell.seed, spark + 15_485) * shell.stars);
+    if (unitAt(shell.seed ^ blink, spark) < 0.4) continue;
+    const star = Math.floor(unitAt(shell.seed, spark + 15_485) * shell.stars);
     if (!placeStar(shell, star, t, SPARK_SIZE, out, written)) continue;
     paint(out, written, 0xffffff, 1);
     written++;

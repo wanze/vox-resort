@@ -214,17 +214,18 @@ function needsShown(needs: Needs, person: number): GuestView['needs'] {
   return health < 1 ? [...shown, { need: 'health', level: health }] : shown;
 }
 
-export function guestView(
-  guests: Guests,
-  needs: Needs,
-  happiness: Happiness,
-  venues: readonly Venue[],
-  person: number,
-  day: number,
-  at: GuestSpot,
-  thought: GuestView['thought'],
-  thoughts?: Thoughts,
-): GuestView {
+export function guestView(parts: {
+  readonly guests: Guests;
+  readonly needs: Needs;
+  readonly happiness: Happiness;
+  readonly venues: readonly Venue[];
+  readonly person: number;
+  readonly day: number;
+  readonly at: GuestSpot;
+  readonly thought: GuestView['thought'];
+  readonly thoughts?: Thoughts;
+}): GuestView {
+  const { guests, needs, happiness, venues, person, day, at, thought, thoughts } = parts;
   const party = guests.parties[guests.party[person]!]!;
   const home = homeOf(guests, person);
   const arrivedOn = guests.arrivedOn[person]!;
@@ -255,18 +256,29 @@ export interface PlaceOccupancy {
   readonly waiting: number;
 }
 
-export function placeView(
-  placement: Placement,
-  label: string,
-  guests: Guests,
-  occupancy: PlaceOccupancy | null,
-  setting: number,
+export function placeView(parts: {
+  readonly placement: Placement;
+  readonly label: string;
+  readonly guests: Guests;
+  readonly occupancy: PlaceOccupancy | null;
+  readonly setting: number;
   // Null means spotless: a fixture, or a venue so new the router has not seen it.
-  cleanliness: number | null = null,
-  takings = 0,
-  lifeguard: LifeguardWatch = 'nobody',
-  broken = false,
-): PlaceView {
+  readonly cleanliness?: number | null;
+  readonly takings?: number;
+  readonly lifeguard?: LifeguardWatch;
+  readonly broken?: boolean;
+}): PlaceView {
+  const {
+    placement,
+    label,
+    guests,
+    occupancy,
+    setting,
+    cleanliness = null,
+    takings = 0,
+    lifeguard = 'nobody',
+    broken = false,
+  } = parts;
   const venue = venueOf(placement.id);
   const home = guests.homes.findIndex((candidate) => candidate.key === placement.key);
   const residents: PartyMemberView[] = [];

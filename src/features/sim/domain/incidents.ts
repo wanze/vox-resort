@@ -1,4 +1,4 @@
-import { mix } from './night';
+import { mix, unitOf } from '../../random/domain/hash';
 import type { Needs } from './needs';
 
 // Low enough that a hurt guest's urgency, 3 x 0.65, beats any want at its worst.
@@ -17,7 +17,7 @@ const GOLDEN = 2_654_435_761;
 // Hashed rather than drawn from a stream, so an incident moves no other seeded draw. The low bit
 // keeps a sunburn's draw and a mishap's apart for the same person and number.
 const drawFor = (person: number, when: number, kind: 0 | 1): number =>
-  mix(Math.imul(person + 1, GOLDEN) + when * 2 + kind) / 2 ** 32;
+  unitOf(mix(Math.imul(person + 1, GOLDEN) + when * 2 + kind));
 
 export function sunburnt(
   person: number,

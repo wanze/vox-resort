@@ -64,7 +64,8 @@ import {
   pickUp,
   stepWith,
 } from './litter';
-import { bedtimeOf, mix } from './night';
+import { mix } from '../../random/domain/hash';
+import { bedtimeOf } from './night';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor } from './queueLane';
 import { sandRoutesFor } from './sandRoute';
 import { ARCHETYPES } from './archetypes';

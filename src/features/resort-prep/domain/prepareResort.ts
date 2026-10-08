@@ -30,11 +30,11 @@ import {
 import {
   keepStyle,
   layoutResort,
-  tileKey,
   type Placement,
   type ResortLayout,
   type StyleOf,
 } from '../../layout/domain/resortLayout';
+import { tileKey } from '../../layout/domain/tileKey';
 import { RESORT_PLAN, type ResortPlan } from '../../layout/domain/resortPlan';
 import { shoreFor, type Shore } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';

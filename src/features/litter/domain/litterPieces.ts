@@ -1,7 +1,7 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { TileRect } from '../../layout/domain/parkShapes';
 import { PIECE, windowOf, type Litter } from '../../sim/domain/litter';
-import { mix } from '../../sim/domain/night';
+import { mix } from '../../random/domain/hash';
 
 export interface LitterPiece {
   readonly x: number;

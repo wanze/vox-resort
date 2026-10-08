@@ -1,4 +1,5 @@
-import { tileKey, type Tile } from './resortLayout';
+import type { Tile } from './resortLayout';
+import { tileKey } from './tileKey';
 
 export interface TileRect {
   readonly x0: number;

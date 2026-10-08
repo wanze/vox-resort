@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import referenceJson from '../../../../fixtures/reference-resort.json';
@@ -76,11 +77,12 @@ import { arrivalsFor, ratingFor } from './rating';
 import { createBreakdowns, isBroken, type Breakdowns } from './breakdowns';
 import { burnTheSunbathers, hurt, mishap } from './incidents';
 import { createRouter, type Router } from './router';
+import { routerPerPerson, routerVenuesMatch } from './routerSnapshot';
 import { guestsSnapshotSchema } from './resortSnapshot';
 import { advanceClock, createSimClock, SPEED_DAY_SECONDS, withSpeed } from './simClock';
 import { reliefAt, shelterOf, venuesOn, type Venue } from './venues';
 import { isOpenIn, weatherEffect, type Weather } from './weather';
-import { cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
+import { carryUpkeep, cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import { onDuty, rosterFor, STAFF_ROLES, staffPool, workplacesOf } from './staff';
 import { VISIT } from './occupancy';
 import { createStaffRouter, meanCleanliness } from './staffRouter';
@@ -1847,6 +1849,39 @@ const shareOutOf = (
   return { ranked, busiest, ignored };
 };
 
+// For the golden test: a typed array's type is part of a save's shape.
+const shapeOf = (value: unknown): unknown => {
+  if (ArrayBuffer.isView(value)) {
+    return `${value.constructor.name}(${(value as unknown as ArrayLike<unknown>).length})`;
+  }
+  if (Array.isArray(value)) return `Array(${value.length})`;
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .toSorted()
+        .map((key) => [key, shapeOf((value as Record<string, unknown>)[key])]),
+    );
+  }
+  return typeof value;
+};
+const digestOf = (value: unknown): string =>
+  createHash('sha256')
+    .update(
+      JSON.stringify(value, (_key, inner: unknown) => {
+        if (ArrayBuffer.isView(inner)) {
+          return [inner.constructor.name, ...Array.from(inner as unknown as ArrayLike<unknown>)];
+        }
+        if (typeof inner !== 'object' || inner === null || Array.isArray(inner)) return inner;
+        return Object.fromEntries(
+          Object.keys(inner)
+            .toSorted()
+            .map((key) => [key, (inner as Record<string, unknown>)[key]]),
+        );
+      }),
+    )
+    .digest('hex')
+    .slice(0, 16);
+
 describe('on the reference resort', () => {
   const layout = referenceWorldOf(referenceJson);
   const plan = planOfWorld(layout);
@@ -2711,7 +2746,11 @@ describe('on the reference resort', () => {
 
   // Everything a day on the plot changes, as showcase.ts wires it, so that a twin restored from
   // a snapshot can be run beside the plot it was taken from.
-  const livePlot = (events: EventParts = {}) => {
+  const livePlot = (
+    events: EventParts = {},
+    options: { readonly venues?: readonly Venue[]; readonly lifeguards?: boolean } = {},
+  ) => {
+    let standing = options.venues ?? venues;
     const seated = walkNetworkFor({
       paved: layout.paths,
       levelOf,
@@ -2730,7 +2769,7 @@ describe('on the reference resort', () => {
       seed: 12,
     });
     const needs = createNeeds(people, 13);
-    const upkeep = createUpkeep(venues.length);
+    let upkeep = createUpkeep(standing.length);
     const litter = createLitter(plan.tilesX, plan.tilesZ);
     const carrying = createCarrying(people.count);
     const cover = binCoverFor([], plan.tilesX, plan.tilesZ);
@@ -2740,7 +2779,7 @@ describe('on the reference resort', () => {
     const router = createRouter({
       guests: people,
       needs,
-      venues,
+      venues: standing,
       lodgings,
       gateways: [],
       onLeave: () => {},
@@ -2774,16 +2813,21 @@ describe('on the reference resort', () => {
 
     const employed = staffPool();
     const duty = onDuty(employed, rosterFor(workplacesOf(venues, seated.posts)));
+    if (options.lifeguards === false) {
+      for (let worker = 0; worker < employed.count; worker++) {
+        if (employed.role[worker] === 'lifeguard') duty[worker] = 0;
+      }
+    }
     let workers: Crowd | null = null;
     const staffRouter = createStaffRouter({
       staff: employed,
-      venues,
+      venues: standing,
       network: seated,
       upkeep: () => upkeep,
       crowd: () => workers!,
       duty: () => duty,
       litter: () => litter,
-      occupants: (venue) => router.occupancyOf(venues[venue]!.key)?.inside ?? 0,
+      occupants: (venue) => router.occupancyOf(standing[venue]!.key)?.inside ?? 0,
       seed: 9,
     });
     workers = createCrowd({
@@ -2844,6 +2888,15 @@ describe('on the reference resort', () => {
         crowd = restoreCrowd(crowd!, saved.crowd);
         workers = restoreCrowd(workers!, saved.workers);
       },
+      // In the order showcase.ts rebuilds after an edit.
+      rebuild(next: readonly Venue[]) {
+        upkeep = carryUpkeep(upkeep, standing, next);
+        standing = next;
+        router.rebuild(next, lodgings, [], seated);
+        staffRouter.rebuild(next, seated);
+        crowd = reseatCrowd(crowd!, seated, (person) => router.holds(person));
+        workers = reseatCrowd(workers!, seated);
+      },
     };
   };
 
@@ -2901,6 +2954,162 @@ describe('on the reference resort', () => {
     const night = live.snapshot();
     expect(night.router.asleep.includes(1), 'nobody asleep').toBe(true);
     twinFrom(night);
+  });
+
+  it('saves both routers in the shape and with the values they had at 57d0685', () => {
+    const live = livePlot();
+    live.runTo(16 * 60);
+    const a = live.snapshot();
+    live.runTo(23 * 60 + 30);
+    const b = live.snapshot();
+    expect(shapeOf(a.router)).toMatchInlineSnapshot(`
+      {
+        "arriving": "Uint8Array(600)",
+        "asleep": "Uint8Array(600)",
+        "balkCount": "Int32Array(58)",
+        "claims": "Array(98)",
+        "doorOf": "Int32Array(600)",
+        "errands": {
+          "back": "Uint8Array(600)",
+          "leg": "Int32Array(600)",
+          "route": "Array(600)",
+          "venue": "Int32Array(600)",
+        },
+        "fetching": "Int32Array(600)",
+        "fieldsBuilt": "Array(54)",
+        "goals": {
+          "need": "Int8Array(600)",
+          "venue": "Int32Array(600)",
+        },
+        "homeLodging": "Int32Array(600)",
+        "homeward": "Uint8Array(600)",
+        "justLeft": "Int32Array(600)",
+        "leaving": "Uint8Array(600)",
+        "lookAgainAt": "Int32Array(600)",
+        "now": "number",
+        "occupancy": {
+          "at": "Int32Array(600)",
+          "queues": "Array(58)",
+          "slot": "Int32Array(600)",
+          "state": "Uint8Array(600)",
+          "until": "Float64Array(600)",
+        },
+        "partyPitches": "Array(197)",
+        "random": "number",
+        "spotOf": "Int32Array(600)",
+        "stayRoutes": "Array(600)",
+        "stayUntil": "Int32Array(600)",
+        "stays": "Int32Array(600)",
+        "stepFreeFieldsBuilt": "Array(54)",
+        "visitCount": "Int32Array(58)",
+      }
+    `);
+    expect(shapeOf(a.staff)).toMatchInlineSnapshot(`
+      {
+        "assigned": "Int32Array(40)",
+        "doorOf": "Int32Array(40)",
+        "goingHome": "Uint8Array(40)",
+        "lastStage": "Int32Array(40)",
+        "legOf": "Int32Array(40)",
+        "legRoute": "Array(40)",
+        "load": "Uint8Array(40)",
+        "now": "number",
+        "orders": "Array(0)",
+        "random": "number",
+        "restocking": "Uint8Array(40)",
+        "roomOf": "Int32Array(40)",
+        "sheltering": "Uint8Array(40)",
+        "tileOf": "Int32Array(40)",
+        "towerOf": "Int32Array(40)",
+        "until": "Int32Array(40)",
+        "working": "Uint8Array(40)",
+      }
+    `);
+    expect(shapeOf(b.router)).toMatchInlineSnapshot(`
+      {
+        "arriving": "Uint8Array(600)",
+        "asleep": "Uint8Array(600)",
+        "balkCount": "Int32Array(58)",
+        "claims": "Array(59)",
+        "doorOf": "Int32Array(600)",
+        "errands": {
+          "back": "Uint8Array(600)",
+          "leg": "Int32Array(600)",
+          "route": "Array(600)",
+          "venue": "Int32Array(600)",
+        },
+        "fetching": "Int32Array(600)",
+        "fieldsBuilt": "Array(55)",
+        "goals": {
+          "need": "Int8Array(600)",
+          "venue": "Int32Array(600)",
+        },
+        "homeLodging": "Int32Array(600)",
+        "homeward": "Uint8Array(600)",
+        "justLeft": "Int32Array(600)",
+        "leaving": "Uint8Array(600)",
+        "lookAgainAt": "Int32Array(600)",
+        "now": "number",
+        "occupancy": {
+          "at": "Int32Array(600)",
+          "queues": "Array(58)",
+          "slot": "Int32Array(600)",
+          "state": "Uint8Array(600)",
+          "until": "Float64Array(600)",
+        },
+        "partyPitches": "Array(197)",
+        "random": "number",
+        "spotOf": "Int32Array(600)",
+        "stayRoutes": "Array(600)",
+        "stayUntil": "Int32Array(600)",
+        "stays": "Int32Array(600)",
+        "stepFreeFieldsBuilt": "Array(55)",
+        "visitCount": "Int32Array(58)",
+      }
+    `);
+    expect(shapeOf(b.staff)).toMatchInlineSnapshot(`
+      {
+        "assigned": "Int32Array(40)",
+        "doorOf": "Int32Array(40)",
+        "goingHome": "Uint8Array(40)",
+        "lastStage": "Int32Array(40)",
+        "legOf": "Int32Array(40)",
+        "legRoute": "Array(40)",
+        "load": "Uint8Array(40)",
+        "now": "number",
+        "orders": "Array(0)",
+        "random": "number",
+        "restocking": "Uint8Array(40)",
+        "roomOf": "Int32Array(40)",
+        "sheltering": "Uint8Array(40)",
+        "tileOf": "Int32Array(40)",
+        "towerOf": "Int32Array(40)",
+        "until": "Int32Array(40)",
+        "working": "Uint8Array(40)",
+      }
+    `);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"a6d086bccd70e319"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"0c2a81e02ec0efaa"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"06291d0402664b35"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"70d85af5fef81fc3"`);
+  });
+
+  it('holds nothing across a rebuild that a snapshot does not carry', () => {
+    // A lifeguard's keptWater is set by a rebuild and not saved, so no twin could match it.
+    const live = livePlot({}, { lifeguards: false });
+    live.runTo(16 * 60);
+    const fewer = venues.slice(1);
+    live.rebuild(fewer);
+    const rebuilt = live.snapshot().router;
+    expect(routerVenuesMatch(rebuilt, fewer.length + 1)).toBe(true);
+    for (const column of routerPerPerson(rebuilt)) expect(column.length).toBe(600);
+
+    const twin = livePlot({}, { venues: fewer, lifeguards: false });
+    twin.restore(live.snapshot());
+    expect(twin.snapshot()).toEqual(live.snapshot());
+    live.runTo(live.ticks + 60);
+    twin.runTo(live.ticks);
+    expect(twin.snapshot()).toEqual(live.snapshot());
   });
 
   it('runs a plot with no event on exactly as one with no event parts at all', () => {

@@ -1,7 +1,7 @@
 import type { NodeIndex } from '../../crowd/domain/nearestNode';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { doorsFor } from '../../sim/domain/doors';
-import { SAND_ROUTE_TILES } from '../../sim/domain/router';
+import { SAND_ROUTE_TILES } from '../../sim/domain/venueRoutes';
 import { sandRoutesFor } from '../../sim/domain/sandRoute';
 import { reliefAt, type Venue } from '../../sim/domain/venues';
 import { TILE_VOXELS, type GuestNeed } from '../../../../voxel-gen/voxelgen.ts';

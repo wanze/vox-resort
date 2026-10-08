@@ -31,6 +31,27 @@ const pitchSchema = z.object({
     .readonly(),
 }) satisfies z.ZodType<Pitch>;
 
+// Saved as the router holds them; a new per-guest or per-venue column goes into one of these and
+// into the schema, or routerState's tests fail.
+export const ROUTER_COLUMNS = [
+  'doorOf',
+  'justLeft',
+  'leaving',
+  'asleep',
+  'homeward',
+  'homeLodging',
+  'arriving',
+  'spotOf',
+  'fetching',
+  'stayUntil',
+  'stayRoutes',
+  'lookAgainAt',
+] as const;
+export const ROUTER_VENUE_COLUMNS = ['balkCount', 'visitCount'] as const;
+
+export type RouterColumn = (typeof ROUTER_COLUMNS)[number];
+export type RouterVenueColumn = (typeof ROUTER_VENUE_COLUMNS)[number];
+
 // A claim is shared by a party's pitch and each member's stay, so the table is saved once and
 // both point into it by index, -1 for none.
 export const routerSnapshotSchema = z.object({
@@ -81,19 +102,8 @@ export function routerPerPerson(snapshot: RouterSnapshot): readonly ArrayLike<un
     errands.route,
     errands.leg,
     errands.back,
-    snapshot.doorOf,
-    snapshot.justLeft,
-    snapshot.leaving,
-    snapshot.asleep,
-    snapshot.homeward,
-    snapshot.homeLodging,
-    snapshot.arriving,
+    ...ROUTER_COLUMNS.map((key) => snapshot[key]),
     snapshot.stays,
-    snapshot.spotOf,
-    snapshot.fetching,
-    snapshot.stayUntil,
-    snapshot.stayRoutes,
-    snapshot.lookAgainAt,
   ];
 }
 

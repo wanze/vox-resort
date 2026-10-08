@@ -11,6 +11,27 @@ const orderSchema = z.object({
   taken: z.boolean(),
 });
 
+// Saved as the router holds them; a new per-worker column goes in here and into the schema, or
+// staffRouterState's tests fail.
+export const STAFF_COLUMNS = [
+  'assigned',
+  'until',
+  'working',
+  'doorOf',
+  'tileOf',
+  'roomOf',
+  'lastStage',
+  'sheltering',
+  'towerOf',
+  'legOf',
+  'legRoute',
+  'load',
+  'restocking',
+  'goingHome',
+] as const;
+
+export type StaffColumn = (typeof STAFF_COLUMNS)[number];
+
 export const staffRouterSnapshotSchema = z.object({
   assigned: int32,
   until: int32,
@@ -35,22 +56,7 @@ export const staffRouterSnapshotSchema = z.object({
 export type StaffRouterSnapshot = z.infer<typeof staffRouterSnapshotSchema>;
 
 export function staffPerWorker(snapshot: StaffRouterSnapshot): readonly ArrayLike<unknown>[] {
-  return [
-    snapshot.assigned,
-    snapshot.until,
-    snapshot.working,
-    snapshot.doorOf,
-    snapshot.tileOf,
-    snapshot.roomOf,
-    snapshot.lastStage,
-    snapshot.sheltering,
-    snapshot.towerOf,
-    snapshot.legOf,
-    snapshot.legRoute,
-    snapshot.load,
-    snapshot.restocking,
-    snapshot.goingHome,
-  ];
+  return STAFF_COLUMNS.map((key) => snapshot[key]);
 }
 
 // Venue and lodging indices are into the lists the snapshot was taken on; one past the end of

@@ -11,26 +11,26 @@ Guests, staff, boats and balloons, and the simulation behind them.
 
 ## Code
 
-| What                        | Where                                                               |
-| --------------------------- | ------------------------------------------------------------------- |
-| Walk network, crowd, step   | `crowd/domain/walkNetwork.ts`, `crowd.ts`, `avoidance.ts`           |
-| Sand obstacles, seats       | `crowd/domain/sandGrid.ts`, `seating.ts`                            |
-| Doors, flow fields, routing | `sim/domain/doors.ts`, `flowField.ts`, `router.ts`                  |
-| Choosing a venue            | `sim/domain/chooseVenue.ts`, `appeal.ts`                            |
-| Queues and visits           | `sim/domain/occupancy.ts`                                           |
-| Beach                       | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`              |
-| Needs, happiness, rating    | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                  |
-| Night, weather, check-in    | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                   |
-| Cleanliness and staff       | `sim/domain/upkeep.ts`, `staffRouter.ts`                            |
-| Advice                      | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`            |
-| Money                       | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`    |
-| Guests, parties, beds       | `guests/domain/`                                                    |
-| Events                      | `events/`                                                           |
-| Inspector                   | `inspect/`, `hud/components/InspectPanel.tsx`                       |
-| Drawing                     | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
-| Places and acts in a venue  | `choreography/domain/`                                              |
-| Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                     |
-| Game step, headless runs    | `resort-sim/domain/stepSim.ts`, `headless.ts`                       |
+| What                        | Where                                                                                  |
+| --------------------------- | -------------------------------------------------------------------------------------- |
+| Walk network, crowd, step   | `crowd/domain/walkNetwork.ts`, `crowd.ts`, `avoidance.ts`                              |
+| Sand obstacles, seats       | `crowd/domain/sandGrid.ts`, `seating.ts`                                               |
+| Doors, flow fields, routing | `sim/domain/doors.ts`, `flowField.ts`, `venueRoutes.ts`, `router.ts`, `routerState.ts` |
+| Choosing a venue            | `sim/domain/chooseVenue.ts`, `appeal.ts`                                               |
+| Queues and visits           | `sim/domain/occupancy.ts`                                                              |
+| Beach                       | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`                                 |
+| Needs, happiness, rating    | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                                     |
+| Night, weather, check-in    | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                                      |
+| Cleanliness and staff       | `sim/domain/upkeep.ts`, `staffRouter.ts`, `staffRouterState.ts`                        |
+| Advice                      | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`                               |
+| Money                       | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`                       |
+| Guests, parties, beds       | `guests/domain/`                                                                       |
+| Events                      | `events/`                                                                              |
+| Inspector                   | `inspect/`, `hud/components/InspectPanel.tsx`                                          |
+| Drawing                     | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts`                    |
+| Places and acts in a venue  | `choreography/domain/`                                                                 |
+| Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                                        |
+| Game step, headless runs    | `resort-sim/domain/stepSim.ts`, `headless.ts`                                          |
 
 ## Principles
 
@@ -515,7 +515,9 @@ restores them onto a resort rebuilt from the saved placements in saved order.
 Saves live in IndexedDB and are parsed with zod (`saves/domain/snapshot.ts`).
 
 **Every new piece of simulation state must be added to its module's snapshot and
-schema.** There are no migrations. The twin-run tests (`crowd.test.ts`,
+schema.** For the two routers, a new field goes into the state record and its
+column list in `routerSnapshot.ts` or `staffRouterSnapshot.ts`, and the state
+tests fail until it is declared. There are no migrations. The twin-run tests (`crowd.test.ts`,
 `router.test.ts`) restore a snapshot into a second resort and run both side by
 side, catching missed fields their scenario exercises. Reordering
 `THOUGHT_KINDS`, `GUEST_NEEDS`, `STAFF_ROLES` or the crowd's sentinels changes

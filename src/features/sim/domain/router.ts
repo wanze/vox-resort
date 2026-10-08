@@ -11,7 +11,6 @@ import {
   walkSandTo,
   type Crowd,
 } from '../../crowd/domain/crowd';
-import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, partyOf, usesWheelchair, type Guests } from '../../guests/domain/guests';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
@@ -20,7 +19,7 @@ import { isBroken, wear, type Breakdowns } from './breakdowns';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { walkingTicks } from './crowdRate';
 import { doorsFor } from './doors';
-import { flowFieldFor, type FlowField, type FlowOptions } from './flowField';
+import { type FlowField, type FlowOptions } from './flowField';
 import {
   clearAllGoals,
   clearPartyGoal,
@@ -37,19 +36,16 @@ import { lodgingFor, type Lodging } from './lodgings';
 import { relieve, strongestNeed, type Needs } from './needs';
 import { isBedtime, NIGHT_RELIEF } from './night';
 import { isBeach, LOUNGER_RELIEF, SHADE_RELIEF, withBeach } from './beach';
-import { pitchFor, type Pitch, type PitchSpot } from './beachPitch';
-import {
-  arriveAt,
-  createOccupancy,
-  type ArrivalOutcome,
-  leaveVenue,
-  restoreOccupancy,
-  snapshotOccupancy,
-  sweepOccupancy,
-  VISIT,
-  type Occupancy,
-} from './occupancy';
+import { pitchFor, type PitchSpot } from './beachPitch';
+import { arriveAt, type ArrivalOutcome, leaveVenue, sweepOccupancy, VISIT } from './occupancy';
 import { routerVenuesMatch, type RouterSnapshot } from './routerSnapshot';
+import {
+  createRouterState,
+  restoreRouterState,
+  snapshotRouterState,
+  type Claim,
+  type RouterState,
+} from './routerState';
 import { MAX_QUEUE_SHOWN, queueLaneFor, sandLaneFor, type QueueSpot } from './queueLane';
 import { sandFieldFor, sandRoutesFor, type SandField, type SandRoute } from './sandRoute';
 import { shadedAt, type ShadeMap } from './shade';
@@ -57,6 +53,7 @@ import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
 import { openNow } from './hours';
 import { weatherEffect, type Weather } from './weather';
+import { createVenueRoutes, SAND_ROUTE_TILES } from './venueRoutes';
 import { type Venue } from './venues';
 
 // Duplicated rather than imported: simClock's constant is private to the clock.
@@ -64,10 +61,6 @@ const TICK_SECONDS = 60;
 
 // -1 is an answer (stand still, or wander), not the absence of one.
 const BY_DAY = -2;
-
-// The furthest beach building on the reference plot is 28 tiles from a gate; 40 leaves
-// room for detours.
-export const SAND_ROUTE_TILES = 40;
 
 // Twice needs.ts's content line, so nobody on the sand jumps up every few minutes.
 const FETCH_URGENCY = 0.4;
@@ -81,39 +74,32 @@ const LOOK_AGAIN_TICKS = 15;
 // a grubby guest walks from the gate to the shower and the lounger is only ever passed.
 const SETTLE_TICKS = 45;
 
-// Routes are per person, not per venue: each party member walks to their own beach spot.
-interface Errands {
-  readonly venue: Int32Array;
-  readonly route: (SandRoute | null)[];
-  readonly leg: Int32Array;
-  readonly back: Uint8Array;
-}
-
-const createErrands = (people: number): Errands => ({
-  venue: new Int32Array(people).fill(-1),
-  route: Array.from({ length: people }, () => null),
-  leg: new Int32Array(people),
-  back: new Uint8Array(people),
-});
-
 // What a rebuild reads of the router it replaces, to carry over who stays put.
 interface Before {
   readonly venues: readonly Venue[];
   readonly lodgings: readonly Lodging[];
   readonly network: WalkNetwork;
-  readonly occupancy: Occupancy;
-  readonly errands: Errands;
-  readonly doorOf: Int32Array;
-  readonly asleep: Uint8Array;
-  readonly homeward: Uint8Array;
-  readonly homeLodging: Int32Array;
-  readonly fetching: Int32Array;
+  readonly state: RouterState;
 }
 
-interface Claim {
-  readonly pitch: Pitch;
-  readonly routes: readonly SandRoute[];
-  holders: number;
+// Everything here follows from the graph and the venue list, so a rebuild starts it afresh.
+interface GuestCaches {
+  // One field per venue, not per need: a per-need field routes to the nearest venue and
+  // ignores chooseVenue's weighing. Built lazily; a sweep costs about 0.5 ms.
+  fields: (FlowField | null)[];
+  // A party with a wheelchair walks fields of its own, built only once one of them asks.
+  stepFreeFields: (FlowField | null)[];
+  lanes: (readonly QueueSpot[] | null)[];
+  sandRoutes: (readonly SandRoute[] | null)[];
+  readonly sandFields: (SandField | null)[];
+  readonly standsOnSand: Int8Array;
+  // Hashed from the key, not the index, so a rebuild does not reshuffle preferences.
+  readonly salts: Int32Array;
+  cutOffField: FlowField | null;
+  // One multi-source field rather than one per gate: a guest leaves by the nearest gate.
+  leavingField: FlowField | null;
+  stepFreeLeaving: FlowField | null;
+  gateNodes: readonly number[] | null;
 }
 
 export type BeachStay = 'arriving' | 'resting' | 'leaving';
@@ -242,107 +228,27 @@ export function createRouter(parts: {
   let lodgings = parts.lodgings;
   let gateways = parts.gateways;
   let network = parts.network;
-  let index: NodeIndex = nodeIndexFor(network);
-  // One field per venue, not per need: a per-need field routes to the nearest venue and
-  // ignores chooseVenue's weighing. Built lazily; a sweep costs about 0.5 ms.
-  let fields: (FlowField | null)[] = venues.map(() => null);
-  // A party with a wheelchair walks fields of its own, built only once one of them asks.
-  let stepFreeFields: (FlowField | null)[] = venues.map(() => null);
-  let stepFreeHomeFields: (FlowField | null)[] = lodgings.map(() => null);
-  let stepFreeLeaving: FlowField | null = null;
-  let cutOffField: FlowField | null = null;
-  let lanes: (readonly QueueSpot[] | null)[] = venues.map(() => null);
-  let sandRoutes: (readonly SandRoute[] | null)[] = venues.map(() => null);
-  let errands = createErrands(guests.count);
-  let homeFields: (FlowField | null)[] = lodgings.map(() => null);
-  // One multi-source field rather than one per gate: a guest leaves by the nearest gate.
-  let leavingField: FlowField | null = null;
-  let gateNodes: readonly number[] | null = null;
-  let leaving = new Uint8Array(guests.count);
-  let built = 0;
-  let homeLodging = new Int32Array(guests.count);
+  let routes = createVenueRoutes(network, venues, lodgings);
+  let caches = cachesFor(venues);
+  // Never destructured outside one function body: a rebuild or a restore replaces it whole.
+  let state = createRouterState(guests.count, guests.parties.length, venues.length);
   const findHomes = (): void => {
     for (let person = 0; person < guests.count; person++) {
       const home = homeOf(guests, person);
-      homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
+      state.homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
     }
   };
   findHomes();
-  let asleep = new Uint8Array(guests.count);
-  let asleepCount = 0;
-  let homeward = new Uint8Array(guests.count);
-  let partyPitches: (Claim | null)[] = guests.parties.map(() => null);
-  let stays: (Claim | null)[] = Array.from({ length: guests.count }, () => null);
-  let spotOf = new Int32Array(guests.count);
-  let pitched = new Set<number>();
-  let promised = new Set<number>();
-  let fetching = new Int32Array(guests.count).fill(-1);
-  let stayUntil = new Int32Array(guests.count);
-  let stayRoutes: (SandRoute | null)[] = Array.from({ length: guests.count }, () => null);
-  let lookAgainAt = new Int32Array(guests.count);
-  let sandFields: (SandField | null)[] = venues.map(() => null);
-  let standsOnSand = new Int8Array(venues.length).fill(-1);
-  // Counted as events, because occupancy only says what is true now.
-  let balkCount = new Int32Array(venues.length);
-  let visitCount = new Int32Array(venues.length);
-  // Hashed from the key, not the index, so a rebuild does not reshuffle preferences.
-  let salts = saltsFor(venues);
-  // Not carried across a rebuild: the index would point at whatever building lands there.
-  let justLeft = new Int32Array(guests.count).fill(-1);
-  let occupancy: Occupancy = createOccupancy(guests.count, venues.length);
-  let doorOf = new Int32Array(guests.count).fill(-1);
-  // Kept across a rebuild: it is a fact about the guest, not about the graph.
-  const arriving = new Uint8Array(guests.count);
   let now = 0;
-
-  const claimTable = (): {
-    readonly claims: readonly Claim[];
-    readonly idOf: (claim: Claim | null | undefined) => number;
-  } => {
-    const claims: Claim[] = [];
-    const ids = new Map<Claim, number>();
-    const idOf = (claim: Claim | null | undefined): number => {
-      if (!claim) return -1;
-      const known = ids.get(claim);
-      if (known !== undefined) return known;
-      ids.set(claim, claims.length);
-      claims.push(claim);
-      return claims.length - 1;
-    };
-    return { claims, idOf };
-  };
-
-  // Holders, pitched tiles and promised loungers all follow from who stays where.
-  const restoreClaims = (snapshot: RouterSnapshot): void => {
-    const claims: Claim[] = snapshot.claims.map(({ pitch, routes }) => ({
-      pitch,
-      routes,
-      holders: 0,
-    }));
-    partyPitches = snapshot.partyPitches.map((id) => claims[id] ?? null);
-    stays = Array.from(snapshot.stays, (id) => claims[id] ?? null);
-    for (const claim of stays) if (claim) claim.holders++;
-    pitched = new Set(claims.map((claim) => claim.pitch.tile));
-    promised = new Set(
-      claims.flatMap((claim) =>
-        claim.pitch.spots.map((spot) => spot.seat).filter((seat) => seat >= 0),
-      ),
-    );
-  };
 
   // Rebuilt first: queue limits and walking distances read which fields exist.
   const restoreFields = (swept: readonly number[], stepFreeSwept: readonly number[]): void => {
-    fields = venues.map(() => null);
-    stepFreeFields = venues.map(() => null);
-    lanes = venues.map(() => null);
-    sandRoutes = venues.map(() => null);
+    caches.fields = venues.map(() => null);
+    caches.stepFreeFields = venues.map(() => null);
+    caches.lanes = venues.map(() => null);
+    caches.sandRoutes = venues.map(() => null);
     for (const venue of swept) fieldFor(venue);
     for (const venue of stepFreeSwept) stepFreeFieldFor(venue);
-  };
-
-  const sweep = (sources: readonly number[], options?: FlowOptions): FlowField => {
-    built++;
-    return flowFieldFor(network, sources, options);
   };
 
   // Asked of the party, which routes as one: nobody goes on ahead up a flight.
@@ -350,23 +256,23 @@ export function createRouter(parts: {
     (guests.parties[guests.party[person] ?? -1]?.wheelchair ?? -1) >= 0;
 
   const cutOff = (): FlowField => {
-    cutOffField ??= {
+    caches.cutOffField ??= {
       next: new Int32Array(network.nodes.length).fill(-1),
       hops: new Int32Array(network.nodes.length).fill(-1),
     };
-    return cutOffField;
+    return caches.cutOffField;
   };
 
   // No sand leg: the beach and a venue reached over the sand are out of reach in a wheelchair.
   const stepFreeFieldFor = (venue: number): FlowField => {
-    const existing = stepFreeFields[venue];
+    const existing = caches.stepFreeFields[venue];
     if (existing) return existing;
     const declared = venues[venue]!;
-    const doors = isBeach(declared) ? null : doorsFor(declared, index, network);
-    const field = doors && doors.nodes.length > 0 ? sweep(doors.nodes, STEP_FREE) : cutOff();
-    stepFreeFields[venue] = field;
+    const doors = isBeach(declared) ? null : doorsFor(declared, routes.index, network);
+    const field = doors && doors.nodes.length > 0 ? routes.sweep(doors.nodes, STEP_FREE) : cutOff();
+    caches.stepFreeFields[venue] = field;
     if (doors && doors.nodes.length > 0) {
-      lanes[venue] ??= longestLane(network, doors.nodes, declared);
+      caches.lanes[venue] ??= longestLane(network, doors.nodes, declared);
     }
     return field;
   };
@@ -377,26 +283,25 @@ export function createRouter(parts: {
     isStepFree(person) ? stepFreeFieldFor(venue) : fieldFor(venue);
 
   const fieldFor = (venue: number): FlowField => {
-    const existing = fields[venue];
+    const existing = caches.fields[venue];
     if (existing) return existing;
     const declared = venues[venue]!;
     if (isBeach(declared)) {
       // Nobody queues for sand: no lane is laid, so the line is never joined.
-      const field = sweep(network.gates);
-      fields[venue] = field;
+      const field = routes.sweep(network.gates);
+      caches.fields[venue] = field;
       return field;
     }
-    const doors = doorsFor(declared, index, network);
-    const overSand =
-      doors.nodes.length === 0 ? sandRoutesFor(network, doors.sand, SAND_ROUTE_TILES) : [];
-    sandRoutes[venue] = overSand;
-    const field = sweep(
+    const doors = doorsFor(declared, routes.index, network);
+    const overSand = doors.nodes.length === 0 ? routes.sandRoutesOf(venue) : [];
+    caches.sandRoutes[venue] = overSand;
+    const field = routes.sweep(
       overSand.length > 0
         ? overSand.map((route) => route.gate).toSorted((a, b) => a - b)
         : doors.nodes,
     );
-    fields[venue] = field;
-    lanes[venue] =
+    caches.fields[venue] = field;
+    caches.lanes[venue] =
       overSand.length > 0
         ? longestSandLane(network, overSand)
         : longestLane(network, doors.nodes, declared);
@@ -405,71 +310,59 @@ export function createRouter(parts: {
 
   // Cached per venue because a stay looks for somewhere to go every quarter hour.
   const isOnSand = (venue: number): boolean => {
-    const known = standsOnSand[venue]!;
+    const known = caches.standsOnSand[venue]!;
     if (known >= 0) return known === 1;
     const declared = venues[venue]!;
-    const doors = isBeach(declared) ? null : doorsFor(declared, index, network);
+    const doors = isBeach(declared) ? null : doorsFor(declared, routes.index, network);
     const answer = doors !== null && doors.nodes.length === 0 && doors.sand.length > 0;
-    standsOnSand[venue] = answer ? 1 : 0;
+    caches.standsOnSand[venue] = answer ? 1 : 0;
     return answer;
   };
 
   const sandFieldOf = (venue: number): SandField => {
-    const existing = sandFields[venue];
+    const existing = caches.sandFields[venue];
     if (existing) return existing;
     const field = sandFieldFor(
       network,
-      doorsFor(venues[venue]!, index, network).sand,
+      doorsFor(venues[venue]!, routes.index, network).sand,
       SAND_ROUTE_TILES,
     );
-    sandFields[venue] = field;
+    caches.sandFields[venue] = field;
     return field;
   };
 
   // Null is a real state, a plot nobody can leave, which the HUD shows.
   const leavingFieldOf = (stepFree: boolean): FlowField | null => {
-    const known = stepFree ? stepFreeLeaving : leavingField;
+    const known = stepFree ? caches.stepFreeLeaving : caches.leavingField;
     if (known) return known;
     const sources = gateNodesOf();
     if (sources.length === 0) return null;
-    const field = sweep(sources, stepFree ? STEP_FREE : undefined);
-    if (stepFree) stepFreeLeaving = field;
-    else leavingField = field;
+    const field = routes.sweep(sources, stepFree ? STEP_FREE : undefined);
+    if (stepFree) caches.stepFreeLeaving = field;
+    else caches.leavingField = field;
     return field;
   };
 
   const gateNodesOf = (): readonly number[] => {
-    if (gateNodes) return gateNodes;
+    if (caches.gateNodes) return caches.gateNodes;
     const found = new Set<number>();
     for (const gateway of gateways) {
-      for (const node of doorsFor(gateway, index).nodes) found.add(node);
+      for (const node of doorsFor(gateway, routes.index).nodes) found.add(node);
     }
-    gateNodes = [...found].toSorted((a, b) => a - b);
-    return gateNodes;
-  };
-
-  const homeFieldFor = (lodging: number, stepFree: boolean): FlowField => {
-    const swept = stepFree ? stepFreeHomeFields : homeFields;
-    const existing = swept[lodging];
-    if (existing) return existing;
-    const field = sweep(
-      doorsFor(lodgings[lodging]!, index).nodes,
-      stepFree ? STEP_FREE : undefined,
-    );
-    swept[lodging] = field;
-    return field;
+    caches.gateNodes = [...found].toSorted((a, b) => a - b);
+    return caches.gateNodes;
   };
 
   const sandLegFrom = (venue: number, field: FlowField, at: number): number => {
-    const routes = sandRoutes[venue];
-    if (!routes || routes.length === 0) return 0;
+    const overSand = caches.sandRoutes[venue];
+    if (!overSand || overSand.length === 0) return 0;
     let gate = at;
     while (field.next[gate]! !== gate) gate = field.next[gate]!;
-    return routes.find((route) => route.gate === gate)?.length ?? 0;
+    return overSand.find((route) => route.gate === gate)?.length ?? 0;
   };
 
   // The ceiling is safe where no lane is laid yet: nobody can be waiting there.
-  const queueLimit = (venue: number): number => lanes[venue]?.length ?? MAX_QUEUE_SHOWN;
+  const queueLimit = (venue: number): number => caches.lanes[venue]?.length ?? MAX_QUEUE_SHOWN;
 
   // Seeded, so bench runs replay the same scene. Never zero, or a visit would admit and
   // release in one call and no queue would ever form.
@@ -506,7 +399,7 @@ export function createRouter(parts: {
     (venue: number): number => {
       // The beach is swept as soon as it is considered: a straight line to the middle
       // of a band says nothing about the distance to the nearest gate.
-      const field = fields[venue] ?? (isBeach(venues[venue]!) ? fieldFor(venue) : null);
+      const field = caches.fields[venue] ?? (isBeach(venues[venue]!) ? fieldFor(venue) : null);
       if (!field) {
         const { x, z } = venues[venue]!;
         const node = network.nodes[at];
@@ -517,9 +410,9 @@ export function createRouter(parts: {
       return hops * TILE_VOXELS + sandLegFrom(venue, field, at);
     };
 
-  const queueLength = (venue: number): number => occupancy.queues[venue]?.length ?? 0;
+  const queueLength = (venue: number): number => state.occupancy.queues[venue]?.length ?? 0;
 
-  const occupants = (venue: number): number => occupancy.inside[venue] ?? 0;
+  const occupants = (venue: number): number => state.occupancy.inside[venue] ?? 0;
 
   // The synthetic beach lies past the upkeep array and so reads as spotless, which is right.
   const cleanOf = (venue: number): number => cleanliness(parts.upkeep(), venue);
@@ -538,13 +431,13 @@ export function createRouter(parts: {
 
   const wearOut = (venue: number): void => {
     const breakdowns = parts.breakdowns?.();
-    if (breakdowns) wear(breakdowns, venue, venues[venue]!.reliability, salts[venue]!, now);
+    if (breakdowns) wear(breakdowns, venue, venues[venue]!.reliability, caches.salts[venue]!, now);
   };
 
   const affinityOf =
     (person: number) =>
     (venue: number): number =>
-      tasteFor(salts[venue] ?? 0, person, TASTE_SPREAD);
+      tasteFor(caches.salts[venue] ?? 0, person, TASTE_SPREAD);
 
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
     // A venue that shuts while somebody is inside is not emptied.
@@ -553,13 +446,13 @@ export function createRouter(parts: {
       return 'balked';
     }
     if (queueLength(venue) >= queueLimit(venue)) {
-      balkCount[venue]!++;
+      state.balkCount[venue]!++;
       onThought(person, 'queue-too-long', venues[venue]!.label);
       return 'balked';
     }
-    visitCount[venue]!++;
+    state.visitCount[venue]!++;
     return arriveAt(
-      occupancy,
+      state.occupancy,
       person,
       venue,
       venues[venue]!.capacity,
@@ -588,7 +481,7 @@ export function createRouter(parts: {
       queueLimit,
       occupants,
       affinity: affinityOf(person),
-      justLeft: justLeft[person]!,
+      justLeft: state.justLeft[person]!,
       cleanliness: cleanOf,
       isOpen: isOutLate(person) ? isOpenLate : isOpen,
       weather: weatherEffect(weatherNow()),
@@ -620,11 +513,11 @@ export function createRouter(parts: {
   // The height is the door node's: a venue knows its middle, not the ground height there.
   const stand = (person: number, venue: number, door: number, waiting: boolean): void => {
     const people = crowd();
-    const lane = lanes[venue] ?? [];
-    const onSand = door < 0 || (sandRoutes[venue]?.length ?? 0) > 0;
+    const lane = caches.lanes[venue] ?? [];
+    const onSand = door < 0 || (caches.sandRoutes[venue]?.length ?? 0) > 0;
     const spot =
       waiting && lane.length > 0
-        ? lane[Math.min(occupancy.slot[person]!, lane.length - 1)]!
+        ? lane[Math.min(state.occupancy.slot[person]!, lane.length - 1)]!
         : {
             x: venues[venue]!.x,
             z: venues[venue]!.z,
@@ -640,7 +533,7 @@ export function createRouter(parts: {
     if (goal === NO_GOAL || goal >= venues.length) return false;
     const venue = venues[goal]!;
     if (routeField(person, goal).next[at] !== at) return false;
-    const overSand = sandRoutes[goal] ?? [];
+    const overSand = caches.sandRoutes[goal] ?? [];
     if (overSand.length > 0) return setOffOverSand(person, goal, at, overSand);
 
     const outcome = admitAt(person, goal);
@@ -649,7 +542,7 @@ export function createRouter(parts: {
       clearPartyGoal(goals, guests, person);
       return false;
     }
-    doorOf[person] = at;
+    state.doorOf[person] = at;
     if (!isBeach(venue)) {
       stand(person, goal, at, outcome === 'waiting');
       return true;
@@ -663,18 +556,18 @@ export function createRouter(parts: {
 
   // No onVisited: the guest never settled, so there was no visit to have run its course.
   const endVisitAtTheGate = (person: number, at: number, venue: Venue): void => {
-    leaveVenue(occupancy, person);
-    justLeft[person] = at;
+    leaveVenue(state.occupancy, person);
+    state.justLeft[person] = at;
     relieve(needs, person, venue.satisfies);
     clearPartyGoal(goals, guests, person);
-    doorOf[person] = -1;
+    state.doorOf[person] = -1;
   };
 
   const settleOnSand = (person: number, gate: number): boolean => {
     const party = guests.party[person]!;
     const members = partyOf(guests, person);
-    partyPitches[party] ??= claimPitch(gate, members, watching(person));
-    const shared = partyPitches[party];
+    state.partyPitches[party] ??= claimPitch(gate, members, watching(person));
+    const shared = state.partyPitches[party];
     if (shared && stayAt(person, shared, members.indexOf(person), gate)) return true;
     if (shared) dropIfEmpty(shared, party);
     const own = claimPitch(gate, [person], watching(person));
@@ -689,23 +582,23 @@ export function createRouter(parts: {
       network,
       gate,
       members: members.map((member) => ({ child: guests.child[member] === 1 })),
-      taken: pitched,
-      loungerFree: (seat) => !promised.has(seat) && seatIsFree(people, seat),
+      taken: state.pitched,
+      loungerFree: (seat) => !state.promised.has(seat) && seatIsFree(people, seat),
       shaded: (tile) => parts.shade?.()?.tiles.has(tile) === true,
       hot: weatherNow() === 'heatwave',
       ...(watch ? { watch } : {}),
     });
     if (!pitch) return null;
-    pitched.add(pitch.tile);
-    for (const spot of pitch.spots) if (spot.seat >= 0) promised.add(spot.seat);
+    state.pitched.add(pitch.tile);
+    for (const spot of pitch.spots) if (spot.seat >= 0) state.promised.add(spot.seat);
     return { pitch, routes: sandRoutesFor(network, [pitch], SAND_ROUTE_TILES), holders: 0 };
   };
 
   const dropIfEmpty = (claim: Claim, party: number): void => {
     if (claim.holders > 0) return;
-    pitched.delete(claim.pitch.tile);
-    for (const spot of claim.pitch.spots) promised.delete(spot.seat);
-    if (partyPitches[party] === claim) partyPitches[party] = null;
+    state.pitched.delete(claim.pitch.tile);
+    for (const spot of claim.pitch.spots) state.promised.delete(spot.seat);
+    if (state.partyPitches[party] === claim) state.partyPitches[party] = null;
   };
 
   const stayAt = (person: number, claim: Claim, member: number, gate: number): boolean => {
@@ -713,8 +606,8 @@ export function createRouter(parts: {
     const spot = claim.pitch.spots[member];
     if (!route || !spot) return false;
     claim.holders++;
-    stays[person] = claim;
-    spotOf[person] = member;
+    state.stays[person] = claim;
+    state.spotOf[person] = member;
     const last = route.waypoints.at(-1)!;
     const onward = Math.hypot(spot.x - last.x, spot.z - last.z);
     const toSpot: SandRoute =
@@ -722,19 +615,19 @@ export function createRouter(parts: {
         ? { ...route, waypoints: [...route.waypoints, spot], length: route.length + onward }
         : route;
     setOffAlong(person, venues.length - 1, toSpot);
-    occupancy.until[person] = stayEndFor(person, claim, toSpot);
+    state.occupancy.until[person] = stayEndFor(person, claim, toSpot);
     return true;
   };
 
   const restOnLounger = (person: number, venue: number): void => {
-    const spot = stays[person]?.pitch.spots[spotOf[person]!];
+    const spot = state.stays[person]?.pitch.spots[state.spotOf[person]!];
     if (venue !== beachIndex() || !spot || spot.seat < 0) return;
     relieve(needs, person, LOUNGER_RELIEF);
   };
 
   const restInShade = (person: number, venue: number): void => {
-    const pitch = stays[person]?.pitch;
-    const spot = pitch?.spots[spotOf[person]!];
+    const pitch = state.stays[person]?.pitch;
+    const spot = pitch?.spots[state.spotOf[person]!];
     if (venue !== beachIndex() || !pitch || !spot || spot.seat >= 0) return;
     if (weatherNow() !== 'heatwave' || parts.shade?.()?.tiles.has(pitch.tile) !== true) return;
     relieve(needs, person, SHADE_RELIEF);
@@ -745,16 +638,18 @@ export function createRouter(parts: {
   // walk to a far lounger is added rather than eaten into.
   const stayEndFor = (person: number, claim: Claim, route: SandRoute): number => {
     for (const member of partyOf(guests, person)) {
-      if (member === person || stays[member] !== claim) continue;
-      return fetching[member]! >= 0 ? stayUntil[member]! : occupancy.until[member]!;
+      if (member === person || state.stays[member] !== claim) continue;
+      return state.fetching[member]! >= 0
+        ? state.stayUntil[member]!
+        : state.occupancy.until[member]!;
     }
-    return occupancy.until[person]! + walkingTicks(route.length);
+    return state.occupancy.until[person]! + walkingTicks(route.length);
   };
 
   const leaveStay = (person: number): void => {
-    const claim = stays[person];
+    const claim = state.stays[person];
     if (!claim) return;
-    stays[person] = null;
+    state.stays[person] = null;
     claim.holders--;
     dropIfEmpty(claim, guests.party[person]!);
   };
@@ -767,10 +662,10 @@ export function createRouter(parts: {
 
   const restAtSpot = (person: number, claim: Claim): void => {
     // The spot is the last waypoint, so the walk back starts with the one before.
-    errands.leg[person]! -= 1;
+    state.errands.leg[person]! -= 1;
     const people = crowd();
-    const spot = claim.pitch.spots[spotOf[person]!]!;
-    lookAgainAt[person] = now + SETTLE_TICKS;
+    const spot = claim.pitch.spots[state.spotOf[person]!]!;
+    state.lookAgainAt[person] = now + SETTLE_TICKS;
     if (watching(person)) {
       holdToWatch(people, person, spot);
       return;
@@ -787,7 +682,7 @@ export function createRouter(parts: {
   // they never came back, and the sand emptied.
   const sendOnErrands = (): void => {
     const beach = beachIndex();
-    if (beach < 0 || !(occupancy.inside[beach]! > 0)) return;
+    if (beach < 0 || !(state.occupancy.inside[beach]! > 0)) return;
     const people = crowd();
     for (let person = 0; person < guests.count; person++) {
       if (!dueAnotherLook(person, beach, people)) continue;
@@ -796,24 +691,25 @@ export function createRouter(parts: {
       // Even for what the beach gives: its relief comes when the stay ends, and skipping it left a
       // volleyball court on the sand with nobody bored enough to walk over.
       if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
-      lookAgainAt[person] = now + LOOK_AGAIN_TICKS;
+      state.lookAgainAt[person] = now + LOOK_AGAIN_TICKS;
       // First aid is on the paving, and an errand would fetch whatever the sand sells: a hurt
       // guest would otherwise lie out the rest of a long stay.
-      if (wanted.need === 'health') occupancy.until[person] = now;
+      if (wanted.need === 'health') state.occupancy.until[person] = now;
       else fetchOverTheSand(person, people);
     }
   };
 
   // Last, as it asks the events: it runs per guest per tick while anybody is on the sand.
   const dueAnotherLook = (person: number, beach: number, people: Crowd): boolean => {
-    if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) return false;
-    return isWaiting(people, person) && now >= lookAgainAt[person]! && !watching(person);
+    if (state.occupancy.state[person] !== VISIT.inside || state.occupancy.at[person] !== beach)
+      return false;
+    return isWaiting(people, person) && now >= state.lookAgainAt[person]! && !watching(person);
   };
 
   // Everything off the sand scores Infinity: leaving the beach is a separate decision,
   // taken when the stay ends. The party goal is untouched.
   const fetchOverTheSand = (person: number, people: Crowd): void => {
-    const claim = stays[person];
+    const claim = state.stays[person];
     if (!claim) return;
     const choice = chooseVenue({
       needs,
@@ -827,7 +723,7 @@ export function createRouter(parts: {
       queueLimit,
       occupants,
       affinity: affinityOf(person),
-      justLeft: justLeft[person]!,
+      justLeft: state.justLeft[person]!,
       cleanliness: cleanOf,
       isOpen,
       weather: weatherEffect(weatherNow()),
@@ -836,11 +732,11 @@ export function createRouter(parts: {
     fieldFor(choice.venue);
     const waypoints = sandFieldOf(choice.venue).routeFrom(claim.pitch);
     if (!waypoints) return;
-    stayUntil[person] = occupancy.until[person]!;
-    stayRoutes[person] = errands.route[person] ?? null;
+    state.stayUntil[person] = state.occupancy.until[person]!;
+    state.stayRoutes[person] = state.errands.route[person] ?? null;
     // Out of the beach's count while away, or the sweep would end a stay at a bar.
-    leaveVenue(occupancy, person);
-    fetching[person] = choice.venue;
+    leaveVenue(state.occupancy, person);
+    state.fetching[person] = choice.venue;
     setOffAlong(person, choice.venue, { gate: -1, waypoints, length: 0 });
   };
 
@@ -853,23 +749,23 @@ export function createRouter(parts: {
 
   // At least a tick, so an expired stay ends from the spot and they leave like anybody else.
   const backToThePitch = (person: number): void => {
-    fetching[person] = -1;
+    state.fetching[person] = -1;
     const beach = beachIndex();
-    const route = stayRoutes[person];
-    const claim = stays[person];
+    const route = state.stayRoutes[person];
+    const claim = state.stays[person];
     if (beach < 0 || !route || !claim) return;
     arriveAt(
-      occupancy,
+      state.occupancy,
       person,
       beach,
       venues[beach]!.capacity,
-      Math.max(1, stayUntil[person]! - now),
+      Math.max(1, state.stayUntil[person]! - now),
       now,
     );
-    errands.venue[person] = beach;
-    errands.route[person] = route;
-    errands.back[person] = 0;
-    errands.leg[person] = route.waypoints.length - 1;
+    state.errands.venue[person] = beach;
+    state.errands.route[person] = route;
+    state.errands.back[person] = 0;
+    state.errands.leg[person] = route.waypoints.length - 1;
     const spot = route.waypoints.at(-1)!;
     walkSandTo(crowd(), person, spot.x, spot.z);
   };
@@ -885,7 +781,8 @@ export function createRouter(parts: {
   const leaveErrand = (person: number, venue: number): void => {
     endVisit(person, venue);
     const route = errandOf(person);
-    const staying = stays[person] !== null && now < stayUntil[person]! && !dueInBed(person);
+    const staying =
+      state.stays[person] !== null && now < state.stayUntil[person]! && !dueInBed(person);
     if (route && staying) {
       walkBack(person, route);
       return;
@@ -899,22 +796,22 @@ export function createRouter(parts: {
     restOnLounger(person, beach);
     restInShade(person, beach);
     leaveStay(person);
-    fetching[person] = -1;
-    stayRoutes[person] = null;
+    state.fetching[person] = -1;
+    state.stayRoutes[person] = null;
     clearPartyGoal(goals, guests, person);
-    const home = sandRoutes[venue]?.[0];
+    const home = caches.sandRoutes[venue]?.[0];
     if (!home) {
-      errands.venue[person] = -1;
+      state.errands.venue[person] = -1;
       return;
     }
-    errands.venue[person] = venue;
-    errands.route[person] = home;
-    errands.leg[person] = home.waypoints.length;
+    state.errands.venue[person] = venue;
+    state.errands.route[person] = home;
+    state.errands.leg[person] = home.waypoints.length;
     walkBack(person, home);
   };
 
   const dueInBed = (person: number): boolean =>
-    homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
+    state.homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
 
   const beachIndex = (): number => {
     const last = venues.length - 1;
@@ -928,9 +825,9 @@ export function createRouter(parts: {
   };
 
   const restingOnBeach = (person: number, beach: number): boolean =>
-    occupancy.state[person] === VISIT.inside &&
-    occupancy.at[person] === beach &&
-    fetching[person]! < 0;
+    state.occupancy.state[person] === VISIT.inside &&
+    state.occupancy.at[person] === beach &&
+    state.fetching[person]! < 0;
 
   const inviteInPlace = (person: number, beach: number): boolean => {
     const members = partyOf(guests, person);
@@ -938,8 +835,8 @@ export function createRouter(parts: {
     const people = crowd();
     for (const member of members) {
       const stay = parts.eventStay?.(member, beach) ?? -1;
-      occupancy.until[member] = Math.max(occupancy.until[member]!, stay);
-      const spot = stays[member]?.pitch.spots[spotOf[member]!];
+      state.occupancy.until[member] = Math.max(state.occupancy.until[member]!, stay);
+      const spot = state.stays[member]?.pitch.spots[state.spotOf[member]!];
       // One still walking out is posed when it reaches the spot.
       if (spot && isWaiting(people, member)) holdToWatch(people, member, spot);
     }
@@ -950,9 +847,9 @@ export function createRouter(parts: {
     person: number,
     venue: number,
     gate: number,
-    routes: readonly SandRoute[],
+    overSand: readonly SandRoute[],
   ): boolean => {
-    const route = routes.find((each) => each.gate === gate);
+    const route = overSand.find((each) => each.gate === gate);
     if (!route || queueLength(venue) >= queueLimit(venue)) {
       clearPartyGoal(goals, guests, person);
       return false;
@@ -962,29 +859,29 @@ export function createRouter(parts: {
   };
 
   const setOffAlong = (person: number, venue: number, route: SandRoute): void => {
-    errands.venue[person] = venue;
-    errands.route[person] = route;
-    errands.leg[person] = 0;
-    errands.back[person] = 0;
+    state.errands.venue[person] = venue;
+    state.errands.route[person] = route;
+    state.errands.leg[person] = 0;
+    state.errands.back[person] = 0;
     const first = route.waypoints[0]!;
     walkSandTo(crowd(), person, first.x, first.z);
   };
 
   const errandOf = (person: number): SandRoute | undefined =>
-    errands.venue[person]! < 0 ? undefined : (errands.route[person] ?? undefined);
+    state.errands.venue[person]! < 0 ? undefined : (state.errands.route[person] ?? undefined);
 
   const walkBack = (person: number, route: SandRoute): void => {
-    errands.back[person] = 1;
-    const leg = errands.leg[person]! - 1;
-    errands.leg[person] = leg;
+    state.errands.back[person] = 1;
+    const leg = state.errands.leg[person]! - 1;
+    state.errands.leg[person] = leg;
     const point = route.waypoints[leg];
     if (point) {
       walkSandTo(crowd(), person, point.x, point.z);
       return;
     }
-    errands.venue[person] = -1;
+    state.errands.venue[person] = -1;
     // An errand from a pitch started on the sand and never touched the graph.
-    if (fetching[person]! >= 0) {
+    if (state.fetching[person]! >= 0) {
       backToThePitch(person);
       return;
     }
@@ -996,46 +893,47 @@ export function createRouter(parts: {
   const alongTheSand = (person: number): number => {
     const route = person >= 0 && person < goals.count ? errandOf(person) : undefined;
     if (!route) return -1;
-    if (errands.back[person] === 1) {
+    if (state.errands.back[person] === 1) {
       walkBack(person, route);
       return -1;
     }
-    const leg = errands.leg[person]! + 1;
-    errands.leg[person] = leg;
+    const leg = state.errands.leg[person]! + 1;
+    state.errands.leg[person] = leg;
     const next = route.waypoints[leg];
-    const stay = stays[person];
+    const stay = state.stays[person];
     if (next) walkSandTo(crowd(), person, next.x, next.z);
-    else if (fetching[person]! >= 0) reachSandDoor(person, route);
+    else if (state.fetching[person]! >= 0) reachSandDoor(person, route);
     else if (stay) restAtSpot(person, stay);
     else reachSandDoor(person, route);
     return -1;
   };
 
   const reachSandDoor = (person: number, route: SandRoute): void => {
-    const venue = errands.venue[person]!;
+    const venue = state.errands.venue[person]!;
     const outcome = admitAt(person, venue);
     if (outcome !== 'balked') {
       stand(person, venue, -1, outcome === 'waiting');
       return;
     }
     // Coming from their own pitch, they keep their party's goal.
-    if (fetching[person]! < 0) clearPartyGoal(goals, guests, person);
+    if (state.fetching[person]! < 0) clearPartyGoal(goals, guests, person);
     walkBack(person, route);
   };
 
   const backOffTheSand = (person: number): void => {
     if (person < 0 || person >= goals.count) return;
-    errands.venue[person] = -1;
+    state.errands.venue[person] = -1;
   };
 
   const callInForBed = (tickOfDay: number): void => {
     const beach = venues.length - 1;
     const venue = venues[beach];
-    if (!venue || !isBeach(venue) || !(occupancy.inside[beach]! > 0)) return;
+    if (!venue || !isBeach(venue) || !(state.occupancy.inside[beach]! > 0)) return;
     for (let person = 0; person < guests.count; person++) {
-      if (occupancy.state[person] !== VISIT.inside || occupancy.at[person] !== beach) continue;
-      if (homeLodging[person]! < 0 || !bedtime(guests.party[person]!, tickOfDay)) continue;
-      leaveVenue(occupancy, person);
+      if (state.occupancy.state[person] !== VISIT.inside || state.occupancy.at[person] !== beach)
+        continue;
+      if (state.homeLodging[person]! < 0 || !bedtime(guests.party[person]!, tickOfDay)) continue;
+      leaveVenue(state.occupancy, person);
       leave(person, beach);
     }
   };
@@ -1044,10 +942,11 @@ export function createRouter(parts: {
   const leave = (person: number, venue: number): void => {
     // The whole party: a sibling still arriving would have its goal overwritten by whoever
     // checked in first and decides for them all, and so never reach the desk.
-    if (venues[venue]?.receives) for (const member of partyOf(guests, person)) arriving[member] = 0;
+    if (venues[venue]?.receives)
+      for (const member of partyOf(guests, person)) state.arriving[member] = 0;
     // Before the errand branch, so a drink fetched from a pitch counts too.
-    justLeft[person] = venue;
-    if (fetching[person] === venue) {
+    state.justLeft[person] = venue;
+    if (state.fetching[person] === venue) {
       leaveErrand(person, venue);
       return;
     }
@@ -1055,9 +954,9 @@ export function createRouter(parts: {
     restOnLounger(person, venue);
     restInShade(person, venue);
     clearPartyGoal(goals, guests, person);
-    const door = doorOf[person]!;
-    doorOf[person] = -1;
-    const overSand = errands.venue[person] === venue ? errandOf(person) : undefined;
+    const door = state.doorOf[person]!;
+    state.doorOf[person] = -1;
+    const overSand = state.errands.venue[person] === venue ? errandOf(person) : undefined;
     leaveStay(person);
     if (overSand) walkBack(person, overSand);
     else if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
@@ -1066,13 +965,14 @@ export function createRouter(parts: {
   // A guest with no reachable bed gets BY_DAY and walks all night on purpose: the resort
   // should show it. Guests inside a venue at bedtime are never asked; this runs on arrival.
   const homewardStep = (person: number, at: number): number => {
-    const lodging = homeLodging[person]!;
-    const onward = lodging < 0 ? -1 : (homeFieldFor(lodging, isStepFree(person)).next[at] ?? -1);
+    const lodging = state.homeLodging[person]!;
+    const onward =
+      lodging < 0 ? -1 : (routes.lodgingField(lodging, isStepFree(person)).next[at] ?? -1);
     if (onward < 0) {
       onThought(person, 'no-bed', null);
       return BY_DAY;
     }
-    homeward[person] = 1;
+    state.homeward[person] = 1;
     if (onward !== at) return onward;
     fallAsleep(person, lodging, at);
     return -1;
@@ -1084,17 +984,17 @@ export function createRouter(parts: {
     const { x, z } = lodgings[lodging]!;
     holdAt(people, person, x, network.nodes[door]!.y, z, people.heading[person] ?? 0);
     clearPartyGoal(goals, guests, person);
-    doorOf[person] = door;
-    asleep[person] = 1;
-    asleepCount++;
+    state.doorOf[person] = door;
+    state.asleep[person] = 1;
+    state.asleepCount++;
   };
 
   // Checks "no longer bedtime" rather than the exact wake tick, which a multi-tick frame
   // or a dragged clock could step over.
   const wakeWhoeverIsUp = (tickOfDay: number): void => {
     for (let person = 0; person < guests.count; person++) {
-      if (asleepCount === 0) break;
-      if (asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
+      if (state.asleepCount === 0) break;
+      if (state.asleep[person] === 0 || isBedtime(guests.party[person]!, tickOfDay)) continue;
       relieve(needs, person, NIGHT_RELIEF);
       parts.onWoke?.(person);
       getUp(person);
@@ -1102,18 +1002,18 @@ export function createRouter(parts: {
   };
 
   const getUp = (person: number): void => {
-    asleep[person] = 0;
-    homeward[person] = 0;
-    asleepCount--;
-    const door = doorOf[person]!;
-    doorOf[person] = -1;
+    state.asleep[person] = 0;
+    state.homeward[person] = 0;
+    state.asleepCount--;
+    const door = state.doorOf[person]!;
+    state.doorOf[person] = -1;
     if (door >= 0 && door < network.nodes.length) releaseTo(crowd(), person, door);
   };
 
   // Asked before the night, so a departing guest heads for the gate, not a bed no longer
   // theirs. There is no teleport: a guest who cannot reach a gate stays on the plot.
   const leavingStep = (person: number, at: number): number => {
-    if (person < 0 || person >= goals.count || leaving[person] !== 1) return BY_DAY;
+    if (person < 0 || person >= goals.count || state.leaving[person] !== 1) return BY_DAY;
     const field = leavingFieldOf(isStepFree(person));
     const onward = field?.next[at] ?? -1;
     if (onward < 0) return BY_DAY;
@@ -1129,22 +1029,22 @@ export function createRouter(parts: {
 
   const forgetPerson = (person: number): void => {
     if (person < 0 || person >= goals.count) return;
-    leaving[person] = 0;
-    homeward[person] = 0;
-    if (asleep[person] === 1) {
-      asleep[person] = 0;
-      asleepCount--;
+    state.leaving[person] = 0;
+    state.homeward[person] = 0;
+    if (state.asleep[person] === 1) {
+      state.asleep[person] = 0;
+      state.asleepCount--;
     }
-    leaveVenue(occupancy, person);
+    leaveVenue(state.occupancy, person);
     leaveStay(person);
     clearPartyGoal(goals, guests, person);
-    errands.venue[person] = -1;
-    errands.route[person] = null;
-    errands.back[person] = 0;
-    fetching[person] = -1;
-    stayRoutes[person] = null;
-    doorOf[person] = -1;
-    arriving[person] = 0;
+    state.errands.venue[person] = -1;
+    state.errands.route[person] = null;
+    state.errands.back[person] = 0;
+    state.fetching[person] = -1;
+    state.stayRoutes[person] = null;
+    state.doorOf[person] = -1;
+    state.arriving[person] = 0;
   };
 
   // Least hops, ties to the lower index; only fields for receiving venues are swept.
@@ -1164,10 +1064,10 @@ export function createRouter(parts: {
 
   // A guest who cannot reach a desk was already let in, and must not stand still for ever.
   const sendToDesk = (person: number, at: number): boolean => {
-    if (arriving[person] !== 1) return false;
+    if (state.arriving[person] !== 1) return false;
     const reception = nearestReception(at, isStepFree(person));
     if (reception < 0) {
-      arriving[person] = 0;
+      state.arriving[person] = 0;
       return false;
     }
     setPartyVenue(goals, guests, person, reception);
@@ -1185,11 +1085,11 @@ export function createRouter(parts: {
   const isFree = (person: number): boolean =>
     person >= 0 &&
     person < goals.count &&
-    asleep[person] === 0 &&
-    leaving[person] === 0 &&
-    arriving[person] === 0 &&
-    occupancy.state[person] === VISIT.away &&
-    errands.venue[person] === -1;
+    state.asleep[person] === 0 &&
+    state.leaving[person] === 0 &&
+    state.arriving[person] === 0 &&
+    state.occupancy.state[person] === VISIT.away &&
+    state.errands.venue[person] === -1;
 
   const dayStep = (person: number, at: number): number => {
     const hadGoal = goals.venue[person] !== NO_GOAL;
@@ -1210,8 +1110,8 @@ export function createRouter(parts: {
   // The one place an out-of-range person index is turned away; later code indexes columns.
   const nightStep = (person: number, at: number): number => {
     if (person < 0 || person >= goals.count) return -1;
-    if (asleep[person] === 1) return -1;
-    homeward[person] = 0;
+    if (state.asleep[person] === 1) return -1;
+    state.homeward[person] = 0;
     if (!bedtime(guests.party[person]!, parts.tickOfDay())) return BY_DAY;
     return homewardStep(person, at);
   };
@@ -1221,73 +1121,76 @@ export function createRouter(parts: {
   const carryOver = (before: Before): void => {
     const venueAfter = venuesAfter(before.venues, venues);
     for (let person = 0; person < guests.count; person++) carryInside(before, person, venueAfter);
-    for (const [old, queue] of before.occupancy.queues.entries()) {
+    for (const [old, queue] of before.state.occupancy.queues.entries()) {
       const venue = venueAfter[old]!;
       for (const person of queue) carryWaiting(before, person, old, venue);
     }
     for (let person = 0; person < guests.count; person++) {
-      if (before.asleep[person] === 1) carrySleeper(before, person);
+      if (before.state.asleep[person] === 1) carrySleeper(before, person);
     }
   };
 
   // Not somebody fetching from the beach: the pitch they would go back to is not carried.
   const carryInside = (before: Before, person: number, venueAfter: readonly number[]): void => {
-    if (before.occupancy.state[person] !== VISIT.inside || before.fetching[person]! >= 0) return;
-    const old = before.occupancy.at[person]!;
+    const { occupancy: was, fetching } = before.state;
+    if (was.state[person] !== VISIT.inside || fetching[person]! >= 0) return;
+    const old = was.at[person]!;
     const venue = venueAfter[old]!;
     if (venue < 0 || !findWayOut(before, person, old, venue)) return;
+    const { occupancy } = state;
     occupancy.state[person] = VISIT.inside;
     occupancy.at[person] = venue;
-    occupancy.until[person] = before.occupancy.until[person]!;
+    occupancy.until[person] = was.until[person]!;
     occupancy.inside[venue]! += 1;
   };
 
   // Stood again: the line may be laid elsewhere on the new graph.
   const carryWaiting = (before: Before, person: number, old: number, venue: number): void => {
-    if (venue < 0 || before.fetching[person]! >= 0) return;
+    if (venue < 0 || before.state.fetching[person]! >= 0) return;
     if (!findWayOut(before, person, old, venue)) return;
-    const queue = occupancy.queues[venue]!;
-    occupancy.state[person] = VISIT.waiting;
-    occupancy.at[person] = venue;
-    occupancy.slot[person] = queue.length;
+    const queue = state.occupancy.queues[venue]!;
+    state.occupancy.state[person] = VISIT.waiting;
+    state.occupancy.at[person] = venue;
+    state.occupancy.slot[person] = queue.length;
     queue.push(person);
     fieldFor(venue);
-    stand(person, venue, doorOf[person]!, true);
+    stand(person, venue, state.doorOf[person]!, true);
   };
 
   const carrySleeper = (before: Before, person: number): void => {
-    const lodging = homeLodging[person]!;
-    const was = before.lodgings[before.homeLodging[person]!];
+    const lodging = state.homeLodging[person]!;
+    const was = before.lodgings[before.state.homeLodging[person]!];
     const declared = lodgings[lodging];
     if (!was || !declared || was.key !== declared.key || !sameFootprint(was, declared)) return;
-    const door = nearestNode(network, doorsFor(declared, index).nodes, before, person);
+    const door = nearestNode(network, doorsFor(declared, routes.index).nodes, before, person);
     if (door < 0) return;
-    doorOf[person] = door;
-    asleep[person] = 1;
-    asleepCount++;
-    homeward[person] = before.homeward[person]!;
+    state.doorOf[person] = door;
+    state.asleep[person] = 1;
+    state.asleepCount++;
+    state.homeward[person] = before.state.homeward[person]!;
   };
 
   // The way they will leave by, on the new graph: the door nearest the old one, or the route
   // over the sand that ends nearest where the old one did. False when there is none.
   const findWayOut = (before: Before, person: number, old: number, venue: number): boolean => {
-    if (before.doorOf[person]! >= 0) {
+    if (before.state.doorOf[person]! >= 0) {
       const door = nearestNode(
         network,
-        doorsFor(venues[venue]!, index, network).nodes,
+        doorsFor(venues[venue]!, routes.index, network).nodes,
         before,
         person,
       );
-      doorOf[person] = door;
+      state.doorOf[person] = door;
       return door >= 0;
     }
-    const route = before.errands.venue[person] === old ? before.errands.route[person] : null;
+    const route =
+      before.state.errands.venue[person] === old ? before.state.errands.route[person] : null;
     const end = route?.waypoints.at(-1);
     if (!end) return false;
     fieldFor(venue);
     let best: SandRoute | null = null;
     let bestDistance = Number.POSITIVE_INFINITY;
-    for (const candidate of sandRoutes[venue] ?? []) {
+    for (const candidate of caches.sandRoutes[venue] ?? []) {
       const door = candidate.waypoints.at(-1)!;
       const distance = Math.hypot(door.x - end.x, door.z - end.z);
       if (distance < bestDistance) {
@@ -1296,11 +1199,11 @@ export function createRouter(parts: {
       }
     }
     if (!best) return false;
-    errands.venue[person] = venue;
-    errands.route[person] = best;
+    state.errands.venue[person] = venue;
+    state.errands.route[person] = best;
     // Past the last waypoint, as reaching the door left them.
-    errands.leg[person] = best.waypoints.length;
-    errands.back[person] = 0;
+    state.errands.leg[person] = best.waypoints.length;
+    state.errands.back[person] = 0;
     return true;
   };
 
@@ -1316,24 +1219,24 @@ export function createRouter(parts: {
     },
 
     offTheSand(person) {
-      if (person < 0 || person >= goals.count || asleep[person] === 1) return false;
-      return homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
+      if (person < 0 || person >= goals.count || state.asleep[person] === 1) return false;
+      return state.homeLodging[person]! >= 0 && bedtime(guests.party[person]!, parts.tickOfDay());
     },
 
     sendHome(person) {
-      if (person < 0 || person >= goals.count || leaving[person] === 1) return;
-      leaving[person] = 1;
+      if (person < 0 || person >= goals.count || state.leaving[person] === 1) return;
+      state.leaving[person] = 1;
       clearPartyGoal(goals, guests, person);
-      if (asleep[person] === 1) getUp(person);
+      if (state.asleep[person] === 1) getUp(person);
     },
 
     admit(person, node) {
       if (person < 0 || person >= goals.count) return;
       forgetPerson(person);
-      arriving[person] = 1;
+      state.arriving[person] = 1;
       // The body was somebody else's, or nobody's, so the bed it walked to is not theirs.
       const home = homeOf(guests, person);
-      homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
+      state.homeLodging[person] = home ? lodgingFor(lodgings, home.key) : -1;
       const people = crowd();
       const gate = network.nodes[node];
       // Stood at the gate first, or a body dealt on an empty plot walks in from the origin.
@@ -1355,7 +1258,7 @@ export function createRouter(parts: {
     },
 
     isArriving(person) {
-      return arriving[person] === 1;
+      return state.arriving[person] === 1;
     },
 
     isFree(person) {
@@ -1365,7 +1268,7 @@ export function createRouter(parts: {
     invite(person, venue) {
       if (venue >= 0 && venue === beachIndex() && inviteInPlace(person, venue)) return true;
       if (!isFree(person) || venue < 0 || venue >= venues.length) return false;
-      homeward[person] = 0;
+      state.homeward[person] = 0;
       setPartyVenue(goals, guests, person, venue);
       return true;
     },
@@ -1373,7 +1276,7 @@ export function createRouter(parts: {
     tick(at) {
       now = at;
       const swept = sweepOccupancy(
-        occupancy,
+        state.occupancy,
         (venue) => venues[venue]?.capacity ?? 0,
         (venue, person) => (venues[venue] ? dwellFor(person, venue) : 1),
         at,
@@ -1382,12 +1285,12 @@ export function createRouter(parts: {
         leave(swept.left[each]!, swept.leftFrom[each]!);
       }
       for (const person of swept.admitted) {
-        stand(person, occupancy.at[person]!, doorOf[person]!, false);
+        stand(person, state.occupancy.at[person]!, state.doorOf[person]!, false);
       }
       for (const person of swept.moved) {
-        stand(person, occupancy.at[person]!, doorOf[person]!, true);
+        stand(person, state.occupancy.at[person]!, state.doorOf[person]!, true);
       }
-      if (asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
+      if (state.asleepCount > 0) wakeWhoeverIsUp(at % TICKS_PER_DAY);
       callInForBed(at % TICKS_PER_DAY);
       sendOnErrands();
     },
@@ -1401,102 +1304,63 @@ export function createRouter(parts: {
     },
 
     rebuild(nextVenues, nextLodgings, nextGateways, nextNetwork) {
-      const before: Before = {
-        venues,
-        lodgings,
-        network,
-        occupancy,
-        errands,
-        doorOf,
-        asleep,
-        homeward,
-        homeLodging: homeLodging.slice(),
-        fetching,
-      };
+      const before: Before = { venues, lodgings, network, state };
       venues = withBeach(nextVenues, nextNetwork);
       lodgings = nextLodgings;
       gateways = nextGateways;
       network = nextNetwork;
-      index = nodeIndexFor(nextNetwork);
-      fields = venues.map(() => null);
-      stepFreeFields = venues.map(() => null);
-      cutOffField = null;
-      lanes = venues.map(() => null);
-      sandRoutes = venues.map(() => null);
-      errands = createErrands(guests.count);
-      homeFields = nextLodgings.map(() => null);
-      stepFreeHomeFields = nextLodgings.map(() => null);
-      leavingField = null;
-      stepFreeLeaving = null;
-      gateNodes = null;
+      routes = createVenueRoutes(nextNetwork, venues, nextLodgings);
+      caches = cachesFor(venues);
       // Leavers are re-sent on the next day's pass; their node indices mean nothing now.
-      leaving = new Uint8Array(guests.count);
-      built = 0;
+      state = createRouterState(guests.count, guests.parties.length, venues.length);
+      // Kept across a rebuild: it is a fact about the guest, not about the graph.
+      state.arriving.set(before.state.arriving);
       findHomes();
-      asleep = new Uint8Array(guests.count);
-      asleepCount = 0;
-      homeward = new Uint8Array(guests.count);
-      // A fresh one: the per-venue arrays are sized to the replaced venue list.
-      occupancy = createOccupancy(guests.count, venues.length);
-      doorOf = new Int32Array(guests.count).fill(-1);
-      partyPitches = guests.parties.map(() => null);
-      stays = Array.from({ length: guests.count }, () => null);
-      spotOf = new Int32Array(guests.count);
-      pitched = new Set();
-      promised = new Set();
-      fetching = new Int32Array(guests.count).fill(-1);
-      stayUntil = new Int32Array(guests.count);
-      stayRoutes = Array.from({ length: guests.count }, () => null);
-      lookAgainAt = new Int32Array(guests.count);
-      sandFields = venues.map(() => null);
-      standsOnSand = new Int8Array(venues.length).fill(-1);
-      balkCount = new Int32Array(venues.length);
-      visitCount = new Int32Array(venues.length);
-      salts = saltsFor(venues);
-      justLeft = new Int32Array(guests.count).fill(-1);
       clearAllGoals(goals);
       carryOver(before);
     },
 
     holds(person) {
-      return asleep[person] === 1 || (occupancy.state[person] ?? VISIT.away) !== VISIT.away;
+      return (
+        state.asleep[person] === 1 || (state.occupancy.state[person] ?? VISIT.away) !== VISIT.away
+      );
     },
 
     get fieldCount() {
-      return built;
+      return routes.sweeps;
     },
 
     get asleepCount() {
-      return asleepCount;
+      return state.asleepCount;
     },
 
     isAsleep(person) {
-      return asleep[person] === 1;
+      return state.asleep[person] === 1;
     },
 
     isWaitingAt(person) {
-      return occupancy.state[person] === VISIT.waiting;
+      return state.occupancy.state[person] === VISIT.waiting;
     },
 
     venueIndexOf(person) {
-      const state = occupancy.state[person];
-      return state === undefined || state === VISIT.away ? -1 : occupancy.at[person]!;
+      const visit = state.occupancy.state[person];
+      return visit === undefined || visit === VISIT.away ? -1 : state.occupancy.at[person]!;
     },
 
     queuePlaceOf(person) {
-      return occupancy.state[person] === VISIT.waiting ? occupancy.slot[person]! : -1;
+      return state.occupancy.state[person] === VISIT.waiting ? state.occupancy.slot[person]! : -1;
     },
 
     homewardTo(person) {
-      if (homeward[person] !== 1) return null;
-      return lodgings[homeLodging[person]!] ?? null;
+      if (state.homeward[person] !== 1) return null;
+      return lodgings[state.homeLodging[person]!] ?? null;
     },
 
     get occupancyTotals() {
       let inside = 0;
       let waiting = 0;
       for (let venue = 0; venue < venues.length; venue++) {
-        inside += occupancy.inside[venue] ?? 0;
+        inside += state.occupancy.inside[venue] ?? 0;
         waiting += queueLength(venue);
       }
       return { inside, waiting };
@@ -1504,32 +1368,32 @@ export function createRouter(parts: {
 
     goalOf(person) {
       if (person < 0 || person >= goals.count) return null;
-      if (fetching[person]! >= 0) return venues[fetching[person]!] ?? null;
+      if (state.fetching[person]! >= 0) return venues[state.fetching[person]!] ?? null;
       const goal = goals.venue[person]!;
       return goal === NO_GOAL ? null : (venues[goal] ?? null);
     },
 
     visitOf(person) {
-      if (person < 0 || person >= occupancy.people) return null;
-      const state = occupancy.state[person];
-      if (state === VISIT.away) return null;
-      const venue = venues[occupancy.at[person]!];
+      if (person < 0 || person >= state.occupancy.people) return null;
+      const visit = state.occupancy.state[person];
+      if (visit === VISIT.away) return null;
+      const venue = venues[state.occupancy.at[person]!];
       if (!venue) return null;
-      return { venue, waiting: state === VISIT.waiting, place: occupancy.slot[person]! };
+      return { venue, waiting: visit === VISIT.waiting, place: state.occupancy.slot[person]! };
     },
 
     stayOf(person) {
       if (person < 0 || person >= goals.count) return null;
-      if (fetching[person]! >= 0) return errands.back[person] === 1 ? 'arriving' : null;
-      const venue = venues[errands.venue[person]!];
+      if (state.fetching[person]! >= 0) return state.errands.back[person] === 1 ? 'arriving' : null;
+      const venue = venues[state.errands.venue[person]!];
       if (!venue || !isBeach(venue)) return null;
-      if (errands.back[person] === 1) return 'leaving';
+      if (state.errands.back[person] === 1) return 'leaving';
       return isWaiting(crowd(), person) ? 'resting' : 'arriving';
     },
 
     restingUntil(person) {
       if (this.stayOf(person) !== 'resting' || watching(person)) return Number.NaN;
-      return occupancy.until[person]!;
+      return state.occupancy.until[person]!;
     },
 
     isSunbathing(person) {
@@ -1540,55 +1404,31 @@ export function createRouter(parts: {
     occupancyOf(venueKey) {
       const venue = venues.findIndex((candidate) => candidate.key === venueKey);
       if (venue === -1) return null;
-      return { inside: occupancy.inside[venue] ?? 0, waiting: queueLength(venue) };
+      return { inside: state.occupancy.inside[venue] ?? 0, waiting: queueLength(venue) };
     },
 
     // Built on demand: read once a day, but written on every arrival.
     dayBalks() {
-      return tallyOf(venues, balkCount);
+      return tallyOf(venues, state.balkCount);
     },
 
     dayVisits() {
-      return tallyOf(venues, visitCount);
+      return tallyOf(venues, state.visitCount);
     },
 
     forgetTheDay() {
-      balkCount.fill(0);
-      visitCount.fill(0);
+      state.balkCount.fill(0);
+      state.visitCount.fill(0);
     },
 
     snapshot() {
-      const { claims, idOf } = claimTable();
-      const party = Array.from(partyPitches, (claim) => idOf(claim));
-      const staying = Int32Array.from(stays, (claim) => idOf(claim));
       return {
+        ...snapshotRouterState(state),
         goals: snapshotGoals(goals),
-        occupancy: snapshotOccupancy(occupancy),
-        errands: {
-          venue: errands.venue.slice(),
-          route: [...errands.route],
-          leg: errands.leg.slice(),
-          back: errands.back.slice(),
-        },
-        doorOf: doorOf.slice(),
-        justLeft: justLeft.slice(),
-        leaving: leaving.slice(),
-        asleep: asleep.slice(),
-        homeward: homeward.slice(),
-        homeLodging: homeLodging.slice(),
-        arriving: arriving.slice(),
-        claims: claims.map(({ pitch, routes }) => ({ pitch, routes })),
-        partyPitches: party,
-        stays: staying,
-        spotOf: spotOf.slice(),
-        fetching: fetching.slice(),
-        stayUntil: stayUntil.slice(),
-        stayRoutes: [...stayRoutes],
-        lookAgainAt: lookAgainAt.slice(),
-        balkCount: balkCount.slice(),
-        visitCount: visitCount.slice(),
-        fieldsBuilt: fields.flatMap((field, venue) => (field ? [venue] : [])),
-        stepFreeFieldsBuilt: stepFreeFields.flatMap((field, venue) => (field ? [venue] : [])),
+        fieldsBuilt: caches.fields.flatMap((field, venue) => (field ? [venue] : [])),
+        stepFreeFieldsBuilt: caches.stepFreeFields.flatMap((field, venue) =>
+          field ? [venue] : [],
+        ),
         now,
         random: random.state(),
       };
@@ -1602,29 +1442,7 @@ export function createRouter(parts: {
       }
       restoreFields(snapshot.fieldsBuilt, snapshot.stepFreeFieldsBuilt);
       restoreGoals(goals, snapshot.goals);
-      restoreOccupancy(occupancy, snapshot.occupancy);
-      errands = {
-        venue: snapshot.errands.venue.slice(),
-        route: [...snapshot.errands.route],
-        leg: snapshot.errands.leg.slice(),
-        back: snapshot.errands.back.slice(),
-      };
-      doorOf = snapshot.doorOf.slice();
-      justLeft = snapshot.justLeft.slice();
-      leaving = snapshot.leaving.slice();
-      asleep = snapshot.asleep.slice();
-      asleepCount = asleep.reduce((total, each) => total + each, 0);
-      homeward = snapshot.homeward.slice();
-      homeLodging = snapshot.homeLodging.slice();
-      arriving.set(snapshot.arriving);
-      restoreClaims(snapshot);
-      spotOf = snapshot.spotOf.slice();
-      fetching = snapshot.fetching.slice();
-      stayUntil = snapshot.stayUntil.slice();
-      stayRoutes = [...snapshot.stayRoutes];
-      lookAgainAt = snapshot.lookAgainAt.slice();
-      balkCount = snapshot.balkCount.slice();
-      visitCount = snapshot.visitCount.slice();
+      state = restoreRouterState(snapshot);
       now = snapshot.now;
       random = resumeRandom(snapshot.random);
     },
@@ -1651,7 +1469,7 @@ function nearestNode(
   before: Before,
   person: number,
 ): number {
-  const was = before.network.nodes[before.doorOf[person]!];
+  const was = before.network.nodes[before.state.doorOf[person]!];
   if (!was) return -1;
   let best = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
@@ -1707,6 +1525,22 @@ function longestLane(
     bestDistance = distance;
   }
   return best;
+}
+
+function cachesFor(venues: readonly Venue[]): GuestCaches {
+  return {
+    fields: venues.map(() => null),
+    stepFreeFields: venues.map(() => null),
+    lanes: venues.map(() => null),
+    sandRoutes: venues.map(() => null),
+    sandFields: venues.map(() => null),
+    standsOnSand: new Int8Array(venues.length).fill(-1),
+    salts: saltsFor(venues),
+    cutOffField: null,
+    leavingField: null,
+    stepFreeLeaving: null,
+    gateNodes: null,
+  };
 }
 
 function saltsFor(venues: readonly Venue[]): Int32Array {

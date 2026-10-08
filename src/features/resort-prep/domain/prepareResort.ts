@@ -378,6 +378,9 @@ export function preparedTransferables(prepared: PreparedResort): ArrayBuffer[] {
     ...[surfaces.sea, surfaces.water, surfaces.ground.grass, surfaces.ground.sand]
       .concat(surfaces.risers.grass, surfaces.risers.sand)
       .flatMap(surfaceBuffers),
+    ...[surfaces.columns.water, surfaces.columns.ground.grass, surfaces.columns.ground.sand]
+      .concat(surfaces.columns.risers.grass, surfaces.columns.risers.sand)
+      .map((starts) => starts.buffer),
   ]);
   return [...buffers] as ArrayBuffer[];
 }

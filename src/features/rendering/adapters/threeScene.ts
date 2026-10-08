@@ -39,8 +39,13 @@ import {
 import type { Shore } from '../../layout/domain/shoreline';
 import type { Terrain } from '../../layout/domain/terrain';
 import { orthographicLens, perspectiveLens, type DetailView } from '../domain/levelOfDetail';
-import type { SurfaceGeometry, TerrainSurfaces } from '../domain/terrainSurface';
-import { TERRAIN_SPREAD, terrainSurfacesFor } from '../domain/terrainSurface';
+import type {
+  SurfaceGeometry,
+  TerrainRequest,
+  TerrainSurfaces,
+  TileColumns,
+} from '../domain/terrainSurface';
+import { retileColumns, TERRAIN_SPREAD, terrainSurfacesFor } from '../domain/terrainSurface';
 import { createSeaMaterial } from './seaMaterial';
 import { createRiverMaterial } from './riverMaterial';
 import type { WaterMaterial } from './waterSurface';
@@ -128,7 +133,7 @@ export interface SceneHandle {
     terrain: Terrain,
     surfaces?: TerrainSurfaces | null,
   ): void;
-  retile(): void;
+  retile(columns: TileColumns): void;
   drawingBufferSize(): { width: number; height: number };
   detailView(): DetailView;
   shaderBuilds(): number;
@@ -298,28 +303,12 @@ function layFlat(
 
 function layTerrain(
   scene: Scene,
-  shore: Shore | null,
-  terrain: Terrain,
-  framing: CameraFraming,
-  worldExtent: number,
   palette: TerrainPalette,
-  isClear: (tileX: number, tileZ: number) => boolean,
-  precomputed: TerrainSurfaces | null = null,
+  surfaces: TerrainSurfaces,
 ): TerrainMeshes {
   const group = new Group();
   scene.add(group);
   const disposables: Disposable[] = [];
-
-  const surfaces =
-    precomputed ??
-    terrainSurfacesFor({
-      terrain,
-      isClear,
-      shore,
-      center: { x: framing.target.x, z: framing.target.z },
-      reach: worldExtent * TERRAIN_SPREAD,
-      tileVoxels: TILE_VOXELS,
-    });
 
   layWater(group, disposables, [
     [surfaces.sea, palette.sea],
@@ -454,17 +443,17 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let terrainFraming = framing;
   let terrainVolume = lightVolume;
   let palette = createTerrainPalette(lightVolume, shade);
-  let surfaces = layTerrain(
-    scene,
-    shore,
-    terrain,
-    framing,
-    extent,
-    palette,
-    isClear,
-    options.surfaces ?? null,
-  );
   let coast = shore;
+  const terrainRequest = (): TerrainRequest => ({
+    terrain,
+    isClear,
+    shore: coast,
+    center: { x: terrainFraming.target.x, z: terrainFraming.target.z },
+    reach: extent * TERRAIN_SPREAD,
+    tileVoxels: TILE_VOXELS,
+  });
+  let built = options.surfaces ?? terrainSurfacesFor(terrainRequest());
+  let surfaces = layTerrain(scene, palette, built);
 
   const standIsoCamera = (): void => {
     const anchor = mode === 'isometric' ? controls.target : targets.isometric;
@@ -548,11 +537,14 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       fingerTaken = taken;
       applyMode();
     },
-    retile() {
+    retile(columns) {
       const started = performance.now();
+      const next = retileColumns(built, terrainRequest(), columns);
+      if (next === built) return;
       surfaces.dispose();
       scene.remove(surfaces.group);
-      surfaces = layTerrain(scene, coast, terrain, terrainFraming, extent, palette, isClear);
+      built = next;
+      surfaces = layTerrain(scene, palette, built);
       performance.measure('vox:retile', { start: started });
     },
     reframe(nextBounds, nextFraming, nextVolume, nextShore, nextTerrain, nextSurfaces) {
@@ -572,16 +564,8 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       coast = nextShore;
       palette = createTerrainPalette(terrainVolume, shade);
       palette.setSky(sky.getHex());
-      surfaces = layTerrain(
-        scene,
-        coast,
-        terrain,
-        terrainFraming,
-        extent,
-        palette,
-        isClear,
-        nextSurfaces ?? null,
-      );
+      built = nextSurfaces ?? terrainSurfacesFor(terrainRequest());
+      surfaces = layTerrain(scene, palette, built);
 
       perspectiveCamera.position.set(
         nextFraming.position.x,

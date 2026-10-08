@@ -38,11 +38,34 @@ export type RiserSurface = 'grass' | 'sand';
 
 export type SurfacesBySurface = Readonly<Record<RiserSurface, SurfaceGeometry | null>>;
 
+export interface TileColumns {
+  readonly from: number;
+  readonly to: number;
+}
+
+type StartsBySurface = Readonly<Record<RiserSurface, Uint32Array>>;
+
+interface Starts {
+  readonly water: Uint32Array;
+  readonly ground: StartsBySurface;
+  readonly risers: StartsBySurface;
+}
+
+// Where each column's quads start in each mesh, one entry past the last column, so a
+// column can be relaid without the rest. The box is kept to refuse a relay for another one.
+interface ColumnStarts extends Starts {
+  readonly first: number;
+  readonly last: number;
+  readonly minZ: number;
+  readonly maxZ: number;
+}
+
 export interface TerrainSurfaces {
   readonly sea: SurfaceGeometry | null;
   readonly water: SurfaceGeometry | null;
   readonly ground: SurfacesBySurface;
   readonly risers: SurfacesBySurface;
+  readonly columns: ColumnStarts;
 }
 
 // In plot extents either side of the framed middle.
@@ -113,6 +136,10 @@ class GroundBuilder {
   private readonly normals: number[] = [];
   private readonly indices: number[] = [];
   private quads = 0;
+
+  get count(): number {
+    return this.quads;
+  }
 
   // Twelve numbers rather than an array: a rebuild lays tens of thousands of quads while the pointer moves.
   private quad(
@@ -688,47 +715,252 @@ function laySea(
   return sea.build();
 }
 
-export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
-  const { terrain, shore, center, reach, tileVoxels } = request;
+interface Box {
+  readonly columns: { readonly first: number; readonly last: number };
+  readonly bounds: RowBounds;
+}
 
+function boxOf(request: TerrainRequest): Box {
+  const { center, reach, tileVoxels } = request;
   const minZ = center.z - reach;
   const maxZ = center.z + reach;
-  const columns = {
-    first: Math.floor((center.x - reach) / tileVoxels),
-    last: Math.ceil((center.x + reach) / tileVoxels),
-  };
   const firstRow = Math.floor(minZ / tileVoxels);
-  const bounds: RowBounds = {
-    firstRow,
-    rows: Math.ceil(maxZ / tileVoxels) - firstRow,
-    minZ,
-    maxZ,
-    tileVoxels,
+  return {
+    columns: {
+      first: Math.floor((center.x - reach) / tileVoxels),
+      last: Math.ceil((center.x + reach) / tileVoxels),
+    },
+    bounds: { firstRow, rows: Math.ceil(maxZ / tileVoxels) - firstRow, minZ, maxZ, tileVoxels },
   };
+}
 
+interface LaidColumns {
+  readonly water: SurfaceGeometry | null;
+  readonly ground: SurfacesBySurface;
+  readonly risers: SurfacesBySurface;
+  readonly starts: Starts;
+}
+
+const newStarts = (entries: number): Starts => ({
+  water: new Uint32Array(entries),
+  ground: { grass: new Uint32Array(entries), sand: new Uint32Array(entries) },
+  risers: { grass: new Uint32Array(entries), sand: new Uint32Array(entries) },
+});
+
+function markStarts(starts: Starts, meshes: Meshes, entry: number): void {
+  starts.water[entry] = meshes.water.count;
+  for (const surface of ['grass', 'sand'] as const) {
+    starts.ground[surface][entry] = meshes.ground[surface].count;
+    starts.risers[surface][entry] = meshes.risers[surface].count;
+  }
+}
+
+function layColumns(request: TerrainRequest, box: Box, from: number, to: number): LaidColumns {
+  const { terrain, tileVoxels } = request;
+  const { bounds } = box;
   const meshes: Meshes = {
     ground: newBuilders(),
     risers: newBuilders(),
     water: new GroundBuilder(),
   };
+  const starts = newStarts(to - from + 2);
 
   const isClear = request.isClear ?? ALWAYS_CLEAR;
   const profiles = (tileX: number): ColumnProfile =>
     profileOf(terrain, tileX, bounds.firstRow, bounds.rows);
-  let west = profiles(columns.first - 1);
-  let here = profiles(columns.first);
-  for (let tileX = columns.first; tileX <= columns.last; tileX++) {
+  let west = profiles(from - 1);
+  let here = profiles(from);
+  for (let tileX = from; tileX <= to; tileX++) {
+    markStarts(starts, meshes, tileX - from);
     const east = profiles(tileX + 1);
     const x0 = tileX * tileVoxels;
     layColumn(meshes, { west, here, east }, { tileX, x0, x1: x0 + tileVoxels }, bounds, isClear);
     west = here;
     here = east;
   }
+  markStarts(starts, meshes, to - from + 1);
 
   return {
-    sea: shore ? laySea(shore, bounds, columns) : null,
     water: meshes.water.build(),
     ground: builtBy(meshes.ground),
     risers: builtBy(meshes.risers),
+    starts,
   };
+}
+
+const columnStartsOf = (box: Box, starts: Starts): ColumnStarts => ({
+  first: box.columns.first,
+  last: box.columns.last,
+  minZ: box.bounds.minZ,
+  maxZ: box.bounds.maxZ,
+  ...starts,
+});
+
+export function terrainSurfacesFor(request: TerrainRequest): TerrainSurfaces {
+  const box = boxOf(request);
+  const { starts, ...laid } = layColumns(request, box, box.columns.first, box.columns.last);
+  return {
+    sea: request.shore ? laySea(request.shore, box.bounds, box.columns) : null,
+    ...laid,
+    columns: columnStartsOf(box, starts),
+  };
+}
+
+// A column's ground reads its neighbours' profiles one column either side.
+const NEIGHBOUR_COLUMNS = 1;
+
+interface PlacedMesh {
+  readonly geometry: SurfaceGeometry | null;
+  readonly starts: Uint32Array;
+}
+
+const NO_NUMBERS = new Float32Array(0);
+
+const lastOf = (starts: Uint32Array): number => starts[starts.length - 1]!;
+
+function quadIndices(quads: number): Uint32Array {
+  const indices = new Uint32Array(quads * 6);
+  for (let quad = 0, at = 0; quad < quads; quad++, at += 6) {
+    const base = quad * 4;
+    indices[at] = base;
+    indices[at + 1] = base + 1;
+    indices[at + 2] = base + 2;
+    indices[at + 3] = base;
+    indices[at + 4] = base + 2;
+    indices[at + 5] = base + 3;
+  }
+  return indices;
+}
+
+// Copies, never writes into old: the scene still draws from its arrays until it disposes them.
+function spliceNumbers(
+  old: Float32Array,
+  fresh: Float32Array,
+  keep: number,
+  resume: number,
+  end: number,
+): Float32Array {
+  const added = fresh.length / 12;
+  const out = new Float32Array((keep + added + end - resume) * 12);
+  out.set(old.subarray(0, keep * 12), 0);
+  out.set(fresh, keep * 12);
+  out.set(old.subarray(resume * 12, end * 12), (keep + added) * 12);
+  return out;
+}
+
+function spliceStarts(old: Uint32Array, fresh: Uint32Array, at: number): Uint32Array {
+  const keep = old[at]!;
+  const resume = old[at + fresh.length - 1]!;
+  const shift = keep + lastOf(fresh) - resume;
+  const out = new Uint32Array(old.length);
+  out.set(old.subarray(0, at), 0);
+  for (let i = 0; i < fresh.length; i++) out[at + i] = fresh[i]! + keep;
+  for (let i = at + fresh.length; i < old.length; i++) out[i] = old[i]! + shift;
+  return out;
+}
+
+function spliceMesh(old: PlacedMesh, fresh: PlacedMesh, at: number): PlacedMesh {
+  const keep = old.starts[at]!;
+  const resume = old.starts[at + fresh.starts.length - 1]!;
+  const end = lastOf(old.starts);
+  const starts = spliceStarts(old.starts, fresh.starts, at);
+  const quadCount = lastOf(starts);
+  if (quadCount === 0) return { geometry: null, starts };
+  const numbers = (of: (geometry: SurfaceGeometry) => Float32Array | null): Float32Array =>
+    spliceNumbers(
+      (old.geometry && of(old.geometry)) ?? NO_NUMBERS,
+      (fresh.geometry && of(fresh.geometry)) ?? NO_NUMBERS,
+      keep,
+      resume,
+      end,
+    );
+  return {
+    geometry: {
+      positions: numbers((geometry) => geometry.positions),
+      normals: numbers((geometry) => geometry.normals),
+      shoreDistances: null,
+      indices: quadIndices(quadCount),
+      quadCount,
+    },
+    starts,
+  };
+}
+
+function spliceBySurface(
+  old: SurfacesBySurface,
+  oldStarts: StartsBySurface,
+  fresh: SurfacesBySurface,
+  freshStarts: StartsBySurface,
+  at: number,
+): { readonly geometries: SurfacesBySurface; readonly starts: StartsBySurface } {
+  const splice = (surface: RiserSurface): PlacedMesh =>
+    spliceMesh(
+      { geometry: old[surface], starts: oldStarts[surface] },
+      { geometry: fresh[surface], starts: freshStarts[surface] },
+      at,
+    );
+  const grass = splice('grass');
+  const sand = splice('sand');
+  return {
+    geometries: { grass: grass.geometry, sand: sand.geometry },
+    starts: { grass: grass.starts, sand: sand.starts },
+  };
+}
+
+const fitsBox = (columns: ColumnStarts, box: Box): boolean =>
+  columns.first === box.columns.first &&
+  columns.last === box.columns.last &&
+  columns.minZ === box.bounds.minZ &&
+  columns.maxZ === box.bounds.maxZ;
+
+export function retileColumns(
+  previous: TerrainSurfaces,
+  request: TerrainRequest,
+  changed: TileColumns,
+): TerrainSurfaces {
+  const box = boxOf(request);
+  if (!fitsBox(previous.columns, box)) return terrainSurfacesFor(request);
+  const { first, last } = box.columns;
+  const from = Math.max(first, changed.from - NEIGHBOUR_COLUMNS);
+  const to = Math.min(last, changed.to + NEIGHBOUR_COLUMNS);
+  if (from > to) return previous;
+
+  const fresh = layColumns(request, box, from, to);
+  const at = from - first;
+  const kept = previous.columns;
+  const water = spliceMesh(
+    { geometry: previous.water, starts: kept.water },
+    { geometry: fresh.water, starts: fresh.starts.water },
+    at,
+  );
+  const ground = spliceBySurface(
+    previous.ground,
+    kept.ground,
+    fresh.ground,
+    fresh.starts.ground,
+    at,
+  );
+  const risers = spliceBySurface(
+    previous.risers,
+    kept.risers,
+    fresh.risers,
+    fresh.starts.risers,
+    at,
+  );
+  return {
+    sea: previous.sea,
+    water: water.geometry,
+    ground: ground.geometries,
+    risers: risers.geometries,
+    columns: columnStartsOf(box, {
+      water: water.starts,
+      ground: ground.starts,
+      risers: risers.starts,
+    }),
+  };
+}
+
+export function joinColumns(joined: TileColumns | null, next: TileColumns): TileColumns {
+  if (!joined) return next;
+  return { from: Math.min(joined.from, next.from), to: Math.max(joined.to, next.to) };
 }

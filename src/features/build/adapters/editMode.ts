@@ -42,6 +42,7 @@ import type { InstancedWorld } from '../../rendering/adapters/instancedWorld';
 import type { BlobShadowField } from '../../rendering/adapters/blobShadowField';
 import type { ModelGeometry } from '../../rendering/adapters/voxelMeshBuilder';
 import type { SceneHandle } from '../../rendering/adapters/threeScene';
+import type { TileColumns } from '../../rendering/domain/terrainSurface';
 import type { BuildCue } from '../../sound/domain/cues';
 import { layoutItemFor } from '../domain/buildPlan';
 import { itemChooser } from '../domain/stylePick';
@@ -136,6 +137,11 @@ export interface Purse {
   refund(amount: number): void;
 }
 
+const groundUnder = (placement: Placement): TileColumns => ({
+  from: placement.tileX,
+  to: placement.tileX + placement.tilesX - 1,
+});
+
 // Occupancy keeps the layout's overlap check live, so a hover costs a map lookup per footprint
 // tile.
 export function createEditMode(parts: {
@@ -145,7 +151,7 @@ export function createEditMode(parts: {
   readonly geometries: readonly ModelGeometry[];
   readonly onChange: () => void;
   // Placing counts too: the ground under anything standing is drawn square.
-  readonly onGroundChange: () => void;
+  readonly onGroundChange: (columns: TileColumns) => void;
   // Only for a tile whose zone changed, so a drag over painted tiles deals nobody afresh.
   readonly onZonesChange: () => void;
   readonly onCancel: () => void;
@@ -328,7 +334,7 @@ export function createEditMode(parts: {
     listFor(plot, placement.id).push(placement);
     // Whether or not it takes time: the ground under what stands is square from the moment the
     // tiles are claimed.
-    if (reshapesGround(placement)) parts.onGroundChange();
+    if (reshapesGround(placement)) parts.onGroundChange(groundUnder(placement));
     const seconds = buildTimeOf(placement, lifted);
     if (seconds > 0) {
       const height = objectTypeTop(placement.id);
@@ -417,7 +423,7 @@ export function createEditMode(parts: {
       parts.onCue('dig');
       // Separate from onChange: the HUD counts are unchanged, but the terrain meshes must be
       // rebuilt.
-      parts.onGroundChange();
+      parts.onGroundChange({ from: tile.x, to: tile.x });
     },
     onCancel,
   });
@@ -474,7 +480,7 @@ export function createEditMode(parts: {
       const stillBuilding = sites.some((site) => site.placement.key === placement.key);
       lift(placement);
       parts.money.refund(refundOf(placement.id, stillBuilding));
-      if (reshapesGround(placement)) parts.onGroundChange();
+      if (reshapesGround(placement)) parts.onGroundChange(groundUnder(placement));
       onChange();
       parts.onCue('demolish');
     },

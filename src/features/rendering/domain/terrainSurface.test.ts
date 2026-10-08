@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import referenceJson from '../../../../fixtures/reference-resort.json';
+import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
 import { shoreFor, waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
-import { SAND_LEVEL, SEA_LEVEL, terrainSurfacesFor, type SurfaceGeometry } from './terrainSurface';
+import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
+import { planOfWorld } from '../../resort-prep/domain/savedWorld';
+import {
+  joinColumns,
+  retileColumns,
+  SAND_LEVEL,
+  SEA_LEVEL,
+  terrainSurfacesFor,
+  type SurfaceGeometry,
+  type TerrainSurfaces,
+  type TileColumns,
+} from './terrainSurface';
 import {
   elevationFor,
   levelHeight,
@@ -9,7 +22,12 @@ import {
   type TerraceSpec,
 } from '../../layout/domain/elevation';
 import type { ShoreSpec } from '../../layout/domain/shoreline';
-import { createTerrain, type TerrainEdit } from '../../layout/domain/terrain';
+import {
+  createTerrain,
+  MAX_TERRAIN_LEVEL,
+  terrainFor,
+  type TerrainEdit,
+} from '../../layout/domain/terrain';
 
 const TILE = 16;
 
@@ -115,7 +133,7 @@ const NOTHING = { grass: null, sand: null };
 
 describe('terrainSurfacesFor', () => {
   it('draws nothing at all on flat land with no shore', () => {
-    expect(terrainSurfacesFor(request(null))).toEqual({
+    expect(terrainSurfacesFor(request(null))).toMatchObject({
       sea: null,
       water: null,
       ground: NOTHING,
@@ -591,5 +609,203 @@ describe('ground that was dug rather than grown', () => {
       quadsOf(surfaces.ground.sand!).filter((quad) => quad.x0 === 20 * TILE).length;
     expect(inColumn(bare)).toBe(1);
     expect(inColumn(turfed)).toBe(2);
+  });
+});
+
+const editable = (coast: Shore | null, land: Elevation | null = null) => {
+  const built = new Set<string>();
+  const req = {
+    terrain: createTerrain({ shore: coast, elevation: land, tilesX: 40, tilesZ: 40 }),
+    isClear: (tileX: number, tileZ: number) => !built.has(`${tileX},${tileZ}`),
+    shore: coast,
+    center: { x: 320, z: 320 },
+    reach: 640,
+    tileVoxels: TILE,
+  };
+  return { built, req };
+};
+
+type Request = ReturnType<typeof editable>['req'];
+
+const FIRST = -20;
+
+function relayed(before: TerrainSurfaces, req: Request, changed: TileColumns): TerrainSurfaces {
+  const relaid = retileColumns(before, req, changed);
+  expect(relaid).toEqual(terrainSurfacesFor(req));
+  return relaid;
+}
+
+const startsOf = (surfaces: TerrainSurfaces): readonly Uint32Array[] => {
+  const { water, ground, risers } = surfaces.columns;
+  return [water, ground.grass, ground.sand, risers.grass, risers.sand];
+};
+
+const meshesOf = (surfaces: TerrainSurfaces): readonly (SurfaceGeometry | null)[] => [
+  surfaces.water,
+  surfaces.ground.grass,
+  surfaces.ground.sand,
+  surfaces.risers.grass,
+  surfaces.risers.sand,
+];
+
+const quadsPerColumn = (starts: Uint32Array): number[] =>
+  [...starts.subarray(1)].map((start, i) => start - starts[i]!);
+
+describe('retileColumns', () => {
+  it('lays a river dug into flat grass', () => {
+    const { req } = editable(null);
+    const before = terrainSurfacesFor(req);
+    req.terrain.set(20, 20, { level: 0, surface: 'water' });
+    const after = relayed(before, req, { from: 20, to: 20 });
+    expect(before.water).toBeNull();
+    expect(after.water?.quadCount).toBe(1);
+  });
+
+  it('takes the river away again when the tile goes back to its base', () => {
+    const { req } = editable(null);
+    req.terrain.set(20, 20, { level: 0, surface: 'water' });
+    const before = terrainSurfacesFor(req);
+    req.terrain.set(20, 20, { level: 0, surface: 'grass' });
+    expect(relayed(before, req, { from: 20, to: 20 }).water).toBeNull();
+  });
+
+  it('relays the risers around a tile raised on a terrace', () => {
+    const { req } = editable(null, terraced());
+    const before = terrainSurfacesFor(req);
+    const level = req.terrain.levelOf(20, 4);
+    req.terrain.set(20, 4, { level: level + 1, surface: req.terrain.surfaceOf(20, 4) });
+    const after = relayed(before, req, { from: 20, to: 20 });
+    expect(after.risers.grass!.quadCount).not.toBe(before.risers.grass!.quadCount);
+  });
+
+  it('raises an island in the bay and keeps the sea it stands in', () => {
+    const coast = shore();
+    const { req } = editable(coast);
+    const before = terrainSurfacesFor(req);
+    req.terrain.set(20, waterStartZ(coast, 20) + 2, { level: 1, surface: 'sand' });
+    const after = relayed(before, req, { from: 20, to: 20 });
+    expect(after.sea).toBe(before.sea);
+    expect(after.risers.sand).not.toBeNull();
+  });
+
+  it('squares a slope under something built, in that column only', () => {
+    const land = terraced([{ level: 1, inset: 8, wave: 0 }]);
+    const { built, req } = editable(null, land);
+    const before = terrainSurfacesFor(req);
+    built.add(`20,${stepStartZ(land, 0, 20) - 1}`);
+    const after = relayed(before, req, { from: 20, to: 20 });
+    const differing = new Set<number>();
+    startsOf(before).forEach((starts, mesh) => {
+      const was = quadsPerColumn(starts);
+      quadsPerColumn(startsOf(after)[mesh]!).forEach((quads, column) => {
+        if (quads !== was[column]) differing.add(column + FIRST);
+      });
+    });
+    expect([...differing]).toEqual([20]);
+  });
+
+  it('relays a footprint three columns wide', () => {
+    const { req } = editable(null, terraced());
+    const before = terrainSurfacesFor(req);
+    for (let tileX = 18; tileX <= 20; tileX++) {
+      req.terrain.set(tileX, 10, { level: 0, surface: 'water' });
+    }
+    relayed(before, req, { from: 18, to: 20 });
+  });
+
+  it('relays the first column of the box, and the one just outside it', () => {
+    const { req } = editable(null, terraced());
+    const before = terrainSurfacesFor(req);
+    req.terrain.set(FIRST, 5, { level: 1, surface: 'sand' });
+    const inside = relayed(before, req, { from: FIRST, to: FIRST });
+    req.terrain.set(FIRST - 1, 6, { level: 2, surface: 'grass' });
+    relayed(inside, req, { from: FIRST - 1, to: FIRST - 1 });
+  });
+
+  it('hands back what it was given for an edit no column can see', () => {
+    const { req } = editable(null);
+    const before = terrainSurfacesFor(req);
+    req.terrain.set(70, 20, { level: 0, surface: 'water' });
+    expect(retileColumns(before, req, { from: 70, to: 70 })).toBe(before);
+  });
+
+  it('builds afresh for a box it was not built for', () => {
+    const { req } = editable(shore(), terraced());
+    const before = terrainSurfacesFor(req);
+    const wider = { ...req, reach: 800 };
+    expect(retileColumns(before, wider, { from: 20, to: 20 })).toEqual(terrainSurfacesFor(wider));
+  });
+
+  it('stays exact through a run of random edits on terraces by the sea', () => {
+    const coast: ShoreSpec = { inset: 20, beach: 6, wave: 3, seed: 1 };
+    const land = terraced(
+      [
+        { level: 1, inset: 10, wave: 2 },
+        { level: 2, inset: 20, wave: 2 },
+      ],
+      coast,
+    );
+    const { req } = editable(shore({ wave: 3 }), land);
+    let seed = 7;
+    const next = (below: number): number => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed % below;
+    };
+    let surfaces = terrainSurfacesFor(req);
+    for (let edit = 0; edit < 40; edit++) {
+      const tileX = FIRST - 2 + next(85);
+      const tileZ = -5 + next(50);
+      const { level, surface } = req.terrain.tileAt(tileX, tileZ);
+      const tiles = [
+        { level: Math.min(MAX_TERRAIN_LEVEL, level + 1), surface },
+        { level: Math.max(0, level - 1), surface },
+        { level, surface: 'sand' as const },
+        { level, surface: 'grass' as const },
+        { level, surface: 'water' as const },
+      ];
+      req.terrain.set(tileX, tileZ, tiles[next(tiles.length)]!);
+      surfaces = relayed(surfaces, req, { from: tileX, to: tileX });
+    }
+  });
+
+  it('relays the reference resort exactly', () => {
+    const plan = planOfWorld(referenceWorldOf(referenceJson));
+    const terrain = terrainFor(plan);
+    const middle = (plan.tilesX * TILE_VOXELS) / 2;
+    const req = {
+      terrain,
+      shore: shoreFor(plan),
+      center: { x: middle, z: (plan.tilesZ * TILE_VOXELS) / 2 },
+      reach: plan.tilesX * TILE_VOXELS,
+      tileVoxels: TILE_VOXELS,
+    };
+    const before = terrainSurfacesFor(req);
+    // Not simply the first: the world's first edits lie in the apron, past the drawn box.
+    const { tileX, tileZ, level, surface } = plan.terrain!.find(
+      (edit) => edit.tileX >= before.columns.first && edit.level < MAX_TERRAIN_LEVEL,
+    )!;
+    terrain.set(tileX, tileZ, { level: level + 1, surface });
+    const relaid = retileColumns(before, req, { from: tileX, to: tileX });
+    expect(relaid).not.toBe(before);
+    expect(relaid).toEqual(terrainSurfacesFor(req));
+  });
+
+  it('indexes every column of a full build, ending at each mesh quad count', () => {
+    const surfaces = terrainSurfacesFor(editable(shore(), terraced()).req);
+    const { first, last } = surfaces.columns;
+    startsOf(surfaces).forEach((starts, mesh) => {
+      expect(starts).toHaveLength(last - first + 2);
+      for (let i = 1; i < starts.length; i++) {
+        expect(starts[i]!).toBeGreaterThanOrEqual(starts[i - 1]!);
+      }
+      expect(starts[starts.length - 1]).toBe(meshesOf(surfaces)[mesh]?.quadCount ?? 0);
+    });
+  });
+});
+
+describe('joinColumns', () => {
+  it('joins every span touched into their hull', () => {
+    expect(joinColumns(null, { from: 4, to: 6 })).toEqual({ from: 4, to: 6 });
+    expect(joinColumns({ from: 4, to: 6 }, { from: 1, to: 2 })).toEqual({ from: 1, to: 6 });
   });
 });

@@ -235,7 +235,12 @@ import { buildInstancedWorld } from '../features/rendering/adapters/instancedWor
 import type { ModelGeometry } from '../features/rendering/adapters/voxelMeshBuilder';
 import { buildModelGeometries } from '../features/rendering/adapters/voxelMeshBuilder';
 import { blobShadowsFor } from '../features/rendering/domain/blobShadows';
-import { SAND_LEVEL, SEA_LEVEL } from '../features/rendering/domain/terrainSurface';
+import {
+  joinColumns,
+  SAND_LEVEL,
+  SEA_LEVEL,
+  type TileColumns,
+} from '../features/rendering/domain/terrainSurface';
 import type { BlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import { buildBlobShadowField } from '../features/rendering/adapters/blobShadowField';
 import {
@@ -2429,8 +2434,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     highlights,
   });
 
-  // A flag rather than a rebuild per spadeful: the rebuild is coalesced to one per frame.
-  let ground = false;
+  // A span rather than a relay per spadeful: one relay a frame, over every column touched.
+  let groundColumns: TileColumns | null = null;
 
   // Coalesced by tellHud: a placement costs a scan and a React render, and a drag places one per move.
   let counted = false;
@@ -2524,8 +2529,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       letter();
       options.onDirty?.();
     },
-    onGroundChange: () => {
-      ground = true;
+    onGroundChange: (columns) => {
+      groundColumns = joinColumns(groundColumns, columns);
       lifecycle.groundEdited();
       options.onDirty?.();
     },
@@ -2862,9 +2867,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const frameStarted = performance.now();
 
     // First: the ground the crowd walks and the surfaces the camera sees must agree.
-    if (ground) {
-      handle.retile();
-      ground = false;
+    if (groundColumns) {
+      handle.retile(groundColumns);
+      groundColumns = null;
     }
     tellHud(frameStarted);
     if (lifecycle.reanchorDue(timeMs)) lifecycle.reanchor();

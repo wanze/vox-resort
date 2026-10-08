@@ -282,5 +282,6 @@ describe('preparedTransferables', () => {
     expect(new Set(buffers).size).toBe(buffers.length);
     expect(buffers).toContain(generated.lighting!.grid.irradiance.buffer);
     expect(buffers).toContain(generated.surfaces.sea!.positions.buffer);
+    expect(buffers).toContain(generated.surfaces.columns.water.buffer);
   });
 });

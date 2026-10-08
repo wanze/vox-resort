@@ -72,6 +72,23 @@ describe('partiesOf', () => {
     expect(urgent.some((each) => each.party === 1)).toBe(false);
     expect(all.find((each) => each.party === 1)?.people).toBe(guests.parties[1]!.members.length);
   });
+
+  it('asks no urgency of a party with a member busy', () => {
+    const index = guests.parties.findIndex((each) => each.members.length >= 2);
+    const { members } = guests.parties[index]!;
+    const busy = members.at(-1)!;
+    const asked = new Set<number>();
+    const free = partiesOf(
+      guests,
+      (person) => person !== busy,
+      (person) => {
+        asked.add(person);
+        return 0;
+      },
+    );
+    expect(members.filter((member) => asked.has(member))).toEqual([]);
+    expect(free.some((each) => each.party === index)).toBe(false);
+  });
 });
 
 describe('stepFree', () => {
@@ -152,6 +169,28 @@ describe('pickAudience', () => {
     expect(
       pickAudience(ask({ kind: { ...EVERYONE, audience: (each) => each.children > 0 } })),
     ).toEqual([]);
+  });
+});
+
+describe('the free and the picked, pinned', () => {
+  it('finds the same free parties', () => {
+    const free = partiesOf(
+      guests,
+      (person) => person % 7 !== 3,
+      (person) => (person % 5 === 0 ? 0.6 : 0),
+    );
+    expect(free.map((each) => each.party)).toEqual([3, 5, 10, 15, 17]);
+    expect(free.reduce((sum, each) => sum + each.people, 0)).toBe(10);
+  });
+
+  it('picks the same parties in the same order', () => {
+    const HALF: EventKind = {
+      ...EVENT_KINDS['live-music'],
+      appeal: { family: 0.5, couple: 0.5, friends: 0.5, solo: 0.5 },
+    };
+    expect(pickAudience(ask({ kind: HALF, room: 40 }))).toEqual([
+      15, 37, 6, 12, 8, 30, 9, 19, 27, 11, 31, 26, 35, 33,
+    ]);
   });
 });
 

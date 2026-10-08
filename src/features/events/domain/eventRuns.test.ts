@@ -533,6 +533,17 @@ describe('a run from start to end', () => {
     expect(peopleThere(current, guests, (person) => there.has(person))).toBe(2);
   });
 
+  it('counts neither the absent nor a member who left the party', () => {
+    const own = createGuests({ count: 30, homes, variants: 4, childVariant: 3, seed: 3 });
+    const index = own.parties.findIndex((each) => each.members.length >= 3);
+    const [absent, left, ...stayed] = own.parties[index]!.members;
+    own.present[absent!] = 0;
+    own.party[left!] = index === 0 ? 1 : 0;
+    const { current } = announced();
+    current.parties.push(index);
+    expect(peopleThere(current, own, () => true)).toBe(stayed.length);
+  });
+
   it('holds nothing for a show that never started, and tells the invited when it is off', () => {
     const { state, current } = announced();
     current.parties.push(2);

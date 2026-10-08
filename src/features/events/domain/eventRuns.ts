@@ -382,18 +382,31 @@ const NONE_HELD: EventTally = { held: 0, audience: 0, called: 0 };
 
 const CALLED_OFF: EventTally = { held: 0, audience: 0, called: 1 };
 
-const membersOf = (guests: Guests, party: number): readonly number[] =>
-  (guests.parties[party]?.members ?? []).filter(
-    (person) => guests.present[person] === 1 && guests.party[person] === party,
-  );
+const inParty = (guests: Guests, party: number, person: number): boolean =>
+  guests.present[person] === 1 && guests.party[person] === party;
 
-const onTheWay = (run: EventRun, invitation: Invitation): number =>
-  run.parties.reduce(
-    (coming, party) =>
-      coming +
-      membersOf(invitation.guests, party).filter((person) => !invitation.isThere(person)).length,
-    0,
-  );
+const membersOf = (guests: Guests, party: number): readonly number[] =>
+  (guests.parties[party]?.members ?? []).filter((person) => inParty(guests, party, person));
+
+// Counted, not listed: the sand's room is asked on every frame a beach show is on.
+const countMembers = (
+  guests: Guests,
+  party: number,
+  counted: (person: number) => boolean,
+): number => {
+  let count = 0;
+  for (const person of guests.parties[party]?.members ?? []) {
+    if (inParty(guests, party, person) && counted(person)) count++;
+  }
+  return count;
+};
+
+const onTheWay = (run: EventRun, invitation: Invitation): number => {
+  const away = (person: number): boolean => !invitation.isThere(person);
+  let coming = 0;
+  for (const party of run.parties) coming += countMembers(invitation.guests, party, away);
+  return coming;
+};
 
 // At the announcement and topped up at the start. A party invited to any show is never asked
 // again: it would be sent to the second and still be kept up for the first.
@@ -401,7 +414,10 @@ export function inviteAudience(state: EventsState, run: EventRun, invitation: In
   const { guests } = invitation;
   const room = invitation.room - onTheWay(run, invitation);
   if (room <= 0) return;
-  const invited = new Set(state.runs.flatMap((each) => each.parties));
+  const invited = new Set<number>();
+  for (const each of state.runs) {
+    for (const party of each.parties) invited.add(party);
+  }
   const free = invitation.free().filter((party) => !invited.has(party.party));
   const { occurrence } = run;
   const picked = pickAudience({
@@ -455,7 +471,7 @@ export function peopleThere(
 ): number {
   let there = 0;
   for (const party of run.parties) {
-    there += membersOf(guests, party).filter(isThere).length;
+    there += countMembers(guests, party, isThere);
   }
   return there;
 }

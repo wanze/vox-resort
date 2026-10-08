@@ -96,12 +96,13 @@ function freePartiesOf(resort: SimState): () => readonly AudienceParty[] {
 // A party resting on the sand is free to watch from where it lies.
 function freeOnTheSandOf(resort: SimState): () => readonly AudienceParty[] {
   const { router } = resort;
+  let free: readonly AudienceParty[] | null = null;
   return () =>
-    partiesOf(
+    (free ??= partiesOf(
       resort.guests,
       (person) => router.isFree(person) || router.stayOf(person) === 'resting',
       (person) => urgencyBesidesFun(resort, person),
-    );
+    ));
 }
 
 function stageRoomOf(resort: SimState, venue: number): number {
@@ -126,14 +127,19 @@ function inviteParty(resort: SimState, run: EventRun, person: number, venue: num
   return false;
 }
 
-function inviteTo(resort: SimState, run: EventRun, free: () => readonly AudienceParty[]): void {
+function inviteTo(
+  resort: SimState,
+  run: EventRun,
+  free: () => readonly AudienceParty[],
+  sand: () => readonly AudienceParty[],
+): void {
   const venue = runVenueOf(resort, run);
   if (!resort.siteVenues[venue]) return;
   const { router } = resort;
   inviteAudience(resort.events, run, {
     guests: resort.guests,
     room: roomAt(resort, run, venue),
-    free: venue === beachIndexOf(resort) ? freeOnTheSandOf(resort) : free,
+    free: venue === beachIndexOf(resort) ? sand : free,
     isThere: (person) => router.venueIndexOf(person) === venue,
     invite: (person) => inviteParty(resort, run, person, venue),
   });
@@ -141,11 +147,11 @@ function inviteTo(resort: SimState, run: EventRun, free: () => readonly Audience
 
 // Not only twice: a keen party reaching the sand after the start would lie down on a pitch of its
 // own, so the sand is asked again on every tick until the end, while there is room.
-function topUpTheSand(resort: SimState): void {
+function topUpTheSand(resort: SimState, sand: () => readonly AudienceParty[]): void {
   const beach = beachIndexOf(resort);
   if (beach < 0) return;
   for (const run of resort.events.runs) {
-    if (runVenueOf(resort, run) === beach) inviteTo(resort, run, freeOnTheSandOf(resort));
+    if (runVenueOf(resort, run) === beach) inviteTo(resort, run, sand, sand);
   }
 }
 
@@ -221,6 +227,7 @@ interface StepContext {
   readonly resort: SimState;
   readonly now: number;
   readonly free: () => readonly AudienceParty[];
+  readonly sand: () => readonly AudienceParty[];
 }
 
 // What each step does to the resort. The rockets are not drawn from here but from the runs, so a
@@ -228,10 +235,10 @@ interface StepContext {
 const EVENT_STEPS: {
   readonly [kind in EventStep['kind']]: (step: StepOf<kind>, context: StepContext) => void;
 } = {
-  announce: (step, { resort, free }) => inviteTo(resort, step.run, free),
-  start: (step, { resort, free }) => {
+  announce: (step, { resort, free, sand }) => inviteTo(resort, step.run, free, sand),
+  start: (step, { resort, free, sand }) => {
     resort.ledger = record(resort.ledger, 'events', -step.fee);
-    inviteTo(resort, step.run, free);
+    inviteTo(resort, step.run, free, sand);
   },
   end: (step, { resort, now }) => endEvent(resort, step.run, now),
   'call-off': (step, { resort, now }) => callOffEvent(resort, step, now),
@@ -243,29 +250,38 @@ const EVENT_STEPS: {
 
 const settles = (step: EventStep): boolean => step.kind === 'call-off' || step.kind === 'postpone';
 
-function applyEventSteps(resort: SimState, steps: readonly EventStep[], now: number): void {
-  const context: StepContext = { resort, now, free: freePartiesOf(resort) };
+function applyEventSteps(
+  resort: SimState,
+  steps: readonly EventStep[],
+  now: number,
+  sand: () => readonly AudienceParty[],
+): void {
+  const context: StepContext = { resort, now, free: freePartiesOf(resort), sand };
   for (const step of steps) {
     (EVENT_STEPS[step.kind] as (step: EventStep, context: StepContext) => void)(step, context);
   }
 }
 
 // Every frame, as a party comes off the desk free at no particular moment.
-function callLatecomers(resort: SimState, now: number): void {
+function callLatecomers(resort: SimState, now: number, sand: () => readonly AudienceParty[]): void {
   if (resort.newcomers.length === 0) return;
   for (const run of resort.events.runs) {
     const kind = eventKindOf(run.occurrence);
     if (kind.latecomers !== true) continue;
-    inviteTo(resort, run, () =>
-      latecomersFor({
-        run,
-        kind,
-        newcomers: resort.newcomers,
-        guests: resort.guests,
-        isFree: (person) => resort.router.isFree(person),
-        urgency: (person) => urgencyBesidesFun(resort, person),
-        now,
-      }),
+    inviteTo(
+      resort,
+      run,
+      () =>
+        latecomersFor({
+          run,
+          kind,
+          newcomers: resort.newcomers,
+          guests: resort.guests,
+          isFree: (person) => resort.router.isFree(person),
+          urgency: (person) => urgencyBesidesFun(resort, person),
+          now,
+        }),
+      sand,
     );
   }
 }
@@ -282,9 +298,12 @@ export function runEvents(
   const advance = advanceEvents(events, now - ticks + 1, now, eventFactsOf(resort, clock));
   events.programme = advance.programme;
   events.runs = advance.runs;
-  applyEventSteps(resort, advance.steps, now);
-  callLatecomers(resort, now);
-  topUpTheSand(resort);
+  // One list a frame for every show on the sand, as for the stages: an invitation changes only
+  // the party invited, which inviteAudience leaves out.
+  const sand = freeOnTheSandOf(resort);
+  applyEventSteps(resort, advance.steps, now, sand);
+  callLatecomers(resort, now, sand);
+  topUpTheSand(resort, sand);
   refreshInvited(resort);
   if (advance.steps.some(settles)) refreshKeen(resort, clock);
   sendTheKeenToBed(resort, now);

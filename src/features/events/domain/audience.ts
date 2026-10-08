@@ -25,7 +25,19 @@ export interface AudienceAsk {
   readonly salt: number;
 }
 
+const presentIn = (guests: Guests, index: number, person: number): boolean =>
+  guests.present[person] === 1 && guests.party[person] === index;
+
+const anyUrgent = (
+  guests: Guests,
+  index: number,
+  members: readonly number[],
+  urgency: (person: number) => number,
+): boolean =>
+  members.some((person) => presentIn(guests, index, person) && urgency(person) >= INVITE_URGENCY);
+
 // `urgency` leaves fun out: wanting some fun is the reason to come, not a reason to stay away.
+// Freedom first: urgency weighs every need, and one busy member rules the party out anyway.
 function freeParty(
   guests: Guests,
   index: number,
@@ -37,12 +49,12 @@ function freeParty(
   let people = 0;
   let children = 0;
   for (const person of party.members) {
-    if (guests.present[person] !== 1 || guests.party[person] !== index) continue;
-    if (!isFree(person) || urgency(person) >= INVITE_URGENCY) return null;
+    if (!presentIn(guests, index, person)) continue;
+    if (!isFree(person)) return null;
     people++;
     children += guests.child[person]!;
   }
-  if (people === 0) return null;
+  if (people === 0 || anyUrgent(guests, index, party.members, urgency)) return null;
   return {
     party: index,
     kind: party.kind,
@@ -100,10 +112,12 @@ export function isInterested(
 export function pickAudience(ask: AudienceAsk): readonly number[] {
   const { kind, day, salt } = ask;
   const share = drawOf(kind, ask.tier);
-  const keen = ask.parties
-    .map((party) => ({ party, at: keenness(party.party, salt) }))
-    .filter(({ party, at }) => keenEnough(party, kind, share, day, at))
-    .toSorted((a, b) => a.at - b.at || a.party.party - b.party.party);
+  const keen: { party: AudienceParty; at: number }[] = [];
+  for (const party of ask.parties) {
+    const at = keenness(party.party, salt);
+    if (keenEnough(party, kind, share, day, at)) keen.push({ party, at });
+  }
+  keen.sort((a, b) => a.at - b.at || a.party.party - b.party.party);
   const picked: number[] = [];
   let left = ask.room;
   for (const { party } of keen) {

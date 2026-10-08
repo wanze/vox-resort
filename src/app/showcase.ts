@@ -29,8 +29,6 @@ import {
   costToStand,
   DIG_COST,
   landPriceOf,
-  nightPriceOf,
-  priceOf,
   refundOf,
 } from '../features/catalog/domain/prices';
 import {
@@ -81,16 +79,12 @@ import {
   forSale,
   landViewOf,
   ownedArea,
-  ownedBounds,
   ownedSpan,
   ownsTile,
-  rightsOf,
-  type LandRights,
   type LandView,
   type TileSpan,
 } from '../features/land/domain/landRights';
 import { widenGame } from '../features/saves/domain/widenGame';
-import type { TileRect } from '../features/layout/domain/parkShapes';
 import { restoreResort, snapshotResort } from '../features/sim/domain/resortState';
 import type { ClockSnapshot } from '../features/sim/domain/resortSnapshot';
 import {
@@ -106,7 +100,7 @@ import {
   wantsStairsOf,
   type PavingRules,
 } from '../features/build/domain/paving';
-import { type HandrailRules } from '../features/build/domain/handrails';
+import type { HandrailRules } from '../features/build/domain/handrails';
 import type { TerrainRules } from '../features/build/domain/terrainBrush';
 import {
   armedBrush,
@@ -144,103 +138,26 @@ import {
   type SimClock,
   type SimSpeed,
 } from '../features/sim/domain/simClock';
+import { strongestNeed } from '../features/sim/domain/needs';
+import type { Rating } from '../features/sim/domain/rating';
+import { carryUpkeep, cleanliness, NEEDS_CLEANING } from '../features/sim/domain/upkeep';
+import { carryBreakdowns, isBroken } from '../features/sim/domain/breakdowns';
+import { litterSummary, pruneLitter, type Litter } from '../features/sim/domain/litter';
+import type { Review } from '../features/sim/domain/reviews';
+import type { DayReport } from '../features/sim/domain/dayReport';
+import { latestOf, loudest, type ThoughtTally } from '../features/sim/domain/thoughts';
+import { sceneryOver } from '../features/sim/domain/scenery';
 import {
-  createNeeds,
-  decayNeeds,
-  relieve,
-  strongestNeed,
-  type Needs,
-} from '../features/sim/domain/needs';
-import {
-  ageHappiness,
-  createHappiness,
-  meanHappiness,
-  remember,
-  type Happiness,
-} from '../features/sim/domain/happiness';
-import { arrivalsFor, ratingFor, type Rating } from '../features/sim/domain/rating';
-import {
-  carryUpkeep,
-  cleanliness,
-  createUpkeep,
-  NEEDS_CLEANING,
-  type Upkeep,
-} from '../features/sim/domain/upkeep';
-import { burnTheSunbathers, hurt, mishap } from '../features/sim/domain/incidents';
-import {
-  carryBreakdowns,
-  createBreakdowns,
-  isBroken,
-  type Breakdowns,
-} from '../features/sim/domain/breakdowns';
-import {
-  BEACH_LITTER,
-  createCarrying,
-  createLitter,
-  dropAt,
-  LITTER_WEIGHT,
-  litterAt,
-  litterSummary,
-  pickUp,
-  pruneLitter,
-  stepWith,
-  type Carrying,
-  type Litter,
-} from '../features/sim/domain/litter';
-import { isBedtime, LATE_NIGHT_RELIEF, mix } from '../features/sim/domain/night';
-import { isPastTen, nightOf, planNightsOut } from '../features/sim/domain/nightOut';
-import { keepReview, reviewFor, type Review } from '../features/sim/domain/reviews';
-import {
-  countArrivals,
-  countDeparture,
-  countEvent,
-  countReview,
-  countWelcomed,
-  keepDay,
-  noteWelcomeGap,
-  reportOf,
-  startDay,
-  type DayCounts,
-  type DayReport,
-} from '../features/sim/domain/dayReport';
-import {
-  createDay,
-  createThoughts,
-  forgetStay,
-  latestOf,
-  loudest,
-  stayCount,
-  surroundingsThought,
-  tallyInto,
-  think,
-  visitThought,
-  type ThoughtKind,
-  type ThoughtTally,
-  type Thoughts,
-} from '../features/sim/domain/thoughts';
-import { sceneryAt, sceneryOver, type SceneryField } from '../features/sim/domain/scenery';
-import {
-  AUTO_HIRING,
-  cheerTheAudience,
   hire,
-  onDuty,
-  rosterFor,
-  rosterOf,
-  shiftChange,
   shortOf,
   STAFF_ROLES,
-  staffPool,
   unwatched,
-  wagesFor,
-  workplacesOf,
   type Hiring,
   type Roster,
-  type Staff,
   type StaffRole,
 } from '../features/sim/domain/staff';
 import {
   canAfford,
-  closeDay,
   createLedger,
   OPENING_BALANCE,
   record,
@@ -248,15 +165,8 @@ import {
   type Ledger,
   type Reason,
 } from '../features/sim/domain/ledger';
+import { takingsOf } from '../features/sim/domain/takings';
 import {
-  earn,
-  maintenanceFor,
-  nightBill,
-  takingsOf,
-  type VenueTakings,
-} from '../features/sim/domain/takings';
-import {
-  createStaffRouter,
   createStaffTask,
   meanCleanliness,
   SPELLS_PER_LOAD,
@@ -265,73 +175,44 @@ import {
   type OrderRole,
   type StaffRouter,
   type StaffTask,
-  type StaffZones,
 } from '../features/sim/domain/staffRouter';
-import {
-  anyZone,
-  createZones,
-  dealZones,
-  NO_ZONE,
-  paintZone,
-  staffByZone,
-  zoneAt,
-  workplaceZones,
-  zonesIn,
-  zonesOf,
-  type Zones,
-} from '../features/sim/domain/zones';
-import {
-  arrivalsDueBy,
-  CHECK_IN_TICK,
-  checkInDue,
-  bedsOn,
-  runCheckIn,
-  wavesDue,
-} from '../features/sim/domain/checkIn';
-import { type Gateway } from '../features/sim/domain/gateways';
-import { depotForShift, type Depot } from '../features/sim/domain/depots';
-import { createRandom, type Random } from '../features/layout/domain/random';
-import { beachVenueFor, isBeach as isTheBeach, withBeach } from '../features/sim/domain/beach';
+import { NO_ZONE, paintZone, staffByZone, zoneAt, type Zones } from '../features/sim/domain/zones';
+import { CHECK_IN_TICK } from '../features/sim/domain/checkIn';
+import type { Depot } from '../features/sim/domain/depots';
+import { beachVenueFor, withBeach } from '../features/sim/domain/beach';
 import { isNamed, relabelled, shelterOf, type Venue } from '../features/sim/domain/venues';
-import {
-  assignNames,
-  namedPlacesOf,
-  renameTo,
-  type VenueNames,
-} from '../features/naming/domain/venueNames';
-import { lodgingFor, type Lodging } from '../features/sim/domain/lodgings';
+import { assignNames, namedPlacesOf, renameTo } from '../features/naming/domain/venueNames';
+import type { Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
-import { createRouter, type Router } from '../features/sim/domain/router';
-import { plotFactsOf, type PlotFacts } from '../features/resort-sim/domain/plotFacts';
-import { type ShadeMap } from '../features/sim/domain/shade';
-import { partiesOf, partyMixOf } from '../features/events/domain/audience';
-import { labelOf as eventLabelOf, type AudienceParty } from '../features/events/domain/catalogue';
+import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
+import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
+import { venueIndexOf } from '../features/resort-sim/domain/visits';
 import {
-  advanceEvents,
-  bookedVenues,
-  callOffRun,
-  createEvents,
-  createPartyRuns,
-  endRun,
-  entertain,
-  hostedShows,
-  indexParties,
-  inviteAudience,
-  kindOf as eventKindOf,
-  markParty,
-  peopleThere,
-  runOfVisit,
-  showingVenues,
-  visitLitter,
-  type CallOffStep,
-  type EventFacts,
-  type EventRun,
-  type EventStep,
-  type EventsState,
-  type PartyRuns,
-} from '../features/events/domain/eventRuns';
+  beachTilesFor,
+  knowPaving,
+  litterWindowOf,
+  pavingIndexOf,
+  rezone,
+  rosterNow,
+  staffTheResort,
+  type TileAt,
+} from '../features/resort-sim/domain/staffing';
+import { refreshNightOut } from '../features/resort-sim/domain/nights';
+import {
+  beachIndexOf,
+  eventFactsOf,
+  refreshEventVenues,
+  refreshInvited,
+  refreshKeen,
+  runningShowOf,
+  WEATHER_SEED,
+  weatherOnDay,
+} from '../features/resort-sim/domain/eventSteps';
+import { stepSim } from '../features/resort-sim/domain/stepSim';
+import { partiesArrivedOn } from '../features/resort-sim/domain/arrivals';
+import { partyMixOf } from '../features/events/domain/audience';
+import { createEvents, type EventStep } from '../features/events/domain/eventRuns';
 import { restoreEvents, snapshotEvents } from '../features/events/domain/eventsSnapshot';
-import { fadeGlow } from '../features/events/domain/glow';
 import {
   book,
   BUILT_INS,
@@ -347,8 +228,6 @@ import {
   type BookingChange,
   type BookingDraft,
   type BookingRefusal,
-  type EventSite,
-  type Occurrence,
   type Programme,
 } from '../features/events/domain/programme';
 import {
@@ -357,21 +236,11 @@ import {
   type ProgrammeFacts,
 } from '../features/events/domain/programmeView';
 import { heldAt, stageKeysOf } from '../features/events/domain/sites';
-import {
-  latecomersFor,
-  stageRank,
-  welcomeGapOf,
-  withoutBuiltIns,
-} from '../features/events/domain/welcome';
-import {
-  bookingDayKey,
-  keenParties,
-  showToTell,
-  tonightsShow,
-} from '../features/events/domain/stayingUp';
+import { stageRank, withoutBuiltIns } from '../features/events/domain/welcome';
+import { bookingDayKey, showToTell } from '../features/events/domain/stayingUp';
 import { dayAt } from '../features/events/domain/week';
 import { watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
-import { fireworksDrought, isFireworksNight } from '../features/fireworks/domain/nights';
+import { fireworksDrought } from '../features/fireworks/domain/nights';
 import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
 import {
   isOpenIn,
@@ -380,7 +249,7 @@ import {
   type Weather,
   type WeatherEffect,
 } from '../features/sim/domain/weather';
-import { djPlays, openAt, openNow } from '../features/sim/domain/hours';
+import { openAt, openNow } from '../features/sim/domain/hours';
 import { flashAt, flashSky } from '../features/weather/domain/lightning';
 import {
   createRaindrops,
@@ -416,10 +285,7 @@ import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/step
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
   createFootfall,
-  fadeFootfall,
   overlayValuesFor,
-  sampleFootfall,
-  type Footfall,
   type OverlayKind,
 } from '../features/overlays/domain/overlays';
 import {
@@ -439,7 +305,6 @@ import {
   buildHighlightField,
   type HighlightField,
 } from '../features/highlights/adapters/highlightField';
-import { nodeIndexFor, type NodeIndex } from '../features/crowd/domain/nearestNode';
 import { crowdScaleFor } from '../features/sim/domain/crowdRate';
 import { anchorsFor, type LightAnchor } from '../features/lighting/domain/lightAnchors';
 import { buildFlamesField, type FlamesField } from '../features/bonfire/adapters/flamesField';
@@ -481,17 +346,7 @@ import {
   revealHeightOf,
   type ConstructionSite,
 } from '../features/construction/domain/construction';
-import {
-  createCrowd,
-  holdAt,
-  ON_SAND,
-  putOnPlot,
-  restoreCrowd,
-  snapshotCrowd,
-  takeOffPlot,
-  WALK_SPEED,
-  type Crowd,
-} from '../features/crowd/domain/crowd';
+import { restoreCrowd, snapshotCrowd, WALK_SPEED } from '../features/crowd/domain/crowd';
 import {
   crowdOverrideFrom,
   crowdSizeFor,
@@ -519,17 +374,11 @@ import { performOnSand } from '../features/choreography/domain/sandCastles';
 import { performWork } from '../features/choreography/domain/work';
 import {
   bedCount,
-  checkOutParty,
-  createGuests,
-  fullNameOf,
   homelessCount,
-  makeBeds,
-  paceOf,
   usesWheelchair,
   presentCount,
   rehome,
   unmadeCount,
-  type Guests,
 } from '../features/guests/domain/guests';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
@@ -644,12 +493,10 @@ const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.
 
 const CROWD_OVERRIDE = crowdOverrideFrom(globalThis.location?.search ?? '');
 
-// Seeds are fixed so bench runs replay the same scene, and separate so retuning
-// one draw never reshuffles another (more berths must not move the fleet).
-const CROWD_SEED = 1;
-
 const BALLOON_COUNT = 36;
 
+// Seeds are fixed so bench runs replay the same scene, and separate so retuning
+// one draw never reshuffles another (more berths must not move the fleet).
 const BALLOON_SEED = 2;
 
 // Four pieces on 128 tiles is already a landfill, and the advice will have said so long before.
@@ -665,19 +512,6 @@ const SEA_SEED = 3;
 
 const CREW_SEED = 4;
 
-const GUEST_SEED = 5;
-
-const NEEDS_SEED = 6;
-
-const DWELL_SEED = 7;
-
-const ARRIVALS_SEED = 8;
-
-const STAFF_SEED = 9;
-
-// 13 because it opens on three clear days; 10 opened day 0, and so every bench run, on rain.
-const WEATHER_SEED = 13;
-
 const RAIN_SEED = 4;
 
 const AIM_HEIGHT = hipHeight(ADULT_VOXELS);
@@ -686,8 +520,6 @@ const AIM_HEIGHT = hipHeight(ADULT_VOXELS);
 const INITIAL_TIME = 0.62;
 
 const LOUDEST_SHOWN = 5;
-
-const TICKS_PER_HOUR = 60;
 
 export interface ShowcaseStats {
   readonly backend: 'webgpu' | 'webgl2';
@@ -1177,8 +1009,10 @@ function createLighting(prepared: PreparedResort, claiming: readonly Placement[]
   };
 }
 
-interface Resort {
-  readonly plot: Plot;
+interface Resort extends SimState {
+  // Narrowed from the holders the rules read: a relocate or an adopt on the field is seen by both.
+  readonly crowd: CrowdField;
+  readonly staff: CrowdField;
   readonly lighting: Lighting;
   readonly world: InstancedWorld;
   readonly shadows: BlobShadowField;
@@ -1186,9 +1020,6 @@ interface Resort {
   readonly construction: ConstructionField;
   // Per resort for the same reason; lettered by the showcase, which holds the name.
   readonly nameplates: Nameplates;
-  readonly crowd: CrowdField;
-  // A second crowd: a guest's variant indexes the guest models, and HUD counts are about guests.
-  readonly staff: CrowdField;
   // Where visitors are drawn, index-aligned with `venues`. Replaced with them on an edit, which
   // renumbers the network's seats the places point into.
   places: readonly VenuePlaces[];
@@ -1211,118 +1042,9 @@ interface Resort {
     readonly y: Float32Array;
     readonly z: Float32Array;
   };
-  // Rebuilt rather than updated on an edit: its flow fields are indexed by node, and an edit
-  // renumbers nodes.
-  readonly staffRouter: StaffRouter;
-  readonly staffPool: Staff;
-  hiring: Hiring;
-  recommended: Roster;
-  roster: Roster;
-  // Read late by the staff router, so an edit swaps it rather than writing into it.
-  duty: Uint8Array;
-  // Per tile of the plan, so it survives every edit without being carried; never replaced.
-  readonly zones: Zones;
-  // Null on a plot that owns all of itself; bought into in place, and saved from here.
-  readonly rights: LandRights | null;
-  // Dealt afresh by rezone, and read late by the staff router, as the duty is.
-  zoneOf: Int8Array;
-  venueZones: Int32Array;
-  lodgingZones: Int32Array;
-  readonly guests: Guests;
-  readonly needs: Needs;
-  readonly happiness: Happiness;
-  // Replaced by a load; an edit keeps it, dropping the bookings of a stage pulled down.
-  events: EventsState;
-  // Per venue, refreshed once a frame, so the staff router's question is an array read.
-  eventBooked: Uint8Array;
-  eventShowing: Uint8Array;
-  // A resident DJ plays while the venue is open: a show with or without an animator. Refreshed
-  // with the clock, as the first resort is built before the clock exists.
-  djOn: Uint8Array;
-  hosted: readonly { readonly venue: number; readonly until: number }[];
-  // Per party, the run it is invited to: the router asks per guest per tick.
-  invited: PartyRuns;
-  // Per party, kept up from noon for tonight's show.
-  keen: Uint8Array;
-  keenShow: Occurrence | null;
-  // Per party, the tick its night out ends, or -1: hashed afresh every hour, so never saved.
-  nightOutUntil: Int32Array;
-  // Out tonight, but nothing late served them; cleared at check-in.
-  readonly homeEarly: Set<number>;
-  // Still out at ten, so they wake tired; cleared at check-in.
-  readonly nightOwls: Set<number>;
-  // Today's runs called off or put off, so nobody is kept up for them; cleared at check-in.
-  readonly settled: Set<string>;
-  // The lanterns stay on the sand on a fireworks night.
-  fireworksNight: boolean;
-  // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
-  venues: readonly Venue[];
-  // By key, which a rename keeps, so it is replaced only with the venues on an edit.
-  venueIndex: ReadonlyMap<string, number>;
-  // The venues as the router lists them, the beach last: where an event can be held.
-  siteVenues: readonly Venue[];
-  // By key like venueIndex, so the beach, which no venue list holds, is found too.
-  siteVenueIndex: ReadonlyMap<string, number>;
-  // Only the venues that hire craft out, at their venueIndex, so a hire costs no scan of all.
-  rentalVenues: ReadonlyMap<string, number>;
-  // Biggest first, sorted once per edit rather than each time the events are asked.
-  stages: readonly EventSite[];
-  // The owned sand, and the points out at sea a show is launched from.
-  beachTiles: number;
+  // The points out at sea a show is launched from.
   launchSites: readonly LaunchSite[];
-  // Drawn once per venue and carried by key, so building a second bar never renames the first.
-  names: VenueNames;
-  lodgings: readonly Lodging[];
-  // Homes are sorted by beds, lodgings stand in placement order; rebuilt with both on an edit.
-  homeOfLodging: Int32Array;
-  gateways: readonly Gateway[];
-  depots: readonly Depot[];
-  // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
-  // plot.
-  upkeep: Upkeep;
-  // Carried by key like the dirt, so paving a tile does not mend a broken slide.
-  breakdowns: Breakdowns;
-  // Replaced on an edit rather than patched: a moved tree takes its reach with it.
-  scenery: SceneryField;
-  // Replaced on an edit, as the scenery is.
-  shade: ShadeMap;
-  // Kept across an edit, pruned to what is still paved or open sand: planting a hedge does not
-  // sweep the plot.
-  readonly litter: Litter;
-  // Per node, so replaced empty on an edit, which renumbers nodes.
-  footfall: Footfall;
   readonly overlay: OverlayField;
-  // Per guest body, never replaced: a wrapper in hand outlasts an edit.
-  readonly carrying: Carrying;
-  // Per guest body too, and forgotten at check-in, when the body becomes somebody else.
-  readonly thoughts: Thoughts;
-  // Cleared each morning with the router's counters, so the panel speaks for today.
-  readonly thoughtDay: Map<string, ThoughtTally>;
-  reviews: readonly Review[];
-  // From one check-in to the next, as the books run.
-  today: DayCounts;
-  history: readonly DayReport[];
-  // Replaced on an edit, as the scenery is.
-  binCover: Uint8Array;
-  unreachable: ReadonlySet<string>;
-  rating: Rating;
-  // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
-  open: boolean;
-  // Sized once a day by the rating and let in over the waves. A wave nobody could come in is
-  // counted as admitted, so its share is not carried into the next one.
-  arrivalsPlanned: number;
-  arrivalsAdmitted: number;
-  // The parties checked in since the last 11:00 check-in, so yesterday's until then, for an event
-  // that calls latecomers.
-  newcomers: number[];
-  // Per resort: two plots must not share a sequence.
-  arrivals: Random;
-  ledger: Ledger;
-  readonly takings: VenueTakings;
-  beds: { readonly total: number; readonly taken: number };
-  // Rebuilt rather than updated on an edit: its flow fields are indexed by node, and an edit
-  // renumbers nodes.
-  readonly router: Router;
   readonly balloons: BalloonField;
   readonly litterField: LitterField;
   readonly ballField: BallField;
@@ -1332,71 +1054,13 @@ interface Resort {
   // Replaced when an edit adds or pulls down a hut that hires craft out.
   sea: SeaField;
   readonly occupancy: TileOccupancy;
-  readonly plan: ResortPlan;
   // The only writer of plot.rails; rails claim no tile, so they are indexed here instead of in
   // occupancy.
   readonly railIndex: RailIndex;
-  readonly shore: Shore | null;
   readonly terrain: Terrain;
   readonly bounds: WorldBounds;
   readonly framing: CameraFraming;
   dispose(): void;
-}
-
-// The graph is passed in so the router and the crowd share one node numbering.
-function crowdFor(parts: {
-  readonly network: WalkNetwork;
-  readonly people: readonly ModelGeometry[];
-  readonly lightVolume: BakedLightVolume | null;
-  readonly guests: Guests;
-  readonly population: number;
-  readonly routeOf: (person: number, at: number) => number;
-  readonly offTheSand: (person: number) => boolean;
-  readonly drawnAs: Cast;
-  readonly chair: ModelGeometry | undefined;
-}): CrowdField {
-  return buildCrowdField({
-    crowd: createCrowd({
-      network: parts.network,
-      count: parts.population,
-      variants: parts.people.length,
-      variantOf: (i) => parts.guests.variant[i] ?? 0,
-      routeOf: parts.routeOf,
-      offTheSand: parts.offTheSand,
-      paceOf: (i) => paceOf(parts.guests, i),
-      roamsBeach: false,
-      seed: CROWD_SEED,
-    }),
-    models: parts.people,
-    lightVolume: parts.lightVolume,
-    drawnAs: parts.drawnAs,
-    ...(parts.chair ? { chair: parts.chair } : {}),
-  });
-}
-
-function staffCrowdFor(parts: {
-  readonly network: WalkNetwork;
-  readonly models: readonly ModelGeometry[];
-  readonly lightVolume: BakedLightVolume | null;
-  readonly staff: Staff;
-  readonly routeOf: (worker: number, at: number) => number;
-  readonly drawnAs: Cast;
-}): CrowdField {
-  return buildCrowdField({
-    crowd: createCrowd({
-      network: parts.network,
-      count: parts.staff.count,
-      // Never zero: createCrowd deals a variant per body and would divide by zero.
-      variants: Math.max(1, parts.models.length),
-      variantOf: (worker) => parts.staff.variant[worker] ?? 0,
-      routeOf: parts.routeOf,
-      roamsBeach: false,
-      seed: STAFF_SEED,
-    }),
-    models: parts.models,
-    lightVolume: parts.lightVolume,
-    drawnAs: parts.drawnAs,
-  });
 }
 
 // Long enough that a drag costs one rebuild, short enough to read as immediate.
@@ -1539,27 +1203,12 @@ interface ResortArt {
   readonly props: readonly ModelGeometry[];
 }
 
-// A party no lodging could take starts away, but createCrowd deals every body onto the paving.
-function keepAwayOffThePlot(guests: Guests, crowd: Crowd): void {
-  for (let person = 0; person < crowd.count; person++) {
-    if (guests.present[person] === 1) continue;
-    takeOffPlot(crowd, person, crowd.x[person]!, crowd.y[person]!, crowd.z[person]!);
-  }
-}
-
 // A load or a settle restores whoever is here, so the bodies a settle adds start away.
 const startsAway = (building: boolean, saved: number | undefined): boolean =>
   building || saved !== undefined;
 
 // The plan's land, which is the live rights as they stood at the last settle.
 const spanOf = (plan: ResortPlan): TileSpan => ownedSpan(plan.land ?? null, plan);
-
-// The live rights, not the plan's: a path laid on land bought since the last settle gets litter too.
-const litterWindowOf = (resort: Pick<Resort, 'rights' | 'plan'>): TileRect | undefined =>
-  resort.rights ? ownedBounds(resort.rights, resort.plan) : undefined;
-
-const liveRightsOf = (plan: ResortPlan): LandRights | null =>
-  plan.land ? rightsOf(plan.land) : null;
 
 // The volume is wired up before the world, because the world's materials bind to it.
 // A save brings its own: a plot started empty but paved since would otherwise be sized again, and
@@ -1572,48 +1221,6 @@ function populationOf(plan: ResortPlan, plot: Plot, saved: number | undefined): 
     ? crowdSizeForArea(plan.tilesX, plan.tilesZ, CROWD_OVERRIDE)
     : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
 }
-
-type KeptFacts = Pick<
-  Resort,
-  | 'names'
-  | 'venues'
-  | 'siteVenues'
-  | 'beachTiles'
-  | 'launchSites'
-  | 'lodgings'
-  | 'homeOfLodging'
-  | 'gateways'
-  | 'depots'
-  | 'scenery'
-  | 'shade'
-  | 'binCover'
-  | 'unreachable'
-  | 'venueIndex'
-  | 'siteVenueIndex'
-  | 'rentalVenues'
-  | 'stages'
->;
-
-// One list for the first build and every edit, so neither can forget a fact the other keeps.
-const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
-  names: facts.names,
-  venues: facts.venues,
-  siteVenues: facts.siteVenues,
-  beachTiles: facts.beachTiles,
-  launchSites: facts.launchSites,
-  lodgings: facts.lodgings,
-  homeOfLodging: facts.homeOfLodging,
-  gateways: facts.gateways,
-  depots: facts.depots,
-  scenery: facts.scenery,
-  shade: facts.shade,
-  binCover: facts.binCover,
-  unreachable: facts.unreachable,
-  venueIndex: facts.venueIndex,
-  siteVenueIndex: facts.siteVenueIndex,
-  rentalVenues: facts.rentalVenues,
-  stages: facts.stages,
-});
 
 function buildResort(
   parts: ResortArt & {
@@ -1641,174 +1248,41 @@ function buildResort(
   // elevation and the shore know nothing about, and would sleep nine times its guests.
   const facts = plotFactsOf({ plan, shore, terrain }, plot.layout, new Map());
   knowPaving(facts);
-  const { network, venues, lodgings } = facts;
-  const guests = createGuests({
-    count: population,
-    homes: facts.homes,
-    variants: parts.people.length,
-    childVariant: CHILD_VARIANT,
-    seed: GUEST_SEED,
+  const state = createSimState({
+    plan,
+    plot,
+    shore,
+    facts,
+    population,
     away: startsAway(building, parts.population),
+    guestVariants: parts.people.length,
+    childVariant: CHILD_VARIANT,
+    // Never zero: createCrowd deals a variant per body and would divide by zero.
+    staffVariants: Math.max(1, parts.staff.length),
+    clock: { ticks: parts.ticks, tickOfDay: parts.tickOfDay, weather: parts.weather },
   });
-  const needs = createNeeds(guests, NEEDS_SEED);
-  const happiness = createHappiness(population);
-  const arrivals = createRandom(ARRIVALS_SEED);
+  const { network, venues } = facts;
+  const { guests, router, staffPool } = state;
   const places = placesFor(venues, byKey(plot.layout.placements), network);
   const rentals = rentalsOf(shore, plot.layout.placements, hireOf);
   const bathing = { shore, rentals, span: spanOf(plan) };
   const cast = createCast(population, places, { sand: network.sand, swim: bathing });
-  const upkeep = createUpkeep(venues.length);
-  const breakdowns = createBreakdowns(venues.length);
-  const litter = createLitter(plan.tilesX, plan.tilesZ);
   const overlay = buildOverlayField();
-  const carrying = createCarrying(population);
-  const beds = bedCount(guests);
-  // The router reads crowd positions and the crowd is built with the router, so one is bound late.
-  let crowdField: CrowdField | null = null;
-  const router = createRouter({
-    guests,
-    needs,
-    venues,
-    lodgings,
-    gateways: facts.gateways,
-    network,
-    onLeave: (person) => {
-      const party = guests.party[person]!;
-      // Before check-out, which clears who was here.
-      const review = reviewOfParty(resort, party);
-      if (review) {
-        resort.reviews = keepReview(resort.reviews, review);
-        resort.today = countReview(resort.today, review.stars);
-      }
-      const left = checkOutParty(guests, party, true);
-      resort.today = countDeparture(resort.today, left.length);
-      const people = crowdField!.crowd;
-      for (const member of left) {
-        // Every member: a visit left standing would walk an empty body out of the door.
-        router.forget(member);
-        takeOffPlot(people, member, people.x[member]!, people.y[member]!, people.z[member]!);
-      }
-    },
-    tickOfDay: parts.tickOfDay,
-    weather: parts.weather,
-    // Safe: the crowd is built on the next statement, and nothing calls the router before a frame.
-    crowd: () => crowdField!.crowd,
-    // Late-bound: an edit replaces the upkeep, and a stale one would soil venues that no longer
-    // stand.
-    upkeep: () => resort.upkeep,
-    breakdowns: () => resort.breakdowns,
-    shade: () => resort.shade,
-    // A hash, not the router's stream: a draw from it would move every seeded scene after it.
-    onVisited: (person, venue) => visitMade(resort, person, venue, parts.ticks()),
-    onThought: (person, kind, subject) => hear(resort, parts.ticks(), person, kind, subject),
-    upLate: (party) =>
-      resort.invited.end[party]! >= 0 ||
-      resort.keen[party] === 1 ||
-      isOutTonight(resort, party, parts.ticks()),
-    // An invited or keen party is the event's, and chooses as it always did.
-    outLate: (party) =>
-      isOutTonight(resort, party, parts.ticks()) &&
-      isBedtime(party, parts.tickOfDay()) &&
-      resort.invited.end[party]! < 0 &&
-      resort.keen[party] !== 1,
-    onNightOver: (party) => resort.homeEarly.add(party),
-    eventStay: (person, venue) => {
-      const party = guests.party[person]!;
-      return resort.invited.venue[party] === venue ? resort.invited.end[party]! : -1;
-    },
-    onWoke: (person) => {
-      const party = guests.party[person]!;
-      if (resort.events.tired.has(party) || resort.nightOwls.has(party)) {
-        relieve(needs, person, LATE_NIGHT_RELIEF);
-      }
-    },
-    seed: DWELL_SEED,
-  });
-  const crowd = crowdFor({
-    network,
-    people: parts.people,
+  const chair = parts.props.find((model) => model.id === WHEELCHAIR_ID);
+  const crowd = buildCrowdField({
+    crowd: state.crowd.crowd,
+    models: parts.people,
     lightVolume: lighting.volume,
-    guests,
-    population,
-    routeOf: (person, at) => {
-      stepLitterAt(resort, person, at);
-      return router.step(person, at);
-    },
-    offTheSand: (person) => router.offTheSand(person),
     drawnAs: cast,
-    chair: parts.props.find((model) => model.id === WHEELCHAIR_ID),
+    ...(chair ? { chair } : {}),
   });
-  crowdField = crowd;
-  keepAwayOffThePlot(guests, crowd.crowd);
-  // The pool is meshed once per resort; the roster follows the plot, putting bodies on and off it.
-  const employed = staffPool();
-  const recommended = rosterFor(workplacesOf(venues, network.posts, lodgings));
-  const roster = rosterOf(AUTO_HIRING, recommended);
-  const duty = onDuty(employed, roster);
-  const staffCast = createCast(employed.count, places);
-  let staffField: CrowdField | null = null;
-  // Getters, so the router reads the latest deal without an object built per question.
-  const staffZones: StaffZones = {
-    get zoneOf() {
-      return resort.zoneOf;
-    },
-    get venueZones() {
-      return resort.venueZones;
-    },
-    get lodgingZones() {
-      return resort.lodgingZones;
-    },
-    tileZone: (tileX, tileZ) => zoneAt(resort.zones, tileX, tileZ),
-  };
-  // Built once: the guests and the lodging map are read through the resort, which a load and an
-  // edit replace.
-  const housekeeping = {
-    unmadeAt: (lodging: number) => resort.guests.unmade[resort.homeOfLodging[lodging] ?? -1] ?? 0,
-    make: (lodging: number, most: number) => {
-      makeBeds(resort.guests, resort.homeOfLodging[lodging] ?? -1, most);
-    },
-  };
-  const staffRouter = createStaffRouter({
-    staff: employed,
-    venues,
-    network,
-    upkeep: () => resort.upkeep,
-    breakdowns: () => resort.breakdowns,
-    crowd: () => staffField!.crowd,
-    weather: parts.weather,
-    tickOfDay: parts.tickOfDay,
-    duty: () => resort.duty,
-    litter: () => resort.litter,
-    litterWindow: () => litterWindowOf(resort),
-    // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
-    occupants: (venue) => resort.router.occupancyOf(resort.venues[venue]!.key)?.inside ?? 0,
-    zones: () => staffZones,
-    lodgings,
-    beds: () => housekeeping,
-    depots: facts.depots,
-    supplyNode: () => resort.router.arrivalNode,
-    onClockedOff: (worker) => {
-      const workers = staffField!.crowd;
-      takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
-    },
-    booked: (venue) => resort.eventBooked[venue] === 1,
-    hosting: () => resort.hosted,
-    seed: STAFF_SEED,
-  });
-  const staff = staffCrowdFor({
-    network,
+  const staffCast = createCast(staffPool.count, places);
+  const staff = buildCrowdField({
+    crowd: state.staff.crowd,
     models: parts.staff,
     lightVolume: lighting.volume,
-    staff: employed,
-    routeOf: (worker, at) => staffRouter.step(worker, at),
     drawnAs: staffCast,
   });
-  staffField = staff;
-  const workers = staff.crowd;
-  for (let worker = 0; worker < employed.count; worker++) {
-    if (duty[worker] === 1) continue;
-    takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
-  }
   const balloons = balloonsFor({
     shore,
     span: spanOf(plan),
@@ -1838,17 +1312,8 @@ function buildResort(
   });
   const sea = seaFor(waters, rentals);
 
-  const events = createEvents(population);
-  events.programme = withBuiltIns(
-    events.programme,
-    BUILT_INS,
-    stageKeysOf(venues),
-    stageRank(venues),
-  );
-
-  const resort: Resort = {
-    plan,
-    plot,
+  // The same object, not a copy: the routers' callbacks write the state they were built with.
+  const resort: Resort = Object.assign(state, {
     lighting,
     world,
     shadows,
@@ -1861,16 +1326,16 @@ function buildResort(
     staffCast,
     casting: {
       count: population,
-      venueOf: (person) => router.venueIndexOf(person),
-      isWaiting: (person) => router.isWaitingAt(person),
-      queuePlace: (person) => router.queuePlaceOf(person),
-      isAsleep: (person) => router.isAsleep(person),
-      isPresent: (person) => guests.present[person] === 1,
-      isChild: (person) => guests.child[person] === 1,
-      partyOf: (person) => guests.party[person]!,
-      inChair: (person) => usesWheelchair(guests, person),
+      venueOf: (person: number) => router.venueIndexOf(person),
+      isWaiting: (person: number) => router.isWaitingAt(person),
+      queuePlace: (person: number) => router.queuePlaceOf(person),
+      isAsleep: (person: number) => router.isAsleep(person),
+      isPresent: (person: number) => guests.present[person] === 1,
+      isChild: (person: number) => guests.child[person] === 1,
+      partyOf: (person: number) => guests.party[person]!,
+      inChair: (person: number) => usesWheelchair(guests, person),
       bathing: {
-        restingUntil: (person) => router.restingUntil(person),
+        restingUntil: (person: number) => router.restingUntil(person),
         // A getter: relocate replaces the crowd.
         get crowd() {
           return resort.crowd.crowd;
@@ -1886,69 +1351,18 @@ function buildResort(
       z: new Float32Array(population),
     },
     staffDrawnAt: {
-      x: new Float32Array(employed.count),
-      y: new Float32Array(employed.count),
-      z: new Float32Array(employed.count),
+      x: new Float32Array(staffPool.count),
+      y: new Float32Array(staffPool.count),
+      z: new Float32Array(staffPool.count),
     },
-    staffRouter,
-    staffPool: employed,
-    hiring: AUTO_HIRING,
-    recommended,
-    roster,
-    duty,
-    zones: createZones(plan.tilesX, plan.tilesZ),
-    rights: liveRightsOf(plan),
-    zoneOf: new Int8Array(employed.count).fill(NO_ZONE),
-    venueZones: new Int32Array(venues.length),
-    lodgingZones: new Int32Array(lodgings.length),
-    guests,
-    needs,
-    happiness,
-    events,
-    eventBooked: new Uint8Array(venues.length),
-    eventShowing: new Uint8Array(venues.length),
-    djOn: new Uint8Array(venues.length),
-    hosted: NO_HOSTED,
-    invited: createPartyRuns(guests.parties.length),
-    keen: new Uint8Array(guests.parties.length),
-    keenShow: null,
-    nightOutUntil: new Int32Array(guests.parties.length).fill(-1),
-    homeEarly: new Set(),
-    nightOwls: new Set(),
-    settled: new Set(),
-    fireworksNight: false,
-    ...keptFactsOf(facts),
-    upkeep,
-    breakdowns,
-    litter,
-    footfall: createFootfall(network.nodes.length),
+    launchSites: facts.launchSites,
     overlay,
-    carrying,
-    thoughts: createThoughts(population),
-    thoughtDay: createDay(),
-    reviews: [],
-    // Every resort is built on a clock restarted at day 0, and a load restores its own counts.
-    today: startDay(0),
-    history: [],
-    rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
-    // A plot with no paving is a building site; a generated one is a resort already running,
-    // and the benchmark must see it running.
-    open: !building,
-    arrivalsPlanned: 0,
-    arrivalsAdmitted: 0,
-    newcomers: [],
-    beds: { total: beds.beds, taken: beds.taken },
-    router,
-    arrivals,
-    ledger: createLedger('sandbox', OPENING_BALANCE.sandbox),
-    takings: new Map(),
     balloons,
     litterField,
     ballField,
     flames,
     burning: '',
     sea,
-    shore,
     terrain,
     // The sea is not in it: what water takes is a rule about the object, not a held tile.
     // Off the layout's lists: a benchmark's tiled copies would all claim their originals' tiles.
@@ -1971,8 +1385,7 @@ function buildResort(
       resort.sea.dispose();
       lighting.volume?.dispose();
     },
-  };
-  rezone(resort);
+  });
   recastAll(resort);
   return resort;
 }
@@ -2265,112 +1678,6 @@ function lightRooms(resort: Resort, last: number | null): number {
   return share;
 }
 
-// Off the graph, a guest is on the sand, where only the litter counts: scenery there is not
-// fielded, so an unlittered beach reads as it always has.
-function surroundingsOf(resort: Resort, person: number): number {
-  const { node, network } = resort.crowd.crowd;
-  const at = network.nodes[node[person] ?? -1];
-  if (at) {
-    return mindedAt(resort, at.tileX, at.tileZ, sceneryAt(resort.scenery, at.tileX, at.tileZ));
-  }
-  const tile = sandTileOf(resort, person);
-  const { tilesX } = resort.litter;
-  return tile < 0 ? 0 : mindedAt(resort, tile % tilesX, Math.floor(tile / tilesX), 0);
-}
-
-// The litter grid's index of the beach tile under the body, or -1 off the beach.
-function sandTileOf(resort: Resort, person: number): number {
-  const { x, z } = resort.crowd.crowd;
-  const tileX = Math.floor(x[person]! / TILE_VOXELS);
-  const tileZ = Math.floor(z[person]! / TILE_VOXELS);
-  return isBeach(resort.shore, tileX, tileZ) ? tileZ * resort.litter.tilesX + tileX : -1;
-}
-
-function mindedAt(resort: Resort, tileX: number, tileZ: number, scenery: number): number {
-  const around = scenery - LITTER_WEIGHT * litterAt(resort.litter, tileX, tileZ);
-  return Math.min(1, Math.max(-1, around));
-}
-
-function hear(
-  resort: Resort,
-  tick: number,
-  person: number,
-  kind: ThoughtKind,
-  subject: string | null,
-): void {
-  if (think(resort.thoughts, person, kind, subject, tick)) {
-    tallyInto(resort.thoughtDay, kind, subject);
-  }
-}
-
-// A key the list lacks is the router's synthetic beach, which reads as spotless at -1.
-const venueIndexOf = (resort: Resort, key: string): number => resort.venueIndex.get(key) ?? -1;
-
-// After the visit wore it, so the last guest out of a dirty bar is the one who notices.
-function judgeVisit(resort: Resort, tick: number, person: number, venue: Venue): void {
-  const clean = cleanliness(resort.upkeep, venueIndexOf(resort, venue.key));
-  const thought = visitThought(venue.role, clean);
-  if (thought) hear(resort, tick, person, thought, venue.label);
-}
-
-// A mishap in water somebody is watching is ten times rarer; the beach is watched from a tower.
-function riskTheWater(resort: Resort, tick: number, person: number, venue: Venue): void {
-  if (venue.bathing !== true) return;
-  const index = venueIndexOf(resort, venue.key);
-  const { staffRouter } = resort;
-  const watched = index >= 0 ? staffRouter.watching(index) : staffRouter.watchingBeach;
-  if (!mishap(person, tick, watched)) return;
-  hurt(resort.needs, person);
-  hear(resort, tick, person, 'hurt', venue.label);
-}
-
-function burnOnTheBeach(resort: Resort, clock: Clock): void {
-  if (clock.weather !== 'heatwave') return;
-  const { router } = resort;
-  burnTheSunbathers(
-    resort.needs,
-    resort.guests.present,
-    (person) => router.isSunbathing(person),
-    Math.floor(clock.ticks / TICKS_PER_HOUR),
-    (person) => hear(resort, clock.ticks, person, 'hurt', null),
-  );
-}
-
-function hearSurroundings(resort: Resort, tick: number): void {
-  for (let person = 0; person < resort.guests.count; person++) {
-    const thought = lookAround(resort, person);
-    if (thought) hear(resort, tick, person, thought, null);
-  }
-}
-
-// Asleep guests are skipped: a bed is not a view.
-function lookAround(resort: Resort, person: number): ThoughtKind | null {
-  if (resort.guests.present[person] !== 1 || resort.router.isAsleep(person)) return null;
-  return surroundingsThought(surroundingsOf(resort, person));
-}
-
-// Only members still here and still of this party: a body is reused by later parties.
-function reviewOfParty(resort: Resort, party: number): Review | null {
-  const { guests, happiness } = resort;
-  const { kind, family, members: listed } = guests.parties[party]!;
-  const members = listed.filter(
-    (member) => guests.present[member] === 1 && guests.party[member] === party,
-  );
-  const spokesperson = members.find((member) => guests.child[member] !== 1) ?? members[0];
-  if (spokesperson === undefined) return null;
-  return reviewFor({
-    thoughts: resort.thoughts,
-    members,
-    spokesperson,
-    party,
-    family,
-    partyKind: kind,
-    name: fullNameOf(guests, spokesperson),
-    nights: guests.nights[spokesperson]!,
-    happiness: (member) => happiness.stay[member] ?? 0,
-  });
-}
-
 function voicesOf(resort: Resort): VoicesView {
   return { loudest: loudest(resort.thoughtDay, LOUDEST_SHOWN), reviews: resort.reviews };
 }
@@ -2391,56 +1698,9 @@ function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | nu
   };
 }
 
-// The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
-const hourTurned = (from: number, to: number): boolean =>
-  Math.floor(to / TICKS_PER_HOUR) > Math.floor((from - 1) / TICKS_PER_HOUR);
-
-// Runs on every node and every sand leg every guest reaches, so it allocates nothing. At the
-// end of a leg the body stands on the waypoint, which is the tile a wrapper falls on.
-function stepLitterAt(resort: Resort, person: number, at: number): void {
-  const tile = tileReachedAt(resort, person, at);
-  if (tile < 0) return;
-  const { litter } = resort;
-  const tileX = tile % litter.tilesX;
-  const tileZ = Math.floor(tile / litter.tilesX);
-  stepWith(litter, resort.carrying, resort.binCover, person, tileX, tileZ);
-}
-
-function tileReachedAt(resort: Resort, person: number, at: number): number {
-  if (at === ON_SAND) return sandTileOf(resort, person);
-  const node = resort.crowd.crowd.network.nodes[at];
-  return node ? node.tileZ * resort.litter.tilesX + node.tileX : -1;
-}
-
-// A hash with its own multiplier, so it is not the wrapper's draw for the same visit, and never
-// the router's stream, whose draws would move every seeded scene after it.
-function leaveOnTheBeach(resort: Resort, person: number, tick: number): void {
-  if ((mix(person * 40_503 + tick) % 1024) / 1024 >= BEACH_LITTER) return;
-  const tile = sandTileOf(resort, person);
-  if (tile < 0) return;
-  const { litter } = resort;
-  dropAt(litter, resort.binCover, tile % litter.tilesX, Math.floor(tile / litter.tilesX));
-}
-
 interface DrawnLitter {
   readonly litter: Litter | null;
   readonly version: number;
-}
-
-const pavingIndices = new WeakMap<WalkNetwork, NodeIndex>();
-
-// The crowd is handed this very graph, so the first litter draw finds its index built.
-const knowPaving = (facts: PlotFacts): void => {
-  pavingIndices.set(facts.network, facts.paving);
-};
-
-function pavingIndexOf(network: WalkNetwork): NodeIndex {
-  let index = pavingIndices.get(network);
-  if (!index) {
-    index = nodeIndexFor(network);
-    pavingIndices.set(network, index);
-  }
-  return index;
 }
 
 // Only on a change: litter moves a few times an hour, and a write touches every slot. The grid
@@ -2459,24 +1719,6 @@ function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
     piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length, litterWindowOf(resort)),
   );
   return { litter, version: litter.version };
-}
-
-interface TileAt {
-  readonly tileX: number;
-  readonly tileZ: number;
-}
-
-// The shore never moves with an edit, so a resort sweeps its sand once.
-const beachTileLists = new WeakMap<Shore, readonly TileAt[]>();
-
-function beachTilesFor(shore: Shore | null): readonly TileAt[] {
-  if (!shore) return [];
-  let tiles = beachTileLists.get(shore);
-  if (!tiles) {
-    tiles = beachTilesOf(shore).map(({ x, z }) => ({ tileX: x, tileZ: z }));
-    beachTileLists.set(shore, tiles);
-  }
-  return tiles;
 }
 
 const sandSlotLists = new WeakMap<WalkNetwork, readonly TileAt[]>();
@@ -2579,11 +1821,6 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
   });
 }
 
-const NO_HOSTED: readonly { readonly venue: number; readonly until: number }[] = [];
-
-const runVenueOf = (resort: Resort, run: EventRun): number =>
-  heldAt(run.occurrence.site, run.occurrence.kind, resort.siteVenues);
-
 const undressed = (): void => {};
 
 function relabelVenues(resort: Resort): void {
@@ -2592,358 +1829,7 @@ function relabelVenues(resort: Resort): void {
   resort.router.relabel(resort.venues);
 }
 
-const beachIndexOf = (resort: Resort): number =>
-  resort.siteVenues.length > resort.venues.length ? resort.venues.length : -1;
-
-// The event a visit was made to: the party was invited to it there, or the person watched it.
-const eventVisitOf = (resort: Resort, person: number, venue: Venue): EventRun | null =>
-  runOfVisit(
-    resort.events,
-    resort.guests.party[person]!,
-    person,
-    resort.siteVenueIndex.get(venue.key) ?? -1,
-    (run) => runVenueOf(resort, run),
-  );
-
-// A hash, not the router's stream: a draw from it would move every seeded scene after it.
-function visitMade(resort: Resort, person: number, venue: Venue, tick: number): void {
-  const show = eventVisitOf(resort, person, venue);
-  const draw = (mix(person * 2_654_435_761 + tick) % 1024) / 1024;
-  pickUp(resort.carrying, person, visitLitter(show, venue.litter ?? 0), draw);
-  if (isTheBeach(venue)) leaveOnTheBeach(resort, person, tick);
-  judgeVisit(resort, tick, person, venue);
-  riskTheWater(resort, tick, person, venue);
-  // An event is free to see.
-  if (!show) payForVisit(resort, venue);
-}
-
-function payForVisit(resort: Resort, venue: Venue): void {
-  const earned = priceOf(venue.id);
-  resort.ledger = record(resort.ledger, 'visit', earned);
-  earn(resort.takings, venue.key, earned);
-}
-
-// Today's weather is the clock's, which may be pinned; a pinned weather holds every day ahead too.
-function weatherOnDay(clock: Clock, day: number): Weather {
-  if (day === clock.day) return clock.weather;
-  return clock.forcedWeather ?? weatherOn(day, WEATHER_SEED);
-}
-
-function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
-  const venues = resort.siteVenues;
-  return {
-    mode: resort.ledger.mode,
-    weatherOn: (day) => weatherOnDay(clock, day),
-    hasSite: (site, kind) => heldAt(site, kind, venues) >= 0,
-    // The router's own door rule, so an event is called off exactly when its stage is shut.
-    siteOpen: (site, weather, kind) => {
-      const venue = venues[heldAt(site, kind, venues)];
-      return venue !== undefined && isOpenIn(shelterOf(venue), weatherEffect(weather));
-    },
-    hostOnDuty: resort.roster.animator > 0,
-    canPay: (fee) => canAfford(resort.ledger, fee),
-    stages: resort.stages,
-  };
-}
-
-function refreshEventVenues(resort: Resort, now: number): void {
-  const { events, venues } = resort;
-  if (resort.eventBooked.length !== venues.length) {
-    resort.eventBooked = new Uint8Array(venues.length);
-    resort.eventShowing = new Uint8Array(venues.length);
-  }
-  bookedVenues(events.runs, events.programme, venues, now, resort.eventBooked);
-  showingVenues(events.runs, venues, resort.eventShowing);
-  resort.hosted = events.runs.length === 0 ? NO_HOSTED : hostedShows(events.runs, venues);
-}
-
-function urgencyBesidesFun(resort: Resort, person: number): number {
-  const want = strongestNeed(resort.needs, resort.guests, person);
-  return want && want.need !== 'fun' ? want.urgency : 0;
-}
-
-function freePartiesOf(resort: Resort): () => readonly AudienceParty[] {
-  let free: readonly AudienceParty[] | null = null;
-  return () =>
-    (free ??= partiesOf(
-      resort.guests,
-      (person) => resort.router.isFree(person),
-      (person) => urgencyBesidesFun(resort, person),
-    ));
-}
-
-// A party resting on the sand is free to watch from where it lies.
-function freeOnTheSandOf(resort: Resort): () => readonly AudienceParty[] {
-  const { router } = resort;
-  return () =>
-    partiesOf(
-      resort.guests,
-      (person) => router.isFree(person) || router.stayOf(person) === 'resting',
-      (person) => urgencyBesidesFun(resort, person),
-    );
-}
-
-function stageRoomOf(resort: Resort, venue: number): number {
-  const declared = resort.siteVenues[venue]!;
-  const there = resort.router.occupancyOf(declared.key) ?? { inside: 0, waiting: 0 };
-  return declared.capacity - there.inside - there.waiting;
-}
-
-// The sand's own room on the beach, whose capacity has no door to count at.
-function roomAt(resort: Resort, run: EventRun, venue: number): number {
-  if (venue !== beachIndexOf(resort)) return stageRoomOf(resort, venue);
-  const there = (person: number): boolean => resort.router.venueIndexOf(person) === venue;
-  return watchRoom(resort.beachTiles) - peopleThere(run, resort.guests, there);
-}
-
-// On the index before the router is asked, so a party invited where it lies is told the end.
-function inviteParty(resort: Resort, run: EventRun, person: number, venue: number): boolean {
-  const party = resort.guests.party[person]!;
-  markParty(resort.invited, party, run.occurrence.end, venue);
-  if (resort.router.invite(person, venue)) return true;
-  markParty(resort.invited, party, -1, -1);
-  return false;
-}
-
-function inviteTo(resort: Resort, run: EventRun, free: () => readonly AudienceParty[]): void {
-  const venue = runVenueOf(resort, run);
-  if (!resort.siteVenues[venue]) return;
-  const { router } = resort;
-  inviteAudience(resort.events, run, {
-    guests: resort.guests,
-    room: roomAt(resort, run, venue),
-    free: venue === beachIndexOf(resort) ? freeOnTheSandOf(resort) : free,
-    isThere: (person) => router.venueIndexOf(person) === venue,
-    invite: (person) => inviteParty(resort, run, person, venue),
-  });
-}
-
-// Not only twice: a keen party reaching the sand after the start would lie down on a pitch of its
-// own, so the sand is asked again on every tick until the end, while there is room.
-function topUpTheSand(resort: Resort): void {
-  const beach = beachIndexOf(resort);
-  if (beach < 0) return;
-  for (const run of resort.events.runs) {
-    if (runVenueOf(resort, run) === beach) inviteTo(resort, run, freeOnTheSandOf(resort));
-  }
-}
-
-function refreshInvited(resort: Resort): void {
-  const parties = resort.guests.parties.length;
-  if (resort.invited.end.length < parties) resort.invited = createPartyRuns(parties);
-  indexParties(resort.events.runs, (run) => runVenueOf(resort, run), resort.invited);
-}
-
-// Hourly, at check-in, on a booking and on a load: the keen are those tonight's show will invite.
-function refreshKeen(resort: Resort, clock: Clock): void {
-  const { programme } = resort.events;
-  const facts = eventFactsOf(resort, clock);
-  resort.keenShow = tonightsShow({
-    programme,
-    now: clock.ticks,
-    open: (site, kind) => facts.siteOpen(site, clock.weather, kind),
-    settled: resort.settled,
-  });
-  resort.fireworksNight = isFireworksNight(programme, clock.day);
-  resort.keen = keenParties(resort.guests, resort.keenShow, resort.keen);
-}
-
-function refreshDj(resort: Resort, clock: Clock): void {
-  const { venues } = resort;
-  if (resort.djOn.length !== venues.length) resort.djOn = new Uint8Array(venues.length);
-  const effect = weatherEffect(clock.weather);
-  for (const [index, venue] of venues.entries()) {
-    const broken = isBroken(resort.breakdowns, index);
-    resort.djOn[index] = Number(djPlays(venue, effect, clock.tickOfDay, broken));
-  }
-}
-
-const isOutTonight = (resort: Resort, party: number, now: number): boolean =>
-  (resort.nightOutUntil[party] ?? -1) > now && !resort.homeEarly.has(party);
-
-// Last orders: a venue that is shut by then is no reason to stay out.
-const LATE_CHECK = 23 * TICKS_PER_HOUR;
-
-function lateVenueTonight(resort: Resort, clock: Clock): boolean {
-  const effect = weatherEffect(clock.weather);
-  return resort.venues.some(
-    (venue, index) =>
-      venue.hours !== undefined &&
-      !resort.unreachable.has(venue.key) &&
-      !isBroken(resort.breakdowns, index) &&
-      openNow(venue, effect, LATE_CHECK),
-  );
-}
-
-function refreshNightOut(resort: Resort, clock: Clock): void {
-  const { parties, child } = resort.guests;
-  if (resort.nightOutUntil.length < parties.length) {
-    resort.nightOutUntil = new Int32Array(parties.length);
-  }
-  if (lateVenueTonight(resort, clock)) {
-    planNightsOut(parties, child, nightOf(clock.ticks), resort.nightOutUntil);
-  } else resort.nightOutUntil.fill(-1);
-}
-
-const isOutAndUp = (resort: Resort, party: number, now: number): boolean =>
-  isOutTonight(resort, party, now) &&
-  resort.guests.parties[party]!.members.some(
-    (member) => resort.guests.present[member] === 1 && !resort.router.isAsleep(member),
-  );
-
-// Hourly: whoever is still out and awake past ten wakes the worse for it.
-function markNightOwls(resort: Resort, clock: Clock): void {
-  if (!isPastTen(clock.tickOfDay)) return;
-  for (let party = 0; party < resort.guests.parties.length; party++) {
-    if (isOutAndUp(resort, party, clock.ticks)) resort.nightOwls.add(party);
-  }
-}
-
-// The keen go to bed with the show over, whether or not they were ever invited.
-function sendTheKeenToBed(resort: Resort, now: number): void {
-  if (!resort.keenShow || now < resort.keenShow.end) return;
-  resort.keen.fill(0);
-  resort.keenShow = null;
-}
-
-function endEvent(resort: Resort, run: EventRun, now: number): void {
-  const kind = eventKindOf(run.occurrence);
-  const ended = endRun(
-    resort.events,
-    run,
-    resort.guests,
-    (person) => stayCount(resort.thoughts, person, kind.praise),
-    (person, amount) => remember(resort.happiness, person, amount),
-  );
-  const label = eventLabelOf(kind, run.occurrence.tier);
-  for (const person of ended.people) hear(resort, now, person, kind.praise, label);
-  resort.today = countEvent(resort.today, ended.tally);
-  if (kind.id === 'welcome' && ended.tally.held > 0) {
-    resort.today = countWelcomed(resort.today, ended.tally.audience);
-  }
-}
-
-// Its stage gone only when no stage stands: one pulled down mid-meeting leaves others to use.
-function noteWelcomeCalledOff(resort: Resort, step: CallOffStep): void {
-  const gone = step.reason === 'no-site' && stageKeysOf(resort.venues).length === 0;
-  resort.today = noteWelcomeGap(resort.today, gone ? 'no-stage' : 'called-off');
-}
-
-// A built-in left with no stage is the advice's to tell: it would be called off every day.
-const quietCallOff = (step: CallOffStep): boolean =>
-  step.reason === 'no-site' && eventKindOf(step.occurrence).builtIn === true;
-
-function callOffEvent(resort: Resort, step: CallOffStep, now: number): void {
-  const kind = eventKindOf(step.occurrence);
-  const label = eventLabelOf(kind, step.occurrence.tier);
-  resort.settled.add(bookingDayKey(step.occurrence));
-  if (kind.id === 'welcome') noteWelcomeCalledOff(resort, step);
-  if (quietCallOff(step)) return;
-  resort.ledger = record(resort.ledger, 'events', step.refund);
-  const called = callOffRun(step, resort.guests);
-  for (const person of called.people) hear(resort, now, person, 'called-off', label);
-  resort.today = countEvent(resort.today, called.tally);
-}
-
-type StepOf<Kind extends EventStep['kind']> = Extract<EventStep, { readonly kind: Kind }>;
-
-interface StepContext {
-  readonly resort: Resort;
-  readonly now: number;
-  readonly free: () => readonly AudienceParty[];
-}
-
-// What each step does to the resort. The rockets are not drawn from here but from the runs, so a
-// load or a dragged clock plays the same show.
-const EVENT_STEPS: {
-  readonly [kind in EventStep['kind']]: (step: StepOf<kind>, context: StepContext) => void;
-} = {
-  announce: (step, { resort, free }) => inviteTo(resort, step.run, free),
-  start: (step, { resort, free }) => {
-    resort.ledger = record(resort.ledger, 'events', -step.fee);
-    inviteTo(resort, step.run, free);
-  },
-  end: (step, { resort, now }) => endEvent(resort, step.run, now),
-  'call-off': (step, { resort, now }) => callOffEvent(resort, step, now),
-  postpone: (step, { resort }) => {
-    resort.settled.add(bookingDayKey(step.occurrence));
-    resort.today = countEvent(resort.today, { held: 0, audience: 0, called: 0, postponed: 1 });
-  },
-};
-
-const settles = (step: EventStep): boolean => step.kind === 'call-off' || step.kind === 'postpone';
-
-function applyEventSteps(resort: Resort, steps: readonly EventStep[], now: number): void {
-  const context: StepContext = { resort, now, free: freePartiesOf(resort) };
-  for (const step of steps) {
-    (EVENT_STEPS[step.kind] as (step: EventStep, context: StepContext) => void)(step, context);
-  }
-}
-
-// Every frame, as a party comes off the desk free at no particular moment.
-function callLatecomers(resort: Resort, now: number): void {
-  if (resort.newcomers.length === 0) return;
-  for (const run of resort.events.runs) {
-    const kind = eventKindOf(run.occurrence);
-    if (kind.latecomers !== true) continue;
-    inviteTo(resort, run, () =>
-      latecomersFor({
-        run,
-        kind,
-        newcomers: resort.newcomers,
-        guests: resort.guests,
-        isFree: (person) => resort.router.isFree(person),
-        urgency: (person) => urgencyBesidesFun(resort, person),
-        now,
-      }),
-    );
-  }
-}
-
-// After the routers' ticks: the invitations and the end of a show act on where everybody now is.
-function runEvents(
-  resort: Resort,
-  clock: Clock,
-  ticks: number,
-  heard: (steps: readonly EventStep[]) => void,
-): void {
-  const { events } = resort;
-  const now = clock.ticks;
-  const advance = advanceEvents(events, now - ticks + 1, now, eventFactsOf(resort, clock));
-  events.programme = advance.programme;
-  events.runs = advance.runs;
-  applyEventSteps(resort, advance.steps, now);
-  callLatecomers(resort, now);
-  topUpTheSand(resort);
-  refreshInvited(resort);
-  if (advance.steps.some(settles)) refreshKeen(resort, clock);
-  sendTheKeenToBed(resort, now);
-  if (advance.steps.length > 0) heard(advance.steps);
-  refreshEventVenues(resort, now);
-  const hours = ticks / TICKS_PER_HOUR;
-  const { router } = resort;
-  const beach = beachIndexOf(resort);
-  // On the sand only once settled: somebody still walking out is not yet watching.
-  entertain(
-    events,
-    resort.needs,
-    resort.guests,
-    (person, venue) =>
-      router.venueIndexOf(person) === venue &&
-      !router.isWaitingAt(person) &&
-      (venue !== beach || router.stayOf(person) === 'resting'),
-    (run) => runVenueOf(resort, run),
-    hours,
-  );
-  fadeGlow(events.glow, hours);
-}
-
 const WEEK_TICKS = 7 * TICKS_PER_DAY;
-
-const runningShowOf = (resort: Resort): EventRun | null =>
-  resort.events.runs.find(
-    (run) => run.phase === 'running' && eventKindOf(run.occurrence).id === 'fireworks',
-  ) ?? null;
 
 // Follows the run rather than its start and end steps, so a load mid-show, a call-off and a
 // dragged clock all come out right with no case of their own.
@@ -3039,192 +1925,6 @@ function keepProgrammeStanding(resort: Resort, wasStanding: readonly Venue[]): v
   const before = new Set(stageKeysOf(wasStanding));
   const built = stages.filter((key) => !before.has(key));
   resort.events.programme = toNewStage(withBuiltIns(kept, BUILT_INS, stages, rank), built, rank);
-}
-
-function runTicks(
-  resort: Resort,
-  clock: Clock,
-  ticks: number,
-  lastShare: number | null,
-  morning: () => void,
-  hourly: () => void,
-  heardEvents: (steps: readonly EventStep[]) => void,
-): number {
-  decayNeeds(resort.needs, resort.guests, ticks, weatherEffect(clock.weather), (person) =>
-    resort.router.isAsleep(person),
-  );
-  // One tick at a time: a place freed on the first tick must let somebody in on the first.
-  for (let tick = ticks; tick > 0; tick--) {
-    resort.router.tick(clock.ticks - tick + 1);
-    // Same tick as the guests', so a venue cleaned on the first tick is clean for whoever decides
-    // next.
-    resort.staffRouter.tick(clock.ticks - tick + 1);
-  }
-  // Once a frame, not once a tick: the inner loop is the router's, and a frame's sample is plenty.
-  sampleFootfall(
-    resort.footfall,
-    resort.crowd.crowd.node,
-    resort.guests.present,
-    resort.happiness.level,
-  );
-  runEvents(resort, clock, ticks, heardEvents);
-  // After the ticks, so a guest is charged for the line they were actually in.
-  const { glow } = resort.events;
-  ageHappiness(
-    resort.happiness,
-    resort.needs,
-    resort.guests,
-    (person) => resort.router.isWaitingAt(person),
-    ticks,
-    (person) => surroundingsOf(resort, person),
-    (person) => glow[person]!,
-  );
-  // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
-  if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
-    payTheBills(resort);
-    rateTheDay(resort);
-    closeTheDay(resort, clock.day);
-    runDay(resort, clock.day);
-    resort.settled.clear();
-    refreshKeen(resort, clock);
-    refreshNightOut(resort, clock);
-    // After the coaches and before the counters are wiped, which the advice reads.
-    morning();
-    resort.router.forgetTheDay();
-    resort.thoughtDay.clear();
-    fadeFootfall(resort.footfall);
-  }
-  // After the morning's wipe, so the first hour of a day is heard in that day.
-  if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
-    hearSurroundings(resort, clock.ticks);
-    burnOnTheBeach(resort, clock);
-    refreshKeen(resort, clock);
-    refreshNightOut(resort, clock);
-    markNightOwls(resort, clock);
-    hourly();
-  }
-  admitLaterWaves(resort, clock, ticks);
-  refreshDj(resort, clock);
-  // A booked event cheers its own audience, so a show on the same stage does not cheer them twice.
-  cheerTheAudience(resort.needs, resort.guests.present, {
-    performing: (venue) =>
-      (resort.staffRouter.performingAt(venue) || resort.djOn[venue] === 1) &&
-      resort.eventShowing[venue] !== 1,
-    venueOf: (person) => resort.router.venueIndexOf(person),
-    waiting: (person) => resort.router.isWaitingAt(person),
-    venues: resort.venues.length,
-    hours: ticks / TICKS_PER_HOUR,
-  });
-  return lightRooms(resort, lastShare);
-}
-
-// Stood at the node first, or a body dealt on an empty plot walks in from the origin.
-function enterAt(crowd: Crowd, i: number, node: number): void {
-  const at = crowd.network.nodes[node];
-  if (at) holdAt(crowd, i, at.x, at.y, at.z, crowd.heading[i] ?? 0);
-  putOnPlot(crowd, i, node);
-}
-
-// After the relocate, so the arrival node is on the graph the staff crowd now walks. Rezoned
-// before anybody clocks on, so a zoned worker starts at a depot in their zone.
-function staffTheResort(resort: Resort): void {
-  const { recommended, roster, duty } = rosterNow(resort);
-  const workers = resort.staff.crowd;
-  const shift = shiftChange(duty, workers.offPlot);
-  resort.recommended = recommended;
-  resort.roster = roster;
-  resort.duty = duty;
-  rezone(resort);
-  for (const worker of shift.leaving) resort.staffRouter.clockOff(worker);
-  // No paving yet: they are owed their shift at the next edit that lays some.
-  if (workers.network.edges.length === 0) return;
-  const entries = clockOnNodes(resort, shift.starting);
-  for (const [turn, worker] of shift.starting.entries()) {
-    enterAt(workers, worker, entries[turn]!);
-    resort.staffRouter.clockOn(worker);
-  }
-}
-
-// With no staff house, at the entrance; with no entrance either, at node 0: anywhere on the
-// paving beats waiting for a gate.
-function clockOnNodes(resort: Resort, starting: readonly number[]): readonly number[] {
-  const network = resort.staff.crowd.network;
-  const index = pavingIndexOf(network);
-  const doors = resort.depots
-    .map((depot) => ({ depot, node: doorsFor(depot, index).nodes[0] ?? -1 }))
-    .filter((door) => door.node >= 0);
-  const depotZones = zonesOfPlaces(
-    resort.zones,
-    doors.map((door) => door.depot),
-    network,
-  );
-  const arrival = Math.max(0, resort.router.arrivalNode);
-  return starting.map((worker, turn) => {
-    const depot = depotForShift(turn, resort.zoneOf[worker] ?? NO_ZONE, depotZones);
-    return depot < 0 ? arrival : doors[depot]!.node;
-  });
-}
-
-// A zone holds a workplace for a role wherever that role's task choice could send somebody, so
-// nobody is dealt to a zone with no work for them. Cleaners sweep paving and sand and make up
-// rooms, so those count too.
-function rezone(resort: Resort): void {
-  const { zones, venues, lodgings } = resort;
-  if (!anyZone(zones)) {
-    resort.venueZones = new Int32Array(venues.length);
-    resort.lodgingZones = new Int32Array(lodgings.length);
-    resort.zoneOf = new Int8Array(resort.staffPool.count).fill(NO_ZONE);
-    return;
-  }
-  const network = resort.staff.crowd.network;
-  resort.venueZones = zonesOfPlaces(zones, venues, network);
-  resort.lodgingZones = zonesOfPlaces(zones, lodgings, network);
-  const held = workplaceZones(zones, venues, resort.venueZones, {
-    paved: network.nodes,
-    towers: network.posts.map((seat) => tileUnder(network.seats[seat]!)),
-    beach: beachTilesFor(resort.shore),
-  });
-  held.cleaner = resort.lodgingZones.reduce((mask, each) => mask | each, held.cleaner);
-  const roles = resort.staffPool.role.map((role) => STAFF_ROLES.indexOf(role));
-  resort.zoneOf = dealZones(
-    roles,
-    resort.duty,
-    STAFF_ROLES.map((role) => zonesIn(held[role])),
-  );
-}
-
-function zonesOfPlaces(
-  zones: Zones,
-  places: readonly (Venue | Lodging | Depot)[],
-  network: WalkNetwork,
-): Int32Array {
-  const index = pavingIndexOf(network);
-  return Int32Array.from(places, (place) =>
-    zonesOf(
-      zones,
-      place,
-      doorsFor(place, index).nodes.map((node) => network.nodes[node]!),
-    ),
-  );
-}
-
-const tileUnder = (spot: { readonly x: number; readonly z: number }) => ({
-  tileX: Math.floor(spot.x / TILE_VOXELS),
-  tileZ: Math.floor(spot.z / TILE_VOXELS),
-});
-
-// Shared with a load, which sets the duty without a shift change: the saved staff crowd already
-// has everyone where the save left them.
-function rosterNow(resort: Resort): {
-  readonly recommended: Roster;
-  readonly roster: Roster;
-  readonly duty: Uint8Array;
-} {
-  const recommended = rosterFor(
-    workplacesOf(resort.venues, resort.staff.crowd.network.posts, resort.lodgings),
-  );
-  const roster = rosterOf(resort.hiring, recommended);
-  return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
 }
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
@@ -3327,153 +2027,6 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     quietBeach: quietBeachOf(resort, now),
     welcomeless: stageKeysOf(resort.venues).length === 0 ? resort.today.arrived : 0,
   };
-}
-
-// Before the morning coach, so a day in the books runs from one check-in to the next.
-function payTheBills(resort: Resort): void {
-  const { plot } = resort;
-  const standing = [...plot.placements, ...plot.props].map((placement) =>
-    buildCostOf(placement.id),
-  );
-  const billed = record(resort.ledger, 'wages', -wagesFor(resort.roster));
-  resort.ledger = closeDay(record(billed, 'maintenance', -maintenanceFor(standing)));
-  resort.takings.clear();
-  // Into the new day, so a lodging's takings show the morning's rent until the next one.
-  const rent = nightBill(resort.guests, (home) => nightlyRate(resort, home), resort.takings);
-  resort.ledger = record(resort.ledger, 'night', rent);
-}
-
-function nightlyRate(resort: Resort, home: number): number {
-  const { id, key } = resort.guests.homes[home]!;
-  const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
-  return lodging ? nightPriceOf(id, sceneryOver(resort.scenery, lodging)) : priceOf(id);
-}
-
-function rateTheDay(resort: Resort): void {
-  const beds = bedCount(resort.guests);
-  resort.rating = ratingFor({
-    happiness: meanHappiness(resort.happiness, resort.guests),
-    present: presentCount(resort.guests),
-    housed: beds.taken,
-    cleanliness: meanCleanliness(resort.upkeep, resort.venues.length),
-  });
-}
-
-// Before the morning coach, which counts towards the new day. The first check-in of a resort
-// built that morning closes a period nobody played, so it only restarts the counts.
-function closeTheDay(resort: Resort, day: number): void {
-  if (resort.today.from !== day) {
-    noteMissedWelcome(resort);
-    const report = reportOf({
-      counts: resort.today,
-      rating: resort.rating,
-      present: presentCount(resort.guests),
-      beds: resort.beds,
-      ledger: resort.ledger,
-      thoughts: resort.thoughtDay,
-    });
-    resort.history = keepDay(resort.history, report);
-  }
-  resort.today = startDay(day);
-}
-
-// A day with no welcome run or called off had no stage for it, or had it switched off.
-function noteMissedWelcome(resort: Resort): void {
-  if (resort.today.arrived === 0 || resort.today.welcome !== undefined) return;
-  const gap = welcomeGapOf({
-    programme: resort.events.programme,
-    stages: stageKeysOf(resort.venues).length,
-    held: false,
-    called: false,
-  });
-  if (gap) resort.today = noteWelcomeGap(resort.today, gap);
-}
-
-function partiesArrivedOn(guests: Guests, day: number): number[] {
-  const parties = new Set<number>();
-  for (let person = 0; person < guests.count; person++) {
-    if (guests.present[person] === 1 && guests.arrivedOn[person] === day) {
-      parties.add(guests.party[person]!);
-    }
-  }
-  return [...parties];
-}
-
-function noteArrivedParties(resort: Resort, arrived: readonly number[]): void {
-  const known = new Set(resort.newcomers);
-  for (const person of arrived) {
-    const party = resort.guests.party[person]!;
-    if (!known.has(party)) resort.newcomers.push(party);
-    known.add(party);
-  }
-}
-
-// The rating comes first, so the morning coach is sized by the resort the current guests
-// experienced.
-function runDay(resort: Resort, day: number): void {
-  // Everybody kept up late has woken by now.
-  resort.events.tired.clear();
-  resort.homeEarly.clear();
-  resort.nightOwls.clear();
-  resort.newcomers = [];
-  resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
-  resort.arrivalsAdmitted = 0;
-  admitWave(resort, day, 0);
-  sendDepartures(resort, day);
-  const after = bedCount(resort.guests);
-  resort.beds = { total: after.beds, taken: after.taken };
-}
-
-// The first wave is the day's own check-in, run by runDay with the rating it is sized by.
-function admitLaterWaves(resort: Resort, clock: Clock, ticks: number): void {
-  for (const wave of wavesDue(clock.ticks - ticks + 1, clock.ticks)) {
-    if (wave > 0) admitWave(resort, clock.day, wave);
-  }
-}
-
-// No reachable gate or desk means no arrivals, which is a real state the advice reports.
-const canArrive = (resort: Resort): boolean =>
-  resort.open && resort.router.arrivalNode >= 0 && resort.router.receptionReachable;
-
-function admitWave(resort: Resort, day: number, wave: number): void {
-  const due = arrivalsDueBy(resort.arrivalsPlanned, wave);
-  const room = due - resort.arrivalsAdmitted;
-  if (!canArrive(resort) || room <= 0) {
-    resort.arrivalsAdmitted = Math.max(resort.arrivalsAdmitted, due);
-    return;
-  }
-  const arrived = runCheckIn({
-    guests: resort.guests,
-    needs: resort.needs,
-    happiness: resort.happiness,
-    rating: resort.rating,
-    day,
-    random: resort.arrivals,
-    room,
-  });
-  for (const person of arrived) {
-    // The body was somebody else's, and so was whatever it was holding and thinking.
-    resort.carrying.nodes[person] = 0;
-    forgetStay(resort.thoughts, person);
-    resort.events.glow[person] = 0;
-    resort.router.admit(person, resort.router.arrivalNode);
-  }
-  noteArrivedParties(resort, arrived);
-  resort.arrivalsAdmitted += arrived.length;
-  resort.today = countArrivals(resort.today, arrived.length);
-  const beds = bedCount(resort.guests);
-  resort.beds = { total: beds.beds, taken: beds.taken };
-}
-
-// Once a day, not per tick; asking twice is free, so a guest who could not reach a gate is asked
-// again tomorrow.
-function sendDepartures(resort: Resort, day: number): void {
-  const { guests } = resort;
-  for (let person = 0; person < guests.count; person++) {
-    if (guests.present[person] !== 1) continue;
-    if (guests.arrivedOn[person]! + guests.nights[person]! >= day) continue;
-    resort.router.sendHome(person);
-  }
 }
 
 interface Clock {
@@ -5644,7 +4197,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const facts = plotFactsOf({ plan, shore, terrain }, plot, resort.names);
     knowPaving(facts);
     const { network } = facts;
-    Object.assign(resort, keptFactsOf(facts));
+    Object.assign(resort, keptFactsOf(facts), { launchSites: facts.launchSites });
     // Before the router's rebuild, whose findHomes maps the new home indices.
     rehome(resort.guests, facts.homes);
     const beds = bedCount(resort.guests);
@@ -5740,7 +4293,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
       const simStarted = timer.start();
-      lastShare = runTicks(current(), clock, ticks, lastShare, morning, hourly, heardEvents);
+      stepSim(current(), clock, ticks, { morning, hourly, heard: heardEvents });
+      lastShare = lightRooms(current(), lastShare);
       recastAll(current());
       lightTheFires(current());
       timer.end('vox:frame:sim', simStarted, ticks);

@@ -45,6 +45,8 @@ catalogue; this one only moves when somebody edits it.
 
 3. `pnpm fixture:refresh`
 4. `pnpm test`, then re-measure the numbers pinned to it and `pnpm sim:report`.
+   `headless.test.ts` pins three days of the whole game on it: re-pin with
+   `pnpm vitest run headless -u`.
 
 `referenceResort.test.ts` fails when a model changes size, as the fixture still
 holds the old footprint: re-export, or edit the placement by hand. It also fails

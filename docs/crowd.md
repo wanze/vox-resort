@@ -30,6 +30,7 @@ Guests, staff, boats and balloons, and the simulation behind them.
 | Drawing                     | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts` |
 | Places and acts in a venue  | `choreography/domain/`                                              |
 | Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                     |
+| Game step, headless runs    | `resort-sim/domain/stepSim.ts`, `headless.ts`                       |
 
 ## Principles
 
@@ -103,9 +104,10 @@ crowd speed under bench, frame delta clamped to `MAX_STEP` otherwise.
 
 `pnpm sim:report` runs the sim headless for `SIM_DAYS` days on the reference
 resort ([fixtures/README.md](../fixtures/README.md)), which only moves when
-somebody edits it, so its numbers compare across changes. `SIM_PLOT=112x100
-SIM_SEED=1` runs a generated plot instead, and `SIM_SAVE=<save JSON>` a whole
-save.
+somebody edits it, so its numbers compare across changes. It runs the game's
+own step (`stepSim`), staff, events, bills and weather included, so its numbers
+are the game's. `SIM_PLOT=112x100 SIM_SEED=1` runs a generated plot instead,
+`SIM_SAVE=<save JSON>` a whole save, and `SIM_WEATHER=clear` pins the weather.
 
 ## Clock
 

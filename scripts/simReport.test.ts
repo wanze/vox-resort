@@ -2,32 +2,19 @@ import { readFileSync } from 'node:fs';
 import { it } from 'vitest';
 import referenceJson from '../fixtures/reference-resort.json';
 import { GUEST_NEEDS, type GuestNeed } from '../voxel-gen/voxelgen.ts';
-import { ORIGINAL_TYPES, venueOf } from '../src/features/catalog/domain/objectTypes';
-import { seatSiteOf } from '../src/features/catalog/domain/placementFacts';
-import { buildCostOf, priceOf } from '../src/features/catalog/domain/prices';
-import {
-  createCrowd,
-  isWaiting,
-  MAX_STEP,
-  stepCrowd,
-  takeOffPlot,
-  type Crowd,
-} from '../src/features/crowd/domain/crowd';
+import { ORIGINAL_TYPES } from '../src/features/catalog/domain/objectTypes';
+import { buildCostOf } from '../src/features/catalog/domain/prices';
+import { isWaiting, takeOffPlot, type Crowd } from '../src/features/crowd/domain/crowd';
 import { crowdSizeFor, crowdSizeForOwned } from '../src/features/crowd/domain/crowdSize';
-import { seatSpotsFor } from '../src/features/crowd/domain/seating';
-import { walkNetworkFor, type WalkNetwork } from '../src/features/crowd/domain/walkNetwork';
+import type { WalkNetwork } from '../src/features/crowd/domain/walkNetwork';
 import {
   bedCount,
   checkOutParty,
-  createGuests,
   homelessCount,
-  paceOf,
   presentCount,
   unmadeCount,
   type Guests,
 } from '../src/features/guests/domain/guests';
-import { elevationFor, levelAt } from '../src/features/layout/domain/elevation';
-import { createRandom } from '../src/features/layout/domain/random';
 import { clampParams, generateResort } from '../src/features/layout/domain/resortGenerator';
 import {
   layoutResort,
@@ -35,51 +22,24 @@ import {
   type Placement,
 } from '../src/features/layout/domain/resortLayout';
 import type { ResortPlan } from '../src/features/layout/domain/resortPlan';
-import { shoreFor } from '../src/features/layout/domain/shoreline';
-import { terrainFor } from '../src/features/layout/domain/terrain';
-import { ownedArea, ownedSpan, type TileSpan } from '../src/features/land/domain/landRights';
+import { ownedArea } from '../src/features/land/domain/landRights';
+import type { Plot } from '../src/features/resort-prep/domain/prepareResort';
 import { referenceWorldOf } from '../src/features/resort-prep/domain/referenceResort';
 import { planOfWorld, type SavedWorld } from '../src/features/resort-prep/domain/savedWorld';
-import {
-  arrivalsDueBy,
-  CHECK_IN_TICK,
-  checkInDue,
-  bedsOn,
-  freeBedsOn,
-  runCheckIn,
-  wavesDue,
-} from '../src/features/sim/domain/checkIn';
-import { crowdScaleFor } from '../src/features/sim/domain/crowdRate';
+import { createHeadlessGame, framesPerTickAt } from '../src/features/resort-sim/domain/headless';
+import type { SimNow } from '../src/features/resort-sim/domain/simNow';
+import { CHECK_IN_TICK, freeBedsOn } from '../src/features/sim/domain/checkIn';
 import { demandFor, type DemandLine } from '../src/features/sim/domain/demand';
-import { gatewaysOn } from '../src/features/sim/domain/gateways';
-import { ageHappiness, createHappiness, meanHappiness } from '../src/features/sim/domain/happiness';
-import { lodgingsOn } from '../src/features/sim/domain/lodgings';
-import {
-  createNeeds,
-  decayNeeds,
-  strongestNeed,
-  type Needs,
-} from '../src/features/sim/domain/needs';
-import { arrivalsFor, ratingFor } from '../src/features/sim/domain/rating';
-import { OPENING_BALANCE } from '../src/features/sim/domain/ledger';
-import { reviewFor } from '../src/features/sim/domain/reviews';
-import { createRouter, type Router } from '../src/features/sim/domain/router';
-import {
-  SPEED_DAY_SECONDS,
-  TICKS_PER_DAY,
-  type SimSpeed,
-} from '../src/features/sim/domain/simClock';
-import {
-  createDay,
-  createThoughts,
-  loudest,
-  tallyInto,
-  think,
-} from '../src/features/sim/domain/thoughts';
-import { rosterFor, wagesFor, workplacesOf } from '../src/features/sim/domain/staff';
-import { maintenanceFor, nightBill } from '../src/features/sim/domain/takings';
-import { createUpkeep } from '../src/features/sim/domain/upkeep';
-import { venuesOn, type Venue } from '../src/features/sim/domain/venues';
+import { createLedger, netOf, OPENING_BALANCE } from '../src/features/sim/domain/ledger';
+import { strongestNeed, type Needs } from '../src/features/sim/domain/needs';
+import type { Review } from '../src/features/sim/domain/reviews';
+import type { Router } from '../src/features/sim/domain/router';
+import { TICKS_PER_DAY, type SimSpeed } from '../src/features/sim/domain/simClock';
+import { wagesFor } from '../src/features/sim/domain/staff';
+import { maintenanceFor } from '../src/features/sim/domain/takings';
+import { loudest } from '../src/features/sim/domain/thoughts';
+import type { Venue } from '../src/features/sim/domain/venues';
+import { WEATHERS, type Weather } from '../src/features/sim/domain/weather';
 
 const [TILES_X, TILES_Z] = (process.env.SIM_PLOT ?? '112x100').split('x').map(Number) as [
   number,
@@ -101,10 +61,11 @@ const REFERENCE = !SAVE && process.env.SIM_PLOT === undefined && process.env.SIM
 // Rush caps the crowd's substeps, so guests there walk slower against the clock than at normal.
 const SPEED = (process.env.SIM_SPEED ?? 'normal') as SimSpeed;
 
-// The frames a normal-speed tick runs, so walks take as long as they do in the app.
-const FRAMES_PER_TICK = Math.round(
-  (crowdScaleFor(SPEED) * SPEED_DAY_SECONDS[SPEED]) / TICKS_PER_DAY / MAX_STEP,
-);
+// Unset, the weather is the game's own forecast: `clear` pins it, so a rule can be compared alone.
+const WEATHER = (process.env.SIM_WEATHER ?? null) as Weather | null;
+if (WEATHER !== null && !WEATHERS.includes(WEATHER)) {
+  throw new Error(`SIM_WEATHER is one of ${WEATHERS.join(', ')}, not ${WEATHER}`);
+}
 
 const OPENS_AT = 8 * 60;
 const HOUR = 60;
@@ -135,8 +96,7 @@ interface Ground {
   readonly placements: readonly Placement[];
   readonly props: readonly Placement[];
   readonly paths: readonly Placement[];
-  readonly levelOf: (tileX: number, tileZ: number) => number;
-  readonly span?: TileSpan;
+  readonly rails: readonly Placement[];
   readonly population?: number;
 }
 
@@ -145,20 +105,16 @@ function generatedGround(): Ground {
     TYPES,
     clampParams({ tilesX: TILES_X, tilesZ: TILES_Z, seed: SEED, density: 0.7 }),
   );
-  const elevation = elevationFor(plan);
-  return { plan, ...layoutResort(ITEMS, plan), levelOf: (x, z) => levelAt(elevation, x, z) };
+  return { plan, ...layoutResort(ITEMS, plan) };
 }
 
 function worldGround(world: SavedWorld): Ground {
-  const plan = planOfWorld(world);
-  const terrain = terrainFor(plan);
   return {
-    plan,
+    plan: planOfWorld(world),
     placements: world.placements,
     props: world.props,
     paths: world.paths,
-    levelOf: (x, z) => terrain.levelOf(x, z),
-    span: ownedSpan(plan.land ?? null, plan),
+    rails: world.rails,
   };
 }
 
@@ -190,33 +146,20 @@ function plotOf() {
   const ground = groundOf();
   const { plan } = ground;
   const layout = KEEP ? { ...ground, placements: kept(ground.placements), props: [] } : ground;
-  const standing = [...layout.placements, ...layout.props];
-  const network = walkNetworkFor({
-    paved: layout.paths,
-    levelOf: ground.levelOf,
-    shore: shoreFor(plan),
-    tilesX: plan.tilesX,
-    ...(ground.span ? { span: ground.span } : {}),
-    obstacles: standing,
-    seats: seatSpotsFor(standing.map(seatSiteOf)),
-  });
-  const homes = layout.placements
-    .map((placement) => ({ placement, venue: venueOf(placement.id) }))
-    .filter(({ venue }) => venue?.role === 'lodging' && (venue.beds ?? 0) > 0)
-    .map(({ placement, venue }) => ({
-      key: placement.key,
-      id: placement.id,
-      label: placement.id,
-      beds: venue!.beds!,
-    }))
-    .toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key));
-  const paths = PATH_TILES ?? layout.paths.length;
+  const { placements, props, paths, rails } = layout;
+  const plot: Plot = {
+    layout: { placements, props, paths, rails, tilesX: plan.tilesX, tilesZ: plan.tilesZ },
+    placements: [...placements],
+    props: [...props],
+    paths: [...paths],
+    rails: [...rails],
+  };
   const built = [
-    ...standing.map((placement) => buildCostOf(placement.id)),
-    paths * buildCostOf('path'),
+    ...[...placements, ...props].map((placement) => buildCostOf(placement.id)),
+    (PATH_TILES ?? paths.length) * buildCostOf('path'),
   ];
-  const population = ground.population ?? crowdSizeFor(layout.paths.length);
-  return { layout, network, homes, built, population };
+  const population = ground.population ?? crowdSizeFor(paths.length);
+  return { plan, plot, built, population };
 }
 
 function kept(placements: readonly Placement[]): Placement[] {
@@ -361,111 +304,92 @@ function needDayLine(day: NeedDay): string {
   return `${levels.join(', ')}; ${Math.round(100 * of(day.dry))}% awake with one run dry`;
 }
 
+// Reviews are kept newest first: those ahead of the newest seen are the ones written since.
+function newReviews(reviews: readonly Review[], seen: Review | undefined): readonly Review[] {
+  const at = seen === undefined ? -1 : reviews.indexOf(seen);
+  return at < 0 ? reviews : reviews.slice(0, at);
+}
+
 it('reports a few days on a generated plot', () => {
-  const { layout, network, homes, built, population } = plotOf();
-  const venues = venuesOn(layout.placements);
-  const lodgings = lodgingsOn(layout.placements);
-  const wages = wagesFor(rosterFor(workplacesOf(venues, network.posts, lodgings)));
-  const maintenance = maintenanceFor(built);
+  const { plan, plot, built, population } = plotOf();
   const buildCost = built.reduce((sum, cost) => sum + cost, 0);
-  let balance = OPENING_BALANCE.tycoon - buildCost;
-  const books = { nights: 0, visits: 0 };
   const needDay = createNeedDay();
-  const guests = createGuests({ count: population, homes, variants: 4, childVariant: 3, seed: 7 });
-  const needs = createNeeds(guests, 13);
-  const happiness = createHappiness(population);
-  const thoughts = createThoughts(population);
-  // Nobody cleans here, so it is reset every hour: this reports the guests, not the staff.
-  const upkeep = createUpkeep(venues.length);
-  let heard = createDay();
-  let tick = OPENS_AT;
+  const game = createHeadlessGame({
+    plan,
+    plot,
+    population,
+    startTick: OPENS_AT,
+    forcedWeather: WEATHER,
+  });
+  const { state } = game;
+  const { guests, needs, router, venues } = state;
+  const crowd = state.crowd.crowd;
+  const { network } = crowd;
+  state.ledger = createLedger('tycoon', OPENING_BALANCE.tycoon - buildCost);
+  if (OPENS_EMPTY) {
+    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
+    for (let person = 0; person < population; person++) {
+      if (guests.present[person] === 1) continue;
+      takeOffPlot(crowd, person, crowd.x[person]!, crowd.y[person]!, crowd.z[person]!);
+    }
+  }
   const stars: number[] = [];
 
-  let crowd: Crowd | null = null;
-  const router: Router = createRouter({
-    guests,
-    needs,
-    venues,
-    lodgings,
-    gateways: gatewaysOn(layout.placements),
-    network,
-    onLeave: (person) => {
-      const party = guests.party[person]!;
-      const members = guests.parties[party]!.members.filter(
-        (member) => guests.present[member] === 1 && guests.party[member] === party,
-      );
-      if (members.length > 0) {
-        const review = reviewFor({
-          thoughts,
-          members,
-          spokesperson: members[0]!,
-          party,
-          family: '',
-          partyKind: guests.parties[party]!.kind,
-          name: '',
-          nights: guests.nights[members[0]!]!,
-          happiness: (member) => happiness.stay[member]!,
-        });
-        stars.push(review.stars);
-      }
-      for (const member of checkOutParty(guests, party)) {
-        router.forget(member);
-        takeOffPlot(crowd!, member, crowd!.x[member]!, crowd!.y[member]!, crowd!.z[member]!);
-      }
-    },
-    onThought: (person, kind, subject) => {
-      if (think(thoughts, person, kind, subject, tick)) tallyInto(heard, kind, subject);
-    },
-    onVisited: (_person, venue) => {
-      books.visits += priceOf(venue.id);
-    },
-    tickOfDay: () => tick % TICKS_PER_DAY,
-    crowd: () => crowd!,
-    upkeep: () => upkeep,
-    seed: 19,
-  });
-  crowd = createCrowd({
-    network,
-    count: population,
-    variants: 4,
-    seed: 4,
-    routeOf: (person, at) => router.step(person, at),
-    offTheSand: (person) => router.offTheSand(person),
-    paceOf: (person) => paceOf(guests, person),
-    roamsBeach: false,
-  });
-  if (OPENS_EMPTY)
-    for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
-  for (let person = 0; person < population; person++) {
-    if (guests.present[person] === 1) continue;
-    takeOffPlot(crowd, person, crowd.x[person]!, crowd.y[person]!, crowd.z[person]!);
-  }
-
   console.log(
-    `${plotLabel(layout.plan)} at ${SPEED}: ` +
+    `${plotLabel(plan)} at ${SPEED}: ` +
       `${population} guests, ${bedCount(guests).beds} beds, ` +
       `${venues.length} venues, ${network.beachSeats.length} loungers, ${network.gates.length} gate tiles onto the beach`,
   );
+  const standing = [...plot.placements, ...plot.props].map((placement) =>
+    buildCostOf(placement.id),
+  );
   console.log(
-    `Books: built for ${buildCost}, wages ${wages} and maintenance ${maintenance} a day, ` +
-      `opening a tycoon game at ${balance}`,
+    `Books: built for ${buildCost}, wages ${wagesFor(state.roster)} and maintenance ` +
+      `${maintenanceFor(standing)} a day, opening a tycoon game at ${state.ledger.balance}`,
   );
 
-  const arrivals = createRandom(41);
-  let rating = ratingFor({ happiness: null, present: 0, housed: 0 });
-  let planned = 0;
-  let admitted = 0;
   const setOffAt = new Int32Array(population).fill(-1);
   const trips: number[] = [];
   let changedMind = 0;
 
-  // Through the last day's check-in, where its summary is printed.
-  for (const end = DAYS * TICKS_PER_DAY + CHECK_IN_TICK; tick <= end; tick++) {
-    for (let frame = 0; frame < FRAMES_PER_TICK; frame++) stepCrowd(crowd, MAX_STEP);
-    decayNeeds(needs, guests, 1, undefined, (person) => router.isAsleep(person));
-    router.tick(tick);
-    ageHappiness(happiness, needs, guests, (person) => router.isWaitingAt(person), 1);
-    if (tick % HOUR === 0) upkeep.level.fill(1);
+  const morning = (): void => {
+    const { day } = game.now;
+    if (day > 0) {
+      const visits = new Map<string, number>();
+      for (const [key, count] of router.dayVisits()) {
+        const id = key.split('#')[0]!;
+        visits.set(id, (visits.get(id) ?? 0) + count);
+      }
+      const sorted = trips.toSorted((a, b) => a - b);
+      const said = loudest(state.thoughtDay, 5).map(
+        (each) => `${each.kind} ${each.subject ?? ''} ${each.count}`,
+      );
+      const { beds } = state.history.find((report) => report.day === day - 1)!;
+      const { yesterday, today, balance } = state.ledger;
+      console.log(
+        [
+          `Day ${day - 1} ends: ${state.rating.stars} stars, mean mood ${state.rating.happiness.toFixed(2)}`,
+          `  visits: ${ranked(visits)}`,
+          `  walks to the beach: ${sorted.length}, median ${percentile(sorted, 0.5)} min, ` +
+            `p90 ${percentile(sorted, 0.9)} min; ${changedMind} changed their mind`,
+          `  loudest thoughts: ${said.join(', ') || 'none'}`,
+          `  demand: ${demandNow(guests, needs, router, venues)}`,
+          `  needs: ${needDayLine(needDay)}; beds ${beds.taken}/${beds.total}`,
+          `  books: nights ${yesterday.night}, visits ${yesterday.visit}, wages ${yesterday.wages}, ` +
+            `maintenance ${yesterday.maintenance}, net ${netOf(yesterday)}, ` +
+            `balance ${balance - netOf(today)}`,
+        ].join('\n'),
+      );
+    }
+    trips.length = 0;
+    changedMind = 0;
+    Object.assign(needDay, createNeedDay());
+  };
+
+  let newest: Review | undefined;
+  const afterTick = ({ ticks: tick }: SimNow): void => {
+    for (const review of newReviews(state.reviews, newest)) stars.push(review.stars);
+    newest = state.reviews[0];
 
     for (let person = 0; person < population; person++) {
       const toBeach = router.goalOf(person)?.label === 'Beach' && router.visitOf(person) === null;
@@ -476,72 +400,10 @@ it('reports a few days on a generated plot', () => {
       setOffAt[person] = -1;
     }
 
-    const day = Math.floor(tick / TICKS_PER_DAY);
-    if (checkInDue(tick, tick)) {
-      const beds = bedCount(guests);
-      rating = ratingFor({
-        happiness: meanHappiness(happiness, guests),
-        present: presentCount(guests),
-        housed: beds.taken,
-      });
-      if (day > 0) {
-        const visits = new Map<string, number>();
-        for (const [key, count] of router.dayVisits()) {
-          const id = key.split('#')[0]!;
-          visits.set(id, (visits.get(id) ?? 0) + count);
-        }
-        const sorted = trips.toSorted((a, b) => a - b);
-        const said = loudest(heard, 5).map(
-          (each) => `${each.kind} ${each.subject ?? ''} ${each.count}`,
-        );
-        console.log(
-          [
-            `Day ${day - 1} ends: ${rating.stars} stars, mean mood ${rating.happiness.toFixed(2)}`,
-            `  visits: ${ranked(visits)}`,
-            `  walks to the beach: ${sorted.length}, median ${percentile(sorted, 0.5)} min, ` +
-              `p90 ${percentile(sorted, 0.9)} min; ${changedMind} changed their mind`,
-            `  loudest thoughts: ${said.join(', ') || 'none'}`,
-            `  demand: ${demandNow(guests, needs, router, venues)}`,
-            `  needs: ${needDayLine(needDay)}; beds ${beds.taken}/${beds.beds}`,
-            `  books: nights ${books.nights}, visits ${books.visits}, wages -${wages}, ` +
-              `maintenance -${maintenance}, net ${books.nights + books.visits - wages - maintenance}, ` +
-              `balance ${(balance += books.nights + books.visits - wages - maintenance)}`,
-          ].join('\n'),
-        );
-      }
-      trips.length = 0;
-      changedMind = 0;
-      books.nights = nightBill(guests, (home) => priceOf(guests.homes[home]!.id));
-      books.visits = 0;
-      Object.assign(needDay, createNeedDay());
-      router.forgetTheDay();
-      heard = createDay();
-      planned = arrivalsFor(rating, bedsOn(guests));
-      admitted = 0;
-      for (let person = 0; person < guests.count; person++) {
-        if (guests.present[person] !== 1) continue;
-        if (guests.arrivedOn[person]! + guests.nights[person]! >= day) continue;
-        router.sendHome(person);
-      }
-    }
-    for (const wave of wavesDue(tick, tick)) {
-      const arrived = runCheckIn({
-        guests,
-        needs,
-        happiness,
-        rating,
-        day,
-        random: arrivals,
-        room: arrivalsDueBy(planned, wave) - admitted,
-      });
-      admitted += arrived.length;
-      for (const person of arrived) router.admit(person, router.arrivalNode);
-    }
-
     const hour = hourOf(tick);
-    if (tick % HOUR !== 0 || hour < 9 || hour > 20) continue;
+    if (tick % HOUR !== 0 || hour < 9 || hour > 20) return;
     sampleNeeds(needDay, guests, needs, router);
-    if (QUIET) continue;
+    if (QUIET) return;
     const beach = beachNow(guests, router, crowd);
     console.log(
       `  ${String(hour).padStart(2)}:00  on loungers ${beach.onLounger}, on sand ${beach.onSand}, ` +
@@ -551,7 +413,14 @@ it('reports a few days on a generated plot', () => {
     if (tick % TICKS_PER_DAY === LOUNGERS_LOOKED_AT) {
       console.log(`         loungers: ${ranked(loungerStates(guests, router, crowd))}`);
     }
-  }
+  };
+
+  // Through the last day's check-in, where its summary is printed.
+  game.play(DAYS * TICKS_PER_DAY + CHECK_IN_TICK, {
+    framesPerTick: framesPerTickAt(SPEED),
+    hooks: { morning, hourly: () => {}, heard: () => {} },
+    afterTick,
+  });
   console.log(
     `Reviews, 1 to 5 stars: ${[1, 2, 3, 4, 5].map((each) => stars.filter((star) => star === each).length).join(' / ')}`,
   );

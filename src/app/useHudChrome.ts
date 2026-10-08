@@ -3,7 +3,8 @@ import { useHotkeys } from './useHotkeys';
 import { useWindows } from './useWindows';
 import { saveOrAsk } from '../features/saves/domain/saveSlots';
 import type { MenuId } from '../features/hud/components/TopBar';
-import { escapeOutcome } from '../features/hud/domain/escape';
+import { escapeOutcome, type EscapeOutcome } from '../features/hud/domain/escape';
+import { focusedWindow } from '../features/hud/adapters/focusedWindow';
 import { hotkeysFor, type HudAction } from '../features/hud/domain/keymap';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import { cycledTool } from '../features/build/domain/stylePick';
@@ -26,6 +27,8 @@ const always = (action: () => void) => (): boolean => {
   action();
   return true;
 };
+
+const menuAfter = (outcome: EscapeOutcome): MenuId | null => (outcome === 'open' ? 'main' : null);
 
 // Null for a key with nothing to do, which then passes on to whatever else listens for it.
 export interface HudToggles {
@@ -79,9 +82,11 @@ export function useHudChrome(
       return next !== null;
     },
     cancel: () => {
-      const outcome = escapeOutcome(menu !== null, idle);
+      const shown = focusedWindow();
+      const outcome = escapeOutcome(menu !== null, idle, shown !== null);
       if (outcome === 'pass') return false;
-      setMenu(outcome === 'open' ? 'main' : null);
+      if (outcome === 'close-window' && shown !== null) windows.show(shown, false);
+      else setMenu(menuAfter(outcome));
       return true;
     },
   };

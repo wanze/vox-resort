@@ -1,6 +1,7 @@
 import type { StylePick } from '../../build/domain/buildTool';
 import type { StyleStrip as Strip } from '../../build/domain/stylePick';
 import type { PreviewLookup } from './BuildPalette';
+import { leaveField } from './HudWindow';
 import { ObjectInfo } from './ObjectInfo';
 import { StyleStrip } from './StyleStrip';
 import { keyLabel } from '../domain/keymap';
@@ -90,7 +91,7 @@ export function BuildPaletteHead({
           onChange={(event) => onQueryChange(event.target.value)}
           onKeyDown={(event) => {
             // The field clears itself on the first Escape; the second hands the keys back to the game.
-            if (event.key === 'Escape' && query === '') event.currentTarget.blur();
+            if (event.key === 'Escape' && query === '') leaveField(event.currentTarget);
           }}
         />
         <span className="hud-palette-count" title="Kinds of thing to build">

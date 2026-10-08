@@ -1,4 +1,4 @@
-import { HudDropdown } from '../../hud/components/HudDropdown';
+import { HudMenu } from '../../hud/components/HudDropdown';
 import { HudOption } from '../../hud/components/HudOption';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from './overlayNames';
@@ -71,7 +71,7 @@ export function OverlayOptions({ kind, onKindChange, onDone }: OverlayOptionsPro
 export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
   return (
     <div className="hud-overlay">
-      <HudDropdown
+      <HudMenu
         open={open}
         onOpenChange={onOpenChange}
         title={kind ? `Map view: ${OVERLAY_QUESTIONS[kind]}` : 'Map view'}
@@ -87,7 +87,7 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
           onKindChange={onKindChange}
           onDone={() => onOpenChange(false)}
         />
-      </HudDropdown>
+      </HudMenu>
       {kind ? (
         <p className="hud-overlay-legend">
           <span>{OVERLAY_ENDS[kind][0]}</span>

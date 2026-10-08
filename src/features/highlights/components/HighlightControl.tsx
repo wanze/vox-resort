@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HudDropdown } from '../../hud/components/HudDropdown';
+import { HudPopover } from '../../hud/components/HudDropdown';
 import { HudOption } from '../../hud/components/HudOption';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import { highlightIconOf } from './highlightIcons';
@@ -125,7 +125,8 @@ export function HighlightControl({
   const { types, picks } = highlights;
   return (
     <div className="hud-highlight">
-      <HudDropdown
+      <HudPopover
+        name="Highlight buildings"
         open={open}
         onOpenChange={onOpenChange}
         title="Highlight buildings of a kind"
@@ -143,7 +144,7 @@ export function HighlightControl({
           focusSearch={focusSearch}
           onDone={() => onOpenChange(false)}
         />
-      </HudDropdown>
+      </HudPopover>
       <HighlightLegend types={types} picks={picks} />
     </div>
   );

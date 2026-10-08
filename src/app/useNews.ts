@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { loadPrefs, savePrefs } from '../features/hud/adapters/prefsStore';
 import type { HudPrefs } from '../features/hud/domain/hudPrefs';
 import {
@@ -7,6 +14,7 @@ import {
   logEvent,
   logNews,
   newsFrom,
+  resumeToasts,
   showDay,
   showEvent,
   showToasts,
@@ -63,6 +71,30 @@ function usePrefs() {
   };
 }
 
+// Held while the player reads them, with a pointer on them or the keyboard in them.
+function useFading(
+  toasts: readonly Toast[],
+  setToasts: Dispatch<SetStateAction<readonly Toast[]>>,
+): (held: boolean) => void {
+  const [held, setHeld] = useState(false);
+  const fading = toasts.some((toast) => toast.until !== null);
+  useEffect(() => {
+    if (!fading || held) return;
+    const timer = globalThis.setInterval(
+      () => setToasts((shown) => expireToasts(shown, Date.now())),
+      TICK_MS,
+    );
+    return () => globalThis.clearInterval(timer);
+  }, [fading, held, setToasts]);
+  return useCallback(
+    (on: boolean) => {
+      setHeld(on);
+      if (!on) setToasts((shown) => resumeToasts(shown, Date.now()));
+    },
+    [setToasts],
+  );
+}
+
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
@@ -100,15 +132,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setLog((kept) => logEvent(kept, news));
   }, []);
 
-  const fading = toasts.some((toast) => toast.until !== null);
-  useEffect(() => {
-    if (!fading) return;
-    const timer = globalThis.setInterval(
-      () => setToasts((shown) => expireToasts(shown, Date.now())),
-      TICK_MS,
-    );
-    return () => globalThis.clearInterval(timer);
-  }, [fading]);
+  const hold = useFading(toasts, setToasts);
 
   return {
     toasts,
@@ -117,6 +141,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     hear,
     closeDay,
     hearEvent,
+    hold,
     dismiss: useCallback(
       (key: string) => setToasts((shown) => shown.filter((toast) => toastKey(toast) !== key)),
       [],

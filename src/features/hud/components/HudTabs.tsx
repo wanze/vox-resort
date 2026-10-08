@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react';
 import { PixelIcon } from './PixelIcon';
 import type { IconName } from './pixelIcons';
+import { rovingTarget } from '../domain/roving';
 
 export interface HudTabsProps<T extends string> {
   readonly tabs: readonly T[];
@@ -10,13 +11,17 @@ export interface HudTabsProps<T extends string> {
   readonly iconOf?: (tab: T) => IconName;
   readonly badgeOf?: (tab: T) => number;
   readonly label?: string;
+  // The id of the element showing the current tab's content, which labels itself with tabIdOf.
+  readonly panelId: string;
 }
 
-const STEPS: { readonly [key: string]: number } = { ArrowLeft: -1, ArrowRight: 1 };
+export const tabIdOf = (panelId: string, tab: string): string => `${panelId}-${tab}`;
 
 const noBadge = (): number => 0;
 
 function HudTab(props: {
+  readonly id: string;
+  readonly panelId: string;
   readonly title: string;
   readonly icon: IconName | null;
   readonly badge: number;
@@ -26,8 +31,10 @@ function HudTab(props: {
   return (
     <button
       type="button"
+      id={props.id}
       className="hud-tab"
       role="tab"
+      aria-controls={props.panelId}
       aria-selected={props.selected}
       tabIndex={props.selected ? 0 : -1}
       onClick={props.onPick}
@@ -52,14 +59,14 @@ export function HudTabs<T extends string>({
   iconOf,
   badgeOf = noBadge,
   label,
+  panelId,
 }: HudTabsProps<T>) {
   const step = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const by = STEPS[event.key];
-    if (by === undefined) return;
+    const at = rovingTarget(event.key, tabs.indexOf(current), tabs.length, 'horizontal');
+    const next = at === null ? undefined : tabs[at];
+    if (at === null || next === undefined) return;
     event.preventDefault();
-    const at = (tabs.indexOf(current) + by + tabs.length) % tabs.length;
-    const next = tabs[at];
-    if (next === undefined) return;
+    event.stopPropagation();
     onPick(next);
     event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')[at]?.focus();
   };
@@ -69,6 +76,8 @@ export function HudTabs<T extends string>({
       {tabs.map((tab) => (
         <HudTab
           key={tab}
+          id={tabIdOf(panelId, tab)}
+          panelId={panelId}
           title={titleOf(tab)}
           icon={iconOf ? iconOf(tab) : null}
           badge={badgeOf(tab)}

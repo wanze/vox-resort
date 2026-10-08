@@ -1,4 +1,4 @@
-import { HudDropdown } from './HudDropdown';
+import { HudPopover } from './HudDropdown';
 import { PixelIcon } from './PixelIcon';
 import { trendArrow, trendWords } from './dayWords';
 import {
@@ -76,7 +76,8 @@ export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: R
   const arrow = trendArrow(trend);
   const change = trendWords(trend);
   return (
-    <HudDropdown
+    <HudPopover
+      name="Rating"
       className="hud-rating"
       open={open}
       onOpenChange={onOpenChange}
@@ -91,6 +92,6 @@ export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: R
       <p className="hud-rating-note">
         Set each morning at check-in. The more stars, the more guests arrive.
       </p>
-    </HudDropdown>
+    </HudPopover>
   );
 }

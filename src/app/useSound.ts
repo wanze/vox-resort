@@ -134,7 +134,7 @@ export function useSound(welcome: boolean): SoundControls {
 
 const HEARD =
   ':is(.hud, .welcome) :is(button, [role="option"], input[type="checkbox"]):not(:disabled)';
-const TOGGLES = 'input[type="checkbox"], [role="menuitemcheckbox"]';
+const TOGGLES = 'input[type="checkbox"], [role="menuitemcheckbox"], [role="checkbox"]';
 
 function clickCueOf(target: EventTarget | null): Cue | null {
   const clicked = target instanceof Element ? target.closest(HEARD) : null;

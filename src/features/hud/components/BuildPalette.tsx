@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { BuildGrid, BuildGroup, type BuildGridProps } from './BuildGroup';
 import { BuildPaletteHead } from './BuildPaletteHead';
 import { BuildTools } from './BuildTools';
-import { HudTabs } from './HudTabs';
+import { HudTabs, tabIdOf } from './HudTabs';
 import { ZoneChips } from './ZoneChips';
 import { zoneLabel } from './zoneWords';
 import {
@@ -94,6 +94,7 @@ interface CatalogueProps {
 }
 
 function Catalogue({ groups, shown, searching, current, onPick, grid }: CatalogueProps) {
+  const panelId = useId();
   const open = groups.find((group) => group.category === current);
   if (searching) {
     return (
@@ -116,8 +117,14 @@ function Catalogue({ groups, shown, searching, current, onPick, grid }: Catalogu
         onPick={onPick}
         titleOf={(category) => groupOf(groups, category).label}
         label="Catalogue"
+        panelId={panelId}
       />
-      <div className="hud-palette-shelves">
+      <div
+        className="hud-palette-shelves"
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabIdOf(panelId, open.category)}
+      >
         <BuildGrid group={open} {...grid} />
       </div>
     </>

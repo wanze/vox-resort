@@ -61,6 +61,8 @@ export interface NewsControls {
   hear(advice: readonly Advice[], ticks: number): void;
   closeDay(report: DayReport): void;
   hearEvent(news: EventNews): void;
+  // Nothing fades while held; on release, whatever was about to gets a few seconds more.
+  hold(held: boolean): void;
   dismiss(key: string): void;
   setMuted(kind: ToastKind, muted: boolean): void;
   setMarkers(shown: boolean): void;

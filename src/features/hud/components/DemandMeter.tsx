@@ -2,7 +2,7 @@ import { DEMAND_GROUPS, type Demand, type DemandGroup } from '../../sim/domain/d
 import { DemandBar } from './DemandBar';
 import { DemandPanel } from './DemandPanel';
 import { GROUP_NAMES, GROUP_TITLES, LINE_NAMES, pressureWord } from './demandWords';
-import { HudDropdown } from './HudDropdown';
+import { HudPopover } from './HudDropdown';
 import type { StatusView } from '../domain/views';
 
 export interface DemandMeterProps {
@@ -30,7 +30,8 @@ function titleOf(demand: Demand | null): string {
 export function DemandMeter({ status, open, onOpenChange }: DemandMeterProps) {
   const demand = status?.demand ?? null;
   return (
-    <HudDropdown
+    <HudPopover
+      name="Demand"
       className="hud-demand-menu"
       open={open}
       onOpenChange={onOpenChange}
@@ -49,6 +50,6 @@ export function DemandMeter({ status, open, onOpenChange }: DemandMeterProps) {
       }
     >
       <DemandPanel status={status} />
-    </HudDropdown>
+    </HudPopover>
   );
 }

@@ -1,5 +1,7 @@
+import { useEffect, useState, type FocusEvent } from 'react';
 import { eventNewsLine } from '../../events/components/eventWords';
 import {
+  isUrgentToast,
   toastKey,
   type EventNews,
   type News,
@@ -29,6 +31,8 @@ export interface ToastsProps {
   readonly onUpdate: (action: UpdateAction) => void;
   // Null on the welcome screen, which has no resort to tell of and offers only a new version.
   readonly news: NewsToastsProps | null;
+  // Told while the pointer or the keyboard is on the toasts, so none fades mid-read.
+  readonly onHold?: (held: boolean) => void;
 }
 
 type ToastActionsProps = Pick<NewsToastsProps, 'onShowOnPlot' | 'hire' | 'onOpenAdvice'>;
@@ -83,7 +87,7 @@ function DismissButton({
 function DayPlate({ report, ...props }: { readonly report: DayReport } & NewsToastsProps) {
   const label = `Day ${report.day} report`;
   return (
-    <div className="hud-toast" data-severity="day" role="status">
+    <div className="hud-toast" data-severity="day">
       <PixelIcon name="overview" />
       <div className="hud-toast-body">
         <strong>Day report</strong>
@@ -114,7 +118,7 @@ function ToastPlate({
   const urgent = news.severity === 'urgent';
   const label = adviceLabel(news.advice.kind);
   return (
-    <div className="hud-toast" data-severity={news.severity} role={urgent ? 'alert' : 'status'}>
+    <div className="hud-toast" data-severity={news.severity}>
       <PixelIcon name={urgent ? 'alert' : 'advice'} />
       <div className="hud-toast-body">
         <strong>{label}</strong>
@@ -133,7 +137,7 @@ function EventPlate({
 }: { readonly news: EventNews } & Pick<NewsToastsProps, 'onDismiss' | 'onShowOnPlot'>) {
   const { at } = news;
   return (
-    <div className="hud-toast" data-severity="event" role="status">
+    <div className="hud-toast" data-severity="event">
       <PixelIcon name="programme" />
       <div className="hud-toast-body">
         <strong>Programme</strong>
@@ -195,11 +199,7 @@ function UpdatePlate({
 }) {
   const { line, actions } = UPDATE_WORDS[phase];
   return (
-    <div
-      className="hud-toast"
-      data-severity="warning"
-      role={phase === 'unsaved' ? 'alert' : 'status'}
-    >
+    <div className="hud-toast" data-severity="warning">
       <PixelIcon name="refresh" />
       <div className="hud-toast-body">
         <strong>New version</strong>
@@ -236,14 +236,65 @@ function ToastOf({ toast, ...props }: { readonly toast: Toast } & ToastsProps) {
   return props.news ? <NewsToast toast={toast} {...props.news} /> : null;
 }
 
-// Never pauses and never sounds: the corner is for the eye, the log keeps what scrolled past.
-export function Toasts(props: ToastsProps) {
-  if (props.toasts.length === 0) return null;
+function newsLineOf(
+  toast: Exclude<Toast, { readonly kind: 'update' }>,
+  news: NewsToastsProps,
+): string {
+  if (toast.kind === 'day') {
+    const { report } = toast;
+    return `Day report. ${daySummary(report, trendOn(news.history, report.day), news.mode)}`;
+  }
+  if (toast.kind === 'event') return `Programme. ${eventNewsLine(toast.news)}`;
+  return `${adviceLabel(toast.news.advice.kind)}. ${newsSays(toast.news)}`;
+}
+
+function lineOf(toast: Toast, news: NewsToastsProps | null): string | null {
+  if (toast.kind === 'update') return `New version. ${UPDATE_WORDS[toast.phase].line}`;
+  return news === null ? null : newsLineOf(toast, news);
+}
+
+// Always in the page, so a screen reader is already listening when a line arrives; a region
+// mounted with its first toast is often not heard at all.
+function LiveLines(props: ToastsProps & { readonly urgent: boolean }) {
   return (
-    <div className="hud-toasts">
+    <div className="visually-hidden" aria-live={props.urgent ? 'assertive' : 'polite'}>
+      {props.toasts
+        .filter((toast) => isUrgentToast(toast) === props.urgent)
+        .map((toast) => {
+          const line = lineOf(toast, props.news);
+          return line === null ? null : <p key={toastKey(toast)}>{line}</p>;
+        })}
+    </div>
+  );
+}
+
+function useHold(onHold: ((held: boolean) => void) | undefined) {
+  const [pointer, setPointer] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const held = pointer || focus;
+  useEffect(() => onHold?.(held), [onHold, held]);
+  return {
+    onPointerEnter: () => setPointer(true),
+    onPointerLeave: () => setPointer(false),
+    onFocus: () => setFocus(true),
+    onBlur: (event: FocusEvent<HTMLDivElement>) => {
+      const to = event.relatedTarget;
+      if (!(to instanceof Node && event.currentTarget.contains(to))) setFocus(false);
+    },
+  };
+}
+
+// Never pauses the game and never sounds: the corner is for the eye, the log keeps what
+// scrolled past.
+export function Toasts(props: ToastsProps) {
+  const handlers = useHold(props.onHold);
+  return (
+    <div className="hud-toasts" {...handlers}>
       {props.toasts.map((toast) => (
         <ToastOf key={toastKey(toast)} toast={toast} {...props} />
       ))}
+      <LiveLines {...props} urgent={false} />
+      <LiveLines {...props} urgent />
     </div>
   );
 }

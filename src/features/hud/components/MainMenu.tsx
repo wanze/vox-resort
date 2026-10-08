@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { HudDropdown } from './HudDropdown';
+import { HudMenu } from './HudDropdown';
 import { HudOption } from './HudOption';
 import { MenuPage } from './MenuPage';
 import { PixelIcon } from './PixelIcon';
@@ -345,7 +345,7 @@ export function MainMenu(props: MainMenuProps) {
   };
 
   return (
-    <HudDropdown
+    <HudMenu
       className="hud-menu"
       open={open}
       onOpenChange={onOpenChange}
@@ -358,6 +358,6 @@ export function MainMenu(props: MainMenuProps) {
       }
     >
       <MenuPages {...props} title={title} run={run} />
-    </HudDropdown>
+    </HudMenu>
   );
 }

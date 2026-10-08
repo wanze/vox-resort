@@ -10,6 +10,7 @@ import {
   type EventNews,
   eventNewsFrom,
   expireToasts,
+  isUrgentToast,
   logEvent,
   logNews,
   type Message,
@@ -21,6 +22,7 @@ import {
   showDay,
   showEvent,
   showToasts,
+  resumeToasts,
   type Toast,
   toastKey,
   type ToastKind,
@@ -435,6 +437,36 @@ describe('expireToasts', () => {
     ];
     expect(expireToasts(shown, 4999)).toBe(shown);
     expect(expireToasts(shown, 5000).map((toast) => toast.until)).toEqual([null]);
+  });
+});
+
+describe('resumeToasts', () => {
+  it('gives a toast about to fade a few more seconds and leaves the rest', () => {
+    const shown: readonly Toast[] = [
+      toastOf(newsOf('no-beds', 'warning'), 11_000),
+      toastOf(newsOf('dirty', 'warning'), 19_000),
+      toastOf(newsOf('broken', 'urgent'), null),
+    ];
+    expect(resumeToasts(shown, 10_000).map((toast) => toast.until)).toEqual([14_000, 19_000, null]);
+  });
+
+  it('hands back the same list when nothing needs more time', () => {
+    const shown: readonly Toast[] = [
+      toastOf(newsOf('dirty', 'warning'), 19_000),
+      toastOf(newsOf('broken', 'urgent'), null),
+    ];
+    expect(resumeToasts(shown, 10_000)).toBe(shown);
+  });
+});
+
+describe('isUrgentToast', () => {
+  it('interrupts for urgent advice and a game that could not be saved, and nothing else', () => {
+    expect(isUrgentToast(toastOf(newsOf('broken', 'urgent'), null))).toBe(true);
+    expect(isUrgentToast(toastOf(newsOf('no-beds', 'warning'), 5000))).toBe(false);
+    expect(isUrgentToast({ kind: 'update', phase: 'unsaved', until: null })).toBe(true);
+    expect(isUrgentToast({ kind: 'update', phase: 'ready', until: null })).toBe(false);
+    expect(isUrgentToast({ kind: 'day', report: reportOn(3), until: 5000 })).toBe(false);
+    expect(isUrgentToast({ kind: 'event', news: eventNews('announce'), until: 5000 })).toBe(false);
   });
 });
 

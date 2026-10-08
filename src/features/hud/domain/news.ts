@@ -200,6 +200,9 @@ const DAY_MS = 10_000;
 
 const EVENT_MS = 10_000;
 
+// Long enough to finish reading a line once the pointer or the focus has let go of the toasts.
+const RESUME_MS = 4_000;
+
 const MESSAGES_KEPT = 50;
 
 // A null `before` is a baseline: a load or a new game marks what is already wrong as heard
@@ -323,6 +326,23 @@ export function expireToasts(shown: readonly Toast[], nowMs: number): readonly T
   const kept = shown.filter((toast) => toast.until === null || toast.until > nowMs);
   return kept.length === shown.length ? shown : kept;
 }
+
+// A floor rather than a paused clock, so the toasts stay plain data with an end time.
+export function resumeToasts(shown: readonly Toast[], nowMs: number): readonly Toast[] {
+  const floor = nowMs + RESUME_MS;
+  if (!shown.some((toast) => toast.until !== null && toast.until < floor)) return shown;
+  return shown.map((toast) =>
+    toast.kind !== 'update' && toast.until !== null && toast.until < floor
+      ? { ...toast, until: floor }
+      : toast,
+  );
+}
+
+// Said over whatever a screen reader is reading: the resort is in trouble, or a reload loses the game.
+export const isUrgentToast = (toast: Toast): boolean =>
+  toast.kind === 'update'
+    ? toast.phase === 'unsaved'
+    : toast.kind === 'advice' && toast.news.severity === 'urgent';
 
 export function withoutResolved(
   shown: readonly Toast[],

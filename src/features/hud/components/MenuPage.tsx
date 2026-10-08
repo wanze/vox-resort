@@ -18,6 +18,7 @@ export function MenuPage({ title, onBack, children }: MenuPageProps) {
         type="button"
         className="hud-option hud-menu-back"
         role="menuitem"
+        tabIndex={-1}
         onClick={onBack}
       >
         <span className="hud-option-icon hud-menu-back-mark" aria-hidden="true">

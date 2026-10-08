@@ -21,6 +21,7 @@ export function WindowDock({ layout, onToggle, adviceCount }: WindowDockProps) {
           key={id}
           type="button"
           className="hud-tool"
+          data-dock={id}
           aria-pressed={isOpen(layout, id)}
           title={hintOf(id)}
           onClick={() => onToggle(id)}

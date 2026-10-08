@@ -1,5 +1,6 @@
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { CommandList } from './CommandList';
+import { useReturnFocus } from './useReturnFocus';
 import type { Command } from './commands';
 import { rankCommands, sectionCommands, stepCursor } from '../domain/commandSearch';
 import { keyLabel } from '../domain/keymap';
@@ -16,7 +17,10 @@ const keepFocus = (event: PointerEvent<HTMLDivElement>): void => {
 
 const STEPS: Readonly<Record<string, number>> = { ArrowDown: 1, ArrowUp: -1 };
 
+const nowhere = (): null => null;
+
 export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
+  useReturnFocus(nowhere);
   const listId = useId();
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);

@@ -4,6 +4,7 @@ import {
   DEFAULT_LAYOUT,
   depthOf,
   isOpen,
+  isWindowId,
   moveWindow,
   parseLayout,
   raiseWindow,
@@ -215,5 +216,18 @@ describe('parseLayout', () => {
     expect(parseLayout(null)).toBe(DEFAULT_LAYOUT);
     expect(parseLayout('build')).toBe(DEFAULT_LAYOUT);
     expect(parseLayout({ spots: {} })).toBe(DEFAULT_LAYOUT);
+  });
+});
+
+describe('isWindowId', () => {
+  it('knows a window, the inspector among them', () => {
+    expect(isWindowId('saves')).toBe(true);
+    expect(isWindowId('inspect')).toBe(true);
+  });
+
+  it('turns down a tab and anything that is not a window name', () => {
+    expect(isWindowId('advice')).toBe(false);
+    expect(isWindowId(undefined)).toBe(false);
+    expect(isWindowId(42)).toBe(false);
   });
 });

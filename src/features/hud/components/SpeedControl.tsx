@@ -1,4 +1,4 @@
-import { HudDropdown } from './HudDropdown';
+import { HudMenu } from './HudDropdown';
 import { HudOption } from './HudOption';
 import { PixelIcon } from './PixelIcon';
 import { speedNote } from './controlNames';
@@ -14,7 +14,7 @@ export interface SpeedControlProps {
 
 export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: SpeedControlProps) {
   return (
-    <HudDropdown
+    <HudMenu
       className="hud-speed"
       open={open}
       onOpenChange={onOpenChange}
@@ -40,6 +40,6 @@ export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: Speed
           }}
         />
       ))}
-    </HudDropdown>
+    </HudMenu>
   );
 }

@@ -1,4 +1,4 @@
-import { HudDropdown } from './HudDropdown';
+import { HudPopover } from './HudDropdown';
 import { PixelIcon } from './PixelIcon';
 import { WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import type { DayForecast } from '../../events/domain/programmeView';
@@ -38,7 +38,8 @@ export function WeatherForecast(props: WeatherForecastProps) {
   const { weather, forced } = props;
   const title = `Weather: ${WEATHER_NAMES[weather]}${forced ? ', pinned' : ', following the forecast'}`;
   return (
-    <HudDropdown
+    <HudPopover
+      name="Weather forecast"
       className="hud-weather"
       open={props.open}
       onOpenChange={props.onOpenChange}
@@ -60,6 +61,6 @@ export function WeatherForecast(props: WeatherForecastProps) {
           Pinned to {WEATHER_NAMES[forced].toLowerCase()} in the menu, so every day stays that way.
         </p>
       ) : null}
-    </HudDropdown>
+    </HudPopover>
   );
 }

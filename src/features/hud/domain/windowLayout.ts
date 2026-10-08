@@ -149,7 +149,7 @@ export function clampSpot(spot: WindowSpot, size: Box, viewport: Box, top: numbe
   };
 }
 
-const isWindowId = (value: unknown): value is WindowId =>
+export const isWindowId = (value: unknown): value is WindowId =>
   typeof value === 'string' && (WINDOW_IDS as readonly string[]).includes(value);
 
 // Windows an older build had before they became tabs, read back as the tab they are now.

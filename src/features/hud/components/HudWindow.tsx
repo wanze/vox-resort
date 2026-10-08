@@ -1,5 +1,13 @@
-import { useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { PixelIcon } from './PixelIcon';
+import { useReturnFocus } from './useReturnFocus';
 import type { IconName } from './pixelIcons';
 import { clampSpot, type Box, type WindowId, type WindowSpot } from '../domain/windowLayout';
 
@@ -11,6 +19,8 @@ export interface HudWindowFrame {
   readonly peek: boolean;
   readonly spot: WindowSpot | null;
   readonly depth: number;
+  // Opened by the player just now, so the keyboard follows it in.
+  readonly takesFocus: boolean;
   readonly onRaise: () => void;
   readonly onMove: (spot: WindowSpot) => void;
   readonly onClose: () => void;
@@ -145,7 +155,9 @@ function WindowTitle({ title, icon, sheet }: WindowTitleProps) {
     return (
       <>
         <PixelIcon name={icon} />
-        <h2 className="hud-window-title">{title}</h2>
+        <h2 className="hud-window-title" tabIndex={-1} data-window-focus="">
+          {title}
+        </h2>
       </>
     );
   }
@@ -153,6 +165,7 @@ function WindowTitle({ title, icon, sheet }: WindowTitleProps) {
     <button
       type="button"
       className="hud-window-toggle"
+      data-window-focus=""
       aria-expanded={sheet.expanded}
       onClick={sheet.toggle}
     >
@@ -163,12 +176,44 @@ function WindowTitle({ title, icon, sheet }: WindowTitleProps) {
   );
 }
 
+const titleOf = (host: Element): HTMLElement | null =>
+  host.querySelector<HTMLElement>('[data-window-focus]');
+
+// Hands the keys back to the game without dropping the focus out of the window, so the next
+// Escape still closes it rather than opening the main menu.
+export function leaveField(field: HTMLElement): void {
+  const host = field.closest('.hud-window');
+  const title = host ? titleOf(host) : null;
+  if (title) title.focus();
+  else field.blur();
+}
+
+// Only some windows sit on the dock; the main menu opens the rest.
+const returnTarget = (id: WindowId): HTMLElement | null =>
+  document.querySelector<HTMLElement>(`[data-dock="${id}"]`) ??
+  document.querySelector<HTMLElement>('.hud-menu > .hud-chip');
+
+// Only on mount: a window already open does not pull the keyboard back on a later render.
+function useFocusOnOpen(frame: HudWindowFrame) {
+  const section = useRef<HTMLElement>(null);
+  const [takesFocus] = useState(frame.takesFocus);
+  useReturnFocus(() => returnTarget(frame.id));
+  useEffect(() => {
+    const host = section.current;
+    if (!takesFocus || !host || host.contains(document.activeElement)) return;
+    titleOf(host)?.focus();
+  }, [takesFocus]);
+  return section;
+}
+
 export function HudWindow({ frame, title, icon, children }: HudWindowProps) {
   const drag = useWindowDrag(frame);
   const sheet = useSheet(frame);
+  const section = useFocusOnOpen(frame);
 
   return (
     <section
+      ref={section}
       className="hud-window"
       data-window={frame.id}
       {...stateOf(drag.dragging, sheet, frame.peek)}

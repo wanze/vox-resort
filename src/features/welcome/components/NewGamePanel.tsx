@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import {
   clampParams,
   PLOT_DENSITY,
@@ -11,6 +11,7 @@ import type { SaveOutcome } from '../../saves/domain/saveSlots';
 import type { SaveMeta } from '../../saves/domain/snapshot';
 import { UnsavedWarning } from '../../saves/components/UnsavedWarning';
 import { PixelIcon } from '../../hud/components/PixelIcon';
+import { rovingTarget } from '../../hud/domain/roving';
 import type { IconName } from '../../hud/components/pixelIcons';
 import { ResortNameField, useDraftName } from '../../naming/components/ResortNameField';
 import { groundOf, nameFor, paramsFor, type Ground, type NewGame } from '../domain/newGame';
@@ -54,15 +55,28 @@ function ModeChoice(props: {
   readonly mode: GameMode | null;
   readonly onPick: (mode: GameMode) => void;
 }) {
+  const at = MODES.findIndex(({ mode }) => mode === props.mode);
+  // Before a pick the first mode takes Tab, so the group is still reached.
+  const stop = Math.max(at, 0);
+  const step = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const next = rovingTarget(event.key, at, MODES.length, 'both');
+    const picked = next === null ? undefined : MODES[next];
+    if (next === null || picked === undefined) return;
+    event.preventDefault();
+    event.stopPropagation();
+    props.onPick(picked.mode);
+    event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+  };
   return (
-    <div className="new-game-modes" role="radiogroup" aria-label="Game mode">
-      {MODES.map(({ mode, icon, note }) => (
+    <div className="new-game-modes" role="radiogroup" aria-label="Game mode" onKeyDown={step}>
+      {MODES.map(({ mode, icon, note }, index) => (
         <button
           key={mode}
           type="button"
           role="radio"
           className="new-game-mode"
           aria-checked={mode === props.mode}
+          tabIndex={index === stop ? 0 : -1}
           onClick={() => props.onPick(mode)}
         >
           <PixelIcon name={icon} scale={3} />

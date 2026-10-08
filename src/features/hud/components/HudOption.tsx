@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { use, type ReactNode } from 'react';
+import { OptionHost } from './optionHost';
 import { PixelIcon } from './PixelIcon';
 import type { IconName } from './pixelIcons';
 
@@ -16,10 +17,26 @@ export interface HudOptionProps {
   readonly more?: boolean;
 }
 
-function roleOf(checked: boolean | undefined, many: boolean): string {
-  if (checked === undefined) return 'menuitem';
-  return many ? 'menuitemcheckbox' : 'menuitemradio';
+interface RowSemantics {
+  readonly role?: string;
+  readonly 'aria-checked'?: boolean;
+  readonly 'aria-pressed'?: boolean;
+  readonly tabIndex?: number;
 }
+
+// Menu rows are reached by the arrows, so Tab leaves the menu instead of walking it.
+function menuRow(checked: boolean | undefined, many: boolean): RowSemantics {
+  if (checked === undefined) return { role: 'menuitem', tabIndex: -1 };
+  const role = many ? 'menuitemcheckbox' : 'menuitemradio';
+  return { role, 'aria-checked': checked, tabIndex: -1 };
+}
+
+function plainRow(checked: boolean | undefined, many: boolean): RowSemantics {
+  if (checked === undefined) return {};
+  return many ? { role: 'checkbox', 'aria-checked': checked } : { 'aria-pressed': checked };
+}
+
+const ROWS = { menu: menuRow, plain: plainRow } as const;
 
 export function HudOption({
   label,
@@ -32,12 +49,12 @@ export function HudOption({
   disabled = false,
   more = false,
 }: HudOptionProps) {
+  const semantics = ROWS[use(OptionHost)](checked, many);
   return (
     <button
       type="button"
       className="hud-option"
-      role={roleOf(checked, many)}
-      aria-checked={checked}
+      {...semantics}
       aria-haspopup={more ? 'menu' : undefined}
       disabled={disabled}
       onClick={onSelect}

@@ -9,7 +9,7 @@ import { DayReportPanel } from './DayReportPanel';
 import { DemandPanel } from './DemandPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
-import { HudTabs } from './HudTabs';
+import { HudTabs, tabIdOf } from './HudTabs';
 import type { HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
@@ -241,6 +241,7 @@ function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFr
     peek: compact && id === 'build' && props.tool !== null,
     spot: windows.layout.spots[id] ?? null,
     depth: depthOf(windows.layout, id),
+    takesFocus: windows.layout.focus === id,
     onRaise: () => windows.raise(id),
     onMove: (spot) => windows.move(id, spot),
     onClose,
@@ -251,6 +252,7 @@ function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
   const page = props.windows.tab(id);
   const content = CONTENT[page](props);
   if (content === null) return null;
+  const panelId = `hud-${id}-tabpanel`;
   return (
     <>
       <HudTabs<TabId>
@@ -261,8 +263,11 @@ function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
         iconOf={(tab) => TAB_ICONS[tab]}
         badgeOf={(tab) => (tab === 'advice' ? props.advice.length : 0)}
         label={WINDOW_TITLES[id]}
+        panelId={panelId}
       />
-      {content}
+      <div role="tabpanel" id={panelId} aria-labelledby={tabIdOf(panelId, page)}>
+        {content}
+      </div>
     </>
   );
 }
@@ -342,24 +347,6 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
   };
   return (
     <div className="hud">
-      <VenueSigns
-        spots={props.signs}
-        shown={props.news.prefs.signs}
-        named={props.signsNamed}
-        marked={markedTiles(props)}
-        elements={props.nodes.signs}
-        onSelectAt={props.inspector.selectAt}
-      />
-      <StaffPins elements={props.nodes.staffPins} onSelectWorker={props.inspector.selectWorker} />
-      <ProblemMarkers
-        advice={props.advice}
-        shown={props.news.prefs.markers}
-        elements={props.nodes.markers}
-        onShowOnPlot={props.onShowOnPlot}
-        onSelectAt={props.inspector.selectAt}
-        orders={props.orders}
-        onSendCleaner={props.inspector.sendCleanerTo}
-      />
       <TopBar
         clockElement={props.nodes.clock}
         clock={props.clock}
@@ -420,7 +407,29 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           onOpenReport: (day) => openReport(props, day),
           onDismiss: props.news.dismiss,
         }}
+        onHold={props.news.hold}
       />
+      {/* Last in Tab order, behind the bar and the windows; their z-index keeps them painted under. */}
+      <section aria-label="On the map">
+        <VenueSigns
+          spots={props.signs}
+          shown={props.news.prefs.signs}
+          named={props.signsNamed}
+          marked={markedTiles(props)}
+          elements={props.nodes.signs}
+          onSelectAt={props.inspector.selectAt}
+        />
+        <StaffPins elements={props.nodes.staffPins} onSelectWorker={props.inspector.selectWorker} />
+        <ProblemMarkers
+          advice={props.advice}
+          shown={props.news.prefs.markers}
+          elements={props.nodes.markers}
+          onShowOnPlot={props.onShowOnPlot}
+          onSelectAt={props.inspector.selectAt}
+          orders={props.orders}
+          onSendCleaner={props.inspector.sendCleanerTo}
+        />
+      </section>
       <Palette {...props} />
       {props.error ? <HudError message={props.error} /> : null}
       {!props.error && props.refusal ? (

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { HudTabs } from '../../hud/components/HudTabs';
+import { useEffect, useId, useRef, useState } from 'react';
+import { HudTabs, tabIdOf } from '../../hud/components/HudTabs';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import { SIGN_ICONS } from '../../hud/components/signIcons';
 import type { BookingRefusal } from '../domain/programme';
@@ -380,6 +380,7 @@ function ComingUp({ view }: { readonly view: ProgrammeView }) {
 }
 
 export function ProgrammePanel({ programme }: ProgrammePanelProps) {
+  const panelId = useId();
   const { view } = programme;
   if (!view) return null;
   if (!view.site) {
@@ -393,12 +394,20 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
         onPick={programme.showTab}
         titleOf={(tab) => TAB_TITLES[tab]}
         label="Programme"
+        panelId={panelId}
       />
-      {programme.tab === 'plan' ? (
-        <Plan view={view} programme={programme} />
-      ) : (
-        <ComingUp view={view} />
-      )}
+      <div
+        className="hud-programme-page"
+        role="tabpanel"
+        id={panelId}
+        aria-labelledby={tabIdOf(panelId, programme.tab)}
+      >
+        {programme.tab === 'plan' ? (
+          <Plan view={view} programme={programme} />
+        ) : (
+          <ComingUp view={view} />
+        )}
+      </div>
     </div>
   );
 }

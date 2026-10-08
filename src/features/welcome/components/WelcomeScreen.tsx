@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
 import { SaveList } from '../../saves/components/SaveList';
 import {
@@ -80,6 +80,7 @@ function Menu(props: {
   readonly latest: SaveMeta | null;
   readonly onChoose: (choice: Choice) => void;
   readonly onLoad: (id: string) => void;
+  readonly returnTo: Choice | null;
 }) {
   const { latest } = props;
   const free = props.ready && props.loading === null;
@@ -97,6 +98,7 @@ function Menu(props: {
         type="button"
         className={latest ? 'welcome-button' : 'welcome-button welcome-button-main'}
         disabled={!free}
+        autoFocus={props.returnTo === 'new'}
         onClick={() => props.onChoose('new')}
       >
         New game
@@ -105,6 +107,7 @@ function Menu(props: {
         type="button"
         className="welcome-button"
         disabled={!free}
+        autoFocus={props.returnTo === 'load'}
         onClick={() => props.onChoose('load')}
       >
         Load game
@@ -141,7 +144,13 @@ function LinkNotice({ shared }: { readonly shared: IncomingShare }) {
 
 // A link opened with the page takes the menu's place, so a player who already chose to start
 // or load is not pulled away.
-function Choices(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) => void }) {
+interface ChoiceProps extends WelcomeScreenProps {
+  readonly onChoose: (choice: Choice) => void;
+  // The card the player came back from, whose button takes the keyboard again.
+  readonly returnTo: Choice | null;
+}
+
+function Choices(props: ChoiceProps) {
   const { shared } = props;
   if (shared?.kind === 'ready') {
     return (
@@ -166,12 +175,13 @@ function Choices(props: WelcomeScreenProps & { readonly onChoose: (choice: Choic
         latest={latestOf(props.saves.saves)}
         onChoose={props.onChoose}
         onLoad={props.onLoad}
+        returnTo={props.returnTo}
       />
     </>
   );
 }
 
-function Card(props: WelcomeScreenProps & { readonly onChoose: (choice: Choice) => void }) {
+function Card(props: ChoiceProps) {
   if (props.error) return <Failure message={props.error} />;
   return (
     <>
@@ -186,9 +196,14 @@ function CardHead(props: {
   readonly busy: boolean;
   readonly onBack: () => void;
 }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  // The button that opened the card is gone, so the keyboard starts at its heading.
+  useEffect(() => heading.current?.focus(), []);
   return (
     <header className="welcome-card-head">
-      <h2>{props.title}</h2>
+      <h2 ref={heading} tabIndex={-1}>
+        {props.title}
+      </h2>
       <button
         type="button"
         className="hud-resort-clear welcome-back"
@@ -260,7 +275,11 @@ function LocalTime() {
 
 function Body(props: WelcomeScreenProps) {
   const [choice, setChoice] = useState<Choice>('menu');
-  const back = (): void => setChoice('menu');
+  const [from, setFrom] = useState<Choice | null>(null);
+  const back = (): void => {
+    setFrom(choice);
+    setChoice('menu');
+  };
   if (choice === 'new' && props.params) {
     return (
       <NewGameCard
@@ -285,7 +304,7 @@ function Body(props: WelcomeScreenProps) {
   }
   return (
     <div className="welcome-card">
-      <Card {...props} onChoose={setChoice} />
+      <Card {...props} onChoose={setChoice} returnTo={from} />
     </div>
   );
 }

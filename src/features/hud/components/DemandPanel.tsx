@@ -1,6 +1,5 @@
 import { Fragment } from 'react';
 import { DEMAND_GROUPS, type DemandGroup } from '../../sim/domain/demand';
-import type { StatusView } from '../../../app/showcase';
 import { DemandBar } from './DemandBar';
 import {
   GROUP_TITLES,
@@ -10,6 +9,7 @@ import {
   turnedAwayShare,
   wantedOfPlaces,
 } from './demandWords';
+import type { StatusView } from '../domain/views';
 
 export interface DemandPanelProps {
   readonly status: StatusView | null;

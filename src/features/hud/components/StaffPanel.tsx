@@ -1,9 +1,9 @@
-import type { ShowcaseStats } from '../../../app/showcase';
 import { STAFF_CAPS, STAFF_ROLES, WAGES, wagesFor, type StaffRole } from '../../sim/domain/staff';
 import type { RoleTally, StaffTally } from '../domain/staffPins';
 import { ZONE_COLOURS } from '../../overlays/domain/ramp';
 import { roleWord } from './staffWords';
 import { crewLine, cssColour, ZONE_IDS, zoneLabel } from './zoneWords';
+import type { ShowcaseStats } from '../domain/views';
 
 export interface StaffPanelProps {
   readonly staff: ShowcaseStats['staff'] | null;

@@ -10,7 +10,7 @@ import {
   type HighlightPick,
   type HighlightType,
 } from '../domain/highlights';
-import type { HighlightControls } from '../../../app/useHighlights';
+import type { HighlightControls } from './highlightControls';
 
 export interface HighlightOptionsProps {
   readonly highlights: HighlightControls;

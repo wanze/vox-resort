@@ -15,18 +15,9 @@ import {
   type WindowLayout,
   type WindowSpot,
 } from '../features/hud/domain/windowLayout';
-import type { TabbedWindow, TabId } from '../features/hud/domain/windowTabs';
+import type { TabbedWindow } from '../features/hud/domain/windowTabs';
 import { isCompact, type LayoutMode } from '../features/hud/domain/layoutMode';
-
-export interface WindowControls {
-  readonly layout: WindowLayout;
-  toggle(page: PageId): void;
-  show(page: PageId, shown: boolean): void;
-  raise(id: WindowId): void;
-  move(id: WindowId, spot: WindowSpot): void;
-  resetPlaces(): void;
-  readonly tab: (id: TabbedWindow) => TabId;
-}
+import type { WindowControls } from '../features/hud/components/hudControls';
 
 export function useWindows(mode: LayoutMode): WindowControls {
   const [layout, setLayout] = useState<WindowLayout>(loadLayout);

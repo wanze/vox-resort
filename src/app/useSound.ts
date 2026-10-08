@@ -24,14 +24,7 @@ import {
 import { moodAt } from '../features/sound/domain/playlist';
 import type { SoundPrefs } from '../features/sound/domain/soundPrefs';
 import { VENUE_SLOTS } from '../features/sound/domain/bank';
-
-export interface SoundControls {
-  readonly prefs: SoundPrefs;
-  setPrefs(prefs: SoundPrefs): void;
-  toggle(): void;
-  cue(cue: Cue): void;
-  hear(scene: HeardScene): void;
-}
+import type { SoundControls } from '../features/hud/components/hudControls';
 
 // None under a bench, so its figures are measured without an audio thread.
 const SILENT = parseBenchConfig(globalThis.location?.search ?? '') !== null;

@@ -10,16 +10,13 @@ import { WeatherForecast } from './WeatherForecast';
 import { WindowDock } from './WindowDock';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
 import { HighlightControl } from '../../highlights/components/HighlightControl';
-import type { ClockControls } from '../../../app/useClockControls';
-import type { OverlayControls } from '../../../app/useOverlay';
-import type { HighlightControls } from '../../../app/useHighlights';
-import type { ResortControls } from '../../../app/useResortControls';
-import type { SaveControls } from '../../../app/useSaves';
-import type { SoundControls } from '../../../app/useSound';
-import type { StatusView } from '../../../app/showcase';
-import type { WindowControls } from '../../../app/useWindows';
 import type { DayForecast } from '../../events/domain/programmeView';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { HighlightControls } from '../../highlights/components/highlightControls';
+import type { ClockControls, ResortControls, SoundControls, WindowControls } from './hudControls';
+import type { StatusView } from '../domain/views';
+import type { OverlayControls } from '../../overlays/components/overlayControls';
+import type { SaveControls } from '../../saves/components/saveControls';
 
 export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'highlight' | 'demand' | 'rating';
 

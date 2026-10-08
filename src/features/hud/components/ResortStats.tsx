@@ -1,5 +1,5 @@
 import { StatRow } from './StatRow';
-import type { ShowcaseStats, StatusView } from '../../../app/showcase';
+import type { ShowcaseStats, StatusView } from '../domain/views';
 
 export interface ResortStatsProps {
   readonly stats: ShowcaseStats | null;

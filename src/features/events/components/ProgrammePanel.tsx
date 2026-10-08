@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ProgrammeControls, ProgrammeTab } from '../../../app/useProgramme';
 import { HudTabs } from '../../hud/components/HudTabs';
 import { PixelIcon } from '../../hud/components/PixelIcon';
 import { SIGN_ICONS } from '../../hud/components/signIcons';
@@ -20,6 +19,7 @@ import { START_STEP } from '../domain/week';
 import { EventCards } from './EventCards';
 import { refusalWords } from './eventWords';
 import { ProgrammeWeek, PART_NAMES, type Cell } from './ProgrammeWeek';
+import type { ProgrammeControls, ProgrammeTab } from './programmeControls';
 
 export interface ProgrammePanelProps {
   readonly programme: ProgrammeControls;

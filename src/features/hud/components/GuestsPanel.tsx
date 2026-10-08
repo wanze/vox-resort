@@ -1,8 +1,8 @@
-import type { VoicesView } from '../../../app/showcase';
 import { quoteOf, type Review } from '../../sim/domain/reviews';
 import type { ThoughtTally } from '../../sim/domain/thoughts';
 import { StatRow } from './StatRow';
 import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
+import type { VoicesView } from '../domain/views';
 
 export interface GuestsPanelProps {
   readonly voices: VoicesView;

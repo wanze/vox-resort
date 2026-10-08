@@ -2,14 +2,9 @@ import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { deflate, inflate } from '../features/sharing/adapters/deflate';
 import { packShared, ShareError, unpackShared } from '../features/sharing/domain/layoutCodec';
 import { formatLink, MAX_BODY_BYTES, parseLink } from '../features/sharing/domain/shareLink';
-import { sharedOf, type SharedResort } from '../features/sharing/domain/sharedResort';
+import { sharedOf } from '../features/sharing/domain/sharedResort';
 import type { Showcase } from './showcase';
-
-export type IncomingShare =
-  | { readonly kind: 'loading' }
-  | { readonly kind: 'ready'; readonly shared: SharedResort }
-  | { readonly kind: 'unreadable' }
-  | { readonly kind: 'newer' };
+import type { IncomingShare } from '../features/sharing/components/incomingShare';
 
 export interface IncomingLink {
   readonly share: IncomingShare | null;

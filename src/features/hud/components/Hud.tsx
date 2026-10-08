@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode, type RefObject } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { ArmedChip } from './ArmedChip';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
@@ -19,7 +19,7 @@ import { PlacementBar } from './PlacementBar';
 import { ProblemMarkers } from './ProblemMarkers';
 import { StaffPins } from './StaffPins';
 import { VenueSigns } from './VenueSigns';
-import { RenderStats, type DebugElements } from './RenderStats';
+import { RenderStats } from './RenderStats';
 import { ResortNameForm } from './ResortNameForm';
 import { ResortStats } from './ResortStats';
 import { StaffPanel } from './StaffPanel';
@@ -40,79 +40,82 @@ import type { Advice } from '../../sim/domain/advice';
 import { starsTrend } from '../../sim/domain/dayReport';
 import type { GameMode, Ledger } from '../../sim/domain/ledger';
 import type { LandView } from '../../land/domain/landRights';
-import type { OrderRole } from '../../sim/domain/staffRouter';
 import { hireOffer } from '../domain/hireOffer';
 import { markersOf, type OrderSpot } from '../domain/markers';
 import type { SignSpot } from '../domain/signs';
 import type { UpdateAction } from '../domain/news';
-import type { CameraControls } from '../../../app/useCameraControls';
-import type { ClockControls } from '../../../app/useClockControls';
-import type { HistoryControls } from '../../../app/useHistory';
-import type { NewsControls } from '../../../app/useNews';
-import type { OverlayControls } from '../../../app/useOverlay';
-import type { HighlightControls } from '../../../app/useHighlights';
-import type { ProgrammeControls } from '../../../app/useProgramme';
-import type { ResortControls } from '../../../app/useResortControls';
-import type { SaveControls } from '../../../app/useSaves';
-import type { SoundControls } from '../../../app/useSound';
-import type { WindowControls } from '../../../app/useWindows';
-import type { ShowcaseStats, StatusView, VoicesView } from '../../../app/showcase';
+import type { HudControls, InspectorControls } from './hudControls';
+import type { HudNodes } from './hudNodes';
+import { useHudSlice } from './useHudSlice';
+import type { HudStore } from '../domain/hudStore';
+import type { ShowcaseStats, StatusView, VoicesView } from '../domain/views';
 
-export interface HudProps {
-  readonly stats: ShowcaseStats | null;
-  readonly debugElements: DebugElements;
-  readonly clockElement: RefObject<HTMLSpanElement | null>;
-  readonly clock: ClockControls;
-  readonly camera: CameraControls;
-  readonly resort: ResortControls;
-  readonly saves: SaveControls;
-  // Makes a link to the resort's layout; the Share window copies or sends it.
-  readonly onShare: () => Promise<string>;
-  readonly overlay: OverlayControls;
-  readonly highlights: HighlightControls;
-  readonly advice: readonly Advice[];
-  readonly news: NewsControls;
-  readonly onUpdate: (action: UpdateAction) => void;
-  readonly voices: VoicesView;
-  readonly status: StatusView | null;
-  readonly history: HistoryControls;
-  readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
-  readonly markerElements: RefObject<(HTMLElement | null)[]>;
-  readonly staffPinElements: RefObject<(HTMLButtonElement | null)[]>;
-  readonly signs: readonly SignSpot[];
-  readonly signElements: RefObject<(HTMLElement | null)[]>;
-  readonly signsNamed: boolean;
-  readonly onSelectWorker: (worker: number) => void;
-  readonly onSelectAt: (at: { readonly tileX: number; readonly tileZ: number }) => void;
-  readonly ledger: Ledger | null;
-  readonly land: LandView | null;
-  readonly preview: PreviewLookup;
+interface HudPlacement {
   readonly tool: BuildTool | null;
   readonly onToolChange: (tool: BuildTool | null) => void;
-  // A placement a finger left on the map, waiting for the bar's Place or Cancel.
-  readonly pending: boolean;
+  readonly preview: PreviewLookup;
   readonly onConfirm: () => void;
   readonly onDismiss: () => void;
   readonly onTurn: (quarters: number) => void;
-  readonly selection: SelectionView | null;
-  readonly inspectElement: RefObject<HTMLSpanElement | null>;
-  readonly onSelectPerson: (person: number) => void;
-  readonly onShowSelected: () => void;
-  readonly orders: readonly OrderSpot[];
-  readonly onSend: (role: OrderRole) => void;
-  readonly onSendCleanerTo: (at: { readonly tileX: number; readonly tileZ: number }) => void;
-  readonly onRenameVenue: (key: string, name: string) => void;
-  readonly onClearSelection: () => void;
-  readonly windows: WindowControls;
+}
+
+interface HudChrome {
   readonly layout: LayoutMode;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly palette: boolean;
   readonly onPaletteChange: (open: boolean) => void;
-  readonly sound: SoundControls;
-  readonly programme: ProgrammeControls;
   readonly error: string | null;
   readonly refusal: { readonly title: string; readonly message: string } | null;
+  readonly onUpdate: (action: UpdateAction) => void;
+  // Makes a link to the resort's layout; the Share window copies or sends it.
+  readonly onShare: () => Promise<string>;
+  readonly signsNamed: boolean;
+  readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
+}
+
+export interface HudProps {
+  readonly hud: HudStore;
+  readonly nodes: HudNodes;
+  readonly controls: HudControls;
+  readonly placement: HudPlacement;
+  readonly inspector: InspectorControls;
+  readonly chrome: HudChrome;
+}
+
+interface HudSlices {
+  readonly stats: ShowcaseStats | null;
+  readonly advice: readonly Advice[];
+  readonly voices: VoicesView;
+  readonly status: StatusView | null;
+  readonly signs: readonly SignSpot[];
+  readonly selection: SelectionView | null;
+  readonly orders: readonly OrderSpot[];
+  readonly ledger: Ledger | null;
+  readonly land: LandView | null;
+  // A placement a finger left on the map, waiting for the bar's Place or Cancel.
+  readonly pending: boolean;
+}
+
+// What the HUD's pieces read: the groups laid flat, beside what the store holds.
+interface HudView extends HudControls, HudPlacement, HudChrome, HudSlices {
+  readonly nodes: HudNodes;
+  readonly inspector: InspectorControls;
+}
+
+function useHudSlices(hud: HudStore): HudSlices {
+  return {
+    stats: useHudSlice(hud, (state) => state.stats),
+    advice: useHudSlice(hud, (state) => state.advice).list,
+    voices: useHudSlice(hud, (state) => state.voices),
+    status: useHudSlice(hud, (state) => state.status),
+    signs: useHudSlice(hud, (state) => state.signs),
+    selection: useHudSlice(hud, (state) => state.selection),
+    orders: useHudSlice(hud, (state) => state.orders),
+    ledger: useHudSlice(hud, (state) => state.ledger),
+    land: useHudSlice(hud, (state) => state.land),
+    pending: useHudSlice(hud, (state) => state.pending),
+  };
 }
 
 type Panel = Exclude<PageId, 'inspect' | TabbedWindow>;
@@ -123,19 +126,19 @@ const FRAMED = WINDOW_IDS.filter((id): id is Framed => id !== 'inspect');
 const modeOf = (ledger: Ledger | null): GameMode | null => ledger?.mode ?? null;
 
 // Read at render, so a toast raised before the hire offers nothing once the role is enough.
-const hireControls = (props: HudProps): HireControls => ({
+const hireControls = (props: HudView): HireControls => ({
   offerFor: (advice) => hireOffer(advice, props.stats?.staff ?? null),
   onHire: (offer) => props.resort.setHiring(offer.role, offer.count),
 });
 
 // null for the newest, which is where the Overview and the palette open it.
-const openReport = (props: Pick<HudProps, 'history' | 'windows'>, day: number | null): void => {
+const openReport = (props: Pick<HudView, 'history' | 'windows'>, day: number | null): void => {
   props.history.show(day);
   props.windows.show('report', true);
 };
 
 // Null when a window has nothing to show yet, such as the generator before the first resort.
-const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
+const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   build: (props) => (
     <BuildPalette
       preview={props.preview}
@@ -226,10 +229,10 @@ const CONTENT: { readonly [panel in Panel]: (props: HudProps) => ReactNode } = {
   share: ({ saves, resort, onShare }) => (
     <SharePanel onShare={onShare} title={resort.name} busy={slotsBusy(saves)} />
   ),
-  debug: (props) => <RenderStats stats={props.stats} elements={props.debugElements} />,
+  debug: (props) => <RenderStats stats={props.stats} elements={props.nodes} />,
 };
 
-function frameOf(props: HudProps, id: WindowId, onClose: () => void): HudWindowFrame {
+function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFrame {
   const { windows } = props;
   const compact = isCompact(props.layout);
   return {
@@ -244,7 +247,7 @@ function frameOf(props: HudProps, id: WindowId, onClose: () => void): HudWindowF
   };
 }
 
-function tabbedBody(props: HudProps, id: TabbedWindow): ReactNode {
+function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
   const page = props.windows.tab(id);
   const content = CONTENT[page](props);
   if (content === null) return null;
@@ -264,7 +267,7 @@ function tabbedBody(props: HudProps, id: TabbedWindow): ReactNode {
   );
 }
 
-const bodyOf = (props: HudProps, id: Framed): ReactNode =>
+const bodyOf = (props: HudView, id: Framed): ReactNode =>
   isTabbed(id) ? tabbedBody(props, id) : CONTENT[id](props);
 
 const selectedKey = (selection: SelectionView | null): string | null => {
@@ -273,7 +276,7 @@ const selectedKey = (selection: SelectionView | null): string | null => {
   return selection.kind === 'guest' ? `guest:${selection.person}` : `staff:${selection.worker}`;
 };
 
-function Windows(props: HudProps) {
+function Windows(props: HudView) {
   const { windows } = props;
   const selected = selectedKey(props.selection);
   const { raise } = windows;
@@ -298,15 +301,15 @@ function Windows(props: HudProps) {
         );
       })}
       <InspectPanel
-        frame={frameOf(props, 'inspect', props.onClearSelection)}
+        frame={frameOf(props, 'inspect', props.inspector.clear)}
         selection={props.selection}
         advice={props.advice}
-        activityElement={props.inspectElement}
-        onSelectPerson={props.onSelectPerson}
-        onShow={props.onShowSelected}
-        onSend={props.onSend}
+        activityElement={props.nodes.inspect}
+        onSelectPerson={props.inspector.selectPerson}
+        onShow={props.inspector.showSelected}
+        onSend={props.inspector.send}
         hire={hireControls(props)}
-        onRenameVenue={props.onRenameVenue}
+        onRenameVenue={props.inspector.renameVenue}
         onOpenProgramme={(key) => {
           props.programme.choose(key);
           windows.show('programme', true);
@@ -317,7 +320,7 @@ function Windows(props: HudProps) {
 }
 
 // Built only while open, and afresh each time, so every tick and check mark reads the current state.
-function Palette(props: HudProps) {
+function Palette(props: HudView) {
   if (!props.palette) return null;
   return (
     <CommandPalette commands={listCommands(props)} onClose={() => props.onPaletteChange(false)} />
@@ -325,10 +328,18 @@ function Palette(props: HudProps) {
 }
 
 // The same list ProblemMarkers draws, so a sign gives way only to a marker that is showing.
-const markedTiles = (props: HudProps) =>
+const markedTiles = (props: HudView) =>
   props.news.prefs.markers ? markersOf(props.advice).map((marker) => marker.at) : [];
 
-export function Hud(props: HudProps) {
+export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudProps) {
+  const props: HudView = {
+    ...controls,
+    ...placement,
+    ...chrome,
+    ...useHudSlices(hud),
+    nodes,
+    inspector,
+  };
   return (
     <div className="hud">
       <VenueSigns
@@ -336,21 +347,21 @@ export function Hud(props: HudProps) {
         shown={props.news.prefs.signs}
         named={props.signsNamed}
         marked={markedTiles(props)}
-        elements={props.signElements}
-        onSelectAt={props.onSelectAt}
+        elements={props.nodes.signs}
+        onSelectAt={props.inspector.selectAt}
       />
-      <StaffPins elements={props.staffPinElements} onSelectWorker={props.onSelectWorker} />
+      <StaffPins elements={props.nodes.staffPins} onSelectWorker={props.inspector.selectWorker} />
       <ProblemMarkers
         advice={props.advice}
         shown={props.news.prefs.markers}
-        elements={props.markerElements}
+        elements={props.nodes.markers}
         onShowOnPlot={props.onShowOnPlot}
-        onSelectAt={props.onSelectAt}
+        onSelectAt={props.inspector.selectAt}
         orders={props.orders}
-        onSendCleaner={props.onSendCleanerTo}
+        onSendCleaner={props.inspector.sendCleanerTo}
       />
       <TopBar
-        clockElement={props.clockElement}
+        clockElement={props.nodes.clock}
         clock={props.clock}
         resort={props.resort}
         saves={props.saves}

@@ -1,36 +1,18 @@
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, type RefObject } from 'react';
 import type { Showcase } from './showcase';
-import type { SelectionView } from '../features/inspect/domain/selection';
-import type { OrderSpot } from '../features/hud/domain/markers';
+import type { HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
 import type { OrderRole } from '../features/sim/domain/staffRouter';
+import type { InspectorControls } from '../features/hud/components/hudControls';
 
-// The scene owns the selection, since clicks land on the canvas; this only mirrors what it reports.
-export interface InspectorControls {
-  readonly selection: SelectionView | null;
-  // Stable, so the mount effect can hold it.
-  readonly adopt: (selection: SelectionView | null) => void;
-  // Mirrored here too: an order is given from the inspector, and its flag shows on the markers.
-  readonly orders: readonly OrderSpot[];
-  readonly adoptOrders: (orders: readonly OrderSpot[]) => void;
-  send(role: OrderRole): void;
-  sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
-  renameVenue(key: string, name: string): void;
-  selectPerson(person: number): void;
-  selectWorker(worker: number): void;
-  showSelected(): void;
-  selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
-  clear(): void;
-}
-
-export function useInspector(showcase: RefObject<Showcase | null>): InspectorControls {
-  const [selection, adopt] = useState<SelectionView | null>(null);
-  const [orders, adoptOrders] = useState<readonly OrderSpot[]>([]);
+export function useInspector(
+  showcase: RefObject<Showcase | null>,
+  hud: HudStore,
+): InspectorControls {
+  const selection = useHudSlice(hud, (state) => state.selection);
 
   return {
     selection,
-    adopt,
-    orders,
-    adoptOrders,
     send: useCallback(
       (role: OrderRole) => {
         showcase.current?.sendStaff(role);

@@ -23,23 +23,7 @@ import {
 import type { Advice } from '../features/sim/domain/advice';
 import type { DayReport } from '../features/sim/domain/dayReport';
 import type { SimSpeed } from '../features/sim/domain/simClock';
-
-export interface NewsControls {
-  readonly toasts: readonly Toast[];
-  readonly log: readonly Message[];
-  readonly prefs: HudPrefs;
-  hear(advice: readonly Advice[], ticks: number): void;
-  closeDay(report: DayReport): void;
-  hearEvent(news: EventNews): void;
-  dismiss(key: string): void;
-  setMuted(kind: ToastKind, muted: boolean): void;
-  setMarkers(shown: boolean): void;
-  setStaffPins(shown: boolean): void;
-  setSigns(shown: boolean): void;
-  setUpdate(phase: UpdatePhase | null): void;
-  // The next advice is a baseline: a new resort's problems are not news.
-  reset(): void;
-}
+import type { NewsControls } from '../features/hud/components/hudControls';
 
 const TICK_MS = 1000;
 
@@ -81,7 +65,7 @@ export function useNews(speed: SimSpeed): NewsControls {
   const { prefs, change, setMarkers, setStaffPins, setSigns } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
-  // Read through refs so `hear` stays stable: the showcase holds it from its mount on.
+  // Read through refs so `hear` stays stable: a watch on the HUD store holds it.
   const latest = useRef({ speed, muted: prefs.muted });
   useEffect(() => {
     latest.current = { speed, muted: prefs.muted };

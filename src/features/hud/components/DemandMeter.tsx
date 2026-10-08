@@ -1,9 +1,9 @@
 import { DEMAND_GROUPS, type Demand, type DemandGroup } from '../../sim/domain/demand';
-import type { StatusView } from '../../../app/showcase';
 import { DemandBar } from './DemandBar';
 import { DemandPanel } from './DemandPanel';
 import { GROUP_NAMES, GROUP_TITLES, LINE_NAMES, pressureWord } from './demandWords';
 import { HudDropdown } from './HudDropdown';
+import type { StatusView } from '../domain/views';
 
 export interface DemandMeterProps {
   // null before the first facts are counted, which shows flat bars.

@@ -1,49 +1,30 @@
 import { useCallback, useMemo, useState, type RefObject } from 'react';
-import type {
-  BookingChange,
-  BookingDraft,
-  BookingRefusal,
-} from '../features/events/domain/programme';
+import type { BookingChange, BookingDraft } from '../features/events/domain/programme';
 import {
   cardsAt,
   programmeView,
-  type Card,
   type DayForecast,
   type DayPart,
   type ProgrammeFacts,
-  type ProgrammeView,
 } from '../features/events/domain/programmeView';
 import type { Showcase } from './showcase';
-
-export type ProgrammeTab = 'plan' | 'upcoming';
-
-// The showcase owns the programme; this mirrors it and holds which stage the window shows.
-export interface ProgrammeControls {
-  readonly view: ProgrammeView | null;
-  // The week's weather the programme plans around, which the top bar shows as well.
-  readonly forecast: readonly DayForecast[];
-  readonly tab: ProgrammeTab;
-  // Stable, so the mount effect can hold it.
-  readonly adopt: (facts: ProgrammeFacts) => void;
-  // Turns to the plan, since a stage is chosen to book on it.
-  choose(site: string): void;
-  showTab(tab: ProgrammeTab): void;
-  // Asked for one cell at a time: every start is checked against the whole programme.
-  cardsAt(day: number, part: DayPart): readonly Card[];
-  // Each answers why it was refused, or null once it is done.
-  book(draft: BookingDraft): BookingRefusal | null;
-  unbook(id: number): void;
-  rebook(id: number, change: BookingChange): BookingRefusal | null;
-  switchBuiltIn(id: number, on: boolean): void;
-}
+import type { HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
+import type {
+  ProgrammeControls,
+  ProgrammeTab,
+} from '../features/events/components/programmeControls';
 
 const NO_FORECAST: readonly DayForecast[] = [];
 
 const forecastOf = (facts: ProgrammeFacts | null): readonly DayForecast[] =>
   facts?.forecast ?? NO_FORECAST;
 
-export function useProgramme(showcase: RefObject<Showcase | null>): ProgrammeControls {
-  const [facts, adopt] = useState<ProgrammeFacts | null>(null);
+export function useProgramme(
+  showcase: RefObject<Showcase | null>,
+  hud: HudStore,
+): ProgrammeControls {
+  const facts = useHudSlice(hud, (state) => state.programme);
   const [site, setSite] = useState<string | null>(null);
   const [tab, showTab] = useState<ProgrammeTab>('plan');
   const view = useMemo(() => (facts ? programmeView(facts, site) : null), [facts, site]);
@@ -53,7 +34,6 @@ export function useProgramme(showcase: RefObject<Showcase | null>): ProgrammeCon
     view,
     forecast: forecastOf(facts),
     tab,
-    adopt,
     choose: useCallback((key: string) => {
       setSite(key);
       showTab('plan');

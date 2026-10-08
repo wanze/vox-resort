@@ -28,18 +28,20 @@ import { canAfford, type Ledger } from '../../sim/domain/ledger';
 import { footprintLabel } from '../domain/paletteFilter';
 import { isOpen, isShown, type PageId } from '../domain/windowLayout';
 import type { Searchable } from '../domain/commandSearch';
-import type { CameraControls } from '../../../app/useCameraControls';
-import type { ClockControls } from '../../../app/useClockControls';
-import type { HistoryControls } from '../../../app/useHistory';
-import type { OverlayControls } from '../../../app/useOverlay';
-import type { HighlightControls } from '../../../app/useHighlights';
-import type { ResortControls } from '../../../app/useResortControls';
-import type { SaveControls } from '../../../app/useSaves';
-import type { SoundControls } from '../../../app/useSound';
 import { isReadable, listOrder, saveOrAsk } from '../../saves/domain/saveSlots';
 import { savedAgo, titleOf } from '../../saves/domain/saveWords';
 import { SAVE_SHORTCUT } from './MainMenu';
-import type { WindowControls } from '../../../app/useWindows';
+import type { HighlightControls } from '../../highlights/components/highlightControls';
+import type {
+  CameraControls,
+  ClockControls,
+  HistoryControls,
+  ResortControls,
+  SoundControls,
+  WindowControls,
+} from './hudControls';
+import type { OverlayControls } from '../../overlays/components/overlayControls';
+import type { SaveControls } from '../../saves/components/saveControls';
 
 export type CommandArt =
   | { readonly icon: IconName }

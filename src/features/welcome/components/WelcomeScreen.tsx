@@ -13,12 +13,12 @@ import { titleOf } from '../../saves/domain/saveWords';
 import type { SaveMeta } from '../../saves/domain/snapshot';
 import { SharedResortCard } from '../../sharing/components/SharedResortCard';
 import type { SharedResort } from '../../sharing/domain/sharedResort';
-import type { SaveControls } from '../../../app/useSaves';
-import type { IncomingShare } from '../../../app/useSharing';
 import type { LoadingStep } from '../domain/loading';
 import type { NewGame } from '../domain/newGame';
 import { LoadingProgress } from './LoadingProgress';
 import { NewGamePanel } from './NewGamePanel';
+import type { SaveControls } from '../../saves/components/saveControls';
+import type { IncomingShare } from '../../sharing/components/incomingShare';
 
 export interface WelcomeScreenProps {
   readonly loaded: readonly LoadingStep[];

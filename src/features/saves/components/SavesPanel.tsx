@@ -4,7 +4,7 @@ import { statusLine } from '../domain/saveWords';
 import { clockTime } from './saveNames';
 import { NameForm } from './NameForm';
 import { SaveList } from './SaveList';
-import type { SaveControls } from '../../../app/useSaves';
+import type { SaveControls } from './saveControls';
 
 function SaveStatus({ saves }: { readonly saves: SaveControls }) {
   const { lastSavedAt } = saves;

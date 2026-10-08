@@ -34,7 +34,7 @@
     "rules": [
       { "from": "domain", "allow": ["domain", "models", "sounds"] },
       { "from": "adapters", "allow": ["domain", "adapters", "models", "sounds"] },
-      { "from": "components", "allow": ["domain", "components"], "allowTypeOnly": ["app"] },
+      { "from": "components", "allow": ["domain", "components"] },
       { "from": "app", "allow": ["domain", "adapters", "components", "app", "models", "sounds"] },
       { "from": "models", "allow": ["models"] },
       { "from": "sounds", "allow": ["sounds"], "allowTypeOnly": ["domain"] }

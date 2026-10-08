@@ -10,14 +10,12 @@ import { isOpen, isShown } from '../domain/windowLayout';
 import { SoundOptions } from '../../sound/components/SoundControl';
 import { saveOrAsk } from '../../saves/domain/saveSlots';
 import { HighlightOptions } from '../../highlights/components/HighlightControl';
-import type { HighlightControls } from '../../../app/useHighlights';
-import type { OverlayControls } from '../../../app/useOverlay';
 import { OverlayOptions } from '../../overlays/components/OverlayControl';
 import { OVERLAY_NAMES } from '../../overlays/components/overlayNames';
-import type { ClockControls } from '../../../app/useClockControls';
-import type { SaveControls } from '../../../app/useSaves';
-import type { SoundControls } from '../../../app/useSound';
-import type { WindowControls } from '../../../app/useWindows';
+import type { HighlightControls } from '../../highlights/components/highlightControls';
+import type { ClockControls, SoundControls, WindowControls } from './hudControls';
+import type { OverlayControls } from '../../overlays/components/overlayControls';
+import type { SaveControls } from '../../saves/components/saveControls';
 
 export const SAVE_SHORTCUT = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')
   ? '⌘S'

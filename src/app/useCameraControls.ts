@@ -1,36 +1,26 @@
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, type RefObject } from 'react';
 import type { CameraMode, CompassDirection } from '../features/layout/domain/worldBounds';
-import type { CameraView, Showcase } from './showcase';
+import type { Showcase } from './showcase';
+import type { HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
+import type { CameraControls } from '../features/hud/components/hudControls';
 
-// A mirror: the scene owns the camera and keys move it without React, so state is read back from
-// the scene.
-export interface CameraControls {
-  readonly view: CameraView;
-  adopt(view: CameraView): void;
-  setMode(mode: CameraMode): void;
-  setDirection(direction: CompassDirection): void;
-  setDetail(enabled: boolean): void;
-}
-
-const INITIAL_VIEW: CameraView = { mode: 'perspective', direction: 'southeast', detail: true };
-
-export function useCameraControls(showcase: RefObject<Showcase | null>): CameraControls {
-  const [view, setView] = useState<CameraView>(INITIAL_VIEW);
+export function useCameraControls(
+  showcase: RefObject<Showcase | null>,
+  hud: HudStore,
+): CameraControls {
+  const view = useHudSlice(hud, (state) => state.camera);
 
   const apply = useCallback(
     (change: (mounted: Showcase) => void) => {
       const mounted = showcase.current;
-      if (!mounted) return;
-      change(mounted);
-      // Read back: the scene refuses a mode change while a benchmark is running.
-      setView(mounted.cameraView);
+      if (mounted) change(mounted);
     },
     [showcase],
   );
 
   return {
     view,
-    adopt: setView,
     setMode: useCallback(
       (mode: CameraMode) => apply((mounted) => mounted.setCameraMode(mode)),
       [apply],

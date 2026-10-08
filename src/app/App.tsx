@@ -12,26 +12,23 @@ import type { ResortParams } from '../features/layout/domain/resortGenerator';
 import { parseBenchConfig } from '../features/bench/domain/benchConfig';
 import { useHudNodes } from './useHudNodes';
 import { useCameraControls } from './useCameraControls';
-import { useClockControls, type ClockControls } from './useClockControls';
+import { useClockControls } from './useClockControls';
 import { useAdvice } from './useAdvice';
 import { useHistory } from './useHistory';
 import { useNews } from './useNews';
-import { useStatus } from './useStatus';
-import { useThoughts } from './useThoughts';
-import { usePending } from './usePending';
 import { useInspector } from './useInspector';
 import { useOverlay } from './useOverlay';
 import { useProgramme } from './useProgramme';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
-import { useSaves, type SaveControls } from './useSaves';
+import { useSaves } from './useSaves';
 import { useSigns } from './useSigns';
 import { useHighlights } from './useHighlights';
-import { useClickCues, useSound, useToastCues, type SoundControls } from './useSound';
+import { useClickCues, useSound, useToastCues } from './useSound';
 import { useUpdate } from './useUpdate';
 import { useIncomingLink, useShareLink } from './useSharing';
 import type { SharedResort } from '../features/sharing/domain/sharedResort';
-import { mountShowcase, type BuildNote, type Showcase, type ShowcaseStats } from './showcase';
+import { mountShowcase, type Showcase } from './showcase';
 import {
   armedLand,
   armedZone,
@@ -44,6 +41,11 @@ import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 import type { Toast } from '../features/hud/domain/news';
+import type { ClockControls, SoundControls } from '../features/hud/components/hudControls';
+import type { BuildNote } from '../features/hud/domain/views';
+import { createHudStore, type HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
+import type { SaveControls } from '../features/saves/components/saveControls';
 
 const GAME_TITLE = 'Vox Resort';
 
@@ -93,10 +95,11 @@ function Screen(props: {
 // it gives way to the HUD once the resort stands.
 function useWelcome(
   showcase: RefObject<Showcase | null>,
+  hud: HudStore,
   saves: SaveControls,
   setPlaying: (playing: boolean) => void,
 ) {
-  const resort = useResortControls(showcase, saves.started);
+  const resort = useResortControls(showcase, hud, saves.started);
   const { start, openShared: openResort } = resort;
   const { load } = saves;
   const incoming = useIncomingLink(OPENS_ON_WELCOME);
@@ -151,6 +154,7 @@ function useDocumentTitle(playing: boolean, name: string | null): void {
 // params a load brings are handed over late.
 function useGame(
   showcase: RefObject<Showcase | null>,
+  hud: HudStore,
   clock: ClockControls,
   setUpdate: (phase: UpdatePhase | null) => void,
 ) {
@@ -165,7 +169,7 @@ function useGame(
     [adoptForced],
   );
   const saves = useSaves(showcase, playing, onLoaded);
-  const welcome = useWelcome(showcase, saves, setPlaying);
+  const welcome = useWelcome(showcase, hud, saves, setPlaying);
   const { adopt: adoptParams } = welcome.resort;
   useEffect(() => {
     adoptParamsRef.current = adoptParams;
@@ -179,16 +183,31 @@ function useGame(
 // Together because the advice and the day's report are what the news is heard from, and a new
 // resort is a baseline for both.
 // sceneUp, so the staff pins, signs and highlights asked for at startup are not told to nobody.
-function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sceneUp: boolean) {
+function useAdviceNews(
+  showcase: RefObject<Showcase | null>,
+  hud: HudStore,
+  speed: SimSpeed,
+  sceneUp: boolean,
+) {
   const news = useNews(speed);
-  const history = useHistory(news.closeDay);
+  const { hear } = news;
+  // Watched before the history, so a morning's advice is heard before its day is closed.
+  useEffect(
+    () =>
+      hud.watch(
+        (state) => state.advice,
+        (advice) => hear(advice.list, advice.ticks),
+      ),
+    [hud, hear],
+  );
+  const history = useHistory(hud, news.closeDay);
   const { reset: resetNews } = news;
   const { reset: resetHistory } = history;
   const replaced = useCallback(() => {
     resetNews();
     resetHistory();
   }, [resetNews, resetHistory]);
-  const advice = useAdvice(showcase, news.hear);
+  const advice = useAdvice(showcase, hud);
   const shown = news.prefs.markers;
   // markersOf on the same list ProblemMarkers renders, so the anchors and the buttons line up.
   useEffect(() => {
@@ -199,32 +218,28 @@ function useAdviceNews(showcase: RefObject<Showcase | null>, speed: SimSpeed, sc
     if (sceneUp) showcase.current?.setStaffPins(staffPins);
   }, [showcase, sceneUp, staffPins]);
   const signs = useSigns(showcase, sceneUp, news.prefs.signs);
-  const highlights = useHighlights(showcase, sceneUp);
+  const highlights = useHighlights(showcase, hud, sceneUp);
   return { news, history, replaced, advice, signs, highlights };
 }
 
-function useHourly() {
-  return { thoughts: useThoughts(), status: useStatus() };
-}
-
-function usePlacement(showcase: RefObject<Showcase | null>) {
-  const { pending, adopt } = usePending();
+function usePlacement(showcase: RefObject<Showcase | null>, hud: HudStore) {
+  const pending = useHudSlice(hud, (state) => state.pending);
   const confirm = useCallback(() => showcase.current?.confirmPlacement(), [showcase]);
   const dismiss = useCallback(() => showcase.current?.dismissPlacement(), [showcase]);
   const turn = useCallback(
     (quarters: number) => showcase.current?.turnPlacement(quarters),
     [showcase],
   );
-  return { pending, adopt, confirm, dismiss, turn };
+  return { pending, confirm, dismiss, turn };
 }
 
-function useControls(showcase: RefObject<Showcase | null>) {
+function useControls(showcase: RefObject<Showcase | null>, hud: HudStore) {
   return {
-    camera: useCameraControls(showcase),
-    clock: useClockControls(showcase),
-    inspector: useInspector(showcase),
-    placement: usePlacement(showcase),
-    programme: useProgramme(showcase),
+    camera: useCameraControls(showcase, hud),
+    clock: useClockControls(showcase, hud),
+    inspector: useInspector(showcase, hud),
+    placement: usePlacement(showcase, hud),
+    programme: useProgramme(showcase, hud),
   };
 }
 
@@ -266,7 +281,10 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
   const showcaseRef = useRef<Showcase | null>(null);
-  const [stats, setStats] = useState<ShowcaseStats | null>(null);
+  // Set once showcaseRef holds the scene: the store says the scene is up a little before that.
+  const [sceneUp, setSceneUp] = useState(false);
+  // Made before the showcase, so React is listening before anything is published.
+  const [hud] = useState(createHudStore);
   const [error, setError] = useState<string | null>(null);
   const mapOverlay = useOverlay(showcaseRef);
   const {
@@ -274,14 +292,19 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, placement, programme } = useControls(showcaseRef);
+  const { camera, clock, inspector, placement, programme } = useControls(showcaseRef, hud);
   const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
+    hud,
     clock.speed,
-    stats !== null,
+    sceneUp,
   );
-  const { thoughts, status } = useHourly();
-  const { playing, saves, welcome, onUpdate, share } = useGame(showcaseRef, clock, news.setUpdate);
+  const { playing, saves, welcome, onUpdate, share } = useGame(
+    showcaseRef,
+    hud,
+    clock,
+    news.setUpdate,
+  );
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
   const { windows, layout, menu, setMenu, palette, setPalette } = useHudChrome(
@@ -300,20 +323,10 @@ export function App() {
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
-  const { adopt: adoptParams, adoptOpen, adoptName, money } = resort;
-  const { adopt: adoptCamera } = camera;
-  const { adopt: adoptSelection, adoptOrders } = inspector;
-  const { adopt: adoptAdvice, show: showAdvice } = advice;
-  const { adopt: adoptHistory } = history;
-  const { adopt: adoptVoices } = thoughts;
-  const { adopt: adoptPending } = placement;
-  const { adopt: adoptStatus } = status;
-  const { adoptWeather, adoptSpeed, togglePause } = clock;
-  const { adopt: adoptLedger, adoptLand, note } = money;
+  const { adopt: adoptParams, money } = resort;
+  const { adoptSpeed, togglePause } = clock;
+  const { note } = money;
   const { markDirty, morning } = saves;
-  const { adopt: adoptSigns } = signs;
-  const { adopt: adoptHighlights } = highlights;
-  const { adopt: adoptProgramme } = programme;
   const { hearEvent } = news;
   const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
   const { cue: onCue, hear: onHear } = sound;
@@ -329,26 +342,11 @@ export function App() {
 
     const options = {
       canvas,
-      onSceneChange: setStats,
+      hud,
       onToolChange: selectTool,
-      onCameraChange: adoptCamera,
-      onSelectionChange: adoptSelection,
-      onOrdersChange: adoptOrders,
-      onSigns: adoptSigns,
-      onHighlightTypes: adoptHighlights,
-      onAdviceChange: adoptAdvice,
       onResortReplaced: replaced,
-      onThoughtsChange: adoptVoices,
-      onStatusChange: adoptStatus,
-      onHistoryChange: adoptHistory,
-      onWeatherChange: adoptWeather,
-      onOpenChange: adoptOpen,
-      onNameChange: adoptName,
-      onMoneyChange: adoptLedger,
-      onLandChange: adoptLand,
       onRefused,
       onBuildNote: note,
-      onPendingChange: adoptPending,
       onFrame: overlay.update,
       onLoading: adoptLoading,
       onDirty: markDirty,
@@ -358,7 +356,6 @@ export function App() {
       onSpeedChange: adoptSpeed,
       onDoubleTap: togglePause,
       onEventNews: hearEvent,
-      onProgrammeChange: adoptProgramme,
       welcome: OPENS_ON_WELCOME,
     };
 
@@ -372,20 +369,8 @@ export function App() {
         }
         showcaseRef.current = mounted;
         mounted.selectTool(toolRef.current);
-        setStats(mounted.stats);
-        // So the panel says something before the first check-in hour comes round.
-        showAdvice(mounted.advice);
-        adoptVoices(mounted.voices);
-        adoptStatus(mounted.status);
-        adoptHistory(mounted.history);
-        adoptCamera(mounted.cameraView);
         adoptParams(mounted.params);
-        adoptOpen(mounted.open);
-        adoptName(mounted.name);
-        adoptLedger(mounted.ledger);
-        adoptProgramme(mounted.programme);
-        // So the bar says what kind of day it is before midnight comes round.
-        adoptWeather(mounted.stats.weather);
+        setSceneUp(true);
       } catch (cause: unknown) {
         console.error(cause);
         setError(messageOf(cause));
@@ -401,25 +386,13 @@ export function App() {
     };
     // All of them are stable, so the renderer is mounted exactly once.
   }, [
+    hud,
     hudNodes,
     selectTool,
     toolRef,
     adoptParams,
-    adoptOpen,
-    adoptName,
-    adoptCamera,
-    adoptSelection,
-    adoptOrders,
-    adoptAdvice,
-    showAdvice,
-    replaced,
-    adoptVoices,
-    adoptStatus,
-    adoptHistory,
-    adoptWeather,
-    adoptLedger,
-    adoptLand,
     adoptLoading,
+    replaced,
     note,
     onRefused,
     markDirty,
@@ -428,11 +401,7 @@ export function App() {
     onHear,
     adoptSpeed,
     togglePause,
-    adoptSigns,
-    adoptHighlights,
-    adoptPending,
     hearEvent,
-    adoptProgramme,
   ]);
 
   return (
@@ -461,58 +430,43 @@ export function App() {
         }
       >
         <Hud
-          stats={stats}
-          debugElements={hudNodes}
-          clockElement={hudNodes.clock}
-          clock={clock}
-          camera={camera}
-          resort={resort}
-          saves={saves}
-          onShare={share}
-          overlay={mapOverlay}
-          highlights={highlights}
-          advice={advice.advice}
-          news={news}
-          onUpdate={onUpdate}
-          voices={thoughts.voices}
-          status={status.status}
-          history={history}
-          onShowOnPlot={advice.showOnPlot}
-          markerElements={hudNodes.markers}
-          staffPinElements={hudNodes.staffPins}
-          signs={signs.spots}
-          signElements={hudNodes.signs}
-          signsNamed={signs.named}
-          onSelectWorker={inspector.selectWorker}
-          onSelectAt={inspector.selectAt}
-          preview={previewUrl}
-          tool={tool}
-          onToolChange={selectTool}
-          pending={placement.pending}
-          onConfirm={placement.confirm}
-          onDismiss={placement.dismiss}
-          onTurn={placement.turn}
-          selection={inspector.selection}
-          inspectElement={hudNodes.inspect}
-          onSelectPerson={inspector.selectPerson}
-          onShowSelected={inspector.showSelected}
-          orders={inspector.orders}
-          onSend={inspector.send}
-          onSendCleanerTo={inspector.sendCleanerTo}
-          onRenameVenue={inspector.renameVenue}
-          onClearSelection={inspector.clear}
-          error={error}
-          refusal={money.refusal}
-          ledger={money.ledger}
-          land={money.land}
-          windows={windows}
-          layout={layout}
-          menu={menu}
-          onMenuChange={setMenu}
-          palette={palette}
-          onPaletteChange={setPalette}
-          sound={sound}
-          programme={programme}
+          hud={hud}
+          nodes={hudNodes}
+          controls={{
+            clock,
+            camera,
+            resort,
+            saves,
+            overlay: mapOverlay,
+            highlights,
+            news,
+            history,
+            sound,
+            programme,
+            windows,
+          }}
+          placement={{
+            tool,
+            onToolChange: selectTool,
+            preview: previewUrl,
+            onConfirm: placement.confirm,
+            onDismiss: placement.dismiss,
+            onTurn: placement.turn,
+          }}
+          inspector={inspector}
+          chrome={{
+            layout,
+            menu,
+            onMenuChange: setMenu,
+            palette,
+            onPaletteChange: setPalette,
+            error,
+            refusal: money.refusal,
+            onUpdate,
+            onShare: share,
+            signsNamed: signs.named,
+            onShowOnPlot: advice.showOnPlot,
+          }}
         />
       </Screen>
     </div>

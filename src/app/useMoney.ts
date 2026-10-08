@@ -1,22 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LandView } from '../features/land/domain/landRights';
-import type { Ledger } from '../features/sim/domain/ledger';
-import type { BuildNote } from './showcase';
-
-export interface MoneyControls {
-  readonly ledger: Ledger | null;
-  readonly refusal: BuildNote | null;
-  readonly adopt: (ledger: Ledger) => void;
-  readonly land: LandView | null;
-  readonly adoptLand: (land: LandView) => void;
-  readonly note: (note: BuildNote) => void;
-}
+import type { BuildNote } from '../features/hud/domain/views';
+import type { MoneyControls } from '../features/hud/components/hudControls';
+import type { HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
 
 const REFUSAL_MS = 4_000;
 
-export function useMoney(): MoneyControls {
-  const [ledger, adopt] = useState<Ledger | null>(null);
-  const [land, adoptLand] = useState<LandView | null>(null);
+export function useMoney(hud: HudStore): MoneyControls {
+  const ledger = useHudSlice(hud, (state) => state.ledger);
+  const land = useHudSlice(hud, (state) => state.land);
   const [refusal, setRefusal] = useState<BuildNote | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -33,5 +25,5 @@ export function useMoney(): MoneyControls {
     [],
   );
 
-  return { ledger, refusal, adopt, land, adoptLand, note };
+  return { ledger, refusal, land, note };
 }

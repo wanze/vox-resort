@@ -3,35 +3,34 @@ import {
   keptPicks,
   toggledPick,
   type HighlightPick,
-  type HighlightType,
 } from '../features/highlights/domain/highlights';
 import type { Showcase } from './showcase';
-
-export interface HighlightControls {
-  readonly types: readonly HighlightType[];
-  readonly picks: readonly HighlightPick[];
-  // Stable, so the mount effect can hold it.
-  readonly adopt: (types: readonly HighlightType[]) => void;
-  readonly toggle: (family: string) => void;
-  readonly clear: () => void;
-}
+import type { HighlightControls } from '../features/highlights/components/highlightControls';
+import type { HudStore } from '../features/hud/domain/hudStore';
+import { useHudSlice } from '../features/hud/components/useHudSlice';
 
 export function useHighlights(
   showcase: RefObject<Showcase | null>,
+  hud: HudStore,
   sceneUp: boolean,
 ): HighlightControls {
-  const [types, setTypes] = useState<readonly HighlightType[]>([]);
+  const types = useHudSlice(hud, (state) => state.highlightTypes);
   const [picks, setPicks] = useState<readonly HighlightPick[]>([]);
+  // A kind pulled down is no longer picked.
+  useEffect(
+    () =>
+      hud.watch(
+        (state) => state.highlightTypes,
+        (next) => setPicks((current) => keptPicks(current, next)),
+      ),
+    [hud],
+  );
   useEffect(() => {
     if (sceneUp) showcase.current?.setHighlights(picks);
   }, [showcase, sceneUp, picks]);
   return {
     types,
     picks,
-    adopt: useCallback((next: readonly HighlightType[]) => {
-      setTypes(next);
-      setPicks((current) => keptPicks(current, next));
-    }, []),
     toggle: useCallback((family: string) => {
       setPicks((current) => toggledPick(current, family));
     }, []),

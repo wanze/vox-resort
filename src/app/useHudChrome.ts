@@ -1,8 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useHotkeys } from './useHotkeys';
-import { useWindows, type WindowControls } from './useWindows';
-import type { ClockControls } from './useClockControls';
-import type { SaveControls } from './useSaves';
+import { useWindows } from './useWindows';
 import { saveOrAsk } from '../features/saves/domain/saveSlots';
 import type { Hotkey } from '../features/hud/adapters/hotkeys';
 import type { MenuId } from '../features/hud/components/TopBar';
@@ -12,6 +10,8 @@ import { cycledTool } from '../features/build/domain/stylePick';
 import type { SelectionView } from '../features/inspect/domain/selection';
 import type { LayoutMode } from '../features/hud/domain/layoutMode';
 import { useLayoutMode } from './useLayoutMode';
+import type { ClockControls, WindowControls } from '../features/hud/components/hudControls';
+import type { SaveControls } from '../features/saves/components/saveControls';
 
 export interface HudChrome {
   readonly windows: WindowControls;

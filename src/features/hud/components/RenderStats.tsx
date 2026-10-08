@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { StatRow } from './StatRow';
-import type { ShowcaseStats } from '../../../app/showcase';
+import type { ShowcaseStats } from '../domain/views';
 
 export interface DebugElements {
   readonly fps: RefObject<HTMLSpanElement | null>;

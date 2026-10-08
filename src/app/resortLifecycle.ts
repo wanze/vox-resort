@@ -48,7 +48,7 @@ export function prepRequestFor(source: ResortSource, bench: BenchConfig | null):
   };
 }
 
-function cameraOf(handle: SceneHandle): CameraSnapshot {
+export function cameraOf(handle: SceneHandle): CameraSnapshot {
   const { position, zoom } = handle.camera;
   const { target } = handle.controls;
   return {
@@ -61,7 +61,7 @@ function cameraOf(handle: SceneHandle): CameraSnapshot {
 }
 
 // Mode and direction first, as each re-stands the camera; the saved position then wins.
-function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void {
+export function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void {
   handle.setIsoDirection(camera.isoDirection);
   handle.setCameraMode(camera.mode);
   handle.lookAt(camera.target);
@@ -93,6 +93,11 @@ interface LifecycleParts {
   readonly populationOf: (prepared: PreparedResort) => number;
   readonly restoreGame: (resort: Resort, saved: GameSnapshot) => void;
   readonly reanchor: () => void;
+  // Ends a follow first, which hands the camera back to the player.
+  readonly beforeReplace: () => void;
+  // The player's own camera while a follow has taken it over, so neither a save nor a settle keeps
+  // a guest's view.
+  readonly heldCamera: () => CameraSnapshot | null;
   readonly openIsometric: () => void;
   readonly stopDrift: () => void;
   // Letters and tells the HUD everything of the resort now standing.
@@ -140,8 +145,11 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     parts.reanchor();
   };
 
+  const playerCamera = (): CameraSnapshot => parts.heldCamera() ?? cameraOf(handle);
+
   // Told at once, so a save that fails to restore still leaves the next advice a baseline.
   const replaceResort = (prepared: PreparedResort, population?: number): Resort => {
+    parts.beforeReplace();
     const resort = slot.replace(prepared, population);
     parts.fireworks.clear();
     parts.ownership.update(resort.rights, resort.plan);
@@ -201,7 +209,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
       crowd: snapshotCrowd(resort.crowd.crowd),
       staff: snapshotCrowd(resort.staff.crowd),
       clock: clock.snapshot(),
-      camera: cameraOf(handle),
+      camera: playerCamera(),
     };
   };
 
@@ -270,7 +278,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
   const settleOnto = (prepared: PreparedResort): void => {
     const replaceStarted = performance.now();
     const saved = gameNow();
-    const camera = cameraOf(handle);
+    const camera = playerCamera();
     const sites = build.openSites();
     const population = Math.max(saved.population, parts.populationOf(prepared));
     build.abandon();

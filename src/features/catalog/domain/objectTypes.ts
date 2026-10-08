@@ -187,3 +187,11 @@ export const soundOf = (id: string): SoundKind | null => SOUNDS.get(familyOf(id)
 export function binReachOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.binReach ?? 0;
 }
+
+// Plot props stand in the way of a camera as much as placements do.
+const SOLID_TOPS: ReadonlyMap<string, readonly number[]> = new Map([
+  ...OBJECT_TYPES.map((type) => [type.id, type.model.solidTops] as const),
+  ...PROP_MODELS.map((model) => [model.id, model.solidTops] as const),
+]);
+
+export const solidTopsById = (id: string): readonly number[] | undefined => SOLID_TOPS.get(id);

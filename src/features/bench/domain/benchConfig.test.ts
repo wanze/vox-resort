@@ -88,6 +88,17 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&speed=rush')?.speed).toBe('rush');
   });
 
+  it('follows a guest at the shoulder or through their eyes', () => {
+    expect(parseBenchConfig('?bench=1&follow=third')?.follow).toBe('third');
+    expect(parseBenchConfig('?bench=1&follow=first')?.follow).toBe('first');
+  });
+
+  it('follows nobody unless a view is asked for', () => {
+    expect(parseBenchConfig('?bench=1')).not.toHaveProperty('follow');
+    expect(parseBenchConfig('?bench=1&follow=second')).not.toHaveProperty('follow');
+    expect(parseBenchConfig('?bench=1&follow=')).not.toHaveProperty('follow');
+  });
+
   it('keeps the clock paused unless a playing speed is asked for', () => {
     expect(parseBenchConfig('?bench=1')).not.toHaveProperty('speed');
     expect(parseBenchConfig('?bench=1&speed=paused')).not.toHaveProperty('speed');

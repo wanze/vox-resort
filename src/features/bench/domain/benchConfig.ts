@@ -30,6 +30,12 @@ type BenchSpeed = (typeof SPEEDS)[number];
 
 const BENCH_SPEEDS: ReadonlySet<string> = new Set<string>(SPEEDS);
 
+const FOLLOWS = ['first', 'third'] as const;
+
+type BenchFollow = (typeof FOLLOWS)[number];
+
+const BENCH_FOLLOWS: ReadonlySet<string> = new Set<string>(FOLLOWS);
+
 const FIREWORKS: ReadonlySet<string> = new Set<TierId>(['small', 'medium', 'grand']);
 
 export interface BenchConfig {
@@ -51,6 +57,8 @@ export interface BenchConfig {
   readonly plot?: 'reference';
   // Runs the clock, so the sim, both routers and the crowd at its real scale are measured too.
   readonly speed?: BenchSpeed;
+  // Follows the first guest walking, so the frame at a guest's eye or shoulder is measured.
+  readonly follow?: BenchFollow;
 }
 
 export const DEFAULT_BENCH: BenchConfig = {
@@ -117,6 +125,7 @@ export function parseBenchConfig(search: string): BenchConfig | null {
     ...fireworksOf(params.get('fireworks')),
     ...(params.get('plot') === 'reference' ? { plot: 'reference' as const } : {}),
     ...speedOf(params.get('speed')),
+    ...followOf(params.get('follow')),
   };
 }
 
@@ -141,6 +150,9 @@ const fireworksOf = (raw: string | null): { readonly fireworks?: TierId } =>
 
 const speedOf = (raw: string | null): { readonly speed?: BenchSpeed } =>
   raw !== null && BENCH_SPEEDS.has(raw) ? { speed: raw as BenchSpeed } : {};
+
+const followOf = (raw: string | null): { readonly follow?: BenchFollow } =>
+  raw !== null && BENCH_FOLLOWS.has(raw) ? { follow: raw as BenchFollow } : {};
 
 // A 60 Hz player's frame. MAX_STEP would hand a running sim six times that and measure a frame
 // rate nobody plays at; paused runs keep it, so every paused number recorded still compares.

@@ -19,6 +19,8 @@ import { buildCrewField } from './crewField';
 
 export interface SeaField {
   readonly group: Group;
+  // Read, never stepped, from outside: a camera riding along needs where each craft is.
+  readonly flotilla: Flotilla;
   readonly count: number;
   readonly crewCount: number;
   readonly drawCalls: number;
@@ -96,6 +98,9 @@ export function buildSeaField(options: SeaFieldOptions): SeaField {
   const hulls = fieldTriangles(parts);
   return {
     group,
+    get flotilla() {
+      return flotilla;
+    },
     get count() {
       return flotilla.count;
     },

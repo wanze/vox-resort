@@ -28,7 +28,7 @@ const SUITE: readonly BenchCase[] = [
   { name: 'night-street', view: 'street', time: 0.02, note: 'after dark, camera at eye level' },
 ];
 
-const PASSED = ['weather', 'styles', 'fireworks', 'plot', 'speed', 'people'] as const;
+const PASSED = ['weather', 'styles', 'fireworks', 'plot', 'speed', 'people', 'follow'] as const;
 
 interface BenchStats {
   readonly frames: number;
@@ -92,7 +92,7 @@ interface Cli {
   readonly mainThread: boolean;
   readonly noDetail: boolean;
   // Handed to the page as they were given: `--weather`, `--styles`, `--fireworks`, `--plot`,
-  // `--speed` and `--people`.
+  // `--speed`, `--people` and `--follow`.
   readonly passed: ReadonlyMap<string, string>;
   readonly mosaic: boolean;
   readonly json: boolean;

@@ -17,7 +17,7 @@ import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from './PixelIcon';
 import { StatRow } from './StatRow';
-import { thoughtLine } from './thoughtWords';
+import { NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
 import { VenueName } from './VenueName';
 
 export interface InspectPanelProps {
@@ -29,28 +29,13 @@ export interface InspectPanelProps {
   readonly onSelectPerson: (person: number) => void;
   // Looks at the inspected worker where they are now: staff walk off while the panel is open.
   readonly onShow: () => void;
+  // Takes the camera to the inspected guest's shoulder.
+  readonly onFollow: () => void;
   readonly onSend: (role: OrderRole) => void;
   readonly hire?: HireControls;
   readonly onRenameVenue: (key: string, name: string) => void;
   readonly onOpenProgramme: (key: string) => void;
 }
-
-const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
-  family: 'Family',
-  couple: 'Couple',
-  friends: 'Friends',
-  solo: 'On their own',
-};
-
-// Duplicated from selection.ts on purpose: that wording is what a venue serves.
-const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
-  hunger: 'Hunger',
-  thirst: 'Thirst',
-  energy: 'Energy',
-  fun: 'Fun',
-  hygiene: 'Hygiene',
-  health: 'Health',
-};
 
 const ROLES: { readonly [role in NonNullable<PlaceView['venue']>['role']]: string } = {
   lodging: 'Lodging',
@@ -93,56 +78,32 @@ function MemberList({ label, members, selected, onSelectPerson }: MemberListProp
   );
 }
 
-function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
-  return (
-    <div className="hud-needs" role="group" aria-label="How they are doing">
-      {needs.map(({ need, level }) => (
-        <div key={need} className="hud-need">
-          <span className="hud-need-label">{NEED_LABELS[need]}</span>
-          <span
-            className="hud-need-track"
-            aria-label={`${NEED_LABELS[need]} ${Math.round(level * 100)}%`}
-          >
-            <span
-              className="hud-need-fill"
-              style={{ width: `${level * 100}%`, ['--level' as string]: level }}
-            />
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
   if (!wants) return <StatRow label="Wants">Nothing right now</StatRow>;
   return <StatRow label="Wants">{wants.label}</StatRow>;
-}
-
-function ThinksRow({ thought }: { readonly thought: GuestView['thought'] }) {
-  return (
-    <dl className="hud-stats hud-advice">
-      <StatRow label="Thinks">
-        {thought ? `“${thoughtLine(thought.kind, thought.subject)}”` : 'Nothing yet'}
-      </StatRow>
-    </dl>
-  );
 }
 
 function GuestDetails({
   guest,
   activityElement,
   onSelectPerson,
+  onFollow,
 }: {
   readonly guest: GuestView;
   readonly activityElement: RefObject<HTMLSpanElement | null>;
   readonly onSelectPerson: (person: number) => void;
+  readonly onFollow: () => void;
 }) {
   return (
     <>
       <p className="hud-inspect-activity">
         <span ref={activityElement}>—</span>
       </p>
+      <div className="hud-inspect-members">
+        <button type="button" className="hud-camera-mode" onClick={onFollow}>
+          Follow
+        </button>
+      </div>
       <dl className="hud-stats">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
@@ -421,6 +382,7 @@ function Details({
   activityElement,
   onSelectPerson,
   onShow,
+  onFollow,
   onSend,
   hire,
   onRenameVenue,
@@ -432,6 +394,7 @@ function Details({
         guest={selection}
         activityElement={activityElement}
         onSelectPerson={onSelectPerson}
+        onFollow={onFollow}
       />
     );
   }

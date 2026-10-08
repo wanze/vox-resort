@@ -102,6 +102,21 @@ Rails claim no tile and are left out of occupancy and shadows.
 build tool active, left belongs to the tool and right does what left normally
 does. Benchmarks use perspective.
 
+**Following** a guest or riding a craft (`F`, the inspector's Follow, the
+palette's rides) takes the camera over from the controls, as the welcome drift
+does: they are disabled and never updated while it runs, since their update
+would clamp the pitch above the horizon. It switches to perspective, and puts
+the player's camera back, moved to where the target ended up, when it stops.
+The rig is `guest-view/domain/followRig.ts`: every target gives it a point, a
+heading and a framing each frame, and each channel eases by half-life, so it
+does not depend on the frame rate; a jump past 64 voxels is a cut. In third
+person the camera is pulled in towards the guest when something solid is in the
+way (`sightLine.ts`): each model's `solidTops` fact is, per tile, the top of
+its highest layer with a quarter of its cells filled, so roofs, floors and
+hedges block and lamp posts, court fences and palm trunks do not. The near
+plane is not changed, so within 4 voxels of a first-person camera a wall or a
+guest is cut open.
+
 **Venue signs** are DOM elements over each venue's door, shown once a tile spans
 20 CSS pixels. They give way to problem markers, and `N` turns them off. Each
 needs its own `will-change: transform` layer, or the canvas repaints and the
@@ -226,6 +241,7 @@ pnpm bench -- --mosaic             # mosaic paving everywhere
 pnpm bench -- --plot reference     # the reference resort, with its shore
 pnpm bench -- --speed rush         # run the clock: sim, routers, crowd at its real scale
 pnpm bench -- --people 5000        # guest slots (capped at 10 000)
+pnpm bench -- --follow third       # follow the first guest walking (or first)
 pnpm bench -- --no-vsync           # uncapped frame rate
 pnpm bench -- --webgl              # WebGL2 fallback
 pnpm bench -- --shots ./shots      # screenshot per case
@@ -279,6 +295,18 @@ each (CPU per frame):
 
 `--speed rush --plot reference --people 5000`: 6.00 ms median, 11.10 ms max;
 the crowd takes 2.5 ms of it and the sim 0.97 ms a tick.
+
+`--follow first|third` follows the first guest walking from the first frame,
+the rig stepped by the bench's fixed step, so a run replays. `--plot
+reference`, `--no-vsync`, same machine and resolution, two runs in each order:
+
+| Case                       | Draw calls | Triangles | CPU median   | GPU median   |
+| -------------------------- | ---------- | --------- | ------------ | ------------ |
+| day-street                 | 397        | 674 k     | 1.50 ms      | 1.97 ms      |
+| day-overview, follow third | 101        | 233 k     | 0.90–1.10 ms | 1.70–1.77 ms |
+| day-overview, follow first | 91         | 218 k     | 0.80–1.00 ms | 1.57–1.64 ms |
+
+Both follow runs cost less than the street view.
 
 Variants (`--styles mixed`) cost about +46% draw calls and nearly double
 startup; wall-to-wall mosaic about +27% draw calls and +0.2 ms CPU. Meshing

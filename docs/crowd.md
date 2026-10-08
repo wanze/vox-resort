@@ -27,6 +27,7 @@ Guests, staff, boats and balloons, and the simulation behind them.
 | Guests, parties, beds       | `guests/domain/`                                                                       |
 | Events                      | `events/`                                                                              |
 | Inspector                   | `inspect/`, `hud/components/InspectPanel.tsx`                                          |
+| Following a guest, rides    | `guest-view/`, `app/guestView.ts`                                                      |
 | Drawing                     | `crowd/adapters/crowdField.ts`, `rendering/adapters/figureField.ts`                    |
 | Places and acts in a venue  | `choreography/domain/`                                                                 |
 | Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                                        |
@@ -93,6 +94,31 @@ paving keeps the capacity with everyone off the plot until paving arrives.
 - **Inspector**: a click without a build tool picks the nearest person on
   screen, else the tile's placement. Guests show needs, destination and a live
   status line; venues show who's inside and queuing.
+- **Following** (`guest-view/`): the inspector's Follow button or `F` puts the
+  camera behind the guest, and `C` switches to their eyes, where their own body
+  is left out of the drawing. A drag looks around and springs back after two
+  seconds; the wheel or a pinch moves the camera nearer or farther. A follow
+  card stands in for the inspector, worded again every simulated hour, can be
+  dragged out of the way, and venue signs and problem markers are hidden. The
+  camera trails the guest on a leash and only slowly comes round behind their
+  heading, so a guest who zigzags does not swing it about. Going indoors or
+  under a roof, the camera stops at the door (`guest-view/domain/doorway.ts`)
+  and waits there until they come back out and can be seen from it, or have
+  walked 32 voxels or four seconds; somebody already inside when the follow
+  began is watched from an orbit. One who checks out (the body handed to
+  another party counts) is held for three seconds.
+  Esc, a click on nothing, Stop, a camera command or arming a tool ends it;
+  another guest clicked is hopped to.
+- **Speed while following** is capped at Slow, which still jogs the crowd at
+  3.6 times walking pace, whatever is picked or unpaused to meanwhile; the
+  speed from before, or the last one picked, comes back after. Nothing is saved: a save keeps the camera from
+  before following.
+- **Riding along** is a camera on a craft, not the guest: a followed guest
+  inside a hire hut with a craft out is shown out on the youngest one, once a
+  visit, and the card's Ride along takes another. The guest stays in the hut in
+  the sim, and the passengers drawn aboard are not them (visual only
+  means visual only). A ride ends when the craft ties up, or when an edit puts
+  new fleets on the sea.
 - **Venue names** (`naming/domain/venueNames.ts`) are drawn from the model's
   `names` by hash, never reused, renamable in the inspector, saved by placement
   key.

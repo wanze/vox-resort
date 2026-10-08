@@ -43,8 +43,10 @@ export function useClockControls(
       },
       [showcase],
     ),
+    // Remembered for unpausing too: Space during a follow must go back to its Slow, not past it.
     adoptSpeed: useCallback((next: SimSpeed) => {
       current.current = next;
+      if (next !== 'paused') running.current = next;
       setSpeed(next);
     }, []),
     adoptForced: useCallback((next: Weather | null) => setForced(next), []),

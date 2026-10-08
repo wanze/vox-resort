@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { ArmedChip } from './ArmedChip';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
@@ -30,6 +30,7 @@ import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, slotsBusy, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { SharePanel } from '../../sharing/components/SharePanel';
+import { FollowCard } from '../../guest-view/components/FollowCard';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
@@ -305,21 +306,25 @@ function Windows(props: HudView) {
           </HudWindow>
         );
       })}
-      <InspectPanel
-        frame={frameOf(props, 'inspect', props.inspector.clear)}
-        selection={props.selection}
-        advice={props.advice}
-        activityElement={props.nodes.inspect}
-        onSelectPerson={props.inspector.selectPerson}
-        onShow={props.inspector.showSelected}
-        onSend={props.inspector.send}
-        hire={hireControls(props)}
-        onRenameVenue={props.inspector.renameVenue}
-        onOpenProgramme={(key) => {
-          props.programme.choose(key);
-          windows.show('programme', true);
-        }}
-      />
+      {/* The follow card stands in for the inspector, and takes its activity line. */}
+      {props.guestView.following ? null : (
+        <InspectPanel
+          frame={frameOf(props, 'inspect', props.inspector.clear)}
+          selection={props.selection}
+          advice={props.advice}
+          activityElement={props.nodes.inspect}
+          onSelectPerson={props.inspector.selectPerson}
+          onShow={props.inspector.showSelected}
+          onFollow={props.guestView.follow}
+          onSend={props.inspector.send}
+          hire={hireControls(props)}
+          onRenameVenue={props.inspector.renameVenue}
+          onOpenProgramme={(key) => {
+            props.programme.choose(key);
+            windows.show('programme', true);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -332,9 +337,35 @@ function Palette(props: HudView) {
   );
 }
 
+// They are for running the resort, and at a guest's eye a sign would be as big as a door.
+const markersShown = (props: HudView): boolean =>
+  props.news.prefs.markers && props.guestView.following === null;
+
+const signsShown = (props: HudView): boolean =>
+  props.news.prefs.signs && props.guestView.following === null;
+
 // The same list ProblemMarkers draws, so a sign gives way only to a marker that is showing.
 const markedTiles = (props: HudView) =>
-  props.news.prefs.markers ? markersOf(props.advice).map((marker) => marker.at) : [];
+  markersShown(props) ? markersOf(props.advice).map((marker) => marker.at) : [];
+
+// Always mounted, so a card dragged out of the way stays there for the next follow.
+function Following(props: HudView) {
+  const { following } = props.guestView;
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  if (!following) return null;
+  return (
+    <FollowCard
+      offset={offset}
+      onMove={setOffset}
+      following={following}
+      selection={props.selection}
+      activityElement={props.nodes.inspect}
+      onToggleView={props.guestView.toggleView}
+      onRideAlong={props.guestView.rideAlong}
+      onStop={props.guestView.stop}
+    />
+  );
+}
 
 export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudProps) {
   const props: HudView = {
@@ -387,6 +418,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         onDismiss={props.onDismiss}
         onTurn={props.onTurn}
       />
+      <Following {...props} />
       <ArmedChip
         tool={props.tool}
         land={props.land}
@@ -413,7 +445,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
       <section aria-label="On the map">
         <VenueSigns
           spots={props.signs}
-          shown={props.news.prefs.signs}
+          shown={signsShown(props)}
           named={props.signsNamed}
           marked={markedTiles(props)}
           elements={props.nodes.signs}
@@ -422,7 +454,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         <StaffPins elements={props.nodes.staffPins} onSelectWorker={props.inspector.selectWorker} />
         <ProblemMarkers
           advice={props.advice}
-          shown={props.news.prefs.markers}
+          shown={markersShown(props)}
           elements={props.nodes.markers}
           onShowOnPlot={props.onShowOnPlot}
           onSelectAt={props.inspector.selectAt}

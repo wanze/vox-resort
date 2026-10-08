@@ -269,7 +269,15 @@ import {
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
-import { namesPlacement, placementKeyOf, workerOf } from '../features/inspect/domain/selection';
+import {
+  namesPlacement,
+  personOf,
+  placementKeyOf,
+  workerOf,
+  type InspectTarget,
+} from '../features/inspect/domain/selection';
+import type { RideCommand } from '../features/guest-view/domain/followRules';
+import { createGuestView } from './guestView';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
@@ -463,6 +471,14 @@ export interface Showcase {
   sendStaff(role: OrderRole): void;
   sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
   clearSelection(): void;
+  // Following takes the camera over, behind the inspected guest or through their eyes.
+  followSelected(): void;
+  ride(craft: number): void;
+  stopFollowing(): void;
+  toggleFollowView(): void;
+  // Leaves the guest at the hut and rides one of its craft out until it ties up.
+  rideAlong(): void;
+  rideOffers(): readonly RideCommand[];
   book(draft: BookingDraft): BookingRefusal | null;
   unbook(id: number): void;
   rebook(id: number, change: BookingChange): BookingRefusal | null;
@@ -2314,10 +2330,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const setCameraMode = (mode: CameraMode): void => {
     if (bench) return;
+    guestView.stop();
     handle.setCameraMode(mode);
   };
 
   const setIsoDirection = (direction: CompassDirection): void => {
+    guestView.stop();
     handle.setIsoDirection(direction);
   };
 
@@ -2329,6 +2347,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Off the live terrain, so a building on a terrace is looked at rather than through.
   const lookAtTile = (tile: { readonly tileX: number; readonly tileZ: number }): void => {
     if (bench) return;
+    guestView.stop();
     const { terrain } = current();
     handle.lookAt({
       x: (tile.tileX + 0.5) * TILE_VOXELS,
@@ -2342,6 +2361,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     mode: () => handle.cameraMode,
     onModeChange: (mode) => {
       if (drift) return;
+      // Isometric means nothing at a guest's shoulder, so the key swaps the follow's view instead.
+      if (guestView.active) return guestView.toggleView();
       setCameraMode(mode);
       hud.publish({ camera: cameraView() });
     },
@@ -2563,6 +2584,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   let armedTool: BuildTool | null = null;
   const selectTool = (tool: BuildTool | null): void => {
+    guestView.toolPicked(tool);
     const wasZoning = armedZone(armedTool) !== null;
     const zoning = armedZone(tool) !== null;
     const wasBuying = armedLand(armedTool);
@@ -2583,6 +2605,21 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
   const select = selection.select;
 
+  const guestView = createGuestView({
+    handle,
+    canvas,
+    resort: current,
+    clock,
+    bench,
+    fixedStep,
+    drifting: () => drift !== null,
+    onChange: (following) => hud.publish({ following }),
+    onSpeedChange: (speed) => onSpeedChange?.(speed),
+  });
+
+  // `select` itself is left alone, so a rebuild or a load still clears the panel as before.
+  const pick = (picked: InspectTarget): void => guestView.pick(picked, select);
+
   const inspector = createInspectPointer({
     canvas,
     camera: () => handle.camera,
@@ -2595,7 +2632,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     aimHeight: AIM_HEIGHT,
     ground: build.ground,
     keyAt: (tile) => current().occupancy.keyAt(tile),
-    onSelect: select,
+    onSelect: pick,
     onDoubleTap: () => options.onDoubleTap?.(),
   });
 
@@ -2683,6 +2720,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       programme: programmeNow(),
     });
     if (overlayKind !== null) paintOverlay();
+    // The panel is otherwise worded on a click and each morning; a follow watches it change.
+    if (guestView.person !== null) selection.reword();
     options.onDirty?.();
   };
 
@@ -2742,6 +2781,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // A snapshot runs it too, so what is saved never pairs new lists with the old graph.
   const reanchor = (): void => {
     rebuildAfterEdit(current(), clock.ticks, handle);
+    guestView.relayout();
     paintOverlay();
     letter();
     // Said now rather than tomorrow; the day's counters are left alone.
@@ -2770,6 +2810,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     populationOf: (prepared) => populationOf(prepared.plan, prepared.plot, undefined),
     restoreGame: (resort, saved) => restoreGame(resort, saved, clock),
     reanchor,
+    beforeReplace: guestView.stop,
+    heldCamera: guestView.heldCamera,
     openIsometric,
     stopDrift: () => {
       drift = null;
@@ -2792,7 +2834,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const moveCamera = (elapsed: number): void => {
     if (drift) drift.advance(elapsed);
-    else if (!bench) handle.controls.update();
+    else if (!guestView.steer(elapsed) && !bench) handle.controls.update();
   };
 
   // After the render call: that is where the shaders are built, which is most of the wait.
@@ -3061,7 +3103,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       clock.setTime(time);
       options.onDirty?.();
     },
-    setSpeed: clock.setSpeed,
+    setSpeed: guestView.setSpeed,
     // Told at once, so the forced button reads as pressed on the click.
     setWeather(weather) {
       clock.setWeather(weather);
@@ -3081,10 +3123,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     selectPerson: (person) => select({ person }),
     selectWorker: (worker) => select({ worker }),
-    showSelected: () => lookAtWorker(handle, current(), workerOf(selection.target())),
+    showSelected() {
+      guestView.stop();
+      lookAtWorker(handle, current(), workerOf(selection.target()));
+    },
     sendStaff: (role) => sendToPlace(current(), role, placementKeyOf(selection.target())),
     sendCleanerTo: (tile) => sendToTile(current(), tile),
-    clearSelection: () => select(null),
+    clearSelection: () => pick(null),
+    followSelected() {
+      const person = personOf(selection.target());
+      if (person !== null) guestView.followGuest(person);
+    },
+    ride: (craft) => guestView.follow({ kind: 'craft', craft }),
+    stopFollowing: guestView.stop,
+    toggleFollowView: guestView.toggleView,
+    rideAlong: guestView.rideAlong,
+    rideOffers: guestView.offers,
     snapshot: lifecycle.snapshot,
     load: lifecycle.load,
     dispose() {
@@ -3093,6 +3147,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       handle.renderer.setAnimationLoop(null);
       globalThis.removeEventListener('resize', resize);
       cameraKeys.dispose();
+      guestView.dispose();
       inspector.dispose();
       build.dispose();
       preparer.dispose();

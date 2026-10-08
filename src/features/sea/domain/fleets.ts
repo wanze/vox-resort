@@ -25,6 +25,14 @@ export function fleetsFor(
   );
 }
 
+// The hut each fleet sails from, in the order fleetsFor lays the fleets on the sea.
+export function fleetHutKeys(
+  rentals: readonly RentalHut[],
+  hireOf: (id: string) => ModelHire | null,
+): string[] {
+  return rentals.flatMap((rental) => (hireOf(rental.id)?.fleets ?? []).map(() => rental.key));
+}
+
 // A craft goes out only full, so every fleet but the last takes whole crews and leaves the rest
 // to the next; the last takes the remainder too, as nobody is sent home from the hut.
 export function fleetAllowances(hirers: number, fleets: readonly ModelFleet[]): number[] {

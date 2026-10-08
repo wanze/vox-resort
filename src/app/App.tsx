@@ -17,6 +17,7 @@ import { useAdvice } from './useAdvice';
 import { useHistory } from './useHistory';
 import { useNews } from './useNews';
 import { useInspector } from './useInspector';
+import { useGuestView } from './useGuestView';
 import { useOverlay } from './useOverlay';
 import { useProgramme } from './useProgramme';
 import { useResortControls } from './useResortControls';
@@ -41,7 +42,12 @@ import { armWithMemory } from '../features/build/domain/stylePick';
 import type { GameSnapshot } from '../features/saves/domain/snapshot';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 import type { Toast } from '../features/hud/domain/news';
-import type { ClockControls, SoundControls } from '../features/hud/components/hudControls';
+import type {
+  ClockControls,
+  GuestViewControls,
+  SoundControls,
+} from '../features/hud/components/hudControls';
+import type { SelectionView } from '../features/inspect/domain/selection';
 import type { BuildNote } from '../features/hud/domain/views';
 import { createHudStore, type HudStore } from '../features/hud/domain/hudStore';
 import { useHudSlice } from '../features/hud/components/useHudSlice';
@@ -243,6 +249,7 @@ function useControls(showcase: RefObject<Showcase | null>, hud: HudStore) {
     camera: useCameraControls(showcase, hud),
     clock: useClockControls(showcase, hud),
     inspector: useInspector(showcase, hud),
+    guestView: useGuestView(showcase, hud),
     placement: usePlacement(showcase, hud),
     programme: useProgramme(showcase, hud),
   };
@@ -282,6 +289,18 @@ function landToggle(
   return () => selectTool(armedLand(tool) ? null : { kind: 'land' });
 }
 
+const inspecting = (selection: SelectionView | null, guestView: GuestViewControls): boolean =>
+  selection !== null || guestView.following !== null;
+
+// None while nothing is followed and no guest is inspected, so the key does nothing then.
+function followToggle(
+  guestView: GuestViewControls,
+  selection: SelectionView | null,
+): (() => void) | null {
+  if (guestView.following !== null) return guestView.stop;
+  return selection?.kind === 'guest' ? guestView.follow : null;
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
@@ -297,7 +316,10 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, placement, programme } = useControls(showcaseRef, hud);
+  const { camera, clock, inspector, guestView, placement, programme } = useControls(
+    showcaseRef,
+    hud,
+  );
   const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
     hud,
@@ -317,7 +339,7 @@ export function App() {
     clock,
     tool,
     selectTool,
-    inspector.selection,
+    inspecting(inspector.selection, guestView),
     playing,
     saves,
     {
@@ -325,6 +347,7 @@ export function App() {
       signs: () => news.setSigns(!news.prefs.signs),
       sound: sound.toggle,
       land: landToggle(resort.money.land, tool, selectTool),
+      follow: followToggle(guestView, inspector.selection),
     },
     news.prefs.singleKeys,
   );
@@ -451,6 +474,7 @@ export function App() {
             sound,
             programme,
             windows,
+            guestView,
           }}
           placement={{
             tool,

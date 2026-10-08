@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelFleet, ModelHire } from '../../../../voxel-gen/voxelgen.ts';
-import { fleetAllowances, fleetsFor, hutAllowances, type RentalHut } from './fleets';
+import { fleetAllowances, fleetHutKeys, fleetsFor, hutAllowances, type RentalHut } from './fleets';
 
 const PEDALOS: ModelFleet = { craft: 'pedalo', count: 6, riders: 2, pace: 0.6 };
 
@@ -76,5 +76,24 @@ describe('hutAllowances', () => {
       (key) => inside[key] ?? 0,
     );
     expect(allowed).toEqual([1, 1, 3, 0]);
+  });
+});
+
+describe('fleetHutKeys', () => {
+  it('names the hut of every fleet fleetsFor lays, in the same order', () => {
+    const hires: Record<string, ModelHire> = {
+      pedalos: { fleets: [PEDALOS] },
+      sports: { fleets: [BANANA, JET_SKIS] },
+    };
+    const huts: RentalHut[] = [
+      { x: 400, z: 300, key: 'b', id: 'sports' },
+      { x: 100, z: 300, key: 'a', id: 'pedalos' },
+    ];
+    const hireOf = (id: string): ModelHire | null => hires[id] ?? null;
+    const keys = fleetHutKeys(huts, hireOf);
+    const fleets = fleetsFor(huts, hireOf, () => 1, 1);
+    expect(keys).toEqual(['b', 'b', 'a']);
+    expect(keys).toHaveLength(fleets.length);
+    expect(fleets.map((fleet) => huts.find((hut) => hut === fleet.rental)!.key)).toEqual(keys);
   });
 });

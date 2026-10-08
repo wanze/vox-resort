@@ -218,6 +218,27 @@ describe('buildCrowdField', () => {
     field.dispose();
   });
 
+  it('leaves out the one person hidden, keeps everybody else, and brings them back', () => {
+    const crowd = crowdOf(6);
+    const field = buildCrowdField({ crowd, models: MODELS });
+    const standing = (): Vector3[] =>
+      meshes(field.group).flatMap((mesh) =>
+        Array.from({ length: mesh.count }, (_, slot) => positionOf(mesh, slot)),
+      );
+    const at = (person: number) => (spot: Vector3) =>
+      Math.abs(spot.x - crowd.x[person]!) < 1e-3 && Math.abs(spot.z - crowd.z[person]!) < 1e-3;
+
+    field.hide(2);
+    expect(field.drawnCount).toBe(5);
+    for (let person = 0; person < crowd.count; person++) {
+      expect(standing().some(at(person)), `person ${person}`).toBe(person !== 2);
+    }
+    field.hide(null);
+    expect(field.drawnCount).toBe(6);
+    expect(standing().some(at(2))).toBe(true);
+    field.dispose();
+  });
+
   it('keeps a person’s walk phase with them when others drop out of the draw', () => {
     const crowd = crowdOf(40);
     const field = buildCrowdField({ crowd, models: MODELS });

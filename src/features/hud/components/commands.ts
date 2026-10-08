@@ -33,9 +33,11 @@ import { isReadable, listOrder, saveOrAsk } from '../../saves/domain/saveSlots';
 import { savedAgo, titleOf } from '../../saves/domain/saveWords';
 import { SAVE_SHORTCUT } from './MainMenu';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
+import type { SelectionView } from '../../inspect/domain/selection';
 import type {
   CameraControls,
   ClockControls,
+  GuestViewControls,
   HistoryControls,
   ResortControls,
   SoundControls,
@@ -73,6 +75,8 @@ export interface CommandContext {
   readonly land: LandView | null;
   readonly preview: PreviewLookup;
   readonly sound: SoundControls;
+  readonly guestView: GuestViewControls;
+  readonly selection: SelectionView | null;
 }
 
 const CORNER_NAMES: { readonly [direction in CompassDirection]: string } = {
@@ -219,6 +223,51 @@ function cameraCommands({ camera }: CommandContext): Command[] {
       run: () => camera.setDetail(!view.detail),
     },
   ];
+}
+
+function stopFollowing({ guestView }: CommandContext): Command[] {
+  if (!guestView.following) return [];
+  return [
+    {
+      id: 'follow:stop',
+      label: 'Stop following',
+      group: 'Camera',
+      keywords: 'follow guest leave back',
+      note: 'back to your own camera',
+      art: { icon: 'camera' },
+      shortcut: keyLabel('follow'),
+      run: guestView.stop,
+    },
+  ];
+}
+
+function followGuest({ guestView, selection }: CommandContext): Command[] {
+  if (selection?.kind !== 'guest' || guestView.following) return [];
+  return [
+    {
+      id: 'follow:guest',
+      label: `Follow ${selection.name}`,
+      group: 'Camera',
+      keywords: 'follow guest walk along first third person eyes shoulder',
+      note: 'from behind them, or through their eyes',
+      art: { icon: 'camera' },
+      shortcut: keyLabel('follow'),
+      run: guestView.follow,
+    },
+  ];
+}
+
+// Only while a craft is out: the palette is built afresh each time it opens.
+function rideCommands({ guestView }: CommandContext): Command[] {
+  return guestView.offers().map((offer) => ({
+    id: `ride:${offer.label}`,
+    label: offer.label,
+    group: 'Camera',
+    keywords: 'ride boat sea water craft follow',
+    note: 'until it comes back in',
+    art: { icon: 'camera' as const },
+    run: () => guestView.ride(offer.craft),
+  }));
 }
 
 function soundCommands({ sound }: CommandContext): Command[] {
@@ -484,6 +533,9 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...overlayCommands(context),
     ...highlightCommands(context),
     ...cameraCommands(context),
+    ...stopFollowing(context),
+    ...followGuest(context),
+    ...rideCommands(context),
     ...soundCommands(context),
     ...gameCommands(context),
     ...resortCommands(context),

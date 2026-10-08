@@ -40,6 +40,8 @@ export interface CrowdField {
   // A rebuild renumbers the places, so it hands over a new cast rather than a new field.
   drawAs(next: DrawnAs | null): void;
   readonly drawnCount: number;
+  // Left out of the drawing, as a first-person camera's own body is; null draws everybody again.
+  hide(person: number | null): void;
   // `holds` names who the sim keeps where they stand; reseatCrowd says how.
   relocate(network: WalkNetwork, holds?: (person: number) => boolean): void;
   // Takes a restored crowd as it is, where relocate would re-anchor everybody.
@@ -122,8 +124,13 @@ const tooSmall = (
 };
 
 // continue, not break, for whoever is not drawn: slot 7 being empty says nothing about slot 8.
-const isDrawn = (crowd: Crowd, drawnAs: DrawnAs | null, person: number): boolean =>
-  crowd.offPlot[person] !== 1 && drawnAs?.shown[person] !== SHOWN.hidden;
+const isDrawn = (
+  crowd: Crowd,
+  drawnAs: DrawnAs | null,
+  person: number,
+  hidden: number | null,
+): boolean =>
+  person !== hidden && crowd.offPlot[person] !== 1 && drawnAs?.shown[person] !== SHOWN.hidden;
 
 const placedIn = (drawnAs: DrawnAs | null, person: number): DrawnAs | null =>
   drawnAs?.shown[person] === SHOWN.placed ? drawnAs : null;
@@ -151,6 +158,7 @@ function writeInstances(
   view: DetailView | null,
   drawnAs: DrawnAs | null,
   chairs: ChairField | null,
+  hidden: number | null,
 ): number {
   const matrices = part.mesh.instanceMatrix.array;
   const pose = part.pose.array;
@@ -158,7 +166,7 @@ function writeInstances(
   for (let index = 0; index < part.people.length; index++) {
     const person = part.people[index]!;
     if (person >= crowd.count) break;
-    if (!isDrawn(crowd, drawnAs, person)) continue;
+    if (!isDrawn(crowd, drawnAs, person, hidden)) continue;
     const placed = placedIn(drawnAs, person);
     const from = placed ?? crowd;
     const x = from.x[person]!;
@@ -223,10 +231,13 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
   let clock = 0;
   let view: DetailView | null = null;
   let drawnCount = 0;
+  let hidden: number | null = null;
   const writeAll = (): void => {
     drawnCount = 0;
     chairs?.begin();
-    for (const part of parts) drawnCount += writeInstances(part, crowd, view, drawnAs, chairs);
+    for (const part of parts) {
+      drawnCount += writeInstances(part, crowd, view, drawnAs, chairs, hidden);
+    }
     chairs?.end();
   };
   writeAll();
@@ -247,6 +258,11 @@ export function buildCrowdField(options: CrowdFieldOptions): CrowdField {
     },
     drawAs(next) {
       drawnAs = next;
+      writeAll();
+    },
+    hide(person) {
+      if (person === hidden) return;
+      hidden = person;
       writeAll();
     },
     // Empty meshes are skipped by the renderer, so the HUD must not count them either.

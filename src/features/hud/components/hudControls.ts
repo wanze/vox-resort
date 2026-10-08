@@ -18,6 +18,7 @@ import type { BuildNote, CameraView } from '../domain/views';
 import type { PageId, WindowId, WindowLayout, WindowSpot } from '../domain/windowLayout';
 import type { TabbedWindow, TabId } from '../domain/windowTabs';
 import type { SelectionView } from '../../inspect/domain/selection';
+import type { FollowView, RideCommand } from '../../guest-view/domain/followRules';
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
@@ -128,6 +129,19 @@ export interface InspectorControls {
   clear(): void;
 }
 
+// The scene owns the follow camera, as it owns the selection; this reads what it tells.
+export interface GuestViewControls {
+  readonly following: FollowView | null;
+  // Follows the inspected guest.
+  follow(): void;
+  ride(craft: number): void;
+  stop(): void;
+  toggleView(): void;
+  rideAlong(): void;
+  // Asked when the palette opens: which craft are out changes every few seconds.
+  offers(): readonly RideCommand[];
+}
+
 export interface HudControls {
   readonly clock: ClockControls;
   readonly camera: CameraControls;
@@ -140,4 +154,5 @@ export interface HudControls {
   readonly sound: SoundControls;
   readonly programme: ProgrammeControls;
   readonly windows: WindowControls;
+  readonly guestView: GuestViewControls;
 }

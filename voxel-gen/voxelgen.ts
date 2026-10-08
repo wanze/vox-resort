@@ -749,6 +749,30 @@ export interface ModelFacts extends Omit<VoxelModel, 'voxels' | 'canopy'> {
   readonly voxelCount: number;
   readonly dayVoxelCount: number;
   readonly dominantColor: Color;
+  // Per tile of the model's own grid, row by row, the top of its highest solid layer; 0 for none.
+  readonly solidTops: readonly number[];
+}
+
+// A quarter of a tile's cells: a roof, a floor or a hedge fills that, a lamp post or a court's
+// fence does not, though filled share over the whole model cannot tell a lamp from a court.
+const SOLID_CELLS = (TILE_VOXELS * TILE_VOXELS) / 4;
+
+export function solidTopsOf(
+  model: Pick<VoxelModel, 'width' | 'height' | 'depth' | 'voxels'>,
+): number[] {
+  const across = Math.ceil(model.width / TILE_VOXELS);
+  const deep = Math.ceil(model.depth / TILE_VOXELS);
+  const layers = Math.max(1, model.height);
+  const filled = new Int32Array(across * deep * layers);
+  for (const { x, y, z } of model.voxels) {
+    const tile = Math.floor(z / TILE_VOXELS) * across + Math.floor(x / TILE_VOXELS);
+    filled[tile * layers + y]!++;
+  }
+  return Array.from({ length: across * deep }, (_, tile) => {
+    for (let y = layers - 1; y >= 0; y--)
+      if (filled[tile * layers + y]! >= SOLID_CELLS) return y + 1;
+    return 0;
+  });
 }
 
 // The swatch colour: the colour painted most by day; a tie goes to the colour met first.
@@ -777,5 +801,6 @@ export function factsOf(model: VoxelModel): ModelFacts {
     voxelCount: voxels.length,
     dayVoxelCount: voxels.length + (canopy?.open.length ?? 0),
     dominantColor: dominantColorOf(model),
+    solidTops: solidTopsOf(model),
   };
 }

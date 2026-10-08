@@ -8,7 +8,6 @@ import { focusedWindow } from '../features/hud/adapters/focusedWindow';
 import { hotkeysFor, type HudAction } from '../features/hud/domain/keymap';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import { cycledTool } from '../features/build/domain/stylePick';
-import type { SelectionView } from '../features/inspect/domain/selection';
 import type { LayoutMode } from '../features/hud/domain/layoutMode';
 import { useLayoutMode } from './useLayoutMode';
 import type { ClockControls, WindowControls } from '../features/hud/components/hudControls';
@@ -36,13 +35,15 @@ export interface HudToggles {
   readonly signs: () => void;
   readonly sound: () => void;
   readonly land: (() => void) | null;
+  readonly follow: (() => void) | null;
 }
 
 export function useHudChrome(
   clock: ClockControls,
   tool: BuildTool | null,
   onToolChange: (tool: BuildTool | null) => void,
-  selection: SelectionView | null,
+  // An open inspector or a follow, either of which takes Escape before the menu.
+  inspecting: boolean,
   playing: boolean,
   saves: SaveControls,
   toggles: HudToggles,
@@ -57,8 +58,9 @@ export function useHudChrome(
     if (open) setMenu(null);
     showPalette(open);
   }, []);
-  // An armed tool or an open inspector takes Escape first, so it only reaches the menu when idle.
-  const idle = tool === null && selection === null;
+  // An armed tool, an open inspector or a follow takes Escape first, so it only reaches the menu
+  // when idle.
+  const idle = tool === null && !inspecting;
 
   const runs: { readonly [action in HudAction]: () => boolean } = {
     palette: always(() => setPalette(!palette)),
@@ -73,6 +75,10 @@ export function useHudChrome(
     land: () => {
       toggles.land?.();
       return toggles.land !== null;
+    },
+    follow: () => {
+      toggles.follow?.();
+      return toggles.follow !== null;
     },
     debug: always(() => windows.toggle('debug')),
     // Passed on unless the armed family has styles to cycle through.

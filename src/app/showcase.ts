@@ -2,11 +2,9 @@ import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials
 import { mosaicKitOf } from '../features/catalog/domain/mosaics';
 import {
   allMaterials,
-  binReachOf,
   emissiveByModelId,
   waterByModelId,
   windowsByModelId,
-  bedsOf,
   familyOf,
   hireOf,
   isGateway,
@@ -19,9 +17,7 @@ import {
   PAINTED_MODELS,
   PEOPLE_MODELS,
   PROP_MODELS,
-  sceneryOf,
   SEA_MODELS,
-  shadeOf,
   signOf,
   SKY_MODELS,
   soundOf,
@@ -43,7 +39,6 @@ import {
   hearthOf,
   lightsOf,
   occluderOf,
-  seatSiteOf,
 } from '../features/catalog/domain/placementFacts';
 import type { LayoutItem, Placement } from '../features/layout/domain/resortLayout';
 import { railModelsIn } from '../features/layout/domain/resortLayout';
@@ -180,7 +175,6 @@ import {
 } from '../features/sim/domain/breakdowns';
 import {
   BEACH_LITTER,
-  binCoverFor,
   createCarrying,
   createLitter,
   dropAt,
@@ -190,7 +184,6 @@ import {
   pickUp,
   pruneLitter,
   stepWith,
-  type BinSite,
   type Carrying,
   type Litter,
 } from '../features/sim/domain/litter';
@@ -225,13 +218,7 @@ import {
   type ThoughtTally,
   type Thoughts,
 } from '../features/sim/domain/thoughts';
-import {
-  sceneryAt,
-  sceneryFieldFor,
-  sceneryItemsOf,
-  sceneryOver,
-  type SceneryField,
-} from '../features/sim/domain/scenery';
+import { sceneryAt, sceneryOver, type SceneryField } from '../features/sim/domain/scenery';
 import {
   AUTO_HIRING,
   cheerTheAudience,
@@ -301,32 +288,22 @@ import {
   runCheckIn,
   wavesDue,
 } from '../features/sim/domain/checkIn';
-import { gatewaysOn, type Gateway } from '../features/sim/domain/gateways';
-import { depotForShift, depotsOn, type Depot } from '../features/sim/domain/depots';
+import { type Gateway } from '../features/sim/domain/gateways';
+import { depotForShift, type Depot } from '../features/sim/domain/depots';
 import { createRandom, type Random } from '../features/layout/domain/random';
 import { beachVenueFor, isBeach as isTheBeach, withBeach } from '../features/sim/domain/beach';
-import {
-  isNamed,
-  relabelled,
-  shelterOf,
-  venuesOn,
-  type Venue,
-} from '../features/sim/domain/venues';
+import { isNamed, relabelled, shelterOf, type Venue } from '../features/sim/domain/venues';
 import {
   assignNames,
   namedPlacesOf,
   renameTo,
   type VenueNames,
 } from '../features/naming/domain/venueNames';
-import {
-  homesOfLodgings,
-  lodgingFor,
-  lodgingsOn,
-  type Lodging,
-} from '../features/sim/domain/lodgings';
+import { lodgingFor, type Lodging } from '../features/sim/domain/lodgings';
 import { occupiedShare } from '../features/sim/domain/night';
 import { createRouter, type Router } from '../features/sim/domain/router';
-import { shadeMapOf, type ShadeMap } from '../features/sim/domain/shade';
+import { plotFactsOf, type PlotFacts } from '../features/resort-sim/domain/plotFacts';
+import { type ShadeMap } from '../features/sim/domain/shade';
 import { partiesOf, partyMixOf } from '../features/events/domain/audience';
 import { labelOf as eventLabelOf, type AudienceParty } from '../features/events/domain/catalogue';
 import {
@@ -383,7 +360,6 @@ import { heldAt, stageKeysOf } from '../features/events/domain/sites';
 import {
   latecomersFor,
   stageRank,
-  stagesByPreference,
   welcomeGapOf,
   withoutBuiltIns,
 } from '../features/events/domain/welcome';
@@ -394,7 +370,7 @@ import {
   tonightsShow,
 } from '../features/events/domain/stayingUp';
 import { dayAt } from '../features/events/domain/week';
-import { sandOf, watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
+import { watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
 import { fireworksDrought, isFireworksNight } from '../features/fireworks/domain/nights';
 import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
 import {
@@ -431,7 +407,6 @@ import { pixelsPerVoxel } from '../features/rendering/domain/levelOfDetail';
 import {
   adviceFor,
   refreshedWithin,
-  unreachableOn,
   type Advice,
   type ResortFacts,
 } from '../features/sim/domain/advice';
@@ -523,12 +498,7 @@ import {
   crowdSizeForArea,
   crowdSizeForOwned,
 } from '../features/crowd/domain/crowdSize';
-import {
-  BEACH_SURFACE,
-  walkNetworkFor,
-  type WalkNetwork,
-} from '../features/crowd/domain/walkNetwork';
-import { seatSpotsFor } from '../features/crowd/domain/seating';
+import { BEACH_SURFACE, type WalkNetwork } from '../features/crowd/domain/walkNetwork';
 import {
   carryPlaces,
   createCast,
@@ -561,7 +531,6 @@ import {
   unmadeCount,
   type Guests,
 } from '../features/guests/domain/guests';
-import type { Home } from '../features/guests/domain/homes';
 import type { CrowdField } from '../features/crowd/adapters/crowdField';
 import { buildCrowdField } from '../features/crowd/adapters/crowdField';
 import { createInspectPointer } from '../features/inspect/adapters/inspectPointer';
@@ -1288,8 +1257,16 @@ interface Resort {
   fireworksNight: boolean;
   // Replaced wholesale on an edit rather than patched, so it cannot drift from what stands.
   venues: readonly Venue[];
+  // By key, which a rename keeps, so it is replaced only with the venues on an edit.
+  venueIndex: ReadonlyMap<string, number>;
   // The venues as the router lists them, the beach last: where an event can be held.
   siteVenues: readonly Venue[];
+  // By key like venueIndex, so the beach, which no venue list holds, is found too.
+  siteVenueIndex: ReadonlyMap<string, number>;
+  // Only the venues that hire craft out, at their venueIndex, so a hire costs no scan of all.
+  rentalVenues: ReadonlyMap<string, number>;
+  // Biggest first, sorted once per edit rather than each time the events are asked.
+  stages: readonly EventSite[];
   // The owned sand, and the points out at sea a show is launched from.
   beachTiles: number;
   launchSites: readonly LaunchSite[];
@@ -1366,24 +1343,6 @@ interface Resort {
   dispose(): void;
 }
 
-// Off the layout's placements: a benchmark tiles the plan ninefold and would sleep nine times its
-// guests. A stranded lodging houses nobody, or its guests would be checked in to walk all night.
-function homesOn(placements: readonly Placement[], stranded: ReadonlySet<string>): Home[] {
-  return (
-    placements
-      .filter((placement) => !stranded.has(placement.key))
-      .map((placement) => ({
-        key: placement.key,
-        id: placement.id,
-        label: objectTypeById(placement.id).label,
-        beds: bedsOf(placement.id),
-      }))
-      .filter((home) => home.beds > 0)
-      // The key breaks ties so two runs house guests the same way.
-      .toSorted((a, b) => b.beds - a.beds || a.key.localeCompare(b.key))
-  );
-}
-
 // The graph is passed in so the router and the crowd share one node numbering.
 function crowdFor(parts: {
   readonly network: WalkNetwork;
@@ -1442,31 +1401,6 @@ function staffCrowdFor(parts: {
 
 // Long enough that a drag costs one rebuild, short enough to read as immediate.
 const REANCHOR_DELAY_MS = 250;
-
-// paved and standing are passed in: the first build reads layout.*, which a benchmark's tiled
-// copies must not be counted from, and a rebuild after an edit reads plot.* with hand edits.
-function networkFor(parts: {
-  readonly plan: ResortPlan;
-  readonly shore: Shore | null;
-  readonly terrain: Terrain;
-  readonly paved: readonly Placement[];
-  readonly standing: readonly Placement[];
-}): WalkNetwork {
-  return walkNetworkFor({
-    paved: parts.paved,
-    levelOf: (tileX, tileZ) => parts.terrain.levelOf(tileX, tileZ),
-    shore: parts.shore,
-    tilesX: parts.plan.tilesX,
-    span: spanOf(parts.plan),
-    // Asked of the ground exactly as layoutResort asks, so the crowd walks the deck the layout
-    // stood.
-    bridged: (tileX, tileZ) =>
-      parts.terrain.surfaceOf(tileX, tileZ) === 'water' && !parts.terrain.isSea(tileX, tileZ),
-    seats: seatSpotsFor(parts.standing.map(seatSiteOf)),
-    // The sand under a sail is walked and lain on: only its posts stand, clear of every pitch.
-    obstacles: parts.standing.filter((placement) => !shadeOf(placement.id)),
-  });
-}
 
 function balloonsFor(parts: {
   readonly shore: Shore | null;
@@ -1639,6 +1573,48 @@ function populationOf(plan: ResortPlan, plot: Plot, saved: number | undefined): 
     : crowdSizeFor(plot.layout.paths.length, CROWD_OVERRIDE);
 }
 
+type KeptFacts = Pick<
+  Resort,
+  | 'names'
+  | 'venues'
+  | 'siteVenues'
+  | 'beachTiles'
+  | 'launchSites'
+  | 'lodgings'
+  | 'homeOfLodging'
+  | 'gateways'
+  | 'depots'
+  | 'scenery'
+  | 'shade'
+  | 'binCover'
+  | 'unreachable'
+  | 'venueIndex'
+  | 'siteVenueIndex'
+  | 'rentalVenues'
+  | 'stages'
+>;
+
+// One list for the first build and every edit, so neither can forget a fact the other keeps.
+const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
+  names: facts.names,
+  venues: facts.venues,
+  siteVenues: facts.siteVenues,
+  beachTiles: facts.beachTiles,
+  launchSites: facts.launchSites,
+  lodgings: facts.lodgings,
+  homeOfLodging: facts.homeOfLodging,
+  gateways: facts.gateways,
+  depots: facts.depots,
+  scenery: facts.scenery,
+  shade: facts.shade,
+  binCover: facts.binCover,
+  unreachable: facts.unreachable,
+  venueIndex: facts.venueIndex,
+  siteVenueIndex: facts.siteVenueIndex,
+  rentalVenues: facts.rentalVenues,
+  stages: facts.stages,
+});
+
 function buildResort(
   parts: ResortArt & {
     readonly prepared: PreparedResort;
@@ -1661,23 +1637,14 @@ function buildResort(
   // scene and the benchmark stay as they were.
   const building = plot.layout.paths.length === 0;
   const population = populationOf(plan, plot, parts.population);
-  // Off the layout's paving, not the plot's: a benchmark tiles the plan ninefold onto ground
-  // the elevation and the shore know nothing about.
-  const network = networkFor({
-    plan,
-    shore,
-    terrain,
-    paved: plot.layout.paths,
-    // Props too: the layout stands benches as props, so placements alone have nothing to sit on.
-    standing: [...plot.layout.placements, ...plot.layout.props],
-  });
-  const names = assignNames(new Map(), namedPlacesOf(plot.layout.placements));
-  const venues = venuesOn(plot.layout.placements, names);
-  const lodgings = lodgingsOn(plot.layout.placements);
-  const unreachable = strandedOn(venues, lodgings, network);
+  // The layout's lists, not the plot's: a benchmark tiles the plan ninefold onto ground the
+  // elevation and the shore know nothing about, and would sleep nine times its guests.
+  const facts = plotFactsOf({ plan, shore, terrain }, plot.layout, new Map());
+  knowPaving(facts);
+  const { network, venues, lodgings } = facts;
   const guests = createGuests({
     count: population,
-    homes: homesOn(plot.layout.placements, unreachable),
+    homes: facts.homes,
     variants: parts.people.length,
     childVariant: CHILD_VARIANT,
     seed: GUEST_SEED,
@@ -1686,33 +1653,15 @@ function buildResort(
   const needs = createNeeds(guests, NEEDS_SEED);
   const happiness = createHappiness(population);
   const arrivals = createRandom(ARRIVALS_SEED);
-  const gateways = gatewaysOn(plot.layout.placements);
-  const depots = depotsOn(plot.layout.placements);
   const places = placesFor(venues, byKey(plot.layout.placements), network);
   const rentals = rentalsOf(shore, plot.layout.placements, hireOf);
   const bathing = { shore, rentals, span: spanOf(plan) };
   const cast = createCast(population, places, { sand: network.sand, swim: bathing });
   const upkeep = createUpkeep(venues.length);
   const breakdowns = createBreakdowns(venues.length);
-  // Off the layout's lists, as the network is, props too since the layout stands trees as either,
-  // and paving, since a mosaic dresses a square.
-  const scenery = sceneryFieldFor(
-    sceneryItemsOf(
-      [...plot.layout.placements, ...plot.layout.props, ...plot.layout.paths],
-      sceneryOf,
-    ),
-    plan.tilesX,
-    plan.tilesZ,
-  );
-  const shade = shadeMapOf(plot.layout.placements, shadeOf, plan.tilesX);
   const litter = createLitter(plan.tilesX, plan.tilesZ);
   const overlay = buildOverlayField();
   const carrying = createCarrying(population);
-  const binCover = binCoverFor(
-    binsOn([...plot.layout.placements, ...plot.layout.props]),
-    plan.tilesX,
-    plan.tilesZ,
-  );
   const beds = bedCount(guests);
   // The router reads crowd positions and the crowd is built with the router, so one is bound late.
   let crowdField: CrowdField | null = null;
@@ -1721,7 +1670,7 @@ function buildResort(
     needs,
     venues,
     lodgings,
-    gateways,
+    gateways: facts.gateways,
     network,
     onLeave: (person) => {
       const party = guests.party[person]!;
@@ -1836,7 +1785,7 @@ function buildResort(
     zones: () => staffZones,
     lodgings,
     beds: () => housekeeping,
-    depots,
+    depots: facts.depots,
     supplyNode: () => resort.router.arrivalNode,
     onClockedOff: (worker) => {
       const workers = staffField!.crowd;
@@ -1968,18 +1917,9 @@ function buildResort(
     nightOwls: new Set(),
     settled: new Set(),
     fireworksNight: false,
-    venues,
-    siteVenues: withBeach(venues, network),
-    ...sandOf(network.beach),
-    names,
-    lodgings,
-    homeOfLodging: homesOfLodgings(lodgings, guests.homes),
-    gateways,
-    depots,
+    ...keptFactsOf(facts),
     upkeep,
     breakdowns,
-    scenery,
-    shade,
     litter,
     footfall: createFootfall(network.nodes.length),
     overlay,
@@ -1990,8 +1930,6 @@ function buildResort(
     // Every resort is built on a clock restarted at day 0, and a load restores its own counts.
     today: startDay(0),
     history: [],
-    binCover,
-    unreachable,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     // A plot with no paving is a building site; a generated one is a resort already running,
     // and the benchmark must see it running.
@@ -2042,23 +1980,9 @@ function buildResort(
 const byKey = (placements: readonly Placement[]): ReadonlyMap<string, Placement> =>
   new Map(placements.map((placement) => [placement.key, placement]));
 
-const rentalIndices = new WeakMap<readonly Venue[], ReadonlyMap<string, number>>();
-
-// Built once per venue list, as venueIndexOf is.
-function rentalVenuesOf(venues: readonly Venue[]): ReadonlyMap<string, number> {
-  let indices = rentalIndices.get(venues);
-  if (indices === undefined) {
-    indices = new Map(
-      venues.flatMap((venue, index) => (hireOf(venue.id) ? [[venue.key, index] as const] : [])),
-    );
-    rentalIndices.set(venues, indices);
-  }
-  return indices;
-}
-
 // Drawn only: the visit is the router's, and the boats keep the crowd's time.
 function allowHire(resort: Resort): void {
-  const venues = rentalVenuesOf(resort.venues);
+  const venues = resort.rentalVenues;
   const hirersAt = (key: string): number => {
     const venue = venues.get(key);
     return venue === undefined ? 0 : insideAt(resort.cast, venue);
@@ -2150,8 +2074,11 @@ function recastAfterEdit(
     sand: network.sand,
     swim: resort.bathing,
   });
-  const standing = new Map(resort.venues.map((venue, at) => [venue.key, at]));
-  carryPlaces(was, resort.cast, (venue) => standing.get(wasStanding[venue]?.key ?? '') ?? -1);
+  carryPlaces(
+    was,
+    resort.cast,
+    (venue) => resort.venueIndex.get(wasStanding[venue]?.key ?? '') ?? -1,
+  );
   resort.staffCast = createCast(resort.staffPool.count, resort.places);
   recastAll(resort);
   resort.crowd.drawAs(resort.cast);
@@ -2376,22 +2303,12 @@ function hear(
   }
 }
 
-// Built once per venue list, which an edit replaces whole, so a visit costs no scan.
-const venueIndices = new WeakMap<readonly Venue[], ReadonlyMap<string, number>>();
-
 // A key the list lacks is the router's synthetic beach, which reads as spotless at -1.
-function venueIndexOf(venues: readonly Venue[], key: string): number {
-  let index = venueIndices.get(venues);
-  if (!index) {
-    index = new Map(venues.map((venue, at) => [venue.key, at]));
-    venueIndices.set(venues, index);
-  }
-  return index.get(key) ?? -1;
-}
+const venueIndexOf = (resort: Resort, key: string): number => resort.venueIndex.get(key) ?? -1;
 
 // After the visit wore it, so the last guest out of a dirty bar is the one who notices.
 function judgeVisit(resort: Resort, tick: number, person: number, venue: Venue): void {
-  const clean = cleanliness(resort.upkeep, venueIndexOf(resort.venues, venue.key));
+  const clean = cleanliness(resort.upkeep, venueIndexOf(resort, venue.key));
   const thought = visitThought(venue.role, clean);
   if (thought) hear(resort, tick, person, thought, venue.label);
 }
@@ -2399,7 +2316,7 @@ function judgeVisit(resort: Resort, tick: number, person: number, venue: Venue):
 // A mishap in water somebody is watching is ten times rarer; the beach is watched from a tower.
 function riskTheWater(resort: Resort, tick: number, person: number, venue: Venue): void {
   if (venue.bathing !== true) return;
-  const index = venueIndexOf(resort.venues, venue.key);
+  const index = venueIndexOf(resort, venue.key);
   const { staffRouter } = resort;
   const watched = index >= 0 ? staffRouter.watching(index) : staffRouter.watchingBeach;
   if (!mishap(person, tick, watched)) return;
@@ -2512,6 +2429,11 @@ interface DrawnLitter {
 
 const pavingIndices = new WeakMap<WalkNetwork, NodeIndex>();
 
+// The crowd is handed this very graph, so the first litter draw finds its index built.
+const knowPaving = (facts: PlotFacts): void => {
+  pavingIndices.set(facts.network, facts.paving);
+};
+
 function pavingIndexOf(network: WalkNetwork): NodeIndex {
   let index = pavingIndices.get(network);
   if (!index) {
@@ -2537,17 +2459,6 @@ function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
     piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length, litterWindowOf(resort)),
   );
   return { litter, version: litter.version };
-}
-
-function binsOn(placements: readonly Placement[]): BinSite[] {
-  const bins: BinSite[] = [];
-  for (const placement of placements) {
-    const reach = binReachOf(placement.id);
-    if (reach <= 0) continue;
-    const { tileX, tileZ, tilesX, tilesZ } = placement;
-    bins.push({ tileX, tileZ, tilesX, tilesZ, reach });
-  }
-  return bins;
 }
 
 interface TileAt {
@@ -2690,7 +2601,7 @@ const eventVisitOf = (resort: Resort, person: number, venue: Venue): EventRun | 
     resort.events,
     resort.guests.party[person]!,
     person,
-    venueIndexOf(resort.siteVenues, venue.key),
+    resort.siteVenueIndex.get(venue.key) ?? -1,
     (run) => runVenueOf(resort, run),
   );
 
@@ -2731,20 +2642,8 @@ function eventFactsOf(resort: Resort, clock: Clock): EventFacts {
     },
     hostOnDuty: resort.roster.animator > 0,
     canPay: (fee) => canAfford(resort.ledger, fee),
-    stages: preferredStages(resort.venues),
+    stages: resort.stages,
   };
-}
-
-// Keyed by the list itself, which an edit replaces wholesale, so it is sorted once per edit.
-const STAGE_PREFERENCE = new WeakMap<readonly Venue[], readonly EventSite[]>();
-
-function preferredStages(venues: readonly Venue[]): readonly EventSite[] {
-  let stages = STAGE_PREFERENCE.get(venues);
-  if (!stages) {
-    stages = stagesByPreference(venues);
-    STAGE_PREFERENCE.set(venues, stages);
-  }
-  return stages;
 }
 
 function refreshEventVenues(resort: Resort, now: number): void {
@@ -3326,19 +3225,6 @@ function rosterNow(resort: Resort): {
   );
   const roster = rosterOf(resort.hiring, recommended);
   return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
-}
-
-// A lodging is reached by its doors alone, never over the sand, as the router walks guests home.
-function strandedOn(
-  venues: readonly Venue[],
-  lodgings: readonly Lodging[],
-  network: WalkNetwork,
-): ReadonlySet<string> {
-  const index = nodeIndexFor(network);
-  return new Set([
-    ...unreachableOn(venues, (venue) => doorsFor(venue, index, network)),
-    ...unreachableOn(lodgings, (lodging) => doorsFor(lodging, index)),
-  ]);
 }
 
 function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
@@ -4801,7 +4687,7 @@ function lookAtWorker(handle: SceneHandle, resort: Resort, worker: number | null
 }
 
 function sendToPlace(resort: Resort, role: OrderRole, key: string | null): void {
-  const venue = key === null ? -1 : venueIndexOf(resort.venues, key);
+  const venue = key === null ? -1 : venueIndexOf(resort, key);
   if (venue >= 0) resort.staffRouter.order(role, { venue });
 }
 
@@ -5321,7 +5207,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const resort = current();
     const { guests, router } = resort;
     // By key: the venue list is the router's numbering; -1 reads as spotless.
-    const venue = resort.venues.findIndex((candidate) => candidate.key === placement.key);
+    const venue = venueIndexOf(resort, placement.key);
     const view = placeView(
       placement,
       objectTypeById(placement.id).label,
@@ -5754,49 +5640,25 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     walkStaleAt = null;
     const resort = current();
     const { plan, plot, shore, terrain, crowd } = resort;
-    const network = networkFor({
-      plan,
-      shore,
-      terrain,
-      paved: plot.paths,
-      standing: [...plot.placements, ...plot.props],
-    });
     const wasStanding = resort.venues;
-    resort.names = assignNames(resort.names, namedPlacesOf(plot.placements));
-    resort.venues = venuesOn(plot.placements, resort.names);
-    resort.lodgings = lodgingsOn(plot.placements);
-    resort.gateways = gatewaysOn(plot.placements);
-    resort.depots = depotsOn(plot.placements);
-    resort.unreachable = strandedOn(resort.venues, resort.lodgings, network);
+    const facts = plotFactsOf({ plan, shore, terrain }, plot, resort.names);
+    knowPaving(facts);
+    const { network } = facts;
+    Object.assign(resort, keptFactsOf(facts));
     // Before the router's rebuild, whose findHomes maps the new home indices.
-    rehome(resort.guests, homesOn(plot.placements, resort.unreachable));
-    resort.homeOfLodging = homesOfLodgings(resort.lodgings, resort.guests.homes);
+    rehome(resort.guests, facts.homes);
     const beds = bedCount(resort.guests);
     resort.beds = { total: beds.beds, taken: beds.taken };
     // By key: surviving venues keep their dirt, and new ones start clean.
     resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
     resort.breakdowns = carryBreakdowns(resort.breakdowns, wasStanding, resort.venues);
-    resort.scenery = sceneryFieldFor(
-      sceneryItemsOf([...plot.placements, ...plot.props, ...plot.paths], sceneryOf),
-      plan.tilesX,
-      plan.tilesZ,
-    );
-    resort.shade = shadeMapOf(plot.placements, shadeOf, plan.tilesX);
-    resort.binCover = binCoverFor(
-      binsOn([...plot.placements, ...plot.props]),
-      plan.tilesX,
-      plan.tilesZ,
-    );
-    const paving = nodeIndexFor(network);
     // Sand under a building just placed would never be swept.
     pruneLitter(
       resort.litter,
       (x, z) =>
-        paving.at(x, z) !== undefined ||
+        facts.paving.at(x, z) !== undefined ||
         (isBeach(shore, x, z) && resort.occupancy.keyAt({ x, z }) === undefined),
     );
-    resort.siteVenues = withBeach(resort.venues, network);
-    Object.assign(resort, sandOf(network.beach));
     keepProgrammeStanding(resort, wasStanding);
     refreshInvited(resort);
     refreshEventVenues(resort, clock.ticks);

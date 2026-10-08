@@ -158,6 +158,9 @@ const crowdOf = (count: number, tiles = 6): Crowd =>
 const meshes = (group: { children: unknown[] }): InstancedMesh[] =>
   group.children as InstancedMesh[];
 
+const poseOf = (mesh: InstancedMesh): BufferAttribute =>
+  mesh.geometry.getAttribute('pose') as BufferAttribute;
+
 function positionOf(mesh: InstancedMesh, slot: number): Vector3 {
   const matrix = new Matrix4();
   mesh.getMatrixAt(slot, matrix);
@@ -392,6 +395,25 @@ describe('buildCrowdField', () => {
         (i) => Math.abs(crowd.x[i]! - at.x) < 1e-3 && Math.abs(crowd.z[i]! - at.z) < 1e-3,
       );
       expect(person, `slot ${slot} was left behind`).toBeDefined();
+    }
+    field.dispose();
+  });
+
+  it('uploads only the slots it draws, and does not pile up ranges frame after frame', () => {
+    const field = buildCrowdField({ crowd: crowdOf(40), models: MODELS });
+    for (let frame = 0; frame < 5; frame++) field.advance(1 / 60, 1);
+    for (const mesh of meshes(field.group)) {
+      expect(mesh.instanceMatrix.updateRanges, mesh.name).toEqual([
+        { start: 0, count: mesh.count * 16 },
+      ]);
+      expect(poseOf(mesh).updateRanges, mesh.name).toEqual([{ start: 0, count: mesh.count * 4 }]);
+    }
+
+    field.setView({ x: 0, y: 0, z: 0, lens: orthographicLens(1, 100) });
+    field.advance(1 / 60, 1);
+    for (const mesh of meshes(field.group)) {
+      expect(mesh.instanceMatrix.updateRanges, mesh.name).toEqual([{ start: 0, count: 0 }]);
+      expect(poseOf(mesh).updateRanges, mesh.name).toEqual([{ start: 0, count: 0 }]);
     }
     field.dispose();
   });

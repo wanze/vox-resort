@@ -313,6 +313,7 @@ import type { SharedResort } from '../features/sharing/domain/sharedResort';
 import { createNameplates, type Nameplates } from '../features/naming/adapters/nameplateField';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
+import { reportDue } from '../features/hud/domain/reportPace';
 import type { FrameUpdate } from '../features/hud/adapters/hudOverlay';
 import type { HudState, HudStore } from '../features/hud/domain/hudStore';
 import {
@@ -331,6 +332,7 @@ import {
   benchRefusal,
   benchStep,
   parseBenchConfig,
+  timesGpu,
   type BenchConfig,
 } from '../features/bench/domain/benchConfig';
 import { roundStats, summarizeFrames, type FrameStats } from '../features/bench/domain/frameStats';
@@ -1926,9 +1928,17 @@ function pinCamera(handle: SceneHandle): void {
   handle.controls.enableDamping = false;
 }
 
-// Only here: the models are shared by every resort, the crowd, the sky and the bay.
+// Only here: every list is shared by every resort, the crowd, the staff, the sky and the bay.
 function disposeCatalogue(catalogue: MeshedCatalogue): void {
-  const all = [catalogue.geometries, catalogue.people, catalogue.sky, catalogue.sea];
+  const all = [
+    catalogue.geometries,
+    catalogue.people,
+    catalogue.staff,
+    catalogue.sky,
+    catalogue.sea,
+    catalogue.litter,
+    catalogue.props,
+  ];
   for (const models of all) {
     for (const model of models) {
       for (const copy of [model, model.coarse]) {
@@ -2194,6 +2204,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const startup = trackStartupFrames();
 
   const bench = parseBenchConfig(globalThis.location?.search ?? '');
+  const timing = timesGpu(globalThis.location?.search ?? '');
 
   const scratch = scratchForModels();
   const preparer = createResortPreparer({
@@ -2242,7 +2253,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
     groundShade: ownership.shade,
     // Wall-clock times cap at the refresh rate; the GPU's timers keep discriminating.
-    trackTimestamp: true,
+    trackTimestamp: timing,
     forceWebGL: bench?.forceWebGL ?? false,
   });
   handle.scene.add(current().world.group);
@@ -2421,11 +2432,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // A flag rather than a rebuild per spadeful: the rebuild is coalesced to one per frame.
   let ground = false;
 
-  // Told once a frame: a placement costs a scan and a React render, and a drag places one per move.
+  // Coalesced by tellHud: a placement costs a scan and a React render, and a drag places one per move.
   let counted = false;
 
-  // Told once a frame: a drag spends once per tile.
+  // Coalesced by tellHud: a drag spends once per tile.
   let spent = false;
+
+  // Each report re-renders the whole HUD; the flags stay set until the gap passes, so the last
+  // change of a drag is still told. One patch, so its stats and money reach React together.
+  let toldAt: number | null = null;
+  const heldReport = (): Partial<HudState> => ({
+    ...(counted ? { stats: statsNow() } : {}),
+    ...(spent ? { ledger: current().ledger } : {}),
+  });
+  const tellHud = (nowMs: number): void => {
+    if (!(counted || spent) || !reportDue(toldAt, nowMs)) return;
+    hud.publish(heldReport());
+    counted = false;
+    spent = false;
+    toldAt = nowMs;
+  };
 
   const money: Purse = {
     canAfford: (amount) => canAfford(current().ledger, amount),
@@ -2821,6 +2847,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     current().world.updateDetail(view);
     current().crowd.setView(view);
   };
+  // Skipped, not left to fail: three warns when a renderer built without timers is asked.
+  const timeGpu = (): void => {
+    if (!timing) return;
+    // Resolving drains the query pool, so once a frame gives one reading a frame.
+    void handle.renderer.resolveTimestampsAsync().then((duration) => {
+      if (typeof duration !== 'number' || duration <= 0) return;
+      gpuMs = duration;
+      recorder?.recordGpu(duration);
+    });
+  };
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
     const frameStarted = performance.now();
@@ -2830,14 +2866,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       handle.retile();
       ground = false;
     }
-    if (counted) {
-      hud.publish({ stats: statsNow() });
-      counted = false;
-    }
-    if (spent) {
-      hud.publish({ ledger: current().ledger });
-      spent = false;
-    }
+    tellHud(frameStarted);
     if (lifecycle.reanchorDue(timeMs)) lifecycle.reanchor();
 
     const elapsed = lastTimeMs === null ? 0 : (timeMs - lastTimeMs) / 1000;
@@ -2887,12 +2916,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const frameEnded = performance.now();
     tellDrawn();
     frameCost = sampleFrameCost(frameCost, timeMs, frameEnded - frameStarted);
-    // Resolving drains the query pool, so once a frame gives one reading a frame.
-    void handle.renderer.resolveTimestampsAsync().then((duration) => {
-      if (typeof duration !== 'number' || duration <= 0) return;
-      gpuMs = duration;
-      recorder?.recordGpu(duration);
-    });
+    timeGpu();
 
     const sample = sampleFrame(fpsState, timeMs);
     fpsState = sample.state;

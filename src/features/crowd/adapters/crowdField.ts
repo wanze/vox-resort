@@ -183,7 +183,12 @@ function writeInstances(
     slot++;
   }
   part.mesh.count = slot;
+  // Cleared first: three copies these ranges into a big mesh's own buffer without clearing them.
+  part.mesh.instanceMatrix.clearUpdateRanges();
+  part.mesh.instanceMatrix.addUpdateRange(0, slot * 16);
   part.mesh.instanceMatrix.needsUpdate = true;
+  part.pose.clearUpdateRanges();
+  part.pose.addUpdateRange(0, slot * POSE_STRIDE);
   part.pose.needsUpdate = true;
   return slot;
 }

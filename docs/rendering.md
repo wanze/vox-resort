@@ -123,6 +123,7 @@ draw, so each placement sits in four layers of buckets and
   keep over 60% of the triangles.
 - People under 3 px are packed out of the draw.
 - `?lod=0` turns it off. The Debug window (F3) shows draws, timings and buckets.
+  GPU time needs `?gpu`.
 
 **Shader builds**: WebGPU builds a shader per `InstancedMesh`, which costs
 milliseconds each for thousands of buckets. So a bucket is a plain `Mesh` over an
@@ -229,6 +230,8 @@ pnpm bench -- --shots ./shots      # screenshot per case
 ```
 
 The options also work as URL parameters; `?people=n` sets the crowd size.
+`?gpu` times the GPU outside a bench, for the Debug window (F3); without it the
+GPU field reads n/a.
 The authored plot has no shore; `--plot reference` runs the reference resort
 ([fixtures/README.md](../fixtures/README.md)) instead, with the sea, its boats
 and the beach crowd. `--repeat`, `--styles` and `--mosaic` remake the authored

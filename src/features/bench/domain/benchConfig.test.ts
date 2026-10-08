@@ -6,6 +6,7 @@ import {
   benchStep,
   DEFAULT_BENCH,
   parseBenchConfig,
+  timesGpu,
 } from './benchConfig';
 
 const refused = (search: string) => benchRefusal(parseBenchConfig(search)!);
@@ -132,6 +133,19 @@ describe('parseBenchConfig', () => {
     expect(parseBenchConfig('?bench=1&repeat=10')?.repeat).toBe(10);
     expect(parseBenchConfig('?bench=1&repeat=11')?.repeat).toBe(DEFAULT_BENCH.repeat);
     expect(parseBenchConfig('?bench=1&repeat=1000000')?.repeat).toBe(DEFAULT_BENCH.repeat);
+  });
+});
+
+describe('timesGpu', () => {
+  it('times the GPU only under a bench or the gpu flag', () => {
+    expect(timesGpu('')).toBe(false);
+    expect(timesGpu('?gpu')).toBe(true);
+    expect(timesGpu('?gpu=1')).toBe(true);
+    expect(timesGpu('?gpu=0')).toBe(false);
+    expect(timesGpu('?gpu=false')).toBe(false);
+    expect(timesGpu('?bench=1')).toBe(true);
+    expect(timesGpu('?bench=0&gpu=1')).toBe(true);
+    expect(timesGpu('?people=50')).toBe(false);
   });
 });
 

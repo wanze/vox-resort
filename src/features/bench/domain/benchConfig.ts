@@ -120,6 +120,13 @@ export function parseBenchConfig(search: string): BenchConfig | null {
   };
 }
 
+// The timers cost a query resolve and a buffer map every frame, so only a bench or ?gpu pays.
+export function timesGpu(search: string): boolean {
+  if (parseBenchConfig(search) !== null) return true;
+  const flag = new URLSearchParams(search).get('gpu');
+  return flag !== null && flag !== '0' && flag !== 'false';
+}
+
 // Each of these remakes the authored plot; the reference resort is measured as it was built.
 export function benchRefusal(config: BenchConfig): string | null {
   if (config.plot !== 'reference') return null;

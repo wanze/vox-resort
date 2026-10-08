@@ -1,4 +1,5 @@
 import { HudOption } from '../../hud/components/HudOption';
+import { keyLabel } from '../../hud/domain/keymap';
 import { VOLUMES, type SoundPrefs, type Volume } from '../domain/soundPrefs';
 
 export interface SoundOptionsProps {
@@ -43,7 +44,7 @@ export function SoundOptions({ prefs, onChange }: SoundOptionsProps) {
       <HudOption
         label="Sound"
         note="music, the resort and the buttons"
-        shortcut="M"
+        shortcut={keyLabel('sound')}
         checked={prefs.on}
         many
         onSelect={() => onChange({ ...prefs, on: !prefs.on })}

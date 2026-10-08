@@ -1,6 +1,7 @@
 import type { IconName } from './pixelIcons';
 import type { PageId, WindowId } from '../domain/windowLayout';
 import { isTab, type TabId } from '../domain/windowTabs';
+import { keyLabel } from '../domain/keymap';
 
 export const WINDOW_TITLES: { readonly [id in WindowId]: string } = {
   build: 'Build',
@@ -55,8 +56,8 @@ export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
 };
 
 export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
-  build: 'B',
-  debug: 'F3',
+  build: keyLabel('build'),
+  debug: keyLabel('debug'),
 };
 
 // The inspector follows the selection and the rest are reached from the menu.

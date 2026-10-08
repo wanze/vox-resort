@@ -2,6 +2,7 @@ import { HudDropdown } from './HudDropdown';
 import { HudOption } from './HudOption';
 import { PixelIcon } from './PixelIcon';
 import { speedNote } from './controlNames';
+import { keyLabel } from '../domain/keymap';
 import { SIM_SPEEDS, SPEED_LABELS, type SimSpeed } from '../../sim/domain/simClock';
 
 export interface SpeedControlProps {
@@ -31,7 +32,7 @@ export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: Speed
           icon={option}
           label={SPEED_LABELS[option]}
           note={speedNote(option)}
-          shortcut={option === 'paused' ? 'Space' : undefined}
+          shortcut={option === 'paused' ? keyLabel('pause') : undefined}
           checked={speed === option}
           onSelect={() => {
             onSpeedChange(option);

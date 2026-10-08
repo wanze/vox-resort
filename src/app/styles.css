@@ -702,6 +702,16 @@ input[type='checkbox'] {
   margin-top: var(--space-1);
 }
 
+/* The rule a menu would draw between its sections, with the gap above the next heading. */
+.hud-menu-group + .hud-menu-group {
+  margin-top: var(--space-2);
+  border-top: 2px dotted var(--edge-soft);
+}
+
+.hud-menu-group + .hud-menu-group > .hud-menu-heading {
+  margin-top: var(--space-2);
+}
+
 .hud-menu .hud-dropdown-panel {
   min-width: 290px;
 }

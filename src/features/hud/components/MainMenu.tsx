@@ -7,6 +7,7 @@ import { WEATHER_NAMES } from './controlNames';
 import { WeatherOptions } from './WeatherControl';
 import { MENU_PAGES, pageIcon, pageKey, pageTitle, WINDOW_KEYS } from './windowNames';
 import { isOpen, isShown } from '../domain/windowLayout';
+import { keyLabel } from '../domain/keymap';
 import { SoundOptions } from '../../sound/components/SoundControl';
 import { saveOrAsk } from '../../saves/domain/saveSlots';
 import { HighlightOptions } from '../../highlights/components/HighlightControl';
@@ -17,9 +18,8 @@ import type { ClockControls, SoundControls, WindowControls } from './hudControls
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 
-export const SAVE_SHORTCUT = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')
-  ? '⌘S'
-  : 'Ctrl+S';
+const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '');
+export const SAVE_SHORTCUT = keyLabel('save', MAC);
 
 export interface ViewToggles {
   readonly markers: boolean;
@@ -28,6 +28,11 @@ export interface ViewToggles {
   readonly onSignsChange: (shown: boolean) => void;
   readonly staffPins: boolean;
   readonly onStaffPinsChange: (shown: boolean) => void;
+}
+
+export interface ShortcutToggle {
+  readonly singleKeys: boolean;
+  readonly onSingleKeysChange: (on: boolean) => void;
 }
 
 export interface MainMenuProps {
@@ -41,12 +46,13 @@ export interface MainMenuProps {
   readonly clock: ClockControls;
   readonly sound: SoundControls;
   readonly view: ViewToggles;
+  readonly shortcuts: ShortcutToggle;
   readonly highlights: HighlightControls;
   readonly overlay: OverlayControls;
   readonly gates: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void };
 }
 
-type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'sound';
+type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'settings';
 
 interface PageContext extends MainMenuProps {
   readonly title: string;
@@ -60,16 +66,26 @@ const PAGE_TITLES: { readonly [page in SubPage]: string } = {
   highlight: 'Highlight buildings',
   maps: 'Map view',
   weather: 'Weather',
-  sound: 'Sound',
+  settings: 'Settings',
 };
 
 const weatherNote = ({ weather, forcedWeather }: ClockControls): string =>
   `${WEATHER_NAMES[weather]}, ${forcedWeather ? 'pinned' : 'forecast'}`;
 
-const SOUND_ROWS = {
-  on: { icon: 'sound', note: 'on' },
-  off: { icon: 'muted', note: 'muted' },
-} as const;
+const settingsNote = (sound: SoundControls, shortcuts: ShortcutToggle): string =>
+  `${sound.prefs.on ? 'sound on' : 'sound muted'}, ${shortcuts.singleKeys ? 'all shortcuts' : 'no single-key shortcuts'}`;
+
+// The heading is for the eye; the group carries the same name for a screen reader.
+function MenuGroup({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return (
+    <div className="hud-menu-group" role="group" aria-label={label}>
+      <p className="hud-menu-heading" aria-hidden="true">
+        {label}
+      </p>
+      {children}
+    </div>
+  );
+}
 
 interface PageProps extends PageContext {
   readonly onOpen: (page: SubPage) => void;
@@ -126,8 +142,7 @@ function GatesOption({ gates, run }: Pick<PageContext, 'gates' | 'run'>) {
 }
 
 function RootPage(props: PageProps) {
-  const { saves, windows, clock, sound, run, onOpen } = props;
-  const soundRow = SOUND_ROWS[sound.prefs.on ? 'on' : 'off'];
+  const { saves, windows, clock, sound, shortcuts, run, onOpen } = props;
   return (
     <>
       <HudOption
@@ -167,17 +182,17 @@ function RootPage(props: PageProps) {
         onSelect={() => onOpen('weather')}
       />
       <HudOption
-        icon={soundRow.icon}
-        label="Sound"
-        note={soundRow.note}
+        icon="settings"
+        label="Settings"
+        note={settingsNote(sound, shortcuts)}
         more
-        onSelect={() => onOpen('sound')}
+        onSelect={() => onOpen('settings')}
       />
       <hr className="hud-rule" />
       <HudOption
         label="Find an action…"
         note="search every switch, window and thing to build"
-        shortcut="/"
+        shortcut={keyLabel('find')}
         onSelect={props.onFind}
       />
     </>
@@ -254,14 +269,14 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
       />
       <HudOption
         label="Building signs"
-        note="say what each building is, when zoomed in (N; hold Alt for names)"
+        note={`say what each building is, when zoomed in (${keyLabel('signs')}; hold Alt for names)`}
         checked={view.signs}
         many
         onSelect={() => view.onSignsChange(!view.signs)}
       />
       <HudOption
         label="Staff pins"
-        note="pin every member of staff on duty (S)"
+        note={`pin every member of staff on duty (${keyLabel('staffPins')})`}
         checked={view.staffPins}
         many
         onSelect={() => view.onStaffPinsChange(!view.staffPins)}
@@ -292,7 +307,22 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
       }}
     />
   ),
-  sound: ({ sound }) => <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />,
+  settings: ({ sound, shortcuts }) => (
+    <>
+      <MenuGroup label="Sound">
+        <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
+      </MenuGroup>
+      <MenuGroup label="Keyboard">
+        <HudOption
+          label="Single-key shortcuts"
+          note={`keys such as ${keyLabel('build')} and ${keyLabel('pause')}; ${keyLabel('cancel')} and ${keyLabel('palette', MAC)} always work`}
+          checked={shortcuts.singleKeys}
+          many
+          onSelect={() => shortcuts.onSingleKeysChange(!shortcuts.singleKeys)}
+        />
+      </MenuGroup>
+    </>
+  ),
 };
 
 // Mounted only while the menu is open, so it always opens on the root page.
@@ -319,7 +349,7 @@ export function MainMenu(props: MainMenuProps) {
       className="hud-menu"
       open={open}
       onOpenChange={onOpenChange}
-      title="Menu (Esc)"
+      title={`Menu (${keyLabel('cancel')})`}
       label={
         <>
           <PixelIcon name="menu" />

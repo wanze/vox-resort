@@ -384,6 +384,10 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           signs: props.news.prefs.signs,
           onSignsChange: props.news.setSigns,
         }}
+        shortcuts={{
+          singleKeys: props.news.prefs.singleKeys,
+          onSingleKeysChange: props.news.setSingleKeys,
+        }}
         sound={props.sound}
         forecast={props.programme.forecast}
       />

@@ -156,6 +156,7 @@ export function createEditMode(parts: {
   readonly onPending: (pending: boolean) => void;
   readonly land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'>;
   readonly onCue: (cue: BuildCue) => void;
+  readonly singleKeys: () => boolean;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -385,6 +386,7 @@ export function createEditMode(parts: {
     onCancel,
     onFallback: parts.onFallback,
     onPending: parts.onPending,
+    singleKeys: parts.singleKeys,
   });
 
   const terrainRules: TerrainRules = {

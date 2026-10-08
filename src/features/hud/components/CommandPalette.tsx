@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from 
 import { CommandList } from './CommandList';
 import type { Command } from './commands';
 import { rankCommands, sectionCommands, stepCursor } from '../domain/commandSearch';
+import { keyLabel } from '../domain/keymap';
 
 export interface CommandPaletteProps {
   readonly commands: readonly Command[];
@@ -68,7 +69,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             }}
             onKeyDown={onKeyDown}
           />
-          <kbd className="hud-option-key">Esc</kbd>
+          <kbd className="hud-option-key">{keyLabel('cancel')}</kbd>
         </div>
         <CommandList
           id={listId}

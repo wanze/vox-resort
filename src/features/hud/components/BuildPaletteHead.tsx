@@ -3,6 +3,7 @@ import type { StyleStrip as Strip } from '../../build/domain/stylePick';
 import type { PreviewLookup } from './BuildPalette';
 import { ObjectInfo } from './ObjectInfo';
 import { StyleStrip } from './StyleStrip';
+import { keyLabel } from '../domain/keymap';
 
 export interface BuildPaletteHeadProps {
   readonly count: number;
@@ -53,7 +54,7 @@ function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
           type="button"
           className="hud-palette-turn"
           onClick={onTurn}
-          title="Turn (R)"
+          title={`Turn (${keyLabel('turnPlacement')})`}
           aria-label="Turn"
         >
           ⟳

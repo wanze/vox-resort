@@ -1,7 +1,7 @@
 import type { RefObject } from 'react';
 import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
-import { MainMenu, type ViewToggles } from './MainMenu';
+import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
 import { PixelIcon } from './PixelIcon';
 import { RatingControl } from './RatingControl';
 import { SpeedControl } from './SpeedControl';
@@ -36,6 +36,7 @@ export interface TopBarProps {
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly onFind: () => void;
   readonly view: ViewToggles;
+  readonly shortcuts: ShortcutToggle;
   // A touch layout: no field takes focus by itself there.
   readonly compact: boolean;
   readonly sound: SoundControls;
@@ -110,6 +111,7 @@ export function TopBar(props: TopBarProps) {
           clock={clock}
           sound={props.sound}
           view={props.view}
+          shortcuts={props.shortcuts}
           highlights={props.highlights}
           overlay={overlay}
           gates={{ open: resort.open, onOpenChange: resort.setOpen }}

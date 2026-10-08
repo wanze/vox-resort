@@ -56,13 +56,17 @@ function usePrefs() {
       (shown: boolean) => change((was) => ({ ...was, signs: shown })),
       [change],
     ),
+    setSingleKeys: useCallback(
+      (on: boolean) => change((was) => ({ ...was, singleKeys: on })),
+      [change],
+    ),
   };
 }
 
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
-  const { prefs, change, setMarkers, setStaffPins, setSigns } = usePrefs();
+  const { prefs, change, setMarkers, setStaffPins, setSigns, setSingleKeys } = usePrefs();
   const before = useRef<readonly Advice[] | null>(null);
   const heard = useRef<ReadonlyMap<string, number>>(new Map());
   // Read through refs so `hear` stays stable: a watch on the HUD store holds it.
@@ -130,6 +134,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setMarkers,
     setStaffPins,
     setSigns,
+    setSingleKeys,
     setUpdate: useCallback(
       (phase: UpdatePhase | null) => setToasts((shown) => withUpdate(shown, phase)),
       [],

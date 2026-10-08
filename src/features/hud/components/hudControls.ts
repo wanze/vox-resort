@@ -66,6 +66,7 @@ export interface NewsControls {
   setMarkers(shown: boolean): void;
   setStaffPins(shown: boolean): void;
   setSigns(shown: boolean): void;
+  setSingleKeys(on: boolean): void;
   setUpdate(phase: UpdatePhase | null): void;
   // The next advice is a baseline: a new resort's problems are not news.
   reset(): void;

@@ -25,6 +25,7 @@ import { reRailAround, type HandrailRules } from '../domain/handrails';
 import { footprintTiles, type Footprint, type TileOccupancy } from '../domain/tileOccupancy';
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
+import { keyHeard, KEYMAP } from '../../hud/domain/keymap';
 
 export interface BuildPointerOptions {
   readonly canvas: HTMLCanvasElement;
@@ -54,6 +55,7 @@ export interface BuildPointerOptions {
   readonly onFallback?: (fellBack: boolean) => void;
   // Whether a placement waits for the player to confirm it, which only happens on touch.
   readonly onPending?: (pending: boolean) => void;
+  readonly singleKeys: () => boolean;
 }
 
 // Asked for every placement, so a random style rolls afresh for each tile of a drag.
@@ -79,8 +81,9 @@ const freeing = (occupancy: TileOccupancy, key: string): TileOccupancy => ({
     }),
 });
 
-function turnAsked(event: KeyboardEvent): number {
-  if (event.key.toLowerCase() !== 'r') return 0;
+function turnAsked(event: KeyboardEvent, singleKeys: boolean): number {
+  if (!keyHeard('turnPlacement', singleKeys)) return 0;
+  if (event.key.toLowerCase() !== KEYMAP.turnPlacement.key) return 0;
   return event.shiftKey ? -1 : 1;
 }
 
@@ -182,7 +185,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
       item = nextItem();
     },
     onKey(event) {
-      const quarters = turnAsked(event);
+      const quarters = turnAsked(event, options.singleKeys());
       if (quarters !== 0) turn(quarters);
     },
     onCancel: options.onCancel,

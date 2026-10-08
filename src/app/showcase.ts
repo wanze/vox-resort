@@ -446,6 +446,7 @@ export interface Showcase {
   setStaffPins(shown: boolean): void;
   // Over every venue's door while zoomed in; under a bench, never placed.
   setSigns(shown: boolean): void;
+  setSingleKeys(on: boolean): void;
   selectAt(tile: { readonly tileX: number; readonly tileZ: number }): void;
   generate(params: ResortParams): Promise<void>;
   clear(params: ResortParams, mode: GameMode): Promise<void>;
@@ -2363,6 +2364,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     });
   };
 
+  let singleKeys = true;
   const cameraKeys = createCameraKeys({
     mode: () => handle.cameraMode,
     onModeChange: (mode) => {
@@ -2375,6 +2377,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       setIsoDirection(turnDirection(handle.isoDirection, quarters));
       hud.publish({ camera: cameraView() });
     },
+    singleKeys: () => singleKeys,
   });
 
   const viewSize = { width: 0, height: 0 };
@@ -2519,6 +2522,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onPending: (pending) => hud.publish({ pending }),
     land,
     onCue: cue,
+    singleKeys: () => singleKeys,
   });
 
   // Off under a bench, as the markers are, so every recorded figure is drawn without them. A gate
@@ -3034,6 +3038,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     setSigns(shown) {
       signsWanted = shown;
+    },
+    setSingleKeys(on) {
+      singleKeys = on;
     },
     selectAt(tile) {
       const key = current().occupancy.keyAt({ x: tile.tileX, z: tile.tileZ });

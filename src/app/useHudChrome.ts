@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import { useHotkeys } from './useHotkeys';
 import { useWindows } from './useWindows';
 import { saveOrAsk } from '../features/saves/domain/saveSlots';
-import type { Hotkey } from '../features/hud/adapters/hotkeys';
 import type { MenuId } from '../features/hud/components/TopBar';
 import { escapeOutcome } from '../features/hud/domain/escape';
+import { hotkeysFor, type HudAction } from '../features/hud/domain/keymap';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import { cycledTool } from '../features/build/domain/stylePick';
 import type { SelectionView } from '../features/inspect/domain/selection';
@@ -43,6 +43,7 @@ export function useHudChrome(
   playing: boolean,
   saves: SaveControls,
   toggles: HudToggles,
+  singleKeys: boolean,
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
@@ -56,49 +57,36 @@ export function useHudChrome(
   // An armed tool or an open inspector takes Escape first, so it only reaches the menu when idle.
   const idle = tool === null && selection === null;
 
-  const hotkeys: readonly Hotkey[] = [
-    { key: 'k', chord: true, run: always(() => setPalette(!palette)) },
+  const runs: { readonly [action in HudAction]: () => boolean } = {
+    palette: always(() => setPalette(!palette)),
     // Taken whatever the game's state, so the browser's own save-page dialog never opens.
-    {
-      key: 's',
-      chord: true,
-      run: always(() => void saveOrAsk(saves.save, () => windows.show('saves', true))),
+    save: always(() => void saveOrAsk(saves.save, () => windows.show('saves', true))),
+    find: always(() => setPalette(true)),
+    pause: always(clock.togglePause),
+    build: always(() => windows.toggle('build')),
+    staffPins: always(toggles.staffPins),
+    signs: always(toggles.signs),
+    sound: always(toggles.sound),
+    land: () => {
+      toggles.land?.();
+      return toggles.land !== null;
     },
-    { key: '/', run: always(() => setPalette(true)) },
-    { key: ' ', run: always(clock.togglePause) },
-    { key: 'b', run: always(() => windows.toggle('build')) },
-    { key: 's', run: always(toggles.staffPins) },
-    { key: 'n', run: always(toggles.signs) },
-    { key: 'm', run: always(toggles.sound) },
-    {
-      key: 'l',
-      run: () => {
-        toggles.land?.();
-        return toggles.land !== null;
-      },
-    },
-    { key: 'f3', run: always(() => windows.toggle('debug')) },
+    debug: always(() => windows.toggle('debug')),
     // Passed on unless the armed family has styles to cycle through.
-    {
-      key: 'v',
-      run: () => {
-        const next = cycledTool(tool);
-        if (next) onToolChange(next);
-        return next !== null;
-      },
+    nextStyle: () => {
+      const next = cycledTool(tool);
+      if (next) onToolChange(next);
+      return next !== null;
     },
-    {
-      key: 'escape',
-      run: () => {
-        const outcome = escapeOutcome(menu !== null, idle);
-        if (outcome === 'pass') return false;
-        setMenu(outcome === 'open' ? 'main' : null);
-        return true;
-      },
+    cancel: () => {
+      const outcome = escapeOutcome(menu !== null, idle);
+      if (outcome === 'pass') return false;
+      setMenu(outcome === 'open' ? 'main' : null);
+      return true;
     },
-  ];
+  };
   // None behind the welcome screen: there is no HUD for them to open.
-  useHotkeys(playing ? hotkeys : []);
+  useHotkeys(playing ? hotkeysFor(runs, singleKeys) : []);
 
   return { windows, layout, menu, setMenu, palette, setPalette };
 }

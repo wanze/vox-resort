@@ -1,9 +1,11 @@
+import { keyHeard, KEYMAP, type CameraAction } from '../../hud/domain/keymap';
 import type { CameraMode } from '../../layout/domain/worldBounds';
 
 export interface CameraKeysOptions {
   readonly mode: () => CameraMode;
   readonly onModeChange: (mode: CameraMode) => void;
   readonly onTurn: (quarters: number) => void;
+  readonly singleKeys: () => boolean;
 }
 
 export interface CameraKeys {
@@ -20,11 +22,12 @@ interface CameraGesture {
   readonly quarters: number;
 }
 
-const GESTURES: Readonly<Record<string, CameraGesture>> = {
-  c: { swap: true, quarters: 0 },
-  q: { swap: false, quarters: -1 },
-  e: { swap: false, quarters: 1 },
+const GESTURES: { readonly [action in CameraAction]: CameraGesture } = {
+  cameraMode: { swap: true, quarters: 0 },
+  turnLeft: { swap: false, quarters: -1 },
+  turnRight: { swap: false, quarters: 1 },
 };
+const CAMERA_ACTIONS = Object.keys(GESTURES) as CameraAction[];
 
 function otherMode(mode: CameraMode): CameraMode {
   return mode === 'perspective' ? 'isometric' : 'perspective';
@@ -35,14 +38,18 @@ function aimedAtScene(event: KeyboardEvent): boolean {
   return !inAField(event.target);
 }
 
-function gestureFor(event: KeyboardEvent): CameraGesture | null {
+function gestureFor(event: KeyboardEvent, singleKeys: boolean): CameraGesture | null {
   if (!aimedAtScene(event)) return null;
-  return GESTURES[event.key.toLowerCase()] ?? null;
+  const key = event.key.toLowerCase();
+  const action = CAMERA_ACTIONS.find(
+    (each) => KEYMAP[each].key === key && keyHeard(each, singleKeys),
+  );
+  return action === undefined ? null : GESTURES[action];
 }
 
 export function createCameraKeys(options: CameraKeysOptions): CameraKeys {
   const onKeyDown = (event: KeyboardEvent): void => {
-    const gesture = gestureFor(event);
+    const gesture = gestureFor(event, options.singleKeys());
     if (gesture === null) return;
     if (gesture.swap) {
       options.onModeChange(otherMode(options.mode()));

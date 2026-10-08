@@ -26,6 +26,7 @@ import { SIM_SPEEDS, SPEED_LABELS } from '../../sim/domain/simClock';
 import { WEATHERS } from '../../sim/domain/weather';
 import { canAfford, type Ledger } from '../../sim/domain/ledger';
 import { footprintLabel } from '../domain/paletteFilter';
+import { keyLabel } from '../domain/keymap';
 import { isOpen, isShown, type PageId } from '../domain/windowLayout';
 import type { Searchable } from '../domain/commandSearch';
 import { isReadable, listOrder, saveOrAsk } from '../../saves/domain/saveSlots';
@@ -89,7 +90,7 @@ function speedCommands({ clock }: CommandContext): Command[] {
     keywords: 'game time clock',
     note: speedNote(speed),
     art: { icon: speed },
-    shortcut: speed === 'paused' ? 'Space' : undefined,
+    shortcut: speed === 'paused' ? keyLabel('pause') : undefined,
     checked: clock.speed === speed,
     run: () => clock.setSpeed(speed),
   }));
@@ -192,7 +193,7 @@ function cameraCommands({ camera }: CommandContext): Command[] {
       group: 'Camera',
       keywords: 'view fly',
       art: { icon: 'camera' },
-      shortcut: 'C',
+      shortcut: keyLabel('cameraMode'),
       checked: !isometric,
       run: () => camera.setMode('perspective'),
     },
@@ -230,7 +231,7 @@ function soundCommands({ sound }: CommandContext): Command[] {
       keywords: 'audio music volume mute quiet silence',
       note: on ? 'silence the music, the resort and the buttons' : 'bring the sound back',
       art: { icon: on ? 'muted' : 'sound' },
-      shortcut: 'M',
+      shortcut: keyLabel('sound'),
       run: sound.toggle,
     },
   ];
@@ -358,7 +359,7 @@ function windowCommands(context: CommandContext): Command[] {
       keywords: 'window stats fps frame rate performance',
       note: 'frame rate, frame cost and what is drawn',
       art: { icon: 'debug' },
-      shortcut: 'F3',
+      shortcut: keyLabel('debug'),
       checked: isOpen(windows.layout, 'debug'),
       run: () => windows.toggle('debug'),
     },
@@ -394,7 +395,7 @@ function landCommands({ tool, onToolChange, land, preview }: CommandContext): Co
       keywords: 'land parcel buy claim plot expand grow',
       note: LAND_TOOL.hint,
       art: toolArt(preview, 'land', LAND_TOOL.glyph),
-      shortcut: 'L',
+      shortcut: keyLabel('land'),
       checked: armedLand(tool),
       run: () => onToolChange({ kind: 'land' }),
     },
@@ -432,7 +433,7 @@ function toolCommands({ tool, onToolChange, preview }: CommandContext): Command[
             label: 'Stop building',
             group: 'Build',
             keywords: 'cancel disarm put down',
-            shortcut: 'Esc',
+            shortcut: keyLabel('cancel'),
             run: () => onToolChange(null),
           },
         ];
@@ -469,7 +470,7 @@ function styleCommands({ tool, onToolChange }: CommandContext): Command[] {
       group: 'Build',
       keywords: 'style variant look cycle',
       note: pickLabel(strip),
-      shortcut: 'V',
+      shortcut: keyLabel('nextStyle'),
       run: () => onToolChange(next),
     },
   ];

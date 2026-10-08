@@ -9,7 +9,13 @@ describe('parsePrefs', () => {
   });
 
   it('reads back what was stored', () => {
-    const prefs = { muted: ['warning' as const], markers: false, staff: true, signs: false };
+    const prefs = {
+      muted: ['warning' as const],
+      markers: false,
+      staff: true,
+      signs: false,
+      singleKeys: false,
+    };
     expect(parsePrefs(JSON.parse(JSON.stringify(prefs)))).toEqual(prefs);
   });
 
@@ -34,5 +40,13 @@ describe('parsePrefs', () => {
     expect(parsePrefs({ muted: [], markers: true, staff: false }).signs).toBe(true);
     expect(parsePrefs({ muted: [], signs: 'no' }).signs).toBe(true);
     expect(parsePrefs({ muted: [], signs: false }).signs).toBe(false);
+  });
+
+  it('hears single-key shortcuts unless they were turned off, as in a store from before them', () => {
+    expect(parsePrefs({ muted: [], markers: true, staff: false, signs: true }).singleKeys).toBe(
+      true,
+    );
+    expect(parsePrefs({ muted: [], singleKeys: 'off' }).singleKeys).toBe(true);
+    expect(parsePrefs({ muted: [], singleKeys: false }).singleKeys).toBe(false);
   });
 });

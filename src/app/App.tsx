@@ -217,6 +217,10 @@ function useAdviceNews(
   useEffect(() => {
     if (sceneUp) showcase.current?.setStaffPins(staffPins);
   }, [showcase, sceneUp, staffPins]);
+  const singleKeys = news.prefs.singleKeys;
+  useEffect(() => {
+    if (sceneUp) showcase.current?.setSingleKeys(singleKeys);
+  }, [showcase, sceneUp, singleKeys]);
   const signs = useSigns(showcase, sceneUp, news.prefs.signs);
   const highlights = useHighlights(showcase, hud, sceneUp);
   return { news, history, replaced, advice, signs, highlights };
@@ -320,6 +324,7 @@ export function App() {
       sound: sound.toggle,
       land: landToggle(resort.money.land, tool, selectTool),
     },
+    news.prefs.singleKeys,
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.

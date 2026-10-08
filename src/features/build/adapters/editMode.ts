@@ -103,7 +103,7 @@ function buildTimeOf(placement: Placement, lifted?: Placement): number {
   return buildSeconds({
     category: model.category,
     height: model.height,
-    voxelCount: model.voxels.length,
+    voxelCount: model.voxelCount,
   });
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ModelVenue, VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelFacts, ModelVenue } from '../../../../voxel-gen/voxelgen.ts';
 import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { objectFacts, type ObjectFacts } from './objectFacts';
 
@@ -15,9 +15,9 @@ const MODEL = {
   placement: {},
   venue: null,
   hire: null,
-} as unknown as VoxelModel;
+} as unknown as ModelFacts;
 
-function typeOf(model: Partial<VoxelModel>, category = 'amenities'): ObjectTypeDefinition {
+function typeOf(model: Partial<ModelFacts>, category = 'amenities'): ObjectTypeDefinition {
   const venue = model.venue ?? null;
   return {
     id: 'thing',
@@ -98,7 +98,7 @@ describe('objectFacts', () => {
   });
 
   it('grades scenery and counts only the seats a guest may take', () => {
-    const seats = [{}, {}, { post: 'lifeguard' }] as unknown as VoxelModel['seats'];
+    const seats = [{}, {}, { post: 'lifeguard' }] as unknown as ModelFacts['seats'];
     const facts = objectFacts(typeOf({ scenery: 0.8, seats }, 'grounds'), 0);
     expect(valueOf(facts, 'Scenery')).toBe('Strong');
     expect(valueOf(facts, 'Seats')).toBe('2');
@@ -109,12 +109,12 @@ describe('objectFacts', () => {
   });
 
   it('leaves the seats of a venue to its capacity', () => {
-    const seats = [{}, {}] as unknown as VoxelModel['seats'];
+    const seats = [{}, {}] as unknown as ModelFacts['seats'];
     expect(valueOf(objectFacts(typeOf({ seats, venue: venue({}) }), 0), 'Seats')).toBeUndefined();
   });
 
   it('says a lamp lights the night but not that a lit venue does', () => {
-    const lights = [{}] as unknown as VoxelModel['lights'];
+    const lights = [{}] as unknown as ModelFacts['lights'];
     expect(objectFacts(typeOf({ lights }), 0).notes).toEqual(['Lights up at night']);
     expect(objectFacts(typeOf({ lights, venue: venue({}) }), 0).notes).toEqual([]);
   });

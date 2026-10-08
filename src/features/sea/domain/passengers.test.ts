@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WALK_SPEED } from '../../crowd/domain/crowd';
-import type { VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelFacts } from '../../../../voxel-gen/voxelgen.ts';
 import { createFlotilla, poseOf, stepFlotilla, type Flotilla } from './flotilla';
 import {
   aboard,
@@ -64,8 +64,8 @@ const takenOn = (passengers: Passengers, craft: number): string[] =>
     .filter((index) => passengers.craft[index] === craft)
     .map((index) => `${passengers.x[index]},${passengers.y[index]},${passengers.z[index]}`);
 
-const model = (parts: Partial<VoxelModel>): VoxelModel =>
-  ({ id: 'craft', width: 8, height: 6, depth: 12, seats: [], ...parts }) as VoxelModel;
+const model = (parts: Partial<ModelFacts>): ModelFacts =>
+  ({ id: 'craft', width: 8, height: 6, depth: 12, seats: [], ...parts }) as ModelFacts;
 
 describe('berthsOf', () => {
   it('puts a declared seat on the craft’s own middle and waterline', () => {

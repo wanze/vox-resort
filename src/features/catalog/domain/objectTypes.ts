@@ -1,26 +1,22 @@
-import { LITTER_SOURCES } from '../../../../voxel-gen/litter/index.ts';
-import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
-import { PEOPLE_SOURCES, STAFF_SOURCES } from '../../../../voxel-gen/people/index.ts';
-import { PROP_SOURCES } from '../../../../voxel-gen/props/index.ts';
-import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
-import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
-import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
+import catalogueJson from '../../../../voxel-gen/facts.json';
+import type { Catalogue } from '../../../../voxel-gen/catalogue.ts';
 import {
-  buildModel,
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
   type ModelDepot,
+  type ModelFacts,
   type ModelHire,
   type ModelMosaic,
   type ModelVenue,
   type SignKind,
   type SoundKind,
   type VenueRole,
-  type VoxelModel,
-  type VoxelModelSource,
 } from '../../../../voxel-gen/voxelgen.ts';
-import { materialIdFor, materialsForColors, type MaterialDefinition } from './materials';
+
+// JSON widens every string union to string, hence the cast; voxel-gen/catalogue.test.ts holds
+// the file equal to catalogueFacts(), which is typed, so a wrong shape fails a test.
+const CATALOGUE = catalogueJson as unknown as Catalogue<ModelFacts>;
 
 export { TILE_VOXELS };
 export type { ModelMosaic, ModelVenue, SignKind, SoundKind };
@@ -33,40 +29,18 @@ export interface ObjectTypeDefinition {
   readonly style: number;
   readonly styleLabel: string;
   readonly category: ModelCategory;
-  readonly model: VoxelModel;
+  readonly model: ModelFacts;
   readonly color: number;
   readonly venue: ModelVenue | null;
 }
 
-function dominantColor(model: VoxelModel): number {
-  const counts = new Map<number, number>();
-  for (const voxels of [model.voxels, model.canopy?.open ?? []]) {
-    for (const voxel of voxels) counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
-  }
-  let best = 0;
-  let bestCount = -1;
-  for (const [color, count] of counts) {
-    if (count > bestCount) {
-      best = color;
-      bestCount = count;
-    }
-  }
-  return best;
-}
-
 const FAMILY_LABELS: ReadonlyMap<string, string> = new Map(
-  MODEL_SOURCES.map((source) => [source.id, source.label]),
+  CATALOGUE.types.map(({ model }) => [model.id, model.label]),
 );
 
-const SOURCES_WITH_FAMILY: readonly (readonly [VoxelModelSource, string])[] = [
-  ...MODEL_SOURCES.map((source) => [source, source.id] as const),
-  ...VARIANTS.map((variant) => [variant.source, variant.of] as const),
-];
-
-export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = SOURCES_WITH_FAMILY.map(
-  ([source, family], index) => {
-    const model = buildModel(source);
-    const style = SOURCES_WITH_FAMILY.slice(0, index).filter(([, of]) => of === family).length;
+export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = CATALOGUE.types.map(
+  ({ family, model }, index) => {
+    const style = CATALOGUE.types.slice(0, index).filter((type) => type.family === family).length;
     return {
       id: model.id,
       label: FAMILY_LABELS.get(family) ?? model.label,
@@ -75,7 +49,7 @@ export const OBJECT_TYPES: readonly ObjectTypeDefinition[] = SOURCES_WITH_FAMILY
       styleLabel: model.label,
       category: model.category,
       model,
-      color: dominantColor(model),
+      color: model.dominantColor,
       venue: model.venue,
     };
   },
@@ -87,31 +61,19 @@ export const ORIGINAL_TYPES: readonly ObjectTypeDefinition[] = OBJECT_TYPES.filt
 );
 
 // Not ObjectTypeDefinitions: a person has no swatch, shelf or footprint to claim.
-export const PEOPLE_MODELS: readonly VoxelModel[] = PEOPLE_SOURCES.map(buildModel);
+export const PEOPLE_MODELS: readonly ModelFacts[] = CATALOGUE.people;
 
 // A list of its own because a guest's variant indexes PEOPLE_MODELS, so a cleaner
 // in it would be dealt to a guest.
-export const STAFF_MODELS: readonly VoxelModel[] = STAFF_SOURCES.map(buildModel);
+export const STAFF_MODELS: readonly ModelFacts[] = CATALOGUE.staff;
 
-export const SKY_MODELS: readonly VoxelModel[] = SKY_SOURCES.map(buildModel);
+export const SKY_MODELS: readonly ModelFacts[] = CATALOGUE.sky;
 
-export const SEA_MODELS: readonly VoxelModel[] = SEA_SOURCES.map(buildModel);
+export const SEA_MODELS: readonly ModelFacts[] = CATALOGUE.sea;
 
-export const LITTER_MODELS: readonly VoxelModel[] = LITTER_SOURCES.map(buildModel);
+export const LITTER_MODELS: readonly ModelFacts[] = CATALOGUE.litter;
 
-export const PROP_MODELS: readonly VoxelModel[] = PROP_SOURCES.map(buildModel);
-
-// Materials must come from every registry: only people paint with skin, and
-// without it the mesher would be asked for a voxel DVE never registered.
-export const PAINTED_MODELS: readonly VoxelModel[] = [
-  ...OBJECT_TYPES.map((type) => type.model),
-  ...PEOPLE_MODELS,
-  ...STAFF_MODELS,
-  ...SKY_MODELS,
-  ...SEA_MODELS,
-  ...LITTER_MODELS,
-  ...PROP_MODELS,
-];
+export const PROP_MODELS: readonly ModelFacts[] = CATALOGUE.props;
 
 export interface ObjectTypeGroup {
   readonly category: ModelCategory;
@@ -224,47 +186,4 @@ export const soundOf = (id: string): SoundKind | null => SOUNDS.get(familyOf(id)
 
 export function binReachOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.binReach ?? 0;
-}
-
-let materials: readonly MaterialDefinition[] | undefined;
-
-// Walks every voxel of every model, millions of them, so it runs once per thread.
-export function allMaterials(): readonly MaterialDefinition[] {
-  if (materials) return materials;
-  const colors = new Set<number>();
-  for (const model of PAINTED_MODELS) {
-    for (const voxels of [model.voxels, model.canopy?.open ?? [], model.canopy?.furled ?? []]) {
-      for (const voxel of voxels) colors.add(voxel.color);
-    }
-  }
-  materials = materialsForColors(colors);
-  return materials;
-}
-
-export function emissiveByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
-  const byId = new Map<string, ReadonlySet<number>>();
-  for (const model of PAINTED_MODELS) {
-    if (model.emissive.length > 0) byId.set(model.id, new Set(model.emissive));
-  }
-  return byId;
-}
-
-export function waterByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
-  const byId = new Map<string, ReadonlySet<number>>();
-  for (const model of PAINTED_MODELS) {
-    if (model.water.length > 0) byId.set(model.id, new Set(model.water));
-  }
-  return byId;
-}
-
-export function windowsByModelId(): ReadonlyMap<string, ReadonlySet<number>> {
-  const byId = new Map<string, ReadonlySet<number>>();
-  for (const model of PAINTED_MODELS) {
-    if (model.windows.length > 0) byId.set(model.id, new Set(model.windows));
-  }
-  return byId;
-}
-
-export function materialColorsById(): ReadonlyMap<string, number> {
-  return new Map(allMaterials().map((material) => [materialIdFor(material.key), material.color]));
 }

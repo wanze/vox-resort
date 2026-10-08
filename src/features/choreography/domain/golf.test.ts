@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { objectTypeById } from '../../catalog/domain/objectTypes';
+import { paintedCatalogue } from '../../catalog/domain/paintedModels';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { venuesOn } from '../../sim/domain/venues';
@@ -137,7 +138,8 @@ describe('playRounds', () => {
   });
 
   it('never walks anybody through a hedge, a landmark or a flag', () => {
-    const solid = new Set(model.voxels.map(({ x, y, z }) => `${x},${y},${z}`));
+    const painted = paintedCatalogue().types.find((type) => type.model.id === model.id)!.model;
+    const solid = new Set(painted.voxels.map(({ x, y, z }) => `${x},${y},${z}`));
     const cast = golfers(16);
     for (let time = 0; time < course.slot * 2; time += STEP * 3) {
       perform(cast, time);

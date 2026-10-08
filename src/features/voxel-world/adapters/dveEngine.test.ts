@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { materialKeyFor, voxelIdFor } from '../../catalog/domain/materials';
 import {
-  allMaterials,
-  materialColorsById,
-  OBJECT_TYPES,
-  PAINTED_MODELS,
-  PEOPLE_MODELS,
-} from '../../catalog/domain/objectTypes';
+  materialColorsOf,
+  materialsOf,
+  paintedCatalogue,
+  paintedModelsOf,
+} from '../../catalog/domain/paintedModels';
 import { deinterleaveVertices, flipWinding } from '../../rendering/domain/vertexBuffer';
 import { coarseIdOf, coarseScratchModelOf } from '../domain/coarseVoxels';
 import { scratchLayoutFor } from '../domain/modelScratch';
@@ -18,25 +17,30 @@ const corner = (index: number, source: Float32Array): readonly number[] => [
   source[index * 3 + 2]!,
 ];
 
-// Meshes PAINTED_MODELS too: the `skin` material is painted only by the crowd,
+const catalogue = paintedCatalogue();
+const PAINTED = paintedModelsOf(catalogue);
+const TYPES = catalogue.types.map((type) => type.model);
+const MATERIALS = materialsOf(PAINTED);
+
+// Meshes every painted model too: the `skin` material is painted only by the crowd,
 // so a catalogue-only registry would silently drop it.
 describe('buildSectionMeshes', () => {
   it('meshes the catalogue and the crowd into submeshes of known materials', async () => {
     const scratch = scratchLayoutFor(
-      [...PAINTED_MODELS, ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model))],
+      [...PAINTED, ...TYPES.map((model) => coarseScratchModelOf(model))],
       (color) => voxelIdFor(materialKeyFor(color)),
       sectionSizeOf(DEFAULT_WORLD_SCALE),
     );
     const meshed = new Set(scratch.regions.map((region) => region.id));
-    for (const person of PEOPLE_MODELS) expect(meshed.has(person.id), person.id).toBe(true);
-    for (const type of OBJECT_TYPES) {
-      expect(meshed.has(coarseIdOf(type.id)), type.id).toBe(true);
+    for (const person of catalogue.people) expect(meshed.has(person.id), person.id).toBe(true);
+    for (const model of TYPES) {
+      expect(meshed.has(coarseIdOf(model.id)), model.id).toBe(true);
     }
     expect(scratch.extentX).toBeLessThanOrEqual(DEFAULT_WORLD_SCALE.horizontalExtent);
     const writes = scratch.writes;
 
-    const sections = await buildSectionMeshes(allMaterials(), writes);
-    const colors = materialColorsById();
+    const sections = await buildSectionMeshes(MATERIALS, writes);
+    const colors = materialColorsOf(MATERIALS);
 
     expect(sections.length).toBeGreaterThan(0);
     for (const section of sections) {
@@ -55,9 +59,9 @@ describe('buildSectionMeshes', () => {
     const writes = {
       positions: Int32Array.of(6000, 100, 1000),
       voxelIds: Uint16Array.of(0),
-      palette: [voxelIdFor(materialKeyFor(OBJECT_TYPES[0]!.color))],
+      palette: [voxelIdFor(materialKeyFor(TYPES[0]!.voxels[0]!.color))],
     };
-    const [section] = await buildSectionMeshes(allMaterials(), writes);
+    const [section] = await buildSectionMeshes(MATERIALS, writes);
     expect(section).toBeDefined();
 
     const { positions, normals } = deinterleaveVertices(section!.vertices, section!.vertexCount);

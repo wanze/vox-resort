@@ -744,3 +744,38 @@ export const dayVoxelsOf = (
 
 export const allVoxelsOf = (model: VoxelModel): readonly PaintedVoxel[] =>
   model.canopy ? [...model.voxels, ...model.canopy.open, ...model.canopy.furled] : model.voxels;
+
+export interface ModelFacts extends Omit<VoxelModel, 'voxels' | 'canopy'> {
+  readonly voxelCount: number;
+  readonly dayVoxelCount: number;
+  readonly dominantColor: Color;
+}
+
+// The swatch colour: the colour painted most by day; a tie goes to the colour met first.
+function dominantColorOf(model: VoxelModel): Color {
+  const counts = new Map<Color, number>();
+  for (const voxels of [model.voxels, model.canopy?.open ?? []]) {
+    for (const voxel of voxels) counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
+  }
+  let best = 0;
+  let bestCount = -1;
+  for (const [color, count] of counts) {
+    if (count > bestCount) {
+      best = color;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+// Everything the page and the prep worker know about a model; only the mesh worker needs voxels.
+// Pure, so a model made at runtime gets its facts the same way the committed file does.
+export function factsOf(model: VoxelModel): ModelFacts {
+  const { voxels, canopy, ...facts } = model;
+  return {
+    ...facts,
+    voxelCount: voxels.length,
+    dayVoxelCount: voxels.length + (canopy?.open.length ?? 0),
+    dominantColor: dominantColorOf(model),
+  };
+}

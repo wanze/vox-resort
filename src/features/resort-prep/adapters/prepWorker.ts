@@ -1,4 +1,4 @@
-// Kept alive between resorts: the catalogue is built on module load and too slow to rebuild per request.
+// Kept alive between resorts, so a new game does not wait for a worker to start and load its modules.
 
 import {
   prepareResort,
@@ -32,7 +32,7 @@ self.addEventListener('message', (event: MessageEvent<PrepMessage>) => {
   }
 });
 
-// Sent once the imports above have built the catalogue: an error before it is a worker that could
+// Sent once the imports above have loaded: an error before it is a worker that could
 // not start, one after it a job that crashed.
 const ready: PrepAnswer = { ready: true };
 self.postMessage(ready);

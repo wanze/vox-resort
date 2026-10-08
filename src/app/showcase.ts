@@ -1,17 +1,10 @@
-import { materialKeyFor, voxelIdFor } from '../features/catalog/domain/materials';
 import {
-  allMaterials,
-  emissiveByModelId,
-  waterByModelId,
-  windowsByModelId,
   familyOf,
   hireOf,
   isGateway,
-  materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
   LITTER_MODELS,
-  PAINTED_MODELS,
   PEOPLE_MODELS,
   PROP_MODELS,
   SEA_MODELS,
@@ -222,13 +215,6 @@ import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightV
 import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createSkyApplier } from '../features/lighting/adapters/skyApplier';
 import { createResortClock, type ResortClock } from '../features/sim/domain/resortClock';
-import type { ScratchLayout } from '../features/voxel-world/domain/modelScratch';
-import {
-  canopyScratchModelsOf,
-  scratchLayoutFor,
-} from '../features/voxel-world/domain/modelScratch';
-import { coarseScratchModelOf } from '../features/voxel-world/domain/coarseVoxels';
-import { DEFAULT_WORLD_SCALE, sectionSizeOf } from '../features/voxel-world/adapters/dveEngine';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
 import type { InstancedWorld } from '../features/rendering/adapters/instancedWorld';
 import { buildInstancedWorld } from '../features/rendering/adapters/instancedWorld';
@@ -352,7 +338,7 @@ import type {
 } from '../features/hud/domain/views';
 
 // Precomputed: read once per object placed, and a drag places one per pointer move.
-const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxels.length]));
+const VOXELS_PER_TYPE = new Map(OBJECT_TYPES.map((type) => [type.id, type.model.voxelCount]));
 
 const CROWD_OVERRIDE = crowdOverrideFrom(globalThis.location?.search ?? '');
 
@@ -510,26 +496,6 @@ function trackStartupFrames(): StartupTracker {
   };
 }
 
-function scratchForModels(): ScratchLayout {
-  const started = performance.now();
-  const scratch = scratchLayoutFor(
-    [
-      ...PAINTED_MODELS,
-      ...PAINTED_MODELS.flatMap(canopyScratchModelsOf),
-      ...OBJECT_TYPES.map((type) => coarseScratchModelOf(type.model)),
-    ],
-    (color) => voxelIdFor(materialKeyFor(color)),
-    sectionSizeOf(DEFAULT_WORLD_SCALE),
-  );
-  if (scratch.extentX > DEFAULT_WORLD_SCALE.horizontalExtent) {
-    throw new Error(
-      `The models need ${scratch.extentX} voxels of scratch space, the world allows ${DEFAULT_WORLD_SCALE.horizontalExtent}`,
-    );
-  }
-  performance.measure('vox:boot:scratch', { start: started });
-  return scratch;
-}
-
 interface MeshedCatalogue {
   readonly geometries: readonly ModelGeometry[];
   // Kept out of the instanced world: a person is not a placement and must never be stood on the
@@ -584,23 +550,14 @@ const KEPT_APART_IDS: ReadonlySet<string> = new Set([
   ...PROP_IDS,
 ]);
 
-async function meshModels(
-  scratch: ScratchLayout,
-  bench: BenchConfig | null,
-): Promise<MeshedCatalogue> {
+async function meshModels(bench: BenchConfig | null): Promise<MeshedCatalogue> {
   const started = performance.now();
   const meshed = await meshCatalogue(
-    {
-      materials: allMaterials(),
-      writes: scratch.writes,
-      regions: scratch.regions,
-      colorsByMaterialId: materialColorsById(),
-      emissiveByModelId: emissiveByModelId(),
-      waterByModelId: waterByModelId(),
-      windowsByModelId: windowsByModelId(),
-    },
+    { extraTypes: [] },
     { forceMainThread: bench?.forceMainThreadMeshing ?? false },
   );
+  // Painted in the worker, whose clock is not ours: only the duration is meaningful.
+  performance.measure('vox:boot:build', { end: performance.now(), duration: meshed.buildMs });
   const geometries = buildModelGeometries(meshed.models);
   return {
     geometries: geometries.filter((model) => !KEPT_APART_IDS.has(model.id)),
@@ -612,9 +569,9 @@ async function meshModels(
     litter: geometries.filter((model) => LITTER_IDS.has(model.id)),
     props: geometries.filter((model) => PROP_IDS.has(model.id)),
     dveMs: meshed.dveMs,
-    meshMs: Math.round(performance.now() - started),
+    meshMs: Math.round(performance.now() - started) - meshed.buildMs,
     threaded: meshed.threaded,
-    meshedVoxelCount: scratch.writes.voxelIds.length,
+    meshedVoxelCount: meshed.meshedVoxelCount,
   };
 }
 
@@ -2218,7 +2175,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const starting = startingParams(bench);
   const identity: ResortIdentity = { params: starting, name: resortNameFor(starting.seed) };
   const [catalogue, first] = await Promise.all([
-    meshModels(scratchForModels(), bench).then(loaded('models', options.onLoading)),
+    meshModels(bench).then(loaded('models', options.onLoading)),
     startingSource(bench, starting)
       .then((source) => preparer.prepare(prepRequestFor(source, bench)))
       .then(loaded('resort', options.onLoading)),

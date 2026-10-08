@@ -1,4 +1,4 @@
-import type { ModelSeat, VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelFacts, ModelSeat } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom } from '../../layout/domain/random';
 import { rotationRadians } from '../../layout/domain/rotation';
 import { poseOf, type Flotilla } from './flotilla';
@@ -20,7 +20,7 @@ export interface Berth {
 
 // Seats are measured from the model's corner, but the hull hangs from its middle
 // on its lowest layer, matching hungGeometry in movingField.ts; +0.5 centres the sitter.
-export function berthsOf(model: VoxelModel): Berth[] {
+export function berthsOf(model: ModelFacts): Berth[] {
   return model.seats.map((seat: ModelSeat) => ({
     x: seat.x + 0.5 - model.width / 2,
     y: seat.y,

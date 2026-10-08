@@ -26,3 +26,6 @@ Run `typecheck`, `lint`, `test`, `format` and `fallow:audit` before considering 
 A model that should be on the reference resort goes into
 `fixtures/reference-resort.json` (see `fixtures/README.md`), or onto
 `NOT_IN_REFERENCE` in `referenceResort.test.ts`.
+
+A new or changed model needs `pnpm models:facts`, which rewrites the committed
+`voxel-gen/facts.json`; `voxel-gen/catalogue.test.ts` fails until it has run.

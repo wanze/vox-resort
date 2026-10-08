@@ -10,7 +10,7 @@ import {
   SETTING_PREMIUM,
 } from './prices';
 
-const voxelsOf = (id: string): number => objectTypeById(id).model.voxels.length;
+const voxelsOf = (id: string): number => objectTypeById(id).model.voxelCount;
 
 describe('buildCostOf', () => {
   it('charges a variant what its family costs, not what its own size would', () => {

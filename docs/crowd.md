@@ -543,7 +543,8 @@ misread a new link.
   `STAFF_ROLES` order. Preview with `pnpm preview --people`.
 - Boats and buoys `voxel-gen/sea/`, balloons `voxel-gen/sky/`, litter
   `voxel-gen/litter/`, balls `voxel-gen/props/`.
-- `PAINTED_MODELS` joins them all; `dveEngine.test.ts` meshes everything.
+- `paintedModelsOf(paintedCatalogue())` in `paintedModels.ts` joins them all,
+  painted in the mesh worker; `dveEngine.test.ts` still meshes everything.
 - On a model: `scenery`, `venue.litter`, `binReach`, `venue.reliability`,
   `cost`, `venue.price`, `venue.spots`, seats with `watches`, and `game`,
   `side`, `venue.court` and `venue.ball` for courts.

@@ -1,25 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES } from '../../../../voxel-gen/models/index.ts';
-import { PALETTE } from '../../../../voxel-gen/palette.ts';
 import { BUOY_INDEX } from '../../../../voxel-gen/sea/index.ts';
 import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
-import { allVoxelsOf, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { materialIdFor, materialKeyFor, materialsForColors } from './materials';
+import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
+import { materialKeyFor, materialsForColors } from './materials';
 import {
-  allMaterials,
   binReachOf,
   bedsOf,
   isGateway,
   LITTER_MODELS,
-  emissiveByModelId,
   familyOf,
-  materialColorsById,
   OBJECT_TYPES,
   objectTypeById,
   objectTypeGroups,
   objectTypeTop,
   ORIGINAL_TYPES,
-  PAINTED_MODELS,
   PEOPLE_MODELS,
   PROP_MODELS,
   sceneryOf,
@@ -33,41 +28,7 @@ import {
   stylesOf,
   venueOf,
   venueTypes,
-  windowsByModelId,
 } from './objectTypes';
-
-describe('windowsByModelId', () => {
-  it('names the buildings, and only what they glaze with', () => {
-    const windows = windowsByModelId();
-    expect(windows.size).toBeGreaterThan(6);
-    for (const [id, colors] of windows) {
-      const model = objectTypeById(id).model;
-      expect(colors.size).toBeGreaterThan(0);
-      const painted = new Set(model.voxels.map((voxel) => voxel.color));
-      for (const color of colors) {
-        expect(painted.has(color), `${id} declares a window colour it never paints`).toBe(true);
-      }
-    }
-  });
-
-  it('glazes the hotel and leaves the palm alone', () => {
-    const windows = windowsByModelId();
-    expect(windows.get('hotel')).toContain(PALETTE.glass.base);
-    expect(windows.has('palm')).toBe(false);
-    expect(windows.has('street-lamp')).toBe(false);
-  });
-
-  it('never calls a colour both a window and a glow', () => {
-    const emissive = emissiveByModelId();
-    for (const [id, colors] of windowsByModelId()) {
-      for (const color of colors) {
-        expect(emissive.get(id)?.has(color) ?? false, `${id} paints ${color} twice over`).toBe(
-          false,
-        );
-      }
-    }
-  });
-});
 
 describe('model lights', () => {
   it('declares a light on the street lamp, inside its own bounding box', () => {
@@ -100,20 +61,7 @@ describe('model lights', () => {
   });
 });
 
-describe('PAINTED_MODELS', () => {
-  it('is the catalogue, the crowd, the staff, the sky, the sea and the litter, and nothing twice', () => {
-    expect(PAINTED_MODELS).toHaveLength(
-      OBJECT_TYPES.length +
-        PEOPLE_MODELS.length +
-        STAFF_MODELS.length +
-        SKY_MODELS.length +
-        SEA_MODELS.length +
-        LITTER_MODELS.length +
-        PROP_MODELS.length,
-    );
-    expect(new Set(PAINTED_MODELS.map((model) => model.id)).size).toBe(PAINTED_MODELS.length);
-  });
-
+describe('the models kept apart from the catalogue', () => {
   it('keeps the balloons out of the catalogue, which is what they are apart from', () => {
     const catalogue = new Set(OBJECT_TYPES.map((type) => type.id));
     expect(SKY_MODELS.length).toBeGreaterThan(0);
@@ -183,24 +131,6 @@ describe('PAINTED_MODELS', () => {
   });
 });
 
-describe('emissiveByModelId', () => {
-  it('lists only the models that declare a glowing colour', () => {
-    const emissive = emissiveByModelId();
-    expect(emissive.has('street-lamp')).toBe(true);
-    expect(emissive.has('cottage')).toBe(false);
-  });
-
-  it('only names colours the model actually paints with', () => {
-    for (const [id, colors] of emissiveByModelId()) {
-      const model = PAINTED_MODELS.find((candidate) => candidate.id === id);
-      const painted = new Set(model!.voxels.map((voxel) => voxel.color));
-      for (const color of colors) expect(painted.has(color)).toBe(true);
-    }
-  });
-});
-
-const keyOf = (voxel: { x: number; y: number; z: number }) => `${voxel.x},${voxel.y},${voxel.z}`;
-
 describe('OBJECT_TYPES', () => {
   it('covers every hand-authored model', () => {
     expect(ORIGINAL_TYPES.length).toBe(99);
@@ -221,40 +151,6 @@ describe('OBJECT_TYPES', () => {
     expect(new Set(OBJECT_TYPES.map((type) => type.styleLabel)).size).toBe(OBJECT_TYPES.length);
   });
 
-  it('paints each canopy state beside the model, never into a voxel the model fills', () => {
-    const canopied = OBJECT_TYPES.filter((type) => type.model.canopy !== null);
-    expect(canopied.map((type) => type.id)).toContain('sun-lounger');
-    for (const { id, model } of canopied) {
-      const filled = new Set(model.voxels.map(keyOf));
-      for (const state of ['open', 'furled'] as const) {
-        const painted = model.canopy![state];
-        expect(painted.length, `${id} ${state}`).toBeGreaterThan(0);
-        expect(
-          painted.filter((voxel) => filled.has(keyOf(voxel))),
-          `${id} ${state}`,
-        ).toEqual([]);
-      }
-    }
-  });
-
-  it('starts every model at its own corner', () => {
-    // Reduced rather than spread: hundreds of thousands of Math.min arguments overflow the stack.
-    for (const type of OBJECT_TYPES) {
-      const model = type.model;
-      expect(model.voxels.length).toBeGreaterThan(0);
-      const lo = { x: Infinity, y: Infinity, z: Infinity };
-      const hi = { x: -Infinity, y: -Infinity, z: -Infinity };
-      for (const voxel of allVoxelsOf(model)) {
-        for (const axis of ['x', 'y', 'z'] as const) {
-          lo[axis] = Math.min(lo[axis], voxel[axis]);
-          hi[axis] = Math.max(hi[axis], voxel[axis]);
-        }
-      }
-      expect(lo).toEqual({ x: 0, y: 0, z: 0 });
-      expect(hi).toEqual({ x: model.width - 1, y: model.height - 1, z: model.depth - 1 });
-    }
-  });
-
   it('keeps every model inside the tiles it claims', () => {
     for (const type of OBJECT_TYPES) {
       expect(type.model.tiles.x).toBeGreaterThan(0);
@@ -262,27 +158,6 @@ describe('OBJECT_TYPES', () => {
       expect(type.model.width).toBeLessThanOrEqual(type.model.tiles.x * TILE_VOXELS);
       expect(type.model.depth).toBeLessThanOrEqual(type.model.tiles.z * TILE_VOXELS);
     }
-  });
-
-  it('paints only 24-bit colours', () => {
-    // Collected rather than asserted per voxel: an expectation each exceeds the runner timeout.
-    const outside = new Set<number>();
-    for (const type of OBJECT_TYPES) {
-      for (const voxel of type.model.voxels) {
-        if (voxel.color < 0 || voxel.color > 0xffffff) outside.add(voxel.color);
-      }
-    }
-    expect([...outside]).toEqual([]);
-  });
-
-  it('takes the HUD swatch from the colour a model uses most', () => {
-    const bungalow = objectTypeById('bungalow');
-    const counts = new Map<number, number>();
-    for (const voxel of bungalow.model.voxels) {
-      counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
-    }
-    const most = [...counts.entries()].toSorted((a, b) => b[1] - a[1])[0]?.[0];
-    expect(bungalow.color).toBe(most);
   });
 
   it('reports the highest occupied layer of a type', () => {
@@ -408,39 +283,6 @@ describe('objectTypeGroups', () => {
 });
 
 describe('materials', () => {
-  it('registers one material per distinct colour the app paints with', () => {
-    const colors = new Set(
-      PAINTED_MODELS.flatMap((model) => allVoxelsOf(model).map((voxel) => voxel.color)),
-    );
-    expect(allMaterials()).toHaveLength(colors.size);
-    expect(new Set(allMaterials().map((material) => material.key)).size).toBe(colors.size);
-  });
-
-  it('registers the skin the crowd is painted in, which nothing else paints', () => {
-    const registered = new Set(allMaterials().map((material) => material.key));
-    for (const tone of Object.values(PALETTE.skin)) {
-      expect(registered.has(materialKeyFor(tone)), `skin #${tone.toString(16)}`).toBe(true);
-    }
-    const catalogue = new Set(
-      OBJECT_TYPES.flatMap((type) => type.model.voxels.map((voxel) => voxel.color)),
-    );
-    expect(Object.values(PALETTE.skin).some((tone) => catalogue.has(tone))).toBe(false);
-  });
-
-  it('stays under the material ceiling the mesher encodes in a byte', () => {
-    // DVE writes a submesh material as a Uint8 and registers six of its own first, so the
-    // 251st colour wraps onto `dve_solid`.
-    expect(allMaterials().length).toBeLessThanOrEqual(250);
-  });
-
-  it('maps every material id to its colour', () => {
-    const colors = materialColorsById();
-    expect(colors.size).toBe(allMaterials().length);
-    for (const material of allMaterials()) {
-      expect(colors.get(materialIdFor(material.key))).toBe(material.color);
-    }
-  });
-
   it('keys materials by their padded hex colour', () => {
     expect(materialKeyFor(0x0a1b2c)).toBe('0a1b2c');
     expect(materialsForColors([0x112233, 0x112233, 0x445566])).toEqual([

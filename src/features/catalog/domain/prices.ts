@@ -1,5 +1,4 @@
 import type { GameMode } from '../../sim/domain/ledger';
-import { dayVoxelsOf } from '../../../../voxel-gen/voxelgen.ts';
 import { OBJECT_TYPES } from './objectTypes';
 
 // A path tile costs 20, so paving the reference plot is a seventh of what stands on it.
@@ -24,10 +23,7 @@ function derivedCost(voxels: number): number {
 }
 
 const OWN_COSTS: ReadonlyMap<string, number> = new Map(
-  OBJECT_TYPES.map((type) => [
-    type.id,
-    type.model.cost ?? derivedCost(dayVoxelsOf(type.model).length),
-  ]),
+  OBJECT_TYPES.map((type) => [type.id, type.model.cost ?? derivedCost(type.model.dayVoxelCount)]),
 );
 
 // A style is free: sized by its own voxels, Game Hall B would cost more than twice its A.

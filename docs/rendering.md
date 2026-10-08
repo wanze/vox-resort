@@ -12,12 +12,14 @@ tiles; the generator goes up to 480 × 480 (`PLOT_TILES`).
 
 ## Pipeline
 
-1. **Catalogue**: `OBJECT_TYPES` builds every model once, one material per
-   colour. `PAINTED_MODELS` adds people, staff, balloons, boats, litter and balls.
+1. **Catalogue**: `OBJECT_TYPES` reads each model's facts from the committed
+   `voxel-gen/facts.json`. Only the mesh worker paints voxels:
+   `paintedModelsOf(paintedCatalogue())` in `paintedModels.ts` is every type plus
+   people, staff, balloons, boats, litter and balls, one material per colour.
 2. **Layout**: `layoutResort` turns a plan into placements, paving, props and
    rails.
-3. **Scratch regions**: each model gets a slice of the voxel world, plus one for
-   its coarse copy.
+3. **Scratch regions**: in the mesh worker, each model gets a slice of the voxel
+   world, plus one for its coarse copy.
 4. **DVE**: `dveEngine.ts` paints the regions and meshes them in a worker
    (`meshWorker.ts`), falling back to the main thread.
 5. **Attributes**: submeshes are grouped per model, coplanar faces greedy-merged

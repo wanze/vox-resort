@@ -1,4 +1,4 @@
-import { dayVoxelsOf, type ModelLight } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSite } from '../../crowd/domain/seating';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotateLights } from '../../layout/domain/rotation';
@@ -14,8 +14,7 @@ import { OBJECT_TYPES, objectTypeById, objectTypeTop } from './objectTypes';
 const DENSITY_PER_TYPE = new Map(
   OBJECT_TYPES.map((type) => [
     type.id,
-    dayVoxelsOf(type.model).length /
-      Math.max(1, type.model.width * type.model.height * type.model.depth),
+    type.model.dayVoxelCount / Math.max(1, type.model.width * type.model.height * type.model.depth),
   ]),
 );
 

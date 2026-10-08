@@ -1,5 +1,5 @@
 import { Group, Mesh, Vector3, type BufferGeometry, type Material } from 'three/webgpu';
-import type { ModelNameplate, VoxelModel } from '../../../../voxel-gen/voxelgen.ts';
+import type { ModelFacts, ModelNameplate } from '../../../../voxel-gen/voxelgen.ts';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { rotationRadians, turnedOrigin } from '../../layout/domain/rotation';
@@ -21,7 +21,7 @@ function meshOf(
   geometry: BufferGeometry,
   material: Material,
   placement: Placement,
-  model: VoxelModel,
+  model: ModelFacts,
 ): Mesh {
   const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
   const scale = model.scale ?? 1;
@@ -39,7 +39,7 @@ function meshOf(
 // reads the light volume from the world position either way.
 export function createNameplates(
   volume: BakedLightVolume | null,
-  modelOf: (id: string) => VoxelModel,
+  modelOf: (id: string) => ModelFacts,
 ): Nameplates {
   const group = new Group();
   group.name = 'nameplates';

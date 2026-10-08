@@ -3,8 +3,10 @@
 Voxel models written in code: place coloured cubes on an integer grid and you
 get an object in the resort, plus an isometric PNG preview.
 
-The app imports these files directly (`src/features/catalog/domain/objectTypes.ts`
-builds every model in `models/index.ts`), so there is only one copy of the art.
+The app imports these files directly through `catalogue.ts`, so there is only one
+copy of the art. Only the mesh worker paints them
+(`src/features/catalog/domain/paintedModels.ts`); the page and the prep worker
+read their sizes, seats, lights and colours from the committed `facts.json`.
 The preview renderer has no dependencies: a small z-buffered rasteriser and PNG
 encoder.
 
@@ -28,8 +30,10 @@ Output goes to `voxel-gen/out/` (git-ignored), or `VOXELGEN_OUT` if set.
 
 ## Adding a model
 
-Copy a file in `models/`, edit it and add it to `models/index.ts`. A building is
-composed from `parts/` and painted from `palette.ts`:
+Copy a file in `models/`, edit it and add it to `models/index.ts`, then run
+`pnpm models:facts` to rewrite `facts.json`; `catalogue.test.ts` fails until you
+have, and again whenever a model changes. A building is composed from `parts/`
+and painted from `palette.ts`:
 
 ```ts
 import { PALETTE } from '../palette.ts';
@@ -291,7 +295,8 @@ block 40 x 20 m, so 10x5) and fill the footprint edge to edge.
 
 Besides `models/`, three registries feed the same pipeline: `people/`, `sky/`
 (balloons) and `sea/` (boats, buoys). They aren't on the build palette and aren't
-placed by the generator. `PAINTED_MODELS` in `objectTypes.ts` joins all of them;
+placed by the generator. `paintedModelsOf(paintedCatalogue())` in
+`paintedModels.ts` joins all of them in the mesh worker;
 `features/crowd/`, `features/balloons/` and `features/sea/` move them.
 
 Their origin is where they're drawn from: people from their feet, balloons from

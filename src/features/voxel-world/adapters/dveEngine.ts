@@ -135,7 +135,7 @@ export async function buildSectionMeshes(
   const { VoxelLUT } = await import('@divinevoxel/vlox/Voxels/Data/VoxelLUT');
 
   // Resolved once per palette entry: setStringId is this lookup plus setId and would run
-  // ~750k times. An unknown id would otherwise silently paint air.
+  // once per write, millions of times. An unknown id would otherwise silently paint air.
   const engineIds = palette.map((id) => {
     if (!VoxelLUT.voxelIds.isRegistered(id)) {
       throw new Error(`Voxel id ${id} was never registered with the engine`);

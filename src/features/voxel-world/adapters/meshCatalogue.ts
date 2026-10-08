@@ -29,14 +29,14 @@ function runInWorker(request: MeshCatalogueRequest): Promise<MeshCatalogueResult
       finish(() => reject(new Error(event.message || 'The mesh worker failed')));
     });
     const wire = toWire(request);
-    // Three quarters of a million writes: transferred, not cloned.
+    // Millions of writes: transferred, not cloned.
     worker.postMessage(wire, {
       transfer: [wire.writes.positions.buffer, wire.writes.voxelIds.buffer],
     });
   });
 }
 
-// Meshing takes about 1.4 s, so it runs in a worker to keep the page responsive.
+// Meshing takes seconds, so it runs in a worker to keep the page responsive.
 // The main-thread fallback exists because a worker can fail to start.
 export async function meshCatalogue(
   request: MeshCatalogueRequest,

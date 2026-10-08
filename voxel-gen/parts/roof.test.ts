@@ -3,14 +3,12 @@ import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
 import { gableRoof, hipRoof, thatchRoof } from './roof.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const span = (b: VoxelBuilder, y: number, axis: 'x' | 'z'): [number, number] | null => {
   let lo = Infinity;
   let hi = -Infinity;
-  for (const key of b.voxels.keys()) {
-    const [x, layer, z] = key.split(',').map(Number) as [number, number, number];
+  for (const { x, y: layer, z } of b) {
     if (layer !== y) continue;
     const value = axis === 'x' ? x : z;
     lo = Math.min(lo, value);

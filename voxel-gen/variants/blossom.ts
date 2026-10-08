@@ -46,10 +46,9 @@ export default defineModel({
 
     // The flush of pink is at the heart of each flower, so it shows only on the
     // undersides the camera catches, never across the white tops.
-    for (const [key, color] of b.voxels) {
+    for (const { x, y, z, color } of b) {
       if (color !== stucco.light) continue;
-      const [x, y, z] = key.split(',').map(Number) as [number, number, number];
-      if (b.voxels.has(`${x},${y - 1},${z}`)) continue;
+      if (b.has(x, y - 1, z)) continue;
       if (noise(x, y, z, 71) < 0.22) b.set(x, y, z, bloom.light);
     }
 

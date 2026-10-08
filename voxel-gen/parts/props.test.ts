@@ -3,8 +3,7 @@ import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
 import { flowerBox, parasol, pottedPlant } from './props.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 describe('pottedPlant', () => {
   it('stands greenery in a rimmed terracotta pot', () => {

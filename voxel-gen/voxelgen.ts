@@ -1,14 +1,58 @@
 export type Color = number;
 
+// One number per voxel rather than an "x,y,z" string: making and splitting those strings
+// was most of the time every model took to build at startup.
+const CELL_RANGE = 1024;
+const CELL_SPAN = 2 * CELL_RANGE;
+
+const onGrid = (value: number): boolean =>
+  Number.isInteger(value) && value >= -CELL_RANGE && value < CELL_RANGE;
+
+function cellOf(x: number, y: number, z: number): number {
+  if (!onGrid(x) || !onGrid(y) || !onGrid(z)) {
+    throw new Error(`Voxel ${x},${y},${z} is not a whole voxel within ${CELL_RANGE} of the origin`);
+  }
+  return ((x + CELL_RANGE) * CELL_SPAN + (y + CELL_RANGE)) * CELL_SPAN + (z + CELL_RANGE);
+}
+
+function voxelAt(cell: number, color: Color): PaintedVoxel {
+  const z = (cell % CELL_SPAN) - CELL_RANGE;
+  const column = Math.floor(cell / CELL_SPAN);
+  return {
+    x: Math.floor(column / CELL_SPAN) - CELL_RANGE,
+    y: (column % CELL_SPAN) - CELL_RANGE,
+    z,
+    color,
+  };
+}
+
 export class VoxelBuilder {
-  readonly voxels = new Map<string, Color>();
+  private readonly cells = new Map<number, Color>();
 
   set(x: number, y: number, z: number, c: Color): void {
-    this.voxels.set(`${x},${y},${z}`, c);
+    this.cells.set(cellOf(x, y, z), c);
   }
 
   del(x: number, y: number, z: number): void {
-    this.voxels.delete(`${x},${y},${z}`);
+    this.cells.delete(cellOf(x, y, z));
+  }
+
+  get(x: number, y: number, z: number): Color | undefined {
+    return this.cells.get(cellOf(x, y, z));
+  }
+
+  has(x: number, y: number, z: number): boolean {
+    return this.cells.has(cellOf(x, y, z));
+  }
+
+  get size(): number {
+    return this.cells.size;
+  }
+
+  // In painting order and live, like a Map: a voxel added mid-loop is visited too, a repainted
+  // one keeps its place.
+  *[Symbol.iterator](): IterableIterator<PaintedVoxel> {
+    for (const [cell, color] of this.cells) yield voxelAt(cell, color);
   }
 
   box(x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, c: Color): void {
@@ -622,10 +666,7 @@ function defaultsOf(source: VoxelModelSource) {
 const paintedBy = (build: (builder: VoxelBuilder) => void): PaintedVoxel[] => {
   const builder = new VoxelBuilder();
   build(builder);
-  return [...builder.voxels].map(([key, color]) => {
-    const [x, y, z] = key.split(',').map(Number) as [number, number, number];
-    return { x, y, z, color };
-  });
+  return [...builder];
 };
 
 export function buildModel(source: VoxelModelSource): VoxelModel {
@@ -640,13 +681,15 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
   let maxX = -Infinity;
   let maxY = -Infinity;
   let maxZ = -Infinity;
-  for (const { x, y, z } of [...painted, ...open, ...furled]) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    minZ = Math.min(minZ, z);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-    maxZ = Math.max(maxZ, z);
+  for (const voxels of [painted, open, furled]) {
+    for (const { x, y, z } of voxels) {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      minZ = Math.min(minZ, z);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+      maxZ = Math.max(maxZ, z);
+    }
   }
 
   const shifted = (voxels: readonly PaintedVoxel[]): PaintedVoxel[] =>

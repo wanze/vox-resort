@@ -17,8 +17,7 @@ import { PEOPLE_SOURCES, STAFF_SOURCES } from './index.ts';
 
 const FINE = 1 / FIGURE_SCALE;
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const DRESS = {
   skin: PALETTE.skin.base,
@@ -38,7 +37,7 @@ const LEFT_ARM = 0;
 const RIGHT_ARM = 5;
 
 function column(b: VoxelBuilder, x: number, z: number): (number | undefined)[] {
-  const top = Math.max(...[...b.voxels.keys()].map((key) => Number(key.split(',')[1])));
+  const top = Math.max(...[...b].map((voxel) => voxel.y));
   return Array.from({ length: top + 1 }, (_, y) => at(b, x, y, z));
 }
 

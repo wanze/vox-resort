@@ -3,14 +3,12 @@ import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
 import { hull, pedalo, PEDALO_BEAM, PEDALO_LENGTH, PEDALO_PAIR_BEAM, pedaloSeats } from './boat.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const layer = (b: VoxelBuilder, y: number): Set<string> => {
   const cells = new Set<string>();
-  for (const key of b.voxels.keys()) {
-    const [x, cellY, z] = key.split(',').map(Number) as [number, number, number];
-    if (cellY === y) cells.add(`${x},${z}`);
+  for (const voxel of b) {
+    if (voxel.y === y) cells.add(`${voxel.x},${voxel.z}`);
   }
   return cells;
 };

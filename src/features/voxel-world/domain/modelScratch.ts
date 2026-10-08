@@ -21,7 +21,7 @@ export interface ScratchRegion {
   readonly canopyState?: CanopyState;
 }
 
-// Packed into typed arrays so ~750k writes transfer to the worker instead of being
+// Packed into typed arrays so millions of writes transfer to the worker instead of being
 // structured-cloned, which cost more than the meshing itself.
 export interface PackedVoxelWrites {
   readonly positions: Int32Array;

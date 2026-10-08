@@ -36,7 +36,7 @@ function assertPositive(size: VolumeSize): void {
   }
 }
 
-// Allocates nothing per write: this walks about three quarters of a million of them.
+// Allocates nothing per write: this walks millions of them.
 function forEachVolume(
   positions: Int32Array,
   size: VolumeSize,

@@ -49,10 +49,9 @@ export default defineModel({
 
     // The silver is the leaves' underside turned up by the wind: patches two voxels
     // across on the top surface, so it reads as a sheen and still meshes in quads.
-    for (const [key, color] of b.voxels) {
+    for (const { x, y, z, color } of b) {
       if (color !== foliage.light) continue;
-      const [x, y, z] = key.split(',').map(Number) as [number, number, number];
-      if (b.voxels.has(`${x},${y + 1},${z}`)) continue;
+      if (b.has(x, y + 1, z)) continue;
       if (noise(x >> 1, y, z >> 1, 61) < 0.25) b.set(x, y, z, slate.light);
     }
   },

@@ -14,8 +14,7 @@ import {
   spanPiles,
 } from './span.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const N = TILE_VOXELS - 1;
 
@@ -74,9 +73,7 @@ describe('spanPiles', () => {
   it('stands the deck on the bed of the water, clear of every edge', () => {
     const b = deckOf();
     spanPiles(b, { beam: 4, rows: PILE_ROWS });
-    const piles = [...b.voxels.keys()]
-      .map((key) => key.split(',').map(Number) as [number, number, number])
-      .filter(([, y]) => y < 4);
+    const piles = [...b].map(({ x, y, z }) => [x, y, z] as const).filter(([, y]) => y < 4);
     expect(piles.some(([, y]) => y === 0)).toBe(true);
     for (const [x, , z] of piles) {
       expect({ x, z, clear: Math.min(x, z, N - x, N - z) >= FLANK }).toEqual({

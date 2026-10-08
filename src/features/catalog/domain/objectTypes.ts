@@ -6,9 +6,7 @@ import { SEA_SOURCES } from '../../../../voxel-gen/sea/index.ts';
 import { SKY_SOURCES } from '../../../../voxel-gen/sky/index.ts';
 import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
 import {
-  allVoxelsOf,
   buildModel,
-  dayVoxelsOf,
   MODEL_CATEGORIES,
   TILE_VOXELS,
   type ModelCategory,
@@ -42,8 +40,8 @@ export interface ObjectTypeDefinition {
 
 function dominantColor(model: VoxelModel): number {
   const counts = new Map<number, number>();
-  for (const voxel of dayVoxelsOf(model)) {
-    counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
+  for (const voxels of [model.voxels, model.canopy?.open ?? []]) {
+    for (const voxel of voxels) counts.set(voxel.color, (counts.get(voxel.color) ?? 0) + 1);
   }
   let best = 0;
   let bestCount = -1;
@@ -228,10 +226,19 @@ export function binReachOf(id: string): number {
   return OBJECT_TYPES.find((type) => type.id === id)?.model.binReach ?? 0;
 }
 
+let materials: readonly MaterialDefinition[] | undefined;
+
+// Walks every voxel of every model, millions of them, so it runs once per thread.
 export function allMaterials(): readonly MaterialDefinition[] {
-  return materialsForColors(
-    PAINTED_MODELS.flatMap((model) => allVoxelsOf(model).map((voxel) => voxel.color)),
-  );
+  if (materials) return materials;
+  const colors = new Set<number>();
+  for (const model of PAINTED_MODELS) {
+    for (const voxels of [model.voxels, model.canopy?.open ?? [], model.canopy?.furled ?? []]) {
+      for (const voxel of voxels) colors.add(voxel.color);
+    }
+  }
+  materials = materialsForColors(colors);
+  return materials;
 }
 
 export function emissiveByModelId(): ReadonlyMap<string, ReadonlySet<number>> {

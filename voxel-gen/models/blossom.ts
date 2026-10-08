@@ -41,7 +41,7 @@ export default defineModel({
       for (let z = 1; z <= 14; z++) {
         for (let x = 1; x <= 14; x++) {
           if (noise(x, y, z, 71) > 0.06) continue;
-          if (!b.voxels.has(`${x},${y},${z}`)) continue;
+          if (!b.has(x, y, z)) continue;
           set(x, y, z, LEAF.mid);
         }
       }

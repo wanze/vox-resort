@@ -4,8 +4,7 @@ import { VoxelBuilder } from '../voxelgen.ts';
 import { plinth } from './ground.ts';
 import { poolWater } from './pool.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const deckOf = (w = 16, d = 16): VoxelBuilder => {
   const b = new VoxelBuilder();

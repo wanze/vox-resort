@@ -543,6 +543,8 @@ interface MeshedCatalogue {
   readonly dveMs: number;
   readonly meshMs: number;
   readonly threaded: boolean;
+  // A count, so the session does not keep the scratch's writes alive just to report them.
+  readonly meshedVoxelCount: number;
 }
 
 const PEOPLE_IDS: ReadonlySet<string> = new Set(PEOPLE_MODELS.map((model) => model.id));
@@ -612,6 +614,7 @@ async function meshModels(
     dveMs: meshed.dveMs,
     meshMs: Math.round(performance.now() - started),
     threaded: meshed.threaded,
+    meshedVoxelCount: scratch.writes.voxelIds.length,
   };
 }
 
@@ -1326,7 +1329,6 @@ interface StartupCost {
 function sceneStats(parts: {
   readonly handle: SceneHandle;
   readonly resort: Resort;
-  readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
   readonly startup: StartupCost;
   readonly weather: Weather;
@@ -1334,7 +1336,7 @@ function sceneStats(parts: {
   readonly fireworks: FireworksField;
   readonly highlights: HighlightField;
 }): ShowcaseStats {
-  const { handle, scratch, catalogue, rain, fireworks, highlights } = parts;
+  const { handle, catalogue, rain, fireworks, highlights } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
   const { sea, lighting, ballField, flames } = parts.resort;
@@ -1383,7 +1385,7 @@ function sceneStats(parts: {
     shadowCount: shadows.count,
     occluderCount: lighting.occluderCount,
     sceneVoxelCount: totals.voxels,
-    meshedVoxelCount: scratch.writes.voxelIds.length,
+    meshedVoxelCount: catalogue.meshedVoxelCount,
     lightCount: lighting.anchorCount,
     litLightCount: lighting.litCount,
     lightGridCells: lighting.spec ? cellCount(lighting.spec) : 0,
@@ -1850,7 +1852,6 @@ function createClock(
 function createStatsReader(parts: {
   readonly handle: SceneHandle;
   readonly resort: () => Resort;
-  readonly scratch: ScratchLayout;
   readonly catalogue: MeshedCatalogue;
   readonly startup: StartupTracker;
   readonly mountStarted: number;
@@ -2211,14 +2212,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const bench = parseBenchConfig(globalThis.location?.search ?? '');
   const timing = timesGpu(globalThis.location?.search ?? '');
 
-  const scratch = scratchForModels();
   const preparer = createResortPreparer({
     forceMainThread: bench?.forceMainThreadMeshing ?? false,
   });
   const starting = startingParams(bench);
   const identity: ResortIdentity = { params: starting, name: resortNameFor(starting.seed) };
   const [catalogue, first] = await Promise.all([
-    meshModels(scratch, bench).then(loaded('models', options.onLoading)),
+    meshModels(scratchForModels(), bench).then(loaded('models', options.onLoading)),
     startingSource(bench, starting)
       .then((source) => preparer.prepare(prepRequestFor(source, bench)))
       .then(loaded('resort', options.onLoading)),
@@ -2424,7 +2424,6 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const statsNow = createStatsReader({
     handle,
     resort: current,
-    scratch,
     catalogue,
     startup,
     mountStarted,

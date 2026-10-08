@@ -67,7 +67,13 @@ Anything the parts don't cover, paint by hand:
 b.set(x, y, z, PALETTE.teak.base); // one voxel
 b.box(x0, x1, y0, y1, z0, z1, PALETTE.stone.base); // inclusive box
 b.del(x, y, z); // remove one
+b.get(x, y, z); // its colour, or undefined
+b.has(x, y, z); // whether it is painted
+for (const { x, y, z, color } of b) {
+} // every voxel so far, in painting order
 ```
+
+Coordinates are whole voxels within 1024 of the origin; anything else throws.
 
 **Only use colours from `palette.ts`.** A unit test fails any model that paints
 outside it. [docs/art-direction.md](../docs/art-direction.md) covers the palette,

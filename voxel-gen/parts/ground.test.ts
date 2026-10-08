@@ -3,15 +3,14 @@ import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
 import { plinth, steps } from './ground.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 describe('plinth', () => {
   it('fills the footprint it is given, three layers by default', () => {
     const b = new VoxelBuilder();
     const free = plinth(b, { x: 0, z: 0, w: 16, d: 32 });
     expect(free).toBe(3);
-    expect(b.voxels.size).toBe(16 * 32 * 3);
+    expect(b.size).toBe(16 * 32 * 3);
     expect(at(b, 0, 0, 0)).toBe(PALETTE.stone.base);
     expect(at(b, 8, 1, 16)).toBe(PALETTE.stone.base);
   });

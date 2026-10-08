@@ -3,8 +3,7 @@ import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
 import { awning, doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from './wall.ts';
 
-const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined =>
-  b.voxels.get(`${x},${y},${z}`);
+const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
 const wall = (b: VoxelBuilder, storeys = 1): number =>
   stuccoWall(b, { x: 0, z: 0, w: 8, d: 8, y: 3, storeys });
@@ -14,7 +13,7 @@ describe('stuccoWall', () => {
     const b = new VoxelBuilder();
     wall(b);
     expect(at(b, 4, 8, 4)).toBe(PALETTE.stucco.base);
-    expect(b.voxels.size).toBe(8 * 8 * (STOREY_VOXELS + 1));
+    expect(b.size).toBe(8 * 8 * (STOREY_VOXELS + 1));
   });
 
   it('lays a stone skirting at the foot of the wall', () => {

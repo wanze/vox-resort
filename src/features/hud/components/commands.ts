@@ -1,6 +1,6 @@
 import { speedNote, WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import { MENU_PAGES, pageIcon, pageKey, pageTitle } from './windowNames';
-import type { IconName } from './pixelIcons';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import type { PreviewLookup } from './BuildPalette';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
 import { OVERLAY_KINDS } from '../../overlays/domain/overlays';

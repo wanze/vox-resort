@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { parseSync } from 'oxc-parser';
 
 const MAX_LINES = 3;
@@ -66,7 +66,9 @@ const files = (
     : execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], {
         encoding: 'utf8',
       }).split('\n')
-).filter((f) => CHECKED.test(f));
+)
+  // The index still lists a file deleted but not yet staged.
+  .filter((f) => CHECKED.test(f) && existsSync(f));
 
 const problems = files.flatMap(check);
 if (problems.length > 0) {

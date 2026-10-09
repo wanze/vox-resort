@@ -1,0 +1,88 @@
+/* Above the bar and every window: it takes the keyboard, so nothing may sit over it. */
+.hud-command-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh var(--space-4) var(--space-4);
+  pointer-events: auto;
+}
+
+.hud-command-scrim {
+  background: var(--veil);
+}
+
+.hud-command {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(560px, 100%);
+  max-height: min(560px, 76vh);
+  padding: var(--space-2);
+  border-radius: var(--radius-pebble);
+  animation: ui-pop var(--pop);
+}
+
+.hud-command-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) 0;
+}
+
+.hud-command-search input {
+  flex: 1;
+  height: 38px;
+  font-size: var(--size-lead);
+}
+
+.hud-command-list {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: var(--space-1);
+}
+
+.hud-command-item {
+  min-height: 34px;
+  cursor: var(--cursor-hand);
+}
+
+.hud-command-group + .hud-command-group {
+  margin-top: var(--space-2);
+}
+
+.hud-command-item[aria-selected='true'] {
+  border-color: var(--edge-soft);
+  background-color: var(--wash-selected);
+  box-shadow: inset 3px 0 0 var(--terracotta);
+}
+
+.hud-command-picture {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.hud-command-glyph {
+  display: block;
+  font-size: var(--size-lead);
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.hud-command-empty {
+  margin: var(--space-4) var(--space-3);
+  color: var(--text-faint);
+}
+
+@media (pointer: coarse) {
+  .hud-command-item {
+    min-height: 44px;
+  }
+}

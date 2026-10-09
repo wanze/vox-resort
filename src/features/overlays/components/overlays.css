@@ -1,0 +1,50 @@
+/* The legend hangs under the picker it explains. */
+.overlays {
+  position: relative;
+}
+
+.overlays-legend {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pebble);
+  font-size: var(--size-small);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.overlays-ramp {
+  width: 12ch;
+  height: 0.7em;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px var(--edge-soft);
+}
+
+@media (width <= 639px) {
+  .hud-bar .hud-maps-plate .overlays {
+    display: contents;
+  }
+
+  .hud-bar .hud-maps-plate .overlays > .ui-dropdown {
+    display: none;
+  }
+}
+
+.app:not([data-layout='desk']) .overlays-legend {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (width <= 1240px) {
+  .overlays .ui-chip-label {
+    display: none;
+  }
+}

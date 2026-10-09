@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
 import { armedZone, type BuildTool } from '../../build/domain/buildTool';
-import { rovingTarget } from '../domain/roving';
+import { rovingTarget } from '../../../shared/domain/roving';
 import { zoneLabel, ZONE_BRUSHES } from './zoneWords';
 
 export interface ZoneChipsProps {
@@ -25,12 +25,12 @@ export function ZoneChips({ tool, onToolChange }: ZoneChipsProps) {
   };
 
   return (
-    <div className="zone-chips" role="radiogroup" aria-label="Zone" onKeyDown={step}>
+    <div className="hud-zone-chips" role="radiogroup" aria-label="Zone" onKeyDown={step}>
       {ZONE_BRUSHES.map((brush) => (
         <button
           key={brush.zone}
           type="button"
-          className="zone-chip"
+          className="hud-zone-chip"
           role="radio"
           aria-checked={armed === brush.zone}
           tabIndex={armed === brush.zone ? 0 : -1}

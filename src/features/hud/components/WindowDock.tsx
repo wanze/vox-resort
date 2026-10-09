@@ -1,4 +1,4 @@
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { DOCK_WINDOWS, WINDOW_ICONS, WINDOW_KEYS, WINDOW_TITLES } from './windowNames';
 import { isOpen, type WindowId, type WindowLayout } from '../domain/windowLayout';
 
@@ -15,12 +15,12 @@ const hintOf = (id: WindowId): string => {
 
 export function WindowDock({ layout, onToggle, adviceCount }: WindowDockProps) {
   return (
-    <nav className="hud-plate hud-dock" aria-label="Windows">
+    <nav className="ui-plate hud-dock" aria-label="Windows">
       {DOCK_WINDOWS.map((id) => (
         <button
           key={id}
           type="button"
-          className="hud-tool"
+          className="ui-tab hud-tool"
           data-dock={id}
           aria-pressed={isOpen(layout, id)}
           title={hintOf(id)}
@@ -29,7 +29,7 @@ export function WindowDock({ layout, onToggle, adviceCount }: WindowDockProps) {
           <PixelIcon name={WINDOW_ICONS[id]} />
           <span className="hud-tool-label">{WINDOW_TITLES[id]}</span>
           {id === 'inbox' && adviceCount > 0 ? (
-            <span className="hud-tool-badge" aria-label={`${adviceCount} to look at`}>
+            <span className="ui-badge" aria-label={`${adviceCount} to look at`}>
               {adviceCount}
             </span>
           ) : null}

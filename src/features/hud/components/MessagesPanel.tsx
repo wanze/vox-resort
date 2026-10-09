@@ -52,7 +52,7 @@ function Line({
 }) {
   return (
     <div className="hud-message">
-      <dt>
+      <dt className="ui-label">
         {label}
         <span className="hud-message-when">{whenOf(when)}</span>
       </dt>
@@ -72,12 +72,7 @@ function ActionButton({
   readonly onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className="hud-camera-mode hud-advice-show"
-      aria-label={name}
-      onClick={onClick}
-    >
+    <button type="button" className="ui-button hud-advice-show" aria-label={name} onClick={onClick}>
       {label}
     </button>
   );
@@ -164,7 +159,7 @@ function DayLine({ report, ...props }: { readonly report: DayReport } & Messages
 export function MessagesPanel(props: MessagesPanelProps) {
   const { log, prefs, onMutedChange } = props;
   return (
-    <div className="hud-messages">
+    <div className="ui-stack">
       <div className="hud-message-toggles" role="group" aria-label="Toasts">
         {TOGGLES.map(({ kind, label, title }) => {
           const shown = !prefs.muted.includes(kind);
@@ -172,7 +167,7 @@ export function MessagesPanel(props: MessagesPanelProps) {
             <button
               key={kind}
               type="button"
-              className="hud-camera-mode"
+              className="ui-button"
               aria-pressed={shown}
               title={title}
               onClick={() => onMutedChange(kind, shown)}
@@ -183,7 +178,7 @@ export function MessagesPanel(props: MessagesPanelProps) {
         })}
       </div>
       {log.length === 0 ? (
-        <p className="hud-loading">Nothing has happened yet.</p>
+        <p className="ui-loading">Nothing has happened yet.</p>
       ) : (
         <dl className="hud-message-list">
           {log.map((message) => (

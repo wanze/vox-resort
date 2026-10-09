@@ -12,8 +12,8 @@ import { flushSync } from 'react-dom';
 import { familyOf, objectTypeById } from '../../catalog/domain/objectTypes';
 import { buildCostOf } from '../../catalog/domain/prices';
 import { objectFacts, type ObjectFacts } from '../domain/objectFacts';
-import { PixelIcon } from './PixelIcon';
-import { StatRow } from './StatRow';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { StatRow } from '../../../shared/components/StatRow';
 
 export interface ObjectInfoProps {
   readonly typeId: string;
@@ -25,8 +25,8 @@ export interface ObjectInfoProps {
 function ObjectInfoCard({ facts }: { readonly facts: ObjectFacts }) {
   return (
     <>
-      <h3 className="object-info-title">{facts.title}</h3>
-      <dl className="hud-stats object-info-facts">
+      <h3 className="hud-object-info-title">{facts.title}</h3>
+      <dl className="ui-stats hud-object-info-facts">
         {facts.facts.map((fact) => (
           <StatRow key={fact.label} label={fact.label}>
             {fact.value}
@@ -34,7 +34,7 @@ function ObjectInfoCard({ facts }: { readonly facts: ObjectFacts }) {
         ))}
       </dl>
       {facts.notes.length > 0 ? (
-        <ul className="object-info-notes">
+        <ul className="hud-object-info-notes">
           {facts.notes.map((note) => (
             <li key={note}>{note}</li>
           ))}
@@ -93,10 +93,13 @@ export function ObjectInfo({ typeId, className, mode, scale = 1 }: ObjectInfoPro
   }, [card.open, typeId]);
 
   return (
-    <span className="object-info-host" style={{ '--object-info-anchor': anchor } as CSSProperties}>
+    <span
+      className="hud-object-info-host"
+      style={{ '--object-info-anchor': anchor } as CSSProperties}
+    >
       <button
         type="button"
-        className={`object-info-button ${className}`}
+        className={`hud-object-info-button ${className}`}
         aria-label={`About ${objectTypeById(typeId).label}`}
         aria-expanded={card.open}
         title={mode === 'toggle' ? 'About' : undefined}
@@ -104,8 +107,10 @@ export function ObjectInfo({ typeId, className, mode, scale = 1 }: ObjectInfoPro
       >
         <PixelIcon name="info" scale={scale} />
       </button>
-      <div ref={popover} popover="manual" className="object-info" data-mode={mode}>
-        <div className="object-info-card">{facts ? <ObjectInfoCard facts={facts} /> : null}</div>
+      <div ref={popover} popover="manual" className="hud-object-info" data-mode={mode}>
+        <div className="ui-panel hud-object-info-card">
+          {facts ? <ObjectInfoCard facts={facts} /> : null}
+        </div>
       </div>
     </span>
   );

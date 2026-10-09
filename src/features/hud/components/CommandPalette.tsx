@@ -1,8 +1,9 @@
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { CommandList } from './CommandList';
-import { useReturnFocus } from './useReturnFocus';
+import { useReturnFocus } from '../../../shared/components/useReturnFocus';
 import type { Command } from './commands';
-import { rankCommands, sectionCommands, stepCursor } from '../domain/commandSearch';
+import { rankCommands, sectionCommands } from '../domain/commandSearch';
+import { stepCursor } from '../../../shared/domain/roving';
 import { keyLabel } from '../domain/keymap';
 
 export interface CommandPaletteProps {
@@ -48,9 +49,9 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
 
   return (
     <div className="hud-command-layer">
-      <div className="hud-scrim hud-command-scrim" onPointerDown={onClose} />
+      <div className="ui-scrim hud-command-scrim" onPointerDown={onClose} />
       <div
-        className="hud-command"
+        className="ui-panel hud-command"
         role="dialog"
         aria-modal="true"
         aria-label="Find an action"
@@ -73,7 +74,7 @@ export function CommandPalette({ commands, onClose }: CommandPaletteProps) {
             }}
             onKeyDown={onKeyDown}
           />
-          <kbd className="hud-option-key">{keyLabel('cancel')}</kbd>
+          <kbd className="ui-option-key">{keyLabel('cancel')}</kbd>
         </div>
         <CommandList
           id={listId}

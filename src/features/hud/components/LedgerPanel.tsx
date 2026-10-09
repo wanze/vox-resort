@@ -1,7 +1,7 @@
 import { netOf, REASONS, type Ledger } from '../../sim/domain/ledger';
 import { MODE_LABELS } from '../../welcome/components/modeNames';
 import { againstYesterday, REASON_LABELS, signed } from './ledgerWords';
-import { StatRow } from './StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 
 export interface LedgerPanelProps {
   readonly ledger: Ledger | null;
@@ -30,9 +30,9 @@ function Figure({ today, yesterday }: { readonly today: number; readonly yesterd
 }
 
 export function LedgerPanel({ ledger }: LedgerPanelProps) {
-  if (!ledger) return <p className="hud-loading">No books yet.</p>;
+  if (!ledger) return <p className="ui-loading">No books yet.</p>;
   return (
-    <dl className="hud-stats hud-figures">
+    <dl className="ui-stats hud-figures">
       <StatRow
         label="Mode"
         note={ledger.mode === 'tycoon' ? 'everything built is paid for' : undefined}

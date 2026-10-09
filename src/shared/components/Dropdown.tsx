@@ -13,7 +13,7 @@ import { OptionHost } from './optionHost';
 import { useReturnFocus } from './useReturnFocus';
 import { rovingTarget } from '../domain/roving';
 
-export interface HudDropdownProps {
+export interface DropdownBaseProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly label: ReactNode;
@@ -93,7 +93,7 @@ function Panel({ kind, id, name, trigger, onClose, children }: PanelProps) {
     <div
       ref={panel}
       id={id}
-      className="hud-dropdown-panel"
+      className="ui-dropdown-panel"
       role={kind}
       aria-label={name}
       tabIndex={-1}
@@ -105,12 +105,15 @@ function Panel({ kind, id, name, trigger, onClose, children }: PanelProps) {
   );
 }
 
-interface DropdownProps extends HudDropdownProps {
+interface DropdownProps extends DropdownBaseProps {
   readonly kind: DropdownKind;
   readonly name?: string;
 }
 
-interface TriggerProps extends Pick<HudDropdownProps, 'open' | 'onOpenChange' | 'label' | 'title'> {
+interface TriggerProps extends Pick<
+  DropdownBaseProps,
+  'open' | 'onOpenChange' | 'label' | 'title'
+> {
   readonly kind: DropdownKind;
   readonly panelId: string;
 }
@@ -131,7 +134,7 @@ const Trigger = ({
   <button
     ref={ref}
     type="button"
-    className="hud-chip"
+    className="ui-chip"
     aria-expanded={open}
     aria-haspopup={kind}
     aria-controls={open ? panelId : undefined}
@@ -141,7 +144,7 @@ const Trigger = ({
     onClick={() => onOpenChange(!open)}
   >
     {label}
-    <span className="hud-chip-caret">
+    <span className="ui-chip-caret">
       <PixelIcon name="caret" scale={1} />
     </span>
   </button>
@@ -153,11 +156,11 @@ function Dropdown({ kind, name, className, children, ...trigger }: DropdownProps
   const panelId = useId();
   const close = (): void => trigger.onOpenChange(false);
   return (
-    <div className={className ? `hud-dropdown ${className}` : 'hud-dropdown'}>
+    <div className={className ? `ui-dropdown ${className}` : 'ui-dropdown'}>
       <Trigger {...trigger} kind={kind} panelId={panelId} ref={chip} />
       {trigger.open ? (
         <>
-          <div className="hud-scrim" onPointerDown={close} />
+          <div className="ui-scrim" onPointerDown={close} />
           <Panel kind={kind} id={panelId} name={name} trigger={chip} onClose={close}>
             {children}
           </Panel>
@@ -167,11 +170,11 @@ function Dropdown({ kind, name, className, children, ...trigger }: DropdownProps
   );
 }
 
-// Only for rows of HudOption and MenuPage; anything with text, lists or fields is a popover.
-export function HudMenu(props: HudDropdownProps) {
+// Only for rows of MenuOption and MenuPage; anything with text, lists or fields is a popover.
+export function DropdownMenu(props: DropdownBaseProps) {
   return <Dropdown {...props} kind="menu" />;
 }
 
-export function HudPopover(props: HudDropdownProps & { readonly name: string }) {
+export function DropdownPopover(props: DropdownBaseProps & { readonly name: string }) {
   return <Dropdown {...props} kind="dialog" />;
 }

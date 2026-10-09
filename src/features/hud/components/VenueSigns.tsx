@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { signsUnder, type SignSpot } from '../domain/signs';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { SIGN_ICONS } from './signIcons';
 
 type Tile = { readonly tileX: number; readonly tileZ: number };
@@ -21,15 +21,16 @@ export function VenueSigns({ spots, shown, named, marked, elements, onSelectAt }
   if (!shown) return null;
   const under = signsUnder(spots, marked);
   return (
-    <div className={named ? 'hud-signs hud-signs-named' : 'hud-signs'}>
+    <div className={named ? 'hud-signs hud-signs--named' : 'hud-signs'}>
       {spots.map((spot, index) => (
         <div
           key={spot.key}
           ref={(element) => {
             elements.current[index] = element;
           }}
-          // A class rather than hidden: the render loop owns hidden and would show it again.
-          className={under.has(spot.key) ? 'hud-sign-spot is-under-marker' : 'hud-sign-spot'}
+          className="hud-sign-spot"
+          // Its own attribute rather than hidden: the render loop owns hidden and would show it again.
+          data-under-marker={under.has(spot.key) ? '' : undefined}
           // Hidden until the render loop has placed it, so it never flashes in the corner.
           hidden
         >

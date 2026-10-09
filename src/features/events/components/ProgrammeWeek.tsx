@@ -1,4 +1,4 @@
-import { PixelIcon } from '../../hud/components/PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { DAY_PARTS, type Chip, type DayColumn, type DayPart } from '../domain/programmeView';
 
 export interface Cell {
@@ -22,7 +22,7 @@ export const PART_NAMES: { readonly [part in DayPart]: string } = {
 
 function DayHead({ day }: { readonly day: DayColumn }) {
   return (
-    <div className="hud-programme-day-head">
+    <div className="events-programme-day-head">
       <span>{day.name}</span>
       {day.weather ? (
         <span title={day.pinned ? `${day.weather}, pinned` : day.weather}>
@@ -45,7 +45,7 @@ function ChipButton({
   return (
     <button
       type="button"
-      className="hud-programme-chip"
+      className="events-programme-chip"
       aria-pressed={chosen}
       data-off={chip.off ? '' : undefined}
       title={`${chip.label}, ${chip.repeat.toLowerCase()}`}
@@ -63,7 +63,7 @@ function PartCell({
 }: { readonly day: DayColumn; readonly part: DayPart } & Omit<ProgrammeWeekProps, 'days'>) {
   const chosen = props.cell?.day === day.day && props.cell.part === part;
   return (
-    <div className="hud-programme-cell" data-part={part}>
+    <div className="events-programme-cell" data-part={part}>
       {day.parts[part].map((chip) => (
         <ChipButton
           key={chip.booking}
@@ -76,7 +76,7 @@ function PartCell({
       {day.open[part] ? (
         <button
           type="button"
-          className="hud-programme-add"
+          className="events-programme-add"
           aria-pressed={chosen}
           aria-label={`Book something for ${day.name}, ${part}`}
           onClick={() => props.onCell({ day: day.day, part })}
@@ -91,15 +91,15 @@ function PartCell({
 // Days as rows and the parts of the day as columns, so a phone's sheet shows it as a desk does.
 export function ProgrammeWeek({ days, ...props }: ProgrammeWeekProps) {
   return (
-    <div className="hud-programme-week">
-      <span className="hud-programme-part-head" aria-hidden="true" />
+    <div className="events-programme-week">
+      <span className="events-programme-part-head" aria-hidden="true" />
       {DAY_PARTS.map((part) => (
-        <span key={part} className="hud-programme-part-head">
+        <span key={part} className="events-programme-part-head">
           {PART_NAMES[part]}
         </span>
       ))}
       {days.map((day) => (
-        <div key={day.day} className="hud-programme-day">
+        <div key={day.day} className="events-programme-day">
           <DayHead day={day} />
           {DAY_PARTS.map((part) => (
             <PartCell key={part} day={day} part={part} {...props} />

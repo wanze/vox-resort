@@ -2,7 +2,7 @@ import type { RefObject } from 'react';
 import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
 import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { RatingControl } from './RatingControl';
 import { SpeedControl } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
@@ -54,7 +54,7 @@ function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
 function GuestsReadout({ status }: { readonly status: StatusView | null }) {
   if (status === null) return null;
   return (
-    <div className="hud-guests">
+    <div>
       <HudReadout
         icon={<PixelIcon name="guests" />}
         value={
@@ -79,7 +79,7 @@ function GatesToggle({
   return (
     <button
       type="button"
-      className="hud-gates"
+      className="ui-chip hud-gates"
       aria-pressed={open}
       title={open ? 'Close the gates to new guests' : 'Open the gates to new guests'}
       onClick={() => onOpenChange(!open)}
@@ -101,7 +101,7 @@ export function TopBar(props: TopBarProps) {
 
   return (
     <header className="hud-bar">
-      <div className="hud-plate">
+      <div className="ui-plate">
         <MainMenu
           open={menu === 'main'}
           onOpenChange={opener('main')}
@@ -120,7 +120,7 @@ export function TopBar(props: TopBarProps) {
         />
       </div>
 
-      <div className="hud-plate">
+      <div className="ui-plate">
         <TimeOfDay clockElement={props.clockElement} />
         <SpeedControl
           speed={clock.speed}
@@ -138,7 +138,7 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       {/* Highlight first: its legend hangs to the left, the map's to the right, so both fit. */}
-      <div className="hud-plate hud-maps-plate">
+      <div className="ui-plate hud-maps-plate">
         <HighlightControl
           highlights={props.highlights}
           open={menu === 'highlight'}
@@ -153,7 +153,7 @@ export function TopBar(props: TopBarProps) {
         />
       </div>
 
-      <div className="hud-plate hud-status">
+      <div className="ui-plate hud-status">
         <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
         {status ? (
           <RatingControl

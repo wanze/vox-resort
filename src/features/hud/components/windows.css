@@ -1,0 +1,84 @@
+.ui-window[data-window='build'] {
+  right: var(--space-3);
+  width: var(--palette-w);
+  max-height: min(78vh, calc(100% - var(--window-top) - var(--space-3)));
+}
+
+.ui-window[data-window='inspect'],
+.ui-window[data-window='debug'] {
+  left: var(--space-3);
+  width: 330px;
+}
+
+.ui-window[data-window='debug'] {
+  width: 370px;
+}
+
+.ui-window[data-window='overview'],
+.ui-window[data-window='inbox'],
+.ui-window[data-window='people'],
+.ui-window[data-window='books'],
+.ui-window[data-window='camera'] {
+  right: calc(var(--palette-w) + var(--space-3) * 2);
+  width: 380px;
+}
+
+/* Wide enough for all four tabs, Photo wall too, on one row. */
+.ui-window[data-window='overview'] {
+  width: 406px;
+}
+
+.ui-window[data-window='inbox'] {
+  --window-top: calc(var(--window-floor) + 26px);
+}
+
+.ui-window[data-window='people'] {
+  --window-top: calc(var(--window-floor) + 52px);
+}
+
+.ui-window[data-window='books'] {
+  --window-top: calc(var(--window-floor) + 78px);
+  width: 300px;
+}
+
+.ui-window[data-window='camera'] {
+  --window-top: calc(var(--window-floor) + 104px);
+  width: 260px;
+}
+
+.ui-window[data-window='programme'] {
+  --window-top: calc(var(--window-floor) + 40px);
+  right: calc(var(--palette-w) + var(--space-3) * 2);
+  width: 440px;
+}
+
+.ui-window[data-window='resort'] {
+  --window-top: calc(var(--window-floor) + 40px);
+  left: calc(50% - 170px);
+  width: 340px;
+}
+
+.ui-window[data-window='name'] {
+  --window-top: calc(var(--window-floor) + 60px);
+  left: calc(50% - 170px);
+  width: 340px;
+}
+
+.ui-window[data-window='share'] {
+  --window-top: calc(var(--window-floor) + 60px);
+  left: calc(50% - 170px);
+  width: 340px;
+}
+
+.ui-window[data-window='saves'] {
+  --window-top: calc(var(--window-floor) + 60px);
+  left: calc(50% - 190px);
+  width: 380px;
+}
+
+.ui-window[data-window='build'] .ui-window-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 var(--space-2) var(--space-2);
+}

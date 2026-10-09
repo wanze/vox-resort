@@ -1,7 +1,7 @@
 import { useState, type CSSProperties, type PointerEvent, type RefObject } from 'react';
 import type { GuestView, SelectionView } from '../../inspect/domain/selection';
 import { NeedBars, PARTY_KINDS, ThinksRow } from '../../hud/components/GuestRows';
-import { StatRow } from '../../hud/components/StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 import type { FollowView } from '../domain/followRules';
 import { keptOnScreen, type Offset, type Rect } from '../domain/cardSpot';
 
@@ -89,14 +89,14 @@ function GuestRows({
 }) {
   return (
     <>
-      <p className="hud-inspect-activity">
+      <p className="ui-activity">
         {following.riding ? (
           `Riding along on a ${following.riding}`
         ) : (
           <span ref={activityElement}>—</span>
         )}
       </p>
-      <dl className="hud-stats">
+      <dl className="ui-stats">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Mood">{Math.round(guest.happiness * 100)}%</StatRow>
       </dl>
@@ -112,7 +112,7 @@ function ViewButton({
 }: Pick<FollowCardProps, 'following' | 'onToggleView'>) {
   if (!following.firstPerson || following.left) return null;
   return (
-    <button type="button" className="hud-placement-button" onClick={onToggleView}>
+    <button type="button" className="ui-button-large" onClick={onToggleView}>
       {following.view === 'first' ? 'Third person' : 'First person'}
     </button>
   );
@@ -125,14 +125,14 @@ function Actions({
   onStop,
 }: Pick<FollowCardProps, 'following' | 'onToggleView' | 'onRideAlong' | 'onStop'>) {
   return (
-    <div className="hud-actions">
+    <div className="ui-actions">
       <ViewButton following={following} onToggleView={onToggleView} />
       {following.rideOffered ? (
-        <button type="button" className="hud-placement-button" onClick={onRideAlong}>
+        <button type="button" className="ui-button-large" onClick={onRideAlong}>
           Ride along
         </button>
       ) : null}
-      <button type="button" className="hud-placement-button" onClick={onStop}>
+      <button type="button" className="ui-button-large" onClick={onStop}>
         <span aria-hidden="true">✕</span> Stop
       </button>
     </div>
@@ -153,13 +153,13 @@ export function FollowCard({
   const drag = useCardDrag(offset, onMove);
   return (
     <section
-      className="hud-follow hud-plate"
+      className="guest-view-follow ui-plate"
       aria-label="Following"
       data-dragging={drag.dragging ? '' : undefined}
       style={drag.style}
       {...drag.handlers}
     >
-      <p className="hud-follow-name" aria-live="polite">
+      <p className="guest-view-follow-name" aria-live="polite">
         {titleOf(following, guest)}
       </p>
       {guest && !following.left ? (

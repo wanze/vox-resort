@@ -10,9 +10,9 @@ import type { GameMode } from '../../sim/domain/ledger';
 import type { SaveOutcome } from '../../saves/domain/saveSlots';
 import type { SaveMeta } from '../../saves/domain/snapshot';
 import { UnsavedWarning } from '../../saves/components/UnsavedWarning';
-import { PixelIcon } from '../../hud/components/PixelIcon';
-import { rovingTarget } from '../../hud/domain/roving';
-import type { IconName } from '../../hud/components/pixelIcons';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { rovingTarget } from '../../../shared/domain/roving';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import { ResortNameField, useDraftName } from '../../naming/components/ResortNameField';
 import { groundOf, nameFor, paramsFor, type Ground, type NewGame } from '../domain/newGame';
 import { MODE_LABELS } from './modeNames';
@@ -68,19 +68,24 @@ function ModeChoice(props: {
     event.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
   };
   return (
-    <div className="new-game-modes" role="radiogroup" aria-label="Game mode" onKeyDown={step}>
+    <div
+      className="welcome-new-game-modes"
+      role="radiogroup"
+      aria-label="Game mode"
+      onKeyDown={step}
+    >
       {MODES.map(({ mode, icon, note }, index) => (
         <button
           key={mode}
           type="button"
           role="radio"
-          className="new-game-mode"
+          className="welcome-new-game-mode"
           aria-checked={mode === props.mode}
           tabIndex={index === stop ? 0 : -1}
           onClick={() => props.onPick(mode)}
         >
           <PixelIcon name={icon} scale={3} />
-          <span className="new-game-mode-text">
+          <span className="welcome-new-game-mode-text">
             <strong>{MODE_LABELS[mode]}</strong>
             <span>{note}</span>
           </span>
@@ -95,14 +100,14 @@ function GroundChoice(props: {
   readonly onPick: (ground: Ground) => void;
 }) {
   return (
-    <div className="hud-resort-row hud-resort-choice-row" role="group" aria-label="Start from">
+    <div className="ui-form-row ui-form-row--choice" role="group" aria-label="Start from">
       <span>Start from</span>
-      <div className="hud-resort-choices">
+      <div className="ui-form-choices">
         {GROUNDS.map(({ ground, label }) => (
           <button
             key={ground}
             type="button"
-            className="hud-resort-choice new-game-ground"
+            className="ui-form-choice welcome-new-game-ground"
             aria-pressed={ground === props.ground}
             onClick={() => props.onPick(ground)}
           >
@@ -124,7 +129,7 @@ function Slider(props: {
   readonly onSlide: (value: number) => void;
 }) {
   return (
-    <label className="hud-resort-row">
+    <label className="ui-form-row">
       <span>{props.label}</span>
       <input
         type="range"
@@ -135,7 +140,7 @@ function Slider(props: {
         onChange={(event) => props.onSlide(Number(event.target.value))}
         aria-label={props.aria}
       />
-      <span className="hud-resort-value">{props.shown}</span>
+      <span className="ui-form-value">{props.shown}</span>
     </label>
   );
 }
@@ -152,14 +157,14 @@ function LandFields(props: {
 }) {
   const current = clampLand(props.land);
   return (
-    <div className="hud-resort-row hud-resort-choice-row" role="group" aria-label="Landscape">
+    <div className="ui-form-row ui-form-row--choice" role="group" aria-label="Landscape">
       <span>Landscape</span>
-      <div className="hud-resort-choices">
+      <div className="ui-form-choices">
         {LAND_FLAGS.map(({ flag, label }) => (
           <button
             key={flag}
             type="button"
-            className="hud-resort-choice"
+            className="ui-form-choice"
             aria-pressed={current[flag]}
             onClick={() => props.onChange({ ...current, [flag]: !current[flag] })}
           >
@@ -210,7 +215,7 @@ function PlotFields(props: {
           />
         </>
       ) : null}
-      <div className="hud-resort-row hud-resort-seed">
+      <div className="ui-form-row ui-form-row--field">
         <span>Seed</span>
         <input
           type="number"
@@ -220,7 +225,7 @@ function PlotFields(props: {
         />
         <button
           type="button"
-          className="hud-resort-roll"
+          className="ui-form-roll"
           onClick={() => onChange({ seed: rollSeed() })}
           aria-label="A different landscape"
         >
@@ -251,12 +256,12 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
   };
 
   return (
-    <div className="hud-resort new-game">
+    <div className="ui-form welcome-new-game">
       <UnsavedWarning unsaved={unsaved} onKeep={onKeepUnsaved} />
       <ResortNameField value={name} onChange={setName} />
       <ModeChoice mode={mode} onPick={setMode} />
       {mode === null ? null : (
-        <div className="new-game-options">
+        <div className="welcome-new-game-options">
           {mode === 'sandbox' ? <GroundChoice ground={ground} onPick={setGround} /> : null}
           <PlotFields
             draft={draft}
@@ -265,7 +270,7 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
           />
           <button
             type="button"
-            className="hud-resort-go new-game-start"
+            className="ui-button-primary ui-button-tall"
             disabled={busy}
             onClick={start({ mode, ground })}
           >

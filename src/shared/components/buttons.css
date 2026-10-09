@@ -1,0 +1,179 @@
+.ui-chip,
+.ui-tab,
+.ui-window-close,
+.ui-button,
+.ui-form-roll,
+.ui-button-primary,
+.ui-button-secondary,
+.ui-form-choice,
+.ui-button-large {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--bevel), var(--shadow-ledge);
+  color: var(--text);
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  transition:
+    filter var(--quick),
+    box-shadow var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.ui-chip:hover,
+.ui-tab:hover,
+.ui-window-close:hover,
+.ui-button:hover:not(:disabled),
+.ui-form-roll:hover:not(:disabled),
+.ui-button-secondary:hover:not(:disabled),
+.ui-form-choice:hover,
+.ui-button-large:not(.ui-button-large--primary):hover {
+  filter: brightness(1.05);
+  color: var(--terracotta-deep);
+  transform: translateY(-1px);
+}
+
+.ui-chip:active,
+.ui-tab:active,
+.ui-window-close:active,
+.ui-button:active:not(:disabled),
+.ui-button-primary:active:not(:disabled),
+.ui-button-secondary:active:not(:disabled),
+.ui-button-large:active {
+  transform: translateY(1px);
+  box-shadow: var(--bevel-in);
+}
+
+.ui-chip[aria-expanded='true'],
+.ui-tab[aria-selected='true'],
+.ui-tab[aria-pressed='true'],
+.ui-button[aria-pressed='true'],
+.ui-form-choice[aria-pressed='true'],
+.ui-button-large[aria-pressed='true'],
+.ui-button-large:not(.ui-button-large--primary)[aria-expanded='true'] {
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in);
+  border-color: var(--edge-strong);
+  color: var(--terracotta-deep);
+  transform: none;
+}
+
+.ui-chip {
+  height: var(--control-h);
+  padding: 0 var(--space-2) 0 var(--space-2);
+}
+
+.ui-chip-label {
+  font-size: var(--size-body);
+  white-space: nowrap;
+}
+
+.ui-chip-caret {
+  color: var(--text-faint);
+}
+
+/* 44px: the smallest target a fingertip hits reliably. */
+.ui-button-large {
+  min-width: 44px;
+  height: 44px;
+  padding: 0 var(--space-3);
+  font-size: var(--size-body);
+  white-space: nowrap;
+}
+
+.ui-button {
+  min-height: var(--control-h);
+  padding: 0 var(--space-2);
+}
+
+.ui-button-primary,
+.ui-button-secondary {
+  height: 34px;
+}
+
+.ui-button-primary,
+.ui-button-large--primary {
+  border-color: var(--terracotta-deep);
+  background-image: var(--slab-accent);
+  color: var(--text-on-accent);
+  text-shadow: var(--shadow-accent-text);
+}
+
+.ui-button-primary:hover:not(:disabled),
+.ui-button-large--primary:hover {
+  filter: brightness(1.08);
+  color: var(--text-on-accent);
+}
+
+/* The one action that ends a form, set off from the last field above it. */
+.ui-button-tall {
+  height: 40px;
+  margin-top: var(--space-2);
+  font-size: var(--size-body);
+}
+
+.ui-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 16px;
+  padding: 3px 3px 2px;
+  border: 1px solid var(--terracotta-deep);
+  border-radius: 6px 8px 5px 7px;
+  background: var(--terracotta);
+  font: 700 10px / 1 var(--font-ui);
+  text-align: center;
+  color: var(--text-on-accent);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Dressed as the buttons beside it; the caret is drawn in, since the native one ignores the theme. */
+.ui-select {
+  appearance: none;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 calc(var(--space-3) * 2 + 10px) 0 var(--space-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background:
+    var(--select-caret) right var(--space-3) center / 10px 6px no-repeat,
+    var(--slab-raised);
+  box-shadow: var(--bevel), var(--shadow-ledge);
+  color: var(--text);
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  cursor: var(--cursor-hand);
+}
+
+.ui-select:hover:not(:disabled) {
+  filter: brightness(1.05);
+  color: var(--terracotta-deep);
+}
+
+.ui-button-compact {
+  height: 28px;
+  padding: 0 var(--space-3);
+}
+
+/* Full strength while it works, so the one pressed reads apart from the ones merely waiting. */
+.ui-button-compact[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+  animation: ui-busy 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes ui-busy {
+  to {
+    filter: brightness(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button-compact[aria-busy='true'] {
+    animation: none;
+  }
+}

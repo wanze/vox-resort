@@ -1,6 +1,6 @@
 import { quoteOf, type Review } from '../../sim/domain/reviews';
 import type { ThoughtTally } from '../../sim/domain/thoughts';
-import { StatRow } from './StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
 import type { VoicesView } from '../domain/views';
 
@@ -37,7 +37,7 @@ function ReviewRow({ review }: { readonly review: Review }) {
       {said ? (
         <>
           <br />
-          <span className="hud-stat-note">“{said}”</span>
+          <span className="ui-stat-note">“{said}”</span>
         </>
       ) : null}
     </StatRow>
@@ -47,10 +47,10 @@ function ReviewRow({ review }: { readonly review: Review }) {
 export function GuestsPanel({ voices }: GuestsPanelProps) {
   const { loudest, reviews } = voices;
   if (loudest.length === 0 && reviews.length === 0) {
-    return <p className="hud-loading">Nobody has said anything yet.</p>;
+    return <p className="ui-loading">Nobody has said anything yet.</p>;
   }
   return (
-    <dl className="hud-stats hud-advice">
+    <dl className="ui-stats hud-advice">
       {loudest.map((tally) => (
         <LoudestRow key={`${tally.kind}|${tally.subject ?? ''}`} tally={tally} />
       ))}

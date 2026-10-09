@@ -15,8 +15,8 @@ import { adviceKey, severityOf } from '../domain/news';
 import { adviceSays } from './adviceWords';
 import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
-import { PixelIcon } from './PixelIcon';
-import { StatRow } from './StatRow';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { StatRow } from '../../../shared/components/StatRow';
 import { NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
 import { VenueName } from './VenueName';
 
@@ -66,7 +66,7 @@ function MemberList({ label, members, selected, onSelectPerson }: MemberListProp
         <button
           key={member.person}
           type="button"
-          className="hud-camera-mode"
+          className="ui-button"
           aria-pressed={member.person === selected}
           onClick={() => onSelectPerson(member.person)}
         >
@@ -96,15 +96,15 @@ function GuestDetails({
 }) {
   return (
     <>
-      <p className="hud-inspect-activity">
+      <p className="ui-activity">
         <span ref={activityElement}>—</span>
       </p>
       <div className="hud-inspect-members">
-        <button type="button" className="hud-camera-mode" onClick={onFollow}>
+        <button type="button" className="ui-button" onClick={onFollow}>
           Follow
         </button>
       </div>
-      <dl className="hud-stats">
+      <dl className="ui-stats">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
@@ -148,7 +148,7 @@ function BrokenRow({ broken }: { readonly broken: boolean }) {
 
 function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
   return (
-    <dl className="hud-stats">
+    <dl className="ui-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
       <BrokenRow broken={venue.broken} />
       <StatRow label="Capacity">{venue.capacity}</StatRow>
@@ -178,7 +178,7 @@ function Residents({
   readonly onSelectPerson: (person: number) => void;
 }) {
   if (place.venue?.role !== 'lodging') return null;
-  if (place.residents.length === 0) return <p className="hud-loading">Nobody sleeps here.</p>;
+  if (place.residents.length === 0) return <p className="ui-loading">Nobody sleeps here.</p>;
   return (
     <MemberList
       label="Who sleeps here"
@@ -244,7 +244,7 @@ function SendButton({
   return (
     <button
       type="button"
-      className="hud-camera-mode"
+      className="ui-button"
       disabled={why !== undefined}
       title={why}
       onClick={() => onSend(role)}
@@ -280,9 +280,9 @@ function ProgrammeRow({
 }) {
   if (!place.programme) return null;
   return (
-    <div className="hud-inspect-programme">
+    <div className="ui-row ui-row--spread">
       <span>{place.programme.next ?? 'Nothing on this week'}</span>
-      <button type="button" className="hud-camera-mode" onClick={() => onOpenProgramme(place.key)}>
+      <button type="button" className="ui-button" onClick={() => onOpenProgramme(place.key)}>
         Programme
       </button>
     </div>
@@ -309,8 +309,8 @@ function PlaceDetails({
   if (!place.venue) {
     return (
       <>
-        <p className="hud-loading">Dressing: nothing here for a guest to do.</p>
-        <dl className="hud-stats">
+        <p className="ui-loading">Dressing: nothing here for a guest to do.</p>
+        <dl className="ui-stats">
           <SurroundingsRow setting={place.setting} />
         </dl>
       </>
@@ -350,10 +350,10 @@ function StaffDetails({
 }) {
   return (
     <>
-      <p className="hud-inspect-activity">
+      <p className="ui-activity">
         <span ref={activityElement}>—</span>
       </p>
-      <dl className="hud-stats">
+      <dl className="ui-stats">
         <StatRow label="Role">{worker.roleTitle}</StatRow>
         <StatRow label="Works">{worker.zone}</StatRow>
         <StatRow label="Shift">{worker.onDuty ? 'On duty' : 'Off duty'}</StatRow>
@@ -361,7 +361,7 @@ function StaffDetails({
       </dl>
       {worker.onDuty ? (
         <div className="hud-inspect-members">
-          <button type="button" className="hud-camera-mode" onClick={onShow}>
+          <button type="button" className="ui-button" onClick={onShow}>
             Show
           </button>
         </div>

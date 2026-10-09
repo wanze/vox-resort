@@ -1,0 +1,272 @@
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-gates {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .hud-menu-gates {
+  display: contents;
+}
+
+/* A double tap on a control would otherwise zoom the page. */
+.hud button,
+.hud input,
+.hud select {
+  touch-action: manipulation;
+}
+
+@media (pointer: coarse) {
+  /* iOS zooms into any field set smaller than 16 px as soon as it takes focus. */
+  .hud input,
+  .hud select {
+    font-size: 16px;
+  }
+}
+
+@keyframes hud-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes hud-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+.app:not([data-layout='desk']) .hud-bar {
+  height: calc(var(--strip-h) + var(--safe-t));
+  padding: calc(var(--safe-t) + var(--space-1)) calc(var(--space-2) + var(--safe-r)) 0
+    calc(var(--space-2) + var(--safe-l));
+  align-items: flex-start;
+  /* Packed from the left, with the gap growing a little with the screen: spread evenly, the groups
+     drifted apart on a wide tablet and read as unrelated. */
+  justify-content: flex-start;
+  gap: clamp(var(--space-1), 1.5vw, var(--space-4));
+}
+
+/* Each group on its own plate, as on a desk, but slimmer: the side padding is what a phone runs out of. */
+.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock) {
+  flex: none;
+  gap: var(--space-1);
+  height: calc(var(--strip-control-h) + 10px);
+  padding: 0 var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
+  height: var(--strip-control-h);
+  padding: 0 var(--space-3);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-time {
+  padding-left: var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-readout-row {
+  gap: var(--space-1);
+}
+
+.app:not([data-layout='desk']) .hud-bar :is(.hud-readout-value, .hud-time-clock) {
+  font-size: var(--size-body);
+}
+
+.app:not([data-layout='desk'])
+  .hud-bar
+  :is(
+    .hud-wordmark,
+    .ui-chip-label,
+    .hud-menu .ui-chip-caret,
+    .hud-readout-label,
+    .hud-gates-state
+  ) {
+  display: none;
+}
+
+/* The status keeps the right edge, so the strip's spare width is one gap rather than several. */
+.app:not([data-layout='desk']) .hud-bar .hud-status {
+  margin-left: auto;
+}
+
+@media (width <= 459px) {
+  .app:not([data-layout='desk']) .hud-bar .hud-demand-menu > .ui-chip {
+    padding: 0 var(--space-2);
+  }
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-dock {
+  position: fixed;
+  margin: 0;
+  border-radius: 0;
+}
+
+.app[data-layout='bottom'] .hud-bar .hud-dock {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  align-items: stretch;
+  height: calc(var(--dock-h) + var(--safe-b));
+  padding: var(--space-1) calc(var(--space-1) + var(--safe-r)) calc(var(--space-1) + var(--safe-b))
+    calc(var(--space-1) + var(--safe-l));
+}
+
+.app[data-layout='bottom'] .hud-dock .hud-tool {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+}
+
+.app[data-layout='bottom'] .hud-dock .hud-tool-label {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.app[data-layout='rail'] .hud-bar .hud-dock {
+  top: calc(var(--strip-h) + var(--safe-t));
+  left: 0;
+  bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  width: calc(var(--rail-w) + var(--safe-l));
+  height: auto;
+  padding: var(--space-2) var(--space-1) var(--space-2) calc(var(--space-1) + var(--safe-l));
+}
+
+.app[data-layout='rail'] .hud-dock .hud-tool-label {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .ui-window[data-window] {
+  width: auto;
+  animation: hud-sheet-up var(--pop);
+}
+
+.app:not([data-layout='desk']) .ui-window-head {
+  position: relative;
+  padding-top: var(--space-4);
+  cursor: auto;
+}
+
+.app[data-layout='bottom'] .ui-window[data-window] {
+  --sheet-room: calc(
+    100% - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b) - var(--space-2)
+  );
+  top: auto;
+  right: var(--safe-r);
+  bottom: calc(var(--dock-h) + var(--safe-b));
+  left: var(--safe-l);
+  max-height: calc(var(--sheet-room) * var(--sheet-half));
+  border-radius: 12px 8px 0 0 / 8px 11px 0 0;
+}
+
+.app[data-layout='bottom'] .ui-window[data-window][data-expanded] {
+  max-height: var(--sheet-room);
+}
+
+.app[data-layout='rail'] .ui-window[data-window] {
+  top: calc(var(--strip-h) + var(--safe-t));
+  right: var(--safe-r);
+  bottom: 0;
+  left: auto;
+  width: var(--sheet-w);
+  max-height: none;
+  border-radius: 12px 0 0 9px / 8px 0 0 12px;
+  animation-name: hud-sheet-in;
+}
+
+/* Collapsed to its tools while one is armed, so it hangs from the top instead of filling the side. */
+.app[data-layout='rail'] .ui-window[data-window][data-peek]:not([data-expanded]) {
+  bottom: auto;
+}
+
+.app:not([data-layout='desk'])
+  .ui-window[data-peek]:not([data-expanded])
+  :is(.hud-palette-search, .ui-tabs, .hud-palette-shelves) {
+  display: none;
+}
+
+.app:not([data-layout='desk']) .hud-bar .ui-dropdown-panel {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: calc(var(--space-2) + var(--safe-r));
+  left: calc(var(--space-2) + var(--safe-l));
+  min-width: 0;
+  max-height: calc(
+    100dvh - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b) - var(--space-4)
+  );
+}
+
+.app[data-layout='rail'] .hud-bar .ui-dropdown-panel {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+  max-height: calc(100dvh - var(--strip-h) - var(--safe-t) - var(--safe-b) - var(--space-4));
+}
+
+.app:not([data-layout='desk']) .hud .hud-toasts {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: calc(var(--space-2) + var(--safe-r));
+  bottom: auto;
+  left: calc(var(--space-2) + var(--safe-l));
+  width: auto;
+}
+
+.app[data-layout='rail'] .hud .hud-toasts {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+}
+
+.app:not([data-layout='desk']) .hud-toast:nth-child(n + 3) {
+  display: none;
+}
+
+/* A sheet covers the bottom: without anchors to sit on it, the bar goes under the strip instead. */
+.app[data-layout='bottom'] .hud-placement {
+  bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
+}
+
+.app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .hud-placement {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  bottom: auto;
+}
+
+@supports (anchor-name: --sheet) {
+  .app[data-layout='bottom'] .ui-window[data-window] {
+    anchor-name: --sheet;
+  }
+
+  .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .hud-placement {
+    position-anchor: --sheet;
+    top: auto;
+    bottom: anchor(top, calc(var(--dock-h) + var(--safe-b)));
+    margin-bottom: var(--space-2);
+  }
+}
+
+.app[data-layout='rail'] .hud-placement {
+  left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
+}
+
+/* A peeking sheet hangs from the top and leaves the bottom free, so only a full one moves the bar. */
+.app[data-layout='rail'] .hud:has(.ui-window[data-window]:not([data-peek])) .hud-placement {
+  left: calc(50% + (var(--rail-w) + var(--safe-l) - var(--sheet-w) - var(--safe-r)) / 2);
+}
+
+/* Pinned under the strip, so the on-screen keyboard rising from below never covers the field. */
+.app:not([data-layout='desk']) .hud-command-layer {
+  padding: calc(var(--strip-h) + var(--safe-t) + var(--space-2))
+    calc(var(--space-2) + var(--safe-r)) var(--space-2) calc(var(--space-2) + var(--safe-l));
+}
+
+/* Hidden, not unmounted: the render loop writes the signs, markers and pins into the HUD's nodes. */
+.app[data-photo] .hud {
+  display: none;
+}

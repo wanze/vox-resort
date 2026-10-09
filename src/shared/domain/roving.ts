@@ -1,4 +1,7 @@
-import { stepCursor } from './commandSearch';
+export function stepCursor(cursor: number, step: number, count: number): number {
+  if (count === 0) return 0;
+  return (((cursor + step) % count) + count) % count;
+}
 
 export type RovingAxis = 'horizontal' | 'vertical' | 'both';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rankCommands, sectionCommands, stepCursor, type Searchable } from './commandSearch';
+import { rankCommands, sectionCommands, type Searchable } from './commandSearch';
 
 const command = (label: string, group: string, keywords?: string): Searchable =>
   keywords === undefined ? { label, group } : { label, group, keywords };
@@ -51,18 +51,5 @@ describe('sectionCommands', () => {
 
   it('has no sections for no commands', () => {
     expect(sectionCommands([])).toEqual([]);
-  });
-});
-
-describe('stepCursor', () => {
-  it('wraps round both ends', () => {
-    expect(stepCursor(2, 1, 3)).toBe(0);
-    expect(stepCursor(0, -1, 3)).toBe(2);
-    expect(stepCursor(1, 1, 3)).toBe(2);
-  });
-
-  it('stays at the top of an empty list', () => {
-    expect(stepCursor(0, 1, 0)).toBe(0);
-    expect(stepCursor(0, -1, 0)).toBe(0);
   });
 });

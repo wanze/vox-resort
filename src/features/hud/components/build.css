@@ -1,0 +1,539 @@
+.hud-palette {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.hud-palette-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-palette-search input {
+  flex: 1;
+}
+
+.hud-palette-count {
+  min-width: 3ch;
+  font: 600 var(--size-small) / 1 var(--font-ui);
+  text-align: right;
+  color: var(--text-faint);
+}
+
+.hud-palette-armed {
+  justify-content: flex-start;
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+}
+
+.hud-palette-armed-row {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.hud-palette-armed-row .hud-palette-armed {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.hud-palette-turn,
+.hud-palette-info {
+  flex: none;
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+  font-size: var(--size-body);
+}
+
+.hud-palette-armed-label {
+  color: var(--text-on-accent-dim);
+}
+
+.hud-palette-armed-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-palette-armed-detail {
+  flex: none;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.8;
+}
+
+.hud-build-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* 34 px and 3 px gaps keep seven tools and two rules on one line at --palette-w. */
+  gap: 3px;
+}
+
+.hud-build-tool,
+.hud-zone-chip {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background: linear-gradient(160deg, var(--stone-100), var(--stone-400));
+  box-shadow: var(--bevel);
+  color: var(--stone-700);
+  transition:
+    box-shadow var(--quick),
+    border-color var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.hud-build-tool {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+
+.hud-build-tool:hover {
+  border-color: var(--stone-700);
+  color: var(--terracotta-deep);
+  transform: translateY(-1px);
+}
+
+.hud-build-tool[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow: var(--bevel-in), var(--glow-accent);
+  color: var(--terracotta);
+  transform: none;
+}
+
+.hud-build-tool-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: var(--emboss);
+}
+
+.hud-build-tool-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.hud-build-tool-mark {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--terracotta);
+  text-shadow:
+    0 0 2px var(--stone-50),
+    0 0 2px var(--stone-50);
+}
+
+.hud-build-tool-zones {
+  display: grid;
+  grid-template-columns: repeat(2, 8px);
+  gap: 2px;
+}
+
+.hud-build-tool-zones > span {
+  height: 8px;
+  border-radius: 2px;
+  box-shadow: var(--bevel);
+}
+
+.hud-build-tools-rule {
+  width: 1px;
+  height: 24px;
+  background: var(--edge-soft);
+}
+
+.hud-zone-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.hud-zone-chip {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.hud-zone-chip[aria-checked='true'] {
+  border-color: var(--terracotta);
+  box-shadow:
+    inset 0 0 0 2px var(--stone-50),
+    var(--glow-accent);
+}
+
+/* The window's tabs bleed over a wide body; the palette's body is narrow and scrolls below them.
+   No icons and tight padding, so the four categories fit one line at --palette-w. */
+.hud-palette .ui-tabs {
+  position: static;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 0 var(--space-1);
+}
+
+.hud-palette .ui-tab {
+  flex: 1 1 auto;
+  padding: 0 4px;
+}
+
+.hud-palette-armed-stop {
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+.hud-palette-shelves {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-2) var(--space-2);
+  border-radius: var(--radius-pebble);
+  background: var(--tray);
+  box-shadow:
+    var(--bevel-in),
+    0 0 0 1px var(--edge-soft);
+}
+
+.hud-palette-empty {
+  margin: var(--space-4) 0;
+  color: var(--text-faint);
+}
+
+.hud-build-group-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  /* Its own padding rather than the tray's, so the sticky heading covers the gap
+     above the tiles. */
+  padding: var(--space-2) var(--space-1) var(--space-1);
+  background: var(--tray);
+}
+
+.hud-build-group-count {
+  margin-left: auto;
+  font: 600 11px / 1 var(--font-ui);
+  color: var(--text-faint);
+}
+
+.hud-build-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tile-min), 1fr));
+  gap: 5px;
+  padding: var(--space-1) 0 var(--space-2);
+}
+
+.hud-build-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background: var(--tile-ground);
+  box-shadow: var(--bevel);
+  color: var(--text);
+  --art-zoom: 1.04;
+  transition:
+    box-shadow var(--quick),
+    border-color var(--quick),
+    transform var(--quick);
+}
+
+.hud-build-tile-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.hud-build-tile-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translateY(-9%) scale(var(--art-zoom));
+  transition: transform var(--quick);
+}
+
+.hud-build-tile-swatch {
+  position: absolute;
+  inset: 22%;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--bevel);
+}
+
+.hud-build-tile-name {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: var(--space-2) 4px 3px;
+  background: var(--plate);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-align: left;
+  overflow-wrap: anywhere;
+  color: var(--stone-800);
+}
+
+.hud-build-tile-badge {
+  position: absolute;
+  top: var(--space-1);
+  right: var(--space-1);
+  z-index: 1;
+  padding: 2px 4px;
+  border-radius: 5px 6px 4px;
+  background: var(--badge);
+  font: 500 10px / 1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--stone-200);
+}
+
+.hud-build-tile-cost {
+  font-weight: 700;
+  color: var(--price);
+}
+
+.hud-build-tile--short .hud-build-tile-art {
+  opacity: 0.45;
+}
+
+.hud-build-tile--short .hud-build-tile-cost {
+  color: var(--price-short);
+}
+
+.hud-build-tile-slot {
+  position: relative;
+}
+
+/* A button shrinks to its content even as a block, and everything in a tile is positioned. */
+.hud-build-tile-slot > .hud-build-tile {
+  width: 100%;
+}
+
+/* A finger reads the facts from the armed bar instead: a corner this small is missed into the tile. */
+.hud-build-tile-info {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--badge-rim);
+  border-radius: 50%;
+  background: var(--badge);
+  color: var(--stone-200);
+  opacity: 0;
+  transition:
+    opacity var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+@media (hover: hover) {
+  .hud-build-tile-info {
+    display: flex;
+  }
+
+  .hud-build-tile-slot:hover .hud-build-tile-info,
+  .hud-build-tile-info:focus-visible,
+  .hud-build-tile-info[aria-expanded='true'] {
+    opacity: 1;
+  }
+
+  .hud-build-tile-slot:hover .hud-build-tile-info {
+    transform: translateY(-2px);
+  }
+
+  .hud-build-tile-info:hover {
+    color: var(--price);
+  }
+}
+
+.hud-object-info-host {
+  display: contents;
+}
+
+.hud-object-info-button {
+  anchor-name: var(--object-info-anchor);
+}
+
+/* Centred by the browser's own popover rules wherever anchors are missing. */
+.hud-object-info {
+  width: min(250px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  pointer-events: auto;
+}
+
+/* A pointing card must never take the hover from the icon it belongs to. */
+.hud-object-info[data-mode='hover'] {
+  pointer-events: none;
+}
+
+@supports (anchor-name: --object-info) {
+  .hud-object-info {
+    position-anchor: var(--object-info-anchor);
+    position-area: bottom;
+    position-try-fallbacks: flip-block;
+    inset: auto;
+    margin: var(--space-1) 0;
+  }
+}
+
+.hud-object-info-card {
+  max-height: inherit;
+  overflow: auto;
+  padding: var(--space-3);
+  border-radius: var(--radius-pebble);
+  animation: ui-pop var(--pop);
+}
+
+.hud-object-info-title {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  font: 700 var(--size-body) / 1.2 var(--font-ui);
+  color: var(--stone-800);
+}
+
+.hud-object-info-facts {
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--size-small);
+  white-space: normal;
+}
+
+.hud-object-info-facts dt {
+  padding-top: 0;
+  color: var(--text-dim);
+}
+
+.hud-object-info-notes {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) 0 0 var(--space-4);
+  border-top: 2px dotted var(--edge-soft);
+  font-size: var(--size-small);
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
+.hud-object-info-notes li + li {
+  margin-top: 2px;
+}
+
+.hud-build-tile--terrain {
+  background: linear-gradient(160deg, var(--stone-100), var(--stone-400));
+}
+
+.hud-build-tile-glyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 20%;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--stone-700);
+  text-shadow: var(--emboss);
+  transition: color var(--quick);
+}
+
+.hud-build-tile--terrain:hover .hud-build-tile-glyph {
+  color: var(--terracotta-deep);
+}
+
+.hud-build-tile--terrain[aria-pressed='true'] .hud-build-tile-glyph {
+  color: var(--terracotta);
+}
+
+.hud-build-tile:hover,
+.hud-build-tile-slot:hover > .hud-build-tile {
+  border-color: var(--stone-700);
+  box-shadow: var(--bevel), var(--shadow-lift);
+  transform: translateY(-2px);
+  --art-zoom: 1.1;
+}
+
+.hud-build-tile[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow: var(--bevel-in), var(--glow-accent);
+}
+
+.hud-build-tile[aria-pressed='true'] .hud-build-tile-name {
+  background: var(--plate-accent);
+  color: var(--text-on-accent);
+}
+
+.hud-palette-styles {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-build-tile--style {
+  flex: 0 1 var(--tile-min);
+  min-width: 0;
+}
+
+.hud-build-tile--style .hud-build-tile-name {
+  text-align: center;
+}
+
+/* The die sits where a model's picture would, clear of the name plate the others wear. */
+.hud-build-tile--style .hud-build-tile-glyph {
+  padding-bottom: 0;
+}
+
+.hud-palette-styles-key {
+  margin-left: auto;
+}
+
+@media (pointer: coarse) {
+  .hud-build-tool {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hud-zone-chip {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (hover: none) {
+  .hud-palette-styles-key {
+    display: none;
+  }
+}

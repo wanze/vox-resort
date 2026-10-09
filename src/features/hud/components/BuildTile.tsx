@@ -26,7 +26,7 @@ function moneyOf(type: ObjectTypeDefinition, ledger: Ledger | null) {
   const short = ledger !== null && !canAfford(ledger, cost);
   return {
     price: cost.toLocaleString('en-US'),
-    className: short ? 'build-tile build-tile-short' : 'build-tile',
+    className: short ? 'hud-build-tile hud-build-tile--short' : 'hud-build-tile',
     note: short ? ', more than the bank holds' : '',
   };
 }
@@ -35,11 +35,11 @@ function moneyOf(type: ObjectTypeDefinition, ledger: Ledger | null) {
 export function TileArt({ type, preview }: { type: ObjectTypeDefinition; preview: PreviewLookup }) {
   const picture = preview(type.id);
   return (
-    <span className="build-tile-art">
+    <span className="hud-build-tile-art">
       {picture ? (
         <img src={picture} alt="" loading="lazy" decoding="async" draggable={false} />
       ) : (
-        <span className="build-tile-swatch" style={{ background: toCssColor(type.color) }} />
+        <span className="hud-build-tile-swatch" style={{ background: toCssColor(type.color) }} />
       )}
     </span>
   );
@@ -50,7 +50,7 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
 
   // A sibling, not a child: a button may not hold another, and the tap on it must not arm the tile.
   return (
-    <div className="build-tile-slot">
+    <div className="hud-build-tile-slot">
       <button
         type="button"
         className={className}
@@ -60,14 +60,14 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
         onClick={() => onSelect(selected ? null : type.id)}
       >
         <TileArt type={type} preview={preview} />
-        <span className="build-tile-name" aria-hidden="true">
+        <span className="hud-build-tile-name" aria-hidden="true">
           {type.label}
         </span>
-        <span className="build-tile-badge">
-          <span className="build-tile-cost">{price}</span>
+        <span className="hud-build-tile-badge">
+          <span className="hud-build-tile-cost">{price}</span>
         </span>
       </button>
-      <ObjectInfo typeId={type.id} className="build-tile-info" mode="hover" />
+      <ObjectInfo typeId={type.id} className="hud-build-tile-info" mode="hover" />
     </div>
   );
 }

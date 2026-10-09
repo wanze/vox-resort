@@ -1,5 +1,5 @@
 import type { GuestView } from '../../inspect/domain/selection';
-import { StatRow } from './StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 import { thoughtLine } from './thoughtWords';
 
 export const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
@@ -42,7 +42,7 @@ export function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
 
 export function ThinksRow({ thought }: { readonly thought: GuestView['thought'] }) {
   return (
-    <dl className="hud-stats hud-advice">
+    <dl className="ui-stats hud-advice">
       <StatRow label="Thinks">
         {thought ? `“${thoughtLine(thought.kind, thought.subject)}”` : 'Nothing yet'}
       </StatRow>

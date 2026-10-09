@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rovingTarget } from './roving';
+import { rovingTarget, stepCursor } from './roving';
 
 describe('rovingTarget', () => {
   it('steps along a horizontal strip and wraps at both ends', () => {
@@ -48,5 +48,18 @@ describe('rovingTarget', () => {
   it('leaves other keys alone', () => {
     expect(rovingTarget('a', 1, 4, 'both')).toBeNull();
     expect(rovingTarget('Enter', 1, 4, 'both')).toBeNull();
+  });
+});
+
+describe('stepCursor', () => {
+  it('wraps round both ends', () => {
+    expect(stepCursor(2, 1, 3)).toBe(0);
+    expect(stepCursor(0, -1, 3)).toBe(2);
+    expect(stepCursor(1, 1, 3)).toBe(2);
+  });
+
+  it('stays at the top of an empty list', () => {
+    expect(stepCursor(0, 1, 0)).toBe(0);
+    expect(stepCursor(0, -1, 0)).toBe(0);
   });
 });

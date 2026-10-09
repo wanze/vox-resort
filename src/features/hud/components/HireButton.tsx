@@ -25,7 +25,7 @@ export function HireButton({
   return (
     <button
       type="button"
-      className="hud-camera-mode hud-advice-show"
+      className="ui-button hud-advice-show"
       aria-label={aria}
       onClick={() => hire.onHire(offer)}
     >

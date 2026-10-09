@@ -6,9 +6,9 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
-import { PixelIcon } from './PixelIcon';
-import { useReturnFocus } from './useReturnFocus';
-import type { IconName } from './pixelIcons';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { useReturnFocus } from '../../../shared/components/useReturnFocus';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import { clampSpot, type Box, type WindowId, type WindowSpot } from '../domain/windowLayout';
 
 export interface HudWindowFrame {
@@ -60,7 +60,7 @@ function styleOf(frame: HudWindowFrame, live: WindowSpot | null): CSSProperties 
 }
 
 function panelOf(event: PointerEvent<HTMLElement>): { panel: HTMLElement; host: Element } | null {
-  const panel = event.currentTarget.closest('.hud-window');
+  const panel = event.currentTarget.closest('.ui-window');
   if (!(panel instanceof HTMLElement) || !panel.offsetParent) return null;
   return { panel, host: panel.offsetParent };
 }
@@ -155,7 +155,7 @@ function WindowTitle({ title, icon, sheet }: WindowTitleProps) {
     return (
       <>
         <PixelIcon name={icon} />
-        <h2 className="hud-window-title" tabIndex={-1} data-window-focus="">
+        <h2 className="ui-window-title" tabIndex={-1} data-window-focus="">
           {title}
         </h2>
       </>
@@ -164,14 +164,14 @@ function WindowTitle({ title, icon, sheet }: WindowTitleProps) {
   return (
     <button
       type="button"
-      className="hud-window-toggle"
+      className="ui-window-toggle"
       data-window-focus=""
       aria-expanded={sheet.expanded}
       onClick={sheet.toggle}
     >
-      <span className="hud-window-grip" aria-hidden="true" />
+      <span className="ui-window-grip" aria-hidden="true" />
       <PixelIcon name={icon} />
-      <span className="hud-window-title">{title}</span>
+      <span className="ui-window-title">{title}</span>
     </button>
   );
 }
@@ -182,7 +182,7 @@ const titleOf = (host: Element): HTMLElement | null =>
 // Hands the keys back to the game without dropping the focus out of the window, so the next
 // Escape still closes it rather than opening the main menu.
 export function leaveField(field: HTMLElement): void {
-  const host = field.closest('.hud-window');
+  const host = field.closest('.ui-window');
   const title = host ? titleOf(host) : null;
   if (title) title.focus();
   else field.blur();
@@ -191,7 +191,7 @@ export function leaveField(field: HTMLElement): void {
 // Only some windows sit on the dock; the main menu opens the rest.
 const returnTarget = (id: WindowId): HTMLElement | null =>
   document.querySelector<HTMLElement>(`[data-dock="${id}"]`) ??
-  document.querySelector<HTMLElement>('.hud-menu > .hud-chip');
+  document.querySelector<HTMLElement>('.hud-menu > .ui-chip');
 
 // Only on mount: a window already open does not pull the keyboard back on a later render.
 function useFocusOnOpen(frame: HudWindowFrame) {
@@ -214,18 +214,18 @@ export function HudWindow({ frame, title, icon, children }: HudWindowProps) {
   return (
     <section
       ref={section}
-      className="hud-window"
+      className="ui-window"
       data-window={frame.id}
       {...stateOf(drag.dragging, sheet, frame.peek)}
       aria-label={title}
       style={styleOf(frame, drag.live)}
       onPointerDownCapture={frame.onRaise}
     >
-      <header className="hud-window-head" {...drag.handlers}>
+      <header className="ui-window-head" {...drag.handlers}>
         <WindowTitle title={title} icon={icon} sheet={sheet} />
         <button
           type="button"
-          className="hud-window-close"
+          className="ui-window-close"
           aria-label={`Close ${title}`}
           title="Close"
           onClick={frame.onClose}
@@ -233,7 +233,7 @@ export function HudWindow({ frame, title, icon, children }: HudWindowProps) {
           <PixelIcon name="close" scale={1} />
         </button>
       </header>
-      <div className="hud-window-body">{children}</div>
+      <div className="ui-window-body">{children}</div>
     </section>
   );
 }

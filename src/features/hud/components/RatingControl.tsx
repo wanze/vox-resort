@@ -1,5 +1,5 @@
-import { HudPopover } from './HudDropdown';
-import { PixelIcon } from './PixelIcon';
+import { DropdownPopover } from '../../../shared/components/Dropdown';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { trendArrow, trendWords } from './dayWords';
 import {
   costliestPart,
@@ -76,7 +76,7 @@ export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: R
   const arrow = trendArrow(trend);
   const change = trendWords(trend);
   return (
-    <HudPopover
+    <DropdownPopover
       name="Rating"
       className="hud-rating"
       open={open}
@@ -88,10 +88,10 @@ export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: R
     >
       <RatingBreakdown rating={rating} />
       <StepFreeLine {...stepFree} />
-      <hr className="hud-rule" />
+      <hr className="ui-rule" />
       <p className="hud-rating-note">
         Set each morning at check-in. The more stars, the more guests arrive.
       </p>
-    </HudPopover>
+    </DropdownPopover>
   );
 }

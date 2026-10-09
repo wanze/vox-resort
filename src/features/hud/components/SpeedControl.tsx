@@ -1,6 +1,6 @@
-import { HudMenu } from './HudDropdown';
-import { HudOption } from './HudOption';
-import { PixelIcon } from './PixelIcon';
+import { DropdownMenu } from '../../../shared/components/Dropdown';
+import { MenuOption } from '../../../shared/components/MenuOption';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { speedNote } from './controlNames';
 import { keyLabel } from '../domain/keymap';
 import { SIM_SPEEDS, SPEED_LABELS, type SimSpeed } from '../../sim/domain/simClock';
@@ -14,7 +14,7 @@ export interface SpeedControlProps {
 
 export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: SpeedControlProps) {
   return (
-    <HudMenu
+    <DropdownMenu
       className="hud-speed"
       open={open}
       onOpenChange={onOpenChange}
@@ -22,12 +22,12 @@ export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: Speed
       label={
         <>
           <PixelIcon name={speed} />
-          <span className="hud-chip-label">{SPEED_LABELS[speed]}</span>
+          <span className="ui-chip-label">{SPEED_LABELS[speed]}</span>
         </>
       }
     >
       {SIM_SPEEDS.map((option) => (
-        <HudOption
+        <MenuOption
           key={option}
           icon={option}
           label={SPEED_LABELS[option]}
@@ -40,6 +40,6 @@ export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: Speed
           }}
         />
       ))}
-    </HudMenu>
+    </DropdownMenu>
   );
 }

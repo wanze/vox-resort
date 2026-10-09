@@ -32,13 +32,13 @@ function ToolButton(props: {
   return (
     <button
       type="button"
-      className="build-tool"
+      className="hud-build-tool"
       aria-pressed={props.pressed}
       aria-label={props.label}
       title={props.title}
       onClick={props.onPress}
     >
-      <span className="build-tool-art" aria-hidden="true">
+      <span className="hud-build-tool-art" aria-hidden="true">
         {props.children}
       </span>
     </button>
@@ -59,7 +59,7 @@ function ToolPicture(props: {
   return (
     <>
       <img src={picture} alt="" draggable={false} />
-      {props.marked ? <span className="build-tool-mark">{props.glyph}</span> : null}
+      {props.marked ? <span className="hud-build-tool-mark">{props.glyph}</span> : null}
     </>
   );
 }
@@ -89,7 +89,7 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
     onToolChange(pressed ? null : next);
 
   return (
-    <div className="build-tools" role="toolbar" aria-label="Tools">
+    <div className="hud-build-tools" role="toolbar" aria-label="Tools">
       {BRUSH_GROUPS.map((group) => (
         <Fragment key={group[0]!.id}>
           {group.map((each) => (
@@ -108,7 +108,7 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
               />
             </ToolButton>
           ))}
-          <span className="build-tools-rule" />
+          <span className="hud-build-tools-rule" />
         </Fragment>
       ))}
       <ToolButton
@@ -117,7 +117,7 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
         pressed={zone !== null}
         onPress={toggle(zone !== null, { kind: 'zone', zone: lastZone })}
       >
-        <span className="build-tool-zones">
+        <span className="hud-build-tool-zones">
           {ZONE_BRUSHES.filter((each) => each.colour).map((each) => (
             <span key={each.zone} style={{ background: each.colour }} />
           ))}

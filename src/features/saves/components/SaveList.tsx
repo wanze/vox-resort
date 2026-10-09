@@ -10,6 +10,8 @@ export interface SaveListProps {
   readonly busy: boolean;
   // The save being opened, whose button says so until the game shows.
   readonly loading?: string | null;
+  // For the welcome card, which has no scrolling body of its own as a window does.
+  readonly scroll?: boolean;
   readonly now: number;
   readonly onLoad: (id: string) => void;
   readonly onDelete: (id: string) => void;
@@ -22,7 +24,7 @@ function DeleteButton(props: { readonly disabled: boolean; readonly onDelete: ()
     return (
       <button
         type="button"
-        className="hud-resort-clear save-button"
+        className="ui-button-secondary ui-button-compact"
         disabled={props.disabled}
         onClick={() => setAsking(true)}
       >
@@ -31,14 +33,18 @@ function DeleteButton(props: { readonly disabled: boolean; readonly onDelete: ()
     );
   }
   return (
-    <span className="save-confirm" role="group" aria-label="Delete this save?">
+    <span className="saves-confirm" role="group" aria-label="Delete this save?">
       <span>Delete?</span>
-      <button type="button" className="hud-resort-clear save-button" onClick={props.onDelete}>
+      <button
+        type="button"
+        className="ui-button-secondary ui-button-compact"
+        onClick={props.onDelete}
+      >
         Yes
       </button>
       <button
         type="button"
-        className="hud-resort-clear save-button"
+        className="ui-button-secondary ui-button-compact"
         onClick={() => setAsking(false)}
       >
         No
@@ -55,18 +61,18 @@ function SaveRow(
 ) {
   const { meta } = props;
   return (
-    <li className="save-row" data-current={props.current ? '' : undefined}>
-      <span className="save-row-text">
-        <span className="save-row-name">
+    <li className="saves-row" data-current={props.current ? '' : undefined}>
+      <span className="saves-row-text">
+        <span className="saves-row-name">
           {titleOf(meta)}
-          {props.current ? <span className="save-row-current">current</span> : null}
+          {props.current ? <span className="saves-row-current">current</span> : null}
         </span>
-        <span className="save-row-note">{summaryOf(meta, props.now)}</span>
+        <span className="saves-row-note">{summaryOf(meta, props.now)}</span>
       </span>
-      <span className="save-row-actions">
+      <span className="saves-row-actions">
         <button
           type="button"
-          className="hud-resort-go save-button"
+          className="ui-button-primary ui-button-compact"
           disabled={props.busy}
           aria-busy={props.loading === meta.id}
           onClick={() => props.onLoad(meta.id)}
@@ -85,12 +91,12 @@ function UnreadableRow(props: {
   readonly onDelete: (id: string) => void;
 }) {
   return (
-    <li className="save-row" data-unreadable="">
-      <span className="save-row-text">
-        <span className="save-row-name">Can't be read</span>
-        <span className="save-row-note">saved by another version, or damaged</span>
+    <li className="saves-row" data-unreadable="">
+      <span className="saves-row-text">
+        <span className="saves-row-name">Can't be read</span>
+        <span className="saves-row-note">saved by another version, or damaged</span>
       </span>
-      <span className="save-row-actions">
+      <span className="saves-row-actions">
         <DeleteButton disabled={props.busy} onDelete={() => props.onDelete(props.id)} />
       </span>
     </li>
@@ -98,9 +104,9 @@ function UnreadableRow(props: {
 }
 
 export function SaveList(props: SaveListProps) {
-  if (props.saves.length === 0) return <p className="save-empty">No saved games yet.</p>;
+  if (props.saves.length === 0) return <p className="ui-note">No saved games yet.</p>;
   return (
-    <ul className="save-list">
+    <ul className={props.scroll ? 'saves-list saves-list--scroll' : 'saves-list'}>
       {props.saves.map((save) =>
         isReadable(save) ? (
           <SaveRow key={save.id} {...props} meta={save} current={save.id === props.currentId} />

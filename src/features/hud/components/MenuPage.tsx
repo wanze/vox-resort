@@ -16,16 +16,16 @@ export function MenuPage({ title, onBack, children }: MenuPageProps) {
       <button
         ref={back}
         type="button"
-        className="hud-option hud-menu-back"
+        className="ui-option hud-menu-back"
         role="menuitem"
         tabIndex={-1}
         onClick={onBack}
       >
-        <span className="hud-option-icon hud-menu-back-mark" aria-hidden="true">
+        <span className="hud-menu-back-mark" aria-hidden="true">
           ‹
         </span>
-        <span className="hud-option-text">
-          <span className="hud-option-label">{title}</span>
+        <span className="ui-option-text">
+          <span className="ui-option-label">{title}</span>
         </span>
       </button>
       {children}

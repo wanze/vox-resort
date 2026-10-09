@@ -19,13 +19,13 @@ function RandomTile({
   return (
     <button
       type="button"
-      className="build-tile terrain-tile style-tile"
+      className="hud-build-tile hud-build-tile--terrain hud-build-tile--style"
       aria-pressed={pressed}
       aria-label="Random style"
       title="Random style, rolled again for every placement"
       onClick={() => onStyle(null)}
     >
-      <span className="terrain-tile-glyph" aria-hidden="true">
+      <span className="hud-build-tile-glyph" aria-hidden="true">
         🎲
       </span>
     </button>
@@ -40,19 +40,19 @@ export function StyleStrip({ strip, preview, onStyle }: StyleStripProps) {
         <button
           key={type.id}
           type="button"
-          className="build-tile style-tile"
+          className="hud-build-tile hud-build-tile--style"
           aria-pressed={strip.pick === type.id}
           aria-label={type.styleLabel}
           title={type.styleLabel}
           onClick={() => onStyle(type.id)}
         >
           <TileArt type={type} preview={preview} />
-          <span className="build-tile-name" aria-hidden="true">
+          <span className="hud-build-tile-name" aria-hidden="true">
             {styleLetter(index)}
           </span>
         </button>
       ))}
-      <kbd className="hud-option-key hud-palette-styles-key" title="V cycles the styles">
+      <kbd className="ui-option-key hud-palette-styles-key" title="V cycles the styles">
         V
       </kbd>
     </div>

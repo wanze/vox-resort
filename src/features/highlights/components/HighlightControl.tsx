@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { HudPopover } from '../../hud/components/HudDropdown';
-import { HudOption } from '../../hud/components/HudOption';
-import { PixelIcon } from '../../hud/components/PixelIcon';
+import { DropdownPopover } from '../../../shared/components/Dropdown';
+import { MenuOption } from '../../../shared/components/MenuOption';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { highlightIconOf } from './highlightIcons';
 import {
   canPick,
@@ -30,7 +30,7 @@ const cssColourOf = (colour: number): string =>
 function Swatch({ colour }: { readonly colour: number }) {
   return (
     <span
-      className="hud-highlight-swatch"
+      className="highlights-swatch"
       style={{ backgroundColor: cssColourOf(colour) }}
       aria-hidden="true"
     />
@@ -46,7 +46,7 @@ function HighlightLegend({
 }) {
   if (picks.length === 0) return null;
   return (
-    <ul className="hud-highlight-legend">
+    <ul className="ui-panel highlights-legend">
       {picks.map((pick) => (
         <li key={pick.family}>
           <Swatch colour={pick.colour} />
@@ -65,7 +65,7 @@ export function HighlightOptions({ highlights, focusSearch, onDone }: HighlightO
   const shown = searchTypes(types, query);
   return (
     <>
-      <div className="hud-highlight-search">
+      <div className="highlights-search">
         <input
           type="search"
           value={query}
@@ -79,8 +79,8 @@ export function HighlightOptions({ highlights, focusSearch, onDone }: HighlightO
           }}
         />
       </div>
-      <div className="hud-highlight-list">
-        <HudOption
+      <div className="highlights-list">
+        <MenuOption
           label="None"
           note="show every building alike"
           checked={picks.length === 0}
@@ -89,11 +89,11 @@ export function HighlightOptions({ highlights, focusSearch, onDone }: HighlightO
             onDone();
           }}
         />
-        <hr className="hud-rule" />
+        <hr className="ui-rule" />
         {shown.map((type) => {
           const pick = picks.find((each) => each.family === type.family);
           return (
-            <HudOption
+            <MenuOption
               key={type.family}
               label={type.label}
               icon={highlightIconOf(type)}
@@ -110,7 +110,7 @@ export function HighlightOptions({ highlights, focusSearch, onDone }: HighlightO
             />
           );
         })}
-        {shown.length === 0 ? <p className="hud-highlight-empty">No building matches</p> : null}
+        {shown.length === 0 ? <p className="highlights-empty">No building matches</p> : null}
       </div>
     </>
   );
@@ -124,8 +124,8 @@ export function HighlightControl({
 }: HighlightControlProps) {
   const { types, picks } = highlights;
   return (
-    <div className="hud-highlight">
-      <HudPopover
+    <div className="highlights">
+      <DropdownPopover
         name="Highlight buildings"
         open={open}
         onOpenChange={onOpenChange}
@@ -133,7 +133,7 @@ export function HighlightControl({
         label={
           <>
             <PixelIcon name="inspect" />
-            <span className="hud-chip-label">
+            <span className="ui-chip-label">
               {picks.length > 0 ? `Highlight · ${picks.length}` : 'Highlight'}
             </span>
           </>
@@ -144,7 +144,7 @@ export function HighlightControl({
           focusSearch={focusSearch}
           onDone={() => onOpenChange(false)}
         />
-      </HudPopover>
+      </DropdownPopover>
       <HighlightLegend types={types} picks={picks} />
     </div>
   );

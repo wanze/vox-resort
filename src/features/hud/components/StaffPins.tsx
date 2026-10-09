@@ -1,8 +1,8 @@
 import type { RefObject } from 'react';
 import type { StaffRole } from '../../sim/domain/staff';
 import { PINNED_STAFF } from '../domain/staffPins';
-import { PixelIcon } from './PixelIcon';
-import type { IconName } from './pixelIcons';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import { roleWord } from './staffWords';
 
 export interface StaffPinsProps {

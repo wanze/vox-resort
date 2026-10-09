@@ -1,0 +1,451 @@
+.hud-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: var(--z-bar);
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.hud-dock {
+  margin-left: auto;
+}
+
+.hud-status {
+  gap: var(--space-3);
+}
+
+/* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
+.hud-status > * {
+  flex: none;
+}
+
+.hud-readout-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-readout {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.hud-readout-value {
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--ochre);
+}
+
+.hud-wordmark {
+  max-width: 180px;
+  overflow: hidden;
+  font: 400 16px / 1 var(--font-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  color: var(--terracotta-deep);
+  text-shadow: var(--emboss);
+}
+
+.hud-speed .ui-chip-label {
+  min-width: 6ch;
+  text-align: left;
+}
+
+.hud-menu-back {
+  margin-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  border-radius: var(--radius-pebble) var(--radius-pebble) 0 0;
+}
+
+.hud-menu-back .ui-option-label {
+  color: var(--text-dim);
+}
+
+.hud-menu-back-mark {
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.hud-menu-heading {
+  margin: var(--space-3) var(--space-2) var(--space-1);
+}
+
+.hud-menu-heading:first-child {
+  margin-top: var(--space-1);
+}
+
+/* The rule a menu would draw between its sections, with the gap above the next heading. */
+.hud-menu-group + .hud-menu-group {
+  margin-top: var(--space-2);
+  border-top: 2px dotted var(--edge-soft);
+}
+
+.hud-menu-group + .hud-menu-group > .hud-menu-heading {
+  margin-top: var(--space-2);
+}
+
+.hud-menu .ui-dropdown-panel {
+  min-width: 290px;
+}
+
+/* An option's layout without its hover: the days are read, not picked. */
+.hud-forecast-day {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+}
+
+.hud-weather .ui-dropdown-panel {
+  min-width: 260px;
+}
+
+.hud-weather-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hud-weather-pin {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--terracotta-deep);
+  border-radius: 50%;
+  background: var(--terracotta);
+}
+
+.hud-time {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-2);
+}
+
+/* Fixed width, so the bar does not shift as the minutes tick over. */
+.hud-time-clock {
+  min-width: 11ch;
+  /* As large as the guest count beside it, so the bar's figures read as one row. */
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--ochre);
+}
+
+@media (width <= 1510px) {
+  .hud-dock .hud-tool-label {
+    display: none;
+  }
+}
+
+/* The name goes first: the menu still opens on its icon, and the resort's name is on its gates. */
+@media (width <= 1650px) {
+  .hud-wordmark {
+    display: none;
+  }
+}
+
+@media (width <= 1240px) {
+  .hud-speed .ui-chip-label {
+    display: none;
+  }
+}
+
+@media (width <= 1060px) {
+  .hud-status .hud-readout-label {
+    display: none;
+  }
+}
+
+.hud-gates {
+  height: var(--control-h);
+  padding: 0 var(--space-3) 0 var(--space-2);
+}
+
+/* The gates leave the bar for the menu before anything else does: they are rarely changed. */
+.hud-menu-gates {
+  display: none;
+}
+
+@media (width <= 1120px) {
+  .hud-bar .hud-gates {
+    display: none;
+  }
+
+  .hud-menu-gates {
+    display: contents;
+  }
+}
+
+.hud-gates-lamp {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--lamp-rim);
+  border-radius: 2px;
+  background: var(--lamp-off);
+  box-shadow: 0 0 6px var(--lamp-off);
+}
+
+.hud-gates[aria-pressed='true'] .hud-gates-lamp {
+  background: var(--lamp-on);
+  box-shadow: 0 0 6px var(--lamp-on);
+}
+
+.hud-gates .hud-readout-value {
+  font-family: var(--font-ui);
+  font-size: var(--size-body);
+}
+
+.hud-demand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Bars run up and down, so the panel wants room for the grid's bar column to read as a scale. */
+.hud-demand-menu .ui-dropdown-panel {
+  min-width: 320px;
+}
+
+.hud-demand-menu .hud-demand-grid {
+  padding: var(--dropdown-inset);
+}
+
+.hud-demand-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hud-demand-initial {
+  font: 400 var(--size-label) / 1 var(--font-label);
+}
+
+/* Zero sits in the middle; the fill grows up or down from it by --pressure, -1 to 1.
+   One edge of the fill stays on zero because one of the max/min is always 0. */
+.hud-demand-bar {
+  --demand-ink: var(--ink-quiet);
+  position: relative;
+  display: block;
+  width: 9px;
+  /* With the initial under it, this sits centred in the chip with room above and below. */
+  height: 14px;
+  border-radius: 2px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.hud-demand-bar[data-tone='up'] {
+  --demand-ink: var(--ink-warm);
+}
+
+.hud-demand-bar[data-tone='loud'] {
+  --demand-ink: var(--ink-red);
+}
+
+.hud-demand-bar::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: calc(50% - 0.5px);
+  height: 1px;
+  background: var(--edge);
+}
+
+.hud-demand-fill {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: calc(50% - max(var(--pressure), 0) * 50%);
+  bottom: calc(50% + min(var(--pressure), 0) * 50%);
+  background: var(--demand-ink);
+}
+
+.hud-demand-bar[data-across] {
+  width: 100%;
+  height: 8px;
+}
+
+.hud-demand-bar[data-across]::before {
+  top: -1px;
+  bottom: -1px;
+  left: calc(50% - 0.5px);
+  right: auto;
+  width: 1px;
+  height: auto;
+}
+
+.hud-demand-bar[data-across] .hud-demand-fill {
+  top: 1px;
+  bottom: 1px;
+  left: calc(50% + min(var(--pressure), 0) * 50%);
+  right: calc(50% - max(var(--pressure), 0) * 50%);
+}
+
+.hud-demand-grid {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr) auto auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: center;
+}
+
+.hud-demand-grid > .hud-demand-group-heading {
+  grid-column: 1 / -1;
+  margin: calc(var(--space-2) + var(--space-1) * 2) 0 var(--space-1);
+}
+
+.hud-demand-grid > .hud-demand-group-heading:first-of-type {
+  margin-top: 0;
+}
+
+.hud-demand-row {
+  display: contents;
+}
+
+.hud-demand-head {
+  font: 400 var(--size-label) / 1.2 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.hud-demand-scale {
+  display: flex;
+  justify-content: space-between;
+}
+
+.hud-demand-name {
+  font: 600 var(--size-small) / 1.2 var(--font-ui);
+}
+
+.hud-demand-figure {
+  font: 400 var(--size-small) / 1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.hud-rating .ui-dropdown-panel {
+  min-width: 280px;
+}
+
+.hud-stars {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.hud-stars-trend {
+  font-size: var(--size-small);
+  color: var(--ochre);
+}
+
+.hud-rating-parts {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--dropdown-inset);
+  white-space: nowrap;
+}
+
+.hud-rating-part {
+  display: contents;
+}
+
+.hud-rating-parts dd {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hud-rating-lost {
+  color: var(--text-dim);
+}
+
+.hud-rating-part[data-costliest='true'] > * {
+  font-weight: 700;
+  color: var(--terracotta-deep);
+}
+
+.hud-rating-step-free {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--dropdown-inset);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-rating-note {
+  margin: 0;
+  padding: var(--dropdown-inset);
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}
+
+.hud-forecast {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-menu-highlight,
+.hud-menu-maps {
+  display: none;
+}
+
+@media (width <= 739px) {
+  .hud-menu-highlight {
+    display: contents;
+  }
+}
+
+/* A narrow phone gives the room to the counts and the demand bars. The forecast is also in the
+   programme, and the map views move to the menu's View page; their legends are fixed, so they stay. */
+@media (width <= 639px) {
+  .hud-bar .hud-weather {
+    display: none;
+  }
+
+  .hud-bar .hud-maps-plate {
+    display: contents;
+  }
+
+  .hud-menu-maps {
+    display: contents;
+  }
+}
+
+@media (width <= 459px) {
+  .hud-bar .ui-chip-caret,
+  .hud-bar .hud-figure-of {
+    display: none;
+  }
+
+  .hud-bar .hud-demand {
+    gap: var(--space-1);
+  }
+}

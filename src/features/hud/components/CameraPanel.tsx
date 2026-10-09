@@ -41,7 +41,7 @@ export function CameraPanel({
           <button
             key={option.mode}
             type="button"
-            className="hud-camera-mode"
+            className="ui-button"
             aria-pressed={mode === option.mode}
             onClick={() => onModeChange(option.mode)}
           >
@@ -55,7 +55,7 @@ export function CameraPanel({
           <button
             key={point}
             type="button"
-            className="hud-camera-point"
+            className="ui-button hud-camera-point"
             disabled={!isometric}
             aria-pressed={isometric && direction === point}
             aria-label={`Face the plot from the ${CORNERS[point].label}`}
@@ -70,7 +70,7 @@ export function CameraPanel({
       <div className="hud-camera-modes" role="group" aria-label="Level of detail">
         <button
           type="button"
-          className="hud-camera-mode"
+          className="ui-button"
           aria-pressed={detail}
           title="Draw far objects coarse and leave out ones too small to see"
           onClick={() => onDetailChange(!detail)}

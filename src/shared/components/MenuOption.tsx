@@ -3,7 +3,7 @@ import { OptionHost } from './optionHost';
 import { PixelIcon } from './PixelIcon';
 import type { IconName } from './pixelIcons';
 
-export interface HudOptionProps {
+export interface MenuOptionProps {
   readonly label: string;
   readonly onSelect: () => void;
   readonly icon?: IconName | null;
@@ -38,7 +38,7 @@ function plainRow(checked: boolean | undefined, many: boolean): RowSemantics {
 
 const ROWS = { menu: menuRow, plain: plainRow } as const;
 
-export function HudOption({
+export function MenuOption({
   label,
   onSelect,
   icon = null,
@@ -48,21 +48,21 @@ export function HudOption({
   many = false,
   disabled = false,
   more = false,
-}: HudOptionProps) {
+}: MenuOptionProps) {
   const semantics = ROWS[use(OptionHost)](checked, many);
   return (
     <button
       type="button"
-      className="hud-option"
+      className="ui-option"
       {...semantics}
       aria-haspopup={more ? 'menu' : undefined}
       disabled={disabled}
       onClick={onSelect}
     >
-      <span className="hud-option-icon">{icon ? <PixelIcon name={icon} /> : null}</span>
-      <span className="hud-option-text">
-        <span className="hud-option-label">{label}</span>
-        {note ? <span className="hud-option-note">{note}</span> : null}
+      <span>{icon ? <PixelIcon name={icon} /> : null}</span>
+      <span className="ui-option-text">
+        <span className="ui-option-label">{label}</span>
+        {note ? <span className="ui-option-note">{note}</span> : null}
       </span>
       <OptionMarks shortcut={shortcut} checked={checked === true} more={more} />
     </button>
@@ -80,14 +80,14 @@ function OptionMarks({
 }) {
   return (
     <>
-      {shortcut ? <kbd className="hud-option-key">{shortcut}</kbd> : null}
+      {shortcut ? <kbd className="ui-option-key">{shortcut}</kbd> : null}
       {more ? (
-        <span className="hud-option-more" aria-hidden="true">
+        <span className="ui-option-more" aria-hidden="true">
           ›
         </span>
       ) : null}
       {checked ? (
-        <span className="hud-option-check">
+        <span className="ui-option-check">
           <PixelIcon name="check" />
         </span>
       ) : null}

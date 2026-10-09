@@ -11,8 +11,8 @@ export interface UnsavedWarningProps {
 export function UnsavedWarning({ unsaved, onKeep }: UnsavedWarningProps) {
   if (!unsaved) return null;
   return (
-    <div className="save-warning" role="note">
-      <p>Your unsaved game (day {unsaved.day}) will be replaced.</p>
+    <div className="saves-warning" role="note">
+      <p className="ui-note">Your unsaved game (day {unsaved.day}) will be replaced.</p>
       <NameForm initial="" disabled={false} actions={[{ label: 'Keep it as…', run: onKeep }]} />
     </div>
   );

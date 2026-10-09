@@ -14,7 +14,7 @@ export function useDraftName(seed: number): readonly [string, (name: string) => 
 
 export function ResortNameField({ value, onChange }: ResortNameFieldProps) {
   return (
-    <div className="hud-resort-row hud-resort-name">
+    <div className="ui-form-row ui-form-row--field">
       <span>Name</span>
       <input
         type="text"
@@ -26,7 +26,7 @@ export function ResortNameField({ value, onChange }: ResortNameFieldProps) {
       />
       <button
         type="button"
-        className="hud-resort-roll"
+        className="ui-form-roll"
         onClick={() => onChange(rerollResortName(Math.random))}
         aria-label="A different name"
       >

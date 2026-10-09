@@ -61,7 +61,7 @@ function ContinueButton(props: {
   return (
     <button
       type="button"
-      className="welcome-button welcome-button-main welcome-continue"
+      className="welcome-button welcome-button--main welcome-continue"
       disabled={!props.ready || props.loading}
       aria-busy={props.loading}
       onClick={() => props.onLoad(props.latest.id)}
@@ -96,7 +96,7 @@ function Menu(props: {
       ) : null}
       <button
         type="button"
-        className={latest ? 'welcome-button' : 'welcome-button welcome-button-main'}
+        className={latest ? 'welcome-button' : 'welcome-button welcome-button--main'}
         disabled={!free}
         autoFocus={props.returnTo === 'new'}
         onClick={() => props.onChoose('new')}
@@ -154,16 +154,18 @@ function Choices(props: ChoiceProps) {
   const { shared } = props;
   if (shared?.kind === 'ready') {
     return (
-      <SharedResortCard
-        shared={shared.shared}
-        ready={props.ready}
-        busy={props.busy}
-        failed={props.sharedFailed}
-        unsaved={readableById(props.saves.saves, UNSAVED_ID)}
-        onKeepUnsaved={props.saves.nameUnsaved}
-        onOpen={props.onOpenShared}
-        onBack={props.onDismissShared}
-      />
+      <>
+        <CardHead title="A resort for you" busy={props.busy} onBack={props.onDismissShared} />
+        <SharedResortCard
+          shared={shared.shared}
+          ready={props.ready}
+          busy={props.busy}
+          failed={props.sharedFailed}
+          unsaved={readableById(props.saves.saves, UNSAVED_ID)}
+          onKeepUnsaved={props.saves.nameUnsaved}
+          onOpen={props.onOpenShared}
+        />
+      </>
     );
   }
   return (
@@ -206,7 +208,7 @@ function CardHead(props: {
       </h2>
       <button
         type="button"
-        className="hud-resort-clear welcome-back"
+        className="ui-button-secondary welcome-back"
         disabled={props.busy}
         onClick={props.onBack}
       >
@@ -224,7 +226,7 @@ function NewGameCard(props: {
   readonly onBack: () => void;
 }) {
   return (
-    <section className="welcome-card welcome-new-game" aria-label="New game">
+    <section className="welcome-card" aria-label="New game">
       <CardHead title="New game" busy={props.busy} onBack={props.onBack} />
       <NewGamePanel
         params={props.params}
@@ -249,7 +251,7 @@ function LoadGameCard(props: {
   const [now] = useState(Date.now);
   const blocked = props.busy || !props.ready || slotsBusy(saves);
   return (
-    <section className="welcome-card welcome-load-game" aria-label="Load game">
+    <section className="welcome-card" aria-label="Load game">
       <CardHead title="Load game" busy={blocked} onBack={props.onBack} />
       {saves.available ? (
         <SaveList
@@ -257,12 +259,13 @@ function LoadGameCard(props: {
           currentId={null}
           busy={blocked}
           loading={saves.loading}
+          scroll
           now={now}
           onLoad={props.onLoad}
           onDelete={(id) => void saves.remove(id)}
         />
       ) : (
-        <p className="save-empty">Saving is not available in this browser.</p>
+        <p className="ui-note">Saving is not available in this browser.</p>
       )}
     </section>
   );

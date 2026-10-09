@@ -1,5 +1,5 @@
 import { SIGN_ICONS } from '../../hud/components/signIcons';
-import type { IconName } from '../../hud/components/pixelIcons';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import type { HighlightKind } from '../domain/highlights';
 
 // Lodging has no sign; the parasol stands for a place to stay.

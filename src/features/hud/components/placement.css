@@ -1,0 +1,44 @@
+/* Above the toasts it may overlap on a phone, and under every window. */
+.hud-placement {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-5) + var(--safe-b));
+  z-index: var(--z-floating);
+  height: auto;
+  padding: var(--space-1);
+  /* translate rather than transform, which the pop animation holds while it runs. */
+  translate: -50% 0;
+  animation: ui-pop var(--pop);
+}
+
+.hud-armed-open {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud-armed-name {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-armed-hint {
+  font-size: var(--size-small);
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+/* A mouse has a hover ghost to show what a click will do. */
+@media (hover: hover) {
+  .hud-armed-hint {
+    display: none;
+  }
+}
+
+.hud-placement-price {
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}

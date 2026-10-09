@@ -36,11 +36,11 @@ function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
     <div className="hud-palette-armed-row">
       <button
         type="button"
-        className="hud-palette-armed"
+        className="ui-button-primary hud-palette-armed"
         onClick={onDisarm}
         aria-label={`Stop placing ${armed}`}
       >
-        <span className="hud-palette-armed-label">Placing</span>
+        <span className="ui-label hud-palette-armed-label">Placing</span>
         <span className="hud-palette-armed-name">{armed}</span>
         {detail ? <span className="hud-palette-armed-detail">· {detail}</span> : null}
         <span className="hud-palette-armed-stop" aria-hidden="true">
@@ -48,12 +48,12 @@ function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
         </span>
       </button>
       {object ? (
-        <ObjectInfo typeId={object} className="hud-palette-info" mode="toggle" scale={2} />
+        <ObjectInfo typeId={object} className="ui-chip hud-palette-info" mode="toggle" scale={2} />
       ) : null}
       {onTurn ? (
         <button
           type="button"
-          className="hud-palette-turn"
+          className="ui-chip hud-palette-turn"
           onClick={onTurn}
           title={`Turn (${keyLabel('turnPlacement')})`}
           aria-label="Turn"

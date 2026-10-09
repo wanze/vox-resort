@@ -27,7 +27,7 @@ const starsOf = (value: number): string => `${value.toFixed(1)} ★`;
 
 function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
-    <section className="hud-report-section">
+    <section>
       <h3 className="hud-report-heading">{title}</h3>
       {children}
     </section>
@@ -51,7 +51,7 @@ function Stepper({
     <div className="hud-report-stepper">
       <button
         type="button"
-        className="hud-camera-mode"
+        className="ui-button"
         aria-label="The day before"
         disabled={!before}
         onClick={() => before && onShow(before.day)}
@@ -65,7 +65,7 @@ function Stepper({
       </strong>
       <button
         type="button"
-        className="hud-camera-mode"
+        className="ui-button"
         aria-label="The day after"
         disabled={!after}
         onClick={() => after && onShow(after.day)}
@@ -116,7 +116,7 @@ function Row({
 }) {
   return (
     <div className="hud-report-row" data-total={total || undefined}>
-      <dt>{label}</dt>
+      <dt className="ui-label">{label}</dt>
       {children}
     </div>
   );
@@ -218,7 +218,7 @@ function SaidSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="What guests said">
       {report.loudest.length === 0 ? (
-        <p className="hud-loading">Nobody said anything.</p>
+        <p className="ui-loading">Nobody said anything.</p>
       ) : (
         <Rows layout="said">
           {report.loudest.map((tally) => (
@@ -290,12 +290,12 @@ const indexOf = (history: readonly DayReport[], shown: number | null): number =>
 
 export function DayReportPanel({ history, shown, onShow, mode, resortName }: DayReportPanelProps) {
   if (history.length === 0) {
-    return <p className="hud-loading">The first report comes at the next check-in.</p>;
+    return <p className="ui-loading">The first report comes at the next check-in.</p>;
   }
   const at = indexOf(history, shown);
   const report = history[at]!;
   return (
-    <div className="hud-report">
+    <div className="ui-stack hud-report">
       <Stepper history={history} at={at} onShow={onShow} resortName={resortName} />
       <RatingSection report={report} trend={trendOn(history, report.day)} />
       <GuestsSection report={report} />

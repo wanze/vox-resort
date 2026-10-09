@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
-import { HudMenu } from './HudDropdown';
-import { HudOption } from './HudOption';
+import { DropdownMenu } from '../../../shared/components/Dropdown';
+import { MenuOption } from '../../../shared/components/MenuOption';
 import { MenuPage } from './MenuPage';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { WEATHER_NAMES } from './controlNames';
 import { WeatherOptions } from './WeatherControl';
 import { MENU_PAGES, pageIcon, pageKey, pageTitle, WINDOW_KEYS } from './windowNames';
@@ -80,7 +80,7 @@ const settingsNote = (sound: SoundControls, shortcuts: ShortcutToggle): string =
 function MenuGroup({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="hud-menu-group" role="group" aria-label={label}>
-      <p className="hud-menu-heading" aria-hidden="true">
+      <p className="ui-label hud-menu-heading" aria-hidden="true">
         {label}
       </p>
       {children}
@@ -106,8 +106,8 @@ function NarrowViewRows({
   return (
     <>
       <div className="hud-menu-highlight">
-        <hr className="hud-rule" />
-        <HudOption
+        <hr className="ui-rule" />
+        <MenuOption
           icon="inspect"
           label="Highlight buildings"
           note={picked > 0 ? `${picked} kinds ringed` : 'ring every building of a kind'}
@@ -116,7 +116,7 @@ function NarrowViewRows({
         />
       </div>
       <div className="hud-menu-maps">
-        <HudOption
+        <MenuOption
           icon="overlay"
           label="Map view"
           note={overlay.kind ? OVERLAY_NAMES[overlay.kind] : 'off'}
@@ -132,7 +132,7 @@ function NarrowViewRows({
 function GatesOption({ gates, run }: Pick<PageContext, 'gates' | 'run'>) {
   return (
     <div className="hud-menu-gates">
-      <HudOption
+      <MenuOption
         icon="guests"
         label={gates.open ? 'Close the gates' : 'Open the gates'}
         note={gates.open ? 'turn new guests away' : 'let new guests in'}
@@ -146,7 +146,7 @@ function RootPage(props: PageProps) {
   const { saves, windows, clock, sound, shortcuts, run, onOpen } = props;
   return (
     <>
-      <HudOption
+      <MenuOption
         label="Save game"
         note={saves.current?.name ?? 'name it first'}
         shortcut={SAVE_SHORTCUT}
@@ -154,50 +154,50 @@ function RootPage(props: PageProps) {
         onSelect={run(() => void saveOrAsk(saves.save, () => windows.show('saves', true)))}
       />
       <GatesOption gates={props.gates} run={run} />
-      <HudOption
+      <MenuOption
         icon="camera"
         label="Photo mode"
         note="hide the HUD and take a picture"
         shortcut={keyLabel('photo')}
         onSelect={run(props.onPhoto)}
       />
-      <hr className="hud-rule" />
-      <HudOption
+      <hr className="ui-rule" />
+      <MenuOption
         icon="resort"
         label="Game"
         note="start, load, rename or share"
         more
         onSelect={() => onOpen('game')}
       />
-      <HudOption
+      <MenuOption
         label="Windows"
         note="open and close every window"
         more
         onSelect={() => onOpen('windows')}
       />
-      <HudOption
+      <MenuOption
         icon="overlay"
         label="View"
         note="markers, signs and staff pins"
         more
         onSelect={() => onOpen('view')}
       />
-      <HudOption
+      <MenuOption
         icon={clock.weather}
         label="Weather"
         note={weatherNote(clock)}
         more
         onSelect={() => onOpen('weather')}
       />
-      <HudOption
+      <MenuOption
         icon="settings"
         label="Settings"
         note={settingsNote(sound, shortcuts)}
         more
         onSelect={() => onOpen('settings')}
       />
-      <hr className="hud-rule" />
-      <HudOption
+      <hr className="ui-rule" />
+      <MenuOption
         label="Find an action…"
         note="search every switch, window and thing to build"
         shortcut={keyLabel('find')}
@@ -210,24 +210,24 @@ function RootPage(props: PageProps) {
 const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
   game: ({ windows, run, title }) => (
     <>
-      <HudOption
+      <MenuOption
         icon="resort"
         label="New game…"
         note="tycoon or free play, on bare land or a generated resort"
         onSelect={run(() => windows.show('resort', true))}
       />
-      <HudOption
+      <MenuOption
         label="Load game…"
         note="pick up a saved game, or delete one"
         onSelect={run(() => windows.show('saves', true))}
       />
-      <HudOption
+      <MenuOption
         icon="rename"
         label="Rename resort…"
         note={title}
         onSelect={run(() => windows.show('name', true))}
       />
-      <HudOption
+      <MenuOption
         icon="share"
         label="Share resort…"
         note="a link to its layout"
@@ -238,7 +238,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
   windows: ({ windows, run }) => (
     <>
       {MENU_PAGES.map((page) => (
-        <HudOption
+        <MenuOption
           key={page}
           icon={pageIcon(page)}
           label={pageTitle(page)}
@@ -248,8 +248,8 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
           onSelect={() => windows.toggle(page)}
         />
       ))}
-      <hr className="hud-rule" />
-      <HudOption
+      <hr className="ui-rule" />
+      <MenuOption
         icon="debug"
         label="Debug info"
         note="frame rate, frame cost and what is drawn"
@@ -258,7 +258,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         checked={isOpen(windows.layout, 'debug')}
         onSelect={() => windows.toggle('debug')}
       />
-      <HudOption
+      <MenuOption
         label="Reset window positions"
         note="put every window back where it started"
         onSelect={run(windows.resetPlaces)}
@@ -268,21 +268,21 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
   // Not layers: these stand over whichever layer the map view has on, or none.
   view: ({ view, highlights, overlay, onOpen }) => (
     <>
-      <HudOption
+      <MenuOption
         label="Problem markers"
         note="pin a sign over every building in trouble"
         checked={view.markers}
         many
         onSelect={() => view.onMarkersChange(!view.markers)}
       />
-      <HudOption
+      <MenuOption
         label="Building signs"
         note={`say what each building is, when zoomed in (${keyLabel('signs')}; hold Alt for names)`}
         checked={view.signs}
         many
         onSelect={() => view.onSignsChange(!view.signs)}
       />
-      <HudOption
+      <MenuOption
         label="Staff pins"
         note={`pin every member of staff on duty (${keyLabel('staffPins')})`}
         checked={view.staffPins}
@@ -321,7 +321,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         <SoundOptions prefs={sound.prefs} onChange={sound.setPrefs} />
       </MenuGroup>
       <MenuGroup label="Keyboard">
-        <HudOption
+        <MenuOption
           label="Single-key shortcuts"
           note={`keys such as ${keyLabel('build')} and ${keyLabel('pause')}; ${keyLabel('cancel')} and ${keyLabel('palette', MAC)} always work`}
           checked={shortcuts.singleKeys}
@@ -353,7 +353,7 @@ export function MainMenu(props: MainMenuProps) {
   };
 
   return (
-    <HudMenu
+    <DropdownMenu
       className="hud-menu"
       open={open}
       onOpenChange={onOpenChange}
@@ -366,6 +366,6 @@ export function MainMenu(props: MainMenuProps) {
       }
     >
       <MenuPages {...props} title={title} run={run} />
-    </HudMenu>
+    </DropdownMenu>
   );
 }

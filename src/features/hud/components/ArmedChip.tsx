@@ -25,9 +25,7 @@ function hintOf(tool: BuildTool | null): string {
 
 function ArmedInfo({ tool }: { readonly tool: BuildTool | null }) {
   const id = armedObject(tool);
-  return id ? (
-    <ObjectInfo typeId={id} className="hud-placement-button" mode="toggle" scale={2} />
-  ) : null;
+  return id ? <ObjectInfo typeId={id} className="ui-button-large" mode="toggle" scale={2} /> : null;
 }
 
 // Without it, a tool armed with its sheet closed would take the next tap with no sign of being there.
@@ -38,15 +36,15 @@ export function ArmedChip(props: ArmedChipProps) {
   const label = shown ? armedLabel(tool, land) : null;
   if (!label) return null;
   return (
-    <div className="hud-placement hud-plate">
-      <button type="button" className="hud-placement-button hud-armed-open" onClick={onOpen}>
+    <div className="hud-placement ui-plate">
+      <button type="button" className="ui-button-large hud-armed-open" onClick={onOpen}>
         <span className="hud-armed-name">{label}</span>
         <span className="hud-armed-hint">{hintOf(tool)}</span>
       </button>
       <ArmedInfo tool={tool} />
       <button
         type="button"
-        className="hud-placement-button"
+        className="ui-button-large"
         onClick={onDisarm}
         aria-label={`Stop placing ${label}`}
       >

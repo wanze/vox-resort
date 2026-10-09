@@ -1,0 +1,96 @@
+.saves-panel,
+.saves-warning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.saves-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.saves-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--size-small);
+}
+
+.saves-warning {
+  padding: var(--space-3);
+  border: 1px dashed var(--terracotta);
+  border-radius: var(--radius-pebble);
+}
+
+.saves-warning > p {
+  color: var(--terracotta-deep);
+  font-weight: 600;
+}
+
+.saves-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saves-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-pebble);
+  background-image: var(--sunken);
+}
+
+.saves-row[data-current] {
+  border-color: var(--terracotta);
+}
+
+.saves-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.saves-row-name {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saves-row[data-unreadable] .saves-row-name {
+  color: var(--text-faint);
+}
+
+.saves-row-current {
+  margin-left: var(--space-2);
+  font-size: var(--size-small);
+  font-weight: 600;
+  color: var(--terracotta-deep);
+}
+
+.saves-row-note {
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.saves-row-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+.saves-list--scroll {
+  max-height: 50vh;
+  overflow: auto;
+}

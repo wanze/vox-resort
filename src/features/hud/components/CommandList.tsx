@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import type { Command, CommandArt } from './commands';
 import type { CommandSection } from '../domain/commandSearch';
 
@@ -35,10 +35,8 @@ function Art({ art }: { readonly art: CommandArt | undefined }) {
 function Marks({ command }: { readonly command: Command }) {
   return (
     <>
-      {command.shortcut ? <kbd className="hud-option-key">{command.shortcut}</kbd> : <span />}
-      <span className="hud-option-check">
-        {command.checked ? <PixelIcon name="check" /> : null}
-      </span>
+      {command.shortcut ? <kbd className="ui-option-key">{command.shortcut}</kbd> : <span />}
+      <span className="ui-option-check">{command.checked ? <PixelIcon name="check" /> : null}</span>
     </>
   );
 }
@@ -63,18 +61,18 @@ function Item({ command, id, active, onPoint, onRun }: ItemProps) {
       ref={row}
       id={id}
       role="option"
-      className="hud-command-item"
+      className="ui-option hud-command-item"
       aria-selected={active}
       aria-checked={command.checked}
       onPointerMove={onPoint}
       onClick={onRun}
     >
-      <span className="hud-option-icon">
+      <span>
         <Art art={command.art} />
       </span>
-      <span className="hud-option-text">
-        <span className="hud-option-label">{command.label}</span>
-        {command.note ? <span className="hud-option-note">{command.note}</span> : null}
+      <span className="ui-option-text">
+        <span className="ui-option-label">{command.label}</span>
+        {command.note ? <span className="ui-option-note">{command.note}</span> : null}
       </span>
       <Marks command={command} />
     </div>
@@ -84,7 +82,7 @@ function Item({ command, id, active, onPoint, onRun }: ItemProps) {
 export function CommandList({ id, sections, active, onPoint, onRun }: CommandListProps) {
   let index = 0;
   return (
-    <div id={id} className="hud-command-list" role="listbox">
+    <div id={id} className="ui-scroll hud-command-list" role="listbox">
       {sections.map((section) => (
         <div
           key={section.group}
@@ -92,7 +90,7 @@ export function CommandList({ id, sections, active, onPoint, onRun }: CommandLis
           role="group"
           aria-label={section.group}
         >
-          <p className="hud-menu-heading">{section.group}</p>
+          <p className="ui-label hud-menu-heading">{section.group}</p>
           {section.items.map((command) => {
             const at = index++;
             return (

@@ -1,0 +1,202 @@
+.events-programme {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.events-programme-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.events-programme-actions > span {
+  flex: 1 1 100%;
+}
+
+.events-programme-picker {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 2px dotted var(--edge-soft);
+}
+
+/* The kind's name over the list of its stages, as a field's label sits over the field. */
+.events-programme-site {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.events-programme-type {
+  position: relative;
+  min-width: var(--control-h);
+  min-height: var(--control-h);
+  padding: 0;
+}
+
+/* Set apart from the week above it, so it reads as one form for one cell or one booking. */
+.events-programme-form {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--terracotta);
+  border-radius: var(--radius-pebble);
+  scroll-margin: var(--space-2);
+}
+
+.events-programme-filters > select {
+  flex: 1 1 140px;
+}
+
+.events-programme-upcoming-day {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.events-programme-upcoming-day > ol {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Days as rows on every screen, so a phone's sheet reads as the desk window does. */
+.events-programme-week {
+  display: grid;
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-2);
+  align-items: start;
+}
+
+.events-programme-day {
+  display: contents;
+}
+
+.events-programme-part-head {
+  color: var(--text-faint);
+  font: var(--size-label) var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.events-programme-day-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-top: 4px;
+  white-space: nowrap;
+}
+
+.events-programme-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  min-height: 28px;
+  padding: 2px;
+  border-radius: var(--radius-pebble);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+}
+
+.events-programme-chip,
+.events-programme-add {
+  appearance: none;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--size-small);
+}
+
+.events-programme-chip {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.events-programme-chip[data-off] {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.events-programme-add {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+
+.events-programme-chip[aria-pressed='true'],
+.events-programme-add[aria-pressed='true'] {
+  border-color: var(--terracotta);
+  box-shadow: var(--glow-accent);
+}
+
+.events-programme-heading {
+  margin: 0;
+  color: var(--text-dim);
+  font: var(--size-label) var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.events-programme-upcoming,
+.events-cards {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-radius: var(--radius-pebble);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+}
+
+.events-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.events-blurb {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.events-card .ui-stat-note {
+  margin: 0;
+}
+
+.events-warning {
+  margin: 0;
+  color: var(--ink-red);
+  font-size: var(--size-small);
+}
+
+.events-card[data-full] {
+  opacity: 0.6;
+}
+
+.events-notes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-faint);
+  font-size: var(--size-small);
+}
+
+.events-refusal {
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pebble);
+  background: var(--ink-red);
+  color: var(--text-on-accent);
+  font-size: var(--size-small);
+}

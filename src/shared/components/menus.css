@@ -1,0 +1,111 @@
+.ui-dropdown {
+  position: relative;
+}
+
+.ui-dropdown > .ui-chip[aria-expanded='true'] {
+  position: relative;
+  z-index: 3;
+}
+
+.ui-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.ui-dropdown-panel {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  left: calc(var(--space-2) * -1);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 260px;
+  max-height: calc(100dvh - var(--bar-h) - var(--space-5));
+  overflow: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-pebble);
+  pointer-events: auto;
+  animation: ui-pop var(--pop);
+  transform-origin: top left;
+}
+
+/* Focused by the code to hand a popover the keyboard; the panel is not a control. */
+.ui-dropdown-panel:focus {
+  outline: none;
+}
+
+.ui-option {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 38px;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pebble);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  transition: background-color var(--quick);
+}
+
+.ui-option:hover:enabled {
+  border-color: var(--edge-soft);
+  background-color: var(--wash-hover);
+}
+
+.ui-option[aria-checked='true'] .ui-option-label {
+  color: var(--terracotta-deep);
+}
+
+.ui-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ui-option-label {
+  font-weight: 600;
+}
+
+.ui-option-note {
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}
+
+.ui-option-key {
+  padding: 2px 5px;
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-sm);
+  background: var(--wash-key);
+  box-shadow: 0 1px 0 var(--edge-soft);
+  font: 600 10px / 1.2 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.ui-option-check {
+  color: var(--terracotta);
+}
+
+.ui-option-more {
+  font: 600 var(--size-lead) / 1 var(--font-ui);
+  color: var(--text-faint);
+}
+
+@media (pointer: coarse) {
+  .ui-option {
+    min-height: 44px;
+  }
+}
+
+@media (hover: none) {
+  .ui-option-key {
+    display: none;
+  }
+}

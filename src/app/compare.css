@@ -163,7 +163,7 @@ body {
 .compare-captions span {
   padding: 4px 10px;
   border-radius: var(--radius);
-  background: rgb(251 246 236 / 0.85);
+  background: rgb(251 246 236 / 85%);
 }
 
 .compare-error {
@@ -175,7 +175,7 @@ body {
   background: var(--panel);
 }
 
-@media (max-width: 720px) {
+@media (width <= 720px) {
   .compare {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;

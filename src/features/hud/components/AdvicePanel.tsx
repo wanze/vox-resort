@@ -21,13 +21,13 @@ function AdviceRow({
   const { at } = advice;
   return (
     <li className="hud-advice-row">
-      <span className="hud-advice-subject">{adviceLabel(advice.kind)}</span>
+      <span className="ui-label">{adviceLabel(advice.kind)}</span>
       <span>{adviceSays(advice)}</span>
       <span className="hud-advice-actions">
         {at ? (
           <button
             type="button"
-            className="hud-camera-mode hud-advice-show"
+            className="ui-button hud-advice-show"
             aria-label={`Show ${advice.subject} at tile ${at.tileX}, ${at.tileZ}`}
             onClick={() => onShowOnPlot(at)}
           >
@@ -42,7 +42,7 @@ function AdviceRow({
 
 export function AdvicePanel({ advice, onShowOnPlot, hire }: AdvicePanelProps) {
   if (advice.length === 0) {
-    return <p className="hud-loading">Nothing needs attention.</p>;
+    return <p className="ui-loading">Nothing needs attention.</p>;
   }
   return (
     <ul className="hud-advice-list">

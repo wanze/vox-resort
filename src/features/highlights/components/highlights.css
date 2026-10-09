@@ -1,0 +1,106 @@
+.highlights {
+  position: relative;
+}
+
+/* The list scrolls under the search rather than the whole panel, so the field stays in reach. */
+.ui-dropdown-panel:has(.highlights-list) {
+  overflow: hidden;
+}
+
+.highlights .ui-dropdown-panel {
+  min-width: 280px;
+  max-height: min(420px, calc(100dvh - var(--bar-h) - var(--space-5)));
+}
+
+.highlights-search {
+  display: flex;
+  flex: none;
+  padding-bottom: var(--space-2);
+}
+
+.highlights-search input {
+  flex: 1;
+}
+
+.highlights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.highlights-empty {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}
+
+.highlights-legend {
+  position: absolute;
+  top: calc(100% + var(--space-3));
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  list-style: none;
+  border-radius: var(--radius-pebble);
+  font-size: var(--size-small);
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.highlights-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.highlights-swatch {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: var(--space-1);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px var(--edge-soft);
+  vertical-align: -0.1em;
+}
+
+/* The highlight picker is the first chip to leave for the menu's View page; its legend is fixed, so
+   it stays. */
+@media (width <= 739px) {
+  .hud-bar .highlights {
+    display: contents;
+  }
+
+  .hud-bar .highlights > .ui-dropdown {
+    display: none;
+  }
+}
+
+.app:not([data-layout='desk']) .highlights-legend {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  right: auto;
+  left: calc(var(--space-2) + var(--safe-l));
+}
+
+.app[data-layout='rail'] .highlights-legend {
+  left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
+}
+
+/* Under the map's legend, which takes the middle of the same row on a narrow screen. */
+/* stylelint-disable-next-line selector-class-pattern -- the two legends share that row */
+.app:not([data-layout='desk']) .hud-bar:has(.overlays-legend) .highlights-legend {
+  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2) * 2 + 2.6em);
+}
+
+@media (width <= 1240px) {
+  .highlights .ui-chip-label {
+    display: none;
+  }
+}

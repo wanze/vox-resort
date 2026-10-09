@@ -2,7 +2,7 @@ import { useId, useMemo, useState } from 'react';
 import { BuildGrid, BuildGroup, type BuildGridProps } from './BuildGroup';
 import { BuildPaletteHead } from './BuildPaletteHead';
 import { BuildTools } from './BuildTools';
-import { HudTabs, tabIdOf } from './HudTabs';
+import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
 import { ZoneChips } from './ZoneChips';
 import { zoneLabel } from './zoneWords';
 import {
@@ -98,7 +98,7 @@ function Catalogue({ groups, shown, searching, current, onPick, grid }: Catalogu
   const open = groups.find((group) => group.category === current);
   if (searching) {
     return (
-      <div className="hud-palette-shelves">
+      <div className="ui-scroll hud-palette-shelves">
         {shown.map((group) => (
           <BuildGroup key={group.category} group={group} {...grid} />
         ))}
@@ -111,7 +111,7 @@ function Catalogue({ groups, shown, searching, current, onPick, grid }: Catalogu
   if (!open) return null;
   return (
     <>
-      <HudTabs
+      <Tabs
         tabs={groups.map((group) => group.category)}
         current={open.category}
         onPick={onPick}
@@ -120,7 +120,7 @@ function Catalogue({ groups, shown, searching, current, onPick, grid }: Catalogu
         panelId={panelId}
       />
       <div
-        className="hud-palette-shelves"
+        className="ui-scroll hud-palette-shelves"
         role="tabpanel"
         id={panelId}
         aria-labelledby={tabIdOf(panelId, open.category)}

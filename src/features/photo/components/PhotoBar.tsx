@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PixelIcon } from '../../hud/components/PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { PHOTO_FILTER_IDS, PHOTO_FILTERS } from '../domain/photoFilters';
 import { PHOTO_FOV, timeLabel } from '../domain/photoView';
 import type { PhotoControls, PhotoScale, SelfieControls } from './photoControls';
@@ -14,8 +14,8 @@ const LOOK_STEPS = 24 * 12;
 
 function LensSlider({ photo }: { readonly photo: PhotoControls }) {
   return (
-    <label className="hud-slider photo-slider">
-      <span className="hud-slider-label">Lens</span>
+    <label className="ui-slider photo-slider">
+      <span className="ui-slider-label">Lens</span>
       <input
         type="range"
         min={PHOTO_FOV.min}
@@ -24,7 +24,7 @@ function LensSlider({ photo }: { readonly photo: PhotoControls }) {
         value={Math.round(photo.fov)}
         onChange={(event) => photo.setFov(Number(event.target.value))}
       />
-      <span className="hud-slider-value">{Math.round(photo.fov)}°</span>
+      <span className="ui-slider-value">{Math.round(photo.fov)}°</span>
     </label>
   );
 }
@@ -32,9 +32,9 @@ function LensSlider({ photo }: { readonly photo: PhotoControls }) {
 function TimeSlider({ photo }: { readonly photo: PhotoControls }) {
   const shown = photo.lookTime ?? photo.clockTime;
   return (
-    <div className="photo-time">
-      <label className="hud-slider photo-slider">
-        <span className="hud-slider-label">Time</span>
+    <div className="ui-row">
+      <label className="ui-slider photo-slider">
+        <span className="ui-slider-label">Time</span>
         <input
           type="range"
           min={0}
@@ -43,11 +43,11 @@ function TimeSlider({ photo }: { readonly photo: PhotoControls }) {
           value={Math.round(shown * LOOK_STEPS) % LOOK_STEPS}
           onChange={(event) => photo.setLookTime(Number(event.target.value) / LOOK_STEPS)}
         />
-        <span className="hud-slider-value">{timeLabel(shown)}</span>
+        <span className="ui-slider-value">{timeLabel(shown)}</span>
       </label>
       <button
         type="button"
-        className="hud-placement-button photo-now"
+        className="ui-button-large photo-now"
         disabled={photo.lookTime === null}
         onClick={() => photo.setLookTime(null)}
       >
@@ -67,7 +67,7 @@ function Pressed(props: {
   return (
     <button
       type="button"
-      className="hud-placement-button photo-toggle"
+      className="ui-button-large photo-toggle"
       aria-pressed={props.pressed}
       disabled={props.disabled}
       title={props.hint}
@@ -82,10 +82,10 @@ function Pressed(props: {
 function Field({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="photo-field" role="group" aria-label={label}>
-      <span className="photo-label" aria-hidden="true">
+      <span className="ui-label" aria-hidden="true">
         {label}
       </span>
-      <div className="photo-group">{children}</div>
+      <div className="ui-row ui-row--wrap photo-group">{children}</div>
     </div>
   );
 }
@@ -181,7 +181,7 @@ function usePostcard(make: () => Promise<string>) {
 function PostcardNote({ made }: { readonly made: Postcard | null }) {
   if (made === null || made.kind === 'by-hand') return null;
   return (
-    <p className="photo-note" role="status">
+    <p className="ui-note photo-note" role="status">
       {made.kind === 'copied' ? 'Postcard link copied' : 'The link could not be made'}
     </p>
   );
@@ -195,14 +195,14 @@ function Actions({
   readonly postcard: ReturnType<typeof usePostcard>;
 }) {
   return (
-    <div className="hud-actions">
+    <div className="ui-actions">
       <PostcardNote made={postcard.made} />
-      <button type="button" className="hud-placement-button" onClick={postcard.copy}>
+      <button type="button" className="ui-button-large" onClick={postcard.copy}>
         Copy postcard link
       </button>
       <button
         type="button"
-        className="hud-placement-button hud-placement-place"
+        className="ui-button-large ui-button-large--primary"
         disabled={photo.busy}
         aria-busy={photo.busy}
         onClick={photo.take}
@@ -216,13 +216,13 @@ function Actions({
 function LastShot({ photo }: { readonly photo: PhotoControls }) {
   if (!photo.shot) return null;
   return (
-    <div className="photo-group" role="group" aria-label="Last photo">
+    <div className="ui-row ui-row--wrap photo-group" role="group" aria-label="Last photo">
       <span className="photo-name">{photo.shot.name}</span>
-      <button type="button" className="hud-placement-button" onClick={photo.save}>
+      <button type="button" className="ui-button-large" onClick={photo.save}>
         Save
       </button>
       {photo.canShare ? (
-        <button type="button" className="hud-placement-button" onClick={photo.share}>
+        <button type="button" className="ui-button-large" onClick={photo.share}>
           Share…
         </button>
       ) : null}
@@ -235,7 +235,7 @@ function LinkByHand({ link }: { readonly link: string | null }) {
   return (
     <input
       type="text"
-      className="share-link"
+      className="ui-field"
       value={link}
       readOnly
       aria-label="Postcard link"
@@ -264,13 +264,13 @@ function Taken({ photo, made }: { readonly photo: PhotoControls; readonly made: 
 export function PhotoBar({ photo, compact }: PhotoBarProps) {
   const postcard = usePostcard(photo.postcard);
   return (
-    <section className="photo-bar hud-plate" aria-label="Photo mode">
-      <header className="hud-window-head photo-head">
+    <section className="photo-bar ui-plate" aria-label="Photo mode">
+      <header className="ui-window-head photo-head">
         <PixelIcon name="camera" />
-        <h2 className="hud-window-title">Photo mode</h2>
+        <h2 className="ui-window-title">Photo mode</h2>
         <button
           type="button"
-          className="hud-window-close"
+          className="ui-window-close"
           aria-label="Close photo mode"
           title="Close (Esc)"
           onClick={photo.exit}

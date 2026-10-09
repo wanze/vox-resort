@@ -33,12 +33,12 @@ function StaffRow({
   const plural = roleWord(role, 2);
   return (
     <div className="hud-staff-row">
-      <dt>{plural}</dt>
+      <dt className="ui-label">{plural}</dt>
       <dd className="hud-staff-count">{formatNumber(count)}</dd>
       <dd>
         <button
           type="button"
-          className="hud-camera-mode hud-staff-step"
+          className="ui-button hud-staff-step"
           aria-label={`Let one of the ${plural} go`}
           disabled={count <= 0}
           onClick={() => onHire(role, count - 1)}
@@ -49,7 +49,7 @@ function StaffRow({
       <dd>
         <button
           type="button"
-          className="hud-camera-mode hud-staff-step"
+          className="ui-button hud-staff-step"
           aria-label={`Hire one more of the ${plural}`}
           disabled={count >= STAFF_CAPS[role]}
           onClick={() => onHire(role, count + 1)}
@@ -60,7 +60,7 @@ function StaffRow({
       <dd>
         <button
           type="button"
-          className="hud-camera-mode hud-staff-step"
+          className="ui-button hud-staff-step"
           aria-label={`Hire ${plural} automatically`}
           aria-pressed={auto}
           onClick={() => onHire(role, auto ? count : null)}
@@ -78,7 +78,7 @@ function StaffRow({
 }
 
 export function StaffPanel({ staff, tally, onHire }: StaffPanelProps) {
-  if (!staff) return <p className="hud-loading">Meshing the catalogue…</p>;
+  if (!staff) return <p className="ui-loading">Meshing the catalogue…</p>;
 
   return (
     <>
@@ -92,15 +92,15 @@ export function StaffPanel({ staff, tally, onHire }: StaffPanelProps) {
             onHire={onHire}
           />
         ))}
-        <div className="hud-staff-row hud-staff-total">
-          <dt>Wages</dt>
+        <div className="hud-staff-row hud-staff-row--total">
+          <dt className="ui-label">Wages</dt>
           <dd className="hud-staff-count">{formatNumber(wagesFor(staff.roster))}/day</dd>
         </div>
       </dl>
       <h3 className="hud-report-heading">Zone crews</h3>
-      <dl className="zone-staff">
+      <dl className="hud-zone-staff">
         {ZONE_IDS.map((zone) => (
-          <div key={zone} className="zone-staff-row">
+          <div key={zone} className="hud-zone-staff-row">
             <dt style={{ color: cssColour(ZONE_COLOURS[zone]!) }}>{zoneLabel(zone)}</dt>
             <dd>{crewLine(staff.zones[zone]!)}</dd>
           </div>

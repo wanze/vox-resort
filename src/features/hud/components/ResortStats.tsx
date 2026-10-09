@@ -1,4 +1,4 @@
-import { StatRow } from './StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 import type { ShowcaseStats, StatusView } from '../domain/views';
 
 export interface ResortStatsProps {
@@ -29,13 +29,13 @@ function liveFigures(stats: ShowcaseStats, status: StatusView | null) {
 }
 
 export function ResortStats({ stats, status, onOpenReport }: ResortStatsProps) {
-  if (!stats) return <p className="hud-loading">Meshing the catalogue…</p>;
+  if (!stats) return <p className="ui-loading">Meshing the catalogue…</p>;
   const { unmade } = stats.beds;
   const { stars, present } = liveFigures(stats, status);
 
   return (
-    <div className="hud-stack">
-      <dl className="hud-stats hud-figures hud-overview">
+    <div className="ui-stack">
+      <dl className="ui-stats hud-figures hud-overview">
         <StatRow label="Rating">{`${stars.toFixed(1)} ★`}</StatRow>
         <StatRow label="Guests">
           <OutOf value={present} of={stats.guests.capacity} />
@@ -56,7 +56,7 @@ export function ResortStats({ stats, status, onOpenReport }: ResortStatsProps) {
           <Aside>{`${formatNumber(stats.venues.waiting)} queueing`}</Aside>
         </StatRow>
       </dl>
-      <button type="button" className="hud-camera-mode" onClick={onOpenReport}>
+      <button type="button" className="ui-button" onClick={onOpenReport}>
         Day report
       </button>
     </div>

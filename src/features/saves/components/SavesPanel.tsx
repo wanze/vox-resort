@@ -9,7 +9,7 @@ import type { SaveControls } from './saveControls';
 function SaveStatus({ saves }: { readonly saves: SaveControls }) {
   const { lastSavedAt } = saves;
   return (
-    <p className="save-status" role="status">
+    <p className="ui-note" role="status">
       {statusLine({
         available: saves.available,
         status: saves.status,

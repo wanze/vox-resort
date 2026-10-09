@@ -12,7 +12,7 @@ export function ResortNameForm({ name, onRename }: ResortNameFormProps) {
   const [typed, setTyped] = useState(name);
   return (
     <form
-      className="hud-resort resort-name-form"
+      className="ui-form"
       onSubmit={(event) => {
         event.preventDefault();
         const next = cleanResortName(typed) ?? name;
@@ -21,7 +21,7 @@ export function ResortNameForm({ name, onRename }: ResortNameFormProps) {
       }}
     >
       <ResortNameField value={typed} onChange={setTyped} />
-      <button type="submit" className="hud-resort-go save-button">
+      <button type="submit" className="ui-button-primary ui-button-compact">
         Rename
       </button>
     </form>

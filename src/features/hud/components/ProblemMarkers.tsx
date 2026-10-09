@@ -3,7 +3,7 @@ import type { Advice } from '../../sim/domain/advice';
 import { markersOf, orderedTiles, tileKey, type Marker, type OrderSpot } from '../domain/markers';
 import { severityOf } from '../domain/news';
 import { adviceSays } from './adviceWords';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 type Tile = { readonly tileX: number; readonly tileZ: number };
 

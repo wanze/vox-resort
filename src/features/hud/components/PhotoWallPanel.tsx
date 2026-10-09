@@ -133,7 +133,7 @@ function PhotoCard({ card, shelf }: { readonly card: WallCard; readonly shelf: S
       )}
       <span className="hud-photo-caption" aria-hidden="true">
         <span className="hud-photo-subject">{spot.subject}</span>
-        <span className="hud-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
+        <span className="ui-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
       </span>
     </button>
   );
@@ -150,7 +150,7 @@ function Wall({
 }) {
   if (groups.length === 0) return null;
   return (
-    <section className="hud-report-section">
+    <section>
       <h3 className="hud-report-heading">{title}</h3>
       {groups.map((group) => (
         <section key={group.kind} className="hud-photo-group">
@@ -199,8 +199,8 @@ export function PhotoWallPanel({ today, history, photo }: PhotoWallPanelProps) {
   const { root, enlarge, lightbox } = useLightbox(wall.shown, photo);
   const shelf = { pictures, watch, onOpen: enlarge };
   return (
-    <div className="hud-report" ref={root}>
-      {wall.today.length === 0 ? <p className="hud-loading">No photos yet today.</p> : null}
+    <div className="ui-stack hud-report" ref={root}>
+      {wall.today.length === 0 ? <p className="ui-loading">No photos yet today.</p> : null}
       <Wall title={`Today, ${wall.taken} photos`} groups={wall.today} shelf={shelf} />
       <Wall title="Yesterday" groups={wall.yesterday} shelf={shelf} />
       {lightbox}

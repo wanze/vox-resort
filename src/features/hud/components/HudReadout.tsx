@@ -12,7 +12,7 @@ export function HudReadout({ label, value, icon }: HudReadoutProps) {
     <div className="hud-readout-row">
       {icon}
       <div className="hud-readout">
-        {label ? <span className="hud-readout-label">{label}</span> : null}
+        {label ? <span className="ui-label hud-readout-label">{label}</span> : null}
         <span className="hud-readout-value">{value}</span>
       </div>
     </div>

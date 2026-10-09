@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { clockWords } from '../../events/domain/week';
 import type { PhotoControls, PhotoShot } from '../../photo/components/photoControls';
 import { enlargedSize, type WallCard } from '../domain/photoWall';
-import { PixelIcon } from './PixelIcon';
-import { useReturnFocus } from './useReturnFocus';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { useReturnFocus } from '../../../shared/components/useReturnFocus';
 
 export type WallPhotos = Pick<
   PhotoControls,
@@ -124,10 +124,10 @@ function Actions({
   readonly photo: WallPhotos;
 }) {
   return (
-    <div className="hud-actions hud-lightbox-actions">
+    <div className="ui-actions hud-lightbox-actions">
       <button
         type="button"
-        className="hud-placement-button"
+        className="ui-button-large"
         disabled={!steps.back}
         onClick={() => steps.step(-1)}
       >
@@ -135,7 +135,7 @@ function Actions({
       </button>
       <button
         type="button"
-        className="hud-placement-button"
+        className="ui-button-large"
         disabled={!steps.on}
         onClick={() => steps.step(1)}
       >
@@ -144,7 +144,7 @@ function Actions({
       <span className="hud-lightbox-gap" />
       <button
         type="button"
-        className="hud-placement-button"
+        className="ui-button-large"
         disabled={!shot}
         onClick={() => shot && photo.saveShot(shot)}
       >
@@ -153,7 +153,7 @@ function Actions({
       {photo.canShare ? (
         <button
           type="button"
-          className="hud-placement-button"
+          className="ui-button-large"
           disabled={!shot}
           onClick={() => shot && photo.shareShot(shot)}
         >
@@ -176,22 +176,22 @@ export function PhotoLightbox({ cards, open, onOpen, onClose, photo }: PhotoLigh
   const { spot } = open;
   return (
     <div className="hud-lightbox-layer">
-      <div className="hud-scrim hud-lightbox-scrim" onPointerDown={onClose} />
+      <div className="ui-scrim hud-lightbox-scrim" onPointerDown={onClose} />
       <div
-        className="hud-lightbox"
+        className="ui-panel hud-lightbox"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onKeyDown={keysFor(steps.step, onClose)}
       >
-        <header className="hud-window-head">
-          <h2 className="hud-window-title" id={titleId}>
+        <header className="ui-window-head">
+          <h2 className="ui-window-title" id={titleId}>
             {spot.subject}
           </h2>
-          <span className="hud-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
+          <span className="ui-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
           <button
             type="button"
-            className="hud-window-close"
+            className="ui-window-close"
             aria-label="Close the photo"
             title="Close (Esc)"
             autoFocus

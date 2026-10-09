@@ -1,0 +1,34 @@
+/* Where the placement bar stands: arming a tool ends a follow, so the two never meet. */
+.guest-view-follow {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-5) + var(--safe-b));
+  z-index: var(--z-floating);
+  flex-direction: column;
+  align-items: stretch;
+  width: min(320px, calc(100vw - 2 * var(--space-3) - var(--safe-l) - var(--safe-r)));
+  height: auto;
+  padding: var(--space-2) var(--space-3);
+  translate: calc(-50% + var(--drag-x, 0px)) var(--drag-y, 0px);
+  touch-action: none;
+  cursor: grab;
+  animation: ui-pop var(--pop);
+}
+
+.guest-view-follow[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.guest-view-follow-name {
+  margin: 0;
+  font-weight: 700;
+}
+
+.app[data-layout='bottom'] .guest-view-follow {
+  bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
+}
+
+.app[data-layout='rail'] .guest-view-follow {
+  left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
+}

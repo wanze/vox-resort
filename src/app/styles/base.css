@@ -1,0 +1,152 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+:where(#root) {
+  height: 100%;
+  height: 100dvh;
+  margin: 0;
+}
+
+html {
+  cursor: var(--cursor);
+}
+
+body {
+  background: var(--stone-300);
+  color: var(--text);
+  font: 500 var(--size-body) / 1.35 var(--font-ui);
+  font-synthesis: none;
+  overflow: hidden;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+summary,
+label,
+select,
+input[type='range'],
+input[type='checkbox'] {
+  cursor: var(--cursor-hand);
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.app-canvas {
+  display: block;
+  height: 100%;
+  width: 100%;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+.app-canvas[data-armed] {
+  cursor: var(--cursor-build);
+}
+
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled {
+  opacity: 0.45;
+}
+
+/* Engine pseudo-elements cannot share a selector: an unrecognised vendor pseudo
+   voids the whole rule. */
+input[type='range'] {
+  appearance: none;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+}
+
+/* Defaulted in var() rather than set on the input, so a value inherited from a
+   wrapper wins. The track rules are duplicated for the same pseudo-element reason,
+   and painting the groove on the input would leave a 6px hit target. */
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track, var(--sunken));
+  box-shadow: var(--bevel-in);
+}
+
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--track, var(--sunken));
+  box-shadow: var(--bevel-in);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  margin-top: -4px;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 5px 6px 4px;
+  background: var(--knob-face);
+  box-shadow: var(--knob-shadow);
+}
+
+input[type='range']::-moz-range-thumb {
+  border: 0;
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 5px 6px 4px;
+  background: var(--knob-face);
+  box-shadow: var(--knob-shadow);
+}
+
+input[type='number'],
+input[type='search'],
+input[type='text'] {
+  appearance: none;
+  cursor: text;
+  user-select: text;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in);
+  color: var(--text);
+  font: 500 var(--size-body) / 1 var(--font-ui);
+}
+
+input[type='number'] {
+  font-family: var(--font-ui);
+}
+
+input::placeholder {
+  color: var(--text-faint);
+}
+
+input[type='checkbox'] {
+  accent-color: var(--terracotta);
+}
+
+/* The same matrices the saved file gets, so the preview is the photo. */
+.app-canvas[data-photo-filter='warm'] {
+  filter: url('#photo-warm');
+}
+
+.app-canvas[data-photo-filter='faded'] {
+  filter: url('#photo-faded');
+}
+
+.app-canvas[data-photo-filter='mono'] {
+  filter: url('#photo-mono');
+}

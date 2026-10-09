@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { VenueNaming } from '../../inspect/domain/selection';
 import { MAX_VENUE_NAME } from '../../naming/domain/venueNames';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 export interface VenueNameProps {
   readonly name: string;
@@ -30,7 +30,7 @@ export function VenueName({ name, naming, onRename }: VenueNameProps) {
       <span className="hud-venue-kind">{naming.named ? naming.kind : null}</span>
       <button
         type="button"
-        className="hud-camera-mode"
+        className="ui-button"
         aria-label={`Rename ${name}`}
         title="Rename"
         onClick={() => setEditing(true)}
@@ -41,7 +41,7 @@ export function VenueName({ name, naming, onRename }: VenueNameProps) {
       {naming.suggested ? (
         <button
           type="button"
-          className="hud-camera-mode"
+          className="ui-button"
           aria-label="A different name"
           title="A different name"
           onClick={() => onRename('')}
@@ -69,7 +69,7 @@ function VenueNameField({
   return (
     <input
       type="text"
-      className="save-name hud-venue-name-field"
+      className="hud-venue-name-field"
       autoFocus
       value={typed}
       maxLength={MAX_VENUE_NAME}

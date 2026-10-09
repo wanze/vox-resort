@@ -1,0 +1,408 @@
+.hud-ledger-trend {
+  margin-left: var(--space-2);
+  color: var(--foliage);
+}
+
+.hud-ledger-trend[data-way='down'] {
+  color: var(--ink-red);
+}
+
+.hud-figures dd {
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.hud-overview {
+  gap: var(--space-2) var(--space-3);
+}
+
+.hud-figure-of,
+.hud-figure-aside {
+  color: var(--text-faint);
+  font-size: var(--size-small);
+}
+
+.hud-figure-aside {
+  margin-left: var(--space-2);
+}
+
+.hud-debug dd {
+  white-space: pre-line;
+}
+
+.hud-debug-fps {
+  font-size: var(--size-lead);
+  font-weight: 700;
+  color: var(--foliage);
+}
+
+.hud-staff {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto 1fr auto;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.hud-staff-row {
+  display: contents;
+}
+
+.hud-staff dt {
+  padding-right: var(--space-2);
+}
+
+.hud-staff dd {
+  margin: 0;
+}
+
+.hud-staff-count {
+  min-width: 2ch;
+  padding-right: var(--space-1);
+  font: 600 13px / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.hud-staff-row--total .hud-staff-count {
+  grid-column: 2 / -1;
+  padding-top: var(--space-2);
+  text-align: left;
+}
+
+.hud-staff-step {
+  min-width: 28px;
+}
+
+.hud-staff-note {
+  color: var(--text-faint);
+  font: 500 var(--size-small) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A line of its own under the role's row, as the grid has no column left for it. */
+.hud-staff-tally {
+  grid-column: 1 / -1;
+  margin-top: calc(-1 * var(--space-1));
+  color: var(--text-faint);
+  font: 500 var(--size-small) / 1 var(--font-ui);
+}
+
+/* Rows are sentences here; .ui-stats keeps every line on one line, which would
+   make the panel too wide. */
+.hud-advice {
+  white-space: normal;
+}
+
+/* Subject, what is wrong and what to do about it in three columns, so every row's parts line up. */
+.hud-advice-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-3);
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-advice-row {
+  display: contents;
+}
+
+.hud-advice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.hud-advice-actions .hud-advice-show {
+  margin-left: 0;
+}
+
+.hud-advice-show {
+  margin-left: var(--space-2);
+  vertical-align: baseline;
+}
+
+.hud-message-toggles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.hud-message-list {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3) var(--space-3);
+  align-items: center;
+  margin: 0;
+}
+
+.hud-message {
+  display: contents;
+}
+
+.hud-message dd {
+  margin: 0;
+}
+
+.hud-message-when {
+  display: block;
+  margin-top: var(--space-1);
+  font: 500 var(--size-small) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text-faint);
+}
+
+.hud-message-action {
+  justify-self: end;
+}
+
+.hud-message-action .hud-advice-show {
+  margin-left: 0;
+}
+
+.hud-report-stepper {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  gap: var(--space-2);
+  align-items: center;
+  text-align: center;
+}
+
+.hud-report-stepper strong {
+  font: 700 var(--size-lead) / 1.1 var(--font-ui);
+}
+
+.hud-report-heading {
+  margin: 0 0 var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 2px dotted var(--edge-soft);
+  font: 700 var(--size-body) / 1.2 var(--font-ui);
+  color: var(--stone-800);
+}
+
+.hud-report-rows {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  margin: 0;
+}
+
+.hud-report-rows[data-layout='said'] {
+  grid-template-columns: auto 1fr auto;
+}
+
+.hud-report-rows[data-layout='chart'] {
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+}
+
+.hud-report-row {
+  display: contents;
+}
+
+.hud-report-row dd {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.hud-report-row dd.hud-report-said {
+  font-family: var(--font-ui);
+  text-align: left;
+  white-space: normal;
+}
+
+.hud-report-row dd.hud-report-chart {
+  line-height: 0;
+}
+
+.hud-report-row[data-total] > * {
+  padding-top: var(--space-2);
+  border-top: 2px dotted var(--edge-soft);
+  font-weight: 700;
+}
+
+/* Flush with the report's own rows, which the dropdown's padding would push in. */
+.hud-report .hud-rating-parts {
+  padding: 0;
+}
+
+.hud-report-stars {
+  margin: 0 0 var(--space-1);
+  font-size: var(--size-lead);
+}
+
+.hud-sparkline {
+  display: block;
+  color: var(--foliage);
+}
+
+.hud-camera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hud-camera-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.hud-camera-compass {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+
+/* Kept at its height on a touch screen, where the kit's buttons grow. */
+.hud-camera-point {
+  min-height: 0;
+  height: 36px;
+  font: 400 var(--size-label) / 1 var(--font-label);
+  letter-spacing: var(--track-label);
+}
+
+.hud-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hud-inspect-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-inspect-problem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-left: 3px solid var(--ochre);
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  white-space: normal;
+}
+
+.hud-inspect-problem[data-severity='urgent'] {
+  border-left-color: var(--lamp-off);
+}
+
+.hud-inspect-problem[data-severity='note'] {
+  border-left-color: var(--edge-soft);
+}
+
+.hud-inspect-problem-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.hud-inspect-problem .hud-advice-show {
+  flex: none;
+  margin-left: auto;
+}
+
+.hud-inspect-members {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hud-venue-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-venue-kind {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+
+.hud-venue-name-field {
+  width: 100%;
+}
+
+.hud-needs {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.hud-need {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hud-need-label {
+  color: var(--text-dim);
+  font-size: var(--size-small);
+}
+
+/* Stepped rather than smooth, so a need drains in blocks the way the rest of the world is built. */
+.hud-need-track {
+  height: 10px;
+  border-radius: 3px;
+  background: var(--sunken);
+  box-shadow:
+    var(--bevel-in),
+    0 0 0 1px var(--edge-soft);
+  overflow: hidden;
+}
+
+/* The hue runs red through yellow to green as the need fills, so an empty one shows from afar.
+   Each need sets its own --level, so the colours cannot be tokens. */
+/* stylelint-disable function-disallowed-list */
+.hud-need-fill {
+  --hue: calc(var(--level, 1) * 90);
+  display: block;
+  height: 100%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, var(--need-notch) 8px 10px),
+    linear-gradient(180deg, hsl(var(--hue) 68% 60%), hsl(var(--hue) 62% 42%));
+}
+/* stylelint-enable function-disallowed-list */
+
+.hud-staff + .hud-report-heading {
+  margin-top: var(--space-4);
+}
+
+.hud-zone-staff {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+
+.hud-zone-staff-row {
+  display: contents;
+}
+
+.hud-zone-staff dt {
+  font: 400 var(--size-label) / 1.2 var(--font-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.hud-zone-staff dd {
+  margin: 0;
+  color: var(--text-dim);
+}

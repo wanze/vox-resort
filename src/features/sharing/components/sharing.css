@@ -1,0 +1,18 @@
+.sharing-panel,
+.sharing-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sharing-summary {
+  gap: 2px;
+}
+
+.sharing-summary strong {
+  font: 700 var(--size-lead) / 1.2 var(--font-ui);
+}
+
+.sharing-summary span {
+  color: var(--text-dim);
+}

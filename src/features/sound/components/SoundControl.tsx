@@ -1,4 +1,4 @@
-import { HudOption } from '../../hud/components/HudOption';
+import { MenuOption } from '../../../shared/components/MenuOption';
 import { keyLabel } from '../../hud/domain/keymap';
 import { VOLUMES, type SoundPrefs, type Volume } from '../domain/soundPrefs';
 
@@ -22,8 +22,8 @@ function VolumeSlider(props: {
 }) {
   const percent = Math.round(props.value * 100);
   return (
-    <label className="hud-slider">
-      <span className="hud-slider-label">{VOLUME_NAMES[props.volume]}</span>
+    <label className="ui-slider">
+      <span className="ui-slider-label">{VOLUME_NAMES[props.volume]}</span>
       <input
         type="range"
         min={0}
@@ -32,7 +32,7 @@ function VolumeSlider(props: {
         value={percent}
         onChange={(event) => props.onChange(Number(event.target.value) / 100)}
       />
-      <span className="hud-slider-value">{percent}</span>
+      <span className="ui-slider-value">{percent}</span>
     </label>
   );
 }
@@ -41,7 +41,7 @@ function VolumeSlider(props: {
 export function SoundOptions({ prefs, onChange }: SoundOptionsProps) {
   return (
     <>
-      <HudOption
+      <MenuOption
         label="Sound"
         note="music, the resort and the buttons"
         shortcut={keyLabel('sound')}
@@ -49,7 +49,7 @@ export function SoundOptions({ prefs, onChange }: SoundOptionsProps) {
         many
         onSelect={() => onChange({ ...prefs, on: !prefs.on })}
       />
-      <hr className="hud-rule" />
+      <hr className="ui-rule" />
       {VOLUMES.map((volume) => (
         <VolumeSlider
           key={volume}

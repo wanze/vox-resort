@@ -1,5 +1,5 @@
-import { HudPopover } from './HudDropdown';
-import { PixelIcon } from './PixelIcon';
+import { DropdownPopover } from '../../../shared/components/Dropdown';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import type { DayForecast } from '../../events/domain/programmeView';
 import { dayWords } from '../../events/domain/week';
@@ -20,14 +20,14 @@ const DAYS_SHOWN = 6;
 function ForecastDay({ each, today }: { readonly each: DayForecast; readonly today: boolean }) {
   return (
     <li className="hud-forecast-day">
-      <span className="hud-option-icon">
+      <span>
         <PixelIcon name={each.weather} />
       </span>
-      <span className="hud-option-text">
-        <span className="hud-option-label">
+      <span className="ui-option-text">
+        <span className="ui-option-label">
           {today ? 'Today' : dayWords(each.day)} · {WEATHER_NAMES[each.weather]}
         </span>
-        <span className="hud-option-note">{WEATHER_NOTES[each.weather]}</span>
+        <span className="ui-option-note">{WEATHER_NOTES[each.weather]}</span>
       </span>
     </li>
   );
@@ -38,7 +38,7 @@ export function WeatherForecast(props: WeatherForecastProps) {
   const { weather, forced } = props;
   const title = `Weather: ${WEATHER_NAMES[weather]}${forced ? ', pinned' : ', following the forecast'}`;
   return (
-    <HudPopover
+    <DropdownPopover
       name="Weather forecast"
       className="hud-weather"
       open={props.open}
@@ -61,6 +61,6 @@ export function WeatherForecast(props: WeatherForecastProps) {
           Pinned to {WEATHER_NAMES[forced].toLowerCase()} in the menu, so every day stays that way.
         </p>
       ) : null}
-    </HudPopover>
+    </DropdownPopover>
   );
 }

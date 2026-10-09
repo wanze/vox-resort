@@ -23,7 +23,7 @@ function LinkField({ link }: { readonly link: string }) {
     <input
       ref={field}
       type="text"
-      className="share-link"
+      className="ui-field"
       value={link}
       readOnly
       aria-label="Link to this resort"
@@ -33,18 +33,18 @@ function LinkField({ link }: { readonly link: string }) {
 }
 
 function Outcome({ made }: { readonly made: Made }) {
-  if (made.kind === 'failed') return <p className="share-note">The link could not be made.</p>;
+  if (made.kind === 'failed') return <p className="ui-note">The link could not be made.</p>;
   const long = made.link.length > LONG_LINK_CHARS;
   return (
     <>
       {made.kind === 'copied' ? (
-        <p className="share-note" role="status">
+        <p className="ui-note" role="status">
           Link copied ({sizeOf(made.link)})
         </p>
       ) : (
         <LinkField key={made.link} link={made.link} />
       )}
-      {long ? <p className="share-note">Long link: some apps may cut it</p> : null}
+      {long ? <p className="ui-note">Long link: some apps may cut it</p> : null}
     </>
   );
 }
@@ -91,12 +91,12 @@ export function SharePanel({ onShare, title, busy }: SharePanelProps) {
   };
 
   return (
-    <div className="share-panel">
-      <p className="share-note">A link to its layout, opened in sandbox from day one.</p>
-      <div className="save-form-actions">
+    <div className="sharing-panel">
+      <p className="ui-note">A link to its layout, opened in sandbox from day one.</p>
+      <div className="ui-columns">
         <button
           type="button"
-          className="hud-resort-go save-button"
+          className="ui-button-primary ui-button-compact"
           disabled={blocked}
           aria-busy={sharing}
           onClick={() => void run(copy)()}
@@ -106,7 +106,7 @@ export function SharePanel({ onShare, title, busy }: SharePanelProps) {
         {CAN_SEND ? (
           <button
             type="button"
-            className="hud-resort-clear save-button"
+            className="ui-button-secondary ui-button-compact"
             disabled={blocked}
             onClick={() => void run(send)()}
           >

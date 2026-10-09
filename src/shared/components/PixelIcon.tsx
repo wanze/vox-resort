@@ -15,7 +15,7 @@ export function PixelIcon({ name, scale = 2 }: PixelIconProps) {
   const art = ART[name];
   return (
     <svg
-      className="pixel-icon"
+      className="ui-pixel-icon"
       width={art.width * scale}
       height={art.height * scale}
       viewBox={`0 0 ${art.width} ${art.height}`}

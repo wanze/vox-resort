@@ -5,7 +5,7 @@ export interface HudErrorProps {
 
 export function HudError({ title = 'Could not start the renderer', message }: HudErrorProps) {
   return (
-    <div className="hud-error" role="alert">
+    <div className="ui-panel hud-error" role="alert">
       <strong>{title}</strong>
       <p>{message}</p>
     </div>

@@ -1,0 +1,269 @@
+/* Under the staff pins and the problem markers: what a building is gives way to what is wrong there. */
+.hud-signs {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-signs);
+  overflow: hidden;
+}
+
+.hud-sign-spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.hud-sign-spot[hidden],
+.hud-sign-spot[data-under-marker] {
+  display: none;
+}
+
+.hud-sign-spot:hover,
+.hud-sign-spot:focus-within {
+  z-index: 1;
+}
+
+/* Quieter than a marker: paper and ink, no colour of its own beyond the icon. */
+.hud-sign {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -34px 0 0 -14px;
+  padding: 0;
+  border: 2px solid var(--stone-700);
+  border-radius: var(--radius-pebble);
+  background: var(--stone-50);
+  box-shadow: var(--shadow-lift);
+  cursor: var(--cursor-hand);
+  pointer-events: auto;
+}
+
+.hud-sign::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--stone-700);
+  border-bottom: 0;
+}
+
+.hud-sign:hover,
+.hud-sign:focus-visible {
+  filter: brightness(1.08);
+}
+
+/* Beside the plate, level with it, so it never covers the building's own sign. */
+.hud-sign-name {
+  position: absolute;
+  top: -32px;
+  left: 16px;
+  display: none;
+  padding: 2px var(--space-2);
+  border: 2px solid var(--stone-700);
+  border-radius: var(--radius-pebble);
+  background: var(--stone-50);
+  box-shadow: var(--shadow-lift);
+  color: var(--text);
+  font: var(--size-small) / 1.2 var(--font-ui);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.hud-sign:hover + .hud-sign-name,
+.hud-sign:focus-visible + .hud-sign-name,
+.hud-signs--named .hud-sign-name {
+  display: block;
+}
+
+/* Under the toasts and every window; the render loop moves each marker with a transform. */
+.hud-markers {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-markers);
+  overflow: hidden;
+}
+
+/* The render loop moves the spot; the marker and its menu hang off it. */
+.hud-marker-spot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.hud-marker-spot[hidden] {
+  display: none;
+}
+
+.hud-marker-spot:hover,
+.hud-marker-spot:focus-within {
+  z-index: 1;
+}
+
+/* Touching the marker's right edge, so the pointer can cross from one to the other. */
+.hud-marker-menu {
+  position: absolute;
+  top: -39px;
+  left: 16px;
+  display: none;
+  padding: var(--space-1) var(--space-2);
+  border: 2px solid var(--ochre);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  font: inherit;
+  white-space: nowrap;
+  cursor: var(--cursor-hand);
+  pointer-events: auto;
+}
+
+.hud-marker-spot:hover .hud-marker-menu,
+.hud-marker-spot:focus-within .hud-marker-menu {
+  display: block;
+}
+
+/* A pennant on the corner: somebody has been sent. */
+.hud-marker-flag {
+  display: none;
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-left: 9px solid var(--lamp-on);
+}
+
+.hud-marker[data-sent] .hud-marker-flag {
+  display: block;
+}
+
+/* The negative margins put the tip of the tail, not the corner, on the anchor. */
+.hud-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin: -39px 0 0 -16px;
+  padding: 0;
+  border: 2px solid var(--ochre);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  cursor: var(--cursor-hand);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.hud-marker::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-top-color: var(--marker-edge, var(--ochre));
+  border-bottom: 0;
+}
+
+.hud-marker[data-severity='urgent'] {
+  --marker-edge: var(--lamp-off);
+  border-color: var(--lamp-off);
+}
+
+.hud-marker:hover,
+.hud-marker:focus-visible {
+  z-index: 1;
+  filter: brightness(1.08);
+}
+
+/* Under the problem markers: a sign over a building in trouble outranks who is walking past. */
+.hud-pins {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-pins);
+  overflow: hidden;
+}
+
+.hud-pin {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -27px 0 0 -11px;
+  padding: 0;
+  border: 2px solid var(--pin-edge);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  cursor: var(--cursor-hand);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.hud-pin[hidden] {
+  display: none;
+}
+
+.hud-pin::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--pin-edge);
+  border-bottom: 0;
+}
+
+.hud-pin[data-role='cleaner'] {
+  --pin-edge: var(--pin-cleaner);
+}
+
+.hud-pin[data-role='lifeguard'] {
+  --pin-edge: var(--pin-lifeguard);
+}
+
+.hud-pin[data-role='animator'] {
+  --pin-edge: var(--pin-animator);
+}
+
+.hud-pin[data-role='mechanic'] {
+  --pin-edge: var(--pin-mechanic);
+}
+
+/* Over a roof, the pin says so: the worker is under it, not standing on it. */
+.hud-pin-inside {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: none;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--stone-50);
+  border-radius: 50%;
+  background: var(--pin-edge);
+}
+
+.hud-pin[data-inside] .hud-pin-inside {
+  display: block;
+}
+
+.hud-pin:hover,
+.hud-pin:focus-visible {
+  z-index: 1;
+  filter: brightness(1.08);
+}

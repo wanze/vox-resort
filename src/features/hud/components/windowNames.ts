@@ -1,4 +1,4 @@
-import type { IconName } from './pixelIcons';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import type { PageId, WindowId } from '../domain/windowLayout';
 import { isTab, type TabId } from '../domain/windowTabs';
 import { keyLabel } from '../domain/keymap';

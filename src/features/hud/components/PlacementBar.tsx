@@ -53,25 +53,25 @@ export function PlacementBar(props: PlacementBarProps) {
   const { onConfirm, onDismiss, onTurn } = props;
   return (
     <div
-      className="hud-placement hud-plate"
+      className="hud-placement ui-plate"
       role="group"
       aria-label={asked.question}
       aria-live="polite"
     >
       <button
         type="button"
-        className="hud-placement-button hud-placement-place"
+        className="ui-button-large ui-button-large--primary"
         onClick={onConfirm}
       >
         {asked.verb}
         <Price price={asked.price} />
       </button>
       {asked.turns ? (
-        <button type="button" className="hud-placement-button" onClick={() => onTurn(1)}>
+        <button type="button" className="ui-button-large" onClick={() => onTurn(1)}>
           <span aria-hidden="true">⟳</span> Turn
         </button>
       ) : null}
-      <button type="button" className="hud-placement-button" onClick={onDismiss}>
+      <button type="button" className="ui-button-large" onClick={onDismiss}>
         <span aria-hidden="true">✕</span> Cancel
       </button>
     </div>

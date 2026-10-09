@@ -8,11 +8,11 @@ export interface StatRowProps {
 
 export function StatRow({ label, children, note }: StatRowProps) {
   return (
-    <div className="hud-stat">
+    <div className="ui-stat">
       <dt>{label}</dt>
       <dd>
         {children}
-        {note ? <span className="hud-stat-note"> ({note})</span> : null}
+        {note ? <span className="ui-stat-note"> ({note})</span> : null}
       </dd>
     </div>
   );

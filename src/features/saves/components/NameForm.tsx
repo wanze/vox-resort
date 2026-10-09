@@ -27,14 +27,22 @@ function Reply(props: {
 }) {
   const reply = replyFor(props.outcome);
   if (!reply) return null;
-  if (!reply.asks) return <p className="save-reply">{reply.text}</p>;
+  if (!reply.asks) return <p className="ui-note">{reply.text}</p>;
   return (
-    <div className="save-reply save-confirm" role="alert">
+    <div className="ui-note saves-confirm" role="alert">
       <span>{reply.text}</span>
-      <button type="button" className="hud-resort-clear save-button" onClick={props.onReplace}>
+      <button
+        type="button"
+        className="ui-button-secondary ui-button-compact"
+        onClick={props.onReplace}
+      >
         Replace
       </button>
-      <button type="button" className="hud-resort-clear save-button" onClick={props.onCancel}>
+      <button
+        type="button"
+        className="ui-button-secondary ui-button-compact"
+        onClick={props.onCancel}
+      >
         Cancel
       </button>
     </div>
@@ -49,7 +57,7 @@ export function NameForm({ initial, actions, disabled }: NameFormProps) {
 
   return (
     <form
-      className="save-form"
+      className="saves-form"
       onSubmit={(event) => {
         event.preventDefault();
         run(0, false);
@@ -57,7 +65,6 @@ export function NameForm({ initial, actions, disabled }: NameFormProps) {
     >
       <input
         type="text"
-        className="save-name"
         value={name}
         maxLength={40}
         placeholder="Name this game"
@@ -67,12 +74,16 @@ export function NameForm({ initial, actions, disabled }: NameFormProps) {
           setAnswer(null);
         }}
       />
-      <div className="save-form-actions">
+      <div className="ui-columns">
         {actions.map((action, index) => (
           <button
             key={action.label}
             type={index === 0 ? 'submit' : 'button'}
-            className={index === 0 ? 'hud-resort-go save-button' : 'hud-resort-clear save-button'}
+            className={
+              index === 0
+                ? 'ui-button-primary ui-button-compact'
+                : 'ui-button-secondary ui-button-compact'
+            }
             disabled={disabled}
             onClick={index === 0 ? undefined : () => run(index, false)}
           >

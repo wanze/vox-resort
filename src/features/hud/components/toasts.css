@@ -1,0 +1,83 @@
+/* Over the canvas and under every window, which starts at z-index 10. */
+.hud-toasts {
+  position: absolute;
+  bottom: var(--space-5);
+  left: var(--space-5);
+  z-index: var(--z-toasts);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(380px, calc(100% - 2 * var(--space-5)));
+}
+
+.hud-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-left-width: 4px;
+  border-radius: var(--radius-pebble);
+  pointer-events: auto;
+  animation: ui-pop var(--pop);
+}
+
+.hud-toast[data-severity='urgent'] {
+  border-left-color: var(--lamp-off);
+}
+
+.hud-toast[data-severity='warning'] {
+  border-left-color: var(--ochre);
+}
+
+.hud-toast[data-severity='day'] {
+  border-left-color: var(--foliage);
+}
+
+.hud-toast[data-severity='event'] {
+  border-left-color: var(--terracotta);
+}
+
+.hud-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.hud-toast-body p {
+  margin: var(--space-1) 0 0;
+}
+
+.hud-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.hud-toast-actions .hud-advice-show {
+  margin-left: 0;
+}
+
+.hud-error {
+  position: absolute;
+  bottom: var(--space-5);
+  left: var(--space-5);
+  z-index: var(--z-error);
+  max-width: 520px;
+  padding: var(--space-4);
+  border-color: var(--terracotta);
+  border-radius: var(--radius-pebble);
+  pointer-events: auto;
+  animation: ui-pop var(--pop);
+}
+
+.hud-error strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  font: 700 var(--size-lead) / 1.2 var(--font-ui);
+  color: var(--terracotta-deep);
+}
+
+.hud-error p {
+  margin: 0;
+  color: var(--text-dim);
+}

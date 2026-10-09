@@ -14,7 +14,7 @@ import type { GameMode } from '../../sim/domain/ledger';
 import { adviceLabel, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
 import { HireButton, type HireControls } from './HireButton';
-import { PixelIcon } from './PixelIcon';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 interface NewsToastsProps {
   readonly history: readonly DayReport[];
@@ -45,7 +45,7 @@ function ToastActions({ news, ...props }: { readonly news: News } & ToastActions
       {at ? (
         <button
           type="button"
-          className="hud-camera-mode hud-advice-show"
+          className="ui-button hud-advice-show"
           aria-label={`Show ${advice.subject} at tile ${at.tileX}, ${at.tileZ}`}
           onClick={() => props.onShowOnPlot(at)}
         >
@@ -53,11 +53,7 @@ function ToastActions({ news, ...props }: { readonly news: News } & ToastActions
         </button>
       ) : null}
       <HireButton advice={advice} hire={props.hire} />
-      <button
-        type="button"
-        className="hud-camera-mode hud-advice-show"
-        onClick={props.onOpenAdvice}
-      >
+      <button type="button" className="ui-button hud-advice-show" onClick={props.onOpenAdvice}>
         Advice
       </button>
     </div>
@@ -74,7 +70,7 @@ function DismissButton({
   return (
     <button
       type="button"
-      className="hud-window-close"
+      className="ui-window-close"
       aria-label={`Dismiss ${label}`}
       title="Dismiss"
       onClick={onDismiss}
@@ -87,7 +83,7 @@ function DismissButton({
 function DayPlate({ report, ...props }: { readonly report: DayReport } & NewsToastsProps) {
   const label = `Day ${report.day} report`;
   return (
-    <div className="hud-toast" data-severity="day">
+    <div className="ui-panel hud-toast" data-severity="day">
       <PixelIcon name="overview" />
       <div className="hud-toast-body">
         <strong>Day report</strong>
@@ -95,7 +91,7 @@ function DayPlate({ report, ...props }: { readonly report: DayReport } & NewsToa
         <div className="hud-toast-actions">
           <button
             type="button"
-            className="hud-camera-mode hud-advice-show"
+            className="ui-button hud-advice-show"
             onClick={() => props.onOpenReport(report.day)}
           >
             Summary
@@ -118,7 +114,7 @@ function ToastPlate({
   const urgent = news.severity === 'urgent';
   const label = adviceLabel(news.advice.kind);
   return (
-    <div className="hud-toast" data-severity={news.severity}>
+    <div className="ui-panel hud-toast" data-severity={news.severity}>
       <PixelIcon name={urgent ? 'alert' : 'advice'} />
       <div className="hud-toast-body">
         <strong>{label}</strong>
@@ -137,7 +133,7 @@ function EventPlate({
 }: { readonly news: EventNews } & Pick<NewsToastsProps, 'onDismiss' | 'onShowOnPlot'>) {
   const { at } = news;
   return (
-    <div className="hud-toast" data-severity="event">
+    <div className="ui-panel hud-toast" data-severity="event">
       <PixelIcon name="programme" />
       <div className="hud-toast-body">
         <strong>Programme</strong>
@@ -146,7 +142,7 @@ function EventPlate({
           <div className="hud-toast-actions">
             <button
               type="button"
-              className="hud-camera-mode hud-advice-show"
+              className="ui-button hud-advice-show"
               aria-label={`Show ${news.venue ?? news.label} at tile ${at.tileX}, ${at.tileZ}`}
               onClick={() => onShowOnPlot(at)}
             >
@@ -199,7 +195,7 @@ function UpdatePlate({
 }) {
   const { line, actions } = UPDATE_WORDS[phase];
   return (
-    <div className="hud-toast" data-severity="warning">
+    <div className="ui-panel hud-toast" data-severity="warning">
       <PixelIcon name="refresh" />
       <div className="hud-toast-body">
         <strong>New version</strong>
@@ -209,7 +205,7 @@ function UpdatePlate({
             <button
               key={action}
               type="button"
-              className="hud-camera-mode hud-advice-show"
+              className="ui-button hud-advice-show"
               disabled={phase === 'saving'}
               onClick={() => onUpdate(action)}
             >
@@ -257,7 +253,7 @@ function lineOf(toast: Toast, news: NewsToastsProps | null): string | null {
 // mounted with its first toast is often not heard at all.
 function LiveLines(props: ToastsProps & { readonly urgent: boolean }) {
   return (
-    <div className="visually-hidden" aria-live={props.urgent ? 'assertive' : 'polite'}>
+    <div className="ui-visually-hidden" aria-live={props.urgent ? 'assertive' : 'polite'}>
       {props.toasts
         .filter((toast) => isUrgentToast(toast) === props.urgent)
         .map((toast) => {

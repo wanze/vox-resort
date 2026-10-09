@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { StatRow } from './StatRow';
+import { StatRow } from '../../../shared/components/StatRow';
 import type { ShowcaseStats } from '../domain/views';
 
 export interface DebugElements {
@@ -68,7 +68,7 @@ function LiveRows({
 export function RenderStats({ stats, elements }: RenderStatsProps) {
   const { activeLights } = elements;
   return (
-    <dl className="hud-stats hud-stats-stacked hud-figures hud-debug">
+    <dl className="ui-stats ui-stats--stacked hud-figures hud-debug">
       <LiveRows elements={elements} />
       {stats ? (
         <>

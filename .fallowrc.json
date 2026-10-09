@@ -28,14 +28,33 @@
       { "name": "adapters", "patterns": ["src/features/*/adapters/**"] },
       { "name": "components", "patterns": ["src/features/*/components/**"] },
       { "name": "app", "patterns": ["src/app/**", "src/main.tsx"] },
+      { "name": "shared-domain", "patterns": ["src/shared/domain/**"] },
+      { "name": "shared-components", "patterns": ["src/shared/components/**"] },
       { "name": "models", "patterns": ["voxel-gen/**"] },
       { "name": "sounds", "patterns": ["sounds/**"] }
     ],
     "rules": [
-      { "from": "domain", "allow": ["domain", "models", "sounds"] },
-      { "from": "adapters", "allow": ["domain", "adapters", "models", "sounds"] },
-      { "from": "components", "allow": ["domain", "components"] },
-      { "from": "app", "allow": ["domain", "adapters", "components", "app", "models", "sounds"] },
+      { "from": "domain", "allow": ["domain", "models", "sounds", "shared-domain"] },
+      { "from": "adapters", "allow": ["domain", "adapters", "models", "sounds", "shared-domain"] },
+      {
+        "from": "components",
+        "allow": ["domain", "components", "shared-domain", "shared-components"]
+      },
+      {
+        "from": "app",
+        "allow": [
+          "domain",
+          "adapters",
+          "components",
+          "app",
+          "models",
+          "sounds",
+          "shared-domain",
+          "shared-components"
+        ]
+      },
+      { "from": "shared-domain", "allow": ["shared-domain"] },
+      { "from": "shared-components", "allow": ["shared-domain", "shared-components"] },
       { "from": "models", "allow": ["models"] },
       { "from": "sounds", "allow": ["sounds"], "allowTypeOnly": ["domain"] }
     ],
@@ -44,6 +63,7 @@
       "allowUnmatched": [
         "scripts/**",
         "vite.config.ts",
+        "stylelint.config.mjs",
         "index.html",
         "compare.html",
         "sounds.html"

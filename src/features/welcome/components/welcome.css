@@ -1,0 +1,362 @@
+.welcome {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  align-items: center;
+  padding: var(--space-5) clamp(16px, 7vw, 96px);
+  overflow-y: auto;
+}
+
+.welcome::before,
+.welcome::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.welcome::before {
+  background-image: var(--backdrop);
+  transition: opacity 1200ms var(--ease);
+}
+
+.welcome::after {
+  z-index: -2;
+  background-image: var(--scrim);
+}
+
+/* The one reveal on the page: the backdrop lifts and the resort is behind it. */
+.welcome[data-ready]::before {
+  opacity: 0;
+}
+
+.welcome + .hud-toasts {
+  z-index: var(--z-over-modal);
+}
+
+.welcome-failure strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  font: 700 var(--size-lead) / 1.2 var(--font-ui);
+  color: var(--terracotta-deep);
+}
+
+.welcome-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: min(440px, 100%);
+}
+
+.welcome-wordmark {
+  margin: 0 0 var(--space-2);
+  font: 700 clamp(46px, 8vw, 92px) / 0.95 var(--font-title);
+  letter-spacing: 0.01em;
+  color: var(--stone-50);
+  text-shadow: var(--extrude);
+}
+
+.welcome-tagline {
+  margin: 0 0 var(--space-3);
+  font-size: var(--size-lead);
+  color: var(--stone-100);
+  text-shadow: var(--shadow-caption);
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  animation: ui-pop var(--pop);
+}
+
+.welcome-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.welcome-card-head h2 {
+  margin: 0;
+  font: 700 22px / 1 var(--font-ui);
+  color: var(--terracotta-deep);
+}
+
+.welcome-card-head h2:focus {
+  outline: none;
+}
+
+.welcome-back {
+  height: var(--control-h);
+  padding: 0 var(--space-4);
+}
+
+.welcome-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.welcome-button,
+.welcome-new-game-mode {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--edge);
+  background-image: var(--slab-raised);
+  box-shadow: var(--bevel), var(--shadow-ledge);
+  color: var(--text);
+  transition:
+    filter var(--quick),
+    box-shadow var(--quick),
+    color var(--quick),
+    transform var(--quick);
+}
+
+.welcome-button {
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-pebble);
+  font: 700 24px / 1 var(--font-ui);
+}
+
+.welcome-button--main {
+  justify-content: center;
+  border-color: var(--terracotta-deep);
+  background-image: var(--slab-accent);
+  color: var(--text-on-accent);
+  text-shadow: var(--shadow-accent-text);
+}
+
+.welcome-button-note {
+  font: 400 var(--size-small) / 1 var(--font-ui);
+  color: var(--text-dim);
+}
+
+.welcome-button:hover:not(:disabled),
+.welcome-new-game-mode:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.welcome-button:active:not(:disabled),
+.welcome-new-game-mode:active {
+  transform: translateY(1px);
+  box-shadow: var(--bevel-in);
+}
+
+.welcome-button:disabled {
+  opacity: 0.6;
+}
+
+.welcome-button--main:disabled {
+  opacity: 0.45;
+}
+
+/* Full strength while it works, so the one pressed reads apart from the ones merely waiting. */
+.welcome-button[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+  animation: ui-busy 0.9s ease-in-out infinite alternate;
+}
+
+.welcome-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.welcome-blocks {
+  display: grid;
+  grid-template-columns: repeat(3, 10px);
+  gap: 3px;
+  flex: none;
+}
+
+.welcome-blocks > span {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--stone-300);
+  box-shadow: var(--bevel-in);
+  animation: welcome-lay 2.4s var(--ease) infinite;
+  animation-delay: calc(var(--block) * 140ms);
+}
+
+@keyframes welcome-lay {
+  0%,
+  8% {
+    background: var(--stone-300);
+    transform: translateY(-3px);
+  }
+
+  14%,
+  70% {
+    background: var(--terracotta);
+    box-shadow: var(--bevel);
+    transform: none;
+  }
+
+  86%,
+  100% {
+    background: var(--stone-300);
+  }
+}
+
+.welcome-loading-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.welcome-loading-text p {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.welcome-progress {
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+  box-shadow: var(--bevel-in);
+  overflow: hidden;
+}
+
+.welcome-progress > span {
+  display: block;
+  height: 100%;
+  background-image: var(--slab-accent);
+  transition: width 600ms var(--ease);
+}
+
+.welcome-failure p {
+  margin: 0 0 var(--space-2);
+  color: var(--text-dim);
+}
+
+.welcome-clock {
+  position: fixed;
+  left: clamp(16px, 7vw, 96px);
+  bottom: var(--space-4);
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--stone-100);
+  text-shadow: var(--shadow-caption);
+}
+
+.welcome-new-game-modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.welcome-new-game-mode {
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pebble);
+  text-align: left;
+  font: 500 var(--size-small) / 1.35 var(--font-ui);
+}
+
+.welcome-new-game-mode[aria-checked='true'] {
+  border-color: var(--terracotta);
+  background-image: var(--sunken);
+  box-shadow: var(--bevel-in), var(--glow-accent);
+  transform: none;
+}
+
+.welcome-new-game-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--text-dim);
+}
+
+.welcome-new-game-mode-text strong {
+  font: 700 var(--size-lead) / 1.1 var(--font-ui);
+  color: var(--text);
+}
+
+.welcome-new-game-mode[aria-checked='true'] strong {
+  color: var(--terracotta-deep);
+}
+
+.welcome-new-game-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  animation: ui-pop var(--pop);
+}
+
+.welcome-new-game-ground {
+  text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-blocks > span {
+    animation: none;
+    background: var(--terracotta);
+  }
+
+  .welcome::before {
+    transition: none;
+  }
+
+  .welcome-button[aria-busy='true'] {
+    animation: none;
+  }
+}
+
+.welcome-new-game .ui-form-row {
+  grid-template-columns: 74px 1fr 48px;
+}
+
+.welcome-new-game .ui-form-row--choice {
+  grid-template-columns: 74px 1fr;
+}
+
+.welcome-continue {
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.welcome-button--main .welcome-button-note {
+  color: var(--text-on-accent);
+  opacity: 0.85;
+}
+
+.welcome-link-notice {
+  margin: 0;
+  font-weight: 600;
+  color: var(--terracotta-deep);
+}
+
+@media (pointer: coarse) {
+  .welcome input,
+  .welcome select {
+    font-size: 16px;
+  }
+}
+
+/* Auto margins centre the column without cutting off its top when it is taller than the screen. */
+.app:not([data-layout='desk']) .welcome {
+  align-items: start;
+  padding: calc(var(--space-4) + var(--safe-t)) calc(var(--space-4) + var(--safe-r))
+    calc(var(--space-4) + var(--safe-b)) calc(var(--space-4) + var(--safe-l));
+}
+
+.app:not([data-layout='desk']) .welcome-column {
+  width: min(100%, 420px);
+  margin: auto;
+}

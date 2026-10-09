@@ -20,14 +20,14 @@ function Choice<T extends string>(props: {
   readonly onPick: (value: T) => void;
 }) {
   return (
-    <div className="hud-resort-row hud-resort-choice-row" role="group" aria-label={props.label}>
+    <div className="ui-form-row ui-form-row--choice" role="group" aria-label={props.label}>
       <span>{props.label}</span>
-      <div className="hud-resort-choices">
+      <div className="ui-form-choices">
         {props.options.map((option) => (
           <button
             key={option}
             type="button"
-            className="hud-resort-choice"
+            className="ui-form-choice"
             aria-pressed={option === props.value}
             onClick={() => props.onPick(option)}
           >
@@ -47,7 +47,7 @@ function Share(props: {
   readonly onSlide: (value: number) => void;
 }) {
   return (
-    <label className="hud-resort-row">
+    <label className="ui-form-row">
       <span>{props.label}</span>
       <input
         type="range"
@@ -58,7 +58,7 @@ function Share(props: {
         onChange={(event) => props.onSlide(Number(event.target.value))}
         aria-label={props.aria}
       />
-      <span className="hud-resort-value">{Math.round(props.value * 100)}%</span>
+      <span className="ui-form-value">{Math.round(props.value * 100)}%</span>
     </label>
   );
 }
@@ -68,9 +68,9 @@ export function ResortAdvanced({ config, onChange }: ResortAdvancedProps) {
   const change = (patch: Partial<ResortConfig>): void => onChange({ ...current, ...patch });
 
   return (
-    <details className="hud-resort-advanced">
+    <details className="ui-form-advanced">
       <summary>Advanced</summary>
-      <div className="hud-resort-advanced-body">
+      <div className="ui-form-advanced-body">
         <Share
           label="Parks"
           range={PARK_SHARE}
@@ -103,8 +103,8 @@ export function ResortAdvanced({ config, onChange }: ResortAdvancedProps) {
           value={current.variety}
           onPick={(variety) => change({ variety })}
         />
-        <div className="hud-resort-flags">
-          <label className="hud-resort-flag">
+        <div className="ui-form-flags">
+          <label className="ui-form-flag">
             <input
               type="checkbox"
               checked={current.streetTrees}
@@ -112,7 +112,7 @@ export function ResortAdvanced({ config, onChange }: ResortAdvancedProps) {
             />
             <span>Street trees</span>
           </label>
-          <label className="hud-resort-flag">
+          <label className="ui-form-flag">
             <input
               type="checkbox"
               checked={current.gatePlazas}

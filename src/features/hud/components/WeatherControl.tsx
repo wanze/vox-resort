@@ -1,4 +1,4 @@
-import { HudOption } from './HudOption';
+import { MenuOption } from '../../../shared/components/MenuOption';
 import { WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 
@@ -12,16 +12,16 @@ export interface WeatherOptionsProps {
 export function WeatherOptions({ forced, onWeatherChange }: WeatherOptionsProps) {
   return (
     <>
-      <HudOption
+      <MenuOption
         icon="forecast"
         label="Forecast"
         note="let the week's own weather run"
         checked={forced === null}
         onSelect={() => onWeatherChange(null)}
       />
-      <hr className="hud-rule" />
+      <hr className="ui-rule" />
       {WEATHERS.map((kind) => (
-        <HudOption
+        <MenuOption
           key={kind}
           icon={kind}
           label={WEATHER_NAMES[kind]}

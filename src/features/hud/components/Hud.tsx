@@ -10,7 +10,7 @@ import { DemandPanel } from './DemandPanel';
 import { PhotoWallPanel } from './PhotoWallPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
-import { HudTabs, tabIdOf } from './HudTabs';
+import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
 import type { HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
@@ -260,7 +260,7 @@ function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
   const panelId = `hud-${id}-tabpanel`;
   return (
     <>
-      <HudTabs<TabId>
+      <Tabs<TabId>
         tabs={WINDOW_TABS[id]}
         current={page}
         onPick={(tab) => props.windows.show(tab, true)}

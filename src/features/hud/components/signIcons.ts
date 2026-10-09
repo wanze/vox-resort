@@ -1,5 +1,5 @@
 import type { SignKind } from '../../catalog/domain/objectTypes';
-import type { IconName } from './pixelIcons';
+import type { IconName } from '../../../shared/components/pixelIcons';
 
 // A role's fallback borrows the sign of the place most like it.
 export const SIGN_ICONS = {

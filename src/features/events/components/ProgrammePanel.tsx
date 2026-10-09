@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { HudTabs, tabIdOf } from '../../hud/components/HudTabs';
-import { PixelIcon } from '../../hud/components/PixelIcon';
+import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { SIGN_ICONS } from '../../hud/components/signIcons';
 import type { BookingRefusal } from '../domain/programme';
 import {
@@ -39,12 +39,12 @@ const typeIcon = (type: SiteType) => (type.sign ? SIGN_ICONS[type.sign] : 'clear
 function TypePicker({ view, programme }: ViewProps) {
   const current = view.site?.type;
   return (
-    <div className="hud-programme-types" role="group" aria-label="Kind of stage">
+    <div className="ui-row ui-row--wrap" role="group" aria-label="Kind of stage">
       {view.types.map((type) => (
         <button
           key={type.key}
           type="button"
-          className="hud-camera-mode hud-programme-type"
+          className="ui-button events-programme-type"
           aria-pressed={type.key === current}
           aria-label={type.label}
           title={type.label}
@@ -52,7 +52,7 @@ function TypePicker({ view, programme }: ViewProps) {
         >
           <PixelIcon name={typeIcon(type)} />
           {type.sites.length > 1 ? (
-            <span className="hud-tool-badge" aria-hidden="true">
+            <span className="ui-badge" aria-hidden="true">
               {type.sites.length}
             </span>
           ) : null}
@@ -67,11 +67,11 @@ function SitePicker({ view, programme }: ViewProps) {
   const site = view.site!;
   const type = view.types.find((each) => each.key === site.type);
   return (
-    <div className="hud-programme-site">
-      <span className="hud-programme-heading">{type?.label}</span>
+    <div className="events-programme-site">
+      <span className="events-programme-heading">{type?.label}</span>
       {type && type.sites.length > 1 ? (
         <select
-          className="hud-select"
+          className="ui-select"
           aria-label={`Which ${type.label}`}
           value={site.key}
           onChange={(event) => programme.choose(event.target.value)}
@@ -92,7 +92,7 @@ function SitePicker({ view, programme }: ViewProps) {
 function Refusal({ refusal }: { readonly refusal: BookingRefusal | null }) {
   if (!refusal) return null;
   return (
-    <p className="hud-event-refusal" role="alert">
+    <p className="events-refusal" role="alert">
       {refusalWords(refusal)}
     </p>
   );
@@ -108,7 +108,7 @@ function ActionButton(props: {
   return (
     <button
       type="button"
-      className="hud-camera-mode"
+      className="ui-button"
       disabled={!props.allowed}
       title={props.allowed ? undefined : props.why}
       onClick={props.onPress}
@@ -147,7 +147,7 @@ function SiteSelect(props: {
   if (!here) return null;
   return (
     <select
-      className="hud-select"
+      className="ui-select"
       aria-label="Move to"
       value={here.key}
       onChange={(event) => {
@@ -172,8 +172,8 @@ function ChipActions({ chip, programme }: { readonly chip: Chip } & ProgrammePan
   const move = (by: number) => () =>
     setRefusal(programme.rebook(chip.booking, { start: chip.minute + by }));
   return (
-    <div className="hud-programme-form">
-      <div className="hud-programme-actions">
+    <div className="events-programme-form">
+      <div className="ui-row ui-row--wrap events-programme-actions">
         <span>
           {chip.time} {chip.label} · {chip.repeat}
         </span>
@@ -207,12 +207,12 @@ function CellCards({
   const site = view.site;
   if (!day || !site) return null;
   return (
-    <div className="hud-programme-form">
-      <div className="hud-programme-form-head">
-        <h3 className="hud-programme-heading">
+    <div className="events-programme-form">
+      <div className="ui-row ui-row--spread">
+        <h3 className="events-programme-heading">
           {day.name}, {PART_NAMES[cell.part].toLowerCase()} at {site.label}
         </h3>
-        <button type="button" className="hud-camera-mode" onClick={onClose}>
+        <button type="button" className="ui-button" onClick={onClose}>
           Close
         </button>
       </div>
@@ -293,7 +293,7 @@ function Booking({ view, programme }: ViewProps) {
 function Plan({ view, programme }: ViewProps) {
   return (
     <>
-      <div className="hud-programme-picker">
+      <div className="events-programme-picker">
         <TypePicker view={view} programme={programme} />
         <SitePicker view={view} programme={programme} />
       </div>
@@ -316,7 +316,7 @@ function FilterSelect<T extends string>(props: {
 }) {
   return (
     <select
-      className="hud-select"
+      className="ui-select"
       aria-label={props.label}
       value={props.value ?? ''}
       onChange={(event) => props.onPick((event.target.value || null) as T | null)}
@@ -337,10 +337,10 @@ function ComingUp({ view }: { readonly view: ProgrammeView }) {
   const sites = upcomingSites(view.upcoming);
   const filter = { kind: kept(asked.kind, kinds), site: kept(asked.site, sites) };
   const days = upcomingByDay(filterUpcoming(view.upcoming, filter));
-  if (view.upcoming.length === 0) return <p className="hud-loading">Nothing booked yet.</p>;
+  if (view.upcoming.length === 0) return <p className="ui-loading">Nothing booked yet.</p>;
   return (
     <>
-      <div className="hud-programme-filters">
+      <div className="ui-row ui-row--wrap events-programme-filters">
         <FilterSelect
           label="Which events"
           all="All events"
@@ -357,17 +357,17 @@ function ComingUp({ view }: { readonly view: ProgrammeView }) {
         />
       </div>
       {days.length === 0 ? (
-        <p className="hud-loading">Nothing like that this week.</p>
+        <p className="ui-loading">Nothing like that this week.</p>
       ) : (
-        <ol className="hud-programme-upcoming">
+        <ol className="events-programme-upcoming">
           {days.map((day) => (
-            <li key={day.day} className="hud-programme-upcoming-day">
-              <h3 className="hud-programme-heading">{day.name}</h3>
+            <li key={day.day} className="events-programme-upcoming-day">
+              <h3 className="events-programme-heading">{day.name}</h3>
               <ol>
                 {day.events.map((each) => (
                   <li key={each.key}>
                     {each.time} {each.label}
-                    <span className="hud-stat-note"> · {each.site}</span>
+                    <span className="ui-stat-note"> · {each.site}</span>
                   </li>
                 ))}
               </ol>
@@ -384,11 +384,11 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
   const { view } = programme;
   if (!view) return null;
   if (!view.site) {
-    return <p className="hud-loading">Build somewhere with a stage to put on events.</p>;
+    return <p className="ui-loading">Build somewhere with a stage to put on events.</p>;
   }
   return (
-    <div className="hud-programme">
-      <HudTabs
+    <div className="events-programme">
+      <Tabs
         tabs={TABS}
         current={programme.tab}
         onPick={programme.showTab}
@@ -397,7 +397,7 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
         panelId={panelId}
       />
       <div
-        className="hud-programme-page"
+        className="events-programme-page"
         role="tabpanel"
         id={panelId}
         aria-labelledby={tabIdOf(panelId, programme.tab)}

@@ -1,6 +1,6 @@
-import { HudMenu } from '../../hud/components/HudDropdown';
-import { HudOption } from '../../hud/components/HudOption';
-import { PixelIcon } from '../../hud/components/PixelIcon';
+import { DropdownMenu } from '../../../shared/components/Dropdown';
+import { MenuOption } from '../../../shared/components/MenuOption';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from './overlayNames';
 import { OVERLAY_KINDS, type OverlayKind } from '../domain/overlays';
 import { rampInto } from '../domain/ramp';
@@ -49,15 +49,15 @@ export function OverlayOptions({ kind, onKindChange, onDone }: OverlayOptionsPro
   };
   return (
     <>
-      <HudOption
+      <MenuOption
         label="Off"
         note="show the resort as it is"
         checked={kind === null}
         onSelect={pick(null)}
       />
-      <hr className="hud-rule" />
+      <hr className="ui-rule" />
       {OVERLAY_KINDS.map((each) => (
-        <HudOption
+        <MenuOption
           key={each}
           label={OVERLAY_NAMES[each]}
           note={OVERLAY_QUESTIONS[each]}
@@ -71,15 +71,15 @@ export function OverlayOptions({ kind, onKindChange, onDone }: OverlayOptionsPro
 
 export function OverlayControl({ kind, onKindChange, open, onOpenChange }: OverlayControlProps) {
   return (
-    <div className="hud-overlay">
-      <HudMenu
+    <div className="overlays">
+      <DropdownMenu
         open={open}
         onOpenChange={onOpenChange}
         title={kind ? `Map view: ${OVERLAY_QUESTIONS[kind]}` : 'Map view'}
         label={
           <>
             <PixelIcon name="overlay" />
-            <span className="hud-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Maps'}</span>
+            <span className="ui-chip-label">{kind ? OVERLAY_NAMES[kind] : 'Maps'}</span>
           </>
         }
       >
@@ -88,11 +88,11 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
           onKindChange={onKindChange}
           onDone={() => onOpenChange(false)}
         />
-      </HudMenu>
+      </DropdownMenu>
       {kind ? (
-        <p className="hud-overlay-legend">
+        <p className="ui-panel overlays-legend">
           <span>{OVERLAY_ENDS[kind][0]}</span>
-          <span className="hud-overlay-ramp" style={{ backgroundImage: RAMP_GRADIENT }} />
+          <span className="overlays-ramp" style={{ backgroundImage: RAMP_GRADIENT }} />
           <span>{OVERLAY_ENDS[kind][1]}</span>
         </p>
       ) : null}

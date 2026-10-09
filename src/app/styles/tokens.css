@@ -1,0 +1,200 @@
+/* Colours, radii, shadows and stacking levels start here; every other sheet only spends them. */
+
+/* Scaled here once rather than in every rule: 14px of HUD text is set at the 16px Jersey reads
+   well at, and every size and line height in the sheet keeps its proportions. */
+@font-face {
+  font-family: 'Jersey HUD';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/jersey-15/files/jersey-15-latin-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  size-adjust: 114.286%;
+}
+
+@font-face {
+  font-family: 'Jersey HUD';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/jersey-15/files/jersey-15-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+  size-adjust: 114.286%;
+}
+
+:root {
+  color-scheme: light;
+
+  --stone-50: #fbf6ec;
+  --stone-100: #f4ebdc;
+  --stone-200: #e9ddc8;
+  --stone-300: #dccdb1;
+  --stone-400: #c7b494;
+  --stone-500: #a99676;
+  --stone-600: #86745a;
+  --stone-700: #64553f;
+  --stone-800: #463a2a;
+  --stone-900: #2f271b;
+
+  --terracotta: #bf5a33;
+  --terracotta-lit: #d9784c;
+  --terracotta-deep: #8f3f1e;
+  --foliage: #5b8a2a;
+  --ochre: #9a6117;
+  --lamp-on: #7cc443;
+  --lamp-off: #d2503a;
+  /* The pixel icons' warm, red and quiet grey inks, so a demand bar reads like the icons beside it. */
+  --ink-warm: #e98a2c;
+  --ink-red: #d2503a;
+  --ink-quiet: #8e9aab;
+  --pin-cleaner: #2f8e9e;
+  --pin-lifeguard: #d2503a;
+  --pin-animator: #f5c03c;
+  --pin-mechanic: #6c7686;
+  --price: #f7d58a;
+  --price-short: #ff9a78;
+
+  /* Brown specks at a fine scale and soft patches at a coarse one: flat colour reads as
+     plastic, the two together as cut sandstone. */
+  --grain: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.26 0 0 0 0 0.16 0 0 0 1.5 -0.66'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23g)'/%3E%3C/svg%3E");
+  --mottle: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.011' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.33 0 0 0 0 0.2 0.7 0 0 0 -0.28'/%3E%3C/filter%3E%3Crect width='360' height='360' filter='url(%23m)'/%3E%3C/svg%3E");
+  --slab:
+    var(--grain), var(--mottle),
+    linear-gradient(165deg, var(--stone-100) 0%, var(--stone-200) 55%, var(--stone-300) 100%);
+  --slab-raised: var(--grain), linear-gradient(180deg, var(--stone-50) 0%, var(--stone-200) 100%);
+  --slab-accent: var(--grain), linear-gradient(180deg, var(--terracotta-lit), var(--terracotta));
+  --sunken: linear-gradient(180deg, var(--stone-300) 0%, var(--stone-200) 100%);
+  /* Flat on purpose: the one ground a sticky heading can share with the tiles
+     scrolling under it. */
+  --tray: #e3d5bc;
+  --tile-ground: radial-gradient(circle at 50% 38%, #fbf5ea 0%, #ebdfc9 60%, #dccbad 100%);
+  --plate: linear-gradient(180deg, rgb(251 246 236 / 0%), rgb(251 246 236 / 92%) 48%);
+  --plate-accent: linear-gradient(180deg, rgb(143 63 30 / 0%), rgb(143 63 30 / 92%) 55%);
+  --badge: rgb(58 46 34 / 78%);
+  --badge-rim: rgb(255 246 234 / 35%);
+  --need-notch: rgb(0 0 0 / 18%);
+  --lamp-rim: rgb(0 0 0 / 45%);
+
+  --edge: rgb(80 58 34 / 50%);
+  --edge-soft: rgb(80 58 34 / 22%);
+  --edge-strong: rgb(80 58 34 / 65%);
+  --wash-key: rgb(255 255 255 / 40%);
+  --wash-hover: rgb(255 255 255 / 45%);
+  --wash-selected: rgb(255 255 255 / 55%);
+  --bevel: inset 2px 2px 0 rgb(255 255 255 / 55%), inset -2px -2px 0 rgb(110 82 50 / 20%);
+  --bevel-in: inset 2px 2px 3px rgb(90 64 38 / 32%), inset -1px -1px 0 rgb(255 255 255 / 55%);
+  --shadow-slab: 0 2px 0 rgb(90 64 38 / 30%), 0 10px 26px rgb(48 32 16 / 30%);
+  --shadow-lift: 0 3px 8px rgb(48 32 16 / 28%);
+  --shadow-ledge: 0 1px 0 rgb(90 64 38 / 25%);
+  --shadow-drag: 0 18px 40px rgb(48 32 16 / 38%);
+  --emboss: 1px 1px 0 rgb(255 255 255 / 55%);
+  --shadow-accent-text: 0 1px 0 rgb(0 0 0 / 25%);
+  --glow-accent: 0 0 0 1px var(--terracotta), 0 0 12px rgb(191 90 51 / 45%);
+  --knob-size: 14px;
+  --knob-face: linear-gradient(180deg, var(--stone-50), var(--stone-400));
+  --knob-shadow: 0 0 0 1px var(--edge), 0 2px 3px rgb(48 32 16 / 35%);
+
+  /* Stepped like stacked voxels, lit from the top left, so the title reads as built, not printed. */
+  --extrude:
+    2px 2px 0 var(--terracotta-lit), 4px 4px 0 var(--terracotta), 6px 6px 0 var(--terracotta-deep),
+    8px 8px 0 var(--stone-900), 10px 16px 28px rgb(20 12 4 / 45%);
+  --shadow-caption: 0 1px 2px rgb(20 12 4 / 70%);
+  --backdrop:
+    var(--grain), radial-gradient(ellipse at 70% 35%, var(--stone-700), var(--stone-900) 70%);
+  /* Darkest behind the menu and gone by the middle, so the resort stays the picture. */
+  --scrim: linear-gradient(90deg, rgb(35 27 17 / 62%) 0%, rgb(35 27 17 / 30%) 38%, transparent 62%);
+  --veil: rgb(47 39 27 / 28%);
+  --veil-deep: rgb(47 39 27 / 55%);
+
+  --text: #3a2e22;
+  --text-dim: #6b5a45;
+  --text-faint: #917e66;
+  --text-on-accent: #fff6ea;
+  --text-on-accent-dim: rgb(255 246 234 / 75%);
+
+  /* One face for words and figures alike: Jersey's digits stay apart even at note size. */
+  --font-ui: 'Jersey HUD', ui-sans-serif, system-ui, sans-serif;
+  --font-title: 'Pixelify Sans Variable', ui-sans-serif, system-ui, sans-serif;
+  /* Drawn on an 8px grid, so it stays crisp only at 8 or 16. */
+  --font-label: 'Silkscreen', 'Pixelify Sans Variable', ui-monospace, monospace;
+  --size-label: 8px;
+  --size-small: 12px;
+  --size-body: 14px;
+  --size-lead: 17px;
+  --track-label: 0.06em;
+
+  --space-1: 3px;
+  --space-2: 6px;
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 20px;
+  --dropdown-inset: var(--space-1) var(--space-2);
+
+  /* Unequal corners on each axis, so no two edges curve alike and a panel or button reads as
+     a worn stone rather than a rounded rectangle. */
+  --radius-pebble: 12px 8px 11px 9px / 8px 11px 9px 12px;
+  /* The menus' pixel caret, in the dim text brown. */
+  --select-caret: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%236b5a45' d='M0 0h10v2H8v2H6v2H4V4H2V2H0z'/%3E%3C/svg%3E");
+  --radius-sm: 4px;
+
+  --control-h: 32px;
+  --bar-h: 56px;
+  /* Plain pixels, not calc(): the window drag reads it back from script. */
+  --window-floor: 62px;
+  --palette-w: 284px;
+  --tile-min: 60px;
+
+  /* Taller than the plates, so they float with a little of the map showing above and below. */
+  --strip-h: 48px;
+  --strip-control-h: 32px;
+  --dock-h: 56px;
+  --rail-w: 56px;
+  /* A share of the room between strip and dock, not a length: it multiplies that room. */
+  --sheet-half: 0.55;
+  --sheet-w: min(380px, 48vw);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --quick: 120ms var(--ease);
+  --pop: 150ms var(--ease);
+
+  /* The HUD's stack over the canvas. The windows sit between floating and bar: HudWindow numbers
+     them up from 10. */
+  --z-signs: 2;
+  --z-pins: 3;
+  --z-markers: 4;
+  --z-toasts: 5;
+  --z-floating: 6;
+  --z-bar: 100;
+  --z-error: 200;
+  --z-modal: 300;
+  --z-over-modal: 301;
+
+  --cursor: url('../cursors/arrow.svg') 1 1, default;
+  --cursor-hand: url('../cursors/hand.svg') 9 1, pointer;
+  --cursor-build: url('../cursors/build.svg') 15 15, crosshair;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --quick: 1ms linear;
+    --pop: 1ms linear;
+  }
+}
+
+/* The drag reads --window-floor back, so it grows with the bar: 8 px taller controls. */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 40px;
+    --bar-h: 64px;
+    --window-floor: 70px;
+  }
+}

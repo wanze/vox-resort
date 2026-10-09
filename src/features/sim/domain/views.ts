@@ -19,6 +19,16 @@ const SEA_SHARE = 0.6;
 // A bare hilltop reaches the bar for a photo; a dressed one, or one above the sea, clears it.
 const HEIGHT_SHARE = 0.5;
 
+// A sight in view counts beside the scenery it spreads, which saturates: a plaza around a fountain
+// scored no better than a bare sea view, and was hardly ever photographed.
+const SIGHT_SHARE = 0.3;
+
+// A pond, a canal or a river close by; the sea is counted on its own, across the sand.
+const POND_SHARE = 0.4;
+
+// Tiles of inland water within VIEW_REACH for the full share: two short canals by a bridge.
+const POND_FULL = 12;
+
 // A fountain, a statue or a bed of flowers is a sight; a hedge or a plain tree (0.3, 0.4) dresses
 // a tile, but nobody photographs it.
 const SIGHT_FROM = 0.5;
@@ -89,6 +99,10 @@ export interface Views {
   readonly downhill: Float32Array;
   // An index into sights, -1 for none.
   readonly sight: Int32Array;
+  // That sight's strength, less with distance as the scenery spreads it; 0 for none.
+  readonly sightScore: Float32Array;
+  // The share of POND_FULL tiles of water within VIEW_REACH that is not the sea.
+  readonly pond: Float32Array;
   // A venue index of a stage or hearth within SHOW_REACH, -1 for none.
   readonly stage: Int32Array;
   readonly sights: readonly Sight[];
@@ -101,7 +115,15 @@ export interface Moment {
   readonly fireworks: boolean;
 }
 
-export const PHOTO_KINDS = ['sight', 'sea', 'sunset', 'show', 'fireworks', 'view'] as const;
+export const PHOTO_KINDS = [
+  'sight',
+  'sea',
+  'sunset',
+  'show',
+  'fireworks',
+  'view',
+  'water',
+] as const;
 
 export type PhotoKind = (typeof PHOTO_KINDS)[number];
 
@@ -134,6 +156,24 @@ interface WaterGrid {
   readonly width: number;
 }
 
+const WET = { sea: 1, pond: 2 } as const;
+
+// The terrain asked once a tile over the padded plot, as all three water grids read it.
+function waterKindsOf(tilesX: number, tilesZ: number, parts: Pick<ViewParts, 'isWater' | 'isSea'>) {
+  const width = tilesX + 2 * VIEW_REACH;
+  const kinds = new Uint8Array(width * (tilesZ + 2 * VIEW_REACH));
+  for (let z = 0; z < tilesZ + 2 * VIEW_REACH; z++) {
+    for (let x = 0; x < width; x++) {
+      const tileX = x - VIEW_REACH;
+      const tileZ = z - VIEW_REACH;
+      if (!parts.isWater(tileX, tileZ)) continue;
+      kinds[z * width + x] = parts.isSea(tileX, tileZ) ? WET.sea : WET.pond;
+    }
+  }
+  return (mask: number) => (tileX: number, tileZ: number) =>
+    (kinds[(tileZ + VIEW_REACH) * width + tileX + VIEW_REACH]! & mask) !== 0;
+}
+
 // Over the plot and a VIEW_REACH margin, which the terrain answers as sea or apron.
 function waterGridOf(
   tilesX: number,
@@ -156,7 +196,10 @@ function waterGridOf(
   return { water, sums, width };
 }
 
-function seaShares(tilesX: number, tilesZ: number, grid: WaterGrid): Float32Array {
+// Against the half of the square beyond a straight shore, so the shore itself reads 1.
+const SHORE_FULL = (2 * VIEW_REACH + 1) * VIEW_REACH;
+
+function waterShares(tilesX: number, tilesZ: number, grid: WaterGrid, full: number): Float32Array {
   const sea = new Float32Array(tilesX * tilesZ);
   const side = 2 * VIEW_REACH + 1;
   const stride = grid.width + 1;
@@ -168,8 +211,7 @@ function seaShares(tilesX: number, tilesZ: number, grid: WaterGrid): Float32Arra
         grid.sums[z * stride + x + side]! -
         grid.sums[(z + side) * stride + x]! +
         grid.sums[z * stride + x]!;
-      // Against the half of the square beyond a straight shore, so the shore itself reads 1.
-      sea[z * tilesX + x] = Math.min(1, count / (side * VIEW_REACH));
+      sea[z * tilesX + x] = Math.min(1, count / full);
     }
   }
   return sea;
@@ -256,7 +298,7 @@ function sightsOf(
       }
     }
   }
-  return { sight, sights };
+  return { sight, sightScore: best, sights };
 }
 
 function stagesNear(tilesX: number, tilesZ: number, venues: readonly ViewVenue[]): Int32Array {
@@ -300,17 +342,28 @@ export interface ViewParts extends OutlookParts {
 // Once per edit, beside the scenery field: nothing per tick scans the plot.
 export function viewsFor(parts: ViewParts): Views {
   const { tilesX, tilesZ, scenery } = parts;
-  const grid = waterGridOf(tilesX, tilesZ, parts.isWater);
-  const water = seaShares(tilesX, tilesZ, grid);
+  const wetAt = waterKindsOf(tilesX, tilesZ, parts);
+  const grid = waterGridOf(tilesX, tilesZ, wetAt(WET.sea | WET.pond));
+  const water = waterShares(tilesX, tilesZ, grid, SHORE_FULL);
+  const seaWater = waterShares(
+    tilesX,
+    tilesZ,
+    waterGridOf(tilesX, tilesZ, wetAt(WET.sea)),
+    SHORE_FULL,
+  );
+  const pond = waterShares(tilesX, tilesZ, waterGridOf(tilesX, tilesZ, wetAt(WET.pond)), POND_FULL);
   const outlook = outlookFor(parts);
+  const sights = sightsOf(tilesX, tilesZ, parts.placements, parts.strengthOf, parts.labelOf);
   const sea = new Float32Array(tilesX * tilesZ);
   const base = new Float32Array(tilesX * tilesZ);
   for (let tile = 0; tile < base.length; tile++) {
-    sea[tile] = Math.max(water[tile]!, outlook.horizon[tile]!);
+    sea[tile] = Math.max(seaWater[tile]!, outlook.horizon[tile]!);
     base[tile] = clamp01(
       SCENERY_SHARE * scenery.value[tile]! +
         SEA_SHARE * sea[tile]! +
-        HEIGHT_SHARE * outlook.overlook[tile]!,
+        HEIGHT_SHARE * outlook.overlook[tile]! +
+        SIGHT_SHARE * sights.sightScore[tile]! +
+        POND_SHARE * pond[tile]!,
     );
   }
   return {
@@ -319,10 +372,11 @@ export function viewsFor(parts: ViewParts): Views {
     base,
     water,
     sea,
+    pond,
     seaHeading: seaHeadings(tilesX, tilesZ, water, grid, outlook.horizonHeading),
     overlook: outlook.overlook,
     downhill: outlook.downhill,
-    ...sightsOf(tilesX, tilesZ, parts.placements, parts.strengthOf, parts.labelOf),
+    ...sights,
     stage: stagesNear(tilesX, tilesZ, parts.venues),
   };
 }
@@ -372,7 +426,7 @@ function viewOf(
   views: Views,
   tile: number,
   venues: readonly ViewVenue[],
-  kind: 'sea' | 'sunset' | 'fireworks' | 'view',
+  kind: 'sea' | 'sunset' | 'fireworks' | 'view' | 'water',
   label: string,
 ): PhotoSubject {
   const cellX = Math.floor((tile % views.tilesX) / SPOT_CELL);
@@ -401,7 +455,9 @@ export function subjectAt(
   if (moment.golden > 0 && sea >= 0.5) return viewOf(views, tile, venues, 'sunset', 'Sunset');
   const sight = views.sights[views.sight[tile]!];
   if (sight) return { kind: 'sight', key: sight.key, label: sight.label, at: sight };
-  return viewOf(views, tile, venues, sea > 0 ? 'sea' : 'view', sea > 0 ? 'Sea' : 'View');
+  if (sea > 0) return viewOf(views, tile, venues, 'sea', 'Sea');
+  if (views.pond[tile]! > 0) return viewOf(views, tile, venues, 'water', 'Water');
+  return viewOf(views, tile, venues, 'view', 'View');
 }
 
 // From a body at (x, z) in voxels on the tile; a view with nothing to face keeps `fallback`.
@@ -415,6 +471,7 @@ export function headingFor(
 ): number {
   if (subject.at) return Math.atan2(subject.at.x - x, subject.at.z - z);
   if (subject.kind === 'sunset') return SUNSET_HEADING;
+  // seaHeading faces the nearest water of any kind, so a pond as well as the sea.
   const facing = subject.kind === 'view' ? views.downhill[tile]! : views.seaHeading[tile]!;
   return Number.isNaN(facing) ? fallback : facing;
 }

@@ -231,6 +231,20 @@ describe('snapshotResort', () => {
     expect(fresh.history[0]!.photos).toEqual(state.today.photos);
   });
 
+  it("keeps a photo's framing through a save, and reads a spot saved without one", () => {
+    const state = played();
+    const shot = { key: 'sea@1,2', subject: 'Sea', kind: 'sea' as const, x: 8, y: 2, z: 9 };
+    state.today = countPhoto(state.today, { ...shot, heading: 1, minute: 600, fov: 52, tilt: 0 });
+    const saved = snapshotResort(state);
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(saved));
+    expect(fresh.today.photos!.spots[0]).toMatchObject({ fov: 52, tilt: 0 });
+    const { fov: _fov, tilt: _tilt, ...plain } = saved.today.photos!.spots[0]!;
+    const before = { ...saved, today: { ...saved.today, photos: { taken: 1, spots: [plain] } } };
+    const parsed = resortSnapshotSchema.parse(before).today.photos!.spots[0]!;
+    expect('fov' in parsed || 'tilt' in parsed).toBe(false);
+  });
+
   it('restores a save from before photos with nobody having taken one', () => {
     const state = played();
     notePhoto(state.photos, 4, 2, 600);

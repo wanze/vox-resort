@@ -168,6 +168,8 @@ export interface Router {
   forgetTheDay(): void;
   visitOf(person: number): Visit | null;
   stayOf(person: number): BeachStay | null;
+  // On a leg over the sand to or from their pitch, or on an errand from it.
+  walksTheSand(person: number): boolean;
   // When a resting beach stay ends, in ticks; NaN for anybody not resting there.
   restingUntil(person: number): number;
   // Resting on the open sand: a lounger stands under a parasol, and a sail shades a towel.
@@ -1389,6 +1391,14 @@ export function createRouter(parts: {
       if (!venue || !isBeach(venue)) return null;
       if (state.errands.back[person] === 1) return 'leaving';
       return isWaiting(crowd(), person) ? 'resting' : 'arriving';
+    },
+
+    walksTheSand(person) {
+      if (person < 0 || person >= goals.count) return false;
+      if (state.asleep[person] === 1 || state.leaving[person] === 1) return false;
+      if (state.fetching[person]! >= 0) return true;
+      const stay = this.stayOf(person);
+      return stay === 'arriving' || stay === 'leaving';
     },
 
     restingUntil(person) {

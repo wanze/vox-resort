@@ -354,6 +354,9 @@ it('reports a few days on a generated plot', () => {
 
   // Caught each tick: the check-in starts a fresh tally before the morning hook can read it.
   let photosToday: PhotoTally | undefined;
+  // A photo taken off the graph was taken on the sand: nobody pauses on the sand any other way.
+  const photoSeen = state.photos.lastAt.slice();
+  let sandPhotos = 0;
   const photoLine = (present: number): string => {
     const taken = photosToday?.taken ?? 0;
     const sunsets = [...state.thoughtDay.values()]
@@ -366,7 +369,8 @@ it('reports a few days on a generated plot', () => {
       .map((spot) => `${spot.subject} ${spot.count}`);
     return (
       `  photos: ${taken} taken (${(taken / Math.max(1, present)).toFixed(2)} per guest), ` +
-      `sunsets ${sunsets}, spots ${spots.length}, top: ${top.join(', ') || 'none'}`
+      `sunsets ${sunsets}, on the sand ${sandPhotos}, spots ${spots.length}, ` +
+      `top: ${top.join(', ') || 'none'}`
     );
   };
 
@@ -405,9 +409,19 @@ it('reports a few days on a generated plot', () => {
       );
     }
     photosToday = undefined;
+    sandPhotos = 0;
     trips.length = 0;
     changedMind = 0;
     Object.assign(needDay, createNeedDay());
+  };
+
+  const countSandPhotos = (): void => {
+    for (let person = 0; person < population; person++) {
+      const last = state.photos.lastAt[person]!;
+      if (last === photoSeen[person]) continue;
+      photoSeen[person] = last;
+      if (last >= 0 && crowd.node[person]! < 0) sandPhotos++;
+    }
   };
 
   let newest: Review | undefined;
@@ -415,6 +429,7 @@ it('reports a few days on a generated plot', () => {
     for (const review of newReviews(state.reviews, newest)) stars.push(review.stars);
     newest = state.reviews[0];
     photosToday = state.today.photos ?? photosToday;
+    if (PHOTOS) countSandPhotos();
 
     for (let person = 0; person < population; person++) {
       const toBeach = router.goalOf(person)?.label === 'Beach' && router.visitOf(person) === null;

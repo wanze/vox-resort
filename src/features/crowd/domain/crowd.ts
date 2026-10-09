@@ -150,8 +150,9 @@ export interface CrowdOptions {
   readonly offTheSand?: (person: number) => boolean;
   // A share of the body's drawn speed, asked per edge: who walks in a body changes at check-in.
   readonly paceOf?: (person: number) => number;
-  // Asked first on reaching a node, before the arrival's draws, so it must draw nothing itself:
-  // a crowd it always answers null for replays as one without it.
+  // Asked first on reaching a node or the end of a sand leg (ON_SAND), before the arrival's
+  // draws, so it must draw nothing itself: a crowd it always answers null for replays as one
+  // without it.
   readonly pausesAt?: (person: number, node: number) => Pause | null;
   readonly roamsBeach?: boolean;
 }
@@ -727,6 +728,12 @@ function stopPartWay(crowd: Crowd, i: number): void {
 // acted if and only if it restarted `t`; if not, they become a roamer.
 function runErrand(crowd: Crowd, i: number): void {
   standAtTheEnd(crowd, i);
+  // `node` stays ERRAND through the pause, so its end runs this again on the same spot.
+  const pause = crowd.pausesAt?.(i, ON_SAND) ?? null;
+  if (pause) {
+    standFor(crowd, i, pause);
+    return;
+  }
   crowd.routeOf?.(i, ON_SAND);
   if (crowd.t[i]! < 1) return;
   crowd.gate[i] = nearestGate(crowd.network, crowd.fromX[i]!, crowd.fromZ[i]!);
@@ -765,7 +772,8 @@ export function isWaiting(crowd: Crowd, i: number): boolean {
 export function restingOn(crowd: Crowd, i: number): number {
   if (crowd.node[i] === HELD) return crowd.holdPose[i]!;
   // Every walk away goes through `aim`, which sets another lane, so a stale pose never shows.
-  const standing = crowd.node[i]! >= 0 && crowd.lane[i] === LANE.none;
+  const node = crowd.node[i]!;
+  const standing = (node >= 0 || node === ERRAND) && crowd.lane[i] === LANE.none;
   if (standing && crowd.holdPose[i] === DRAWN_POSE.photo) return DRAWN_POSE.photo;
   if (crowd.node[i] !== SEATED) return RESTING.none;
   return crowd.network.seats[crowd.seat[i]!]!.pose === 'lie' ? RESTING.lying : RESTING.sitting;

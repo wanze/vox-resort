@@ -488,8 +488,14 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
 `outlook.ts`, `photos.ts`; the decision is `resort-sim/domain/photoSteps.ts`).
 
 - **The scenic value** of a tile is built once per edit, with the scenery:
-  `0.7 × scenery + 0.6 × sea + 0.5 × overlook`, clamped to 1.
-  - `sea` is the larger of the water within 6 tiles and the sea seen across
+  `0.7 × scenery + 0.6 × sea + 0.5 × overlook + 0.3 × sight + 0.4 × pond`,
+  clamped to 1.
+  - `sight` is the strongest sight's strength, less with distance as the
+    scenery spreads it (a fountain beside the tile 0.8): the scenery field
+    saturates, so without it a fountain plaza scored no better than a bare sea
+    view. `pond` is the inland water (not sea) within 6 tiles, full at 12
+    tiles: a canal under a bridge, a pond, a river.
+  - `sea` is the larger of the sea within 6 tiles and the sea seen across
     open ground. The sea lies towards +z, so three rays (straight and the two
     diagonals) are swept from the shore inland; a ray is clear if nothing on
     the way (ground plus the tallest model on the tile) reaches the guest's
@@ -503,28 +509,62 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
     `0.8 × sea`. Rain and storms make it 0. Litter on the tile and a broken
     venue within 2 tiles (0.3) are taken off after the draw.
 - **Who and how often**: a present adult reaching a path node whom the router
-  calls free (not asleep, leaving, arriving, visiting or on an errand), at most
-  once every 3 sim hours. At a value `v >= 0.5` the chance per node reached is
-  `PHOTO_CHANCE × (v - 0.5) / 0.5`, hashed from person, node and tick. Nobody
-  on the sand, and no children. Off while the clock is paused, so a bench
-  replays unchanged.
+  calls free (not asleep, leaving, arriving, visiting or on an errand), or at
+  the end of a leg over the sand to or from their pitch, or on an errand from
+  it (`router.walksTheSand`), at most once every 3 sim hours. At a value
+  `v >= 0.5` the chance per stop is `PHOTO_CHANCE × (v - 0.5) / 0.5`, hashed
+  from person, node (`ON_SAND` on the sand) and tick. Nobody resting on the
+  beach, swimming or on a lounger, and no children. Off while the clock is
+  paused, so a bench replays unchanged.
+- **On the sand** the value is the beach tile under the body: level 0, so no
+  overlook; the sea and the sunset carry it, which makes a sand photo rare by
+  day (about 1 % a leg) and likely in the golden hour. It counts in the tally
+  and the thoughts, not on the overlay, which is per node.
 - **The pause** is asked by the crowd (`pausesAt`) before an arrival's draws,
-  and draws nothing itself. It is a 6-second timed stand on the node (`photo`
-  pose, both arms up, facing the subject), out of avoidance as a sitter is.
+  and draws nothing itself. It is a 6-second timed stand on the node, or at
+  the end of the sand leg (`runErrand` asks before the router, and asks again
+  when the pause runs out, which the 3-hour gap answers no), in the `photo`
+  pose, both arms up, facing the picture's heading, out of avoidance as a
+  sitter is.
 - **The subject**, first that applies: the fireworks, a show, the sunset (sea
   of 0.5 or more in the golden hour, facing the setting sun), a sight (a model
   of scenery 0.5 or more within 4 tiles: fountain, statue, flowerbed,
-  blossom), the sea, or the view (facing downhill). A sight or a show is keyed
+  blossom), the sea, inland water ("Water", facing it), or the view (facing
+  downhill). A sight or a show is keyed
   by its placement; the rest by kind and 8-tile cell (`sea@12,30`), named
   after a named venue within 12 tiles ("Sea by Float & Sip").
+- **Framing**: each photo has its own, hashed from person, node and tick
+  (`photo/domain/framing.ts`): the heading turned up to ±12° (±5° for a sight
+  or a show, which must stay in frame), a field of view of 45° to 70° and a
+  tilt of -0.02 to 0.2 rad. The heading is stored turned; `fov` and `tilt` are
+  stored on the spot, and a spot saved without them draws at 60° and 0.12.
 - **Effects**: a stay memory of `0.01 / (1 + photos so far)` (reviews, not the
   rating), a `photo` or `sunset` thought, a count on the node (halved every
   morning) and the day's tally of spots, each with its latest viewpoint.
+- **Spots kept**: 24 a day. Past that, the least photographed spot **of the
+  kind with the most spots** goes (the earliest on a tie), so a day of twenty
+  sea cells keeps its one sunset. The day report keeps the 12 most
+  photographed; its panel shows three.
 - **Shown** in the Photos overlay, the day report's "Most photographed", and
-  the Overview's Photo wall, which renders each spot from its latest viewpoint
-  as the resort looks now, never saved.
-- **The one dial** is `PHOTO_CHANCE` (0.05). On the reference resort that is
-  about 0.7 to 1.3 photos per guest a day, and 25 to 45 sunsets. Measure a
+  the Overview's Photo wall. The wall hangs every tracked spot of today and
+  the last report's, grouped Sunsets, Shows, Fireworks, Sights, Sea, Water, Views,
+  each by count. A card renders when it scrolls into view, one at a time,
+  never saved. Clicking one opens a lightbox: the same spot drawn at up to
+  960x640, with Previous and Next across the wall, Save and Share (captioned
+  with the resort's name).
+- **A picture is drawn at its photo's hour** (`photoMode.pictureOf`): the look
+  time is set to the photo's minute for the capture and put back before the
+  read-back is awaited, so the sun, the dome, shadows and lamps follow; the
+  weather, the parasols and which rooms are lit are today's. **The flash**: a
+  photo from sunset to 07:00 (ramping over 20 minutes either side) is drawn
+  with the ambient light raised and whitened (`setFlash`, a uniform, so no
+  shader rebuild and no light to pay for every frame), then the pixels get a
+  centre-weighted lift (`photo/domain/flash.ts`), so the foreground reads and
+  the night sky stays dark. Guests show no flash in the game (see plan 109).
+- **Dunes**: beach walkers stay on the level-0 sand; dune sand is an obstacle
+  to them. Guests on paving over a dune score its height.
+- **The one dial** is `PHOTO_CHANCE` (0.04). On the reference resort that is
+  about 1.0 to 1.4 photos per guest a day, and 20 to 40 sunsets. Measure a
   change with `SIM_PHOTOS=1 pnpm sim:report`; without the variable the report
   takes no photos.
 

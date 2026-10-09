@@ -280,7 +280,7 @@ import {
 import type { RideCommand } from '../features/guest-view/domain/followRules';
 import { createGuestView } from './guestView';
 import { createPhotoMode, type Viewpoint } from './photoMode';
-import type { PhotoPixels } from '../features/photo/domain/photoPixels';
+import type { PhotoPixels, PhotoSize } from '../features/photo/domain/photoPixels';
 import { snapLookTime } from '../features/photo/domain/photoView';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
@@ -493,7 +493,7 @@ export interface Showcase {
   // Called between frames: the photo is drawn offscreen at the buffer's size times the scale.
   capturePhoto(scale: number): Promise<PhotoPixels>;
   // A picture for the photo wall, from where a guest took their photo.
-  pictureOf(spot: Viewpoint): Promise<PhotoPixels>;
+  pictureOf(spot: Viewpoint, size?: PhotoSize): Promise<PhotoPixels>;
   // Only for a followed guest who is drawn; false, and nothing done, for anybody else.
   setSelfie(on: boolean): boolean;
   postcardView(): PostcardView;

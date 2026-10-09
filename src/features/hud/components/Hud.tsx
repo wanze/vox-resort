@@ -193,7 +193,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
   photos: ({ voices, history, photo }) => (
-    <PhotoWallPanel today={voices.photos} history={history.history} onPicture={photo.picture} />
+    <PhotoWallPanel today={voices.photos} history={history.history} photo={photo} />
   ),
   guests: (props) => <GuestsPanel voices={props.voices} />,
   staff: ({ stats, status, resort }) => (

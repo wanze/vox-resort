@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import referenceJson from '../../../../fixtures/reference-resort.json';
-import { shoreFor } from '../../layout/domain/shoreline';
+import { ON_SAND } from '../../crowd/domain/crowd';
+import { isBeach, shoreFor } from '../../layout/domain/shoreline';
+import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
@@ -115,5 +117,51 @@ describe('photoPause', () => {
     expect(state.moment.golden).toBeGreaterThan(0);
     refreshMoment(state, { ...now, weather: 'storm' });
     expect(state.moment.wet).toBe(true);
+  });
+
+  // The beach tile with the widest view of the sea, and a guest stood on it.
+  const onTheShore = (state: SimState, person: number): void => {
+    let best = -1;
+    for (let tile = 0; tile < facts.views.sea.length; tile++) {
+      const tileX = tile % facts.views.tilesX;
+      const tileZ = Math.floor(tile / facts.views.tilesX);
+      if (!isBeach(shore, tileX, tileZ)) continue;
+      if (best < 0 || facts.views.sea[tile]! > facts.views.sea[best]!) best = tile;
+    }
+    const { crowd } = state.crowd;
+    crowd.x[person] = ((best % facts.views.tilesX) + 0.5) * TILE_VOXELS;
+    crowd.z[person] = (Math.floor(best / facts.views.tilesX) + 0.5) * TILE_VOXELS;
+  };
+
+  const onTheSand = (state: SimState, person: number) => {
+    for (let tick = EVENING; tick < EVENING + 60; tick++) {
+      const pause = photoPause(state, person, ON_SAND, tick);
+      if (pause) return { pause, tick };
+    }
+    return null;
+  };
+
+  it('stops a guest walking the sand to their pitch for the sunset, counted but not on a node', () => {
+    const state = freshState();
+    state.moment = momentAt(EVENING, 'clear', false);
+    const person = photographer(state);
+    onTheShore(state, person);
+    vi.spyOn(state.router, 'stayOf').mockReturnValue('arriving');
+    const taken = onTheSand(state, person);
+    expect(taken, 'no photo in an hour on the sand').not.toBeNull();
+    expect(stayCount(state.thoughts, person, 'sunset')).toBe(1);
+    expect(Array.from(state.photos.heat).every((heat) => heat === 0)).toBe(true);
+    const spot = state.today.photos?.spots[0];
+    expect(spot).toMatchObject({ kind: 'sunset', x: state.crowd.crowd.x[person] });
+  });
+
+  it('never stops a guest resting on the beach', () => {
+    const state = freshState();
+    state.moment = momentAt(EVENING, 'clear', false);
+    const person = photographer(state);
+    onTheShore(state, person);
+    vi.spyOn(state.router, 'stayOf').mockReturnValue('resting');
+    expect(onTheSand(state, person)).toBeNull();
+    expect(state.photos.lastAt[person]).toBe(NEVER);
   });
 });

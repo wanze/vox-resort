@@ -15,6 +15,14 @@ const isPerspective = (camera: Camera): camera is PerspectiveCamera =>
 const bottomUp = (renderer: WebGPURenderer): boolean =>
   (renderer.backend as { isWebGLBackend?: boolean }).isWebGLBackend === true;
 
+// Three refreshes the lights' uniforms once per animation frame, not per render, so a capture
+// that moved the sun or the ambient would be lit as the frame was. Internal to Three.js: without
+// it the picture keeps the frame's light rather than breaking.
+function nextNodeFrame(renderer: WebGPURenderer): void {
+  const nodes = Reflect.get(renderer, '_nodes') as { nodeFrame?: { update(): void } } | undefined;
+  nodes?.nodeFrame?.update();
+}
+
 // An output target, not a plain one: three then still runs its output pass, the sRGB encode and
 // the multisample resolve, into it. Not sRGB-typed itself, or the encode would happen twice.
 export function createPhotoCapture(renderer: WebGPURenderer): PhotoCapture {
@@ -32,8 +40,11 @@ export function createPhotoCapture(renderer: WebGPURenderer): PhotoCapture {
         const previous = renderer.getRenderTarget();
         try {
           renderer.setOutputRenderTarget(target);
+          nextNodeFrame(renderer);
           renderer.render(scene, camera);
         } finally {
+          // Again, so a render later in this frame reads the light the caller puts back.
+          nextNodeFrame(renderer);
           // Both: render() leaves the output target set as the current one too, and every frame
           // after would draw into this disposed target instead of the canvas.
           renderer.setOutputRenderTarget(previousOutput);

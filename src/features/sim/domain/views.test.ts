@@ -126,6 +126,31 @@ describe('viewsFor', () => {
     expect(strong.sights[strong.sight[at(5, 5)]!]?.key).toBe('fountain');
   });
 
+  it('lifts the tiles around a sight beyond what its scenery alone gives', () => {
+    const plaza = viewsOn(() => false, [placed('fountain', 5, 5)]);
+    const plain = viewsOn(() => false, [placed('mosaic', 5, 5)]);
+    const beside = at(6, 5);
+    expect(plaza.sightScore[beside]).toBeCloseTo(0.8);
+    expect(plain.sightScore[beside]).toBe(0);
+    // The scenery a fountain spreads one tile away, 0.8, saturates to 0.8 / 2.8.
+    expect(plaza.base[beside]).toBeCloseTo(0.7 * (0.8 / 2.8) + 0.3 * 0.8);
+  });
+
+  it('counts a pond as water of its own, not as the sea', () => {
+    const views = viewsOn(pond, [], [], () => false);
+    const bank = at(10, 12);
+    expect(views.pond[bank]).toBe(1);
+    expect(views.sea[bank]).toBe(0);
+    expect(views.base[bank]).toBeCloseTo(0.4);
+    expect(views.pond[at(1, 1)]).toBe(0);
+    expect(subjectAt(views, bank, NOON, nobodyShowing, [])).toMatchObject({
+      kind: 'water',
+      label: 'Water',
+    });
+    const evening = momentAt(tickAt(21), 'clear', false);
+    expect(subjectAt(views, bank, evening, nobodyShowing, []).kind).toBe('water');
+  });
+
   it('never makes a mosaic a sight', () => {
     const views = viewsOn(() => false, [placed('mosaic', 5, 5)]);
     expect(views.sights).toHaveLength(0);

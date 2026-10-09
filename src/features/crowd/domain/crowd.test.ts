@@ -1588,3 +1588,156 @@ describe('pausing for a photo', () => {
     expect(reseated.lane[0]).toBe(LANE.paved);
   });
 });
+
+const untilPosing = (crowd: Crowd): number => {
+  for (let step = 0; step < 6000; step++) {
+    stepCrowd(crowd, MAX_STEP);
+    for (let i = 0; i < crowd.count; i++) {
+      if (crowd.node[i] !== -1 && restingOn(crowd, i) === DRAWN_POSE.photo) return i;
+    }
+  }
+  throw new Error('nobody paused on the sand');
+};
+
+describe('pausing for a photo on the sand', () => {
+  const PAUSE: Pause = { seconds: 6, heading: 1 };
+  const shore = shoreFor({
+    tilesX: 20,
+    tilesZ: 20,
+    shore: { inset: 1, beach: 6, wave: 0, seed: 1 },
+  });
+  const beach = (): WalkNetwork =>
+    walkNetworkFor({ paved: boardwalk(8), levelOf: FLAT, shore, tilesX: 20 });
+  const FIRST = { x: 6.5 * TILE_VOXELS, z: 14.5 * TILE_VOXELS };
+  const SECOND = { x: 3.5 * TILE_VOXELS, z: 13.5 * TILE_VOXELS };
+
+  // Out from a gate, a second leg, then back to the gate: every sand leg a beach guest walks.
+  const errands = (
+    network: WalkNetwork,
+    options: {
+      seed: number;
+      count: number;
+      pausesAt?: (person: number, node: number) => Pause | null;
+    },
+  ) => {
+    const legs = new Map<number, number>();
+    const asked: number[] = [];
+    let crowd: Crowd | null = null;
+    crowd = createCrowd({
+      network,
+      variants: 2,
+      roamsBeach: false,
+      ...options,
+      routeOf: (person, at) => {
+        if (at !== ON_SAND && !network.nodes[at]!.gate) return -1;
+        if (at === ON_SAND) asked.push(person);
+        const leg = legs.get(person) ?? 0;
+        legs.set(person, (leg + 1) % 3);
+        if (leg === 0) walkSandTo(crowd!, person, FIRST.x, FIRST.z);
+        else if (leg === 1) walkSandTo(crowd!, person, SECOND.x, SECOND.z);
+        else releaseTo(crowd!, person, network.gates[0]!);
+        return -1;
+      },
+    });
+    return { crowd, asked, legs };
+  };
+
+  const onSand = (crowd: Crowd) => (person: number, node: number) =>
+    node === ON_SAND && crowd.node[person] !== -1 ? PAUSE : null;
+
+  it('replays exactly as a beach crowd without the option while it never pauses anybody', () => {
+    const plain = errands(beach(), { seed: 61, count: 20 });
+    const asked = errands(beach(), { seed: 61, count: 20, pausesAt: () => null });
+    for (let step = 0; step < 4000; step++) {
+      stepCrowd(plain.crowd, MAX_STEP);
+      stepCrowd(asked.crowd, MAX_STEP);
+    }
+    expect(plain.asked.length, 'nobody walked the sand').toBeGreaterThan(10);
+    expect(snapshotCrowd(asked.crowd)).toEqual(snapshotCrowd(plain.crowd));
+  });
+
+  it('stands a person at the end of a sand leg for the pause, then asks the router as before', () => {
+    let paused = 0;
+    let drawn = 0;
+    const network = beach();
+    const holder: { crowd: Crowd | null } = { crowd: null };
+    const walked = errands(network, {
+      seed: 62,
+      count: 1,
+      pausesAt: (_, node) => {
+        if (node !== ON_SAND || paused > 0) return null;
+        paused++;
+        drawn = holder.crowd!.random.state();
+        return PAUSE;
+      },
+    });
+    holder.crowd = walked.crowd;
+    const { crowd, asked, legs } = walked;
+    legs.set(0, 1);
+    const gate = network.nodes[network.gates[0]!]!;
+    holdAt(crowd, 0, gate.x, gate.y, gate.z, 0);
+    walkSandTo(crowd, 0, FIRST.x, FIRST.z);
+    for (
+      let step = 0;
+      step < 600 && asked.length === 0 && crowd.holdPose[0] !== DRAWN_POSE.photo;
+      step++
+    ) {
+      stepCrowd(crowd, MAX_STEP);
+    }
+    expect(paused).toBe(1);
+    expect(crowd.random.state()).toBe(drawn);
+    expect(asked).toHaveLength(0);
+    expect(crowd.heading[0]).toBeCloseTo(PAUSE.heading);
+    expect(restingOn(crowd, 0)).toBe(DRAWN_POSE.photo);
+    const at = [crowd.x[0], crowd.z[0]];
+    expect(Math.hypot(at[0]! - FIRST.x, at[1]! - FIRST.z)).toBeLessThan(1);
+    for (let step = 0; step < 55; step++) stepCrowd(crowd, MAX_STEP);
+    expect([crowd.x[0], crowd.z[0]]).toEqual(at);
+    expect(asked).toHaveLength(0);
+    for (let step = 0; step < 20; step++) stepCrowd(crowd, MAX_STEP);
+    expect(asked).toEqual([0]);
+    expect(restingOn(crowd, 0)).toBe(RESTING.none);
+    expect(crowd.lane[0]).toBe(LANE.sand);
+    expect(isRoaming(crowd, 0)).toBe(false);
+  });
+
+  it('carries a crowd restored mid-pause on the sand on as the saved one goes on', () => {
+    const network = beach();
+    const holder: { crowd: Crowd | null } = { crowd: null };
+    const pausesAt = (person: number, node: number) => onSand(holder.crowd!)(person, node);
+    const saved = errands(network, { seed: 63, count: 12, pausesAt });
+    holder.crowd = saved.crowd;
+    const posing = untilPosing(saved.crowd);
+    expect(saved.crowd.toX[posing]).toBe(saved.crowd.fromX[posing]);
+    const twinHolder: { crowd: Crowd | null } = { crowd: null };
+    const twin = errands(beach(), {
+      seed: 63,
+      count: 12,
+      pausesAt: (person, node) => onSand(twinHolder.crowd!)(person, node),
+    });
+    for (const [person, leg] of saved.legs) twin.legs.set(person, leg);
+    const restored = restoreCrowd(twin.crowd, snapshotCrowd(saved.crowd));
+    twinHolder.crowd = restored;
+    expect(restingOn(restored, posing)).toBe(DRAWN_POSE.photo);
+    for (let step = 0; step < 900; step++) {
+      stepCrowd(saved.crowd, MAX_STEP);
+      stepCrowd(restored, MAX_STEP);
+    }
+    expect(snapshotCrowd(restored)).toEqual(snapshotCrowd(saved.crowd));
+  });
+
+  it('leaves a person paused on the sand during an edit on the sand, no longer posing', () => {
+    const holder: { crowd: Crowd | null } = { crowd: null };
+    const walked = errands(beach(), {
+      seed: 64,
+      count: 12,
+      pausesAt: (person, node) => onSand(holder.crowd!)(person, node),
+    });
+    holder.crowd = walked.crowd;
+    const posing = untilPosing(walked.crowd);
+    const reseated = reseatCrowd(walked.crowd, beach());
+    expect(isRoaming(reseated, posing)).toBe(true);
+    expect(restingOn(reseated, posing)).toBe(RESTING.none);
+    expect(reseated.lane[posing]).toBe(LANE.sand);
+  });
+});

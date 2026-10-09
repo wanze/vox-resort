@@ -5,7 +5,13 @@ import type { SceneHandle } from '../features/rendering/adapters/threeScene';
 import { perspectiveLens } from '../features/rendering/domain/levelOfDetail';
 import { DRAWN_POSE } from '../features/rendering/domain/poses';
 import { createPhotoCapture } from '../features/photo/adapters/photoCapture';
-import { MAX_PHOTO_SIDE, photoSize, type PhotoPixels } from '../features/photo/domain/photoPixels';
+import { flashed, flashFor } from '../features/photo/domain/flash';
+import {
+  MAX_PHOTO_SIDE,
+  photoSize,
+  type PhotoPixels,
+  type PhotoSize,
+} from '../features/photo/domain/photoPixels';
 import { clampFov } from '../features/photo/domain/photoView';
 import {
   canSelfie,
@@ -36,8 +42,9 @@ export interface PhotoMode {
   setLookTime(time: number | null): void;
   setFov(degrees: number): void;
   capture(scale: number): Promise<PhotoPixels>;
-  // From where a guest stood, as the scene is now: the capture cannot turn the clock back.
-  pictureOf(spot: Viewpoint): Promise<PhotoPixels>;
+  // From where a guest stood, at the photo's hour, with a flash after dark. The weather, the
+  // parasols and which rooms are lit are as they are now.
+  pictureOf(spot: Viewpoint, size?: PhotoSize): Promise<PhotoPixels>;
   // Always with the sun behind the guest while it is up: the selfie is for the sunset.
   setSelfie(on: boolean): boolean;
   // Each frame after the choreography and before the crowd writes its instances.
@@ -52,6 +59,10 @@ export interface Viewpoint {
   readonly y: number;
   readonly z: number;
   readonly heading: number;
+  readonly minute: number;
+  // Absent on photos from before each had its own framing.
+  readonly fov?: number;
+  readonly tilt?: number;
 }
 
 // About the size of a card on the photo wall, at the wall's 3:2.
@@ -61,6 +72,8 @@ const PICTURE_FOV = 60;
 
 // A little up from level, as a phone is held: the horizon sits below the middle of the frame.
 const PICTURE_TILT = 0.12;
+
+const MINUTES_PER_DAY = 1440;
 
 interface Selfie {
   readonly person: number;
@@ -169,25 +182,38 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
       detailFor(handle.detailView(), size.height, handle.fov);
       return capturer.capture(handle.scene, handle.camera, size);
     },
-    // The HUD's groups are put back as they were, the overlay may be on while the wall is open,
-    // and before the read-back is awaited: the capture draws before its first await.
-    pictureOf(spot) {
+    // The HUD's groups, the hour and the flash are put back as they were before the read-back is
+    // awaited: the capture draws before its first await. Photo mode's own hour is what goes back.
+    pictureOf(spot, size = PICTURE_SIZE) {
+      const fov = spot.fov ?? PICTURE_FOV;
+      const tilt = spot.tilt ?? PICTURE_TILT;
       const eye = { x: spot.x, y: spot.y + GUEST_FRAMING.eye, z: spot.z };
+      pictureCamera.fov = fov;
+      pictureCamera.aspect = size.width / size.height;
+      pictureCamera.updateProjectionMatrix();
       pictureCamera.position.set(eye.x, eye.y, eye.z);
-      const ahead = Math.cos(PICTURE_TILT);
+      const ahead = Math.cos(tilt);
       pictureCamera.lookAt(
         eye.x + Math.sin(spot.heading) * ahead,
-        eye.y + Math.sin(PICTURE_TILT),
+        eye.y + Math.sin(tilt),
         eye.z + Math.cos(spot.heading) * ahead,
       );
       pictureCamera.updateMatrixWorld();
-      detailFor(eye, PICTURE_SIZE.height, PICTURE_FOV);
+      detailFor(eye, size.height, fov);
+      const flash = flashFor(spot.minute);
+      clock.setLookTime(spot.minute / MINUTES_PER_DAY);
+      handle.setFlash(flash);
       const groups = parts.hudGroups();
       const shown = groups.map((group) => group.visible);
       showHud(false);
-      const taken = capturer.capture(handle.scene, pictureCamera, PICTURE_SIZE);
-      groups.forEach((group, at) => (group.visible = shown[at]!));
-      return taken;
+      try {
+        const taken = capturer.capture(handle.scene, pictureCamera, size);
+        return taken.then((pixels) => flashed(pixels, flash));
+      } finally {
+        groups.forEach((group, at) => (group.visible = shown[at]!));
+        handle.setFlash(0);
+        clock.setLookTime(lookTime);
+      }
     },
     setSelfie(on) {
       release();

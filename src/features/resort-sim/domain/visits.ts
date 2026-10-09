@@ -46,7 +46,7 @@ export function surroundingsOf(resort: SimState, person: number): number {
 }
 
 // The litter grid's index of the beach tile under the body, or -1 off the beach.
-function sandTileOf(resort: SimState, person: number): number {
+export function sandTileOf(resort: SimState, person: number): number {
   const { x, z } = resort.crowd.crowd;
   const tileX = Math.floor(x[person]! / TILE_VOXELS);
   const tileZ = Math.floor(z[person]! / TILE_VOXELS);

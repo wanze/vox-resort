@@ -8,6 +8,7 @@ import type { BuildTool } from '../features/build/domain/buildTool';
 import type { FollowView } from '../features/guest-view/domain/followRules';
 import { PHOTO_FILTERS, type PhotoFilterId } from '../features/photo/domain/photoFilters';
 import { photoFileName } from '../features/photo/domain/photoName';
+import type { PhotoSize } from '../features/photo/domain/photoPixels';
 import { clampFov } from '../features/photo/domain/photoView';
 import {
   canSharePhotos,
@@ -121,6 +122,29 @@ function usePicture(showcase: RefObject<Showcase | null>) {
   return useCallback((spot: PhotoSpot) => pictureFrom(showcase, spot), [showcase]);
 }
 
+const MINUTES_PER_DAY = 1440;
+
+async function enlargedFrom(
+  showcase: RefObject<Showcase | null>,
+  parts: PhotoParts,
+  spot: PhotoSpot,
+  size: PhotoSize,
+  daysAgo: number,
+): Promise<PhotoShot | null> {
+  const mounted = showcase.current;
+  if (!mounted) return null;
+  try {
+    const pixels = await mounted.pictureOf(spot, size);
+    const look = { matrix: PHOTO_FILTERS.none.matrix, caption: nameOf(parts) };
+    const day = Math.max(0, dayOf(parts) - daysAgo);
+    const name = photoFileName(nameOf(parts), day, spot.minute / MINUTES_PER_DAY);
+    return { blob: await encodePhoto(pixels, look), name };
+  } catch (cause: unknown) {
+    console.error(cause);
+    return null;
+  }
+}
+
 export function usePhotoMode(
   showcase: RefObject<Showcase | null>,
   parts: PhotoParts,
@@ -203,5 +227,10 @@ export function usePhotoMode(
     selfie: selfie.controls,
     postcard,
     picture,
+    enlarge: (spot, size, daysAgo) => enlargedFrom(showcase, parts, spot, size, daysAgo),
+    saveShot: (shot) => savePhoto(shot.blob, shot.name),
+    shareShot: (shot) => {
+      void sharePhoto(shot.blob, shot.name, nameOf(parts)).catch(console.error);
+    },
   };
 }

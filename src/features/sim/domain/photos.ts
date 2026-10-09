@@ -9,8 +9,8 @@ export const PHOTO_GAP_TICKS = 180;
 // A shore tile by day sits just over it; a garden alone barely reaches it.
 export const PHOTO_FROM = 0.5;
 
-// The one dial: how many photos there are. Tuned on the reference resort (plan 107, Part E).
-export const PHOTO_CHANCE = 0.05;
+// The one dial: how many photos there are. Tuned on the reference resort (plans 107 and 109).
+export const PHOTO_CHANCE = 0.04;
 
 // Crowd seconds: long enough to be seen raising the phone, short beside a sit of 20 to 90.
 export const PHOTO_SECONDS = 6;

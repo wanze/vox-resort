@@ -73,6 +73,10 @@ const MAX_NEAR = 4;
 const ISO_MIN_ZOOM = 0.2;
 const ISO_MAX_ZOOM = 60;
 
+// On top of the night's 0.22, a full flash lights the near scene about as a grey day does. A
+// PointLight would change every material's light set and cost every frame while it sat at zero.
+const FLASH_AMBIENT = 0.7;
+
 // Grows with the plot: at near 0.1 an integer depth buffer let the ground win over
 // the paving at the far side. Still needed with reversedDepthBuffer, because WebGL2
 // without EXT_clip_control quietly falls back to an integer buffer.
@@ -131,6 +135,8 @@ export interface SceneHandle {
   // Must be called before OrbitControls sees the pointerdown, which reads it once per touch.
   takeFinger(taken: boolean): void;
   applySky(state: SkyState): void;
+  // Raises and whitens the ambient light, a uniform, until set back to 0: no shader rebuild.
+  setFlash(strength: number): void;
   reframe(
     bounds: WorldBounds,
     framing: CameraFraming,
@@ -254,6 +260,8 @@ interface TerrainPalette {
   setSky(color: number): void;
   dispose(): void;
 }
+
+const WHITE = new Color(0xffffff);
 
 const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, RISER_COLOR, SAND_RISER_COLOR] as const;
 
@@ -444,6 +452,12 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
 
   const ambient = new AmbientLight(0xffffff, 1.1);
   scene.add(ambient);
+  let ambientSky = { color: 0xffffff, intensity: 1.1 };
+  let flash = 0;
+  const lightAmbient = (): void => {
+    ambient.color.setHex(ambientSky.color).lerp(WHITE, flash);
+    ambient.intensity = ambientSky.intensity + flash * FLASH_AMBIENT;
+  };
   const sun = new DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
 
@@ -617,14 +631,18 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       // A direction only, from the position to the light's target, which stays at the origin:
       // offsetting the position alone tilted the light away from the sun the sky draws.
       sun.position.set(state.sunDirection.x, state.sunDirection.y, state.sunDirection.z);
-      ambient.color.setHex(state.ambientColor);
-      ambient.intensity = state.ambientIntensity;
+      ambientSky = { color: state.ambientColor, intensity: state.ambientIntensity };
+      lightAmbient();
       sky.setHex(state.skyColor);
       dome.apply(state);
       // Written whether or not the fog is in the scene, so switching back to the
       // perspective view does not bring yesterday's sky with it.
       fog.color.setHex(state.skyColor);
       palette.setSky(state.skyColor);
+    },
+    setFlash(strength) {
+      flash = Math.min(1, Math.max(0, strength));
+      lightAmbient();
     },
     resize(nextWidth, nextHeight) {
       aspect = nextWidth / nextHeight;

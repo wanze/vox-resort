@@ -31,6 +31,9 @@ export interface PhotoSpot {
   readonly z: number;
   readonly heading: number;
   readonly minute: number;
+  // Absent in saves from before each photo had its own framing.
+  readonly fov?: number;
+  readonly tilt?: number;
 }
 
 export interface PhotoTally {
@@ -78,7 +81,8 @@ export const LOUDEST_KEPT = 3;
 // Enough that a spot climbing the list late in the day is not dropped before it gets there.
 export const SPOTS_TRACKED = 24;
 
-export const PHOTO_SPOTS_KEPT = 3;
+// Enough for yesterday's photo wall to show a few of every kind; the report panel shows three.
+export const PHOTO_SPOTS_KEPT = 12;
 
 // Adding zero turns a -0 from rounding a tiny fall into a plain 0.
 const oneDecimal = (value: number): number => Math.round(value * 10) / 10 + 0;
@@ -134,8 +138,8 @@ export function noteWelcomeGap(counts: DayCounts, gap: WelcomeGap): DayCounts {
   return before.gap === null ? { ...counts, welcome: { ...before, gap } } : counts;
 }
 
-// The latest photo's viewpoint replaces the spot's; past the cap, the least photographed goes,
-// the earliest listed on a tie.
+// The latest photo's viewpoint replaces the spot's; past the cap, the least photographed of the
+// kind with the most spots goes, the earliest listed on a tie, so a day of sea keeps its sunset.
 export function countPhoto(counts: DayCounts, shot: Omit<PhotoSpot, 'count'>): DayCounts {
   const before = counts.photos ?? { taken: 0, spots: [] };
   const at = before.spots.findIndex((spot) => spot.key === shot.key);
@@ -152,11 +156,22 @@ export function countPhoto(counts: DayCounts, shot: Omit<PhotoSpot, 'count'>): D
 }
 
 function leastPhotographed(spots: readonly PhotoSpot[]): number {
-  let least = 0;
-  for (let at = 1; at < spots.length; at++) {
-    if (spots[at]!.count < spots[least]!.count) least = at;
+  const kind = mostSpotted(spots);
+  let least = -1;
+  for (let at = 0; at < spots.length; at++) {
+    if (spots[at]!.kind !== kind) continue;
+    if (least < 0 || spots[at]!.count < spots[least]!.count) least = at;
   }
   return least;
+}
+
+// The first listed of the kinds tied for most, so the choice does not hang on PHOTO_KINDS' order.
+function mostSpotted(spots: readonly PhotoSpot[]): PhotoKind {
+  const counts = new Map<PhotoKind, number>();
+  for (const spot of spots) counts.set(spot.kind, (counts.get(spot.kind) ?? 0) + 1);
+  let most = spots[0]!.kind;
+  for (const [kind, count] of counts) if (count > counts.get(most)!) most = kind;
+  return most;
 }
 
 const topSpots = (tally: PhotoTally): PhotoTally => ({

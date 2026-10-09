@@ -172,6 +172,8 @@ const photoTallySchema = z.object({
       z: z.number(),
       heading: z.number(),
       minute: count,
+      fov: z.number().exactOptional(),
+      tilt: z.number().exactOptional(),
     }),
   ),
 });

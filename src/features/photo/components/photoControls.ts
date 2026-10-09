@@ -1,5 +1,6 @@
 import type { PhotoSpot } from '../../sim/domain/dayReport';
 import type { PhotoFilterId } from '../domain/photoFilters';
+import type { PhotoSize } from '../domain/photoPixels';
 
 export interface PhotoShot {
   readonly blob: Blob;
@@ -40,4 +41,8 @@ export interface PhotoControls {
   postcard(): Promise<string>;
   // An object URL of the scene from where a guest took their photo, or null if none was drawn.
   picture(spot: PhotoSpot): Promise<string | null>;
+  // The same, drawn large and captioned with the resort's name, ready to save or share.
+  enlarge(spot: PhotoSpot, size: PhotoSize, daysAgo: number): Promise<PhotoShot | null>;
+  saveShot(shot: PhotoShot): void;
+  shareShot(shot: PhotoShot): void;
 }

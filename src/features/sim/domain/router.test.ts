@@ -987,6 +987,20 @@ describe('a visit to the beach', () => {
     expect(jumped).toBeLessThan(TILE_VOXELS / 2);
   });
 
+  it('walks the sand on the way to the pitch and back, but not while resting there', () => {
+    const { router, crowd } = onTheBeach([0]);
+    const seen = new Map<string, boolean>();
+    for (let step = 0; step < 4000 && !seen.has('leaving'); step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (step % SAND_TICKS_EVERY === 0) router.tick(step / SAND_TICKS_EVERY);
+      const stay = router.stayOf(0);
+      if (stay && !seen.has(stay)) seen.set(stay, router.walksTheSand(0));
+    }
+    expect(Object.fromEntries(seen)).toEqual({ arriving: true, resting: false, leaving: true });
+    router.sendHome(0);
+    expect(router.walksTheSand(0)).toBe(false);
+  });
+
   it('settles a family together, the adults lying down and the children sitting', () => {
     const { router, crowd } = onTheBeach(family);
     expect(untilSettled(crowd, family), 'the family never all settled').toBe(true);

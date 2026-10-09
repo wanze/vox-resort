@@ -180,11 +180,47 @@ describe('the photos of the day', () => {
     expect(counts.photos!.taken).toBe(SPOTS_TRACKED + 2);
   });
 
-  it('reports the three most photographed, by count and then key', () => {
+  it('reports the most photographed, by count and then key', () => {
     const report = reportFor(photographed(['b', 'a', 'c', 'd', 'c', 'd', 'b']));
-    expect(report.photos!.spots.map((spot) => spot.key)).toEqual(['b', 'c', 'd']);
-    expect(report.photos!.spots).toHaveLength(PHOTO_SPOTS_KEPT);
+    expect(report.photos!.spots.map((spot) => spot.key)).toEqual(['b', 'c', 'd', 'a']);
     expect(report.photos!.taken).toBe(7);
+  });
+
+  it('keeps twelve spots in the report, the most photographed', () => {
+    const keys = Array.from({ length: 20 }, (_, at) => `spot-${String(at).padStart(2, '0')}`);
+    const report = reportFor(photographed([...keys, ...keys.slice(15)]));
+    expect(PHOTO_SPOTS_KEPT).toBe(12);
+    expect(report.photos!.spots.map((spot) => spot.key)).toEqual([
+      ...keys.slice(15),
+      ...keys.slice(0, 7),
+    ]);
+  });
+
+  it('keeps a lone sunset on a day of sea, dropping the least photographed sea instead', () => {
+    const sunset = { ...shot('sunset@1,1'), kind: 'sunset' as const };
+    const sea = (at: number) => ({ ...shot(`sea@${at}`), kind: 'sea' as const });
+    let counts = countPhoto(startDay(0), sunset);
+    for (let at = 0; at < SPOTS_TRACKED; at++) counts = countPhoto(counts, sea(at));
+    counts = countPhoto(counts, sea(0));
+    counts = countPhoto(counts, sea(SPOTS_TRACKED));
+    const tracked = counts.photos!.spots.map((spot) => spot.key);
+    expect(tracked).toHaveLength(SPOTS_TRACKED);
+    expect(tracked).toContain('sunset@1,1');
+    expect(tracked).toContain('sea@0');
+    expect(tracked).not.toContain('sea@1');
+    expect(tracked.at(-1)).toBe(`sea@${SPOTS_TRACKED}`);
+  });
+
+  it('drops from the kind with the most spots even when another has a less photographed one', () => {
+    const view = (key: string) => ({ ...shot(key), kind: 'view' as const });
+    let counts = photographed(Array.from({ length: 13 }, (_, at) => `sight-${at}`));
+    for (let at = 0; at < SPOTS_TRACKED - 13; at++) {
+      counts = countPhoto(countPhoto(counts, view(`view-${at}`)), view(`view-${at}`));
+    }
+    counts = countPhoto(counts, view('late'));
+    const tracked = counts.photos!.spots.map((spot) => spot.key);
+    expect(tracked).not.toContain('sight-0');
+    expect(tracked).toContain('late');
   });
 
   it('has no photos key on a day nobody took one', () => {

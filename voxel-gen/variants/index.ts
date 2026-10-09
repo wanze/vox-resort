@@ -3,6 +3,8 @@
 
 import type { VoxelModelSource } from '../voxelgen.ts';
 import bungalow from './bungalow.ts';
+import bungalowC from './bungalow-c.ts';
+import bungalowD from './bungalow-d.ts';
 import cottage from './cottage.ts';
 import icecream from './icecream.ts';
 import palm from './palm.ts';
@@ -115,6 +117,12 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'open-air-stage', source: openAirStage },
   { of: 'night-club', source: nightClub },
   ...MOSAIC_VARIANTS,
+];
+
+// On the compare page and held to the family contract, but not yet offered in the game.
+export const DRAFT_VARIANTS: readonly ModelVariant[] = [
+  { of: 'bungalow', source: bungalowC },
+  { of: 'bungalow', source: bungalowD },
 ];
 
 export const VARIANT_SOURCES: readonly VoxelModelSource[] = VARIANTS.map(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { awning, doorway, shutteredWindow, STOREY_VOXELS, stuccoWall } from './wall.ts';
+import { awning, doorway, rubble, shutteredWindow, STOREY_VOXELS, stuccoWall } from './wall.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -151,5 +151,33 @@ describe('awning', () => {
     expect(() =>
       awning(new VoxelBuilder(), { face: 'z+', at: 7, along: 2, w: 3, y: 9, reach: 0 }),
     ).toThrow(/one voxel past/);
+  });
+});
+
+const tones = (b: VoxelBuilder): number[] => [...b].map((voxel) => voxel.color);
+
+describe('rubble', () => {
+  it('fills the whole block in stone tones only', () => {
+    const b = new VoxelBuilder();
+    rubble(b, { x: 2, z: 3, w: 6, d: 4, y: 1, h: 8 });
+    const { stone } = PALETTE;
+    expect(tones(b)).toHaveLength(6 * 4 * 8);
+    for (const tone of tones(b)) expect([stone.deep, stone.base, stone.shade]).toContain(tone);
+  });
+
+  // A face of mostly one tone is what lets the mesher merge it.
+  it('keeps most of the face in the shade tone', () => {
+    const b = new VoxelBuilder();
+    rubble(b, { x: 0, z: 0, w: 24, d: 1, y: 0, h: 24 });
+    const shade = tones(b).filter((tone) => tone === PALETTE.stone.shade).length;
+    expect(shade / tones(b).length).toBeGreaterThan(0.45);
+  });
+
+  it('lays stones longer than a voxel, never a dither', () => {
+    const b = new VoxelBuilder();
+    rubble(b, { x: 0, z: 0, w: 30, d: 1, y: 0, h: 1 });
+    let runs = 1;
+    for (let x = 1; x < 30; x++) if (b.get(x, 0, 0) !== b.get(x - 1, 0, 0)) runs++;
+    expect(runs).toBeLessThanOrEqual(10);
   });
 });

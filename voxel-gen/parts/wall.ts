@@ -177,3 +177,38 @@ export function awning(b: VoxelBuilder, o: AwningOptions): void {
     }
   }
 }
+
+export interface RubbleOptions {
+  readonly x: number;
+  readonly z: number;
+  readonly w: number;
+  readonly d: number;
+  readonly y: number;
+  readonly h: number;
+  readonly stone?: Ramp;
+}
+
+const stoneHash = (a: number, b: number): number => {
+  const h = Math.imul(a * 374_761_393 + b * 668_265_263, 1_274_126_177);
+  return (h ^ (h >>> 13)) >>> 0;
+};
+
+// Courses two high, stones three long, running along x + z so they wrap round the
+// corners. Most stones keep the shade tone so neighbours merge into longer ones; a
+// dither would cost a quad per voxel.
+function rubbleTone(stone: Ramp, x: number, y: number, z: number): Color {
+  const course = Math.floor(y / 2);
+  const pick = stoneHash(course, Math.floor((x + z + course * 2) / 3)) % 5;
+  if (pick === 0) return stone.deep;
+  return pick === 1 ? stone.base : stone.shade;
+}
+
+export function rubble(b: VoxelBuilder, o: RubbleOptions): void {
+  if (o.w < 1 || o.d < 1 || o.h < 1) throw new Error('Rubble fills at least one voxel');
+  const stone = o.stone ?? PALETTE.stone;
+  for (let x = o.x; x < o.x + o.w; x++) {
+    for (let y = o.y; y < o.y + o.h; y++) {
+      for (let z = o.z; z < o.z + o.d; z++) b.set(x, y, z, rubbleTone(stone, x, y, z));
+    }
+  }
+}

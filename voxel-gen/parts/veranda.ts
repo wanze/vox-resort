@@ -157,3 +157,32 @@ export function balustrade(b: VoxelBuilder, o: BalustradeOptions): void {
     if (step % pitch === 0 || step === o.w - 1) paint(step, o.y + 1, top - 1, rail.base);
   }
 }
+
+export interface PlankRailOptions {
+  readonly x: number;
+  readonly z: number;
+  readonly y: number;
+  readonly w: number;
+  readonly along: Run;
+  readonly pitch?: number;
+  readonly rail?: Ramp;
+}
+
+// Two long boards between posts: a handful of quads where a balustrade costs four a baluster.
+export function plankRail(b: VoxelBuilder, o: PlankRailOptions): void {
+  const pitch = o.pitch ?? 5;
+  if (o.w < 1) throw new Error('A rail is at least one voxel long');
+  if (pitch < 1) throw new Error('A rail sets its posts at least a voxel apart');
+
+  const rail = o.rail ?? PALETTE.teak;
+  const x1 = o.along === 'x' ? o.x + o.w - 1 : o.x;
+  const z1 = o.along === 'z' ? o.z + o.w - 1 : o.z;
+  b.box(o.x, x1, o.y + 1, o.y + 1, o.z, z1, rail.base);
+  b.box(o.x, x1, o.y + 3, o.y + 3, o.z, z1, rail.light);
+  for (let step = 0; step < o.w; step++) {
+    if (step % pitch !== 0 && step !== o.w - 1) continue;
+    const x = o.along === 'x' ? o.x + step : o.x;
+    const z = o.along === 'z' ? o.z + step : o.z;
+    b.box(x, x, o.y, o.y + 3, z, z, rail.shade);
+  }
+}

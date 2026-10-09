@@ -163,3 +163,30 @@ export function thatchRoof(b: VoxelBuilder, o: ThatchRoofOptions): number {
   else b.box(cap.xLo, cap.xHi, ridge, ridge, cap.zLo - 1, cap.zHi + 1, pole.base);
   return ridge + 1;
 }
+
+export interface LeanToOptions {
+  readonly x: number;
+  readonly z: number;
+  readonly w: number;
+  readonly d: number;
+  readonly y: number;
+  readonly fall?: number;
+  readonly sheet?: Ramp;
+}
+
+// A tin porch roof falling towards z+, the side every model fronts. Returns the
+// layer under its front edge, the height its posts stand to.
+export function leanTo(b: VoxelBuilder, o: LeanToOptions): number {
+  const fall = o.fall ?? 3;
+  if (o.w < 1 || o.d < 1) throw new Error('A lean-to needs a footprint to cover');
+  if (fall < 1) throw new Error('A lean-to falls no faster than a voxel a row');
+
+  const sheet = o.sheet ?? PALETTE.slate;
+  const x1 = o.x + o.w - 1;
+  const front = o.z + o.d - 1;
+  const layerAt = (z: number): number => o.y - Math.floor((z - o.z) / fall);
+  for (let z = o.z; z <= front; z++) b.box(o.x, x1, layerAt(z), layerAt(z), z, z, sheet.base);
+  const lip = layerAt(front) - 1;
+  b.box(o.x, x1, lip, lip, front, front, sheet.shade);
+  return lip;
+}

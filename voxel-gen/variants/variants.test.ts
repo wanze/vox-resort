@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DRAFT_SOURCES, MODEL_SOURCES } from '../models/index.ts';
 import { buildModel, TILE_VOXELS, type ModelSpot, type VoxelModel } from '../voxelgen.ts';
-import { VARIANTS } from './index.ts';
+import { DRAFT_VARIANTS, VARIANTS as OFFERED } from './index.ts';
+
+// Drafts too, so one is ready to offer the moment it joins VARIANTS.
+const VARIANTS = [...OFFERED, ...DRAFT_VARIANTS];
 
 const catalogue = new Map(MODEL_SOURCES.map((source) => [source.id, source]));
 

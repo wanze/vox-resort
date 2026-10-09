@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { arcade, balustrade } from './veranda.ts';
+import { arcade, balustrade, plankRail } from './veranda.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -172,5 +172,23 @@ describe('balustrade', () => {
     );
     expect(() => balustrade(new VoxelBuilder(), { ...options, height: 2 })).toThrow(/three layers/);
     expect(() => balustrade(new VoxelBuilder(), { ...options, pitch: 0 })).toThrow(/a voxel apart/);
+  });
+});
+
+describe('plankRail', () => {
+  it('runs two boards between posts, open below each', () => {
+    const b = new VoxelBuilder();
+    plankRail(b, { x: 0, z: 0, y: 0, w: 12, along: 'x' });
+    expect(columns(b, 0, 0, 11, 0)).toBe('#....#....##');
+    expect(columns(b, 1, 0, 11, 0)).toBe('############');
+    expect(columns(b, 2, 0, 11, 0)).toBe('#....#....##');
+    expect(at(b, 3, 3, 0)).toBe(PALETTE.teak.light);
+  });
+
+  it('runs along z as well', () => {
+    const b = new VoxelBuilder();
+    plankRail(b, { x: 4, z: 2, y: 0, w: 6, along: 'z' });
+    expect(span(b, 1, 'z')).toEqual([2, 7]);
+    expect(span(b, 1, 'x')).toEqual([4, 4]);
   });
 });

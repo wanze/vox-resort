@@ -13,7 +13,7 @@ import { PEOPLE_SOURCES } from './people/index.ts';
 import { SEA_SOURCES } from './sea/index.ts';
 import { SKY_SOURCES } from './sky/index.ts';
 import { TOOL_SOURCES } from './tools/index.ts';
-import { VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
+import { DRAFT_VARIANTS, VARIANT_SOURCES, VARIANTS } from './variants/index.ts';
 import {
   buildModel,
   dayVoxelsOf,
@@ -476,6 +476,7 @@ async function chooseSources(
     ...MODEL_SOURCES,
     ...DRAFT_SOURCES,
     ...VARIANT_SOURCES,
+    ...DRAFT_VARIANTS.map((variant) => variant.source),
     ...PEOPLE_SOURCES,
     ...SKY_SOURCES,
     ...SEA_SOURCES,
@@ -517,7 +518,7 @@ const FLAGGED_REGISTRIES: ReadonlyMap<string, Registry> = new Map([
 
 // Each alternative sits beside the model it would replace, one pair to a row.
 function renderVariants(ids: readonly string[]): Buffer {
-  const chosen = VARIANTS.filter(
+  const chosen = [...VARIANTS, ...DRAFT_VARIANTS].filter(
     (variant) => !ids.length || ids.includes(variant.source.id) || ids.includes(variant.of),
   );
   const pairs = chosen.flatMap((variant) => {

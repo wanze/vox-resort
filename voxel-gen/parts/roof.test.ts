@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { gableRoof, hipRoof, thatchRoof } from './roof.ts';
+import { gableRoof, hipRoof, leanTo, thatchRoof } from './roof.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -145,5 +145,24 @@ describe('thatchRoof', () => {
     expect(() =>
       thatchRoof(new VoxelBuilder(), { x: 0, z: 0, w: 0, d: 8, y: 0, overhang: 0 }),
     ).toThrow(/footprint to cover/);
+  });
+});
+
+describe('leanTo', () => {
+  it('falls a voxel every few rows towards the front', () => {
+    const b = new VoxelBuilder();
+    leanTo(b, { x: 0, z: 0, w: 4, d: 7, y: 10, fall: 3 });
+    expect(at(b, 0, 10, 2)).toBe(PALETTE.slate.base);
+    expect(at(b, 0, 9, 3)).toBe(PALETTE.slate.base);
+    expect(at(b, 0, 8, 6)).toBe(PALETTE.slate.base);
+    expect(at(b, 0, 10, 3)).toBeUndefined();
+  });
+
+  it('hangs a lip at the front and returns it as the height its posts stand to', () => {
+    const b = new VoxelBuilder();
+    const posts = leanTo(b, { x: 0, z: 0, w: 4, d: 7, y: 10, fall: 3 });
+    expect(posts).toBe(7);
+    expect(at(b, 2, 7, 6)).toBe(PALETTE.slate.shade);
+    expect(at(b, 2, 7, 5)).toBeUndefined();
   });
 });

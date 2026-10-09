@@ -15,7 +15,7 @@ import { maintenanceFor } from '../../sim/domain/takings';
 import { createDay } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
 import { venuesOn } from '../../sim/domain/venues';
-import { closeTheDay, payTheBills, rateTheDay, type DayCloseState } from './dayClose';
+import { closeTheDay, paidShareFor, payTheBills, rateTheDay, type DayCloseState } from './dayClose';
 
 const world = referenceWorldOf(referenceJson);
 const [lodging] = lodgingsOn(world.placements);
@@ -78,6 +78,12 @@ describe('payTheBills', () => {
     expect(nightPriceOf(home.id, 1)).toBeGreaterThan(priceOf(home.id));
     expect(standing.ledger.today.night).toBe(housed * nightPriceOf(home.id, 1));
     expect(gone.ledger.today.night).toBe(housed * priceOf(home.id));
+  });
+
+  it('reads the share of the list price a bed is charged at, 1 where it is bare', () => {
+    expect(paidShareFor(stateOf(), 0)).toBeCloseTo(nightPriceOf(home.id, 1) / priceOf(home.id));
+    expect(paidShareFor(stateOf(), 0)).toBeGreaterThan(1);
+    expect(paidShareFor(stateOf({ lodgings: [] }), 0)).toBe(1);
   });
 });
 

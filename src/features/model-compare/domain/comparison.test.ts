@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { VARIANTS } from '../../../../voxel-gen/variants/index.ts';
+import { DRAFT_VARIANTS, VARIANTS } from '../../../../voxel-gen/variants/index.ts';
 import { buildComparison, comparisonEntries, statChanges } from './comparison';
 
 describe('comparisonEntries', () => {
-  it('lists one entry per variant, named after the model it would replace', () => {
+  it('lists one entry per variant, drafts last, named after the model it would replace', () => {
     const entries = comparisonEntries();
-    expect(entries.map((entry) => entry.variantId)).toEqual(VARIANTS.map((v) => v.source.id));
+    expect(entries.map((entry) => entry.variantId)).toEqual(
+      [...VARIANTS, ...DRAFT_VARIANTS].map((v) => v.source.id),
+    );
     expect(entries.find((entry) => entry.id === 'palm')?.label).toBe('Palm');
   });
 });

@@ -15,6 +15,7 @@ import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
+import { expectationWords, type Expectation } from '../../sim/domain/expectations';
 import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
 import { strongestNeed, type Needs } from '../../sim/domain/needs';
@@ -66,6 +67,7 @@ export interface GuestView {
   readonly needs: readonly { readonly need: GuestNeed; readonly level: number }[];
   readonly wants: { readonly need: GuestNeed; readonly label: string } | null;
   readonly happiness: number;
+  readonly expects: Expectation;
   readonly thought: { readonly kind: ThoughtKind; readonly subject: string | null } | null;
   readonly welcomed: boolean;
 }
@@ -244,6 +246,7 @@ export function guestView(parts: {
     needs: needsShown(needs, person),
     wants: wantsOf({ guests, needs, venues, person, at }),
     happiness: happiness.level[person] ?? 0,
+    expects: expectationWords(happiness.expects[person] ?? 0),
     thought,
     welcomed: thoughts !== undefined && stayCount(thoughts, person, 'welcomed') > 0,
   };

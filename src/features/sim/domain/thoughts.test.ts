@@ -234,7 +234,7 @@ describe('widenThoughts', () => {
     });
     expect(widened.stay).toEqual(old.stay);
     expect(widened.heardSubject).toEqual(old.heardSubject);
-    expect(THOUGHT_KINDS.slice(fireworks)).toEqual(['fireworks', 'photo', 'sunset']);
+    expect(THOUGHT_KINDS.slice(fireworks, fireworks + 3)).toEqual(['fireworks', 'photo', 'sunset']);
     expect(isComplaint('fireworks')).toBe(false);
   });
 
@@ -246,5 +246,25 @@ describe('widenThoughts', () => {
     expect(isComplaint('sunset')).toBe(false);
     expect(lastSubjectOf(thoughts, 1, 'photo')).toBe('Sea');
     expect(lastSubjectOf(thoughts, 0, 'photo')).toBeNull();
+  });
+
+  it('pads a save from before value for money, praising good value and grumbling at the price', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 1, 'sunset', null, 5);
+    const kinds = THOUGHT_KINDS.length;
+    const worth = THOUGHT_KINDS.indexOf('not-worth-it');
+    const old = snapshotThoughts(thoughts, new Map());
+    const short = (column: ArrayLike<number | string | null>) =>
+      Array.from(column).filter((_, at) => at % kinds < worth);
+    const widened = widenThoughts({
+      ...old,
+      stay: Uint16Array.from(short(old.stay) as number[]),
+      heardAt: Int32Array.from(short(old.heardAt) as number[]),
+      heardSubject: short(old.heardSubject) as (string | null)[],
+    });
+    expect(widened.stay).toEqual(old.stay);
+    expect(THOUGHT_KINDS.slice(worth)).toEqual(['not-worth-it', 'good-value']);
+    expect(isComplaint('not-worth-it')).toBe(true);
+    expect(isComplaint('good-value')).toBe(false);
   });
 });

@@ -9,6 +9,13 @@ export const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } 
   solo: 'On their own',
 };
 
+export const EXPECTATION_WORDS: { readonly [expects in GuestView['expects']]: string } = {
+  'easy-going': 'Easy-going',
+  particular: 'Particular',
+  demanding: 'Demanding',
+  'hard-to-please': 'Hard to please',
+};
+
 // Duplicated from selection.ts on purpose: that wording is what a venue serves.
 const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: string } = {
   hunger: 'Hunger',

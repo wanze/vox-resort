@@ -97,6 +97,25 @@ const at = (key: string, id: string, tileX = 3, tileZ = 7): Placement => ({
 const moodOf = (guests: Guests) => createHappiness(guests.count);
 
 describe('guestView', () => {
+  it('says in words how much the guest expects', () => {
+    const guests = guestsOf();
+    const happiness = moodOf(guests);
+    happiness.expects[0] = 0.6;
+    const view = (person: number) =>
+      guestView({
+        guests,
+        needs: needsOf(guests),
+        happiness,
+        venues: NO_VENUES,
+        person,
+        day: 0,
+        at: HERE,
+        thought: null,
+      });
+    expect(view(0).expects).toBe('demanding');
+    expect(view(1).expects).toBe('easy-going');
+  });
+
   it('names the guest and lists their whole party, themselves included, in party order', () => {
     const guests = guestsOf();
     const person = Array.from({ length: guests.count }, (_, i) => i).find(

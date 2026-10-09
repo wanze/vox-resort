@@ -1,5 +1,6 @@
 import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Guests } from '../../guests/domain/guests';
+import { EXPECTED_CONTENT_RISE } from './expectations';
 import type { Needs } from './needs';
 import type { HappinessSnapshot } from './resortSnapshot';
 
@@ -31,6 +32,9 @@ export interface Happiness {
   readonly level: Float32Array;
   // How the stay has gone so far, which a review is written from.
   readonly stay: Float32Array;
+  // 0 to 1, fixed at check-in. 0 is the guest from before expectations, content at half full
+  // and minding a queue as much as anybody, so a resort that sets none plays as it always did.
+  readonly expects: Float32Array;
 }
 
 const clamp = (level: number): number => (level < 0 ? 0 : level > 1 ? 1 : level);
@@ -41,14 +45,16 @@ export function createHappiness(count: number): Happiness {
     count: people,
     level: new Float32Array(people).fill(ARRIVAL_MOOD),
     stay: new Float32Array(people).fill(ARRIVAL_MOOD),
+    expects: new Float32Array(people),
   };
 }
 
 // The body was somebody else's, and so was their mood.
-export function welcome(happiness: Happiness, person: number): void {
+export function welcome(happiness: Happiness, person: number, expects = 0): void {
   if (person < 0 || person >= happiness.count) return;
   happiness.level[person] = ARRIVAL_MOOD;
   happiness.stay[person] = ARRIVAL_MOOD;
+  happiness.expects[person] = expects;
 }
 
 // Straight onto the stay a review is written from; it fades with the rest of it, over about a day.
@@ -64,10 +70,11 @@ export const CONTENT_LEVEL = 0.5;
 // Unweighted on purpose: archetype weights decide where a guest walks, not whether they enjoy
 // their stay. The shortfall is squared, so one empty need costs more than five half-met ones and a
 // resort with no food cannot score like one with a long walk to lunch.
-export function contentmentOf(needs: Needs, person: number): number {
+export function contentmentOf(needs: Needs, person: number, expects = 0): number {
+  const content = CONTENT_LEVEL + EXPECTED_CONTENT_RISE * expects;
   let shortfall = 0;
   for (const need of GUEST_NEEDS) {
-    const met = Math.min(1, needs.level[need][person]! / CONTENT_LEVEL);
+    const met = Math.min(1, needs.level[need][person]! / content);
     shortfall += (1 - met) * (1 - met);
   }
   const wants = 1 - Math.sqrt(shortfall / GUEST_NEEDS.length);
@@ -98,10 +105,11 @@ export function ageHappiness(
     const around = surroundings ? SURROUNDINGS_SHARE * surroundings(person) : 0;
     // The target, not the level: a bump to the level drifts back down within the hour.
     const lifted = lift ? lift(person) : 0;
-    const towards = clamp(contentmentOf(needs, person) + around + lifted) - level;
+    const expects = happiness.expects[person]!;
+    const towards = clamp(contentmentOf(needs, person, expects) + around + lifted) - level;
     // Never past the target, so a long run of ticks settles instead of overshooting.
     const moved = towards < 0 ? Math.max(towards, -drift) : Math.min(towards, drift);
-    const now = clamp(level + moved - (waiting(person) ? queued : 0));
+    const now = clamp(level + moved - (waiting(person) ? queued * (1 + expects) : 0));
     happiness.level[person] = now;
     happiness.stay[person]! += (now - happiness.stay[person]!) * remembered;
   }
@@ -120,10 +128,16 @@ export function meanHappiness(happiness: Happiness, guests: Guests): number | nu
 }
 
 export function snapshotHappiness(happiness: Happiness): HappinessSnapshot {
-  return { level: happiness.level.slice(), stay: happiness.stay.slice() };
+  return {
+    level: happiness.level.slice(),
+    stay: happiness.stay.slice(),
+    expects: happiness.expects.slice(),
+  };
 }
 
 export function restoreHappiness(happiness: Happiness, snapshot: HappinessSnapshot): void {
   happiness.level.set(snapshot.level);
   happiness.stay.set(snapshot.stay);
+  happiness.expects.fill(0);
+  if (snapshot.expects) happiness.expects.set(snapshot.expects.subarray(0, happiness.count));
 }

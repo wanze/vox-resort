@@ -18,7 +18,7 @@ import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { StatRow } from '../../../shared/components/StatRow';
-import { NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
+import { EXPECTATION_WORDS, NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
 import { VenueActions, VenueKind } from './VenueName';
 
 export interface InspectPanelProps {
@@ -106,6 +106,7 @@ function GuestDetails({
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
         {guest.welcomed ? <StatRow label="Welcome meeting">attended</StatRow> : null}
         <StatRow label="Mood">{Math.round(guest.happiness * 100)}%</StatRow>
+        <StatRow label="Expects">{EXPECTATION_WORDS[guest.expects]}</StatRow>
         <WantsRow wants={guest.wants} />
       </dl>
       <NeedBars needs={guest.needs} />

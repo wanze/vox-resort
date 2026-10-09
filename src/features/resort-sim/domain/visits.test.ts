@@ -6,11 +6,13 @@ import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { mishap } from '../../sim/domain/incidents';
-import { loudest } from '../../sim/domain/thoughts';
+import { NO_HOME } from '../../guests/domain/homes';
+import { loudest, type ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
 import { plotFactsOf } from './plotFacts';
 import { createSimState, type SimState } from './simState';
-import { visitMade } from './visits';
+import { paidShareFor } from './dayClose';
+import { judgeTheNight, visitMade } from './visits';
 
 const world = referenceWorldOf(referenceJson);
 const plan = planOfWorld(world);
@@ -95,5 +97,44 @@ describe('visitMade', () => {
     expect(health(state)).toBe(freshState().needs.level.health[PERSON]);
     visitMade(state, PERSON, bathing, unluckyTick);
     expect(health(state)).toBeLessThan(freshState().needs.level.health[PERSON]!);
+  });
+});
+
+const heard = (state: SimState, kind: ThoughtKind): number =>
+  loudest(state.thoughtDay, 99)
+    .filter((each) => each.kind === kind)
+    .reduce((total, each) => total + each.count, 0);
+const housed = (state: SimState): number[] =>
+  Array.from({ length: state.guests.count }, (_, person) => person).filter(
+    (person) => state.guests.present[person] === 1 && state.guests.home[person] !== NO_HOME,
+  );
+
+describe('judgeTheNight', () => {
+  it('grumbles at a dear bed to a glum guest, and never praises it to a happy one', () => {
+    const glum = freshState();
+    glum.happiness.level.fill(0.2);
+    judgeTheNight(glum, 1);
+    const happy = freshState();
+    happy.happiness.level.fill(0.9);
+    judgeTheNight(happy, 1);
+
+    const people = housed(glum);
+    const dear = people.filter((person) => paidShareFor(glum, glum.guests.home[person]!) > 1.05);
+    expect(dear.length).toBeGreaterThan(0);
+    expect(heard(glum, 'not-worth-it')).toBe(dear.length);
+    expect(heard(happy, 'not-worth-it')).toBe(0);
+    expect(heard(happy, 'good-value')).toBe(people.length - dear.length);
+  });
+
+  it('praises a bed at list price to a happy guest, naming the lodging', () => {
+    const state = freshState();
+    state.lodgings = [];
+    state.happiness.level.fill(0.9);
+    judgeTheNight(state, 1);
+    expect(heard(state, 'good-value')).toBe(housed(state).length);
+    const home = state.guests.homes[state.guests.home[housed(state)[0]!]!]!;
+    expect(loudest(state.thoughtDay, 99).map((each) => each.subject)).toContain(
+      state.names.get(home.key) ?? home.label,
+    );
   });
 });

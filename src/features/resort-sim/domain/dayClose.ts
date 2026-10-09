@@ -15,6 +15,7 @@ import {
 import { meanHappiness, type Happiness } from '../../sim/domain/happiness';
 import { closeDay, record, type Ledger } from '../../sim/domain/ledger';
 import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
+import { paidShareOf } from '../../sim/domain/expectations';
 import { ratingFor, type Rating } from '../../sim/domain/rating';
 import { sceneryOver, type SceneryField } from '../../sim/domain/scenery';
 import { wagesFor, type Roster } from '../../sim/domain/staff';
@@ -57,11 +58,16 @@ export function payTheBills(resort: DayCloseState): void {
   resort.ledger = record(resort.ledger, 'night', rent);
 }
 
-function nightlyRate(resort: DayCloseState, home: number): number {
+type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery'>;
+
+function nightlyRate(resort: RateState, home: number): number {
   const { id, key } = resort.guests.homes[home]!;
   const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
   return lodging ? nightPriceOf(id, sceneryOver(resort.scenery, lodging)) : priceOf(id);
 }
+
+export const paidShareFor = (resort: RateState, home: number): number =>
+  paidShareOf(nightlyRate(resort, home), priceOf(resort.guests.homes[home]!.id));
 
 export function rateTheDay(resort: DayCloseState): void {
   const beds = bedCount(resort.guests);

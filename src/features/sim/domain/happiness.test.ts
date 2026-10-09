@@ -13,6 +13,8 @@ import {
   meanHappiness,
   QUEUE_COST_PER_HOUR,
   remember,
+  restoreHappiness,
+  snapshotHappiness,
   STAY_MEMORY_HOURS,
   SURROUNDINGS_SHARE,
   welcome,
@@ -243,5 +245,65 @@ describe('remember', () => {
     remember(happiness, 7, 0.1);
     remember(happiness, -1, 0.1);
     expect([...happiness.stay].filter((each) => each !== 1)).toHaveLength(2);
+  });
+});
+
+describe('a guest who expects more', () => {
+  it('settles lower on the same needs', () => {
+    const guests = guestsOf();
+    const easy = createHappiness(guests.count);
+    const hard = createHappiness(guests.count);
+    welcome(hard, 0, 1);
+    ageHappiness(easy, needsAt(guests, 0.6), guests, NO_QUEUE, 30 * HOUR);
+    ageHappiness(hard, needsAt(guests, 0.6), guests, NO_QUEUE, 30 * HOUR);
+    expect(moodOf(easy, 0)).toBe(1);
+    expect(moodOf(hard, 0)).toBeLessThan(moodOf(easy, 0));
+    expect(moodOf(hard, 1)).toBe(1);
+  });
+
+  it('is measured exactly as before at no expectation', () => {
+    const needs = needsAt(guestsOf(), 0.3);
+    needs.level.hunger[0] = 0;
+    expect(contentmentOf(needs, 0, 0)).toBe(contentmentOf(needs, 0));
+    let shortfall = 0;
+    for (const need of GUEST_NEEDS) {
+      shortfall += (1 - Math.min(1, needs.level[need][0]! / CONTENT_LEVEL)) ** 2;
+    }
+    const wants = 1 - Math.sqrt(shortfall / GUEST_NEEDS.length);
+    const health = needs.level.health[0]!;
+    expect(contentmentOf(needs, 0)).toBe(wants * (HURT_FLOOR + (1 - HURT_FLOOR) * health));
+  });
+
+  it('minds an hour in a line twice as much at the most', () => {
+    const guests = guestsOf();
+    const needs = needsAt(guests, ARRIVAL_MOOD);
+    const easy = createHappiness(guests.count);
+    const hard = createHappiness(guests.count);
+    welcome(hard, 0, 1);
+    ageHappiness(easy, needs, guests, ALL_QUEUED, HOUR / 4);
+    ageHappiness(hard, needs, guests, ALL_QUEUED, HOUR / 4);
+    const settled = ARRIVAL_MOOD + DRIFT_PER_HOUR / 4;
+    expect(settled - moodOf(hard, 0)).toBeCloseTo(2 * (settled - moodOf(easy, 0)));
+  });
+
+  it('is set at check-in, and easy-going unless told otherwise', () => {
+    const happiness = createHappiness(3);
+    welcome(happiness, 1, 0.4);
+    expect(happiness.expects[1]).toBeCloseTo(0.4);
+    welcome(happiness, 1);
+    expect(happiness.expects[1]).toBe(0);
+  });
+
+  it('restores easy-going from a snapshot without it, and pads a shorter one', () => {
+    const happiness = createHappiness(4);
+    happiness.expects.fill(0.5);
+    const { expects: _expects, ...before } = snapshotHappiness(happiness);
+    restoreHappiness(happiness, before);
+    expect([...happiness.expects]).toEqual([0, 0, 0, 0]);
+
+    const saved = snapshotHappiness(createHappiness(4));
+    happiness.expects.fill(0.5);
+    restoreHappiness(happiness, { ...saved, expects: new Float32Array([0.25, 0.75]) });
+    expect([...happiness.expects]).toEqual([0.25, 0.75, 0, 0]);
   });
 });

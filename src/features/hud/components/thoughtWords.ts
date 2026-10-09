@@ -35,6 +35,9 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   photo: (subject) =>
     subject ? `Had to take a picture of the ${lowerFirst(subject)}` : 'Had to take a picture',
   sunset: () => 'What a sunset!',
+  'not-worth-it': (subject) =>
+    subject ? `${subject} was not worth what we paid` : 'Not worth what we paid',
+  'good-value': (subject) => (subject ? `${subject} was good value` : 'Good value for money'),
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -55,6 +58,8 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   fireworks: 'Fireworks',
   photo: 'Photos',
   sunset: 'Sunset',
+  'not-worth-it': 'Value',
+  'good-value': 'Value',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

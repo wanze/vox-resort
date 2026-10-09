@@ -1,5 +1,9 @@
 import { MODEL_SOURCES } from '../../../../voxel-gen/models/index.ts';
-import { VARIANTS, type ModelVariant } from '../../../../voxel-gen/variants/index.ts';
+import {
+  DRAFT_VARIANTS,
+  VARIANTS,
+  type ModelVariant,
+} from '../../../../voxel-gen/variants/index.ts';
 import {
   buildModel,
   type VoxelModel,
@@ -30,6 +34,8 @@ export interface ComparisonEntry {
   readonly variantId: string;
 }
 
+const COMPARED: readonly ModelVariant[] = [...VARIANTS, ...DRAFT_VARIANTS];
+
 function compared(source: VoxelModelSource): ComparedModel {
   const model = buildModel(source);
   return {
@@ -47,7 +53,7 @@ function originalOf(variant: ModelVariant): VoxelModelSource {
 
 // Listed cheaply so the page can show every pair before meshing any of them.
 export function comparisonEntries(): ComparisonEntry[] {
-  return VARIANTS.map((variant) => ({
+  return COMPARED.map((variant) => ({
     id: variant.of,
     label: originalOf(variant).label,
     variantId: variant.source.id,
@@ -55,7 +61,7 @@ export function comparisonEntries(): ComparisonEntry[] {
 }
 
 export function buildComparison(variantId: string): Comparison {
-  const variant = VARIANTS.find((candidate) => candidate.source.id === variantId);
+  const variant = COMPARED.find((candidate) => candidate.source.id === variantId);
   if (!variant) throw new Error(`No variant ${variantId}`);
   const original = originalOf(variant);
   return {

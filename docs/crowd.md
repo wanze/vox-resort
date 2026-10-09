@@ -333,7 +333,17 @@ guests go on a hot day, not what a visit gives. Drawing is in
 
 **Happiness** (`happiness.ts`) drifts towards `contentmentOf`, lower while
 queuing. Needs below `CONTENT_LEVEL` count squared, so one empty need costs more
-than five half-met ones. **Rating** (`rating.ts`) is three quarters happiness,
+than five half-met ones.
+
+**Expectations** (`expectations.ts`): each guest gets `expects`, 0 to 1, at
+check-in, from the morning's stars (2.5 → 0, 5 → 1) and what their bed costs
+against its list price (0.8 → 0, 1.6 → 1), weighted 0.6 and 0.4. It never
+changes during the stay. A guest at 1 needs every need three quarters full to be
+content (`EXPECTED_CONTENT_RISE`) and minds a queue twice as much. At 0 a guest
+behaves as before expectations; opening guests and old saves start there. The
+inspector shows it in words, from "Easy-going" to "Hard to please".
+
+**Rating** (`rating.ts`) is three quarters happiness,
 one quarter guests with a bed, plus cleanliness. An empty resort rates 3 stars,
 a fully served one about 4.5.
 
@@ -364,6 +374,10 @@ kind; `reviews.ts` turns a stay into one line at check-out.
 - A review's stars are `round(5 × mean stay mood)`, its complaint the most
   frequent thought, its praise the most frequent praise. A `photo` praise
   quotes the subject of the party's latest photo (`praiseSubject`).
+- `not-worth-it` and `good-value` are heard as the night is billed, about the
+  lodging: a guest charged over 1.05 of list whose mood is under
+  `0.55 + 0.25 × expects` grumbles, and one charged at most that with a mood of
+  0.8 or more praises it.
 - `photo` ("Had to take a picture of the fountain") and `sunset` ("What a
   sunset!") are praise, heard when a guest takes a photo.
 - Wording lives in `hud/components/thoughtWords.ts`.
@@ -601,8 +615,9 @@ One simulation runs in both modes. Sandbox and tycoon differ only in
 pays wages and maintenance, it's just never short. Don't "fix" wages to 0 in
 sandbox.
 
-**No guest behaves differently because of a price.** Choosing, routing, needs,
-thoughts and advice never read one.
+**A guest's expectation reads the price they paid; nothing else does.** The
+price sets how demanding a guest is when they check in. It never changes which
+venue they choose, where they walk or which lodging they get.
 
 - `cost` on a model is what standing it costs; undeclared, it's derived from
   voxel count.

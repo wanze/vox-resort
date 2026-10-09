@@ -72,8 +72,10 @@ export function runCheckIn(parts: {
   readonly random: () => number;
   // A wave's share of the day's arrivals; omitted, the whole day arrives at once.
   readonly room?: number;
+  // Asked per member once the party has a bed; omitted, everybody is easy-going.
+  readonly expectationOf?: (home: number) => number;
 }): readonly number[] {
-  const { guests, needs, happiness, rating, day, random } = parts;
+  const { guests, needs, happiness, rating, day, random, expectationOf } = parts;
   const free = freeBodiesOf(guests);
   let room = parts.room ?? arrivalsFor(rating, bedsOn(guests));
   const arrived: number[] = [];
@@ -88,7 +90,7 @@ export function runCheckIn(parts: {
     }
     for (const person of party.members) {
       resetNeeds(needs, person, random);
-      welcome(happiness, person);
+      welcome(happiness, person, expectationOf ? expectationOf(guests.home[person]!) : 0);
       arrived.push(person);
     }
     room -= party.members.length;

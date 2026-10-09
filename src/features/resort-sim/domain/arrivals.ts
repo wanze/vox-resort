@@ -3,12 +3,16 @@ import { bedCount, type Guests } from '../../guests/domain/guests';
 import type { Random } from '../../layout/domain/random';
 import { arrivalsDueBy, bedsOn, runCheckIn, wavesDue } from '../../sim/domain/checkIn';
 import { countArrivals, type DayCounts } from '../../sim/domain/dayReport';
+import { expectationFor } from '../../sim/domain/expectations';
 import type { Happiness } from '../../sim/domain/happiness';
 import type { Carrying } from '../../sim/domain/litter';
+import type { Lodging } from '../../sim/domain/lodgings';
 import type { Needs } from '../../sim/domain/needs';
 import { arrivalsFor, type Rating } from '../../sim/domain/rating';
 import type { Router } from '../../sim/domain/router';
+import type { SceneryField } from '../../sim/domain/scenery';
 import { forgetStay, type Thoughts } from '../../sim/domain/thoughts';
+import { paidShareFor } from './dayClose';
 import type { SimNow } from './simNow';
 
 export interface ArrivalsState {
@@ -16,6 +20,8 @@ export interface ArrivalsState {
   readonly guests: Guests;
   readonly needs: Needs;
   readonly happiness: Happiness;
+  readonly lodgings: readonly Lodging[];
+  readonly scenery: SceneryField;
   events: Pick<EventsState, 'tired' | 'glow'>;
   readonly homeEarly: Set<number>;
   readonly nightOwls: Set<number>;
@@ -92,6 +98,8 @@ export function admitWave(resort: ArrivalsState, day: number, wave: number): voi
     day,
     random: resort.arrivals,
     room,
+    // The rating runDay sized the coach by, which is the resort these guests booked.
+    expectationOf: (home) => expectationFor(resort.rating.stars, paidShareFor(resort, home)),
   });
   for (const person of arrived) {
     // The body was somebody else's, and so was whatever it was holding and thinking.

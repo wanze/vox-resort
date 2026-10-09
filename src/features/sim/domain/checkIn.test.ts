@@ -155,4 +155,34 @@ describe('runCheckIn', () => {
     expect(happiness.level[missed]).toBe(0);
     expect(Array.from(guests.child)).toEqual(child);
   });
+
+  it('sets what each member expects by the bed they were given, and nothing when not asked', () => {
+    const run = (expectationOf?: (home: number) => number) => {
+      const guests = emptied(guestsOf(200));
+      const happiness = createHappiness(guests.count);
+      happiness.expects.fill(0.9);
+      const arrived = runCheckIn({
+        guests,
+        needs: createNeeds(guests, 7),
+        happiness,
+        rating: FIVE_STARS,
+        day: 4,
+        random: createRandom(31),
+        // Every bed, so more than the first lodging is dealt out.
+        room: bedCount(guests).beds,
+        ...(expectationOf ? { expectationOf } : {}),
+      });
+      return { guests, happiness, arrived };
+    };
+    const asked = run((home) => (home === 0 ? 0.5 : 0.1));
+    const homes = new Set(asked.arrived.map((person) => asked.guests.home[person]));
+    expect(homes.size).toBeGreaterThan(1);
+    for (const person of asked.arrived) {
+      const home = asked.guests.home[person];
+      expect(asked.happiness.expects[person]).toBeCloseTo(home === 0 ? 0.5 : 0.1);
+    }
+    const plain = run();
+    expect(plain.arrived).toEqual(asked.arrived);
+    for (const person of plain.arrived) expect(plain.happiness.expects[person]).toBe(0);
+  });
 });

@@ -8,7 +8,7 @@ import { cheerTheAudience } from '../../sim/domain/staff';
 import { weatherEffect } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
-import { burnOnTheBeach, hearSurroundings, surroundingsOf } from './visits';
+import { burnOnTheBeach, hearSurroundings, judgeTheNight, surroundingsOf } from './visits';
 import { closeTheDay, payTheBills, rateTheDay } from './dayClose';
 import { admitLaterWaves, runDay } from './arrivals';
 import { markNightOwls, refreshDj, refreshNightOut } from './nights';
@@ -60,6 +60,8 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
   // Over the whole run of ticks: twelve ticks in a frame must not step over the check-in hour.
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
     payTheBills(resort);
+    // Before the day closes, so the night's verdicts count towards the day that earned them.
+    judgeTheNight(resort, clock.ticks);
     rateTheDay(resort);
     closeTheDay(resort, clock.day);
     runDay(resort, clock.day);

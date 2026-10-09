@@ -9,6 +9,7 @@ import { createCarrying } from '../../sim/domain/litter';
 import { createNeeds } from '../../sim/domain/needs';
 import { arrivalsFor, ratingFor } from '../../sim/domain/rating';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
+import { expectationFor } from '../../sim/domain/expectations';
 import { createThoughts } from '../../sim/domain/thoughts';
 import { admitLaterWaves, admitWave, runDay, sendDepartures, type ArrivalsState } from './arrivals';
 import type { SimNow } from './simNow';
@@ -40,6 +41,8 @@ function stateOf(away: boolean) {
     guests,
     needs: createNeeds(guests, 1),
     happiness: createHappiness(guests.count),
+    lodgings: [],
+    scenery: { tilesX: 0, tilesZ: 0, value: new Float32Array(0) },
     events: createEvents(guests.count),
     homeEarly: new Set(),
     nightOwls: new Set(),
@@ -95,6 +98,17 @@ describe('admitWave', () => {
     expect(state.newcomers).toEqual(parties);
     expect(state.today.arrived).toBe(people.length);
     expect(state.arrivalsAdmitted).toBe(people.length);
+  });
+
+  it('has the arrivals expect what the stars and the price of their bed promised', () => {
+    const { state, admitted } = stateOf(true);
+    state.happiness.expects.fill(0.9);
+    admitWave(state, 0, 0);
+    expect(state.rating.stars).toBe(5);
+    expect(admitted.length).toBeGreaterThan(0);
+    for (const [person] of admitted) {
+      expect(state.happiness.expects[person]).toBeCloseTo(expectationFor(5, 1));
+    }
   });
 });
 

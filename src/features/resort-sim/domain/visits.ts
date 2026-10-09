@@ -4,8 +4,10 @@ import { ON_SAND } from '../../crowd/domain/crowd';
 import { type EventRun, runOfVisit, visitLitter } from '../../events/domain/eventRuns';
 import { heldAt } from '../../events/domain/sites';
 import { fullNameOf } from '../../guests/domain/guests';
+import { NO_HOME } from '../../guests/domain/homes';
 import { isBeach } from '../../layout/domain/shoreline';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
+import { valueThought } from '../../sim/domain/expectations';
 import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
 import {
@@ -29,6 +31,7 @@ import {
 } from '../../sim/domain/thoughts';
 import { cleanliness } from '../../sim/domain/upkeep';
 import type { Venue } from '../../sim/domain/venues';
+import { paidShareFor } from './dayClose';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
 
@@ -67,6 +70,20 @@ export function hear(
 ): void {
   if (think(resort.thoughts, person, kind, subject, tick)) {
     tallyInto(resort.thoughtDay, kind, subject);
+  }
+}
+
+// As the night is billed, about the bed it was billed for.
+export function judgeTheNight(resort: SimState, tick: number): void {
+  const { guests, happiness } = resort;
+  for (let person = 0; person < guests.count; person++) {
+    const home = guests.home[person]!;
+    if (guests.present[person] !== 1 || home === NO_HOME) continue;
+    const share = paidShareFor(resort, home);
+    const kind = valueThought(happiness.level[person]!, happiness.expects[person]!, share);
+    if (!kind) continue;
+    const { key, label } = guests.homes[home]!;
+    hear(resort, tick, person, kind, resort.names.get(key) ?? label);
   }
 }
 

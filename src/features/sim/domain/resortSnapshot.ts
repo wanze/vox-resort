@@ -65,7 +65,13 @@ export const needsSnapshotSchema = z.object({
 
 export type NeedsSnapshot = z.infer<typeof needsSnapshotSchema>;
 
-export const happinessSnapshotSchema = z.object({ level: float32, stay: float32 });
+export const happinessSnapshotSchema = z.object({
+  level: float32,
+  stay: float32,
+  // Saves from before expectations load with every guest easy-going. Not length-checked: a save
+  // widened to more people keeps it short, and the bodies past it stay easy-going till check-in.
+  expects: float32.exactOptional(),
+});
 
 export type HappinessSnapshot = z.infer<typeof happinessSnapshotSchema>;
 

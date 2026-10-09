@@ -256,4 +256,17 @@ describe('snapshotResort', () => {
     expect(fresh.photos.heat.every((heat) => heat === 0)).toBe(true);
     expect(fresh.today.photos).toBeUndefined();
   });
+
+  it('keeps what each guest expects, and reads a save from before expectations as easy-going', () => {
+    const state = played();
+    state.happiness.expects[2] = 0.6;
+    const saved = snapshotResort(state);
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(saved));
+    expect(fresh.happiness.expects[2]).toBeCloseTo(0.6);
+
+    const { expects: _expects, ...happiness } = saved.happiness;
+    restoreResort(fresh, resortSnapshotSchema.parse({ ...saved, happiness }));
+    expect(fresh.happiness.expects.every((expects) => expects === 0)).toBe(true);
+  });
 });

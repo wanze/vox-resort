@@ -294,7 +294,7 @@
   padding: var(--space-1) var(--space-2);
   border-left: 3px solid var(--ochre);
   border-radius: var(--radius-sm);
-  background: var(--sunken);
+  background: var(--stone-100);
   white-space: normal;
 }
 
@@ -327,9 +327,11 @@
   color: var(--text-dim);
 }
 
+/* Centred, as the field is a control's height and the button beside it a large one's. */
 .hud-venue-name-edit {
   display: flex;
   flex: 1 1 100%;
+  align-items: center;
   gap: var(--space-2);
 }
 

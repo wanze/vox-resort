@@ -57,7 +57,7 @@ export function ResortStats({ stats, status, onOpenReport }: ResortStatsProps) {
         </StatRow>
       </dl>
       <div className="ui-actions">
-        <button type="button" className="ui-button" onClick={onOpenReport}>
+        <button type="button" className="ui-button-large" onClick={onOpenReport}>
           Day report
         </button>
       </div>

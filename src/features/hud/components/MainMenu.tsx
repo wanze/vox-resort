@@ -147,6 +147,7 @@ function RootPage(props: PageProps) {
   return (
     <>
       <MenuOption
+        icon="saves"
         label="Save game"
         note={saves.current?.name ?? 'name it first'}
         shortcut={SAVE_SHORTCUT}
@@ -170,6 +171,7 @@ function RootPage(props: PageProps) {
         onSelect={() => onOpen('game')}
       />
       <MenuOption
+        icon="windows"
         label="Windows"
         note="open and close every window"
         more

@@ -117,7 +117,8 @@ function GuestDetails({
         onSelectPerson={onSelectPerson}
       />
       <div className="ui-actions">
-        <button type="button" className="ui-button" onClick={onFollow}>
+        <button type="button" className="ui-button-large" onClick={onFollow}>
+          <PixelIcon name="camera" />
           Follow
         </button>
       </div>
@@ -251,7 +252,7 @@ function SendButton({
   return (
     <button
       type="button"
-      className="ui-button"
+      className="ui-button-large"
       disabled={why !== undefined}
       title={why}
       onClick={() => onSend(role)}
@@ -278,7 +279,7 @@ function ProgrammeButton({
 }) {
   if (!place.programme) return null;
   return (
-    <button type="button" className="ui-button" onClick={() => onOpenProgramme(place.key)}>
+    <button type="button" className="ui-button-large" onClick={() => onOpenProgramme(place.key)}>
       Programme
     </button>
   );
@@ -380,7 +381,7 @@ function StaffDetails({
       </dl>
       {worker.onDuty ? (
         <div className="ui-actions">
-          <button type="button" className="ui-button" onClick={onShow}>
+          <button type="button" className="ui-button-large" onClick={onShow}>
             Show
           </button>
         </div>

@@ -41,12 +41,12 @@ export function VenueActions({ name, naming, onRename, children }: VenueActionsP
       {naming ? (
         <button
           type="button"
-          className="ui-button"
+          className="ui-button-large"
           aria-label={`Rename ${name}`}
           title="Rename"
           onClick={() => setEditing(true)}
         >
-          <PixelIcon name="rename" scale={1} />
+          <PixelIcon name="rename" />
           Rename
         </button>
       ) : null}
@@ -105,12 +105,12 @@ function VenueNameField({
       {naming.suggested ? (
         <button
           type="button"
-          className="ui-button"
+          className="ui-button-large"
           // Safari never focuses a clicked button, so the field would close under the click.
           onMouseDown={(event) => event.preventDefault()}
           onClick={onReroll}
         >
-          <PixelIcon name="refresh" scale={1} />
+          <PixelIcon name="refresh" />
           Random name
         </button>
       ) : null}

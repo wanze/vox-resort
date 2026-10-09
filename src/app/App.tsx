@@ -384,7 +384,7 @@ export function App() {
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
   const { adopt: adoptParams, money } = resort;
-  const { adoptSpeed, togglePause } = clock;
+  const { adoptSpeed } = clock;
   const { note } = money;
   const { markDirty, morning } = saves;
   const { hearEvent } = news;
@@ -414,7 +414,6 @@ export function App() {
       onCue,
       onHear,
       onSpeedChange: adoptSpeed,
-      onDoubleTap: togglePause,
       onEventNews: hearEvent,
       welcome: OPENS_ON_WELCOME,
     };
@@ -460,7 +459,6 @@ export function App() {
     onCue,
     onHear,
     adoptSpeed,
-    togglePause,
     hearEvent,
   ]);
 

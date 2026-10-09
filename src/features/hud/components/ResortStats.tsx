@@ -56,9 +56,11 @@ export function ResortStats({ stats, status, onOpenReport }: ResortStatsProps) {
           <Aside>{`${formatNumber(stats.venues.waiting)} queueing`}</Aside>
         </StatRow>
       </dl>
-      <button type="button" className="ui-button" onClick={onOpenReport}>
-        Day report
-      </button>
+      <div className="ui-actions">
+        <button type="button" className="ui-button" onClick={onOpenReport}>
+          Day report
+        </button>
+      </div>
     </div>
   );
 }

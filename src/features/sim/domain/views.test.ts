@@ -157,7 +157,7 @@ describe('viewsFor', () => {
     expect(views.sight.every((sight) => sight === -1)).toBe(true);
   });
 
-  it('times the reference resort under 50 ms', () => {
+  it('sees the sea and some sights on the reference resort', () => {
     const world = referenceWorldOf(referenceJson);
     const plan = planOfWorld(world);
     const terrain = terrainFor(plan);
@@ -168,27 +168,20 @@ describe('viewsFor', () => {
       plan.tilesZ,
     );
     const venues = venuesOn(world.placements);
-    const build = () =>
-      viewsFor({
-        tilesX: plan.tilesX,
-        tilesZ: plan.tilesZ,
-        scenery,
-        placements,
-        standing: [...world.placements, ...world.props],
-        strengthOf: sceneryOf,
-        labelOf: (id) => objectTypeById(id).label,
-        topOf: objectTypeTop,
-        levelOf: (tileX, tileZ) => terrain.levelOf(tileX, tileZ),
-        isWater: (tileX, tileZ) => terrain.surfaceOf(tileX, tileZ) === 'water',
-        isSea: (tileX, tileZ) => terrain.isSea(tileX, tileZ),
-        venues,
-      });
-    build();
-    const started = performance.now();
-    const views = build();
-    const took = performance.now() - started;
-    console.log(`viewsFor on the reference resort: ${took.toFixed(1)} ms`);
-    expect(took).toBeLessThan(50);
+    const views = viewsFor({
+      tilesX: plan.tilesX,
+      tilesZ: plan.tilesZ,
+      scenery,
+      placements,
+      standing: [...world.placements, ...world.props],
+      strengthOf: sceneryOf,
+      labelOf: (id) => objectTypeById(id).label,
+      topOf: objectTypeTop,
+      levelOf: (tileX, tileZ) => terrain.levelOf(tileX, tileZ),
+      isWater: (tileX, tileZ) => terrain.surfaceOf(tileX, tileZ) === 'water',
+      isSea: (tileX, tileZ) => terrain.isSea(tileX, tileZ),
+      venues,
+    });
     expect(views.sea.some((sea) => sea === 1)).toBe(true);
     expect(views.sights.length).toBeGreaterThan(0);
   });

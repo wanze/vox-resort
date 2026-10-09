@@ -54,6 +54,7 @@ input[type='checkbox'] {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 summary:focus-visible {
   outline: 2px solid var(--terracotta);
   outline-offset: 2px;

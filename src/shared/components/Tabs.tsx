@@ -36,7 +36,6 @@ function Tab(props: {
       role="tab"
       aria-controls={props.panelId}
       aria-selected={props.selected}
-      tabIndex={props.selected ? 0 : -1}
       onClick={props.onPick}
     >
       {props.icon ? <PixelIcon name={props.icon} /> : null}
@@ -50,7 +49,8 @@ function Tab(props: {
   );
 }
 
-// Only the current tab takes Tab, and the arrows pick as they move, as a native tab strip does.
+// Every tab takes Tab, so the strip is walked as the other buttons are; the arrows still pick as
+// they move, as a native tab strip does.
 export function Tabs<T extends string>({
   tabs,
   current,

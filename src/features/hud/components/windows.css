@@ -76,9 +76,10 @@
   width: 380px;
 }
 
+/* The top padding is the search field's focus ring, which the hidden overflow would clip. */
 .ui-window[data-window='build'] .ui-window-body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 0 var(--space-2) var(--space-2);
+  padding: var(--space-2);
 }

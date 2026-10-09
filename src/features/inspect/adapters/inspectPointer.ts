@@ -3,7 +3,6 @@ import { pickTile, type PickGround } from '../../build/domain/groundPick';
 import type { Tile } from '../../layout/domain/resortLayout';
 import { pickGuestOrWorker, type PickablePeople } from '../domain/pickPerson';
 import type { InspectTarget } from '../domain/selection';
-import { isDoubleTap, type Tap } from '../domain/doubleTap';
 
 // Listens instead of capturing the left button, which belongs to the camera drag
 // while no tool is armed: only a short, nearly still press counts as a click.
@@ -25,7 +24,6 @@ export interface InspectPointerOptions {
   readonly ground: PickGround;
   readonly keyAt: (tile: Tile) => string | undefined;
   readonly onSelect: (selected: InspectTarget) => void;
-  readonly onDoubleTap: () => void;
 }
 
 export interface InspectPointer {
@@ -38,7 +36,6 @@ function inAField(target: EventTarget | null): boolean {
 
 export function createInspectPointer(options: InspectPointerOptions): InspectPointer {
   const { canvas, camera, armed, people, staff, aimHeight, ground, keyAt, onSelect } = options;
-  let lastTap: Tap | null = null;
 
   const viewProjection = new Matrix4();
   const inverseViewProjection = new Matrix4();
@@ -95,19 +92,9 @@ export function createInspectPointer(options: InspectPointerOptions): InspectPoi
     return moved <= start.slop && event.timeStamp - start.at <= CLICK_MS;
   };
 
-  const tapped = (event: PointerEvent): boolean => {
-    if (event.pointerType !== 'touch') return false;
-    const tap = { x: event.clientX, y: event.clientY, at: event.timeStamp };
-    const double = isDoubleTap(lastTap, tap);
-    lastTap = double ? null : tap;
-    if (double) options.onDoubleTap();
-    return double;
-  };
-
   const onPointerUp = (event: PointerEvent): void => {
     // A tool armed between the press and the release has the click now.
-    if (!endsClick(event) || !armed()) return;
-    if (!tapped(event)) onSelect(pick(event));
+    if (endsClick(event) && armed()) onSelect(pick(event));
   };
 
   const onPointerCancel = (): void => {

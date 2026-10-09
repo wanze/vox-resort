@@ -5,6 +5,7 @@ import type {
   PartyMemberView,
   PlaceView,
   SelectionView,
+  SendOffers,
   SendState,
   StaffView,
 } from '../../inspect/domain/selection';
@@ -18,7 +19,7 @@ import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { StatRow } from '../../../shared/components/StatRow';
 import { NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
-import { VenueName } from './VenueName';
+import { VenueActions, VenueKind } from './VenueName';
 
 export interface InspectPanelProps {
   readonly frame: HudWindowFrame;
@@ -99,11 +100,6 @@ function GuestDetails({
       <p className="ui-activity">
         <span ref={activityElement}>—</span>
       </p>
-      <div className="hud-inspect-members">
-        <button type="button" className="ui-button" onClick={onFollow}>
-          Follow
-        </button>
-      </div>
       <dl className="ui-stats">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
@@ -120,6 +116,11 @@ function GuestDetails({
         selected={guest.person}
         onSelectPerson={onSelectPerson}
       />
+      <div className="ui-actions">
+        <button type="button" className="ui-button" onClick={onFollow}>
+          Follow
+        </button>
+      </div>
     </>
   );
 }
@@ -146,10 +147,16 @@ function BrokenRow({ broken }: { readonly broken: boolean }) {
   return <StatRow label="Repairs">Broken down</StatRow>;
 }
 
-function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting: number }) {
+function ProgrammeRow({ programme }: { readonly programme: PlaceView['programme'] }) {
+  if (!programme) return null;
+  return <StatRow label="Programme">{programme.next ?? 'Nothing on this week'}</StatRow>;
+}
+
+function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue: Venue }) {
   return (
     <dl className="ui-stats">
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
+      <ProgrammeRow programme={place.programme} />
       <BrokenRow broken={venue.broken} />
       <StatRow label="Capacity">{venue.capacity}</StatRow>
       {venue.role === 'lodging' ? (
@@ -165,7 +172,7 @@ function VenueRows({ venue, setting }: { readonly venue: Venue; readonly setting
       <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watch={venue.lifeguard} />
-      <SurroundingsRow setting={setting} />
+      <SurroundingsRow setting={place.setting} />
     </dl>
   );
 }
@@ -254,24 +261,15 @@ function SendButton({
   );
 }
 
-function SendButtons({
-  place,
-  onSend,
-}: {
-  readonly place: PlaceView;
-  readonly onSend: (role: OrderRole) => void;
-}) {
-  const send = place.send;
-  if (!send || (send.mechanic === null && send.cleaner === null)) return null;
-  return (
-    <div className="hud-inspect-members" role="group" aria-label="Send staff">
-      <SendButton role="mechanic" state={send.mechanic} onSend={onSend} />
-      <SendButton role="cleaner" state={send.cleaner} onSend={onSend} />
-    </div>
-  );
-}
+const NO_SEND: SendOffers = { mechanic: null, cleaner: null };
 
-function ProgrammeRow({
+const offersAny = ({ mechanic, cleaner }: SendOffers): boolean =>
+  mechanic !== null || cleaner !== null;
+
+const hasActions = (place: PlaceView): boolean =>
+  offersAny(place.send ?? NO_SEND) || place.programme !== undefined || place.naming !== undefined;
+
+function ProgrammeButton({
   place,
   onOpenProgramme,
 }: {
@@ -280,12 +278,37 @@ function ProgrammeRow({
 }) {
   if (!place.programme) return null;
   return (
-    <div className="ui-row ui-row--spread">
-      <span>{place.programme.next ?? 'Nothing on this week'}</span>
-      <button type="button" className="ui-button" onClick={() => onOpenProgramme(place.key)}>
-        Programme
-      </button>
-    </div>
+    <button type="button" className="ui-button" onClick={() => onOpenProgramme(place.key)}>
+      Programme
+    </button>
+  );
+}
+
+function PlaceActions({
+  place,
+  onSend,
+  onRenameVenue,
+  onOpenProgramme,
+}: {
+  readonly place: PlaceView;
+  readonly onSend: (role: OrderRole) => void;
+  readonly onRenameVenue: (key: string, name: string) => void;
+  readonly onOpenProgramme: (key: string) => void;
+}) {
+  if (!hasActions(place)) return null;
+  const send = place.send ?? NO_SEND;
+  return (
+    <VenueActions
+      // Keyed, so a half-typed name is not carried over to the next place selected.
+      key={place.key}
+      name={place.label}
+      naming={place.naming}
+      onRename={(name) => onRenameVenue(place.key, name)}
+    >
+      <SendButton role="mechanic" state={send.mechanic} onSend={onSend} />
+      <SendButton role="cleaner" state={send.cleaner} onSend={onSend} />
+      <ProgrammeButton place={place} onOpenProgramme={onOpenProgramme} />
+    </VenueActions>
   );
 }
 
@@ -318,23 +341,19 @@ function PlaceDetails({
   }
   return (
     <>
-      {place.naming ? (
-        <VenueName
-          // Keyed, so a half-typed name is not carried over to the next place selected.
-          key={place.key}
-          name={place.label}
-          naming={place.naming}
-          onRename={(name) => onRenameVenue(place.key, name)}
-        />
-      ) : null}
+      <VenueKind naming={place.naming} />
       <Problems
         problems={adviceAt(advice, { tileX: place.tile.x, tileZ: place.tile.z })}
         hire={hire}
       />
-      <SendButtons place={place} onSend={onSend} />
-      <ProgrammeRow place={place} onOpenProgramme={onOpenProgramme} />
-      <VenueRows venue={place.venue} setting={place.setting} />
+      <VenueRows place={place} venue={place.venue} />
       <Residents place={place} onSelectPerson={onSelectPerson} />
+      <PlaceActions
+        place={place}
+        onSend={onSend}
+        onRenameVenue={onRenameVenue}
+        onOpenProgramme={onOpenProgramme}
+      />
     </>
   );
 }
@@ -360,7 +379,7 @@ function StaffDetails({
         <StatRow label="Wage">{worker.wage.toLocaleString('en-US')}/day</StatRow>
       </dl>
       {worker.onDuty ? (
-        <div className="hud-inspect-members">
+        <div className="ui-actions">
           <button type="button" className="ui-button" onClick={onShow}>
             Show
           </button>

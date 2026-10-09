@@ -408,8 +408,6 @@ export interface ShowcaseOptions {
   readonly hud: HudStore;
   readonly onFrame: (update: FrameUpdate) => void;
   readonly onToolChange?: (tool: BuildTool | null) => void;
-  // A double tap on the resort while no tool is armed.
-  readonly onDoubleTap?: () => void;
   // A new game or a load, told before the new resort's first advice.
   readonly onResortReplaced?: () => void;
   readonly onRefused?: (note: BuildNote) => void;
@@ -2694,7 +2692,6 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     ground: build.ground,
     keyAt: (tile) => current().occupancy.keyAt(tile),
     onSelect: pick,
-    onDoubleTap: () => options.onDoubleTap?.(),
   });
 
   let dayAdvice: readonly Advice[] = [];

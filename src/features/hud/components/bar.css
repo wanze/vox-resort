@@ -15,10 +15,6 @@
   margin-left: auto;
 }
 
-.hud-status {
-  gap: var(--space-3);
-}
-
 /* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
 .hud-status > * {
   flex: none;

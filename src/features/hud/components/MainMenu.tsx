@@ -95,8 +95,8 @@ interface PageProps extends PageContext {
 // Back from a page goes to the page that opened it, not always to the root.
 const PAGE_PARENTS: { readonly [page in SubPage]?: SubPage } = { highlight: 'view', maps: 'view' };
 
-// What a narrow strip has given up, each row shown by the stylesheet from the width its chip leaves
-// the strip at; the map views leave later than the highlight picker.
+// What a narrow strip has given up, each row shown by the stylesheet once the strip folds its chip
+// away; the map views fold later than the highlight picker.
 function NarrowViewRows({
   highlights,
   overlay,

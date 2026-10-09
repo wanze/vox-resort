@@ -1812,6 +1812,9 @@ function createClock(
     get label() {
       return clock.label;
     },
+    get timeLabel() {
+      return clock.timeLabel;
+    },
     get speed() {
       return clock.speed;
     },
@@ -2996,7 +2999,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onFrame({
       sampled: sample.updated,
       fps: fpsState.fps,
-      clock: clock.label,
+      day: clock.day,
+      time: clock.timeLabel,
       activeLights: clock.litLamps,
       drawCalls: handle.renderer.info.render.drawCalls,
       triangles: handle.renderer.info.render.triangles,

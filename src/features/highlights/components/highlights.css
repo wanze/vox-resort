@@ -70,16 +70,13 @@
   vertical-align: -0.1em;
 }
 
-/* The highlight picker is the first chip to leave for the menu's View page; its legend is fixed, so
-   it stays. */
-@media (width <= 739px) {
-  .hud-bar .highlights {
-    display: contents;
-  }
+/* The picker goes to the menu's View page when the bar folds it; its legend is fixed, so it stays. */
+.hud-bar[data-fold~='highlight'] .highlights {
+  display: contents;
+}
 
-  .hud-bar .highlights > .ui-dropdown {
-    display: none;
-  }
+.hud-bar[data-fold~='highlight'] .highlights > .ui-dropdown {
+  display: none;
 }
 
 .app:not([data-layout='desk']) .highlights-legend {

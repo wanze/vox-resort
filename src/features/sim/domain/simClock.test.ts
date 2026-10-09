@@ -5,6 +5,7 @@ import {
   TICKS_PER_DAY,
   advanceClock,
   clockLabel,
+  timeLabel,
   createSimClock,
   dayOf,
   followTime,
@@ -106,6 +107,12 @@ describe('stampOf', () => {
   it('reads the day and the hour from bare ticks', () => {
     expect(stampOf(3 * TICKS_PER_DAY + 14 * 60 + 20)).toEqual({ day: 3, hour: 14 });
     expect(stampOf(TICKS_PER_DAY - 1)).toEqual({ day: 0, hour: 23 });
+  });
+});
+
+describe('timeLabel', () => {
+  it('pads the hour and the minutes', () => {
+    expect(timeLabel(atTick(365))).toBe('06:05');
   });
 });
 

@@ -70,10 +70,14 @@ export function hourOf(clock: SimClock): number {
   return stampOf(clock.ticks).hour;
 }
 
-export function clockLabel(clock: SimClock): string {
+export function timeLabel(clock: SimClock): string {
   const hour = String(hourOf(clock)).padStart(2, '0');
   const minute = String((clock.ticks % TICKS_PER_DAY) % 60).padStart(2, '0');
-  return `Day ${dayOf(clock)}  ${hour}:${minute}`;
+  return `${hour}:${minute}`;
+}
+
+export function clockLabel(clock: SimClock): string {
+  return `Day ${dayOf(clock)}  ${timeLabel(clock)}`;
 }
 
 export function advanceClock(

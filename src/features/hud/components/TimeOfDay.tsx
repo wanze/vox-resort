@@ -1,13 +1,17 @@
 import type { RefObject } from 'react';
 
 export interface TimeOfDayProps {
-  readonly clockElement: RefObject<HTMLSpanElement | null>;
+  readonly dayElement: RefObject<HTMLSpanElement | null>;
+  readonly timeElement: RefObject<HTMLSpanElement | null>;
 }
 
-export function TimeOfDay({ clockElement }: TimeOfDayProps) {
+export function TimeOfDay({ dayElement, timeElement }: TimeOfDayProps) {
   return (
     <div className="hud-time">
-      <span ref={clockElement} className="hud-time-clock" />
+      <span className="hud-time-clock">
+        <span ref={dayElement} className="hud-time-day" />
+        <span ref={timeElement} />
+      </span>
     </div>
   );
 }

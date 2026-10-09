@@ -41,23 +41,35 @@
   }
 }
 
+/* One slab from edge to edge, like the dock: a plate per group left slivers of scene between them,
+   which looked broken on a phone and cost it width. Packed from the left, with the gap growing a
+   little with the screen, so the groups do not drift apart on a wide tablet. */
 .app:not([data-layout='desk']) .hud-bar {
+  --strip-gap: clamp(var(--space-2), 1.5vw, var(--space-4));
   height: calc(var(--strip-h) + var(--safe-t));
-  padding: calc(var(--safe-t) + var(--space-1)) calc(var(--space-2) + var(--safe-r)) 0
-    calc(var(--space-2) + var(--safe-l));
-  align-items: flex-start;
-  /* Packed from the left, with the gap growing a little with the screen: spread evenly, the groups
-     drifted apart on a wide tablet and read as unrelated. */
+  padding: var(--safe-t) calc(var(--space-2) + var(--safe-r)) 0 calc(var(--space-2) + var(--safe-l));
   justify-content: flex-start;
-  gap: clamp(var(--space-1), 1.5vw, var(--space-4));
+  gap: var(--strip-gap);
+  border-bottom: 1px solid var(--edge);
+  background-image: var(--slab);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  pointer-events: auto;
 }
 
-/* Each group on its own plate, as on a desk, but slimmer: the side padding is what a phone runs out of. */
 .app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock) {
   flex: none;
   gap: var(--space-1);
-  height: calc(var(--strip-control-h) + 10px);
-  padding: 0 var(--space-1);
+  height: var(--strip-control-h);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock) + .ui-plate:not(.hud-dock) {
+  padding-left: var(--strip-gap);
+  border-left: 2px dotted var(--edge-soft);
 }
 
 .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
@@ -77,6 +89,18 @@
   font-size: var(--size-body);
 }
 
+/* Stacked, so the clock takes the width of its time rather than of the whole line. */
+.app:not([data-layout='desk']) .hud-bar .hud-time-clock {
+  flex-direction: column;
+  gap: 2px;
+  min-width: 5ch;
+}
+
+.app:not([data-layout='desk']) .hud-bar .hud-time-day {
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
 .app:not([data-layout='desk'])
   .hud-bar
   :is(
@@ -84,9 +108,16 @@
     .ui-chip-label,
     .hud-menu .ui-chip-caret,
     .hud-readout-label,
-    .hud-gates-state
+    .hud-gates-state,
+    .hud-figure-of
   ) {
   display: none;
+}
+
+/* A third off the 12-pixel art: still whole device pixels at a phone's 3x, where 18 px would blur. */
+.app:not([data-layout='desk']) .hud-bar .hud-readout-row > .ui-pixel-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* The status keeps the right edge, so the strip's spare width is one gap rather than several. */
@@ -94,10 +125,28 @@
   margin-left: auto;
 }
 
-@media (width <= 459px) {
-  .app:not([data-layout='desk']) .hud-bar .hud-demand-menu > .ui-chip {
-    padding: 0 var(--space-2);
-  }
+/* Laid out at its natural width for a moment while barFolds measures it; never painted so. */
+.app:not([data-layout='desk']) .hud-bar[data-measuring] {
+  right: auto;
+  width: max-content;
+}
+
+.hud-bar[data-fold~='highlight'] .hud-menu-highlight,
+.hud-bar[data-fold~='maps'] :is(.hud-menu-maps, .hud-maps-plate) {
+  display: contents;
+}
+
+.hud-bar[data-fold~='weather'] .hud-weather,
+.hud-bar[data-fold~='tight'] .ui-chip-caret {
+  display: none;
+}
+
+.hud-bar[data-fold~='tight'] .hud-demand {
+  gap: var(--space-1);
+}
+
+.hud-bar[data-fold~='tight'] .hud-demand-menu > .ui-chip {
+  padding: 0 var(--space-2);
 }
 
 .app:not([data-layout='desk']) .hud-bar .hud-dock {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { ArmedChip } from './ArmedChip';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
@@ -65,6 +65,8 @@ interface HudPlacement {
 
 interface HudChrome {
   readonly layout: LayoutMode;
+  // Folded by the app as its figures grow; written outside React, like the nodes.
+  readonly bar: RefObject<HTMLElement | null>;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly palette: boolean;
@@ -418,7 +420,9 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
   return (
     <div className="hud">
       <TopBar
-        clockElement={props.nodes.clock}
+        barElement={props.bar}
+        dayElement={props.nodes.day}
+        timeElement={props.nodes.time}
         clock={props.clock}
         resort={props.resort}
         saves={props.saves}

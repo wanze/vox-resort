@@ -21,7 +21,9 @@ import type { SaveControls } from '../../saves/components/saveControls';
 export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'highlight' | 'demand' | 'rating';
 
 export interface TopBarProps {
-  readonly clockElement: RefObject<HTMLSpanElement | null>;
+  readonly barElement: RefObject<HTMLElement | null>;
+  readonly dayElement: RefObject<HTMLSpanElement | null>;
+  readonly timeElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
   readonly resort: ResortControls;
   readonly saves: SaveControls;
@@ -93,14 +95,14 @@ function GatesToggle({
 }
 
 export function TopBar(props: TopBarProps) {
-  const { clock, resort, overlay, ledger, status, windows, menu, onMenuChange } = props;
+  const { barElement, clock, resort, overlay, ledger, status, windows, menu, onMenuChange } = props;
   const opener =
     (id: MenuId) =>
     (open: boolean): void =>
       onMenuChange(open ? id : null);
 
   return (
-    <header className="hud-bar">
+    <header ref={barElement} className="hud-bar">
       <div className="ui-plate">
         <MainMenu
           open={menu === 'main'}
@@ -121,7 +123,7 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <div className="ui-plate">
-        <TimeOfDay clockElement={props.clockElement} />
+        <TimeOfDay dayElement={props.dayElement} timeElement={props.timeElement} />
         <SpeedControl
           speed={clock.speed}
           onSpeedChange={clock.setSpeed}

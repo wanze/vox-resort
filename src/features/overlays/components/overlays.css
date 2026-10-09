@@ -26,14 +26,12 @@
   box-shadow: 0 0 0 1px var(--edge-soft);
 }
 
-@media (width <= 639px) {
-  .hud-bar .hud-maps-plate .overlays {
-    display: contents;
-  }
+.hud-bar[data-fold~='maps'] .overlays {
+  display: contents;
+}
 
-  .hud-bar .hud-maps-plate .overlays > .ui-dropdown {
-    display: none;
-  }
+.hud-bar[data-fold~='maps'] .overlays > .ui-dropdown {
+  display: none;
 }
 
 .app:not([data-layout='desk']) .overlays-legend {

@@ -5,7 +5,8 @@ export interface FrameUpdate {
   // True on the frames the frame rate is re-measured, which is when the debug readouts move.
   readonly sampled: boolean;
   readonly fps: number;
-  readonly clock: string;
+  readonly day: number;
+  readonly time: string;
   readonly activeLights: number;
   readonly drawCalls: number;
   readonly triangles: number;
@@ -44,7 +45,8 @@ interface Slot<T> {
 }
 
 export interface HudOverlayParts {
-  readonly clock: Slot<HTMLSpanElement>;
+  readonly day: Slot<HTMLSpanElement>;
+  readonly time: Slot<HTMLSpanElement>;
   readonly inspect: Slot<HTMLSpanElement>;
   readonly fps: Slot<HTMLSpanElement>;
   readonly cpu: Slot<HTMLSpanElement>;
@@ -181,7 +183,8 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
       writeMarkers(parts.markers, frame.markers);
       writeStaffPins(frame.staff);
       if (frame.sampled) writeDebug(frame);
-      writeText(parts.clock, frame.clock);
+      writeText(parts.day, `Day ${frame.day}`);
+      writeText(parts.time, frame.time);
       // Blanked rather than left standing, so a guest's last activity is never read as somebody else's.
       writeText(parts.inspect, frame.inspect ?? '');
     },

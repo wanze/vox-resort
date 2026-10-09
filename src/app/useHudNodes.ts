@@ -5,7 +5,8 @@ import { PINNED_STAFF } from '../features/hud/domain/staffPins';
 import type { HudNodes } from '../features/hud/components/hudNodes';
 
 export function useHudNodes(): HudNodes {
-  const clock = useRef<HTMLSpanElement | null>(null);
+  const day = useRef<HTMLSpanElement | null>(null);
+  const time = useRef<HTMLSpanElement | null>(null);
   const inspect = useRef<HTMLSpanElement | null>(null);
   const fps = useRef<HTMLSpanElement | null>(null);
   const cpu = useRef<HTMLSpanElement | null>(null);
@@ -23,7 +24,8 @@ export function useHudNodes(): HudNodes {
   // One stable object, so the effect mounting the renderer runs exactly once.
   return useMemo(
     () => ({
-      clock,
+      day,
+      time,
       inspect,
       fps,
       cpu,
@@ -38,7 +40,8 @@ export function useHudNodes(): HudNodes {
       signs,
     }),
     [
-      clock,
+      day,
+      time,
       inspect,
       fps,
       cpu,

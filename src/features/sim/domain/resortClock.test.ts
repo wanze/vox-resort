@@ -49,6 +49,7 @@ describe('createResortClock', () => {
     expect(other.snapshot()).toEqual(saved);
     expect(other.time).toBe(clock.time);
     expect(other.label).toBe(clock.label);
+    expect(other.timeLabel).toBe(clock.timeLabel);
     expect(other.weather).toBe('rain');
   });
 

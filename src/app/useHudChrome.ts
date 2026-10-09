@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useBarFolds } from './useBarFolds';
 import { useHotkeys } from './useHotkeys';
 import { useWindows } from './useWindows';
 import { saveOrAsk } from '../features/saves/domain/saveSlots';
@@ -17,6 +18,7 @@ import type { SaveControls } from '../features/saves/components/saveControls';
 export interface HudChrome {
   readonly windows: WindowControls;
   readonly layout: LayoutMode;
+  readonly bar: RefObject<HTMLElement | null>;
   readonly menu: MenuId | null;
   readonly setMenu: (menu: MenuId | null) => void;
   readonly palette: boolean;
@@ -53,6 +55,8 @@ export function useHudChrome(
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
+  const bar = useRef<HTMLElement>(null);
+  useBarFolds(bar, layout);
   const [menu, setMenu] = useState<MenuId | null>(null);
   const [palette, showPalette] = useState(false);
   // One thing on top at a time, so the palette never opens under a dropdown still listening for Escape.
@@ -110,5 +114,5 @@ export function useHudChrome(
   // None behind the welcome screen: there is no HUD for them to open.
   useHotkeys(playing ? live : []);
 
-  return { windows, layout, menu, setMenu, palette, setPalette };
+  return { windows, layout, bar, menu, setMenu, palette, setPalette };
 }

@@ -8,6 +8,7 @@ import {
   dayOf,
   followTime,
   TICKS_PER_DAY,
+  timeLabel,
   timeOf,
   withSpeed,
   withTime,
@@ -24,6 +25,7 @@ export interface ResortClock {
   readonly tickOfDay: number;
   readonly ticks: number;
   readonly label: string;
+  readonly timeLabel: string;
   readonly speed: SimSpeed;
   readonly balloonReadiness: number;
   // Real seconds, as the lightning flashes by, so the thunder follows the same strikes.
@@ -68,6 +70,9 @@ export function createResortClock(startTime: number, weatherSeed: number): Resor
     },
     get label() {
       return clockLabel(clock);
+    },
+    get timeLabel() {
+      return timeLabel(clock);
     },
     get speed() {
       return clock.speed;

@@ -5,6 +5,7 @@ import {
   buildKey,
   isPaintable,
   layoutItemFor,
+  paintsOnTouch,
   planAt,
   planStroke,
   tilesBetween,
@@ -40,6 +41,24 @@ describe('isPaintable', () => {
 
   it('does not paint a row of buildings out of one drag', () => {
     expect(isPaintable(COTTAGE)).toBe(false);
+  });
+});
+
+describe('paintsOnTouch', () => {
+  it('paints paving, which faces itself', () => {
+    expect(paintsOnTouch(PATH, false)).toBe(true);
+  });
+
+  it('paints a one-tile object that turning leaves alike', () => {
+    expect(paintsOnTouch(item('hedge'), true)).toBe(true);
+  });
+
+  it('shows a one-tile object as a ghost, so a finger can turn it', () => {
+    expect(paintsOnTouch(item('bench'), false)).toBe(false);
+  });
+
+  it('shows a building as a ghost, however it turns', () => {
+    expect(paintsOnTouch(COTTAGE, true)).toBe(false);
   });
 });
 

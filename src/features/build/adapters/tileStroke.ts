@@ -37,7 +37,7 @@ export interface TileStrokeOptions {
 }
 
 export interface TouchPlacing {
-  // Asked per touch gesture: a finger has no hover, so a building is shown first and placed on
+  // Asked per touch gesture: a finger has no hover, so an object is shown first and placed on
   // confirm, while a path is painted.
   readonly confirms: () => boolean;
   readonly onPending: (tile: Tile | null) => void;
@@ -76,7 +76,7 @@ const offsetOf = (from: Tile | null, to: Tile | null): Tile =>
 const heightOf = (ground: PickGround, tile: Tile): number =>
   levelHeight(ground.levelOf(tile.x, tile.z));
 
-// On touch, one finger moves the camera. A tap paints a tile, or shows a building, and leaves an
+// On touch, one finger moves the camera. A tap paints a path, or shows an object, and leaves an
 // anchor there; only a drag that starts on the anchor works tiles, carrying on from it.
 export function createTileStroke(options: TileStrokeOptions): TileStroke {
   const { canvas, camera, ground, paints, onHover, onTile, onCancel, takeLeftButton } = options;

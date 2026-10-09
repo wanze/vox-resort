@@ -7,7 +7,13 @@ import {
   type Tile,
 } from '../../layout/domain/resortLayout';
 import { normalizeRotation, type Rotation } from '../../layout/domain/rotation';
-import { isPaintable, planAt, type FitRule, type GroundRule } from '../domain/buildPlan';
+import {
+  isPaintable,
+  paintsOnTouch,
+  planAt,
+  type FitRule,
+  type GroundRule,
+} from '../domain/buildPlan';
 import type { PickGround } from '../domain/groundPick';
 import {
   fellBackToStairs,
@@ -26,6 +32,7 @@ import { footprintTiles, type Footprint, type TileOccupancy } from '../domain/ti
 import type { PlacementGhost } from './placementGhost';
 import { createTileStroke } from './tileStroke';
 import { keyHeard, KEYMAP } from '../../hud/domain/keymap';
+import { objectTypeById } from '../../catalog/domain/objectTypes';
 
 export interface BuildPointerOptions {
   readonly canvas: HTMLCanvasElement;
@@ -157,7 +164,7 @@ export function createBuildPointer(options: BuildPointerOptions): BuildPointer {
     ground,
     paints: () => item !== null && isPaintable(item),
     placing: {
-      confirms: () => item !== null && !isPaintable(item),
+      confirms: () => item !== null && !paintsOnTouch(item, objectTypeById(item.id).model.turnless),
       onPending: (tile) => onPending(tile !== null),
       covers,
     },

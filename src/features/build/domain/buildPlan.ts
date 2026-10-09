@@ -8,6 +8,7 @@ import {
 } from '../../layout/domain/resortLayout';
 import { straddledTile, type LevelProvider } from '../../layout/domain/elevation';
 import type { Rotation } from '../../layout/domain/rotation';
+import { isPaving } from './paving';
 import { footprintTiles, type TileOccupancy } from './tileOccupancy';
 
 const FLAT: LevelProvider = () => 0;
@@ -30,6 +31,12 @@ export function buildKey(item: LayoutItem, tile: Tile): string {
 
 export function isPaintable(item: LayoutItem): boolean {
   return item.tilesX === 1 && item.tilesZ === 1;
+}
+
+// A finger cannot turn what it paints, nor draw a straight row, so only what turning leaves
+// alike is painted on touch; anything else waits as a ghost that can be turned.
+export function paintsOnTouch(item: LayoutItem, turnless: boolean): boolean {
+  return isPaintable(item) && (turnless || isPaving(item));
 }
 
 export interface PlacementPlan {

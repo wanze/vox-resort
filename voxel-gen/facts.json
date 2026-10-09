@@ -34,7 +34,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10127978,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -71,7 +72,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 7034428,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -108,7 +110,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 5651233,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -145,7 +148,8 @@
         "voxelCount": 576,
         "dayVoxelCount": 576,
         "dominantColor": 5651233,
-        "solidTops": [6]
+        "solidTops": [6],
+        "turnless": false
       }
     },
     {
@@ -182,7 +186,8 @@
         "voxelCount": 616,
         "dayVoxelCount": 616,
         "dominantColor": 5651233,
-        "solidTops": [6]
+        "solidTops": [6],
+        "turnless": false
       }
     },
     {
@@ -219,7 +224,8 @@
         "voxelCount": 1664,
         "dayVoxelCount": 1664,
         "dominantColor": 10127978,
-        "solidTops": [9]
+        "solidTops": [9],
+        "turnless": false
       }
     },
     {
@@ -256,7 +262,8 @@
         "voxelCount": 1664,
         "dayVoxelCount": 1664,
         "dominantColor": 10127978,
-        "solidTops": [9]
+        "solidTops": [9],
+        "turnless": false
       }
     },
     {
@@ -296,7 +303,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -336,7 +344,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -376,7 +385,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -416,7 +426,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -456,7 +467,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -496,7 +508,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 8012329,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -536,7 +549,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -576,7 +590,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -616,7 +631,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -656,7 +672,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -696,7 +713,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -736,7 +754,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -776,7 +795,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -816,7 +836,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -856,7 +877,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -896,7 +918,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -936,7 +959,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -976,7 +1000,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1016,7 +1041,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1056,7 +1082,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1096,7 +1123,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -1133,7 +1161,8 @@
         "voxelCount": 1024,
         "dayVoxelCount": 1024,
         "dominantColor": 10919059,
-        "solidTops": [5]
+        "solidTops": [5],
+        "turnless": false
       }
     },
     {
@@ -1170,7 +1199,8 @@
         "voxelCount": 2048,
         "dayVoxelCount": 2048,
         "dominantColor": 10919059,
-        "solidTops": [9]
+        "solidTops": [9],
+        "turnless": false
       }
     },
     {
@@ -1207,7 +1237,8 @@
         "voxelCount": 128,
         "dayVoxelCount": 128,
         "dominantColor": 14997956,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1253,7 +1284,8 @@
         "voxelCount": 144,
         "dayVoxelCount": 144,
         "dominantColor": 10781282,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1290,7 +1322,8 @@
         "voxelCount": 219,
         "dayVoxelCount": 219,
         "dominantColor": 12562055,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1327,7 +1360,8 @@
         "voxelCount": 219,
         "dayVoxelCount": 219,
         "dominantColor": 12562055,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1364,7 +1398,8 @@
         "voxelCount": 184,
         "dayVoxelCount": 184,
         "dominantColor": 14466709,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1401,7 +1436,8 @@
         "voxelCount": 184,
         "dayVoxelCount": 184,
         "dominantColor": 14466709,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1438,7 +1474,8 @@
         "voxelCount": 240,
         "dayVoxelCount": 240,
         "dominantColor": 14466709,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1475,7 +1512,8 @@
         "voxelCount": 240,
         "dayVoxelCount": 240,
         "dominantColor": 14466709,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1521,7 +1559,8 @@
         "voxelCount": 184,
         "dayVoxelCount": 184,
         "dominantColor": 5651233,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1567,7 +1606,8 @@
         "voxelCount": 136,
         "dayVoxelCount": 136,
         "dominantColor": 5651233,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1613,7 +1653,8 @@
         "voxelCount": 136,
         "dayVoxelCount": 136,
         "dominantColor": 5651233,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -1650,7 +1691,8 @@
         "voxelCount": 1232,
         "dayVoxelCount": 1232,
         "dominantColor": 4154926,
-        "solidTops": [7]
+        "solidTops": [7],
+        "turnless": true
       }
     },
     {
@@ -1696,7 +1738,8 @@
         "voxelCount": 640,
         "dayVoxelCount": 640,
         "dominantColor": 13482383,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1733,7 +1776,8 @@
         "voxelCount": 720,
         "dayVoxelCount": 720,
         "dominantColor": 14466709,
-        "solidTops": [7]
+        "solidTops": [7],
+        "turnless": true
       }
     },
     {
@@ -1770,7 +1814,8 @@
         "voxelCount": 644,
         "dayVoxelCount": 644,
         "dominantColor": 14466709,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1807,7 +1852,8 @@
         "voxelCount": 980,
         "dayVoxelCount": 980,
         "dominantColor": 14466709,
-        "solidTops": [6]
+        "solidTops": [6],
+        "turnless": false
       }
     },
     {
@@ -1844,7 +1890,8 @@
         "voxelCount": 747,
         "dayVoxelCount": 747,
         "dominantColor": 13482383,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1881,7 +1928,8 @@
         "voxelCount": 7864,
         "dayVoxelCount": 7864,
         "dominantColor": 4825182,
-        "solidTops": [51, 50, 49, 50]
+        "solidTops": [51, 50, 49, 50],
+        "turnless": false
       }
     },
     {
@@ -1918,7 +1966,8 @@
         "voxelCount": 1549,
         "dayVoxelCount": 1549,
         "dominantColor": 4825182,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -1955,7 +2004,8 @@
         "voxelCount": 1451,
         "dayVoxelCount": 1451,
         "dominantColor": 10334348,
-        "solidTops": [21]
+        "solidTops": [21],
+        "turnless": false
       }
     },
     {
@@ -1992,7 +2042,8 @@
         "voxelCount": 12341,
         "dayVoxelCount": 12341,
         "dominantColor": 4825182,
-        "solidTops": [43, 45, 42, 42]
+        "solidTops": [43, 45, 42, 42],
+        "turnless": false
       }
     },
     {
@@ -2029,7 +2080,8 @@
         "voxelCount": 1861,
         "dayVoxelCount": 1861,
         "dominantColor": 16235732,
-        "solidTops": [23]
+        "solidTops": [23],
+        "turnless": false
       }
     },
     {
@@ -2066,7 +2118,8 @@
         "voxelCount": 8703,
         "dayVoxelCount": 8703,
         "dominantColor": 10273378,
-        "solidTops": [36, 36, 35, 36]
+        "solidTops": [36, 36, 35, 36],
+        "turnless": false
       }
     },
     {
@@ -2103,7 +2156,8 @@
         "voxelCount": 940,
         "dayVoxelCount": 940,
         "dominantColor": 13482383,
-        "solidTops": [7]
+        "solidTops": [7],
+        "turnless": false
       }
     },
     {
@@ -2148,7 +2202,8 @@
         "voxelCount": 133,
         "dayVoxelCount": 269,
         "dominantColor": 15329762,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -2187,7 +2242,8 @@
         "voxelCount": 1584,
         "dayVoxelCount": 1584,
         "dominantColor": 7787493,
-        "solidTops": [16, 16, 18, 18]
+        "solidTops": [16, 16, 18, 18],
+        "turnless": false
       }
     },
     {
@@ -2246,7 +2302,8 @@
         "voxelCount": 614,
         "dayVoxelCount": 614,
         "dominantColor": 14466709,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -2340,7 +2397,8 @@
         "voxelCount": 1296,
         "dayVoxelCount": 1296,
         "dominantColor": 14466709,
-        "solidTops": [2, 2]
+        "solidTops": [2, 2],
+        "turnless": false
       }
     },
     {
@@ -2386,7 +2444,8 @@
         "voxelCount": 620,
         "dayVoxelCount": 620,
         "dominantColor": 13482383,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -2491,7 +2550,8 @@
         "voxelCount": 1055,
         "dayVoxelCount": 1055,
         "dominantColor": 13482383,
-        "solidTops": [9]
+        "solidTops": [9],
+        "turnless": false
       }
     },
     {
@@ -2577,7 +2637,8 @@
         "voxelCount": 12645,
         "dayVoxelCount": 12645,
         "dominantColor": 13616056,
-        "solidTops": [37, 37, 37, 37]
+        "solidTops": [37, 37, 37, 37],
+        "turnless": false
       }
     },
     {
@@ -2631,7 +2692,8 @@
         "voxelCount": 3428,
         "dayVoxelCount": 3428,
         "dominantColor": 13616056,
-        "solidTops": [4, 4, 4, 4]
+        "solidTops": [4, 4, 4, 4],
+        "turnless": false
       }
     },
     {
@@ -2802,7 +2864,8 @@
         "voxelCount": 3992,
         "dayVoxelCount": 3992,
         "dominantColor": 13616056,
-        "solidTops": [18, 18, 18, 18]
+        "solidTops": [18, 18, 18, 18],
+        "turnless": false
       }
     },
     {
@@ -2902,7 +2965,8 @@
         "voxelCount": 5261,
         "dayVoxelCount": 5261,
         "dominantColor": 15788761,
-        "solidTops": [17, 17]
+        "solidTops": [17, 17],
+        "turnless": false
       }
     },
     {
@@ -2965,7 +3029,8 @@
         "voxelCount": 5612,
         "dayVoxelCount": 5612,
         "dominantColor": 10133667,
-        "solidTops": [17, 17]
+        "solidTops": [17, 17],
+        "turnless": false
       }
     },
     {
@@ -3030,7 +3095,8 @@
         "voxelCount": 3876,
         "dayVoxelCount": 3876,
         "dominantColor": 15260870,
-        "solidTops": [14, 14]
+        "solidTops": [14, 14],
+        "turnless": false
       }
     },
     {
@@ -3153,7 +3219,8 @@
         "voxelCount": 5684,
         "dayVoxelCount": 5684,
         "dominantColor": 9068342,
-        "solidTops": [23, 23, 3, 3]
+        "solidTops": [23, 23, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -3221,7 +3288,8 @@
         "voxelCount": 660,
         "dayVoxelCount": 660,
         "dominantColor": 14466709,
-        "solidTops": [3]
+        "solidTops": [3],
+        "turnless": false
       }
     },
     {
@@ -3294,7 +3362,8 @@
         "voxelCount": 10019,
         "dayVoxelCount": 10019,
         "dominantColor": 15260870,
-        "solidTops": [17, 17, 17, 17]
+        "solidTops": [17, 17, 17, 17],
+        "turnless": false
       }
     },
     {
@@ -3344,7 +3413,8 @@
         "voxelCount": 10552,
         "dayVoxelCount": 10552,
         "dominantColor": 10133667,
-        "solidTops": [19, 19, 18, 18]
+        "solidTops": [19, 19, 18, 18],
+        "turnless": false
       }
     },
     {
@@ -3457,7 +3527,8 @@
         "voxelCount": 10604,
         "dayVoxelCount": 10604,
         "dominantColor": 15260870,
-        "solidTops": [20, 21, 17, 17]
+        "solidTops": [20, 21, 17, 17],
+        "turnless": false
       }
     },
     {
@@ -3505,7 +3576,8 @@
         "voxelCount": 922,
         "dayVoxelCount": 922,
         "dominantColor": 14466709,
-        "solidTops": [11]
+        "solidTops": [11],
+        "turnless": false
       }
     },
     {
@@ -3692,7 +3764,8 @@
         "voxelCount": 23465,
         "dayVoxelCount": 23465,
         "dominantColor": 15260870,
-        "solidTops": [22, 22, 22, 20, 20, 20, 3, 3, 3]
+        "solidTops": [22, 22, 22, 20, 20, 20, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -3823,7 +3896,8 @@
         "voxelCount": 5268,
         "dayVoxelCount": 5268,
         "dominantColor": 13616056,
-        "solidTops": [19, 19, 3, 3]
+        "solidTops": [19, 19, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -4011,7 +4085,8 @@
         "voxelCount": 8788,
         "dayVoxelCount": 8788,
         "dominantColor": 9068342,
-        "solidTops": [19, 21, 19, 3, 3, 3]
+        "solidTops": [19, 21, 19, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -4136,7 +4211,8 @@
         "voxelCount": 10084,
         "dayVoxelCount": 10084,
         "dominantColor": 13616056,
-        "solidTops": [20, 22, 20, 20, 22, 20]
+        "solidTops": [20, 22, 20, 20, 22, 20],
+        "turnless": false
       }
     },
     {
@@ -4451,7 +4527,8 @@
         "voxelCount": 14731,
         "dayVoxelCount": 14731,
         "dominantColor": 13616056,
-        "solidTops": [17, 5, 5, 7, 5, 4, 4, 4, 5, 5, 4, 7]
+        "solidTops": [17, 5, 5, 7, 5, 4, 4, 4, 5, 5, 4, 7],
+        "turnless": false
       }
     },
     {
@@ -4789,7 +4866,8 @@
         "voxelCount": 16204,
         "dayVoxelCount": 16204,
         "dominantColor": 13616056,
-        "solidTops": [21, 21, 3, 18, 18, 3, 3, 4, 3]
+        "solidTops": [21, 21, 3, 18, 18, 3, 3, 4, 3],
+        "turnless": false
       }
     },
     {
@@ -4883,7 +4961,8 @@
         "voxelCount": 5626,
         "dayVoxelCount": 5626,
         "dominantColor": 14466709,
-        "solidTops": [19, 2, 5, 5]
+        "solidTops": [19, 2, 5, 5],
+        "turnless": false
       }
     },
     {
@@ -4999,7 +5078,8 @@
         "voxelCount": 8309,
         "dayVoxelCount": 8309,
         "dominantColor": 14466709,
-        "solidTops": [20, 18, 2, 2, 5, 5]
+        "solidTops": [20, 18, 2, 2, 5, 5],
+        "turnless": false
       }
     },
     {
@@ -5052,7 +5132,8 @@
         "voxelCount": 16993,
         "dayVoxelCount": 16993,
         "dominantColor": 9068342,
-        "solidTops": [26, 31, 26, 23, 26, 23]
+        "solidTops": [26, 31, 26, 23, 26, 23],
+        "turnless": false
       }
     },
     {
@@ -5105,7 +5186,8 @@
         "voxelCount": 46826,
         "dayVoxelCount": 46826,
         "dominantColor": 15260870,
-        "solidTops": [31, 32, 31, 36, 37, 36, 31, 32, 31]
+        "solidTops": [31, 32, 31, 36, 37, 36, 31, 32, 31],
+        "turnless": false
       }
     },
     {
@@ -5158,7 +5240,8 @@
         "voxelCount": 23537,
         "dayVoxelCount": 23537,
         "dominantColor": 15260870,
-        "solidTops": [23, 23, 23, 23, 21, 21]
+        "solidTops": [23, 23, 23, 23, 21, 21],
+        "turnless": false
       }
     },
     {
@@ -5216,7 +5299,8 @@
         "voxelCount": 68764,
         "dayVoxelCount": 68764,
         "dominantColor": 15260870,
-        "solidTops": [3, 33, 33, 32, 3, 39, 39, 38, 3, 35, 35, 34, 3, 17, 17, 17]
+        "solidTops": [3, 33, 33, 32, 3, 39, 39, 38, 3, 35, 35, 34, 3, 17, 17, 17],
+        "turnless": false
       }
     },
     {
@@ -5290,7 +5374,8 @@
           65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 79, 65, 65, 65, 65,
           64, 64, 65, 65, 65, 79, 79, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 3, 53, 53, 53, 53,
           53, 53, 53, 53, 3
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -5378,7 +5463,8 @@
         "voxelCount": 37914,
         "dayVoxelCount": 37914,
         "dominantColor": 15260870,
-        "solidTops": [17, 17, 17, 17, 17, 17, 17, 17, 13, 17, 17, 8]
+        "solidTops": [17, 17, 17, 17, 17, 17, 17, 17, 13, 17, 17, 8],
+        "turnless": false
       }
     },
     {
@@ -5489,7 +5575,8 @@
         "voxelCount": 37112,
         "dayVoxelCount": 37112,
         "dominantColor": 15260870,
-        "solidTops": [19, 22, 22, 19, 20, 24, 24, 20, 17, 18, 18, 17]
+        "solidTops": [19, 22, 22, 19, 20, 24, 24, 20, 17, 18, 18, 17],
+        "turnless": false
       }
     },
     {
@@ -5690,7 +5777,8 @@
         "voxelCount": 18607,
         "dayVoxelCount": 18607,
         "dominantColor": 13616056,
-        "solidTops": [20, 22, 20, 3, 20, 23, 20, 3, 3, 3, 3, 3]
+        "solidTops": [20, 22, 20, 3, 20, 23, 20, 3, 3, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -5847,7 +5935,8 @@
         "voxelCount": 25022,
         "dayVoxelCount": 25022,
         "dominantColor": 13616056,
-        "solidTops": [17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 3, 3, 3, 3]
+        "solidTops": [17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 17, 3, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -6000,7 +6089,8 @@
         "voxelCount": 24884,
         "dayVoxelCount": 24884,
         "dominantColor": 13616056,
-        "solidTops": [22, 22, 22, 22, 20, 20, 20, 20, 3, 3, 3, 3]
+        "solidTops": [22, 22, 22, 22, 20, 20, 20, 20, 3, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -6314,7 +6404,8 @@
         "solidTops": [
           22, 24, 23, 6, 9, 8, 6, 6, 6, 6, 9, 8, 7, 6, 6, 8, 8, 6, 8, 6, 6, 8, 6, 7, 2, 4, 4, 3, 5,
           2
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -6803,7 +6894,8 @@
         "voxelCount": 19834,
         "dayVoxelCount": 19834,
         "dominantColor": 10133667,
-        "solidTops": [18, 18, 18, 18, 7, 5, 5, 9, 7, 5, 5, 5]
+        "solidTops": [18, 18, 18, 18, 7, 5, 5, 9, 7, 5, 5, 5],
+        "turnless": false
       }
     },
     {
@@ -7608,7 +7700,8 @@
         "solidTops": [
           14, 2, 29, 29, 29, 29, 2, 14, 2, 12, 6, 6, 6, 6, 12, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -8052,7 +8145,8 @@
         "solidTops": [
           4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 3, 3, 3, 3, 4, 4, 4, 4, 3, 3, 3, 3, 4,
           4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -8382,7 +8476,8 @@
         "solidTops": [
           4, 4, 6, 4, 4, 4, 6, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
           4, 4, 4, 4, 4, 4, 4, 4, 6, 4, 4, 4, 6, 4, 4
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -8850,7 +8945,8 @@
         "solidTops": [
           3, 3, 7, 7, 7, 7, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
           3, 3, 3, 3, 3, 3, 3, 3, 3, 3
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -9119,7 +9215,8 @@
         "voxelCount": 6490,
         "dayVoxelCount": 6490,
         "dominantColor": 14466709,
-        "solidTops": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        "solidTops": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "turnless": false
       }
     },
     {
@@ -9308,7 +9405,8 @@
         "voxelCount": 1374,
         "dayVoxelCount": 1374,
         "dominantColor": 14466709,
-        "solidTops": [1, 1, 1, 1]
+        "solidTops": [1, 1, 1, 1],
+        "turnless": false
       }
     },
     {
@@ -9858,7 +9956,8 @@
           4, 4, 4, 8, 4, 4, 4, 4, 4, 4, 5, 4, 29, 4, 5, 4, 5, 4, 4, 4, 4, 7, 4, 4, 4, 34, 4, 4, 4,
           4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 18, 4, 5, 4, 4, 4, 4, 4, 5, 19, 4, 4, 4, 4, 4, 4, 4, 5, 4,
           4, 4, 4, 4, 4
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -9895,7 +9994,8 @@
         "voxelCount": 890,
         "dayVoxelCount": 890,
         "dominantColor": 14466709,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -9985,7 +10085,8 @@
         "voxelCount": 1237,
         "dayVoxelCount": 1237,
         "dominantColor": 13616056,
-        "solidTops": [15]
+        "solidTops": [15],
+        "turnless": false
       }
     },
     {
@@ -10070,7 +10171,8 @@
         "voxelCount": 4101,
         "dayVoxelCount": 4101,
         "dominantColor": 9068342,
-        "solidTops": [16, 13]
+        "solidTops": [16, 13],
+        "turnless": false
       }
     },
     {
@@ -10207,7 +10309,8 @@
         "voxelCount": 7784,
         "dayVoxelCount": 7784,
         "dominantColor": 13616056,
-        "solidTops": [20, 20, 17, 17]
+        "solidTops": [20, 20, 17, 17],
+        "turnless": false
       }
     },
     {
@@ -10260,7 +10363,8 @@
         "voxelCount": 14004,
         "dayVoxelCount": 14004,
         "dominantColor": 14466709,
-        "solidTops": [26, 32, 26, 23, 27, 23]
+        "solidTops": [26, 32, 26, 23, 27, 23],
+        "turnless": false
       }
     },
     {
@@ -10313,7 +10417,8 @@
         "voxelCount": 20015,
         "dayVoxelCount": 20015,
         "dominantColor": 15260870,
-        "solidTops": [20, 20, 22, 22, 18, 18]
+        "solidTops": [20, 20, 22, 22, 18, 18],
+        "turnless": false
       }
     },
     {
@@ -10371,7 +10476,8 @@
         "voxelCount": 49103,
         "dayVoxelCount": 49103,
         "dominantColor": 15260870,
-        "solidTops": [17, 33, 34, 33, 20, 34, 35, 35, 4, 4, 31, 33, 6, 6, 4, 4]
+        "solidTops": [17, 33, 34, 33, 20, 34, 35, 35, 4, 4, 31, 33, 6, 6, 4, 4],
+        "turnless": false
       }
     },
     {
@@ -10417,7 +10523,8 @@
         "voxelCount": 746,
         "dayVoxelCount": 746,
         "dominantColor": 14466709,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -10454,7 +10561,8 @@
         "voxelCount": 744,
         "dayVoxelCount": 744,
         "dominantColor": 14466709,
-        "solidTops": [3]
+        "solidTops": [3],
+        "turnless": true
       }
     },
     {
@@ -10491,7 +10599,8 @@
         "voxelCount": 688,
         "dayVoxelCount": 688,
         "dominantColor": 14466709,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": false
       }
     },
     {
@@ -10528,7 +10637,8 @@
         "voxelCount": 1128,
         "dayVoxelCount": 1128,
         "dominantColor": 14466709,
-        "solidTops": [6]
+        "solidTops": [6],
+        "turnless": false
       }
     },
     {
@@ -10565,7 +10675,8 @@
         "voxelCount": 6176,
         "dayVoxelCount": 6176,
         "dominantColor": 5209914,
-        "solidTops": [46, 46, 46, 43]
+        "solidTops": [46, 46, 46, 43],
+        "turnless": false
       }
     },
     {
@@ -10602,7 +10713,8 @@
         "voxelCount": 1501,
         "dayVoxelCount": 1501,
         "dominantColor": 4154926,
-        "solidTops": [3]
+        "solidTops": [3],
+        "turnless": false
       }
     },
     {
@@ -10639,7 +10751,8 @@
         "voxelCount": 1208,
         "dayVoxelCount": 1208,
         "dominantColor": 7773029,
-        "solidTops": [18]
+        "solidTops": [18],
+        "turnless": false
       }
     },
     {
@@ -10676,7 +10789,8 @@
         "voxelCount": 9623,
         "dayVoxelCount": 9623,
         "dominantColor": 4154926,
-        "solidTops": [37, 35, 35, 37]
+        "solidTops": [37, 35, 35, 37],
+        "turnless": false
       }
     },
     {
@@ -10713,7 +10827,8 @@
         "voxelCount": 1232,
         "dayVoxelCount": 1232,
         "dominantColor": 15590611,
-        "solidTops": [18]
+        "solidTops": [18],
+        "turnless": false
       }
     },
     {
@@ -10750,7 +10865,8 @@
         "voxelCount": 8024,
         "dayVoxelCount": 8024,
         "dominantColor": 8231484,
-        "solidTops": [34, 31, 31, 33]
+        "solidTops": [34, 31, 31, 33],
+        "turnless": false
       }
     },
     {
@@ -10787,7 +10903,8 @@
         "voxelCount": 982,
         "dayVoxelCount": 982,
         "dominantColor": 14466709,
-        "solidTops": [8]
+        "solidTops": [8],
+        "turnless": false
       }
     },
     {
@@ -10832,7 +10949,8 @@
         "voxelCount": 143,
         "dayVoxelCount": 279,
         "dominantColor": 15590611,
-        "solidTops": [0]
+        "solidTops": [0],
+        "turnless": false
       }
     },
     {
@@ -10891,7 +11009,8 @@
         "voxelCount": 976,
         "dayVoxelCount": 976,
         "dominantColor": 14466709,
-        "solidTops": [7]
+        "solidTops": [7],
+        "turnless": false
       }
     },
     {
@@ -10985,7 +11104,8 @@
         "voxelCount": 1264,
         "dayVoxelCount": 1264,
         "dominantColor": 14466709,
-        "solidTops": [2, 2]
+        "solidTops": [2, 2],
+        "turnless": false
       }
     },
     {
@@ -11031,7 +11151,8 @@
         "voxelCount": 1010,
         "dayVoxelCount": 1010,
         "dominantColor": 14466709,
-        "solidTops": [6]
+        "solidTops": [6],
+        "turnless": false
       }
     },
     {
@@ -11098,7 +11219,8 @@
         "voxelCount": 1014,
         "dayVoxelCount": 1014,
         "dominantColor": 14466709,
-        "solidTops": [3]
+        "solidTops": [3],
+        "turnless": false
       }
     },
     {
@@ -11146,7 +11268,8 @@
         "voxelCount": 1243,
         "dayVoxelCount": 1243,
         "dominantColor": 14466709,
-        "solidTops": [19]
+        "solidTops": [19],
+        "turnless": false
       }
     },
     {
@@ -11224,7 +11347,8 @@
         "voxelCount": 14350,
         "dayVoxelCount": 14350,
         "dominantColor": 14466709,
-        "solidTops": [39, 35, 35, 39]
+        "solidTops": [39, 35, 35, 39],
+        "turnless": false
       }
     },
     {
@@ -11278,7 +11402,8 @@
         "voxelCount": 4072,
         "dayVoxelCount": 4072,
         "dominantColor": 13616056,
-        "solidTops": [5, 5, 4, 5]
+        "solidTops": [5, 5, 4, 5],
+        "turnless": false
       }
     },
     {
@@ -11340,7 +11465,8 @@
         "voxelCount": 6148,
         "dayVoxelCount": 6148,
         "dominantColor": 15260870,
-        "solidTops": [19, 19]
+        "solidTops": [19, 19],
+        "turnless": false
       }
     },
     {
@@ -11404,7 +11530,8 @@
         "voxelCount": 5100,
         "dayVoxelCount": 5100,
         "dominantColor": 14466709,
-        "solidTops": [17, 17]
+        "solidTops": [17, 17],
+        "turnless": false
       }
     },
     {
@@ -11512,7 +11639,8 @@
         "voxelCount": 7954,
         "dayVoxelCount": 7954,
         "dominantColor": 13213786,
-        "solidTops": [23, 23, 20, 20]
+        "solidTops": [23, 23, 20, 20],
+        "turnless": false
       }
     },
     {
@@ -11584,7 +11712,8 @@
         "voxelCount": 8102,
         "dayVoxelCount": 8102,
         "dominantColor": 15260870,
-        "solidTops": [17, 15, 17, 3]
+        "solidTops": [17, 15, 17, 3],
+        "turnless": false
       }
     },
     {
@@ -11681,7 +11810,8 @@
         "voxelCount": 12781,
         "dayVoxelCount": 12781,
         "dominantColor": 15260870,
-        "solidTops": [32, 30, 29, 3]
+        "solidTops": [32, 30, 29, 3],
+        "turnless": false
       }
     },
     {
@@ -11852,7 +11982,8 @@
         "voxelCount": 21897,
         "dayVoxelCount": 21897,
         "dominantColor": 15260870,
-        "solidTops": [21, 23, 21, 20, 21, 20, 3, 3, 3]
+        "solidTops": [21, 23, 21, 20, 21, 20, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -12025,7 +12156,8 @@
         "voxelCount": 8585,
         "dayVoxelCount": 8585,
         "dominantColor": 13616056,
-        "solidTops": [18, 18, 18, 3, 3, 3]
+        "solidTops": [18, 18, 18, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -12135,7 +12267,8 @@
         "voxelCount": 9354,
         "dayVoxelCount": 9354,
         "dominantColor": 13616056,
-        "solidTops": [17, 21, 17, 18, 21, 18]
+        "solidTops": [17, 21, 17, 18, 21, 18],
+        "turnless": false
       }
     },
     {
@@ -12205,7 +12338,8 @@
         "voxelCount": 5404,
         "dayVoxelCount": 5404,
         "dominantColor": 14466709,
-        "solidTops": [18, 2, 5, 5]
+        "solidTops": [18, 2, 5, 5],
+        "turnless": false
       }
     },
     {
@@ -12455,7 +12589,8 @@
         "voxelCount": 16498,
         "dayVoxelCount": 16498,
         "dominantColor": 13616056,
-        "solidTops": [20, 29, 3, 18, 17, 3, 4, 3, 3]
+        "solidTops": [20, 29, 3, 18, 17, 3, 4, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -12658,7 +12793,8 @@
         "voxelCount": 14107,
         "dayVoxelCount": 14107,
         "dominantColor": 13616056,
-        "solidTops": [18, 5, 4, 5, 4, 4, 4, 4, 6, 4, 4, 4]
+        "solidTops": [18, 5, 4, 5, 4, 4, 4, 4, 6, 4, 4, 4],
+        "turnless": false
       }
     },
     {
@@ -12711,7 +12847,8 @@
         "voxelCount": 35292,
         "dayVoxelCount": 35292,
         "dominantColor": 15260870,
-        "solidTops": [16, 31, 34, 20, 32, 34, 3, 30, 32]
+        "solidTops": [16, 31, 34, 20, 32, 34, 3, 30, 32],
+        "turnless": false
       }
     },
     {
@@ -12785,7 +12922,8 @@
           3, 53, 53, 77, 77, 77, 77, 53, 53, 3, 57, 60, 59, 77, 77, 77, 91, 59, 60, 57, 58, 64, 62,
           77, 79, 77, 77, 62, 64, 58, 56, 59, 58, 77, 77, 77, 77, 58, 59, 56, 3, 4, 3, 3, 3, 3, 3,
           4, 3, 3
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -12857,7 +12995,8 @@
         "voxelCount": 42668,
         "dayVoxelCount": 42668,
         "dominantColor": 15260870,
-        "solidTops": [26, 28, 25, 17, 27, 29, 26, 16, 16, 16, 16, 14]
+        "solidTops": [26, 28, 25, 17, 27, 29, 26, 16, 16, 16, 16, 14],
+        "turnless": false
       }
     },
     {
@@ -12967,7 +13106,8 @@
         "voxelCount": 37426,
         "dayVoxelCount": 37426,
         "dominantColor": 15260870,
-        "solidTops": [20, 32, 32, 20, 20, 32, 32, 20, 3, 4, 4, 3]
+        "solidTops": [20, 32, 32, 20, 20, 32, 32, 20, 3, 4, 4, 3],
+        "turnless": false
       }
     },
     {
@@ -13132,7 +13272,8 @@
         "voxelCount": 22518,
         "dayVoxelCount": 22518,
         "dominantColor": 13616056,
-        "solidTops": [3, 21, 22, 21, 3, 19, 20, 19, 4, 4, 3, 6]
+        "solidTops": [3, 21, 22, 21, 3, 19, 20, 19, 4, 4, 3, 6],
+        "turnless": false
       }
     },
     {
@@ -13274,7 +13415,8 @@
         "voxelCount": 56128,
         "dayVoxelCount": 56128,
         "dominantColor": 15260870,
-        "solidTops": [19, 20, 20, 19, 22, 20, 20, 20, 20, 29, 29, 20, 3, 15, 15, 3]
+        "solidTops": [19, 20, 20, 19, 22, 20, 20, 20, 20, 29, 29, 20, 3, 15, 15, 3],
+        "turnless": false
       }
     },
     {
@@ -13410,7 +13552,8 @@
         "voxelCount": 31483,
         "dayVoxelCount": 31483,
         "dominantColor": 15260870,
-        "solidTops": [20, 21, 20, 21, 17, 17, 18, 21, 3, 3, 3, 3]
+        "solidTops": [20, 21, 20, 21, 17, 17, 18, 21, 3, 3, 3, 3],
+        "turnless": false
       }
     },
     {
@@ -13717,7 +13860,8 @@
         "solidTops": [
           22, 6, 8, 23, 24, 23, 8, 8, 8, 8, 8, 8, 15, 15, 4, 4, 15, 15, 6, 6, 4, 4, 6, 6, 3, 4, 4,
           4, 4, 3
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -14032,7 +14176,8 @@
         "solidTops": [
           6, 6, 6, 6, 6, 6, 19, 19, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 3, 3, 3, 4, 7, 7, 4, 3, 3, 3, 3,
           4, 7, 7, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -14354,7 +14499,8 @@
         "solidTops": [
           4, 4, 9, 20, 20, 20, 9, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
           4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -14838,7 +14984,8 @@
         "solidTops": [
           3, 22, 22, 22, 22, 22, 22, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
           3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -15103,7 +15250,8 @@
         "voxelCount": 7235,
         "dayVoxelCount": 7235,
         "dominantColor": 14466709,
-        "solidTops": [1, 12, 1, 1, 12, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        "solidTops": [1, 12, 1, 1, 12, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        "turnless": false
       }
     },
     {
@@ -15365,7 +15513,8 @@
           36, 5, 19, 5, 4, 5, 5, 4, 5, 4, 4, 4, 4, 4, 6, 4, 4, 4, 19, 4, 4, 4, 4, 4, 4, 4, 5, 21, 4,
           6, 4, 4, 4, 14, 8, 6, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 18, 4, 4, 5, 5, 5, 5, 5, 4,
           4, 5, 4, 6, 5
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -16169,7 +16318,8 @@
         "solidTops": [
           2, 6, 27, 22, 22, 27, 6, 2, 14, 2, 6, 6, 6, 26, 2, 14, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
           2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2
-        ]
+        ],
+        "turnless": false
       }
     },
     {
@@ -16656,7 +16806,8 @@
         "voxelCount": 19420,
         "dayVoxelCount": 19420,
         "dominantColor": 13616056,
-        "solidTops": [17, 18, 18, 17, 9, 5, 5, 9, 5, 5, 5, 5]
+        "solidTops": [17, 18, 18, 17, 9, 5, 5, 9, 5, 5, 5, 5],
+        "turnless": false
       }
     },
     {
@@ -16696,7 +16847,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -16736,7 +16888,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 12234910,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     },
     {
@@ -16776,7 +16929,8 @@
         "voxelCount": 512,
         "dayVoxelCount": 512,
         "dominantColor": 10919059,
-        "solidTops": [2]
+        "solidTops": [2],
+        "turnless": true
       }
     }
   ],
@@ -16814,7 +16968,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 15260870,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "guest-b",
@@ -16849,7 +17004,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 13781052,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "guest-c",
@@ -16884,7 +17040,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 4169394,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "child",
@@ -16919,7 +17076,8 @@
       "voxelCount": 136,
       "dayVoxelCount": 136,
       "dominantColor": 15246140,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     }
   ],
   "staff": [
@@ -16956,7 +17114,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 14340296,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "lifeguard",
@@ -16991,7 +17150,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 14005630,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "animator",
@@ -17026,7 +17186,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 10137703,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "mechanic",
@@ -17061,7 +17222,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 12872258,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     }
   ],
   "sky": [
@@ -17097,7 +17259,8 @@
       "voxelCount": 476,
       "dayVoxelCount": 476,
       "dominantColor": 13781052,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     },
     {
       "id": "balloon-amber",
@@ -17131,7 +17294,8 @@
       "voxelCount": 476,
       "dayVoxelCount": 476,
       "dominantColor": 15246140,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     },
     {
       "id": "balloon-paper",
@@ -17165,7 +17329,8 @@
       "voxelCount": 476,
       "dayVoxelCount": 476,
       "dominantColor": 15260870,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     }
   ],
   "sea": [
@@ -17210,7 +17375,8 @@
       "voxelCount": 103,
       "dayVoxelCount": 103,
       "dominantColor": 15246140,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "rowboat",
@@ -17259,7 +17425,8 @@
       "voxelCount": 314,
       "dayVoxelCount": 314,
       "dominantColor": 5651233,
-      "solidTops": [2]
+      "solidTops": [2],
+      "turnless": false
     },
     {
       "id": "sailboat",
@@ -17301,7 +17468,8 @@
       "voxelCount": 441,
       "dayVoxelCount": 441,
       "dominantColor": 5651233,
-      "solidTops": [2, 0]
+      "solidTops": [2, 0],
+      "turnless": false
     },
     {
       "id": "pedalo",
@@ -17350,7 +17518,8 @@
       "voxelCount": 304,
       "dayVoxelCount": 304,
       "dominantColor": 15590611,
-      "solidTops": [3]
+      "solidTops": [3],
+      "turnless": false
     },
     {
       "id": "jet-ski",
@@ -17399,7 +17568,8 @@
       "voxelCount": 120,
       "dayVoxelCount": 120,
       "dominantColor": 12234910,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "speedboat",
@@ -17441,7 +17611,8 @@
       "voxelCount": 325,
       "dayVoxelCount": 325,
       "dominantColor": 9472123,
-      "solidTops": [2, 0]
+      "solidTops": [2, 0],
+      "turnless": false
     },
     {
       "id": "banana",
@@ -17504,7 +17675,8 @@
       "voxelCount": 144,
       "dayVoxelCount": 144,
       "dominantColor": 12223024,
-      "solidTops": [1, 0]
+      "solidTops": [1, 0],
+      "turnless": false
     }
   ],
   "litter": [
@@ -17540,7 +17712,8 @@
       "voxelCount": 13,
       "dayVoxelCount": 13,
       "dominantColor": 15590611,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "litter-wrapper",
@@ -17574,7 +17747,8 @@
       "voxelCount": 9,
       "dayVoxelCount": 9,
       "dominantColor": 15246140,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     }
   ],
   "props": [
@@ -17610,7 +17784,8 @@
       "voxelCount": 1,
       "dayVoxelCount": 1,
       "dominantColor": 10137703,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     },
     {
       "id": "ball-volley",
@@ -17644,7 +17819,8 @@
       "voxelCount": 8,
       "dayVoxelCount": 8,
       "dominantColor": 15590611,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "ball-basket",
@@ -17678,7 +17854,8 @@
       "voxelCount": 8,
       "dayVoxelCount": 8,
       "dominantColor": 12223024,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     },
     {
       "id": "ball-golf",
@@ -17712,7 +17889,8 @@
       "voxelCount": 1,
       "dayVoxelCount": 1,
       "dominantColor": 15590611,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": true
     },
     {
       "id": "wheelchair",
@@ -17747,7 +17925,8 @@
       "voxelCount": 180,
       "dayVoxelCount": 180,
       "dominantColor": 4169394,
-      "solidTops": [0]
+      "solidTops": [0],
+      "turnless": false
     },
     {
       "id": "sandcastle-mound",
@@ -17782,7 +17961,8 @@
       "voxelCount": 116,
       "dayVoxelCount": 116,
       "dominantColor": 11573367,
-      "solidTops": [1]
+      "solidTops": [1],
+      "turnless": true
     },
     {
       "id": "sandcastle-walls",
@@ -17817,7 +17997,8 @@
       "voxelCount": 243,
       "dayVoxelCount": 243,
       "dominantColor": 11573367,
-      "solidTops": [3]
+      "solidTops": [3],
+      "turnless": false
     },
     {
       "id": "sandcastle-towers",
@@ -17852,7 +18033,8 @@
       "voxelCount": 364,
       "dayVoxelCount": 364,
       "dominantColor": 14466709,
-      "solidTops": [3]
+      "solidTops": [3],
+      "turnless": false
     },
     {
       "id": "sandcastle-keep",
@@ -17887,7 +18069,8 @@
       "voxelCount": 443,
       "dayVoxelCount": 443,
       "dominantColor": 14466709,
-      "solidTops": [3]
+      "solidTops": [3],
+      "turnless": false
     }
   ]
 }

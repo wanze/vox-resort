@@ -751,6 +751,7 @@ export interface ModelFacts extends Omit<VoxelModel, 'voxels' | 'canopy'> {
   readonly dominantColor: Color;
   // Per tile of the model's own grid, row by row, the top of its highest solid layer; 0 for none.
   readonly solidTops: readonly number[];
+  readonly turnless: boolean;
 }
 
 // A quarter of a tile's cells: a roof, a floor or a hedge fills that, a lamp post or a court's
@@ -773,6 +774,16 @@ export function solidTopsOf(
       if (filled[tile * layers + y]! >= SOLID_CELLS) return y + 1;
     return 0;
   });
+}
+
+// A seat, a light or a sign faces somewhere even on a symmetric model, so any of them rules it out.
+export function turnlessOf(model: VoxelModel): boolean {
+  const { width: across, depth: deep } = model;
+  if (across !== deep || model.seats.length > 0 || model.lights.length > 0) return false;
+  if (model.venue || model.hire || model.nameplate) return false;
+  const voxels = allVoxelsOf(model);
+  const painted = new Map(voxels.map(({ x, y, z, color }) => [`${x},${y},${z}`, color]));
+  return voxels.every(({ x, y, z, color }) => painted.get(`${deep - 1 - z},${y},${x}`) === color);
 }
 
 // The swatch colour: the colour painted most by day; a tie goes to the colour met first.
@@ -802,5 +813,6 @@ export function factsOf(model: VoxelModel): ModelFacts {
     dayVoxelCount: voxels.length + (canopy?.open.length ?? 0),
     dominantColor: dominantColorOf(model),
     solidTops: solidTopsOf(model),
+    turnless: turnlessOf(model),
   };
 }

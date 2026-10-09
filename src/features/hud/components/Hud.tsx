@@ -31,7 +31,9 @@ import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, slotsBusy, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { SharePanel } from '../../sharing/components/SharePanel';
-import { FollowCard } from '../../guest-view/components/FollowCard';
+import { FollowCard, type FollowSheet } from '../../guest-view/components/FollowCard';
+import { collapsedOnView } from '../../guest-view/domain/followSheet';
+import type { ViewMode } from '../../guest-view/domain/followRig';
 import { TAB_ICONS, TAB_TITLES, WINDOW_ICONS, WINDOW_TITLES } from './windowNames';
 import { depthOf, isOpen, WINDOW_IDS, type PageId, type WindowId } from '../domain/windowLayout';
 import { isTabbed, WINDOW_TABS, type TabbedWindow, type TabId } from '../domain/windowTabs';
@@ -352,15 +354,48 @@ const signsShown = (props: HudView): boolean =>
 const markedTiles = (props: HudView) =>
   markersShown(props) ? markersOf(props.advice).map((marker) => marker.at) : [];
 
-// Always mounted, so a card dragged out of the way stays there for the next follow.
+type Collapse = (collapsed: boolean) => void;
+
+// Starts collapsed, and collapses again on going into first person.
+function useCollapsed(view: ViewMode | null) {
+  const [collapsed, setCollapsed] = useState(true);
+  const [seenView, setSeenView] = useState(view);
+  if (view !== seenView) {
+    setSeenView(view);
+    setCollapsed(collapsedOnView(collapsed, seenView, view));
+  }
+  return [collapsed, setCollapsed] as const;
+}
+
+// A window's sheet has the bottom of the screen, so the card is a bar on it until it shuts, or is
+// shut to open the card.
+function sheetOver(windows: HudView['windows'], collapsed: boolean, onCollapse: Collapse) {
+  const sheets = FRAMED.filter((id) => isOpen(windows.layout, id));
+  return {
+    collapsed: collapsed || sheets.length > 0,
+    onCollapse: (next: boolean) => {
+      if (!next) for (const id of sheets) windows.show(id, false);
+      onCollapse(next);
+    },
+  };
+}
+
+function useFollowSheet(props: HudView): FollowSheet | null {
+  const [collapsed, setCollapsed] = useCollapsed(props.guestView.following?.view ?? null);
+  return isCompact(props.layout) ? sheetOver(props.windows, collapsed, setCollapsed) : null;
+}
+
+// Always mounted, so a card dragged out of the way or collapsed stays so for the next follow.
 function Following(props: HudView) {
   const { following } = props.guestView;
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const sheet = useFollowSheet(props);
   if (!following) return null;
   return (
     <FollowCard
       offset={offset}
       onMove={setOffset}
+      sheet={sheet}
       following={following}
       selection={props.selection}
       activityElement={props.nodes.inspect}

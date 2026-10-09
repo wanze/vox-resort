@@ -32,3 +32,80 @@
 .app[data-layout='rail'] .guest-view-follow {
   left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
 }
+
+/* On a phone: no dragging, a grip to pull it up by, and swipes that the page must not scroll for. */
+.guest-view-follow[data-sheet] {
+  padding: var(--space-4) var(--space-3) var(--space-2);
+  overflow-y: auto;
+  cursor: auto;
+}
+
+.guest-view-follow[data-collapsed] {
+  flex-flow: row wrap;
+  align-items: center;
+  width: min(440px, calc(100vw - 2 * var(--space-3) - var(--safe-l) - var(--safe-r)));
+}
+
+.guest-view-follow-toggle {
+  flex: 1 1 8em;
+  min-height: 32px;
+}
+
+.guest-view-follow-toggle .guest-view-follow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guest-view-follow[data-collapsed] .ui-actions {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* Across the screen above the dock, as a window's sheet stands. */
+.app[data-layout='bottom'] .guest-view-follow[data-sheet] {
+  right: var(--safe-r);
+  bottom: calc(var(--dock-h) + var(--safe-b));
+  left: var(--safe-l);
+  width: auto;
+  max-height: calc(
+    (100% - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b)) * var(--sheet-half)
+  );
+  translate: none;
+  border-radius: 12px 8px 0 0 / 8px 11px 0 0;
+  animation: hud-sheet-up var(--pop);
+}
+
+/* On a window's sheet, as the placement bar is, or under the strip without anchors to sit on. */
+.app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .guest-view-follow[data-sheet] {
+  inset: calc(var(--strip-h) + var(--safe-t) + var(--space-2)) calc(var(--space-2) + var(--safe-r))
+    auto calc(var(--space-2) + var(--safe-l));
+  border-radius: var(--radius-pebble);
+}
+
+@supports (anchor-name: --sheet) {
+  .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .guest-view-follow[data-sheet] {
+    position-anchor: --sheet;
+    top: auto;
+    bottom: anchor(top, calc(var(--dock-h) + var(--safe-b)));
+    margin-bottom: var(--space-2);
+  }
+}
+
+/* Open, it is a side sheet as the windows are; collapsed it stays a bar at the bottom. */
+.app[data-layout='rail'] .guest-view-follow[data-sheet]:not([data-collapsed]) {
+  top: calc(var(--strip-h) + var(--safe-t));
+  right: var(--safe-r);
+  bottom: 0;
+  left: auto;
+  width: var(--sheet-w);
+  translate: none;
+  border-radius: 12px 0 0 9px / 8px 0 0 12px;
+  animation: hud-sheet-in var(--pop);
+}
+
+.app[data-layout='rail'] .hud:has(.ui-window[data-window]) .guest-view-follow[data-sheet] {
+  left: calc(50% + (var(--rail-w) + var(--safe-l) - var(--sheet-w) - var(--safe-r)) / 2);
+  max-width: calc(100vw - var(--rail-w) - var(--safe-l) - var(--sheet-w) - var(--safe-r) - 16px);
+}

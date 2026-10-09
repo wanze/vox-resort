@@ -1,9 +1,22 @@
-import { useState, type CSSProperties, type PointerEvent, type RefObject } from 'react';
+import {
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react';
 import type { GuestView, SelectionView } from '../../inspect/domain/selection';
 import { NeedBars, PARTY_KINDS, ThinksRow } from '../../hud/components/GuestRows';
 import { StatRow } from '../../../shared/components/StatRow';
 import type { FollowView } from '../domain/followRules';
 import { keptOnScreen, type Offset, type Rect } from '../domain/cardSpot';
+import { swipeOf } from '../domain/followSheet';
+
+export interface FollowSheet {
+  readonly collapsed: boolean;
+  readonly onCollapse: (collapsed: boolean) => void;
+}
 
 export interface FollowCardProps {
   readonly following: FollowView;
@@ -16,6 +29,8 @@ export interface FollowCardProps {
   // Where the player dragged the card to, from where it stands by default; kept across follows.
   readonly offset: Offset;
   readonly onMove: (offset: Offset) => void;
+  // On a phone: a bar of its actions that opens into a sheet; null keeps the card to drag about.
+  readonly sheet: FollowSheet | null;
 }
 
 interface Drag {
@@ -64,6 +79,37 @@ function useCardDrag(offset: Offset, onMove: (offset: Offset) => void) {
       onPointerMove: follow,
       onPointerUp: drop,
       onPointerCancel: drop,
+    },
+  };
+}
+
+// Decided while the finger is still down, and the tap it ends in is swallowed, so a swipe that
+// starts or ends on Stop never stops the follow.
+function useSheetSwipe(onCollapse: (collapsed: boolean) => void) {
+  const start = useRef<Offset | null>(null);
+  const swiped = useRef(false);
+  const letGo = (): void => {
+    start.current = null;
+  };
+  return {
+    onPointerDown: (event: PointerEvent<HTMLElement>): void => {
+      swiped.current = false;
+      start.current = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
+    },
+    onPointerMove: (event: PointerEvent<HTMLElement>): void => {
+      if (!start.current || swiped.current) return;
+      const swipe = swipeOf(event.clientX - start.current.x, event.clientY - start.current.y);
+      if (swipe === null) return;
+      swiped.current = true;
+      onCollapse(swipe === 'shut');
+    },
+    onPointerUp: letGo,
+    onPointerCancel: letGo,
+    onClickCapture: (event: MouseEvent<HTMLElement>): void => {
+      if (!swiped.current) return;
+      swiped.current = false;
+      event.preventDefault();
+      event.stopPropagation();
     },
   };
 }
@@ -139,33 +185,69 @@ function Actions({
   );
 }
 
+const flag = (on: boolean): '' | undefined => (on ? '' : undefined);
+
+type Shown = Omit<FollowCardProps, 'offset' | 'onMove' | 'sheet'>;
+
+function Details({ selection, activityElement, following }: Shown) {
+  const guest = guestOf(following, selection);
+  if (!guest || following.left) return null;
+  return <GuestRows guest={guest} following={following} activityElement={activityElement} />;
+}
+
 // Sits where the touch placement bar does, until dragged elsewhere; the two never show together,
 // as arming a tool ends a follow.
-export function FollowCard({
-  selection,
-  activityElement,
-  offset,
-  onMove,
-  ...actions
-}: FollowCardProps) {
-  const { following } = actions;
-  const guest = guestOf(following, selection);
+function FloatingCard({ offset, onMove, ...shown }: Omit<FollowCardProps, 'sheet'>) {
+  const { following, selection } = shown;
   const drag = useCardDrag(offset, onMove);
   return (
     <section
       className="guest-view-follow ui-plate"
       aria-label="Following"
-      data-dragging={drag.dragging ? '' : undefined}
+      data-dragging={flag(drag.dragging)}
       style={drag.style}
       {...drag.handlers}
     >
       <p className="guest-view-follow-name" aria-live="polite">
-        {titleOf(following, guest)}
+        {titleOf(following, guestOf(following, selection))}
       </p>
-      {guest && !following.left ? (
-        <GuestRows guest={guest} following={following} activityElement={activityElement} />
-      ) : null}
-      <Actions {...actions} />
+      <Details {...shown} />
+      <Actions {...shown} />
     </section>
   );
+}
+
+// The title is a button, as a window sheet's is, so a keyboard opens it as a tap or a swipe does.
+function SheetCard({ sheet, ...shown }: Shown & { readonly sheet: FollowSheet }) {
+  const { following, selection } = shown;
+  const { collapsed } = sheet;
+  const swipe = useSheetSwipe(sheet.onCollapse);
+  return (
+    <section
+      className="guest-view-follow ui-plate"
+      aria-label="Following"
+      data-sheet=""
+      data-collapsed={flag(collapsed)}
+      {...swipe}
+    >
+      <button
+        type="button"
+        className="ui-window-toggle guest-view-follow-toggle"
+        aria-expanded={!collapsed}
+        onClick={() => sheet.onCollapse(!collapsed)}
+      >
+        <span className="ui-window-grip" aria-hidden="true" />
+        <span className="guest-view-follow-name" aria-live="polite">
+          {titleOf(following, guestOf(following, selection))}
+        </span>
+      </button>
+      {collapsed ? null : <Details {...shown} />}
+      <Actions {...shown} />
+    </section>
+  );
+}
+
+export function FollowCard({ sheet, offset, onMove, ...shown }: FollowCardProps) {
+  if (sheet) return <SheetCard sheet={sheet} {...shown} />;
+  return <FloatingCard offset={offset} onMove={onMove} {...shown} />;
 }

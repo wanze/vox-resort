@@ -408,6 +408,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         }}
         sound={props.sound}
         forecast={props.programme.forecast}
+        onPhoto={props.photo.enter}
       />
       <Windows {...props} />
       <PlacementBar

@@ -125,7 +125,7 @@ function Actions({
   onStop,
 }: Pick<FollowCardProps, 'following' | 'onToggleView' | 'onRideAlong' | 'onStop'>) {
   return (
-    <div className="hud-follow-actions">
+    <div className="hud-actions">
       <ViewButton following={following} onToggleView={onToggleView} />
       {following.rideOffered ? (
         <button type="button" className="hud-placement-button" onClick={onRideAlong}>

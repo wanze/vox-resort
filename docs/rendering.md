@@ -180,6 +180,49 @@ and shadows appear when it's done.
 - **Blob shadows**: one quad per tall object, in one mesh.
 - **Day/night**: `skyStateFor(time)` returns sun, ambient, sky, fog and lamp
   level.
+- **The sky** is `scene.backgroundNode`, three's own camera-centred sphere at
+  the far plane (`lighting/adapters/skyDome.ts`), one draw call. `skyColor` is
+  the horizon: the fog, the pools, lightning and fireworks read it, and every
+  direction below the horizon is exactly that colour, so the dome meets the
+  fogged sea without a seam. Above it the dome runs to `zenithColor` and adds a
+  sun disc and halo (`sunGlow`) and a warm band on the sun's side at dusk
+  (`dusk`). The shape is `skyColourAt` in `lighting/domain/skyDome.ts`, whose
+  constants are the ones to tune; the shader does the same sums in linear
+  colour. The isometric view sees only directions below the horizon, so it
+  shows the flat colour it always did. The sea reflects the dome along the
+  reflected view ray; pools and rivers keep the flat horizon colour. A new
+  `SkyState` field needs a value in `skyStateFor`, a rule in `overcastSky` and
+  `litSky`, and feeding the dome if it is drawn.
+
+## Photo mode
+
+`P`, the menu or the palette. It pauses the
+clock, hides the HUD with CSS (it stays mounted: the render loop writes into its
+nodes) and the overlay and highlight groups in the scene, and pins the camera to
+perspective; leaving puts the speed, the camera mode and the lens back. While
+following, the follow's camera is suspended rather than ended, so the guest is
+kept for a selfie. Canvas clicks pick nothing.
+
+- **Look time** replaces the clock's time for the sky only: the sun, the dome,
+  the blob shadows and the lamps follow it, while the sim, which rooms are lit,
+  the parasols, the balloons and the sound stay on the clock's.
+- **Filters** are colour matrices (`photo/domain/photoFilters.ts`): the saved
+  file gets them on its bytes, the screen an SVG `feColorMatrix` with the same
+  numbers on the canvas, both on sRGB values. There is no GPU post pass.
+- **Capture** (`photo/adapters/photoCapture.ts`) draws any camera at any size
+  into a `RenderTarget` set as the renderer's output target, so three still
+  does its sRGB encode and multisample resolve, then reads it back. WebGPU pads
+  rows to 256 bytes and WebGL2 reads bottom-up; `tightRows` undoes both. 2x is
+  capped at 4 096 px on the long side, and the level of detail is chosen for
+  the photo's size before the render. One GPU round trip a photo: never one a
+  frame.
+- **Selfie**: with a guest followed and drawn, "Take a selfie" stands the
+  camera a selfie stick (10 voxels) from their face, on the side away from the
+  sun while it is up, so the sun is behind them. The guest is held in the cast
+  each frame, after the choreography and before the crowd draws, turned to the
+  camera in the `selfie` pose, and put back as they were afterwards.
+- **Postcard links** carry the view, the lens and the look time in the share
+  link's header; one opens in perspective on that view, at that hour of day one.
 
 ## Weather
 
@@ -190,7 +233,8 @@ and shadows appear when it's done.
   looks the same at every zoom, and computed from elapsed time so it's
   frame-rate independent. A clear day skips it entirely.
 - **Lightning** is a pure function of time, so pausing doesn't bank strikes and
-  benches are reproducible. `flashSky` brightens ambient and sky only.
+  benches are reproducible. `flashSky` brightens ambient, horizon and zenith
+  only.
 - The weather can be pinned with `?weather=`; it isn't saved.
 
 ## Fireworks
@@ -346,4 +390,5 @@ Nothing in `src/` needs to change. Styles of an existing model go in
 
 Occlusion culling, `BatchedMesh`, dynamic resolution, chunked terrain, textures,
 shadow maps, objects on slopes, undo. Balloons and the bay don't follow hand
-edits.
+edits. Stars, a moon and clouds on the sky dome; a fog that takes the sun's
+halo; a gallery of photos taken.

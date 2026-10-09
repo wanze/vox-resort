@@ -348,6 +348,7 @@ input[type='text'] {
 .hud-camera-mode[aria-pressed='true'],
 .hud-camera-point[aria-pressed='true'],
 .hud-resort-choice[aria-pressed='true'],
+.photo-toggle[aria-pressed='true'],
 .hud-palette-info[aria-expanded='true'],
 .hud-placement-button.object-info-button[aria-expanded='true'] {
   background-image: var(--sunken);
@@ -443,6 +444,7 @@ input[type='checkbox'] {
 
 .hud-readout-label,
 .hud-menu-heading,
+.photo-label,
 .build-group-label,
 .hud-palette-armed-label,
 .hud-resort-advanced > summary,
@@ -2027,10 +2029,16 @@ input[type='checkbox'] {
   font-weight: 700;
 }
 
-.hud-follow-actions {
+/* A dialog's own buttons, under the dotted rule the menus draw between their sections. */
+.hud-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 2px dotted var(--edge-soft);
 }
 
 /* 44px: the smallest target a fingertip hits reliably. */
@@ -2349,7 +2357,9 @@ input[type='checkbox'] {
 .hud-programme-filters,
 .hud-programme-actions,
 .hud-event-tiers,
-.hud-event-book {
+.hud-event-book,
+.photo-group,
+.photo-time {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -4088,4 +4098,133 @@ input[type='checkbox'] {
 .app:not([data-layout='desk']) .welcome-column {
   width: min(100%, 420px);
   margin: auto;
+}
+
+/* Hidden, not unmounted: the render loop writes the signs, markers and pins into the HUD's nodes. */
+.app[data-photo] .hud {
+  display: none;
+}
+
+/* The same matrices the saved file gets, so the preview is the photo. */
+.app-canvas[data-photo-filter='warm'] {
+  filter: url('#photo-warm');
+}
+
+.app-canvas[data-photo-filter='faded'] {
+  filter: url('#photo-faded');
+}
+
+.app-canvas[data-photo-filter='mono'] {
+  filter: url('#photo-mono');
+}
+
+.photo-filter-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.photo-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--space-3) + var(--safe-b));
+  z-index: 6;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: min(560px, calc(100vw - 2 * var(--space-3) - var(--safe-l) - var(--safe-r)));
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+  translate: -50% 0;
+  font: 500 var(--size-body) / 1.35 var(--font-ui);
+  animation: hud-pop var(--pop);
+}
+
+.photo-head {
+  cursor: default;
+}
+
+.photo-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.photo-slider {
+  flex: 1 1 auto;
+  grid-template-columns: 5ch 1fr 6ch;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0;
+}
+
+.photo-time {
+  flex-wrap: nowrap;
+}
+
+.photo-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding-top: var(--space-1);
+}
+
+.photo-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.photo-group {
+  gap: 2px;
+}
+
+/* Apart from the groups above, the selfie's too when it wraps onto a row of its own. */
+.hud-actions > .photo-note {
+  margin-right: auto;
+}
+
+.photo-bar .photo-now {
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-2);
+  font-size: var(--size-small);
+}
+
+.photo-toggle:disabled,
+.photo-bar .hud-placement-button:disabled {
+  opacity: 0.5;
+}
+
+.photo-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: var(--size-small);
+}
+
+/* Coloured as a window's tab strip, so the photo taken reads apart from the controls. */
+.photo-taken {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 2px dotted var(--edge-soft);
+  background: var(--stone-100);
+}
+
+.photo-taken .photo-group {
+  gap: var(--space-2);
+}
+
+.photo-name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: var(--size-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

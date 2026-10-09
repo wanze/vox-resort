@@ -4,12 +4,30 @@ import { PLOT_TILES } from '../../layout/domain/resortGenerator';
 import { savedResortName } from '../../naming/domain/resortName';
 import { savedWorldSchema, type SavedWorld } from '../../resort-prep/domain/savedWorld';
 import { paramsSchema, type GameSnapshot } from '../../saves/domain/snapshot';
+import { PHOTO_FOV } from '../../photo/domain/photoView';
+
+// Far past any plot, so a link cannot stand the camera where the far plane loses the resort.
+const VIEW_REACH = 1e6;
+
+const coordinate = z.number().min(-VIEW_REACH).max(VIEW_REACH);
+const point = z.tuple([coordinate, coordinate, coordinate]);
+
+// A postcard: where the camera stood, and the hour the sky was drawn at.
+const postcardViewSchema = z.object({
+  position: point,
+  target: point,
+  fov: z.number().min(PHOTO_FOV.min).max(PHOTO_FOV.max),
+  time: z.number().min(0).lt(1),
+});
+
+export type PostcardView = z.infer<typeof postcardViewSchema>;
 
 export interface SharedResort {
   readonly world: SavedWorld;
   readonly params: ResortParams;
   readonly name: string;
   readonly names: readonly (readonly [string, string])[];
+  readonly view?: PostcardView;
 }
 
 export function sharedOf(game: GameSnapshot): SharedResort {
@@ -35,6 +53,8 @@ export const sharedHeaderSchema = z.object({
   params: paramsSchema,
   name: z.string(),
   names: z.array(z.tuple([z.string(), z.string()])),
+  // Optional, so a link without one is what it always was; a reader from before drops it.
+  view: postcardViewSchema.optional(),
 });
 
 export type SharedHeader = z.infer<typeof sharedHeaderSchema>;

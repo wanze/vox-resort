@@ -16,6 +16,7 @@ const HUD_ACTIONS: readonly HudAction[] = [
   'debug',
   'nextStyle',
   'follow',
+  'photo',
   'cancel',
 ];
 
@@ -47,6 +48,7 @@ describe('KEYMAP', () => {
       debug: { key: 'f3' },
       nextStyle: { key: 'v' },
       follow: { key: 'f' },
+      photo: { key: 'p' },
       cancel: { key: 'escape' },
       cameraMode: { key: 'c' },
       turnLeft: { key: 'q' },

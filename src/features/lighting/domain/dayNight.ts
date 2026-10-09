@@ -11,7 +11,13 @@ export interface SkyState {
   readonly sunIntensity: number;
   readonly ambientColor: number;
   readonly ambientIntensity: number;
+  // The horizon: the fog, the pools and the flashes read it, so the plot's edge keeps its colour.
   readonly skyColor: number;
+  readonly zenithColor: number;
+  // 0..1, how strongly the sun's disc and halo show; it lingers a little after the disc has set.
+  readonly sunGlow: number;
+  // 0..1, the warm band low on the sun's side of the horizon.
+  readonly dusk: number;
   readonly lampFactor: number;
 }
 
@@ -44,6 +50,9 @@ export function smoothstep(edge0: number, edge1: number, value: number): number 
 const SKY_NIGHT = 0x070b16;
 const SKY_TWILIGHT = 0xd97a4a;
 const SKY_DAY = 0x8fc6e8;
+const ZENITH_NIGHT = 0x03060f;
+const ZENITH_TWILIGHT = 0x3d4f80;
+const ZENITH_DAY = 0x4f8fd0;
 const SUN_LOW = 0xffb066;
 const SUN_HIGH = 0xfff4e0;
 const AMBIENT_NIGHT = 0x2b3a5c;
@@ -86,6 +95,9 @@ export function skyStateFor(time: number): SkyState {
     ambientColor: mixColor(AMBIENT_NIGHT, AMBIENT_DAY, day),
     ambientIntensity: 0.22 + 0.95 * day,
     skyColor: mixColor(mixColor(SKY_NIGHT, SKY_DAY, day), SKY_TWILIGHT, twilight),
+    zenithColor: mixColor(mixColor(ZENITH_NIGHT, ZENITH_DAY, day), ZENITH_TWILIGHT, twilight),
+    sunGlow: smoothstep(-0.1, 0, elevation),
+    dusk: twilight,
     lampFactor: 1 - smoothstep(-0.12, 0.12, elevation),
   };
 }
@@ -97,6 +109,17 @@ const OVERCAST_GREY = 0x6a7280;
 const OVERCAST_LIGHT = 0.35;
 
 const OVERCAST_LAMPS = 0.4;
+
+// The cloud's grey, darkened until no channel outshines the clear zenith: a dusk zenith is darker
+// than the grey a storm gives the horizon.
+function cloudOver(zenith: number, grey: number): number {
+  let scale = 1;
+  for (const shift of [16, 8, 0]) {
+    const channel = (grey >> shift) & 0xff;
+    if (channel > 0) scale = Math.min(scale, ((zenith >> shift) & 0xff) / channel);
+  }
+  return mixColor(0x000000, grey, scale);
+}
 
 // Cloud blocks the sun, so the dimming tapers off as the lamps come up and never brightens anything.
 export function overcastSky(sky: SkyState, overcast: number): SkyState {
@@ -112,6 +135,9 @@ export function overcastSky(sky: SkyState, overcast: number): SkyState {
     ambientColor: mixColor(sky.ambientColor, grey, cloud),
     ambientIntensity: sky.ambientIntensity * dimmed,
     skyColor: mixColor(sky.skyColor, grey, cloud),
+    zenithColor: mixColor(sky.zenithColor, cloudOver(sky.zenithColor, grey), cloud),
+    sunGlow: sky.sunGlow * (1 - cloud),
+    dusk: sky.dusk * (1 - cloud),
     // Capped: a storm at midnight must not burn the lamps brighter than night does.
     lampFactor: Math.min(1, sky.lampFactor + OVERCAST_LAMPS * cloud),
   };

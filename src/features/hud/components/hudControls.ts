@@ -24,6 +24,7 @@ import type { HighlightControls } from '../../highlights/components/highlightCon
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { ProgrammeControls } from '../../events/components/programmeControls';
 import type { SaveControls } from '../../saves/components/saveControls';
+import type { PhotoControls } from '../../photo/components/photoControls';
 
 // The scene owns the camera and keys move it without React, so the view is what the scene tells.
 export interface CameraControls {
@@ -155,4 +156,5 @@ export interface HudControls {
   readonly programme: ProgrammeControls;
   readonly windows: WindowControls;
   readonly guestView: GuestViewControls;
+  readonly photo: PhotoControls;
 }

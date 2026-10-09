@@ -291,6 +291,7 @@ export function packShared(shared: SharedResort): Uint8Array {
       params: shared.params,
       name: shared.name,
       names: shared.names,
+      ...(shared.view ? { view: shared.view } : {}),
     }),
   );
   if (world.land) out.raw(world.land.owned);
@@ -341,5 +342,6 @@ export function unpackShared(bytes: Uint8Array): SharedResort {
     params: header.params,
     name: cleanResortName(header.name) ?? resortNameFor(header.params.seed),
     names: namesOf(header),
+    ...(header.view ? { view: header.view } : {}),
   };
 }

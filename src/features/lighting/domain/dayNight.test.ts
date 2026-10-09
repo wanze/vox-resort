@@ -118,6 +118,36 @@ describe('skyStateFor', () => {
   it('wraps, so the cycle can run past midnight without a seam', () => {
     expect(skyStateFor(1.25)).toEqual(skyStateFor(0.25));
   });
+
+  // Pinned before the dome came: the fog and the plot's edge must look as they always did.
+  it('keeps the horizon colour the sky always had', () => {
+    expect(skyStateFor(at(0)).skyColor).toBe(0x070b16);
+    expect(skyStateFor(at(6)).skyColor).toBe(0xd6794a);
+    expect(skyStateFor(at(12)).skyColor).toBe(0x8fc6e8);
+    expect(skyStateFor(at(21, 30)).skyColor).toBe(0xd6794a);
+  });
+
+  it('is darker overhead than at the horizon, by day and by night', () => {
+    for (const time of [at(13, 45), at(0)]) {
+      const sky = skyStateFor(time);
+      expect(brightness(sky.zenithColor)).toBeLessThan(brightness(sky.skyColor));
+    }
+  });
+
+  it('shows the sun at noon, none at midnight, and some still at sunset', () => {
+    expect(skyStateFor(at(13, 45)).sunGlow).toBe(1);
+    expect(skyStateFor(at(0)).sunGlow).toBe(0);
+    expect(skyStateFor(SUNSET_TIME).sunGlow).toBeGreaterThan(0);
+  });
+
+  it('lays the dusk band on within an hour of sunset, and none at noon', () => {
+    expect(skyStateFor(at(13, 45)).dusk).toBe(0);
+    const evening = Array.from({ length: 12 * 12 }, (_unused, step) => 0.5 + step / (24 * 12));
+    const deepest = evening.reduce((best, time) =>
+      skyStateFor(time).dusk > skyStateFor(best).dusk ? time : best,
+    );
+    expect(Math.abs(deepest - SUNSET_TIME)).toBeLessThanOrEqual(1 / 24);
+  });
 });
 
 const channels = (color: number): number[] => [
@@ -196,6 +226,21 @@ describe('overcastSky', () => {
         const clouded = overcastSky(skyStateFor(time), cloud);
         expect(clouded.lampFactor, `lamps at ${time}`).toBeLessThanOrEqual(1);
         expect(clouded.lampFactor).toBeGreaterThanOrEqual(skyStateFor(time).lampFactor);
+      }
+    }
+  });
+
+  it('takes the sun glow and the dusk band away at full cloud, and never brightens the zenith', () => {
+    for (const time of HOURS) {
+      const sky = skyStateFor(time);
+      const storm = overcastSky(sky, 1);
+      expect(storm.sunGlow, `glow at ${time}`).toBe(0);
+      expect(storm.dusk, `dusk at ${time}`).toBe(0);
+      for (const cloud of [0.55, 0.85, 1]) {
+        expect(
+          brightness(overcastSky(sky, cloud).zenithColor),
+          `zenith at ${time}`,
+        ).toBeLessThanOrEqual(brightness(sky.zenithColor));
       }
     }
   });

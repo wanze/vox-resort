@@ -561,7 +561,8 @@ beyond its schema `worldMisfits` checks that the layout fits its plot and its
 models: every placement stands where its model would, and no key, rail edge or
 terrain cell repeats. **A new field on `SavedWorld` must be added to `layoutCodec.ts`**, or the
 codec's round-trip test fails. Bump `LINK_VERSION` only when an old reader would
-misread a new link.
+misread a new link. A postcard link from photo mode also carries a view (camera,
+lens and hour) as an optional header field, which an old reader drops.
 
 ## Where the art lives
 

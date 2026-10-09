@@ -45,6 +45,7 @@ import type {
 } from './hudControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
+import type { PhotoControls } from '../../photo/components/photoControls';
 
 export type CommandArt =
   | { readonly icon: IconName }
@@ -76,6 +77,7 @@ export interface CommandContext {
   readonly preview: PreviewLookup;
   readonly sound: SoundControls;
   readonly guestView: GuestViewControls;
+  readonly photo: PhotoControls;
   readonly selection: SelectionView | null;
 }
 
@@ -187,7 +189,7 @@ function highlightCommands({ highlights }: CommandContext): Command[] {
 }
 
 // A corner also switches into isometric, where the panel would first make the player do it by hand.
-function cameraCommands({ camera }: CommandContext): Command[] {
+function cameraCommands({ camera, photo }: CommandContext): Command[] {
   const { view } = camera;
   const isometric = view.mode === 'isometric';
   return [
@@ -221,6 +223,16 @@ function cameraCommands({ camera }: CommandContext): Command[] {
       note: 'draw far objects coarse and leave out ones too small to see',
       checked: view.detail,
       run: () => camera.setDetail(!view.detail),
+    },
+    {
+      id: 'camera:photo',
+      label: 'Photo mode',
+      group: 'Camera',
+      keywords: 'picture screenshot selfie snapshot',
+      note: 'hide the HUD and take a picture',
+      art: { icon: 'camera' },
+      shortcut: keyLabel('photo'),
+      run: photo.enter,
     },
   ];
 }

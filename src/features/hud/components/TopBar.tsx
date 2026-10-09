@@ -41,6 +41,7 @@ export interface TopBarProps {
   readonly compact: boolean;
   readonly sound: SoundControls;
   readonly forecast: readonly DayForecast[];
+  readonly onPhoto: () => void;
 }
 
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
@@ -115,6 +116,7 @@ export function TopBar(props: TopBarProps) {
           highlights={props.highlights}
           overlay={overlay}
           gates={{ open: resort.open, onOpenChange: resort.setOpen }}
+          onPhoto={props.onPhoto}
         />
       </div>
 

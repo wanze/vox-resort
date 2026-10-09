@@ -1,5 +1,15 @@
 import { MeshStandardNodeMaterial } from 'three/webgpu';
-import { attribute, float, mix, smoothstep, vec3 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
+import {
+  attribute,
+  cameraPosition,
+  float,
+  mix,
+  positionWorld,
+  reflect,
+  smoothstep,
+  vec3,
+} from 'three/tsl';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import {
@@ -40,13 +50,20 @@ const FOAM_ROUGHNESS = 0.9;
 
 export type SeaMaterial = WaterMaterial;
 
-export function createSeaMaterial(lightVolume: BakedLightVolume | null): SeaMaterial {
+// The sea mirrors the whole sky, sunset and all; pools and rivers are small and seen from above,
+// so they keep the flat horizon colour they are handed.
+export function createSeaMaterial(
+  lightVolume: BakedLightVolume | null,
+  skyAlong: (direction: Node<'vec3'>) => Node<'vec3'>,
+): SeaMaterial {
   const material = new MeshStandardNodeMaterial({ metalness: 0 });
   const edgeDistance = attribute<'float'>('shoreEdgeDistance', 'float');
   const coastDistance = attribute<'float'>('shoreCoastDistance', 'float');
 
-  return waterMaterialOf(material, lightVolume, (sky) => {
+  return waterMaterialOf(material, lightVolume, () => {
     const { normal, height } = swellOf(WAVES);
+    // A reflected ray that points down gets the horizon colour, by the dome's own rule.
+    const sky = skyAlong(reflect(positionWorld.sub(cameraPosition).normalize(), normal));
 
     const depth = coastDistance.add(height.mul(SWELL_DRAG));
     const shallowT = smoothstep(0, SHALLOW_REACH, depth);

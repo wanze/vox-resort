@@ -78,6 +78,9 @@ const CHEER_BOUNCE_VOXELS = 0.25;
 
 const STRIKE_REACH = 2.2;
 
+// One arm up and forward, holding the stick towards a camera in front.
+const SELFIE_REACH = 2.4;
+
 const REACH_HOP_VOXELS = 0.8;
 
 // Past any leg's taper, so the shader tells an arm from a leg by the weight alone: the hands
@@ -201,6 +204,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const jogging = is(DRAWN_POSE.jog);
   const striking = is(DRAWN_POSE.strike);
   const reaching = is(DRAWN_POSE.reach);
+  const selfie = is(DRAWN_POSE.selfie);
 
   const phase = pose.w;
   const cycle = (rate: number) => clock.mul(rate).add(phase);
@@ -252,6 +256,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
         .mul(STRIKE_REACH),
     )
     .add(reaching.mul(progress).mul(PI))
+    .add(selfie.mul(side.max(0)).mul(SELFIE_REACH))
     .add(sitting.mul(SIT_ARMS));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.

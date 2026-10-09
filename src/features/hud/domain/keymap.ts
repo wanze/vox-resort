@@ -11,6 +11,7 @@ export type HudAction =
   | 'debug'
   | 'nextStyle'
   | 'follow'
+  | 'photo'
   | 'cancel';
 export type CameraAction = 'cameraMode' | 'turnLeft' | 'turnRight';
 type KeyAction = HudAction | CameraAction | 'turnPlacement';
@@ -35,6 +36,7 @@ export const KEYMAP: { readonly [action in KeyAction]: KeyBinding } = {
   debug: { key: 'f3' },
   nextStyle: { key: 'v' },
   follow: { key: 'f' },
+  photo: { key: 'p' },
   cancel: { key: 'escape' },
   cameraMode: { key: 'c' },
   turnLeft: { key: 'q' },

@@ -214,6 +214,7 @@ import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibili
 import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createSkyApplier } from '../features/lighting/adapters/skyApplier';
+import type { SkyState } from '../features/lighting/domain/dayNight';
 import { createResortClock, type ResortClock } from '../features/sim/domain/resortClock';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
 import type { InstancedWorld } from '../features/rendering/adapters/instancedWorld';
@@ -278,6 +279,9 @@ import {
 } from '../features/inspect/domain/selection';
 import type { RideCommand } from '../features/guest-view/domain/followRules';
 import { createGuestView } from './guestView';
+import { createPhotoMode } from './photoMode';
+import type { PhotoPixels } from '../features/photo/domain/photoPixels';
+import { snapLookTime } from '../features/photo/domain/photoView';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
 import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
@@ -308,7 +312,7 @@ import { createCameraKeys } from '../features/rendering/adapters/cameraKeys';
 import { startCameraDrift, type CameraDrift } from '../features/rendering/adapters/cameraDrift';
 import type { LoadingStep } from '../features/welcome/domain/loading';
 import { resortNameFor } from '../features/naming/domain/resortName';
-import type { SharedResort } from '../features/sharing/domain/sharedResort';
+import type { PostcardView, SharedResort } from '../features/sharing/domain/sharedResort';
 import { createNameplates, type Nameplates } from '../features/naming/adapters/nameplateField';
 import { createFpsState, sampleFrame } from '../features/hud/domain/fps';
 import { createFrameCostState, sampleFrameCost } from '../features/hud/domain/frameCost';
@@ -479,6 +483,18 @@ export interface Showcase {
   // Leaves the guest at the hut and rides one of its craft out until it ties up.
   rideAlong(): void;
   rideOffers(): readonly RideCommand[];
+  // Pins the camera to perspective, keeps the HUD's own marks out of the scene and hands a follow's
+  // camera back. False under a bench, which refuses camera changes.
+  setPhotoMode(on: boolean): boolean;
+  // The hour the sun is drawn at, snapped to five minutes; null goes back to the clock's.
+  setLookTime(time: number | null): void;
+  setFov(degrees: number): void;
+  readonly clockTime: number;
+  // Called between frames: the photo is drawn offscreen at the buffer's size times the scale.
+  capturePhoto(scale: number): Promise<PhotoPixels>;
+  // Only for a followed guest who is drawn; false, and nothing done, for anybody else.
+  setSelfie(on: boolean): boolean;
+  postcardView(): PostcardView;
   book(draft: BookingDraft): BookingRefusal | null;
   unbook(id: number): void;
   rebook(id: number, change: BookingChange): BookingRefusal | null;
@@ -1741,7 +1757,9 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
 
 export interface Clock extends ResortClock {
   readonly litLamps: number;
+  readonly sky: SkyState;
   relight(): void;
+  setLookTime(time: number | null): void;
 }
 
 function createClock(
@@ -1795,7 +1813,15 @@ function createClock(
     get running() {
       return clock.running;
     },
+    get sky() {
+      return sky.sky;
+    },
     relight,
+    // Applied now: the clock is paused while a photo's hour is picked.
+    setLookTime(time) {
+      sky.setLookTime(time);
+      sky.apply(clock);
+    },
     advance(elapsedSeconds, pace) {
       const ticks = clock.advance(elapsedSeconds, pace);
       sky.apply(clock);
@@ -2329,7 +2355,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
 
   const setCameraMode = (mode: CameraMode): void => {
-    if (bench) return;
+    if (bench || photo.active) return;
     guestView.stop();
     handle.setCameraMode(mode);
   };
@@ -2356,18 +2382,28 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     });
   };
 
+  // On day one, at the hour the postcard was taken.
+  const openPostcard = (view: PostcardView): void => {
+    const [x, y, z] = view.position;
+    const [tx, ty, tz] = view.target;
+    handle.setCameraMode('perspective');
+    handle.setPose({ position: { x, y, z }, target: { x: tx, y: ty, z: tz }, fov: view.fov });
+    clock.setTime(view.time);
+    hud.publish({ camera: cameraView() });
+  };
+
   let singleKeys = true;
   const cameraKeys = createCameraKeys({
     mode: () => handle.cameraMode,
     onModeChange: (mode) => {
-      if (drift) return;
+      if (drift || photo.active) return;
       // Isometric means nothing at a guest's shoulder, so the key swaps the follow's view instead.
       if (guestView.active) return guestView.toggleView();
       setCameraMode(mode);
       hud.publish({ camera: cameraView() });
     },
     onTurn: (quarters) => {
-      if (drift) return;
+      if (drift || photo.active) return;
       setIsoDirection(turnDirection(handle.isoDirection, quarters));
       hud.publish({ camera: cameraView() });
     },
@@ -2617,13 +2653,23 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onSpeedChange: (speed) => onSpeedChange?.(speed),
   });
 
+  const photo = createPhotoMode({
+    handle,
+    clock,
+    resort: current,
+    guestView,
+    hudGroups: () => [current().overlay.group, highlights.group],
+    detail: () => detail,
+  });
+
   // `select` itself is left alone, so a rebuild or a load still clears the panel as before.
   const pick = (picked: InspectTarget): void => guestView.pick(picked, select);
 
   const inspector = createInspectPointer({
     canvas,
     camera: () => handle.camera,
-    armed: () => armedTool === null,
+    // Nothing is picked in photo mode: a click on nothing would end a follow mid-selfie.
+    armed: () => armedTool === null && !photo.active,
     people: () => {
       const { crowd, cast, drawnAt } = current();
       return whereDrawn(crowd.crowd, cast, { count: crowd.count, ...drawnAt });
@@ -2810,7 +2856,10 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     populationOf: (prepared) => populationOf(prepared.plan, prepared.plot, undefined),
     restoreGame: (resort, saved) => restoreGame(resort, saved, clock),
     reanchor,
-    beforeReplace: guestView.stop,
+    beforeReplace: () => {
+      photo.forget();
+      guestView.stop();
+    },
     heldCamera: guestView.heldCamera,
     openIsometric,
     stopDrift: () => {
@@ -2899,6 +2948,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     performAtSea(current().cast, actSeconds, clock.ticks);
     performOnSand(current().cast, actSeconds, clock.ticks);
     performWork(current().staffCast, current().cast, actSeconds);
+    photo.hold();
     current().ballField.write(current().cast.played);
     const crowdStarted = timer.start();
     current().crowd.advance(walked, crowdScale);
@@ -3093,7 +3143,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         identity.name = shared.name;
       };
       const source = { kind: 'saved', world: shared.world } as const;
-      return lifecycle.regrow(clampParams(shared.params), source, 'sandbox', named);
+      const grown = lifecycle.regrow(clampParams(shared.params), source, 'sandbox', named);
+      const { view } = shared;
+      return view ? grown.then(() => openPostcard(view)) : grown;
     },
     selectTool,
     confirmPlacement: () => build.confirm(),
@@ -3139,6 +3191,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     toggleFollowView: guestView.toggleView,
     rideAlong: guestView.rideAlong,
     rideOffers: guestView.offers,
+    setPhotoMode(on) {
+      if (bench) return false;
+      // A follow keeps its guest, whom a selfie needs; anything else inspected is let go.
+      if (on && !guestView.active) select(null);
+      photo.setOn(on);
+      hud.publish({ camera: cameraView() });
+      return true;
+    },
+    setLookTime: (time) => photo.setLookTime(time === null ? null : snapLookTime(time)),
+    setFov: photo.setFov,
+    get clockTime() {
+      return clock.time;
+    },
+    capturePhoto: photo.capture,
+    setSelfie: photo.setSelfie,
+    postcardView: photo.postcardView,
     snapshot: lifecycle.snapshot,
     load: lifecycle.load,
     dispose() {

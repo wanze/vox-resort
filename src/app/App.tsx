@@ -28,6 +28,11 @@ import { useHighlights } from './useHighlights';
 import { useClickCues, useSound, useToastCues } from './useSound';
 import { useUpdate } from './useUpdate';
 import { useIncomingLink, useShareLink } from './useSharing';
+import { usePhotoMode } from './usePhotoMode';
+import { PhotoBar } from '../features/photo/components/PhotoBar';
+import { PhotoFilterDefs } from '../features/photo/components/PhotoFilterDefs';
+import { isCompact, type LayoutMode } from '../features/hud/domain/layoutMode';
+import type { PhotoControls } from '../features/photo/components/photoControls';
 import type { SharedResort } from '../features/sharing/domain/sharedResort';
 import { mountShowcase, type Showcase } from './showcase';
 import {
@@ -244,14 +249,21 @@ function usePlacement(showcase: RefObject<Showcase | null>, hud: HudStore) {
   return { pending, confirm, dismiss, turn };
 }
 
-function useControls(showcase: RefObject<Showcase | null>, hud: HudStore) {
+function useControls(
+  showcase: RefObject<Showcase | null>,
+  hud: HudStore,
+  selectTool: (tool: BuildTool | null) => void,
+) {
+  const clock = useClockControls(showcase, hud);
+  const guestView = useGuestView(showcase, hud);
   return {
     camera: useCameraControls(showcase, hud),
-    clock: useClockControls(showcase, hud),
+    clock,
     inspector: useInspector(showcase, hud),
-    guestView: useGuestView(showcase, hud),
+    guestView,
     placement: usePlacement(showcase, hud),
     programme: useProgramme(showcase, hud),
+    photo: usePhotoMode(showcase, { clock, selectTool, following: guestView.following, hud }),
   };
 }
 
@@ -301,6 +313,22 @@ function followToggle(
   return selection?.kind === 'guest' ? guestView.follow : null;
 }
 
+const photoFlag = (photo: PhotoControls): '' | undefined => (photo.on ? '' : undefined);
+
+const photoFilterOf = (photo: PhotoControls): string | undefined =>
+  photo.on ? photo.filter : undefined;
+
+// Beside the HUD, not in it: photo mode hides the HUD.
+function PhotoLayer(props: { readonly photo: PhotoControls; readonly layout: LayoutMode }) {
+  if (!props.photo.on) return null;
+  return (
+    <>
+      <PhotoFilterDefs />
+      <PhotoBar photo={props.photo} compact={isCompact(props.layout)} />
+    </>
+  );
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudNodes = useHudNodes();
@@ -316,9 +344,10 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, guestView, placement, programme } = useControls(
+  const { camera, clock, inspector, guestView, placement, programme, photo } = useControls(
     showcaseRef,
     hud,
+    selectTool,
   );
   const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
@@ -350,6 +379,7 @@ export function App() {
       follow: followToggle(guestView, inspector.selection),
     },
     news.prefs.singleKeys,
+    photo,
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
@@ -435,8 +465,8 @@ export function App() {
   ]);
 
   return (
-    <div className="app" data-layout={layout}>
-      <canvas ref={canvasRef} className="app-canvas" />
+    <div className="app" data-layout={layout} data-photo={photoFlag(photo)}>
+      <canvas ref={canvasRef} className="app-canvas" data-photo-filter={photoFilterOf(photo)} />
       <Screen
         playing={playing}
         welcome={
@@ -475,6 +505,7 @@ export function App() {
             programme,
             windows,
             guestView,
+            photo,
           }}
           placement={{
             tool,
@@ -500,6 +531,7 @@ export function App() {
           }}
         />
       </Screen>
+      <PhotoLayer photo={photo} layout={layout} />
     </div>
   );
 }

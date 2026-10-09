@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type RefObject } from 'react';
 import { deflate, inflate } from '../features/sharing/adapters/deflate';
 import { packShared, ShareError, unpackShared } from '../features/sharing/domain/layoutCodec';
 import { formatLink, MAX_BODY_BYTES, parseLink } from '../features/sharing/domain/shareLink';
-import { sharedOf } from '../features/sharing/domain/sharedResort';
+import { sharedOf, type PostcardView } from '../features/sharing/domain/sharedResort';
 import type { Showcase } from './showcase';
 import type { IncomingShare } from '../features/sharing/components/incomingShare';
 
@@ -57,13 +57,23 @@ export function useIncomingLink(enabled: boolean): IncomingLink {
 }
 
 // The same snapshot an autosave takes, so a link costs what an autosave costs.
-async function linkOf(showcase: RefObject<Showcase | null>): Promise<string> {
+async function linkOf(
+  showcase: RefObject<Showcase | null>,
+  view: (mounted: Showcase) => PostcardView | null,
+): Promise<string> {
   const mounted = showcase.current;
   if (!mounted) throw new Error('No resort to share');
-  const compressed = await deflate(packShared(sharedOf(mounted.snapshot())));
+  const postcard = view(mounted);
+  const shared = sharedOf(mounted.snapshot());
+  const compressed = await deflate(packShared(postcard ? { ...shared, view: postcard } : shared));
   return formatLink(globalThis.location.origin + globalThis.location.pathname, compressed);
 }
 
 export function useShareLink(showcase: RefObject<Showcase | null>): () => Promise<string> {
-  return useCallback(() => linkOf(showcase), [showcase]);
+  return useCallback(() => linkOf(showcase, () => null), [showcase]);
+}
+
+// The view the camera has now, at the hour photo mode draws the sky at.
+export function usePostcardLink(showcase: RefObject<Showcase | null>): () => Promise<string> {
+  return useCallback(() => linkOf(showcase, (mounted) => mounted.postcardView()), [showcase]);
 }

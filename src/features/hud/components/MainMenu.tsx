@@ -50,6 +50,7 @@ export interface MainMenuProps {
   readonly highlights: HighlightControls;
   readonly overlay: OverlayControls;
   readonly gates: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void };
+  readonly onPhoto: () => void;
 }
 
 type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'settings';
@@ -153,6 +154,13 @@ function RootPage(props: PageProps) {
         onSelect={run(() => void saveOrAsk(saves.save, () => windows.show('saves', true)))}
       />
       <GatesOption gates={props.gates} run={run} />
+      <HudOption
+        icon="camera"
+        label="Photo mode"
+        note="hide the HUD and take a picture"
+        shortcut={keyLabel('photo')}
+        onSelect={run(props.onPhoto)}
+      />
       <hr className="hud-rule" />
       <HudOption
         icon="resort"

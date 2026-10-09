@@ -80,5 +80,6 @@ export function litSky(sky: SkyState, light: SkyLight): SkyState {
     ambientColor: mixColor(sky.ambientColor, light.color, bolt * light.ambientMix),
     ambientIntensity: sky.ambientIntensity + bolt * light.ambient,
     skyColor: mixColor(sky.skyColor, light.color, bolt * light.skyMix),
+    zenithColor: mixColor(sky.zenithColor, light.color, bolt * light.skyMix),
   };
 }

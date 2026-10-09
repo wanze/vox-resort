@@ -9,7 +9,7 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { savedWorldOf } from '../../resort-prep/domain/savedWorld';
 import { packShared, ShareError, unpackShared, type ShareFailure } from './layoutCodec';
 import { formatLink } from './shareLink';
-import type { SharedResort } from './sharedResort';
+import { sharedHeaderSchema, type PostcardView, type SharedResort } from './sharedResort';
 import { worldMisfits } from './worldFits';
 
 function sharedFor(kind: 'generate' | 'clear', tiles: number, tilesZ: number, seed: number) {
@@ -135,6 +135,42 @@ describe('packShared and unpackShared', () => {
     const link = formatLink('', deflateRawSync(packShared(REFERENCE)));
     // Measured at 6 998 characters.
     expect(link.length).toBeLessThan(8_000);
+  });
+});
+
+const VIEW: PostcardView = {
+  position: [120.5, 64, 410.25],
+  target: [200, 2, 300],
+  fov: 42,
+  time: 21.25 / 24,
+};
+
+describe('a postcard view', () => {
+  it('comes back with the link that carries it', () => {
+    const shared = { ...GROWN, view: VIEW };
+    expect(unpackShared(packShared(shared))).toEqual(shared);
+  });
+
+  it('leaves a link without one exactly as it was', () => {
+    const header = new TextDecoder().decode(packShared(GROWN));
+    expect(header).not.toContain('"view"');
+    expect(unpackShared(packShared(GROWN))).not.toHaveProperty('view');
+  });
+
+  it('is dropped by a reader that does not know it', () => {
+    const header = { ...HEADER, view: VIEW };
+    const old = sharedHeaderSchema.omit({ view: true }).parse(header);
+    expect(old).not.toHaveProperty('view');
+    expect(old.name).toBe(HEADER.name);
+  });
+
+  it('refuses a lens out of range or a number that is not one', () => {
+    const lens = bodyOf({ ...HEADER, view: { ...VIEW, fov: 500 } });
+    expect(refusal(lens)).toBe('invalid');
+    // JSON writes NaN as null.
+    const lost = bodyOf({ ...HEADER, view: { ...VIEW, position: [Number.NaN, 0, 0] } });
+    expect(refusal(lost)).toBe('invalid');
+    expect(refusal(bodyOf({ ...HEADER, view: { ...VIEW, time: 1 } }))).toBe('invalid');
   });
 });
 

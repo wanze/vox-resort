@@ -23,7 +23,11 @@ export interface SkyClock {
 
 export interface SkyApplier {
   readonly lampFactor: number;
+  readonly sky: SkyState;
   apply(clock: SkyClock): void;
+  // A photo's hour: the sun, the dome, the shadows and the lamps follow it; which rooms are lit,
+  // the parasols and the sim stay on the clock's. Null goes back to the clock's.
+  setLookTime(time: number | null): void;
   // A new resort's volume and blobs start at zero whatever the time of day.
   reset(): void;
 }
@@ -40,10 +44,18 @@ export function createSkyApplier(parts: {
   const { handle, resort, glow } = parts;
   let sky: SkyState | null = null;
   let applied: readonly number[] | null = null;
+  let lookTime: number | null = null;
+  const sunTimeAt = (time: number): number => lookTime ?? time;
 
   return {
     get lampFactor() {
       return sky?.lampFactor ?? 0;
+    },
+    get sky() {
+      return sky ?? skyStateFor(lookTime ?? 0);
+    },
+    setLookTime(time) {
+      lookTime = time;
     },
     apply(clock) {
       const { time, weather } = clock;
@@ -52,9 +64,10 @@ export function createSkyApplier(parts: {
       const lit = glow();
       // Overcast, flash and glow are in the guard too: the weather turns at midnight even while
       // paused, and a flash or a burst lasts under a second.
-      const inputs = [time, overcast, flash, lit.strength, lit.color];
+      const sunTime = sunTimeAt(time);
+      const inputs = [time, sunTime, overcast, flash, lit.strength, lit.color];
       if (sameSkyInputs(inputs, applied)) return;
-      sky = fireworksSky(flashSky(overcastSky(skyStateFor(time), overcast), flash), lit);
+      sky = fireworksSky(flashSky(overcastSky(skyStateFor(sunTime), overcast), flash), lit);
       handle.applySky(sky);
       resort().lighting.volume?.setLampFactor(sky.lampFactor);
       resort().world.setLampFactor(sky.lampFactor);

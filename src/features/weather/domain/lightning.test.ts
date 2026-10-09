@@ -94,4 +94,13 @@ describe('litSky', () => {
     const light = { bolt: 0, color: 0xff0000, ambient: 1, ambientMix: 1, skyMix: 1 };
     expect(litSky(sky, light)).toBe(sky);
   });
+
+  it('lights the zenith with the horizon, and leaves the sun glow and the dusk band alone', () => {
+    const sky = skyStateFor(0.02);
+    const lit = litSky(sky, { bolt: 1, color: 0xff0000, ambient: 1, ambientMix: 1, skyMix: 0.5 });
+    expect(lit.zenithColor).not.toBe(sky.zenithColor);
+    expect((lit.zenithColor >> 16) & 0xff).toBeGreaterThan((sky.zenithColor >> 16) & 0xff);
+    expect(lit.sunGlow).toBe(sky.sunGlow);
+    expect(lit.dusk).toBe(sky.dusk);
+  });
 });

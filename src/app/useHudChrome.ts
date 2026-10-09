@@ -11,6 +11,7 @@ import { cycledTool } from '../features/build/domain/stylePick';
 import type { LayoutMode } from '../features/hud/domain/layoutMode';
 import { useLayoutMode } from './useLayoutMode';
 import type { ClockControls, WindowControls } from '../features/hud/components/hudControls';
+import type { PhotoControls } from '../features/photo/components/photoControls';
 import type { SaveControls } from '../features/saves/components/saveControls';
 
 export interface HudChrome {
@@ -48,6 +49,7 @@ export function useHudChrome(
   saves: SaveControls,
   toggles: HudToggles,
   singleKeys: boolean,
+  photo: Pick<PhotoControls, 'on' | 'enter' | 'exit'>,
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
@@ -81,6 +83,12 @@ export function useHudChrome(
       return toggles.follow !== null;
     },
     debug: always(() => windows.toggle('debug')),
+    // Put away first: the HUD is hidden, not unmounted, and would come back with them open.
+    photo: always(() => {
+      setPalette(false);
+      setMenu(null);
+      photo.enter();
+    }),
     // Passed on unless the armed family has styles to cycle through.
     nextStyle: () => {
       const next = cycledTool(tool);
@@ -96,8 +104,11 @@ export function useHudChrome(
       return true;
     },
   };
+  // Photo mode hides the HUD, so its keys only leave it.
+  const photoRuns = { photo: always(photo.exit), cancel: always(photo.exit) };
+  const live = photo.on ? hotkeysFor(photoRuns, singleKeys) : hotkeysFor(runs, singleKeys);
   // None behind the welcome screen: there is no HUD for them to open.
-  useHotkeys(playing ? hotkeysFor(runs, singleKeys) : []);
+  useHotkeys(playing ? live : []);
 
   return { windows, layout, menu, setMenu, palette, setPalette };
 }

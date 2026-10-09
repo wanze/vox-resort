@@ -7,6 +7,7 @@ export const DRAWN_POSE = {
   jog: 8,
   strike: 9,
   reach: 10,
+  selfie: 11,
 } as const;
 
 // Short of 1, so the shader's floor still reads the code the progress was added to.

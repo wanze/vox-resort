@@ -22,8 +22,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
+import { createSkyDome, type SkyDome } from '../../lighting/adapters/skyDome';
 import { linearRgbOf } from '../../lighting/domain/lightGrid';
 import type { SkyState } from '../../lighting/domain/dayNight';
+import type { CameraPose } from '../../photo/domain/photoView';
 import type {
   CameraFraming,
   CameraMode,
@@ -121,6 +123,10 @@ export interface SceneHandle {
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
   lookAt(spot: { readonly x: number; readonly y: number; readonly z: number }): void;
+  readonly fov: number;
+  setFov(degrees: number): void;
+  // Stands the perspective camera exactly; the controls orbit round the target from there.
+  setPose(pose: CameraPose): void;
   takeLeftButton(taken: boolean): void;
   // Must be called before OrbitControls sees the pointerdown, which reads it once per touch.
   takeFinger(taken: boolean): void;
@@ -254,8 +260,9 @@ const FLAT_TONES = [GROUND_COLOR, SAND_COLOR, RISER_COLOR, SAND_RISER_COLOR] as 
 function createTerrainPalette(
   lightVolume: BakedLightVolume | null,
   shade: GroundShade | undefined,
+  skyAlong: SkyDome['along'],
 ): TerrainPalette {
-  const sea = createSeaMaterial(lightVolume);
+  const sea = createSeaMaterial(lightVolume, skyAlong);
   const river = createRiverMaterial(lightVolume);
   const flat = new Map(FLAT_TONES.map((tone) => [tone, landMaterial(tone, lightVolume, shade)]));
   return {
@@ -351,8 +358,10 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
 
   const scene = new Scene();
   const bufferSize = new Vector2();
+  // The fog and the pools start from the horizon colour; the dome draws the rest of the sky.
   const sky = new Color(0x11161d);
-  scene.background = sky;
+  const dome = createSkyDome();
+  scene.backgroundNode = dome.node;
 
   let plot = bounds;
   let extent = worldExtentOf(plot);
@@ -442,7 +451,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let terrain = options.terrain;
   let terrainFraming = framing;
   let terrainVolume = lightVolume;
-  let palette = createTerrainPalette(lightVolume, shade);
+  let palette = createTerrainPalette(lightVolume, shade, dome.along);
   let coast = shore;
   const terrainRequest = (): TerrainRequest => ({
     terrain,
@@ -519,6 +528,21 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       else camera.position.copy(controls.target).add(offset);
       controls.update();
     },
+    get fov() {
+      return perspectiveCamera.fov;
+    },
+    setFov(degrees) {
+      perspectiveCamera.fov = degrees;
+      perspectiveCamera.updateProjectionMatrix();
+    },
+    setPose(pose) {
+      perspectiveCamera.fov = pose.fov;
+      perspectiveCamera.updateProjectionMatrix();
+      perspectiveCamera.position.set(pose.position.x, pose.position.y, pose.position.z);
+      targets.perspective.set(pose.target.x, pose.target.y, pose.target.z);
+      if (mode === 'perspective') controls.target.copy(targets.perspective);
+      controls.update();
+    },
     setIsoDirection(next) {
       if (next === direction) return;
       direction = next;
@@ -562,7 +586,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       terrainFraming = nextFraming;
       terrainVolume = nextVolume;
       coast = nextShore;
-      palette = createTerrainPalette(terrainVolume, shade);
+      palette = createTerrainPalette(terrainVolume, shade, dome.along);
       palette.setSky(sky.getHex());
       built = nextSurfaces ?? terrainSurfacesFor(terrainRequest());
       surfaces = layTerrain(scene, palette, built);
@@ -590,13 +614,13 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
     applySky(state) {
       sun.color.setHex(state.sunColor);
       sun.intensity = state.sunIntensity;
-      sun.position
-        .set(state.sunDirection.x, state.sunDirection.y, state.sunDirection.z)
-        .multiplyScalar(extent)
-        .add(controls.target);
+      // A direction only, from the position to the light's target, which stays at the origin:
+      // offsetting the position alone tilted the light away from the sun the sky draws.
+      sun.position.set(state.sunDirection.x, state.sunDirection.y, state.sunDirection.z);
       ambient.color.setHex(state.ambientColor);
       ambient.intensity = state.ambientIntensity;
       sky.setHex(state.skyColor);
+      dome.apply(state);
       // Written whether or not the fog is in the scene, so switching back to the
       // perspective view does not bring yesterday's sky with it.
       fog.color.setHex(state.skyColor);
@@ -614,6 +638,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       ground.dispose();
       surfaces.dispose();
       palette.dispose();
+      dome.dispose();
       renderer.dispose();
     },
   };

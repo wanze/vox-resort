@@ -48,6 +48,8 @@ export function createHeadlessGame(parts: {
   readonly population: number;
   readonly startTick: number;
   readonly forcedWeather: Weather | null;
+  // Off by default, so a report or a test replays as it did before guests took photos.
+  readonly photos?: boolean;
 }): HeadlessGame {
   const { plan, plot, forcedWeather } = parts;
   const shore = shoreFor(plan);
@@ -67,6 +69,7 @@ export function createHeadlessGame(parts: {
       ticks: () => ticks,
       tickOfDay: () => ticks % TICKS_PER_DAY,
       weather: () => simNowAt(ticks, forcedWeather).weather,
+      photosOn: () => parts.photos === true,
     },
   });
   return {

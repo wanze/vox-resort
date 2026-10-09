@@ -10,6 +10,7 @@ export const OVERLAY_KINDS = [
   'step-free',
   'scenery',
   'litter',
+  'photos',
 ] as const;
 
 export type OverlayKind = (typeof OVERLAY_KINDS)[number];
@@ -57,16 +58,17 @@ export function fadeFootfall(footfall: Footfall): void {
 }
 
 // By the busiest node: the question is where, relatively, not how many.
-export function footfallValues(footfall: Footfall): Float32Array {
-  const { seen } = footfall;
+function countValues(counts: Float32Array): Float32Array {
   let most = 0;
-  for (const count of seen) most = Math.max(most, count);
-  const values = new Float32Array(seen.length);
-  for (let at = 0; at < seen.length; at++) {
-    values[at] = seen[at]! > 0 ? seen[at]! / most : Number.NaN;
+  for (const count of counts) most = Math.max(most, count);
+  const values = new Float32Array(counts.length);
+  for (let at = 0; at < counts.length; at++) {
+    values[at] = counts[at]! > 0 ? counts[at]! / most : Number.NaN;
   }
   return values;
 }
+
+export const footfallValues = (footfall: Footfall): Float32Array => countValues(footfall.seen);
 
 // Inverted, so the ramp's bad end is unhappy as it is for every other layer.
 export function moodValues(footfall: Footfall): Float32Array {
@@ -121,6 +123,8 @@ export interface OverlaySources {
   readonly stepFree: () => Float32Array;
   readonly scenery: TileGrid;
   readonly litter: TileGrid;
+  // Per node, as the footfall is.
+  readonly photos: Float32Array;
 }
 
 const REACH_NEEDS: { readonly [kind in OverlayKind]?: GuestNeed } = {
@@ -135,6 +139,7 @@ export function overlayValuesFor(kind: OverlayKind, sources: OverlaySources): Fl
   if (kind === 'step-free') return sources.stepFree();
   if (kind === 'footfall') return footfallValues(sources.footfall);
   if (kind === 'mood') return moodValues(sources.footfall);
+  if (kind === 'photos') return countValues(sources.photos);
   const scenery = kind === 'scenery';
   const grid = scenery ? sources.scenery : sources.litter;
   return gridValues(grid, sources.tileOf, sources.nodes, scenery ? -1 : 1);

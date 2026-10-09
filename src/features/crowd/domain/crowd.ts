@@ -4,6 +4,7 @@
 
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { createRandom, resumeRandom, type Random } from '../../layout/domain/random';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { LANE, proximityFor, steerWalkers, type Walkers } from './avoidance';
 import { PER_BODY_COLUMNS, type CrowdSnapshot } from './crowdSnapshot';
 import { nearestNodeTo, nodeIndexFor, type NodeIndex } from './nearestNode';
@@ -129,7 +130,13 @@ export interface Crowd extends Walkers {
   readonly routeOf: ((person: number, at: number) => number) | undefined;
   readonly offTheSand: ((person: number) => boolean) | undefined;
   readonly paceOf: ((person: number) => number) | undefined;
+  readonly pausesAt: ((person: number, node: number) => Pause | null) | undefined;
   readonly roamsBeach: boolean;
+}
+
+export interface Pause {
+  readonly seconds: number;
+  readonly heading: number;
 }
 
 export interface CrowdOptions {
@@ -143,6 +150,9 @@ export interface CrowdOptions {
   readonly offTheSand?: (person: number) => boolean;
   // A share of the body's drawn speed, asked per edge: who walks in a body changes at check-in.
   readonly paceOf?: (person: number) => number;
+  // Asked first on reaching a node, before the arrival's draws, so it must draw nothing itself:
+  // a crowd it always answers null for replays as one without it.
+  readonly pausesAt?: (person: number, node: number) => Pause | null;
   readonly roamsBeach?: boolean;
 }
 
@@ -190,6 +200,7 @@ export function createCrowd(options: CrowdOptions): Crowd {
     routeOf: options.routeOf,
     offTheSand: options.offTheSand,
     paceOf: options.paceOf,
+    pausesAt: options.pausesAt,
     roamsBeach: options.roamsBeach ?? true,
   };
 
@@ -384,6 +395,12 @@ function arriveAtNode(crowd: Crowd, i: number): void {
   crowd.fromX[i] = node.x;
   crowd.fromY[i] = node.y;
   crowd.fromZ[i] = node.z;
+  // Leaves `cameFrom` as it was, so the arrival after the pause still does not double back.
+  const pause = crowd.pausesAt?.(i, arrived) ?? null;
+  if (pause) {
+    standFor(crowd, i, pause);
+    return;
+  }
 
   const seat = node.seats.length > 0 ? freeSeat(crowd, node) : -1;
   if (strollsOntoSand(crowd, i, node)) {
@@ -401,6 +418,21 @@ function arriveAtNode(crowd: Crowd, i: number): void {
     aim(crowd, i, onward);
   }
   crowd.cameFrom[i] = arrived;
+}
+
+// A zero-length segment on the node, so running out arrives at the same node again. Out of
+// avoidance, as a sitter is: walkers pass through rather than queue behind a photographer.
+function standFor(crowd: Crowd, i: number, pause: Pause): void {
+  crowd.toX[i] = crowd.fromX[i]!;
+  crowd.toY[i] = crowd.fromY[i]!;
+  crowd.toZ[i] = crowd.fromZ[i]!;
+  crowd.heading[i] = pause.heading;
+  crowd.lane[i] = LANE.none;
+  crowd.side[i] = 0;
+  crowd.pace[i] = 1;
+  crowd.t[i] = 0;
+  crowd.rate[i] = 1 / pause.seconds;
+  crowd.holdPose[i] = DRAWN_POSE.photo;
 }
 
 // `offTheSand` is asked before rolling, so they cost no draw.
@@ -732,6 +764,9 @@ export function isWaiting(crowd: Crowd, i: number): boolean {
 
 export function restingOn(crowd: Crowd, i: number): number {
   if (crowd.node[i] === HELD) return crowd.holdPose[i]!;
+  // Every walk away goes through `aim`, which sets another lane, so a stale pose never shows.
+  const standing = crowd.node[i]! >= 0 && crowd.lane[i] === LANE.none;
+  if (standing && crowd.holdPose[i] === DRAWN_POSE.photo) return DRAWN_POSE.photo;
   if (crowd.node[i] !== SEATED) return RESTING.none;
   return crowd.network.seats[crowd.seat[i]!]!.pose === 'lie' ? RESTING.lying : RESTING.sitting;
 }

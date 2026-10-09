@@ -3,6 +3,7 @@ import { fadeFootfall, sampleFootfall } from '../../overlays/domain/overlays';
 import { checkInDue } from '../../sim/domain/checkIn';
 import { ageHappiness } from '../../sim/domain/happiness';
 import { decayNeeds } from '../../sim/domain/needs';
+import { fadePhotoHeat } from '../../sim/domain/photos';
 import { cheerTheAudience } from '../../sim/domain/staff';
 import { weatherEffect } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
@@ -12,6 +13,7 @@ import { closeTheDay, payTheBills, rateTheDay } from './dayClose';
 import { admitLaterWaves, runDay } from './arrivals';
 import { markNightOwls, refreshDj, refreshNightOut } from './nights';
 import { refreshKeen, runEvents } from './eventSteps';
+import { refreshMoment } from './photoSteps';
 
 // The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
 const hourTurned = (from: number, to: number): boolean =>
@@ -42,6 +44,8 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     resort.happiness.level,
   );
   runEvents(resort, clock, ticks, hooks.heard);
+  // After the events, so the fireworks starting this frame are in it.
+  refreshMoment(resort, clock);
   // After the ticks, so a guest is charged for the line they were actually in.
   const { glow } = resort.events;
   ageHappiness(
@@ -67,6 +71,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     resort.router.forgetTheDay();
     resort.thoughtDay.clear();
     fadeFootfall(resort.footfall);
+    fadePhotoHeat(resort.photos);
   }
   // After the morning's wipe, so the first hour of a day is heard in that day.
   if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {

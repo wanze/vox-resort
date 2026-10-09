@@ -19,6 +19,8 @@ export const THOUGHT_KINDS = [
   'called-off',
   'welcomed',
   'fireworks',
+  'photo',
+  'sunset',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
@@ -31,6 +33,8 @@ const PRAISE: ReadonlySet<ThoughtKind> = new Set([
   'great-show',
   'welcomed',
   'fireworks',
+  'photo',
+  'sunset',
 ]);
 
 // Two simulated hours. The router reports a homeless guest at every node they reach all night,
@@ -164,6 +168,15 @@ export function latestOf(
 
 export function stayCount(thoughts: Thoughts, person: number, kind: ThoughtKind): number {
   return thoughts.stay[person * KINDS + THOUGHT_KINDS.indexOf(kind)] ?? 0;
+}
+
+// The subject last heard of that kind this stay, which a review quotes for a photo.
+export function lastSubjectOf(
+  thoughts: Thoughts,
+  person: number,
+  kind: ThoughtKind,
+): string | null {
+  return thoughts.heardSubject[person * KINDS + THOUGHT_KINDS.indexOf(kind)] ?? null;
 }
 
 export function worstOf(

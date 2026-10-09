@@ -8,6 +8,7 @@ import type { Review } from './reviews';
 import { SIM_SPEEDS } from './simClock';
 import type { Hiring } from './staff';
 import { THOUGHT_KINDS, widenThoughts, type ThoughtTally } from './thoughts';
+import { PHOTO_KINDS } from './views';
 import { WEATHERS } from './weather';
 
 const float32 = z.instanceof(Float32Array);
@@ -115,6 +116,7 @@ const reviewSchema = z.object({
   complaint: thoughtKind.nullable(),
   praise: thoughtKind.nullable(),
   subject: z.string().nullable(),
+  praiseSubject: z.string().exactOptional(),
 }) satisfies z.ZodType<Review>;
 
 const ratingSchema = z.object({
@@ -156,6 +158,24 @@ const welcomeTallySchema = z.object({
   gap: z.enum(['no-stage', 'off', 'called-off']).nullable(),
 });
 
+// Absent in saves from before photos, and on a day nobody took one.
+const photoTallySchema = z.object({
+  taken: count,
+  spots: z.array(
+    z.object({
+      key: z.string(),
+      subject: z.string(),
+      kind: z.enum(PHOTO_KINDS),
+      count,
+      x: z.number(),
+      y: z.number(),
+      z: z.number(),
+      heading: z.number(),
+      minute: count,
+    }),
+  ),
+});
+
 const dayCountsSchema = z.object({
   from: count,
   arrived: count,
@@ -164,6 +184,7 @@ const dayCountsSchema = z.object({
   reviewStars: z.number(),
   events: eventTallySchema.exactOptional(),
   welcome: welcomeTallySchema.exactOptional(),
+  photos: photoTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayCounts>;
 
 const dayReportSchema = z.object({
@@ -180,6 +201,7 @@ const dayReportSchema = z.object({
   loudest: z.array(tallySchema),
   events: eventTallySchema.exactOptional(),
   welcome: welcomeTallySchema.exactOptional(),
+  photos: photoTallySchema.exactOptional(),
 }) satisfies z.ZodType<DayReport>;
 
 const ledgerSchema = z.object({
@@ -222,9 +244,13 @@ export const resortSnapshotSchema = z.object({
   beds: bedsSchema,
   hiring: hiringSchema,
   zones: int8,
+  // Absent in saves from before photos, which load with nobody having taken one.
+  photos: z.object({ lastAt: int32, heat: float32 }).exactOptional(),
 });
 
 export type ResortSnapshot = z.infer<typeof resortSnapshotSchema>;
+
+export type PhotosSnapshot = NonNullable<ResortSnapshot['photos']>;
 
 export const clockSnapshotSchema = z.object({
   ticks: count,

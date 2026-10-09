@@ -7,6 +7,7 @@ import { listCommands } from './commands';
 import { CameraPanel } from './CameraPanel';
 import { DayReportPanel } from './DayReportPanel';
 import { DemandPanel } from './DemandPanel';
+import { PhotoWallPanel } from './PhotoWallPanel';
 import { GuestsPanel } from './GuestsPanel';
 import { HudError } from './HudError';
 import { HudTabs, tabIdOf } from './HudTabs';
@@ -191,6 +192,9 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
     />
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
+  photos: ({ voices, history, photo }) => (
+    <PhotoWallPanel today={voices.photos} history={history.history} onPicture={photo.picture} />
+  ),
   guests: (props) => <GuestsPanel voices={props.voices} />,
   staff: ({ stats, status, resort }) => (
     <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />

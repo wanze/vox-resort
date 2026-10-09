@@ -112,3 +112,24 @@ describe('a review from a party with a wheelchair', () => {
     expect(review.subject).toBe('Restaurant');
   });
 });
+
+describe('a review praising a photo', () => {
+  it('quotes the subject of the latest photo, the spokesperson first', () => {
+    const thoughts = createThoughts(3);
+    often(thoughts, 1, 'photo', 'Fountain', 2);
+    think(thoughts, 0, 'photo', 'Sea', 900);
+    const review = reviewOf(thoughts, [0, 1]);
+    expect(review.praise).toBe('photo');
+    expect(review.praiseSubject).toBe('Sea');
+    expect(reviewOf(thoughts, [2, 1]).praiseSubject).toBe('Fountain');
+  });
+
+  it('has no praise subject for any other praise', () => {
+    const thoughts = createThoughts(2);
+    often(thoughts, 0, 'enjoyed', 'Pool', 3);
+    think(thoughts, 0, 'photo', 'Sea', 900);
+    const review = reviewOf(thoughts, [0]);
+    expect(review.praise).toBe('enjoyed');
+    expect('praiseSubject' in review).toBe(false);
+  });
+});

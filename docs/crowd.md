@@ -2,12 +2,12 @@
 
 Guests, staff, boats and balloons, and the simulation behind them.
 
-|          |                                                                               |
-| -------- | ----------------------------------------------------------------------------- |
-| People   | 0.25 per paved tile, max 10,000 (`crowdSize.ts`), `?people=n` overrides       |
-| Poses    | walk, stand, sit, lie; drawn only: swim, wade, hop, cheer, jog, strike, reach |
-| Boats    | 12 (`CRAFT_COUNT`), plus buoys and rental boats                               |
-| Balloons | 36 (`BALLOON_COUNT`)                                                          |
+|          |                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------- |
+| People   | 0.25 per paved tile, max 10,000 (`crowdSize.ts`), `?people=n` overrides                      |
+| Poses    | walk, stand, sit, lie, photo; drawn only: swim, wade, hop, cheer, jog, strike, reach, selfie |
+| Boats    | 12 (`CRAFT_COUNT`), plus buoys and rental boats                                              |
+| Balloons | 36 (`BALLOON_COUNT`)                                                                         |
 
 ## Code
 
@@ -32,6 +32,7 @@ Guests, staff, boats and balloons, and the simulation behind them.
 | Places and acts in a venue  | `choreography/domain/`                                                                 |
 | Swimming, boats             | `choreography/domain/seaSwim.ts`, `sea/domain/`                                        |
 | Game step, headless runs    | `resort-sim/domain/stepSim.ts`, `headless.ts`                                          |
+| Views and photos            | `sim/domain/views.ts`, `outlook.ts`, `photos.ts`, `resort-sim/domain/photoSteps.ts`    |
 
 ## Principles
 
@@ -361,7 +362,10 @@ kind; `reviews.ts` turns a stay into one line at check-out.
   `enjoyed`, `lovely`, `littered`, `no-step-free`, `hurt`, `broken` and event
   praise. The same thought within two sim hours is ignored.
 - A review's stars are `round(5 × mean stay mood)`, its complaint the most
-  frequent thought, its praise `enjoyed` or `lovely`.
+  frequent thought, its praise the most frequent praise. A `photo` praise
+  quotes the subject of the party's latest photo (`praiseSubject`).
+- `photo` ("Had to take a picture of the fountain") and `sunset` ("What a
+  sunset!") are praise, heard when a guest takes a photo.
 - Wording lives in `hud/components/thoughtWords.ts`.
 - `THOUGHT_KINDS` is append-only: saves keep a slot per kind.
 
@@ -478,6 +482,52 @@ per-tile field within 4 tiles, saturated so nothing reaches 1, rebuilt after
 every edit. A guest's happiness target adds 0.1 × the scenery under them.
 Scenery never changes where anybody walks.
 
+## Photos
+
+Guests stop now and then to photograph a view (`sim/domain/views.ts`,
+`outlook.ts`, `photos.ts`; the decision is `resort-sim/domain/photoSteps.ts`).
+
+- **The scenic value** of a tile is built once per edit, with the scenery:
+  `0.7 × scenery + 0.6 × sea + 0.5 × overlook`, clamped to 1.
+  - `sea` is the larger of the water within 6 tiles and the sea seen across
+    open ground. The sea lies towards +z, so three rays (straight and the two
+    diagonals) are swept from the shore inland; a ray is clear if nothing on
+    the way (ground plus the tallest model on the tile) reaches the guest's
+    eye. A clear ray counts fully up to 36 tiles from the water and fades out
+    by 72. Standing higher, a guest sees over loungers and palms.
+  - `overlook` is how far the tile stands above the lowest ground within 12
+    tiles, full at 4 levels: a dune top, a hilltop, a plateau's edge.
+  - At query time: the base counts from 07:00 to sunset; the golden hour (the
+    90 minutes before 21:30, dry days only) adds `0.5 × golden × sea`; a show
+    on a stage or fire pit within 6 tiles adds 0.5; the fireworks add
+    `0.8 × sea`. Rain and storms make it 0. Litter on the tile and a broken
+    venue within 2 tiles (0.3) are taken off after the draw.
+- **Who and how often**: a present adult reaching a path node whom the router
+  calls free (not asleep, leaving, arriving, visiting or on an errand), at most
+  once every 3 sim hours. At a value `v >= 0.5` the chance per node reached is
+  `PHOTO_CHANCE × (v - 0.5) / 0.5`, hashed from person, node and tick. Nobody
+  on the sand, and no children. Off while the clock is paused, so a bench
+  replays unchanged.
+- **The pause** is asked by the crowd (`pausesAt`) before an arrival's draws,
+  and draws nothing itself. It is a 6-second timed stand on the node (`photo`
+  pose, both arms up, facing the subject), out of avoidance as a sitter is.
+- **The subject**, first that applies: the fireworks, a show, the sunset (sea
+  of 0.5 or more in the golden hour, facing the setting sun), a sight (a model
+  of scenery 0.5 or more within 4 tiles: fountain, statue, flowerbed,
+  blossom), the sea, or the view (facing downhill). A sight or a show is keyed
+  by its placement; the rest by kind and 8-tile cell (`sea@12,30`), named
+  after a named venue within 12 tiles ("Sea by Float & Sip").
+- **Effects**: a stay memory of `0.01 / (1 + photos so far)` (reviews, not the
+  rating), a `photo` or `sunset` thought, a count on the node (halved every
+  morning) and the day's tally of spots, each with its latest viewpoint.
+- **Shown** in the Photos overlay, the day report's "Most photographed", and
+  the Overview's Photo wall, which renders each spot from its latest viewpoint
+  as the resort looks now, never saved.
+- **The one dial** is `PHOTO_CHANCE` (0.05). On the reference resort that is
+  about 0.7 to 1.3 photos per guest a day, and 25 to 45 sunsets. Measure a
+  change with `SIM_PHOTOS=1 pnpm sim:report`; without the variable the report
+  takes no photos.
+
 ## Overlays
 
 The **Overlay** picker tints paved tiles by one question
@@ -494,7 +544,9 @@ data, and **high is always bad**, so one ramp and legend serve all.
 | Step-free | where a wheelchair can't go    |
 | Scenery   | where the walk is plain        |
 | Litter    | where litter lies              |
+| Photos    | where guests take photos       |
 
+Photos is a count, like Footfall: its high end is where most are taken, not bad.
 Distance layers come from one multi-source sweep (`reach.ts`), kept per walk
 graph. Footfall is sampled per frame and halved every morning. Layers update
 hourly while on, never per frame. The sim never reads one.

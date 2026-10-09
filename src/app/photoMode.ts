@@ -1,4 +1,4 @@
-import type { Object3D } from 'three/webgpu';
+import { PerspectiveCamera, type Object3D } from 'three/webgpu';
 import { CHILD_FRAMING, GUEST_FRAMING } from '../features/guest-view/domain/followRig';
 import { CAMERA_FOV_DEGREES, type CameraMode } from '../features/layout/domain/worldBounds';
 import type { SceneHandle } from '../features/rendering/adapters/threeScene';
@@ -36,6 +36,8 @@ export interface PhotoMode {
   setLookTime(time: number | null): void;
   setFov(degrees: number): void;
   capture(scale: number): Promise<PhotoPixels>;
+  // From where a guest stood, as the scene is now: the capture cannot turn the clock back.
+  pictureOf(spot: Viewpoint): Promise<PhotoPixels>;
   // Always with the sun behind the guest while it is up: the selfie is for the sunset.
   setSelfie(on: boolean): boolean;
   // Each frame after the choreography and before the crowd writes its instances.
@@ -44,6 +46,21 @@ export interface PhotoMode {
   forget(): void;
   postcardView(): PostcardView;
 }
+
+export interface Viewpoint {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly heading: number;
+}
+
+// About the size of a card on the photo wall, at the wall's 3:2.
+const PICTURE_SIZE = { width: 240, height: 160 } as const;
+
+const PICTURE_FOV = 60;
+
+// A little up from level, as a phone is held: the horizon sits below the middle of the frame.
+const PICTURE_TILT = 0.12;
 
 interface Selfie {
   readonly person: number;
@@ -66,6 +83,12 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
   const { handle, clock, guestView } = parts;
   const current = parts.resort;
   const capturer = createPhotoCapture(handle.renderer);
+  const pictureCamera = new PerspectiveCamera(
+    PICTURE_FOV,
+    PICTURE_SIZE.width / PICTURE_SIZE.height,
+    0.5,
+    handle.camera.far,
+  );
   let before: { readonly mode: CameraMode } | null = null;
   let lookTime: number | null = null;
   let selfie: Selfie | null = null;
@@ -92,6 +115,15 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
 
   const showHud = (shown: boolean): void => {
     for (const group of parts.hudGroups()) group.visible = shown;
+  };
+
+  // The lens is the photo's own, so the detail around a far spot is drawn as near as it is.
+  const detailFor = (view: { x: number; y: number; z: number }, height: number, fov: number) => {
+    if (!parts.detail()) return;
+    const detail = { x: view.x, y: view.y, z: view.z, lens: perspectiveLens(height, fov) };
+    current().world.updateDetail(detail);
+    current().crowd.setView(detail);
+    current().crowd.advance(0, 0);
   };
 
   const startSelfie = (): boolean => {
@@ -134,13 +166,28 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     // Detail is chosen for the photo's own size; the next frame's choice puts it back.
     capture(scale) {
       const size = photoSize(handle.drawingBufferSize(), scale, MAX_PHOTO_SIDE);
-      if (parts.detail()) {
-        const view = { ...handle.detailView(), lens: perspectiveLens(size.height, handle.fov) };
-        current().world.updateDetail(view);
-        current().crowd.setView(view);
-        current().crowd.advance(0, 0);
-      }
+      detailFor(handle.detailView(), size.height, handle.fov);
       return capturer.capture(handle.scene, handle.camera, size);
+    },
+    // The HUD's groups are put back as they were, the overlay may be on while the wall is open,
+    // and before the read-back is awaited: the capture draws before its first await.
+    pictureOf(spot) {
+      const eye = { x: spot.x, y: spot.y + GUEST_FRAMING.eye, z: spot.z };
+      pictureCamera.position.set(eye.x, eye.y, eye.z);
+      const ahead = Math.cos(PICTURE_TILT);
+      pictureCamera.lookAt(
+        eye.x + Math.sin(spot.heading) * ahead,
+        eye.y + Math.sin(PICTURE_TILT),
+        eye.z + Math.cos(spot.heading) * ahead,
+      );
+      pictureCamera.updateMatrixWorld();
+      detailFor(eye, PICTURE_SIZE.height, PICTURE_FOV);
+      const groups = parts.hudGroups();
+      const shown = groups.map((group) => group.visible);
+      showHud(false);
+      const taken = capturer.capture(handle.scene, pictureCamera, PICTURE_SIZE);
+      groups.forEach((group, at) => (group.visible = shown[at]!));
+      return taken;
     },
     setSelfie(on) {
       release();

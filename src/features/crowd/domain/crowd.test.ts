@@ -26,6 +26,7 @@ import {
   stepOntoSand,
   takeOffPlot,
   WALK_SPEED,
+  type Pause,
   walkSandTo,
   type Crowd,
 } from './crowd';
@@ -39,6 +40,7 @@ import {
 import type { SeatSpot } from './seating';
 import { LANE, MAX_SIDE } from './avoidance';
 import { crowdSnapshotSchema } from './crowdSnapshot';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 
 const FLAT: LevelProvider = () => 0;
 
@@ -1475,5 +1477,114 @@ describe('reseatCrowd', () => {
       expect(isRoaming(reseated, 0)).toBe(false);
       expect(reseated.x[0]).not.toBe(Math.fround(court.x + 16));
     });
+  });
+});
+
+describe('pausing for a photo', () => {
+  const PAUSE: Pause = { seconds: 6, heading: 1 };
+
+  const benchedStreet = (): WalkNetwork =>
+    walkNetworkFor({
+      paved: street(12),
+      levelOf: FLAT,
+      shore: null,
+      tilesX: 20,
+      seats: [4, 8].map((tileX) => ({
+        x: (tileX + 0.5) * TILE_VOXELS,
+        z: TILE_VOXELS * 1.5,
+        y: walkingSurface(0) + 2,
+        heading: Math.PI,
+        pose: 'sit' as const,
+        tileX,
+        tileZ: 1,
+      })),
+    });
+
+  it('replays exactly as a crowd without the option while it never pauses anybody', () => {
+    const options = { network: benchedStreet(), count: 30, variants: 2, seed: 51 };
+    const plain = createCrowd(options);
+    const asked = createCrowd({ ...options, pausesAt: () => null });
+    for (let step = 0; step < 3000; step++) {
+      stepCrowd(plain, MAX_STEP);
+      stepCrowd(asked, MAX_STEP);
+    }
+    expect(snapshotCrowd(asked)).toEqual(snapshotCrowd(plain));
+  });
+
+  it('stands a person on the node for the pause without a draw, then asks again', () => {
+    let asked = 0;
+    let drawnBefore = 0;
+    const crowd: Crowd = createCrowd({
+      network: benchedStreet(),
+      count: 1,
+      variants: 1,
+      seed: 52,
+      pausesAt: () => {
+        asked++;
+        if (asked > 1) return null;
+        drawnBefore = crowd.random.state();
+        return PAUSE;
+      },
+    });
+    for (let step = 0; step < 10_000; step++) {
+      stepCrowd(crowd, MAX_STEP);
+      if (asked > 0) break;
+    }
+    expect(crowd.random.state()).toBe(drawnBefore);
+    const at = [crowd.x[0], crowd.z[0]];
+    expect(crowd.heading[0]).toBeCloseTo(PAUSE.heading);
+    expect(restingOn(crowd, 0)).toBe(DRAWN_POSE.photo);
+    for (let step = 0; step < 55; step++) stepCrowd(crowd, MAX_STEP);
+    expect([crowd.x[0], crowd.z[0]]).toEqual(at);
+    expect(restingOn(crowd, 0)).toBe(DRAWN_POSE.photo);
+    expect(asked).toBe(1);
+    for (let step = 0; step < 20; step++) stepCrowd(crowd, MAX_STEP);
+    expect(asked).toBe(2);
+    expect(restingOn(crowd, 0)).toBe(RESTING.none);
+    expect([crowd.x[0], crowd.z[0]]).not.toEqual(at);
+  });
+
+  // Paused once per person, at the first node they reach, so a twin's own record can match.
+  const oncePerPerson = (paused: Set<number>) => (person: number) => {
+    if (paused.has(person)) return null;
+    paused.add(person);
+    return PAUSE;
+  };
+
+  it('carries a crowd restored mid-pause on as the saved one goes on', () => {
+    const paused = new Set<number>();
+    const options = { network: benchedStreet(), count: 20, variants: 2, seed: 53 };
+    const saved = createCrowd({ ...options, pausesAt: oncePerPerson(paused) });
+    let posing = -1;
+    while (posing < 0) {
+      stepCrowd(saved, MAX_STEP);
+      for (let i = 0; i < saved.count && posing < 0; i++) {
+        if (restingOn(saved, i) === DRAWN_POSE.photo) posing = i;
+      }
+    }
+    const twin = restoreCrowd(
+      createCrowd({ ...options, pausesAt: oncePerPerson(new Set(paused)) }),
+      snapshotCrowd(saved),
+    );
+    expect(restingOn(twin, posing)).toBe(DRAWN_POSE.photo);
+    for (let step = 0; step < 900; step++) {
+      stepCrowd(saved, MAX_STEP);
+      stepCrowd(twin, MAX_STEP);
+    }
+    expect(snapshotCrowd(twin)).toEqual(snapshotCrowd(saved));
+  });
+
+  it('walks a person paused during an edit to the nearest node, no longer posing', () => {
+    const crowd = createCrowd({
+      network: benchedStreet(),
+      count: 1,
+      variants: 1,
+      seed: 54,
+      pausesAt: oncePerPerson(new Set()),
+    });
+    while (restingOn(crowd, 0) !== DRAWN_POSE.photo) stepCrowd(crowd, MAX_STEP);
+    const reseated = reseatCrowd(crowd, benchedStreet());
+    expect(restingOn(reseated, 0)).toBe(RESTING.none);
+    expect(reseated.lane[0]).toBe(LANE.paved);
   });
 });

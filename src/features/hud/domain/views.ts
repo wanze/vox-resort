@@ -1,4 +1,5 @@
 import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
+import type { PhotoTally } from '../../sim/domain/dayReport';
 import type { Demand } from '../../sim/domain/demand';
 import type { Rating } from '../../sim/domain/rating';
 import type { Review } from '../../sim/domain/reviews';
@@ -58,6 +59,8 @@ export interface ShowcaseStats {
 export interface VoicesView {
   readonly loudest: readonly ThoughtTally[];
   readonly reviews: readonly Review[];
+  // Since this morning's check-in, for the photo wall.
+  readonly photos: PhotoTally | null;
 }
 
 export interface StatusView {

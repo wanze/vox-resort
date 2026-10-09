@@ -50,7 +50,7 @@ export const INITIAL_HUD: HudState = {
   highlightTypes: [],
   advice: { list: [], ticks: 0 },
   status: null,
-  voices: { loudest: [], reviews: [] },
+  voices: { loudest: [], reviews: [], photos: null },
   history: [],
   weather: 'clear',
   open: true,

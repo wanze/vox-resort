@@ -1,3 +1,4 @@
+import type { PhotoSpot } from '../../sim/domain/dayReport';
 import type { PhotoFilterId } from '../domain/photoFilters';
 
 export interface PhotoShot {
@@ -37,4 +38,6 @@ export interface PhotoControls {
   readonly selfie: SelfieControls;
   // A share link that opens on this view, at this hour.
   postcard(): Promise<string>;
+  // An object URL of the scene from where a guest took their photo, or null if none was drawn.
+  picture(spot: PhotoSpot): Promise<string | null>;
 }

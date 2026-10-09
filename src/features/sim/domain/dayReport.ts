@@ -1,6 +1,7 @@
 import type { Column, Ledger } from './ledger';
 import type { Rating } from './rating';
 import { loudest, type ThoughtTally } from './thoughts';
+import type { PhotoKind } from './views';
 
 export interface EventTally {
   readonly held: number;
@@ -19,6 +20,24 @@ export interface WelcomeTally {
   readonly gap: WelcomeGap | null;
 }
 
+export interface PhotoSpot {
+  readonly key: string;
+  readonly subject: string;
+  readonly kind: PhotoKind;
+  readonly count: number;
+  // Where the latest photo of it was taken from, in voxels, and when: the wall renders from here.
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly heading: number;
+  readonly minute: number;
+}
+
+export interface PhotoTally {
+  readonly taken: number;
+  readonly spots: readonly PhotoSpot[];
+}
+
 export interface DayCounts {
   // The day this period started on; reports are labelled with it.
   readonly from: number;
@@ -30,6 +49,8 @@ export interface DayCounts {
   readonly events?: EventTally;
   // Absent until the welcome meeting is held or missed, and in saves from before it.
   readonly welcome?: WelcomeTally;
+  // Absent until the first photo of the day, and in saves from before photos.
+  readonly photos?: PhotoTally;
 }
 
 export interface DayReport {
@@ -47,11 +68,17 @@ export interface DayReport {
   readonly loudest: readonly ThoughtTally[];
   readonly events?: EventTally;
   readonly welcome?: WelcomeTally;
+  readonly photos?: PhotoTally;
 }
 
 export const HISTORY_DAYS = 14;
 
 export const LOUDEST_KEPT = 3;
+
+// Enough that a spot climbing the list late in the day is not dropped before it gets there.
+export const SPOTS_TRACKED = 24;
+
+export const PHOTO_SPOTS_KEPT = 3;
 
 // Adding zero turns a -0 from rounding a tiny fall into a plain 0.
 const oneDecimal = (value: number): number => Math.round(value * 10) / 10 + 0;
@@ -107,6 +134,38 @@ export function noteWelcomeGap(counts: DayCounts, gap: WelcomeGap): DayCounts {
   return before.gap === null ? { ...counts, welcome: { ...before, gap } } : counts;
 }
 
+// The latest photo's viewpoint replaces the spot's; past the cap, the least photographed goes,
+// the earliest listed on a tie.
+export function countPhoto(counts: DayCounts, shot: Omit<PhotoSpot, 'count'>): DayCounts {
+  const before = counts.photos ?? { taken: 0, spots: [] };
+  const at = before.spots.findIndex((spot) => spot.key === shot.key);
+  let spots: PhotoSpot[];
+  if (at >= 0) {
+    spots = before.spots.map((spot, index) =>
+      index === at ? { ...shot, count: spot.count + 1 } : spot,
+    );
+  } else {
+    spots = [...before.spots, { ...shot, count: 1 }];
+    if (spots.length > SPOTS_TRACKED) spots.splice(leastPhotographed(spots), 1);
+  }
+  return { ...counts, photos: { taken: before.taken + 1, spots } };
+}
+
+function leastPhotographed(spots: readonly PhotoSpot[]): number {
+  let least = 0;
+  for (let at = 1; at < spots.length; at++) {
+    if (spots[at]!.count < spots[least]!.count) least = at;
+  }
+  return least;
+}
+
+const topSpots = (tally: PhotoTally): PhotoTally => ({
+  taken: tally.taken,
+  spots: tally.spots
+    .toSorted((a, b) => b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .slice(0, PHOTO_SPOTS_KEPT),
+});
+
 // Called after closeDay, so the day that just ended is the ledger's yesterday.
 export function reportOf(parts: {
   readonly counts: DayCounts;
@@ -131,6 +190,7 @@ export function reportOf(parts: {
     loudest: loudest(parts.thoughts, LOUDEST_KEPT),
     ...(counts.events ? { events: counts.events } : {}),
     ...(counts.welcome ? { welcome: counts.welcome } : {}),
+    ...(counts.photos ? { photos: topSpots(counts.photos) } : {}),
   };
 }
 

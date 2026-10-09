@@ -10,11 +10,12 @@ export interface GuestsPanelProps {
 
 const REVIEWS_SHOWN = 5;
 
-// The subject belongs to the complaint; a praise is worded without one.
+// The subject belongs to the complaint; a praise is worded without one, but for a photo's.
 function saidOf(review: Review): string | null {
   const quoted = quoteOf(review);
   if (!quoted) return null;
-  return thoughtLine(quoted, quoted === review.complaint ? review.subject : null);
+  if (quoted === review.complaint) return thoughtLine(quoted, review.subject);
+  return thoughtLine(quoted, review.praiseSubject ?? null);
 }
 
 function LoudestRow({ tally }: { readonly tally: ThoughtTally }) {

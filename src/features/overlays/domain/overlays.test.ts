@@ -139,6 +139,7 @@ describe('overlayValuesFor', () => {
     scenery: { tilesX: 2, tilesZ: 1, value: Float32Array.from([1, 0]) },
     litter: { tilesX: 2, tilesZ: 1, value: Float32Array.from([0, 0.5]) },
     stepFree: () => Float32Array.from([0, 1]),
+    photos: Float32Array.from([0, 4]),
   };
 
   it('sweeps from the need each reach layer is about, and only that one', () => {
@@ -153,6 +154,12 @@ describe('overlayValuesFor', () => {
   it('reads footfall and mood off the samples', () => {
     expect([...overlayValuesFor('footfall', sources)]).toEqual([1, 0.5]);
     expect(overlayValuesFor('mood', sources)[0]).toBeNaN();
+  });
+
+  it('reads photos by the most photographed node, and nothing where none were taken', () => {
+    const values = overlayValuesFor('photos', sources);
+    expect(values[0]).toBeNaN();
+    expect(values[1]).toBe(1);
   });
 
   it('turns scenery over and reads litter as it lies', () => {
@@ -176,6 +183,7 @@ describe('overlayValuesFor, step-free', () => {
       stepFree: () => swept,
       scenery: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
       litter: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
+      photos: new Float32Array(3),
     });
     expect(values).toBe(swept);
     expect(asked).toBe(0);

@@ -3,6 +3,7 @@ import {
   binReachOf,
   hireOf,
   objectTypeById,
+  objectTypeTop,
   sceneryOf,
   shadeOf,
 } from '../../catalog/domain/objectTypes';
@@ -30,6 +31,7 @@ import { homesOfLodgings, lodgingsOn, type Lodging } from '../../sim/domain/lodg
 import { sceneryFieldFor, sceneryItemsOf, type SceneryField } from '../../sim/domain/scenery';
 import { shadeMapOf, type ShadeMap } from '../../sim/domain/shade';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
+import { viewsFor, type Views } from '../../sim/domain/views';
 
 export interface PlotGround {
   readonly plan: ResortPlan;
@@ -60,6 +62,7 @@ export interface PlotFacts {
   readonly beachTiles: number;
   readonly launchSites: readonly LaunchSite[];
   readonly scenery: SceneryField;
+  readonly views: Views;
   readonly shade: ShadeMap;
   readonly binCover: Uint8Array;
   readonly venueIndex: ReadonlyMap<string, number>;
@@ -182,16 +185,43 @@ function indicesOf(venues: readonly Venue[], siteVenues: readonly Venue[]) {
   };
 }
 
+// From the same list as the scenery, so a sight is always something the scenery counts.
+function viewsOn(
+  ground: PlotGround,
+  sources: PlotSources,
+  scenery: SceneryField,
+  venues: readonly Venue[],
+): Views {
+  const { plan, terrain } = ground;
+  const standing = [...sources.placements, ...sources.props];
+  return viewsFor({
+    tilesX: plan.tilesX,
+    tilesZ: plan.tilesZ,
+    scenery,
+    placements: [...standing, ...sources.paths],
+    standing,
+    strengthOf: sceneryOf,
+    labelOf: (id) => objectTypeById(id).label,
+    topOf: objectTypeTop,
+    levelOf: (tileX, tileZ) => terrain.levelOf(tileX, tileZ),
+    isWater: (tileX, tileZ) => terrain.surfaceOf(tileX, tileZ) === 'water',
+    isSea: (tileX, tileZ) => terrain.isSea(tileX, tileZ),
+    venues,
+  });
+}
+
 export function plotFactsOf(ground: PlotGround, sources: PlotSources, held: VenueNames): PlotFacts {
   const network = networkOn(ground, sources);
   const paving = nodeIndexFor(network);
   const places = placesOn(sources.placements, held, network, paving);
+  const fields = fieldsOn(ground.plan, sources);
   return {
     network,
     paving,
     ...places,
     ...sandOf(network.beach),
-    ...fieldsOn(ground.plan, sources),
+    ...fields,
+    views: viewsOn(ground, sources, fields.scenery, places.venues),
     ...indicesOf(places.venues, places.siteVenues),
   };
 }

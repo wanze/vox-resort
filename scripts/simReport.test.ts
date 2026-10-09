@@ -37,6 +37,7 @@ import type { Router } from '../src/features/sim/domain/router';
 import { TICKS_PER_DAY, type SimSpeed } from '../src/features/sim/domain/simClock';
 import { wagesFor } from '../src/features/sim/domain/staff';
 import { maintenanceFor } from '../src/features/sim/domain/takings';
+import type { PhotoTally } from '../src/features/sim/domain/dayReport';
 import { loudest } from '../src/features/sim/domain/thoughts';
 import type { Venue } from '../src/features/sim/domain/venues';
 import { WEATHERS, type Weather } from '../src/features/sim/domain/weather';
@@ -53,6 +54,8 @@ const KEEP = process.env.SIM_KEEP ?? '';
 const PATH_TILES = process.env.SIM_PATHS === undefined ? null : Number(process.env.SIM_PATHS);
 const OPENS_EMPTY = process.env.SIM_EMPTY === '1';
 const QUIET = process.env.SIM_QUIET === '1';
+// Off by default, so a report without it replays as it did before guests took photos.
+const PHOTOS = process.env.SIM_PHOTOS === '1';
 // The JSON a save exports to: runs the player's own resort instead of a generated one.
 const SAVE = process.env.SIM_SAVE ?? '';
 // A generated plot moves with every model added to the catalogue; the reference resort only
@@ -320,6 +323,7 @@ it('reports a few days on a generated plot', () => {
     population,
     startTick: OPENS_AT,
     forcedWeather: WEATHER,
+    photos: PHOTOS,
   });
   const { state } = game;
   const { guests, needs, router, venues } = state;
@@ -348,6 +352,24 @@ it('reports a few days on a generated plot', () => {
       `${maintenanceFor(standing)} a day, opening a tycoon game at ${state.ledger.balance}`,
   );
 
+  // Caught each tick: the check-in starts a fresh tally before the morning hook can read it.
+  let photosToday: PhotoTally | undefined;
+  const photoLine = (present: number): string => {
+    const taken = photosToday?.taken ?? 0;
+    const sunsets = [...state.thoughtDay.values()]
+      .filter((tally) => tally.kind === 'sunset')
+      .reduce((sum, tally) => sum + tally.count, 0);
+    const spots = photosToday?.spots ?? [];
+    const top = spots
+      .toSorted((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map((spot) => `${spot.subject} ${spot.count}`);
+    return (
+      `  photos: ${taken} taken (${(taken / Math.max(1, present)).toFixed(2)} per guest), ` +
+      `sunsets ${sunsets}, spots ${spots.length}, top: ${top.join(', ') || 'none'}`
+    );
+  };
+
   const setOffAt = new Int32Array(population).fill(-1);
   const trips: number[] = [];
   let changedMind = 0;
@@ -364,7 +386,7 @@ it('reports a few days on a generated plot', () => {
       const said = loudest(state.thoughtDay, 5).map(
         (each) => `${each.kind} ${each.subject ?? ''} ${each.count}`,
       );
-      const { beds } = state.history.find((report) => report.day === day - 1)!;
+      const { beds, present } = state.history.find((report) => report.day === day - 1)!;
       const { yesterday, today, balance } = state.ledger;
       console.log(
         [
@@ -378,9 +400,11 @@ it('reports a few days on a generated plot', () => {
           `  books: nights ${yesterday.night}, visits ${yesterday.visit}, wages ${yesterday.wages}, ` +
             `maintenance ${yesterday.maintenance}, net ${netOf(yesterday)}, ` +
             `balance ${balance - netOf(today)}`,
+          ...(PHOTOS ? [photoLine(present)] : []),
         ].join('\n'),
       );
     }
+    photosToday = undefined;
     trips.length = 0;
     changedMind = 0;
     Object.assign(needDay, createNeedDay());
@@ -390,6 +414,7 @@ it('reports a few days on a generated plot', () => {
   const afterTick = ({ ticks: tick }: SimNow): void => {
     for (const review of newReviews(state.reviews, newest)) stars.push(review.stars);
     newest = state.reviews[0];
+    photosToday = state.today.photos ?? photosToday;
 
     for (let person = 0; person < population; person++) {
       const toBeach = router.goalOf(person)?.label === 'Beach' && router.visitOf(person) === null;

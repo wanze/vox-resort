@@ -48,6 +48,7 @@ import { LATE_NIGHT_RELIEF, isBedtime } from '../../sim/domain/night';
 import { type Rating, ratingFor } from '../../sim/domain/rating';
 import { type Review, keepReview } from '../../sim/domain/reviews';
 import { type Router, createRouter } from '../../sim/domain/router';
+import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
 import type { SceneryField } from '../../sim/domain/scenery';
 import type { ShadeMap } from '../../sim/domain/shade';
 import {
@@ -71,9 +72,11 @@ import {
 } from '../../sim/domain/thoughts';
 import { type Upkeep, createUpkeep } from '../../sim/domain/upkeep';
 import type { Venue } from '../../sim/domain/venues';
+import type { Moment, Views } from '../../sim/domain/views';
 import type { Weather } from '../../sim/domain/weather';
 import { NO_ZONE, type Zones, createZones, zoneAt } from '../../sim/domain/zones';
 import { NO_HOSTED } from './eventSteps';
+import { NO_MOMENT, photoPause } from './photoSteps';
 import type { PlotFacts } from './plotFacts';
 import { litterWindowOf, rezone } from './staffing';
 import { hear, reviewOfParty, stepLitterAt, visitMade } from './visits';
@@ -161,6 +164,13 @@ export interface SimState {
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
   // Replaced on an edit, as the scenery is.
+  views: Views;
+  // Refreshed once a frame from the clock, so a guest reaching a node reads an object, not the
+  // clock.
+  moment: Moment;
+  // Kept across an edit but for the heat, which is per node.
+  readonly photos: Photos;
+  // Replaced on an edit, as the scenery is.
   shade: ShadeMap;
   // Kept across an edit, pruned to what is still paved or open sand: planting a hedge does not
   // sweep the plot.
@@ -226,6 +236,7 @@ type KeptFacts = Pick<
   | 'gateways'
   | 'depots'
   | 'scenery'
+  | 'views'
   | 'shade'
   | 'binCover'
   | 'unreachable'
@@ -246,6 +257,7 @@ export const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
   gateways: facts.gateways,
   depots: facts.depots,
   scenery: facts.scenery,
+  views: facts.views,
   shade: facts.shade,
   binCover: facts.binCover,
   unreachable: facts.unreachable,
@@ -281,6 +293,9 @@ export interface SimParts {
     readonly ticks: () => number;
     readonly tickOfDay: () => number;
     readonly weather: () => Weather;
+    // Off while the clock is paused, which is how a bench runs, so its scenes replay unchanged;
+    // absent, nobody stops for a photo.
+    readonly photosOn?: () => boolean;
   };
 }
 
@@ -353,6 +368,7 @@ export function createSimState(parts: SimParts): SimState {
       for (const member of left) {
         // Every member: a visit left standing would walk an empty body out of the door.
         router.forget(member);
+        forgetPhotos(resort.photos, member);
         takeOffPlot(people, member, people.x[member]!, people.y[member]!, people.z[member]!);
       }
     },
@@ -402,6 +418,8 @@ export function createSimState(parts: SimParts): SimState {
     },
     offTheSand: (person) => router.offTheSand(person),
     paceOf: (i) => paceOf(guests, i),
+    pausesAt: (person, node) =>
+      clock.photosOn?.() === true ? photoPause(resort, person, node, clock.ticks()) : null,
     roamsBeach: false,
     seed: CROWD_SEED,
   });
@@ -509,6 +527,8 @@ export function createSimState(parts: SimParts): SimState {
     breakdowns,
     litter,
     footfall: createFootfall(network.nodes.length),
+    moment: NO_MOMENT,
+    photos: createPhotos(population, network.nodes.length),
     carrying,
     thoughts: createThoughts(population),
     thoughtDay: createDay(),

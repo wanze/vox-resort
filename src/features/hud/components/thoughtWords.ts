@@ -10,6 +10,9 @@ const NEED_WORDS: { readonly [need: string]: string } = {
   health: 'scrapes',
 };
 
+// Only the first letter: a subject can be a venue's name, as in "Show at The Open Air".
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+
 // In a guest's voice, and only what the simulation decided: never a reason it did not weigh.
 const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string } = {
   'queue-too-long': (subject) =>
@@ -29,6 +32,9 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   'called-off': (subject) => (subject ? `${subject} was called off` : 'The show was called off'),
   welcomed: () => 'What a warm welcome',
   fireworks: (subject) => (subject ? `${subject} lit up the night` : 'What a fireworks show'),
+  photo: (subject) =>
+    subject ? `Had to take a picture of the ${lowerFirst(subject)}` : 'Had to take a picture',
+  sunset: () => 'What a sunset!',
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -47,6 +53,8 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   'called-off': 'Called off',
   welcomed: 'Welcome',
   fireworks: 'Fireworks',
+  photo: 'Photos',
+  sunset: 'Sunset',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

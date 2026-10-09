@@ -2,9 +2,10 @@ import { restoreGuests, snapshotGuests, type Guests } from '../../guests/domain/
 import { resumeRandom, type Random } from '../../layout/domain/random';
 import type { Footfall } from '../../overlays/domain/overlays';
 import { restoreBreakdowns, snapshotBreakdowns, type Breakdowns } from './breakdowns';
-import type { DayCounts, DayReport } from './dayReport';
+import type { DayCounts, DayReport, PhotoTally } from './dayReport';
 import { restoreHappiness, snapshotHappiness, type Happiness } from './happiness';
 import type { Ledger } from './ledger';
+import { restorePhotos, snapshotPhotos, type Photos } from './photos';
 import type { Carrying, Litter } from './litter';
 import { restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import type { Rating } from './rating';
@@ -45,10 +46,22 @@ export interface ResortState {
   beds: { readonly total: number; readonly taken: number };
   hiring: Hiring;
   readonly zones: Zones;
+  readonly photos: Photos;
 }
 
+const copyPhotos = (photos: PhotoTally) => ({
+  taken: photos.taken,
+  spots: photos.spots.map((spot) => ({ ...spot })),
+});
+
+// Spread in only when present: an undefined key is not the same as a missing one in a save.
+const withPhotos = <T extends { readonly photos?: PhotoTally }>(counts: T) => ({
+  ...counts,
+  ...(counts.photos ? { photos: copyPhotos(counts.photos) } : {}),
+});
+
 const copyReport = (report: DayReport) => ({
-  ...report,
+  ...withPhotos(report),
   rating: { ...report.rating },
   beds: { ...report.beds },
   money: { ...report.money },
@@ -69,7 +82,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     names: [...state.names],
     footfall: { seen: state.footfall.seen.slice(), mood: state.footfall.mood.slice() },
     reviews: state.reviews.map((review) => ({ ...review })),
-    today: { ...state.today },
+    today: withPhotos(state.today),
     history: state.history.map(copyReport),
     rating: { ...state.rating },
     ledger: {
@@ -86,6 +99,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     beds: { ...state.beds },
     hiring: { ...state.hiring },
     zones: state.zones.zone.slice(),
+    photos: snapshotPhotos(state.photos),
   };
 }
 
@@ -107,7 +121,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.footfall.seen.set(snapshot.footfall.seen);
   state.footfall.mood.set(snapshot.footfall.mood);
   state.reviews = snapshot.reviews.map((review) => ({ ...review }));
-  state.today = { ...snapshot.today };
+  state.today = withPhotos(snapshot.today);
   state.history = snapshot.history.map(copyReport);
   state.rating = { ...snapshot.rating };
   state.ledger = snapshot.ledger;
@@ -119,4 +133,5 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.hiring = { ...snapshot.hiring };
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;
+  restorePhotos(state.photos, snapshot.photos);
 }

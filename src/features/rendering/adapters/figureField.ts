@@ -81,6 +81,9 @@ const STRIKE_REACH = 2.2;
 // One arm up and forward, holding the stick towards a camera in front.
 const SELFIE_REACH = 2.4;
 
+// Both arms forward, a little above level: a phone held out at eye height, as the arm has no elbow.
+const PHOTO_ARMS = 0.55 * Math.PI;
+
 const REACH_HOP_VOXELS = 0.8;
 
 // Past any leg's taper, so the shader tells an arm from a leg by the weight alone: the hands
@@ -205,6 +208,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const striking = is(DRAWN_POSE.strike);
   const reaching = is(DRAWN_POSE.reach);
   const selfie = is(DRAWN_POSE.selfie);
+  const photographing = is(DRAWN_POSE.photo);
 
   const phase = pose.w;
   const cycle = (rate: number) => clock.mul(rate).add(phase);
@@ -257,6 +261,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     )
     .add(reaching.mul(progress).mul(PI))
     .add(selfie.mul(side.max(0)).mul(SELFIE_REACH))
+    .add(photographing.mul(PHOTO_ARMS))
     .add(sitting.mul(SIT_ARMS));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.

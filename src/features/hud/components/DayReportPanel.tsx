@@ -196,6 +196,21 @@ function EventsSection({ report }: { readonly report: DayReport }) {
   );
 }
 
+function PhotosSection({ report }: { readonly report: DayReport }) {
+  if (!report.photos) return null;
+  return (
+    <Section title="Most photographed">
+      <Rows layout="figures">
+        {report.photos.spots.map((spot) => (
+          <Row key={spot.key} label={spot.subject}>
+            <dd>{`${whole(spot.count)}×`}</dd>
+          </Row>
+        ))}
+      </Rows>
+    </Section>
+  );
+}
+
 function SaidSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="What guests said">
@@ -283,6 +298,7 @@ export function DayReportPanel({ history, shown, onShow, mode, resortName }: Day
       <GuestsSection report={report} />
       {mode === 'tycoon' ? <MoneySection report={report} /> : null}
       <EventsSection report={report} />
+      <PhotosSection report={report} />
       <SaidSection report={report} />
       <TrendSection history={history} mode={mode} />
     </div>

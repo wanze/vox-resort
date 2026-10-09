@@ -17,6 +17,7 @@ import { AUTO_HIRING, staffPool } from '../../sim/domain/staff';
 import { createStaffRouter } from '../../sim/domain/staffRouter';
 import { createDay, createThoughts } from '../../sim/domain/thoughts';
 import { createUpkeep } from '../../sim/domain/upkeep';
+import { createPhotos } from '../../sim/domain/photos';
 import { createZones } from '../../sim/domain/zones';
 import { gameSnapshotSchema, SAVE_VERSION, type GameSnapshot } from './snapshot';
 import { resortPerPerson } from '../../sim/domain/resortSnapshot';
@@ -91,6 +92,7 @@ function gameOf(POPULATION: number, seed: number): GameSnapshot {
     beds: { total: 0, taken: 0 },
     hiring: AUTO_HIRING,
     zones: createZones(4, 3),
+    photos: createPhotos(POPULATION, network.nodes.length),
   });
   return {
     version: SAVE_VERSION,

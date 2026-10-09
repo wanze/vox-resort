@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type RefObject } from 'react';
 import type { Showcase } from './showcase';
 import { usePostcardLink } from './useSharing';
 import { CAMERA_FOV_DEGREES } from '../features/layout/domain/worldBounds';
+import type { PhotoSpot } from '../features/sim/domain/dayReport';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import type { FollowView } from '../features/guest-view/domain/followRules';
@@ -99,6 +100,27 @@ function useShot(showcase: RefObject<Showcase | null>, parts: PhotoParts) {
   };
 }
 
+// Never saved: the URL is the wall's to revoke, and a failed render leaves the card without one.
+async function pictureFrom(
+  showcase: RefObject<Showcase | null>,
+  spot: PhotoSpot,
+): Promise<string | null> {
+  const mounted = showcase.current;
+  if (!mounted) return null;
+  try {
+    const pixels = await mounted.pictureOf(spot);
+    const blob = await encodePhoto(pixels, { matrix: PHOTO_FILTERS.none.matrix, caption: null });
+    return URL.createObjectURL(blob);
+  } catch (cause: unknown) {
+    console.error(cause);
+    return null;
+  }
+}
+
+function usePicture(showcase: RefObject<Showcase | null>) {
+  return useCallback((spot: PhotoSpot) => pictureFrom(showcase, spot), [showcase]);
+}
+
 export function usePhotoMode(
   showcase: RefObject<Showcase | null>,
   parts: PhotoParts,
@@ -115,6 +137,7 @@ export function usePhotoMode(
   const { reset: resetSelfie } = selfie;
   const { forget: forgetShot } = shots;
   const postcard = usePostcardLink(showcase);
+  const picture = usePicture(showcase);
 
   const enter = useCallback(() => {
     const mounted = showcase.current;
@@ -179,5 +202,6 @@ export function usePhotoMode(
     busy: shots.busy,
     selfie: selfie.controls,
     postcard,
+    picture,
   };
 }

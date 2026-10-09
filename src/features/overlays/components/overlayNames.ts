@@ -10,6 +10,7 @@ export const OVERLAY_NAMES: { readonly [kind in OverlayKind]: string } = {
   'step-free': 'Step-free',
   scenery: 'Scenery',
   litter: 'Litter',
+  photos: 'Photos',
 };
 
 export const OVERLAY_QUESTIONS: { readonly [kind in OverlayKind]: string } = {
@@ -21,4 +22,5 @@ export const OVERLAY_QUESTIONS: { readonly [kind in OverlayKind]: string } = {
   'step-free': 'Where a wheelchair can go',
   scenery: 'Where the walk is plain',
   litter: 'Where litter lies',
+  photos: 'Where guests take photos',
 };

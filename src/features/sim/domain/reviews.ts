@@ -1,6 +1,7 @@
 import type { PartyKind } from '../../guests/domain/parties';
 import {
   isComplaint,
+  lastSubjectOf,
   stayCount,
   THOUGHT_KINDS,
   worstOf,
@@ -19,6 +20,8 @@ export interface Review {
   readonly complaint: ThoughtKind | null;
   readonly praise: ThoughtKind | null;
   readonly subject: string | null;
+  // What a photo praise was of; set only when the praise is 'photo'.
+  readonly praiseSubject?: string;
 }
 
 export const REVIEWS_KEPT = 12;
@@ -41,6 +44,9 @@ export function reviewFor(parts: {
 }): Review {
   const { thoughts, members, spokesperson } = parts;
   const complaint = mostThought(thoughts, members, COMPLAINTS);
+  const praise = mostThought(thoughts, members, PRAISES);
+  const photographed =
+    praise === 'photo' ? photoSubjectOf(thoughts, [spokesperson, ...members]) : null;
   return {
     party: parts.party,
     family: parts.family,
@@ -49,8 +55,9 @@ export function reviewFor(parts: {
     nights: parts.nights,
     stars: starsOf(members, parts.happiness),
     complaint,
-    praise: mostThought(thoughts, members, PRAISES),
+    praise,
     subject: complaint === null ? null : subjectOf(thoughts, [spokesperson, ...members], complaint),
+    ...(photographed === null ? {} : { praiseSubject: photographed }),
   };
 }
 
@@ -85,6 +92,14 @@ function mostThought(
     bestCount = count;
   }
   return best;
+}
+
+function photoSubjectOf(thoughts: Thoughts, people: readonly number[]): string | null {
+  for (const person of people) {
+    const subject = lastSubjectOf(thoughts, person, 'photo');
+    if (subject !== null) return subject;
+  }
+  return null;
 }
 
 function subjectOf(

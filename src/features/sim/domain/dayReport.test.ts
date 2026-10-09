@@ -3,13 +3,16 @@ import {
   countArrivals,
   countDeparture,
   countEvent,
+  countPhoto,
   countReview,
   countWelcomed,
   HISTORY_DAYS,
   keepDay,
   LOUDEST_KEPT,
   noteWelcomeGap,
+  PHOTO_SPOTS_KEPT,
   reportOf,
+  SPOTS_TRACKED,
   startDay,
   starsTrend,
   type DayCounts,
@@ -140,5 +143,52 @@ describe('starsTrend', () => {
     expect(starsTrend([dayRated(0, 3.6), dayRated(1, 3.8)])).toBe(0.2);
     expect(starsTrend([dayRated(0, 3.8), dayRated(1, 3.1)])).toBe(-0.7);
     expect(starsTrend([dayRated(0, 3.8), dayRated(1, 3.8)])).toBe(0);
+  });
+});
+
+const shot = (key: string, minute = 600) => ({
+  key,
+  subject: key,
+  kind: 'sight' as const,
+  x: minute,
+  y: 2,
+  z: 3,
+  heading: 0,
+  minute,
+});
+
+const photographed = (keys: readonly string[]): DayCounts =>
+  keys.reduce((counts, key) => countPhoto(counts, shot(key)), startDay(0));
+
+describe('the photos of the day', () => {
+  it('merges photos of one spot and keeps the latest viewpoint', () => {
+    const counts = countPhoto(
+      countPhoto(startDay(0), shot('fountain', 600)),
+      shot('fountain', 720),
+    );
+    expect(counts.photos).toEqual({ taken: 2, spots: [{ ...shot('fountain', 720), count: 2 }] });
+  });
+
+  it('drops the least photographed spot past the cap, the earliest on a tie', () => {
+    const keys = Array.from({ length: SPOTS_TRACKED }, (_, at) => `spot-${at}`);
+    const counts = photographed(['spot-0', ...keys, 'late']);
+    const tracked = counts.photos!.spots.map((spot) => spot.key);
+    expect(tracked).toHaveLength(SPOTS_TRACKED);
+    expect(tracked).toContain('spot-0');
+    expect(tracked).not.toContain('spot-1');
+    expect(tracked.at(-1)).toBe('late');
+    expect(counts.photos!.taken).toBe(SPOTS_TRACKED + 2);
+  });
+
+  it('reports the three most photographed, by count and then key', () => {
+    const report = reportFor(photographed(['b', 'a', 'c', 'd', 'c', 'd', 'b']));
+    expect(report.photos!.spots.map((spot) => spot.key)).toEqual(['b', 'c', 'd']);
+    expect(report.photos!.spots).toHaveLength(PHOTO_SPOTS_KEPT);
+    expect(report.photos!.taken).toBe(7);
+  });
+
+  it('has no photos key on a day nobody took one', () => {
+    expect('photos' in startDay(3)).toBe(false);
+    expect('photos' in reportFor(startDay(3))).toBe(false);
   });
 });

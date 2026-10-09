@@ -4,6 +4,7 @@ import {
   isComplaint,
   createThoughts,
   forgetStay,
+  lastSubjectOf,
   latestOf,
   loudest,
   REPEAT_TICKS,
@@ -221,9 +222,10 @@ describe('widenThoughts', () => {
     const thoughts = createThoughts(2);
     think(thoughts, 0, 'welcomed', 'Welcome meeting', 5);
     const kinds = THOUGHT_KINDS.length;
+    const fireworks = THOUGHT_KINDS.indexOf('fireworks');
     const old = snapshotThoughts(thoughts, new Map());
     const short = (column: ArrayLike<number | string | null>) =>
-      Array.from(column).filter((_, at) => at % kinds < kinds - 1);
+      Array.from(column).filter((_, at) => at % kinds < fireworks);
     const widened = widenThoughts({
       ...old,
       stay: Uint16Array.from(short(old.stay) as number[]),
@@ -232,7 +234,17 @@ describe('widenThoughts', () => {
     });
     expect(widened.stay).toEqual(old.stay);
     expect(widened.heardSubject).toEqual(old.heardSubject);
-    expect(THOUGHT_KINDS.at(-1)).toBe('fireworks');
+    expect(THOUGHT_KINDS.slice(fireworks)).toEqual(['fireworks', 'photo', 'sunset']);
     expect(isComplaint('fireworks')).toBe(false);
+  });
+
+  it('hears both photo thoughts as praise, and remembers what the last photo was of', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 1, 'photo', 'Fountain', 10);
+    think(thoughts, 1, 'photo', 'Sea', 400);
+    expect(isComplaint('photo')).toBe(false);
+    expect(isComplaint('sunset')).toBe(false);
+    expect(lastSubjectOf(thoughts, 1, 'photo')).toBe('Sea');
+    expect(lastSubjectOf(thoughts, 0, 'photo')).toBeNull();
   });
 });

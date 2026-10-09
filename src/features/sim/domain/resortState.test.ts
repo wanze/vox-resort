@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createBreakdowns } from './breakdowns';
-import { countArrivals, countReview, HISTORY_DAYS, reportOf, startDay } from './dayReport';
+import {
+  countArrivals,
+  countPhoto,
+  countReview,
+  HISTORY_DAYS,
+  reportOf,
+  startDay,
+} from './dayReport';
 import { createGuests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import { createRandom } from '../../layout/domain/random';
@@ -9,6 +16,7 @@ import { createHappiness } from './happiness';
 import { createLedger, record } from './ledger';
 import { createCarrying, createLitter } from './litter';
 import { createNeeds } from './needs';
+import { createPhotos, NEVER, notePhoto } from './photos';
 import { ratingFor } from './rating';
 import { resortSnapshotSchema } from './resortSnapshot';
 import { restoreResort, snapshotResort, type ResortState } from './resortState';
@@ -49,6 +57,7 @@ function stateFor(seed: number): ResortState {
     beds: { total: 30, taken: 0 },
     hiring: AUTO_HIRING,
     zones: createZones(6, 5),
+    photos: createPhotos(40, 9),
   };
 }
 
@@ -204,5 +213,33 @@ describe('snapshotResort', () => {
     expect(resortSnapshotSchema.safeParse({ ...saved, litter: [...saved.litter] }).success).toBe(
       false,
     );
+  });
+
+  it("keeps the photo times, the heat and the day's photos through a save", () => {
+    const state = played();
+    notePhoto(state.photos, 4, 2, 600);
+    const shot = { key: 'sunset@1,2', subject: 'Sunset', kind: 'sunset' as const, x: 8, y: 2 };
+    state.today = countPhoto(state.today, { ...shot, z: 9, heading: 1, minute: 1260 });
+    state.history = [{ ...reportedOn(state, 1), photos: state.today.photos! }];
+    const saved = snapshotResort(state);
+    expect(resortSnapshotSchema.safeParse(saved).success).toBe(true);
+    const fresh = stateFor(9);
+    restoreResort(fresh, saved);
+    expect(fresh.photos.lastAt[4]).toBe(600);
+    expect(fresh.photos.heat[2]).toBe(1);
+    expect(fresh.today.photos).toEqual(state.today.photos);
+    expect(fresh.history[0]!.photos).toEqual(state.today.photos);
+  });
+
+  it('restores a save from before photos with nobody having taken one', () => {
+    const state = played();
+    notePhoto(state.photos, 4, 2, 600);
+    const { photos: _photos, ...before } = snapshotResort(state);
+    const fresh = stateFor(9);
+    notePhoto(fresh.photos, 1, 3, 90);
+    restoreResort(fresh, resortSnapshotSchema.parse(before));
+    expect(fresh.photos.lastAt.every((at) => at === NEVER)).toBe(true);
+    expect(fresh.photos.heat.every((heat) => heat === 0)).toBe(true);
+    expect(fresh.today.photos).toBeUndefined();
   });
 });

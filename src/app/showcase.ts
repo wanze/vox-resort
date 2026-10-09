@@ -279,7 +279,7 @@ import {
 } from '../features/inspect/domain/selection';
 import type { RideCommand } from '../features/guest-view/domain/followRules';
 import { createGuestView } from './guestView';
-import { createPhotoMode } from './photoMode';
+import { createPhotoMode, type Viewpoint } from './photoMode';
 import type { PhotoPixels } from '../features/photo/domain/photoPixels';
 import { snapLookTime } from '../features/photo/domain/photoView';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
@@ -492,6 +492,8 @@ export interface Showcase {
   readonly clockTime: number;
   // Called between frames: the photo is drawn offscreen at the buffer's size times the scale.
   capturePhoto(scale: number): Promise<PhotoPixels>;
+  // A picture for the photo wall, from where a guest took their photo.
+  pictureOf(spot: Viewpoint): Promise<PhotoPixels>;
   // Only for a followed guest who is drawn; false, and nothing done, for anybody else.
   setSelfie(on: boolean): boolean;
   postcardView(): PostcardView;
@@ -928,6 +930,7 @@ interface ResortArt {
   readonly tickOfDay: () => number;
   readonly ticks: () => number;
   readonly weather: () => Weather;
+  readonly photosOn: () => boolean;
   readonly geometries: readonly ModelGeometry[];
   readonly people: readonly ModelGeometry[];
   readonly staff: readonly ModelGeometry[];
@@ -993,7 +996,12 @@ function buildResort(
     childVariant: CHILD_VARIANT,
     // Never zero: createCrowd deals a variant per body and would divide by zero.
     staffVariants: Math.max(1, parts.staff.length),
-    clock: { ticks: parts.ticks, tickOfDay: parts.tickOfDay, weather: parts.weather },
+    clock: {
+      ticks: parts.ticks,
+      tickOfDay: parts.tickOfDay,
+      weather: parts.weather,
+      photosOn: parts.photosOn,
+    },
   });
   const { network, venues } = facts;
   const { guests, router, staffPool } = state;
@@ -1412,7 +1420,11 @@ function lightRooms(resort: Resort, last: number | null): number {
 }
 
 function voicesOf(resort: Resort): VoicesView {
-  return { loudest: loudest(resort.thoughtDay, LOUDEST_SHOWN), reviews: resort.reviews };
+  return {
+    loudest: loudest(resort.thoughtDay, LOUDEST_SHOWN),
+    reviews: resort.reviews,
+    photos: resort.today.photos ?? null,
+  };
 }
 
 // The rating is the one set at check-in, not a fresh one: it is what sizes the arrivals.
@@ -1551,6 +1563,7 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
     stepFree: () => stepFreeOf(resort).nodes,
     scenery: resort.scenery,
     litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
+    photos: resort.photos.heat,
   });
 }
 
@@ -2201,6 +2214,7 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   refleetAfterEdit(resort, handle);
   recastAfterEdit(resort, network, wasStanding);
   resort.footfall = createFootfall(network.nodes.length);
+  resort.photos.heat = new Float32Array(network.nodes.length);
 }
 
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
@@ -2229,6 +2243,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     tickOfDay: () => clock.tickOfDay,
     ticks: () => clock.ticks,
     weather: () => clock.weather,
+    photosOn: () => clock.speed !== 'paused',
     geometries: catalogue.geometries,
     people: catalogue.people,
     staff: catalogue.staff,
@@ -3205,6 +3220,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       return clock.time;
     },
     capturePhoto: photo.capture,
+    pictureOf: photo.pictureOf,
     setSelfie: photo.setSelfie,
     postcardView: photo.postcardView,
     snapshot: lifecycle.snapshot,

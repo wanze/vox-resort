@@ -13,6 +13,7 @@ import { isRoaming, RESTING, restingOn, type Crowd } from '../../crowd/domain/cr
 import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
 import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
@@ -416,6 +417,7 @@ function stillWording(
 function doingNow(crowd: Crowd, person: number, resting: number, errand: Errand): string {
   if (resting === RESTING.sitting) return 'Sitting';
   if (resting === RESTING.lying) return 'Lying down';
+  if (resting === DRAWN_POSE.photo) return 'Taking a photo';
   if (isRoaming(crowd, person)) return 'On the beach';
   return errand === null ? 'Walking' : errandWording(errand);
 }

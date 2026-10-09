@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useState, type ReactNode, type RefCallback } from 'react';
 import { AdvicePanel } from './AdvicePanel';
 import { ArmedChip } from './ArmedChip';
 import { BuildPalette, type PreviewLookup } from './BuildPalette';
@@ -66,7 +66,7 @@ interface HudPlacement {
 interface HudChrome {
   readonly layout: LayoutMode;
   // Folded by the app as its figures grow; written outside React, like the nodes.
-  readonly bar: RefObject<HTMLElement | null>;
+  readonly bar: RefCallback<HTMLElement>;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
   readonly palette: boolean;

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react';
+import { useCallback, useState, type RefCallback } from 'react';
 import { useBarFolds } from './useBarFolds';
 import { useHotkeys } from './useHotkeys';
 import { useWindows } from './useWindows';
@@ -18,7 +18,7 @@ import type { SaveControls } from '../features/saves/components/saveControls';
 export interface HudChrome {
   readonly windows: WindowControls;
   readonly layout: LayoutMode;
-  readonly bar: RefObject<HTMLElement | null>;
+  readonly bar: RefCallback<HTMLElement>;
   readonly menu: MenuId | null;
   readonly setMenu: (menu: MenuId | null) => void;
   readonly palette: boolean;
@@ -55,8 +55,7 @@ export function useHudChrome(
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
-  const bar = useRef<HTMLElement>(null);
-  useBarFolds(bar, layout);
+  const bar = useBarFolds(layout);
   const [menu, setMenu] = useState<MenuId | null>(null);
   const [palette, showPalette] = useState(false);
   // One thing on top at a time, so the palette never opens under a dropdown still listening for Escape.

@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { RefCallback, RefObject } from 'react';
 import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
 import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
@@ -21,7 +21,7 @@ import type { SaveControls } from '../../saves/components/saveControls';
 export type MenuId = 'main' | 'speed' | 'weather' | 'overlay' | 'highlight' | 'demand' | 'rating';
 
 export interface TopBarProps {
-  readonly barElement: RefObject<HTMLElement | null>;
+  readonly barElement: RefCallback<HTMLElement>;
   readonly dayElement: RefObject<HTMLSpanElement | null>;
   readonly timeElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;

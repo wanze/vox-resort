@@ -24,6 +24,7 @@ import type {
 } from '../features/photo/components/photoControls';
 import type { ClockControls } from '../features/hud/components/hudControls';
 import type { HudStore } from '../features/hud/domain/hudStore';
+import { cardSize } from '../features/hud/domain/photoWall';
 
 export interface PhotoParts {
   readonly clock: ClockControls;
@@ -109,7 +110,7 @@ async function pictureFrom(
   const mounted = showcase.current;
   if (!mounted) return null;
   try {
-    const pixels = await mounted.pictureOf(spot);
+    const pixels = await mounted.pictureOf(spot, cardSize(window.devicePixelRatio));
     const blob = await encodePhoto(pixels, { matrix: PHOTO_FILTERS.none.matrix, caption: null });
     return URL.createObjectURL(blob);
   } catch (cause: unknown) {

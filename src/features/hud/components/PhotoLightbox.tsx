@@ -18,10 +18,10 @@ export interface PhotoLightboxProps {
   readonly photo: WallPhotos;
 }
 
-// As `.hud-lightbox-picture` leaves room: 16 px gutters and the frame's padding either side, the
-// head and the actions above and below.
-const GUTTERS = 64;
-const CHROME = 200;
+// As `.hud-lightbox-picture` leaves room: 16 px gutters, the frame's padding and the print's
+// border either side, the head, the actions and the print's border above and below.
+const GUTTERS = 88;
+const CHROME = 224;
 
 interface Developed {
   readonly id: string;
@@ -41,13 +41,15 @@ function useEnlarged(card: WallCard, photo: WallPhotos): Developed | null {
   useEffect(() => {
     let current = true;
     const room = { width: window.innerWidth - GUTTERS, height: window.innerHeight - CHROME };
-    void enlarge.current(card.spot, enlargedSize(room), card.daysAgo).then((shot) => {
-      if (!current || !shot) return;
-      const url = URL.createObjectURL(shot.blob);
-      if (latest.current) URL.revokeObjectURL(latest.current);
-      latest.current = url;
-      setDeveloped({ id: card.id, shot, url });
-    });
+    void enlarge
+      .current(card.spot, enlargedSize(room, window.devicePixelRatio), card.daysAgo)
+      .then((shot) => {
+        if (!current || !shot) return;
+        const url = URL.createObjectURL(shot.blob);
+        if (latest.current) URL.revokeObjectURL(latest.current);
+        latest.current = url;
+        setDeveloped({ id: card.id, shot, url });
+      });
     return () => {
       current = false;
     };
@@ -102,11 +104,15 @@ function Picture({
   const ready = developed?.id === card.id;
   return (
     <div className="hud-lightbox-frame">
-      {developed ? (
-        <img className="hud-lightbox-picture" src={developed.url} alt={card.spot.subject} />
-      ) : (
-        <span className="hud-lightbox-picture" aria-hidden="true" />
-      )}
+      <span className="hud-lightbox-print">
+        <span className="hud-photo-film">
+          {developed ? (
+            <img className="hud-lightbox-picture" src={developed.url} alt={card.spot.subject} />
+          ) : (
+            <span className="hud-lightbox-picture" aria-hidden="true" />
+          )}
+        </span>
+      </span>
       <p className="hud-lightbox-note" role="status">
         {ready ? '' : 'Developing…'}
       </p>
@@ -188,7 +194,7 @@ export function PhotoLightbox({ cards, open, onOpen, onClose, photo }: PhotoLigh
           <h2 className="ui-window-title" id={titleId}>
             {spot.subject}
           </h2>
-          <span className="ui-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
+          <span className="ui-stat-note">{`at ${clockWords(spot.minute)}`}</span>
           <button
             type="button"
             className="ui-window-close"

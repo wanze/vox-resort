@@ -546,12 +546,15 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
   sea cells keeps its one sunset. The day report keeps the 12 most
   photographed; its panel shows three.
 - **Shown** in the Photos overlay, the day report's "Most photographed", and
-  the Overview's Photo wall. The wall hangs every tracked spot of today and
-  the last report's, grouped Sunsets, Shows, Fireworks, Sights, Sea, Water, Views,
-  each by count. A card renders when it scrolls into view, one at a time,
-  never saved. Clicking one opens a lightbox: the same spot drawn at up to
-  960x640, with Previous and Next across the wall, Save and Share (captioned
-  with the resort's name).
+  the Overview's Photo wall. The wall hangs the four most photographed spots of
+  each kind, today's and the last report's, grouped Sunsets, Shows, Fireworks,
+  Sights, Sea, Water, Views, as old prints (faded and vignetted in CSS only). A
+  card renders at 300x200 CSS pixels times the screen's density (up to 3) when
+  it scrolls into view, one at a time, never saved. Clicking one opens a
+  lightbox: the same spot drawn at up to 960x640 CSS pixels, again times the
+  density, with Previous and Next across the wall, Save and Share (captioned
+  with the resort's name). After each capture the screen's level of detail is
+  put back at once, or the crowd would be drawn one frame as the photo saw it.
 - **A picture is drawn at its photo's hour** (`photoMode.pictureOf`): the look
   time is set to the photo's minute for the capture and put back before the
   read-back is awaited, so the sun, the dome, shadows and lamps follow; the

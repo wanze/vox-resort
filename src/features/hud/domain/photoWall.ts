@@ -33,6 +33,9 @@ export interface PhotoWall {
   readonly shown: readonly WallCard[];
 }
 
+// The most photographed of each kind: a wall of a dozen near-identical sea views says less.
+export const CARDS_PER_GROUP = 4;
+
 const byCount = (a: PhotoSpot, b: PhotoSpot): number =>
   b.count - a.count || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
 
@@ -41,6 +44,7 @@ function groupsOf(spots: readonly PhotoSpot[], day: number, daysAgo: 0 | 1): rea
     const cards = spots
       .filter((spot) => spot.kind === kind)
       .toSorted(byCount)
+      .slice(0, CARDS_PER_GROUP)
       .map((spot) => ({ id: `${day - daysAgo}|${spot.key}`, spot, daysAgo }));
     return cards.length > 0 ? [{ kind, cards }] : [];
   });
@@ -56,12 +60,34 @@ export function photoWallOf(today: PhotoTally | null, history: readonly DayRepor
   return { taken: today?.taken ?? 0, today: todays, yesterday, shown };
 }
 
+interface Size {
+  readonly width: number;
+  readonly height: number;
+}
+
+// As wide as a card grows in the window, in CSS pixels, at the wall's 3:2.
+const CARD = { width: 300, height: 200 } as const;
+
 const ENLARGED = { width: 960, height: 640 } as const;
 
-// At the wall's 3:2, never wider or taller than the room the lightbox has.
-export function enlargedSize(room: { readonly width: number; readonly height: number }) {
+// Past 3 device pixels to a CSS pixel nobody sees the difference, and the render still costs.
+const MAX_DENSITY = 3;
+
+const densityOf = (devicePixelRatio: number): number =>
+  Number.isFinite(devicePixelRatio) ? Math.min(Math.max(devicePixelRatio, 1), MAX_DENSITY) : 1;
+
+const inPixels = (size: Size, fit: number, density: number): Size => ({
+  width: Math.max(1, Math.floor(size.width * fit * density)),
+  height: Math.max(1, Math.floor(size.height * fit * density)),
+});
+
+// In device pixels, so a card is sharp on a dense screen.
+export function cardSize(devicePixelRatio: number): Size {
+  return inPixels(CARD, 1, densityOf(devicePixelRatio));
+}
+
+// At the wall's 3:2, never wider or taller than the room the lightbox has, in CSS pixels.
+export function enlargedSize(room: Size, devicePixelRatio: number): Size {
   const fit = Math.min(1, room.width / ENLARGED.width, room.height / ENLARGED.height);
-  const width = Math.max(1, Math.floor(ENLARGED.width * fit));
-  const height = Math.max(1, Math.floor(ENLARGED.height * fit));
-  return { width, height };
+  return inPixels(ENLARGED, fit, densityOf(devicePixelRatio));
 }

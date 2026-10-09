@@ -31,6 +31,7 @@ import { useIncomingLink, useShareLink } from './useSharing';
 import { usePhotoMode } from './usePhotoMode';
 import { PhotoBar } from '../features/photo/components/PhotoBar';
 import { PhotoFilterDefs } from '../features/photo/components/PhotoFilterDefs';
+import { PhotoViewfinder } from '../features/photo/components/PhotoViewfinder';
 import { isCompact, type LayoutMode } from '../features/hud/domain/layoutMode';
 import type { PhotoControls } from '../features/photo/components/photoControls';
 import type { SharedResort } from '../features/sharing/domain/sharedResort';
@@ -324,6 +325,7 @@ function PhotoLayer(props: { readonly photo: PhotoControls; readonly layout: Lay
   return (
     <>
       <PhotoFilterDefs />
+      <PhotoViewfinder photo={props.photo} />
       <PhotoBar photo={props.photo} compact={isCompact(props.layout)} />
     </>
   );

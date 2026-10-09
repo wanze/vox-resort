@@ -109,6 +109,20 @@
     var(--grain), radial-gradient(ellipse at 70% 35%, var(--stone-700), var(--stone-900) 70%);
   /* Darkest behind the menu and gone by the middle, so the resort stays the picture. */
   --scrim: linear-gradient(90deg, rgb(35 27 17 / 62%) 0%, rgb(35 27 17 / 30%) 38%, transparent 62%);
+  /* An old print: yellowed paper, a soft lift off the panel and an emulsion darker at its edges. */
+  --print-paper: #f3ead7;
+  --print-edge: rgb(120 92 52 / 30%);
+  --shadow-print: 0 1px 1px rgb(48 32 16 / 30%), 0 5px 12px rgb(48 32 16 / 26%);
+  --shadow-print-lift: 0 2px 2px rgb(48 32 16 / 28%), 0 10px 22px rgb(48 32 16 / 30%);
+  --print-vignette: inset 0 0 0 1px var(--print-edge), inset 0 0 24px rgb(70 44 14 / 42%);
+  /* CSS's sepia adds about a tenth to red and green, so the brightness takes that off and more. */
+  --print-fade: sepia(0.3) saturate(0.85) brightness(0.85);
+  /* A camera's viewfinder over the scene: marks light enough to read on sky and sea alike. */
+  --viewfinder-mark: rgb(255 250 240 / 88%);
+  --viewfinder-faint: rgb(255 250 240 / 28%);
+  --viewfinder-shade: 0 0 2px rgb(0 0 0 / 55%);
+  --viewfinder-vignette: inset 0 0 18vmin rgb(10 8 4 / 38%);
+  --shutter: #0b0905;
   --veil: rgb(47 39 27 / 28%);
   --veil-deep: rgb(47 39 27 / 55%);
 

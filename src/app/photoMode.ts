@@ -44,7 +44,7 @@ export interface PhotoMode {
   capture(scale: number): Promise<PhotoPixels>;
   // From where a guest stood, at the photo's hour, with a flash after dark. The weather, the
   // parasols and which rooms are lit are as they are now.
-  pictureOf(spot: Viewpoint, size?: PhotoSize): Promise<PhotoPixels>;
+  pictureOf(spot: Viewpoint, size: PhotoSize): Promise<PhotoPixels>;
   // Always with the sun behind the guest while it is up: the selfie is for the sunset.
   setSelfie(on: boolean): boolean;
   // Each frame after the choreography and before the crowd writes its instances.
@@ -64,9 +64,6 @@ export interface Viewpoint {
   readonly fov?: number;
   readonly tilt?: number;
 }
-
-// About the size of a card on the photo wall, at the wall's 3:2.
-const PICTURE_SIZE = { width: 240, height: 160 } as const;
 
 const PICTURE_FOV = 60;
 
@@ -96,12 +93,7 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
   const { handle, clock, guestView } = parts;
   const current = parts.resort;
   const capturer = createPhotoCapture(handle.renderer);
-  const pictureCamera = new PerspectiveCamera(
-    PICTURE_FOV,
-    PICTURE_SIZE.width / PICTURE_SIZE.height,
-    0.5,
-    handle.camera.far,
-  );
+  const pictureCamera = new PerspectiveCamera(PICTURE_FOV, 3 / 2, 0.5, handle.camera.far);
   let before: { readonly mode: CameraMode } | null = null;
   let lookTime: number | null = null;
   let selfie: Selfie | null = null;
@@ -136,6 +128,16 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     const detail = { x: view.x, y: view.y, z: view.z, lens: perspectiveLens(height, fov) };
     current().world.updateDetail(detail);
     current().crowd.setView(detail);
+    current().crowd.advance(0, 0);
+  };
+
+  // At once, not by the next frame: the crowd writes its instances before that frame chooses its
+  // detail, so it would be drawn once as the photo saw it and everyone out of its reach blinks.
+  const restoreDetail = (): void => {
+    if (!parts.detail()) return;
+    const view = handle.detailView();
+    current().world.updateDetail(view);
+    current().crowd.setView(view);
     current().crowd.advance(0, 0);
   };
 
@@ -176,15 +178,19 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     setFov(degrees) {
       handle.setFov(clampFov(degrees));
     },
-    // Detail is chosen for the photo's own size; the next frame's choice puts it back.
+    // Detail is chosen for the photo's own size, and the screen's is put back once it is drawn.
     capture(scale) {
       const size = photoSize(handle.drawingBufferSize(), scale, MAX_PHOTO_SIDE);
       detailFor(handle.detailView(), size.height, handle.fov);
-      return capturer.capture(handle.scene, handle.camera, size);
+      try {
+        return capturer.capture(handle.scene, handle.camera, size);
+      } finally {
+        restoreDetail();
+      }
     },
-    // The HUD's groups, the hour and the flash are put back as they were before the read-back is
+    // The HUD's groups, the hour, the flash and the detail are put back as they were before the read-back is
     // awaited: the capture draws before its first await. Photo mode's own hour is what goes back.
-    pictureOf(spot, size = PICTURE_SIZE) {
+    pictureOf(spot, size) {
       const fov = spot.fov ?? PICTURE_FOV;
       const tilt = spot.tilt ?? PICTURE_TILT;
       const eye = { x: spot.x, y: spot.y + GUEST_FRAMING.eye, z: spot.z };
@@ -213,6 +219,7 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
         groups.forEach((group, at) => (group.visible = shown[at]!));
         handle.setFlash(0);
         clock.setLookTime(lookTime);
+        restoreDetail();
       }
     },
     setSelfie(on) {

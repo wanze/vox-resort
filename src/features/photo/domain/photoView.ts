@@ -14,6 +14,15 @@ export interface CameraPose {
   readonly fov: number;
 }
 
+// Half a 35 mm frame's 24 mm height: the fov is vertical, as three's is.
+const FRAME_HALF_HEIGHT_MM = 12;
+
+// What a photographer would call the lens, so the viewfinder reads like a camera's.
+export function focalLength(verticalFovDegrees: number): number {
+  const half = (clampFov(verticalFovDegrees) * Math.PI) / 360;
+  return Math.round(FRAME_HALF_HEIGHT_MM / Math.tan(half));
+}
+
 export function clampFov(degrees: number): number {
   return Math.min(PHOTO_FOV.max, Math.max(PHOTO_FOV.min, degrees));
 }

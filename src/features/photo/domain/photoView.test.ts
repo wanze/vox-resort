@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampFov, PHOTO_FOV, snapLookTime, timeLabel } from './photoView';
+import { clampFov, focalLength, PHOTO_FOV, snapLookTime, timeLabel } from './photoView';
 
 const at = (hours: number, minutes = 0): number => (hours + minutes / 60) / 24;
 
@@ -8,6 +8,18 @@ describe('clampFov', () => {
     expect(clampFov(5)).toBe(PHOTO_FOV.min);
     expect(clampFov(500)).toBe(PHOTO_FOV.max);
     expect(clampFov(55)).toBe(55);
+  });
+});
+
+describe('focalLength', () => {
+  it('names the lens as on a 35 mm camera, wide at a wide view', () => {
+    expect(focalLength(90)).toBe(12);
+    expect(focalLength(60)).toBe(21);
+    expect(focalLength(20)).toBe(68);
+  });
+
+  it('names only lenses the slider offers', () => {
+    expect(focalLength(5)).toBe(focalLength(PHOTO_FOV.min));
   });
 });
 

@@ -491,7 +491,7 @@ export interface Showcase {
   // Called between frames: the photo is drawn offscreen at the buffer's size times the scale.
   capturePhoto(scale: number): Promise<PhotoPixels>;
   // A picture for the photo wall, from where a guest took their photo.
-  pictureOf(spot: Viewpoint, size?: PhotoSize): Promise<PhotoPixels>;
+  pictureOf(spot: Viewpoint, size: PhotoSize): Promise<PhotoPixels>;
   // Only for a followed guest who is drawn; false, and nothing done, for anybody else.
   setSelfie(on: boolean): boolean;
   postcardView(): PostcardView;

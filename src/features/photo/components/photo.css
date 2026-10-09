@@ -98,3 +98,124 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Under the bar, over the canvas; the HUD is hidden in photo mode, so nothing else is between. */
+.photo-viewfinder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow: var(--viewfinder-vignette);
+  --frame-t: calc(var(--space-5) + var(--safe-t));
+  --frame-r: calc(var(--space-5) + var(--safe-r));
+  --frame-b: calc(var(--space-5) + var(--safe-b));
+  --frame-l: calc(var(--space-5) + var(--safe-l));
+}
+
+.photo-viewfinder-thirds {
+  --ink: linear-gradient(var(--viewfinder-faint), var(--viewfinder-faint));
+  position: absolute;
+  inset: 0;
+  background:
+    var(--ink) 33.333% 0 / 1px 100% no-repeat,
+    var(--ink) 66.667% 0 / 1px 100% no-repeat,
+    var(--ink) 0 33.333% / 100% 1px no-repeat,
+    var(--ink) 0 66.667% / 100% 1px no-repeat;
+}
+
+.photo-viewfinder-corner {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  border: 0 solid var(--viewfinder-mark);
+  filter: drop-shadow(var(--viewfinder-shade));
+}
+
+.photo-viewfinder-corner[data-corner='top-left'] {
+  top: var(--frame-t);
+  left: var(--frame-l);
+  border-width: 3px 0 0 3px;
+}
+
+.photo-viewfinder-corner[data-corner='top-right'] {
+  top: var(--frame-t);
+  right: var(--frame-r);
+  border-width: 3px 3px 0 0;
+}
+
+.photo-viewfinder-corner[data-corner='bottom-left'] {
+  bottom: var(--frame-b);
+  left: var(--frame-l);
+  border-width: 0 0 3px 3px;
+}
+
+.photo-viewfinder-corner[data-corner='bottom-right'] {
+  right: var(--frame-r);
+  bottom: var(--frame-b);
+  border-width: 0 3px 3px 0;
+}
+
+/* Only the corners of a box, as a camera's autofocus mark. */
+.photo-viewfinder-focus {
+  --ink: linear-gradient(var(--viewfinder-mark), var(--viewfinder-mark));
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 40px;
+  translate: -50% -50%;
+  background:
+    var(--ink) left top / 12px 2px no-repeat,
+    var(--ink) left top / 2px 12px no-repeat,
+    var(--ink) right top / 12px 2px no-repeat,
+    var(--ink) right top / 2px 12px no-repeat,
+    var(--ink) left bottom / 12px 2px no-repeat,
+    var(--ink) left bottom / 2px 12px no-repeat,
+    var(--ink) right bottom / 12px 2px no-repeat,
+    var(--ink) right bottom / 2px 12px no-repeat;
+  filter: drop-shadow(var(--viewfinder-shade));
+}
+
+.photo-viewfinder-readout {
+  position: absolute;
+  top: calc(var(--frame-t) + var(--space-2));
+  color: var(--viewfinder-mark);
+  font: 400 var(--size-lead) / 1 var(--font-ui);
+  letter-spacing: var(--track-label);
+  text-shadow: var(--viewfinder-shade);
+}
+
+.photo-viewfinder-readout[data-side='left'] {
+  left: calc(var(--frame-l) + 48px);
+}
+
+.photo-viewfinder-readout[data-side='right'] {
+  right: calc(var(--frame-r) + 48px);
+}
+
+.photo-viewfinder-shutter {
+  position: absolute;
+  inset: 0;
+  background: var(--shutter);
+  opacity: 0;
+}
+
+.photo-viewfinder[data-busy] .photo-viewfinder-shutter {
+  animation: photo-shutter 180ms ease-out;
+}
+
+@keyframes photo-shutter {
+  30% {
+    opacity: 0.85;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-viewfinder[data-busy] .photo-viewfinder-shutter {
+    animation: none;
+  }
+}

@@ -123,17 +123,19 @@ function PhotoCard({ card, shelf }: { readonly card: WallCard; readonly shelf: S
       className="hud-photo-card"
       data-card={card.id}
       ref={(element) => shelf.watch(card.id, element)}
-      aria-label={`${spot.subject}, ${spot.count}× at ${clockWords(spot.minute)}: enlarge`}
+      aria-label={`${spot.subject}, at ${clockWords(spot.minute)}: enlarge`}
       onClick={() => shelf.onOpen(card)}
     >
-      {picture ? (
-        <img className="hud-photo-picture" src={picture} alt="" />
-      ) : (
-        <span className="hud-photo-picture" aria-hidden="true" />
-      )}
+      <span className="hud-photo-film">
+        {picture ? (
+          <img className="hud-photo-picture" src={picture} alt="" />
+        ) : (
+          <span className="hud-photo-picture" aria-hidden="true" />
+        )}
+      </span>
       <span className="hud-photo-caption" aria-hidden="true">
         <span className="hud-photo-subject">{spot.subject}</span>
-        <span className="ui-stat-note">{`${spot.count}× · at ${clockWords(spot.minute)}`}</span>
+        <span className="hud-photo-time">{`at ${clockWords(spot.minute)}`}</span>
       </span>
     </button>
   );

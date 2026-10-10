@@ -1,6 +1,6 @@
 import type { Placement } from '../../layout/domain/resortLayout';
-import { SUNSET_TIME, skyStateFor } from '../../lighting/domain/dayNight';
-import { outlookFor, type OutlookParts } from './outlook';
+import { SUNRISE_TIME, SUNSET_TIME, skyStateFor } from '../../lighting/domain/dayNight';
+import { outlookFor, SUNRISE_HEADING, type OutlookParts } from './outlook';
 import { SCENERY_REACH, type SceneryField } from './scenery';
 import { TICKS_PER_DAY } from './simClock';
 import { isNamed, type Venue } from './venues';
@@ -46,6 +46,14 @@ const FIREWORKS_SHARE = 0.8;
 const DAYLIGHT_FROM = 7 / 24;
 
 const GOLDEN_SPAN = 1.5 / 24;
+
+// The sky lightens half an hour before the sun is up and the light stays golden for the first
+// ninety minutes of it, as long as the sunset's; the early risers are out for the first half.
+const DAWN_SPAN = 0.5 / 24;
+const SUNRISE_SPAN = 1.5 / 24;
+
+// Two of the three lines towards the rising sun, as a sunset needs half the sea.
+const SUNRISE_FROM = 0.5;
 
 // Wide enough that the pier and the far beach are two spots, small enough that a stretch of
 // promenade is one.
@@ -105,6 +113,8 @@ export interface Views {
   readonly pond: Float32Array;
   // A venue index of a stage or hearth within SHOW_REACH, -1 for none.
   readonly stage: Int32Array;
+  // How much of the rising sun is in view along the lines towards it, from outlook.ts.
+  readonly sunrise: Float32Array;
   readonly sights: readonly Sight[];
 }
 
@@ -112,9 +122,12 @@ export interface Moment {
   readonly wet: boolean;
   readonly daylight: boolean;
   readonly golden: number;
+  // The sunrise's own golden light, 0 outside it.
+  readonly sunrise: number;
   readonly fireworks: boolean;
 }
 
+// Only ever appended to: a save names each spot's kind.
 export const PHOTO_KINDS = [
   'sight',
   'sea',
@@ -123,6 +136,7 @@ export const PHOTO_KINDS = [
   'fireworks',
   'view',
   'water',
+  'sunrise',
 ] as const;
 
 export type PhotoKind = (typeof PHOTO_KINDS)[number];
@@ -378,16 +392,28 @@ export function viewsFor(parts: ViewParts): Views {
     downhill: outlook.downhill,
     ...sights,
     stage: stagesNear(tilesX, tilesZ, parts.venues),
+    sunrise: outlook.sunrise,
   };
 }
 
+function sunriseGlowAt(time: number): number {
+  const from = SUNRISE_TIME - DAWN_SPAN;
+  const to = SUNRISE_TIME + SUNRISE_SPAN;
+  if (time < from || time >= to) return 0;
+  return time < SUNRISE_TIME ? (time - from) / DAWN_SPAN : (to - time) / SUNRISE_SPAN;
+}
+
+export const isWet = (weather: Weather): boolean => weather === 'rain' || weather === 'storm';
+
 export function momentAt(tickOfDay: number, weather: Weather, fireworks: boolean): Moment {
   const time = tickOfDay / TICKS_PER_DAY;
-  const wet = weather === 'rain' || weather === 'storm';
+  const wet = isWet(weather);
   const goldenFrom = SUNSET_TIME - GOLDEN_SPAN;
   const golden =
     !wet && time >= goldenFrom && time < SUNSET_TIME ? (time - goldenFrom) / GOLDEN_SPAN : 0;
-  return { wet, daylight: time >= DAYLIGHT_FROM && time < SUNSET_TIME, golden, fireworks };
+  const sunrise = wet ? 0 : sunriseGlowAt(time);
+  const daylight = time >= DAYLIGHT_FROM && time < SUNSET_TIME;
+  return { wet, daylight, golden, sunrise, fireworks };
 }
 
 // The negatives, litter and breakdowns, are the caller's: they live outside this module.
@@ -400,12 +426,15 @@ export function scenicAt(
   if (moment.wet) return 0;
   const sea = views.sea[tile]!;
   const stage = views.stage[tile]!;
-  let value = GOLDEN_SHARE * moment.golden * sea;
+  let value = GOLDEN_SHARE * (moment.golden * sea + moment.sunrise * views.sunrise[tile]!);
   if (moment.daylight) value += views.base[tile]!;
   if (stage >= 0 && showing(stage)) value += SHOW_SHARE;
   if (moment.fireworks) value += FIREWORKS_SHARE * sea;
   return clamp01(value);
 }
+
+export const sunriseInView = (views: Views, tile: number, moment: Moment): boolean =>
+  moment.sunrise > 0 && views.sunrise[tile]! >= SUNRISE_FROM;
 
 // From the middle of the cell, so every photo of one spot gets the same name.
 function nearestNamed(venues: readonly ViewVenue[], cellX: number, cellZ: number) {
@@ -426,7 +455,7 @@ function viewOf(
   views: Views,
   tile: number,
   venues: readonly ViewVenue[],
-  kind: 'sea' | 'sunset' | 'fireworks' | 'view' | 'water',
+  kind: 'sea' | 'sunset' | 'sunrise' | 'fireworks' | 'view' | 'water',
   label: string,
 ): PhotoSubject {
   const cellX = Math.floor((tile % views.tilesX) / SPOT_CELL);
@@ -436,8 +465,8 @@ function viewOf(
   return { kind, key: `${kind}@${cellX},${cellZ}`, label: named, at: null };
 }
 
-// The most striking thing in view goes first: the fireworks, a show, the sunset, a sight. The
-// venues are the resort's own, so a renamed one is named as it is now.
+// The most striking thing in view goes first: the fireworks, a show, the sunset or the sunrise, a
+// sight. The venues are the resort's own, so a renamed one is named as it is now.
 export function subjectAt(
   views: Views,
   tile: number,
@@ -453,6 +482,7 @@ export function subjectAt(
     return { kind: 'show', key: venue.key, label: `Show at ${venue.label}`, at: venue };
   }
   if (moment.golden > 0 && sea >= 0.5) return viewOf(views, tile, venues, 'sunset', 'Sunset');
+  if (sunriseInView(views, tile, moment)) return viewOf(views, tile, venues, 'sunrise', 'Sunrise');
   const sight = views.sights[views.sight[tile]!];
   if (sight) return { kind: 'sight', key: sight.key, label: sight.label, at: sight };
   if (sea > 0) return viewOf(views, tile, venues, 'sea', 'Sea');
@@ -471,6 +501,7 @@ export function headingFor(
 ): number {
   if (subject.at) return Math.atan2(subject.at.x - x, subject.at.z - z);
   if (subject.kind === 'sunset') return SUNSET_HEADING;
+  if (subject.kind === 'sunrise') return SUNRISE_HEADING;
   // seaHeading faces the nearest water of any kind, so a pond as well as the sea.
   const facing = subject.kind === 'view' ? views.downhill[tile]! : views.seaHeading[tile]!;
   return Number.isNaN(facing) ? fallback : facing;

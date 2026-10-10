@@ -300,6 +300,8 @@ export const resortSnapshotSchema = z.object({
   open: z.boolean(),
   beds: bedsSchema,
   hiring: hiringSchema,
+  // Absent in saves from before staff went home at night, whose staff all work on.
+  staffOff: uint8.exactOptional(),
   // Saves from before prices were set charge list price.
   prices: z
     .record(z.string(), z.number().min(PRICE_RANGE.min).max(PRICE_RANGE.max))

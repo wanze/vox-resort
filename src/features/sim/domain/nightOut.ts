@@ -1,5 +1,6 @@
 import type { PartyKind } from '../../guests/domain/parties';
 import { mix, unitOf } from '../../random/domain/hash';
+import { isEarlyRiser } from './night';
 import { TICKS_PER_DAY } from './simClock';
 
 // Every family has children, and no child is taken to a club.
@@ -22,8 +23,10 @@ const TIRED_FROM = 22 * HOUR;
 const drawOf = (party: number, day: number, salt: number): number =>
   mix(party * 4 + Math.trunc(day) * 2_654_435_761 + salt);
 
+// A party up at five for the sunrise is in bed by ten: back from the club at three, it would
+// never sleep at all, and a fast night would leave it on the paths at dawn.
 export function goesOut(party: number, day: number, kind: PartyKind, children: number): boolean {
-  if (children > 0) return false;
+  if (children > 0 || isEarlyRiser(party)) return false;
   return unitOf(drawOf(party, day, 3)) < NIGHT_OUT_SHARE[kind];
 }
 

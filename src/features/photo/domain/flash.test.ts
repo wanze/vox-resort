@@ -13,16 +13,17 @@ const grey = (width: number, height: number, value: number) => ({
 describe('flashFor', () => {
   it('fires no flash by day, and a full one in the night', () => {
     for (const hour of [8, 12, 15, 20]) expect(flashFor(hour * 60)).toBe(0);
-    for (const hour of [23, 0, 3, 6]) expect(flashFor(hour * 60)).toBe(1);
+    for (const hour of [23, 0, 3, 5]) expect(flashFor(hour * 60)).toBe(1);
   });
 
-  it('ramps up over the twenty minutes before sunset, and down after seven', () => {
+  it('ramps up over the twenty minutes before sunset, and down after sunrise at six', () => {
     expect(flashFor(SUNSET - 20)).toBe(0);
     expect(flashFor(SUNSET - 10)).toBeCloseTo(0.5);
     expect(flashFor(SUNSET)).toBe(1);
-    expect(flashFor(7 * 60)).toBe(1);
-    expect(flashFor(7 * 60 + 10)).toBeCloseTo(0.5);
-    expect(flashFor(7 * 60 + 20)).toBe(0);
+    expect(flashFor(6 * 60)).toBe(1);
+    expect(flashFor(6 * 60 + 10)).toBeCloseTo(0.5);
+    expect(flashFor(6 * 60 + 20)).toBe(0);
+    expect(flashFor(7 * 60)).toBe(0);
   });
 });
 

@@ -232,6 +232,10 @@ function useAdviceNews(
   useEffect(() => {
     if (sceneUp) showcase.current?.setStaffPins(staffPins);
   }, [showcase, sceneUp, staffPins]);
+  const fastNights = news.prefs.fastNights;
+  useEffect(() => {
+    if (sceneUp) showcase.current?.setFastNights(fastNights);
+  }, [showcase, sceneUp, fastNights]);
   const singleKeys = news.prefs.singleKeys;
   useEffect(() => {
     if (sceneUp) showcase.current?.setSingleKeys(singleKeys);

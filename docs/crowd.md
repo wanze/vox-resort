@@ -20,8 +20,9 @@ Guests, staff, boats and balloons, and the simulation behind them.
 | Queues and visits           | `sim/domain/occupancy.ts`                                                              |
 | Beach                       | `sim/domain/beach.ts`, `beachPitch.ts`, `sandRoute.ts`                                 |
 | Needs, happiness, rating    | `sim/domain/needs.ts`, `happiness.ts`, `rating.ts`                                     |
-| Night, weather, check-in    | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`                                      |
-| Cleanliness and staff       | `sim/domain/upkeep.ts`, `staffRouter.ts`, `staffRouterState.ts`                        |
+| Night, weather, check-in    | `sim/domain/night.ts`, `weather.ts`, `checkIn.ts`, `resort-sim/domain/sunrise.ts`      |
+| Fast nights                 | `sim/domain/fastNight.ts`, `resort-sim/domain/quietNight.ts`                           |
+| Cleanliness and staff       | `sim/domain/upkeep.ts`, `staffRouter.ts`, `staffRouterState.ts`, `staffNight.ts`       |
 | Advice                      | `sim/domain/advice.ts`, `hud/components/AdvicePanel.tsx`                               |
 | Money                       | `catalog/domain/prices.ts`, `sim/domain/ledger.ts`, `takings.ts`                       |
 | Guests, parties, beds       | `guests/domain/`                                                                       |
@@ -135,6 +136,11 @@ somebody edits it, so its numbers compare across changes. It runs the game's
 own step (`stepSim`), staff, events, bills and weather included, so its numbers
 are the game's. `SIM_PLOT=112x100 SIM_SEED=1` runs a generated plot instead,
 `SIM_SAVE=<save JSON>` a whole save, and `SIM_WEATHER=clear` pins the weather.
+Each day's `mornings` line reads litter, dirty and broken venues and unmade beds
+at 05:00, 07:00 and 10:59. `SIM_FAST_NIGHTS=0` adds a `night` line (when the
+night goes quiet, who is still up at 05:00, who never slept, real seconds per
+speed); `SIM_FAST_NIGHTS=1` also runs the quiet part with fewer crowd frames per
+tick, as the app's clock does, so the walkers fall behind as they would.
 
 ## Clock
 
@@ -150,6 +156,27 @@ ticks a frame (so the clock falls behind under load). The resort opens paused.
 
 Needs run on ticks; the crowd and hire boats on frame time scaled by speed;
 balloons, the sea and construction on real time.
+
+The frame hands `clock.advance` a pace, never a new speed, so nothing of it is
+saved: a fireworks show slows it (`showPace`), debug turbo (`turboPace`) and
+**fast nights** speed it up, the larger of those two winning.
+
+- **Fast nights** (`sim/domain/fastNight.ts`, `resort-sim/domain/quietNight.ts`):
+  on by default, a checkbox in the speed menu, kept in the HUD preferences in
+  local storage. The quiet part of a night runs as a 16-second day would
+  (`FAST_NIGHT_DAY_SECONDS`) at every speed, about 1.5 ticks a frame.
+- **Quiet** means: between 22:00 and 05:00, no worker on shift (one still
+  walking home may be), no event running or announced, no late venue open, and
+  at most one present guest with a bed in twenty awake (or two). It ends at 05:00
+  as the staff come back, so dawn runs at the chosen speed.
+- **Normal at once** while following a guest, in photo mode, with a build tool
+  armed or the inspector open, paused (stays paused), between seasons, under a
+  bench and on the welcome screen. A moon on the speed chip shows it running.
+- On the reference resort the night club holds it to 02:00, so a clear night
+  runs fast from 02:00 to 05:00 (about 01:00 when rain shuts the club early).
+  Sunset to 05:00 then takes about 171 s at slow, 58 s normal, 25 s fast and
+  8 s rush, against 281, 94, 38 and 9 s without it. Walking is not sped up:
+  revellers still out at 02:00 reach bed after 05:00, before they wake.
 
 ## Guests
 
@@ -284,6 +311,12 @@ model. Nothing on sand is paved, so beach buildings are reached over it.
 ## Night
 
 `night.ts` hashes a bedtime (from 19:00) and wake time (from 07:00) per party.
+One party in ten is an **early riser** (`isEarlyRiser`, a hash of the party,
+never a draw): it wakes between 05:00 and 05:30, never goes out late, and on a
+dry morning walks to the beach (`resort-sim/domain/sunrise.ts`). It is invited
+as an event's audience is, so it gets a pitch facing the sea and no errands, and
+stays until 07:00 (`dawnStayOf`, derived, never saved). A party with a
+wheelchair stays on the paving.
 Sunset is 21:30. Guests walk home on a flow field per lodging and are held
 inside until morning; those without a bed wander. Lit windows follow the share
 of beds in use. Parasols furl in the evening and in rain (`canopyFurl.ts`).
@@ -472,6 +505,19 @@ same `crowd.ts`. A resort meshes a fixed pool (`STAFF_CAPS`); the roster
 - **Orders**: send a mechanic or cleaner to a specific venue or tile from the
   inspector. The nearest free worker claims it at their next step.
 - **Uniforms**: a cap in a role colour, and no shirt in a guest colour.
+- **Nights off** (`staffNight.ts`, `keepStaffHours` in `staffing.ts`): from
+  22:00 a worker goes home once the evening is over: no event running or due
+  within the hour and no late venue (the night club) open; a lifeguard as soon
+  as nobody is in open water. A cleaner or mechanic finishes the spell in hand;
+  a show or a watch is cut. They walk the way a worker taken off the roster
+  does, to the staff house or the entrance, and at 05:00 a shift change clocks
+  them on there again. `duty` stays the roster (the HUD counts it); `onShift`
+  is the duty less `staffOff`, which the staff router reads and a save keeps.
+  Wages stay daily. Water is not reported unwatched while the lifeguards are
+  off. On the reference resort lifeguards leave about 22:00 to 23:30 and the
+  rest at 02:00, when the club shuts. The mornings are as clean as before: a few
+  pieces of litter at 05:00 swept by 07:00, no unmade beds by the 11:00
+  check-in, the rating unchanged; a venue broken overnight now waits for 05:00.
 
 ## Events
 
@@ -562,8 +608,14 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
     by 72. Standing higher, a guest sees over loungers and palms.
   - `overlook` is how far the tile stands above the lowest ground within 12
     tiles, full at 4 levels: a dune top, a hilltop, a plateau's edge.
+  - `sunrise` (`outlook.ts`) is the share of three lines towards the rising
+    sun (`SUNRISE_HEADING`, the sun half an hour up: +x and a little towards
+    the sea, so along the shore) that nothing on the way reaches the eye
+    within 36 tiles; the sea and the plot's edge end a line clear.
   - At query time: the base counts from 07:00 to sunset; the golden hour (the
-    90 minutes before 21:30, dry days only) adds `0.5 × golden × sea`; a show
+    90 minutes before 21:30, dry days only) adds `0.5 × golden × sea`; the
+    sunrise's own glow (rising from 05:30 to 1 at 06:00, gone by 07:30, dry
+    days) adds `0.5 × glow × sunrise`; a show
     on a stage or fire pit within 6 tiles adds 0.5; the fireworks add
     `0.8 × sea`. Rain and storms make it 0. Litter on the tile and a broken
     venue within 2 tiles (0.3) are taken off after the draw.
@@ -585,8 +637,14 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
   when the pause runs out, which the 3-hour gap answers no), in the `photo`
   pose, both arms up, facing the picture's heading, out of avoidance as a
   sitter is.
+- **Early risers** photograph the sunrise wherever it is in view (`sunrise` of
+  0.5 or more in its glow) at `SUNRISE_KEEN` (0.5) a stop, litter or not;
+  everybody else needs the daylight base, so few others do. On the reference
+  resort that is 10 to 18 sunrises a dry morning: along the eastern edge by the
+  bakery and café there, at the beach bars and pier, and on the sand.
 - **The subject**, first that applies: the fireworks, a show, the sunset (sea
-  of 0.5 or more in the golden hour, facing the setting sun), a sight (a model
+  of 0.5 or more in the golden hour, facing the setting sun), the sunrise
+  (`sunrise` of 0.5 or more in its glow, facing the rising sun), a sight (a model
   of scenery 0.5 or more within 4 tiles: fountain, statue, flowerbed,
   blossom), the sea, inland water ("Water", facing it), or the view (facing
   downhill). A sight or a show is keyed
@@ -598,7 +656,7 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
   tilt of -0.02 to 0.2 rad. The heading is stored turned; `fov` and `tilt` are
   stored on the spot, and a spot saved without them draws at 60° and 0.12.
 - **Effects**: a stay memory of `0.01 / (1 + photos so far)` (reviews, not the
-  rating), a `photo` or `sunset` thought, a count on the node (halved every
+  rating), a `photo`, `sunset` or `sunrise` thought, a count on the node (halved every
   morning) and the day's tally of spots, each with its latest viewpoint.
 - **Spots kept**: 24 a day. Past that, the least photographed spot **of the
   kind with the most spots** goes (the earliest on a tie), so a day of twenty
@@ -606,8 +664,8 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
   photographed; its panel shows three.
 - **Shown** in the Photos overlay, the day report's "Most photographed", and
   the Overview's Photo wall. The wall hangs the four most photographed spots of
-  each kind, today's and the last report's, grouped Sunsets, Shows, Fireworks,
-  Sights, Sea, Water, Views, as old prints (faded and vignetted in CSS only). A
+  each kind, today's and the last report's, grouped Sunrises, Sunsets, Shows,
+  Fireworks, Sights, Sea, Water, Views, as old prints (faded and vignetted in CSS only). A
   card renders at 300x200 CSS pixels times the screen's density (up to 3) when
   it scrolls into view, one at a time, never saved. Clicking one opens a
   lightbox: the same spot drawn at up to 960x640 CSS pixels, again times the
@@ -618,7 +676,7 @@ Guests stop now and then to photograph a view (`sim/domain/views.ts`,
   time is set to the photo's minute for the capture and put back before the
   read-back is awaited, so the sun, the dome, shadows and lamps follow; the
   weather, the parasols and which rooms are lit are today's. **The flash**: a
-  photo from sunset to 07:00 (ramping over 20 minutes either side) is drawn
+  photo from sunset to sunrise (ramping over 20 minutes either side) is drawn
   with the ambient light raised and whitened (`setFlash`, a uniform, so no
   shader rebuild and no light to pay for every frame), then the pixels get a
   centre-weighted lift (`photo/domain/flash.ts`), so the foreground reads and

@@ -106,6 +106,7 @@ interface HudSlices {
   // A placement a finger left on the map, waiting for the bar's Place or Cancel.
   readonly pending: boolean;
   readonly seasons: readonly SeasonReport[];
+  readonly fastNight: boolean;
 }
 
 // What the HUD's pieces read: the groups laid flat, beside what the store holds.
@@ -127,6 +128,7 @@ function useHudSlices(hud: HudStore): HudSlices {
     land: useHudSlice(hud, (state) => state.land),
     pending: useHudSlice(hud, (state) => state.pending),
     seasons: useHudSlice(hud, (state) => state.seasons),
+    fastNight: useHudSlice(hud, (state) => state.fastNight),
   };
 }
 
@@ -438,6 +440,11 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         dayElement={props.nodes.day}
         timeElement={props.nodes.time}
         clock={props.clock}
+        fastNights={{
+          on: props.news.prefs.fastNights,
+          onChange: props.news.setFastNights,
+          running: props.fastNight,
+        }}
         resort={props.resort}
         saves={props.saves}
         overlay={props.overlay}

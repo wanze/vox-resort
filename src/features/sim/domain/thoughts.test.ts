@@ -263,7 +263,7 @@ describe('widenThoughts', () => {
       heardSubject: short(old.heardSubject) as (string | null)[],
     });
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.slice(worth)).toEqual(['not-worth-it', 'good-value']);
+    expect(THOUGHT_KINDS.slice(worth)).toEqual(['not-worth-it', 'good-value', 'sunrise']);
     expect(isComplaint('not-worth-it')).toBe(true);
     expect(isComplaint('good-value')).toBe(false);
   });

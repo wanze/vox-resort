@@ -23,6 +23,7 @@ export const THOUGHT_KINDS = [
   'sunset',
   'not-worth-it',
   'good-value',
+  'sunrise',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
@@ -38,6 +39,7 @@ const PRAISE: ReadonlySet<ThoughtKind> = new Set([
   'photo',
   'sunset',
   'good-value',
+  'sunrise',
 ]);
 
 // Two simulated hours. The router reports a homeless guest at every node they reach all night,

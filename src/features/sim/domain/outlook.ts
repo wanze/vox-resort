@@ -1,6 +1,7 @@
 import { LEVEL_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { GUEST_FRAMING } from '../../guest-view/domain/followRig';
 import type { Placement } from '../../layout/domain/resortLayout';
+import { SUNRISE_TIME, skyStateFor } from '../../lighting/domain/dayNight';
 
 // Full value up to the width of a plateau's dune and beach on the reference resort; the view
 // fades out over the next stretch, as the sea becomes a strip on the horizon.
@@ -20,6 +21,25 @@ const OVERLOOK_FULL = 4;
 // Far enough to see past one step of a dune, which is three tiles deep.
 const SLOPE_REACH = 3;
 
+// Facing the sun half an hour after it rises: at +x and a little towards the sea (dayNight.ts),
+// so the sunrise is mostly along the shore rather than over the water.
+export const SUNRISE_HEADING = (() => {
+  const sun = skyStateFor(SUNRISE_TIME + 1 / 48).sunDirection;
+  return Math.atan2(sun.x, sun.z);
+})();
+
+// The sun is that low, so anything reaching the eye hides it however far off; past the sea's own
+// full reach it is a speck on the horizon.
+const SUNRISE_REACH = SEA_NEAR;
+
+// About nine degrees either side, so one palm in the way spoils a third of it, as on the sea.
+const SUNRISE_SPREAD = 0.15;
+
+const SUNRISE_RAYS = [-1, 0, 1].map((side) => {
+  const heading = SUNRISE_HEADING + side * SUNRISE_SPREAD;
+  return { dx: Math.sin(heading), dz: Math.cos(heading) };
+});
+
 export interface Outlook {
   // How much of the sea is in view across open ground, 0 for none.
   readonly horizon: Float32Array;
@@ -29,6 +49,8 @@ export interface Outlook {
   readonly overlook: Float32Array;
   // Down the slope, NaN on the flat.
   readonly downhill: Float32Array;
+  // How much of the rising sun is in view, 0 for none.
+  readonly sunrise: Float32Array;
 }
 
 export interface OutlookParts {
@@ -140,6 +162,39 @@ function seaAcross(ground: Ground, skyline: Float32Array) {
   return { horizon, horizonHeading };
 }
 
+// The sea and the edge of the plot end the search clear: nothing stands on either.
+function clearTowards(
+  ground: Ground,
+  skyline: Float32Array,
+  from: { readonly x: number; readonly z: number; readonly eye: number },
+  ray: { readonly dx: number; readonly dz: number },
+): boolean {
+  const { tilesX, tilesZ } = ground;
+  for (let step = 1; step <= SUNRISE_REACH; step++) {
+    const x = Math.round(from.x + ray.dx * step);
+    const z = Math.round(from.z + ray.dz * step);
+    if (x < 0 || x >= tilesX || z < 0 || z >= tilesZ) return true;
+    if (ground.sea[z * tilesX + x] === 1) return true;
+    if (skyline[z * tilesX + x]! >= from.eye) return false;
+  }
+  return true;
+}
+
+function sunriseAcross(ground: Ground, skyline: Float32Array): Float32Array {
+  const { tilesX, tilesZ } = ground;
+  const sunrise = new Float32Array(tilesX * tilesZ);
+  for (let z = 0; z < tilesZ; z++) {
+    for (let x = 0; x < tilesX; x++) {
+      const tile = z * tilesX + x;
+      const from = { x, z, eye: ground.levels[tile]! * LEVEL_VOXELS + GUEST_FRAMING.eye };
+      let clear = 0;
+      for (const ray of SUNRISE_RAYS) if (clearTowards(ground, skyline, from, ray)) clear++;
+      sunrise[tile] = clear / SUNRISE_RAYS.length;
+    }
+  }
+  return sunrise;
+}
+
 // A minimum over the square, one axis at a time, so it costs twice the reach per tile.
 function lowestAround(ground: Ground): Float32Array {
   const { tilesX, tilesZ } = ground;
@@ -188,5 +243,10 @@ function heightsOf(ground: Ground) {
 // below, and has the ground below them to look at.
 export function outlookFor(parts: OutlookParts): Outlook {
   const ground = groundOf(parts);
-  return { ...seaAcross(ground, skylineOf(parts, ground)), ...heightsOf(ground) };
+  const skyline = skylineOf(parts, ground);
+  return {
+    ...seaAcross(ground, skyline),
+    ...heightsOf(ground),
+    sunrise: sunriseAcross(ground, skyline),
+  };
 }

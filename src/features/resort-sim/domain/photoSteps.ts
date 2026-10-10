@@ -5,14 +5,15 @@ import { countPhoto } from '../../sim/domain/dayReport';
 import { remember } from '../../sim/domain/happiness';
 import { LITTER_WEIGHT, litterAt } from '../../sim/domain/litter';
 import {
-  PHOTO_FROM,
   PHOTO_SECONDS,
+  SUNRISE_KEEN,
   mayPhoto,
   notePhoto,
   photoChance,
   photoDraw,
   photoMemory,
 } from '../../sim/domain/photos';
+import { isEarlyRiser } from '../../sim/domain/night';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { stayCount } from '../../sim/domain/thoughts';
 import {
@@ -22,6 +23,7 @@ import {
   momentAt,
   scenicAt,
   subjectAt,
+  sunriseInView,
   tilesFrom,
 } from '../../sim/domain/views';
 import { runningShowOf } from './eventSteps';
@@ -30,7 +32,13 @@ import type { SimState } from './simState';
 import { hear, sandTileOf } from './visits';
 
 // Before the first frame sets it: nothing is worth a photo yet.
-export const NO_MOMENT: Moment = { wet: false, daylight: false, golden: 0, fireworks: false };
+export const NO_MOMENT: Moment = {
+  wet: false,
+  daylight: false,
+  golden: 0,
+  sunrise: 0,
+  fireworks: false,
+};
 
 // A broken slide two tiles away spoils the picture; one across the square does not.
 const BROKEN_REACH = 2;
@@ -92,12 +100,15 @@ export function photoPause(
   const tile = at.tileZ * views.tilesX + at.tileX;
   const showing = (venue: number) => resort.eventShowing[venue] === 1;
   const scenic = scenicAt(views, tile, moment, showing);
-  if (scenic < PHOTO_FROM || !mayPhoto(resort.photos, person, tick)) return null;
+  // The sun is what they got up for, so litter underfoot does not put them off it.
+  const keen = sunriseInView(views, tile, moment) && isEarlyRiser(guests.party[person]!);
+  const chance = keen ? SUNRISE_KEEN : photoChance(scenic);
+  if (chance <= 0 || !mayPhoto(resort.photos, person, tick)) return null;
   if (guests.present[person] !== 1 || guests.child[person] === 1) return null;
   if (!mayStop(resort, person, node)) return null;
   const draw = photoDraw(person, node, tick);
-  if (draw >= photoChance(scenic)) return null;
-  if (draw >= photoChance(scenic - spoiltAt(resort, at.tileX, at.tileZ))) return null;
+  if (draw >= chance) return null;
+  if (!keen && draw >= photoChance(scenic - spoiltAt(resort, at.tileX, at.tileZ))) return null;
   const subject = subjectAt(views, tile, moment, showing, resort.venues);
   const framing = framingOf(person, node, tick, subject.kind);
   // The guest turns with the frame, so they face what the wall's picture shows.
@@ -128,9 +139,13 @@ function takePhoto(
   subject: PhotoSubject,
 ): void {
   const { thoughts } = resort;
-  const before = stayCount(thoughts, person, 'photo') + stayCount(thoughts, person, 'sunset');
+  const before =
+    stayCount(thoughts, person, 'photo') +
+    stayCount(thoughts, person, 'sunset') +
+    stayCount(thoughts, person, 'sunrise');
   notePhoto(resort.photos, person, node, tick);
   remember(resort.happiness, person, photoMemory(before));
-  if (subject.kind === 'sunset') hear(resort, tick, person, 'sunset', null);
-  else hear(resort, tick, person, 'photo', subject.label);
+  if (subject.kind === 'sunset' || subject.kind === 'sunrise') {
+    hear(resort, tick, person, subject.kind, null);
+  } else hear(resort, tick, person, 'photo', subject.label);
 }

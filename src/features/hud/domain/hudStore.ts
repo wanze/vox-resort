@@ -32,6 +32,8 @@ export interface HudState {
   readonly pending: boolean;
   readonly programme: ProgrammeFacts | null;
   readonly following: FollowView | null;
+  // The clock is running through a quiet night faster than the speed picked.
+  readonly fastNight: boolean;
   // Null where the resort runs no seasons.
   readonly season: SeasonView | null;
   readonly seasons: readonly SeasonReport[];
@@ -64,6 +66,7 @@ export const INITIAL_HUD: HudState = {
   pending: false,
   programme: null,
   following: null,
+  fastNight: false,
   season: null,
   seasons: [],
 };

@@ -10,6 +10,7 @@ import { doorsFor } from '../../sim/domain/doors';
 import type { Lodging } from '../../sim/domain/lodgings';
 import {
   type Roster,
+  type StaffRole,
   STAFF_ROLES,
   onDuty,
   rosterFor,
@@ -18,6 +19,17 @@ import {
   workplacesOf,
 } from '../../sim/domain/staff';
 import type { Venue } from '../../sim/domain/venues';
+import { isBroken } from '../../sim/domain/breakdowns';
+import { openNow } from '../../sim/domain/hours';
+import {
+  type Evening,
+  finishesFirst,
+  isStaffNight,
+  offForTheNight,
+  onShiftOf,
+} from '../../sim/domain/staffNight';
+import { createStaffTask } from '../../sim/domain/staffRouter';
+import { weatherEffect } from '../../sim/domain/weather';
 import {
   NO_ZONE,
   type Zones,
@@ -28,6 +40,7 @@ import {
   zonesOf,
 } from '../../sim/domain/zones';
 import type { PlotFacts } from './plotFacts';
+import type { SimNow } from './simNow';
 import type { SimState } from './simState';
 
 // The live rights, not the plan's: a path laid on land bought since the last settle gets litter too.
@@ -78,12 +91,13 @@ function enterAt(crowd: Crowd, i: number, node: number): void {
 // After the relocate, so the arrival node is on the graph the staff crowd now walks. Rezoned
 // before anybody clocks on, so a zoned worker starts at a depot in their zone.
 export function staffTheResort(resort: SimState): void {
-  const { recommended, roster, duty } = rosterNow(resort);
+  const { recommended, roster, duty, onShift } = rosterNow(resort);
   const workers = resort.staff.crowd;
-  const shift = shiftChange(duty, workers.offPlot);
+  const shift = shiftChange(onShift, workers.offPlot);
   resort.recommended = recommended;
   resort.roster = roster;
   resort.duty = duty;
+  resort.onShift = onShift;
   rezone(resort);
   for (const worker of shift.leaving) resort.staffRouter.clockOff(worker);
   // No paving yet: they are owed their shift at the next edit that lays some.
@@ -169,10 +183,67 @@ export function rosterNow(resort: SimState): {
   readonly recommended: Roster;
   readonly roster: Roster;
   readonly duty: Uint8Array;
+  readonly onShift: Uint8Array;
 } {
   const recommended = rosterFor(
     workplacesOf(resort.venues, resort.staff.crowd.network.posts, resort.lodgings),
   );
   const roster = rosterOf(resort.hiring, recommended);
-  return { recommended, roster, duty: onDuty(resort.staffPool, roster) };
+  const duty = onDuty(resort.staffPool, roster);
+  return { recommended, roster, duty, onShift: onShiftOf(duty, resort.staffOff) };
 }
+
+export function eveningOf(resort: SimState, clock: SimNow): Evening {
+  const effect = weatherEffect(clock.weather);
+  const { tickOfDay } = clock;
+  const lateOpen = resort.venues.some(
+    (venue, index) =>
+      venue.hours !== undefined &&
+      !isBroken(resort.breakdowns, index) &&
+      openNow(venue, effect, tickOfDay),
+  );
+  let swimmers = 0;
+  for (const venue of resort.siteVenues) {
+    if (venue.bathing !== true || !openNow(venue, effect, tickOfDay)) continue;
+    swimmers += resort.router.occupancyOf(venue.key)?.inside ?? 0;
+  }
+  return { tickOfDay, eventOn: resort.events.runs.length > 0, lateOpen, swimmers };
+}
+
+const midSpell = createStaffTask();
+
+function leavingTonight(resort: SimState, clock: SimNow): readonly number[] {
+  const leaving: number[] = [];
+  let evening: Evening | null = null;
+  for (let worker = 0; worker < resort.staffPool.count; worker++) {
+    if (resort.onShift[worker] !== 1) continue;
+    const role = resort.staffPool.role[worker]!;
+    evening ??= eveningOf(resort, clock);
+    if (!offForTheNight(role, evening)) continue;
+    if (finishesFirst(role) && resort.staffRouter.taskOf(worker, midSpell).working) continue;
+    leaving.push(worker);
+  }
+  return leaving;
+}
+
+// Once a frame. The way home is the one a worker taken off the roster walks, to the staff house
+// or the entrance; the way back in is an ordinary shift change.
+export function keepStaffHours(resort: SimState, clock: SimNow): void {
+  if (!isStaffNight(clock.tickOfDay)) {
+    if (!resort.staffOff.includes(1)) return;
+    resort.staffOff = new Uint8Array(resort.staffPool.count);
+    staffTheResort(resort);
+    return;
+  }
+  const leaving = leavingTonight(resort, clock);
+  if (leaving.length === 0) return;
+  const off = resort.staffOff.slice();
+  for (const worker of leaving) off[worker] = 1;
+  resort.staffOff = off;
+  resort.onShift = onShiftOf(resort.duty, off);
+  for (const worker of leaving) resort.staffRouter.clockOff(worker);
+}
+
+// Lifeguards gone for the night leave no water unwatched: it is shut to them until morning.
+export const offTonight = (resort: Pick<SimState, 'staffPool' | 'staffOff'>, role: StaffRole) =>
+  resort.staffPool.role.some((each, worker) => each === role && resort.staffOff[worker] === 1);

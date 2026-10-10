@@ -14,6 +14,8 @@ import { admitLaterWaves, runDay } from './arrivals';
 import { markNightOwls, refreshDj, refreshNightOut } from './nights';
 import { refreshKeen, runEvents } from './eventSteps';
 import { refreshMoment } from './photoSteps';
+import { keepStaffHours } from './staffing';
+import { sendToTheSunrise } from './sunrise';
 import { endSeason, seasonDueToEnd } from './seasonSteps';
 
 // The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
@@ -39,6 +41,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     // next.
     resort.staffRouter.tick(clock.ticks - tick + 1);
   }
+  keepStaffHours(resort, clock);
   // Once a frame, not once a tick: the inner loop is the router's, and a frame's sample is plenty.
   sampleFootfall(
     resort.footfall,
@@ -92,6 +95,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     hooks.hourly();
   }
   admitLaterWaves(resort, clock, ticks);
+  sendToTheSunrise(resort, clock);
   refreshDj(resort, clock);
   // A booked event cheers its own audience, so a show on the same stage does not cheer them twice.
   cheerTheAudience(resort.needs, resort.guests.present, {

@@ -4,7 +4,7 @@ import { HudReadout } from './HudReadout';
 import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { RatingControl } from './RatingControl';
-import { SpeedControl } from './SpeedControl';
+import { SpeedControl, type FastNights } from './SpeedControl';
 import { TimeOfDay } from './TimeOfDay';
 import { WeatherForecast } from './WeatherForecast';
 import { WindowDock } from './WindowDock';
@@ -25,6 +25,7 @@ export interface TopBarProps {
   readonly dayElement: RefObject<HTMLSpanElement | null>;
   readonly timeElement: RefObject<HTMLSpanElement | null>;
   readonly clock: ClockControls;
+  readonly fastNights: FastNights;
   readonly resort: ResortControls;
   readonly saves: SaveControls;
   readonly overlay: OverlayControls;
@@ -184,6 +185,7 @@ export function TopBar(props: TopBarProps) {
         <SpeedControl
           speed={clock.speed}
           onSpeedChange={clock.setSpeed}
+          fastNights={props.fastNights}
           open={menu === 'speed'}
           onOpenChange={opener('speed')}
           betweenSeasons={season !== null}

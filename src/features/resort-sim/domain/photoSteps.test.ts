@@ -6,6 +6,7 @@ import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
+import { isEarlyRiser } from '../../sim/domain/night';
 import { NEVER, PHOTO_GAP_TICKS, PHOTO_SECONDS } from '../../sim/domain/photos';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { stayCount } from '../../sim/domain/thoughts';
@@ -20,13 +21,13 @@ const shore = shoreFor(plan);
 const plot = { ...world, layout: world };
 const facts = plotFactsOf({ plan, shore, terrain: terrainFor(plan) }, world, new Map());
 
-const freshState = (): SimState =>
+const freshState = (population = 60): SimState =>
   createSimState({
     plan,
     plot,
     shore,
     facts,
-    population: 60,
+    population,
     away: false,
     guestVariants: 4,
     childVariant: 1,
@@ -65,7 +66,47 @@ function firstPhoto(state: SimState, person: number) {
   return null;
 }
 
+const DAWN = Math.round((6 / 24) * TICKS_PER_DAY);
+
+const sunriseNode = facts.network.nodes.findIndex(
+  (_, node) => facts.views.sunrise[tileOf(node)] === 1,
+);
+
+const freeAdult = (state: SimState, early: boolean): number => {
+  const { guests } = state;
+  for (let person = 0; person < guests.count; person++) {
+    const adult = guests.present[person] === 1 && guests.child[person] !== 1;
+    const rises = isEarlyRiser(guests.party[person]!);
+    if (adult && rises === early && state.router.isFree(person)) return person;
+  }
+  throw new Error('nobody to ask');
+};
+
+const photosAtDawn = (state: SimState, person: number): number => {
+  let taken = 0;
+  for (let tick = DAWN; tick < DAWN + 60; tick++) {
+    if (photoPause(state, person, sunriseNode, tick)) taken++;
+  }
+  return taken;
+};
+
 describe('photoPause', () => {
+  it('lets an early riser photograph the sunrise where it is in view, facing it', () => {
+    const state = freshState(200);
+    state.moment = momentAt(DAWN, 'clear', false);
+    expect(sunriseNode).toBeGreaterThanOrEqual(0);
+    const early = freeAdult(state, true);
+    expect(photosAtDawn(state, early)).toBe(1);
+    expect(stayCount(state.thoughts, early, 'sunrise')).toBe(1);
+    expect(state.today.photos?.spots[0]?.kind).toBe('sunrise');
+  });
+
+  it('stops nobody else for a sunrise before the day is light', () => {
+    const state = freshState(200);
+    state.moment = momentAt(DAWN, 'clear', false);
+    expect(photosAtDawn(state, freeAdult(state, false))).toBe(0);
+  });
+
   it('stands a guest on the shore at sunset for a picture of it, and remembers it', () => {
     const state = freshState();
     state.moment = momentAt(EVENING, 'clear', false);

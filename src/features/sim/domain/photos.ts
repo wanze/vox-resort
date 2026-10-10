@@ -12,6 +12,10 @@ export const PHOTO_FROM = 0.5;
 // The one dial: how many photos there are. Tuned on the reference resort (plans 107 and 109).
 export const PHOTO_CHANCE = 0.04;
 
+// Up early for it, a guest photographs the sunrise from wherever it is in view, where a passer-by
+// at that hour would need the whole sky; the three-hour gap keeps it to about one each.
+export const SUNRISE_KEEN = 0.5;
+
 // Crowd seconds: long enough to be seen raising the phone, short beside a sit of 20 to 90.
 export const PHOTO_SECONDS = 6;
 

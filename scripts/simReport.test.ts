@@ -29,12 +29,24 @@ import { planOfWorld, type SavedWorld } from '../src/features/resort-prep/domain
 import { createHeadlessGame, framesPerTickAt } from '../src/features/resort-sim/domain/headless';
 import type { SimNow } from '../src/features/resort-sim/domain/simNow';
 import { CHECK_IN_TICK, freeBedsOn } from '../src/features/sim/domain/checkIn';
+import { quietNightNow } from '../src/features/resort-sim/domain/quietNight';
+import { fastNightPace } from '../src/features/sim/domain/fastNight';
+import { isEarlyRiser } from '../src/features/sim/domain/night';
+import { NO_HOME } from '../src/features/guests/domain/homes';
 import { demandFor, type DemandLine } from '../src/features/sim/domain/demand';
 import { createLedger, netOf, OPENING_BALANCE } from '../src/features/sim/domain/ledger';
+import { FOULED_AT, PIECE } from '../src/features/sim/domain/litter';
+import { isBroken } from '../src/features/sim/domain/breakdowns';
+import { cleanliness, NEEDS_CLEANING } from '../src/features/sim/domain/upkeep';
 import { strongestNeed, type Needs } from '../src/features/sim/domain/needs';
 import type { Review } from '../src/features/sim/domain/reviews';
 import type { Router } from '../src/features/sim/domain/router';
-import { TICKS_PER_DAY, type SimSpeed } from '../src/features/sim/domain/simClock';
+import {
+  SIM_SPEEDS,
+  SPEED_DAY_SECONDS,
+  TICKS_PER_DAY,
+  type SimSpeed,
+} from '../src/features/sim/domain/simClock';
 import { wagesFor } from '../src/features/sim/domain/staff';
 import { maintenanceFor } from '../src/features/sim/domain/takings';
 import type { PhotoTally } from '../src/features/sim/domain/dayReport';
@@ -64,6 +76,9 @@ const SAVE = process.env.SIM_SAVE ?? '';
 // A generated plot moves with every model added to the catalogue; the reference resort only
 // moves when somebody edits it, so a report stays comparable across plans.
 const REFERENCE = !SAVE && process.env.SIM_PLOT === undefined && process.env.SIM_SEED === undefined;
+// Unset, nothing is said about the nights. `0` reports them as they run; `1` runs the quiet part
+// fast as the app's frame loop does, the walkers falling behind the clock, to see who is stranded.
+const NIGHTS = process.env.SIM_FAST_NIGHTS;
 // Rush caps the crowd's substeps, so guests there walk slower against the clock than at normal.
 const SPEED = (process.env.SIM_SPEED ?? 'normal') as SimSpeed;
 
@@ -310,6 +325,70 @@ function needDayLine(day: NeedDay): string {
   return `${levels.join(', ')}; ${Math.round(100 * of(day.dry))}% awake with one run dry`;
 }
 
+// Read as the staff come back, at the first wake-up and before the check-in: what the night left.
+const MORNING_LOOKS = new Set([5 * HOUR, 7 * HOUR, CHECK_IN_TICK - 1]);
+
+function morningLook(
+  litter: { readonly level: Float32Array },
+  upkeep: Parameters<typeof cleanliness>[0],
+  breakdowns: Parameters<typeof isBroken>[0],
+  guests: Guests,
+  venues: number,
+): string {
+  let pieces = 0;
+  let fouled = 0;
+  for (const level of litter.level) {
+    pieces += Math.round(level / PIECE);
+    if (level >= FOULED_AT) fouled++;
+  }
+  let dirty = 0;
+  let broken = 0;
+  for (let venue = 0; venue < venues; venue++) {
+    if (cleanliness(upkeep, venue) < NEEDS_CLEANING) dirty++;
+    if (isBroken(breakdowns, venue)) broken++;
+  }
+  return (
+    `litter ${pieces} pieces (${fouled} fouled tiles), ${dirty} venues dirty, ` +
+    `${broken} broken, ${unmadeCount(guests)} beds unmade`
+  );
+}
+
+const SUNSET_TICK = 21.5 * HOUR;
+const STAFF_BACK = 5 * HOUR;
+// The last ordinary waking: a guest with a bed who has not slept by then never got there.
+const ALL_UP = 9 * HOUR;
+
+const clockOf = (tick: number): string =>
+  `${String(Math.floor(tick / HOUR)).padStart(2, '0')}:${String(tick % HOUR).padStart(2, '0')}`;
+
+interface NightLog {
+  quietFrom: number;
+  quiet: number;
+  loud: number;
+  walkingAtFive: number;
+  readonly slept: Uint8Array;
+}
+
+const createNightLog = (people: number): NightLog => ({
+  quietFrom: -1,
+  quiet: 0,
+  loud: 0,
+  walkingAtFive: 0,
+  slept: new Uint8Array(people),
+});
+
+// The real seconds from sunset to the staff coming back, the quiet part at the fast nights' pace.
+function nightSeconds(log: NightLog): string {
+  return SIM_SPEEDS.filter((speed) => speed !== 'paused')
+    .map((speed) => {
+      const loud = (log.loud * SPEED_DAY_SECONDS[speed]) / TICKS_PER_DAY;
+      const quiet =
+        (log.quiet * SPEED_DAY_SECONDS[speed]) / fastNightPace(speed, true) / TICKS_PER_DAY;
+      return `${speed} ${Math.round(loud + quiet)} s`;
+    })
+    .join(', ');
+}
+
 // Reviews are kept newest first: those ahead of the newest seen are the ones written since.
 function newReviews(reviews: readonly Review[], seen: Review | undefined): readonly Review[] {
   const at = seen === undefined ? -1 : reviews.indexOf(seen);
@@ -329,7 +408,7 @@ it('reports a few days on a generated plot', () => {
     photos: PHOTOS,
   });
   const { state } = game;
-  const { guests, needs, router, venues } = state;
+  const { guests, needs, router, venues, litter } = state;
   const crowd = state.crowd.crowd;
   const { network } = crowd;
   state.ledger = createLedger('tycoon', OPENING_BALANCE.tycoon - buildCost);
@@ -368,9 +447,10 @@ it('reports a few days on a generated plot', () => {
   let sandPhotos = 0;
   const photoLine = (present: number): string => {
     const taken = photosToday?.taken ?? 0;
-    const sunsets = [...state.thoughtDay.values()]
-      .filter((tally) => tally.kind === 'sunset')
-      .reduce((sum, tally) => sum + tally.count, 0);
+    const heard = (kind: string) =>
+      [...state.thoughtDay.values()]
+        .filter((tally) => tally.kind === kind)
+        .reduce((sum, tally) => sum + tally.count, 0);
     const spots = photosToday?.spots ?? [];
     const top = spots
       .toSorted((a, b) => b.count - a.count)
@@ -378,11 +458,44 @@ it('reports a few days on a generated plot', () => {
       .map((spot) => `${spot.subject} ${spot.count}`);
     return (
       `  photos: ${taken} taken (${(taken / Math.max(1, present)).toFixed(2)} per guest), ` +
-      `sunsets ${sunsets}, on the sand ${sandPhotos}, spots ${spots.length}, ` +
+      `sunsets ${heard('sunset')}, sunrises ${heard('sunrise')}, on the sand ${sandPhotos}, spots ${spots.length}, ` +
       `top: ${top.join(', ') || 'none'}`
     );
   };
 
+  const mornings: string[] = [];
+  let night = createNightLog(population);
+  const nightLines: string[] = [];
+  const watchTheNight = (tick: number): void => {
+    const ofDay = tick % TICKS_PER_DAY;
+    if (ofDay === SUNSET_TICK) night = createNightLog(population);
+    for (let person = 0; person < population; person++) {
+      if (router.isAsleep(person)) night.slept[person] = 1;
+    }
+    const inNight = ofDay >= SUNSET_TICK || ofDay < STAFF_BACK;
+    if (inNight && quietNightNow(state, game.now)) {
+      if (night.quietFrom < 0) night.quietFrom = ofDay;
+      night.quiet++;
+    } else if (inNight) night.loud++;
+    if (ofDay === STAFF_BACK) {
+      for (let person = 0; person < population; person++) {
+        const bedded = guests.present[person] === 1 && guests.home[person] !== NO_HOME;
+        const early = isEarlyRiser(guests.party[person]!);
+        if (bedded && !early && !router.isAsleep(person)) night.walkingAtFive++;
+      }
+    }
+    if (ofDay !== ALL_UP) return;
+    let stranded = 0;
+    for (let person = 0; person < population; person++) {
+      const bedded = guests.present[person] === 1 && guests.home[person] !== NO_HOME;
+      if (bedded && night.slept[person] !== 1) stranded++;
+    }
+    const from = night.quietFrom < 0 ? 'never' : `from ${clockOf(night.quietFrom)}`;
+    nightLines.push(
+      `quiet ${from}, ${(night.quiet / HOUR).toFixed(1)} h; ${night.walkingAtFive} still up at 05:00, ` +
+        `${stranded} never slept; sunset to 05:00 takes ${nightSeconds(night)}`,
+    );
+  };
   const setOffAt = new Int32Array(population).fill(-1);
   const trips: number[] = [];
   let changedMind = 0;
@@ -410,6 +523,8 @@ it('reports a few days on a generated plot', () => {
           `  loudest thoughts: ${said.join(', ') || 'none'}`,
           `  demand: ${demandNow(guests, needs, router, venues)}`,
           `  needs: ${needDayLine(needDay)}; beds ${beds.taken}/${beds.total}`,
+          `  mornings: ${mornings.join('; ')}`,
+          ...(NIGHTS === undefined ? [] : [`  night: ${nightLines.join('; ')}`]),
           `  books: nights ${yesterday.night}, visits ${yesterday.visit}, wages ${yesterday.wages}, ` +
             `maintenance ${yesterday.maintenance}, net ${netOf(yesterday)}, ` +
             `balance ${balance - netOf(today)}`,
@@ -419,6 +534,8 @@ it('reports a few days on a generated plot', () => {
       );
     }
     photosToday = undefined;
+    mornings.length = 0;
+    nightLines.length = 0;
     sandPhotos = 0;
     trips.length = 0;
     changedMind = 0;
@@ -450,6 +567,15 @@ it('reports a few days on a generated plot', () => {
       setOffAt[person] = -1;
     }
 
+    const ofDay = tick % TICKS_PER_DAY;
+    if (NIGHTS !== undefined) watchTheNight(tick);
+    if (MORNING_LOOKS.has(ofDay)) {
+      const look = morningLook(litter, state.upkeep, state.breakdowns, guests, venues.length);
+      mornings.push(
+        `${String(Math.floor(ofDay / HOUR)).padStart(2, '0')}:${String(ofDay % HOUR).padStart(2, '0')} ${look}`,
+      );
+    }
+
     const hour = hourOf(tick);
     if (tick % HOUR !== 0 || hour < 9 || hour > 20) return;
     sampleNeeds(needDay, guests, needs, router);
@@ -466,11 +592,20 @@ it('reports a few days on a generated plot', () => {
   };
 
   // Through the last day's check-in, where its summary is printed.
-  game.play(DAYS * TICKS_PER_DAY + CHECK_IN_TICK, {
-    framesPerTick: framesPerTickAt(SPEED),
-    hooks: { morning, hourly: () => {}, heard: () => {} },
-    afterTick,
-  });
+  const end = DAYS * TICKS_PER_DAY + CHECK_IN_TICK;
+  const hooks = { morning, hourly: () => {}, heard: () => {} };
+  if (NIGHTS === '1') {
+    // Fewer frames to a quiet tick, as the app's clock runs it: the walking falls behind.
+    let frames = 0;
+    while (game.now.ticks < end) {
+      frames += framesPerTickAt(SPEED) / fastNightPace(SPEED, quietNightNow(state, game.now));
+      const now = Math.floor(frames);
+      frames -= now;
+      game.play(game.now.ticks + 1, { framesPerTick: now, hooks, afterTick });
+    }
+  } else {
+    game.play(end, { framesPerTick: framesPerTickAt(SPEED), hooks, afterTick });
+  }
   console.log(
     `Reviews, 1 to 5 stars: ${[1, 2, 3, 4, 5].map((each) => stars.filter((star) => star === each).length).join(' / ')}`,
   );

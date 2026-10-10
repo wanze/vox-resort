@@ -53,6 +53,8 @@ export interface ResortState {
   open: boolean;
   beds: { readonly total: number; readonly taken: number };
   hiring: Hiring;
+  // Per worker, gone home for the night: without it a load at night would clock them on again.
+  staffOff: Uint8Array;
   prices: Prices;
   readonly zones: Zones;
   readonly photos: Photos;
@@ -116,6 +118,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     open: state.open,
     beds: { ...state.beds },
     hiring: { ...state.hiring },
+    staffOff: state.staffOff.slice(),
     prices: { ...state.prices },
     zones: state.zones.zone.slice(),
     photos: snapshotPhotos(state.photos),
@@ -154,6 +157,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day 
   state.open = snapshot.open;
   state.beds = { ...snapshot.beds };
   state.hiring = { ...snapshot.hiring };
+  state.staffOff = snapshot.staffOff?.slice() ?? new Uint8Array(state.staffOff.length);
   state.prices = { ...snapshot.prices };
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;

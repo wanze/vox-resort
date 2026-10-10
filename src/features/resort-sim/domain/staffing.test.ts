@@ -8,12 +8,16 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { AUTO_HIRING, rosterFor, workplacesOf } from '../../sim/domain/staff';
 import { NO_ZONE, paintZone } from '../../sim/domain/zones';
+import { takeOffPlot } from '../../crowd/domain/crowd';
+import type { SimNow } from './simNow';
 import { plotFactsOf } from './plotFacts';
 import { createSimState, type SimState } from './simState';
 import {
   beachTilesFor,
+  keepStaffHours,
   knowPaving,
   litterWindowOf,
+  offTonight,
   pavingIndexOf,
   rezone,
   rosterNow,
@@ -125,5 +129,79 @@ describe('staffTheResort', () => {
     staffTheResort(state);
     expect(onDuty()).toBeGreaterThan(0);
     expect(onPlot(state)).toBe(onDuty());
+  });
+});
+
+const HOUR = 60;
+
+const at = (tickOfDay: number): SimNow => ({
+  ticks: 1440 + tickOfDay,
+  day: 1,
+  tickOfDay,
+  weather: 'clear',
+  forcedWeather: null,
+});
+
+const count = (column: Uint8Array): number => column.reduce((sum, each) => sum + each, 0);
+
+const ofRole = (state: SimState, role: string, column: Uint8Array): number =>
+  state.staffPool.role.filter((each, worker) => each === role && column[worker] === 1).length;
+
+const walkedHome = (state: SimState): void => {
+  const workers = state.staff.crowd;
+  for (let worker = 0; worker < state.staffPool.count; worker++) {
+    if (state.staffOff[worker] !== 1) continue;
+    takeOffPlot(workers, worker, workers.x[worker]!, workers.y[worker]!, workers.z[worker]!);
+  }
+};
+
+describe('keepStaffHours', () => {
+  it('keeps everybody on through the day', () => {
+    const state = freshState();
+    keepStaffHours(state, at(20 * HOUR));
+    expect(count(state.staffOff)).toBe(0);
+    expect(state.onShift).toEqual(state.duty);
+  });
+
+  // The reference resort's night club keeps its hours until two.
+  it('lets the lifeguards go first while the club keeps the rest', () => {
+    const state = freshState();
+    keepStaffHours(state, at(23 * HOUR));
+    expect(ofRole(state, 'lifeguard', state.staffOff)).toBe(state.roster.lifeguard);
+    expect(ofRole(state, 'cleaner', state.staffOff)).toBe(0);
+    expect(offTonight(state, 'lifeguard')).toBe(true);
+    expect(offTonight(state, 'cleaner')).toBe(false);
+    keepStaffHours(state, at(3 * HOUR));
+    expect(count(state.onShift)).toBe(0);
+    expect(count(state.duty), 'the roster is the same').toBeGreaterThan(0);
+  });
+
+  it('walks them home as a worker taken off the roster walks', () => {
+    const state = freshState();
+    keepStaffHours(state, at(3 * HOUR));
+    const lifeguard = state.staffPool.role.indexOf('lifeguard');
+    expect(state.staffRouter.taskOf(lifeguard).kind).toBe('home');
+  });
+
+  it('keeps them home through an edit and brings them back at five', () => {
+    const state = freshState();
+    keepStaffHours(state, at(3 * HOUR));
+    walkedHome(state);
+    expect(onPlot(state)).toBe(0);
+    staffTheResort(state);
+    expect(onPlot(state)).toBe(0);
+    keepStaffHours(state, at(4 * HOUR + 59));
+    expect(onPlot(state)).toBe(0);
+    keepStaffHours(state, at(5 * HOUR));
+    expect(count(state.staffOff)).toBe(0);
+    expect(onPlot(state)).toBe(count(state.duty));
+  });
+
+  it('keeps the crew while an event is on or due', () => {
+    const state = freshState();
+    state.events.runs = [{} as (typeof state.events.runs)[number]];
+    keepStaffHours(state, at(3 * HOUR));
+    expect(ofRole(state, 'cleaner', state.onShift)).toBe(state.roster.cleaner);
+    expect(ofRole(state, 'lifeguard', state.onShift)).toBe(0);
   });
 });

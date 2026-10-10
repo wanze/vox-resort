@@ -8,8 +8,10 @@ import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { sceneryFieldFor, sceneryItemsOf, SCENERY_REACH } from './scenery';
 import { TICKS_PER_DAY } from './simClock';
 import { venuesOn } from './venues';
+import { SUNRISE_HEADING } from './outlook';
 import {
   headingFor,
+  isWet,
   momentAt,
   scenicAt,
   subjectAt,
@@ -189,7 +191,23 @@ describe('viewsFor', () => {
 
 describe('momentAt', () => {
   it('is daylight at noon with no golden hour', () => {
-    expect(NOON).toEqual({ wet: false, daylight: true, golden: 0, fireworks: false });
+    expect(NOON).toEqual({ wet: false, daylight: true, golden: 0, sunrise: 0, fireworks: false });
+  });
+
+  it('glows from half past five, brightest at sunrise and gone by half past seven', () => {
+    expect(momentAt(tickAt(5.4), 'clear', false).sunrise).toBe(0);
+    expect(momentAt(tickAt(5.75), 'clear', false).sunrise).toBeCloseTo(0.5);
+    expect(momentAt(tickAt(6), 'clear', false).sunrise).toBe(1);
+    expect(momentAt(tickAt(6.75), 'clear', false).sunrise).toBeCloseTo(0.5);
+    expect(momentAt(tickAt(7.5), 'clear', false).sunrise).toBe(0);
+    expect(momentAt(tickAt(6), 'storm', false).sunrise).toBe(0);
+    expect(momentAt(tickAt(6), 'clear', false).daylight).toBe(false);
+  });
+
+  it('calls rain and storms wet, and nothing else', () => {
+    expect(isWet('rain')).toBe(true);
+    expect(isWet('storm')).toBe(true);
+    expect(isWet('clear')).toBe(false);
   });
 
   it('is golden at nine on a clear evening, but not in the rain', () => {
@@ -215,6 +233,11 @@ describe('scenicAt', () => {
     expect(scenicAt(views, shore, momentAt(tickAt(23), 'clear', true), nobodyShowing)).toBeCloseTo(
       0.8,
     );
+  });
+
+  it('gives a clear view of the sunrise its golden share before anybody is out by day', () => {
+    const dawn = momentAt(tickAt(6), 'clear', false);
+    expect(scenicAt(views, shore, dawn, nobodyShowing)).toBeCloseTo(0.5);
   });
 
   it('gives nothing in the rain', () => {
@@ -255,6 +278,40 @@ describe('subjectAt', () => {
     expect(subjectAt(views, at(10, 14), evening, nobodyShowing, [])).toMatchObject({
       kind: 'sunset',
       key: 'sunset@1,1',
+    });
+  });
+
+  it('prefers the sunrise to a sight at dawn, facing the rising sun', () => {
+    const dawn = momentAt(tickAt(6.2), 'clear', false);
+    const subject = subjectAt(views, at(10, 14), dawn, nobodyShowing, []);
+    expect(subject).toMatchObject({ kind: 'sunrise', key: 'sunrise@1,1', label: 'Sunrise' });
+    expect(headingFor(views, subject, at(10, 14), 84, 116, 0)).toBe(SUNRISE_HEADING);
+  });
+
+  it('keeps the sight at dawn where the sunrise is hidden', () => {
+    const placements = [
+      placed('fountain', 10, 12),
+      ...Array.from({ length: 6 }, (_, row) => placed('wall', 12, 10 + row)),
+    ];
+    const strengthOf = (id: string) => STRENGTHS[id] ?? 0;
+    const walled = viewsFor({
+      tilesX: SIZE,
+      tilesZ: SIZE,
+      scenery: sceneryFieldFor(sceneryItemsOf(placements, strengthOf), SIZE, SIZE),
+      placements,
+      standing: placements,
+      strengthOf,
+      labelOf: (id) => id,
+      topOf: (id) => (id === 'wall' ? 64 : 4),
+      levelOf: () => 0,
+      isWater: seaFrom15,
+      isSea: seaFrom15,
+      venues: [],
+    });
+    const dawn = momentAt(tickAt(6.2), 'clear', false);
+    expect(walled.sunrise[at(10, 12)]).toBe(0);
+    expect(subjectAt(walled, at(10, 12), dawn, nobodyShowing, [])).toMatchObject({
+      kind: 'sight',
     });
   });
 

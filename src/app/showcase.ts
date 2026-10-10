@@ -102,6 +102,7 @@ import {
   litterWindowOf,
   pavingIndexOf,
   rezone,
+  offTonight,
   rosterNow,
   staffTheResort,
   type TileAt,
@@ -121,6 +122,8 @@ import { stepSim } from '../features/resort-sim/domain/stepSim';
 import { openSeason } from '../features/resort-sim/domain/seasonSteps';
 import { runSeasonAction, type SeasonAction } from '../features/resort-sim/domain/debugSteps';
 import { turboPace } from '../features/debug/domain/turbo';
+import { fastNightPace, mayRunFast } from '../features/sim/domain/fastNight';
+import { quietNightNow } from '../features/resort-sim/domain/quietNight';
 import {
   effectOn,
   inBreak,
@@ -450,6 +453,8 @@ export interface Showcase {
   openSeason(): void;
   // Debug mode's, and never saved: a turbo speed in a save would not load in a build without it.
   setTurbo(on: boolean): void;
+  // A player's preference, not the resort's: a pace on the frame, so nothing of it is saved.
+  setFastNights(on: boolean): void;
   // True when it opened the next season from a break, whose speed the HUD then resumes.
   runSeasonAction(action: SeasonAction): boolean;
   // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
@@ -1715,6 +1720,7 @@ function unwatchedOn(
   tickOfDay: number,
 ): ReadonlySet<string> {
   const { staffRouter, venues } = resort;
+  if (offTonight(resort, 'lifeguard')) return new Set();
   const { network } = resort.crowd.crowd;
   const beach = beachVenueFor(network);
   const water = beach ? [...venues, beach] : venues;
@@ -2343,6 +2349,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   let drift = driftFor(options, bench, handle);
   let turbo = false;
+  let fastNights = !bench;
+  let nightFast = false;
   const fixedStep = fixedStepOf(bench);
   const timer = createFrameTimer(bench !== null);
   handle.controls.enabled = drift === null;
@@ -2985,6 +2993,25 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       recorder?.recordGpu(duration);
     });
   };
+  const nightPace = (between: boolean): number => {
+    const gate = {
+      on: fastNights,
+      speed: clock.speed,
+      between,
+      welcome: drift !== null,
+      following: guestView.active,
+      photo: photo.active,
+      building: armedTool !== null,
+      inspecting: selection.target() !== null,
+    };
+    const quiet = mayRunFast(gate) && quietNightNow(current(), clock);
+    if (quiet !== nightFast) {
+      nightFast = quiet;
+      hud.publish({ fastNight: quiet });
+    }
+    return fastNightPace(clock.speed, quiet);
+  };
+
   handle.renderer.setAnimationLoop((timeMs: number) => {
     if (!running) return;
     const frameStarted = performance.now();
@@ -3002,9 +3029,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
     // of two runs, and a running bench would tick a different number of times.
     const step = fixedStep ?? elapsed;
-    const pace = showPaceOf(current(), fireworks, clock) * turboPace(clock.speed, turbo);
     // A break stops the simulated clock at any speed; the real seconds still flash a storm.
     const between = inBreak(current().season);
+    // The larger rather than both: turbo already takes every frame's ticks, and a quiet night
+    // inside it is no faster.
+    const quick = Math.max(turboPace(clock.speed, turbo), nightPace(between));
+    const pace = showPaceOf(current(), fireworks, clock) * quick;
     const ticks = between ? clock.advance(step, 0) : stepClock(clock, drift !== null, step, pace);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
@@ -3131,6 +3161,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Refused under a bench, as camera modes are: a run must tick as it always has.
     setTurbo(on) {
       turbo = on && !bench;
+    },
+    setFastNights(on) {
+      fastNights = on && !bench;
     },
     runSeasonAction(action) {
       const resort = current();

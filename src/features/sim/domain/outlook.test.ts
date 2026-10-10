@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Placement } from '../../layout/domain/resortLayout';
-import { outlookFor, type OutlookParts } from './outlook';
+import { outlookFor, SUNRISE_HEADING, type OutlookParts } from './outlook';
 
 // Wide enough for the diagonals from the plateau to reach the sea inside the plot.
 const TILES_X = 80;
@@ -88,5 +88,28 @@ describe('outlookFor', () => {
     const outlook = outlookOn([]);
     expect(outlook.downhill[at(40, 22)]).toBeCloseTo(0);
     expect(Number.isNaN(outlook.downhill[at(40, 2)]!)).toBe(true);
+  });
+
+  it('faces the sunrise along the shore, mostly at +x and a little towards the sea', () => {
+    expect(Math.sin(SUNRISE_HEADING)).toBeGreaterThan(0.9);
+    expect(Math.cos(SUNRISE_HEADING)).toBeGreaterThan(0);
+  });
+
+  it('sees the sunrise across open ground and the sea', () => {
+    const outlook = outlookOn([]);
+    expect(outlook.sunrise[at(40, 30)]).toBe(1);
+    expect(outlook.sunrise[at(10, 5)]).toBe(1);
+  });
+
+  it('loses a third of the sunrise to a palm in line, and all of it behind a grove', () => {
+    expect(outlookOn([tall(46, 32)]).sunrise[at(40, 30)]).toBeCloseTo(2 / 3);
+    const grove = Array.from({ length: 16 }, (_, row) => tall(44, 25 + row));
+    expect(outlookOn(grove).sunrise[at(40, 30)]).toBe(0);
+  });
+
+  it('sees the sunrise over the grove from the plateau above it', () => {
+    const grove = outlookOn(Array.from({ length: 7 }, (_, row) => tall(48, 29 + row)));
+    expect(grove.sunrise[at(40, 31)]).toBe(0);
+    expect(grove.sunrise[at(20, 19)]).toBe(1);
   });
 });

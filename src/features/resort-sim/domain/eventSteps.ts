@@ -42,7 +42,7 @@ export const NO_HOSTED: readonly { readonly venue: number; readonly until: numbe
 // 13 because it opens on three clear days; 10 opened day 0, and so every bench run, on rain.
 export const WEATHER_SEED = 13;
 
-export const beachIndexOf = (resort: SimState): number =>
+export const beachIndexOf = (resort: Pick<SimState, 'siteVenues' | 'venues'>): number =>
   resort.siteVenues.length > resort.venues.length ? resort.venues.length : -1;
 
 // Today's weather is the clock's, which may be pinned; a pinned weather holds every day ahead too.

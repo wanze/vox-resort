@@ -93,6 +93,7 @@ function gameFixture(): GameSnapshot {
     open: true,
     beds: { total: 0, taken: 0 },
     hiring: AUTO_HIRING,
+    staffOff: new Uint8Array(employed.count),
     prices: {},
     zones: createZones(4, 3),
     photos: createPhotos(POPULATION, network.nodes.length),
@@ -154,6 +155,16 @@ describe('gameSnapshotSchema', () => {
     const game = gameFixture();
     const hired = { ...game, resort: { ...game.resort, hiring: { ...AUTO_HIRING, cleaner: 3 } } };
     expect(gameSnapshotSchema.safeParse(hired).success).toBe(true);
+  });
+
+  it('takes the staff off for the night, or none from an older save, and refuses a short column', () => {
+    const game = gameFixture();
+    const { staffOff, ...older } = game.resort;
+    expect(gameSnapshotSchema.safeParse({ ...game, resort: older }).success).toBe(true);
+    const off = { ...game, resort: { ...game.resort, staffOff: staffOff!.map(() => 1) } };
+    expect(gameSnapshotSchema.safeParse(off).success).toBe(true);
+    const short = { ...game, resort: { ...game.resort, staffOff: staffOff!.slice(1) } };
+    expect(gameSnapshotSchema.safeParse(short).success).toBe(false);
   });
 
   it('refuses a save with a part missing', () => {

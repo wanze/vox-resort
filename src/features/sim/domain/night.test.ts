@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bedtimeOf, isBedtime, occupiedShare } from './night';
+import { bedtimeOf, EARLY_WAKE_FROM, isBedtime, isEarlyRiser, occupiedShare } from './night';
 
 const HOUR = 60;
 const PARTIES = Array.from({ length: 50 }, (_, party) => party);
@@ -8,12 +8,23 @@ const wraps = (party: number): boolean => bedtimeOf(party).sleepAt > bedtimeOf(p
 
 describe('bedtimeOf', () => {
   it('puts every bedtime between seven and half past nine, and every waking between seven and nine', () => {
-    for (const party of PARTIES) {
+    for (const party of PARTIES.filter((each) => !isEarlyRiser(each))) {
       const { sleepAt, wakeAt } = bedtimeOf(party);
       expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(19 * HOUR);
       expect(sleepAt, `party ${party}`).toBeLessThan(21.5 * HOUR);
       expect(wakeAt, `party ${party}`).toBeGreaterThanOrEqual(7 * HOUR);
       expect(wakeAt, `party ${party}`).toBeLessThan(9 * HOUR);
+    }
+  });
+
+  it('wakes an early riser between five and half past, an hour before the sun', () => {
+    const early = PARTIES.filter(isEarlyRiser);
+    expect(early.length).toBeGreaterThan(0);
+    for (const party of early) {
+      const { sleepAt, wakeAt } = bedtimeOf(party);
+      expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(19 * HOUR);
+      expect(wakeAt, `party ${party}`).toBeGreaterThanOrEqual(EARLY_WAKE_FROM);
+      expect(wakeAt, `party ${party}`).toBeLessThan(5.5 * HOUR);
     }
   });
 
@@ -25,6 +36,16 @@ describe('bedtimeOf', () => {
     const distinct = new Set(PARTIES.map((party) => bedtimeOf(party).sleepAt));
     expect(distinct.size).toBeGreaterThanOrEqual(3);
     expect(PARTIES.every(wraps)).toBe(true);
+  });
+});
+
+describe('isEarlyRiser', () => {
+  it('picks about one party in ten, the same ones every time', () => {
+    const parties = Array.from({ length: 2000 }, (_, party) => party);
+    const share = parties.filter(isEarlyRiser).length / parties.length;
+    expect(share).toBeGreaterThan(0.08);
+    expect(share).toBeLessThan(0.12);
+    expect(parties.filter(isEarlyRiser)).toEqual(parties.filter(isEarlyRiser));
   });
 });
 

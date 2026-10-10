@@ -29,6 +29,7 @@ import { createZones, paintZone, zoneAt } from './zones';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 30 }];
 const VENUES = [{ key: 'bar#0' }, { key: 'pool#0' }];
+const STAFF = 6;
 
 function stateFor(seed: number): ResortState {
   const guests = createGuests({ count: 40, homes: HOMES, variants: 4, childVariant: 3, seed });
@@ -57,6 +58,7 @@ function stateFor(seed: number): ResortState {
     open: true,
     beds: { total: 30, taken: 0 },
     hiring: AUTO_HIRING,
+    staffOff: new Uint8Array(STAFF),
     prices: {},
     zones: createZones(6, 5),
     photos: createPhotos(40, 9),
@@ -156,6 +158,24 @@ describe('snapshotResort', () => {
     expect(fresh.hiring).toEqual({ ...AUTO_HIRING, cleaner: 3 });
   });
 
+  it('keeps the staff gone home for the night through a save', () => {
+    const state = played();
+    state.staffOff = Uint8Array.of(0, 1, 1, 0, 0, 1);
+    const fresh = stateFor(9);
+    restoreResort(fresh, snapshotResort(state));
+    expect([...fresh.staffOff]).toEqual([0, 1, 1, 0, 0, 1]);
+  });
+
+  it('has every worker on from a save before staff went home at night', () => {
+    const state = played();
+    state.staffOff = Uint8Array.of(0, 1, 1, 0, 0, 1);
+    const { staffOff: _off, ...older } = snapshotResort(state);
+    const fresh = stateFor(9);
+    fresh.staffOff[2] = 1;
+    restoreResort(fresh, resortSnapshotSchema.parse(older));
+    expect([...fresh.staffOff]).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
   it('keeps every role on Auto through a save', () => {
     const fresh = stateFor(9);
     fresh.hiring = hire(AUTO_HIRING, 'mechanic', 2);
@@ -231,6 +251,19 @@ describe('snapshotResort', () => {
     expect(fresh.photos.heat[2]).toBe(1);
     expect(fresh.today.photos).toEqual(state.today.photos);
     expect(fresh.history[0]!.photos).toEqual(state.today.photos);
+  });
+
+  it('keeps a sunrise through a save beside the kinds an older save has', () => {
+    const state = played();
+    const shot = { subject: 'Sunrise', x: 8, y: 2, z: 9, heading: 1, minute: 365 };
+    state.today = countPhoto(state.today, { ...shot, key: 'sunrise@1,2', kind: 'sunrise' });
+    state.today = countPhoto(state.today, { ...shot, key: 'sunset@1,2', kind: 'sunset' });
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(snapshotResort(state)));
+    expect(fresh.today.photos!.spots.map((spot) => spot.kind).toSorted()).toEqual([
+      'sunrise',
+      'sunset',
+    ]);
   });
 
   it("keeps a photo's framing through a save, and reads a spot saved without one", () => {

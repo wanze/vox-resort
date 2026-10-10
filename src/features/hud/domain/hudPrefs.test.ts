@@ -15,6 +15,7 @@ describe('parsePrefs', () => {
       staff: true,
       signs: false,
       singleKeys: false,
+      fastNights: false,
     };
     expect(parsePrefs(JSON.parse(JSON.stringify(prefs)))).toEqual(prefs);
   });
@@ -48,5 +49,11 @@ describe('parsePrefs', () => {
     );
     expect(parsePrefs({ muted: [], singleKeys: 'off' }).singleKeys).toBe(true);
     expect(parsePrefs({ muted: [], singleKeys: false }).singleKeys).toBe(false);
+  });
+
+  it('runs the nights fast unless that was turned off, as in a store from before it', () => {
+    expect(parsePrefs({ muted: [], markers: true, singleKeys: true }).fastNights).toBe(true);
+    expect(parsePrefs({ muted: [], fastNights: 'no' }).fastNights).toBe(true);
+    expect(parsePrefs({ muted: [], fastNights: false }).fastNights).toBe(false);
   });
 });

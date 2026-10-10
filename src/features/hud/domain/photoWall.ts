@@ -3,6 +3,7 @@ import type { PhotoKind } from '../../sim/domain/views';
 
 // The rarest and most striking first: a day of sea should not bury its one sunset.
 export const WALL_KINDS: readonly PhotoKind[] = [
+  'sunrise',
   'sunset',
   'show',
   'fireworks',

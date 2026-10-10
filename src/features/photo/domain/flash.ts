@@ -1,12 +1,13 @@
-import { SUNSET_TIME } from '../../lighting/domain/dayNight';
+import { SUNRISE_TIME, SUNSET_TIME } from '../../lighting/domain/dayNight';
 import type { PhotoPixels } from './photoPixels';
 
 const MINUTES_PER_DAY = 1440;
 
 const SUNSET = SUNSET_TIME * MINUTES_PER_DAY;
 
-// The hour the first walkers are out (views.ts), when a phone stops needing one.
-const DAWN = 7 * 60;
+// The early risers are out before the sun, so the flash fades with the sunrise, as it rose with
+// the sunset, rather than with the first walkers at seven.
+const DAWN = SUNRISE_TIME * MINUTES_PER_DAY;
 
 const RAMP = 20;
 

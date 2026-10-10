@@ -89,6 +89,7 @@ import type { PlotFacts } from './plotFacts';
 import { litterWindowOf, rezone } from './staffing';
 import { hear, reviewOfParty, stepLitterAt, visitMade } from './visits';
 import { isOutTonight } from './nights';
+import { dawnStayOf } from './sunrise';
 
 export interface CrowdHolder {
   readonly crowd: Crowd;
@@ -108,8 +109,13 @@ export interface SimState {
   prices: Prices;
   recommended: Roster;
   roster: Roster;
-  // Read late by the staff router, so an edit swaps it rather than writing into it.
+  // Who is hired to work; the HUD counts it, and it does not change at night.
   duty: Uint8Array;
+  // Per worker, gone home for the night; cleared at STAFF_BACK_AT, and saved.
+  staffOff: Uint8Array;
+  // The duty less anybody off for the night. Read late by the staff router, so it is swapped
+  // rather than written into.
+  onShift: Uint8Array;
   // Per tile of the plan, so it survives every edit without being carried; never replaced.
   readonly zones: Zones;
   // Null on a plot that owns all of itself; bought into in place, and saved from here.
@@ -420,7 +426,8 @@ export function createSimState(parts: SimParts): SimState {
     onNightOver: (party) => resort.homeEarly.add(party),
     eventStay: (person, venue) => {
       const party = guests.party[person]!;
-      return resort.invited.venue[party] === venue ? resort.invited.end[party]! : -1;
+      if (resort.invited.venue[party] === venue) return resort.invited.end[party]!;
+      return dawnStayOf(resort, party, venue, clock.ticks());
     },
     onWoke: (person) => {
       const party = guests.party[person]!;
@@ -478,7 +485,7 @@ export function createSimState(parts: SimParts): SimState {
     crowd: () => resort.staff.crowd,
     weather: clock.weather,
     tickOfDay: clock.tickOfDay,
-    duty: () => resort.duty,
+    duty: () => resort.onShift,
     litter: () => resort.litter,
     litterWindow: () => litterWindowOf(resort),
     // Asked only when a show or a watch is picked, so the lookup by key costs nothing per tick.
@@ -525,6 +532,8 @@ export function createSimState(parts: SimParts): SimState {
     recommended,
     roster,
     duty,
+    staffOff: new Uint8Array(employed.count),
+    onShift: duty,
     zones: createZones(plan.tilesX, plan.tilesZ),
     rights: liveRightsOf(plan),
     zoneOf: new Int8Array(employed.count).fill(NO_ZONE),

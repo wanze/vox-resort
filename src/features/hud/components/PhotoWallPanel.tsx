@@ -13,6 +13,7 @@ export interface PhotoWallPanelProps {
 }
 
 const GROUP_TITLES: Readonly<Record<PhotoKind, string>> = {
+  sunrise: 'Sunrises',
   sunset: 'Sunsets',
   show: 'Shows',
   fireworks: 'Fireworks',

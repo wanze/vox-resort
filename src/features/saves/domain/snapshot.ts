@@ -97,7 +97,11 @@ function misfitsOf(game: GameShape): readonly string[] {
     ...misfit(crowdPerBody(game.crowd), population, 'a guest body column'),
     ...misfit(game.events ? [game.events.glow] : [], population, 'the event glow'),
     ...misfit(
-      [...staffPerWorker(game.staffRouter), ...crowdPerBody(game.staff)],
+      [
+        ...staffPerWorker(game.staffRouter),
+        ...crowdPerBody(game.staff),
+        ...(game.resort.staffOff ? [game.resort.staffOff] : []),
+      ],
       staffCount,
       'a staff column',
     ),

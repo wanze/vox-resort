@@ -58,7 +58,7 @@ const SUN_HIGH = 0xfff4e0;
 const AMBIENT_NIGHT = 0x2b3a5c;
 const AMBIENT_DAY = 0xc3d9f5;
 
-const SUNRISE_TIME = 6 / 24;
+export const SUNRISE_TIME = 6 / 24;
 
 // Late on purpose, read with BEDTIME_HOUR in sim/domain/night.ts: parties walk home in evening light.
 export const SUNSET_TIME = 21.5 / 24;

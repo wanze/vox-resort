@@ -9,6 +9,7 @@ import {
   outUntil,
   planNightsOut,
 } from './nightOut';
+import { isEarlyRiser } from './night';
 import { TICKS_PER_DAY } from './simClock';
 
 const HOUR = 60;
@@ -21,13 +22,17 @@ describe('goesOut', () => {
     }
   });
 
-  it('sends out about its share of each kind over many nights', () => {
+  it('sends out about its share of each kind over many nights, early risers aside', () => {
+    const parties = Array.from({ length: 100 }, (_, party) => party).filter(
+      (party) => !isEarlyRiser(party),
+    );
     for (const kind of KINDS) {
       let out = 0;
-      for (let party = 0; party < 100; party++) {
+      for (const party of parties) {
         for (let day = 0; day < 100; day++) if (goesOut(party, day, kind, 0)) out++;
       }
-      expect(Math.abs(out / 10_000 - NIGHT_OUT_SHARE[kind]), kind).toBeLessThan(0.03);
+      const share = out / (parties.length * 100);
+      expect(Math.abs(share - NIGHT_OUT_SHARE[kind]), kind).toBeLessThan(0.03);
     }
   });
 
@@ -57,6 +62,16 @@ describe('lateBedtimeOf', () => {
         expect(until).toBeLessThan((day + 1) * TICKS_PER_DAY + 1.5 * HOUR);
         expect(until % TICKS_PER_DAY).toBe(bedtime);
       }
+    }
+  });
+});
+
+describe('goesOut, early risers', () => {
+  it('never takes a party up for the sunrise out to the club', () => {
+    const early = Array.from({ length: 400 }, (_, party) => party).filter(isEarlyRiser);
+    expect(early.length).toBeGreaterThan(0);
+    for (const party of early) {
+      for (let day = 0; day < 7; day++) expect(goesOut(party, day, 'friends', 0)).toBe(false);
     }
   });
 });

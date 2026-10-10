@@ -38,7 +38,7 @@ describe('photoWallOf', () => {
     expect(keysOf(wall)).toEqual(['s8', 's7', 's6', 's5']);
   });
 
-  it('groups by kind, sunsets first and views last, and skips a kind with none', () => {
+  it('groups by kind, sunrises and sunsets first and views last, and skips a kind with none', () => {
     const wall = photoWallOf(
       {
         taken: 6,
@@ -48,13 +48,20 @@ describe('photoWallOf', () => {
           spot('sunset-a', 1, 'sunset'),
           spot('sea-b', 3, 'sea'),
           spot('show-a', 1, 'show'),
+          spot('sunrise-a', 1, 'sunrise'),
         ],
       },
       [],
     );
-    expect(wall.today.map((group) => group.kind)).toEqual(['sunset', 'show', 'sea', 'view']);
-    expect(keysOf(wall)).toEqual(['sunset-a', 'show-a', 'sea-a', 'sea-b', 'view-a']);
-    expect(WALL_KINDS).toHaveLength(7);
+    expect(wall.today.map((group) => group.kind)).toEqual([
+      'sunrise',
+      'sunset',
+      'show',
+      'sea',
+      'view',
+    ]);
+    expect(keysOf(wall)).toEqual(['sunrise-a', 'sunset-a', 'show-a', 'sea-a', 'sea-b', 'view-a']);
+    expect(WALL_KINDS).toHaveLength(8);
   });
 
   it("adds yesterday's from the last report after today's, as cards of their own", () => {

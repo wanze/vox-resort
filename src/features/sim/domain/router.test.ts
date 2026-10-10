@@ -3019,7 +3019,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(98)",
+        "claims": "Array(106)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3082,7 +3082,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(59)",
+        "claims": "Array(51)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3140,10 +3140,10 @@ describe('on the reference resort', () => {
         "working": "Uint8Array(40)",
       }
     `);
-    expect(digestOf(a.router)).toMatchInlineSnapshot(`"a6d086bccd70e319"`);
-    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"0c2a81e02ec0efaa"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"06291d0402664b35"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"70d85af5fef81fc3"`);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"622da8396e59ae63"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"07ef137365bd9c90"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"912a4e2e0d5c56ac"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"7a177ec33652f372"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {
@@ -3299,10 +3299,10 @@ describe('on the reference resort', () => {
 
     expect(total, 'a whole day and nobody went anywhere').toBeGreaterThan(0);
 
-    // The gym drains energy, so it is the venue at the edge: both go unvisited on the reference
-    // resort. A saved key is `id@x,z`, a generated one `id#n`.
+    // The gym drains energy, so it is the venue at the edge: one of the two goes unvisited on the
+    // reference resort. A saved key is `id@x,z`, a generated one `id#n`.
     const quiet = [...new Set(share.ignored.map((key) => key.split(/[#@]/)[0]!))];
-    expect(quiet).toEqual(['gym-pavilion-b', 'gym-pavilion']);
+    expect(quiet).toEqual(['gym-pavilion-b']);
 
     // The beach takes 0.65 of the visits for energy on the reference resort; the bound guards
     // against one venue taking a need over.

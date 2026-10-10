@@ -9,7 +9,8 @@ import { countArrivals, startDay } from '../../sim/domain/dayReport';
 import { createHappiness } from '../../sim/domain/happiness';
 import { createLedger } from '../../sim/domain/ledger';
 import { lodgingsOn } from '../../sim/domain/lodgings';
-import { ratingFor } from '../../sim/domain/rating';
+import { EMPTY_STARS, ratingFor } from '../../sim/domain/rating';
+import { firstSeason, startTally } from '../../sim/domain/season';
 import { wagesFor } from '../../sim/domain/staff';
 import { maintenanceFor } from '../../sim/domain/takings';
 import { createDay } from '../../sim/domain/thoughts';
@@ -38,6 +39,8 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     lodgings: [lodging!],
     scenery: fullScenery,
     prices: {},
+    season: null,
+    seasonTally: startTally(),
     happiness: createHappiness(guests.count),
     upkeep: createUpkeep(venues.length),
     venues,
@@ -126,5 +129,33 @@ describe('closeTheDay', () => {
     const state = stateOf({ venues: [], today: startDay(3) });
     closeTheDay(state, 4);
     expect(state.history[0]!.welcome).toBeUndefined();
+  });
+});
+
+const emptied = (state: DayCloseState): DayCloseState => {
+  state.guests.present.fill(0);
+  return state;
+};
+
+describe('a season', () => {
+  const good = { stars: 4.4, happiness: 0.9, housed: 1, cleanliness: 1 };
+
+  it('keeps the stars of an empty resort on a season’s first morning, and only then', () => {
+    const first = emptied(stateOf({ season: firstSeason(5), rating: good }));
+    rateTheDay(first);
+    expect(first.rating.stars).toBe(4.4);
+    const later = emptied(stateOf({ season: firstSeason(5), rating: good }));
+    later.seasonTally = { ...startTally(), days: 1 };
+    rateTheDay(later);
+    expect(later.rating.stars).toBe(EMPTY_STARS);
+  });
+
+  it('tallies the days of the season and none outside it', () => {
+    const state = stateOf({ season: firstSeason(5), today: startDay(4) });
+    closeTheDay(state, 5);
+    expect(state.seasonTally.days).toBe(0);
+    closeTheDay(state, 6);
+    closeTheDay(state, 7);
+    expect(state.seasonTally.days).toBe(2);
   });
 });

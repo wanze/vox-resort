@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createRandom } from '../../layout/domain/random';
 import { guestsSnapshotSchema } from '../../sim/domain/resortSnapshot';
+import { phaseEffect } from '../../sim/domain/season';
 import { createGuests, snapshotGuests } from './guests';
-import { PARTY_MIX, partiesFor, WHEELCHAIR_SHARE, wheelchairFor, type PartyKind } from './parties';
+import {
+  PARTY_MIX,
+  partiesFor,
+  partyShapeFor,
+  USUAL_MIX,
+  WHEELCHAIR_SHARE,
+  wheelchairFor,
+  type PartyKind,
+} from './parties';
 
 const partiesOf = (count: number, seed = 1) => partiesFor({ count, random: createRandom(seed) });
 
@@ -120,5 +129,25 @@ describe('wheelchairFor', () => {
     };
     const loaded = guestsSnapshotSchema.parse(old);
     expect(loaded.parties.every((each) => each.wheelchair === -1)).toBe(true);
+  });
+});
+
+describe('partyShapeFor with a mix', () => {
+  it('draws the same parties from the usual shares given as a mix as from none', () => {
+    const plain = createRandom(17);
+    const mixed = createRandom(17);
+    for (let draw = 0; draw < 200; draw++) {
+      expect(partyShapeFor(mixed, USUAL_MIX)).toEqual(partyShapeFor(plain));
+    }
+  });
+
+  it('makes most parties families in the school holidays', () => {
+    const random = createRandom(3);
+    const { mix } = phaseEffect('holidays');
+    let families = 0;
+    for (let draw = 0; draw < 1_000; draw++) {
+      if (partyShapeFor(random, mix).kind === 'family') families++;
+    }
+    expect(families / 1_000).toBeGreaterThanOrEqual(0.55);
   });
 });

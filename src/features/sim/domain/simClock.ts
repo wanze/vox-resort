@@ -1,4 +1,5 @@
 // Advanced in whole fixed ticks, never frame deltas, so a bench run replays the
+import { shownDay } from '../../../shared/domain/dayNumber';
 // same simulation on any machine.
 
 const TICK_SIM_SECONDS = 60;
@@ -77,7 +78,7 @@ export function timeLabel(clock: SimClock): string {
 }
 
 export function clockLabel(clock: SimClock): string {
-  return `Day ${dayOf(clock)}  ${timeLabel(clock)}`;
+  return `Day ${shownDay(dayOf(clock))}  ${timeLabel(clock)}`;
 }
 
 export function advanceClock(

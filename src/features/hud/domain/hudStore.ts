@@ -6,6 +6,7 @@ import type { LandView } from '../../land/domain/landRights';
 import type { Advice } from '../../sim/domain/advice';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { SeasonReport, SeasonView } from '../../sim/domain/season';
 import type { Weather } from '../../sim/domain/weather';
 import type { OrderSpot } from './markers';
 import type { SignSpot } from './signs';
@@ -31,6 +32,9 @@ export interface HudState {
   readonly pending: boolean;
   readonly programme: ProgrammeFacts | null;
   readonly following: FollowView | null;
+  // Null where the resort runs no seasons.
+  readonly season: SeasonView | null;
+  readonly seasons: readonly SeasonReport[];
 }
 
 export interface HudStore {
@@ -60,6 +64,8 @@ export const INITIAL_HUD: HudState = {
   pending: false,
   programme: null,
   following: null,
+  season: null,
+  seasons: [],
 };
 
 // A patch that changes nothing tells nobody: a publish replaces a callback, and must not render

@@ -1,4 +1,5 @@
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -38,5 +39,5 @@ export function clockWords(minute: number): string {
 }
 
 export function dayWords(day: number): string {
-  return `${WEEKDAY_NAMES[weekdayOf(day)]} ${day}`;
+  return `${WEEKDAY_NAMES[weekdayOf(day)]} ${shownDay(day)}`;
 }

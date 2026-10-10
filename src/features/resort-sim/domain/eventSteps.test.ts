@@ -7,6 +7,7 @@ import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
+import { effectOn, firstSeason } from '../../sim/domain/season';
 import { weatherOn } from '../../sim/domain/weather';
 import {
   beachIndexOf,
@@ -54,6 +55,14 @@ describe('weatherOnDay', () => {
     expect(weatherOnDay(now, 0)).toBe('storm');
     expect(weatherOnDay(now, 3)).toBe(weatherOn(3, WEATHER_SEED));
     expect(weatherOnDay({ ...now, forcedWeather: 'rain' }, 3)).toBe('rain');
+  });
+
+  it('forecasts a season’s days with its own weather', () => {
+    const season = firstSeason(0);
+    for (let day = 1; day < 40; day++) {
+      const bands = effectOn(season, day).weather;
+      expect(weatherOnDay(nowAt(0), day, season)).toBe(weatherOn(day, WEATHER_SEED, bands));
+    }
   });
 });
 

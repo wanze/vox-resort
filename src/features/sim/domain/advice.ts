@@ -77,6 +77,8 @@ export interface ResortFacts {
   readonly shut?: ReadonlySet<string>;
   // Absent means the resort is open, reachable and checking guests in.
   readonly open?: boolean;
+  // Between seasons the gates are shut on purpose, and the top bar says how to open them.
+  readonly between?: boolean;
   readonly entrance?: boolean;
   readonly reception?: boolean;
   readonly bedsTotal?: number;
@@ -537,7 +539,7 @@ const nobodyComes = (kind: AdviceKind, subject: string): Advice => ({
 
 // Closed says nothing until there is a bed to come to: a bare plot is not ready to open.
 export function adviceNobodyComes(facts: ResortFacts): Advice | null {
-  if (facts.open === false) {
+  if (facts.open === false && !facts.between) {
     return (facts.bedsTotal ?? 0) > 0 ? nobodyComes('closed', 'resort') : null;
   }
   if (facts.entrance === false) return nobodyComes('no-entrance', 'entrance');

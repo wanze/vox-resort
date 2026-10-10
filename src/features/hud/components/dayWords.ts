@@ -1,6 +1,7 @@
 import { starsTrend, type DayReport } from '../../sim/domain/dayReport';
 import { netOf, type GameMode } from '../../sim/domain/ledger';
 import { signed } from './ledgerWords';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export const trendArrow = (trend: number | null): string =>
   trend === null || trend === 0 ? '' : trend > 0 ? '▲' : '▼';
@@ -18,7 +19,7 @@ export function trendOn(history: readonly DayReport[], day: number): number | nu
 export function daySummary(report: DayReport, trend: number | null, mode: GameMode | null): string {
   const stars = [`${report.rating.stars.toFixed(1)} ★`, trendWords(trend)].filter(Boolean);
   return [
-    `Day ${report.day}`,
+    `Day ${shownDay(report.day)}`,
     mode === 'tycoon' ? signed(netOf(report.money)) : null,
     stars.join(' '),
     `${report.present.toLocaleString('en-US')} guests`,

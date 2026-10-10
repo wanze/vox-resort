@@ -6,6 +6,7 @@ import type { Ledger } from './ledger';
 import { PRICE_RANGE } from './pricing';
 import type { Rating } from './rating';
 import type { Review } from './reviews';
+import { SEASONS_KEPT, type Season, type SeasonReport, type SeasonTally } from './season';
 import { SIM_SPEEDS } from './simClock';
 import type { Hiring } from './staff';
 import { THOUGHT_KINDS, widenThoughts, type ThoughtTally } from './thoughts';
@@ -194,6 +195,7 @@ const dayCountsSchema = z.object({
   events: eventTallySchema.exactOptional(),
   welcome: welcomeTallySchema.exactOptional(),
   photos: photoTallySchema.exactOptional(),
+  turnedAway: count.exactOptional(),
 }) satisfies z.ZodType<DayCounts>;
 
 const dayReportSchema = z.object({
@@ -211,7 +213,50 @@ const dayReportSchema = z.object({
   events: eventTallySchema.exactOptional(),
   welcome: welcomeTallySchema.exactOptional(),
   photos: photoTallySchema.exactOptional(),
+  turnedAway: count.exactOptional(),
 }) satisfies z.ZodType<DayReport>;
+
+const seasonSchema = z.object({
+  number: z.number().int().positive(),
+  startedOn: count,
+  state: z.enum(['running', 'closing', 'break']),
+}) satisfies z.ZodType<Season>;
+
+const dayMarkSchema = z.object({ day: count, value: z.number() });
+
+const seasonTallySchema = z.object({
+  days: count,
+  starSum: z.number(),
+  bestStars: z.number().nullable(),
+  worstStars: z.number().nullable(),
+  arrived: count,
+  turnedAway: count,
+  left: count,
+  reviews: count,
+  reviewStars: z.number(),
+  money: columnSchema,
+  busiest: dayMarkSchema.nullable(),
+  best: dayMarkSchema.nullable(),
+}) satisfies z.ZodType<SeasonTally>;
+
+const seasonReportSchema = z.object({
+  number: z.number().int().positive(),
+  startedOn: count,
+  days: count,
+  meanStars: z.number().nullable(),
+  bestStars: z.number().nullable(),
+  worstStars: z.number().nullable(),
+  arrived: count,
+  turnedAway: count,
+  left: count,
+  reviews: count,
+  meanReview: z.number().nullable(),
+  money: columnSchema,
+  net: z.number(),
+  balance: z.number(),
+  busiest: dayMarkSchema.nullable(),
+  best: dayMarkSchema.nullable(),
+}) satisfies z.ZodType<SeasonReport>;
 
 const ledgerSchema = z.object({
   balance: z.number(),
@@ -260,6 +305,10 @@ export const resortSnapshotSchema = z.object({
   zones: int8,
   // Absent in saves from before photos, which load with nobody having taken one.
   photos: z.object({ lastAt: int32, heat: float32 }).exactOptional(),
+  // Absent in saves from before seasons, which are cut into seasons by their day on load.
+  season: seasonSchema.exactOptional(),
+  seasonTally: seasonTallySchema.exactOptional(),
+  seasons: z.array(seasonReportSchema).max(SEASONS_KEPT).optional().default([]),
 });
 
 export type ResortSnapshot = z.infer<typeof resortSnapshotSchema>;

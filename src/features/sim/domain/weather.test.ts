@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { GUEST_NEEDS } from '../../../../voxel-gen/voxelgen.ts';
-import { isOpenIn, MAX_EFFECT, weatherEffect, weatherOn, WEATHERS, type Weather } from './weather';
+import { phaseEffect } from './season';
+import {
+  isOpenIn,
+  MAX_EFFECT,
+  USUAL_WEATHER,
+  weatherEffect,
+  weatherOn,
+  WEATHERS,
+  type Weather,
+} from './weather';
 
 const week = (seed: number, days: number): Weather[] =>
   Array.from({ length: days }, (_unused, day) => weatherOn(day, seed));
@@ -94,5 +103,22 @@ describe('isOpenIn', () => {
     const storm = weatherEffect('storm');
     expect(isOpenIn('open', storm)).toBe(false);
     expect(isOpenIn('covered', storm)).toBe(true);
+  });
+});
+
+const stormsIn = (bands = USUAL_WEATHER): number =>
+  Array.from({ length: 365 }, (_unused, day) => weatherOn(day, 13, bands)).filter(
+    (kind) => kind === 'storm',
+  ).length;
+
+describe('weatherOn in a season', () => {
+  it('gives the usual bands the usual weather, day for day', () => {
+    for (let day = 0; day <= 365; day++) {
+      expect(weatherOn(day, 13, USUAL_WEATHER)).toBe(weatherOn(day, 13));
+    }
+  });
+
+  it('brings more storms in the late season', () => {
+    expect(stormsIn(phaseEffect('late').weather)).toBeGreaterThan(stormsIn());
   });
 });

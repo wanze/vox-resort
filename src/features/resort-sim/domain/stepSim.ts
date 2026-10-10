@@ -14,6 +14,7 @@ import { admitLaterWaves, runDay } from './arrivals';
 import { markNightOwls, refreshDj, refreshNightOut } from './nights';
 import { refreshKeen, runEvents } from './eventSteps';
 import { refreshMoment } from './photoSteps';
+import { endSeason, seasonDueToEnd } from './seasonSteps';
 
 // The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
 const hourTurned = (from: number, to: number): boolean =>
@@ -23,6 +24,8 @@ export interface SimHooks {
   readonly morning: () => void;
   readonly hourly: () => void;
   readonly heard: (steps: readonly EventStep[]) => void;
+  // After the hour that ended a season, once its report is written and the gates are shut.
+  readonly seasonEnded?: () => void;
 }
 
 export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: SimHooks): void {
@@ -82,6 +85,10 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     refreshKeen(resort, clock);
     refreshNightOut(resort, clock);
     markNightOwls(resort, clock);
+    if (seasonDueToEnd(resort, clock)) {
+      endSeason(resort);
+      hooks.seasonEnded?.();
+    }
     hooks.hourly();
   }
   admitLaterWaves(resort, clock, ticks);

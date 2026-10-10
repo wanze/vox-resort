@@ -5,6 +5,7 @@ import {
   countEvent,
   countPhoto,
   countReview,
+  countTurnedAway,
   countWelcomed,
   HISTORY_DAYS,
   keepDay,
@@ -226,5 +227,14 @@ describe('the photos of the day', () => {
   it('has no photos key on a day nobody took one', () => {
     expect('photos' in startDay(3)).toBe(false);
     expect('photos' in reportFor(startDay(3))).toBe(false);
+  });
+});
+
+describe('the guests turned away', () => {
+  it('are counted only when there are some, and carried into the report', () => {
+    expect(countTurnedAway(startDay(2), 0)).toEqual(startDay(2));
+    expect(reportFor(startDay(2)).turnedAway).toBeUndefined();
+    const counts = countTurnedAway(countTurnedAway(startDay(2), 4), 3);
+    expect(reportFor(counts).turnedAway).toBe(7);
   });
 });

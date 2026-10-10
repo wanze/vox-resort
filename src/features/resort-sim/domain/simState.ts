@@ -49,6 +49,13 @@ import { factorOf, LIST_PRICES, venuePull, type Prices } from '../../sim/domain/
 import { type Rating, ratingFor } from '../../sim/domain/rating';
 import { type Review, keepReview } from '../../sim/domain/reviews';
 import { type Router, createRouter } from '../../sim/domain/router';
+import {
+  type Season,
+  type SeasonReport,
+  type SeasonTally,
+  firstSeason,
+  startTally,
+} from '../../sim/domain/season';
 import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
 import type { SceneryField } from '../../sim/domain/scenery';
 import type { ShadeMap } from '../../sim/domain/shade';
@@ -196,6 +203,11 @@ export interface SimState {
   rating: Rating;
   // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
   open: boolean;
+  // Null where the resort runs no seasons, as the sim report's and the tests' do.
+  season: Season | null;
+  // The running season's days so far, written up as its report when it ends.
+  seasonTally: SeasonTally;
+  seasons: readonly SeasonReport[];
   // Sized once a day by the rating and let in over the waves. A wave nobody could come in is
   // counted as admitted, so its share is not carried into the next one.
   arrivalsPlanned: number;
@@ -300,6 +312,8 @@ export interface SimParts {
     // absent, nobody stops for a photo.
     readonly photosOn?: () => boolean;
   };
+  // Off by default, so a report or a test replays as it did before seasons.
+  readonly seasons?: boolean;
 }
 
 function guestsOf(parts: SimParts) {
@@ -340,6 +354,27 @@ function eventsOf(population: number, venues: readonly Venue[]): EventsState {
   return events;
 }
 
+// What the router does with a party that reached the gate; the season's end runs it for anybody
+// who never got there.
+export function seeOff(resort: SimState, party: number): void {
+  const { guests, router } = resort;
+  // Before check-out, which clears who was here.
+  const review = reviewOfParty(resort, party);
+  if (review) {
+    resort.reviews = keepReview(resort.reviews, review);
+    resort.today = countReview(resort.today, review.stars);
+  }
+  const left = checkOutParty(guests, party, true);
+  resort.today = countDeparture(resort.today, left.length);
+  const people = resort.crowd.crowd;
+  for (const member of left) {
+    // Every member: a visit left standing would walk an empty body out of the door.
+    router.forget(member);
+    forgetPhotos(resort.photos, member);
+    takeOffPlot(people, member, people.x[member]!, people.y[member]!, people.z[member]!);
+  }
+}
+
 // The routers' callbacks read the state, never a crowd or a list of their own: a relocate, a load
 // and an edit replace those on it.
 export function createSimState(parts: SimParts): SimState {
@@ -357,24 +392,7 @@ export function createSimState(parts: SimParts): SimState {
     lodgings,
     gateways: facts.gateways,
     network,
-    onLeave: (person) => {
-      const party = guests.party[person]!;
-      // Before check-out, which clears who was here.
-      const review = reviewOfParty(resort, party);
-      if (review) {
-        resort.reviews = keepReview(resort.reviews, review);
-        resort.today = countReview(resort.today, review.stars);
-      }
-      const left = checkOutParty(guests, party, true);
-      resort.today = countDeparture(resort.today, left.length);
-      const people = resort.crowd.crowd;
-      for (const member of left) {
-        // Every member: a visit left standing would walk an empty body out of the door.
-        router.forget(member);
-        forgetPhotos(resort.photos, member);
-        takeOffPlot(people, member, people.x[member]!, people.y[member]!, people.z[member]!);
-      }
-    },
+    onLeave: (person) => seeOff(resort, guests.party[person]!),
     tickOfDay: clock.tickOfDay,
     weather: clock.weather,
     // Safe: the crowd is built on the next statement, and nothing calls the router before a frame.
@@ -544,6 +562,10 @@ export function createSimState(parts: SimParts): SimState {
     history: [],
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
     open: !building,
+    // A building site's first check-in is tomorrow's; a generated resort is already in season.
+    season: parts.seasons === true ? firstSeason(building ? 1 : 0) : null,
+    seasonTally: startTally(),
+    seasons: [],
     arrivalsPlanned: 0,
     arrivalsAdmitted: 0,
     newcomers: [],

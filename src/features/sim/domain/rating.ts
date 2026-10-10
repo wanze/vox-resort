@@ -31,9 +31,15 @@ export function ratingFor(parts: {
   readonly present: number;
   readonly housed: number;
   readonly cleanliness?: number;
+  readonly previous?: Rating;
 }): Rating {
   const housed = parts.present > 0 ? clamp(parts.housed / parts.present) : 0;
   const cleanliness = clamp(parts.cleanliness ?? 1);
+  // An empty resort between seasons keeps its reputation; EMPTY_STARS would reset it every year.
+  if (parts.happiness === null && parts.previous) {
+    const { stars, happiness } = parts.previous;
+    return { stars, happiness, housed, cleanliness };
+  }
   if (parts.happiness === null) {
     return { stars: EMPTY_STARS, happiness: 0, housed, cleanliness };
   }
@@ -56,10 +62,15 @@ export function arrivalsFor(
   pull = 1,
 ): number {
   const free = Math.max(0, Math.floor(beds.free));
+  if (free === 0) return 0;
+  return Math.min(free, bookingsWanted(rating, beds, pull));
+}
+
+// Before the free beds cap it: what is left over is the guests turned away.
+export function bookingsWanted(rating: Rating, beds: { readonly total: number }, pull = 1): number {
   const appetite = appetiteFor(rating.stars) * Math.max(0, pull);
-  if (free === 0 || appetite === 0) return 0;
-  const wanted = Math.max(1, Math.round(Math.max(0, beds.total) * ARRIVALS_SHARE * appetite));
-  return Math.min(free, wanted);
+  if (appetite === 0) return 0;
+  return Math.max(1, Math.round(Math.max(0, beds.total) * ARRIVALS_SHARE * appetite));
 }
 
 export type RatingPart = 'happiness' | 'housed' | 'cleanliness';

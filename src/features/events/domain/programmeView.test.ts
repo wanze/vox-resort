@@ -92,13 +92,13 @@ describe('programmeView', () => {
   it('shows seven days from today, on the chosen stage or the first by name', () => {
     const view = programmeView(facts(), null);
     expect(view.days.map((day) => day.name)).toEqual([
-      'Thu 3',
-      'Fri 4',
-      'Sat 5',
-      'Sun 6',
-      'Mon 7',
-      'Tue 8',
-      'Wed 9',
+      'Thu 4',
+      'Fri 5',
+      'Sat 6',
+      'Sun 7',
+      'Mon 8',
+      'Tue 9',
+      'Wed 10',
     ]);
     expect(view.days[0]).toMatchObject({ weather: 'rain', pinned: false });
     expect(view.days[1]!.weather).toBeNull();
@@ -137,14 +137,14 @@ describe('programmeView', () => {
     const view = programmeView(facts({ programme: booked({}) }), null);
     expect(view.days.every((day) => day.parts.evening.length === 1)).toBe(true);
     expect(view.upcoming.map((each) => `${each.dayName} ${each.time}`)).toEqual([
-      'Thu 3 20:00',
-      'Fri 4 20:00',
-      'Sat 5 20:00',
-      'Sun 6 20:00',
-      'Mon 7 20:00',
-      'Tue 8 20:00',
-      'Wed 9 20:00',
-      'Thu 10 20:00',
+      'Thu 4 20:00',
+      'Fri 5 20:00',
+      'Sat 6 20:00',
+      'Sun 7 20:00',
+      'Mon 8 20:00',
+      'Tue 9 20:00',
+      'Wed 10 20:00',
+      'Thu 11 20:00',
     ]);
     expect(view.upcoming[0]).toMatchObject({ label: 'Live music', site: 'Coral Stage' });
   });
@@ -315,7 +315,7 @@ describe('the list of what is coming up', () => {
 
   it('gathers the events under their day', () => {
     const days = upcomingByDay(upcoming);
-    expect(days[0]).toMatchObject({ day: 3, name: 'Thu 3' });
+    expect(days[0]).toMatchObject({ day: 3, name: 'Thu 4' });
     expect(days[0]!.events.map((each) => each.time)).toEqual(['15:00', '20:00']);
     expect(days.map((day) => day.day)).toEqual([3, 4, 5, 6, 7, 8, 9, 10]);
   });

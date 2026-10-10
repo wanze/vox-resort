@@ -1,4 +1,5 @@
 import { timeLabel } from './photoView';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 const MAX_NAME_CHARS = 40;
 
@@ -15,5 +16,5 @@ function slugOf(name: string): string {
 }
 
 export function photoFileName(resortName: string, day: number, time: number): string {
-  return `vox-resort-${slugOf(resortName)}-day-${day}-${timeLabel(time).replace(':', '')}.png`;
+  return `vox-resort-${slugOf(resortName)}-day-${shownDay(day)}-${timeLabel(time).replace(':', '')}.png`;
 }

@@ -15,7 +15,7 @@ import {
   type SimClock,
   type SimSpeed,
 } from './simClock';
-import { weatherOn, type Weather } from './weather';
+import { weatherOn, type Weather, type WeatherBands } from './weather';
 
 export interface ResortClock {
   readonly time: number;
@@ -42,10 +42,19 @@ export interface ResortClock {
   restore(saved: ClockSnapshot): void;
 }
 
-export function createResortClock(startTime: number, weatherSeed: number): ResortClock {
+// The bands are asked late, as the season that sets them lives on a resort a load replaces.
+export function createResortClock(
+  startTime: number,
+  weatherSeed: number,
+  bandsOn?: (day: number) => WeatherBands,
+): ResortClock {
   let clock: SimClock = createSimClock(0, startTime);
   let forced: Weather | null = null;
-  const weatherNow = (): Weather => forced ?? weatherOn(dayOf(clock), weatherSeed);
+  const weatherNow = (): Weather => {
+    if (forced) return forced;
+    const day = dayOf(clock);
+    return weatherOn(day, weatherSeed, bandsOn?.(day));
+  };
   // Real seconds, not simulated: the clock opens paused and a storm must still flash.
   let running = 0;
 

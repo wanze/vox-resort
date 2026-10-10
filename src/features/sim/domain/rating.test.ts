@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   arrivalsFor,
   ARRIVALS_SHARE,
+  bookingsWanted,
   costliestPart,
   EMPTY_STARS,
   RATING_PARTS,
@@ -159,5 +160,23 @@ describe('arrivalsFor', () => {
     const good = ratingFor({ happiness: 0.8, present: 10, housed: 10 });
     expect(arrivalsFor(good, empty(400), 1.3)).toBeGreaterThan(arrivalsFor(good, empty(400)));
     expect(arrivalsFor(good, { free: 20, total: 400 }, 1.3)).toBe(20);
+  });
+});
+
+describe('a season', () => {
+  it('books more people with a pull above 1, still within the free beds', () => {
+    const good = ratingFor({ happiness: 0.8, present: 10, housed: 10 });
+    const usual = arrivalsFor(good, empty(400));
+    expect(arrivalsFor(good, empty(400), 1.5)).toBeGreaterThan(usual);
+    expect(arrivalsFor(good, { free: usual, total: 400 }, 1.5)).toBe(usual);
+    expect(bookingsWanted(good, empty(400), 1.5)).toBeGreaterThan(usual);
+  });
+
+  it('keeps the stars of an empty resort it was given a previous rating for', () => {
+    const previous = ratingFor({ happiness: 0.9, present: 10, housed: 10 });
+    const between = ratingFor({ happiness: null, present: 0, housed: 0, previous });
+    expect(between.stars).toBe(previous.stars);
+    expect(between.happiness).toBe(previous.happiness);
+    expect(ratingFor({ happiness: null, present: 0, housed: 0 }).stars).toBe(EMPTY_STARS);
   });
 });

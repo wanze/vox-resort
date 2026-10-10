@@ -15,6 +15,7 @@ import { adviceLabel, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
 import { HireButton, type HireControls } from './HireButton';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 interface NewsToastsProps {
   readonly history: readonly DayReport[];
@@ -81,7 +82,7 @@ function DismissButton({
 }
 
 function DayPlate({ report, ...props }: { readonly report: DayReport } & NewsToastsProps) {
-  const label = `Day ${report.day} report`;
+  const label = `Day ${shownDay(report.day)} report`;
   return (
     <div className="ui-panel hud-toast" data-severity="day">
       <PixelIcon name="overview" />

@@ -12,6 +12,13 @@ import type { Prices } from './pricing';
 import type { Rating } from './rating';
 import type { ResortSnapshot } from './resortSnapshot';
 import type { Review } from './reviews';
+import {
+  seasonOfOldSave,
+  startTally,
+  type Season,
+  type SeasonReport,
+  type SeasonTally,
+} from './season';
 import type { Hiring } from './staff';
 import type { VenueTakings } from './takings';
 import { restoreThoughts, snapshotThoughts, type Thoughts, type ThoughtTally } from './thoughts';
@@ -49,6 +56,10 @@ export interface ResortState {
   prices: Prices;
   readonly zones: Zones;
   readonly photos: Photos;
+  // Null or absent where a resort runs no seasons, as the sim report's does.
+  season?: Season | null;
+  seasonTally?: SeasonTally;
+  seasons?: readonly SeasonReport[];
 }
 
 const copyPhotos = (photos: PhotoTally) => ({
@@ -68,6 +79,11 @@ const copyReport = (report: DayReport) => ({
   beds: { ...report.beds },
   money: { ...report.money },
   loudest: report.loudest.map((tally) => ({ ...tally })),
+});
+
+const copySeasonal = <T extends { readonly money: object }>(record: T): T => ({
+  ...record,
+  money: { ...record.money },
 });
 
 export function snapshotResort(state: ResortState): ResortSnapshot {
@@ -103,12 +119,16 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     prices: { ...state.prices },
     zones: state.zones.zone.slice(),
     photos: snapshotPhotos(state.photos),
+    ...(state.season ? { season: { ...state.season } } : {}),
+    ...(state.season && state.seasonTally ? { seasonTally: copySeasonal(state.seasonTally) } : {}),
+    seasons: (state.seasons ?? []).map(copySeasonal),
   };
 }
 
 // In the order a load documents; the typed arrays must already have the saved lengths, which
-// the save's schema checked against its population.
-export function restoreResort(state: ResortState, snapshot: ResortSnapshot): void {
+// the save's schema checked against its population. The day is the saved clock's, which places a
+// save from before seasons in one.
+export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day = 0): void {
   restoreGuests(state.guests, snapshot.guests);
   restoreNeeds(state.needs, snapshot.needs);
   restoreHappiness(state.happiness, snapshot.happiness);
@@ -138,4 +158,9 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;
   restorePhotos(state.photos, snapshot.photos);
+  if (state.season) {
+    state.season = snapshot.season ? { ...snapshot.season } : seasonOfOldSave(day);
+    state.seasonTally = snapshot.seasonTally ? copySeasonal(snapshot.seasonTally) : startTally();
+  }
+  state.seasons = snapshot.seasons.map(copySeasonal);
 }

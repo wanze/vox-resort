@@ -118,6 +118,14 @@ import {
   weatherOnDay,
 } from '../features/resort-sim/domain/eventSteps';
 import { stepSim } from '../features/resort-sim/domain/stepSim';
+import { openSeason } from '../features/resort-sim/domain/seasonSteps';
+import {
+  effectOn,
+  inBreak,
+  sameSeasonView,
+  seasonViewOf,
+  type SeasonView,
+} from '../features/sim/domain/season';
 import { partiesArrivedOn } from '../features/resort-sim/domain/arrivals';
 import { partyMixOf } from '../features/events/domain/audience';
 import { createEvents, type EventStep } from '../features/events/domain/eventRuns';
@@ -416,6 +424,8 @@ export interface ShowcaseOptions {
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
   readonly onMorning?: () => void;
+  // Once the season's report is written; never for a load of a resort already in a break.
+  readonly onSeasonEnded?: () => void;
   // Only for what the player does, never for a load or a settle laying the plot out again.
   readonly onCue?: (cue: BuildCue) => void;
   // At most five times a second of real time, with one scene object reused every time.
@@ -434,6 +444,8 @@ export interface Showcase {
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
   setOpen(open: boolean): void;
+  // Only in a break; the speed is the HUD's to resume.
+  openSeason(): void;
   // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
   rename(name: string): void;
   // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
@@ -996,6 +1008,7 @@ function buildResort(
     childVariant: CHILD_VARIANT,
     // Never zero: createCrowd deals a variant per body and would divide by zero.
     staffVariants: Math.max(1, parts.staff.length),
+    seasons: true,
     clock: {
       ticks: parts.ticks,
       tickOfDay: parts.tickOfDay,
@@ -1648,7 +1661,7 @@ function idleStageOf(resort: Resort, now: number): Venue | null {
 function programmeFactsOf(resort: Resort, clock: Clock): ProgrammeFacts {
   const forecast: DayForecast[] = Array.from({ length: 7 }, (_, offset) => ({
     day: clock.day + offset,
-    weather: weatherOnDay(clock, clock.day + offset),
+    weather: weatherOnDay(clock, clock.day + offset, resort.season),
     pinned: clock.forcedWeather !== null,
   }));
   return {
@@ -1740,6 +1753,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     unreachable: resort.unreachable,
     notStepFree: stepFreeOf(resort).cutOff,
     open: resort.open,
+    between: inBreak(resort.season),
     entrance: router.arrivalNode >= 0,
     reception: router.receptionReachable,
     bedsTotal: resort.beds.total,
@@ -1787,7 +1801,11 @@ function createClock(
   startTime: number,
   glow: () => ShowLight,
 ): Clock {
-  const clock = createResortClock(startTime, WEATHER_SEED);
+  const clock = createResortClock(
+    startTime,
+    WEATHER_SEED,
+    (day) => effectOn(resort().season, day).weather,
+  );
   const sky = createSkyApplier({ handle, resort, glow });
   sky.apply(clock);
 
@@ -2157,7 +2175,7 @@ function staffWhereDrawn(resort: Resort) {
 // Every module in the order its readers expect: the guests before the routers that read them
 // and the routers before the crowds they steer.
 function restoreGame(resort: Resort, saved: GameSnapshot, clock: Clock): void {
-  restoreResort(resort, saved.resort);
+  restoreResort(resort, saved.resort, dayAt(saved.clock.ticks));
   // The resort was just built off the layout; a save from before venues had names draws them.
   resort.names = assignNames(resort.names, namedPlacesOf(resort.plot.layout.placements));
   relabelVenues(resort);
@@ -2779,9 +2797,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     else resort.overlay.paint(overlayValues(resort, overlayKind!));
   };
 
+  let seasonShown: SeasonView | null = null;
+  const seasonNow = (): SeasonView | null => {
+    const { season } = current();
+    const next = season ? seasonViewOf(season, clock.day) : null;
+    if (!sameSeasonView(next, seasonShown)) seasonShown = next;
+    return seasonShown;
+  };
+
   // At most once a simulated hour: thoughts are heard per step, and React must not be.
   const hourly = (): void => {
     hud.publish({
+      season: seasonNow(),
       advice: adviseHourly(),
       voices: voicesOf(current()),
       status: report(),
@@ -2814,9 +2841,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       status: report(),
       history: current().history,
       ledger: current().ledger,
+      season: seasonNow(),
     });
     options.onDirty?.();
     options.onMorning?.();
+  };
+
+  // The break holds the clock at paused, so the crowd stands still with it and nothing is charged.
+  const seasonEnded = (): void => {
+    clock.setSpeed('paused');
+    onSpeedChange?.('paused');
+    hud.publish({
+      season: seasonNow(),
+      seasons: current().seasons,
+      open: current().open,
+      advice: advise(),
+      status: report(),
+      ledger: current().ledger,
+    });
+    options.onDirty?.();
+    options.onSeasonEnded?.();
   };
 
   // Everything React shows is told again: the HUD still holds the game that was replaced.
@@ -2836,6 +2880,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       land: landNow(),
       programme: programmeNow(),
       open: current().open,
+      season: seasonNow(),
+      seasons: current().seasons,
       name: identity.name,
       camera: cameraView(),
     });
@@ -2950,11 +2996,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // of two runs, and a running bench would tick a different number of times.
     const step = fixedStep ?? elapsed;
     const pace = showPaceOf(current(), fireworks, clock);
-    const ticks = stepClock(clock, drift !== null, step, pace);
+    // A break stops the simulated clock at any speed; the real seconds still flash a storm.
+    const between = inBreak(current().season);
+    const ticks = between ? clock.advance(step, 0) : stepClock(clock, drift !== null, step, pace);
     // Capped, so a backgrounded tab does not run a week of decay in one frame.
     if (ticks > 0) {
       const simStarted = timer.start();
-      stepSim(current(), clock, ticks, { morning, hourly, heard: heardEvents });
+      stepSim(current(), clock, ticks, { morning, hourly, heard: heardEvents, seasonEnded });
       lastShare = lightRooms(current(), lastShare);
       recastAll(current());
       lightTheFires(current());
@@ -2962,7 +3010,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     }
     // Fixed under a bench so runs replay; a paused bench still walks the crowd. Outside one,
     // handing over zero time is what stops a paused crowd; crowdScaleFor is 1 while paused.
-    const walked = crowdStep(fixedStep, drift !== null || clock.speed !== 'paused', elapsed);
+    const walking = drift !== null || (clock.speed !== 'paused' && !between);
+    const walked = crowdStep(fixedStep, walking, elapsed);
     keepSeats(current().cast, current().casting, current().crowd.crowd.seatBy);
     const crowdScale = crowdScaleFor(clock.speed);
     // Before the crowd writes its instances, which draw the cast where perform left it.
@@ -3042,6 +3091,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     status: report(),
     history: current().history,
     open: current().open,
+    season: seasonNow(),
+    seasons: current().seasons,
     name: identity.name,
     ledger: current().ledger,
     land: landNow(),
@@ -3058,9 +3109,16 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     },
     setOpen(open) {
       const resort = current();
-      if (resort.open === open) return;
+      // Between seasons only the next season opens the gates.
+      if (resort.open === open || inBreak(resort.season)) return;
       resort.open = open;
       hud.publish({ open, advice: advise() });
+      options.onDirty?.();
+    },
+    openSeason() {
+      const resort = current();
+      if (!openSeason(resort, clock)) return;
+      hud.publish({ season: seasonNow(), open: resort.open, advice: advise() });
       options.onDirty?.();
     },
     rename(next) {

@@ -523,3 +523,72 @@
   margin: 0;
   color: var(--text-dim);
 }
+
+.hud-season-now {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.hud-season-now > p {
+  margin: 0;
+}
+
+.hud-season-track [data-phase='early'] {
+  --season-ink: var(--ink-quiet);
+}
+
+.hud-season-track [data-phase='holidays'] {
+  --season-ink: var(--ink-warm);
+}
+
+.hud-season-track [data-phase='late'] {
+  --season-ink: var(--terracotta);
+}
+
+.hud-season-days {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-season-days > li {
+  height: 10px;
+  border-radius: 1px;
+  background: var(--season-ink);
+  opacity: 0.3;
+}
+
+.hud-season-days > li[data-past] {
+  opacity: 1;
+}
+
+.hud-season-days > li[data-today] {
+  opacity: 1;
+  outline: 2px solid var(--stone-800);
+  outline-offset: 1px;
+}
+
+/* Each phase as wide as its days on the track above. */
+.hud-season-legend {
+  display: flex;
+  gap: 2px;
+  margin-top: var(--space-1);
+  font-size: var(--size-small);
+  color: var(--text-dim);
+}
+
+.hud-season-legend > span {
+  flex: var(--days) 1 0;
+  min-width: 0;
+  padding-top: 2px;
+  overflow: hidden;
+  border-top: 2px solid var(--season-ink);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

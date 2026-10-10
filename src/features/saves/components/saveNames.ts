@@ -1,6 +1,7 @@
 import { MODE_LABELS } from '../../welcome/components/modeNames';
 import { savedAgo } from '../domain/saveWords';
 import type { SaveMeta } from '../domain/snapshot';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 // Left out when the save is called after the resort, so the row does not say it twice.
 export function resortOf(meta: Pick<SaveMeta, 'name' | 'resortName'>): readonly string[] {
@@ -13,7 +14,7 @@ export function summaryOf(meta: SaveMeta, now: number): string {
   return [
     ...resortOf(meta),
     MODE_LABELS[meta.mode],
-    `day ${meta.day}`,
+    `day ${shownDay(meta.day)}`,
     ...money,
     savedAgo(meta.savedAt, now),
   ].join(' · ');

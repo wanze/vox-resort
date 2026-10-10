@@ -38,6 +38,7 @@ export const WINDOW_ICONS: { readonly [id in WindowId]: IconName } = {
 export const TAB_TITLES: { readonly [tab in TabId]: string } = {
   summary: 'Resort',
   report: 'Day report',
+  season: 'Season',
   demand: 'Demand',
   photos: 'Photo wall',
   advice: 'Advice',
@@ -51,6 +52,7 @@ export const TAB_TITLES: { readonly [tab in TabId]: string } = {
 export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
   summary: 'overview',
   report: 'report',
+  season: 'clear',
   demand: 'demand',
   photos: 'camera',
   advice: 'advice',
@@ -76,6 +78,7 @@ export const MENU_PAGES: readonly PageId[] = [
   'report',
   'demand',
   'photos',
+  'season',
   'advice',
   'messages',
   'guests',

@@ -50,6 +50,8 @@ export interface MainMenuProps {
   readonly highlights: HighlightControls;
   readonly overlay: OverlayControls;
   readonly gates: { readonly open: boolean; readonly onOpenChange: (open: boolean) => void };
+  // Between seasons the gates open only with the next season.
+  readonly season: { readonly next: number; readonly onOpen: () => void } | null;
   readonly onPhoto: () => void;
 }
 
@@ -129,15 +131,24 @@ function NarrowViewRows({
 }
 
 // Shown by the stylesheet only where the bar has given up its own gates switch.
-function GatesOption({ gates, run }: Pick<PageContext, 'gates' | 'run'>) {
+function GatesOption({ gates, season, run }: Pick<PageContext, 'gates' | 'season' | 'run'>) {
   return (
     <div className="hud-menu-gates">
-      <MenuOption
-        icon="guests"
-        label={gates.open ? 'Close the gates' : 'Open the gates'}
-        note={gates.open ? 'turn new guests away' : 'let new guests in'}
-        onSelect={run(() => gates.onOpenChange(!gates.open))}
-      />
+      {season ? (
+        <MenuOption
+          icon="guests"
+          label={`Open season ${season.next}`}
+          note="open the gates and start the clock"
+          onSelect={run(season.onOpen)}
+        />
+      ) : (
+        <MenuOption
+          icon="guests"
+          label={gates.open ? 'Close the gates' : 'Open the gates'}
+          note={gates.open ? 'turn new guests away' : 'let new guests in'}
+          onSelect={run(() => gates.onOpenChange(!gates.open))}
+        />
+      )}
     </div>
   );
 }
@@ -154,7 +165,7 @@ function RootPage(props: PageProps) {
         disabled={!saves.available}
         onSelect={run(() => void saveOrAsk(saves.save, () => windows.show('saves', true)))}
       />
-      <GatesOption gates={props.gates} run={run} />
+      <GatesOption gates={props.gates} season={props.season} run={run} />
       <MenuOption
         icon="camera"
         label="Photo mode"

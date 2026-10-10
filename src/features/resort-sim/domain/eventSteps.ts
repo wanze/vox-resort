@@ -31,6 +31,7 @@ import { canAfford, record } from '../../sim/domain/ledger';
 import { strongestNeed } from '../../sim/domain/needs';
 import { stayCount } from '../../sim/domain/thoughts';
 import { shelterOf } from '../../sim/domain/venues';
+import { effectOn, type Season } from '../../sim/domain/season';
 import { type Weather, isOpenIn, weatherEffect, weatherOn } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
@@ -45,16 +46,16 @@ export const beachIndexOf = (resort: SimState): number =>
   resort.siteVenues.length > resort.venues.length ? resort.venues.length : -1;
 
 // Today's weather is the clock's, which may be pinned; a pinned weather holds every day ahead too.
-export function weatherOnDay(clock: SimNow, day: number): Weather {
+export function weatherOnDay(clock: SimNow, day: number, season: Season | null = null): Weather {
   if (day === clock.day) return clock.weather;
-  return clock.forcedWeather ?? weatherOn(day, WEATHER_SEED);
+  return clock.forcedWeather ?? weatherOn(day, WEATHER_SEED, effectOn(season, day).weather);
 }
 
 export function eventFactsOf(resort: SimState, clock: SimNow): EventFacts {
   const venues = resort.siteVenues;
   return {
     mode: resort.ledger.mode,
-    weatherOn: (day) => weatherOnDay(clock, day),
+    weatherOn: (day) => weatherOnDay(clock, day, resort.season),
     hasSite: (site, kind) => heldAt(site, kind, venues) >= 0,
     // The router's own door rule, so an event is called off exactly when its stage is shut.
     siteOpen: (site, weather, kind) => {

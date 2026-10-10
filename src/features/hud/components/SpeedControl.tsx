@@ -10,9 +10,22 @@ export interface SpeedControlProps {
   readonly onSpeedChange: (speed: SimSpeed) => void;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  // The clock is stopped until the next season opens, whatever the speed.
+  readonly betweenSeasons?: boolean;
 }
 
-export function SpeedControl({ speed, onSpeedChange, open, onOpenChange }: SpeedControlProps) {
+export function SpeedControl(props: SpeedControlProps) {
+  const { speed, onSpeedChange, open, onOpenChange } = props;
+  if (props.betweenSeasons) {
+    return (
+      <div className="ui-dropdown hud-speed">
+        <button type="button" className="ui-chip" disabled title="The resort is between seasons">
+          <PixelIcon name={speed} />
+          <span className="ui-chip-label">{SPEED_LABELS[speed]}</span>
+        </button>
+      </div>
+    );
+  }
   return (
     <DropdownMenu
       className="hud-speed"

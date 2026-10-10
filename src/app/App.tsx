@@ -366,7 +366,7 @@ export function App() {
   );
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
-  const { windows, layout, menu, setMenu, palette, setPalette, bar } = useHudChrome(
+  const { windows, layout, menu, setMenu, palette, setPalette, bar, onSeasonEnded } = useHudChrome(
     clock,
     tool,
     selectTool,
@@ -413,6 +413,7 @@ export function App() {
       onLoading: adoptLoading,
       onDirty: markDirty,
       onMorning,
+      onSeasonEnded,
       onCue,
       onHear,
       onSpeedChange: adoptSpeed,
@@ -458,6 +459,7 @@ export function App() {
     onRefused,
     markDirty,
     onMorning,
+    onSeasonEnded,
     onCue,
     onHear,
     adoptSpeed,

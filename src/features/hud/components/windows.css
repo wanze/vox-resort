@@ -23,9 +23,9 @@
   width: 380px;
 }
 
-/* Wide enough for all four tabs, Photo wall too, on one row. */
+/* Wide enough for all five tabs, Photo wall and Season too, on one row. */
 .ui-window[data-window='overview'] {
-  width: 406px;
+  width: 492px;
 }
 
 .ui-window[data-window='inbox'] {

@@ -1,5 +1,5 @@
 export const WINDOW_TABS = {
-  overview: ['summary', 'report', 'demand', 'photos'],
+  overview: ['summary', 'report', 'demand', 'photos', 'season'],
   inbox: ['advice', 'messages'],
   people: ['guests', 'staff'],
   books: ['money', 'prices'],

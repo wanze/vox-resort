@@ -3,6 +3,7 @@ import { SUNSET_TIME } from '../../lighting/domain/dayNight';
 import { createResortClock } from './resortClock';
 import { SPEED_DAY_SECONDS, TICKS_PER_DAY } from './simClock';
 import { weatherOn } from './weather';
+import { phaseEffect } from './season';
 
 const SEED = 7;
 
@@ -69,5 +70,13 @@ describe('createResortClock', () => {
     expect(clock.balloonReadiness).toBeGreaterThan(0);
     clock.setWeather('rain');
     expect(clock.balloonReadiness).toBe(0);
+  });
+
+  it('asks the season for today’s weather bands, and a forced weather still wins', () => {
+    const late = phaseEffect('late').weather;
+    const clock = createResortClock(0.3, SEED, () => late);
+    expect(clock.weather).toBe(weatherOn(0, SEED, late));
+    clock.setWeather('heatwave');
+    expect(clock.weather).toBe('heatwave');
   });
 });

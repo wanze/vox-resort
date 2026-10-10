@@ -46,6 +46,7 @@ import type {
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { PhotoControls } from '../../photo/components/photoControls';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export type CommandArt =
   | { readonly icon: IconName }
@@ -320,7 +321,7 @@ function gameCommands({ saves, windows }: CommandContext): Command[] {
       label: `Load ${titleOf(meta)}`,
       group: 'Game',
       keywords: 'load saved game continue open',
-      note: `day ${meta.day}, saved ${savedAgo(meta.savedAt, now)}`,
+      note: `day ${shownDay(meta.day)}, saved ${savedAgo(meta.savedAt, now)}`,
       art: { icon: 'saves' as const },
       run: () => void saves.load(meta.id),
     }));

@@ -5,7 +5,14 @@ import { createRandom } from '../../layout/domain/random';
 import type { GuestsSnapshot } from '../../sim/domain/resortSnapshot';
 import { assignHomes, homeWithRoom, NO_HOME, type Home } from './homes';
 import { givenName } from './names';
-import { partiesFor, partyShapeFor, WHEELCHAIR_PACE, wheelchairFor, type Party } from './parties';
+import {
+  partiesFor,
+  partyShapeFor,
+  WHEELCHAIR_PACE,
+  wheelchairFor,
+  type Party,
+  type PartyMix,
+} from './parties';
 
 export interface GuestRecord {
   readonly given: string;
@@ -61,6 +68,13 @@ function adultVariant(random: () => number, variants: number, childVariant: numb
   const choices = excludes ? variants - 1 : Math.max(1, variants);
   const drawn = Math.min(choices - 1, Math.floor(random() * choices));
   return excludes && drawn >= childVariant ? drawn + 1 : drawn;
+}
+
+// Drawn first and capped after, so a season's end moves no later draw. At least one night: a
+// party that came is never sent home the same morning.
+function capStay(nights: number, day: number, lastNight?: number): number {
+  if (lastNight === undefined) return nights;
+  return Math.min(nights, Math.max(1, lastNight - day + 1));
 }
 
 function stayNights(random: () => number): number {
@@ -177,10 +191,13 @@ export function checkInParty(
     readonly random: () => number;
     readonly day: number;
     readonly free: FreeBodies;
+    readonly mix?: PartyMix | undefined;
+    // The last night anybody may stay, which a season's closing morning sets.
+    readonly lastNight?: number | undefined;
   },
 ): Party | null {
   const { random, day, free } = options;
-  const shape = partyShapeFor(random);
+  const shape = partyShapeFor(random, options.mix);
   // Adults first, so a party cut to one person is never a child on holiday alone.
   const members = [
     ...free.adults.splice(0, Math.min(shape.adults, free.adults.length)),
@@ -202,7 +219,7 @@ export function checkInParty(
 
   const home = homeWithRoom(guests.freeBeds, members.length);
   if (home !== NO_HOME) guests.freeBeds[home] = guests.freeBeds[home]! - members.length;
-  const nights = stayNights(random);
+  const nights = capStay(stayNights(random), day, options.lastNight);
   const people = guests.people as GuestRecord[];
   for (const person of members) {
     guests.party[person] = index;

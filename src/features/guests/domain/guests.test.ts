@@ -470,3 +470,28 @@ describe('rehome', () => {
     expect(run()).toEqual(run());
   });
 });
+
+describe('a stay capped by the last night', () => {
+  it('ends by the last night and draws the next party as if it had not been capped', () => {
+    const capped = guestsWith();
+    const free = guestsWith();
+    for (const guests of [capped, free]) {
+      for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
+    }
+    const cappedDraw = drawOf(9);
+    const freeDraw = drawOf(9);
+    for (let each = 0; each < 12; each++) {
+      const day = 20 + each;
+      const party = checkInParty(capped, {
+        random: cappedDraw,
+        day,
+        free: freeBodiesOf(capped),
+        lastNight: day + 2,
+      });
+      const twin = checkInParty(free, { random: freeDraw, day, free: freeBodiesOf(free) });
+      expect(party!.family).toBe(twin!.family);
+      expect(party!.members).toEqual(twin!.members);
+      expect(capped.nights[party!.members[0]!]).toBeLessThanOrEqual(3);
+    }
+  });
+});

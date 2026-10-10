@@ -24,6 +24,7 @@ import { VenueSigns } from './VenueSigns';
 import { RenderStats } from './RenderStats';
 import { ResortNameForm } from './ResortNameForm';
 import { ResortStats } from './ResortStats';
+import { SeasonPanel } from './SeasonPanel';
 import { StaffPanel } from './StaffPanel';
 import { Toasts } from './Toasts';
 import { TopBar, type MenuId } from './TopBar';
@@ -44,6 +45,7 @@ import type { SelectionView } from '../../inspect/domain/selection';
 import type { Advice } from '../../sim/domain/advice';
 import { starsTrend } from '../../sim/domain/dayReport';
 import type { GameMode, Ledger } from '../../sim/domain/ledger';
+import type { SeasonReport } from '../../sim/domain/season';
 import type { LandView } from '../../land/domain/landRights';
 import { hireOffer } from '../domain/hireOffer';
 import { markersOf, type OrderSpot } from '../domain/markers';
@@ -102,6 +104,7 @@ interface HudSlices {
   readonly land: LandView | null;
   // A placement a finger left on the map, waiting for the bar's Place or Cancel.
   readonly pending: boolean;
+  readonly seasons: readonly SeasonReport[];
 }
 
 // What the HUD's pieces read: the groups laid flat, beside what the store holds.
@@ -122,6 +125,7 @@ function useHudSlices(hud: HudStore): HudSlices {
     ledger: useHudSlice(hud, (state) => state.ledger),
     land: useHudSlice(hud, (state) => state.land),
     pending: useHudSlice(hud, (state) => state.pending),
+    seasons: useHudSlice(hud, (state) => state.seasons),
   };
 }
 
@@ -195,6 +199,9 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       mode={modeOf(ledger)}
       resortName={resort.name}
     />
+  ),
+  season: ({ resort, seasons, ledger }) => (
+    <SeasonPanel season={resort.season} seasons={seasons} mode={modeOf(ledger)} />
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
   photos: ({ voices, history, photo }) => (

@@ -7,7 +7,8 @@ import { startDay } from '../../sim/domain/dayReport';
 import { createHappiness } from '../../sim/domain/happiness';
 import { createCarrying } from '../../sim/domain/litter';
 import { createNeeds } from '../../sim/domain/needs';
-import { arrivalsFor, ratingFor } from '../../sim/domain/rating';
+import { arrivalsFor, bookingsWanted, ratingFor } from '../../sim/domain/rating';
+import { firstSeason, lastNightOf, SEASON_DAYS } from '../../sim/domain/season';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { expectationFor } from '../../sim/domain/expectations';
 import { createThoughts } from '../../sim/domain/thoughts';
@@ -52,6 +53,7 @@ function stateOf(away: boolean) {
     today: startDay(0),
     rating: ratingFor({ happiness: 1, present: 1, housed: 1, cleanliness: 1 }),
     open: true,
+    season: null,
     arrivalsPlanned: 10,
     arrivalsAdmitted: 0,
     newcomers: [],
@@ -145,6 +147,46 @@ describe('runDay', () => {
     expect(state.newcomers).toEqual([]);
     expect(planned).toBeGreaterThan(0);
     expect(state.arrivalsPlanned).toBe(planned);
+  });
+});
+
+describe('runDay in a season', () => {
+  it('sends every guest home on the closing morning and books nobody', () => {
+    const { state, sentHome } = stateOf(false);
+    state.season = firstSeason(0);
+    runDay(state, SEASON_DAYS);
+    expect(state.season).toEqual({ ...firstSeason(0), state: 'closing' });
+    expect(state.arrivalsPlanned).toBe(0);
+    expect(sentHome).toHaveLength(presentCount(state.guests));
+  });
+
+  it('books more in the school holidays than early on, and none past the last night', () => {
+    const early = stateOf(true).state;
+    early.season = firstSeason(0);
+    runDay(early, 2);
+    const holidays = stateOf(true).state;
+    holidays.season = firstSeason(0);
+    runDay(holidays, 10);
+    expect(holidays.arrivalsPlanned).toBeGreaterThan(early.arrivalsPlanned);
+    const late = stateOf(true).state;
+    late.season = firstSeason(0);
+    runDay(late, 26);
+    const { guests } = late;
+    for (let person = 0; person < guests.count; person++) {
+      if (guests.present[person] !== 1) continue;
+      expect(guests.arrivedOn[person]! + guests.nights[person]! - 1).toBeLessThanOrEqual(
+        lastNightOf(late.season),
+      );
+    }
+  });
+
+  it('counts the guests the beds could not take', () => {
+    const { state } = stateOf(false);
+    const beds = bedsOn(state.guests);
+    runDay(state, 1);
+    const wanted = bookingsWanted(state.rating, beds);
+    expect(state.today.turnedAway ?? 0).toBe(Math.max(0, wanted - beds.free));
+    expect(wanted).toBeGreaterThan(beds.free);
   });
 });
 

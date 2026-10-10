@@ -18,6 +18,7 @@ import { createCarrying, createLitter } from './litter';
 import { createNeeds } from './needs';
 import { createPhotos, NEVER, notePhoto } from './photos';
 import { ratingFor } from './rating';
+import { closeSeason, firstSeason, startTally, tallyDay } from './season';
 import { resortSnapshotSchema } from './resortSnapshot';
 import { restoreResort, snapshotResort, type ResortState } from './resortState';
 import { AUTO_HIRING, hire } from './staff';
@@ -284,5 +285,30 @@ describe('snapshotResort', () => {
     expect(resortSnapshotSchema.parse(before).prices).toEqual({});
     const dear = { ...before, prices: { villa: 9 } };
     expect(resortSnapshotSchema.safeParse(dear).success).toBe(false);
+  });
+});
+
+describe('the seasons in a save', () => {
+  it('round-trips the season, its tally and the reports of the last ones', () => {
+    const state: ResortState = { ...played(), season: firstSeason(3) };
+    state.seasonTally = tallyDay(startTally(), reportedOn(state, 4));
+    state.seasons = [closeSeason(state.seasonTally, { ...firstSeason(0), number: 2 }, 900)];
+    state.season = { number: 3, startedOn: 60, state: 'break' };
+    const saved = resortSnapshotSchema.parse(snapshotResort(state));
+    const fresh: ResortState = { ...stateFor(5), season: firstSeason(0) };
+    restoreResort(fresh, saved, 70);
+    expect(fresh.season).toEqual(state.season);
+    expect(fresh.seasonTally).toEqual(state.seasonTally);
+    expect(fresh.seasons).toEqual(state.seasons);
+    expect(snapshotResort(fresh)).toEqual(saved);
+  });
+
+  it('places a save from before seasons in one by its day, with an empty tally', () => {
+    const { season: _season, seasons: _seasons, ...before } = snapshotResort(played());
+    const fresh: ResortState = { ...stateFor(5), season: firstSeason(0) };
+    restoreResort(fresh, resortSnapshotSchema.parse(before), 89);
+    expect(fresh.season).toEqual({ number: 4, startedOn: 84, state: 'running' });
+    expect(fresh.seasonTally).toEqual(startTally());
+    expect(fresh.seasons).toEqual([]);
   });
 });

@@ -2,16 +2,17 @@ import type { EventsState } from '../../events/domain/eventRuns';
 import { bedCount, type Guests } from '../../guests/domain/guests';
 import type { Random } from '../../layout/domain/random';
 import { arrivalsDueBy, bedsOn, runCheckIn, wavesDue } from '../../sim/domain/checkIn';
-import { countArrivals, type DayCounts } from '../../sim/domain/dayReport';
+import { countArrivals, countTurnedAway, type DayCounts } from '../../sim/domain/dayReport';
 import { expectationFor } from '../../sim/domain/expectations';
 import type { Happiness } from '../../sim/domain/happiness';
 import type { Carrying } from '../../sim/domain/litter';
 import type { Lodging } from '../../sim/domain/lodgings';
 import type { Needs } from '../../sim/domain/needs';
 import { bookingPull, type Prices } from '../../sim/domain/pricing';
-import { arrivalsFor, type Rating } from '../../sim/domain/rating';
+import { arrivalsFor, bookingsWanted, type Rating } from '../../sim/domain/rating';
 import type { Router } from '../../sim/domain/router';
 import type { SceneryField } from '../../sim/domain/scenery';
+import { closingDayOf, effectOn, lastNightOf, type Season } from '../../sim/domain/season';
 import { forgetStay, type Thoughts } from '../../sim/domain/thoughts';
 import { paidShareFor } from './dayClose';
 import type { SimNow } from './simNow';
@@ -32,6 +33,7 @@ export interface ArrivalsState {
   today: DayCounts;
   rating: Rating;
   open: boolean;
+  season: Season | null;
   arrivalsPlanned: number;
   arrivalsAdmitted: number;
   newcomers: number[];
@@ -66,14 +68,42 @@ export function runDay(resort: ArrivalsState, day: number): void {
   resort.homeEarly.clear();
   resort.nightOwls.clear();
   resort.newcomers = [];
-  const pull = bookingPull(resort.guests.homes, resort.prices, resort.rating.stars);
-  resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests), pull);
-  resort.arrivalsAdmitted = 0;
-  admitWave(resort, day, 0);
-  sendDepartures(resort, day);
+  const { season } = resort;
+  if (season && day >= closingDayOf(season)) closeTheSeason(resort, season);
+  else bookTheDay(resort, day);
   const after = bedCount(resort.guests);
   resort.beds = { total: after.beds, taken: after.taken };
 }
+
+function bookTheDay(resort: ArrivalsState, day: number): void {
+  const prices = bookingPull(resort.guests.homes, resort.prices, resort.rating.stars);
+  const pull = prices * effectOn(resort.season, day).demand;
+  const beds = bedsOn(resort.guests);
+  resort.arrivalsPlanned = arrivalsFor(resort.rating, beds, pull);
+  // A closed resort turns nobody away: nobody was let book.
+  if (canArrive(resort)) {
+    const wanted = bookingsWanted(resort.rating, beds, pull);
+    resort.today = countTurnedAway(resort.today, wanted - Math.max(0, Math.floor(beds.free)));
+  }
+  resort.arrivalsAdmitted = 0;
+  admitWave(resort, day, 0);
+  sendDepartures(resort, day);
+}
+
+// No coach on the closing morning, and every guest still here walks out as on any departure.
+function closeTheSeason(resort: ArrivalsState, season: Season): void {
+  if (season.state === 'running') resort.season = { ...season, state: 'closing' };
+  resort.arrivalsPlanned = 0;
+  resort.arrivalsAdmitted = 0;
+  const { guests } = resort;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] === 1) resort.router.sendHome(person);
+  }
+}
+
+// Nothing passed without a season, so a resort with none draws exactly as it always has.
+const seasonalDraws = (season: Season | null, day: number) =>
+  season ? { mix: effectOn(season, day).mix, lastNight: lastNightOf(season) } : {};
 
 // The first wave is the day's own check-in, run by runDay with the rating it is sized by.
 export function admitLaterWaves(resort: ArrivalsState, clock: SimNow, ticks: number): void {
@@ -103,6 +133,7 @@ export function admitWave(resort: ArrivalsState, day: number, wave: number): voi
     room,
     // The rating runDay sized the coach by, which is the resort these guests booked.
     expectationOf: (home) => expectationFor(resort.rating.stars, paidShareFor(resort, home)),
+    ...seasonalDraws(resort.season, day),
   });
   for (const person of arrived) {
     // The body was somebody else's, and so was whatever it was holding and thinking.

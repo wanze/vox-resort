@@ -127,9 +127,17 @@
 
 .hud-time {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
   padding-left: var(--space-2);
+}
+
+/* Over the clock rather than beside it, so the bar keeps its width. */
+.hud-time-season {
+  font: var(--size-small) / 1 var(--font-ui);
+  white-space: nowrap;
+  color: var(--text-dim);
 }
 
 /* Fixed width, so the bar does not shift as the minutes tick over. */
@@ -169,7 +177,8 @@
   }
 }
 
-.hud-gates {
+.hud-gates,
+.hud-season-open {
   height: var(--control-h);
   padding: 0 var(--space-3) 0 var(--space-2);
 }
@@ -203,7 +212,8 @@
   box-shadow: 0 0 6px var(--lamp-on);
 }
 
-.hud-gates .hud-readout-value {
+.hud-gates .hud-readout-value,
+.hud-season-open .hud-readout-value {
   font-family: var(--font-ui);
   font-size: var(--size-body);
 }

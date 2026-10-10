@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefCallback } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefCallback } from 'react';
 import { useBarFolds } from './useBarFolds';
 import { useHotkeys } from './useHotkeys';
 import { useWindows } from './useWindows';
@@ -23,6 +23,16 @@ export interface HudChrome {
   readonly setMenu: (menu: MenuId | null) => void;
   readonly palette: boolean;
   readonly setPalette: (open: boolean) => void;
+  // Stable, so the renderer is not mounted again when the layout swaps the window controls.
+  readonly onSeasonEnded: () => void;
+}
+
+function useSeasonTab(show: WindowControls['show']): () => void {
+  const latest = useRef(show);
+  useEffect(() => {
+    latest.current = show;
+  }, [show]);
+  return useCallback(() => latest.current('season', true), []);
 }
 
 const always = (action: () => void) => (): boolean => {
@@ -55,6 +65,7 @@ export function useHudChrome(
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
+  const onSeasonEnded = useSeasonTab(windows.show);
   const bar = useBarFolds(layout);
   const [menu, setMenu] = useState<MenuId | null>(null);
   const [palette, showPalette] = useState(false);
@@ -113,5 +124,5 @@ export function useHudChrome(
   // None behind the welcome screen: there is no HUD for them to open.
   useHotkeys(playing ? live : []);
 
-  return { windows, layout, bar, menu, setMenu, palette, setPalette };
+  return { windows, layout, bar, menu, setMenu, palette, setPalette, onSeasonEnded };
 }

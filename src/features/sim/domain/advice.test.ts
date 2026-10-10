@@ -547,6 +547,12 @@ describe('why nobody comes', () => {
     expect(adviceFor(newPlot({ open: false, bedsTotal: 0 }))).toEqual([]);
   });
 
+  it('does not call the gates closed between seasons, but still finds a missing entrance', () => {
+    expect(adviceFor(newPlot({ open: false, between: true, bedsTotal: 4 }))).toEqual([]);
+    const advice = adviceFor(newPlot({ open: false, between: true, entrance: false }));
+    expect(advice.map((each) => each.kind)).toEqual(['no-entrance']);
+  });
+
   it('says there is no entrance on an empty resort that is open', () => {
     const advice = adviceFor(newPlot({ open: true, entrance: false, reception: false }));
     expect(advice.map((each) => each.kind)).toEqual(['no-entrance']);

@@ -18,6 +18,7 @@ export function useResortControls(
   const [params, setParams] = useState<ResortParams | null>(null);
   const [building, setBuilding] = useState(false);
   const open = useHudSlice(hud, (state) => state.open);
+  const season = useHudSlice(hud, (state) => state.season);
   const name = useHudSlice(hud, (state) => state.name);
   const money = useMoney(hud);
 
@@ -72,12 +73,14 @@ export function useResortControls(
     name,
     building,
     open,
+    season,
     money,
     adopt: setParams,
     // Answered through the HUD store, as setOpen is.
     rename: useCallback((next: string) => showcase.current?.rename(next), [showcase]),
     // The showcase answers through the HUD store, so the state follows what it did.
     setOpen: useCallback((next: boolean) => showcase.current?.setOpen(next), [showcase]),
+    openSeason: useCallback(() => showcase.current?.openSeason(), [showcase]),
     setHiring: useCallback(
       (role: StaffRole, count: number | null) => showcase.current?.setHiring(role, count),
       [showcase],

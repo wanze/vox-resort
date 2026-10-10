@@ -345,7 +345,51 @@ inspector shows it in words, from "Easy-going" to "Hard to please".
 
 **Rating** (`rating.ts`) is three quarters happiness,
 one quarter guests with a bed, plus cleanliness. An empty resort rates 3 stars,
-a fully served one about 4.5.
+a fully served one about 4.5, except on a season's first morning (below).
+
+## Seasons
+
+The resort runs in 28-day summer seasons with a break between them
+(`season.ts`, `resort-sim/domain/seasonSteps.ts`). The season lives on the
+resort as `{ number, startedOn, state }`; the calendar day and the weekdays keep
+counting through a break, so the events programme never hears of it. A season
+day starts at the 11:00 check-in.
+
+| Season days | Phase           | Demand | Family / couple / friends / solo | Clear / rain / heatwave / storm (of 24) |
+| ----------- | --------------- | ------ | -------------------------------- | --------------------------------------- |
+| 1-7         | Early season    | 0.6    | 0.15 / 0.45 / 0.15 / 0.25        | 17 / 5 / 0 / 2                          |
+| 8-21        | School holidays | 1.5    | 0.65 / 0.15 / 0.12 / 0.08        | 15 / 3 / 5 / 1                          |
+| 22-28       | Late season     | 0.7    | 0.15 / 0.30 / 0.40 / 0.15        | 14 / 5 / 1 / 4                          |
+| no season   | as always       | 1      | 0.40 / 0.30 / 0.18 / 0.12        | 16 / 4 / 2 / 2                          |
+
+- **Demand** multiplies the bookings (with the prices' pull). Arrivals stay
+  capped by the free beds, so in the holidays a resort fills and the rest are
+  **turned away**, which the day report counts.
+- **The draws do not move.** A mix changes the shares, never the number of
+  `random()` calls, and a stay is drawn first and then capped so nobody is
+  booked past the last night. A resort with no season passes nothing, so the
+  sim report and the tests (which run without seasons) replay as before.
+- **Closing day**, the morning after season day 28: no coach, and every guest
+  still here is sent home. When the resort is empty, or at 22:00 at the latest,
+  the season **ends**: stragglers are seen off by the router's own `seeOff`, the
+  season report is written (the last 8 kept), the gates close and the state
+  becomes `break`.
+- **The break stops the clock.** No ticks run at any speed, so no wages,
+  maintenance or decay; the speed is held at paused and the crowd stands still.
+  Building, demolishing, renaming and hiring work as usual. **Open season N**
+  in the top bar starts the next season at the next 11:00 check-in, opens the
+  gates and resumes the last running speed.
+- **The rating carries over the break.** On a season's first morning an empty
+  resort keeps yesterday's stars instead of resetting to 3. Only that morning:
+  an empty resort rated one star must still reset, or nobody would ever book it.
+- **The season report** (the Season tab of the overview): days, mean, best and
+  worst stars, guests arrived, turned away and checked out, reviews, money by
+  reason, net, balance, busiest and best day. The closing day's goodbyes and
+  takings count, but it is not a day of the season.
+- **Old saves** are cut into seasons from day 0: day 89 is season 4, which
+  started on day 84, and its report covers only the days played since.
+  A new building site starts season 1 on its first check-in, day 1; a generated
+  resort that opens with guests starts at once.
 
 ## Advice
 

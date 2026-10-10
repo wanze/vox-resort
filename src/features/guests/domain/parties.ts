@@ -56,10 +56,17 @@ export interface PartyShape {
   readonly children: number;
 }
 
+export type PartyMix = { readonly [kind in PartyKind]: number };
+
+export const USUAL_MIX = Object.fromEntries(
+  PARTY_MIX.map((shape) => [shape.kind, shape.share]),
+) as PartyMix;
+
 // The draw order (kind, adults, children, surname) is load-bearing: changing it reshuffles every
 // seeded scene a benchmark compares against.
-export function partyShapeFor(random: () => number): PartyShape {
-  const shape = kindFor(random);
+// A season's mix changes the shares, never the number of draws.
+export function partyShapeFor(random: () => number, mix?: PartyMix): PartyShape {
+  const shape = kindFor(random, mix);
   return {
     kind: shape.kind,
     adults: between(random, shape.adults),
@@ -68,11 +75,12 @@ export function partyShapeFor(random: () => number): PartyShape {
   };
 }
 
-function kindFor(random: () => number): PartyShapeWeights {
+function kindFor(random: () => number, mix?: PartyMix): PartyShapeWeights {
   let roll = random();
   for (const shape of PARTY_MIX) {
-    if (roll < shape.share) return shape;
-    roll -= shape.share;
+    const share = mix ? mix[shape.kind] : shape.share;
+    if (roll < share) return shape;
+    roll -= share;
   }
   // Only reachable through floating-point slack in the shares' sum.
   return PARTY_MIX[PARTY_MIX.length - 1]!;

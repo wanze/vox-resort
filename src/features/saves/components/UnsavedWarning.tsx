@@ -1,6 +1,7 @@
 import type { SaveOutcome } from '../domain/saveSlots';
 import type { SaveMeta } from '../domain/snapshot';
 import { NameForm } from './NameForm';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface UnsavedWarningProps {
   readonly unsaved: SaveMeta | null;
@@ -12,7 +13,7 @@ export function UnsavedWarning({ unsaved, onKeep }: UnsavedWarningProps) {
   if (!unsaved) return null;
   return (
     <div className="saves-warning" role="note">
-      <p className="ui-note">Your unsaved game (day {unsaved.day}) will be replaced.</p>
+      <p className="ui-note">Your unsaved game (day {shownDay(unsaved.day)}) will be replaced.</p>
       <NameForm initial="" disabled={false} actions={[{ label: 'Keep it as…', run: onKeep }]} />
     </div>
   );

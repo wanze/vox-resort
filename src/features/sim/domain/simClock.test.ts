@@ -118,7 +118,7 @@ describe('timeLabel', () => {
 
 describe('clockLabel', () => {
   it('pads the hour and the minutes', () => {
-    expect(clockLabel(atTick(365))).toBe('Day 0  06:05');
+    expect(clockLabel(atTick(365))).toBe('Day 1  06:05');
   });
 });
 

@@ -12,6 +12,7 @@ import { stampOf, TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { adviceIcon, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
 import { PanelSummary } from './PanelSummary';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface MessagesPanelProps {
   readonly log: readonly Message[];
@@ -37,7 +38,7 @@ const TOGGLES: readonly {
 
 const whenOf = (ticks: number): string => {
   const { day, hour } = stampOf(ticks);
-  return `day ${day}, ${String(hour).padStart(2, '0')}:00`;
+  return `day ${shownDay(day)}, ${String(hour).padStart(2, '0')}:00`;
 };
 
 // A report is labelled with the day its period started on, and closed at the next check-in.

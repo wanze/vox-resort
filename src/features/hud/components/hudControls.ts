@@ -1,3 +1,4 @@
+import type { SeasonView } from '../../sim/domain/season';
 import type { LandView } from '../../land/domain/landRights';
 import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
@@ -41,6 +42,8 @@ export interface ClockControls {
   readonly forcedWeather: Weather | null;
   setSpeed(speed: SimSpeed): void;
   togglePause(): void;
+  // Back to the speed the player last ran at, as unpausing does.
+  resume(): void;
   setWeather(weather: Weather | null): void;
   // For a clock the showcase set itself, as a load does; nothing is sent back to it.
   adoptSpeed(speed: SimSpeed): void;
@@ -88,10 +91,13 @@ export interface ResortControls {
   readonly name: string | null;
   readonly building: boolean;
   readonly open: boolean;
+  // Null where the resort runs no seasons.
+  readonly season: SeasonView | null;
   readonly money: MoneyControls;
   adopt(params: ResortParams): void;
   rename(name: string): void;
   setOpen(open: boolean): void;
+  openSeason(): void;
   setHiring(role: StaffRole, count: number | null): void;
   // null puts the family back at list price.
   setPrice(family: string, factor: number | null): void;

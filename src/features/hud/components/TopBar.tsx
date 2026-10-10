@@ -70,6 +70,55 @@ function GuestsReadout({ status }: { readonly status: StatusView | null }) {
   );
 }
 
+// Never handed to the menu as the gates are: between seasons it is the one thing to press.
+function OpenSeasonButton({
+  season,
+  onOpen,
+}: {
+  readonly season: number;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="ui-chip hud-season-open"
+      title="Open the gates and start the next season"
+      onClick={onOpen}
+    >
+      <span className="hud-gates-lamp" aria-hidden="true" />
+      <span className="hud-readout-value">{`Open season ${season}`}</span>
+    </button>
+  );
+}
+
+interface SeasonAction {
+  readonly next: number;
+  readonly onOpen: () => void;
+}
+
+// Null outside a break, where the gates are the player's to open and close.
+function seasonActionOf(resort: ResortControls, clock: ClockControls): SeasonAction | null {
+  if (resort.season?.state !== 'break') return null;
+  return {
+    next: resort.season.number + 1,
+    onOpen: () => {
+      resort.openSeason();
+      clock.resume();
+    },
+  };
+}
+
+function GateControl({
+  action,
+  resort,
+}: {
+  readonly action: SeasonAction | null;
+  readonly resort: ResortControls;
+}) {
+  if (action) return <OpenSeasonButton season={action.next} onOpen={action.onOpen} />;
+  return <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />;
+}
+
 // The stylesheet hands it to the menu on a narrow bar: there is no room, and it is rarely changed.
 function GatesToggle({
   open,
@@ -96,6 +145,7 @@ function GatesToggle({
 
 export function TopBar(props: TopBarProps) {
   const { barElement, clock, resort, overlay, ledger, status, windows, menu, onMenuChange } = props;
+  const season = seasonActionOf(resort, clock);
   const opener =
     (id: MenuId) =>
     (open: boolean): void =>
@@ -118,17 +168,23 @@ export function TopBar(props: TopBarProps) {
           highlights={props.highlights}
           overlay={overlay}
           gates={{ open: resort.open, onOpenChange: resort.setOpen }}
+          season={season}
           onPhoto={props.onPhoto}
         />
       </div>
 
       <div className="ui-plate">
-        <TimeOfDay dayElement={props.dayElement} timeElement={props.timeElement} />
+        <TimeOfDay
+          dayElement={props.dayElement}
+          timeElement={props.timeElement}
+          season={resort.season}
+        />
         <SpeedControl
           speed={clock.speed}
           onSpeedChange={clock.setSpeed}
           open={menu === 'speed'}
           onOpenChange={opener('speed')}
+          betweenSeasons={season !== null}
         />
         <WeatherForecast
           weather={clock.weather}
@@ -166,7 +222,7 @@ export function TopBar(props: TopBarProps) {
             onOpenChange={opener('rating')}
           />
         ) : null}
-        <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />
+        <GateControl action={season} resort={resort} />
         <MoneyReadout ledger={ledger} />
         <GuestsReadout status={status} />
       </div>

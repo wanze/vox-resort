@@ -54,6 +54,8 @@ export interface DayCounts {
   readonly welcome?: WelcomeTally;
   // Absent until the first photo of the day, and in saves from before photos.
   readonly photos?: PhotoTally;
+  // Absent on a day the beds took everybody who wanted to come.
+  readonly turnedAway?: number;
 }
 
 export interface DayReport {
@@ -72,6 +74,7 @@ export interface DayReport {
   readonly events?: EventTally;
   readonly welcome?: WelcomeTally;
   readonly photos?: PhotoTally;
+  readonly turnedAway?: number;
 }
 
 export const HISTORY_DAYS = 14;
@@ -101,6 +104,11 @@ export function countDeparture(counts: DayCounts, left: number): DayCounts {
 
 export function countReview(counts: DayCounts, stars: number): DayCounts {
   return { ...counts, reviews: counts.reviews + 1, reviewStars: counts.reviewStars + stars };
+}
+
+export function countTurnedAway(counts: DayCounts, people: number): DayCounts {
+  if (people <= 0) return counts;
+  return { ...counts, turnedAway: (counts.turnedAway ?? 0) + people };
 }
 
 const NO_EVENTS: EventTally = { held: 0, audience: 0, called: 0 };
@@ -206,6 +214,7 @@ export function reportOf(parts: {
     ...(counts.events ? { events: counts.events } : {}),
     ...(counts.welcome ? { welcome: counts.welcome } : {}),
     ...(counts.photos ? { photos: topSpots(counts.photos) } : {}),
+    ...(counts.turnedAway ? { turnedAway: counts.turnedAway } : {}),
   };
 }
 

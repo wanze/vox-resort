@@ -1,4 +1,5 @@
 // Written straight to the DOM: re-rendering React every frame would distort the frame
+import { shownDay } from '../../../shared/domain/dayNumber';
 // rate it reports. React still creates the nodes.
 
 export interface FrameUpdate {
@@ -183,7 +184,7 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
       writeMarkers(parts.markers, frame.markers);
       writeStaffPins(frame.staff);
       if (frame.sampled) writeDebug(frame);
-      writeText(parts.day, `Day ${frame.day}`);
+      writeText(parts.day, `Day ${shownDay(frame.day)}`);
       writeText(parts.time, frame.time);
       // Blanked rather than left standing, so a guest's last activity is never read as somebody else's.
       writeText(parts.inspect, frame.inspect ?? '');

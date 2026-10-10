@@ -109,7 +109,8 @@
     .hud-menu .ui-chip-caret,
     .hud-readout-label,
     .hud-gates-state,
-    .hud-figure-of
+    .hud-figure-of,
+    .hud-time-season
   ) {
   display: none;
 }

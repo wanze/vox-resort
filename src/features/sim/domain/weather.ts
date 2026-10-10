@@ -56,18 +56,24 @@ export const CLEAR_EFFECT = WEATHER_EFFECTS.clear;
 
 // Clear is about two days in three: weather every day is no event, and a beach shut
 // half the week is one nobody builds.
-const DRAW_RANGE = 24;
-const CLEAR_IN = 16;
-const RAIN_IN = 4;
-const HEATWAVE_IN = 2;
+export const WEATHER_DRAWS = 24;
+
+// Out of WEATHER_DRAWS; a storm is whatever the three leave.
+export interface WeatherBands {
+  readonly clear: number;
+  readonly rain: number;
+  readonly heatwave: number;
+}
+
+export const USUAL_WEATHER: WeatherBands = { clear: 16, rain: 4, heatwave: 2 };
 
 // Derived from day and seed on every call, never stored. Hashed rather than taken
-// modulo, which would cycle the kinds in lockstep.
-export function weatherOn(day: number, seed: number): Weather {
-  const draw = mix(Math.trunc(day) * 2_654_435_761 + seed) % DRAW_RANGE;
-  if (draw < CLEAR_IN) return 'clear';
-  if (draw < CLEAR_IN + RAIN_IN) return 'rain';
-  if (draw < CLEAR_IN + RAIN_IN + HEATWAVE_IN) return 'heatwave';
+// modulo, which would cycle the kinds in lockstep. A season moves the bands, never the draw.
+export function weatherOn(day: number, seed: number, bands = USUAL_WEATHER): Weather {
+  const draw = mix(Math.trunc(day) * 2_654_435_761 + seed) % WEATHER_DRAWS;
+  if (draw < bands.clear) return 'clear';
+  if (draw < bands.clear + bands.rain) return 'rain';
+  if (draw < bands.clear + bands.rain + bands.heatwave) return 'heatwave';
   return 'storm';
 }
 

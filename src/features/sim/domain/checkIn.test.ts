@@ -186,3 +186,22 @@ describe('runCheckIn', () => {
     for (const person of plain.arrived) expect(plain.happiness.expects[person]).toBe(0);
   });
 });
+
+describe('runCheckIn in a season', () => {
+  it('books nobody past the last night', () => {
+    const guests = emptied(guestsOf(200));
+    const arrived = runCheckIn({
+      guests,
+      needs: createNeeds(guests, 7),
+      happiness: createHappiness(guests.count),
+      rating: FIVE_STARS,
+      day: 10,
+      random: createRandom(31),
+      lastNight: 13,
+    });
+    expect(arrived.length).toBeGreaterThan(0);
+    for (const person of arrived) {
+      expect(guests.arrivedOn[person]! + guests.nights[person]!).toBeLessThanOrEqual(14);
+    }
+  });
+});

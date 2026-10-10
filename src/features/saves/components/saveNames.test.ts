@@ -19,11 +19,11 @@ const META: SaveMeta = {
 describe('summaryOf', () => {
   it('leads with the resort name, unless the save is called after it', () => {
     expect(summaryOf({ ...META, resortName: 'Coral Cove' }, 0)).toBe(
-      'Coral Cove · Free play · day 12 · just now',
+      'Coral Cove · Free play · day 13 · just now',
     );
     expect(summaryOf({ ...META, name: 'Coral Cove', resortName: 'Coral Cove' }, 0)).toBe(
-      'Free play · day 12 · just now',
+      'Free play · day 13 · just now',
     );
-    expect(summaryOf(META, 0)).toBe('Free play · day 12 · just now');
+    expect(summaryOf(META, 0)).toBe('Free play · day 13 · just now');
   });
 });

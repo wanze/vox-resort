@@ -18,6 +18,7 @@ import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
 import { paidShareOf } from '../../sim/domain/expectations';
 import { factorOf, type Prices } from '../../sim/domain/pricing';
 import { ratingFor, type Rating } from '../../sim/domain/rating';
+import { isSeasonDay, tallyDay, type Season, type SeasonTally } from '../../sim/domain/season';
 import { sceneryOver, type SceneryField } from '../../sim/domain/scenery';
 import { wagesFor, type Roster } from '../../sim/domain/staff';
 import { meanCleanliness } from '../../sim/domain/staffRouter';
@@ -39,6 +40,8 @@ export interface DayCloseState {
   venues: readonly Venue[];
   rating: Rating;
   readonly prices: Prices;
+  readonly season: Season | null;
+  seasonTally: SeasonTally;
   today: DayCounts;
   history: readonly DayReport[];
   beds: { readonly total: number; readonly taken: number };
@@ -74,13 +77,17 @@ function nightlyRate(resort: RateState, home: number): number {
 export const paidShareFor = (resort: RateState, home: number): number =>
   paidShareOf(nightlyRate(resort, home), priceOf(resort.guests.homes[home]!.id));
 
+// A season's first morning finds the resort emptied by the last one's end, and keeps its stars.
+// Only that morning: an empty resort rated one star must still be reset, or nobody ever books it.
 export function rateTheDay(resort: DayCloseState): void {
   const beds = bedCount(resort.guests);
+  const firstMorning = resort.season !== null && resort.seasonTally.days === 0;
   resort.rating = ratingFor({
     happiness: meanHappiness(resort.happiness, resort.guests),
     present: presentCount(resort.guests),
     housed: beds.taken,
     cleanliness: meanCleanliness(resort.upkeep, resort.venues.length),
+    ...(firstMorning ? { previous: resort.rating } : {}),
   });
 }
 
@@ -98,8 +105,17 @@ export function closeTheDay(resort: DayCloseState, day: number): void {
       thoughts: resort.thoughtDay,
     });
     resort.history = keepDay(resort.history, report);
+    tallySeasonDay(resort, report);
   }
   resort.today = startDay(day);
+}
+
+// By the day reported on, not the state: the closing day's report is written at the next
+// season's first check-in, and belongs to neither.
+function tallySeasonDay(resort: DayCloseState, report: DayReport): void {
+  const { season } = resort;
+  if (!season || season.state === 'break' || !isSeasonDay(season, report.day)) return;
+  resort.seasonTally = tallyDay(resort.seasonTally, report);
 }
 
 // A day with no welcome run or called off had no stage for it, or had it switched off.

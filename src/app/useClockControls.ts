@@ -6,6 +6,9 @@ import type { ClockControls } from '../features/hud/components/hudControls';
 import type { HudStore } from '../features/hud/domain/hudStore';
 import { useHudSlice } from '../features/hud/components/useHudSlice';
 
+// Read live rather than from a render: Open season is answered before React has rendered it.
+const betweenSeasons = (hud: HudStore): boolean => hud.getSnapshot().season?.state === 'break';
+
 export function useClockControls(
   showcase: RefObject<Showcase | null>,
   hud: HudStore,
@@ -19,12 +22,13 @@ export function useClockControls(
 
   const changeSpeed = useCallback(
     (next: SimSpeed) => {
+      if (next !== 'paused' && betweenSeasons(hud)) return;
       current.current = next;
       if (next !== 'paused') running.current = next;
       setSpeed(next);
       showcase.current?.setSpeed(next);
     },
-    [showcase],
+    [showcase, hud],
   );
 
   return {
@@ -36,6 +40,7 @@ export function useClockControls(
       () => changeSpeed(current.current === 'paused' ? running.current : 'paused'),
       [changeSpeed],
     ),
+    resume: useCallback(() => changeSpeed(running.current), [changeSpeed]),
     setWeather: useCallback(
       (next: Weather | null) => {
         setForced(next);

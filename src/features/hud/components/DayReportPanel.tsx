@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import { tallyWords, welcomeWords } from '../../events/components/eventWords';
 import type { DayReport } from '../../sim/domain/dayReport';
-import { netOf, REASONS, type GameMode } from '../../sim/domain/ledger';
+import { netOf, REASONS, type Column, type GameMode } from '../../sim/domain/ledger';
 import { trendOn, trendWords } from './dayWords';
 import { REASON_LABELS, signed } from './ledgerWords';
 import { RatingBreakdown } from './RatingControl';
 import { Sparkline } from './Sparkline';
 import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
+import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface DayReportPanelProps {
   readonly history: readonly DayReport[];
@@ -25,7 +26,13 @@ const whole = (value: number): string => value.toLocaleString('en-US');
 
 const starsOf = (value: number): string => `${value.toFixed(1)} ★`;
 
-function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+export function Section({
+  title,
+  children,
+}: {
+  readonly title: string;
+  readonly children: ReactNode;
+}) {
   return (
     <section>
       <h3 className="hud-report-heading">{title}</h3>
@@ -60,8 +67,8 @@ function Stepper({
       </button>
       <strong>
         {resortName === null
-          ? `Day ${history[at]!.day}`
-          : `${resortName} · Day ${history[at]!.day}`}
+          ? `Day ${shownDay(history[at]!.day)}`
+          : `${resortName} · Day ${shownDay(history[at]!.day)}`}
       </strong>
       <button
         type="button"
@@ -97,7 +104,13 @@ function RatingSection({
 
 type Layout = 'figures' | 'said' | 'chart';
 
-function Rows({ layout, children }: { readonly layout: Layout; readonly children: ReactNode }) {
+export function Rows({
+  layout,
+  children,
+}: {
+  readonly layout: Layout;
+  readonly children: ReactNode;
+}) {
   return (
     <dl className="hud-report-rows" data-layout={layout}>
       {children}
@@ -105,7 +118,7 @@ function Rows({ layout, children }: { readonly layout: Layout; readonly children
   );
 }
 
-function Row({
+export function Row({
   label,
   total = false,
   children,
@@ -142,6 +155,11 @@ function GuestsSection({ report }: { readonly report: DayReport }) {
         <Row label="Arrived">
           <dd>{whole(report.arrived)}</dd>
         </Row>
+        {report.turnedAway ? (
+          <Row label="Turned away">
+            <dd>{whole(report.turnedAway)}</dd>
+          </Row>
+        ) : null}
         <WelcomedRow report={report} />
         <Row label="Checked out">
           <dd>{whole(report.left)}</dd>
@@ -152,16 +170,55 @@ function GuestsSection({ report }: { readonly report: DayReport }) {
             <span className="hud-figure-of"> / {whole(report.beds.total)}</span>
           </dd>
         </Row>
-        <Row label="Reviews">
-          <dd>{whole(report.reviews)}</dd>
-        </Row>
-        {report.meanReview === null ? null : (
-          <Row label="Mean review">
-            <dd>{starsOf(report.meanReview)}</dd>
-          </Row>
-        )}
+        <ReviewRows reviews={report.reviews} meanReview={report.meanReview} />
       </Rows>
     </Section>
+  );
+}
+
+// Shared with the season report, which sums the same figures over its days.
+export function ReviewRows({
+  reviews,
+  meanReview,
+}: {
+  readonly reviews: number;
+  readonly meanReview: number | null;
+}) {
+  return (
+    <>
+      <Row label="Reviews">
+        <dd>{whole(reviews)}</dd>
+      </Row>
+      {meanReview === null ? null : (
+        <Row label="Mean review">
+          <dd>{starsOf(meanReview)}</dd>
+        </Row>
+      )}
+    </>
+  );
+}
+
+export function MoneyRows({
+  money,
+  balance,
+}: {
+  readonly money: Column;
+  readonly balance: number;
+}) {
+  return (
+    <>
+      {REASONS.map((reason) => (
+        <Row key={reason} label={REASON_LABELS[reason]}>
+          <dd>{signed(money[reason])}</dd>
+        </Row>
+      ))}
+      <Row label="Net" total>
+        <dd>{signed(netOf(money))}</dd>
+      </Row>
+      <Row label="Balance">
+        <dd>{whole(balance)}</dd>
+      </Row>
+    </>
   );
 }
 
@@ -169,17 +226,7 @@ function MoneySection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Money">
       <Rows layout="figures">
-        {REASONS.map((reason) => (
-          <Row key={reason} label={REASON_LABELS[reason]}>
-            <dd>{signed(report.money[reason])}</dd>
-          </Row>
-        ))}
-        <Row label="Net" total>
-          <dd>{signed(netOf(report.money))}</dd>
-        </Row>
-        <Row label="Balance">
-          <dd>{whole(report.balance)}</dd>
-        </Row>
+        <MoneyRows money={report.money} balance={report.balance} />
       </Rows>
     </Section>
   );

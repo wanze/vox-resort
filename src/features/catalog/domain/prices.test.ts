@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { OBJECT_TYPES, objectTypeById } from './objectTypes';
 import {
   buildCostOf,
+  chargeOf,
   costToStand,
   DIG_COST,
   nightPriceOf,
@@ -90,5 +91,21 @@ describe('nightPriceOf', () => {
     expect(nightPriceOf('villa', 1)).toBe(Math.round(base * (1 + SETTING_PREMIUM)));
     expect(nightPriceOf('villa', 3)).toBe(nightPriceOf('villa', 1));
     expect(nightPriceOf('villa', -1)).toBe(base);
+  });
+
+  it('changes nothing at factor 1 for any priced type', () => {
+    for (const type of OBJECT_TYPES.filter((each) => priceOf(each.id) > 0)) {
+      for (const setting of [0, 0.4, 1]) {
+        expect(nightPriceOf(type.id, setting, 1)).toBe(nightPriceOf(type.id, setting));
+      }
+    }
+  });
+});
+
+describe('chargeOf', () => {
+  it('charges the list price times the factor, rounded', () => {
+    expect(chargeOf('restaurant', 1.5)).toBe(12);
+    expect(chargeOf('restaurant', 1)).toBe(priceOf('restaurant'));
+    expect(chargeOf('tree', 2)).toBe(0);
   });
 });

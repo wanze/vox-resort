@@ -377,7 +377,8 @@ kind; `reviews.ts` turns a stay into one line at check-out.
 - `not-worth-it` and `good-value` are heard as the night is billed, about the
   lodging: a guest charged over 1.05 of list whose mood is under
   `0.55 + 0.25 × expects` grumbles, and one charged at most that with a mood of
-  0.8 or more praises it.
+  0.8 or more praises it. `not-worth-it` is also heard on a paid visit priced
+  over what the stars justify (see Money).
 - `photo` ("Had to take a picture of the fountain") and `sunset` ("What a
   sunset!") are praise, heard when a guest takes a photo.
 - Wording lives in `hud/components/thoughtWords.ts`.
@@ -615,9 +616,11 @@ One simulation runs in both modes. Sandbox and tycoon differ only in
 pays wages and maintenance, it's just never short. Don't "fix" wages to 0 in
 sandbox.
 
-**A guest's expectation reads the price they paid; nothing else does.** The
-price sets how demanding a guest is when they check in. It never changes which
-venue they choose, where they walk or which lodging they get.
+**Prices reach guests in three places, and only these:** what a guest paid
+for their bed sets their expectation (083); a venue's price multiplies its
+appeal by at most 1.25 and at least 0.4 (`venuePull` in `pricing.ts`); and
+the price of the beds sizes the morning's coach (`bookingPull`). Routing,
+needs and the lodging a party is given never read a price.
 
 - `cost` on a model is what standing it costs; undeclared, it's derived from
   voxel count.
@@ -627,6 +630,13 @@ venue they choose, where they walk or which lodging they get.
   Books.
 - Nights are billed for the bed slept in. A lodging's rate rises up to a quarter
   with its surroundings.
+- **The player sets prices** on the Books window's Prices tab: a factor per
+  family (every style of a Villa costs the same), 0.5 to 2 in steps of 0.1,
+  saved as `prices`. A night applies it before the surroundings premium; a free
+  venue stays free.
+- **Fair** is `1 + 0.15 × (stars − 3)`. List price never moves the bookings;
+  beds dearer than `max(1, fair)` lose them, cheaper than list gain them (pull
+  0.2 to 1.3). A paid visit over `fair + 0.2` is heard as `not-worth-it`.
 - **Tycoon starts on bare ground** with 8,000. Generated resorts are always
   sandbox. "Free play" is the player-facing name for sandbox.
 

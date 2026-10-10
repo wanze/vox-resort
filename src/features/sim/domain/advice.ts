@@ -404,13 +404,21 @@ const IDLE_ROOMY = 40;
 const idleWeight = (capacity: number): number =>
   0.2 + (IDLE_LOUDEST - 0.2) * clamp(capacity / IDLE_ROOMY);
 
+// A quiet first aid is good news, a reception is met at check-in, and a fire pit serves
+// nothing until a bonfire is booked on it.
+const idleIsFine = (venue: Venue): boolean =>
+  venue.receives === true || venue.satisfies.every(({ need }) => need === 'health');
+
 // Silent until somebody has been somewhere: a fresh plot's empty counters would
 // read as every building standing idle.
 export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
   if (facts.visits.size === 0) return [];
   return facts.venues
     .filter(
-      (venue) => !facts.unreachable.has(venue.key) && (facts.visits.get(venue.key) ?? 0) === 0,
+      (venue) =>
+        !idleIsFine(venue) &&
+        !facts.unreachable.has(venue.key) &&
+        (facts.visits.get(venue.key) ?? 0) === 0,
     )
     .map((venue) => ({
       kind: 'unvisited' as const,

@@ -36,58 +36,150 @@
   color: var(--foliage);
 }
 
-.hud-staff {
+/* Staff and prices: name, the figure, a note on it and the stepper, in one grid per panel so
+   every group's columns line up. */
+.hud-settings {
   display: grid;
-  grid-template-columns: auto auto auto auto auto 1fr auto;
-  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: var(--space-2) var(--space-3);
   align-items: center;
-  margin: 0;
   white-space: nowrap;
 }
 
-.hud-staff-row {
+.hud-settings-row,
+.hud-settings-group {
   display: contents;
 }
 
-.hud-staff dt {
-  padding-right: var(--space-2);
-}
-
-.hud-staff dd {
+.hud-settings dd {
   margin: 0;
 }
 
-.hud-staff-count {
-  min-width: 2ch;
-  padding-right: var(--space-1);
+.hud-settings-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A 24px slot, the size of the largest glyph at scale 2; the role figures are drawn smaller,
+   and centring them here keeps every name on the same column. */
+.hud-settings-icon,
+.hud-problem-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.hud-settings-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hud-settings-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-settings-value,
+.hud-summary strong {
   font: 600 13px / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
+}
+
+.hud-settings-value {
   text-align: right;
 }
 
-.hud-staff-row--total .hud-staff-count {
-  grid-column: 2 / -1;
-  padding-top: var(--space-2);
-  text-align: left;
-}
-
-.hud-staff-step {
-  min-width: 28px;
-}
-
-.hud-staff-note {
+/* Wide enough for −50%, so a row at list price keeps its column. */
+.hud-settings-note {
+  min-width: 4ch;
   color: var(--text-faint);
   font: 500 var(--size-small) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-/* A line of its own under the role's row, as the grid has no column left for it. */
-.hud-staff-tally {
+.hud-settings [data-tone='good'],
+.hud-summary [data-tone='good'] {
+  color: var(--foliage);
+}
+
+.hud-settings [data-tone='bad'],
+.hud-summary [data-tone='bad'] {
+  color: var(--ink-red);
+}
+
+.hud-summary,
+.hud-settings-heading {
   grid-column: 1 / -1;
-  margin-top: calc(-1 * var(--space-1));
+}
+
+.hud-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-1);
+}
+
+.hud-summary-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.hud-summary .ui-help {
+  margin-left: auto;
+}
+
+.hud-settings-heading {
+  margin: var(--space-2) 0 0;
+}
+
+.hud-staff-wanted {
   color: var(--text-faint);
-  font: 500 var(--size-small) / 1 var(--font-ui);
+  font-weight: 500;
+}
+
+/* A sliver under the role's name, so it costs the grid no column. */
+.hud-staff-duty {
+  display: flex;
+  gap: 1px;
+  width: 64px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--sunken);
+}
+
+.hud-staff-duty-share {
+  flex-basis: 0;
+  background: var(--duty);
+}
+
+.hud-staff-duty-share[data-share='working'],
+.hud-staff-key[data-share='working'] {
+  --duty: var(--lamp-on);
+}
+
+.hud-staff-duty-share[data-share='walking'],
+.hud-staff-key[data-share='walking'] {
+  --duty: var(--ochre);
+}
+
+.hud-staff-duty-share[data-share='idle'],
+.hud-staff-key[data-share='idle'] {
+  --duty: var(--stone-500);
+}
+
+/* The help's legend: the word underlined in its share's colour. */
+.hud-staff-key {
+  border-bottom: 3px solid var(--duty);
 }
 
 /* Rows are sentences here; .ui-stats keeps every line on one line, which would
@@ -96,8 +188,19 @@
   white-space: normal;
 }
 
-/* Subject, what is wrong and what to do about it in three columns, so every row's parts line up. */
-.hud-advice-list {
+.hud-advice-tiers,
+.hud-guests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.hud-advice-tiers .hud-report-heading,
+.hud-guests .hud-report-heading {
+  margin-bottom: var(--space-2);
+}
+
+.hud-remarks {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-2) var(--space-3);
@@ -107,18 +210,40 @@
   list-style: none;
 }
 
-.hud-advice-row {
+.hud-remark {
   display: contents;
 }
 
-.hud-advice-actions {
+.hud-remark-said {
   display: flex;
-  justify-content: flex-end;
-  gap: var(--space-1);
+  flex-direction: column;
+  gap: 3px;
+  white-space: normal;
 }
 
-.hud-advice-actions .hud-advice-show {
-  margin-left: 0;
+.hud-remark-bar {
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--sunken);
+}
+
+.hud-remark-fill {
+  display: block;
+  height: 100%;
+  background: var(--foliage);
+}
+
+.hud-remark[data-tone='bad'] .hud-remark-fill {
+  background: var(--ink-red);
+}
+
+.hud-remark-count {
+  color: var(--text-faint);
+  font: 500 var(--size-small) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .hud-advice-show {
@@ -132,38 +257,11 @@
   gap: var(--space-2);
 }
 
-.hud-message-list {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-3) var(--space-3);
-  align-items: center;
-  margin: 0;
-}
-
-.hud-message {
-  display: contents;
-}
-
-.hud-message dd {
-  margin: 0;
-}
-
 .hud-message-when {
-  display: block;
-  margin-top: var(--space-1);
+  white-space: nowrap;
   font: 500 var(--size-small) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
-  letter-spacing: normal;
-  text-transform: none;
   color: var(--text-faint);
-}
-
-.hud-message-action {
-  justify-self: end;
-}
-
-.hud-message-action .hud-advice-show {
-  margin-left: 0;
 }
 
 .hud-report-stepper {
@@ -278,7 +376,7 @@
   gap: var(--space-3);
 }
 
-.hud-inspect-problems {
+.hud-problems {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -287,7 +385,7 @@
   list-style: none;
 }
 
-.hud-inspect-problem {
+.hud-problem {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -298,23 +396,43 @@
   white-space: normal;
 }
 
-.hud-inspect-problem[data-severity='urgent'] {
+.hud-problem[data-severity='urgent'] {
   border-left-color: var(--lamp-off);
 }
 
-.hud-inspect-problem[data-severity='note'] {
+.hud-problem[data-severity='note'] {
   border-left-color: var(--edge-soft);
 }
 
-.hud-inspect-problem-icon {
-  flex: none;
-  width: 24px;
-  height: 24px;
+.hud-problem[data-severity='day'] {
+  border-left-color: var(--foliage);
 }
 
-.hud-inspect-problem .hud-advice-show {
+.hud-problem[data-severity='event'] {
+  border-left-color: var(--terracotta);
+}
+
+.hud-problem-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hud-problem-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+.hud-problem .hud-advice-show {
   flex: none;
   margin-left: auto;
+}
+
+.hud-problem-actions .hud-advice-show {
+  margin-left: 0;
 }
 
 .hud-inspect-members {
@@ -380,7 +498,7 @@
 }
 /* stylelint-enable function-disallowed-list */
 
-.hud-staff + .hud-report-heading {
+.hud-settings + .hud-report-heading {
   margin-top: var(--space-4);
 }
 

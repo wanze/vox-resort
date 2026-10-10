@@ -3,7 +3,7 @@ import { it } from 'vitest';
 import referenceJson from '../fixtures/reference-resort.json';
 import { GUEST_NEEDS, type GuestNeed } from '../voxel-gen/voxelgen.ts';
 import { ORIGINAL_TYPES } from '../src/features/catalog/domain/objectTypes';
-import { buildCostOf } from '../src/features/catalog/domain/prices';
+import { buildCostOf, priceOf } from '../src/features/catalog/domain/prices';
 import { isWaiting, takeOffPlot, type Crowd } from '../src/features/crowd/domain/crowd';
 import { crowdSizeFor, crowdSizeForOwned } from '../src/features/crowd/domain/crowdSize';
 import type { WalkNetwork } from '../src/features/crowd/domain/walkNetwork';
@@ -38,6 +38,7 @@ import { TICKS_PER_DAY, type SimSpeed } from '../src/features/sim/domain/simCloc
 import { wagesFor } from '../src/features/sim/domain/staff';
 import { maintenanceFor } from '../src/features/sim/domain/takings';
 import type { PhotoTally } from '../src/features/sim/domain/dayReport';
+import { setPrice, type Prices } from '../src/features/sim/domain/pricing';
 import { loudest } from '../src/features/sim/domain/thoughts';
 import type { Venue } from '../src/features/sim/domain/venues';
 import { WEATHERS, type Weather } from '../src/features/sim/domain/weather';
@@ -56,6 +57,8 @@ const OPENS_EMPTY = process.env.SIM_EMPTY === '1';
 const QUIET = process.env.SIM_QUIET === '1';
 // Off by default, so a report without it replays as it did before guests took photos.
 const PHOTOS = process.env.SIM_PHOTOS === '1';
+// A factor on every priced family's list price, as the Prices tab sets one; unset, list price.
+const PRICES = process.env.SIM_PRICES === undefined ? null : Number(process.env.SIM_PRICES);
 // The JSON a save exports to: runs the player's own resort instead of a generated one.
 const SAVE = process.env.SIM_SAVE ?? '';
 // A generated plot moves with every model added to the catalogue; the reference resort only
@@ -330,6 +333,12 @@ it('reports a few days on a generated plot', () => {
   const crowd = state.crowd.crowd;
   const { network } = crowd;
   state.ledger = createLedger('tycoon', OPENING_BALANCE.tycoon - buildCost);
+  if (PRICES !== null) {
+    state.prices = ORIGINAL_TYPES.filter((type) => priceOf(type.id) > 0).reduce<Prices>(
+      (prices, type) => setPrice(prices, type.family, PRICES),
+      state.prices,
+    );
+  }
   if (OPENS_EMPTY) {
     for (let party = 0; party < guests.parties.length; party++) checkOutParty(guests, party);
     for (let person = 0; person < population; person++) {
@@ -390,7 +399,7 @@ it('reports a few days on a generated plot', () => {
       const said = loudest(state.thoughtDay, 5).map(
         (each) => `${each.kind} ${each.subject ?? ''} ${each.count}`,
       );
-      const { beds, present } = state.history.find((report) => report.day === day - 1)!;
+      const { beds, present, arrived } = state.history.find((report) => report.day === day - 1)!;
       const { yesterday, today, balance } = state.ledger;
       console.log(
         [
@@ -405,6 +414,7 @@ it('reports a few days on a generated plot', () => {
             `maintenance ${yesterday.maintenance}, net ${netOf(yesterday)}, ` +
             `balance ${balance - netOf(today)}`,
           ...(PHOTOS ? [photoLine(present)] : []),
+          ...(PRICES === null ? [] : [`  prices: x${PRICES}, arrived ${arrived}`]),
         ].join('\n'),
       );
     }

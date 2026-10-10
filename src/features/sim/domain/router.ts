@@ -218,6 +218,8 @@ export function createRouter(parts: {
   readonly onNightOver?: (party: number) => void;
   readonly eventStay?: (person: number, venue: number) => number;
   readonly onWoke?: (person: number) => void;
+  // Multiplies a venue's appeal by its price; absent, every venue is at list price.
+  readonly priceAppeal?: (venue: number) => number;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -441,6 +443,13 @@ export function createRouter(parts: {
     (venue: number): number =>
       tasteFor(caches.salts[venue] ?? 0, person, TASTE_SPREAD);
 
+  // One closure per choice, as affinityOf is, and none more while every venue is at list price.
+  const { priceAppeal } = parts;
+  const pricedAffinityOf = (person: number): ((venue: number) => number) => {
+    const taste = affinityOf(person);
+    return priceAppeal ? (venue) => taste(venue) * priceAppeal(venue) : taste;
+  };
+
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
     // A venue that shuts while somebody is inside is not emptied.
     if (!isOpen(venue)) {
@@ -482,7 +491,7 @@ export function createRouter(parts: {
       queueLength,
       queueLimit,
       occupants,
-      affinity: affinityOf(person),
+      affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
       cleanliness: cleanOf,
       isOpen: isOutLate(person) ? isOpenLate : isOpen,
@@ -724,7 +733,7 @@ export function createRouter(parts: {
       queueLength,
       queueLimit,
       occupants,
-      affinity: affinityOf(person),
+      affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
       cleanliness: cleanOf,
       isOpen,

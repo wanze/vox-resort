@@ -36,9 +36,9 @@
   --window-top: calc(var(--window-floor) + 52px);
 }
 
+/* As wide as People: the Prices tab has a row of buttons per family. */
 .ui-window[data-window='books'] {
   --window-top: calc(var(--window-floor) + 78px);
-  width: 300px;
 }
 
 .ui-window[data-window='camera'] {

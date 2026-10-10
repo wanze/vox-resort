@@ -8,6 +8,7 @@ import type { Ledger } from './ledger';
 import { restorePhotos, snapshotPhotos, type Photos } from './photos';
 import type { Carrying, Litter } from './litter';
 import { restoreNeeds, snapshotNeeds, type Needs } from './needs';
+import type { Prices } from './pricing';
 import type { Rating } from './rating';
 import type { ResortSnapshot } from './resortSnapshot';
 import type { Review } from './reviews';
@@ -45,6 +46,7 @@ export interface ResortState {
   open: boolean;
   beds: { readonly total: number; readonly taken: number };
   hiring: Hiring;
+  prices: Prices;
   readonly zones: Zones;
   readonly photos: Photos;
 }
@@ -98,6 +100,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     open: state.open,
     beds: { ...state.beds },
     hiring: { ...state.hiring },
+    prices: { ...state.prices },
     zones: state.zones.zone.slice(),
     photos: snapshotPhotos(state.photos),
   };
@@ -131,6 +134,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot): voi
   state.open = snapshot.open;
   state.beds = { ...snapshot.beds };
   state.hiring = { ...snapshot.hiring };
+  state.prices = { ...snapshot.prices };
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;
   restorePhotos(state.photos, snapshot.photos);

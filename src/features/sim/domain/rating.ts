@@ -49,12 +49,14 @@ export function ratingFor(parts: {
 }
 
 // At least 1 while anybody books at all, or a small plot rounding to nobody would never see a coach.
+// A pull above 1 is allowed: cheap beds bring more coaches, still capped by the beds free.
 export function arrivalsFor(
   rating: Rating,
   beds: { readonly free: number; readonly total: number },
+  pull = 1,
 ): number {
   const free = Math.max(0, Math.floor(beds.free));
-  const appetite = appetiteFor(rating.stars);
+  const appetite = appetiteFor(rating.stars) * Math.max(0, pull);
   if (free === 0 || appetite === 0) return 0;
   const wanted = Math.max(1, Math.round(Math.max(0, beds.total) * ARRIVALS_SHARE * appetite));
   return Math.min(free, wanted);

@@ -143,6 +143,9 @@ describe('raiseWindow', () => {
 describe('tabOf', () => {
   it('falls back to the first tab when none was picked', () => {
     expect(tabOf(layout(), 'overview')).toBe('summary');
+    expect(tabOf(layout({ open: ['books'] }), 'books'), 'a layout from before the tabs').toBe(
+      'money',
+    );
     expect(tabOf(layout({ tabs: { people: 'staff' } }), 'people')).toBe('staff');
   });
 });

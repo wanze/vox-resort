@@ -91,6 +91,7 @@ function gameOf(POPULATION: number, seed: number): GameSnapshot {
     open: true,
     beds: { total: 0, taken: 0 },
     hiring: AUTO_HIRING,
+    prices: {},
     zones: createZones(4, 3),
     photos: createPhotos(POPULATION, network.nodes.length),
   });

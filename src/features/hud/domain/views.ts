@@ -1,6 +1,7 @@
 import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
 import type { PhotoTally } from '../../sim/domain/dayReport';
 import type { Demand } from '../../sim/domain/demand';
+import type { PricesView } from '../../sim/domain/pricing';
 import type { Rating } from '../../sim/domain/rating';
 import type { Review } from '../../sim/domain/reviews';
 import type { Hiring, Roster } from '../../sim/domain/staff';
@@ -54,6 +55,7 @@ export interface ShowcaseStats {
   readonly cleanliness: number;
   readonly rating: number;
   readonly weather: Weather;
+  readonly prices: PricesView;
 }
 
 export interface VoicesView {

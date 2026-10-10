@@ -93,6 +93,8 @@ export interface ResortControls {
   rename(name: string): void;
   setOpen(open: boolean): void;
   setHiring(role: StaffRole, count: number | null): void;
+  // null puts the family back at list price.
+  setPrice(family: string, factor: number | null): void;
   // True once the new resort stands; false if it could not be built.
   start(params: ResortParams, game: NewGame): Promise<boolean>;
   // As start: true once the shared resort stands, false if it could not be built.

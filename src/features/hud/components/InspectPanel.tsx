@@ -11,9 +11,9 @@ import type {
 } from '../../inspect/domain/selection';
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { Advice } from '../../sim/domain/advice';
-import { adviceAt, markerIconOf } from '../domain/markers';
+import { adviceAt } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
-import { adviceSays } from './adviceWords';
+import { adviceIcon, adviceSays } from './adviceWords';
 import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
@@ -154,6 +154,15 @@ function ProgrammeRow({ programme }: { readonly programme: PlaceView['programme'
   return <StatRow label="Programme">{programme.next ?? 'Nothing on this week'}</StatRow>;
 }
 
+function PriceStat({ price }: { readonly price: Venue['price'] }) {
+  if (!price) return null;
+  const list = price.list.toLocaleString('en-US');
+  if (price.charged === price.list) return <StatRow label="Price">{list}</StatRow>;
+  return (
+    <StatRow label="Price">{`${price.charged.toLocaleString('en-US')} (list ${list})`}</StatRow>
+  );
+}
+
 function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue: Venue }) {
   return (
     <dl className="ui-stats">
@@ -172,6 +181,7 @@ function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue
       </StatRow>
       <StatRow label="Waiting">{venue.waiting === 0 ? 'Nobody' : venue.waiting}</StatRow>
       <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
+      <PriceStat price={venue.price} />
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watch={venue.lifeguard} />
       <SurroundingsRow setting={place.setting} />
@@ -208,23 +218,20 @@ function Problems({
 }) {
   if (problems.length === 0) return null;
   return (
-    <ul className="hud-inspect-problems" aria-label="Problems">
-      {problems.map((advice) => {
-        const icon = markerIconOf(advice.kind);
-        return (
-          <li
-            key={adviceKey(advice)}
-            className="hud-inspect-problem"
-            data-severity={severityOf(advice) ?? 'note'}
-          >
-            <span className="hud-inspect-problem-icon">
-              {icon ? <PixelIcon name={icon} /> : null}
-            </span>
-            <span>{adviceSays(advice)}</span>
-            <HireButton advice={advice} hire={hire} />
-          </li>
-        );
-      })}
+    <ul className="hud-problems" aria-label="Problems">
+      {problems.map((advice) => (
+        <li
+          key={adviceKey(advice)}
+          className="hud-problem"
+          data-severity={severityOf(advice) ?? 'note'}
+        >
+          <span className="hud-problem-icon">
+            <PixelIcon name={adviceIcon(advice.kind)} />
+          </span>
+          <span>{adviceSays(advice)}</span>
+          <HireButton advice={advice} hire={hire} />
+        </li>
+      ))}
     </ul>
   );
 }

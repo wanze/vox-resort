@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { HelpTip } from '../../../shared/components/HelpTip';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
+import type { IconName } from '../../../shared/components/pixelIcons';
 import { eventNewsLine } from '../../events/components/eventWords';
 import type { HudPrefs } from '../domain/hudPrefs';
 import { toastKey, type EventNews, type Message, type News, type ToastKind } from '../domain/news';
@@ -6,8 +9,9 @@ import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { GameMode } from '../../sim/domain/ledger';
 import { stampOf, TICKS_PER_DAY } from '../../sim/domain/simClock';
-import { adviceLabel, newsSays } from './adviceWords';
+import { adviceIcon, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
+import { PanelSummary } from './PanelSummary';
 
 export interface MessagesPanelProps {
   readonly log: readonly Message[];
@@ -39,26 +43,32 @@ const whenOf = (ticks: number): string => {
 // A report is labelled with the day its period started on, and closed at the next check-in.
 const closedAt = (report: DayReport): number => (report.day + 1) * TICKS_PER_DAY + CHECK_IN_TICK;
 
+// Coloured as its toast was, so a message reads the same in the log as when it popped up.
 function Line({
-  label,
+  icon,
+  tone,
   when,
   says,
   action,
 }: {
-  readonly label: string;
+  readonly icon: IconName;
+  readonly tone: ToastKind;
   readonly when: number;
   readonly says: string;
   readonly action: ReactNode;
 }) {
   return (
-    <div className="hud-message">
-      <dt className="ui-label">
-        {label}
-        <span className="hud-message-when">{whenOf(when)}</span>
-      </dt>
-      <dd>{says}</dd>
-      <dd className="hud-message-action">{action}</dd>
-    </div>
+    <li className="hud-problem" data-severity={tone}>
+      <span className="hud-problem-icon">
+        <PixelIcon name={icon} />
+      </span>
+      <span className="hud-problem-body">
+        <span>
+          {says} <span className="hud-message-when">{whenOf(when)}</span>
+        </span>
+      </span>
+      {action ? <span className="hud-problem-actions">{action}</span> : null}
+    </li>
   );
 }
 
@@ -88,7 +98,8 @@ function NewsLine({
   const { at } = news.advice;
   return (
     <Line
-      label={adviceLabel(news.advice.kind)}
+      icon={adviceIcon(news.advice.kind)}
+      tone={news.severity}
       when={news.at}
       says={newsSays(news)}
       action={
@@ -114,7 +125,8 @@ function EventLine({
   const { at } = news;
   return (
     <Line
-      label="Programme"
+      icon="programme"
+      tone="event"
       when={news.start}
       says={eventNewsLine(news)}
       action={
@@ -144,7 +156,8 @@ const messageKey = (message: Message): string =>
 function DayLine({ report, ...props }: { readonly report: DayReport } & MessagesPanelProps) {
   return (
     <Line
-      label="Day report"
+      icon="report"
+      tone="day"
       when={closedAt(report)}
       says={daySummary(report, trendOn(props.history, report.day), props.mode)}
       action={
@@ -156,10 +169,23 @@ function DayLine({ report, ...props }: { readonly report: DayReport } & Messages
   );
 }
 
+function MessagesHelp() {
+  return (
+    <HelpTip label="How messages work">
+      <p>Everything that happened, newest first.</p>
+      <p>The buttons choose what pops up; the rest is still kept here.</p>
+    </HelpTip>
+  );
+}
+
 export function MessagesPanel(props: MessagesPanelProps) {
   const { log, prefs, onMutedChange } = props;
   return (
     <div className="ui-stack">
+      <PanelSummary
+        figures={[{ label: 'Messages', value: String(log.length) }]}
+        help={<MessagesHelp />}
+      />
       <div className="hud-message-toggles" role="group" aria-label="Toasts">
         {TOGGLES.map(({ kind, label, title }) => {
           const shown = !prefs.muted.includes(kind);
@@ -180,11 +206,11 @@ export function MessagesPanel(props: MessagesPanelProps) {
       {log.length === 0 ? (
         <p className="ui-loading">Nothing has happened yet.</p>
       ) : (
-        <dl className="hud-message-list">
+        <ul className="hud-problems">
           {log.map((message) => (
             <MessageLine key={messageKey(message)} message={message} {...props} />
           ))}
-        </dl>
+        </ul>
       )}
     </div>
   );

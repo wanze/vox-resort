@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import referenceJson from '../../../../fixtures/reference-resort.json';
-import { priceOf } from '../../catalog/domain/prices';
+import { familyOf } from '../../catalog/domain/objectTypes';
+import { chargeOf, priceOf } from '../../catalog/domain/prices';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
@@ -81,6 +82,22 @@ describe('visitMade', () => {
     visitMade(state, PERSON, priced, 1);
     expect(state.ledger.today.visit).toBe(0);
     expect(state.takings.has(priced.key)).toBe(false);
+  });
+
+  it('charges the price the player set, and grumbles when it is far above what the stars justify', () => {
+    state.prices = { [familyOf(priced.id)]: 2 };
+    visitMade(state, PERSON, priced, 1);
+    expect(state.ledger.today.visit).toBe(chargeOf(priced.id, 2));
+    expect(loudest(state.thoughtDay, 5)).toContainEqual(
+      expect.objectContaining({ kind: 'not-worth-it', subject: priced.label }),
+    );
+  });
+
+  it('says nothing about a price the stars justify', () => {
+    state.prices = { [familyOf(priced.id)]: 1.1 };
+    visitMade(state, PERSON, priced, 1);
+    expect(state.ledger.today.visit).toBe(chargeOf(priced.id, 1.1));
+    expect(loudest(state.thoughtDay, 5).map((tally) => tally.kind)).not.toContain('not-worth-it');
   });
 
   it('has the guest think about a filthy venue', () => {

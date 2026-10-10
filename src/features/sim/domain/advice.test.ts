@@ -35,6 +35,8 @@ import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 
 const TILE = 16;
 
+const FUN: readonly NeedRelief[] = [{ need: 'fun', amount: 0.8 }];
+
 function venueOf(parts: {
   key: string;
   label?: string;
@@ -313,8 +315,8 @@ describe('the advice rules', () => {
   });
 
   it('notes a venue nobody went to all day, and says nothing about an unreachable one', () => {
-    const idle = venueOf({ key: 'tennis#0', label: 'Tennis Court', capacity: 4 });
-    const stranded = venueOf({ key: 'bar#0', label: 'Poolside Bar' });
+    const idle = venueOf({ key: 'tennis#0', label: 'Tennis Court', capacity: 4, satisfies: FUN });
+    const stranded = venueOf({ key: 'bar#0', label: 'Poolside Bar', satisfies: FUN });
     const busy = venueOf({ key: 'bakery#0', label: 'Bakery' });
     const advice = adviceUnvisited(
       healthyFacts({
@@ -334,9 +336,39 @@ describe('the advice rules', () => {
     expect(advice[0]!.weight).toBeCloseTo(0.22, 5);
   });
 
+  it('leaves alone a venue that is fine standing idle', () => {
+    const reception = { ...venueOf({ key: 'reception#0', label: 'Reception' }), receives: true };
+    const firstAid = venueOf({
+      key: 'first-aid#0',
+      label: 'First Aid',
+      satisfies: [{ need: 'health', amount: 1 }],
+    });
+    const firePit = venueOf({ key: 'fire-pit#0', label: 'Fire Pit' });
+    const tennis = venueOf({ key: 'tennis#0', label: 'Tennis Court', satisfies: FUN });
+    const advice = adviceUnvisited(
+      healthyFacts({
+        venues: [reception, firstAid, firePit, tennis],
+        visits: new Map([['bakery#0', 12]]),
+      }),
+    );
+    expect(advice.map((each) => each.subject)).toEqual(['Tennis Court']);
+  });
+
   it('ranks an idle venue by how much room stood empty in it', () => {
-    const pool = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 30, x: 16 });
-    const shower = venueOf({ key: 'shower#0', label: 'Beach Shower', capacity: 1, x: 32 });
+    const pool = venueOf({
+      key: 'pool#0',
+      label: 'Swimming Pool',
+      capacity: 30,
+      x: 16,
+      satisfies: FUN,
+    });
+    const shower = venueOf({
+      key: 'shower#0',
+      label: 'Beach Shower',
+      capacity: 1,
+      x: 32,
+      satisfies: [{ need: 'hygiene', amount: 0.6 }],
+    });
     const busy = venueOf({ key: 'bakery#0', label: 'Bakery', x: 48 });
     const advice = adviceUnvisited(
       healthyFacts({ venues: [shower, pool, busy], visits: new Map([['bakery#0', 3]]) }),
@@ -384,8 +416,8 @@ describe('adviceFor', () => {
   });
 
   it('sorts by weight descending, and breaks a tie towards the earlier kind', () => {
-    const one = venueOf({ key: 'a#0', label: 'A' });
-    const two = venueOf({ key: 'b#0', label: 'B' });
+    const one = venueOf({ key: 'a#0', label: 'A', satisfies: FUN });
+    const two = venueOf({ key: 'b#0', label: 'B', satisfies: FUN });
     const advice = adviceFor(
       healthyFacts({
         venues: [one, two],

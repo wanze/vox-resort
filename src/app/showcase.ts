@@ -94,6 +94,7 @@ import { assignNames, namedPlacesOf, renameTo } from '../features/naming/domain/
 import { occupiedShare } from '../features/sim/domain/night';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
 import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
+import { pricesView, setPrice } from '../features/sim/domain/pricing';
 import { venueIndexOf } from '../features/resort-sim/domain/visits';
 import {
   beachTilesFor,
@@ -438,6 +439,7 @@ export interface Showcase {
   // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
   renameVenue(key: string, typed: string): void;
   setHiring(role: StaffRole, count: number | null): void;
+  setPrice(family: string, factor: number | null): void;
   setCameraMode(mode: CameraMode): void;
   setIsoDirection(direction: CompassDirection): void;
   setDetail(enabled: boolean): void;
@@ -1406,6 +1408,12 @@ function sceneStats(parts: {
     cleanliness: meanCleanliness(parts.resort.upkeep, parts.resort.venues.length),
     rating: parts.resort.rating.stars,
     weather: parts.weather,
+    prices: pricesView({
+      placements: plot.placements,
+      prices: parts.resort.prices,
+      homes: parts.resort.guests.homes,
+      stars: parts.resort.rating.stars,
+    }),
     ...parts.startup,
   };
 }
@@ -3080,6 +3088,14 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       staffTheResort(resort);
       options.onDirty?.();
       hud.publish({ stats: statsNow(), advice: advise(), programme: programmeNow() });
+    },
+    setPrice(family, factor) {
+      const resort = current();
+      resort.prices = setPrice(resort.prices, family, factor);
+      options.onDirty?.();
+      // The inspected building's price row follows.
+      selection.reword();
+      hud.publish({ stats: statsNow(), advice: advise() });
     },
     book(draft) {
       const result = book(current().events.programme, draft, clock.ticks);

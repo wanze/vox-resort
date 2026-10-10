@@ -44,6 +44,8 @@ export const TAB_TITLES: { readonly [tab in TabId]: string } = {
   messages: 'Messages',
   guests: 'Guests',
   staff: 'Staff',
+  money: 'Money',
+  prices: 'Prices',
 };
 
 export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
@@ -55,6 +57,8 @@ export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
   messages: 'messages',
   guests: 'guests',
   staff: 'staff',
+  money: 'books',
+  prices: 'money',
 };
 
 export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
@@ -77,7 +81,8 @@ export const MENU_PAGES: readonly PageId[] = [
   'guests',
   'staff',
   'programme',
-  'books',
+  'money',
+  'prices',
   'camera',
 ];
 

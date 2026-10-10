@@ -147,4 +147,17 @@ describe('arrivalsFor', () => {
     expect(stars).toEqual([...stars].toSorted((a, b) => a - b));
     expect(stars.at(-1)).toBeGreaterThan(stars[0]!);
   });
+
+  it('books half as many at half the pull, and none past the beds free at more', () => {
+    const good = ratingFor({ happiness: 0.8, present: 10, housed: 10 });
+    expect(arrivalsFor(good, empty(400), 1)).toBe(arrivalsFor(good, empty(400)));
+    expect(arrivalsFor(good, empty(400), 0.5)).toBeCloseTo(arrivalsFor(good, empty(400)) / 2, -1);
+    expect(arrivalsFor(good, empty(400), 0)).toBe(0);
+  });
+
+  it('books more at a pull above 1, still within the beds free', () => {
+    const good = ratingFor({ happiness: 0.8, present: 10, housed: 10 });
+    expect(arrivalsFor(good, empty(400), 1.3)).toBeGreaterThan(arrivalsFor(good, empty(400)));
+    expect(arrivalsFor(good, { free: 20, total: 400 }, 1.3)).toBe(20);
+  });
 });

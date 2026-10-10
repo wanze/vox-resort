@@ -1,5 +1,5 @@
 import { TILE_VOXELS } from '../../catalog/domain/objectTypes';
-import { priceOf } from '../../catalog/domain/prices';
+import { chargeOf, priceOf } from '../../catalog/domain/prices';
 import { ON_SAND } from '../../crowd/domain/crowd';
 import { type EventRun, runOfVisit, visitLitter } from '../../events/domain/eventRuns';
 import { heldAt } from '../../events/domain/sites';
@@ -10,6 +10,7 @@ import { isBeach as isTheBeach } from '../../sim/domain/beach';
 import { valueThought } from '../../sim/domain/expectations';
 import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
+import { factorOf, overpriced } from '../../sim/domain/pricing';
 import {
   BEACH_LITTER,
   LITTER_WEIGHT,
@@ -205,11 +206,15 @@ export function visitMade(resort: SimState, person: number, venue: Venue, tick: 
   judgeVisit(resort, tick, person, venue);
   riskTheWater(resort, tick, person, venue);
   // An event is free to see.
-  if (!show) payForVisit(resort, venue);
+  if (!show) payForVisit(resort, tick, person, venue);
 }
 
-function payForVisit(resort: SimState, venue: Venue): void {
-  const earned = priceOf(venue.id);
+function payForVisit(resort: SimState, tick: number, person: number, venue: Venue): void {
+  const factor = factorOf(resort.prices, venue.id);
+  const earned = chargeOf(venue.id, factor);
   resort.ledger = record(resort.ledger, 'visit', earned);
   earn(resort.takings, venue.key, earned);
+  if (priceOf(venue.id) > 0 && overpriced(factor, resort.rating.stars)) {
+    hear(resort, tick, person, 'not-worth-it', venue.label);
+  }
 }

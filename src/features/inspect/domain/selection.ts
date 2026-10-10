@@ -9,6 +9,7 @@ import {
   type VenueRole,
 } from '../../../../voxel-gen/voxelgen.ts';
 import { venueOf } from '../../catalog/domain/objectTypes';
+import { chargeOf, priceOf } from '../../catalog/domain/prices';
 import { isRoaming, RESTING, restingOn, type Crowd } from '../../crowd/domain/crowd';
 import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
@@ -90,6 +91,8 @@ export interface PlaceView {
     readonly waiting: number;
     readonly cleanliness: number;
     readonly takings: number;
+    // The player's price against the list price, before a lodging's surroundings; null if free.
+    readonly price: { readonly list: number; readonly charged: number } | null;
     // Null where nobody swims, so the inspector has nothing to say about a lifeguard.
     readonly lifeguard: LifeguardWatch | null;
     // Broken is closed: guests are turned away until a mechanic has been.
@@ -260,6 +263,11 @@ export interface PlaceOccupancy {
   readonly waiting: number;
 }
 
+function priceShown(id: string, factor = 1): NonNullable<PlaceView['venue']>['price'] {
+  const list = priceOf(id);
+  return list > 0 ? { list, charged: chargeOf(id, factor) } : null;
+}
+
 export function placeView(parts: {
   readonly placement: Placement;
   readonly label: string;
@@ -271,6 +279,8 @@ export function placeView(parts: {
   readonly takings?: number;
   readonly lifeguard?: LifeguardWatch;
   readonly broken?: boolean;
+  // The factor the player set on its family; omitted, list price.
+  readonly factor?: number;
 }): PlaceView {
   const {
     placement,
@@ -309,6 +319,7 @@ export function placeView(parts: {
           waiting: occupancy?.waiting ?? 0,
           cleanliness: cleanliness ?? 1,
           takings,
+          price: priceShown(placement.id, parts.factor),
           lifeguard: venue.bathing === true ? lifeguard : null,
           broken,
         }

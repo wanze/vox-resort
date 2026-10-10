@@ -1,4 +1,4 @@
-import { buildCostOf, nightPriceOf, priceOf } from '../../catalog/domain/prices';
+import { buildCostOf, chargeOf, nightPriceOf, priceOf } from '../../catalog/domain/prices';
 import type { EventsState } from '../../events/domain/eventRuns';
 import { stageKeysOf } from '../../events/domain/sites';
 import { welcomeGapOf } from '../../events/domain/welcome';
@@ -16,6 +16,7 @@ import { meanHappiness, type Happiness } from '../../sim/domain/happiness';
 import { closeDay, record, type Ledger } from '../../sim/domain/ledger';
 import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
 import { paidShareOf } from '../../sim/domain/expectations';
+import { factorOf, type Prices } from '../../sim/domain/pricing';
 import { ratingFor, type Rating } from '../../sim/domain/rating';
 import { sceneryOver, type SceneryField } from '../../sim/domain/scenery';
 import { wagesFor, type Roster } from '../../sim/domain/staff';
@@ -37,6 +38,7 @@ export interface DayCloseState {
   upkeep: Upkeep;
   venues: readonly Venue[];
   rating: Rating;
+  readonly prices: Prices;
   today: DayCounts;
   history: readonly DayReport[];
   beds: { readonly total: number; readonly taken: number };
@@ -58,12 +60,15 @@ export function payTheBills(resort: DayCloseState): void {
   resort.ledger = record(resort.ledger, 'night', rent);
 }
 
-type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery'>;
+type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery' | 'prices'>;
 
 function nightlyRate(resort: RateState, home: number): number {
   const { id, key } = resort.guests.homes[home]!;
   const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
-  return lodging ? nightPriceOf(id, sceneryOver(resort.scenery, lodging)) : priceOf(id);
+  const factor = factorOf(resort.prices, id);
+  return lodging
+    ? nightPriceOf(id, sceneryOver(resort.scenery, lodging), factor)
+    : chargeOf(id, factor);
 }
 
 export const paidShareFor = (resort: RateState, home: number): number =>

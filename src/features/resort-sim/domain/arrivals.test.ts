@@ -43,6 +43,7 @@ function stateOf(away: boolean) {
     happiness: createHappiness(guests.count),
     lodgings: [],
     scenery: { tilesX: 0, tilesZ: 0, value: new Float32Array(0) },
+    prices: {},
     events: createEvents(guests.count),
     homeEarly: new Set(),
     nightOwls: new Set(),

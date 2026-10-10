@@ -82,6 +82,10 @@ export function useResortControls(
       (role: StaffRole, count: number | null) => showcase.current?.setHiring(role, count),
       [showcase],
     ),
+    setPrice: useCallback(
+      (family: string, factor: number | null) => showcase.current?.setPrice(family, factor),
+      [showcase],
+    ),
     start,
     openShared,
   };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { priceOf } from '../../catalog/domain/prices';
 import { GUEST_NEEDS, TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import {
   createCrowd,
@@ -383,6 +384,24 @@ describe('placeView', () => {
     expect(view.venue?.beds).toBe(4);
     expect(view.venue?.serves).toEqual([]);
     expect(view.tile).toEqual({ x: 3, z: 7 });
+  });
+
+  it("shows a venue's price against its list, and none for a free one", () => {
+    const priced = (id: string, factor?: number) =>
+      placeView({
+        placement: at(`${id}#0`, id),
+        label: id,
+        guests: guestsOf(),
+        occupancy: null,
+        setting: 0,
+        ...(factor === undefined ? {} : { factor }),
+      }).venue?.price;
+    expect(priced('villa')).toEqual({ list: priceOf('villa'), charged: priceOf('villa') });
+    expect(priced('villa', 1.2)).toEqual({
+      list: priceOf('villa'),
+      charged: Math.round(priceOf('villa') * 1.2),
+    });
+    expect(priced('restrooms', 2)).toBeNull();
   });
 
   it('has nothing to say about a bench', () => {

@@ -1,0 +1,70 @@
+.ui-help {
+  display: inline-flex;
+}
+
+.ui-help-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background-image: var(--slab-raised);
+  box-shadow: var(--bevel);
+  color: var(--text-dim);
+  anchor-name: var(--ui-help-anchor);
+  transition: color var(--quick);
+}
+
+.ui-help-button:hover,
+.ui-help-button:focus-visible {
+  color: var(--terracotta-deep);
+}
+
+/* The kit's controls grow on a touch screen; this one keeps its look and grows only its target. */
+@media (pointer: coarse) {
+  .ui-help-button {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* Centred by the browser's own popover rules wherever anchors are missing. */
+.ui-help-card {
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(280px, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  margin: auto;
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--radius-pebble);
+  font-size: var(--size-small);
+  line-height: 1.4;
+  white-space: normal;
+  animation: ui-pop var(--pop);
+}
+
+@supports (anchor-name: --ui-help) {
+  .ui-help-card {
+    position-anchor: var(--ui-help-anchor);
+    position-area: bottom span-left;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+    inset: auto;
+    margin: var(--space-1) 0;
+  }
+}
+
+.ui-help-card:popover-open {
+  display: flex;
+}
+
+.ui-help-card p {
+  margin: 0;
+}

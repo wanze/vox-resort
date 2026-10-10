@@ -177,3 +177,21 @@
     animation: none;
   }
 }
+
+.ui-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* Square, so the two read as a pair of keys; they grow with --control-h on a touch screen. */
+.ui-stepper-step {
+  width: var(--control-h);
+  height: var(--control-h);
+  padding: 0;
+}
+
+.ui-stepper-preset {
+  height: var(--control-h);
+  margin-left: var(--space-1);
+}

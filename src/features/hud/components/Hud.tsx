@@ -17,6 +17,7 @@ import { InspectPanel } from './InspectPanel';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { PlacementBar } from './PlacementBar';
+import { PricesPanel } from './PricesPanel';
 import { ProblemMarkers } from './ProblemMarkers';
 import { StaffPins } from './StaffPins';
 import { VenueSigns } from './VenueSigns';
@@ -204,7 +205,10 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
     <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />
   ),
   programme: ({ programme }) => <ProgrammePanel programme={programme} />,
-  books: (props) => <LedgerPanel ledger={props.ledger} />,
+  money: (props) => <LedgerPanel ledger={props.ledger} />,
+  prices: ({ stats, resort }) => (
+    <PricesPanel prices={stats?.prices ?? null} onPrice={resort.setPrice} />
+  ),
   camera: ({ camera }) => (
     <CameraPanel
       mode={camera.view.mode}

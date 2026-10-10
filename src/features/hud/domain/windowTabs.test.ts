@@ -27,6 +27,14 @@ describe('hostOfTab', () => {
   });
 });
 
+describe('the books', () => {
+  it('hosts the money and the prices', () => {
+    expect(hostOfTab('money')).toBe('books');
+    expect(hostOfTab('prices')).toBe('books');
+    expect(isTabbed('books')).toBe(true);
+  });
+});
+
 describe('isTabbed', () => {
   it('is false for a window without tabs', () => {
     expect(isTabbed('build')).toBe(false);

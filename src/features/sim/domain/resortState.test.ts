@@ -56,6 +56,7 @@ function stateFor(seed: number): ResortState {
     open: true,
     beds: { total: 30, taken: 0 },
     hiring: AUTO_HIRING,
+    prices: {},
     zones: createZones(6, 5),
     photos: createPhotos(40, 9),
   };
@@ -268,5 +269,20 @@ describe('snapshotResort', () => {
     const { expects: _expects, ...happiness } = saved.happiness;
     restoreResort(fresh, resortSnapshotSchema.parse({ ...saved, happiness }));
     expect(fresh.happiness.expects.every((expects) => expects === 0)).toBe(true);
+  });
+
+  it("keeps the player's prices through a save", () => {
+    const state = played();
+    state.prices = { villa: 1.3, restaurant: 0.8 };
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(snapshotResort(state)));
+    expect(fresh.prices).toEqual({ villa: 1.3, restaurant: 0.8 });
+  });
+
+  it('reads a save from before prices at list price, and refuses a price out of range', () => {
+    const { prices: _prices, ...before } = snapshotResort(played());
+    expect(resortSnapshotSchema.parse(before).prices).toEqual({});
+    const dear = { ...before, prices: { villa: 9 } };
+    expect(resortSnapshotSchema.safeParse(dear).success).toBe(false);
   });
 });

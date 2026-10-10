@@ -86,6 +86,7 @@ import { isOpenIn, weatherEffect, type Weather } from './weather';
 import { carryUpkeep, cleanliness, createUpkeep, NEEDS_CLEANING, type Upkeep } from './upkeep';
 import { onDuty, rosterFor, STAFF_ROLES, staffPool, workplacesOf } from './staff';
 import { VISIT } from './occupancy';
+import { venuePull } from './pricing';
 import { createStaffRouter, meanCleanliness } from './staffRouter';
 
 const FLAT: LevelProvider = () => 0;
@@ -167,6 +168,7 @@ const routerOn = (
     readonly onThought?: Heard;
     readonly events?: EventParts;
     readonly shade?: ShadeMap;
+    readonly priceAppeal?: (venue: number) => number;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -192,6 +194,7 @@ const routerOn = (
     upkeep: () => upkeep,
     weather: () => weather,
     ...(night.shade ? { shade: () => night.shade ?? null } : {}),
+    ...(night.priceAppeal ? { priceAppeal: night.priceAppeal } : {}),
     seed: 13,
   });
   crowd = createCrowd({
@@ -453,6 +456,40 @@ const gateway = (tileX: number): Gateway => ({
   x: (tileX + 0.5) * TILE_VOXELS,
   z: -0.5 * TILE_VOXELS,
   doors: [],
+});
+
+const cheaper = (choices: (string | undefined)[]): number =>
+  choices.filter((key) => key === 'bakery#1').length;
+
+describe('a venue priced off its list', () => {
+  const network = networkOf(street(13));
+  const bakeries = [bakery(2), { ...bakery(10), key: 'bakery#1' }];
+  const hungry = (): Needs => {
+    const needs = createNeeds(guests, 7);
+    for (const need of GUEST_NEEDS) needs.level[need].fill(1);
+    needs.level.hunger.fill(0);
+    return needs;
+  };
+  const choicesWith = (priceAppeal?: (venue: number) => number): (string | undefined)[] => {
+    const night = { lodgings: [], tickOfDay: () => NOON, ...(priceAppeal ? { priceAppeal } : {}) };
+    const { router } = routerOn(network, bakeries, hungry(), night);
+    return Array.from({ length: guests.count }, (_, person) => {
+      router.step(person, nodeAt(network, 6));
+      return router.goalOf(person)?.key;
+    });
+  };
+
+  it('chooses exactly as before while every venue is at list price', () => {
+    expect(choicesWith(() => venuePull(1))).toEqual(choicesWith());
+  });
+
+  it('sends more guests to the cheaper of two bakeries', () => {
+    const plain = cheaper(choicesWith());
+    const priced = cheaper(choicesWith((venue) => (venue === 0 ? venuePull(2) : 1)));
+    expect(plain).toBeGreaterThan(0);
+    expect(plain).toBeLessThan(guests.count);
+    expect(priced).toBeGreaterThan(plain);
+  });
 });
 
 describe('a stay that is over', () => {

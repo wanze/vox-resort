@@ -1,6 +1,6 @@
 import { quoteOf, type Review } from '../../sim/domain/reviews';
-import type { ThoughtTally } from '../../sim/domain/thoughts';
 import { StatRow } from '../../../shared/components/StatRow';
+import { remarksOf, type Remark } from '../domain/remarks';
 import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
 import type { VoicesView } from '../domain/views';
 
@@ -18,11 +18,19 @@ function saidOf(review: Review): string | null {
   return thoughtLine(quoted, review.praiseSubject ?? null);
 }
 
-function LoudestRow({ tally }: { readonly tally: ThoughtTally }) {
+function RemarkRow({ remark }: { readonly remark: Remark }) {
+  const { tally } = remark;
   return (
-    <StatRow label={THOUGHT_LABELS[tally.kind]} note={`${tally.count}×`}>
-      {thoughtLine(tally.kind, tally.subject)}
-    </StatRow>
+    <li className="hud-remark" data-tone={remark.complaint ? 'bad' : 'good'}>
+      <span className="ui-label">{THOUGHT_LABELS[tally.kind]}</span>
+      <span className="hud-remark-said">
+        {thoughtLine(tally.kind, tally.subject)}
+        <span className="hud-remark-bar" aria-hidden="true">
+          <span className="hud-remark-fill" style={{ width: `${remark.share * 100}%` }} />
+        </span>
+      </span>
+      <span className="hud-remark-count">{tally.count}×</span>
+    </li>
   );
 }
 
@@ -44,19 +52,43 @@ function ReviewRow({ review }: { readonly review: Review }) {
   );
 }
 
+function RemarksSection({ loudest }: { readonly loudest: VoicesView['loudest'] }) {
+  if (loudest.length === 0) return null;
+  return (
+    <section aria-label="What guests say today">
+      <h3 className="hud-report-heading">What guests say today</h3>
+      <ul className="hud-remarks">
+        {remarksOf(loudest).map((remark) => (
+          <RemarkRow key={`${remark.tally.kind}|${remark.tally.subject ?? ''}`} remark={remark} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function ReviewsSection({ reviews }: { readonly reviews: VoicesView['reviews'] }) {
+  if (reviews.length === 0) return null;
+  return (
+    <section aria-label="Latest reviews">
+      <h3 className="hud-report-heading">Latest reviews</h3>
+      <dl className="ui-stats hud-advice">
+        {reviews.slice(0, REVIEWS_SHOWN).map((review) => (
+          <ReviewRow key={review.party} review={review} />
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 export function GuestsPanel({ voices }: GuestsPanelProps) {
   const { loudest, reviews } = voices;
   if (loudest.length === 0 && reviews.length === 0) {
     return <p className="ui-loading">Nobody has said anything yet.</p>;
   }
   return (
-    <dl className="ui-stats hud-advice">
-      {loudest.map((tally) => (
-        <LoudestRow key={`${tally.kind}|${tally.subject ?? ''}`} tally={tally} />
-      ))}
-      {reviews.slice(0, REVIEWS_SHOWN).map((review) => (
-        <ReviewRow key={review.party} review={review} />
-      ))}
-    </dl>
+    <div className="hud-guests">
+      <RemarksSection loudest={loudest} />
+      <ReviewsSection reviews={reviews} />
+    </div>
   );
 }

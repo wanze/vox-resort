@@ -3,6 +3,7 @@ import type { Placement } from '../features/layout/domain/resortLayout';
 import { cleanliness, NEEDS_CLEANING } from '../features/sim/domain/upkeep';
 import { isBroken } from '../features/sim/domain/breakdowns';
 import { latestOf } from '../features/sim/domain/thoughts';
+import { factorOf } from '../features/sim/domain/pricing';
 import { sceneryOver } from '../features/sim/domain/scenery';
 import type { ResortClock } from '../features/sim/domain/resortClock';
 import type { StaffRole } from '../features/sim/domain/staff';
@@ -172,6 +173,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       takings: takingsOf(resort.takings, placement.key),
       lifeguard: lifeguardAt(resort.staffRouter, venue),
       broken: isBroken(resort.breakdowns, venue),
+      factor: factorOf(resort.prices, placement.id),
     });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
     return withNaming(offered, resort.venues[venue]);

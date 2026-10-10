@@ -3,6 +3,7 @@ import type { Home } from '../../guests/domain/homes';
 import type { Party } from '../../guests/domain/parties';
 import { HISTORY_DAYS, type DayCounts, type DayReport } from './dayReport';
 import type { Ledger } from './ledger';
+import { PRICE_RANGE } from './pricing';
 import type { Rating } from './rating';
 import type { Review } from './reviews';
 import { SIM_SPEEDS } from './simClock';
@@ -251,6 +252,11 @@ export const resortSnapshotSchema = z.object({
   open: z.boolean(),
   beds: bedsSchema,
   hiring: hiringSchema,
+  // Saves from before prices were set charge list price.
+  prices: z
+    .record(z.string(), z.number().min(PRICE_RANGE.min).max(PRICE_RANGE.max))
+    .optional()
+    .default({}),
   zones: int8,
   // Absent in saves from before photos, which load with nobody having taken one.
   photos: z.object({ lastAt: int32, heat: float32 }).exactOptional(),

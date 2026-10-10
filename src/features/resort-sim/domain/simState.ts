@@ -45,6 +45,7 @@ import { type Carrying, type Litter, createCarrying, createLitter } from '../../
 import type { Lodging } from '../../sim/domain/lodgings';
 import { type Needs, createNeeds, relieve } from '../../sim/domain/needs';
 import { LATE_NIGHT_RELIEF, isBedtime } from '../../sim/domain/night';
+import { factorOf, LIST_PRICES, venuePull, type Prices } from '../../sim/domain/pricing';
 import { type Rating, ratingFor } from '../../sim/domain/rating';
 import { type Review, keepReview } from '../../sim/domain/reviews';
 import { type Router, createRouter } from '../../sim/domain/router';
@@ -96,6 +97,8 @@ export interface SimState {
   readonly staffRouter: StaffRouter;
   readonly staffPool: Staff;
   hiring: Hiring;
+  // A factor per family on the list price, set on the Prices tab.
+  prices: Prices;
   recommended: Roster;
   roster: Roster;
   // Read late by the staff router, so an edit swaps it rather than writing into it.
@@ -381,6 +384,8 @@ export function createSimState(parts: SimParts): SimState {
     upkeep: () => resort.upkeep,
     breakdowns: () => resort.breakdowns,
     shade: () => resort.shade,
+    // The synthetic beach is past the venue list, and an unknown id is at list price.
+    priceAppeal: (venue) => venuePull(factorOf(resort.prices, resort.venues[venue]?.id ?? '')),
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, clock.ticks()),
     onThought: (person, kind, subject) => hear(resort, clock.ticks(), person, kind, subject),
@@ -498,6 +503,7 @@ export function createSimState(parts: SimParts): SimState {
     staffRouter,
     staffPool: employed,
     hiring: AUTO_HIRING,
+    prices: LIST_PRICES,
     recommended,
     roster,
     duty,

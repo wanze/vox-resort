@@ -8,6 +8,7 @@ import type { Happiness } from '../../sim/domain/happiness';
 import type { Carrying } from '../../sim/domain/litter';
 import type { Lodging } from '../../sim/domain/lodgings';
 import type { Needs } from '../../sim/domain/needs';
+import { bookingPull, type Prices } from '../../sim/domain/pricing';
 import { arrivalsFor, type Rating } from '../../sim/domain/rating';
 import type { Router } from '../../sim/domain/router';
 import type { SceneryField } from '../../sim/domain/scenery';
@@ -22,6 +23,7 @@ export interface ArrivalsState {
   readonly happiness: Happiness;
   readonly lodgings: readonly Lodging[];
   readonly scenery: SceneryField;
+  readonly prices: Prices;
   events: Pick<EventsState, 'tired' | 'glow'>;
   readonly homeEarly: Set<number>;
   readonly nightOwls: Set<number>;
@@ -64,7 +66,8 @@ export function runDay(resort: ArrivalsState, day: number): void {
   resort.homeEarly.clear();
   resort.nightOwls.clear();
   resort.newcomers = [];
-  resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests));
+  const pull = bookingPull(resort.guests.homes, resort.prices, resort.rating.stars);
+  resort.arrivalsPlanned = arrivalsFor(resort.rating, bedsOn(resort.guests), pull);
   resort.arrivalsAdmitted = 0;
   admitWave(resort, day, 0);
   sendDepartures(resort, day);

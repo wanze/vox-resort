@@ -37,6 +37,7 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     guests,
     lodgings: [lodging!],
     scenery: fullScenery,
+    prices: {},
     happiness: createHappiness(guests.count),
     upkeep: createUpkeep(venues.length),
     venues,

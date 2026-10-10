@@ -56,9 +56,13 @@ export function refundOf(id: string, stillBuilding: boolean): number {
   return stillBuilding ? cost : Math.round(cost * REFUND_SHARE);
 }
 
-export function nightPriceOf(id: string, setting: number): number {
+// The player's factor on the list price; rounded once, so a ledger never holds a fraction.
+export const chargeOf = (id: string, factor: number): number => Math.round(priceOf(id) * factor);
+
+// The factor first: the surroundings raise whatever the player asks, as they raise the list price.
+export function nightPriceOf(id: string, setting: number, factor = 1): number {
   const premium = SETTING_PREMIUM * Math.min(1, Math.max(0, setting));
-  return Math.round(priceOf(id) * (1 + premium));
+  return Math.round(priceOf(id) * factor * (1 + premium));
 }
 
 export function landPriceOf(mode: GameMode): number {

@@ -1,4 +1,6 @@
 import type { Advice, AdviceKind } from '../../sim/domain/advice';
+import type { IconName } from '../../../shared/components/pixelIcons';
+import { markerIconOf } from '../domain/markers';
 import type { News } from '../domain/news';
 import { isStaffRole } from '../../sim/domain/staff';
 import { roleWord } from './staffWords';
@@ -79,6 +81,29 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'no-fireworks': 'Fireworks',
   'weather-closed': 'Weather',
 };
+
+// Only for what has no marker on the plot; the rest wear their marker's, so a row and the marker
+// it explains look alike.
+const ICONS: { readonly [kind in AdviceKind]?: IconName } = {
+  closed: 'alert',
+  'no-entrance': 'alert',
+  'no-reception': 'reception',
+  'no-beds': 'lodging',
+  unmade: 'cleaner',
+  hurt: 'first-aid',
+  'unserved-need': 'demand',
+  'short-staffed': 'staff',
+  'far-from-home': 'guests',
+  'no-depot': 'cleaner',
+  unvisited: 'people',
+  'no-events': 'programme',
+  'no-welcome': 'stage',
+  'no-fireworks': 'programme',
+  'weather-closed': 'storm',
+};
+
+export const adviceIcon = (kind: AdviceKind): IconName =>
+  markerIconOf(kind) ?? ICONS[kind] ?? 'advice';
 
 export const adviceSays = (advice: Advice): string => SAYS[advice.kind](advice);
 

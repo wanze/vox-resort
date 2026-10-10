@@ -592,3 +592,47 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The name is the way to the building, so it reads as text until pointed at. */
+.hud-upkeep-name {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  cursor: var(--cursor-hand);
+}
+
+.hud-upkeep-name:hover,
+.hud-upkeep-name:focus-visible {
+  color: var(--terracotta-deep);
+  text-decoration: underline;
+}
+
+/* Left-aligned, unlike a price's percentage: it is a word, not a figure to compare down. */
+.hud-upkeep-note {
+  text-align: left;
+}
+
+.hud-upkeep-action {
+  justify-self: end;
+}
+
+/* A row of its own across the grid, as the summary is, so the columns below keep their widths. */
+.hud-upkeep-filter {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+/* A mouse needs no 44px target, and three actions then share a row. */
+@media (pointer: fine) {
+  .hud-inspect .ui-button-large {
+    height: 34px;
+    padding: 0 var(--space-2);
+    font-size: var(--size-small);
+  }
+}

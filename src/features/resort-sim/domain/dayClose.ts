@@ -12,6 +12,7 @@ import {
   type DayCounts,
   type DayReport,
 } from '../../sim/domain/dayReport';
+import { conditionOf, rateFactor, upkeepFactor, type Condition } from '../../sim/domain/condition';
 import { meanHappiness, type Happiness } from '../../sim/domain/happiness';
 import { closeDay, record, type Ledger } from '../../sim/domain/ledger';
 import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
@@ -40,6 +41,7 @@ export interface DayCloseState {
   venues: readonly Venue[];
   rating: Rating;
   readonly prices: Prices;
+  readonly condition: Condition;
   readonly season: Season | null;
   seasonTally: SeasonTally;
   today: DayCounts;
@@ -51,10 +53,14 @@ export interface DayCloseState {
 
 // Before the morning coach, so a day in the books runs from one check-in to the next.
 export function payTheBills(resort: DayCloseState): void {
-  const { plot } = resort;
-  const standing = [...plot.placements, ...plot.props].map((placement) =>
-    buildCostOf(placement.id),
-  );
+  const { plot, condition } = resort;
+  // A key that never ages is never in the map, so reads as new: props and paths cost what they did.
+  const standing = [
+    ...plot.placements.map(
+      ({ id, key }) => buildCostOf(id) * upkeepFactor(conditionOf(condition, key)),
+    ),
+    ...plot.props.map(({ id }) => buildCostOf(id)),
+  ];
   const billed = record(resort.ledger, 'wages', -wagesFor(resort.roster));
   resort.ledger = closeDay(record(billed, 'maintenance', -maintenanceFor(standing)));
   resort.takings.clear();
@@ -63,12 +69,13 @@ export function payTheBills(resort: DayCloseState): void {
   resort.ledger = record(resort.ledger, 'night', rent);
 }
 
-type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery' | 'prices'>;
+type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery' | 'prices' | 'condition'>;
 
 function nightlyRate(resort: RateState, home: number): number {
   const { id, key } = resort.guests.homes[home]!;
   const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
-  const factor = factorOf(resort.prices, id);
+  // Into the factor, so the rate is rounded once.
+  const factor = factorOf(resort.prices, id) * rateFactor(conditionOf(resort.condition, key));
   return lodging
     ? nightPriceOf(id, sceneryOver(resort.scenery, lodging), factor)
     : chargeOf(id, factor);

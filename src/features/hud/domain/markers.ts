@@ -7,6 +7,7 @@ export type MarkerIcon =
   | 'wheelchair'
   | 'queue'
   | 'dirty'
+  | 'shabby'
   | 'lifeguard'
   | 'litter';
 
@@ -34,6 +35,9 @@ export const orderedTiles = (orders: readonly OrderSpot[]): ReadonlySet<string> 
 // The showcase preallocates its anchor buffers and the HUD its buttons to this count.
 export const MAX_MARKERS = 12;
 
+// As many renovation pins, for the same reason.
+export const MAX_WORKS = 12;
+
 // An idle building or a far lodging is a design note, not a problem to walk to,
 // and a dozen of them would bury the rest.
 const ICONS: Partial<Record<AdviceKind, MarkerIcon>> = {
@@ -42,6 +46,7 @@ const ICONS: Partial<Record<AdviceKind, MarkerIcon>> = {
   'not-step-free': 'wheelchair',
   'full-lines': 'queue',
   dirty: 'dirty',
+  shabby: 'shabby',
   unwatched: 'lifeguard',
   littered: 'litter',
 };

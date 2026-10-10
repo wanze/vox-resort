@@ -9,6 +9,7 @@ import {
   adviceNobodyComes,
   adviceShortStaffed,
   adviceDirty,
+  adviceShabby,
   adviceLittered,
   adviceNoDepot,
   adviceNoEvents,
@@ -185,6 +186,31 @@ describe('the advice rules', () => {
     expect(advice?.subject).toBe('Restaurant');
     expect(advice?.count).toBe(60);
     expect(advice?.weight).toBeCloseTo(0.5, 5);
+  });
+
+  it('names the most run-down building under 0.4, a lodging as well as a venue', () => {
+    const pool = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 40 });
+    const worst = adviceShabby(
+      healthyFacts({
+        venues: [pool],
+        condition: new Map([
+          ['pool#0', 0.3],
+          ['hotel#0', 0.1],
+        ]),
+      }),
+    );
+    expect(worst?.kind).toBe('shabby');
+    expect(worst?.subject).toBe('Hotel');
+    expect(worst?.key).toBe('hotel#0');
+    expect(worst?.count).toBe(10);
+    expect(worst?.weight).toBeCloseTo(0.2 + (0.6 * 0.3) / 0.4);
+  });
+
+  it('says nothing of a building that is only worn', () => {
+    const pool = venueOf({ key: 'pool#0', label: 'Swimming Pool', capacity: 40 });
+    const facts = healthyFacts({ venues: [pool], condition: new Map([['pool#0', 0.5]]) });
+    expect(adviceShabby(facts)).toBeNull();
+    expect(adviceShabby(healthyFacts({ venues: [pool] }))).toBeNull();
   });
 
   it('names the place the cleaners are furthest behind on, and is quiet below the line', () => {

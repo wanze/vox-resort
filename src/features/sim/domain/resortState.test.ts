@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createBreakdowns } from './breakdowns';
+import { settledFor } from './condition';
 import {
   countArrivals,
   countPhoto,
@@ -29,6 +30,7 @@ import { createZones, paintZone, zoneAt } from './zones';
 
 const HOMES: readonly Home[] = [{ key: 'hotel#0', id: 'hotel', label: 'Hotel', beds: 30 }];
 const VENUES = [{ key: 'bar#0' }, { key: 'pool#0' }];
+const LODGINGS = [{ key: 'hotel#0' }];
 const STAFF = 6;
 
 function stateFor(seed: number): ResortState {
@@ -44,6 +46,7 @@ function stateFor(seed: number): ResortState {
     upkeep: createUpkeep(VENUES.length),
     breakdowns: createBreakdowns(VENUES.length),
     venues: VENUES,
+    lodgings: LODGINGS,
     takings: new Map(),
     names: new Map(),
     footfall: createFootfall(9),
@@ -60,6 +63,9 @@ function stateFor(seed: number): ResortState {
     hiring: AUTO_HIRING,
     staffOff: new Uint8Array(STAFF),
     prices: {},
+    condition: new Map(),
+    renovating: new Map(),
+    closing: new Map(),
     zones: createZones(6, 5),
     photos: createPhotos(40, 9),
   };
@@ -318,6 +324,39 @@ describe('snapshotResort', () => {
     expect(resortSnapshotSchema.parse(before).prices).toEqual({});
     const dear = { ...before, prices: { villa: 9 } };
     expect(resortSnapshotSchema.safeParse(dear).success).toBe(false);
+  });
+
+  it("keeps every building's wear and the renovations under way through a save", () => {
+    const state = played();
+    state.condition = new Map([
+      ['bar#0', 0.42],
+      ['hotel#0', 0.9],
+    ]);
+    state.renovating = new Map([['pool#0', 1_200]]);
+    state.closing = new Map([['hotel#0', 640]]);
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(snapshotResort(state)));
+    expect([...fresh.condition]).toEqual([
+      ['bar#0', 0.42],
+      ['hotel#0', 0.9],
+    ]);
+    expect([...fresh.renovating]).toEqual([['pool#0', 1_200]]);
+    expect([...fresh.closing]).toEqual([['hotel#0', 640]]);
+  });
+
+  it('settles every standing building of a save from before ageing, each its own way worn', () => {
+    const {
+      condition: _condition,
+      renovating: _renovating,
+      closing: _closing,
+      ...before
+    } = snapshotResort(played());
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(before));
+    expect([...fresh.condition.keys()]).toEqual(['bar#0', 'pool#0', 'hotel#0']);
+    expect([...fresh.condition]).toEqual([...settledFor(['bar#0', 'pool#0', 'hotel#0'])]);
+    expect(fresh.renovating.size).toBe(0);
+    expect(fresh.closing.size).toBe(0);
   });
 });
 

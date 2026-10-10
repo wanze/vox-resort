@@ -45,6 +45,9 @@ function stateOf(away: boolean) {
     lodgings: [],
     scenery: { tilesX: 0, tilesZ: 0, value: new Float32Array(0) },
     prices: {},
+    condition: new Map(),
+    closing: new Map(),
+    renovating: new Map(),
     events: createEvents(guests.count),
     homeEarly: new Set(),
     nightOwls: new Set(),
@@ -147,6 +150,20 @@ describe('runDay', () => {
     expect(state.newcomers).toEqual([]);
     expect(planned).toBeGreaterThan(0);
     expect(state.arrivalsPlanned).toBe(planned);
+  });
+
+  it('gives no bed in a lodging closed for renovation, and leaves its free beds as they were', () => {
+    const { state: open } = stateOf(true);
+    const state = { ...open, closing: new Map([['villa#1', 500]]) };
+    state.arrivalsPlanned = 30;
+    runDay(state, 1);
+    const housed = (home: number) =>
+      Array.from(state.guests.home).filter(
+        (each, person) => each === home && state.guests.present[person] === 1,
+      ).length;
+    expect(housed(1)).toBeGreaterThan(0);
+    expect(housed(0)).toBe(0);
+    expect(state.guests.freeBeds[0]).toBe(12);
   });
 });
 

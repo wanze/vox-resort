@@ -16,6 +16,7 @@ import { homeOf, partyOf, usesWheelchair, type Guests } from '../../guests/domai
 import { createRandom, resumeRandom } from '../../layout/domain/random';
 import { saltFor, tasteFor } from './appeal';
 import { isBroken, wear, type Breakdowns } from './breakdowns';
+import { appealFactor, reliabilityFactor } from './condition';
 import { chooseVenue, TASTE_SPREAD } from './chooseVenue';
 import { walkingTicks } from './crowdRate';
 import { doorsFor } from './doors';
@@ -220,6 +221,10 @@ export function createRouter(parts: {
   readonly onWoke?: (person: number) => void;
   // Multiplies a venue's appeal by its price; absent, every venue is at list price.
   readonly priceAppeal?: (venue: number) => number;
+  // A venue's wear, 1 as new; absent, everything is new.
+  readonly conditionOf?: (venue: number) => number;
+  // Shut for renovation; absent, nothing ever is.
+  readonly shut?: (venue: number) => boolean;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -421,6 +426,12 @@ export function createRouter(parts: {
   // The synthetic beach lies past the upkeep array and so reads as spotless, which is right.
   const cleanOf = (venue: number): number => cleanliness(parts.upkeep(), venue);
 
+  // A tired venue looks dirtier from outside, so wear reaches the choice without a term of its own.
+  const { conditionOf } = parts;
+  const lookOf = conditionOf
+    ? (venue: number): number => cleanOf(venue) * appealFactor(conditionOf(venue))
+    : cleanOf;
+
   const isBrokenDown = (venue: number): boolean => {
     const breakdowns = parts.breakdowns?.();
     return breakdowns !== undefined && isBroken(breakdowns, venue);
@@ -429,13 +440,19 @@ export function createRouter(parts: {
   // Asked every time rather than kept: the day can turn over between ticks.
   const isOpen = (venue: number): boolean => {
     const declared = venues[venue];
-    if (!declared || isBrokenDown(venue)) return false;
+    if (!declared || isBrokenDown(venue) || parts.shut?.(venue) === true) return false;
     return openNow(declared, weatherEffect(weatherNow()), parts.tickOfDay());
   };
 
   const wearOut = (venue: number): void => {
     const breakdowns = parts.breakdowns?.();
-    if (breakdowns) wear(breakdowns, venue, venues[venue]!.reliability, caches.salts[venue]!, now);
+    if (!breakdowns) return;
+    const { reliability } = venues[venue]!;
+    const worn =
+      reliability === undefined || !conditionOf
+        ? reliability
+        : reliability * reliabilityFactor(conditionOf(venue));
+    wear(breakdowns, venue, worn, caches.salts[venue]!, now);
   };
 
   const affinityOf =
@@ -493,7 +510,7 @@ export function createRouter(parts: {
       occupants,
       affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
-      cleanliness: cleanOf,
+      cleanliness: lookOf,
       isOpen: isOutLate(person) ? isOpenLate : isOpen,
       weather: weatherEffect(weatherNow()),
     });
@@ -735,7 +752,7 @@ export function createRouter(parts: {
       occupants,
       affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
-      cleanliness: cleanOf,
+      cleanliness: lookOf,
       isOpen,
       weather: weatherEffect(weatherNow()),
     });

@@ -17,6 +17,7 @@ import {
 } from '../features/sim/domain/staffRouter';
 import { NO_ZONE } from '../features/sim/domain/zones';
 import { isNamed, type Venue } from '../features/sim/domain/venues';
+import { conditionShown } from '../features/resort-sim/domain/ageing';
 import { venueIndexOf } from '../features/resort-sim/domain/visits';
 import { nextAt } from '../features/events/domain/programmeView';
 import { SHOWN } from '../features/choreography/domain/casting';
@@ -174,6 +175,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       lifeguard: lifeguardAt(resort.staffRouter, venue),
       broken: isBroken(resort.breakdowns, venue),
       factor: factorOf(resort.prices, placement.id),
+      condition: conditionShown(resort, placement.key, clock.ticks),
     });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
     return withNaming(offered, resort.venues[venue]);

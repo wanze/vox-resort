@@ -263,8 +263,30 @@ describe('widenThoughts', () => {
       heardSubject: short(old.heardSubject) as (string | null)[],
     });
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.slice(worth)).toEqual(['not-worth-it', 'good-value', 'sunrise']);
+    expect(THOUGHT_KINDS.slice(worth, worth + 3)).toEqual([
+      'not-worth-it',
+      'good-value',
+      'sunrise',
+    ]);
     expect(isComplaint('not-worth-it')).toBe(true);
     expect(isComplaint('good-value')).toBe(false);
+  });
+
+  it('pads a save from before ageing, and hears a shabby building as a complaint', () => {
+    const thoughts = createThoughts(2);
+    think(thoughts, 1, 'sunrise', null, 5);
+    const kinds = THOUGHT_KINDS.length;
+    const old = snapshotThoughts(thoughts, new Map());
+    const short = (column: ArrayLike<number | string | null>) =>
+      Array.from(column).filter((_, at) => at % kinds < kinds - 1);
+    const widened = widenThoughts({
+      ...old,
+      stay: Uint16Array.from(short(old.stay) as number[]),
+      heardAt: Int32Array.from(short(old.heardAt) as number[]),
+      heardSubject: short(old.heardSubject) as (string | null)[],
+    });
+    expect(widened.stay).toEqual(old.stay);
+    expect(THOUGHT_KINDS.at(-1)).toBe('shabby');
+    expect(isComplaint('shabby')).toBe(true);
   });
 });

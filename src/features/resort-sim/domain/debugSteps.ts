@@ -6,12 +6,26 @@ import {
   startTally,
   type Season,
 } from '../../sim/domain/season';
+import { ageDays } from './ageing';
 import { closeTheSeason } from './arrivals';
 import { endSeason } from './seasonSteps';
 import type { SimNow } from './simNow';
 import type { SimState } from './simState';
 
 export const SEASON_ACTIONS = ['early', 'holidays', 'late', 'last', 'close', 'end'] as const;
+
+export const UPKEEP_ACTIONS = ['week', 'season'] as const;
+
+export type UpkeepAction = (typeof UPKEEP_ACTIONS)[number];
+
+const UPKEEP_DAYS: { readonly [action in UpkeepAction]: number } = {
+  week: 7,
+  season: SEASON_DAYS,
+};
+
+// The season jumps skip days without simulating them, so nothing wears on the way.
+export const runUpkeepAction = (resort: SimState, action: UpkeepAction): boolean =>
+  ageDays(resort, UPKEEP_DAYS[action]);
 
 export type SeasonAction = (typeof SEASON_ACTIONS)[number];
 

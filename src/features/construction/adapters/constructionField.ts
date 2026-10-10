@@ -3,7 +3,20 @@
 // whole wall. The height rides on each mesh's userData so one material draws every site.
 
 import { DoubleSide, Group, Mesh, MeshBasicNodeMaterial } from 'three/webgpu';
-import { attribute, floor, fract, positionGeometry, sin, userData, vertexStage } from 'three/tsl';
+import {
+  attribute,
+  floor,
+  fract,
+  luminance,
+  mix,
+  positionGeometry,
+  sin,
+  userData,
+  vec3,
+  vec4,
+  vertexColor,
+  vertexStage,
+} from 'three/tsl';
 import type { BufferGeometry, Node, NodeMaterial } from 'three/webgpu';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
 import type { Placement } from '../../layout/domain/resortLayout';
@@ -16,7 +29,8 @@ export interface ConstructionField {
   readonly group: Group;
   readonly drawCalls: number;
   readonly triangleCount: number;
-  show(placement: Placement, height: number, reveal: number): void;
+  // Grey from 0, the building's own colours, to 1, stone grey: a renovation is drawn greyed.
+  show(placement: Placement, height: number, reveal: number, grey?: number): void;
   hide(key: string): boolean;
   dispose(): void;
 }
@@ -48,6 +62,19 @@ function cut<T extends NodeMaterial>(material: T, keep: Node<'bool'> | null = nu
   material.maskNode = keep ? below.and(keep) : below;
   // The mesher never emitted faces inside a wall, so a cut shell is see-through from above.
   material.side = DoubleSide;
+  return greyed(material);
+}
+
+// A touch warm, so a greyed building reads as dust sheets rather than as a missing texture.
+const DUST = vec3(1, 0.97, 0.9);
+
+// The vertex colours are mixed here rather than by the material, which would multiply them in
+// a second time.
+function greyed<T extends NodeMaterial>(material: T): T {
+  const colour = vertexColor();
+  const dust = vec3(luminance(colour.rgb)).mul(DUST);
+  material.colorNode = vec4(mix(colour.rgb, dust, userFloat('grey')), 1);
+  material.vertexColors = false;
   return material;
 }
 
@@ -86,6 +113,7 @@ export function buildConstructionField(
     placement: Placement,
     height: number,
     reveal: number,
+    grey: number,
   ): Mesh => {
     const mesh = new Mesh(geometry, materialOf(surface));
     mesh.name = `building-${placement.key}-${surface.kind}`;
@@ -93,6 +121,7 @@ export function buildConstructionField(
     // object the material is compiled for.
     mesh.userData.reveal = reveal;
     mesh.userData.lead = leadVoxels(height);
+    mesh.userData.grey = grey;
     // The same matrix instancedWorld.ts writes for a finished placement, so the building does
     // not step sideways when done.
     const origin = turnedOrigin(placement.width, placement.depth, placement.rotation);
@@ -103,13 +132,13 @@ export function buildConstructionField(
     return mesh;
   };
 
-  const raise = (placement: Placement, height: number, reveal: number): Mesh[] => {
+  const raise = (placement: Placement, height: number, reveal: number, grey: number): Mesh[] => {
     const model = modelById.get(placement.id);
     if (!model) throw new Error(`No geometry was meshed for object type "${placement.id}"`);
     const standing: Mesh[] = [];
     for (const surface of SURFACES) {
       const geometry = surface.of(model);
-      if (geometry) standing.push(pitch(surface, geometry, placement, height, reveal));
+      if (geometry) standing.push(pitch(surface, geometry, placement, height, reveal, grey));
     }
     return standing;
   };
@@ -122,10 +151,13 @@ export function buildConstructionField(
     get triangleCount() {
       return triangleCount;
     },
-    show(placement, height, reveal) {
-      const standing = sites.get(placement.key) ?? raise(placement, height, reveal);
+    show(placement, height, reveal, grey = 0) {
+      const standing = sites.get(placement.key) ?? raise(placement, height, reveal, grey);
       sites.set(placement.key, standing);
-      for (const mesh of standing) mesh.userData.reveal = reveal;
+      for (const mesh of standing) {
+        mesh.userData.reveal = reveal;
+        mesh.userData.grey = grey;
+      }
     },
     hide(key) {
       const standing = sites.get(key);

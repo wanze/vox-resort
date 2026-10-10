@@ -14,6 +14,13 @@
   width: 370px;
 }
 
+/* Wider where a mouse points, so a venue's actions fit on one row; a finger keeps 330px. */
+@media (pointer: fine) {
+  .ui-window[data-window='inspect'] {
+    width: 370px;
+  }
+}
+
 .ui-window[data-window='overview'],
 .ui-window[data-window='inbox'],
 .ui-window[data-window='people'],

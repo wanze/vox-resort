@@ -81,8 +81,10 @@
   display: block;
 }
 
-/* Under the toasts and every window; the render loop moves each marker with a transform. */
-.hud-markers {
+/* Under the toasts and every window; the render loop moves each marker with a transform. A
+   building under renovation is the player's doing, and as urgent. */
+.hud-markers,
+.hud-works {
   position: absolute;
   inset: 0;
   z-index: var(--z-markers);
@@ -90,14 +92,16 @@
 }
 
 /* The render loop moves the spot; the marker and its menu hang off it. */
-.hud-marker-spot {
+.hud-marker-spot,
+.hud-work-spot {
   position: absolute;
   top: 0;
   left: 0;
   will-change: transform;
 }
 
-.hud-marker-spot[hidden] {
+.hud-marker-spot[hidden],
+.hud-work-spot[hidden] {
   display: none;
 }
 
@@ -266,4 +270,63 @@
 .hud-pin:focus-visible {
   z-index: 1;
   filter: brightness(1.08);
+}
+
+/* Taller than a marker for the bar under the roller; the tail's tip sits on the anchor. */
+.hud-work {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  width: 36px;
+  height: 38px;
+  margin: -45px 0 0 -18px;
+  padding: 5px 4px 0;
+  border: 2px solid var(--foliage);
+  border-radius: var(--radius-pebble);
+  background-image: var(--slab-raised);
+  box-shadow: var(--shadow-lift), var(--bevel);
+  cursor: var(--cursor-hand);
+  pointer-events: auto;
+}
+
+.hud-work::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-top-color: var(--foliage);
+  border-bottom: 0;
+}
+
+.hud-work:hover,
+.hud-work:focus-visible {
+  z-index: 1;
+  filter: brightness(1.08);
+}
+
+.hud-work-bar {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid var(--edge-strong);
+  border-radius: 2px;
+  background: var(--sunken);
+}
+
+/* --progress is written by the render loop, in whole percent. */
+.hud-work-fill {
+  display: block;
+  width: var(--progress, 0%);
+  height: 100%;
+  background: var(--foliage);
+}
+
+/* Waiting for its guests to leave: nothing done yet, so the bar is striped, not filled. */
+.hud-work[data-state='closing'] .hud-work-bar {
+  background: repeating-linear-gradient(-45deg, var(--edge-soft) 0 3px, transparent 3px 6px);
 }

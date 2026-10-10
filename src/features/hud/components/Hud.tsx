@@ -14,6 +14,10 @@ import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
 import type { HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
 import { InspectPanel } from './InspectPanel';
+import type { RenovationControls } from './RenovateAction';
+import { RenovationPins } from './RenovationPins';
+import { UpkeepPanel } from './UpkeepPanel';
+import type { UpkeepRow } from '../../resort-sim/domain/ageing';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { PlacementBar } from './PlacementBar';
@@ -99,6 +103,8 @@ interface HudSlices {
   readonly voices: VoicesView;
   readonly status: StatusView | null;
   readonly signs: readonly SignSpot[];
+  readonly upkeep: readonly UpkeepRow[];
+  readonly works: readonly UpkeepRow[];
   readonly selection: SelectionView | null;
   readonly orders: readonly OrderSpot[];
   readonly ledger: Ledger | null;
@@ -122,6 +128,8 @@ function useHudSlices(hud: HudStore): HudSlices {
     voices: useHudSlice(hud, (state) => state.voices),
     status: useHudSlice(hud, (state) => state.status),
     signs: useHudSlice(hud, (state) => state.signs),
+    upkeep: useHudSlice(hud, (state) => state.upkeep),
+    works: useHudSlice(hud, (state) => state.works),
     selection: useHudSlice(hud, (state) => state.selection),
     orders: useHudSlice(hud, (state) => state.orders),
     ledger: useHudSlice(hud, (state) => state.ledger),
@@ -143,6 +151,12 @@ const modeOf = (ledger: Ledger | null): GameMode | null => ledger?.mode ?? null;
 const hireControls = (props: HudView): HireControls => ({
   offerFor: (advice) => hireOffer(advice, props.stats?.staff ?? null),
   onHire: (offer) => props.resort.setHiring(offer.role, offer.count),
+});
+
+const renovationControls = (props: HudView): RenovationControls => ({
+  ledger: props.ledger,
+  renovate: props.inspector.renovate,
+  cancel: props.inspector.cancelRenovation,
 });
 
 // null for the newest, which is where the Overview and the palette open it.
@@ -218,6 +232,16 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   money: (props) => <LedgerPanel ledger={props.ledger} />,
   prices: ({ stats, resort }) => (
     <PricesPanel prices={stats?.prices ?? null} onPrice={resort.setPrice} />
+  ),
+  upkeep: (props) => (
+    <UpkeepPanel
+      rows={props.upkeep}
+      controls={renovationControls(props)}
+      onSelect={(at) => {
+        props.onShowOnPlot(at);
+        props.inspector.selectAt(at);
+      }}
+    />
   ),
   camera: ({ camera }) => (
     <CameraPanel
@@ -350,6 +374,7 @@ function Windows(props: HudView) {
           onSend={props.inspector.send}
           hire={hireControls(props)}
           onRenameVenue={props.inspector.renameVenue}
+          renovation={renovationControls(props)}
           onOpenProgramme={(key) => {
             props.programme.choose(key);
             windows.show('programme', true);
@@ -533,6 +558,12 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           onSelectAt={props.inspector.selectAt}
           orders={props.orders}
           onSendCleaner={props.inspector.sendCleanerTo}
+        />
+        <RenovationPins
+          works={props.works}
+          shown={props.guestView.following === null}
+          elements={props.nodes.works}
+          onSelectAt={props.inspector.selectAt}
         />
       </section>
       <Palette {...props} />

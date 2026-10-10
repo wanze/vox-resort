@@ -7,6 +7,7 @@ import { fullNameOf } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
 import { isBeach } from '../../layout/domain/shoreline';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
+import { conditionOf, isShabby } from '../../sim/domain/condition';
 import { valueThought } from '../../sim/domain/expectations';
 import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
@@ -82,9 +83,11 @@ export function judgeTheNight(resort: SimState, tick: number): void {
     if (guests.present[person] !== 1 || home === NO_HOME) continue;
     const share = paidShareFor(resort, home);
     const kind = valueThought(happiness.level[person]!, happiness.expects[person]!, share);
-    if (!kind) continue;
     const { key, label } = guests.homes[home]!;
-    hear(resort, tick, person, kind, resort.names.get(key) ?? label);
+    if (kind) hear(resort, tick, person, kind, resort.names.get(key) ?? label);
+    if (isShabby(conditionOf(resort.condition, key))) {
+      hear(resort, tick, person, 'shabby', resort.names.get(key) ?? label);
+    }
   }
 }
 
@@ -97,6 +100,9 @@ function judgeVisit(resort: SimState, tick: number, person: number, venue: Venue
   const clean = cleanliness(resort.upkeep, venueIndexOf(resort, venue.key));
   const thought = visitThought(venue.role, clean);
   if (thought) hear(resort, tick, person, thought, venue.label);
+  if (isShabby(conditionOf(resort.condition, venue.key))) {
+    hear(resort, tick, person, 'shabby', venue.label);
+  }
 }
 
 // A mishap in water somebody is watching is ten times rarer; the beach is watched from a tower.

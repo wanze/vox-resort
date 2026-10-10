@@ -10,4 +10,5 @@ export interface HudNodes extends DebugElements {
   readonly markers: RefObject<(HTMLElement | null)[]>;
   readonly staffPins: RefObject<(HTMLButtonElement | null)[]>;
   readonly signs: RefObject<(HTMLElement | null)[]>;
+  readonly works: RefObject<(HTMLElement | null)[]>;
 }

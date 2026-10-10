@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type RefObject } from 'react';
 import type { DebugControls } from '../features/debug/components/debugControls';
-import type { SeasonAction } from '../features/resort-sim/domain/debugSteps';
+import type { SeasonAction, UpkeepAction } from '../features/resort-sim/domain/debugSteps';
 import { DEBUG_MODE } from './debugFlag';
 import type { Showcase } from './showcase';
 import type { HudStore } from '../features/hud/domain/hudStore';
@@ -30,9 +30,13 @@ export function useDebug(
     },
     [showcase, resume],
   );
+  const runUpkeepAction = useCallback(
+    (action: UpkeepAction) => showcase.current?.runUpkeepAction(action),
+    [showcase],
+  );
   const controls = useMemo(
-    () => ({ turbo, setTurbo, detail, setDetail, runSeasonAction }),
-    [turbo, setTurbo, detail, setDetail, runSeasonAction],
+    () => ({ turbo, setTurbo, detail, setDetail, runSeasonAction, runUpkeepAction }),
+    [turbo, setTurbo, detail, setDetail, runSeasonAction, runUpkeepAction],
   );
   return DEBUG_MODE ? controls : null;
 }

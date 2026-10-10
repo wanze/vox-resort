@@ -79,6 +79,7 @@ function gameFixture(): GameSnapshot {
     upkeep,
     breakdowns: createBreakdowns(0),
     venues: [],
+    lodgings: [],
     takings: new Map([['bar#0', 40]]),
     names: new Map([['bar#0', 'The Anchor']]),
     footfall: createFootfall(network.nodes.length),
@@ -95,6 +96,9 @@ function gameFixture(): GameSnapshot {
     hiring: AUTO_HIRING,
     staffOff: new Uint8Array(employed.count),
     prices: {},
+    condition: new Map(),
+    renovating: new Map(),
+    closing: new Map(),
     zones: createZones(4, 3),
     photos: createPhotos(POPULATION, network.nodes.length),
   });

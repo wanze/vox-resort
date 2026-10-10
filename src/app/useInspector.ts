@@ -31,6 +31,18 @@ export function useInspector(
       },
       [showcase],
     ),
+    renovate: useCallback(
+      (key: string) => {
+        showcase.current?.renovate(key);
+      },
+      [showcase],
+    ),
+    cancelRenovation: useCallback(
+      (key: string) => {
+        showcase.current?.cancelRenovation(key);
+      },
+      [showcase],
+    ),
     selectPerson: useCallback(
       (person: number) => {
         showcase.current?.selectPerson(person);

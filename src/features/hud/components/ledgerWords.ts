@@ -10,6 +10,7 @@ export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   wages: 'Wages',
   events: 'Events',
   maintenance: 'Maintenance',
+  renovate: 'Renovation',
 };
 
 export const signed = (amount: number): string =>

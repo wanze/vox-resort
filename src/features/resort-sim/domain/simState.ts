@@ -30,6 +30,7 @@ import type { VenueNames } from '../../naming/domain/venueNames';
 import { type Footfall, createFootfall } from '../../overlays/domain/overlays';
 import type { Plot } from '../../resort-prep/domain/prepareResort';
 import { type Breakdowns, createBreakdowns } from '../../sim/domain/breakdowns';
+import { conditionOf, type Condition } from '../../sim/domain/condition';
 import {
   type DayCounts,
   type DayReport,
@@ -177,6 +178,13 @@ export interface SimState {
   upkeep: Upkeep;
   // Carried by key like the dirt, so paving a tile does not mend a broken slide.
   breakdowns: Breakdowns;
+  // Off where the resort ages nothing, as the sim report's and the tests' do.
+  readonly ageing: boolean;
+  condition: Condition;
+  // The last check-in's wear by key, which debug mode repeats for a skip; never saved.
+  lastWear: ReadonlyMap<string, number>;
+  renovating: ReadonlyMap<string, number>;
+  closing: ReadonlyMap<string, number>;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
   // Replaced on an edit, as the scenery is.
@@ -320,6 +328,8 @@ export interface SimParts {
   };
   // Off by default, so a report or a test replays as it did before seasons.
   readonly seasons?: boolean;
+  // Off by default for the same reason: nothing wears, and nothing is ever shut for it.
+  readonly ageing?: boolean;
 }
 
 function guestsOf(parts: SimParts) {
@@ -347,6 +357,21 @@ function staffOf(venues: readonly Venue[], network: WalkNetwork, lodgings: reado
   const recommended = rosterFor(workplacesOf(venues, network.posts, lodgings));
   const roster = rosterOf(AUTO_HIRING, recommended);
   return { employed, recommended, roster, duty: onDuty(employed, roster) };
+}
+
+// Built once: the maps are read through the resort, which a renovation and an edit replace.
+function ageingParts(resort: () => SimState, ticks: () => number) {
+  const keyOf = (venue: number): string => resort().venues[venue]?.key ?? '';
+  return {
+    conditionOf: (venue: number): number => {
+      const { condition } = resort();
+      return condition.size === 0 ? 1 : conditionOf(condition, keyOf(venue));
+    },
+    shut: (venue: number): boolean => {
+      const { renovating } = resort();
+      return renovating.size > 0 && (renovating.get(keyOf(venue)) ?? -1) > ticks();
+    },
+  };
 }
 
 function eventsOf(population: number, venues: readonly Venue[]): EventsState {
@@ -410,6 +435,8 @@ export function createSimState(parts: SimParts): SimState {
     shade: () => resort.shade,
     // The synthetic beach is past the venue list, and an unknown id is at list price.
     priceAppeal: (venue) => venuePull(factorOf(resort.prices, resort.venues[venue]?.id ?? '')),
+    // The beach is past the venue list, so it is new and never shut.
+    ...(parts.ageing === true ? ageingParts(() => resort, clock.ticks) : {}),
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, clock.ticks()),
     onThought: (person, kind, subject) => hear(resort, clock.ticks(), person, kind, subject),
@@ -558,6 +585,11 @@ export function createSimState(parts: SimParts): SimState {
     ...keptFactsOf(facts),
     upkeep,
     breakdowns,
+    ageing: parts.ageing === true,
+    condition: new Map(),
+    lastWear: new Map(),
+    renovating: new Map(),
+    closing: new Map(),
     litter,
     footfall: createFootfall(network.nodes.length),
     moment: NO_MOMENT,

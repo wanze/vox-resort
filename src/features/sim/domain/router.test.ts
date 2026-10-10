@@ -169,6 +169,8 @@ const routerOn = (
     readonly events?: EventParts;
     readonly shade?: ShadeMap;
     readonly priceAppeal?: (venue: number) => number;
+    readonly conditionOf?: (venue: number) => number;
+    readonly shut?: (venue: number) => boolean;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -195,6 +197,8 @@ const routerOn = (
     weather: () => weather,
     ...(night.shade ? { shade: () => night.shade ?? null } : {}),
     ...(night.priceAppeal ? { priceAppeal: night.priceAppeal } : {}),
+    ...(night.conditionOf ? { conditionOf: night.conditionOf } : {}),
+    ...(night.shut ? { shut: night.shut } : {}),
     seed: 13,
   });
   crowd = createCrowd({
@@ -489,6 +493,51 @@ describe('a venue priced off its list', () => {
     expect(plain).toBeGreaterThan(0);
     expect(plain).toBeLessThan(guests.count);
     expect(priced).toBeGreaterThan(plain);
+  });
+});
+
+describe('a worn venue', () => {
+  const network = networkOf(street(13));
+  const bakeries = [bakery(2), { ...bakery(10), key: 'bakery#1' }];
+  const hungry = (): Needs => {
+    const needs = createNeeds(guests, 7);
+    for (const need of GUEST_NEEDS) needs.level[need].fill(1);
+    needs.level.hunger.fill(0);
+    return needs;
+  };
+  const choicesWith = (conditionOf?: (venue: number) => number): (string | undefined)[] => {
+    const night = { lodgings: [], tickOfDay: () => NOON, ...(conditionOf ? { conditionOf } : {}) };
+    const { router } = routerOn(network, bakeries, hungry(), night);
+    return Array.from({ length: guests.count }, (_, person) => {
+      router.step(person, nodeAt(network, 6));
+      return router.goalOf(person)?.key;
+    });
+  };
+
+  it('chooses exactly as before while every venue is as new', () => {
+    expect(choicesWith(() => 1)).toEqual(choicesWith());
+  });
+
+  it('sends fewer guests to the run-down one of two bakeries', () => {
+    const plain = cheaper(choicesWith());
+    const worn = cheaper(choicesWith((venue) => (venue === 1 ? 0 : 1)));
+    expect(plain).toBeGreaterThan(0);
+    expect(worn).toBeLessThan(plain);
+  });
+
+  it('turns away at the door a guest who set off before it shut for renovation, and says why', () => {
+    const street8 = networkOf(street(8));
+    const { heard, onThought } = hearing();
+    let shut = false;
+    const night = { lodgings: [], tickOfDay: () => NOON, onThought, shut: () => shut };
+    const { router } = routerOn(street8, [bakery(7)], hungry(), night);
+    router.step(0, nodeAt(street8, 0));
+    expect(router.goalOf(0)?.key).toBe('bakery#0');
+
+    shut = true;
+    expect(router.step(0, nodeAt(street8, 7))).toBe(-1);
+    expect(router.visitOf(0)).toBeNull();
+    expect(heard[0]).toEqual([0, 'closed', 'Bakery']);
   });
 });
 

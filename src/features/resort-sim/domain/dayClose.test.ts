@@ -39,6 +39,7 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     lodgings: [lodging!],
     scenery: fullScenery,
     prices: {},
+    condition: new Map(),
     season: null,
     seasonTally: startTally(),
     happiness: createHappiness(guests.count),
@@ -82,6 +83,19 @@ describe('payTheBills', () => {
     expect(nightPriceOf(home.id, 1)).toBeGreaterThan(priceOf(home.id));
     expect(standing.ledger.today.night).toBe(housed * nightPriceOf(home.id, 1));
     expect(gone.ledger.today.night).toBe(housed * priceOf(home.id));
+  });
+
+  it('lets a run-down lodging for less a night, and charges more to keep it up', () => {
+    const fresh = stateOf();
+    payTheBills(fresh);
+    const worn = stateOf({ condition: new Map([[home.key, 0]]) });
+    payTheBills(worn);
+    const housed = housedOf(worn);
+    expect(worn.ledger.today.night).toBe(housed * nightPriceOf(home.id, 1, 0.7));
+    // Two and a half times its 1 % share, give or take the rounding of each bill.
+    const extra = buildCostOf(placed[0]!.id) * 0.01 * 1.5;
+    const moved = fresh.ledger.yesterday.maintenance - worn.ledger.yesterday.maintenance;
+    expect(Math.abs(moved - extra)).toBeLessThanOrEqual(1);
   });
 
   it('reads the share of the list price a bed is charged at, 1 where it is bare', () => {

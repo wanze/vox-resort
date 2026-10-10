@@ -146,6 +146,8 @@ const columnSchema = z.object({
   // Saves from before events were booked have no column for them.
   events: z.number().default(0),
   maintenance: z.number(),
+  // Saves from before renovations have no column for them.
+  renovate: z.number().default(0),
 });
 
 const bedsSchema = z.object({ total: count, taken: count });
@@ -307,6 +309,16 @@ export const resortSnapshotSchema = z.object({
     .record(z.string(), z.number().min(PRICE_RANGE.min).max(PRICE_RANGE.max))
     .optional()
     .default({}),
+  // Saves from before ageing settle every building within SETTLED.
+  condition: z.array(z.tuple([z.string(), z.number().min(0).max(1)])).exactOptional(),
+  renovating: z
+    .array(z.tuple([z.string(), z.number().int()]))
+    .optional()
+    .default([]),
+  closing: z
+    .array(z.tuple([z.string(), z.number().int()]))
+    .optional()
+    .default([]),
   zones: int8,
   // Absent in saves from before photos, which load with nobody having taken one.
   photos: z.object({ lastAt: int32, heat: float32 }).exactOptional(),

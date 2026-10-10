@@ -43,6 +43,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
     `The plot needs ${count} more ${isStaffRole(subject) ? roleWord(subject, count) : subject}`,
   broken: ({ subject }) => `${subject} has broken down`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
+  shabby: ({ subject }) => `${subject} has seen better days: renovate it`,
   unwatched: ({ subject }) => `Nobody is watching ${subject}`,
   littered: ({ count }) => `Litter is piling up on ${count} tiles`,
   'far-from-home': ({ subject, count, need }) =>
@@ -71,6 +72,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'short-staffed': 'Staff',
   broken: 'Repairs',
   dirty: 'Upkeep',
+  shabby: 'Upkeep',
   unwatched: 'Lifeguard',
   littered: 'Litter',
   'far-from-home': 'Distance',

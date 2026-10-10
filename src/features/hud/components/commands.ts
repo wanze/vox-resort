@@ -1,8 +1,16 @@
 import { speedNote, WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
 import { DEBUG_ACTIONS, MENU_PAGES, pageIcon, pageKey, pageTitle } from './windowNames';
 import type { DebugControls } from '../../debug/components/debugControls';
-import { SEASON_ACTION_WORDS, TURBO_WORDS } from '../../debug/components/debugWords';
-import { canRunSeasonAction, SEASON_ACTIONS } from '../../resort-sim/domain/debugSteps';
+import {
+  SEASON_ACTION_WORDS,
+  TURBO_WORDS,
+  UPKEEP_ACTION_WORDS,
+} from '../../debug/components/debugWords';
+import {
+  canRunSeasonAction,
+  SEASON_ACTIONS,
+  UPKEEP_ACTIONS,
+} from '../../resort-sim/domain/debugSteps';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import type { PreviewLookup } from './BuildPalette';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
@@ -472,7 +480,15 @@ function debugCommands({ debug, resort }: CommandContext): Command[] {
       run: () => debug.runSeasonAction(action),
     }),
   );
-  return [turbo, ...season];
+  const upkeep = UPKEEP_ACTIONS.map((action): Command => ({
+    id: `debug:age-${action}`,
+    label: UPKEEP_ACTION_WORDS[action].label,
+    group: 'Debug',
+    keywords: 'upkeep wear renovate condition cheat',
+    note: UPKEEP_ACTION_WORDS[action].note,
+    run: () => debug.runUpkeepAction(action),
+  }));
+  return [turbo, ...upkeep, ...season];
 }
 
 // The glyph until `pnpm preview` has drawn the tool, as an object falls back to no picture.

@@ -1,4 +1,4 @@
-import type { SeasonAction } from '../../resort-sim/domain/debugSteps';
+import type { SeasonAction, UpkeepAction } from '../../resort-sim/domain/debugSteps';
 
 export interface DebugControls {
   readonly turbo: boolean;
@@ -7,4 +7,5 @@ export interface DebugControls {
   readonly detail: boolean;
   setDetail(on: boolean): void;
   runSeasonAction(action: SeasonAction): void;
+  runUpkeepAction(action: UpkeepAction): void;
 }

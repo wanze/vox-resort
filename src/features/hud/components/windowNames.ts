@@ -47,6 +47,7 @@ export const TAB_TITLES: { readonly [tab in TabId]: string } = {
   staff: 'Staff',
   money: 'Money',
   prices: 'Prices',
+  upkeep: 'Upkeep',
   render: 'Render',
   actions: 'Actions',
 };
@@ -63,6 +64,7 @@ export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
   staff: 'staff',
   money: 'books',
   prices: 'money',
+  upkeep: 'renovate',
   render: 'debug',
   actions: 'fast',
 };
@@ -90,6 +92,7 @@ export const MENU_PAGES: readonly PageId[] = [
   'programme',
   'money',
   'prices',
+  'upkeep',
   'camera',
 ];
 

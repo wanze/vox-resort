@@ -38,6 +38,12 @@ export interface FrameUpdate {
   };
   // As markers, one per venue sign; count is 0 while zoomed out or turned off.
   readonly signs: { readonly count: number; readonly spots: Float32Array };
+  // As markers, one per renovation pin, with how far each has got from 0 to 1.
+  readonly works: {
+    readonly count: number;
+    readonly spots: Float32Array;
+    readonly progress: Float32Array;
+  };
 }
 
 // A React ref by shape, so this module stays free of React.
@@ -63,6 +69,8 @@ export interface HudOverlayParts {
   readonly staffPins: Slot<readonly (HTMLButtonElement | null)[]>;
   // One per sign, in the order the showcase placed their anchors.
   readonly signs: Slot<readonly (HTMLElement | null)[]>;
+  // One per renovation pin, in the order the showcase placed their anchors.
+  readonly works: Slot<readonly (HTMLElement | null)[]>;
 }
 
 export interface HudOverlay {
@@ -178,8 +186,24 @@ export function createHudOverlay(parts: HudOverlayParts): HudOverlay {
     }
   };
 
+  // In whole percent, so a bar moving by less than a pixel costs no style write.
+  const progressed = new WeakMap<HTMLElement, number>();
+  const fill = (pin: HTMLElement, share: number): void => {
+    const percent = Math.round(share * 100);
+    if (progressed.get(pin) === percent) return;
+    progressed.set(pin, percent);
+    pin.style.setProperty('--progress', `${percent}%`);
+  };
+
+  const writeProgress = ({ count, progress }: FrameUpdate['works']): void => {
+    const pins = (parts.works.current ?? []).slice(0, count);
+    pins.forEach((pin, index) => pin && fill(pin, progress[index]!));
+  };
+
   return {
     update(frame) {
+      writeMarkers(parts.works, frame.works);
+      writeProgress(frame.works);
       writeMarkers(parts.signs, frame.signs);
       writeMarkers(parts.markers, frame.markers);
       writeStaffPins(frame.staff);

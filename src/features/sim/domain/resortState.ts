@@ -2,6 +2,7 @@ import { restoreGuests, snapshotGuests, type Guests } from '../../guests/domain/
 import { resumeRandom, type Random } from '../../layout/domain/random';
 import type { Footfall } from '../../overlays/domain/overlays';
 import { restoreBreakdowns, snapshotBreakdowns, type Breakdowns } from './breakdowns';
+import { settledFor, type Condition } from './condition';
 import type { DayCounts, DayReport, PhotoTally } from './dayReport';
 import { restoreHappiness, snapshotHappiness, type Happiness } from './happiness';
 import type { Ledger } from './ledger';
@@ -38,6 +39,7 @@ export interface ResortState {
   upkeep: Upkeep;
   breakdowns: Breakdowns;
   readonly venues: readonly { readonly key: string }[];
+  readonly lodgings: readonly { readonly key: string }[];
   readonly takings: VenueTakings;
   // Placement key to name, as naming/domain/venueNames.ts draws them.
   names: ReadonlyMap<string, string>;
@@ -56,6 +58,11 @@ export interface ResortState {
   // Per worker, gone home for the night: without it a load at night would clock them on again.
   staffOff: Uint8Array;
   prices: Prices;
+  condition: Condition;
+  // Placement key to the tick its renovation ends; the building is shut until then.
+  renovating: ReadonlyMap<string, number>;
+  // A lodging paid for and closed to new guests, by key to what was paid, until it empties.
+  closing: ReadonlyMap<string, number>;
   readonly zones: Zones;
   readonly photos: Photos;
   // Null or absent where a resort runs no seasons, as the sim report's does.
@@ -120,6 +127,9 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     hiring: { ...state.hiring },
     staffOff: state.staffOff.slice(),
     prices: { ...state.prices },
+    condition: [...state.condition],
+    renovating: [...state.renovating],
+    closing: [...state.closing],
     zones: state.zones.zone.slice(),
     photos: snapshotPhotos(state.photos),
     ...(state.season ? { season: { ...state.season } } : {}),
@@ -159,6 +169,11 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day 
   state.hiring = { ...snapshot.hiring };
   state.staffOff = snapshot.staffOff?.slice() ?? new Uint8Array(state.staffOff.length);
   state.prices = { ...snapshot.prices };
+  state.condition = snapshot.condition
+    ? new Map(snapshot.condition)
+    : settledFor([...state.venues, ...state.lodgings].map(({ key }) => key));
+  state.renovating = new Map(snapshot.renovating);
+  state.closing = new Map(snapshot.closing);
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;
   restorePhotos(state.photos, snapshot.photos);

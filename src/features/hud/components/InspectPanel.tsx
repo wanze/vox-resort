@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import type {
+  ConditionView,
   GuestView,
   LifeguardWatch,
   PartyMemberView,
@@ -10,6 +11,7 @@ import type {
   StaffView,
 } from '../../inspect/domain/selection';
 import type { OrderRole } from '../../sim/domain/staffRouter';
+import type { ConditionBand } from '../../sim/domain/condition';
 import type { Advice } from '../../sim/domain/advice';
 import { adviceAt } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
@@ -20,6 +22,7 @@ import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { StatRow } from '../../../shared/components/StatRow';
 import { EXPECTATION_WORDS, NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
 import { VenueActions, VenueKind } from './VenueName';
+import { RenovateAction, worksWords, type RenovationControls } from './RenovateAction';
 
 export interface InspectPanelProps {
   readonly frame: HudWindowFrame;
@@ -35,6 +38,7 @@ export interface InspectPanelProps {
   readonly onSend: (role: OrderRole) => void;
   readonly hire?: HireControls;
   readonly onRenameVenue: (key: string, name: string) => void;
+  readonly renovation: RenovationControls;
   readonly onOpenProgramme: (key: string) => void;
 }
 
@@ -163,6 +167,24 @@ function PriceStat({ price }: { readonly price: Venue['price'] }) {
   );
 }
 
+const BANDS: { readonly [band in ConditionBand]: string } = {
+  good: 'Good',
+  worn: 'Worn',
+  shabby: 'Shabby',
+  'run-down': 'Run-down',
+};
+
+function ConditionRows({ condition }: { readonly condition: ConditionView | null }) {
+  if (!condition) return null;
+  const percent = Math.round(condition.level * 100);
+  return (
+    <>
+      <StatRow label="Condition">{`${BANDS[condition.band]} · ${percent}%`}</StatRow>
+      {condition.works ? <StatRow label="Renovation">{worksWords(condition.works)}</StatRow> : null}
+    </>
+  );
+}
+
 function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue: Venue }) {
   return (
     <dl className="ui-stats">
@@ -181,6 +203,7 @@ function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue
       </StatRow>
       <StatRow label="Waiting">{venue.waiting === 0 ? 'Nobody' : venue.waiting}</StatRow>
       <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
+      <ConditionRows condition={place.condition} />
       <PriceStat price={venue.price} />
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watch={venue.lifeguard} />
@@ -275,8 +298,41 @@ const NO_SEND: SendOffers = { mechanic: null, cleaner: null };
 const offersAny = ({ mechanic, cleaner }: SendOffers): boolean =>
   mechanic !== null || cleaner !== null;
 
+const offersRenovation = ({ condition }: PlaceView): boolean =>
+  condition !== null && (condition.cost !== null || condition.works?.kind === 'closing');
+
 const hasActions = (place: PlaceView): boolean =>
-  offersAny(place.send ?? NO_SEND) || place.programme !== undefined || place.naming !== undefined;
+  [
+    offersAny(place.send ?? NO_SEND),
+    place.programme !== undefined,
+    place.naming !== undefined,
+    offersRenovation(place),
+  ].includes(true);
+
+function PlaceRenovation({
+  place,
+  renovation,
+}: {
+  readonly place: PlaceView;
+  readonly renovation: RenovationControls;
+}) {
+  const { condition } = place;
+  if (!condition) return null;
+  const target = {
+    key: place.key,
+    cost: condition.cost,
+    works: condition.works,
+    staying: place.residents.length,
+  };
+  return (
+    <RenovateAction
+      target={target}
+      controls={renovation}
+      className="ui-button-large"
+      brief={false}
+    />
+  );
+}
 
 function ProgrammeButton({
   place,
@@ -295,11 +351,13 @@ function ProgrammeButton({
 
 function PlaceActions({
   place,
+  renovation,
   onSend,
   onRenameVenue,
   onOpenProgramme,
 }: {
   readonly place: PlaceView;
+  readonly renovation: RenovationControls;
   readonly onSend: (role: OrderRole) => void;
   readonly onRenameVenue: (key: string, name: string) => void;
   readonly onOpenProgramme: (key: string) => void;
@@ -317,6 +375,7 @@ function PlaceActions({
       <SendButton role="mechanic" state={send.mechanic} onSend={onSend} />
       <SendButton role="cleaner" state={send.cleaner} onSend={onSend} />
       <ProgrammeButton place={place} onOpenProgramme={onOpenProgramme} />
+      <PlaceRenovation place={place} renovation={renovation} />
     </VenueActions>
   );
 }
@@ -324,6 +383,7 @@ function PlaceActions({
 function PlaceDetails({
   place,
   advice,
+  renovation,
   onSelectPerson,
   onSend,
   hire,
@@ -332,6 +392,7 @@ function PlaceDetails({
 }: {
   readonly place: PlaceView;
   readonly advice: readonly Advice[];
+  readonly renovation: RenovationControls;
   readonly onSelectPerson: (person: number) => void;
   readonly onSend: (role: OrderRole) => void;
   readonly hire: HireControls | undefined;
@@ -359,6 +420,7 @@ function PlaceDetails({
       <Residents place={place} onSelectPerson={onSelectPerson} />
       <PlaceActions
         place={place}
+        renovation={renovation}
         onSend={onSend}
         onRenameVenue={onRenameVenue}
         onOpenProgramme={onOpenProgramme}
@@ -414,6 +476,7 @@ function Details({
   onSend,
   hire,
   onRenameVenue,
+  renovation,
   onOpenProgramme,
 }: Omit<InspectPanelProps, 'frame' | 'selection'> & { readonly selection: SelectionView }) {
   if (selection.kind === 'guest') {
@@ -433,6 +496,7 @@ function Details({
     <PlaceDetails
       place={selection}
       advice={advice}
+      renovation={renovation}
       onSelectPerson={onSelectPerson}
       onSend={onSend}
       hire={hire}

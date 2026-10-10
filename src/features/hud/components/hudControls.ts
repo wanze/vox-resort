@@ -132,6 +132,9 @@ export interface InspectorControls {
   send(role: OrderRole): void;
   sendCleanerTo(tile: { readonly tileX: number; readonly tileZ: number }): void;
   renameVenue(key: string, name: string): void;
+  renovate(key: string): void;
+  // Only while a closed lodging waits for its guests to leave; the money comes back.
+  cancelRenovation(key: string): void;
   selectPerson(person: number): void;
   selectWorker(worker: number): void;
   showSelected(): void;

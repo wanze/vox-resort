@@ -1,10 +1,14 @@
 import { PixelIcon } from '../../../shared/components/PixelIcon';
-import { canRunSeasonAction, SEASON_ACTIONS } from '../../resort-sim/domain/debugSteps';
+import {
+  canRunSeasonAction,
+  SEASON_ACTIONS,
+  UPKEEP_ACTIONS,
+} from '../../resort-sim/domain/debugSteps';
 import { PHASE_WORDS, type SeasonView } from '../../sim/domain/season';
 import { WEATHERS, type Weather } from '../../sim/domain/weather';
 import { WEATHER_NAMES } from '../../hud/components/controlNames';
 import type { DebugControls } from './debugControls';
-import { SEASON_ACTION_WORDS, TURBO_WORDS } from './debugWords';
+import { SEASON_ACTION_WORDS, TURBO_WORDS, UPKEEP_ACTION_WORDS } from './debugWords';
 
 export interface DebugPanelProps {
   readonly debug: DebugControls;
@@ -91,6 +95,24 @@ export function DebugPanel(props: DebugPanelProps) {
         >
           Level of detail {debug.detail ? 'on' : 'off'}
         </button>
+      </section>
+      <section className="ui-stack debug-panel-group" aria-labelledby="debug-panel-upkeep">
+        <h3 id="debug-panel-upkeep" className="ui-label">
+          Upkeep
+        </h3>
+        <div className="debug-panel-actions">
+          {UPKEEP_ACTIONS.map((action) => (
+            <button
+              key={action}
+              type="button"
+              className="ui-button"
+              title={UPKEEP_ACTION_WORDS[action].note}
+              onClick={() => debug.runUpkeepAction(action)}
+            >
+              {UPKEEP_ACTION_WORDS[action].label}
+            </button>
+          ))}
+        </div>
       </section>
       <section className="ui-stack debug-panel-group" aria-labelledby="debug-panel-season">
         <h3 id="debug-panel-season" className="ui-label">

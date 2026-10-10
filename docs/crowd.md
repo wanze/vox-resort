@@ -727,9 +727,9 @@ needs and the lodging a party is given never read a price.
 - `cost` on a model is what standing it costs; undeclared, it's derived from
   voxel count.
 - `price` on a venue is what a visit or a guest-night takes.
-- Money moves for build, demolish (half back), dig, land, visits, nights, wages
-  and maintenance (1% of build cost a day), each with its own column in the
-  Books.
+- Money moves for build, demolish (half back), dig, land, visits, nights, wages,
+  maintenance (1% of build cost a day, more for a worn building) and
+  renovations, each with its own column in the Books.
 - Nights are billed for the bed slept in. A lodging's rate rises up to a quarter
   with its surroundings.
 - **The player sets prices** on the Books window's Prices tab: a factor per
@@ -741,6 +741,61 @@ needs and the lodging a party is given never read a price.
   0.2 to 1.3). A paid visit over `fair + 0.2` is heard as `not-worth-it`.
 - **Tycoon starts on bare ground** with 8,000. Generated resorts are always
   sandbox. "Free play" is the player-facing name for sandbox.
+
+## Ageing
+
+Every lodging and venue has a **condition**, 0 to 1, kept by placement key
+(`sim/domain/condition.ts`, stepped in `resort-sim/domain/ageing.ts`). Paths,
+props and dressing never age. Ageing is opt-in on `createSimState`
+(`ageing: true`, passed only by the showcase), so the sim report and the
+tests age nothing, shut nothing and replay as before.
+
+- **Wear** at each 11:00 check-in, before the bill: `(0.002 + 0.009 × busy) ×
+durability`. A venue's busy is its share of a 12-hour waking day spent
+  occupied, counted full at a quarter (`FULL_OCCUPANCY`: on the reference
+  resort the median venue is occupied 6 % and the busiest 66 %); a lodging's
+  is its beds taken. Durability is 0.8-1.2, hashed from the key, so a row of
+  full bungalows does not come due in one week. A full building is shabby
+  (below 0.4) in about two seasons, an idle one in about ten. The first
+  check-in of a resort built that morning wears nothing.
+- **Bands**: Good from 0.75, Worn from 0.5, Shabby from 0.25, then Run-down.
+- **Five effects**, each 1 as new: a lodging's nightly rate × `0.7 + 0.3c`
+  (into the price factor, so it is rounded once); a venue's cleanliness as the
+  router hands it to `chooseVenue` × `0.6 + 0.4c` (so `chooseVenue.ts` never
+  reads condition); a reliable venue breaks as if its reliability were
+  × `0.4 + 0.6c`; its share of the maintenance × `1 + 1.5(1 − c)`; and below
+  0.4 a guest says `shabby` on a visit, or each morning in such a lodging.
+  Nothing touches the rating directly.
+- **Renovating** from the inspector or Books › Upkeep costs
+  `max(10, round(cost × 0.5 × (1 − c)))`, offered below 0.95, booked as
+  `renovate`, refused in tycoon through `canAfford`, and paid at once.
+  - A venue, or an empty lodging, is new at once and shut for six simulated
+    hours (`renovating`, key to the tick it reopens); guests find it
+    `closed`.
+  - A lodging with guests in it is **closed** first (`closing`, key to what
+    was paid): check-in gives no beds there (its free beds are hidden while a
+    coach is booked and checked in), and the hourly `stepRenovations` starts
+    the work once the last guest has left. Until then it can be cancelled for
+    the money back.
+  - In a season's break nothing shuts, as the clock is stopped.
+- **On the map**: a building under renovation is drawn greyed, whole, by the
+  construction field (`showRenovations` on the build controller), and a pin
+  over it fills a bar as the six hours pass; a lodging still emptying has a
+  striped bar.
+- **Advice**: the single worst building below 0.4 that is not already closed
+  for renovation, as `shabby`, with a marker.
+- **Debug mode** has Age a week and Age a season (panel and palette): the
+  last check-in's wear, or today's use before the first one, repeated for 7 or
+  28 days. The season jumps skip days without simulating them, so they wear
+  nothing.
+- **An old save** loads with every standing lodging and venue between 0.65
+  and 0.9 (`SETTLED`, hashed from the key). An edit keeps the wear and works of
+  what still stands and forgets the rest.
+- **At the reference size** (Part F of plan 086): the reference resort's 101
+  ageing buildings cost 1,427 a day to keep up at 1, 2,306 at 0.5 and 3,186
+  at 0, against 12,900-16,000 taken a day; renovating all of them from 0.5
+  costs 29,345. The generated 112×100 plot: 2,809, 4,545 and 6,282, against
+  25,200-30,300; 57,968 to renovate from 0.5.
 
 ## Land
 

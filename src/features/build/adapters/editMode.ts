@@ -122,6 +122,8 @@ export interface EditMode {
   // Carried over a settle, whose rebuild stands everything in the plot as finished.
   openSites(): readonly ConstructionSite[];
   reopen(open: readonly ConstructionSite[]): void;
+  // Drawn greyed while their renovation lasts; a key no longer given is drawn as it was.
+  showRenovations(keys: ReadonlySet<string>): void;
   readonly ground: PickGround;
   placementOf(key: string): Placement | undefined;
   // For the placement a finger left waiting, with whichever of objects or land is armed.
@@ -136,6 +138,9 @@ export interface Purse {
   spend(reason: Reason, amount: number): void;
   refund(amount: number): void;
 }
+
+// Most of the way, not all: the building must still read as itself under the dust sheets.
+const RENOVATION_GREY = 0.75;
 
 const groundUnder = (placement: Placement): TileColumns => ({
   from: placement.tileX,
@@ -274,6 +279,8 @@ export function createEditMode(parts: {
     const { plot, world, lighting, shadows } = resort();
     parts.onLift(placement);
     occupancy.release(placement, placement.key);
+    // Back into the world first, so the rest of taking it down finds it where it always is.
+    ungreyFirst(placement.key);
     // A building still going up was never raised, so cancelling its site is all of taking it down.
     if (cancelSite(placement.key)) {
       const laid = listFor(plot, placement.id);
@@ -308,6 +315,39 @@ export function createEditMode(parts: {
   };
 
   let sites: readonly ConstructionSite[] = [];
+
+  // Out of the world and into the construction field, whole and greyed, until the work is done.
+  const greyed = new Set<string>();
+
+  const ungrey = (key: string): void => {
+    greyed.delete(key);
+    resort().construction.hide(key);
+    const placement = placementOf(key);
+    if (placement) resort().world.add(placement);
+  };
+
+  // A building still going up has no finished look to grey.
+  const greyable = (key: string): Placement | undefined => {
+    if (greyed.has(key) || sites.some((site) => site.placement.key === key)) return undefined;
+    return placementOf(key);
+  };
+
+  // Deleting the entry being visited is safe while iterating a Set.
+  const ungreyAllBut = (keys: ReadonlySet<string>): void => {
+    for (const key of greyed) if (!keys.has(key)) ungrey(key);
+  };
+
+  const ungreyFirst = (key: string): void => {
+    if (greyed.has(key)) ungrey(key);
+  };
+
+  const grey = (placement: Placement): void => {
+    const { world, construction } = resort();
+    greyed.add(placement.key);
+    world.remove(placement.key);
+    const height = objectTypeTop(placement.id);
+    construction.show(placement, height, revealHeightOf(1, height), RENOVATION_GREY);
+  };
 
   const redrawSites = (): void => {
     const { construction } = resort();
@@ -519,6 +559,14 @@ export function createEditMode(parts: {
     },
     abandon() {
       sites = [];
+      greyed.clear();
+    },
+    showRenovations(keys) {
+      ungreyAllBut(keys);
+      for (const key of keys) {
+        const placement = greyable(key);
+        if (placement) grey(placement);
+      }
     },
     finishAll() {
       const open = sites;

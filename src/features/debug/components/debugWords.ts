@@ -1,4 +1,4 @@
-import type { SeasonAction } from '../../resort-sim/domain/debugSteps';
+import type { SeasonAction, UpkeepAction } from '../../resort-sim/domain/debugSteps';
 import { firstDayOf, SEASON_DAYS } from '../../sim/domain/season';
 import { TURBO_DAY_SECONDS } from '../domain/turbo';
 
@@ -19,6 +19,16 @@ export const SEASON_ACTION_WORDS: {
     note: 'everybody is sent home; it ends once empty, or at 22:00',
   },
   end: { label: 'End the season now', note: 'straight to the break and the season report' },
+};
+
+export const UPKEEP_ACTION_WORDS: {
+  readonly [action in UpkeepAction]: { readonly label: string; readonly note: string };
+} = {
+  week: { label: 'Age a week', note: "every building wears as if the last day's use ran 7 more" },
+  season: {
+    label: 'Age a season',
+    note: `every building wears as if the last day's use ran ${SEASON_DAYS} more`,
+  },
 };
 
 export const TURBO_WORDS = {

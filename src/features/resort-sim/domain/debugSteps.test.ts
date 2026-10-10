@@ -14,7 +14,7 @@ import {
   type SeasonState,
 } from '../../sim/domain/season';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
-import { canRunSeasonAction, runSeasonAction, SEASON_ACTIONS } from './debugSteps';
+import { canRunSeasonAction, runSeasonAction, runUpkeepAction, SEASON_ACTIONS } from './debugSteps';
 import { plotFactsOf } from './plotFacts';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import { createSimState } from './simState';
@@ -161,5 +161,21 @@ describe('runSeasonAction', () => {
     runSeasonAction(game.state, game.now(), 'close');
     expect(runSeasonAction(game.state, game.now(), 'early')).toBe('moved');
     expect(game.state.season).toEqual({ number: 1, startedOn: 5, state: 'running' });
+  });
+});
+
+describe('runUpkeepAction', () => {
+  it('wears every building a season to a week, and nothing on a resort that does not age', () => {
+    const { state } = gameAt(CHECK_IN_TICK);
+    expect(runUpkeepAction(state, 'week')).toBe(false);
+    expect(state.condition.size).toBe(0);
+
+    const week = { ...state, ageing: true, condition: new Map<string, number>() };
+    const season = { ...state, ageing: true, condition: new Map<string, number>() };
+    runUpkeepAction(week, 'week');
+    runUpkeepAction(season, 'season');
+    const key = state.lodgings[0]!.key;
+    expect(week.condition.get(key)).toBeLessThan(1);
+    expect(1 - season.condition.get(key)!).toBeCloseTo(4 * (1 - week.condition.get(key)!));
   });
 });

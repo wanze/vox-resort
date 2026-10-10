@@ -2,7 +2,7 @@ export const WINDOW_TABS = {
   overview: ['summary', 'report', 'demand', 'photos', 'season'],
   inbox: ['advice', 'messages'],
   people: ['guests', 'staff'],
-  books: ['money', 'prices'],
+  books: ['money', 'prices', 'upkeep'],
   debug: ['render', 'actions'],
 } as const;
 

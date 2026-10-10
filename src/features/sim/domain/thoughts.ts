@@ -24,6 +24,7 @@ export const THOUGHT_KINDS = [
   'not-worth-it',
   'good-value',
   'sunrise',
+  'shabby',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];

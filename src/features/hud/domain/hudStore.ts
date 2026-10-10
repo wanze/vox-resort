@@ -10,6 +10,7 @@ import type { SeasonReport, SeasonView } from '../../sim/domain/season';
 import type { Weather } from '../../sim/domain/weather';
 import type { OrderSpot } from './markers';
 import type { SignSpot } from './signs';
+import type { UpkeepRow } from '../../resort-sim/domain/ageing';
 import type { CameraView, ShowcaseStats, StatusView, VoicesView } from './views';
 
 export interface HudState {
@@ -18,6 +19,10 @@ export interface HudState {
   readonly selection: SelectionView | null;
   readonly orders: readonly OrderSpot[];
   readonly signs: readonly SignSpot[];
+  // Every lodging and venue, the most worn first, for Books > Upkeep.
+  readonly upkeep: readonly UpkeepRow[];
+  // Those of them with a renovation pending or under way, one pin each, at most MAX_WORKS.
+  readonly works: readonly UpkeepRow[];
   readonly highlightTypes: readonly HighlightType[];
   // The ticks travel with the list: the news dates what it hears.
   readonly advice: { readonly list: readonly Advice[]; readonly ticks: number };
@@ -53,6 +58,8 @@ export const INITIAL_HUD: HudState = {
   selection: null,
   orders: [],
   signs: [],
+  upkeep: [],
+  works: [],
   highlightTypes: [],
   advice: { list: [], ticks: 0 },
   status: null,

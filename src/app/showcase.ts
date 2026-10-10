@@ -92,6 +92,13 @@ import { beachVenueFor, withBeach } from '../features/sim/domain/beach';
 import { relabelled, shelterOf, type Venue } from '../features/sim/domain/venues';
 import { assignNames, namedPlacesOf, renameTo } from '../features/naming/domain/venueNames';
 import { occupiedShare } from '../features/sim/domain/night';
+import {
+  cancelRenovation,
+  carryAgeing,
+  conditionAdvised,
+  renovate,
+} from '../features/resort-sim/domain/ageing';
+import { createRenovationWorks } from './renovationWorks';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
 import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
 import { pricesView, setPrice } from '../features/sim/domain/pricing';
@@ -120,7 +127,12 @@ import {
 } from '../features/resort-sim/domain/eventSteps';
 import { stepSim } from '../features/resort-sim/domain/stepSim';
 import { openSeason } from '../features/resort-sim/domain/seasonSteps';
-import { runSeasonAction, type SeasonAction } from '../features/resort-sim/domain/debugSteps';
+import {
+  runSeasonAction,
+  runUpkeepAction,
+  type SeasonAction,
+  type UpkeepAction,
+} from '../features/resort-sim/domain/debugSteps';
 import { turboPace } from '../features/debug/domain/turbo';
 import { fastNightPace, mayRunFast } from '../features/sim/domain/fastNight';
 import { quietNightNow } from '../features/resort-sim/domain/quietNight';
@@ -457,10 +469,15 @@ export interface Showcase {
   setFastNights(on: boolean): void;
   // True when it opened the next season from a break, whose speed the HUD then resumes.
   runSeasonAction(action: SeasonAction): boolean;
+  // Debug mode's: wears every building as if the days had been played.
+  runUpkeepAction(action: UpkeepAction): void;
   // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
   rename(name: string): void;
   // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
   renameVenue(key: string, typed: string): void;
+  // Charged at once and as new at once; a venue is shut for the work, a lodging stays open.
+  renovate(key: string): void;
+  cancelRenovation(key: string): void;
   setHiring(role: StaffRole, count: number | null): void;
   setPrice(family: string, factor: number | null): void;
   setCameraMode(mode: CameraMode): void;
@@ -1020,6 +1037,7 @@ function buildResort(
     // Never zero: createCrowd deals a variant per body and would divide by zero.
     staffVariants: Math.max(1, parts.staff.length),
     seasons: true,
+    ageing: true,
     clock: {
       ticks: parts.ticks,
       tickOfDay: parts.tickOfDay,
@@ -1774,6 +1792,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     cleanliness: new Map(
       resort.venues.map((venue, index) => [venue.key, cleanliness(resort.upkeep, index)]),
     ),
+    condition: conditionAdvised(resort),
     unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
     broken: brokenOn(resort, now),
     shortStaffed: shortOf(resort.hiring, resort.recommended),
@@ -2022,6 +2041,14 @@ function moneyRefusalFor(id: string | null, balance: number): string {
   return `${article} ${name} costs ${buildCostOf(id).toLocaleString('en-US')}, and ${bank}.`;
 }
 
+function renovationRefusalFor(cost: number, balance: number): BuildNote {
+  const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
+  return {
+    title: 'Not enough money',
+    message: `Renovating it costs ${cost.toLocaleString('en-US')}, and ${bank}.`,
+  };
+}
+
 const GATE_REFUSAL: BuildNote = {
   title: 'Entrance away from the edge',
   message: "An entrance must face land you don't own.",
@@ -2234,6 +2261,7 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   // By key: surviving venues keep their dirt, and new ones start clean.
   resort.upkeep = carryUpkeep(resort.upkeep, wasStanding, resort.venues);
   resort.breakdowns = carryBreakdowns(resort.breakdowns, wasStanding, resort.venues);
+  carryAgeing(resort);
   // Sand under a building just placed would never be swept.
   pruneLitter(
     resort.litter,
@@ -2485,6 +2513,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let staffPinsShown = false;
   const signSpots = createSignSpots();
   let signsWanted = false;
+  const works = createRenovationWorks({
+    current,
+    ticks: () => clock.ticks,
+    showRenovations: (keys) => build.showRenovations(keys),
+  });
 
   const { onHear } = options;
   const listen =
@@ -2820,9 +2853,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     return seasonShown;
   };
 
-  // At most once a simulated hour: thoughts are heard per step, and React must not be.
+  // The panel is otherwise worded on a click and each morning; a follow watches it change, and a
+  // lodging waiting for its guests to leave counts them down.
+  const panelMoves = (): boolean => guestView.person !== null || works.pinned > 0;
+
+  const worksChanged = (): void => {
+    selection.reword();
+    hud.publish({ ...works.place(), ledger: current().ledger, advice: advise() });
+    options.onDirty?.();
+  };
+
   const hourly = (): void => {
     hud.publish({
+      ...works.place(),
       season: seasonNow(),
       advice: adviseHourly(),
       voices: voicesOf(current()),
@@ -2831,8 +2874,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       programme: programmeNow(),
     });
     if (overlayKind !== null) paintOverlay();
-    // The panel is otherwise worded on a click and each morning; a follow watches it change.
-    if (guestView.person !== null) selection.reword();
+    if (panelMoves()) selection.reword();
     options.onDirty?.();
   };
 
@@ -2852,6 +2894,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const morning = (): void => {
     tellTonight();
     hud.publish({
+      ...works.place(),
       advice: advise(),
       status: report(),
       history: current().history,
@@ -2886,6 +2929,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     hud.publish({
       ...placeSigns(),
       ...placeHighlights(),
+      ...works.place(),
       stats: statsNow(),
       advice: advise(),
       voices: voicesOf(current()),
@@ -2918,6 +2962,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     hud.publish({
       ...placeSigns(),
       ...placeHighlights(),
+      ...works.place(),
       advice: advise(),
       voices: voicesOf(current()),
       status: report(),
@@ -3086,6 +3131,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     signSpots.project(handle.camera, handle.controls.target, signsWanted, viewSize);
     widenHighlights();
     markerSpots.project(handle.camera, viewSize.width, viewSize.height);
+    works.project(handle.camera, viewSize, worksChanged);
     staffPins.pin(current(), staffPinsShown, workerOf(selection.target()));
     selection.tellOrders();
     staffPins.project(handle.camera, viewSize.width, viewSize.height);
@@ -3111,6 +3157,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       markers: markerSpots.view,
       staff: staffPins.view,
       signs: signSpots.view,
+      works: works.view,
     });
 
     recorder?.record(elapsed * 1000, performance.now() - frameStarted);
@@ -3121,6 +3168,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   hud.publish({
     ...placeSigns(),
     ...placeHighlights(),
+    ...works.place(),
     stats: statsNow(),
     camera: cameraView(),
     advice: { list: adviceAndDemand(), ticks: clock.ticks },
@@ -3165,6 +3213,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     setFastNights(on) {
       fastNights = on && !bench;
     },
+    runUpkeepAction(action) {
+      if (runUpkeepAction(current(), action)) worksChanged();
+    },
     runSeasonAction(action) {
       const resort = current();
       const outcome = runSeasonAction(resort, clock, action);
@@ -3201,6 +3252,15 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       selection.reword();
       hud.publish({ ...placeSigns(), advice: advise() });
       options.onDirty?.();
+    },
+    renovate(key) {
+      const outcome = renovate(current(), key, clock.ticks);
+      if (outcome.kind === 'unaffordable') {
+        options.onRefused?.(renovationRefusalFor(outcome.cost, current().ledger.balance));
+      } else if (outcome.kind !== 'refused') worksChanged();
+    },
+    cancelRenovation(key) {
+      if (cancelRenovation(current(), key)) worksChanged();
     },
     setHiring(role, count) {
       const resort = current();

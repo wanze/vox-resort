@@ -4,6 +4,7 @@ import { ARCHETYPES } from './archetypes';
 import type { VenueDoors } from './doors';
 import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
+import { isShabby, SHABBY_BELOW } from './condition';
 import type { Shortfall } from './staff';
 import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
@@ -25,6 +26,7 @@ const KIND_ORDER = [
   'short-staffed',
   'broken',
   'dirty',
+  'shabby',
   'unwatched',
   'littered',
   'far-from-home',
@@ -71,6 +73,8 @@ export interface ResortFacts {
   readonly unreachable: ReadonlySet<string>;
   // A key with no entry is spotless.
   readonly cleanliness: ReadonlyMap<string, number>;
+  // Venue and lodging keys alike; a key with no entry, or no map, is as new.
+  readonly condition?: ReadonlyMap<string, number>;
   // Absent means a clear day.
   readonly closed?: ReadonlySet<string>;
   // Shut by their hours now; absent means none.
@@ -213,6 +217,34 @@ export function adviceDirty(facts: ResortFacts): Advice | null {
         // The percentage the inspector shows, so the two panels agree.
         count: Math.round(clean * 100),
         at: tileOf(venue),
+        need: null,
+      };
+    }
+  }
+  return worst;
+}
+
+const SHABBY_FLOOR = 0.2;
+
+const SHABBY_RISE = 0.6;
+
+// Only the worst: every building wears, and a list of them all would bury the rest.
+export function adviceShabby(facts: ResortFacts): Advice | null {
+  const { condition } = facts;
+  if (!condition || condition.size === 0) return null;
+  let worst: Advice | null = null;
+  for (const building of [...facts.venues, ...facts.lodgings]) {
+    const level = condition.get(building.key) ?? 1;
+    if (!isShabby(level)) continue;
+    const weight = SHABBY_FLOOR + (SHABBY_RISE * (SHABBY_BELOW - level)) / SHABBY_BELOW;
+    if (worst === null || weight > worst.weight) {
+      worst = {
+        kind: 'shabby',
+        weight,
+        subject: building.label,
+        key: building.key,
+        count: Math.round(level * 100),
+        at: tileOf(building),
         need: null,
       };
     }
@@ -564,6 +596,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceShortStaffed(facts),
     ...adviceBroken(facts),
     adviceDirty(facts),
+    adviceShabby(facts),
     ...adviceUnwatched(facts),
     adviceLittered(facts),
     adviceFarFromHome(facts),

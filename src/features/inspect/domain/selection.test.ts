@@ -404,6 +404,26 @@ describe('placeView', () => {
     expect(priced('restrooms', 2)).toBeNull();
   });
 
+  it("names a building's wear by its band, and says nothing of wear where none is given", () => {
+    const worn = placeView({
+      placement: at('bungalow#0', 'bungalow'),
+      label: 'Bungalow',
+      guests: guestsOf(),
+      occupancy: null,
+      setting: 0,
+      condition: { level: 0.62, cost: 240, works: null },
+    });
+    expect(worn.condition).toEqual({ level: 0.62, band: 'worn', cost: 240, works: null });
+    const bench = placeView({
+      placement: at('bench#2', 'bench'),
+      label: 'Bench',
+      guests: guestsOf(),
+      occupancy: null,
+      setting: 0,
+    });
+    expect(bench.condition).toBeNull();
+  });
+
   it('has nothing to say about a bench', () => {
     const view = placeView({
       placement: at('bench#2', 'bench'),

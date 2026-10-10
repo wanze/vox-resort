@@ -1,8 +1,12 @@
-import { useMemo, useRef } from 'react';
-import { MAX_MARKERS } from '../features/hud/domain/markers';
+import { useMemo, useRef, type RefObject } from 'react';
+import { MAX_MARKERS, MAX_WORKS } from '../features/hud/domain/markers';
 import { MAX_SIGNS } from '../features/hud/domain/signs';
 import { PINNED_STAFF } from '../features/hud/domain/staffPins';
 import type { HudNodes } from '../features/hud/components/hudNodes';
+
+const slotsOf = (length: number): RefObject<(HTMLElement | null)[]> => ({
+  current: Array.from({ length }, () => null),
+});
 
 export function useHudNodes(): HudNodes {
   const day = useRef<HTMLSpanElement | null>(null);
@@ -16,11 +20,18 @@ export function useHudNodes(): HudNodes {
   const people = useRef<HTMLSpanElement | null>(null);
   const shaders = useRef<HTMLSpanElement | null>(null);
   const activeLights = useRef<HTMLSpanElement | null>(null);
-  const markers = useRef<(HTMLElement | null)[]>(Array.from({ length: MAX_MARKERS }, () => null));
   const staffPins = useRef<(HTMLButtonElement | null)[]>(
     Array.from({ length: PINNED_STAFF.length }, () => null),
   );
-  const signs = useRef<(HTMLElement | null)[]>(Array.from({ length: MAX_SIGNS }, () => null));
+  // One hook for the three over the map: each is a fixed row of slots the render loop fills.
+  const { markers, signs, works } = useMemo(
+    () => ({
+      markers: slotsOf(MAX_MARKERS),
+      signs: slotsOf(MAX_SIGNS),
+      works: slotsOf(MAX_WORKS),
+    }),
+    [],
+  );
   // One stable object, so the effect mounting the renderer runs exactly once.
   return useMemo(
     () => ({
@@ -38,6 +49,7 @@ export function useHudNodes(): HudNodes {
       markers,
       staffPins,
       signs,
+      works,
     }),
     [
       day,
@@ -54,6 +66,7 @@ export function useHudNodes(): HudNodes {
       markers,
       staffPins,
       signs,
+      works,
     ],
   );
 }

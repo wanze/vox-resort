@@ -1,6 +1,8 @@
 import type { EventsState } from '../../events/domain/eventRuns';
 import { bedCount, type Guests } from '../../guests/domain/guests';
 import type { Random } from '../../layout/domain/random';
+import type { Condition } from '../../sim/domain/condition';
+import { closedLodgings } from './ageing';
 import { arrivalsDueBy, bedsOn, runCheckIn, wavesDue } from '../../sim/domain/checkIn';
 import { countArrivals, countTurnedAway, type DayCounts } from '../../sim/domain/dayReport';
 import { expectationFor } from '../../sim/domain/expectations';
@@ -25,6 +27,9 @@ export interface ArrivalsState {
   readonly lodgings: readonly Lodging[];
   readonly scenery: SceneryField;
   readonly prices: Prices;
+  readonly condition: Condition;
+  readonly closing: ReadonlyMap<string, number>;
+  readonly renovating: ReadonlyMap<string, number>;
   events: Pick<EventsState, 'tired' | 'glow'>;
   readonly homeEarly: Set<number>;
   readonly nightOwls: Set<number>;
@@ -70,7 +75,7 @@ export function runDay(resort: ArrivalsState, day: number): void {
   resort.newcomers = [];
   const { season } = resort;
   if (season && day >= closingDayOf(season)) closeTheSeason(resort, season);
-  else bookTheDay(resort, day);
+  else withClosedBedsHidden(resort, () => bookTheDay(resort, day));
   const after = bedCount(resort.guests);
   resort.beds = { total: after.beds, taken: after.taken };
 }
@@ -108,7 +113,26 @@ const seasonalDraws = (season: Season | null, day: number) =>
 // The first wave is the day's own check-in, run by runDay with the rating it is sized by.
 export function admitLaterWaves(resort: ArrivalsState, clock: SimNow, ticks: number): void {
   for (const wave of wavesDue(clock.ticks - ticks + 1, clock.ticks)) {
-    if (wave > 0) admitWave(resort, clock.day, wave);
+    if (wave > 0) withClosedBedsHidden(resort, () => admitWave(resort, clock.day, wave));
+  }
+}
+
+// Hidden only while a coach is booked and checked in, so check-in, which knows nothing of
+// renovations, never gives out a bed in a lodging shut for one.
+function withClosedBedsHidden(resort: ArrivalsState, run: () => void): void {
+  const closed = closedLodgings(resort);
+  if (closed.size === 0) return run();
+  const { guests } = resort;
+  const hidden: [number, number][] = [];
+  guests.homes.forEach((home, index) => {
+    if (!closed.has(home.key)) return;
+    hidden.push([index, guests.freeBeds[index]!]);
+    guests.freeBeds[index] = 0;
+  });
+  try {
+    run();
+  } finally {
+    for (const [home, free] of hidden) guests.freeBeds[home] = free;
   }
 }
 

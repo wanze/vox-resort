@@ -6,6 +6,7 @@ import {
   closeSeason,
   closingDayOf,
   effectOn,
+  firstDayOf,
   firstSeason,
   keepSeason,
   lastNightOf,
@@ -181,6 +182,16 @@ describe('the next phase', () => {
     expect(nextPhaseOf(21)).toEqual({ phase: 'late', inDays: 1 });
     expect(nextPhaseOf(28)).toEqual({ phase: 'closing', inDays: 1 });
     expect(nextPhaseOf(29)).toBeNull();
+  });
+
+  it('names the first season day of each phase, and the closing day after the last', () => {
+    expect(firstDayOf('early')).toBe(1);
+    expect(firstDayOf('holidays')).toBe(8);
+    expect(firstDayOf('late')).toBe(22);
+    expect(firstDayOf('closing')).toBe(SEASON_DAYS + 1);
+    for (const phase of ['early', 'holidays', 'late', 'closing'] as const) {
+      expect(phaseOfSeasonDay(firstDayOf(phase))).toBe(phase);
+    }
   });
 
   it('agrees with the calendar about every season day', () => {

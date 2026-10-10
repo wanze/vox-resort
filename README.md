@@ -85,5 +85,7 @@ derives everything from the model registry, so adding a model needs no change in
 - [docs/crowd.md](docs/crowd.md): guests, staff, boats and the simulation behind
   them.
 - [docs/sound.md](docs/sound.md): music, ambience, guests and UI cues in Web Audio.
+- [docs/debug.md](docs/debug.md): the Debug window, the builds that have it,
+  turbo and the season jumps.
 - [docs/art-direction.md](docs/art-direction.md): references, palette, parts and
   modelling rules.

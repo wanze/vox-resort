@@ -94,6 +94,9 @@ const PHASE_STARTS: readonly { readonly phase: SeasonPhase; readonly seasonDay: 
   { phase: 'closing', seasonDay: SEASON_DAYS + 1 },
 ];
 
+export const firstDayOf = (phase: SeasonPhase): number =>
+  PHASE_STARTS.find((start) => start.phase === phase)!.seasonDay;
+
 // Null on the closing day, after which comes a break rather than a phase.
 export function nextPhaseOf(
   seasonDay: number,

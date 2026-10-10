@@ -79,9 +79,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The full build, unlike verify's bundle, so the catalogue thumbnails ship.
+      # The full build, unlike verify's bundle, so the catalogue thumbnails ship. CI already turns
+      # debug mode off; said again here so the deployed build never has the Debug window.
       - name: Build
         run: pnpm build
+        env:
+          VOX_DEBUG: 'off'
 
       # Uses the wrangler pinned in package.json.
       - name: Deploy

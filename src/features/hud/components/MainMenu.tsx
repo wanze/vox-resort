@@ -5,7 +5,14 @@ import { MenuPage } from './MenuPage';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { WEATHER_NAMES } from './controlNames';
 import { WeatherOptions } from './WeatherControl';
-import { MENU_PAGES, pageIcon, pageKey, pageTitle, WINDOW_KEYS } from './windowNames';
+import {
+  DEBUG_ACTIONS,
+  MENU_PAGES,
+  pageIcon,
+  pageKey,
+  pageTitle,
+  WINDOW_KEYS,
+} from './windowNames';
 import { isOpen, isShown } from '../domain/windowLayout';
 import { keyLabel } from '../domain/keymap';
 import { SoundOptions } from '../../sound/components/SoundControl';
@@ -53,6 +60,8 @@ export interface MainMenuProps {
   // Between seasons the gates open only with the next season.
   readonly season: { readonly next: number; readonly onOpen: () => void } | null;
   readonly onPhoto: () => void;
+  // Offers the Debug window, which only a build with debug mode has.
+  readonly debug: boolean;
 }
 
 type SubPage = 'game' | 'windows' | 'view' | 'highlight' | 'maps' | 'weather' | 'settings';
@@ -248,7 +257,7 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
       />
     </>
   ),
-  windows: ({ windows, run }) => (
+  windows: ({ windows, run, debug }) => (
     <>
       {MENU_PAGES.map((page) => (
         <MenuOption
@@ -262,15 +271,27 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
         />
       ))}
       <hr className="ui-rule" />
-      <MenuOption
-        icon="debug"
-        label="Debug info"
-        note="frame rate, frame cost and what is drawn"
-        shortcut={WINDOW_KEYS.debug}
-        many
-        checked={isOpen(windows.layout, 'debug')}
-        onSelect={() => windows.toggle('debug')}
-      />
+      {debug ? (
+        <>
+          <MenuOption
+            icon="debug"
+            label="Debug info"
+            note="frame rate, frame cost and what is drawn"
+            shortcut={WINDOW_KEYS.debug}
+            many
+            checked={isOpen(windows.layout, 'debug')}
+            onSelect={() => windows.toggle('debug')}
+          />
+          <MenuOption
+            icon={pageIcon('actions')}
+            label={DEBUG_ACTIONS.label}
+            note={DEBUG_ACTIONS.note}
+            many
+            checked={isShown(windows.layout, 'actions')}
+            onSelect={() => windows.toggle('actions')}
+          />
+        </>
+      ) : null}
       <MenuOption
         label="Reset window positions"
         note="put every window back where it started"

@@ -2,10 +2,13 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { MUSIC_CACHE, STREAMED_MUSIC } from './src/features/pwa/domain/precacheRules.ts';
+import { debugAllowedBy } from './src/features/debug/domain/debugMode.ts';
 
 const SAND = '#dccdb1';
 
 export default defineConfig({
+  // Compiled in: without it the build has no Debug window at all (docs/debug.md).
+  define: { VOX_DEBUG_ALLOWED: JSON.stringify(debugAllowedBy(process.env)) },
   plugins: [
     react(),
     VitePWA({

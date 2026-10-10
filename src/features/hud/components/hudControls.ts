@@ -26,13 +26,13 @@ import type { OverlayControls } from '../../overlays/components/overlayControls'
 import type { ProgrammeControls } from '../../events/components/programmeControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { PhotoControls } from '../../photo/components/photoControls';
+import type { DebugControls } from '../../debug/components/debugControls';
 
 // The scene owns the camera and keys move it without React, so the view is what the scene tells.
 export interface CameraControls {
   readonly view: CameraView;
   setMode(mode: CameraMode): void;
   setDirection(direction: CompassDirection): void;
-  setDetail(enabled: boolean): void;
 }
 
 // The time is not held here: it changes every frame, so hudOverlay writes it straight to the DOM.
@@ -165,4 +165,6 @@ export interface HudControls {
   readonly windows: WindowControls;
   readonly guestView: GuestViewControls;
   readonly photo: PhotoControls;
+  // Null in a build without debug mode, which then has no Debug window, key or command.
+  readonly debug: DebugControls | null;
 }

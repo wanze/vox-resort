@@ -62,6 +62,7 @@ export function useHudChrome(
   toggles: HudToggles,
   singleKeys: boolean,
   photo: Pick<PhotoControls, 'on' | 'enter' | 'exit'>,
+  debug: boolean,
 ): HudChrome {
   const layout = useLayoutMode();
   const windows = useWindows(layout);
@@ -96,7 +97,10 @@ export function useHudChrome(
       toggles.follow?.();
       return toggles.follow !== null;
     },
-    debug: always(() => windows.toggle('debug')),
+    debug: () => {
+      if (debug) windows.toggle('debug');
+      return debug;
+    },
     // Put away first: the HUD is hidden, not unmounted, and would come back with them open.
     photo: always(() => {
       setPalette(false);

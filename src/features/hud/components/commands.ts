@@ -1,5 +1,8 @@
 import { speedNote, WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
-import { MENU_PAGES, pageIcon, pageKey, pageTitle } from './windowNames';
+import { DEBUG_ACTIONS, MENU_PAGES, pageIcon, pageKey, pageTitle } from './windowNames';
+import type { DebugControls } from '../../debug/components/debugControls';
+import { SEASON_ACTION_WORDS, TURBO_WORDS } from '../../debug/components/debugWords';
+import { canRunSeasonAction, SEASON_ACTIONS } from '../../resort-sim/domain/debugSteps';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import type { PreviewLookup } from './BuildPalette';
 import { OVERLAY_NAMES, OVERLAY_QUESTIONS } from '../../overlays/components/overlayNames';
@@ -80,6 +83,7 @@ export interface CommandContext {
   readonly guestView: GuestViewControls;
   readonly photo: PhotoControls;
   readonly selection: SelectionView | null;
+  readonly debug: DebugControls | null;
 }
 
 const CORNER_NAMES: { readonly [direction in CompassDirection]: string } = {
@@ -216,15 +220,6 @@ function cameraCommands({ camera, photo }: CommandContext): Command[] {
         camera.setDirection(direction);
       },
     })),
-    {
-      id: 'camera:detail',
-      label: 'Level of detail',
-      group: 'Camera',
-      keywords: 'lod performance',
-      note: 'draw far objects coarse and leave out ones too small to see',
-      checked: view.detail,
-      run: () => camera.setDetail(!view.detail),
-    },
     {
       id: 'camera:photo',
       label: 'Photo mode',
@@ -414,6 +409,20 @@ function windowCommands(context: CommandContext): Command[] {
   const { windows } = context;
   return [
     ...MENU_PAGES.map((page) => pageCommand(page, context)),
+    ...debugPages(context),
+    {
+      id: 'window:reset',
+      label: 'Reset window positions',
+      group: 'Windows',
+      note: 'put every window back where it started',
+      run: windows.resetPlaces,
+    },
+  ];
+}
+
+function debugPages({ windows, debug }: CommandContext): Command[] {
+  if (!debug) return [];
+  return [
     {
       id: 'window:debug',
       label: 'Debug info',
@@ -426,13 +435,42 @@ function windowCommands(context: CommandContext): Command[] {
       run: () => windows.toggle('debug'),
     },
     {
-      id: 'window:reset',
-      label: 'Reset window positions',
+      id: 'window:actions',
+      label: DEBUG_ACTIONS.label,
       group: 'Windows',
-      note: 'put every window back where it started',
-      run: windows.resetPlaces,
+      keywords: 'window debug cheat',
+      note: DEBUG_ACTIONS.note,
+      art: { icon: pageIcon('actions') },
+      checked: isShown(windows.layout, 'actions'),
+      run: () => windows.toggle('actions'),
     },
   ];
+}
+
+// Only what can run now, as the panel greys out the rest.
+function debugCommands({ debug, resort }: CommandContext): Command[] {
+  if (!debug) return [];
+  const turbo: Command = {
+    id: 'debug:turbo',
+    label: TURBO_WORDS.label,
+    group: 'Debug',
+    keywords: 'speed fast clock cheat',
+    note: TURBO_WORDS.note,
+    art: { icon: 'fast' },
+    checked: debug.turbo,
+    run: () => debug.setTurbo(!debug.turbo),
+  };
+  const season = SEASON_ACTIONS.filter((action) => canRunSeasonAction(resort.season, action)).map(
+    (action): Command => ({
+      id: `debug:${action}`,
+      label: SEASON_ACTION_WORDS[action].label,
+      group: 'Debug',
+      keywords: 'season calendar jump cheat',
+      note: SEASON_ACTION_WORDS[action].note,
+      run: () => debug.runSeasonAction(action),
+    }),
+  );
+  return [turbo, ...season];
 }
 
 // The glyph until `pnpm preview` has drawn the tool, as an object falls back to no picture.
@@ -553,6 +591,7 @@ export function listCommands(context: CommandContext): readonly Command[] {
     ...gameCommands(context),
     ...resortCommands(context),
     ...windowCommands(context),
+    ...debugCommands(context),
     ...toolCommands(context),
     ...landCommands(context),
     ...styleCommands(context),

@@ -29,9 +29,5 @@ export function useCameraControls(
       (direction: CompassDirection) => apply((mounted) => mounted.setIsoDirection(direction)),
       [apply],
     ),
-    setDetail: useCallback(
-      (enabled: boolean) => apply((mounted) => mounted.setDetail(enabled)),
-      [apply],
-    ),
   };
 }

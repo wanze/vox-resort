@@ -303,6 +303,14 @@ describe('the seasons in a save', () => {
     expect(snapshotResort(fresh)).toEqual(saved);
   });
 
+  it('keeps a season a debug jump started before day 0', () => {
+    const state: ResortState = { ...played(), season: { ...firstSeason(0), startedOn: -24 } };
+    state.seasons = [closeSeason(startTally(), state.season!, 0)];
+    const saved = resortSnapshotSchema.parse(snapshotResort(state));
+    expect(saved.season?.startedOn).toBe(-24);
+    expect(saved.seasons?.[0]?.startedOn).toBe(-24);
+  });
+
   it('places a save from before seasons in one by its day, with an empty tally', () => {
     const { season: _season, seasons: _seasons, ...before } = snapshotResort(played());
     const fresh: ResortState = { ...stateFor(5), season: firstSeason(0) };

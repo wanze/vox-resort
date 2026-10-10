@@ -91,7 +91,7 @@ function bookTheDay(resort: ArrivalsState, day: number): void {
 }
 
 // No coach on the closing morning, and every guest still here walks out as on any departure.
-function closeTheSeason(resort: ArrivalsState, season: Season): void {
+export function closeTheSeason(resort: ArrivalsState, season: Season): void {
   if (season.state === 'running') resort.season = { ...season, state: 'closing' };
   resort.arrivalsPlanned = 0;
   resort.arrivalsAdmitted = 0;

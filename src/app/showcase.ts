@@ -119,6 +119,8 @@ import {
 } from '../features/resort-sim/domain/eventSteps';
 import { stepSim } from '../features/resort-sim/domain/stepSim';
 import { openSeason } from '../features/resort-sim/domain/seasonSteps';
+import { runSeasonAction, type SeasonAction } from '../features/resort-sim/domain/debugSteps';
+import { turboPace } from '../features/debug/domain/turbo';
 import {
   effectOn,
   inBreak,
@@ -446,6 +448,10 @@ export interface Showcase {
   setOpen(open: boolean): void;
   // Only in a break; the speed is the HUD's to resume.
   openSeason(): void;
+  // Debug mode's, and never saved: a turbo speed in a save would not load in a build without it.
+  setTurbo(on: boolean): void;
+  // True when it opened the next season from a break, whose speed the HUD then resumes.
+  runSeasonAction(action: SeasonAction): boolean;
   // Kept beside the params rather than in the resort, so a settle or a load of the scene keeps it.
   rename(name: string): void;
   // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
@@ -2336,6 +2342,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   let drift = driftFor(options, bench, handle);
+  let turbo = false;
   const fixedStep = fixedStepOf(bench);
   const timer = createFrameTimer(bench !== null);
   handle.controls.enabled = drift === null;
@@ -2995,7 +3002,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
     // of two runs, and a running bench would tick a different number of times.
     const step = fixedStep ?? elapsed;
-    const pace = showPaceOf(current(), fireworks, clock);
+    const pace = showPaceOf(current(), fireworks, clock) * turboPace(clock.speed, turbo);
     // A break stops the simulated clock at any speed; the real seconds still flash a storm.
     const between = inBreak(current().season);
     const ticks = between ? clock.advance(step, 0) : stepClock(clock, drift !== null, step, pace);
@@ -3120,6 +3127,28 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       if (!openSeason(resort, clock)) return;
       hud.publish({ season: seasonNow(), open: resort.open, advice: advise() });
       options.onDirty?.();
+    },
+    // Refused under a bench, as camera modes are: a run must tick as it always has.
+    setTurbo(on) {
+      turbo = on && !bench;
+    },
+    runSeasonAction(action) {
+      const resort = current();
+      const outcome = runSeasonAction(resort, clock, action);
+      if (outcome === null) return false;
+      // Paused, published and the report opened, as when a season ends on its own.
+      if (outcome === 'ended') {
+        seasonEnded();
+        return false;
+      }
+      hud.publish({
+        season: seasonNow(),
+        seasons: resort.seasons,
+        open: resort.open,
+        advice: advise(),
+      });
+      options.onDirty?.();
+      return outcome === 'opened';
     },
     rename(next) {
       if (next === identity.name) return;

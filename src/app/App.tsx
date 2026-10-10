@@ -29,6 +29,8 @@ import { useClickCues, useSound, useToastCues } from './useSound';
 import { useUpdate } from './useUpdate';
 import { useIncomingLink, useShareLink } from './useSharing';
 import { usePhotoMode } from './usePhotoMode';
+import { useDebug } from './useDebug';
+import { DEBUG_MODE } from './debugFlag';
 import { PhotoBar } from '../features/photo/components/PhotoBar';
 import { PhotoFilterDefs } from '../features/photo/components/PhotoFilterDefs';
 import { PhotoViewfinder } from '../features/photo/components/PhotoViewfinder';
@@ -265,6 +267,7 @@ function useControls(
     placement: usePlacement(showcase, hud),
     programme: useProgramme(showcase, hud),
     photo: usePhotoMode(showcase, { clock, selectTool, following: guestView.following, hud }),
+    debug: useDebug(showcase, hud, clock.resume),
   };
 }
 
@@ -346,7 +349,7 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, guestView, placement, programme, photo } = useControls(
+  const { camera, clock, inspector, guestView, placement, programme, photo, debug } = useControls(
     showcaseRef,
     hud,
     selectTool,
@@ -382,6 +385,7 @@ export function App() {
     },
     news.prefs.singleKeys,
     photo,
+    DEBUG_MODE,
   );
   // The setters are stable but the objects holding them are not; depending on those would tear the
   // renderer down on every render.
@@ -508,6 +512,7 @@ export function App() {
             windows,
             guestView,
             photo,
+            debug,
           }}
           placement={{
             tool,

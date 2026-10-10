@@ -47,6 +47,8 @@ export const TAB_TITLES: { readonly [tab in TabId]: string } = {
   staff: 'Staff',
   money: 'Money',
   prices: 'Prices',
+  render: 'Render',
+  actions: 'Actions',
 };
 
 export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
@@ -61,6 +63,8 @@ export const TAB_ICONS: { readonly [tab in TabId]: IconName } = {
   staff: 'staff',
   money: 'books',
   prices: 'money',
+  render: 'debug',
+  actions: 'fast',
 };
 
 export const WINDOW_KEYS: { readonly [id in WindowId]?: string } = {
@@ -88,6 +92,9 @@ export const MENU_PAGES: readonly PageId[] = [
   'prices',
   'camera',
 ];
+
+// Named apart from its tab, which sits inside the Debug window and needs no "Debug" of its own.
+export const DEBUG_ACTIONS = { label: 'Debug actions', note: 'turbo speed and season jumps' };
 
 export const pageTitle = (page: PageId): string =>
   isTab(page) ? TAB_TITLES[page] : WINDOW_TITLES[page];

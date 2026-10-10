@@ -6,8 +6,6 @@ export interface CameraPanelProps {
   readonly direction: CompassDirection;
   readonly onModeChange: (mode: CameraMode) => void;
   readonly onDirectionChange: (direction: CompassDirection) => void;
-  readonly detail: boolean;
-  readonly onDetailChange: (enabled: boolean) => void;
 }
 
 const MODES: readonly { readonly mode: CameraMode; readonly label: string }[] = [
@@ -29,8 +27,6 @@ export function CameraPanel({
   direction,
   onModeChange,
   onDirectionChange,
-  detail,
-  onDetailChange,
 }: CameraPanelProps) {
   const isometric = mode === 'isometric';
 
@@ -64,19 +60,6 @@ export function CameraPanel({
             {CORNERS[point].initials}
           </button>
         ))}
-      </div>
-
-      {/* A toggle, because it exists to compare frame rate with it and without. */}
-      <div className="hud-camera-modes" role="group" aria-label="Level of detail">
-        <button
-          type="button"
-          className="ui-button"
-          aria-pressed={detail}
-          title="Draw far objects coarse and leave out ones too small to see"
-          onClick={() => onDetailChange(!detail)}
-        >
-          Level of detail {detail ? 'on' : 'off'}
-        </button>
       </div>
     </div>
   );

@@ -216,9 +216,12 @@ const dayReportSchema = z.object({
   turnedAway: count.exactOptional(),
 }) satisfies z.ZodType<DayReport>;
 
+// Not a count: a debug jump early in a game starts the season before day 0.
+const startedOn = z.number().int();
+
 const seasonSchema = z.object({
   number: z.number().int().positive(),
-  startedOn: count,
+  startedOn,
   state: z.enum(['running', 'closing', 'break']),
 }) satisfies z.ZodType<Season>;
 
@@ -241,7 +244,7 @@ const seasonTallySchema = z.object({
 
 const seasonReportSchema = z.object({
   number: z.number().int().positive(),
-  startedOn: count,
+  startedOn,
   days: count,
   meanStars: z.number().nullable(),
   bestStars: z.number().nullable(),

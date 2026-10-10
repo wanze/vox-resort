@@ -3,6 +3,7 @@ export const WINDOW_TABS = {
   inbox: ['advice', 'messages'],
   people: ['guests', 'staff'],
   books: ['money', 'prices'],
+  debug: ['render', 'actions'],
 } as const;
 
 export type TabbedWindow = keyof typeof WINDOW_TABS;

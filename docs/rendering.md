@@ -135,6 +135,8 @@ draw, so each placement sits in four layers of buckets and
 | far      | region                | coarse | a coarse voxel covers ≤ 1.5 px |
 | district | 4 × 4 regions         | coarse | a coarse voxel covers ≤ 1.5 px |
 
+- Always on for the player. Debug mode's Actions tab can switch it off to
+  compare frame rate (`docs/debug.md`); a bench uses `--no-lod`.
 - Buckets under 3 px are hidden. Thresholds have 20% hysteresis.
 - Coarse copies merge 2×2×2 blocks by majority colour, and are dropped if they
   keep over 60% of the triangles.

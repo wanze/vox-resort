@@ -33,6 +33,7 @@ import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, slotsBusy, UNSAVED_ID } from '../../saves/domain/saveSlots';
 import { SharePanel } from '../../sharing/components/SharePanel';
+import { DebugPanel } from '../../debug/components/DebugPanel';
 import { FollowCard, type FollowSheet } from '../../guest-view/components/FollowCard';
 import { collapsedOnView } from '../../guest-view/domain/followSheet';
 import type { ViewMode } from '../../guest-view/domain/followRig';
@@ -220,10 +221,8 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
     <CameraPanel
       mode={camera.view.mode}
       direction={camera.view.direction}
-      detail={camera.view.detail}
       onModeChange={camera.setMode}
       onDirectionChange={camera.setDirection}
-      onDetailChange={camera.setDetail}
     />
   ),
   resort: ({ resort, saves, windows }) =>
@@ -249,7 +248,11 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   share: ({ saves, resort, onShare }) => (
     <SharePanel onShare={onShare} title={resort.name} busy={slotsBusy(saves)} />
   ),
-  debug: (props) => <RenderStats stats={props.stats} elements={props.nodes} />,
+  // Null without debug mode, which keeps a Debug window left open by such a build shut.
+  render: (props) =>
+    props.debug ? <RenderStats stats={props.stats} elements={props.nodes} /> : null,
+  actions: ({ debug, resort }) =>
+    debug ? <DebugPanel debug={debug} season={resort.season} /> : null,
 };
 
 function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFrame {
@@ -463,6 +466,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         sound={props.sound}
         forecast={props.programme.forecast}
         onPhoto={props.photo.enter}
+        debug={props.debug !== null}
       />
       <Windows {...props} />
       <PlacementBar

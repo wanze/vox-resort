@@ -421,6 +421,7 @@
 }
 
 .hud-menu-highlight,
-.hud-menu-maps {
+.hud-menu-maps,
+.hud-menu-weather {
   display: none;
 }

@@ -1,5 +1,8 @@
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { canRunSeasonAction, SEASON_ACTIONS } from '../../resort-sim/domain/debugSteps';
 import { PHASE_WORDS, type SeasonView } from '../../sim/domain/season';
+import { WEATHERS, type Weather } from '../../sim/domain/weather';
+import { WEATHER_NAMES } from '../../hud/components/controlNames';
 import type { DebugControls } from './debugControls';
 import { SEASON_ACTION_WORDS, TURBO_WORDS } from './debugWords';
 
@@ -7,6 +10,8 @@ export interface DebugPanelProps {
   readonly debug: DebugControls;
   // Null where the resort runs no seasons.
   readonly season: SeasonView | null;
+  readonly forcedWeather: Weather | null;
+  readonly onWeatherChange: (weather: Weather | null) => void;
 }
 
 function seasonLine(season: SeasonView | null): string {
@@ -15,7 +20,44 @@ function seasonLine(season: SeasonView | null): string {
   return `Season ${season.number}, day ${season.day}: ${PHASE_WORDS[season.phase]}`;
 }
 
-export function DebugPanel({ debug, season }: DebugPanelProps) {
+// Forecast is its own button: pinned-to-sunny and running-and-sunny look identical
+// but behave differently at midnight.
+function WeatherPins({
+  forced,
+  onWeatherChange,
+}: {
+  readonly forced: Weather | null;
+  readonly onWeatherChange: (weather: Weather | null) => void;
+}) {
+  return (
+    <div className="debug-panel-actions">
+      <button
+        type="button"
+        className="ui-button"
+        aria-pressed={forced === null}
+        onClick={() => onWeatherChange(null)}
+      >
+        <PixelIcon name="forecast" />
+        Forecast
+      </button>
+      {WEATHERS.map((kind) => (
+        <button
+          key={kind}
+          type="button"
+          className="ui-button"
+          aria-pressed={forced === kind}
+          onClick={() => onWeatherChange(kind)}
+        >
+          <PixelIcon name={kind} />
+          {WEATHER_NAMES[kind]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function DebugPanel(props: DebugPanelProps) {
+  const { debug, season } = props;
   return (
     <div className="ui-stack debug-panel">
       <section className="ui-stack debug-panel-group" aria-labelledby="debug-panel-clock">
@@ -30,6 +72,12 @@ export function DebugPanel({ debug, season }: DebugPanelProps) {
         >
           {TURBO_WORDS.label} {debug.turbo ? 'on' : 'off'}
         </button>
+      </section>
+      <section className="ui-stack debug-panel-group" aria-labelledby="debug-panel-weather">
+        <h3 id="debug-panel-weather" className="ui-label">
+          Weather
+        </h3>
+        <WeatherPins forced={props.forcedWeather} onWeatherChange={props.onWeatherChange} />
       </section>
       <section className="ui-stack debug-panel-group" aria-labelledby="debug-panel-render">
         <h3 id="debug-panel-render" className="ui-label">

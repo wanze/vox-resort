@@ -133,7 +133,8 @@
 }
 
 .hud-bar[data-fold~='highlight'] .hud-menu-highlight,
-.hud-bar[data-fold~='maps'] :is(.hud-menu-maps, .hud-maps-plate) {
+.hud-bar[data-fold~='maps'] :is(.hud-menu-maps, .hud-maps-plate),
+.hud-bar[data-fold~='weather'] .hud-menu-weather {
   display: contents;
 }
 

@@ -253,8 +253,15 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
   // Null without debug mode, which keeps a Debug window left open by such a build shut.
   render: (props) =>
     props.debug ? <RenderStats stats={props.stats} elements={props.nodes} /> : null,
-  actions: ({ debug, resort }) =>
-    debug ? <DebugPanel debug={debug} season={resort.season} /> : null,
+  actions: ({ debug, resort, clock }) =>
+    debug ? (
+      <DebugPanel
+        debug={debug}
+        season={resort.season}
+        forcedWeather={clock.forcedWeather}
+        onWeatherChange={clock.setWeather}
+      />
+    ) : null,
 };
 
 function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFrame {

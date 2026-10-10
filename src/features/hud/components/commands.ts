@@ -107,7 +107,9 @@ function speedCommands({ clock }: CommandContext): Command[] {
   }));
 }
 
-function weatherCommands({ clock }: CommandContext): Command[] {
+// Pinning the weather is a debug switch, as it is in the debug panel.
+function weatherCommands({ clock, debug }: CommandContext): Command[] {
+  if (!debug) return [];
   const forecast: Command = {
     id: 'weather:forecast',
     label: 'Forecast',

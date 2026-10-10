@@ -3,8 +3,8 @@ import { DropdownMenu } from '../../../shared/components/Dropdown';
 import { MenuOption } from '../../../shared/components/MenuOption';
 import { MenuPage } from './MenuPage';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
-import { WEATHER_NAMES } from './controlNames';
-import { WeatherOptions } from './WeatherControl';
+import { WEATHER_NAMES, WEATHER_NOTES } from './controlNames';
+import { daysAhead, forecastLabel } from './WeatherForecast';
 import {
   DEBUG_ACTIONS,
   MENU_PAGES,
@@ -24,6 +24,7 @@ import type { HighlightControls } from '../../highlights/components/highlightCon
 import type { ClockControls, SoundControls, WindowControls } from './hudControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { SaveControls } from '../../saves/components/saveControls';
+import type { DayForecast } from '../../events/domain/programmeView';
 
 const MAC = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '');
 export const SAVE_SHORTCUT = keyLabel('save', MAC);
@@ -51,6 +52,8 @@ export interface MainMenuProps {
   readonly resortName: string | null;
   readonly onFind: () => void;
   readonly clock: ClockControls;
+  // From today, one a day.
+  readonly forecast: readonly DayForecast[];
   readonly sound: SoundControls;
   readonly view: ViewToggles;
   readonly shortcuts: ShortcutToggle;
@@ -77,12 +80,12 @@ const PAGE_TITLES: { readonly [page in SubPage]: string } = {
   view: 'View',
   highlight: 'Highlight buildings',
   maps: 'Map view',
-  weather: 'Weather',
+  weather: 'Weather forecast',
   settings: 'Settings',
 };
 
 const weatherNote = ({ weather, forcedWeather }: ClockControls): string =>
-  `${WEATHER_NAMES[weather]}, ${forcedWeather ? 'pinned' : 'forecast'}`;
+  `${WEATHER_NAMES[weather]} today${forcedWeather ? ', pinned' : ''}`;
 
 const settingsNote = (sound: SoundControls, shortcuts: ShortcutToggle): string =>
   `${sound.prefs.on ? 'sound on' : 'sound muted'}, ${shortcuts.singleKeys ? 'all shortcuts' : 'no single-key shortcuts'}`;
@@ -136,6 +139,21 @@ function NarrowViewRows({
         />
       </div>
     </>
+  );
+}
+
+// Shown by the stylesheet only once the bar has folded its weather chip away.
+function WeatherRow({ clock, onOpen }: Pick<PageProps, 'clock' | 'onOpen'>) {
+  return (
+    <div className="hud-menu-weather">
+      <MenuOption
+        icon={clock.weather}
+        label="Weather"
+        note={weatherNote(clock)}
+        more
+        onSelect={() => onOpen('weather')}
+      />
+    </div>
   );
 }
 
@@ -204,13 +222,7 @@ function RootPage(props: PageProps) {
         more
         onSelect={() => onOpen('view')}
       />
-      <MenuOption
-        icon={clock.weather}
-        label="Weather"
-        note={weatherNote(clock)}
-        more
-        onSelect={() => onOpen('weather')}
-      />
+      <WeatherRow clock={clock} onOpen={onOpen} />
       <MenuOption
         icon="settings"
         label="Settings"
@@ -340,15 +352,21 @@ const PAGES: { readonly [page in SubPage]: (props: PageProps) => ReactNode } = {
       onDone={() => onOpenChange(false)}
     />
   ),
-  weather: ({ clock, onOpenChange }) => (
-    <WeatherOptions
-      forced={clock.forcedWeather}
-      onWeatherChange={(weather) => {
-        clock.setWeather(weather);
-        onOpenChange(false);
-      }}
-    />
-  ),
+  // A day leads on to the programme, which shows the same weather beside what is on.
+  weather: ({ forecast, clock, windows, run }) =>
+    daysAhead(forecast).map((each, at) => (
+      <MenuOption
+        key={each.day}
+        icon={each.weather}
+        label={forecastLabel(each, at === 0)}
+        note={
+          at === 0 && clock.forcedWeather
+            ? 'pinned in the debug panel'
+            : WEATHER_NOTES[each.weather]
+        }
+        onSelect={run(() => windows.show('programme', true))}
+      />
+    )),
   settings: ({ sound, shortcuts }) => (
     <>
       <MenuGroup label="Sound">

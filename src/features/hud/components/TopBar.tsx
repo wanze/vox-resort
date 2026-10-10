@@ -164,6 +164,7 @@ export function TopBar(props: TopBarProps) {
           resortName={props.resort.name}
           onFind={props.onFind}
           clock={clock}
+          forecast={props.forecast}
           sound={props.sound}
           view={props.view}
           shortcuts={props.shortcuts}

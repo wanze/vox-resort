@@ -17,6 +17,12 @@ export interface WeatherForecastProps {
 // Today and the five days after it: the weather is drawn from the seed, so it is known ahead.
 const DAYS_SHOWN = 6;
 
+export const daysAhead = (forecast: readonly DayForecast[]): readonly DayForecast[] =>
+  forecast.slice(0, DAYS_SHOWN);
+
+export const forecastLabel = (each: DayForecast, today: boolean): string =>
+  `${today ? 'Today' : dayWords(each.day)} · ${WEATHER_NAMES[each.weather]}`;
+
 function ForecastDay({ each, today }: { readonly each: DayForecast; readonly today: boolean }) {
   return (
     <li className="hud-forecast-day">
@@ -24,16 +30,14 @@ function ForecastDay({ each, today }: { readonly each: DayForecast; readonly tod
         <PixelIcon name={each.weather} />
       </span>
       <span className="ui-option-text">
-        <span className="ui-option-label">
-          {today ? 'Today' : dayWords(each.day)} · {WEATHER_NAMES[each.weather]}
-        </span>
+        <span className="ui-option-label">{forecastLabel(each, today)}</span>
         <span className="ui-option-note">{WEATHER_NOTES[each.weather]}</span>
       </span>
     </li>
   );
 }
 
-// Pinning the weather is a sandbox switch, so it stays on the menu's Weather page.
+// Pinning the weather is a debug switch, so it lives in the debug panel and not here.
 export function WeatherForecast(props: WeatherForecastProps) {
   const { weather, forced } = props;
   const title = `Weather: ${WEATHER_NAMES[weather]}${forced ? ', pinned' : ', following the forecast'}`;
@@ -52,13 +56,14 @@ export function WeatherForecast(props: WeatherForecastProps) {
       }
     >
       <ol className="hud-forecast">
-        {props.forecast.slice(0, DAYS_SHOWN).map((each, at) => (
+        {daysAhead(props.forecast).map((each, at) => (
           <ForecastDay key={each.day} each={each} today={at === 0} />
         ))}
       </ol>
       {forced ? (
         <p className="hud-rating-note">
-          Pinned to {WEATHER_NAMES[forced].toLowerCase()} in the menu, so every day stays that way.
+          Pinned to {WEATHER_NAMES[forced].toLowerCase()} in the debug panel, so every day stays
+          that way.
         </p>
       ) : null}
     </DropdownPopover>

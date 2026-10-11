@@ -69,6 +69,8 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'snack-bar', source: snackBar },
   { of: 'poolside-bar', source: poolsideBar },
   { of: 'bungalow', source: bungalow },
+  { of: 'bungalow', source: bungalowC },
+  { of: 'bungalow', source: bungalowD },
   { of: 'cottage', source: cottage },
   { of: 'villa', source: villa },
   { of: 'street-lamp', source: streetLamp },
@@ -120,10 +122,7 @@ export const VARIANTS: readonly ModelVariant[] = [
 ];
 
 // On the compare page and held to the family contract, but not yet offered in the game.
-export const DRAFT_VARIANTS: readonly ModelVariant[] = [
-  { of: 'bungalow', source: bungalowC },
-  { of: 'bungalow', source: bungalowD },
-];
+export const DRAFT_VARIANTS: readonly ModelVariant[] = [];
 
 export const VARIANT_SOURCES: readonly VoxelModelSource[] = VARIANTS.map(
   (variant) => variant.source,

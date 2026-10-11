@@ -10368,6 +10368,119 @@
       }
     },
     {
+      "family": "bungalow",
+      "model": {
+        "id": "bungalow-c",
+        "label": "Bungalow C",
+        "category": "lodging",
+        "tiles": {
+          "x": 3,
+          "z": 2
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 48,
+        "height": 26,
+        "depth": 32,
+        "emissive": [],
+        "water": [],
+        "windows": [9418948],
+        "lights": [],
+        "seats": [],
+        "placement": {},
+        "venue": {
+          "role": "lodging",
+          "capacity": 4,
+          "beds": 4,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 20,
+          "doors": [
+            {
+              "x": 17,
+              "z": 16,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 15469,
+        "dayVoxelCount": 15469,
+        "dominantColor": 15590611,
+        "solidTops": [21, 21, 21, 7, 18, 2],
+        "turnless": false
+      }
+    },
+    {
+      "family": "bungalow",
+      "model": {
+        "id": "bungalow-d",
+        "label": "Bungalow D",
+        "category": "lodging",
+        "tiles": {
+          "x": 3,
+          "z": 2
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 48,
+        "height": 33,
+        "depth": 32,
+        "emissive": [],
+        "water": [],
+        "windows": [9418948],
+        "lights": [],
+        "seats": [],
+        "placement": {},
+        "venue": {
+          "role": "lodging",
+          "capacity": 4,
+          "beds": 4,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 20,
+          "doors": [
+            {
+              "x": 17,
+              "z": 15,
+              "facing": 0
+            },
+            {
+              "x": 40,
+              "z": 15,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 17463,
+        "dayVoxelCount": 17463,
+        "dominantColor": 15590611,
+        "solidTops": [33, 21, 21, 2, 7, 7],
+        "turnless": false
+      }
+    },
+    {
       "family": "cottage",
       "model": {
         "id": "cottage-b",

@@ -77,6 +77,19 @@
   padding: 0 var(--space-3);
 }
 
+/* Taller to a finger than to the eye, within the strip; never wider, the chips sit 3px apart. */
+@media (pointer: coarse) {
+  .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
+    position: relative;
+  }
+
+  .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates)::before {
+    content: '';
+    position: absolute;
+    inset: -7px 0;
+  }
+}
+
 .app:not([data-layout='desk']) .hud-bar .hud-time {
   padding-left: var(--space-1);
 }
@@ -109,7 +122,7 @@
     .hud-menu .ui-chip-caret,
     .hud-readout-label,
     .hud-gates-state,
-    .hud-figure-of,
+    .ui-out-of-total,
     .hud-time-season
   ) {
   display: none;

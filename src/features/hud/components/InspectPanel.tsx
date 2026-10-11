@@ -18,9 +18,11 @@ import { adviceKey, severityOf } from '../domain/news';
 import { adviceIcon, adviceSays } from './adviceWords';
 import { HireButton, type HireControls } from './HireButton';
 import { HudWindow, type HudWindowFrame } from './HudWindow';
+import { Actions } from '../../../shared/components/Actions';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
-import { StatRow } from '../../../shared/components/StatRow';
-import { EXPECTATION_WORDS, NeedBars, PARTY_KINDS, ThinksRow } from './GuestRows';
+import { LevelRow, StatRow } from '../../../shared/components/StatRow';
+import { OutOf } from '../../../shared/components/OutOf';
+import { EXPECTATION_WORDS, FeelingRows, PARTY_KINDS, ThinksRow } from './GuestRows';
 import { VenueActions, VenueKind } from './VenueName';
 import { RenovateAction, worksWords, type RenovationControls } from './RenovateAction';
 
@@ -104,29 +106,28 @@ function GuestDetails({
       <p className="ui-activity">
         <span ref={activityElement}>—</span>
       </p>
-      <dl className="ui-stats">
+      <dl className="ui-stats hud-advice">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
         {guest.welcomed ? <StatRow label="Welcome meeting">attended</StatRow> : null}
-        <StatRow label="Mood">{Math.round(guest.happiness * 100)}%</StatRow>
         <StatRow label="Expects">{EXPECTATION_WORDS[guest.expects]}</StatRow>
         <WantsRow wants={guest.wants} />
+        <FeelingRows guest={guest} />
+        <ThinksRow thought={guest.thought} />
       </dl>
-      <NeedBars needs={guest.needs} />
-      <ThinksRow thought={guest.thought} />
       <MemberList
         label="Their party"
         members={guest.members}
         selected={guest.person}
         onSelectPerson={onSelectPerson}
       />
-      <div className="ui-actions">
+      <Actions>
         <button type="button" className="ui-button-large" onClick={onFollow}>
           <PixelIcon name="camera" />
           Follow
         </button>
-      </div>
+      </Actions>
     </>
   );
 }
@@ -134,7 +135,7 @@ function GuestDetails({
 type Venue = NonNullable<PlaceView['venue']>;
 
 function SurroundingsRow({ setting }: { readonly setting: number }) {
-  return <StatRow label="Surroundings">{Math.round(setting * 100)}%</StatRow>;
+  return <LevelRow label="Surroundings" level={setting} />;
 }
 
 const LIFEGUARD_WORDS: { readonly [watch in LifeguardWatch]: string } = {
@@ -176,10 +177,9 @@ const BANDS: { readonly [band in ConditionBand]: string } = {
 
 function ConditionRows({ condition }: { readonly condition: ConditionView | null }) {
   if (!condition) return null;
-  const percent = Math.round(condition.level * 100);
   return (
     <>
-      <StatRow label="Condition">{`${BANDS[condition.band]} · ${percent}%`}</StatRow>
+      <LevelRow label="Condition" level={condition.level} word={BANDS[condition.band]} />
       {condition.works ? <StatRow label="Renovation">{worksWords(condition.works)}</StatRow> : null}
     </>
   );
@@ -199,10 +199,10 @@ function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue
       )}
       <StatRow label="Typical stay">{venue.dwell}</StatRow>
       <StatRow label="Inside">
-        {venue.inside} / {venue.capacity}
+        <OutOf value={venue.inside} total={venue.capacity} />
       </StatRow>
       <StatRow label="Waiting">{venue.waiting === 0 ? 'Nobody' : venue.waiting}</StatRow>
-      <StatRow label="Cleanliness">{Math.round(venue.cleanliness * 100)}%</StatRow>
+      <LevelRow label="Cleanliness" level={venue.cleanliness} />
       <ConditionRows condition={place.condition} />
       <PriceStat price={venue.price} />
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
@@ -450,11 +450,11 @@ function StaffDetails({
         <StatRow label="Wage">{worker.wage.toLocaleString('en-US')}/day</StatRow>
       </dl>
       {worker.onDuty ? (
-        <div className="ui-actions">
+        <Actions>
           <button type="button" className="ui-button-large" onClick={onShow}>
             Show
           </button>
-        </div>
+        </Actions>
       ) : null}
     </>
   );
@@ -515,7 +515,7 @@ export function InspectPanel({ frame, selection, ...details }: InspectPanelProps
       title={titleOf(selection)}
       icon={selection.kind === 'place' ? 'resort' : 'guests'}
     >
-      <div className="hud-inspect">
+      <div className="ui-inset hud-inspect">
         <Details selection={selection} {...details} />
       </div>
     </HudWindow>

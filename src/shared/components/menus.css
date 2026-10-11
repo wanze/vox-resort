@@ -75,7 +75,7 @@
 }
 
 .ui-option-note {
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   color: var(--text-faint);
 }
 

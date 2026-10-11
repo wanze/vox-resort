@@ -304,6 +304,11 @@ function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFr
   };
 }
 
+const badgeOf = (props: HudView, tab: TabId): number => {
+  if (tab === 'advice') return props.advice.length;
+  return tab === 'messages' ? props.news.log.length : 0;
+};
+
 function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
   const page = props.windows.tab(id);
   const content = CONTENT[page](props);
@@ -317,19 +322,33 @@ function tabbedBody(props: HudView, id: TabbedWindow): ReactNode {
         onPick={(tab) => props.windows.show(tab, true)}
         titleOf={(tab) => TAB_TITLES[tab]}
         iconOf={(tab) => TAB_ICONS[tab]}
-        badgeOf={(tab) => (tab === 'advice' ? props.advice.length : 0)}
+        badgeOf={(tab) => badgeOf(props, tab)}
         label={WINDOW_TITLES[id]}
         panelId={panelId}
       />
-      <div role="tabpanel" id={panelId} aria-labelledby={tabIdOf(panelId, page)}>
+      <div
+        role="tabpanel"
+        id={panelId}
+        className="ui-inset"
+        aria-labelledby={tabIdOf(panelId, page)}
+      >
         {content}
       </div>
     </>
   );
 }
 
+// These sink their own content, under the tabs, search and tools that stay on the window.
+const OWN_INSET: ReadonlySet<Framed> = new Set(['build', 'programme']);
+
+function plainBody(props: HudView, id: Exclude<Framed, TabbedWindow>): ReactNode {
+  const content = CONTENT[id](props);
+  if (content === null || OWN_INSET.has(id)) return content;
+  return <div className="ui-inset">{content}</div>;
+}
+
 const bodyOf = (props: HudView, id: Framed): ReactNode =>
-  isTabbed(id) ? tabbedBody(props, id) : CONTENT[id](props);
+  isTabbed(id) ? tabbedBody(props, id) : plainBody(props, id);
 
 const selectedKey = (selection: SelectionView | null): string | null => {
   if (selection === null) return null;

@@ -8,7 +8,7 @@
   align-items: stretch;
   width: min(320px, calc(100vw - 2 * var(--space-3) - var(--safe-l) - var(--safe-r)));
   height: auto;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-3);
   translate: calc(-50% + var(--drag-x, 0px)) var(--drag-y, 0px);
   touch-action: none;
   cursor: grab;
@@ -20,9 +20,17 @@
   user-select: none;
 }
 
-.guest-view-follow-name {
-  margin: 0;
-  font-weight: 700;
+/* A window's heading, without the padding the card already has; the card is what drags. */
+.guest-view-follow-head {
+  padding: var(--space-1) 0 0;
+  cursor: inherit;
+}
+
+.guest-view-follow-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .app[data-layout='bottom'] .guest-view-follow {
@@ -35,7 +43,7 @@
 
 /* On a phone: no dragging, a grip to pull it up by, and swipes that the page must not scroll for. */
 .guest-view-follow[data-sheet] {
-  padding: var(--space-4) var(--space-3) var(--space-2);
+  padding: var(--space-4) var(--space-3) var(--space-3);
   overflow-y: auto;
   cursor: auto;
 }
@@ -49,12 +57,6 @@
 .guest-view-follow-toggle {
   flex: 1 1 8em;
   min-height: 32px;
-}
-
-.guest-view-follow-toggle .guest-view-follow-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .guest-view-follow[data-collapsed] .ui-actions {

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { HelpTip } from '../../../shared/components/HelpTip';
+import { Meter } from '../../../shared/components/Meter';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { percentOf } from '../../../shared/components/StatRow';
 import type { UpkeepRow } from '../../resort-sim/domain/ageing';
 import { bandOf, isShabby, type ConditionBand } from '../../sim/domain/condition';
 import {
@@ -48,17 +50,20 @@ function UpkeepLine({
         <span className="hud-settings-icon">
           <PixelIcon name={row.sign ? SIGN_ICONS[row.sign] : 'lodging'} />
         </span>
-        <button
-          type="button"
-          className="hud-upkeep-name"
-          title={`Show ${row.label}`}
-          onClick={() => onSelect(row.at)}
-        >
-          {row.label}
-        </button>
+        <span className="hud-settings-label">
+          <button
+            type="button"
+            className="hud-upkeep-name"
+            title={`Show ${row.label}`}
+            onClick={() => onSelect(row.at)}
+          >
+            {row.label}
+          </button>
+          <Meter level={row.level} small />
+        </span>
       </dt>
       <dd className="hud-settings-value" data-tone={isShabby(row.level) ? 'bad' : undefined}>
-        {Math.round(row.level * 100)}%
+        {percentOf(row.level)}
       </dd>
       <dd className="hud-settings-note hud-upkeep-note">{noteOf(row)}</dd>
       <dd className="hud-upkeep-action">

@@ -1,4 +1,5 @@
 import type { GuestView } from '../../inspect/domain/selection';
+import { Meter } from '../../../shared/components/Meter';
 import { StatRow } from '../../../shared/components/StatRow';
 import { thoughtLine } from './thoughtWords';
 
@@ -26,33 +27,31 @@ const NEED_LABELS: { readonly [need in GuestView['needs'][number]['need']]: stri
   health: 'Health',
 };
 
-export function NeedBars({ needs }: { readonly needs: GuestView['needs'] }) {
+// Rows of the guest's facts list, so mood and needs share its label column; a meter alone,
+// with no figure, as how a guest feels is read at a glance.
+function MeterRow({ label, level }: { readonly label: string; readonly level: number }) {
   return (
-    <div className="hud-needs" role="group" aria-label="How they are doing">
-      {needs.map(({ need, level }) => (
-        <div key={need} className="hud-need">
-          <span className="hud-need-label">{NEED_LABELS[need]}</span>
-          <span
-            className="hud-need-track"
-            aria-label={`${NEED_LABELS[need]} ${Math.round(level * 100)}%`}
-          >
-            <span
-              className="hud-need-fill"
-              style={{ width: `${level * 100}%`, ['--level' as string]: level }}
-            />
-          </span>
-        </div>
+    <StatRow label={label}>
+      <Meter label={label} level={level} />
+    </StatRow>
+  );
+}
+
+export function FeelingRows({ guest }: { readonly guest: GuestView }) {
+  return (
+    <>
+      <MeterRow label="Mood" level={guest.happiness} />
+      {guest.needs.map(({ need, level }) => (
+        <MeterRow key={need} label={NEED_LABELS[need]} level={level} />
       ))}
-    </div>
+    </>
   );
 }
 
 export function ThinksRow({ thought }: { readonly thought: GuestView['thought'] }) {
   return (
-    <dl className="ui-stats hud-advice">
-      <StatRow label="Thinks">
-        {thought ? `“${thoughtLine(thought.kind, thought.subject)}”` : 'Nothing yet'}
-      </StatRow>
-    </dl>
+    <StatRow label="Thinks">
+      {thought ? `“${thoughtLine(thought.kind, thought.subject)}”` : 'Nothing yet'}
+    </StatRow>
   );
 }

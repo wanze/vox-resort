@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MAX_RESORT_NAME, rerollResortName, resortNameFor } from '../domain/resortName';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 export interface ResortNameFieldProps {
   readonly value: string;
@@ -30,7 +31,7 @@ export function ResortNameField({ value, onChange }: ResortNameFieldProps) {
         onClick={() => onChange(rerollResortName(Math.random))}
         aria-label="A different name"
       >
-        ⟳
+        <PixelIcon name="refresh" />
       </button>
     </div>
   );

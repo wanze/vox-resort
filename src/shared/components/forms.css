@@ -39,7 +39,7 @@
   text-align: right;
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  color: var(--ochre);
+  color: var(--text-figure);
   font-weight: 600;
 }
 
@@ -79,6 +79,12 @@
   height: 26px;
   padding: 0 var(--space-1);
   text-transform: capitalize;
+}
+
+@media (pointer: coarse) {
+  .ui-form-choice {
+    height: 44px;
+  }
 }
 
 .ui-form-flags {

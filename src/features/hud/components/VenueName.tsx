@@ -1,6 +1,7 @@
 import { useRef, useState, type FocusEvent, type ReactNode } from 'react';
 import type { VenueNaming } from '../../inspect/domain/selection';
 import { MAX_VENUE_NAME } from '../../naming/domain/venueNames';
+import { Actions } from '../../../shared/components/Actions';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 export interface VenueActionsProps {
@@ -22,7 +23,7 @@ export function VenueActions({ name, naming, onRename, children }: VenueActionsP
   const [editing, setEditing] = useState(false);
   if (editing && naming) {
     return (
-      <div className="ui-actions">
+      <Actions>
         <VenueNameField
           name={name}
           naming={naming}
@@ -32,11 +33,11 @@ export function VenueActions({ name, naming, onRename, children }: VenueActionsP
             if (typed !== null && typed !== name) onRename(typed);
           }}
         />
-      </div>
+      </Actions>
     );
   }
   return (
-    <div className="ui-actions">
+    <Actions>
       {children}
       {naming ? (
         <button
@@ -50,7 +51,7 @@ export function VenueActions({ name, naming, onRename, children }: VenueActionsP
           Rename
         </button>
       ) : null}
-    </div>
+    </Actions>
   );
 }
 

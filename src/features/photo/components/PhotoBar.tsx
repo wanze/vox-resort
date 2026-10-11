@@ -195,7 +195,7 @@ function Actions({
   readonly postcard: ReturnType<typeof usePostcard>;
 }) {
   return (
-    <div className="ui-actions">
+    <div className="ui-actions ui-actions--below photo-actions">
       <PostcardNote made={postcard.made} />
       <button type="button" className="ui-button-large" onClick={postcard.copy}>
         Copy postcard link
@@ -278,7 +278,7 @@ export function PhotoBar({ photo, compact }: PhotoBarProps) {
           <PixelIcon name="close" scale={1} />
         </button>
       </header>
-      <div className="photo-body">
+      <div className="ui-inset photo-body">
         <LensSlider photo={photo} />
         <TimeSlider photo={photo} />
         <div className="photo-fields">
@@ -286,8 +286,8 @@ export function PhotoBar({ photo, compact }: PhotoBarProps) {
           <Resolution photo={photo} compact={compact} />
           <Selfie selfie={photo.selfie} />
         </div>
-        <Actions photo={photo} postcard={postcard} />
       </div>
+      <Actions photo={photo} postcard={postcard} />
       <Taken photo={photo} made={postcard.made} />
     </section>
   );

@@ -202,7 +202,7 @@ export function PhotoWallPanel({ today, history, photo }: PhotoWallPanelProps) {
   const { root, enlarge, lightbox } = useLightbox(wall.shown, photo);
   const shelf = { pictures, watch, onOpen: enlarge };
   return (
-    <div className="ui-stack hud-report" ref={root}>
+    <div className="hud-report" ref={root}>
       {wall.today.length === 0 ? <p className="ui-loading">No photos yet today.</p> : null}
       <Wall title={`Today, ${wall.taken} photos`} groups={wall.today} shelf={shelf} />
       <Wall title="Yesterday" groups={wall.yesterday} shelf={shelf} />

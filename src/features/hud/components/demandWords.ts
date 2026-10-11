@@ -36,9 +36,6 @@ export function pressureWord(pressure: number): string {
 
 const whole = (value: number): string => value.toLocaleString('en-US');
 
-export const wantedOfPlaces = ({ wanting, places }: Pressure): string =>
-  `${whole(wanting)} / ${whole(places)}`;
-
 export const turnedAwayShare = ({ turnedAway }: Pressure): string => {
   const percent = Math.round(turnedAway * 100);
   return percent > 0 ? `${percent}%` : '';

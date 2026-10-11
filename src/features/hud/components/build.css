@@ -49,7 +49,7 @@
 }
 
 .hud-palette-armed-label {
-  color: var(--text-on-accent-dim);
+  color: var(--text-on-accent);
 }
 
 .hud-palette-armed-name {
@@ -63,7 +63,6 @@
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  opacity: 0.8;
 }
 
 .hud-build-tools {
@@ -194,7 +193,6 @@
 
 .hud-palette-armed-stop {
   margin-left: auto;
-  opacity: 0.8;
 }
 
 .hud-palette-shelves {
@@ -527,8 +525,8 @@
   }
 
   .hud-zone-chip {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
   }
 }
 

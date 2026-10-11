@@ -49,11 +49,35 @@
   border-radius: var(--radius-pebble);
 }
 
+/* 44px: the smallest target a fingertip hits reliably. */
+@media (pointer: coarse) {
+  .ui-window-close {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .ui-window-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: var(--space-1) var(--space-4) var(--space-4);
+}
+
+/* Under the inset and outside the scroll, so a window's buttons stay in reach. */
+.ui-window-actions {
+  flex: none;
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.ui-window-actions:empty {
+  display: none;
+}
+
+.ui-window-actions > .ui-actions {
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 
 /* Bleeds over the body's padding, so what scrolls under it is hidden edge to edge: a sticky

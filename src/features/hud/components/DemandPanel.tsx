@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { OutOf } from '../../../shared/components/OutOf';
 import { DEMAND_GROUPS, type DemandGroup } from '../../sim/domain/demand';
 import { DemandBar } from './DemandBar';
 import {
@@ -7,7 +8,6 @@ import {
   pressureNote,
   pressureWord,
   turnedAwayShare,
-  wantedOfPlaces,
 } from './demandWords';
 import type { StatusView } from '../domain/views';
 
@@ -41,9 +41,15 @@ export function DemandPanel({ status }: DemandPanelProps) {
                 className="hud-demand-row"
                 title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure, present)}`}
               >
-                <span className="hud-demand-name">{LINE_NAMES[line]}</span>
+                {/* Inside the name: the row is a run of grid cells, and a sibling would be one more. */}
+                <span className="hud-demand-name">
+                  {LINE_NAMES[line]}
+                  <span className="ui-visually-hidden">{`: ${pressureWord(pressure.pressure)}`}</span>
+                </span>
                 <DemandBar pressure={pressure.pressure} across />
-                <span className="hud-demand-figure">{wantedOfPlaces(pressure)}</span>
+                <span className="hud-demand-figure">
+                  <OutOf value={pressure.wanting} total={pressure.places} />
+                </span>
                 <span className="hud-demand-figure">{turnedAwayShare(pressure)}</span>
               </div>
             );

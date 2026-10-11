@@ -1,5 +1,9 @@
-import { StatRow } from '../../../shared/components/StatRow';
+import { OutOf } from '../../../shared/components/OutOf';
+import { Actions } from '../../../shared/components/Actions';
+import { Meter } from '../../../shared/components/Meter';
+import { percentOf } from '../../../shared/components/StatRow';
 import type { ShowcaseStats, StatusView } from '../domain/views';
+import { Row, Rows } from './ReportRows';
 
 export interface ResortStatsProps {
   readonly stats: ShowcaseStats | null;
@@ -9,15 +13,6 @@ export interface ResortStatsProps {
 }
 
 const formatNumber = (value: number): string => value.toLocaleString('en-US');
-
-function OutOf({ value, of }: { readonly value: number; readonly of: number }) {
-  return (
-    <>
-      {formatNumber(value)}
-      <span className="hud-figure-of"> / {formatNumber(of)}</span>
-    </>
-  );
-}
 
 function Aside({ children }: { readonly children: string }) {
   return <span className="hud-figure-aside">{children}</span>;
@@ -34,33 +29,50 @@ export function ResortStats({ stats, status, onOpenReport }: ResortStatsProps) {
   const { stars, present } = liveFigures(stats, status);
 
   return (
-    <div className="ui-stack">
-      <dl className="ui-stats hud-figures hud-overview">
-        <StatRow label="Rating">{`${stars.toFixed(1)} ★`}</StatRow>
-        <StatRow label="Guests">
-          <OutOf value={present} of={stats.guests.capacity} />
-        </StatRow>
-        <StatRow label="Beds">
-          <OutOf value={stats.beds.taken} of={stats.beds.total} />
-          {unmade > 0 ? <Aside>{`${formatNumber(unmade)} unmade`}</Aside> : null}
-        </StatRow>
-        <StatRow label="Asleep">
-          <OutOf value={stats.asleep} of={stats.beds.taken} />
-        </StatRow>
-        <StatRow label="Staff">
-          <OutOf value={stats.staff.working} of={stats.staff.total} />
-        </StatRow>
-        <StatRow label="Clean">{`${Math.round(stats.cleanliness * 100)}%`}</StatRow>
-        <StatRow label="Venues">
-          {formatNumber(stats.venues.inside)}
-          <Aside>{`${formatNumber(stats.venues.waiting)} queueing`}</Aside>
-        </StatRow>
-      </dl>
-      <div className="ui-actions">
-        <button type="button" className="ui-button-large" onClick={onOpenReport}>
+    <div className="hud-report">
+      <Rows>
+        <Row label="Rating">
+          <dd>{`${stars.toFixed(1)} ★`}</dd>
+        </Row>
+        <Row label="Guests">
+          <dd>
+            <OutOf value={present} total={stats.guests.capacity} />
+          </dd>
+        </Row>
+        <Row label="Beds">
+          <dd>
+            {unmade > 0 ? <Aside>{`${formatNumber(unmade)} unmade`}</Aside> : null}
+            <OutOf value={stats.beds.taken} total={stats.beds.total} />
+          </dd>
+        </Row>
+        <Row label="Asleep">
+          <dd>
+            <OutOf value={stats.asleep} total={stats.beds.taken} />
+          </dd>
+        </Row>
+        <Row label="Staff at work">
+          <dd>
+            <OutOf value={stats.staff.working} total={stats.staff.total} />
+          </dd>
+        </Row>
+        <Row label="Clean">
+          <dd className="ui-stat-meter">
+            <Meter level={stats.cleanliness} />
+            <span>{percentOf(stats.cleanliness)}</span>
+          </dd>
+        </Row>
+        <Row label="In venues">
+          <dd>
+            <Aside>{`${formatNumber(stats.venues.waiting)} queueing`}</Aside>
+            {formatNumber(stats.venues.inside)}
+          </dd>
+        </Row>
+      </Rows>
+      <Actions>
+        <button type="button" className="ui-button" onClick={onOpenReport}>
           Day report
         </button>
-      </div>
+      </Actions>
     </div>
   );
 }

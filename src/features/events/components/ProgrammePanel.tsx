@@ -62,29 +62,29 @@ function TypePicker({ view, programme }: ViewProps) {
   );
 }
 
-// A select rather than a button each, so a resort with a dozen stages of a kind still fits.
+// A select rather than a button each, so a resort with a dozen stages of a kind still fits; the
+// only stage of its kind is the heading of the week under it.
 function SitePicker({ view, programme }: ViewProps) {
   const site = view.site!;
   const type = view.types.find((each) => each.key === site.type);
+  if (!type || type.sites.length === 1) {
+    return <h3 className="hud-report-heading events-programme-title">{site.label}</h3>;
+  }
   return (
     <div className="events-programme-site">
-      <span className="events-programme-heading">{type?.label}</span>
-      {type && type.sites.length > 1 ? (
-        <select
-          className="ui-select"
-          aria-label={`Which ${type.label}`}
-          value={site.key}
-          onChange={(event) => programme.choose(event.target.value)}
-        >
-          {type.sites.map((each) => (
-            <option key={each.key} value={each.key}>
-              {each.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <strong>{site.label}</strong>
-      )}
+      <span className="events-programme-heading">{type.label}</span>
+      <select
+        className="ui-select"
+        aria-label={`Which ${type.label}`}
+        value={site.key}
+        onChange={(event) => programme.choose(event.target.value)}
+      >
+        {type.sites.map((each) => (
+          <option key={each.key} value={each.key}>
+            {each.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -384,7 +384,11 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
   const { view } = programme;
   if (!view) return null;
   if (!view.site) {
-    return <p className="ui-loading">Build somewhere with a stage to put on events.</p>;
+    return (
+      <div className="ui-inset">
+        <p className="ui-loading">Build somewhere with a stage to put on events.</p>
+      </div>
+    );
   }
   return (
     <div className="events-programme">
@@ -397,7 +401,7 @@ export function ProgrammePanel({ programme }: ProgrammePanelProps) {
         panelId={panelId}
       />
       <div
-        className="events-programme-page"
+        className="ui-inset events-programme-page"
         role="tabpanel"
         id={panelId}
         aria-labelledby={tabIdOf(panelId, programme.tab)}

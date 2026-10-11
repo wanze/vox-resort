@@ -42,7 +42,7 @@
   padding: var(--space-3);
   overflow: auto;
   border-radius: var(--radius-pebble);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   line-height: 1.4;
   white-space: normal;
   animation: ui-pop var(--pop);

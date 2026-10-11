@@ -52,6 +52,11 @@
   --ink-warm: #e98a2c;
   --ink-red: #d2503a;
   --ink-quiet: #8e9aab;
+  /* Every bar, meter and chart fills in these four, so green means the same in each window. */
+  --ink-good: var(--foliage);
+  --ink-warn: var(--ink-warm);
+  --ink-bad: var(--ink-red);
+  --ink-idle: var(--ink-quiet);
   --pin-cleaner: #2f8e9e;
   --pin-lifeguard: #d2503a;
   --pin-animator: #f5c03c;
@@ -68,6 +73,8 @@
     var(--grain), var(--mottle),
     linear-gradient(165deg, var(--stone-100) 0%, var(--stone-200) 55%, var(--stone-300) 100%);
   --slab-raised: var(--grain), linear-gradient(180deg, var(--stone-50) 0%, var(--stone-200) 100%);
+  /* Dark enough for --text-on-accent at 4.5:1. */
+  --alert: #ad3d2a;
   --slab-accent: var(--grain), linear-gradient(180deg, var(--terracotta-lit), var(--terracotta));
   --sunken: linear-gradient(180deg, var(--stone-300) 0%, var(--stone-200) 100%);
   /* Flat on purpose: the one ground a sticky heading can share with the tiles
@@ -78,7 +85,7 @@
   --plate-accent: linear-gradient(180deg, rgb(143 63 30 / 0%), rgb(143 63 30 / 92%) 55%);
   --badge: rgb(58 46 34 / 78%);
   --badge-rim: rgb(255 246 234 / 35%);
-  --need-notch: rgb(0 0 0 / 18%);
+  --meter-notch: rgb(0 0 0 / 18%);
   --lamp-rim: rgb(0 0 0 / 45%);
 
   --edge: rgb(80 58 34 / 50%);
@@ -127,17 +134,22 @@
   --veil-deep: rgb(47 39 27 / 55%);
 
   --text: #3a2e22;
-  --text-dim: #6b5a45;
-  --text-faint: #917e66;
+  --text-dim: #564837;
+  --text-faint: #625545;
+  /* The status inks a step darker, where they colour words and figures rather than fill a bar. */
+  --text-good: #3f5f1d;
+  --text-bad: #9a3423;
+  --text-figure: #7b4d12;
   --text-on-accent: #fff6ea;
-  --text-on-accent-dim: rgb(255 246 234 / 75%);
 
   /* One face for words and figures alike: Jersey's digits stay apart even at note size. */
   --font-ui: 'Jersey HUD', ui-sans-serif, system-ui, sans-serif;
   --font-title: 'Pixelify Sans Variable', ui-sans-serif, system-ui, sans-serif;
-  /* Drawn on an 8px grid, so it stays crisp only at 8 or 16. */
-  --font-label: 'Silkscreen', 'Pixelify Sans Variable', ui-monospace, monospace;
-  --size-label: 8px;
+  /* Silkscreen is drawn on an 8px grid, so it stays crisp only at 8 or 16: the wordmark and the
+     demand chip's initials only. */
+  --font-pixel: 'Silkscreen', 'Pixelify Sans Variable', ui-monospace, monospace;
+  --font-label: var(--font-ui);
+  --size-label: 12px;
   --size-small: 12px;
   --size-body: 14px;
   --size-lead: 17px;
@@ -148,13 +160,15 @@
   --space-3: 10px;
   --space-4: 14px;
   --space-5: 20px;
+  /* Between one titled section and the next, in every window, so a heading reads as a break. */
+  --section-gap: 24px;
   --dropdown-inset: var(--space-1) var(--space-2);
 
   /* Unequal corners on each axis, so no two edges curve alike and a panel or button reads as
      a worn stone rather than a rounded rectangle. */
   --radius-pebble: 12px 8px 11px 9px / 8px 11px 9px 12px;
   /* The menus' pixel caret, in the dim text brown. */
-  --select-caret: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%236b5a45' d='M0 0h10v2H8v2H6v2H4V4H2V2H0z'/%3E%3C/svg%3E");
+  --select-caret: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' shape-rendering='crispEdges'%3E%3Cpath fill='%23564837' d='M0 0h10v2H8v2H6v2H4V4H2V2H0z'/%3E%3C/svg%3E");
   --radius-sm: 4px;
 
   --control-h: 32px;

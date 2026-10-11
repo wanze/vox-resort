@@ -323,10 +323,31 @@
   display: block;
   width: var(--progress, 0%);
   height: 100%;
-  background: var(--foliage);
+  background: var(--ink-good);
 }
 
 /* Waiting for its guests to leave: nothing done yet, so the bar is striped, not filled. */
 .hud-work[data-state='closing'] .hud-work-bar {
   background: repeating-linear-gradient(-45deg, var(--edge-soft) 0 3px, transparent 3px 6px);
+}
+
+/* Wider to a finger than to the eye, up to 44px from the padding box; markers may overlap, as
+   they already do on a crowded plot. */
+@media (pointer: coarse) {
+  :is(.hud-pin, .hud-sign, .hud-work)::before {
+    content: '';
+    position: absolute;
+  }
+
+  .hud-pin::before {
+    inset: -13px;
+  }
+
+  .hud-sign::before {
+    inset: -10px;
+  }
+
+  .hud-work::before {
+    inset: -5px -6px;
+  }
 }

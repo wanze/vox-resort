@@ -7,7 +7,8 @@ import {
   type RefObject,
 } from 'react';
 import type { GuestView, SelectionView } from '../../inspect/domain/selection';
-import { NeedBars, PARTY_KINDS, ThinksRow } from '../../hud/components/GuestRows';
+import { FeelingRows, PARTY_KINDS, ThinksRow } from '../../hud/components/GuestRows';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { StatRow } from '../../../shared/components/StatRow';
 import type { FollowView } from '../domain/followRules';
 import { keptOnScreen, type Offset, type Rect } from '../domain/cardSpot';
@@ -134,7 +135,7 @@ function GuestRows({
   readonly activityElement: RefObject<HTMLSpanElement | null>;
 }) {
   return (
-    <>
+    <div className="ui-inset guest-view-follow-body">
       <p className="ui-activity">
         {following.riding ? (
           `Riding along on a ${following.riding}`
@@ -142,13 +143,12 @@ function GuestRows({
           <span ref={activityElement}>—</span>
         )}
       </p>
-      <dl className="ui-stats">
+      <dl className="ui-stats hud-advice">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
-        <StatRow label="Mood">{Math.round(guest.happiness * 100)}%</StatRow>
+        <FeelingRows guest={guest} />
+        <ThinksRow thought={guest.thought} />
       </dl>
-      <NeedBars needs={guest.needs} />
-      <ThinksRow thought={guest.thought} />
-    </>
+    </div>
   );
 }
 
@@ -171,7 +171,7 @@ function Actions({
   onStop,
 }: Pick<FollowCardProps, 'following' | 'onToggleView' | 'onRideAlong' | 'onStop'>) {
   return (
-    <div className="ui-actions">
+    <div className="ui-actions ui-actions--below">
       <ViewButton following={following} onToggleView={onToggleView} />
       {following.rideOffered ? (
         <button type="button" className="ui-button-large" onClick={onRideAlong}>
@@ -208,9 +208,12 @@ function FloatingCard({ offset, onMove, ...shown }: Omit<FollowCardProps, 'sheet
       style={drag.style}
       {...drag.handlers}
     >
-      <p className="guest-view-follow-name" aria-live="polite">
-        {titleOf(following, guestOf(following, selection))}
-      </p>
+      <header className="ui-window-head guest-view-follow-head">
+        <PixelIcon name="guests" />
+        <p className="ui-window-title" aria-live="polite">
+          {titleOf(following, guestOf(following, selection))}
+        </p>
+      </header>
       <Details {...shown} />
       <Actions {...shown} />
     </section>
@@ -237,7 +240,8 @@ function SheetCard({ sheet, ...shown }: Shown & { readonly sheet: FollowSheet })
         onClick={() => sheet.onCollapse(!collapsed)}
       >
         <span className="ui-window-grip" aria-hidden="true" />
-        <span className="guest-view-follow-name" aria-live="polite">
+        <PixelIcon name="guests" />
+        <span className="ui-window-title" aria-live="polite">
           {titleOf(following, guestOf(following, selection))}
         </span>
       </button>

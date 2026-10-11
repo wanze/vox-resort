@@ -68,7 +68,7 @@ function LiveRows({
 export function RenderStats({ stats, elements }: RenderStatsProps) {
   const { activeLights } = elements;
   return (
-    <dl className="ui-stats ui-stats--stacked hud-figures hud-debug">
+    <dl className="ui-stats ui-stats--stacked hud-debug">
       <LiveRows elements={elements} />
       {stats ? (
         <>

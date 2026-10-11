@@ -1,5 +1,8 @@
 import { DropdownPopover } from '../../../shared/components/Dropdown';
+import { Meter } from '../../../shared/components/Meter';
+import { OutOf } from '../../../shared/components/OutOf';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { percentOf } from '../../../shared/components/StatRow';
 import { trendArrow, trendWords } from './dayWords';
 import {
   costliestPart,
@@ -40,9 +43,12 @@ export function RatingBreakdown({ rating }: { readonly rating: Rating }) {
     <dl className="hud-rating-parts">
       {RATING_PARTS.map((part) => (
         <div key={part} className="hud-rating-part" data-costliest={part === costliest}>
-          <dt>{PART_WORDS[part]}</dt>
-          <dd>{`${Math.round(rating[part] * 100)}%`}</dd>
-          <dd className="hud-rating-lost">{lostWords(starsLost(rating, part))}</dd>
+          <dt className="ui-label">{PART_WORDS[part]}</dt>
+          <dd className="hud-rating-figures">
+            <Meter level={rating[part]} />
+            <span>{percentOf(rating[part])}</span>
+            <span className="hud-rating-lost">{lostWords(starsLost(rating, part))}</span>
+          </dd>
         </div>
       ))}
     </dl>
@@ -55,8 +61,10 @@ function StepFreeLine({ reached, venues }: RatingControlProps['stepFree']) {
   if (venues === 0) return null;
   return (
     <p className="hud-rating-step-free" title="For the record only: it counts toward no star">
-      <span>Step-free</span>
-      <span>{`${reached} of ${venues} venues`}</span>
+      <span className="ui-label">Step-free</span>
+      <span>
+        <OutOf value={reached} total={venues} /> venues
+      </span>
     </p>
   );
 }

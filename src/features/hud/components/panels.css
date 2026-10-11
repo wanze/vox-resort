@@ -1,29 +1,17 @@
 .hud-ledger-trend {
-  margin-left: var(--space-2);
-  color: var(--foliage);
-}
-
-.hud-ledger-trend[data-way='down'] {
-  color: var(--ink-red);
-}
-
-.hud-figures dd {
-  font-family: var(--font-ui);
-  font-size: 13px;
-}
-
-.hud-overview {
-  gap: var(--space-2) var(--space-3);
-}
-
-.hud-figure-of,
-.hud-figure-aside {
-  color: var(--text-faint);
+  margin-left: var(--space-1);
+  color: var(--text-good);
   font-size: var(--size-small);
 }
 
+.hud-ledger-trend[data-way='down'] {
+  color: var(--text-bad);
+}
+
 .hud-figure-aside {
   margin-left: var(--space-2);
+  color: var(--text-faint);
+  font-size: var(--size-small);
 }
 
 .hud-debug dd {
@@ -33,7 +21,7 @@
 .hud-debug-fps {
   font-size: var(--size-lead);
   font-weight: 700;
-  color: var(--foliage);
+  color: var(--text-good);
 }
 
 /* Staff and prices: name, the figure, a note on it and the stepper, in one grid per panel so
@@ -86,9 +74,14 @@
   text-overflow: ellipsis;
 }
 
+/* As wide as an inspector's meter, so a building's condition reads the same in both. */
+.hud-settings-label > .ui-meter {
+  width: 72px;
+}
+
 .hud-settings-value,
 .hud-summary strong {
-  font: 600 13px / 1 var(--font-ui);
+  font: 600 var(--size-body) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
 }
 
@@ -105,14 +98,16 @@
   text-align: right;
 }
 
-.hud-settings [data-tone='good'],
+.hud-settings-note[data-tone='good'],
+.hud-settings-value[data-tone='good'],
 .hud-summary [data-tone='good'] {
-  color: var(--foliage);
+  color: var(--text-good);
 }
 
-.hud-settings [data-tone='bad'],
+.hud-settings-note[data-tone='bad'],
+.hud-settings-value[data-tone='bad'],
 .hud-summary [data-tone='bad'] {
-  color: var(--ink-red);
+  color: var(--text-bad);
 }
 
 .hud-summary,
@@ -120,66 +115,62 @@
   grid-column: 1 / -1;
 }
 
+/* The same room above and below the chips wherever they stand: the inset's padding, less any
+   gap the parent already puts between them and the next thing. */
 .hud-summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-1);
+  gap: var(--space-2);
 }
 
-.hud-summary-figure {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-2);
+.hud-settings > .hud-summary {
+  margin-bottom: calc(var(--space-4) - var(--space-2));
+}
+
+.hud-report > .hud-summary + * {
+  margin-top: calc(var(--space-4) - var(--section-gap));
+}
+
+.hud-report-heading + .hud-summary {
+  margin-top: calc(var(--space-4) - var(--space-3));
 }
 
 .hud-summary .ui-help {
   margin-left: auto;
 }
 
+/* Less the grid's own row gap, so the break is the same as between any two sections. */
 .hud-settings-heading {
-  margin: var(--space-2) 0 0;
+  margin: calc(var(--section-gap) - var(--space-2)) 0 0;
 }
 
-.hud-staff-wanted {
-  color: var(--text-faint);
-  font-weight: 500;
-}
-
-/* A sliver under the role's name, so it costs the grid no column. */
 .hud-staff-duty {
-  display: flex;
-  gap: 1px;
   width: 64px;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--sunken);
 }
 
 .hud-staff-duty-share {
   flex-basis: 0;
-  background: var(--duty);
 }
 
 .hud-staff-duty-share[data-share='working'],
 .hud-staff-key[data-share='working'] {
-  --duty: var(--lamp-on);
+  --ink: var(--ink-good);
 }
 
 .hud-staff-duty-share[data-share='walking'],
 .hud-staff-key[data-share='walking'] {
-  --duty: var(--ochre);
+  --ink: var(--ink-warn);
 }
 
 .hud-staff-duty-share[data-share='idle'],
 .hud-staff-key[data-share='idle'] {
-  --duty: var(--stone-500);
+  --ink: var(--ink-idle);
 }
 
 /* The help's legend: the word underlined in its share's colour. */
 .hud-staff-key {
-  border-bottom: 3px solid var(--duty);
+  border-bottom: 3px solid var(--ink);
 }
 
 /* Rows are sentences here; .ui-stats keeps every line on one line, which would
@@ -192,18 +183,13 @@
 .hud-guests {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-}
-
-.hud-advice-tiers .hud-report-heading,
-.hud-guests .hud-report-heading {
-  margin-bottom: var(--space-2);
+  gap: var(--section-gap);
 }
 
 .hud-remarks {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--space-2) var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
   align-items: baseline;
   margin: 0;
   padding: 0;
@@ -214,29 +200,36 @@
   display: contents;
 }
 
+/* The line and its count on one row, the bar under both. */
 .hud-remark-said {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px var(--space-3);
+  align-items: baseline;
   white-space: normal;
 }
 
-.hud-remark-bar {
-  display: block;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--sunken);
+.hud-remark-said > .ui-track {
+  grid-column: 1 / -1;
 }
 
-.hud-remark-fill {
-  display: block;
-  height: 100%;
-  background: var(--foliage);
+.hud-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hud-review {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .hud-remark[data-tone='bad'] .hud-remark-fill {
-  background: var(--ink-red);
+  --ink: var(--ink-bad);
 }
 
 .hud-remark-count {
@@ -249,6 +242,12 @@
 .hud-advice-show {
   margin-left: var(--space-2);
   vertical-align: baseline;
+}
+
+.hud-message-popups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .hud-message-toggles {
@@ -277,28 +276,36 @@
 }
 
 .hud-report-heading {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-3);
   padding-bottom: var(--space-1);
   border-bottom: 2px dotted var(--edge-soft);
   font: 700 var(--size-body) / 1.2 var(--font-ui);
   color: var(--stone-800);
 }
 
+.hud-report-title {
+  margin: 0;
+  font: 700 var(--size-lead) / 1.1 var(--font-ui);
+}
+
+.hud-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--section-gap);
+}
+
+/* Figures to the right, so a column of them can be compared down the section. */
 .hud-report-rows {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-2) var(--space-4);
   align-items: baseline;
   margin: 0;
 }
 
-.hud-report-rows[data-layout='said'] {
-  grid-template-columns: auto 1fr auto;
-}
-
-.hud-report-rows[data-layout='chart'] {
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
+/* The day's summary belongs to the stepper above it, not a section of its own. */
+.hud-report-stepper + .hud-summary {
+  margin-top: calc(var(--space-4) - var(--section-gap));
 }
 
 .hud-report-row {
@@ -313,14 +320,29 @@
   white-space: nowrap;
 }
 
-.hud-report-row dd.hud-report-said {
-  font-family: var(--font-ui);
-  text-align: left;
-  white-space: normal;
+.hud-report-row .hud-figure-aside {
+  margin: 0 var(--space-2) 0 0;
 }
 
-.hud-report-row dd.hud-report-chart {
-  line-height: 0;
+/* A fixed width rather than a share of the row: the figures' column is only as wide as it needs. */
+.hud-report-row .ui-stat-meter {
+  justify-content: flex-end;
+}
+
+.hud-report-row .ui-stat-meter > .ui-meter {
+  flex: none;
+  width: 96px;
+}
+
+.hud-report-chart {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Wide enough for a rating's stars, so the charts before the figures end on one line. */
+.hud-report-chart > :last-child {
+  min-width: 6ch;
 }
 
 .hud-report-row[data-total] > * {
@@ -334,14 +356,9 @@
   padding: 0;
 }
 
-.hud-report-stars {
-  margin: 0 0 var(--space-1);
-  font-size: var(--size-lead);
-}
-
 .hud-sparkline {
   display: block;
-  color: var(--foliage);
+  color: var(--ink-good);
 }
 
 .hud-camera {
@@ -397,7 +414,7 @@
 }
 
 .hud-problem[data-severity='urgent'] {
-  border-left-color: var(--lamp-off);
+  border-left-color: var(--ink-bad);
 }
 
 .hud-problem[data-severity='note'] {
@@ -405,7 +422,7 @@
 }
 
 .hud-problem[data-severity='day'] {
-  border-left-color: var(--foliage);
+  border-left-color: var(--ink-good);
 }
 
 .hud-problem[data-severity='event'] {
@@ -457,49 +474,8 @@
   flex: 1 1 auto;
 }
 
-.hud-needs {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.hud-need {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.hud-need-label {
-  color: var(--text-dim);
-  font-size: var(--size-small);
-}
-
-/* Stepped rather than smooth, so a need drains in blocks the way the rest of the world is built. */
-.hud-need-track {
-  height: 10px;
-  border-radius: 3px;
-  background: var(--sunken);
-  box-shadow:
-    var(--bevel-in),
-    0 0 0 1px var(--edge-soft);
-  overflow: hidden;
-}
-
-/* The hue runs red through yellow to green as the need fills, so an empty one shows from afar.
-   Each need sets its own --level, so the colours cannot be tokens. */
-/* stylelint-disable function-disallowed-list */
-.hud-need-fill {
-  --hue: calc(var(--level, 1) * 90);
-  display: block;
-  height: 100%;
-  background:
-    repeating-linear-gradient(90deg, transparent 0 8px, var(--need-notch) 8px 10px),
-    linear-gradient(180deg, hsl(var(--hue) 68% 60%), hsl(var(--hue) 62% 42%));
-}
-/* stylelint-enable function-disallowed-list */
-
 .hud-settings + .hud-report-heading {
-  margin-top: var(--space-4);
+  margin-top: var(--section-gap);
 }
 
 .hud-zone-staff {
@@ -524,14 +500,8 @@
   color: var(--text-dim);
 }
 
-.hud-season-now {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.hud-season-now > p {
-  margin: 0;
+.hud-season-track {
+  margin-top: var(--space-5);
 }
 
 .hud-season-track [data-phase='early'] {
@@ -557,7 +527,8 @@
 }
 
 .hud-season-days > li {
-  height: 10px;
+  position: relative;
+  height: 6px;
   border-radius: 1px;
   background: var(--season-ink);
   opacity: 0.3;
@@ -567,10 +538,23 @@
   opacity: 1;
 }
 
+/* A playhead: today stands taller than the track, its negative margins keeping the row's height,
+   with a caret above it pointing in. */
 .hud-season-days > li[data-today] {
+  height: 12px;
+  margin: -3px 0;
   opacity: 1;
-  outline: 2px solid var(--stone-800);
-  outline-offset: 1px;
+}
+
+.hud-season-days > li[data-today]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--stone-800);
+  border-bottom: 0;
 }
 
 /* Each phase as wide as its days on the track above. */
@@ -579,15 +563,13 @@
   gap: 2px;
   margin-top: var(--space-1);
   font-size: var(--size-small);
-  color: var(--text-dim);
+  color: var(--text-faint);
 }
 
 .hud-season-legend > span {
   flex: var(--days) 1 0;
   min-width: 0;
-  padding-top: 2px;
   overflow: hidden;
-  border-top: 2px solid var(--season-ink);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -626,11 +608,12 @@
 .hud-upkeep-filter {
   grid-column: 1 / -1;
   justify-self: start;
+  margin-bottom: var(--space-2);
 }
 
 /* A mouse needs no 44px target, and three actions then share a row. */
 @media (pointer: fine) {
-  .hud-inspect .ui-button-large {
+  .ui-window[data-window='inspect'] .ui-button-large {
     height: 34px;
     padding: 0 var(--space-2);
     font-size: var(--size-small);

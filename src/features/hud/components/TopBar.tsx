@@ -2,6 +2,7 @@ import type { RefCallback, RefObject } from 'react';
 import { DemandMeter } from './DemandMeter';
 import { HudReadout } from './HudReadout';
 import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
+import { OutOf } from '../../../shared/components/OutOf';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { RatingControl } from './RatingControl';
 import { SpeedControl, type FastNights } from './SpeedControl';
@@ -51,7 +52,11 @@ export interface TopBarProps {
 function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
   if (ledger?.mode !== 'tycoon') return null;
   return (
-    <HudReadout icon={<PixelIcon name="money" />} value={ledger.balance.toLocaleString('en-US')} />
+    <HudReadout
+      name="Money"
+      icon={<PixelIcon name="money" />}
+      value={ledger.balance.toLocaleString('en-US')}
+    />
   );
 }
 
@@ -60,13 +65,9 @@ function GuestsReadout({ status }: { readonly status: StatusView | null }) {
   return (
     <div>
       <HudReadout
+        name="Guests"
         icon={<PixelIcon name="guests" />}
-        value={
-          <>
-            {status.present.toLocaleString('en-US')}
-            <span className="hud-figure-of"> / {status.beds.total.toLocaleString('en-US')}</span>
-          </>
-        }
+        value={<OutOf value={status.present} total={status.beds.total} unit="beds" />}
       />
     </div>
   );

@@ -6,7 +6,11 @@ export interface CameraDrift {
 }
 
 // Takes the camera over from the controls: they must be disabled and not updated while it runs.
-export function startCameraDrift(camera: Camera, target: Vector3): CameraDrift {
+export function startCameraDrift(
+  camera: Camera,
+  target: Vector3,
+  still: { readonly matches: boolean },
+): CameraDrift {
   const offset = new Vector3().subVectors(camera.position, target);
   const framed = new Spherical().setFromVector3(offset);
   const base: Orbit = { radius: framed.radius, polar: framed.phi, azimuth: framed.theta };
@@ -15,6 +19,9 @@ export function startCameraDrift(camera: Camera, target: Vector3): CameraDrift {
 
   return {
     advance(elapsedSeconds) {
+      // Read every frame: the OS setting can change while the welcome screen is up, and the
+      // drift then resumes where it stood, with no jump.
+      if (still.matches) return;
       seconds += elapsedSeconds;
       const orbit = driftedOrbit(base, seconds);
       spherical.set(orbit.radius, orbit.polar, orbit.azimuth);

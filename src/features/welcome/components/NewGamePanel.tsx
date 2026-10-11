@@ -229,7 +229,7 @@ function PlotFields(props: {
           onClick={() => onChange({ seed: rollSeed() })}
           aria-label="A different landscape"
         >
-          ⟳
+          <PixelIcon name="refresh" />
         </button>
       </div>
       {grown ? (

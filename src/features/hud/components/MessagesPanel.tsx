@@ -11,7 +11,6 @@ import type { GameMode } from '../../sim/domain/ledger';
 import { stampOf, TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { adviceIcon, newsSays } from './adviceWords';
 import { daySummary, trendOn } from './dayWords';
-import { PanelSummary } from './PanelSummary';
 import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface MessagesPanelProps {
@@ -174,20 +173,21 @@ function MessagesHelp() {
   return (
     <HelpTip label="How messages work">
       <p>Everything that happened, newest first.</p>
-      <p>The buttons choose what pops up; the rest is still kept here.</p>
+      <p>The buttons choose what pops up in the corner; the rest is still kept here.</p>
     </HelpTip>
   );
 }
 
-export function MessagesPanel(props: MessagesPanelProps) {
-  const { log, prefs, onMutedChange } = props;
+function PopUpToggles({ prefs, onMutedChange }: MessagesPanelProps) {
   return (
-    <div className="ui-stack">
-      <PanelSummary
-        figures={[{ label: 'Messages', value: String(log.length) }]}
-        help={<MessagesHelp />}
-      />
-      <div className="hud-message-toggles" role="group" aria-label="Toasts">
+    <div className="hud-message-popups">
+      <div className="ui-row ui-row--spread">
+        <span className="ui-label" id="hud-message-popups">
+          Pop up
+        </span>
+        <MessagesHelp />
+      </div>
+      <div className="hud-message-toggles" role="group" aria-labelledby="hud-message-popups">
         {TOGGLES.map(({ kind, label, title }) => {
           const shown = !prefs.muted.includes(kind);
           return (
@@ -204,11 +204,19 @@ export function MessagesPanel(props: MessagesPanelProps) {
           );
         })}
       </div>
-      {log.length === 0 ? (
+    </div>
+  );
+}
+
+export function MessagesPanel(props: MessagesPanelProps) {
+  return (
+    <div className="ui-stack">
+      <PopUpToggles {...props} />
+      {props.log.length === 0 ? (
         <p className="ui-loading">Nothing has happened yet.</p>
       ) : (
         <ul className="hud-problems">
-          {log.map((message) => (
+          {props.log.map((message) => (
             <MessageLine key={messageKey(message)} message={message} {...props} />
           ))}
         </ul>

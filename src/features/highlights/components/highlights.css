@@ -33,7 +33,7 @@
 .highlights-empty {
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   color: var(--text-faint);
 }
 

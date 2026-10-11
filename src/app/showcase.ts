@@ -2129,7 +2129,11 @@ function driftFor(
   handle: SceneHandle,
 ): CameraDrift | null {
   if (!options.welcome || bench) return null;
-  return startCameraDrift(handle.camera, handle.controls.target);
+  return startCameraDrift(
+    handle.camera,
+    handle.controls.target,
+    matchMedia('(prefers-reduced-motion: reduce)'),
+  );
 }
 
 function startTimeOf(bench: BenchConfig | null, welcome: boolean): number {

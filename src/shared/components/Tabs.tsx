@@ -36,12 +36,13 @@ function Tab(props: {
       role="tab"
       aria-controls={props.panelId}
       aria-selected={props.selected}
+      aria-label={props.badge > 0 ? `${props.title}, ${props.badge} to look at` : undefined}
       onClick={props.onPick}
     >
       {props.icon ? <PixelIcon name={props.icon} /> : null}
       <span>{props.title}</span>
       {props.badge > 0 ? (
-        <span className="ui-badge" aria-label={`${props.badge} to look at`}>
+        <span className="ui-badge" aria-hidden="true">
           {props.badge}
         </span>
       ) : null}

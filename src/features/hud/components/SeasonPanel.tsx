@@ -1,4 +1,7 @@
 import type { CSSProperties } from 'react';
+import { HelpTip } from '../../../shared/components/HelpTip';
+import { OutOf } from '../../../shared/components/OutOf';
+import { StatRow } from '../../../shared/components/StatRow';
 import { shownDay } from '../../../shared/domain/dayNumber';
 import type { GameMode } from '../../sim/domain/ledger';
 import {
@@ -12,16 +15,11 @@ import {
   type SeasonReport,
   type SeasonView,
 } from '../../sim/domain/season';
-import { MoneyRows, ReviewRows, Row, Rows, Section } from './DayReportPanel';
+import { MoneyRows, ReviewRows } from './DayReportPanel';
+import { PanelSummary } from './PanelSummary';
+import { Row, Rows, Section } from './ReportRows';
 import { signed } from './ledgerWords';
-import {
-  bookingsLine,
-  MIX_LABELS,
-  nextLine,
-  PHASE_GUESTS,
-  seasonLine,
-  shareWords,
-} from './seasonWords';
+import { bookingsLine, MIX_LABELS, nextLine, PHASE_GUESTS, shareWords } from './seasonWords';
 
 export interface SeasonPanelProps {
   // Null where the resort runs no seasons.
@@ -56,7 +54,7 @@ function MarkRow({
 function RatingSection({ report }: { readonly report: SeasonReport }) {
   return (
     <Section title="Rating">
-      <Rows layout="figures">
+      <Rows>
         <Row label="Mean">
           <dd>{starsOf(report.meanStars)}</dd>
         </Row>
@@ -74,7 +72,7 @@ function RatingSection({ report }: { readonly report: SeasonReport }) {
 function GuestsSection({ report }: { readonly report: SeasonReport }) {
   return (
     <Section title="Guests">
-      <Rows layout="figures">
+      <Rows>
         <Row label="Arrived">
           <dd>{whole(report.arrived)}</dd>
         </Row>
@@ -105,7 +103,7 @@ function MoneySection({
   if (mode !== 'tycoon') return null;
   return (
     <Section title="Money">
-      <Rows layout="figures">
+      <Rows>
         <MoneyRows money={report.money} balance={report.balance} />
         <MarkRow label="Best day" mark={report.best} words={signed} />
       </Rows>
@@ -128,7 +126,7 @@ function EarlierSection({
   if (seasons.length === 0) return null;
   return (
     <Section title="Earlier seasons">
-      <Rows layout="figures">
+      <Rows>
         {seasons.toReversed().map((report) => (
           <Row key={report.number} label={`Season ${report.number}`}>
             <dd>{meanAndNet(report, mode)}</dd>
@@ -175,27 +173,43 @@ function DayTrack({ day }: { readonly day: number }) {
   );
 }
 
-function Running({ season }: { readonly season: SeasonView }) {
+function PhaseHelp({ season }: { readonly season: SeasonView }) {
   const effect = phaseEffect(season.phase);
   const next = nextLine(season.day);
   return (
+    <HelpTip label={`About the ${PHASE_WORDS[season.phase].toLowerCase()}`}>
+      <p>{PHASE_GUESTS[season.phase]}</p>
+      <dl className="ui-stats">
+        <StatRow label="Bookings">{bookingsLine(effect.demand)}</StatRow>
+        {MIX_KINDS.map((kind) => (
+          <StatRow key={kind} label={MIX_LABELS[kind]}>
+            {shareWords(effect.mix[kind])}
+          </StatRow>
+        ))}
+      </dl>
+      {next ? <p>{next}</p> : null}
+    </HelpTip>
+  );
+}
+
+// Before its first check-in a season has no day yet, and the closing day is past the track.
+function dayFigure(season: SeasonView) {
+  if (season.day < 1) return 'from tomorrow';
+  if (season.phase === 'closing') return 'closing';
+  return <OutOf value={season.day} total={SEASON_DAYS} />;
+}
+
+function Running({ season }: { readonly season: SeasonView }) {
+  return (
     <Section title={`Season ${season.number}`}>
-      <div className="hud-season-now">
-        <p>{seasonLine(season)}</p>
-        <DayTrack day={season.day} />
-        <p>{PHASE_GUESTS[season.phase]}</p>
-        <Rows layout="figures">
-          <Row label="Bookings">
-            <dd>{bookingsLine(effect.demand)}</dd>
-          </Row>
-          {MIX_KINDS.map((kind) => (
-            <Row key={kind} label={MIX_LABELS[kind]}>
-              <dd>{shareWords(effect.mix[kind])}</dd>
-            </Row>
-          ))}
-        </Rows>
-        {next ? <p className="ui-loading">{next}</p> : null}
-      </div>
+      <PanelSummary
+        figures={[
+          { label: 'Day', value: dayFigure(season) },
+          { label: 'Now', value: PHASE_WORDS[season.phase] },
+        ]}
+        help={<PhaseHelp season={season} />}
+      />
+      <DayTrack day={season.day} />
     </Section>
   );
 }
@@ -204,11 +218,17 @@ function Between({ season }: { readonly season: SeasonView }) {
   const next = season.number + 1;
   return (
     <Section title={`Before season ${next}`}>
-      <div className="hud-season-now">
-        <p>
-          {`The clock is stopped: build and renovate in peace. Open season ${next} in the top bar starts it at the next check-in, with the early season's guests.`}
-        </p>
-      </div>
+      <PanelSummary
+        figures={[{ label: 'Clock', value: 'stopped' }]}
+        help={
+          <HelpTip label="Between seasons">
+            <p>The clock is stopped: build and renovate in peace.</p>
+            <p>
+              {`Open season ${next} in the top bar to start it at the next check-in, with the early season's guests.`}
+            </p>
+          </HelpTip>
+        }
+      />
     </Section>
   );
 }
@@ -230,9 +250,9 @@ function LastSeason({ seasons, season, mode }: SeasonPanelProps) {
   const days = `Days ${shownDay(report.startedOn)}–${shownDay(lastNightOf(report))}`;
   return (
     <>
-      <h3 className="hud-report-heading">{`Season ${report.number} report · ${days}`}</h3>
+      <h3 className="hud-report-title">{`Season ${report.number} report · ${days}`}</h3>
       {report.days < SEASON_DAYS ? (
-        <p className="ui-loading">
+        <p className="ui-note">
           {`Covers ${whole(report.days)} of its ${SEASON_DAYS} days: the rest were played before seasons.`}
         </p>
       ) : null}
@@ -246,7 +266,7 @@ function LastSeason({ seasons, season, mode }: SeasonPanelProps) {
 
 export function SeasonPanel(props: SeasonPanelProps) {
   return (
-    <div className="ui-stack hud-report">
+    <div className="hud-report">
       <ThisSeason season={props.season} />
       <LastSeason {...props} />
     </div>

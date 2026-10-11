@@ -1,4 +1,5 @@
 import { HelpTip } from '../../../shared/components/HelpTip';
+import { OutOf } from '../../../shared/components/OutOf';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import { STAFF_CAPS, STAFF_ROLES, WAGES, wagesFor, type StaffRole } from '../../sim/domain/staff';
 import type { RoleTally, StaffTally } from '../domain/staffPins';
@@ -34,10 +35,10 @@ const onDuty = ({ working, walking, idle }: RoleTally): number => working + walk
 
 // Drawn empty for a role nobody holds, so every row keeps the same height.
 function DutyBar({ tally }: { readonly tally: RoleTally | null }) {
-  if (!tally || onDuty(tally) === 0) return <span className="hud-staff-duty" />;
+  if (!tally || onDuty(tally) === 0) return <span className="ui-track hud-staff-duty" />;
   const words = tallyWords(tally);
   return (
-    <span className="hud-staff-duty" role="img" aria-label={words} title={words}>
+    <span className="ui-track hud-staff-duty" role="img" aria-label={words} title={words}>
       {SHARES.map((share) => (
         <span
           key={share}
@@ -51,15 +52,9 @@ function DutyBar({ tally }: { readonly tally: RoleTally | null }) {
 }
 
 function Headcount({ count, wanted }: { readonly count: number; readonly wanted: number }) {
+  if (wanted === count) return formatNumber(count);
   return (
-    <>
-      {formatNumber(count)}
-      {wanted === count ? null : (
-        <span className="hud-staff-wanted" data-tone={count < wanted ? 'bad' : undefined}>
-          /{formatNumber(wanted)}
-        </span>
-      )}
-    </>
+    <OutOf value={count} total={wanted} unit="needed" tone={count < wanted ? 'bad' : undefined} />
   );
 }
 

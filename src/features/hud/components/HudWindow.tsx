@@ -6,6 +6,7 @@ import {
   type PointerEvent,
   type ReactNode,
 } from 'react';
+import { ActionSlot } from '../../../shared/components/Actions';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { useReturnFocus } from '../../../shared/components/useReturnFocus';
 import type { IconName } from '../../../shared/components/pixelIcons';
@@ -210,6 +211,7 @@ export function HudWindow({ frame, title, icon, children }: HudWindowProps) {
   const drag = useWindowDrag(frame);
   const sheet = useSheet(frame);
   const section = useFocusOnOpen(frame);
+  const [actions, setActions] = useState<HTMLDivElement | null>(null);
 
   return (
     <section
@@ -233,7 +235,10 @@ export function HudWindow({ frame, title, icon, children }: HudWindowProps) {
           <PixelIcon name="close" scale={1} />
         </button>
       </header>
-      <div className="ui-window-body">{children}</div>
+      <ActionSlot value={actions}>
+        <div className="ui-window-body">{children}</div>
+      </ActionSlot>
+      <div ref={setActions} className="ui-window-actions" />
     </section>
   );
 }

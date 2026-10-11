@@ -2,9 +2,7 @@ import type { ReactNode } from 'react';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import { Stepper, type StepperProps } from '../../../shared/components/Stepper';
-
-// Green for what helps the resort, red for what costs it.
-export type Tone = 'good' | 'bad';
+import type { Tone } from '../../../shared/components/tone';
 
 export interface SettingRowProps {
   readonly icon: IconName;

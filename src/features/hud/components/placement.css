@@ -40,5 +40,4 @@
 .hud-placement-price {
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
-  opacity: 0.85;
 }

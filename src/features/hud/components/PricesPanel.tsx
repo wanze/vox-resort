@@ -8,7 +8,8 @@ import {
 } from '../../sim/domain/pricing';
 import type { ShowcaseStats } from '../domain/views';
 import { PanelSummary } from './PanelSummary';
-import { SettingGroup, SettingRow, type Tone } from './SettingRows';
+import { SettingGroup, SettingRow } from './SettingRows';
+import type { Tone } from '../../../shared/components/tone';
 import { SIGN_ICONS } from './signIcons';
 
 export interface PricesPanelProps {

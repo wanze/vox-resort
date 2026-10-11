@@ -7,6 +7,7 @@
   display: grid;
   grid-template-columns: auto 1fr;
   gap: var(--space-2) var(--space-4);
+  align-items: baseline;
   margin: 0;
   white-space: nowrap;
 }
@@ -15,13 +16,98 @@
   display: contents;
 }
 
-.ui-stats dt {
-  padding-top: 4px;
-}
-
 .ui-stats dd {
   margin: 0;
   font-variant-numeric: tabular-nums;
+}
+
+/* On the baseline, so the meter's foot sits on the figures' and the label beside it lines up;
+   a fixed width keeps the meters of a list in one column. */
+.ui-stat-meter {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.ui-stat-meter > .ui-meter {
+  flex: 0 1 96px;
+}
+
+/* The total steps back, so the eye reads the figure first; the colour is the figure's own. */
+.ui-out-of {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ui-out-of-total {
+  color: var(--text-faint);
+}
+
+.ui-out-of[data-tone='good'] {
+  color: var(--text-good);
+}
+
+.ui-out-of[data-tone='bad'] {
+  color: var(--text-bad);
+}
+
+.ui-out-of[data-tone] .ui-out-of-total {
+  color: inherit;
+}
+
+/* Stepped rather than smooth, so a level drains in blocks the way the rest of the world is built. */
+.ui-meter {
+  display: block;
+  min-width: 48px;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--sunken);
+  box-shadow:
+    var(--bevel-in),
+    0 0 0 1px var(--edge-soft);
+}
+
+/* For a row in a long list, where a full meter on every line would outweigh the names. */
+.ui-meter--small {
+  min-width: 0;
+  height: 6px;
+  border-radius: 2px;
+}
+
+/* Bad ink to warn to good as --level runs 0 to 1, so an empty meter shows from afar. Each meter
+   sets its own level, so the mix cannot be a token; it mixes only tokens. */
+/* stylelint-disable function-disallowed-list */
+.ui-meter-fill {
+  --warm: clamp(0%, var(--level, 1) * 200%, 100%);
+  --good: clamp(0%, var(--level, 1) * 200% - 100%, 100%);
+  display: block;
+  height: 100%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, var(--meter-notch) 8px 10px),
+    linear-gradient(180deg, var(--wash-key), transparent 55%, var(--meter-notch)),
+    color-mix(
+      in oklab,
+      var(--ink-good) var(--good),
+      color-mix(in oklab, var(--ink-warn) var(--warm), var(--ink-bad))
+    );
+}
+/* stylelint-enable function-disallowed-list */
+
+/* A sliver of a bar under a name or a line, so it costs the row no column of its own. */
+.ui-track {
+  display: flex;
+  gap: 1px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.ui-track > * {
+  display: block;
+  background: var(--ink, var(--ink-good));
 }
 
 .ui-stat-note {
@@ -71,6 +157,13 @@
   border-top: 2px dotted var(--edge-soft);
 }
 
+/* Under an inset, which already sets the content apart, so the row needs no rule of its own. */
+.ui-actions--below {
+  margin-top: var(--space-3);
+  padding-top: 0;
+  border-top: 0;
+}
+
 .ui-columns {
   display: grid;
   grid-auto-columns: 1fr;
@@ -87,10 +180,34 @@
 .ui-activity {
   margin: 0;
   font-weight: 600;
-  color: var(--ochre);
+  color: var(--text-figure);
 }
 
 .ui-field {
   width: 100%;
   min-width: 0;
+}
+
+/* Sunk into the panel like the build palette's shelves, so what is read sits apart from the
+   window's own chrome. */
+.ui-inset {
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-pebble);
+  background: var(--tray);
+  box-shadow:
+    var(--bevel-in),
+    0 0 0 1px var(--edge-soft);
+}
+
+/* On the tab strip's ground, so a headline figure stands off the tray it sits on: flat and
+   square-cornered, unlike the raised pebbles that are pressed. */
+.ui-tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--edge-soft);
+  border-radius: var(--radius-sm);
+  background: var(--stone-100);
+  white-space: nowrap;
 }

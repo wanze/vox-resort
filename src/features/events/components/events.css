@@ -19,6 +19,16 @@
   border-bottom: 2px dotted var(--edge-soft);
 }
 
+/* The stage's name carries the rule itself, right under it, as a section's heading does. */
+.events-programme-picker:has(> .events-programme-title) {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.events-programme-title {
+  margin: 0;
+}
+
 /* The kind's name over the list of its stages, as a field's label sits over the field. */
 .events-programme-site {
   display: grid;
@@ -117,6 +127,14 @@
   white-space: nowrap;
 }
 
+/* Raised rather than widened: the chip's own overflow would clip a wider hit area. */
+@media (pointer: coarse) {
+  .events-programme-chip,
+  .events-programme-add {
+    min-height: 44px;
+  }
+}
+
 .events-programme-chip[data-off] {
   color: var(--text-faint);
   text-decoration: line-through;
@@ -176,7 +194,7 @@
 
 .events-warning {
   margin: 0;
-  color: var(--ink-red);
+  color: var(--text-bad);
   font-size: var(--size-small);
 }
 
@@ -196,7 +214,7 @@
   margin: 0;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-pebble);
-  background: var(--ink-red);
+  background: var(--alert);
   color: var(--text-on-accent);
   font-size: var(--size-small);
 }

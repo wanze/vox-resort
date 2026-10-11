@@ -30,7 +30,11 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-3);
+  margin: 0 var(--space-4);
+}
+
+.photo-actions {
+  padding: 0 var(--space-4) var(--space-4);
 }
 
 .photo-slider {

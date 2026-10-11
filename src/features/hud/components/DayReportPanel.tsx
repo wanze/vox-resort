@@ -1,12 +1,14 @@
-import type { ReactNode } from 'react';
 import { tallyWords, welcomeWords } from '../../events/components/eventWords';
 import type { DayReport } from '../../sim/domain/dayReport';
 import { netOf, REASONS, type Column, type GameMode } from '../../sim/domain/ledger';
 import { trendOn, trendWords } from './dayWords';
-import { REASON_LABELS, signed } from './ledgerWords';
+import { RemarkList } from './GuestsPanel';
+import { REASON_LABELS, signed, toneOf } from './ledgerWords';
+import { PanelSummary, type SummaryFigure } from './PanelSummary';
 import { RatingBreakdown } from './RatingControl';
+import { Row, Rows, Section } from './ReportRows';
 import { Sparkline } from './Sparkline';
-import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
+import { OutOf } from '../../../shared/components/OutOf';
 import { shownDay } from '../../../shared/domain/dayNumber';
 
 export interface DayReportPanelProps {
@@ -25,21 +27,6 @@ const SPOTS_SHOWN = 3;
 const whole = (value: number): string => value.toLocaleString('en-US');
 
 const starsOf = (value: number): string => `${value.toFixed(1)} ★`;
-
-export function Section({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <section>
-      <h3 className="hud-report-heading">{title}</h3>
-      {children}
-    </section>
-  );
-}
 
 function Stepper({
   history,
@@ -83,55 +70,30 @@ function Stepper({
   );
 }
 
-function RatingSection({
+// The day at a glance, as the toast told it: the sections below take each figure apart.
+function DaySummary({
   report,
   trend,
+  mode,
 }: {
   readonly report: DayReport;
   readonly trend: number | null;
+  readonly mode: GameMode | null;
 }) {
-  const change = trendWords(trend);
+  const net = netOf(report.money);
+  const figures: SummaryFigure[] = [
+    { label: 'Rating', value: starsOf(report.rating.stars), aside: trendWords(trend) },
+    { label: 'Guests', value: whole(report.present) },
+  ];
+  if (mode === 'tycoon') figures.push({ label: 'Net', value: signed(net), tone: toneOf(net) });
+  return <PanelSummary figures={figures} />;
+}
+
+function RatingSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Rating">
-      <p className="hud-report-stars">
-        {starsOf(report.rating.stars)}
-        {change ? <span className="hud-figure-aside">{`${change} on the day before`}</span> : null}
-      </p>
       <RatingBreakdown rating={report.rating} />
     </Section>
-  );
-}
-
-type Layout = 'figures' | 'said' | 'chart';
-
-export function Rows({
-  layout,
-  children,
-}: {
-  readonly layout: Layout;
-  readonly children: ReactNode;
-}) {
-  return (
-    <dl className="hud-report-rows" data-layout={layout}>
-      {children}
-    </dl>
-  );
-}
-
-export function Row({
-  label,
-  total = false,
-  children,
-}: {
-  readonly label: string;
-  readonly total?: boolean;
-  readonly children: ReactNode;
-}) {
-  return (
-    <div className="hud-report-row" data-total={total || undefined}>
-      <dt className="ui-label">{label}</dt>
-      {children}
-    </div>
   );
 }
 
@@ -148,10 +110,7 @@ function WelcomedRow({ report }: { readonly report: DayReport }) {
 function GuestsSection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Guests">
-      <Rows layout="figures">
-        <Row label="On the plot">
-          <dd>{whole(report.present)}</dd>
-        </Row>
+      <Rows>
         <Row label="Arrived">
           <dd>{whole(report.arrived)}</dd>
         </Row>
@@ -166,8 +125,7 @@ function GuestsSection({ report }: { readonly report: DayReport }) {
         </Row>
         <Row label="Beds">
           <dd>
-            {whole(report.beds.taken)}
-            <span className="hud-figure-of"> / {whole(report.beds.total)}</span>
+            <OutOf value={report.beds.taken} total={report.beds.total} />
           </dd>
         </Row>
         <ReviewRows reviews={report.reviews} meanReview={report.meanReview} />
@@ -225,7 +183,7 @@ export function MoneyRows({
 function MoneySection({ report }: { readonly report: DayReport }) {
   return (
     <Section title="Money">
-      <Rows layout="figures">
+      <Rows>
         <MoneyRows money={report.money} balance={report.balance} />
       </Rows>
     </Section>
@@ -237,7 +195,7 @@ function EventsSection({ report }: { readonly report: DayReport }) {
   if (words === null) return null;
   return (
     <Section title="Programme">
-      <Rows layout="figures">
+      <Rows>
         <Row label="Events">
           <dd>{words}</dd>
         </Row>
@@ -250,7 +208,7 @@ function PhotosSection({ report }: { readonly report: DayReport }) {
   if (!report.photos) return null;
   return (
     <Section title="Most photographed">
-      <Rows layout="figures">
+      <Rows>
         {report.photos.spots.slice(0, SPOTS_SHOWN).map((spot) => (
           <Row key={spot.key} label={spot.subject}>
             <dd>{`${whole(spot.count)}×`}</dd>
@@ -267,14 +225,7 @@ function SaidSection({ report }: { readonly report: DayReport }) {
       {report.loudest.length === 0 ? (
         <p className="ui-loading">Nobody said anything.</p>
       ) : (
-        <Rows layout="said">
-          {report.loudest.map((tally) => (
-            <Row key={`${tally.kind}|${tally.subject ?? ''}`} label={THOUGHT_LABELS[tally.kind]}>
-              <dd className="hud-report-said">{thoughtLine(tally.kind, tally.subject)}</dd>
-              <dd>{`${whole(tally.count)}×`}</dd>
-            </Row>
-          ))}
-        </Rows>
+        <RemarkList loudest={report.loudest} />
       )}
     </Section>
   );
@@ -293,8 +244,8 @@ function ChartRow({
     <Row label={label}>
       <dd className="hud-report-chart">
         <Sparkline label={label} values={values} format={format} />
+        <span>{format(values.at(-1)!)}</span>
       </dd>
-      <dd>{format(values.at(-1)!)}</dd>
     </Row>
   );
 }
@@ -310,7 +261,7 @@ function TrendSection({
   if (history.length < 2) return null;
   return (
     <Section title={`Last ${history.length} days`}>
-      <Rows layout="chart">
+      <Rows>
         <ChartRow
           label="Rating"
           values={history.map((report) => report.rating.stars)}
@@ -342,9 +293,10 @@ export function DayReportPanel({ history, shown, onShow, mode, resortName }: Day
   const at = indexOf(history, shown);
   const report = history[at]!;
   return (
-    <div className="ui-stack hud-report">
+    <div className="hud-report">
       <Stepper history={history} at={at} onShow={onShow} resortName={resortName} />
-      <RatingSection report={report} trend={trendOn(history, report.day)} />
+      <DaySummary report={report} trend={trendOn(history, report.day)} mode={mode} />
+      <RatingSection report={report} />
       <GuestsSection report={report} />
       {mode === 'tycoon' ? <MoneySection report={report} /> : null}
       <EventsSection report={report} />

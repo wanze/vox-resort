@@ -8,12 +8,13 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { mishap } from '../../sim/domain/incidents';
 import { NO_HOME } from '../../guests/domain/homes';
-import { loudest, type ThoughtKind } from '../../sim/domain/thoughts';
+import { loudest, REPEAT_TICKS, type ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
 import { plotFactsOf } from './plotFacts';
 import { createSimState, type SimState } from './simState';
 import { paidShareFor } from './dayClose';
-import { judgeTheNight, visitMade } from './visits';
+import { DETOUR_UPSET } from '../../sim/domain/condition';
+import { hear, judgeTheNight, visitMade } from './visits';
 
 const world = referenceWorldOf(referenceJson);
 const plan = planOfWorld(world);
@@ -125,6 +126,20 @@ const housed = (state: SimState): number[] =>
   Array.from({ length: state.guests.count }, (_, person) => person).filter(
     (person) => state.guests.present[person] === 1 && state.guests.home[person] !== NO_HOME,
   );
+
+describe('hear', () => {
+  it('dents the mood of a guest sent elsewhere by a renovation, once for each time it is heard', () => {
+    const state = freshState();
+    const before = state.happiness.level[PERSON]!;
+    hear(state, 10, PERSON, 'renovating', 'Bakery');
+    hear(state, 20, PERSON, 'renovating', 'Bakery');
+    expect(state.happiness.level[PERSON]).toBeCloseTo(before - DETOUR_UPSET);
+    hear(state, 10 + REPEAT_TICKS, PERSON, 'renovating', 'Bakery');
+    expect(state.happiness.level[PERSON]).toBeCloseTo(before - 2 * DETOUR_UPSET);
+    hear(state, 30, PERSON + 1, 'closed', 'Bakery');
+    expect(state.happiness.level[PERSON + 1]).toBeCloseTo(before);
+  });
+});
 
 describe('judgeTheNight', () => {
   it('grumbles at a dear bed to a glum guest, and never praises it to a happy one', () => {

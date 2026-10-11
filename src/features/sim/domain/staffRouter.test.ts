@@ -413,6 +413,7 @@ const crewOn = (
     readonly litter?: Litter;
     readonly booked?: (venue: number) => boolean;
     readonly hosting?: () => readonly { readonly venue: number; readonly until: number }[];
+    readonly shut?: (venue: number) => boolean;
   } = {},
 ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
   const upkeep = createUpkeep(venues.length);
@@ -431,6 +432,7 @@ const crewOn = (
     ...(options.litter ? { litter: () => options.litter! } : {}),
     ...(options.booked ? { booked: options.booked } : {}),
     ...(options.hosting ? { hosting: options.hosting } : {}),
+    ...(options.shut ? { shut: options.shut } : {}),
     seed: 11,
   });
   crowd = createCrowd({
@@ -516,6 +518,15 @@ describe('an animator', () => {
 
 describe('an animator and the programme', () => {
   const venues = [stage('kids-club#0', 1), stage('game-hall#0', 7)];
+
+  it('puts no show on a stage under renovation', () => {
+    const network = networkOf(street(8));
+    const { router } = crewOn(network, venues, ['animator'], {
+      occupants: [2, 9],
+      shut: (venue) => venue === 1,
+    });
+    expect(router.step(0, nodeAt(network, 4))).toBe(nodeAt(network, 3));
+  });
 
   it('puts no show of their own on a booked stage', () => {
     const network = networkOf(street(8));
@@ -627,6 +638,26 @@ describe('a lifeguard at the pool', () => {
     weather = 'clear';
     router.tick(2);
     expect(crowd.z[0]).toBeCloseTo(inside);
+  });
+
+  it('waits at the door of a pool under renovation, and watches no pool shut before they came', () => {
+    const network = networkOf(street(8));
+    const venues = [pool('swimming-pool#0', 7)];
+    let shut = false;
+    const { router, crowd } = crewOn(network, venues, ['lifeguard'], { shut: () => shut });
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 7));
+    const inside = crowd.z[0]!;
+    shut = true;
+    router.tick(1);
+    expect(crowd.z[0]).toBeCloseTo(network.nodes[nodeAt(network, 7)]!.z);
+    shut = false;
+    router.tick(2);
+    expect(crowd.z[0]).toBeCloseTo(inside);
+
+    const closed = crewOn(network, venues, ['lifeguard'], { shut: () => true });
+    expect(closed.router.step(0, nodeAt(network, 4))).toBe(-1);
+    expect(closed.router.guarded(0)).toBe(false);
   });
 
   it('counts a pool as guarded while its lifeguard is still on the way', () => {

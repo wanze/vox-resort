@@ -31,6 +31,7 @@ const home = { key: lodging!.key, id: lodging!.id, label: lodging!.label, beds: 
 
 function stateOf(visits = new Map<string, number>()) {
   const guests = createGuests({ count: 8, homes: [home], variants: 2, childVariant: 1, seed: 3 });
+  const turnedOut: number[] = [];
   return {
     ageing: true,
     venues: [busy!, idle!],
@@ -45,7 +46,8 @@ function stateOf(visits = new Map<string, number>()) {
     names: new Map<string, string>(),
     ledger: createLedger('sandbox', 0),
     season: null as ReturnType<typeof firstSeason> | null,
-    router: { dayVisits: () => visits },
+    turnedOut,
+    router: { dayVisits: () => visits, turnOut: (venue: number) => turnedOut.push(venue) },
   };
 }
 
@@ -130,6 +132,19 @@ describe('renovate', () => {
     });
     stepRenovations(state, 1_000 + RENOVATION_TICKS);
     expect(state.renovating.size).toBe(0);
+  });
+
+  it('turns everybody out of a venue as its works start, and out of nothing in a break', () => {
+    const state = stateOf();
+    state.condition = new Map([[idle!.key, 0]]);
+    renovate(state, idle!.key, 0);
+    expect(state.turnedOut).toEqual([1]);
+
+    const between = stateOf();
+    between.condition = new Map([[idle!.key, 0]]);
+    between.season = { ...firstSeason(0), state: 'break' };
+    expect(renovate(between, idle!.key, 0).kind).toBe('renovated');
+    expect(between.turnedOut).toEqual([]);
   });
 
   it('closes a lodging with guests in it, and starts once the last of them has gone', () => {

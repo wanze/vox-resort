@@ -17,6 +17,7 @@ import {
   snapshotHappiness,
   STAY_MEMORY_HOURS,
   SURROUNDINGS_SHARE,
+  upset,
   welcome,
   type Happiness,
 } from './happiness';
@@ -245,6 +246,31 @@ describe('remember', () => {
     remember(happiness, 7, 0.1);
     remember(happiness, -1, 0.1);
     expect([...happiness.stay].filter((each) => each !== 1)).toHaveLength(2);
+  });
+});
+
+describe('upset', () => {
+  it('dents the mood at once, the stay by less, and nobody else', () => {
+    const happiness = createHappiness(3);
+    upset(happiness, 1, 0.05);
+    expect(happiness.level[1]).toBeCloseTo(ARRIVAL_MOOD - 0.05);
+    expect(happiness.stay[1]).toBeLessThan(ARRIVAL_MOOD);
+    expect(happiness.stay[1]).toBeGreaterThan(ARRIVAL_MOOD - 0.05);
+    expect(happiness.level[0]).toBeCloseTo(ARRIVAL_MOOD);
+    upset(happiness, 1, 5);
+    expect(happiness.level[1]).toBe(0);
+    upset(happiness, 7, 0.1);
+  });
+
+  it('wears off within the hour once the needs are met again', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    const needs = needsAt(guests, 0.6);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, 30 * HOUR);
+    const settled = happiness.level[0]!;
+    upset(happiness, 0, 0.05);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, HOUR);
+    expect(happiness.level[0]).toBeCloseTo(settled);
   });
 });
 

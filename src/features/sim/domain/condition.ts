@@ -54,6 +54,9 @@ const UPKEEP_RISE = 1.5;
 // The line FILTHY_BELOW draws for dirt: a guest minds wear as late as they mind a mess.
 export const SHABBY_BELOW = 0.4;
 
+// A dent a twentieth deep, gone within the hour: the guest only had to walk further.
+export const DETOUR_UPSET = 0.05;
+
 // From run-down, half the build price: dearer than keeping up, cheaper than building anew.
 const RENOVATION_SHARE = 0.5;
 

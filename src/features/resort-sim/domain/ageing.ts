@@ -34,6 +34,8 @@ type AgeingState = Standing &
 
 type RenovatingState = Standing & Works & Pick<SimState, 'ledger' | 'season' | 'guests'>;
 
+type RenovatorState = RenovatingState & { readonly router: Pick<Router, 'turnOut'> };
+
 const ageingKeysOf = (resort: Standing): string[] => [
   ...resort.venues.map(({ key }) => key),
   ...resort.lodgings.map(({ key }) => key),
@@ -161,8 +163,9 @@ export type RenovationOutcome =
   | { readonly kind: 'renovated' | 'closing' | 'refused' }
   | { readonly kind: 'unaffordable'; readonly cost: number };
 
-// Paid at once. A lodging with guests in it takes no more and is renovated once they have left.
-export function renovate(resort: RenovatingState, key: string, ticks: number): RenovationOutcome {
+// Paid at once. A lodging with guests in it takes no more and is renovated once they have left;
+// a venue sends whoever is in it on their way.
+export function renovate(resort: RenovatorState, key: string, ticks: number): RenovationOutcome {
   const offer = renovationOf(resort, key);
   if (!offer || offer.cost === null || worksAt(resort, key, ticks) !== null) {
     return { kind: 'refused' };
@@ -174,6 +177,9 @@ export function renovate(resort: RenovatingState, key: string, ticks: number): R
     return { kind: 'closing' };
   }
   startWorks(resort, key, ticks);
+  if (!offer.lodging && resort.renovating.has(key)) {
+    resort.router.turnOut(resort.venues.findIndex((venue) => venue.key === key));
+  }
   return { kind: 'renovated' };
 }
 

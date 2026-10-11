@@ -770,8 +770,14 @@ durability`. A venue's busy is its share of a 12-hour waking day spent
   `max(10, round(cost × 0.5 × (1 − c)))`, offered below 0.95, booked as
   `renovate`, refused in tycoon through `canAfford`, and paid at once.
   - A venue, or an empty lodging, is new at once and shut for six simulated
-    hours (`renovating`, key to the tick it reopens); guests find it
-    `closed`.
+    hours (`renovating`, key to the tick it reopens). A venue's works start by
+    turning out whoever is inside or queuing there, unserved, and stopping
+    whoever is on the way (`router.turnOut`). A guest whose pick it would have
+    been chooses the next best and thinks `renovating`, which dents their mood
+    by `DETOUR_UPSET` (0.05, back within the hour, a fifth of it kept on the
+    stay), at most once per venue per `REPEAT_TICKS`. An arriving guest is
+    sent past a desk under renovation; animators and lifeguards skip it, and
+    a lifeguard posted there waits at the door.
   - A lodging with guests in it is **closed** first (`closing`, key to what
     was paid): check-in gives no beds there (its free beds are hidden while a
     coach is booked and checked in), and the hourly `stepRenovations` starts

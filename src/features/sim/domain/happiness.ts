@@ -63,6 +63,15 @@ export function remember(happiness: Happiness, person: number, amount: number): 
   happiness.stay[person] = clamp(happiness.stay[person]! + amount);
 }
 
+// A fifth of a setback outlasts the mood it dents, which drifts back up within the hour.
+const UPSET_REMEMBERED = 0.2;
+
+export function upset(happiness: Happiness, person: number, amount: number): void {
+  if (person < 0 || person >= happiness.count) return;
+  happiness.level[person] = clamp(happiness.level[person]! - amount);
+  happiness.stay[person] = clamp(happiness.stay[person]! - amount * UPSET_REMEMBERED);
+}
+
 // Half full, not where a guest would get up for a snack: peckish is not unhappy, and crediting
 // only from there read a fully built resort as three stars.
 export const CONTENT_LEVEL = 0.5;

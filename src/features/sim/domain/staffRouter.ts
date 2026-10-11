@@ -231,6 +231,9 @@ export function createStaffRouter(parts: {
   // is worked until it ends. Omitted, nothing is ever booked.
   readonly booked?: (venue: number) => boolean;
   readonly hosting?: () => readonly { readonly venue: number; readonly until: number }[];
+  // Under renovation: no show and no watch, and a lifeguard there waits at the door. Omitted,
+  // nothing ever is.
+  readonly shut?: (venue: number) => boolean;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;
 }): StaffRouter {
@@ -243,6 +246,8 @@ export function createStaffRouter(parts: {
     const breakdowns = parts.breakdowns?.();
     return breakdowns !== undefined && isBroken(breakdowns, venue);
   };
+  const isShut = (venue: number): boolean => parts.shut?.(venue) === true;
+  const isUsable = (venue: number): boolean => !isBrokenDown(venue) && !isShut(venue);
 
   let venues = parts.venues;
   let network = parts.network;
@@ -357,7 +362,7 @@ export function createStaffRouter(parts: {
       (place.stage === true || place.dj === true) &&
       inZone(venue) &&
       claims.showBy[venue] === NOBODY &&
-      !isBrokenDown(venue) &&
+      isUsable(venue) &&
       openNow(place, effect, tickOfDay()) &&
       !(parts.booked?.(venue) ?? false)
     );
@@ -401,6 +406,7 @@ export function createStaffRouter(parts: {
         place.bathing === true &&
         claims.watchedBy[venue] === NOBODY &&
         inZone(venue) &&
+        !isShut(venue) &&
         openNow(place, effect, tickOfDay())
       );
     };
@@ -878,7 +884,7 @@ export function createStaffRouter(parts: {
   const mindTheWeather = (worker: number, effect: WeatherEffect): void => {
     const venue = state.assigned[worker]!;
     if (state.towerOf[worker]! >= 0 || state.legRoute[worker] || venue < 0) return;
-    const open = openNow(venues[venue]!, effect, tickOfDay());
+    const open = !isShut(venue) && openNow(venues[venue]!, effect, tickOfDay());
     if (open === (state.sheltering[worker] === 0)) return;
     const door = state.doorOf[worker]!;
     if (open) standInside(worker, venue, door);

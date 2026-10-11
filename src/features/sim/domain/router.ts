@@ -138,6 +138,8 @@ export interface Router {
   relabel(venues: readonly Venue[]): void;
   // Nobody is dragged out of a venue or a line; they leave when the visit ends.
   sendHome(person: number): void;
+  // Shut for renovation: whoever is in or queuing there leaves unserved, and nobody walks on to it.
+  turnOut(venue: number): void;
   admit(person: number, node: number): void;
   // Called for every member of a departing party, or a visit left standing would later
   // walk an empty body out of the door.
@@ -195,7 +197,14 @@ export function createRouter(parts: {
   // Told what the router already decided, never asked: nothing here reads a thought back.
   readonly onThought?: (
     person: number,
-    kind: 'queue-too-long' | 'closed' | 'broken' | 'nothing-for' | 'no-bed' | 'no-step-free',
+    kind:
+      | 'queue-too-long'
+      | 'closed'
+      | 'broken'
+      | 'nothing-for'
+      | 'no-bed'
+      | 'no-step-free'
+      | 'renovating',
     subject: string | null,
   ) => void;
   // Late-bound: an arrival happens between ticks, and the clock knows the hour.
@@ -432,17 +441,21 @@ export function createRouter(parts: {
     ? (venue: number): number => cleanOf(venue) * appealFactor(conditionOf(venue))
     : cleanOf;
 
+  const isShut = (venue: number): boolean => parts.shut?.(venue) === true;
+
   const isBrokenDown = (venue: number): boolean => {
     const breakdowns = parts.breakdowns?.();
     return breakdowns !== undefined && isBroken(breakdowns, venue);
   };
 
   // Asked every time rather than kept: the day can turn over between ticks.
-  const isOpen = (venue: number): boolean => {
+  const isOpenButForWorks = (venue: number): boolean => {
     const declared = venues[venue];
-    if (!declared || isBrokenDown(venue) || parts.shut?.(venue) === true) return false;
+    if (!declared || isBrokenDown(venue)) return false;
     return openNow(declared, weatherEffect(weatherNow()), parts.tickOfDay());
   };
+
+  const isOpen = (venue: number): boolean => !isShut(venue) && isOpenButForWorks(venue);
 
   const wearOut = (venue: number): void => {
     const breakdowns = parts.breakdowns?.();
@@ -467,10 +480,15 @@ export function createRouter(parts: {
     return priceAppeal ? (venue) => taste(venue) * priceAppeal(venue) : taste;
   };
 
+  const shutReason = (venue: number): 'broken' | 'renovating' | 'closed' => {
+    if (isBrokenDown(venue)) return 'broken';
+    return isShut(venue) ? 'renovating' : 'closed';
+  };
+
   const admitAt = (person: number, venue: number): ArrivalOutcome => {
-    // A venue that shuts while somebody is inside is not emptied.
+    // A venue the hours or the weather shut while somebody is inside is not emptied; works are.
     if (!isOpen(venue)) {
-      onThought(person, isBrokenDown(venue) ? 'broken' : 'closed', venues[venue]?.label ?? null);
+      onThought(person, shutReason(venue), venues[venue]?.label ?? null);
       return 'balked';
     }
     if (queueLength(venue) >= queueLimit(venue)) {
@@ -490,12 +508,24 @@ export function createRouter(parts: {
   };
 
   // Past midnight the minigolf is no night out: only a venue that keeps hours is.
-  const isOpenLate = (venue: number): boolean =>
-    isOpen(venue) && venues[venue]!.hours !== undefined;
+  const keepsHours = (venue: number): boolean => venues[venue]!.hours !== undefined;
+
+  const isOpenLate = (venue: number): boolean => isOpen(venue) && keepsHours(venue);
+
+  const isOpenLateButForWorks = (venue: number): boolean =>
+    isOpenButForWorks(venue) && keepsHours(venue);
 
   const isOutLate = (person: number): boolean => parts.outLate?.(guests.party[person]!) ?? false;
 
-  const choiceFor = (person: number, at: number, stepFree: boolean) => {
+  const openFor = (person: number): ((venue: number) => boolean) =>
+    isOutLate(person) ? isOpenLate : isOpen;
+
+  const choiceFor = (
+    person: number,
+    at: number,
+    stepFree: boolean,
+    open: (venue: number) => boolean = openFor(person),
+  ) => {
     const people = crowd();
     return chooseVenue({
       needs,
@@ -511,14 +541,25 @@ export function createRouter(parts: {
       affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
       cleanliness: lookOf,
-      isOpen: isOutLate(person) ? isOpenLate : isOpen,
+      isOpen: open,
       weather: weatherEffect(weatherNow()),
     });
   };
 
+  // Each venue is scored on its own, so a wish that is not shut is the choice anyway, and only a
+  // guest whose pick is under renovation chooses twice and minds the longer walk.
+  const choiceMindingWorks = (person: number, at: number, stepFree: boolean) => {
+    if (!parts.shut) return choiceFor(person, at, stepFree);
+    const late = isOutLate(person);
+    const wish = choiceFor(person, at, stepFree, late ? isOpenLateButForWorks : isOpenButForWorks);
+    if (!wish || !isShut(wish.venue)) return wish;
+    onThought(person, 'renovating', venues[wish.venue]!.label);
+    return choiceFor(person, at, stepFree);
+  };
+
   const decide = (person: number, at: number): void => {
     const stepFree = isStepFree(person);
-    const choice = choiceFor(person, at, stepFree);
+    const choice = choiceMindingWorks(person, at, stepFree);
     if (choice) {
       setPartyGoal(goals, guests, person, choice);
       return;
@@ -807,7 +848,6 @@ export function createRouter(parts: {
   };
 
   const leaveErrand = (person: number, venue: number): void => {
-    endVisit(person, venue);
     const route = errandOf(person);
     const staying =
       state.stays[person] !== null && now < state.stayUntil[person]! && !dueInBed(person);
@@ -968,6 +1008,11 @@ export function createRouter(parts: {
 
   // The relief is applied here, at the end of the visit, not on arrival.
   const leave = (person: number, venue: number): void => {
+    endVisit(person, venue);
+    goOut(person, venue);
+  };
+
+  const goOut = (person: number, venue: number): void => {
     // The whole party: a sibling still arriving would have its goal overwritten by whoever
     // checked in first and decides for them all, and so never reach the desk.
     if (venues[venue]?.receives)
@@ -978,7 +1023,6 @@ export function createRouter(parts: {
       leaveErrand(person, venue);
       return;
     }
-    endVisit(person, venue);
     restOnLounger(person, venue);
     restInShade(person, venue);
     clearPartyGoal(goals, guests, person);
@@ -1076,11 +1120,11 @@ export function createRouter(parts: {
   };
 
   // Least hops, ties to the lower index; only fields for receiving venues are swept.
-  const nearestReception = (at: number, stepFree: boolean): number => {
+  const nearestReception = (at: number, stepFree: boolean, skipShut = false): number => {
     let best = -1;
     let bestHops = Number.POSITIVE_INFINITY;
     for (let venue = 0; venue < venues.length; venue++) {
-      if (!venues[venue]!.receives) continue;
+      if (!venues[venue]!.receives || (skipShut && isShut(venue))) continue;
       const field = stepFree ? stepFreeFieldFor(venue) : fieldFor(venue);
       const hops = field.hops[at] ?? -1;
       if (hops < 0 || hops >= bestHops) continue;
@@ -1090,10 +1134,11 @@ export function createRouter(parts: {
     return best;
   };
 
-  // A guest who cannot reach a desk was already let in, and must not stand still for ever.
+  // A guest who cannot reach a desk was already let in, and must not stand still for ever; nor
+  // wait six hours at one under renovation.
   const sendToDesk = (person: number, at: number): boolean => {
     if (state.arriving[person] !== 1) return false;
-    const reception = nearestReception(at, isStepFree(person));
+    const reception = nearestReception(at, isStepFree(person), true);
     if (reception < 0) {
       state.arriving[person] = 0;
       return false;
@@ -1256,6 +1301,22 @@ export function createRouter(parts: {
       state.leaving[person] = 1;
       clearPartyGoal(goals, guests, person);
       if (state.asleep[person] === 1) getUp(person);
+    },
+
+    turnOut(venue) {
+      if (venue < 0 || venue >= venues.length) return;
+      const { label } = venues[venue]!;
+      const { occupancy } = state;
+      for (let person = 0; person < guests.count; person++) {
+        if (occupancy.state[person] !== VISIT.away && occupancy.at[person] === venue) {
+          leaveVenue(occupancy, person);
+          goOut(person, venue);
+          onThought(person, 'renovating', label);
+        } else if (goals.venue[person] === venue && state.errands.venue[person] !== venue) {
+          // Over the sand they are on a route of its own, and are turned away at the door.
+          clearPartyGoal(goals, guests, person);
+        }
+      }
     },
 
     admit(person, node) {

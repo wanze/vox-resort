@@ -416,6 +416,7 @@ export function createSimState(parts: SimParts): SimState {
   const breakdowns = createBreakdowns(venues.length);
   const litter = createLitter(plan.tilesX, plan.tilesZ);
   const beds = bedCount(guests);
+  const ageing = parts.ageing === true ? ageingParts(() => resort, clock.ticks) : null;
   const router = createRouter({
     guests,
     needs,
@@ -436,7 +437,7 @@ export function createSimState(parts: SimParts): SimState {
     // The synthetic beach is past the venue list, and an unknown id is at list price.
     priceAppeal: (venue) => venuePull(factorOf(resort.prices, resort.venues[venue]?.id ?? '')),
     // The beach is past the venue list, so it is new and never shut.
-    ...(parts.ageing === true ? ageingParts(() => resort, clock.ticks) : {}),
+    ...ageing,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, clock.ticks()),
     onThought: (person, kind, subject) => hear(resort, clock.ticks(), person, kind, subject),
@@ -528,6 +529,7 @@ export function createSimState(parts: SimParts): SimState {
     },
     booked: (venue) => resort.eventBooked[venue] === 1,
     hosting: () => resort.hosted,
+    ...(ageing ? { shut: ageing.shut } : {}),
     seed: STAFF_SEED,
   });
   const workers = createCrowd({

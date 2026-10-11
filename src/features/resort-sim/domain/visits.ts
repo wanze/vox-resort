@@ -7,8 +7,9 @@ import { fullNameOf } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
 import { isBeach } from '../../layout/domain/shoreline';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
-import { conditionOf, isShabby } from '../../sim/domain/condition';
+import { conditionOf, DETOUR_UPSET, isShabby } from '../../sim/domain/condition';
 import { valueThought } from '../../sim/domain/expectations';
+import { upset } from '../../sim/domain/happiness';
 import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
 import { factorOf, overpriced } from '../../sim/domain/pricing';
@@ -70,9 +71,10 @@ export function hear(
   kind: ThoughtKind,
   subject: string | null,
 ): void {
-  if (think(resort.thoughts, person, kind, subject, tick)) {
-    tallyInto(resort.thoughtDay, kind, subject);
-  }
+  if (!think(resort.thoughts, person, kind, subject, tick)) return;
+  tallyInto(resort.thoughtDay, kind, subject);
+  // Only as often as it is heard: a guest who wants the same venue at every node would sink.
+  if (kind === 'renovating') upset(resort.happiness, person, DETOUR_UPSET);
 }
 
 // As the night is billed, about the bed it was billed for.

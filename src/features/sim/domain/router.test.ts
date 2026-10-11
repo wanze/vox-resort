@@ -537,7 +537,79 @@ describe('a worn venue', () => {
     shut = true;
     expect(router.step(0, nodeAt(street8, 7))).toBe(-1);
     expect(router.visitOf(0)).toBeNull();
-    expect(heard[0]).toEqual([0, 'closed', 'Bakery']);
+    expect(heard[0]).toEqual([0, 'renovating', 'Bakery']);
+  });
+});
+
+describe('a venue shut for renovation', () => {
+  const network = networkOf(street(13));
+  const bakeries = [bakery(2), { ...bakery(10), key: 'bakery#1' }];
+  const hungry = (): Needs => {
+    const needs = createNeeds(guests, 7);
+    for (const need of GUEST_NEEDS) needs.level[need].fill(1);
+    needs.level.hunger.fill(0);
+    return needs;
+  };
+  const choosingWith = (shut: number) => {
+    const { heard, onThought } = hearing();
+    const night = {
+      lodgings: [],
+      tickOfDay: () => NOON,
+      onThought,
+      shut: (at: number) => at === shut,
+    };
+    const { router } = routerOn(network, bakeries, hungry(), night);
+    router.step(0, nodeAt(network, 6));
+    return { goal: router.goalOf(0)?.key, heard };
+  };
+
+  it('sends a guest whose pick it is to the other one, minding the longer walk', () => {
+    const wished = choosingWith(-1).goal;
+    const shut = wished === 'bakery#0' ? 0 : 1;
+    const { goal, heard } = choosingWith(shut);
+    expect(goal).toBeDefined();
+    expect(goal).not.toBe(wished);
+    expect(heard).toEqual([[0, 'renovating', 'Bakery']]);
+  });
+
+  it('says nothing to a guest who would have gone elsewhere anyway', () => {
+    const wished = choosingWith(-1).goal;
+    const { goal, heard } = choosingWith(wished === 'bakery#0' ? 1 : 0);
+    expect(goal).toBe(wished);
+    expect(heard).toEqual([]);
+  });
+
+  it('turns out whoever is inside or in line unserved, and stops whoever is on the way', () => {
+    const street8 = networkOf(street(8));
+    const needs = hungry();
+    const { heard, onThought } = hearing();
+    let shut = false;
+    const night = { lodgings: [], tickOfDay: () => NOON, onThought, shut: () => shut };
+    const small = { ...bakery(7), capacity: 1 };
+    const { router } = routerOn(street8, [small], needs, night);
+    const others = (person: number) => guests.party[person] !== guests.party[0];
+    const queued = Array.from({ length: guests.count }, (_, at) => at).find(others)!;
+    const walking = Array.from({ length: guests.count }, (_, at) => at).find(
+      (person) => others(person) && guests.party[person] !== guests.party[queued],
+    )!;
+    for (const person of [0, queued, walking]) router.step(person, nodeAt(street8, 0));
+    router.step(0, nodeAt(street8, 7));
+    router.step(queued, nodeAt(street8, 7));
+    expect(router.visitOf(0)?.waiting).toBe(false);
+    expect(router.visitOf(queued)?.waiting).toBe(true);
+    expect(router.goalOf(walking)?.key).toBe('bakery#0');
+
+    shut = true;
+    router.turnOut(0);
+    expect(router.visitOf(0)).toBeNull();
+    expect(router.visitOf(queued)).toBeNull();
+    expect(router.goalOf(walking)).toBeNull();
+    expect(router.occupancyOf('bakery#0')).toEqual({ inside: 0, waiting: 0 });
+    expect(needs.level.hunger[0]).toBe(0);
+    expect(heard).toEqual([
+      [0, 'renovating', 'Bakery'],
+      [queued, 'renovating', 'Bakery'],
+    ]);
   });
 });
 
@@ -3975,6 +4047,16 @@ describe('checking in at reception', () => {
     expect(router.step(0, nodeAt(network, 0))).toBe(nodeAt(network, 1));
     expect(router.isArriving(0)).toBe(false);
     expect(router.goalOf(0)?.key).toBe('bakery#0');
+  });
+
+  it('sends them past a desk under renovation to the next one', () => {
+    const network = networkOf(street(12));
+    const venues = [reception(1, 'reception#0'), bakery(3), reception(8, 'reception#1')];
+    const night = { lodgings: [], tickOfDay: () => NOON, shut: (venue: number) => venue === 2 };
+    const { router } = routerOn(network, venues, wanting(0, 'hunger'), night);
+    router.admit(0, nodeAt(network, 11));
+    expect(router.step(0, nodeAt(network, 11))).toBe(nodeAt(network, 10));
+    expect(router.goalOf(0)?.key).toBe('reception#0');
   });
 
   it('still has them on their way to check in after the graph is rebuilt', () => {

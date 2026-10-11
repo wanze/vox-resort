@@ -14,6 +14,7 @@ import {
   tallyInto,
   think,
   THOUGHT_KINDS,
+  type ThoughtKind,
   visitThought,
   widenThoughts,
   worstOf,
@@ -157,6 +158,23 @@ describe("the day's loudest thoughts", () => {
   });
 });
 
+const widenedFrom = (kind: ThoughtKind) => {
+  const thoughts = createThoughts(2);
+  think(thoughts, 1, 'sunrise', null, 5);
+  const kinds = THOUGHT_KINDS.length;
+  const known = THOUGHT_KINDS.indexOf(kind);
+  const old = snapshotThoughts(thoughts, new Map());
+  const short = (column: ArrayLike<number | string | null>) =>
+    Array.from(column).filter((_, at) => at % kinds < known);
+  const widened = widenThoughts({
+    ...old,
+    stay: Uint16Array.from(short(old.stay) as number[]),
+    heardAt: Int32Array.from(short(old.heardAt) as number[]),
+    heardSubject: short(old.heardSubject) as (string | null)[],
+  });
+  return { widened, old };
+};
+
 describe('widenThoughts', () => {
   it('pads a save from before the newest kind, keeping every row where it was', () => {
     const thoughts = createThoughts(2);
@@ -273,20 +291,15 @@ describe('widenThoughts', () => {
   });
 
   it('pads a save from before ageing, and hears a shabby building as a complaint', () => {
-    const thoughts = createThoughts(2);
-    think(thoughts, 1, 'sunrise', null, 5);
-    const kinds = THOUGHT_KINDS.length;
-    const old = snapshotThoughts(thoughts, new Map());
-    const short = (column: ArrayLike<number | string | null>) =>
-      Array.from(column).filter((_, at) => at % kinds < kinds - 1);
-    const widened = widenThoughts({
-      ...old,
-      stay: Uint16Array.from(short(old.stay) as number[]),
-      heardAt: Int32Array.from(short(old.heardAt) as number[]),
-      heardSubject: short(old.heardSubject) as (string | null)[],
-    });
+    const { widened, old } = widenedFrom('shabby');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-1)).toBe('shabby');
     expect(isComplaint('shabby')).toBe(true);
+  });
+
+  it('pads a save from before venues closed for renovation, and hears one as a complaint', () => {
+    const { widened, old } = widenedFrom('renovating');
+    expect(widened.stay).toEqual(old.stay);
+    expect(THOUGHT_KINDS.at(-1)).toBe('renovating');
+    expect(isComplaint('renovating')).toBe(true);
   });
 });

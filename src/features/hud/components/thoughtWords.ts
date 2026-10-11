@@ -41,6 +41,10 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
   'good-value': (subject) => (subject ? `${subject} was good value` : 'Good value for money'),
   shabby: (subject) =>
     subject ? `${subject} has seen better days` : 'Everything here has seen better days',
+  renovating: (subject) =>
+    subject
+      ? `${subject} was closed for renovation, we had to go further`
+      : 'Closed for renovation, we had to go further',
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -65,6 +69,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   'good-value': 'Value',
   sunrise: 'Sunrise',
   shabby: 'Upkeep',
+  renovating: 'Upkeep',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

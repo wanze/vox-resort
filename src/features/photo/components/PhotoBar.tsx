@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { PHOTO_FILTER_IDS, PHOTO_FILTERS } from '../domain/photoFilters';
 import { PHOTO_FOV, timeLabel } from '../domain/photoView';
@@ -29,30 +29,38 @@ function LensSlider({ photo }: { readonly photo: PhotoControls }) {
   );
 }
 
+const lookStep = (time: number): number => Math.round(time * LOOK_STEPS) % LOOK_STEPS;
+
+// Not wrapped in a <label>, which may hold only one control; the caret is a
+// second one, taking the picture back to now.
 function TimeSlider({ photo }: { readonly photo: PhotoControls }) {
+  const id = useId();
   const shown = photo.lookTime ?? photo.clockTime;
+  const now = lookStep(photo.clockTime) / (LOOK_STEPS - 1);
   return (
-    <div className="ui-row">
-      <label className="ui-slider photo-slider">
-        <span className="ui-slider-label">Time</span>
+    <div className="ui-slider photo-slider">
+      <label className="ui-slider-label" htmlFor={id}>
+        Time
+      </label>
+      <span className="photo-time" style={{ '--photo-now': now } as CSSProperties}>
         <input
+          id={id}
           type="range"
           min={0}
           max={LOOK_STEPS - 1}
           step={1}
-          value={Math.round(shown * LOOK_STEPS) % LOOK_STEPS}
+          value={lookStep(shown)}
           onChange={(event) => photo.setLookTime(Number(event.target.value) / LOOK_STEPS)}
         />
-        <span className="ui-slider-value">{timeLabel(shown)}</span>
-      </label>
-      <button
-        type="button"
-        className="ui-button-large photo-now"
-        disabled={photo.lookTime === null}
-        onClick={() => photo.setLookTime(null)}
-      >
-        Now
-      </button>
+        <button
+          type="button"
+          className="photo-time-now"
+          aria-label={`Back to now, ${timeLabel(photo.clockTime)}`}
+          title="Now"
+          onClick={() => photo.setLookTime(null)}
+        />
+      </span>
+      <span className="ui-slider-value">{timeLabel(shown)}</span>
     </div>
   );
 }

@@ -67,11 +67,34 @@
   margin-right: auto;
 }
 
-.photo-bar .photo-now {
-  min-width: 0;
-  height: 28px;
-  padding: 0 var(--space-2);
-  font-size: var(--size-small);
+.photo-time {
+  position: relative;
+  display: grid;
+}
+
+/* Centred under where the knob's middle sits at that value, which travels the track
+   less a knob's width. The button is the hit target; the caret is drawn inside it. */
+.photo-time-now {
+  position: absolute;
+  top: 100%;
+  left: calc(var(--knob-size) / 2 + (100% - var(--knob-size)) * var(--photo-now));
+  width: 16px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  translate: -50% 0;
+}
+
+.photo-time-now::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  border: 5px solid transparent;
+  border-top-width: 0;
+  border-bottom: 6px solid var(--terracotta);
+  translate: -50% 0;
 }
 
 .photo-toggle:disabled,

@@ -86,7 +86,10 @@ describe('skyStateFor', () => {
     expect(skyStateFor(at(20, 30)).lampFactor).toBe(0);
     expect(skyStateFor(at(20, 30)).sunIntensity).toBeGreaterThan(1.5);
     expect(skyStateFor(at(21, 45)).sunIntensity).toBe(0);
-    expect(skyStateFor(at(21, 45)).ambientIntensity).toBeCloseTo(0.22, 2);
+    expect(skyStateFor(at(21, 45)).ambientIntensity).toBeCloseTo(
+      skyStateFor(at(0)).ambientIntensity,
+      2,
+    );
   });
 
   it('moves the sun without a jump where the day and the night meet', () => {

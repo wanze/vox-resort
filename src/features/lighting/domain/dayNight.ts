@@ -55,8 +55,10 @@ const ZENITH_TWILIGHT = 0x3d4f80;
 const ZENITH_DAY = 0x4f8fd0;
 const SUN_LOW = 0xffb066;
 const SUN_HIGH = 0xfff4e0;
-const AMBIENT_NIGHT = 0x2b3a5c;
+const AMBIENT_NIGHT = 0x34466c;
 const AMBIENT_DAY = 0xc3d9f5;
+const NIGHT_LIGHT = 0.75;
+const DAY_LIGHT = 1.17;
 
 export const SUNRISE_TIME = 6 / 24;
 
@@ -93,7 +95,7 @@ export function skyStateFor(time: number): SkyState {
     sunColor: mixColor(SUN_LOW, SUN_HIGH, smoothstep(0, 0.45, elevation)),
     sunIntensity: 2.6 * smoothstep(-0.03, 0.22, elevation),
     ambientColor: mixColor(AMBIENT_NIGHT, AMBIENT_DAY, day),
-    ambientIntensity: 0.22 + 0.95 * day,
+    ambientIntensity: NIGHT_LIGHT + (DAY_LIGHT - NIGHT_LIGHT) * day,
     skyColor: mixColor(mixColor(SKY_NIGHT, SKY_DAY, day), SKY_TWILIGHT, twilight),
     zenithColor: mixColor(mixColor(ZENITH_NIGHT, ZENITH_DAY, day), ZENITH_TWILIGHT, twilight),
     sunGlow: smoothstep(-0.1, 0, elevation),

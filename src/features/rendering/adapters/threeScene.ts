@@ -73,9 +73,9 @@ const MAX_NEAR = 4;
 const ISO_MIN_ZOOM = 0.2;
 const ISO_MAX_ZOOM = 60;
 
-// On top of the night's 0.22, a full flash lights the near scene about as a grey day does. A
-// PointLight would change every material's light set and cost every frame while it sat at zero.
-const FLASH_AMBIENT = 0.7;
+// Added to the hour's ambient rather than lit by a light of its own: a PointLight would change
+// every material's light set and cost every frame while it sat at zero.
+const FLASH_AMBIENT = 0.56;
 
 // Grows with the plot: at near 0.1 an integer depth buffer let the ground win over
 // the paving at the far side. Still needed with reversedDepthBuffer, because WebGL2

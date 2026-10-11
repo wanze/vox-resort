@@ -43,22 +43,19 @@ const whenOf = (ticks: number): string => {
 // A report is labelled with the day its period started on, and closed at the next check-in.
 const closedAt = (report: DayReport): number => (report.day + 1) * TICKS_PER_DAY + CHECK_IN_TICK;
 
-// Coloured as its toast was, so a message reads the same in the log as when it popped up.
 function Line({
   icon,
-  tone,
   when,
   says,
   action,
 }: {
   readonly icon: IconName;
-  readonly tone: ToastKind;
   readonly when: number;
   readonly says: string;
   readonly action: ReactNode;
 }) {
   return (
-    <li className="hud-problem" data-severity={tone}>
+    <li className="hud-problem">
       <span className="hud-problem-icon">
         <PixelIcon name={icon} />
       </span>
@@ -99,7 +96,6 @@ function NewsLine({
   return (
     <Line
       icon={adviceIcon(news.advice.kind)}
-      tone={news.severity}
       when={news.at}
       says={newsSays(news)}
       action={
@@ -126,7 +122,6 @@ function EventLine({
   return (
     <Line
       icon="programme"
-      tone="event"
       when={news.start}
       says={eventNewsLine(news)}
       action={
@@ -157,7 +152,6 @@ function DayLine({ report, ...props }: { readonly report: DayReport } & Messages
   return (
     <Line
       icon="report"
-      tone="day"
       when={closedAt(report)}
       says={daySummary(report, trendOn(props.history, report.day), props.mode)}
       action={

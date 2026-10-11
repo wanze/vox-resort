@@ -1,22 +1,123 @@
 .hud-bar {
+  --strip-gap: clamp(var(--space-2), 1.5vw, var(--space-4));
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: var(--z-bar);
-  height: var(--bar-h);
-  display: flex;
+  height: calc(var(--bar-h) + var(--safe-t));
+  display: grid;
+  /* The hub sits in the middle while both sides fit their half, and gives way to the wider one. */
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-rows: 100%;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3) 0;
+  gap: var(--strip-gap);
+  padding: var(--safe-t) calc(var(--space-3) + var(--safe-r)) 0 calc(var(--space-3) + var(--safe-l));
+  border-bottom: 1px solid var(--edge);
+  background-image: var(--slab);
+  box-shadow: var(--shadow-slab), var(--bevel);
+  pointer-events: auto;
 }
 
-.hud-dock {
-  margin-left: auto;
+.hud-bar-start,
+.hud-bar-end {
+  display: flex;
+  align-items: center;
+  gap: var(--strip-gap);
+}
+
+.hud-bar-end {
+  justify-content: flex-end;
+}
+
+/* One slab from edge to edge: a plate per group sat badly beside the hub, and on a phone left
+   slivers of scene between them. The groups part with a rule instead. */
+.hud-bar .ui-plate:not(.hud-dock, .hud-hub) {
+  flex: none;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.hud-bar .ui-plate:not(.hud-dock, .hud-hub) + .ui-plate:not(.hud-dock) {
+  padding-left: var(--strip-gap);
+  border-left: 2px dotted var(--edge-soft);
+}
+
+/* A tab of the bar hanging below it, open at the top so the slab runs on into it; its foot is the
+   windows' floor. */
+.hud-hub {
+  --play-size: calc(var(--control-h) + 8px);
+  align-self: start;
+  height: calc(var(--bar-h) + var(--hub-drop));
+  padding: var(--space-1);
+  border-top: 0;
+  border-radius: 0 0 12px 9px / 0 0 9px 12px;
+}
+
+.hud-hub-well {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 100%;
+  padding: 0 var(--space-3);
+}
+
+.hud-play {
+  flex: none;
+  width: var(--play-size);
+  height: var(--play-size);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.hud-speed-steps {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.hud-speed-step {
+  width: 4px;
+  height: 5px;
+  border-radius: 1px;
+  background: var(--sunken);
+  box-shadow: inset 0 0 0 1px var(--edge-soft);
+}
+
+.hud-speed-step:nth-child(2) {
+  height: 8px;
+}
+
+.hud-speed-step:nth-child(3) {
+  height: 11px;
+}
+
+.hud-speed-step:nth-child(4) {
+  height: 14px;
+}
+
+.hud-speed-step[data-lit] {
+  background: var(--terracotta);
+  box-shadow: inset 0 0 0 1px var(--terracotta-deep);
+}
+
+/* Off to the corner, so a night starting never widens the chip and refolds the strip. */
+.hud-speed-night {
+  position: absolute;
+  top: -7px;
+  right: -9px;
+  display: flex;
 }
 
 /* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
-.hud-status > * {
+.hud-status > *,
+.hud-hub-well > * {
   flex: none;
 }
 
@@ -49,11 +150,6 @@
   letter-spacing: 0.02em;
   color: var(--terracotta-deep);
   text-shadow: var(--emboss);
-}
-
-.hud-speed .ui-chip-label {
-  min-width: 6ch;
-  text-align: left;
 }
 
 .hud-menu-back {
@@ -152,27 +248,9 @@
   color: var(--text-figure);
 }
 
-@media (width <= 1510px) {
-  .hud-dock .hud-tool-label {
-    display: none;
-  }
-}
-
 /* The name goes first: the menu still opens on its icon, and the resort's name is on its gates. */
 @media (width <= 1650px) {
   .hud-wordmark {
-    display: none;
-  }
-}
-
-@media (width <= 1240px) {
-  .hud-speed .ui-chip-label {
-    display: none;
-  }
-}
-
-@media (width <= 1060px) {
-  .hud-status .hud-readout-label {
     display: none;
   }
 }
@@ -222,6 +300,23 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+/* A fold hides the four for the one most pressing, so the strip keeps a warning in less room. */
+.hud-demand-most {
+  display: none;
+}
+
+.hud-bar[data-fold~='demand'] .hud-demand-group {
+  display: none;
+}
+
+.hud-bar[data-fold~='demand'] .hud-demand-most {
+  display: flex;
+}
+
+.hud-bar[data-fold~='guests'] .hud-hub-guests {
+  display: none;
 }
 
 /* Bars run up and down, so the panel wants room for the grid's bar column to read as a scale. */

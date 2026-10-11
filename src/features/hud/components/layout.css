@@ -12,7 +12,6 @@
   display: contents;
 }
 
-/* A double tap on a control would otherwise zoom the page. */
 .hud button,
 .hud input,
 .hud select {
@@ -20,7 +19,6 @@
 }
 
 @media (pointer: coarse) {
-  /* iOS zooms into any field set smaller than 16 px as soon as it takes focus. */
   .hud input,
   .hud select {
     font-size: 16px;
@@ -41,35 +39,14 @@
   }
 }
 
-/* One slab from edge to edge, like the dock: a plate per group left slivers of scene between them,
-   which looked broken on a phone and cost it width. Packed from the left, with the gap growing a
-   little with the screen, so the groups do not drift apart on a wide tablet. */
 .app:not([data-layout='desk']) .hud-bar {
-  --strip-gap: clamp(var(--space-2), 1.5vw, var(--space-4));
   height: calc(var(--strip-h) + var(--safe-t));
   padding: var(--safe-t) calc(var(--space-2) + var(--safe-r)) 0 calc(var(--space-2) + var(--safe-l));
-  justify-content: flex-start;
-  gap: var(--strip-gap);
-  border-bottom: 1px solid var(--edge);
-  background-image: var(--slab);
-  box-shadow: var(--shadow-slab), var(--bevel);
-  pointer-events: auto;
 }
 
-.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock) {
-  flex: none;
+.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock, .hud-hub) {
   gap: var(--space-1);
   height: var(--strip-control-h);
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-}
-
-.app:not([data-layout='desk']) .hud-bar .ui-plate:not(.hud-dock) + .ui-plate:not(.hud-dock) {
-  padding-left: var(--strip-gap);
-  border-left: 2px dotted var(--edge-soft);
 }
 
 .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
@@ -77,7 +54,6 @@
   padding: 0 var(--space-3);
 }
 
-/* Taller to a finger than to the eye, within the strip; never wider, the chips sit 3px apart. */
 @media (pointer: coarse) {
   .app:not([data-layout='desk']) .hud-bar :is(.ui-chip, .hud-gates) {
     position: relative;
@@ -102,7 +78,6 @@
   font-size: var(--size-body);
 }
 
-/* Stacked, so the clock takes the width of its time rather than of the whole line. */
 .app:not([data-layout='desk']) .hud-bar .hud-time-clock {
   flex-direction: column;
   gap: 2px;
@@ -128,21 +103,29 @@
   display: none;
 }
 
-/* A third off the 12-pixel art: still whole device pixels at a phone's 3x, where 18 px would blur. */
 .app:not([data-layout='desk']) .hud-bar .hud-readout-row > .ui-pixel-icon {
   width: 16px;
   height: 16px;
 }
 
-/* The status keeps the right edge, so the strip's spare width is one gap rather than several. */
-.app:not([data-layout='desk']) .hud-bar .hud-status {
-  margin-left: auto;
+.app:not([data-layout='desk']) .hud-bar .hud-hub {
+  --play-size: 44px;
+  height: calc(var(--strip-h) + var(--hub-drop));
 }
 
-/* Laid out at its natural width for a moment while barFolds measures it; never painted so. */
+.app:not([data-layout='desk']) .hud-hub-well {
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+}
+
+.app:not([data-layout='desk']) .hud-hub .hud-speed > .ui-chip {
+  padding: 0 var(--space-2);
+}
+
 .app:not([data-layout='desk']) .hud-bar[data-measuring] {
   right: auto;
   width: max-content;
+  grid-template-columns: auto auto auto;
 }
 
 .hud-bar[data-fold~='highlight'] .hud-menu-highlight,
@@ -249,7 +232,6 @@
   animation-name: hud-sheet-in;
 }
 
-/* Collapsed to its tools while one is armed, so it hangs from the top instead of filling the side. */
 .app[data-layout='rail'] .ui-window[data-window][data-peek]:not([data-expanded]) {
   bottom: auto;
 }
@@ -262,22 +244,20 @@
 
 .app:not([data-layout='desk']) .hud-bar .ui-dropdown-panel {
   position: fixed;
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  top: calc(var(--strip-floor) + var(--space-2));
   right: calc(var(--space-2) + var(--safe-r));
   left: calc(var(--space-2) + var(--safe-l));
   min-width: 0;
-  max-height: calc(
-    100dvh - var(--strip-h) - var(--safe-t) - var(--dock-h) - var(--safe-b) - var(--space-4)
-  );
+  max-height: calc(100dvh - var(--strip-floor) - var(--dock-h) - var(--safe-b) - var(--space-4));
 }
 
 .app[data-layout='rail'] .hud-bar .ui-dropdown-panel {
   left: calc(var(--space-2) + var(--safe-l) + var(--rail-w));
-  max-height: calc(100dvh - var(--strip-h) - var(--safe-t) - var(--safe-b) - var(--space-4));
+  max-height: calc(100dvh - var(--strip-floor) - var(--safe-b) - var(--space-4));
 }
 
 .app:not([data-layout='desk']) .hud .hud-toasts {
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  top: calc(var(--strip-floor) + var(--space-2));
   right: calc(var(--space-2) + var(--safe-r));
   bottom: auto;
   left: calc(var(--space-2) + var(--safe-l));
@@ -292,13 +272,32 @@
   display: none;
 }
 
-/* A sheet covers the bottom: without anchors to sit on it, the bar goes under the strip instead. */
+.app[data-layout='desk'] .hud-bar {
+  grid-template-columns: auto auto auto;
+  width: max-content;
+  margin-inline: auto;
+  border: 1px solid var(--edge);
+  border-top: 0;
+  border-radius: 0 0 12px 9px / 0 0 9px 12px;
+}
+
+.app[data-layout='desk'] .hud-bar .hud-dock {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--space-3) + var(--safe-b));
+  translate: -50% 0;
+}
+
+.app[data-layout='desk'] :is(.hud-toasts, .hud-error, .hud-placement) {
+  bottom: calc(var(--dock-room) + var(--space-2));
+}
+
 .app[data-layout='bottom'] .hud-placement {
   bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
 }
 
 .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .hud-placement {
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  top: calc(var(--strip-floor) + var(--space-2));
   bottom: auto;
 }
 
@@ -319,18 +318,15 @@
   left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
 }
 
-/* A peeking sheet hangs from the top and leaves the bottom free, so only a full one moves the bar. */
 .app[data-layout='rail'] .hud:has(.ui-window[data-window]:not([data-peek])) .hud-placement {
   left: calc(50% + (var(--rail-w) + var(--safe-l) - var(--sheet-w) - var(--safe-r)) / 2);
 }
 
-/* Pinned under the strip, so the on-screen keyboard rising from below never covers the field. */
 .app:not([data-layout='desk']) .hud-command-layer {
-  padding: calc(var(--strip-h) + var(--safe-t) + var(--space-2))
-    calc(var(--space-2) + var(--safe-r)) var(--space-2) calc(var(--space-2) + var(--safe-l));
+  padding: calc(var(--strip-floor) + var(--space-2)) calc(var(--space-2) + var(--safe-r))
+    var(--space-2) calc(var(--space-2) + var(--safe-l));
 }
 
-/* Hidden, not unmounted: the render loop writes the signs, markers and pins into the HUD's nodes. */
 .app[data-photo] .hud {
   display: none;
 }

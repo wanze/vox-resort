@@ -172,8 +172,9 @@
   --radius-sm: 4px;
 
   --control-h: 32px;
-  --bar-h: 56px;
-  /* Plain pixels, not calc(): the window drag reads it back from script. */
+  --bar-h: 48px;
+  /* Plain pixels, not calc(): the window drag reads it back from script. The bar and the hub
+     hanging below it, so a window never opens over the clock. */
   --window-floor: 62px;
   --palette-w: 284px;
   --tile-min: 60px;
@@ -181,7 +182,12 @@
   /* Taller than the plates, so they float with a little of the map showing above and below. */
   --strip-h: 48px;
   --strip-control-h: 32px;
+  /* How far the clock hub hangs below the strip, and the line what hangs under the strip clears. */
+  --hub-drop: 14px;
+  --strip-floor: calc(var(--strip-h) + var(--safe-t) + var(--hub-drop));
   --dock-h: 56px;
+  /* The desk's floating dock and the gap under it, which whatever stands at the foot clears. */
+  --dock-room: calc(var(--control-h) + 12px + var(--space-3) + var(--safe-b));
   --rail-w: 56px;
   /* A share of the room between strip and dock, not a length: it multiplies that room. */
   --sheet-half: 0.55;
@@ -223,7 +229,7 @@
 @media (pointer: coarse) {
   :root {
     --control-h: 40px;
-    --bar-h: 64px;
+    --bar-h: 56px;
     --window-floor: 70px;
   }
 }

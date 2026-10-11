@@ -81,7 +81,7 @@
 
 .app:not([data-layout='desk']) .highlights-legend {
   position: fixed;
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  top: calc(var(--strip-floor) + var(--space-2));
   right: auto;
   left: calc(var(--space-2) + var(--safe-l));
 }
@@ -93,7 +93,7 @@
 /* Under the map's legend, which takes the middle of the same row on a narrow screen. */
 /* stylelint-disable-next-line selector-class-pattern -- the two legends share that row */
 .app:not([data-layout='desk']) .hud-bar:has(.overlays-legend) .highlights-legend {
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2) * 2 + 2.6em);
+  top: calc(var(--strip-floor) + var(--space-2) * 2 + 2.6em);
 }
 
 @media (width <= 1240px) {

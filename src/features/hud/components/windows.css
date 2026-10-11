@@ -1,7 +1,13 @@
 .ui-window[data-window='build'] {
   right: var(--space-3);
   width: var(--palette-w);
-  max-height: min(78vh, calc(100% - var(--window-top) - var(--space-3)));
+  max-height: min(78vh, calc(100% - var(--window-top) - var(--dock-room)));
+}
+
+/* Short of the dock floating at the foot of the screen, which would otherwise cover the window's
+   own buttons. */
+.app[data-layout='desk'] .ui-window[data-window]:not([data-window='build']) {
+  max-height: max(160px, calc(100% - var(--window-top) - var(--dock-room)));
 }
 
 .ui-window[data-window='inspect'],

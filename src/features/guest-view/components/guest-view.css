@@ -33,6 +33,10 @@
   margin-top: var(--space-2);
 }
 
+.app[data-layout='desk'] .guest-view-follow {
+  bottom: calc(var(--dock-room) + var(--space-2));
+}
+
 .app[data-layout='bottom'] .guest-view-follow {
   bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
 }
@@ -81,8 +85,8 @@
 
 /* On a window's sheet, as the placement bar is, or under the strip without anchors to sit on. */
 .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .guest-view-follow[data-sheet] {
-  inset: calc(var(--strip-h) + var(--safe-t) + var(--space-2)) calc(var(--space-2) + var(--safe-r))
-    auto calc(var(--space-2) + var(--safe-l));
+  inset: calc(var(--strip-floor) + var(--space-2)) calc(var(--space-2) + var(--safe-r)) auto
+    calc(var(--space-2) + var(--safe-l));
   border-radius: var(--radius-pebble);
 }
 

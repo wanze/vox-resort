@@ -36,7 +36,7 @@
 
 .app:not([data-layout='desk']) .overlays-legend {
   position: fixed;
-  top: calc(var(--strip-h) + var(--safe-t) + var(--space-2));
+  top: calc(var(--strip-floor) + var(--space-2));
   left: 50%;
   transform: translateX(-50%);
 }

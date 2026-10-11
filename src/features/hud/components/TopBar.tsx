@@ -1,13 +1,9 @@
 import type { RefCallback, RefObject } from 'react';
+import { ClockHub } from './ClockHub';
 import { DemandMeter } from './DemandMeter';
-import { HudReadout } from './HudReadout';
 import { MainMenu, type ShortcutToggle, type ViewToggles } from './MainMenu';
-import { OutOf } from '../../../shared/components/OutOf';
-import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { RatingControl } from './RatingControl';
-import { SpeedControl, type FastNights } from './SpeedControl';
-import { TimeOfDay } from './TimeOfDay';
-import { WeatherForecast } from './WeatherForecast';
+import type { FastNights } from './SpeedControl';
 import { WindowDock } from './WindowDock';
 import { OverlayControl } from '../../overlays/components/OverlayControl';
 import { HighlightControl } from '../../highlights/components/HighlightControl';
@@ -47,30 +43,6 @@ export interface TopBarProps {
   readonly forecast: readonly DayForecast[];
   readonly onPhoto: () => void;
   readonly debug: boolean;
-}
-
-function MoneyReadout({ ledger }: { readonly ledger: Ledger | null }) {
-  if (ledger?.mode !== 'tycoon') return null;
-  return (
-    <HudReadout
-      name="Money"
-      icon={<PixelIcon name="money" />}
-      value={ledger.balance.toLocaleString('en-US')}
-    />
-  );
-}
-
-function GuestsReadout({ status }: { readonly status: StatusView | null }) {
-  if (status === null) return null;
-  return (
-    <div>
-      <HudReadout
-        name="Guests"
-        icon={<PixelIcon name="guests" />}
-        value={<OutOf value={status.present} total={status.beds.total} unit="beds" />}
-      />
-    </div>
-  );
 }
 
 // Never handed to the menu as the gates are: between seasons it is the one thing to press.
@@ -154,85 +126,82 @@ export function TopBar(props: TopBarProps) {
     (open: boolean): void =>
       onMenuChange(open ? id : null);
 
+  const menuOf = (id: MenuId) => ({ open: menu === id, onOpenChange: opener(id) });
+
   return (
     <header ref={barElement} className="hud-bar">
-      <div className="ui-plate">
-        <MainMenu
-          open={menu === 'main'}
-          onOpenChange={opener('main')}
-          windows={windows}
-          saves={props.saves}
-          resortName={props.resort.name}
-          onFind={props.onFind}
-          clock={clock}
-          forecast={props.forecast}
-          sound={props.sound}
-          view={props.view}
-          shortcuts={props.shortcuts}
-          highlights={props.highlights}
-          overlay={overlay}
-          gates={{ open: resort.open, onOpenChange: resort.setOpen }}
-          season={season}
-          onPhoto={props.onPhoto}
-          debug={props.debug}
-        />
-      </div>
-
-      <div className="ui-plate">
-        <TimeOfDay
-          dayElement={props.dayElement}
-          timeElement={props.timeElement}
-          season={resort.season}
-        />
-        <SpeedControl
-          speed={clock.speed}
-          onSpeedChange={clock.setSpeed}
-          fastNights={props.fastNights}
-          open={menu === 'speed'}
-          onOpenChange={opener('speed')}
-          betweenSeasons={season !== null}
-        />
-        <WeatherForecast
-          weather={clock.weather}
-          forced={clock.forcedWeather}
-          forecast={props.forecast}
-          open={menu === 'weather'}
-          onOpenChange={opener('weather')}
-        />
-      </div>
-
-      {/* Highlight first: its legend hangs to the left, the map's to the right, so both fit. */}
-      <div className="ui-plate hud-maps-plate">
-        <HighlightControl
-          highlights={props.highlights}
-          open={menu === 'highlight'}
-          onOpenChange={opener('highlight')}
-          focusSearch={!props.compact}
-        />
-        <OverlayControl
-          kind={overlay.kind}
-          onKindChange={overlay.setOverlay}
-          open={menu === 'overlay'}
-          onOpenChange={opener('overlay')}
-        />
-      </div>
-
-      <div className="ui-plate hud-status">
-        <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
-        {status ? (
-          <RatingControl
-            rating={status.rating}
-            stepFree={status.stepFree}
-            trend={props.trend}
-            open={menu === 'rating'}
-            onOpenChange={opener('rating')}
+      <div className="hud-bar-start">
+        <div className="ui-plate">
+          <MainMenu
+            open={menu === 'main'}
+            onOpenChange={opener('main')}
+            windows={windows}
+            saves={props.saves}
+            resortName={props.resort.name}
+            onFind={props.onFind}
+            clock={clock}
+            forecast={props.forecast}
+            sound={props.sound}
+            view={props.view}
+            shortcuts={props.shortcuts}
+            highlights={props.highlights}
+            overlay={overlay}
+            gates={{ open: resort.open, onOpenChange: resort.setOpen }}
+            season={season}
+            onPhoto={props.onPhoto}
+            debug={props.debug}
           />
-        ) : null}
-        <GateControl action={season} resort={resort} />
-        <MoneyReadout ledger={ledger} />
-        <GuestsReadout status={status} />
+        </div>
+
+        {/* Highlight first: its legend hangs to the left, the map's to the right, so both fit. */}
+        <div className="ui-plate hud-maps-plate">
+          <HighlightControl
+            highlights={props.highlights}
+            open={menu === 'highlight'}
+            onOpenChange={opener('highlight')}
+            focusSearch={!props.compact}
+          />
+          <OverlayControl
+            kind={overlay.kind}
+            onKindChange={overlay.setOverlay}
+            open={menu === 'overlay'}
+            onOpenChange={opener('overlay')}
+          />
+        </div>
       </div>
 
+      <ClockHub
+        dayElement={props.dayElement}
+        timeElement={props.timeElement}
+        season={resort.season}
+        clock={clock}
+        fastNights={props.fastNights}
+        forecast={props.forecast}
+        ledger={ledger}
+        status={status}
+        betweenSeasons={season !== null}
+        short={props.compact}
+        speedMenu={menuOf('speed')}
+        weatherMenu={menuOf('weather')}
+      />
+
+      <div className="hud-bar-end">
+        <div className="ui-plate hud-status">
+          <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
+          {status ? (
+            <RatingControl
+              rating={status.rating}
+              stepFree={status.stepFree}
+              trend={props.trend}
+              open={menu === 'rating'}
+              onOpenChange={opener('rating')}
+            />
+          ) : null}
+          <GateControl action={season} resort={resort} />
+        </div>
+      </div>
+
+      {/* Fixed to an edge of the screen in every layout, so it takes no room in the bar. */}
       <WindowDock
         layout={windows.layout}
         onToggle={windows.toggle}

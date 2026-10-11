@@ -22,14 +22,56 @@ export interface SpeedControlProps {
   readonly betweenSeasons?: boolean;
 }
 
+const BETWEEN_SEASONS = 'The resort is between seasons';
+
+// Rising steps, one lit per speed above pause, so the chip reads like a meter at a glance.
+function SpeedSteps({ speed, night }: { readonly speed: SimSpeed; readonly night: boolean }) {
+  const lit = SIM_SPEEDS.indexOf(speed);
+  return (
+    <span className="hud-speed-steps">
+      {SIM_SPEEDS.slice(1).map((step, at) => (
+        <span key={step} className="hud-speed-step" data-lit={at < lit || undefined} />
+      ))}
+      {night ? (
+        <span className="hud-speed-night">
+          <PixelIcon name="moon" scale={1} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+export interface PlayButtonProps {
+  readonly speed: SimSpeed;
+  readonly onToggle: () => void;
+  readonly betweenSeasons: boolean;
+}
+
+// Shows what a press does, as a player's button does: play while paused, pause while running.
+export function PlayButton({ speed, onToggle, betweenSeasons }: PlayButtonProps) {
+  const paused = speed === 'paused';
+  const action = paused ? 'Resume' : 'Pause';
+  return (
+    <button
+      type="button"
+      className="ui-button hud-play"
+      disabled={betweenSeasons}
+      title={betweenSeasons ? BETWEEN_SEASONS : `${action} (${keyLabel('pause')})`}
+      aria-label={action}
+      onClick={onToggle}
+    >
+      <PixelIcon name={paused ? 'normal' : 'paused'} />
+    </button>
+  );
+}
+
 export function SpeedControl(props: SpeedControlProps) {
   const { speed, onSpeedChange, open, onOpenChange, fastNights } = props;
   if (props.betweenSeasons) {
     return (
       <div className="ui-dropdown hud-speed">
-        <button type="button" className="ui-chip" disabled title="The resort is between seasons">
-          <PixelIcon name={speed} />
-          <span className="ui-chip-label">{SPEED_LABELS[speed]}</span>
+        <button type="button" className="ui-chip" disabled title={BETWEEN_SEASONS}>
+          <SpeedSteps speed={speed} night={false} />
         </button>
       </div>
     );
@@ -40,13 +82,7 @@ export function SpeedControl(props: SpeedControlProps) {
       open={open}
       onOpenChange={onOpenChange}
       title={`Game speed: ${SPEED_LABELS[speed]}${fastNights.running ? ', fast night' : ''}`}
-      label={
-        <>
-          <PixelIcon name={speed} />
-          <span className="ui-chip-label">{SPEED_LABELS[speed]}</span>
-          {fastNights.running ? <PixelIcon name="moon" /> : null}
-        </>
-      }
+      label={<SpeedSteps speed={speed} night={fastNights.running} />}
     >
       {SIM_SPEEDS.map((option) => (
         <MenuOption

@@ -534,6 +534,8 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         onConfirm={props.onConfirm}
         onDismiss={props.onDismiss}
         onTurn={props.onTurn}
+        preview={props.preview}
+        onToolChange={props.onToolChange}
       />
       <Following {...props} />
       <ArmedChip

@@ -1,7 +1,15 @@
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import { buildCostOf } from '../../catalog/domain/prices';
-import { armedLand, armedObject, type BuildTool } from '../../build/domain/buildTool';
+import {
+  armedLand,
+  armedObject,
+  type BuildTool,
+  type StylePick,
+} from '../../build/domain/buildTool';
+import { styleStripFor } from '../../build/domain/stylePick';
 import type { LandView } from '../../land/domain/landRights';
+import type { PreviewLookup } from './BuildPalette';
+import { StyleStrip } from './StyleStrip';
 
 export interface PlacementBarProps {
   readonly pending: boolean;
@@ -10,6 +18,8 @@ export interface PlacementBarProps {
   readonly onConfirm: () => void;
   readonly onDismiss: () => void;
   readonly onTurn: (quarters: number) => void;
+  readonly preview: PreviewLookup;
+  readonly onToolChange: (tool: BuildTool) => void;
 }
 
 interface Asked {
@@ -51,29 +61,37 @@ export function PlacementBar(props: PlacementBarProps) {
   const asked = askedOf(props);
   if (!asked) return null;
   const { onConfirm, onDismiss, onTurn } = props;
+  // The sheet is put away once something is picked, so its style strip is out of reach here.
+  const styles = styleStripFor(props.tool);
+  const onStyle = (style: StylePick): void => {
+    if (styles) props.onToolChange({ kind: 'object', id: styles.family, style });
+  };
   return (
     <div
-      className="hud-placement ui-plate"
+      className="hud-placement hud-placement-ask ui-plate"
       role="group"
       aria-label={asked.question}
       aria-live="polite"
     >
-      <button
-        type="button"
-        className="ui-button-large ui-button-large--primary"
-        onClick={onConfirm}
-      >
-        {asked.verb}
-        <Price price={asked.price} />
-      </button>
-      {asked.turns ? (
-        <button type="button" className="ui-button-large" onClick={() => onTurn(1)}>
-          <span aria-hidden="true">⟳</span> Turn
+      {styles ? <StyleStrip strip={styles} preview={props.preview} onStyle={onStyle} /> : null}
+      <div className="hud-placement-actions">
+        <button
+          type="button"
+          className="ui-button-large ui-button-large--primary"
+          onClick={onConfirm}
+        >
+          {asked.verb}
+          <Price price={asked.price} />
         </button>
-      ) : null}
-      <button type="button" className="ui-button-large" onClick={onDismiss}>
-        <span aria-hidden="true">✕</span> Cancel
-      </button>
+        {asked.turns ? (
+          <button type="button" className="ui-button-large" onClick={() => onTurn(1)}>
+            <span aria-hidden="true">⟳</span> Turn
+          </button>
+        ) : null}
+        <button type="button" className="ui-button-large" onClick={onDismiss}>
+          <span aria-hidden="true">✕</span> Cancel
+        </button>
+      </div>
     </div>
   );
 }

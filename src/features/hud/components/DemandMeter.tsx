@@ -26,6 +26,9 @@ function titleOf(demand: Demand | null): string {
   return ['Demand', ...lines].join('\n');
 }
 
+const mostPressing = (demand: Demand | null): number =>
+  Math.max(...GROUPS.map((group) => pressureOf(demand, group)));
+
 // The bars are the chip, so the meter reads at a glance; the dropdown says what is behind them.
 export function DemandMeter({ status, open, onOpenChange }: DemandMeterProps) {
   const demand = status?.demand ?? null;
@@ -46,6 +49,10 @@ export function DemandMeter({ status, open, onOpenChange }: DemandMeterProps) {
               </span>
             </span>
           ))}
+          {/* Shown in place of the four once the strip folds the meter. */}
+          <span className="hud-demand-most">
+            <DemandBar pressure={mostPressing(demand)} />
+          </span>
         </span>
       }
     >

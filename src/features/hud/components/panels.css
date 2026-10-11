@@ -406,27 +406,23 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  white-space: normal;
+}
+
+/* Among a building's details, where a problem has to stand out from the facts around it. */
+.hud-problem--callout {
   padding: var(--space-1) var(--space-2);
   border-left: 3px solid var(--ochre);
   border-radius: var(--radius-sm);
   background: var(--stone-100);
-  white-space: normal;
 }
 
-.hud-problem[data-severity='urgent'] {
+.hud-problem--callout[data-severity='urgent'] {
   border-left-color: var(--ink-bad);
 }
 
-.hud-problem[data-severity='note'] {
+.hud-problem--callout[data-severity='note'] {
   border-left-color: var(--edge-soft);
-}
-
-.hud-problem[data-severity='day'] {
-  border-left-color: var(--ink-good);
-}
-
-.hud-problem[data-severity='event'] {
-  border-left-color: var(--terracotta);
 }
 
 .hud-problem-body {

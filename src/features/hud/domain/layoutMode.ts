@@ -11,3 +11,19 @@ export function layoutModeFor(width: number, height: number): LayoutMode {
 }
 
 export const isCompact = (mode: LayoutMode): boolean => mode !== 'desk';
+
+export interface ViewportSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+// A phone's keyboard shortens the viewport while a field has focus, which would read as a phone
+// held sideways and swap the layout under the field. Turning the phone still changes the width.
+export function steadySize(
+  settled: ViewportSize | null,
+  measured: ViewportSize,
+  typing: boolean,
+): ViewportSize {
+  if (typing && settled !== null && settled.width === measured.width) return settled;
+  return measured;
+}

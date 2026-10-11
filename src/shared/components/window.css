@@ -64,10 +64,15 @@
   padding: var(--space-1) var(--space-4) var(--space-4);
 }
 
-/* Under the inset and outside the scroll, so a window's buttons stay in reach. */
+/* Under the inset and outside the scroll, so a window's buttons stay in reach. The gap above
+   them is theirs: the body's bottom padding scrolls away with the content it ends. */
 .ui-window-actions {
   flex: none;
-  padding: 0 var(--space-4) var(--space-4);
+  padding: var(--space-4);
+}
+
+.ui-window-body:has(+ .ui-window-actions:not(:empty)) {
+  padding-bottom: 0;
 }
 
 .ui-window-actions:empty {

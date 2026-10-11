@@ -245,7 +245,7 @@ function Problems({
       {problems.map((advice) => (
         <li
           key={adviceKey(advice)}
-          className="hud-problem"
+          className="hud-problem hud-problem--callout"
           data-severity={severityOf(advice) ?? 'note'}
         >
           <span className="hud-problem-icon">

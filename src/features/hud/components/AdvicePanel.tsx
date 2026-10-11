@@ -21,18 +21,16 @@ const TIER_NAMES: { readonly [tier in AdviceTier]: string } = {
 
 function AdviceRow({
   advice,
-  tier,
   onShowOnPlot,
   hire,
 }: {
   readonly advice: Advice;
-  readonly tier: AdviceTier;
   readonly onShowOnPlot: AdvicePanelProps['onShowOnPlot'];
   readonly hire: AdvicePanelProps['hire'];
 }) {
   const { at } = advice;
   return (
-    <li className="hud-problem" data-severity={tier}>
+    <li className="hud-problem">
       <span className="hud-problem-icon">
         <PixelIcon name={adviceIcon(advice.kind)} />
       </span>
@@ -68,13 +66,7 @@ function AdviceGroup({
       <h3 className="hud-report-heading">{TIER_NAMES[group.tier]}</h3>
       <ul className="hud-problems">
         {group.advice.map((each) => (
-          <AdviceRow
-            key={adviceKey(each)}
-            advice={each}
-            tier={group.tier}
-            onShowOnPlot={onShowOnPlot}
-            hire={hire}
-          />
+          <AdviceRow key={adviceKey(each)} advice={each} onShowOnPlot={onShowOnPlot} hire={hire} />
         ))}
       </ul>
     </section>

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  installedBefore,
   startServiceWorker,
   type ServiceWorkerControls,
 } from '../features/pwa/adapters/serviceWorker';
@@ -15,11 +16,14 @@ export function useUpdate(
 ): (action: UpdateAction) => void {
   const worker = useRef<ServiceWorkerControls | null>(null);
   const checks = useRef({ found: false, lastCheckedAt: 0 });
+  // A first visit waits for the first frame: its worker downloads the whole build, and that must
+  // not compete with what draws the resort. Later visits are checked by the browser on arrival
+  // anyway, so the toast can be up while the voxels still load.
+  const [early] = useState(installedBefore);
+  const start = ready || early;
 
   useEffect(() => {
-    // Not before the first frame: a first visit's worker downloads the whole build, and that
-    // must not compete with what draws the resort.
-    if (!ready) return;
+    if (!start) return;
     // Registering is itself a check, so the hour runs from the registration.
     checks.current.lastCheckedAt = Date.now();
     const controls = startServiceWorker(() => {
@@ -45,7 +49,7 @@ export function useUpdate(
       globalThis.clearInterval(timer);
       document.removeEventListener('visibilitychange', check);
     };
-  }, [setUpdate, ready]);
+  }, [setUpdate, start]);
 
   return useCallback(
     (action: UpdateAction) => {

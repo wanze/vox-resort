@@ -399,7 +399,7 @@ const LINEUP_ROW = 420;
 const LINEUP_GAP = 14;
 
 const shifted = (from: VoxelModel, dx: number, dz: number): PaintedVoxel[] =>
-  dayVoxelsOf(from).map((voxel) => ({ ...voxel, x: voxel.x + dx, z: voxel.z + dz }));
+  dayVoxelsOf(from).map(({ x, y, z, color }) => ({ x: x + dx, y, z: z + dz, color }));
 
 function lineupOrigins(models: readonly VoxelModel[]): (readonly [number, number])[] {
   const origins: (readonly [number, number])[] = [];

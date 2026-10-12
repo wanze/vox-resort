@@ -6,10 +6,16 @@ import { MAX_SIGNS, signsShown } from '../domain/signs';
 import type { Anchor } from '../domain/staffPins';
 
 const projected = new Vector3();
+const viewed = new Vector3();
 
-// z beyond 1 is behind the camera, or past its far plane.
-const inViewport = (point: Vector3): boolean =>
-  point.z <= 1 && Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1;
+// Depth from view space, not projected z: with the reversed depth buffer a point behind the
+// perspective camera projects to z below 0, mirrored back into the frame.
+const inDepth = (camera: SceneHandle['camera'], point: Vector3): boolean => {
+  const depth = -viewed.copy(point).applyMatrix4(camera.matrixWorldInverse).z;
+  return depth >= camera.near && depth <= camera.far;
+};
+
+const inFrame = (point: Vector3): boolean => Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1;
 
 // Preallocated, and the same view handed to every frame: the overlay reads it in place. A NaN
 // anchor projects to NaN, which is never in the viewport, so its button stays hidden.
@@ -35,10 +41,12 @@ export function createMarkerSpots(capacity: number) {
     project(camera: SceneHandle['camera'], width: number, height: number): void {
       for (let index = 0; index < view.count; index++) {
         const at = index * 3;
-        projected.set(anchors[at]!, anchors[at + 1]!, anchors[at + 2]!).project(camera);
+        projected.set(anchors[at]!, anchors[at + 1]!, anchors[at + 2]!);
+        const ahead = inDepth(camera, projected);
+        projected.project(camera);
         view.spots[at] = ((projected.x + 1) / 2) * width;
         view.spots[at + 1] = ((1 - projected.y) / 2) * height;
-        view.spots[at + 2] = Number(inViewport(projected));
+        view.spots[at + 2] = Number(ahead && inFrame(projected));
       }
     },
   };

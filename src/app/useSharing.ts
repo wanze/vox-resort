@@ -5,6 +5,7 @@ import { formatLink, MAX_BODY_BYTES, parseLink } from '../features/sharing/domai
 import { sharedOf, type PostcardView } from '../features/sharing/domain/sharedResort';
 import type { Showcase } from './showcase';
 import type { IncomingShare } from '../features/sharing/components/incomingShare';
+import { track } from '../features/analytics/adapters/tracker';
 
 export interface IncomingLink {
   readonly share: IncomingShare | null;
@@ -66,6 +67,7 @@ async function linkOf(
   const postcard = view(mounted);
   const shared = sharedOf(mounted.snapshot());
   const compressed = await deflate(packShared(postcard ? { ...shared, view: postcard } : shared));
+  track({ name: 'share_created', source: postcard ? 'postcard' : 'link' });
   return formatLink(globalThis.location.origin + globalThis.location.pathname, compressed);
 }
 

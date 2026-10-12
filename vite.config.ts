@@ -6,11 +6,32 @@ import { debugAllowedBy } from './src/features/debug/domain/debugMode.ts';
 
 const SAND = '#dccdb1';
 
+// Set in CI only, so neither `pnpm dev`, a local build nor the bench reports a visit.
+const BEACON_TOKEN = process.env.CLOUDFLARE_BEACON_TOKEN;
+
 export default defineConfig({
   // Compiled in: without it the build has no Debug window at all (docs/debug.md).
   define: { VOX_DEBUG_ALLOWED: JSON.stringify(debugAllowedBy(process.env)) },
   plugins: [
     react(),
+    {
+      name: 'cloudflare-web-analytics',
+      apply: 'build',
+      transformIndexHtml: () =>
+        BEACON_TOKEN
+          ? [
+              {
+                tag: 'script',
+                attrs: {
+                  defer: true,
+                  src: 'https://static.cloudflareinsights.com/beacon.min.js',
+                  'data-cf-beacon': JSON.stringify({ token: BEACON_TOKEN }),
+                },
+                injectTo: 'body',
+              },
+            ]
+          : [],
+    },
     VitePWA({
       registerType: 'prompt',
       // Registered by useUpdate, so a reload can wait for the autosave.
@@ -79,7 +100,12 @@ export default defineConfig({
     exclude: ['@divinevoxel/vlox', '@amodx/math', '@amodx/binary', '@amodx/threads'],
   },
   test: {
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'voxel-gen/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'voxel-gen/**/*.test.ts',
+      'worker/**/*.test.ts',
+    ],
     environment: 'node',
     // The generator and sim tests run whole plots and days; 2-3 s here is 5 s+ on a CI runner.
     testTimeout: 30_000,

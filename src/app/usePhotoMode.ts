@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type RefObject } from 'react';
+import { track } from '../features/analytics/adapters/tracker';
 import type { Showcase } from './showcase';
 import { usePostcardLink } from './useSharing';
 import { CAMERA_FOV_DEGREES } from '../features/layout/domain/worldBounds';
@@ -79,7 +80,10 @@ function useShot(showcase: RefObject<Showcase | null>, parts: PhotoParts) {
     if (!mounted || busy) return;
     setBusy(true);
     develop(mounted, time)
-      .then(setShot, console.error)
+      .then((developed) => {
+        setShot(developed);
+        track({ name: 'photo_taken' });
+      }, console.error)
       .finally(() => setBusy(false));
   };
 

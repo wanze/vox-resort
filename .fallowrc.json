@@ -2,6 +2,7 @@
   "$schema": "./node_modules/fallow/schema.json",
   "entry": [
     "src/main.tsx",
+    "worker/index.ts",
     "src/app/compare.tsx",
     "src/app/soundBoard.tsx",
     "src/features/voxel-world/adapters/meshWorker.ts",
@@ -31,7 +32,8 @@
       { "name": "shared-domain", "patterns": ["src/shared/domain/**"] },
       { "name": "shared-components", "patterns": ["src/shared/components/**"] },
       { "name": "models", "patterns": ["voxel-gen/**"] },
-      { "name": "sounds", "patterns": ["sounds/**"] }
+      { "name": "sounds", "patterns": ["sounds/**"] },
+      { "name": "worker", "patterns": ["worker/**"] }
     ],
     "rules": [
       { "from": "domain", "allow": ["domain", "models", "sounds", "shared-domain"] },
@@ -56,7 +58,8 @@
       { "from": "shared-domain", "allow": ["shared-domain"] },
       { "from": "shared-components", "allow": ["shared-domain", "shared-components"] },
       { "from": "models", "allow": ["models"] },
-      { "from": "sounds", "allow": ["sounds"], "allowTypeOnly": ["domain"] }
+      { "from": "sounds", "allow": ["sounds"], "allowTypeOnly": ["domain"] },
+      { "from": "worker", "allow": ["domain"] }
     ],
     "coverage": {
       "requireAllFiles": true,

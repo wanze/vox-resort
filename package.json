@@ -13,7 +13,7 @@
     "sim:report": "vitest run --config scripts/simReport.config.ts",
     "fixture:refresh": "node scripts/reference-resort.ts",
     "models:facts": "node scripts/model-facts.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "lint": "oxlint && stylelint \"src/**/*.css\" && node scripts/check-comments.ts && node scripts/check-sounds.ts",
     "lint:fix": "oxlint --fix && stylelint \"src/**/*.css\" --fix",
     "fallow": "fallow",
@@ -38,6 +38,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "5.20260930.2",
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",

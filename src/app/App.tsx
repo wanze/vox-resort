@@ -29,6 +29,9 @@ import { useClickCues, useSound, useToastCues } from './useSound';
 import { useUpdate } from './useUpdate';
 import { useIncomingLink, useShareLink } from './useSharing';
 import { usePhotoMode } from './usePhotoMode';
+import { useAnalytics } from './useAnalytics';
+import { track } from '../features/analytics/adapters/tracker';
+import { startedOf, type GameSource } from '../features/analytics/domain/gameEvents';
 import { useDebug } from './useDebug';
 import { DEBUG_MODE } from './debugFlag';
 import { PhotoBar } from '../features/photo/components/PhotoBar';
@@ -121,14 +124,22 @@ function useWelcome(
   const [sharedFailed, setSharedFailed] = useState(false);
   const [loaded, setLoaded] = useState<readonly LoadingStep[]>([]);
   const adoptLoading = useCallback((step: LoadingStep) => setLoaded((done) => [...done, step]), []);
+  // Once the resort stands, so the event carries the plot the showcase settled on.
+  const play = useCallback(
+    (source: GameSource) => {
+      track(startedOf(source, hud.getSnapshot(), showcase.current?.params ?? null));
+      setPlaying(true);
+    },
+    [hud, showcase, setPlaying],
+  );
   const startGame = useCallback(
     (params: ResortParams, game: NewGame) =>
-      void start(params, game).then((built) => built && setPlaying(true)),
-    [start, setPlaying],
+      void start(params, game).then((built) => built && play('new')),
+    [start, play],
   );
   const loadGame = useCallback(
-    (id: string) => void load(id).then((running) => running && setPlaying(true)),
-    [load, setPlaying],
+    (id: string) => void load(id).then((running) => running && play('save')),
+    [load, play],
   );
   const openShared = useCallback(
     (shared: SharedResort) => {
@@ -139,10 +150,10 @@ function useWelcome(
           return;
         }
         dismissShared();
-        setPlaying(true);
+        play('shared');
       });
     },
-    [openResort, dismissShared, setPlaying],
+    [openResort, dismissShared, play],
   );
   return {
     resort,
@@ -173,6 +184,8 @@ function useGame(
   setUpdate: (phase: UpdatePhase | null) => void,
   failed: boolean,
 ) {
+  // Before the incoming link is read, which takes the fragment this looks at off the address.
+  useAnalytics(hud);
   const [playing, setPlaying] = useState(!OPENS_ON_WELCOME);
   const { adoptForced } = clock;
   const adoptParamsRef = useRef<(params: ResortParams) => void>(() => {});

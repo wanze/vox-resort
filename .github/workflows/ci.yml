@@ -85,6 +85,7 @@ jobs:
         run: pnpm build
         env:
           VOX_DEBUG: 'off'
+          CLOUDFLARE_BEACON_TOKEN: ${{ vars.CLOUDFLARE_BEACON_TOKEN }}
 
       # Uses the wrangler pinned in package.json.
       - name: Deploy

@@ -28,6 +28,7 @@ export interface SeaField {
   // `crowdDt` is the crowd's scaled time, which the hire boats keep.
   advance(dt: number, crowdDt: number): void;
   allowHire(fleet: number, boats: number): void;
+  roughen(level: number): void;
   dispose(): void;
 }
 
@@ -123,6 +124,9 @@ export function buildSeaField(options: SeaFieldOptions): SeaField {
     },
     allowHire(fleet, boats) {
       flotilla.hireAllowed[fleet] = boats;
+    },
+    roughen(level) {
+      flotilla.roughness = level;
     },
     dispose() {
       crew.dispose();

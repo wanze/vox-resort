@@ -142,6 +142,20 @@ export interface DropPose {
   readonly z: number;
 }
 
+// A pan slides the orbit target across the screen, so in the isometric view it sinks under the sea
+// or floats over it and takes the whole column with it. Clamped to one camera distance either way,
+// so a near-level look does not hang the rain at the horizon.
+export function rainCentre(eye: DropPose, target: DropPose, ground: number): DropPose {
+  const dy = target.y - eye.y;
+  if (dy >= 0) return target;
+  const along = clamp((ground - target.y) / dy, -1, 1);
+  return {
+    x: target.x + (target.x - eye.x) * along,
+    y: target.y + dy * along,
+    z: target.z + (target.z - eye.z) * along,
+  };
+}
+
 // Stateless: the fall is taken modulo the column height, so nothing respawns and
 // frame rate cannot drift it. Drift applies before the wrap to stay inside the box.
 export function dropAt(

@@ -18,6 +18,7 @@ import { refreshMoment } from './photoSteps';
 import { keepStaffHours } from './staffing';
 import { sendToTheSunrise } from './sunrise';
 import { endSeason, seasonDueToEnd } from './seasonSteps';
+import { batterTheShore } from './stormSteps';
 
 // The checkInDue arithmetic over an hour: twelve ticks in a frame must not step over one.
 const hourTurned = (from: number, to: number): boolean =>
@@ -88,6 +89,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
   if (hourTurned(clock.ticks - ticks + 1, clock.ticks)) {
     hearSurroundings(resort, clock.ticks);
     burnOnTheBeach(resort, clock);
+    batterTheShore(resort, clock);
     refreshKeen(resort, clock);
     refreshNightOut(resort, clock);
     markNightOwls(resort, clock);

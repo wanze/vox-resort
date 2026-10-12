@@ -169,6 +169,8 @@ export interface SceneOptions {
   readonly groundShade?: GroundShade;
   // The sea's slopes are multiplied by it; read, never rebuilt, like the ground's shade.
   readonly seaSwell?: Node<'float'>;
+  // 0 for a calm sea, 1 for a storm's: steeper swell, whitecaps and surf. Read like the swell.
+  readonly seaRough?: Node<'float'>;
   // Has to be requested when the renderer is built, not later.
   readonly trackTimestamp?: boolean;
   readonly forceWebGL?: boolean;
@@ -272,8 +274,9 @@ function createTerrainPalette(
   shade: GroundShade | undefined,
   skyAlong: SkyDome['along'],
   swell: Node<'float'> | undefined,
+  rough: Node<'float'> | undefined,
 ): TerrainPalette {
-  const sea = createSeaMaterial(lightVolume, skyAlong, swell);
+  const sea = createSeaMaterial(lightVolume, skyAlong, swell, rough);
   const river = createRiverMaterial(lightVolume);
   const flat = new Map(FLAT_TONES.map((tone) => [tone, landMaterial(tone, lightVolume, shade)]));
   return {
@@ -468,7 +471,13 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let terrain = options.terrain;
   let terrainFraming = framing;
   let terrainVolume = lightVolume;
-  let palette = createTerrainPalette(lightVolume, shade, dome.along, options.seaSwell);
+  let palette = createTerrainPalette(
+    lightVolume,
+    shade,
+    dome.along,
+    options.seaSwell,
+    options.seaRough,
+  );
   let coast = shore;
   const terrainRequest = (): TerrainRequest => ({
     terrain,
@@ -603,7 +612,13 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       terrainFraming = nextFraming;
       terrainVolume = nextVolume;
       coast = nextShore;
-      palette = createTerrainPalette(terrainVolume, shade, dome.along, options.seaSwell);
+      palette = createTerrainPalette(
+        terrainVolume,
+        shade,
+        dome.along,
+        options.seaSwell,
+        options.seaRough,
+      );
       palette.setSky(sky.getHex());
       built = nextSurfaces ?? terrainSurfacesFor(terrainRequest());
       surfaces = layTerrain(scene, palette, built);

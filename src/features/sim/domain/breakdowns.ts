@@ -39,6 +39,14 @@ export function wear(
   return true;
 }
 
+// Not worn out but knocked out, by a storm: false when it was down already, so its clock keeps.
+export function breakDown(breakdowns: Breakdowns, venue: number, now: number): boolean {
+  if (venue < 0 || venue >= breakdowns.venues || breakdowns.broken[venue] === 1) return false;
+  breakdowns.broken[venue] = 1;
+  breakdowns.since[venue] = now;
+  return true;
+}
+
 export function repair(breakdowns: Breakdowns, venue: number): void {
   if (venue < 0 || venue >= breakdowns.venues) return;
   breakdowns.broken[venue] = 0;

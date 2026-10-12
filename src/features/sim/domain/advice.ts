@@ -25,6 +25,7 @@ const KIND_ORDER = [
   // Above the lines a short roster causes, so the cause reads before its symptoms.
   'short-staffed',
   'broken',
+  'storm-damage',
   'dirty',
   'shabby',
   'unwatched',
@@ -94,6 +95,8 @@ export interface ResortFacts {
   readonly unwatched?: ReadonlySet<string>;
   // Key to ticks since it broke; absent means nothing is broken.
   readonly broken?: ReadonlyMap<string, number>;
+  // Venue and lodging keys a storm battered in the last day; absent means none.
+  readonly stormHits?: ReadonlySet<string>;
   // Guests here now with their health below full.
   readonly hurt?: number;
   // Hand-set roles below what the plot wants; absent means every role is on Auto or enough.
@@ -295,6 +298,25 @@ export function adviceBroken(facts: ResortFacts): readonly Advice[] {
         need: null,
       };
     });
+}
+
+// Every building, not the worst: a storm hits two at most, and each wants its own renovation.
+// Gone once it is put right, renovated as new or, where nothing ages, mended.
+export function adviceStormDamage(facts: ResortFacts): readonly Advice[] {
+  const hits = facts.stormHits;
+  if (!hits || hits.size === 0) return [];
+  const level = (key: string): number => facts.condition?.get(key) ?? 1;
+  return [...facts.venues, ...facts.lodgings]
+    .filter(({ key }) => hits.has(key) && (level(key) < 1 || facts.broken?.has(key) === true))
+    .map((building) => ({
+      kind: 'storm-damage' as const,
+      weight: 0.5,
+      subject: building.label,
+      key: building.key,
+      count: Math.round(level(building.key) * 100),
+      at: tileOf(building),
+      need: null,
+    }));
 }
 
 // Ten hurt at once is a plot with a problem, not bad luck.
@@ -595,6 +617,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceNotStepFree(facts),
     ...adviceShortStaffed(facts),
     ...adviceBroken(facts),
+    ...adviceStormDamage(facts),
     adviceDirty(facts),
     adviceShabby(facts),
     ...adviceUnwatched(facts),

@@ -180,8 +180,15 @@ import {
   type WeatherEffect,
 } from '../features/sim/domain/weather';
 import { openAt, openNow } from '../features/sim/domain/hours';
-import { createRaindrops, MAX_DROPS, rainfallFor } from '../features/weather/domain/rainfall';
+import {
+  createRaindrops,
+  MAX_DROPS,
+  rainCentre,
+  rainfallFor,
+} from '../features/weather/domain/rainfall';
 import { buildRainField, type RainField } from '../features/weather/adapters/rainField';
+import { createRoughSea } from '../features/weather/adapters/roughSea';
+import { recentStormHits } from '../features/resort-sim/domain/stormSteps';
 import {
   buildFireworksField,
   type FireworksField,
@@ -195,8 +202,8 @@ import {
   showSeed,
   tierIdOf,
 } from '../features/fireworks/domain/show';
-import type { RainView } from '../features/weather/domain/rainfall';
-import { pixelsPerVoxel } from '../features/rendering/domain/levelOfDetail';
+import type { DropPose, RainView } from '../features/weather/domain/rainfall';
+import { pixelsPerVoxel, type DetailView } from '../features/rendering/domain/levelOfDetail';
 import {
   adviceFor,
   refreshedWithin,
@@ -1825,6 +1832,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     condition: conditionAdvised(resort),
     unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
     broken: brokenOn(resort, now),
+    stormHits: new Set(recentStormHits(resort.stormHits, now).keys()),
     shortStaffed: shortOf(resort.hiring, resort.recommended),
     hurt: hurtCount(resort),
     depots: resort.depots.length,
@@ -2351,6 +2359,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // Kept for the showcase's lifetime, as the ownership mask is: every world and the ground read it.
   const autumn = createAutumnTint();
+  // Kept for the showcase's lifetime like the tint: the sea material reads it.
+  const roughSea = createRoughSea();
   const slot = createResortSlot({
     prepared: first,
     // Not called until a frame steps somebody, by which time the clock exists.
@@ -2388,6 +2398,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Tinted under the land marks, so the edge and the plots for sale keep their colours.
     groundShade: (color) => ownership.shade(autumn.tint(color)),
     seaSwell: autumn.swell,
+    seaRough: roughSea.level,
     // Wall-clock times cap at the refresh rate; the GPU's timers keep discriminating.
     trackTimestamp: timing,
     forceWebGL: bench?.forceWebGL ?? false,
@@ -2456,16 +2467,15 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Cached: drawingBufferSize() allocates a vector per call; the resize handler updates it.
   let buffer = handle.drawingBufferSize();
 
-  // Distance to the target, not the nearest thing in frame: that is the ground the rain falls on.
-  const rainView = (): RainView => {
-    const view = handle.detailView();
-    const target = handle.controls.target;
-    const distance = Math.hypot(view.x - target.x, view.y - target.y, view.z - target.z);
+  // Distance to the ground in the middle of the view, not the nearest thing in frame: that is the
+  // ground the rain falls on.
+  const rainView = (view: DetailView, centre: DropPose): RainView => {
+    const distance = Math.hypot(view.x - centre.x, view.y - centre.y, view.z - centre.z);
     return {
       voxelsPerPixel: 1 / pixelsPerVoxel(view.lens, distance),
       width: buffer.width,
       height: buffer.height,
-      rise: view.y - target.y,
+      rise: view.y - centre.y,
       distance,
     };
   };
@@ -2480,9 +2490,12 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // Its own function to keep the render loop's branching down, which fallow:audit measures.
   const advanceWeather = (elapsedSeconds: number): void => {
-    const target = handle.controls.target;
     const weather = drawnWeather();
-    rain.advance(elapsedSeconds, rainfallFor(weather, rainView()), target);
+    const view = handle.detailView();
+    const centre = rainCentre(view, handle.controls.target, SEA_LEVEL);
+    rain.advance(elapsedSeconds, rainfallFor(weather, rainView(view, centre)), centre);
+    roughSea.advance(elapsedSeconds, weather);
+    current().sea.roughen(roughSea.value);
     if (weather === lastWeather) return;
     lastWeather = weather;
     hud.publish({ weather });

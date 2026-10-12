@@ -4,10 +4,13 @@ import {
   attribute,
   cameraPosition,
   float,
+  max,
   mix,
   positionWorld,
   reflect,
+  sin,
   smoothstep,
+  time,
   vec3,
 } from 'three/tsl';
 import type { BakedLightVolume } from '../../lighting/adapters/bakedLightVolume';
@@ -28,6 +31,7 @@ const COLORS = {
   shallow: 0x2e9fb5,
   deep: 0x0e3f66,
   foam: 0xeaf6f7,
+  storm: 0x2c4a52,
 } as const;
 
 const SHALLOW_REACH = 26;
@@ -48,6 +52,20 @@ const WAVES: readonly Wave[] = [
 
 const FOAM_ROUGHNESS = 0.9;
 
+// A storm steepens the slopes rather than speeding the waves: a faster clock would jump every crest.
+const STORM_STEEPEN = 1.6;
+const STORM_GREY = 0.55;
+const STORM_SURGE = 1.4;
+
+// Lines of surf rolling in on the coast; spaced and paced in voxels, and only near the beach,
+// where a wave breaks.
+const BREAKER_SPACING = 22;
+const BREAKER_SPEED = 9;
+const SURF_REACH = 90;
+
+// Crests of the swell itself, so the white rides the waves out at sea.
+const WHITECAP = { from: 0.35, to: 0.7, share: 0.7 } as const;
+
 export type SeaMaterial = WaterMaterial;
 
 // The sea mirrors the whole sky, sunset and all; pools and rivers are small and seen from above,
@@ -56,29 +74,45 @@ export function createSeaMaterial(
   lightVolume: BakedLightVolume | null,
   skyAlong: (direction: Node<'vec3'>) => Node<'vec3'>,
   swell?: Node<'float'>,
+  rough?: Node<'float'>,
 ): SeaMaterial {
   const material = new MeshStandardNodeMaterial({ metalness: 0 });
   const edgeDistance = attribute<'float'>('shoreEdgeDistance', 'float');
   const coastDistance = attribute<'float'>('shoreCoastDistance', 'float');
 
   return waterMaterialOf(material, lightVolume, () => {
-    const { normal, height } = swellOf(WAVES, swell);
+    const storm = rough ?? float(0);
+    const steepen = storm.mul(STORM_STEEPEN).add(1);
+    const { normal, height } = swellOf(WAVES, swell ? swell.mul(steepen) : steepen);
     // A reflected ray that points down gets the horizon colour, by the dome's own rule.
     const sky = skyAlong(reflect(positionWorld.sub(cameraPosition).normalize(), normal));
 
     const depth = coastDistance.add(height.mul(SWELL_DRAG));
     const shallowT = smoothstep(0, SHALLOW_REACH, depth);
     const deepT = smoothstep(SHALLOW_REACH, DEEP_REACH, depth);
-    const water = mix(
+    const calm = mix(
       mix(vec3(...linearRgbOf(COLORS.sandbank)), vec3(...linearRgbOf(COLORS.shallow)), shallowT),
       vec3(...linearRgbOf(COLORS.deep)),
       deepT,
     );
+    const water = mix(calm, vec3(...linearRgbOf(COLORS.storm)), storm.mul(STORM_GREY));
 
     // Driven off the swell's height rather than a clock, so the water cannot rise while the foam retreats.
     const wash = height.mul(0.5).add(0.5);
-    const foamEdge = mix(float(FOAM_RETREAT), float(FOAM_REACH), wash);
-    const foam = smoothstep(foamEdge.mul(0.35), foamEdge, edgeDistance).oneMinus();
+    const foamEdge = mix(float(FOAM_RETREAT), storm.mul(STORM_SURGE).add(1).mul(FOAM_REACH), wash);
+    const shoreFoam = smoothstep(foamEdge.mul(0.35), foamEdge, edgeDistance).oneMinus();
+
+    const surf = (Math.PI * 2) / BREAKER_SPACING;
+    const crest = smoothstep(
+      0.75,
+      0.97,
+      sin(coastDistance.mul(surf).add(time.mul(BREAKER_SPEED * surf))),
+    );
+    const surfZone = smoothstep(SURF_REACH * 0.4, SURF_REACH, coastDistance).oneMinus();
+    // Broken up along its length by the swell, or every line would be a ruled stripe.
+    const breakers = crest.mul(surfZone).mul(smoothstep(-0.2, 0.5, height));
+    const caps = smoothstep(WHITECAP.from, WHITECAP.to, height).mul(WHITECAP.share);
+    const foam = max(shoreFoam, max(breakers, caps).mul(storm));
 
     // No sky in the foam: it is the one part of the sea that is not a mirror.
     const fresnel = skyFresnel(normal).mul(foam.oneMinus());

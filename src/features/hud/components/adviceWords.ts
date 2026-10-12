@@ -42,6 +42,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'short-staffed': ({ subject, count }) =>
     `The plot needs ${count} more ${isStaffRole(subject) ? roleWord(subject, count) : subject}`,
   broken: ({ subject }) => `${subject} has broken down`,
+  'storm-damage': ({ subject }) => `The storm battered ${subject}: renovate it`,
   dirty: ({ subject }) => `${subject} is getting dirty and nobody has got to it`,
   shabby: ({ subject }) => `${subject} has seen better days: renovate it`,
   unwatched: ({ subject }) => `Nobody is watching ${subject}`,
@@ -71,6 +72,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   'not-step-free': 'Access',
   'short-staffed': 'Staff',
   broken: 'Repairs',
+  'storm-damage': 'Storm',
   dirty: 'Upkeep',
   shabby: 'Upkeep',
   unwatched: 'Lifeguard',

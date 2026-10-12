@@ -172,6 +172,7 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   'not-step-free': null,
   'short-staffed': ['warning', 0],
   broken: ['urgent', 0],
+  'storm-damage': ['warning', 0],
   dirty: ['warning', 0.4],
   shabby: ['warning', 0.4],
   unwatched: ['warning', 0.4],

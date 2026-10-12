@@ -42,6 +42,7 @@ export const MAX_WORKS = 12;
 // and a dozen of them would bury the rest.
 const ICONS: Partial<Record<AdviceKind, MarkerIcon>> = {
   broken: 'broken',
+  'storm-damage': 'shabby',
   unreachable: 'stranded',
   'not-step-free': 'wheelchair',
   'full-lines': 'queue',

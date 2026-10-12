@@ -346,6 +346,22 @@ describe('poseOf', () => {
     expect(poseOf(coarse, 0).y).toBeCloseTo(poseOf(fine, 0).y, 5);
   });
 
+  it('tosses harder in a rough sea, about the same waterline', () => {
+    const calm = bay();
+    const rough = bay();
+    rough.roughness = 1;
+    let calmest = 0;
+    let roughest = 0;
+    for (let tick = 0; tick < 80; tick++) {
+      stepFlotilla(calm, 0.1, GROUND);
+      stepFlotilla(rough, 0.1, GROUND);
+      calmest = Math.max(calmest, Math.abs(poseOf(calm, 0).roll));
+      roughest = Math.max(roughest, Math.abs(poseOf(rough, 0).roll));
+      expect(Math.abs(poseOf(rough, 0).y - WATERLINE)).toBeLessThan(1.5);
+    }
+    expect(roughest).toBeGreaterThan(calmest * 2);
+  });
+
   it('points a craft the way it is heading', () => {
     const flotilla = bay(1);
     run(flotilla, 12);

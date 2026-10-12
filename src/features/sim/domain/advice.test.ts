@@ -10,6 +10,7 @@ import {
   adviceShortStaffed,
   adviceDirty,
   adviceShabby,
+  adviceStormDamage,
   adviceLittered,
   adviceNoDepot,
   adviceNoEvents,
@@ -696,6 +697,30 @@ describe('breakdowns and injuries', () => {
     expect(advice[0]).toMatchObject({ kind: 'broken', count: 240, at: { tileX: 4, tileZ: 6 } });
     expect(advice[0]!.weight).toBeGreaterThan(advice[1]!.weight);
     expect(adviceFor(facts).filter((each) => each.kind === 'broken')).toHaveLength(2);
+  });
+
+  it('names each building the storm battered until it is put right', () => {
+    const bar = venueOf({ key: 'beach-bar#0', label: 'Beach Bar', x: 64, z: 96 });
+    const hut = venueOf({ key: 'surf-hut#0', label: 'Surf Hut', x: 16, z: 16 });
+    const facts = healthyFacts({
+      venues: [...healthyFacts().venues, bar, hut],
+      stormHits: new Set(['beach-bar#0', 'surf-hut#0']),
+      condition: new Map([
+        ['beach-bar#0', 0.62],
+        ['surf-hut#0', 1],
+      ]),
+    });
+    const advice = adviceStormDamage(facts);
+    expect(advice).toEqual([
+      expect.objectContaining({ kind: 'storm-damage', subject: 'Beach Bar', count: 62 }),
+    ]);
+    expect(adviceFor(facts).some((each) => each.kind === 'storm-damage')).toBe(true);
+    const mended = { ...facts, broken: new Map([['surf-hut#0', 30]]) };
+    expect(adviceStormDamage(mended).map((each) => each.subject)).toEqual([
+      'Beach Bar',
+      'Surf Hut',
+    ]);
+    expect(adviceStormDamage(healthyFacts())).toEqual([]);
   });
 
   it('counts the guests who have been hurt', () => {

@@ -91,6 +91,10 @@ const ROLL_RATE = 0.83;
 const PITCH_RADIANS = 0.045;
 const PITCH_RATE = 1.37;
 
+// At a storm's roughness; a calm sea keeps the amplitudes above.
+const STORM_HEAVE = 2.5;
+const STORM_HEEL = 3;
+
 export interface FlotillaOptions {
   readonly moorings: readonly Mooring[];
   readonly buoyVariant: number;
@@ -155,6 +159,8 @@ export interface Flotilla {
   readonly hireStep: number;
   readonly hireSteps: number;
   clock: number;
+  // 0 for a calm sea, 1 for a storm's; set from outside, as the weather is not the sea's.
+  roughness: number;
 }
 
 export interface AfloatPose {
@@ -309,6 +315,7 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     hireStep,
     hireSteps: Math.min(MOST_HIRE_STEPS, Math.ceil((MAX_HIRE_STEPS * HIRE_STEP) / hireStep)),
     clock: 0,
+    roughness: 0,
   };
 
   const helm = (index: number): void => {
@@ -933,12 +940,14 @@ function outOfIsland(island: PierBox, reach: number): void {
 export function poseOf(flotilla: Flotilla, index: number): AfloatPose {
   const ride = flotilla.ride[index]!;
   const clock = flotilla.clock;
+  const heave = 1 + (STORM_HEAVE - 1) * flotilla.roughness;
+  const heel = 1 + (STORM_HEEL - 1) * flotilla.roughness;
   return {
     x: flotilla.x[index]!,
-    y: flotilla.waterline + Math.sin(clock * HEAVE_RATE + ride) * HEAVE_VOXELS,
+    y: flotilla.waterline + Math.sin(clock * HEAVE_RATE + ride) * HEAVE_VOXELS * heave,
     z: flotilla.z[index]!,
     heading: flotilla.heading[index]!,
-    roll: Math.sin(clock * ROLL_RATE + ride) * ROLL_RADIANS,
-    pitch: Math.sin(clock * PITCH_RATE + ride) * PITCH_RADIANS,
+    roll: Math.sin(clock * ROLL_RATE + ride) * ROLL_RADIANS * heel,
+    pitch: Math.sin(clock * PITCH_RATE + ride) * PITCH_RADIANS * heel,
   };
 }

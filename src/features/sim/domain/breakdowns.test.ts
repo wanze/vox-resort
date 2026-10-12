@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  breakDown,
   brokenFirst,
   carryBreakdowns,
   createBreakdowns,
@@ -55,6 +56,19 @@ describe('wear', () => {
     }
     expect(isBroken(breakdowns, 1)).toBe(true);
     expect(breakdowns.since[1]).toBe(brokeAt);
+    expect(isBroken(breakdowns, 0)).toBe(false);
+  });
+});
+
+describe('breakDown', () => {
+  it('knocks a sound venue out, and leaves one already down on its own clock', () => {
+    const breakdowns = createBreakdowns(2);
+    expect(breakDown(breakdowns, 1, 300)).toBe(true);
+    expect(isBroken(breakdowns, 1)).toBe(true);
+    expect(breakdowns.since[1]).toBe(300);
+    expect(breakDown(breakdowns, 1, 900)).toBe(false);
+    expect(breakdowns.since[1]).toBe(300);
+    expect(breakDown(breakdowns, 7, 900)).toBe(false);
     expect(isBroken(breakdowns, 0)).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import {
   isWet,
   MAX_DROPS,
   nearestTo,
+  rainCentre,
   rainfallFor,
   type DropPose,
   type RainView,
@@ -201,5 +202,36 @@ describe('dropAt', () => {
     const lower = dropAt(drops, 0, 0.1, look, CENTRE);
     expect(lower.y).toBeLessThan(top.y);
     expect(Math.hypot(lower.x - top.x, lower.z - top.z)).toBeGreaterThan(0);
+  });
+});
+
+describe('rainCentre', () => {
+  const eye: DropPose = { x: 0, y: 100, z: 100 };
+
+  it('keeps a target that already sits on the ground', () => {
+    expect(rainCentre(eye, { x: 0, y: 0, z: 0 }, 0)).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  it('follows the view down to the ground from a target above it', () => {
+    const centre = rainCentre(eye, { x: 0, y: 50, z: 50 }, 0);
+    expect(centre.x).toBeCloseTo(0);
+    expect(centre.y).toBeCloseTo(0);
+    expect(centre.z).toBeCloseTo(0);
+  });
+
+  it('comes back up to the ground from a target panned under the sea', () => {
+    const centre = rainCentre(eye, { x: 0, y: -50, z: -50 }, 0);
+    expect(centre.y).toBeCloseTo(0);
+    expect(centre.z).toBeCloseTo(0);
+  });
+
+  it('slides no further than the camera is from its target', () => {
+    const centre = rainCentre({ x: 0, y: 10, z: 1000 }, { x: 0, y: 9, z: 0 }, 0);
+    expect(centre.z).toBeCloseTo(-1000);
+  });
+
+  it('leaves a level or upward look on its target', () => {
+    const target = { x: 5, y: 120, z: 0 };
+    expect(rainCentre(eye, target, 0)).toBe(target);
   });
 });

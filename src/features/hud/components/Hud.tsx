@@ -545,6 +545,8 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         paletteOpen={isOpen(props.windows.layout, 'build')}
         onOpen={() => props.windows.show('build', true)}
         onDisarm={() => props.onToolChange(null)}
+        preview={props.preview}
+        onToolChange={props.onToolChange}
       />
       <Toasts
         toasts={props.news.toasts}

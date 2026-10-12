@@ -1,5 +1,5 @@
-import type { StylePick } from '../../build/domain/buildTool';
-import { styleLetter, type StyleStrip as Strip } from '../../build/domain/stylePick';
+import type { BuildTool, StylePick } from '../../build/domain/buildTool';
+import { styleLetter, styleStripFor, type StyleStrip as Strip } from '../../build/domain/stylePick';
 import type { PreviewLookup } from './BuildPalette';
 import { TileArt } from './BuildTile';
 
@@ -57,4 +57,19 @@ export function StyleStrip({ strip, preview, onStyle }: StyleStripProps) {
       </kbd>
     </div>
   );
+}
+
+export interface ArmedStylesProps {
+  readonly tool: BuildTool | null;
+  readonly preview: PreviewLookup;
+  readonly onToolChange: (tool: BuildTool) => void;
+}
+
+// The sheet is put away once something is picked, so its strip is out of reach on a phone.
+export function ArmedStyles({ tool, preview, onToolChange }: ArmedStylesProps) {
+  const strip = styleStripFor(tool);
+  if (!strip) return null;
+  const onStyle = (style: StylePick): void =>
+    onToolChange({ kind: 'object', id: strip.family, style });
+  return <StyleStrip strip={strip} preview={preview} onStyle={onStyle} />;
 }

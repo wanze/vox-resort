@@ -1,15 +1,15 @@
-import { foldCount, foldsAt } from '../domain/barFolds';
+import { settleFolds, type BarFold } from '../domain/barFolds';
 
 // What grows with the resort. No fold changes their size, so watching them rather than the groups
 // the folds resize cannot set the observer looping.
 const FIGURES = '.hud-readout-value, .hud-time-clock';
 
-// Each count is laid out at the bar's natural width and the fold settled before the frame is
+// Each set of folds is laid out at the bar's natural width and settled before the frame is
 // painted, so an overflowing or half-folded bar never shows.
 export function watchBarFolds(bar: HTMLElement): () => void {
-  let folded = 0;
-  const naturalWidth = (count: number): number => {
-    bar.dataset['fold'] = foldsAt(count);
+  let folded: readonly BarFold[] = [];
+  const naturalWidth = (folds: readonly BarFold[]): number => {
+    bar.dataset['fold'] = folds.join(' ');
     return bar.getBoundingClientRect().width;
   };
   const refold = (): void => {
@@ -17,9 +17,9 @@ export function watchBarFolds(bar: HTMLElement): () => void {
     // Hidden in photo mode, with no room to judge by.
     if (room === 0) return;
     bar.toggleAttribute('data-measuring', true);
-    folded = foldCount(folded, (count) => room - naturalWidth(count));
+    folded = settleFolds(folded, (folds) => room - naturalWidth(folds));
     bar.toggleAttribute('data-measuring', false);
-    bar.dataset['fold'] = foldsAt(folded);
+    bar.dataset['fold'] = folded.join(' ');
   };
 
   const sizes = new ResizeObserver(refold);

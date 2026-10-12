@@ -60,7 +60,7 @@ export function PlayButton({ speed, onToggle, betweenSeasons }: PlayButtonProps)
       aria-label={action}
       onClick={onToggle}
     >
-      <PixelIcon name={paused ? 'normal' : 'paused'} />
+      <PixelIcon name={paused ? 'play' : 'paused'} />
     </button>
   );
 }

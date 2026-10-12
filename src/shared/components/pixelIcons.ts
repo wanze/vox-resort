@@ -140,6 +140,21 @@ export const ICONS = {
     '.Nkk..Nkk.',
     '..........',
   ],
+  // The speed list's arrow sits a pixel high and left in its square; the play button wants it
+  // centred, nudged right of the middle as a triangle's weight lies towards its flat side.
+  play: [
+    '..........',
+    '...N......',
+    '...NN.....',
+    '...NnN....',
+    '...NnnN...',
+    '...NnnnN..',
+    '...Nnnk...',
+    '...Nnk....',
+    '...Nk.....',
+    '...N......',
+    '..........',
+  ],
   slow: [
     '..........',
     '..........',

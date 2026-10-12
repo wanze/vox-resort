@@ -128,8 +128,10 @@
   grid-template-columns: auto auto auto;
 }
 
+/* The plate goes only with both its pickers: either can be given back the room on its own. */
 .hud-bar[data-fold~='highlight'] .hud-menu-highlight,
-.hud-bar[data-fold~='maps'] :is(.hud-menu-maps, .hud-maps-plate),
+.hud-bar[data-fold~='maps'] .hud-menu-maps,
+.hud-bar[data-fold~='highlight'][data-fold~='maps'] .hud-maps-plate,
 .hud-bar[data-fold~='weather'] .hud-menu-weather {
   display: contents;
 }
@@ -139,12 +141,20 @@
   display: none;
 }
 
+/* A phone gives the carets up before any fold: the maps hold on for the room they leave. */
+@media (width < 630px) {
+  .hud-bar .ui-chip-caret {
+    display: none;
+  }
+}
+
 .hud-bar[data-fold~='tight'] .hud-demand {
   gap: var(--space-1);
 }
 
-.hud-bar[data-fold~='tight'] .hud-demand-menu > .ui-chip {
-  padding: 0 var(--space-2);
+/* A lone bar is a thin mark, so the chip around it keeps a finger's width. */
+.hud-bar[data-fold~='demand'] .hud-demand-menu > .ui-chip {
+  padding: 0 var(--space-3);
 }
 
 .app:not([data-layout='desk']) .hud-bar .hud-dock {

@@ -2,8 +2,9 @@ import { isPaintable, layoutItemFor } from '../../build/domain/buildPlan';
 import { armedLand, armedObject, type BuildTool } from '../../build/domain/buildTool';
 import { objectTypeById } from '../../catalog/domain/objectTypes';
 import type { LandView } from '../../land/domain/landRights';
-import { armedLabel } from './BuildPalette';
+import { armedLabel, type PreviewLookup } from './BuildPalette';
 import { ObjectInfo } from './ObjectInfo';
+import { ArmedStyles } from './StyleStrip';
 
 export interface ArmedChipProps {
   readonly tool: BuildTool | null;
@@ -13,6 +14,8 @@ export interface ArmedChipProps {
   readonly paletteOpen: boolean;
   readonly onOpen: () => void;
   readonly onDisarm: () => void;
+  readonly preview: PreviewLookup;
+  readonly onToolChange: (tool: BuildTool) => void;
 }
 
 // What a tap does with the tool, for a finger that has no tooltip to read.
@@ -36,20 +39,23 @@ export function ArmedChip(props: ArmedChipProps) {
   const label = shown ? armedLabel(tool, land) : null;
   if (!label) return null;
   return (
-    <div className="hud-placement ui-plate">
-      <button type="button" className="ui-button-large hud-armed-open" onClick={onOpen}>
-        <span className="hud-armed-name">{label}</span>
-        <span className="hud-armed-hint">{hintOf(tool)}</span>
-      </button>
-      <ArmedInfo tool={tool} />
-      <button
-        type="button"
-        className="ui-button-large"
-        onClick={onDisarm}
-        aria-label={`Stop placing ${label}`}
-      >
-        <span aria-hidden="true">✕</span>
-      </button>
+    <div className="hud-placement hud-placement-ask ui-plate">
+      <ArmedStyles tool={tool} preview={props.preview} onToolChange={props.onToolChange} />
+      <div className="hud-placement-actions">
+        <button type="button" className="ui-button-large hud-armed-open" onClick={onOpen}>
+          <span className="hud-armed-name">{label}</span>
+          <span className="hud-armed-hint">{hintOf(tool)}</span>
+        </button>
+        <ArmedInfo tool={tool} />
+        <button
+          type="button"
+          className="ui-button-large"
+          onClick={onDisarm}
+          aria-label={`Stop placing ${label}`}
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
     </div>
   );
 }

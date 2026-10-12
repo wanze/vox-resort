@@ -72,16 +72,16 @@ function ownsParcel(rights: LandGrid, px: number, pz: number): boolean {
   return insideGrid(rights, px, pz) && rights.owned[pz * rights.parcelsX + px] === 1;
 }
 
-// Without rights even the apron past the plot is owned, so a generated resort builds and digs there
-// as it always has.
+// Without rights the whole plot is owned and nothing past it: a generated resort builds to the edge
+// it was grown to, and the apron there is scenery, out of the lighting and the guests' reach.
 export function ownsTile(
   rights: LandGrid | null,
   world: World,
   tileX: number,
   tileZ: number,
 ): boolean {
-  if (!rights) return true;
   if (tileX < 0 || tileZ < 0 || tileX >= world.tilesX || tileZ >= world.tilesZ) return false;
+  if (!rights) return true;
   const { px, pz } = parcelOf(tileX, tileZ);
   return ownsParcel(rights, px, pz);
 }

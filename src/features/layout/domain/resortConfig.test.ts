@@ -11,7 +11,7 @@ import {
 describe('clampConfig', () => {
   it('fills everything not asked for with the defaults', () => {
     expect(clampConfig()).toEqual(DEFAULT_CONFIG);
-    expect(clampConfig({ streetTrees: true })).toEqual({ ...DEFAULT_CONFIG, streetTrees: true });
+    expect(clampConfig({ beach: 'packed' })).toEqual({ ...DEFAULT_CONFIG, beach: 'packed' });
   });
 
   it('pulls the shares into range', () => {
@@ -26,17 +26,8 @@ describe('clampConfig', () => {
       housing: 'terraces',
       beach: 'crowded',
       parkShare: Number.NaN,
-      gatePlazas: 'yes',
     } as unknown as Partial<ResortConfig>;
     expect(clampConfig(asked)).toEqual(DEFAULT_CONFIG);
-  });
-});
-
-describe('variety', () => {
-  it('mixes the styles unless asked for the classic look, as a save from before it would be', () => {
-    expect(clampConfig().variety).toBe('mixed');
-    expect(clampConfig({ variety: 'classic' }).variety).toBe('classic');
-    expect(clampConfig({ variety: 'gaudy' as ResortConfig['variety'] }).variety).toBe('mixed');
   });
 });
 

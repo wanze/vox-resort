@@ -75,6 +75,14 @@ const BLOCKED_SECONDS = 1;
 
 const DEFAULT_RADIUS = 8;
 
+// One on the smallest bay and five on the widest: a dozen made any bay look like a harbour.
+const DRIFTING = { min: 1, max: 5, tilesEach: 48 } as const;
+
+export function driftingCraftFor(tilesX: number): number {
+  const craft = Math.round(tilesX / DRIFTING.tilesEach);
+  return Math.min(DRIFTING.max, Math.max(DRIFTING.min, craft));
+}
+
 // No rate is a multiple of another, so the swell never reads as a loop.
 const HEAVE_VOXELS = 0.4;
 const HEAVE_RATE = 1.1;
@@ -318,12 +326,13 @@ export function createFlotilla(options: FlotillaOptions): Flotilla {
     flotilla.ride[index] = random() * Math.PI * 2;
   }
 
+  const open = ground.drifting ?? ground;
   for (let boat = 0; boat < craft; boat++) {
     const index = moorings.length + boat;
     flotilla.variant[index] = craftVariants[Math.floor(random() * craftVariants.length)]!;
-    flotilla.x[index] = ground.westX + random() * (ground.eastX - ground.westX);
-    const landward = ground.landwardZ(flotilla.x[index]!);
-    flotilla.z[index] = landward + random() * Math.max(0, ground.seawardZ - landward);
+    flotilla.x[index] = open.westX + random() * (open.eastX - open.westX);
+    const landward = open.landwardZ(flotilla.x[index]!);
+    flotilla.z[index] = landward + random() * Math.max(0, open.seawardZ - landward);
     flotilla.heading[index] = wrapAngle(random() * Math.PI * 2);
     helm(index);
     launchClear(flotilla, index);
@@ -481,11 +490,7 @@ export function stepFlotilla(
   hireDt = dt,
 ): void {
   flotilla.clock += dt;
-  for (let index = 0; index < flotilla.count; index++) {
-    if (flotilla.speed[index] !== 0 && flotilla.hired[index] === 0) {
-      drift(flotilla, index, dt, ground);
-    }
-  }
+  driftUnhired(flotilla, dt, ground.drifting ?? ground);
   if (!(hireDt > 0)) return;
   const steps = Math.min(flotilla.hireSteps, Math.ceil(hireDt / flotilla.hireStep));
   const step = Math.min(flotilla.hireStep, hireDt / steps);
@@ -494,6 +499,14 @@ export function stepFlotilla(
       if (flotilla.hired[index] === 0 || flotilla.towedBy[index]! >= 0) continue;
       stepHire(flotilla, index, step, ground);
       if (flotilla.towedBy[index + 1] === index) towAlong(flotilla, index + 1, ground);
+    }
+  }
+}
+
+function driftUnhired(flotilla: Flotilla, dt: number, open: SailingGround): void {
+  for (let index = 0; index < flotilla.count; index++) {
+    if (flotilla.speed[index] !== 0 && flotilla.hired[index] === 0) {
+      drift(flotilla, index, dt, open);
     }
   }
 }

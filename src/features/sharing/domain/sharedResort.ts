@@ -39,7 +39,7 @@ export function sharedOf(game: GameSnapshot): SharedResort {
   };
 }
 
-// Capped as the new-game fields are, so a link cannot ask for a plot the game would never grow
+// Capped at the largest world the game makes, so a link cannot ask for a plot it would never grow
 // and whose tile grids alone would not fit in memory.
 const plotSide = z.number().int().positive().max(PLOT_TILES.max);
 const parcels = z.number().int().positive();

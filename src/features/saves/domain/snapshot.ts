@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { crowdPerBody, crowdSnapshotSchema } from '../../crowd/domain/crowdSnapshot';
 import { eventsSnapshotSchema } from '../../events/domain/eventsSnapshot';
 import { fitsWorld } from '../../land/domain/landRights';
-import { BEACH_PRESETS, HOUSING_STYLES, VARIETIES } from '../../layout/domain/resortConfig';
+import { BEACH_PRESETS, HOUSING_STYLES } from '../../layout/domain/resortConfig';
 import type { ResortParams } from '../../layout/domain/resortGenerator';
 import { COMPASS_DIRECTIONS } from '../../layout/domain/worldBounds';
 import { savedWorldSchema } from '../../resort-prep/domain/savedWorld';
@@ -35,9 +35,6 @@ export const paramsSchema = z.object({
       housing: z.enum(HOUSING_STYLES).exactOptional(),
       villaShare: z.number().exactOptional(),
       beach: z.enum(BEACH_PRESETS).exactOptional(),
-      streetTrees: z.boolean().exactOptional(),
-      gatePlazas: z.boolean().exactOptional(),
-      variety: z.enum(VARIETIES).exactOptional(),
     })
     .exactOptional(),
   land: z

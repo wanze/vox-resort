@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampLand, DEFAULT_LAND } from './landConfig';
+import { clampLand, DEFAULT_LAND, GROWN_LAND } from './landConfig';
 
 describe('clampLand', () => {
   it('fills in whatever was not asked for', () => {
@@ -9,5 +9,10 @@ describe('clampLand', () => {
 
   it('ignores a value that is not a flag, as a save from elsewhere might carry', () => {
     expect(clampLand({ river: 'yes' as unknown as boolean })).toEqual(DEFAULT_LAND);
+  });
+
+  it('fills in from the defaults it is given, as a grown resort does', () => {
+    expect(clampLand(undefined, GROWN_LAND)).toEqual(GROWN_LAND);
+    expect(clampLand({ hills: true }, GROWN_LAND)).toEqual({ ...GROWN_LAND, hills: true });
   });
 });

@@ -359,3 +359,9 @@
   width: min(100%, 420px);
   margin: auto;
 }
+
+.welcome-new-game-hint {
+  margin: 0;
+  font-size: var(--size-small);
+  color: var(--text-faint);
+}

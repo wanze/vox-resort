@@ -51,7 +51,6 @@ export interface ResortPlan {
   // A list of tiles rather than a spec: no line strung across the plot can say one tile is a lake.
   readonly terrain?: readonly TerrainEdit[];
   readonly parks?: readonly Plaza[];
-  readonly avenues?: { readonly tree: string; readonly streets: readonly Plaza[] };
   // One per district, so a street can be built in one style.
   readonly neighbourhoods?: readonly Plaza[];
   // A catalogue type the authored plan forgot is a mistake, so layoutResort reports it.

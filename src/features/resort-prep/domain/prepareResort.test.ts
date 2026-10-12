@@ -169,9 +169,7 @@ describe('styleOfFor', () => {
     );
   });
 
-  it('keeps the originals on a classic plot, the authored one and a cleared one', () => {
-    const classic = { ...PARAMS, config: { variety: 'classic' as const } };
-    expect(styledAcross({ kind: 'generate', params: classic })).toEqual(new Set(['bakery']));
+  it('keeps the originals on the authored plot and a cleared one', () => {
     expect(styledAcross({ kind: 'authored' })).toEqual(new Set(['bakery']));
     expect(styledAcross({ kind: 'clear', params: PARAMS })).toEqual(new Set(['bakery']));
   });
@@ -188,15 +186,9 @@ const laidInMosaic = (prepared: PreparedResort) =>
   prepared.plot.paths.filter((path) => mosaicOf(path.id) !== null);
 
 describe('mosaic on a generated plot', () => {
-  // Against the same styles laid plain, not a classic plot: a variant's door may sit elsewhere.
+  // Against the same styles laid plain, not the originals: a variant's door may sit elsewhere.
   it('dresses some of the paving in mosaic and paves the same tiles as the plot laid plain', () => {
-    const classic = prepareResort({
-      source: { kind: 'generate', params: { ...PARAMS, config: { variety: 'classic' } } },
-      repeat: 1,
-      view: null,
-    });
     expect(laidInMosaic(generated).length).toBeGreaterThan(0);
-    expect(laidInMosaic(classic)).toEqual([]);
     const plain = layoutResort(
       OBJECT_TYPES.map(layoutItemFor),
       generated.plan,

@@ -36,6 +36,7 @@ import {
   clampParams,
   emptyResortPlan,
   generateResort,
+  landscapeOffered,
   PLOT_DENSITY,
   PLOT_TILES,
   type GeneratorType,
@@ -83,7 +84,9 @@ const SWEEP: ResortParams[] = [
       seed: size + 1,
     }),
   ]),
-  ...[320, 480].map((size) => params({ tilesX: size, tilesZ: size, density: 1, seed: size })),
+  ...[200, PLOT_TILES.max].map((size) =>
+    params({ tilesX: size, tilesZ: size, density: 1, seed: size }),
+  ),
   ...[0.2, 0.4, 1].map((density) => params({ density, seed: 99 })),
 ];
 
@@ -260,21 +263,15 @@ describe('generateResort', () => {
 
 describe('the advanced settings', () => {
   const CONFIGS: ResortParams[] = [
-    params({ config: { gatePlazas: true, streetTrees: true } }),
     params({ seed: 4, config: { housing: 'mixed', villaShare: 0.3, beach: 'packed' } }),
     params({
       tilesX: 56,
       tilesZ: 56,
       seed: 56,
-      config: { parkShare: 0, beach: 'quiet', gatePlazas: true },
+      config: { parkShare: 0, beach: 'quiet' },
     }),
     params({ tilesX: 160, tilesZ: 160, seed: 7, config: { parkShare: 0.4, villaShare: 0 } }),
-    params({
-      tilesX: 320,
-      tilesZ: 240,
-      seed: 9,
-      config: { parkShare: 0.4, streetTrees: true, gatePlazas: true },
-    }),
+    params({ tilesX: 240, tilesZ: 200, seed: 9, config: { parkShare: 0.4 } }),
   ];
 
   it('keeps every rule the default sweep holds, whatever the settings', () => {
@@ -301,25 +298,8 @@ describe('the advanced settings', () => {
     expect(generateResort(TYPES, params({ config: {} }))).toEqual(generateResort(TYPES, params()));
   });
 
-  it('opens a square with a sign post inside every gate', () => {
-    const plan = planOf(CONFIGS[0]!);
-    expect(plan.plazas.length).toBeGreaterThanOrEqual(4);
-    expect(count(plan, 'sign-post')).toBeGreaterThanOrEqual(3);
-  });
-
-  it('lines the streets with trees instead of hedges', () => {
-    const plain = layoutResort(ITEMS, planOf(params()));
-    const lined = planOf(CONFIGS[0]!);
-    const { props } = layoutResort(ITEMS, lined);
-    const tree = lined.avenues!.tree;
-    expect(props.filter((prop) => prop.id === tree).length).toBeGreaterThan(20);
-    expect(props.filter((prop) => prop.id === HEDGE_ID).length).toBeLessThan(
-      plain.props.filter((prop) => prop.id === HEDGE_ID).length,
-    );
-  });
-
   it('lays out no parks at a park share of nothing', () => {
-    expect(planOf(CONFIGS[2]!).parks ?? []).toEqual([]);
+    expect(planOf(CONFIGS[1]!).parks ?? []).toEqual([]);
   });
 
   it('fills a packed beach fuller than a quiet one', () => {
@@ -329,7 +309,7 @@ describe('the advanced settings', () => {
   });
 
   it('grows parks across two districts on a large plot', () => {
-    const plan = planOf(CONFIGS[4]!);
+    const plan = planOf(CONFIGS[3]!);
     const widths = (plan.parks ?? []).map((park) => park.x1 - park.x0 + 1);
     expect(Math.max(...widths)).toBeGreaterThan(Math.min(...widths) * 1.8);
   });
@@ -586,7 +566,7 @@ describe('the shore a generated plot gets', () => {
 
   it('stands the volleyball courts and the pedalo rental in the numbers their models ask for', () => {
     const small = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.min)!);
-    const large = planOf(SWEEP.find((set) => set.tilesX === 320)!);
+    const large = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.max)!);
     expect(count(small, 'volleyball')).toBe(1);
     expect(count(large, 'volleyball')).toBe(3);
     for (const set of SWEEP) {
@@ -765,7 +745,7 @@ describe('the districts a generated plot lays out by design', () => {
   it('keeps the parks for plots with room to spare after the catalogue', () => {
     const small = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.min)!);
     expect(small.standsWholeCatalogue).toBe(true);
-    const large = planOf(SWEEP.find((set) => set.tilesX === 320)!);
+    const large = planOf(SWEEP.find((set) => set.tilesX === PLOT_TILES.max)!);
     expect((large.parks ?? []).length).toBeGreaterThan(5);
   });
 
@@ -1066,8 +1046,33 @@ describe('the hill a generated plot gets', () => {
         on: true,
       });
     }
-    // A railed climb stands two balustrades, one a flank.
-    expect(rails.length).toBeLessThan(paths.length / 6);
+    // A railed climb stands two balustrades, one a flank. The dune's front is railed on purpose.
+    const terrain = terrainFor(plan);
+    const offDune = rails.filter(
+      (rail) =>
+        terrain.surfaceOf(rail.tileX, rail.tileZ) !== 'sand' ||
+        terrain.levelOf(rail.tileX, rail.tileZ) !== 3,
+    );
+    expect(offDune.length).toBeLessThan(paths.length / 6);
+  });
+
+  it('paves the front of the dune, so a railing runs along the top of it', () => {
+    for (const set of SWEEP.filter((candidate) => candidate.tilesZ >= 100)) {
+      const plan = planOf(set);
+      const terrain = terrainFor(plan);
+      const { rails } = layoutResort(ITEMS, plan);
+      const columns = new Set(
+        rails
+          .filter(
+            (rail) =>
+              rail.id === RAILING_ID &&
+              terrain.surfaceOf(rail.tileX, rail.tileZ) === 'sand' &&
+              terrain.levelOf(rail.tileX, rail.tileZ) === 3,
+          )
+          .map((rail) => rail.tileX),
+      );
+      expect({ set, railed: columns.size > plan.tilesX * 0.6 }).toEqual({ set, railed: true });
+    }
   });
 
   it('ramps every path that comes down the dune to the beach', () => {
@@ -1107,12 +1112,137 @@ const withoutNeighbourhoods = (plan: ReturnType<typeof generateResort>) => {
   return rest;
 };
 
+const inPlot = (plan: ReturnType<typeof generateResort>) =>
+  (plan.terrain ?? []).filter(
+    (edit) =>
+      edit.tileX >= 0 && edit.tileZ >= 0 && edit.tileX < plan.tilesX && edit.tileZ < plan.tilesZ,
+  );
+
+describe('the landscape a grown resort asks for', () => {
+  const LANDS = [{ river: true }, { hills: true }, { island: true }];
+  const ALL = { river: true, hills: true, island: true };
+  const landed = (land: ResortParams['land'], size = 160, seed = 3) =>
+    planOf(params({ tilesX: size, tilesZ: size, seed, ...(land ? { land } : {}) }));
+  it('leaves the ground plain unless asked', () => {
+    const plain = landed(undefined);
+    expect(inPlot(plain).filter((edit) => edit.surface !== 'water')).toEqual([]);
+    expect(landed({ river: false, hills: false, island: false })).toEqual(plain);
+  });
+
+  it('runs a winding canal across the town, bridged by every street down the plot', () => {
+    const plan = landed({ river: true });
+    const terrain = terrainFor(plan);
+    // West of the plot nothing but the canal is water, so its course can be read there.
+    const course = Map.groupBy(
+      (plan.terrain ?? []).filter((edit) => edit.surface === 'water' && edit.tileX < 0),
+      (edit) => edit.tileX,
+    );
+    expect(course.size).toBeGreaterThan(plan.tilesX / 2);
+    for (const column of course.values()) expect(column).toHaveLength(2);
+    expect(new Set([...course.values()].map((column) => column[0]!.tileZ)).size).toBeGreaterThan(2);
+
+    const inland = (tileX: number, tileZ: number): boolean =>
+      terrain.surfaceOf(tileX, tileZ) === 'water' && !terrain.isSea(tileX, tileZ);
+    const { paths, rails } = layoutResort(ITEMS, plan);
+    const bridged = new Set(
+      paths.filter((tile) => inland(tile.tileX, tile.tileZ)).map((tile) => tile.tileX),
+    );
+    expect(bridged.size).toBeGreaterThanOrEqual(5);
+    expect(paths.some((tile) => tile.id === BRIDGE_ID || tile.id === BRIDGE_RAMP_ID)).toBe(true);
+    const quays = rails.filter(
+      (rail) => inland(rail.tileX, rail.tileZ - 1) || inland(rail.tileX, rail.tileZ + 1),
+    );
+    expect(quays.length).toBeGreaterThan(plan.tilesX);
+  });
+
+  it('raises the hills inside the blocks, never under a street', () => {
+    const plan = landed({ hills: true });
+    const hills = inPlot(plan).filter((edit) => edit.surface === 'grass');
+    expect(hills.length).toBeGreaterThan(100);
+    const streets = new Set(streetTiles(plan).map((tile) => tileKey(tile.x, tile.z)));
+    for (const hill of hills) expect(streets.has(tileKey(hill.tileX, hill.tileZ))).toBe(false);
+    const terrain = terrainFor(plan);
+    const wooded = plan.plots.filter(
+      (plot) =>
+        BY_ID.get(plot.id)!.category === 'grounds' && terrain.levelOf(plot.tileX, plot.tileZ) > 0,
+    );
+    expect(wooded.length).toBeGreaterThan(10);
+  });
+
+  it('raises an island out in the bay, with palms on it', () => {
+    const plan = landed({ island: true });
+    const terrain = terrainFor(plan);
+    const island = inPlot(plan).filter((edit) => terrain.isSea(edit.tileX, edit.tileZ));
+    expect(island.length).toBeGreaterThan(50);
+    const onIsland = plan.plots.filter((plot) => terrain.isSea(plot.tileX, plot.tileZ));
+    expect(onIsland.length).toBeGreaterThan(0);
+    for (const plot of onIsland) expect(['palm', 'olive', 'tikitorch']).toContain(plot.id);
+  });
+
+  it('stands the whole catalogue and lays out, with every landscape at every size', () => {
+    for (const land of [...LANDS, ALL]) {
+      for (const size of [PLOT_TILES.min, 80, 112, 200]) {
+        const plan = landed(land, size, size);
+        expect({ land, size, whole: plan.standsWholeCatalogue }).toEqual({
+          land,
+          size,
+          whole: true,
+        });
+        expect(() => layoutResort(ITEMS, plan)).not.toThrow();
+      }
+    }
+  }, 120_000);
+
+  it('offers each option only on a plot it fits, and ignores it below', () => {
+    expect(landscapeOffered(PLOT_TILES.min, PLOT_TILES.min)).toEqual({
+      river: false,
+      hills: false,
+      island: false,
+    });
+    expect(landscapeOffered(72, 48)).toEqual({ river: true, hills: true, island: false });
+    expect(landscapeOffered(72, 64)).toEqual({ river: true, hills: true, island: true });
+    expect(landed(ALL, PLOT_TILES.min, 2)).toEqual(landed(undefined, PLOT_TILES.min, 2));
+  });
+
+  it('delivers every option it offers, from the smallest plot it offers it on', () => {
+    for (const [tilesX, tilesZ] of [
+      [72, 48],
+      [72, 64],
+      [80, 80],
+      [128, 104],
+    ] as const) {
+      for (const land of [...LANDS, ALL]) {
+        const offered = landscapeOffered(tilesX, tilesZ);
+        for (const seed of [1, 2, 3]) {
+          const plan = planOf(params({ tilesX, tilesZ, seed, land }));
+          const terrain = terrainFor(plan);
+          const edits = plan.terrain ?? [];
+          const got = {
+            river: edits.some((edit) => edit.surface === 'water' && edit.tileX < 0),
+            hills: edits.some(
+              (edit) =>
+                edit.surface === 'grass' &&
+                edit.tileX >= 0 &&
+                !terrain.isSea(edit.tileX, edit.tileZ),
+            ),
+            island: edits.some((edit) => terrain.isSea(edit.tileX, edit.tileZ)),
+          };
+          for (const option of Object.keys(land) as (keyof typeof got)[]) {
+            const at = { tilesX, tilesZ, seed, land, option };
+            expect({ ...at, got: got[option] }).toEqual({ ...at, got: offered[option] });
+          }
+        }
+      }
+    }
+  }, 300_000);
+});
+
 describe('the neighbourhoods a generated plot names', () => {
   // Pinned before neighbourhoods existed: naming them must not move anything else on the plot.
   it('leaves the rest of the plan exactly as it was', () => {
     for (const [seed, hash] of [
-      [1, 2357220008],
-      [7, 3776812620],
+      [1, 2998261023],
+      [7, 3996902972],
     ] as const) {
       const plan = generateResort(TYPES, params({ seed }));
       expect(fnv1a(JSON.stringify(withoutNeighbourhoods(plan))), `seed ${seed}`).toBe(hash);

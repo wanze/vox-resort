@@ -19,8 +19,7 @@ import { lightsOf, occluderOf } from '../../catalog/domain/placementFacts';
 import { MOSAIC_STYLES } from '../../../../voxel-gen/mosaics/index.ts';
 import type { ModelHire } from '../../../../voxel-gen/voxelgen.ts';
 import { layMosaic } from '../../layout/domain/mosaic';
-import { ONE_OFF, styleMix } from '../../catalog/domain/styleMix';
-import { clampConfig } from '../../layout/domain/resortConfig';
+import { ONE_OFF, RESORT_WIDE, styleMix } from '../../catalog/domain/styleMix';
 import {
   emptyResortPlan,
   generateResort,
@@ -173,13 +172,12 @@ function benchStyleOf(styles: BenchStyles | undefined): StyleOf {
 export function styleOfFor(request: PrepRequest, plan: ResortPlan): StyleOf {
   const { source } = request;
   if (source.kind === 'authored') return benchStyleOf(request.styles);
-  if (source.kind !== 'generate' || clampConfig(source.params.config).variety === 'classic') {
-    return keepStyle;
-  }
+  if (source.kind !== 'generate') return keepStyle;
   return styleMix({
     seed: source.params.seed,
     neighbourhoods: plan.neighbourhoods ?? [],
     oneOff: ONE_OFF,
+    uniform: RESORT_WIDE,
   });
 }
 
@@ -194,16 +192,14 @@ const mosaicByCell = (tileX: number, tileZ: number): string => {
 type MosaicStyleAt = (tileX: number, tileZ: number) => string | null;
 
 // Asked of the layout, since a monument's square is known only once it stands. A generated plot
-// dresses its parks and monuments unless it is built classic; the authored one only for the bench.
+// dresses its parks and monuments; the authored one only for the bench.
 function mosaicFor(
   request: PrepRequest,
   plan: ResortPlan,
 ): ((layout: ResortLayout) => MosaicStyleAt) | null {
   const { source } = request;
   if (source.kind === 'authored') return request.mosaic ? () => mosaicByCell : null;
-  if (source.kind !== 'generate' || clampConfig(source.params.config).variety === 'classic') {
-    return null;
-  }
+  if (source.kind !== 'generate') return null;
   return (layout) => mosaicDressing(plan, layout.placements, source.params.seed);
 }
 

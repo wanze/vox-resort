@@ -31,7 +31,7 @@
 .ui-button:hover:not(:disabled),
 .ui-form-roll:hover:not(:disabled),
 .ui-button-secondary:hover:not(:disabled),
-.ui-form-choice:hover,
+.ui-form-choice:hover:not(:disabled),
 .ui-button-large:not(.ui-button-large--primary):hover {
   filter: brightness(1.05);
   color: var(--terracotta-deep);
@@ -194,4 +194,10 @@
 .ui-stepper-preset {
   height: var(--control-h);
   margin-left: var(--space-1);
+}
+
+.ui-form-choice:disabled {
+  color: var(--text-faint);
+  box-shadow: none;
+  cursor: not-allowed;
 }

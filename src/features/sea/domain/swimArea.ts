@@ -2,7 +2,10 @@ import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { TileSpan } from '../../land/domain/landRights';
 import { waterEdgeZ, waterStartZ, type Shore } from '../../layout/domain/shoreline';
 
-const SWIM_TILES = 3;
+export const SWIM_TILES = 5;
+
+// A shallow bay pulls the line in to the plot's last row rather than losing it, but never nearer.
+const SWIM_TILES_MIN = 3;
 
 const BUOY_TILES = 4;
 
@@ -18,6 +21,9 @@ const CORRIDOR_FLARE = 2;
 const LANDING_TILES = 1;
 
 const OFFING_TILES = 6;
+
+// Craft nobody hired keep well out past the buoys, so the bay reads as open sea and not a harbour.
+const OPEN_WATER = { pastBuoys: 6, offing: 14, band: 6 } as const;
 
 export interface Mooring {
   readonly x: number;
@@ -37,8 +43,19 @@ function offRental(rentals: readonly Rental[], x: number): number {
   return off;
 }
 
-function clearanceAt(rentals: readonly Rental[], x: number): number {
-  const open = SWIM_TILES + KEEP_CLEAR_TILES;
+// Unrounded, as the craft limit is a curve; the buoys take the same reach off the rounded edge.
+function swimReachAt(shore: Shore, tileX: number): number {
+  const reach = shore.tilesZ - 1 - waterEdgeZ(shore, tileX);
+  return Math.min(SWIM_TILES, Math.max(SWIM_TILES_MIN, reach));
+}
+
+function buoyRowAt(shore: Shore, tileX: number): number {
+  const water = waterStartZ(shore, tileX);
+  return water + Math.min(SWIM_TILES, Math.max(SWIM_TILES_MIN, shore.tilesZ - 1 - water));
+}
+
+function clearanceAt(shore: Shore, rentals: readonly Rental[], x: number): number {
+  const open = swimReachAt(shore, x / TILE_VOXELS) + KEEP_CLEAR_TILES;
   const off = offRental(rentals, x);
   if (off <= CORRIDOR_TILES) return LANDING_TILES;
   if (off >= CORRIDOR_TILES + CORRIDOR_FLARE) return open;
@@ -69,7 +86,7 @@ export function swimAreaMoorings(options: SwimAreaOptions): Mooring[] {
   const moorings: Mooring[] = [];
   const span = spanOf(options, shore);
   for (let tileX = firstBuoyFrom(span.from); tileX < span.to; tileX += BUOY_TILES) {
-    const tileZ = waterStartZ(shore, tileX) + SWIM_TILES;
+    const tileZ = buoyRowAt(shore, tileX);
     // The camera never frames past the plot's south edge, so a buoy there goes unseen.
     if (tileZ >= shore.tilesZ) continue;
     if (offRental(rentals, (tileX + 0.5) * TILE_VOXELS) <= CORRIDOR_TILES) continue;
@@ -90,10 +107,11 @@ export function swimmableAt(
   const span = spanOf(options, shore);
   if (x < span.from * TILE_VOXELS || x >= span.to * TILE_VOXELS) return null;
   if (offRental(options.rentals ?? [], x) < CORRIDOR_TILES + CORRIDOR_FLARE) return null;
-  const water = waterStartZ(shore, Math.floor(x / TILE_VOXELS));
+  const tileX = Math.floor(x / TILE_VOXELS);
+  const water = waterStartZ(shore, tileX);
   if (water >= shore.tilesZ) return null;
   // One tile short of the buoys, which are moored mid-tile.
-  return { fromZ: water * TILE_VOXELS, toZ: (water + SWIM_TILES - 0.5) * TILE_VOXELS };
+  return { fromZ: water * TILE_VOXELS, toZ: (buoyRowAt(shore, tileX) - 0.5) * TILE_VOXELS };
 }
 
 // The limit follows the coast as a curve: stepping a tile per column would turn boats
@@ -103,6 +121,8 @@ export interface SailingGround {
   readonly eastX: number;
   readonly seawardZ: number;
   landwardZ(x: number): number;
+  // Where craft nobody hired drift; left out, they share the hire boats' water.
+  readonly drifting?: SailingGround;
 }
 
 export function sailingGroundFor(shore: Shore, rentals: readonly Rental[] = []): SailingGround {
@@ -110,6 +130,24 @@ export function sailingGroundFor(shore: Shore, rentals: readonly Rental[] = []):
     westX: 0,
     eastX: shore.tilesX * TILE_VOXELS,
     seawardZ: (shore.tilesZ + OFFING_TILES) * TILE_VOXELS,
-    landwardZ: (x) => (waterEdgeZ(shore, x / TILE_VOXELS) + clearanceAt(rentals, x)) * TILE_VOXELS,
+    landwardZ: (x) =>
+      (waterEdgeZ(shore, x / TILE_VOXELS) + clearanceAt(shore, rentals, x)) * TILE_VOXELS,
+    drifting: openWaterFor(shore),
+  };
+}
+
+// Pushed further out where the coast comes furthest out, so the band never closes.
+function openWaterFor(shore: Shore): SailingGround {
+  const off = SWIM_TILES + OPEN_WATER.pastBuoys;
+  let furthest = -Infinity;
+  for (let tileX = 0; tileX <= shore.tilesX; tileX++) {
+    furthest = Math.max(furthest, waterEdgeZ(shore, tileX));
+  }
+  const seaward = Math.max(shore.tilesZ + OPEN_WATER.offing, furthest + off + OPEN_WATER.band);
+  return {
+    westX: 0,
+    eastX: shore.tilesX * TILE_VOXELS,
+    seawardZ: seaward * TILE_VOXELS,
+    landwardZ: (x) => (waterEdgeZ(shore, x / TILE_VOXELS) + off) * TILE_VOXELS,
   };
 }

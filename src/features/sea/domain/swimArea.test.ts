@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { shoreFor, waterStartZ, type Shore } from '../../layout/domain/shoreline';
-import { sailingGroundFor, swimAreaMoorings, swimmableAt, type Rental } from './swimArea';
+import {
+  sailingGroundFor,
+  swimAreaMoorings,
+  swimmableAt,
+  SWIM_TILES,
+  type Rental,
+} from './swimArea';
 
 const shore = (wave = 0): Shore =>
   shoreFor({ tilesX: 48, tilesZ: 40, shore: { inset: 8, beach: 10, wave, seed: 5 } })!;
@@ -28,7 +34,7 @@ describe('swimAreaMoorings', () => {
     const bay = shore();
     for (const mooring of swimAreaMoorings({ shore: bay })) {
       const tile = tileOf(mooring);
-      expect(tile.z - waterStartZ(bay, tile.x)).toBe(3);
+      expect(tile.z - waterStartZ(bay, tile.x)).toBe(SWIM_TILES);
     }
   });
 
@@ -56,6 +62,17 @@ describe('swimAreaMoorings', () => {
     );
     expect(owned).toEqual(whole.filter((column) => column >= 13 && column < 31));
     expect(owned.length).toBeGreaterThan(2);
+  });
+
+  it('pulls the line in on a bay too shallow for it, rather than losing it', () => {
+    const shallow = shoreFor({
+      tilesX: 20,
+      tilesZ: 20,
+      shore: { inset: 3, beach: 4, wave: 0, seed: 1 },
+    })!;
+    const moorings = swimAreaMoorings({ shore: shallow });
+    expect(moorings.length).toBeGreaterThan(3);
+    for (const mooring of moorings) expect(tileOf(mooring).z).toBe(19);
   });
 
   it('moors nothing past the southern edge of the plot', () => {
@@ -92,6 +109,19 @@ describe('sailingGroundFor', () => {
       Array.from({ length: 12 }, (_, tile) => ground.landwardZ(tile * 4 * TILE_VOXELS)),
     );
     expect(limits.size).toBeGreaterThan(1);
+  });
+});
+
+describe('the open water the drifting craft keep to', () => {
+  it('lies past the buoys and past the hire boats, all along a wandering coast', () => {
+    const bay = shore(3);
+    const ground = sailingGroundFor(bay);
+    const open = ground.drifting!;
+    for (const mooring of swimAreaMoorings({ shore: bay })) {
+      expect(open.landwardZ(mooring.x)).toBeGreaterThan(mooring.z + 4 * TILE_VOXELS);
+      expect(open.landwardZ(mooring.x)).toBeGreaterThan(ground.landwardZ(mooring.x));
+      expect(open.seawardZ - open.landwardZ(mooring.x)).toBeGreaterThanOrEqual(6 * TILE_VOXELS);
+    }
   });
 });
 

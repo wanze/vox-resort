@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WALK_SPEED } from '../../crowd/domain/crowd';
 import { WALK_VOXELS_PER_SIM_HOUR } from '../../sim/domain/crowdRate';
-import { createFlotilla, poseOf, stepFlotilla, type Flotilla } from './flotilla';
+import { createFlotilla, driftingCraftFor, poseOf, stepFlotilla, type Flotilla } from './flotilla';
 import type { PierBox } from './piers';
 import type { Mooring, Rental, SailingGround } from './swimArea';
 
@@ -189,6 +189,41 @@ describe('stepFlotilla', () => {
     const flotilla = bay(12);
     run(flotilla, 900);
     for (const heading of flotilla.heading) expect(Math.abs(heading)).toBeLessThanOrEqual(Math.PI);
+  });
+});
+
+describe('the craft nobody hired', () => {
+  const OPEN: SailingGround = {
+    westX: 0,
+    eastX: 400,
+    seawardZ: 900,
+    landwardZ: (x) => 720 + Math.sin(x / 90) * 24,
+  };
+  const ground: SailingGround = { ...GROUND, seawardZ: 900, drifting: OPEN };
+
+  it('keep to the open water past the hire boats, however long they drift', () => {
+    const out = createFlotilla({
+      moorings: MOORINGS,
+      buoyVariant: 0,
+      craft: 6,
+      craftVariants: [1, 2],
+      ground,
+      waterline: WATERLINE,
+      seed: 11,
+    });
+    for (let tick = 0; tick < 6000; tick++) stepFlotilla(out, 0.1, ground);
+    for (let index = MOORINGS.length; index < out.count; index++) {
+      const x = out.x[index]!;
+      expect(out.z[index]).toBeGreaterThanOrEqual(OPEN.landwardZ(x));
+      expect(out.z[index]).toBeLessThanOrEqual(OPEN.seawardZ);
+    }
+  });
+
+  it('number one on the smallest bay and five on the widest', () => {
+    expect(driftingCraftFor(48)).toBe(1);
+    expect(driftingCraftFor(112)).toBe(2);
+    expect(driftingCraftFor(240)).toBe(5);
+    expect(driftingCraftFor(256)).toBe(5);
   });
 });
 

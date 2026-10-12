@@ -94,10 +94,11 @@ describe('buyParcel', () => {
 });
 
 describe('ownsTile', () => {
-  it('owns everything without rights, the apron past the plot included', () => {
+  it('owns the whole plot without rights, and nothing past it', () => {
     expect(ownsTile(null, WORLD, 0, 63)).toBe(true);
-    expect(ownsTile(null, WORLD, 64, 0)).toBe(true);
-    expect(ownsTile(null, WORLD, -1, 0)).toBe(true);
+    expect(ownsTile(null, WORLD, 63, 0)).toBe(true);
+    expect(ownsTile(null, WORLD, 64, 0)).toBe(false);
+    expect(ownsTile(null, WORLD, -1, 0)).toBe(false);
   });
 
   it('owns nothing outside the world with rights', () => {

@@ -30,6 +30,8 @@ const parts = (seed = 4): HillParts => ({
 
 const SEEDS = [1, 2, 4, 9, 31];
 
+const open = (x: number, z: number): boolean => x >= 20 && x < 70 && z >= 50;
+
 describe('hillEditsFor', () => {
   it('is the same land for the same seed, and different land for another', () => {
     expect(hillEditsFor(parts())).toEqual(hillEditsFor(parts()));
@@ -78,6 +80,18 @@ describe('hillEditsFor', () => {
         expect(edit.tileZ).toBeGreaterThanOrEqual(3);
         expect(edit.tileX).toBeLessThan(TILES_X - 3);
         expect(edit.tileZ).toBeLessThan(TILES_Z - 3);
+      }
+    }
+  });
+
+  it('keeps three rows of level grass to anything it is not let onto', () => {
+    for (const seed of SEEDS) {
+      const edits = hillEditsFor({ ...parts(seed), open });
+      expect(edits.length).toBeGreaterThan(0);
+      for (const edit of edits) {
+        expect(edit.tileX).toBeGreaterThanOrEqual(23);
+        expect(edit.tileX).toBeLessThan(67);
+        expect(edit.tileZ).toBeGreaterThanOrEqual(53);
       }
     }
   });

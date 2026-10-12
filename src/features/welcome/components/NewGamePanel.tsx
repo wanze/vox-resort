@@ -1,11 +1,17 @@
 import { useState, type KeyboardEvent } from 'react';
 import {
   clampParams,
+  landscapeOffered,
   PLOT_DENSITY,
   PLOT_TILES,
   type ResortParams,
 } from '../../layout/domain/resortGenerator';
-import { clampLand, type LandConfig } from '../../layout/domain/landConfig';
+import {
+  clampLand,
+  DEFAULT_LAND,
+  GROWN_LAND,
+  type LandConfig,
+} from '../../layout/domain/landConfig';
 import type { GameMode } from '../../sim/domain/ledger';
 import type { SaveOutcome } from '../../saves/domain/saveSlots';
 import type { SaveMeta } from '../../saves/domain/snapshot';
@@ -14,9 +20,16 @@ import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { rovingTarget } from '../../../shared/domain/roving';
 import type { IconName } from '../../../shared/components/pixelIcons';
 import { ResortNameField, useDraftName } from '../../naming/components/ResortNameField';
-import { groundOf, nameFor, paramsFor, type Ground, type NewGame } from '../domain/newGame';
+import {
+  groundOf,
+  landscapeHintFor,
+  nameFor,
+  startParamsFor,
+  type Ground,
+  type LandDrafts,
+  type NewGame,
+} from '../domain/newGame';
 import { MODE_LABELS } from './modeNames';
-import { ResortAdvanced } from './ResortAdvanced';
 
 export interface NewGamePanelProps {
   readonly params: ResortParams;
@@ -151,35 +164,57 @@ const LAND_FLAGS: readonly { readonly flag: keyof LandConfig; readonly label: st
   { flag: 'island', label: 'Island' },
 ];
 
+// An option the plot is too small for keeps its choice, so it comes back when the plot grows.
 function LandFields(props: {
   readonly land: Partial<LandConfig> | undefined;
+  readonly defaults: LandConfig;
+  readonly offered: LandConfig;
+  readonly hint: string | null;
   readonly onChange: (land: LandConfig) => void;
 }) {
-  const current = clampLand(props.land);
+  const current = clampLand(props.land, props.defaults);
   return (
-    <div className="ui-form-row ui-form-row--choice" role="group" aria-label="Landscape">
-      <span>Landscape</span>
-      <div className="ui-form-choices">
-        {LAND_FLAGS.map(({ flag, label }) => (
-          <button
-            key={flag}
-            type="button"
-            className="ui-form-choice"
-            aria-pressed={current[flag]}
-            onClick={() => props.onChange({ ...current, [flag]: !current[flag] })}
-          >
-            {label}
-          </button>
-        ))}
+    <>
+      <div className="ui-form-row ui-form-row--choice" role="group" aria-label="Landscape">
+        <span>Landscape</span>
+        <div className="ui-form-choices">
+          {LAND_FLAGS.map(({ flag, label }) => (
+            <button
+              key={flag}
+              type="button"
+              className="ui-form-choice"
+              disabled={!props.offered[flag]}
+              aria-pressed={current[flag] && props.offered[flag]}
+              onClick={() => props.onChange({ ...current, [flag]: !current[flag] })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+      {props.hint ? <p className="welcome-new-game-hint">{props.hint}</p> : null}
+    </>
   );
+}
+
+const EVERY_OPTION: LandConfig = { river: true, hills: true, island: true };
+
+// Bare land is the fixed world, which has room for all of it.
+function landscapeFor(grown: boolean, draft: ResortParams) {
+  if (!grown) return { defaults: DEFAULT_LAND, offered: EVERY_OPTION, hint: null };
+  return {
+    defaults: GROWN_LAND,
+    offered: landscapeOffered(draft.tilesX, draft.tilesZ),
+    hint: landscapeHintFor(draft.tilesX, draft.tilesZ),
+  };
 }
 
 function PlotFields(props: {
   readonly draft: ResortParams;
   readonly grown: boolean;
+  readonly land: Partial<LandConfig> | undefined;
   readonly onChange: (patch: Partial<ResortParams>) => void;
+  readonly onLand: (land: LandConfig) => void;
 }) {
   const { draft, grown, onChange } = props;
   return (
@@ -232,11 +267,7 @@ function PlotFields(props: {
           <PixelIcon name="refresh" />
         </button>
       </div>
-      {grown ? (
-        <ResortAdvanced config={draft.config} onChange={(config) => onChange({ config })} />
-      ) : (
-        <LandFields land={draft.land} onChange={(land) => onChange({ land })} />
-      )}
+      <LandFields land={props.land} {...landscapeFor(grown, draft)} onChange={props.onLand} />
     </>
   );
 }
@@ -248,11 +279,12 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
   const [ground, setGround] = useState<Ground>('grown');
   const [name, setName] = useDraftName(draft.seed);
   const change = (patch: Partial<ResortParams>): void => setDraft({ ...draft, ...patch });
+  const [lands, setLands] = useState<LandDrafts>(() => (params.land ? { bare: params.land } : {}));
 
   const start = (game: Omit<NewGame, 'name'>) => (): void => {
     // Shown back clamped, so the panel does not claim a size nobody can build.
     setDraft(clampParams(draft));
-    onStart(clampParams(paramsFor(game, draft)), { ...game, name: nameFor(name, draft.seed) });
+    onStart(startParamsFor(game, draft, lands), { ...game, name: nameFor(name, draft.seed) });
   };
 
   return (
@@ -266,7 +298,9 @@ export function NewGamePanel({ params, onStart, busy, unsaved, onKeepUnsaved }: 
           <PlotFields
             draft={draft}
             grown={groundOf({ mode, ground }) === 'grown'}
+            land={lands[groundOf({ mode, ground })]}
             onChange={change}
+            onLand={(land) => setLands({ ...lands, [groundOf({ mode, ground })]: land })}
           />
           <button
             type="button"

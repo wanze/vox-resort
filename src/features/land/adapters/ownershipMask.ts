@@ -51,6 +51,9 @@ export interface OwnershipMask {
 
 const versionOf = (rights: VersionedGrid | null): number => rights?.version ?? -1;
 
+const drawnFor = (rights: LandGrid | null, bounded: boolean): number =>
+  Number(bounded || rights !== null);
+
 const isOwned = (code: FloatNode): FloatNode =>
   step(TILE_OWNED - 0.5, code).mul(step(code, TILE_OWNED + 0.5));
 
@@ -74,14 +77,15 @@ function maskTexture(data: Uint8Array, tilesX: number, tilesZ: number): DataText
 }
 
 // A 1×1 owned world until the first resort: the materials need a texture from the start.
-export function createOwnershipMask(): OwnershipMask {
+// `bounded` draws the edge of a plot with no rights too, so a generated resort shows where building
+// stops; a benchmark leaves it off, as its tiled copies of the plot lie past that edge.
+export function createOwnershipMask(bounded: boolean): OwnershipMask {
   let data = Uint8Array.of(TILE_OWNED);
   let current = maskTexture(data, 1, 1);
   let seenRights: LandGrid | null = null;
   let seenVersion = -1;
 
   const sizeNode = uniform(new Vector2(1, 1));
-  // Off without rights, so a plot that owns all of itself draws exactly as it did before land.
   const active = uniform(0);
   const forSale = uniform(0);
   const node = texture(current);
@@ -146,7 +150,7 @@ export function createOwnershipMask(): OwnershipMask {
       resize(world);
       tileMaskInto(rights, world, data);
       current.needsUpdate = true;
-      active.value = Number(rights !== null);
+      active.value = drawnFor(rights, bounded);
     },
     showForSale(on) {
       forSale.value = on ? 1 : 0;

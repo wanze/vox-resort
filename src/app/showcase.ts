@@ -318,7 +318,7 @@ import { buildBalloonField } from '../features/balloons/adapters/balloonField';
 import { createBalloons, type ReleaseSite } from '../features/balloons/domain/balloons';
 import type { SeaField } from '../features/sea/adapters/seaField';
 import { buildSeaField } from '../features/sea/adapters/seaField';
-import { createFlotilla } from '../features/sea/domain/flotilla';
+import { createFlotilla, driftingCraftFor } from '../features/sea/domain/flotilla';
 import { pierBoxesFor, type PierBox } from '../features/sea/domain/piers';
 import { islandBoxesFor } from '../features/sea/domain/islands';
 import { berthsOf, createPassengers } from '../features/sea/domain/passengers';
@@ -392,8 +392,6 @@ const LITTER_PIECES = 512;
 // Per kind of ball: courts playing at once beyond this go without one. Fixed, so an edit that
 // adds a court needs no new field.
 const BALLS_PER_KIND = 16;
-
-const CRAFT_COUNT = 12;
 
 const SEA_SEED = 3;
 
@@ -938,7 +936,7 @@ function seaFor(waters: SeaWaters, rentals: readonly RentalHut[]): SeaField {
   const flotilla = createFlotilla({
     moorings: waters.moorings,
     buoyVariant: BUOY_INDEX,
-    craft: waters.shore ? CRAFT_COUNT : 0,
+    craft: waters.shore ? driftingCraftFor(waters.shore.tilesX) : 0,
     craftVariants: driftingVariants(waters.sea),
     fleets,
     // Nobody is at the hut before the first recast, which sets the real allowance.
@@ -2326,7 +2324,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const current = slot.current;
 
   // Kept for the showcase's lifetime: the terrain materials read it, and a new one would recompile them.
-  const ownership = createOwnershipMask();
+  const ownership = createOwnershipMask(bench === null);
   ownership.update(current().rights, current().plan);
 
   const handle = await createScene({

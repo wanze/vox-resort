@@ -6,9 +6,9 @@ import { waterStartZ, type Shore } from './shoreline';
 import { AROUND, type TerrainEdit } from './terrain';
 import { tileKey } from './tileKey';
 
-// The buoys moor three rows out and boats keep two rows beyond them, so nine leaves a channel
+// The buoys moor five rows out and boats keep two rows beyond them, so eleven leaves a channel
 // a boat can pass through between the swimmers and the island.
-const COAST_CLEAR = 9;
+const COAST_CLEAR = 11;
 
 const OFFING = 2;
 

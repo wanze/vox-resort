@@ -6,6 +6,9 @@ import { familyOf, stylesOf } from './objectTypes';
 
 export const ONE_OFF = 0.1;
 
+// Rows of loungers or lamps that change style from one block to the next read as a mistake.
+export const RESORT_WIDE: ReadonlySet<string> = new Set(['sun-lounger', 'street-lamp']);
+
 // A render chunk, so a cell never splits a near-layer bucket between two styles.
 const CELL_SHIFT = 4;
 
@@ -14,6 +17,8 @@ export interface StyleMixOptions {
   readonly neighbourhoods: readonly Plaza[];
   // The chance one placement ignores its neighbourhood and rolls on its own; 1 scatters.
   readonly oneOff: number;
+  // Families built in one style across the whole plot.
+  readonly uniform?: ReadonlySet<string>;
 }
 
 // Hashed rather than drawn from a shared stream, so styling can never shift the generator's draws.
@@ -26,12 +31,13 @@ function regionOf(neighbourhoods: readonly Plaza[], tileX: number, tileZ: number
   return index >= 0 ? `n:${index}` : `c:${tileX >> CELL_SHIFT},${tileZ >> CELL_SHIFT}`;
 }
 
-export function styleMix({ seed, neighbourhoods, oneOff }: StyleMixOptions): StyleOf {
+export function styleMix({ seed, neighbourhoods, oneOff, uniform }: StyleMixOptions): StyleOf {
   return (id, tileX, tileZ) => {
     const family = familyOf(id);
     const styles = stylesOf(family);
     if (styles.length < 2) return id;
     const pick = (roll: number): string => styles[Math.floor(roll * styles.length)]!.id;
+    if (uniform?.has(family)) return pick(rollFor(`${seed}|${family}`));
     const here = `${seed}|${family}|${tileX},${tileZ}`;
     if (rollFor(here) < oneOff) return pick(rollFor(`${here}|own`));
     return pick(rollFor(`${seed}|${family}|${regionOf(neighbourhoods, tileX, tileZ)}`));

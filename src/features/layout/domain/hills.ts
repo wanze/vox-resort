@@ -30,6 +30,39 @@ export interface HillParts {
   readonly tilesX: number;
   readonly tilesZ: number;
   readonly seed: number;
+  // Where a hill may rise at all; a grown resort keeps them inside its blocks, off the streets.
+  readonly open?: (tileX: number, tileZ: number) => boolean;
+  // Rows of level ground kept round a hill, three when left out.
+  readonly clear?: number;
+  // One knoll filling each of these rather than knolls scattered at random, which on ground cut
+  // up by streets mostly land where there is no room.
+  readonly sites?: readonly Site[];
+}
+
+export interface Site {
+  readonly x0: number;
+  readonly x1: number;
+  readonly z0: number;
+  readonly z1: number;
+}
+
+// Two tiles a level: steeper than a scattered knoll's three, or a block would rise only one.
+const SITE_TILES_PER_LEVEL = 2;
+
+function siteKnollsFor(parts: HillParts, sites: readonly Site[]): Knoll[] {
+  const random = createRandom(parts.seed + HILLS_SALT);
+  return sites.map((site) => {
+    const rx = (site.x1 - site.x0 + 1) / 2;
+    const rz = (site.z1 - site.z0 + 1) / 2;
+    return {
+      x: site.x0 + rx,
+      z: site.z0 + rz,
+      rx,
+      rz,
+      rise: clamp(Math.floor(Math.min(rx, rz) / SITE_TILES_PER_LEVEL), 1, MAX_RISE),
+      phase: random() * Math.PI * 2,
+    };
+  });
 }
 
 interface Knoll {
@@ -137,22 +170,25 @@ function settle(grid: Int32Array, tilesX: number, tilesZ: number): void {
 
 // Level grass counts as open; sand, water and any step already there hold a hill back.
 function roomOf(parts: HillParts): Int32Array {
-  const { terrain, level, tilesX, tilesZ } = parts;
+  const { terrain, level, tilesX, tilesZ, open } = parts;
+  const clear = parts.clear ?? CLEAR;
   const room = new Int32Array(tilesX * tilesZ);
   const flat = (x: number, z: number): boolean =>
-    terrain.surfaceOf(x, z) === 'grass' && terrain.levelOf(x, z) === level;
+    terrain.surfaceOf(x, z) === 'grass' &&
+    terrain.levelOf(x, z) === level &&
+    (open?.(x, z) ?? true);
   for (let z = 0; z < tilesZ; z++) {
-    for (let x = 0; x < tilesX; x++) room[z * tilesX + x] = flat(x, z) ? PEAK.rise.max + CLEAR : 0;
+    for (let x = 0; x < tilesX; x++) room[z * tilesX + x] = flat(x, z) ? PEAK.rise.max + clear : 0;
   }
   settle(room, tilesX, tilesZ);
-  for (let cell = 0; cell < room.length; cell++) room[cell] = Math.max(0, room[cell]! - CLEAR);
+  for (let cell = 0; cell < room.length; cell++) room[cell] = Math.max(0, room[cell]! - clear);
   return room;
 }
 
 export function hillEditsFor(parts: HillParts): TerrainEdit[] {
   const { level, tilesX, tilesZ } = parts;
   const room = roomOf(parts);
-  const knolls = knollsFor(parts, room);
+  const knolls = parts.sites ? siteKnollsFor(parts, parts.sites) : knollsFor(parts, room);
   const rise = new Int32Array(tilesX * tilesZ);
   for (let z = 0; z < tilesZ; z++) {
     for (let x = 0; x < tilesX; x++) {

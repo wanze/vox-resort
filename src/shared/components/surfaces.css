@@ -33,7 +33,6 @@
   box-shadow: var(--shadow-slab), var(--bevel);
 }
 
-.ui-form-advanced > summary,
 .ui-stat dt,
 .ui-label {
   font: 400 var(--size-label) / 1.2 var(--font-label);

@@ -31,7 +31,6 @@ import {
   type Bend,
   type PathEdge,
   type PathNode,
-  type Plaza,
   type ResortPlan,
   type ResortPlot,
 } from './resortPlan';
@@ -547,36 +546,6 @@ export interface Decorations {
   readonly lamps: readonly Tile[];
   readonly benches: readonly TurnedTile[];
   readonly hedges: readonly Tile[];
-  readonly trees: readonly Tile[];
-}
-
-const AVENUE_PITCH = 3;
-
-// A tile beside two avenues is a corner, where a tree would stand in a junction's sight line.
-function avenueTrees(
-  ring: readonly Tile[],
-  streets: readonly Plaza[],
-  taken: ReadonlySet<string>,
-): Tile[] {
-  return ring.filter((tile) => {
-    if (taken.has(tileKey(tile.x, tile.z))) return false;
-    const side = avenueSide(tile, streets);
-    if (side === 'north-south') return tile.x % AVENUE_PITCH === 0;
-    return side === 'east-west' && tile.z % AVENUE_PITCH === 0;
-  });
-}
-
-function avenueSide(
-  tile: Tile,
-  streets: readonly Plaza[],
-): 'north-south' | 'east-west' | 'corner' | null {
-  const on = (x: number, z: number) =>
-    streets.some((rect) => x >= rect.x0 && x <= rect.x1 && z >= rect.z0 && z <= rect.z1);
-  const across = on(tile.x, tile.z - 1) || on(tile.x, tile.z + 1);
-  const along = on(tile.x - 1, tile.z) || on(tile.x + 1, tile.z);
-  if (across && along) return 'corner';
-  if (across) return 'north-south';
-  return along ? 'east-west' : null;
 }
 
 // A turn of 1 swings +z round to +x, so the sequence runs +z, +x, -z, -x: the order seat facings use.
@@ -631,17 +600,14 @@ export function decorationsFor(
       (park) => tile.x >= park.x0 && tile.x <= park.x1 && tile.z >= park.z0 && tile.z <= park.z1,
     );
   const benches = spacedBenches({ ring, paved, taken, inPark });
-  const trees = plan.avenues ? avenueTrees(ring, plan.avenues.streets, taken) : [];
-  for (const tree of trees) taken.add(tileKey(tree.x, tree.z));
-  const streets = plan.avenues?.streets ?? [];
   const hedges = hedgeRuns({
     ring,
     taken,
     occupied,
-    skip: (tile) => inPark(tile) || (streets.length > 0 && avenueSide(tile, streets) !== null),
+    skip: inPark,
     pathNeighbours,
   });
-  return { lamps, benches, hedges, trees };
+  return { lamps, benches, hedges };
 }
 
 function spacedLamps(ring: readonly Tile[], spacing: number, taken: Set<string>): Tile[] {
@@ -893,11 +859,10 @@ function propsFor(
   styleOf: StyleOf,
 ): Placement[] {
   const byId = new Map(items.map((item) => [item.id, item]));
-  const { lamps, benches, hedges, trees } = decorationsFor(items, plan);
+  const { lamps, benches, hedges } = decorationsFor(items, plan);
   const turned: { id: string; tile: Tile; rotation: Rotation }[] = [
     ...lamps.map((tile) => ({ id: LAMP_ID, tile, rotation: 0 as Rotation })),
     ...hedges.map((tile) => ({ id: HEDGE_ID, tile, rotation: 0 as Rotation })),
-    ...trees.map((tile) => ({ id: plan.avenues?.tree ?? '', tile, rotation: 0 as Rotation })),
     ...benches.map(({ tile, rotation }) => ({ id: BENCH_ID, tile, rotation })),
   ];
   return turned.flatMap(({ id: family, tile, rotation }) => {

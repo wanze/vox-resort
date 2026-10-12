@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Plaza } from '../../layout/domain/resortPlan';
-import { ONE_OFF, styleMix } from './styleMix';
+import { ONE_OFF, RESORT_WIDE, styleMix } from './styleMix';
 
 const block = (index: number): Plaza => ({
   x0: index * 10,
@@ -47,6 +47,23 @@ describe('styleMix', () => {
       for (let z = 0; z <= 9; z++) styles.add(styleOf('street-lamp', x, z));
     }
     expect([...styles].toSorted()).toEqual(['street-lamp', 'street-lamp-b']);
+  });
+
+  it('builds a resort-wide family in one style across the plot, and varies it by seed', () => {
+    const across = (seed: number): Set<string> => {
+      const styleOf = styleMix({
+        seed,
+        neighbourhoods: NEIGHBOURHOODS,
+        oneOff: 1,
+        uniform: RESORT_WIDE,
+      });
+      const styles = new Set<string>();
+      for (let x = 0; x < 400; x += 3) styles.add(styleOf('street-lamp', x, x % 10));
+      return styles;
+    };
+    const seeds = Array.from({ length: 12 }, (_, seed) => across(seed));
+    for (const styles of seeds) expect(styles.size).toBe(1);
+    expect(new Set(seeds.map((styles) => [...styles][0])).size).toBe(2);
   });
 
   it('falls back to render-chunk cells outside every neighbourhood', () => {

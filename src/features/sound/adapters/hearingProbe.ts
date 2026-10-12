@@ -45,6 +45,8 @@ interface HearingParts {
     readonly running: number;
     readonly tickOfDay: number;
   };
+  // What is drawn, which in a break is not the sim's: the venues keep the sim's for their hours.
+  readonly weather: () => Weather;
   readonly view: ViewSize;
   readonly fireworks: FireworksField;
   readonly onHear: (scene: HeardScene) => void;
@@ -59,13 +61,21 @@ function heardOpen(resort: HeardResort, venue: number, effect: WeatherEffect, ti
 
 // The sources are listed again whenever the venues are replaced, which every new resort, settle
 // and reanchor does; scanning thousands of placements at 5 Hz would not be.
-export function createHearing({ handle, resort, clock, view, fireworks, onHear }: HearingParts) {
+export function createHearing({
+  handle,
+  resort,
+  clock,
+  weather,
+  view,
+  fireworks,
+  onHear,
+}: HearingParts) {
   const scene: HeardScene = {
     tilePx: 0,
     targetX: 0,
     targetZ: 0,
     night: 0,
-    weather: clock.weather,
+    weather: weather(),
     stormSeconds: 0,
     show: null,
     showSeconds: 0,
@@ -106,7 +116,7 @@ export function createHearing({ handle, resort, clock, view, fireworks, onHear }
     scene.targetX = listener.x;
     scene.targetZ = listener.z;
     scene.night = skyStateFor(clock.time).lampFactor;
-    scene.weather = clock.weather;
+    scene.weather = weather();
     scene.stormSeconds = clock.running;
     // Only what is still to launch: a show stopped mid-air is not heard bursting on.
     scene.show = fireworks.playing ? fireworks.show : null;

@@ -207,7 +207,8 @@ kept for a selfie. Canvas clicks pick nothing.
 
 - **Look time** replaces the clock's time for the sky only: the sun, the dome,
   the blob shadows and the lamps follow it, while the sim, which rooms are lit,
-  the parasols, the balloons and the sound stay on the clock's.
+  the parasols, the balloons and the sound stay on the clock's. In a break it
+  replaces the autumn hour too.
 - **Filters** are colour matrices (`photo/domain/photoFilters.ts`): the saved
   file gets them on its bytes, the screen an SVG `feColorMatrix` with the same
   numbers on the canvas, both on sRGB values. There is no GPU post pass.
@@ -238,6 +239,45 @@ kept for a selfie. Canvas clicks pick nothing.
   benches are reproducible. `flashSky` brightens ambient, horizon and zenith
   only.
 - The weather can be pinned with `?weather=`; it isn't saved.
+
+## Off season
+
+Between seasons the clock is stopped and the resort is drawn in autumn
+(`features/off-season/`). It is a look only: the sim, the clock, the stats and
+saves never see it.
+
+- **The blend** is one number, 0 in summer and 1 in a break. When a season
+  ends it holds for `HOLD_SECONDS` (2 s, so the season's last frame is seen and
+  the newspaper's fallback photographs summer), then eases to 1 over
+  `TURN_SECONDS` (4 s, smoothstep, on real seconds). Opening the next season
+  eases it back to 0 at once, from wherever it stood. A load in a break starts
+  at 1 and a new game at 0, neither with a turn. It is never saved.
+- **The sky**: the blend adds a base overcast of `OFF_SEASON_CLOUD` (the larger
+  of it and the weather's), then `offSeasonSky` cools the ambient, warms the
+  sun, greys the horizon and zenith and takes 12 % off both lights, faded by
+  the lamps as the overcast is. The sun's hour moves the short way round to
+  17:15 (`AUTUMN_HOUR`); photo mode's look time still wins over it. The clock,
+  which rooms are lit and the sim keep the clock's hour.
+- **The weather drawn** in a break is `breakWeatherAt(running seconds)`, not the
+  sim's: spells of 45-90 s, mostly dry and grey, drizzle about a third of them,
+  a storm about one in eight and never two running, never a heatwave. It
+  drives the rain, lightning, wet canopies, the sound and the HUD's icon once
+  the blend is past halfway; the stats keep the simulated weather.
+- **Parasols** are all furled: the share is the larger of the hour's and the
+  blend.
+- **Colours**: one `autumn` uniform on the world's own lit material and the
+  land's flat tones turns greens towards ochre by how green they are, then
+  takes 15 % of the saturation, on an approximate sRGB of the albedo. It is
+  mixed with the albedo last, so 0 is today's colours exactly and nothing is
+  ever recompiled. Figures, nameplates, construction and craft share
+  `litMaterial` but not the tint; palms turn with the rest. The land marks
+  (edges, plots for sale) are drawn over the tint.
+- **The sea** gets steeper slopes (up to 1.6x) through a uniform on
+  `swellOf`; its colour darkens by reflecting the greyer dome. Pools and
+  rivers are untouched.
+- **Not drawn**: pool covers, stacked loungers, shutters, falling leaves,
+  boats hauled up. A bench never ends a season, so a break frame is not
+  benched.
 
 ## Fireworks
 

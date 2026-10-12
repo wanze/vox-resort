@@ -241,6 +241,13 @@ import { createLiveSkyVisibility } from '../features/lighting/domain/skyVisibili
 import type { BakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createBakedLightVolume } from '../features/lighting/adapters/bakedLightVolume';
 import { createSkyApplier } from '../features/lighting/adapters/skyApplier';
+import {
+  lookAt,
+  settledTurn,
+  turnTowards,
+  type OffSeasonLook,
+} from '../features/off-season/domain/offSeason';
+import { createAutumnTint, type AutumnTint } from '../features/off-season/adapters/autumnTint';
 import type { SkyState } from '../features/lighting/domain/dayNight';
 import { createResortClock, type ResortClock } from '../features/sim/domain/resortClock';
 import { meshCatalogue } from '../features/voxel-world/adapters/meshCatalogue';
@@ -999,6 +1006,7 @@ interface ResortArt {
   readonly sea: readonly ModelGeometry[];
   readonly litter: readonly ModelGeometry[];
   readonly props: readonly ModelGeometry[];
+  readonly autumn: AutumnTint;
 }
 
 // A load or a settle restores whoever is here, so the bodies a settle adds start away.
@@ -1033,6 +1041,7 @@ function buildResort(
   const lighting = createLighting(parts.prepared, claiming);
   const world = buildInstancedWorld(parts.geometries, everything, {
     lightVolume: lighting.volume,
+    tint: parts.autumn.tint,
   });
   const shadows = buildBlobShadowField(blobShadowsFor(claiming.map(casterOf)));
   const construction = buildConstructionField(parts.geometries, lighting.volume);
@@ -1852,13 +1861,14 @@ function createClock(
   resort: () => Resort,
   startTime: number,
   glow: () => ShowLight,
+  offSeason: () => OffSeasonLook,
 ): Clock {
   const clock = createResortClock(
     startTime,
     WEATHER_SEED,
     (day) => effectOn(resort().season, day).weather,
   );
-  const sky = createSkyApplier({ handle, resort, glow });
+  const sky = createSkyApplier({ handle, resort, glow, offSeason });
   sky.apply(clock);
 
   const relight = (): void => {
@@ -2309,6 +2319,8 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   resort.photos.heat = new Float32Array(network.nodes.length);
 }
 
+const secondsNow = (): number => performance.now() / 1000;
+
 // The tally starts afresh when the season closes, so in a break the closed report has it.
 const topSpotNow = (resort: Resort): PhotoSpot | undefined =>
   (inBreak(resort.season) ? resort.seasons.at(-1) : resort.seasonTally)?.topSpot;
@@ -2337,6 +2349,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       .then(loaded('resort', options.onLoading)),
   ]);
 
+  // Kept for the showcase's lifetime, as the ownership mask is: every world and the ground read it.
+  const autumn = createAutumnTint();
   const slot = createResortSlot({
     prepared: first,
     // Not called until a frame steps somebody, by which time the clock exists.
@@ -2351,6 +2365,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     sea: catalogue.sea,
     litter: catalogue.litter,
     props: catalogue.props,
+    autumn,
   });
   const current = slot.current;
 
@@ -2370,7 +2385,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     surfaces: first.surfaces,
     // The live occupancy, not a snapshot: the ground under a cottage is drawn square.
     isClear: (tileX, tileZ) => current().occupancy.keyAt({ x: tileX, z: tileZ }) === undefined,
-    groundShade: ownership.shade,
+    // Tinted under the land marks, so the edge and the plots for sale keep their colours.
+    groundShade: (color) => ownership.shade(autumn.tint(color)),
+    seaSwell: autumn.swell,
     // Wall-clock times cap at the refresh rate; the GPU's timers keep discriminating.
     trackTimestamp: timing,
     forceWebGL: bench?.forceWebGL ?? false,
@@ -2419,13 +2436,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const timer = createFrameTimer(bench !== null);
   handle.controls.enabled = drift === null;
   let drawnFirst = false;
+  // Never saved: a load in a break starts in autumn and a new game in summer, neither with a turn.
+  let seasonTurn = settledTurn(inBreak(current().season));
+  let look = lookAt(seasonTurn, secondsNow(), 0);
   const clock = createClock(
     handle,
     current,
     startTimeOf(bench, drift !== null),
     () => fireworks.light,
+    () => look,
   );
-  let lastWeather: Weather = clock.weather;
+  // The simulated weather stays the sim's and the stats'; this is what is seen and heard.
+  const drawnWeather = (): Weather => look.weather ?? clock.weather;
+  const followSeason = (): void => {
+    seasonTurn = turnTowards(seasonTurn, inBreak(current().season), secondsNow());
+  };
+  let lastWeather: Weather = drawnWeather();
 
   // Cached: drawingBufferSize() allocates a vector per call; the resize handler updates it.
   let buffer = handle.drawingBufferSize();
@@ -2455,10 +2481,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Its own function to keep the render loop's branching down, which fallow:audit measures.
   const advanceWeather = (elapsedSeconds: number): void => {
     const target = handle.controls.target;
-    rain.advance(elapsedSeconds, rainfallFor(clock.weather, rainView()), target);
-    if (clock.weather === lastWeather) return;
-    lastWeather = clock.weather;
-    hud.publish({ weather: lastWeather });
+    const weather = drawnWeather();
+    rain.advance(elapsedSeconds, rainfallFor(weather, rainView()), target);
+    if (weather === lastWeather) return;
+    lastWeather = weather;
+    hud.publish({ weather });
   };
 
   if (bench) pinCamera(handle);
@@ -2559,7 +2586,15 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const listen =
     bench || !onHear
       ? () => {}
-      : createHearing({ handle, resort: current, clock, view: viewSize, fireworks, onHear });
+      : createHearing({
+          handle,
+          resort: current,
+          clock,
+          weather: drawnWeather,
+          view: viewSize,
+          fireworks,
+          onHear,
+        });
 
   const statsNow = createStatsReader({
     handle,
@@ -2967,6 +3002,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // The break holds the clock at paused, so the crowd stands still with it and nothing is charged.
   const seasonEnded = (): void => {
     pause();
+    // Only scheduled: the fallback below still photographs the season's last frame.
+    followSeason();
     hud.publish({
       season: seasonNow(),
       seasons: current().seasons,
@@ -2998,6 +3035,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // Everything React shows is told again: the HUD still holds the game that was replaced.
   const rebuilt = (): void => {
+    seasonTurn = settledTurn(inBreak(current().season));
+    look = lookAt(seasonTurn, secondsNow(), clock.running);
+    autumn.set(look.blend);
     clock.relight();
     paintOverlay();
     letter();
@@ -3155,6 +3195,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Fixed step under a benchmark: a frame-delta clock puts the scene elsewhere on the same frame
     // of two runs, and a running bench would tick a different number of times.
     const step = fixedStep ?? elapsed;
+    look = lookAt(seasonTurn, secondsNow(), clock.running);
+    autumn.set(look.blend);
     // A break stops the simulated clock at any speed; the real seconds still flash a storm.
     const between = inBreak(current().season);
     // The larger rather than both: turbo already takes every frame's ticks, and a quiet night
@@ -3264,7 +3306,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     ledger: current().ledger,
     land: landNow(),
     programme: programmeNow(),
-    weather: clock.weather,
+    weather: drawnWeather(),
   });
 
   return {
@@ -3297,6 +3339,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     openSeason() {
       const resort = current();
       if (!openSeason(resort, clock)) return;
+      followSeason();
       hud.publish({ season: seasonNow(), open: resort.open, advice: advise() });
       options.onDirty?.();
     },
@@ -3319,6 +3362,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
         seasonEnded();
         return false;
       }
+      followSeason();
       hud.publish({
         season: seasonNow(),
         seasons: resort.seasons,
@@ -3465,7 +3509,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     // Told at once, so the forced button reads as pressed on the click.
     setWeather(weather) {
       clock.setWeather(weather);
-      hud.publish({ weather: clock.weather });
+      hud.publish({ weather: drawnWeather() });
     },
     // Refused under a bench, as camera modes are: every recorded draw count has it off.
     setOverlay(kind) {

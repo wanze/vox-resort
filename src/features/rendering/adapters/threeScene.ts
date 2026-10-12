@@ -167,6 +167,8 @@ export interface SceneOptions {
   readonly surfaces?: TerrainSurfaces | null;
   // Applied to the land, never the water. Built once, so changing what it reads never recompiles.
   readonly groundShade?: GroundShade;
+  // The sea's slopes are multiplied by it; read, never rebuilt, like the ground's shade.
+  readonly seaSwell?: Node<'float'>;
   // Has to be requested when the renderer is built, not later.
   readonly trackTimestamp?: boolean;
   readonly forceWebGL?: boolean;
@@ -269,8 +271,9 @@ function createTerrainPalette(
   lightVolume: BakedLightVolume | null,
   shade: GroundShade | undefined,
   skyAlong: SkyDome['along'],
+  swell: Node<'float'> | undefined,
 ): TerrainPalette {
-  const sea = createSeaMaterial(lightVolume, skyAlong);
+  const sea = createSeaMaterial(lightVolume, skyAlong, swell);
   const river = createRiverMaterial(lightVolume);
   const flat = new Map(FLAT_TONES.map((tone) => [tone, landMaterial(tone, lightVolume, shade)]));
   return {
@@ -465,7 +468,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
   let terrain = options.terrain;
   let terrainFraming = framing;
   let terrainVolume = lightVolume;
-  let palette = createTerrainPalette(lightVolume, shade, dome.along);
+  let palette = createTerrainPalette(lightVolume, shade, dome.along, options.seaSwell);
   let coast = shore;
   const terrainRequest = (): TerrainRequest => ({
     terrain,
@@ -600,7 +603,7 @@ export async function createScene(options: SceneOptions): Promise<SceneHandle> {
       terrainFraming = nextFraming;
       terrainVolume = nextVolume;
       coast = nextShore;
-      palette = createTerrainPalette(terrainVolume, shade, dome.along);
+      palette = createTerrainPalette(terrainVolume, shade, dome.along, options.seaSwell);
       palette.setSky(sky.getHex());
       built = nextSurfaces ?? terrainSurfacesFor(terrainRequest());
       surfaces = layTerrain(scene, palette, built);

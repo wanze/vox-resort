@@ -477,6 +477,9 @@ const cellOf = (layer: Layer, placement: Placement): ChunkCoordinate =>
 export interface InstancedWorldOptions {
   readonly lightVolume?: BakedLightVolume | null;
   readonly chunkVoxels?: number;
+  // The world's own material only: figures, nameplates, construction and craft share litMaterial
+  // but keep their colours.
+  readonly tint?: (color: Node<'vec3'>) => Node<'vec3'>;
 }
 
 export function buildInstancedWorld(
@@ -488,6 +491,11 @@ export function buildInstancedWorld(
   group.name = 'voxel-world';
 
   const lit = litMaterial(options.lightVolume ?? null);
+  if (options.tint) {
+    // Off, or three multiplies the vertex colours into the colour node a second time.
+    lit.vertexColors = false;
+    lit.colorNode = options.tint(vertexColor().rgb);
+  }
   const glow = glowMaterial();
   const poolWater = createPoolWaterMaterial(options.lightVolume ?? null);
   const windows = windowMaterial(options.lightVolume ?? null);

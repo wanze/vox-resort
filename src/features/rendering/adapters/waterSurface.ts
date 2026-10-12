@@ -36,7 +36,8 @@ export interface Swell {
   readonly height: Node<'float'>;
 }
 
-export function swellOf(waves: readonly Wave[]): Swell {
+// The scale steepens the slopes only: the height drives the foam, which must not reach further.
+export function swellOf(waves: readonly Wave[], scale?: Node<'float'>): Swell {
   const at = positionWorld.xz;
   const viewDistance = positionWorld.sub(cameraPosition).length();
   const totalSlope = waves.reduce((total, wave) => total + wave.slope, 0);
@@ -63,6 +64,10 @@ export function swellOf(waves: readonly Wave[]): Swell {
         .mul(wave.slope / totalSlope)
         .mul(visible),
     );
+  }
+  if (scale) {
+    slopeX = slopeX.mul(scale);
+    slopeZ = slopeZ.mul(scale);
   }
   return { normal: normalize(vec3(slopeX.negate(), 1, slopeZ.negate())), height };
 }

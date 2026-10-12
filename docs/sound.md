@@ -66,6 +66,8 @@ night, weather, shore distance, guests in reach, nearby sounding models), and
 - **Zoom**: buildings are heard once their signs appear. The radius shrinks
   from 24 tiles zoomed out to 8 zoomed in.
 - **Weather**: rain and wind rise with rain and storm; music ducks in a storm.
+  Between seasons it is the weather drawn, not the sim's (see
+  [rendering.md](rendering.md#off-season)).
 - **Sea**: surf by closeness to the shore, gulls by day in the dry.
 - **Nature**: birds by day, crickets at night, cicadas in a heatwave.
 - **Fixtures**: a fountain near the camera, a tiki torch at night, and a shade

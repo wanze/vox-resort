@@ -55,13 +55,14 @@ export type SeaMaterial = WaterMaterial;
 export function createSeaMaterial(
   lightVolume: BakedLightVolume | null,
   skyAlong: (direction: Node<'vec3'>) => Node<'vec3'>,
+  swell?: Node<'float'>,
 ): SeaMaterial {
   const material = new MeshStandardNodeMaterial({ metalness: 0 });
   const edgeDistance = attribute<'float'>('shoreEdgeDistance', 'float');
   const coastDistance = attribute<'float'>('shoreCoastDistance', 'float');
 
   return waterMaterialOf(material, lightVolume, () => {
-    const { normal, height } = swellOf(WAVES);
+    const { normal, height } = swellOf(WAVES, swell);
     // A reflected ray that points down gets the horizon colour, by the dome's own rule.
     const sky = skyAlong(reflect(positionWorld.sub(cameraPosition).normalize(), normal));
 

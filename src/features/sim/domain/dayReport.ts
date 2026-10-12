@@ -119,18 +119,19 @@ function extra(key: 'fireworks' | 'postponed', before: EventTally, tally: EventT
   return sum > 0 ? { [key]: sum } : {};
 }
 
-export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
-  const before = counts.events ?? NO_EVENTS;
+export function addEvents(kept: EventTally | undefined, tally: EventTally): EventTally {
+  const before = kept ?? NO_EVENTS;
   return {
-    ...counts,
-    events: {
-      held: before.held + tally.held,
-      audience: before.audience + tally.audience,
-      called: before.called + tally.called,
-      ...extra('fireworks', before, tally),
-      ...extra('postponed', before, tally),
-    },
+    held: before.held + tally.held,
+    audience: before.audience + tally.audience,
+    called: before.called + tally.called,
+    ...extra('fireworks', before, tally),
+    ...extra('postponed', before, tally),
   };
+}
+
+export function countEvent(counts: DayCounts, tally: EventTally): DayCounts {
+  return { ...counts, events: addEvents(counts.events, tally) };
 }
 
 const NO_WELCOME: WelcomeTally = { welcomed: 0, gap: null };

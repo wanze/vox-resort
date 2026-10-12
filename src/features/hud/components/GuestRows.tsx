@@ -1,7 +1,7 @@
 import type { GuestView } from '../../inspect/domain/selection';
 import { Meter } from '../../../shared/components/Meter';
 import { StatRow } from '../../../shared/components/StatRow';
-import { thoughtLine } from './thoughtWords';
+import { thoughtLine } from '../domain/thoughtWords';
 
 export const PARTY_KINDS: { readonly [kind in GuestView['partyKind']]: string } = {
   family: 'Family',

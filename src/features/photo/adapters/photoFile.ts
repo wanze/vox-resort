@@ -25,7 +25,17 @@ async function writeCaption(context: CanvasRenderingContext2D, caption: string):
   context.fillText(caption, size * CAPTION_MARGIN, height - size * CAPTION_MARGIN);
 }
 
-export async function encodePhoto(pixels: PhotoPixels, look: PhotoLook): Promise<Blob> {
+export type PhotoFormat =
+  | { readonly type: 'image/png' }
+  | { readonly type: 'image/jpeg'; readonly quality: number };
+
+const PNG: PhotoFormat = { type: 'image/png' };
+
+export async function encodePhoto(
+  pixels: PhotoPixels,
+  look: PhotoLook,
+  format: PhotoFormat = PNG,
+): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = pixels.width;
   canvas.height = pixels.height;
@@ -38,7 +48,8 @@ export async function encodePhoto(pixels: PhotoPixels, look: PhotoLook): Promise
   return new Promise((resolve, reject) =>
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('The photo did not encode'))),
-      'image/png',
+      format.type,
+      format.type === 'image/jpeg' ? format.quality : undefined,
     ),
   );
 }

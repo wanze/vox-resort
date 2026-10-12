@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Home } from '../../guests/domain/homes';
 import type { Party } from '../../guests/domain/parties';
-import { HISTORY_DAYS, type DayCounts, type DayReport } from './dayReport';
+import { HISTORY_DAYS, type DayCounts, type DayReport, type PhotoSpot } from './dayReport';
 import type { Ledger } from './ledger';
 import { PRICE_RANGE } from './pricing';
 import type { Rating } from './rating';
@@ -114,7 +114,7 @@ export const breakdownsSnapshotSchema = z.object({
 
 export type BreakdownsSnapshot = z.infer<typeof breakdownsSnapshotSchema>;
 
-const reviewSchema = z.object({
+export const reviewSchema = z.object({
   party: count,
   family: z.string(),
   partyKind: partySchema.shape.kind,
@@ -168,25 +168,22 @@ const welcomeTallySchema = z.object({
   gap: z.enum(['no-stage', 'off', 'called-off']).nullable(),
 });
 
+const photoSpotSchema = z.object({
+  key: z.string(),
+  subject: z.string(),
+  kind: z.enum(PHOTO_KINDS),
+  count,
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+  heading: z.number(),
+  minute: count,
+  fov: z.number().exactOptional(),
+  tilt: z.number().exactOptional(),
+}) satisfies z.ZodType<PhotoSpot>;
+
 // Absent in saves from before photos, and on a day nobody took one.
-const photoTallySchema = z.object({
-  taken: count,
-  spots: z.array(
-    z.object({
-      key: z.string(),
-      subject: z.string(),
-      kind: z.enum(PHOTO_KINDS),
-      count,
-      x: z.number(),
-      y: z.number(),
-      z: z.number(),
-      heading: z.number(),
-      minute: count,
-      fov: z.number().exactOptional(),
-      tilt: z.number().exactOptional(),
-    }),
-  ),
-});
+const photoTallySchema = z.object({ taken: count, spots: z.array(photoSpotSchema) });
 
 const dayCountsSchema = z.object({
   from: count,
@@ -229,6 +226,14 @@ const seasonSchema = z.object({
 
 const dayMarkSchema = z.object({ day: count, value: z.number() });
 
+// Absent in saves from before the season paper, and in a season that had none of them.
+const seasonStoryShape = {
+  voices: z.array(tallySchema).exactOptional(),
+  events: eventTallySchema.exactOptional(),
+  photos: count.exactOptional(),
+  topSpot: photoSpotSchema.exactOptional(),
+};
+
 const seasonTallySchema = z.object({
   days: count,
   starSum: z.number(),
@@ -242,9 +247,10 @@ const seasonTallySchema = z.object({
   money: columnSchema,
   busiest: dayMarkSchema.nullable(),
   best: dayMarkSchema.nullable(),
+  ...seasonStoryShape,
 }) satisfies z.ZodType<SeasonTally>;
 
-const seasonReportSchema = z.object({
+export const seasonReportSchema = z.object({
   number: z.number().int().positive(),
   startedOn,
   days: count,
@@ -261,6 +267,7 @@ const seasonReportSchema = z.object({
   balance: z.number(),
   busiest: dayMarkSchema.nullable(),
   best: dayMarkSchema.nullable(),
+  ...seasonStoryShape,
 }) satisfies z.ZodType<SeasonReport>;
 
 const ledgerSchema = z.object({

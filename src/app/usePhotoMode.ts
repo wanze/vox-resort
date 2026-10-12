@@ -7,9 +7,13 @@ import type { PhotoSpot } from '../features/sim/domain/dayReport';
 import type { SimSpeed } from '../features/sim/domain/simClock';
 import type { BuildTool } from '../features/build/domain/buildTool';
 import type { FollowView } from '../features/guest-view/domain/followRules';
-import { PHOTO_FILTERS, type PhotoFilterId } from '../features/photo/domain/photoFilters';
+import {
+  PHOTO_FILTERS,
+  type ColorMatrix,
+  type PhotoFilterId,
+} from '../features/photo/domain/photoFilters';
 import { photoFileName } from '../features/photo/domain/photoName';
-import type { PhotoSize } from '../features/photo/domain/photoPixels';
+import type { PhotoPixels, PhotoSize } from '../features/photo/domain/photoPixels';
 import { clampFov } from '../features/photo/domain/photoView';
 import {
   canSharePhotos,
@@ -26,6 +30,17 @@ import type {
 import type { ClockControls } from '../features/hud/components/hudControls';
 import type { HudStore } from '../features/hud/domain/hudStore';
 import { cardSize } from '../features/hud/domain/photoWall';
+
+// Asked for by the newspaper: the shot used goes to the front page, and leaving without one says so.
+export interface FrontPageSession {
+  // The day the shot was taken on, and its hour as a share of the day.
+  keep(pixels: PhotoPixels, matrix: ColorMatrix, day: number, time: number): void;
+  left(): void;
+}
+
+export interface PhotoMode extends PhotoControls {
+  startFrontPage(session: FrontPageSession): void;
+}
 
 export interface PhotoParts {
   readonly clock: ClockControls;
@@ -62,14 +77,23 @@ function useSelfie(showcase: RefObject<Showcase | null>, following: FollowView |
   return { controls, reset };
 }
 
+interface Developed {
+  readonly pixels: PhotoPixels;
+  readonly day: number;
+  readonly time: number;
+}
+
 function useShot(showcase: RefObject<Showcase | null>, parts: PhotoParts) {
   const [shot, setShot] = useState<PhotoShot | null>(null);
+  // Uncaptioned, for the front page; dropped with the shot.
+  const kept = useRef<Developed | null>(null);
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<PhotoFilterId>('none');
   const [scale, setScale] = useState<PhotoScale>(1);
 
   const develop = async (mounted: Showcase, time: number): Promise<PhotoShot> => {
     const pixels = await mounted.capturePhoto(scale);
+    kept.current = { pixels, day: dayOf(parts), time };
     // Always the resort's name for now; whether to write one, and what, may become a choice.
     const look = { matrix: PHOTO_FILTERS[filter].matrix, caption: nameOf(parts) };
     return { blob: await encodePhoto(pixels, look), name: fileNameOf(parts, time) };
@@ -89,8 +113,12 @@ function useShot(showcase: RefObject<Showcase | null>, parts: PhotoParts) {
 
   return {
     shot,
+    kept,
     // A new session starts with nothing taken: last time's photo was saved or let go.
-    forget: useCallback(() => setShot(null), []),
+    forget: useCallback(() => {
+      kept.current = null;
+      setShot(null);
+    }, []),
     busy,
     filter,
     setFilter,
@@ -150,48 +178,39 @@ async function enlargedFrom(
   }
 }
 
-export function usePhotoMode(
-  showcase: RefObject<Showcase | null>,
-  parts: PhotoParts,
-): PhotoControls {
+// Begun once photo mode is open; whichever way photo mode is left ends it and hands it back.
+function useFrontPage() {
+  const session = useRef<FrontPageSession | null>(null);
   const [on, setOn] = useState(false);
+  const begin = useCallback((asked: FrontPageSession) => {
+    session.current = asked;
+    setOn(true);
+  }, []);
+  const end = useCallback((): FrontPageSession | null => {
+    const ended = session.current;
+    session.current = null;
+    setOn(false);
+    return ended;
+  }, []);
+  return { on, begin, end };
+}
+
+// Read before closing, which forgets the shot.
+function keepShot(
+  kept: RefObject<Developed | null>,
+  filter: PhotoFilterId,
+  close: () => FrontPageSession | null,
+): void {
+  const shot = kept.current;
+  if (shot) close()?.keep(shot.pixels, PHOTO_FILTERS[filter].matrix, shot.day, shot.time);
+}
+
+const leaveSession = (ended: FrontPageSession | null): void => ended?.left();
+
+// The lens and the hour, both put back when photo mode is left.
+function useLens(showcase: RefObject<Showcase | null>) {
   const [fov, setFovState] = useState(CAMERA_FOV_DEGREES);
   const [lookTime, setLookTimeState] = useState<number | null>(null);
-  const [clockTime, setClockTime] = useState(0);
-  // The speed to go back to: entering pauses the clock so the scene holds still for the picture.
-  const speedBefore = useRef<SimSpeed | null>(null);
-  const selfie = useSelfie(showcase, parts.following);
-  const shots = useShot(showcase, parts);
-  const { clock, selectTool } = parts;
-  const { reset: resetSelfie } = selfie;
-  const { forget: forgetShot } = shots;
-  const postcard = usePostcardLink(showcase);
-  const picture = usePicture(showcase);
-
-  const enter = useCallback(() => {
-    const mounted = showcase.current;
-    if (on || !mounted) return;
-    selectTool(null);
-    if (!mounted.setPhotoMode(true)) return;
-    speedBefore.current = clock.speed;
-    clock.setSpeed('paused');
-    setClockTime(mounted.clockTime);
-    setOn(true);
-  }, [showcase, on, clock, selectTool]);
-
-  const exit = useCallback(() => {
-    const mounted = showcase.current;
-    if (!on || !mounted) return;
-    mounted.setPhotoMode(false);
-    if (speedBefore.current) clock.setSpeed(speedBefore.current);
-    speedBefore.current = null;
-    resetSelfie();
-    forgetShot();
-    setOn(false);
-    setFovState(CAMERA_FOV_DEGREES);
-    setLookTimeState(null);
-  }, [showcase, on, clock, resetSelfie, forgetShot]);
-
   const setFov = useCallback(
     (degrees: number) => {
       showcase.current?.setFov(degrees);
@@ -199,7 +218,6 @@ export function usePhotoMode(
     },
     [showcase],
   );
-
   const setLookTime = useCallback(
     (time: number | null) => {
       const mounted = showcase.current;
@@ -209,21 +227,79 @@ export function usePhotoMode(
     },
     [showcase],
   );
+  const reset = useCallback(() => {
+    setFovState(CAMERA_FOV_DEGREES);
+    setLookTimeState(null);
+  }, []);
+  return { fov, setFov, lookTime, setLookTime, reset };
+}
+
+export function usePhotoMode(showcase: RefObject<Showcase | null>, parts: PhotoParts): PhotoMode {
+  const [on, setOn] = useState(false);
+  const [clockTime, setClockTime] = useState(0);
+  const lens = useLens(showcase);
+  const { reset: resetLens } = lens;
+  // The speed to go back to: entering pauses the clock so the scene holds still for the picture.
+  const speedBefore = useRef<SimSpeed | null>(null);
+  const selfie = useSelfie(showcase, parts.following);
+  const shots = useShot(showcase, parts);
+  const { clock, selectTool } = parts;
+  const { reset: resetSelfie } = selfie;
+  const { forget: forgetShot } = shots;
+  const postcard = usePostcardLink(showcase);
+  const picture = usePicture(showcase);
+  const frontPage = useFrontPage();
+  const { end: endFrontPage } = frontPage;
+
+  const open = useCallback((): boolean => {
+    const mounted = showcase.current;
+    if (on || !mounted) return false;
+    selectTool(null);
+    if (!mounted.setPhotoMode(true)) return false;
+    speedBefore.current = clock.speed;
+    clock.setSpeed('paused');
+    setClockTime(mounted.clockTime);
+    setOn(true);
+    return true;
+  }, [showcase, on, clock, selectTool]);
+
+  const close = useCallback((): FrontPageSession | null => {
+    const mounted = showcase.current;
+    if (!on || !mounted) return null;
+    mounted.setPhotoMode(false);
+    if (speedBefore.current) clock.setSpeed(speedBefore.current);
+    speedBefore.current = null;
+    resetSelfie();
+    forgetShot();
+    setOn(false);
+    resetLens();
+    return endFrontPage();
+  }, [showcase, on, clock, resetSelfie, forgetShot, resetLens, endFrontPage]);
+
+  const enter = useCallback(() => void open(), [open]);
+
+  const exit = useCallback(() => leaveSession(close()), [close]);
+
+  const { begin: beginFrontPage } = frontPage;
+  const startFrontPage = useCallback(
+    (asked: FrontPageSession) => (open() ? beginFrontPage(asked) : asked.left()),
+    [open, beginFrontPage],
+  );
 
   return {
     on,
     enter,
     exit,
-    fov,
-    setFov,
-    lookTime,
+    fov: lens.fov,
+    setFov: lens.setFov,
+    lookTime: lens.lookTime,
     clockTime,
-    setLookTime,
+    setLookTime: lens.setLookTime,
     filter: shots.filter,
     setFilter: shots.setFilter,
     scale: shots.scale,
     setScale: shots.setScale,
-    take: () => shots.take(lookTime ?? clockTime),
+    take: () => shots.take(lens.lookTime ?? clockTime),
     shot: shots.shot,
     save: shots.save,
     share: shots.share,
@@ -237,5 +313,10 @@ export function usePhotoMode(
     shareShot: (shot) => {
       void sharePhoto(shot.blob, shot.name, nameOf(parts)).catch(console.error);
     },
+    frontPage: {
+      session: frontPage.on,
+      use: () => keepShot(shots.kept, shots.filter, close),
+    },
+    startFrontPage,
   };
 }

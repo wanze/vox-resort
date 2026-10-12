@@ -14,6 +14,20 @@
   pointer-events: auto;
 }
 
+/* Over the whole screen, a dialog centred inside the safe area, for its ui-scrim to sit under. */
+.ui-modal {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  /* One cell exactly the screen's, so a dialog's 100% is the room left, not its content. */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b))
+    calc(16px + var(--safe-l));
+  pointer-events: auto;
+}
+
 .ui-dropdown-panel {
   position: absolute;
   top: calc(100% + var(--space-3));

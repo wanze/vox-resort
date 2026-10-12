@@ -36,6 +36,8 @@ import {
   type SaveTarget,
 } from '../features/saves/domain/saveSlots';
 import { metaOf, type GameSnapshot, type SaveMeta } from '../features/saves/domain/snapshot';
+import { copyGame, sweep } from '../features/newspaper/adapters/paperStore';
+import { forksTo, keptGames } from '../features/newspaper/domain/archive';
 import type { Showcase } from './showcase';
 import type { SaveControls, SaveStatus } from '../features/saves/components/saveControls';
 
@@ -151,6 +153,19 @@ async function moveUnsaved(named: CurrentGame): Promise<boolean> {
   if (!unsaved) return false;
   await moveSave(UNSAVED_ID, { ...unsaved, ...named });
   return true;
+}
+
+// Listed afresh, and never on a list that failed: an empty list would sweep every paper away.
+async function sweepPapers(running: string | null): Promise<void> {
+  const kept = keptGames(await listSaves(), running);
+  if (kept) await sweep(kept);
+}
+
+// The running game takes a new id before it is written, and the papers so far come along.
+async function forkPapers(mounted: Showcase | null): Promise<void> {
+  if (!mounted) return;
+  const from = mounted.gameId;
+  await copyGame(from, mounted.forkGame()).catch(console.error);
 }
 
 // Resolves either way; a failure is reported and answered false.
@@ -314,7 +329,11 @@ function useLoader(
   return { load, loading };
 }
 
-function useSlots(session: Session, autosave: (trigger: AutosaveTrigger) => Promise<void>) {
+function useSlots(
+  showcaseRef: RefObject<Showcase | null>,
+  session: Session,
+  autosave: (trigger: AutosaveTrigger) => Promise<void>,
+) {
   const { store, currentRef, savesRef, dirtyRef, follow } = session;
   const { fail, refresh } = store;
 
@@ -325,8 +344,9 @@ function useSlots(session: Session, autosave: (trigger: AutosaveTrigger) => Prom
       // So the game, if it was the one deleted, is autosaved into the unsaved slot again.
       dirtyRef.current = true;
       await refresh();
+      await sweepPapers(showcaseRef.current?.gameId ?? null).catch(console.error);
     },
-    [fail, follow, currentRef, dirtyRef, refresh],
+    [showcaseRef, fail, follow, currentRef, dirtyRef, refresh],
   );
 
   // Brought up to date first, when the unsaved slot is the game being played.
@@ -363,7 +383,7 @@ export function useSaves(
   const { store, currentRef, savesRef, dirtyRef } = session;
   const { write, autosave, saveBeforeReload } = useWriter(showcaseRef, session, playing);
   const { load, loading } = useLoader(showcaseRef, session, autosave, onLoaded);
-  const { remove, nameUnsaved } = useSlots(session, autosave);
+  const { remove, nameUnsaved } = useSlots(showcaseRef, session, autosave);
 
   const saveWith = useCallback(
     async (asked: string | undefined, copy: boolean, overwrite: boolean): Promise<SaveOutcome> => {
@@ -376,16 +396,20 @@ export function useSaves(
         freshId: freshId(),
       });
       if (plan.kind !== 'write') return plan;
+      if (forksTo(currentRef.current, plan.target, copy)) await forkPapers(showcaseRef.current);
       return { kind: (await write(plan.target)) ? 'saved' : 'failed' };
     },
-    [currentRef, savesRef, write],
+    [showcaseRef, currentRef, savesRef, write],
   );
 
   // Written at once rather than on the next autosave: until then the game is in no slot at all.
+  // The game it wrote over leaves its papers behind, which go with it.
   const started = useCallback(() => {
     dirtyRef.current = true;
-    void write({ id: UNSAVED_ID, name: null, drop: null });
-  }, [dirtyRef, write]);
+    void write({ id: UNSAVED_ID, name: null, drop: null }).then((written) => {
+      if (written) void sweepPapers(showcaseRef.current?.gameId ?? null).catch(console.error);
+    });
+  }, [showcaseRef, dirtyRef, write]);
 
   useAutosaveTriggers(autosave);
 

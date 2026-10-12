@@ -90,9 +90,12 @@ const copyReport = (report: DayReport) => ({
   loudest: report.loudest.map((tally) => ({ ...tally })),
 });
 
-const copySeasonal = <T extends { readonly money: object }>(record: T): T => ({
+const copySeasonal = <T extends SeasonTally | SeasonReport>(record: T) => ({
   ...record,
   money: { ...record.money },
+  ...(record.voices ? { voices: record.voices.map((voice) => ({ ...voice })) } : {}),
+  ...(record.events ? { events: { ...record.events } } : {}),
+  ...(record.topSpot ? { topSpot: { ...record.topSpot } } : {}),
 });
 
 export function snapshotResort(state: ResortState): ResortSnapshot {

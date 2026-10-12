@@ -62,6 +62,8 @@ const gameShape = z.object({
   params: paramsSchema,
   // Optional, so a save from before resorts had names still reads; it is named by its seed.
   name: z.string().exactOptional(),
+  // Optional, so a save from before the season paper still reads; it is given one on load.
+  gameId: z.string().exactOptional(),
   population: count,
   staffCount: count,
   resort: resortSnapshotSchema,
@@ -124,6 +126,8 @@ export const saveMetaSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
   resortName: z.string().exactOptional(),
+  // Here as well as in the snapshot, so the newspaper archive is swept without opening a save.
+  gameId: z.string().exactOptional(),
   savedAt: z.number(),
   version: z.number(),
   mode: z.enum(['sandbox', 'tycoon']),
@@ -148,6 +152,7 @@ export function metaOf(
     id,
     name,
     ...(snapshot.name === undefined ? {} : { resortName: snapshot.name }),
+    ...(snapshot.gameId === undefined ? {} : { gameId: snapshot.gameId }),
     savedAt: now,
     version: snapshot.version,
     mode: ledger.mode,

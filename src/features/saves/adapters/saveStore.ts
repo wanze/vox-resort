@@ -1,4 +1,5 @@
 import { listedOf, type ListedSave } from '../domain/saveSlots';
+import { answer, done, openedOnce } from './indexedDb';
 import { gameSnapshotSchema, type GameSnapshot, type SaveMeta } from '../domain/snapshot';
 
 const DATABASE = 'vox-resort';
@@ -17,47 +18,14 @@ interface SnapshotRow {
   readonly snapshot: unknown;
 }
 
-// IndexedDB is missing in some embedded browsers and refuses to open in a private window or with
-// site data blocked, as localStorage throws for jsonStore.ts. The failure is kept, so every call
-// after it rejects alike and the game plays on unsaved.
-let opened: Promise<IDBDatabase> | null = null;
-
-function database(): Promise<IDBDatabase> {
-  opened ??= openDatabase();
-  return opened;
-}
-
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    try {
-      const request = globalThis.indexedDB.open(DATABASE, 1);
-      request.addEventListener('upgradeneeded', () => {
-        request.result.createObjectStore(META, { keyPath: 'id' });
-        request.result.createObjectStore(SNAPSHOTS, { keyPath: 'id' });
-      });
-      request.addEventListener('success', () => resolve(request.result));
-      request.addEventListener('error', () => reject(new SavesUnavailable(request.error)));
-    } catch (error) {
-      reject(new SavesUnavailable(error));
-    }
-  });
-}
-
-function done(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.addEventListener('complete', () => resolve());
-    transaction.addEventListener('abort', () =>
-      reject(transaction.error ?? new Error('The save was abandoned')),
-    );
-  });
-}
-
-function answer<T>(request: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.addEventListener('success', () => resolve(request.result));
-    request.addEventListener('error', () => reject(request.error));
-  });
-}
+const database = openedOnce(
+  DATABASE,
+  (db) => {
+    db.createObjectStore(META, { keyPath: 'id' });
+    db.createObjectStore(SNAPSHOTS, { keyPath: 'id' });
+  },
+  (cause) => new SavesUnavailable(cause),
+);
 
 export async function listSaves(): Promise<readonly ListedSave[]> {
   const db = await database();

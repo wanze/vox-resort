@@ -1738,10 +1738,9 @@ const PARK_BED_ID = 'flowerbed';
 
 const TABLE_ID = 'picnic-table';
 
-// A plot too small for the whole catalogue as well as the land asked for first straightens its
-// canal, whose curves take rows from the blocks beside it, then gives up its hills, which take the
-// most room, then its island, then its river. On a plot it is offered on, none needed giving up
-// for any seed measured.
+// A plot too small for the catalogue and the land asked for straightens its canal (the curves take
+// rows from the blocks beside it), then gives up the hills, which take the most room, then the
+// island, then the river. Where a plot offers the land, no seed measured gave any up.
 export function generateResort(types: readonly GeneratorType[], asked: ResortParams): ResortPlan {
   const params = clampParams(asked);
   const wanted = clampLand(params.land, GROWN_LAND);

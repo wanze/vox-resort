@@ -16,6 +16,12 @@ export interface SelfieControls {
   setOn(on: boolean): void;
 }
 
+// Only while the newspaper asked for its front page; photo mode opened any other way has none.
+export interface FrontPageControls {
+  readonly session: boolean;
+  use(): void;
+}
+
 export interface PhotoControls {
   readonly on: boolean;
   enter(): void;
@@ -45,4 +51,5 @@ export interface PhotoControls {
   enlarge(spot: PhotoSpot, size: PhotoSize, daysAgo: number): Promise<PhotoShot | null>;
   saveShot(shot: PhotoShot): void;
   shareShot(shot: PhotoShot): void;
+  readonly frontPage: FrontPageControls;
 }

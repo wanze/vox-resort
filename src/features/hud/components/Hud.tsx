@@ -217,8 +217,8 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       resortName={resort.name}
     />
   ),
-  season: ({ resort, seasons, ledger }) => (
-    <SeasonPanel season={resort.season} seasons={seasons} mode={modeOf(ledger)} />
+  season: ({ resort, seasons, ledger, paper }) => (
+    <SeasonPanel season={resort.season} seasons={seasons} mode={modeOf(ledger)} paper={paper} />
   ),
   demand: ({ status }) => <DemandPanel status={status} />,
   photos: ({ voices, history, photo }) => (

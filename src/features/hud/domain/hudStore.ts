@@ -32,6 +32,8 @@ export interface HudState {
   readonly weather: Weather;
   readonly open: boolean;
   readonly name: string | null;
+  // Names the game's newspapers; null until the first resort stands.
+  readonly gameId: string | null;
   readonly ledger: Ledger | null;
   readonly land: LandView | null;
   readonly pending: boolean;
@@ -68,6 +70,7 @@ export const INITIAL_HUD: HudState = {
   weather: 'clear',
   open: true,
   name: null,
+  gameId: null,
   ledger: null,
   land: null,
   pending: false,

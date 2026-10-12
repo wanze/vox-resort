@@ -29,7 +29,13 @@ importers:
       '@fontsource/jersey-15':
         specifier: 5.3.0
         version: 5.3.0
+      '@fontsource/old-standard-tt':
+        specifier: 5.3.0
+        version: 5.3.0
       '@fontsource/silkscreen':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/unifrakturmaguntia':
         specifier: 5.3.0
         version: 5.3.0
       react:
@@ -939,8 +945,14 @@ packages:
   '@fontsource/jersey-15@5.3.0':
     resolution: {integrity: sha512-S7k74/1Gr6g08m7lF1pNW3ey2GbPyfk5RzOx6xBTfTmjQUeAGaO/U3GsEZrY8BVi5dX0OAwHtvho8i3LaPyO0w==}
 
+  '@fontsource/old-standard-tt@5.3.0':
+    resolution: {integrity: sha512-9cXU8XWqw4Pz9/9Lf6Otf1GPc0y17d96/nP9tzs4PLlq1IFMIxXszL3OLldaoyAn5YGr1r+tIXr0rlbgIeCYrg==}
+
   '@fontsource/silkscreen@5.3.0':
     resolution: {integrity: sha512-M1NQ3LQH0LFNvyFPd/piHEGMImPPtpLglNnLC6Vdcq9kL0jNIOtTQmksAWCc4enbDnw1OnIpZtjNEfRqYm/QmA==}
+
+  '@fontsource/unifrakturmaguntia@5.3.0':
+    resolution: {integrity: sha512-z8NGOUeAu0T534Z8tEyuNbuUZsUiRoQKzg3gRB5sb2o2DipxEqmYQqHdlwxsbN0gpwhgcClKrCuB/AhVeY2UOQ==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4488,7 +4500,11 @@ snapshots:
 
   '@fontsource/jersey-15@5.3.0': {}
 
+  '@fontsource/old-standard-tt@5.3.0': {}
+
   '@fontsource/silkscreen@5.3.0': {}
+
+  '@fontsource/unifrakturmaguntia@5.3.0': {}
 
   '@img/colour@1.1.0': {}
 

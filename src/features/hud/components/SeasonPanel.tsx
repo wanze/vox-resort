@@ -15,11 +15,19 @@ import {
   type SeasonReport,
   type SeasonView,
 } from '../../sim/domain/season';
+import { PaperArchive } from '../../newspaper/components/PaperArchive';
+import type { PaperControls } from '../../newspaper/components/paperControls';
 import { MoneyRows, ReviewRows } from './DayReportPanel';
 import { PanelSummary } from './PanelSummary';
 import { Row, Rows, Section } from './ReportRows';
 import { signed } from './ledgerWords';
-import { bookingsLine, MIX_LABELS, nextLine, PHASE_GUESTS, shareWords } from './seasonWords';
+import {
+  bookingsLine,
+  MIX_LABELS,
+  nextLine,
+  PHASE_GUESTS,
+  shareWords,
+} from '../domain/seasonWords';
 
 export interface SeasonPanelProps {
   // Null where the resort runs no seasons.
@@ -28,6 +36,7 @@ export interface SeasonPanelProps {
   readonly seasons: readonly SeasonReport[];
   // null before the first books are told.
   readonly mode: GameMode | null;
+  readonly paper: PaperControls;
 }
 
 const whole = (value: number): string => value.toLocaleString('en-US');
@@ -238,8 +247,18 @@ function ThisSeason({ season }: { readonly season: SeasonView | null }) {
   return season.state === 'break' ? <Between season={season} /> : <Running season={season} />;
 }
 
+// Only seasons closed since the paper began have one; the rows below cover the rest.
+function PaperSection({ paper }: { readonly paper: PaperControls }) {
+  if (paper.editions.length === 0) return null;
+  return (
+    <Section title="The season paper">
+      <PaperArchive editions={paper.editions} current={null} onRead={paper.read} />
+    </Section>
+  );
+}
+
 // A season counted from part way through, as a save from before seasons is, says so.
-function LastSeason({ seasons, season, mode }: SeasonPanelProps) {
+function LastSeason({ seasons, season, mode, paper }: SeasonPanelProps) {
   const report = seasons.at(-1);
   if (!report) {
     if (season === null) return null;
@@ -256,6 +275,7 @@ function LastSeason({ seasons, season, mode }: SeasonPanelProps) {
           {`Covers ${whole(report.days)} of its ${SEASON_DAYS} days: the rest were played before seasons.`}
         </p>
       ) : null}
+      <PaperSection paper={paper} />
       <RatingSection report={report} />
       <GuestsSection report={report} />
       <MoneySection report={report} mode={mode} />

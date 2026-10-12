@@ -25,6 +25,7 @@ import type { HighlightControls } from '../../highlights/components/highlightCon
 import type { OverlayControls } from '../../overlays/components/overlayControls';
 import type { ProgrammeControls } from '../../events/components/programmeControls';
 import type { SaveControls } from '../../saves/components/saveControls';
+import type { PaperControls } from '../../newspaper/components/paperControls';
 import type { PhotoControls } from '../../photo/components/photoControls';
 import type { DebugControls } from '../../debug/components/debugControls';
 
@@ -171,4 +172,5 @@ export interface HudControls {
   readonly photo: PhotoControls;
   // Null in a build without debug mode, which then has no Debug window, key or command.
   readonly debug: DebugControls | null;
+  readonly paper: PaperControls;
 }

@@ -1,6 +1,13 @@
 import { USUAL_MIX, type PartyMix } from '../../guests/domain/parties';
-import type { DayCounts, DayReport } from './dayReport';
+import {
+  addEvents,
+  type DayCounts,
+  type DayReport,
+  type EventTally,
+  type PhotoSpot,
+} from './dayReport';
 import { netOf, REASONS, type Column } from './ledger';
+import { loudest, type ThoughtTally } from './thoughts';
 import { USUAL_WEATHER, type WeatherBands } from './weather';
 
 export const SEASON_DAYS = 28;
@@ -10,6 +17,9 @@ const EARLY_DAYS = 7;
 const HOLIDAY_DAYS = 14;
 
 export const SEASONS_KEPT = 8;
+
+// Enough for the season paper's lead, its complaints desk and a spare.
+export const SEASON_VOICES = 6;
 
 export type SeasonPhase = 'early' | 'holidays' | 'late' | 'closing';
 
@@ -139,6 +149,11 @@ export interface SeasonTally {
   readonly money: Column;
   readonly busiest: DayMark | null;
   readonly best: DayMark | null;
+  // Absent until a day had one, and in saves from before the season paper.
+  readonly voices?: readonly ThoughtTally[];
+  readonly events?: EventTally;
+  readonly photos?: number;
+  readonly topSpot?: PhotoSpot;
 }
 
 export interface SeasonReport {
@@ -158,6 +173,11 @@ export interface SeasonReport {
   readonly balance: number;
   readonly busiest: DayMark | null;
   readonly best: DayMark | null;
+  // Absent until a day had one, and in saves from before the season paper.
+  readonly voices?: readonly ThoughtTally[];
+  readonly events?: EventTally;
+  readonly photos?: number;
+  readonly topSpot?: PhotoSpot;
 }
 
 const NO_MONEY = Object.fromEntries(REASONS.map((reason) => [reason, 0])) as Column;
@@ -202,8 +222,48 @@ export function tallyDay(tally: SeasonTally, report: DayReport): SeasonTally {
     money: addMoney(tally.money, report.money),
     busiest: higher(tally.busiest, report.day, report.present),
     best: higher(tally.best, report.day, netOf(report.money)),
+    ...tallyStory(tally, report),
   };
 }
+
+// Only what a day had is written, so a season without any reads as one from before the paper.
+const tallyStory = (tally: SeasonTally, report: DayReport): Partial<SeasonTally> => ({
+  ...seasonVoices(addVoices(tally.voices ?? [], report.loudest)),
+  ...seasonEvents(report.events ? addEvents(tally.events, report.events) : tally.events),
+  ...seasonPhotos((tally.photos ?? 0) + (report.photos?.taken ?? 0)),
+  ...seasonSpot(topSpotOf(tally.topSpot, report.photos?.spots ?? [])),
+});
+
+const seasonVoices = (voices: readonly ThoughtTally[]) => (voices.length > 0 ? { voices } : {});
+
+const seasonEvents = (events: EventTally | undefined) => (events ? { events } : {});
+
+const seasonPhotos = (photos: number) => (photos > 0 ? { photos } : {});
+
+const seasonSpot = (topSpot: PhotoSpot | undefined) => (topSpot ? { topSpot } : {});
+
+// Ties keep the earlier spot, as a day's marks do.
+const topSpotOf = (top: PhotoSpot | undefined, spots: readonly PhotoSpot[]) =>
+  spots.reduce<PhotoSpot | undefined>(
+    (best, spot) => (best && best.count >= spot.count ? best : spot),
+    top,
+  );
+
+// Only each day's loudest are added, so a thought heard a little every day can be missed.
+function addVoices(
+  season: readonly ThoughtTally[],
+  day: readonly ThoughtTally[],
+): readonly ThoughtTally[] {
+  if (day.length === 0) return season;
+  const sums = new Map(season.map((voice) => [voiceKey(voice), voice]));
+  for (const voice of day) {
+    const key = voiceKey(voice);
+    sums.set(key, { ...voice, count: (sums.get(key)?.count ?? 0) + voice.count });
+  }
+  return loudest(sums, SEASON_VOICES);
+}
+
+const voiceKey = (voice: ThoughtTally): string => `${voice.kind}|${voice.subject ?? ''}`;
 
 // The closing day ends before its own report is written: its goodbyes and takings count, but it
 // is not a day of the season, so it never sets a mark or the mean stars.
@@ -237,6 +297,10 @@ export function closeSeason(tally: SeasonTally, season: Season, balance: number)
     balance,
     busiest: tally.busiest,
     best: tally.best,
+    ...seasonVoices(tally.voices ?? []),
+    ...seasonEvents(tally.events),
+    ...seasonPhotos(tally.photos ?? 0),
+    ...seasonSpot(tally.topSpot),
   };
 }
 

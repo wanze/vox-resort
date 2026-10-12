@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import type { SeasonView } from '../../sim/domain/season';
-import { seasonLine, seasonTitle } from './seasonWords';
+import { seasonLine, seasonTitle } from '../domain/seasonWords';
 
 export interface TimeOfDayProps {
   readonly dayElement: RefObject<HTMLSpanElement | null>;

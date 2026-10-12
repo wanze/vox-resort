@@ -9,6 +9,7 @@
 @import url('../features/events/components/events.css') layer(features);
 @import url('../features/guest-view/components/guest-view.css') layer(features);
 @import url('../features/highlights/components/highlights.css') layer(features);
+@import url('../features/newspaper/components/newspaper.css') layer(features);
 @import url('../features/overlays/components/overlays.css') layer(features);
 @import url('../features/photo/components/photo.css') layer(features);
 @import url('../features/saves/components/saves.css') layer(features);

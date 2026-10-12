@@ -27,6 +27,95 @@
   size-adjust: 114.286%;
 }
 
+/* The season paper's faces, and nothing else's: a printed page, not the HUD. The blackletter
+   has no latin-ext cut, so a name it lacks a letter for falls back to the serif. */
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-400-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-ext-400-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-400-italic.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-ext-400-italic.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-700-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Old Standard TT';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('@fontsource/old-standard-tt/files/old-standard-tt-latin-ext-700-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: UnifrakturMaguntia;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@fontsource/unifrakturmaguntia/files/unifrakturmaguntia-latin-400-normal.woff2')
+    format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
 :root {
   color-scheme: light;
 
@@ -124,6 +213,21 @@
   --print-vignette: inset 0 0 0 1px var(--print-edge), inset 0 0 24px rgb(70 44 14 / 42%);
   /* CSS's sepia adds about a tenth to red and green, so the brightness takes that off and more. */
   --print-fade: sepia(0.3) saturate(0.85) brightness(0.85);
+  /* The season paper is a printed object, so it keeps these whatever the HUD's theme. */
+  --paper: #ebe8df;
+  --paper-shade: #dedad0;
+  --ink: #1c1b19;
+  --ink-soft: #4a4740;
+  --paper-rule: #2a2925;
+  --paper-dots: #9d978a;
+  --paper-column: #b9b4a8;
+  --headline-red: #b8221a;
+  --headline-red-ink: #fbf6ee;
+  --paper-hatch: rgb(28 27 25 / 18%);
+  --shadow-paper: 0 1px 0 rgb(0 0 0 / 25%), 0 18px 40px rgb(0 0 0 / 45%);
+  --shadow-issue: 0 6px 14px rgb(0 0 0 / 35%);
+  --font-paper: 'Old Standard TT', 'Iowan Old Style', georgia, 'Times New Roman', serif;
+  --font-masthead: unifrakturmaguntia, 'Old English Text MT', var(--font-paper);
   /* A camera's viewfinder over the scene: marks light enough to read on sky and sea alike. */
   --viewfinder-mark: rgb(255 250 240 / 88%);
   --viewfinder-faint: rgb(255 250 240 / 28%);

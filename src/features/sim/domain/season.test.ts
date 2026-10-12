@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { countArrivals, countDeparture, countTurnedAway, reportOf, startDay } from './dayReport';
+import {
+  countArrivals,
+  countDeparture,
+  countEvent,
+  countPhoto,
+  countTurnedAway,
+  reportOf,
+  startDay,
+  type DayCounts,
+} from './dayReport';
 import { closeDay, createLedger, record, REASONS } from './ledger';
 import { arrivalsFor, type Rating } from './rating';
 import {
@@ -16,6 +25,7 @@ import {
   phaseOfSeasonDay,
   phaseOn,
   SEASON_DAYS,
+  SEASON_VOICES,
   SEASONS_KEPT,
   seasonDayOf,
   seasonOfOldSave,
@@ -25,7 +35,7 @@ import {
   USUAL_EFFECT,
   type SeasonPhase,
 } from './season';
-import { createDay } from './thoughts';
+import { createDay, tallyInto, type ThoughtKind } from './thoughts';
 import { WEATHER_DRAWS } from './weather';
 
 const PHASES: readonly SeasonPhase[] = ['early', 'holidays', 'late', 'closing'];
@@ -171,6 +181,119 @@ describe('the season report', () => {
     }
     expect(seasons).toHaveLength(SEASONS_KEPT);
     expect(seasons.at(-1)!.number).toBe(SEASONS_KEPT + 3);
+  });
+});
+
+const storyDay = (
+  day: number,
+  heard: readonly (readonly [ThoughtKind, string | null, number])[],
+  counts: DayCounts = startDay(day),
+) => {
+  const thoughts = createDay();
+  for (const [kind, subject, times] of heard) {
+    for (let time = 0; time < times; time++) tallyInto(thoughts, kind, subject);
+  }
+  return reportOf({
+    counts,
+    rating: FOUR_STARS,
+    present: 10,
+    beds: { total: 60, taken: 10 },
+    ledger: closeDay(createLedger('tycoon', 0)),
+    thoughts,
+  });
+};
+
+const shot = (key: string) => ({
+  key,
+  subject: key,
+  kind: 'view' as const,
+  x: 0,
+  y: 0,
+  z: 0,
+  heading: 0,
+  minute: 600,
+});
+
+const photographed = (day: number, keys: readonly string[]) =>
+  keys.reduce((counts, key) => countPhoto(counts, shot(key)), startDay(day));
+
+describe('what the season paper reads from the tally', () => {
+  it('adds up the loudest thoughts of each day and keeps the loudest of the season', () => {
+    let tally = startTally();
+    tally = tallyDay(
+      tally,
+      storyDay(1, [
+        ['queue-too-long', 'Tiki Bar', 5],
+        ['littered', null, 2],
+      ]),
+    );
+    tally = tallyDay(
+      tally,
+      storyDay(2, [
+        ['queue-too-long', 'Tiki Bar', 4],
+        ['sunset', null, 3],
+      ]),
+    );
+    tally = tallyDay(
+      tally,
+      storyDay(3, [
+        ['hurt', null, 6],
+        ['enjoyed', 'Pool', 1],
+      ]),
+    );
+    tally = tallyDay(
+      tally,
+      storyDay(4, [
+        ['filthy', 'Taverna', 2],
+        ['broken', 'Slide', 1],
+      ]),
+    );
+    expect(tally.voices).toHaveLength(SEASON_VOICES);
+    expect(tally.voices![0]).toEqual({ kind: 'queue-too-long', subject: 'Tiki Bar', count: 9 });
+    expect(tally.voices![1]).toEqual({ kind: 'hurt', subject: null, count: 6 });
+  });
+
+  it('adds nothing for a day nobody thought, photographed or watched anything', () => {
+    const tally = tallyDay(startTally(), storyDay(1, []));
+    expect(tally).not.toHaveProperty('voices');
+    expect(tally).not.toHaveProperty('events');
+    expect(tally).not.toHaveProperty('photos');
+    expect(tally).not.toHaveProperty('topSpot');
+  });
+
+  it('sums the events of the days, writing fireworks only once there were some', () => {
+    const quiet = countEvent(startDay(1), { held: 2, audience: 40, called: 1 });
+    const loud = countEvent(startDay(2), { held: 1, audience: 90, called: 0, fireworks: 1 });
+    let tally = tallyDay(startTally(), storyDay(1, [], quiet));
+    expect(tally.events).toEqual({ held: 2, audience: 40, called: 1 });
+    tally = tallyDay(tally, storyDay(2, [], loud));
+    expect(tally.events).toEqual({ held: 3, audience: 130, called: 1, fireworks: 1 });
+  });
+
+  it('counts the photos and keeps the spot photographed most on any one day', () => {
+    let tally = tallyDay(startTally(), storyDay(1, [], photographed(1, ['pier', 'pier', 'bar'])));
+    tally = tallyDay(tally, storyDay(2, [], photographed(2, ['pool', 'pool', 'pool', 'bar'])));
+    tally = tallyDay(tally, storyDay(3, [], photographed(3, ['bar', 'bar', 'bar'])));
+    expect(tally.photos).toBe(10);
+    expect(tally.topSpot).toMatchObject({ key: 'pool', count: 3 });
+  });
+
+  it('reports a season without them just as before', () => {
+    let tally = startTally();
+    tally = tallyDay(tally, dayReport(3, { stars: 3.5, present: 20, visit: 100 }));
+    const report = closeSeason(tally, firstSeason(3), 0);
+    expect(Object.keys(report)).toEqual(Object.keys(closeSeason(startTally(), firstSeason(3), 0)));
+    expect(report).not.toHaveProperty('voices');
+  });
+
+  it('copies them onto the report when the season had them', () => {
+    const counts = countEvent(photographed(1, ['pier']), { held: 1, audience: 9, called: 0 });
+    const tally = tallyDay(startTally(), storyDay(1, [['sunset', null, 2]], counts));
+    const report = closeSeason(tally, firstSeason(1), 0);
+    expect(report.voices).toEqual([{ kind: 'sunset', subject: null, count: 2 }]);
+    expect(report.events).toEqual({ held: 1, audience: 9, called: 0 });
+    expect(report.photos).toBe(1);
+    expect(report.topSpot).toMatchObject({ key: 'pier' });
   });
 });
 

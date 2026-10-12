@@ -10,7 +10,11 @@
     "scripts/simReport.test.ts"
   ],
   "ignorePatterns": [".smoke/**", "voxel-gen/out/**"],
-  "ignoreDependencies": ["@fontsource/jersey-15"],
+  "ignoreDependencies": [
+    "@fontsource/jersey-15",
+    "@fontsource/old-standard-tt",
+    "@fontsource/unifrakturmaguntia"
+  ],
   "health": {
     "ignore": [
       "voxel-gen/models/**",
@@ -21,7 +25,12 @@
     ]
   },
   "duplicates": {
-    "ignore": ["voxel-gen/models/**", "voxel-gen/variants/**", "voxel-gen/mosaics/styles/**"]
+    "ignore": [
+      "voxel-gen/models/**",
+      "voxel-gen/variants/**",
+      "voxel-gen/mosaics/styles/**",
+      "src/app/styles/tokens.css"
+    ]
   },
   "boundaries": {
     "zones": [

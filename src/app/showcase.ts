@@ -72,6 +72,7 @@ import { carryUpkeep, cleanliness } from '../features/sim/domain/upkeep';
 import { carryBreakdowns, isBroken } from '../features/sim/domain/breakdowns';
 import { litterSummary, pruneLitter, type Litter } from '../features/sim/domain/litter';
 import { loudest } from '../features/sim/domain/thoughts';
+import type { PhotoSpot } from '../features/sim/domain/dayReport';
 import {
   hire,
   shortOf,
@@ -306,6 +307,9 @@ import {
 import type { RideCommand } from '../features/guest-view/domain/followRules';
 import { createGuestView } from './guestView';
 import { createPhotoMode, type Viewpoint } from './photoMode';
+import type { EditionPhoto } from '../features/newspaper/domain/edition';
+import { photoCallDue } from '../features/newspaper/domain/photoCall';
+import { TICKS_PER_HOUR } from '../features/resort-sim/domain/simNow';
 import type { PhotoPixels, PhotoSize } from '../features/photo/domain/photoPixels';
 import { snapLookTime } from '../features/photo/domain/photoView';
 import type { GuestNeed } from '../../voxel-gen/voxelgen.ts';
@@ -403,6 +407,9 @@ const AIM_HEIGHT = hipHeight(ADULT_VOXELS);
 
 const LOUDEST_SHOWN = 5;
 
+// Stored at 1200x800 at most, so this is drawn a little under and scaled up no further.
+const FRONT_FALLBACK = { width: 960, height: 640 };
+
 // Also published as window.__voxBench, which scripts/bench.ts reads.
 export interface BenchResult {
   readonly config: BenchConfig;
@@ -439,8 +446,11 @@ export interface ShowcaseOptions {
   // Something a save would keep has changed. Not per step: from the places that already tell React.
   readonly onDirty?: () => void;
   readonly onMorning?: () => void;
-  // Once the season's report is written; never for a load of a resort already in a break.
-  readonly onSeasonEnded?: () => void;
+  // Once the season's report is written; never for a load of a resort already in a break. The
+  // front-page photo comes along when none was kept for the season, taken as it ended.
+  readonly onSeasonEnded?: (fallback: Promise<FrontCapture> | null) => void;
+  // The last evening of a season, once, with the clock paused and the speed it ran at.
+  readonly onPhotoCall?: (season: number, speed: SimSpeed) => void;
   // Only for what the player does, never for a load or a settle laying the plot out again.
   readonly onCue?: (cue: BuildCue) => void;
   // At most five times a second of real time, with one scene object reused every time.
@@ -455,9 +465,22 @@ export interface ShowcaseOptions {
   readonly onLoading?: (step: LoadingStep) => void;
 }
 
+export interface FrontCapture {
+  readonly season: number;
+  readonly pixels: PhotoPixels;
+  readonly origin: EditionPhoto;
+}
+
 export interface Showcase {
   readonly benchResult: BenchResult | null;
   readonly params: ResortParams;
+  readonly gameId: string;
+  // A save kept as new is another game from here on, with its own newspapers.
+  forkGame(): string;
+  // The season a front-page photo is kept for, so the call is not made twice.
+  setPhotoCallAnswered(season: number | null): void;
+  // The guests' favourite view of the season, else the player's own, drawn before the first await.
+  frontFallback(): Promise<FrontCapture>;
   setOpen(open: boolean): void;
   // Only in a break; the speed is the HUD's to resume.
   openSeason(): void;
@@ -2286,6 +2309,10 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   resort.photos.heat = new Float32Array(network.nodes.length);
 }
 
+// The tally starts afresh when the season closes, so in a break the closed report has it.
+const topSpotNow = (resort: Resort): PhotoSpot | undefined =>
+  (inBreak(resort.season) ? resort.seasons.at(-1) : resort.seasonTally)?.topSpot;
+
 export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase> {
   const { canvas, onFrame, hud, onSpeedChange } = options;
   const mountStarted = performance.now();
@@ -2298,7 +2325,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     forceMainThread: bench?.forceMainThreadMeshing ?? false,
   });
   const starting = startingParams(bench);
-  const identity: ResortIdentity = { params: starting, name: resortNameFor(starting.seed) };
+  const identity: ResortIdentity = {
+    params: starting,
+    name: resortNameFor(starting.seed),
+    gameId: crypto.randomUUID(),
+  };
   const [catalogue, first] = await Promise.all([
     meshModels(bench).then(loaded('models', options.onLoading)),
     startingSource(bench, starting)
@@ -2378,6 +2409,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
   let drift = driftFor(options, bench, handle);
+  // Both per game: asked keeps the call to once even before the answer is stored.
+  let photoCallAnswered: number | null = null;
+  let photoCallAsked: number | null = null;
   let turbo = false;
   let fastNights = !bench;
   let nightFast = false;
@@ -2865,7 +2899,30 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     options.onDirty?.();
   };
 
+  // Never under a bench or behind the welcome screen, which nobody is there to answer.
+  const callableSeason = (): number | null => {
+    const { season } = current();
+    const hour = Math.floor(clock.tickOfDay / TICKS_PER_HOUR);
+    const due = photoCallDue(season, clock.day, hour, photoCallAnswered);
+    return due && !bench && drift === null ? season!.number : null;
+  };
+
+  const pause = (): void => {
+    clock.setSpeed('paused');
+    onSpeedChange?.('paused');
+  };
+
+  const photoCall = (): void => {
+    const season = callableSeason();
+    if (season === null || photoCallAsked === season) return;
+    photoCallAsked = season;
+    const speed = clock.speed;
+    pause();
+    options.onPhotoCall?.(season, speed);
+  };
+
   const hourly = (): void => {
+    photoCall();
     hud.publish({
       ...works.place(),
       season: seasonNow(),
@@ -2909,8 +2966,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // The break holds the clock at paused, so the crowd stands still with it and nothing is charged.
   const seasonEnded = (): void => {
-    clock.setSpeed('paused');
-    onSpeedChange?.('paused');
+    pause();
     hud.publish({
       season: seasonNow(),
       seasons: current().seasons,
@@ -2918,9 +2974,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       advice: advise(),
       status: report(),
       ledger: current().ledger,
+      voices: voicesOf(current()),
     });
     options.onDirty?.();
-    options.onSeasonEnded?.();
+    options.onSeasonEnded?.(fallbackAtEnd());
+  };
+
+  // Drawn now, before any later frame: the resort as the season left it.
+  const fallbackAtEnd = (): Promise<FrontCapture> | null =>
+    bench || photoCallAnswered === current().season?.number ? null : frontFallback();
+
+  const frontFallback = (): Promise<FrontCapture> => {
+    const resort = current();
+    const season = resort.season?.number ?? 0;
+    const spot = topSpotNow(resort);
+    if (spot) {
+      const origin = { from: 'guests', subject: spot.subject, minute: spot.minute } as const;
+      return photo.pictureOf(spot, FRONT_FALLBACK).then((pixels) => ({ season, pixels, origin }));
+    }
+    const origin = { from: 'camera', day: clock.day, minute: clock.tickOfDay } as const;
+    return photo.capture(1).then((pixels) => ({ season, pixels, origin }));
   };
 
   // Everything React shows is told again: the HUD still holds the game that was replaced.
@@ -2944,6 +3017,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       season: seasonNow(),
       seasons: current().seasons,
       name: identity.name,
+      gameId: identity.gameId,
       camera: cameraView(),
     });
   };
@@ -2984,6 +3058,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     selection,
     running: () => running,
     identity,
+    mintGameId: () => crypto.randomUUID(),
     populationOf: (prepared) => populationOf(prepared.plan, prepared.plot, undefined),
     restoreGame: (resort, saved) => restoreGame(resort, saved, clock),
     reanchor,
@@ -2998,7 +3073,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       handle.controls.enabled = true;
     },
     rebuilt,
-    onResortReplaced: () => options.onResortReplaced?.(),
+    onResortReplaced: () => {
+      photoCallAnswered = null;
+      photoCallAsked = null;
+      options.onResortReplaced?.();
+    },
     onSpeedChange: (speed) => onSpeedChange?.(speed),
   });
 
@@ -3181,6 +3260,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     season: seasonNow(),
     seasons: current().seasons,
     name: identity.name,
+    gameId: identity.gameId,
     ledger: current().ledger,
     land: landNow(),
     programme: programmeNow(),
@@ -3194,6 +3274,18 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     get params() {
       return identity.params;
     },
+    get gameId() {
+      return identity.gameId;
+    },
+    forkGame() {
+      identity.gameId = crypto.randomUUID();
+      hud.publish({ gameId: identity.gameId });
+      return identity.gameId;
+    },
+    setPhotoCallAnswered(season) {
+      photoCallAnswered = season;
+    },
+    frontFallback,
     setOpen(open) {
       const resort = current();
       // Between seasons only the next season opens the gates.

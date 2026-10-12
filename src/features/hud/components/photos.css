@@ -90,17 +90,6 @@
 }
 
 /* Over the windows and the strip, as the command palette is, in the middle of the screen. */
-.hud-lightbox-layer {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal);
-  display: grid;
-  place-items: center;
-  padding: calc(16px + var(--safe-t)) calc(16px + var(--safe-r)) calc(16px + var(--safe-b))
-    calc(16px + var(--safe-l));
-  pointer-events: auto;
-}
-
 .hud-lightbox-scrim {
   background: var(--veil-deep);
 }

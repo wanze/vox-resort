@@ -75,6 +75,8 @@ export function restoreCamera(handle: SceneHandle, camera: CameraSnapshot): void
 export interface ResortIdentity {
   params: ResortParams;
   name: string;
+  // Names the game's newspapers; a new one for a new game, a shared resort or a fork.
+  gameId: string;
 }
 
 interface LifecycleParts {
@@ -90,6 +92,8 @@ interface LifecycleParts {
   readonly running: () => boolean;
   // Shared with the showcase, whose lettering and renaming read it too.
   readonly identity: ResortIdentity;
+  // Passed in, so the lifecycle needs no crypto to be tested.
+  readonly mintGameId: () => string;
   readonly populationOf: (prepared: PreparedResort) => number;
   readonly restoreGame: (resort: Resort, saved: GameSnapshot) => void;
   readonly reanchor: () => void;
@@ -169,6 +173,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     const prepared = await preparer.prepare(prepRequestFor(source, bench));
     if (request !== requested || !parts.running()) return;
     identity.params = asked;
+    identity.gameId = parts.mintGameId();
     build.abandon();
     // The person index and the placement key both name something on the old plot.
     selection.select(null);
@@ -200,6 +205,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
       world: savedWorldOf(resort.plan, resort.terrain, resort.plot, resort.rights),
       params: identity.params,
       name: identity.name,
+      gameId: identity.gameId,
       population: resort.guests.count,
       staffCount: resort.staffPool.count,
       resort: snapshotResort(resort),
@@ -232,6 +238,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     restoreCamera(handle, saved.camera);
     identity.params = saved.params;
     identity.name = savedResortName(saved.name, saved.params.seed);
+    identity.gameId = saved.gameId ?? parts.mintGameId();
     parts.rebuilt();
     parts.onSpeedChange('paused');
   };

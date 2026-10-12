@@ -226,6 +226,15 @@ function LastShot({ photo }: { readonly photo: PhotoControls }) {
   return (
     <div className="ui-row ui-row--wrap photo-group" role="group" aria-label="Last photo">
       <span className="photo-name">{photo.shot.name}</span>
+      {photo.frontPage.session ? (
+        <button
+          type="button"
+          className="ui-button-large ui-button-large--primary"
+          onClick={photo.frontPage.use}
+        >
+          Use for front page
+        </button>
+      ) : null}
       <button type="button" className="ui-button-large" onClick={photo.save}>
         Save
       </button>

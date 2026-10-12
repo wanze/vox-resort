@@ -122,6 +122,18 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     for (const group of parts.hudGroups()) group.visible = shown;
   };
 
+  // Put back as they were, which in photo mode is hidden already.
+  const withoutHud = <T>(draw: () => T): T => {
+    const groups = parts.hudGroups();
+    const shown = groups.map((group) => group.visible);
+    showHud(false);
+    try {
+      return draw();
+    } finally {
+      groups.forEach((group, at) => (group.visible = shown[at]!));
+    }
+  };
+
   // The lens is the photo's own, so the detail around a far spot is drawn as near as it is.
   const detailFor = (view: { x: number; y: number; z: number }, height: number, fov: number) => {
     if (!parts.detail()) return;
@@ -179,11 +191,12 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
       handle.setFov(clampFov(degrees));
     },
     // Detail is chosen for the photo's own size, and the screen's is put back once it is drawn.
+    // Outside photo mode too, for the newspaper's front page, so the HUD's marks stay out of it.
     capture(scale) {
       const size = photoSize(handle.drawingBufferSize(), scale, MAX_PHOTO_SIDE);
       detailFor(handle.detailView(), size.height, handle.fov);
       try {
-        return capturer.capture(handle.scene, handle.camera, size);
+        return withoutHud(() => capturer.capture(handle.scene, handle.camera, size));
       } finally {
         restoreDetail();
       }
@@ -209,14 +222,10 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
       const flash = flashFor(spot.minute);
       clock.setLookTime(spot.minute / MINUTES_PER_DAY);
       handle.setFlash(flash);
-      const groups = parts.hudGroups();
-      const shown = groups.map((group) => group.visible);
-      showHud(false);
       try {
-        const taken = capturer.capture(handle.scene, pictureCamera, size);
+        const taken = withoutHud(() => capturer.capture(handle.scene, pictureCamera, size));
         return taken.then((pixels) => flashed(pixels, flash));
       } finally {
-        groups.forEach((group, at) => (group.visible = shown[at]!));
         handle.setFlash(0);
         clock.setLookTime(lookTime);
         restoreDetail();

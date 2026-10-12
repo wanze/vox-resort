@@ -29,6 +29,7 @@ import { useClickCues, useSound, useToastCues } from './useSound';
 import { useUpdate } from './useUpdate';
 import { useIncomingLink, useShareLink } from './useSharing';
 import { usePhotoMode } from './usePhotoMode';
+import { useNewspaper, type Newspaper as NewspaperState } from './useNewspaper';
 import { useAnalytics } from './useAnalytics';
 import { track } from '../features/analytics/adapters/tracker';
 import { startedOf, type GameSource } from '../features/analytics/domain/gameEvents';
@@ -37,6 +38,8 @@ import { DEBUG_MODE } from './debugFlag';
 import { PhotoBar } from '../features/photo/components/PhotoBar';
 import { PhotoFilterDefs } from '../features/photo/components/PhotoFilterDefs';
 import { PhotoViewfinder } from '../features/photo/components/PhotoViewfinder';
+import { Newspaper } from '../features/newspaper/components/Newspaper';
+import { PhotoCall } from '../features/newspaper/components/PhotoCall';
 import { isCompact, type LayoutMode } from '../features/hud/domain/layoutMode';
 import type { PhotoControls } from '../features/photo/components/photoControls';
 import type { SharedResort } from '../features/sharing/domain/sharedResort';
@@ -276,6 +279,7 @@ function useControls(
 ) {
   const clock = useClockControls(showcase, hud);
   const guestView = useGuestView(showcase, hud);
+  const photo = usePhotoMode(showcase, { clock, selectTool, following: guestView.following, hud });
   return {
     camera: useCameraControls(showcase, hud),
     clock,
@@ -283,7 +287,8 @@ function useControls(
     guestView,
     placement: usePlacement(showcase, hud),
     programme: useProgramme(showcase, hud),
-    photo: usePhotoMode(showcase, { clock, selectTool, following: guestView.following, hud }),
+    photo,
+    newspaper: useNewspaper(showcase, hud, clock, photo.startFrontPage),
     debug: useDebug(showcase, hud, clock.resume),
   };
 }
@@ -339,6 +344,19 @@ const photoFlag = (photo: PhotoControls): '' | undefined => (photo.on ? '' : und
 const photoFilterOf = (photo: PhotoControls): string | undefined =>
   photo.on ? photo.filter : undefined;
 
+// Over the HUD and the game alike: the paper and the call each stop the clock.
+function PaperLayer(props: { readonly newspaper: NewspaperState; readonly playing: boolean }) {
+  const { newspaper } = props;
+  const { open } = newspaper.paper;
+  if (!props.playing) return null;
+  return (
+    <>
+      <PhotoCall call={newspaper.call} />
+      {open ? <Newspaper paper={open} controls={newspaper.paper} /> : null}
+    </>
+  );
+}
+
 // Beside the HUD, not in it: photo mode hides the HUD.
 function PhotoLayer(props: { readonly photo: PhotoControls; readonly layout: LayoutMode }) {
   if (!props.photo.on) return null;
@@ -366,11 +384,8 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, guestView, placement, programme, photo, debug } = useControls(
-    showcaseRef,
-    hud,
-    selectTool,
-  );
+  const { camera, clock, inspector, guestView, placement, programme, photo, debug, newspaper } =
+    useControls(showcaseRef, hud, selectTool);
   const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
     hud,
@@ -386,7 +401,7 @@ export function App() {
   );
   const { resort, adoptLoading } = welcome;
   const sound = useSound(!playing);
-  const { windows, layout, menu, setMenu, palette, setPalette, bar, onSeasonEnded } = useHudChrome(
+  const { windows, layout, menu, setMenu, palette, setPalette, bar } = useHudChrome(
     clock,
     tool,
     selectTool,
@@ -412,6 +427,7 @@ export function App() {
   const { markDirty, morning } = saves;
   const { hearEvent } = news;
   const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
+  const { onSeasonEnded, onPhotoCall } = newspaper;
   const { cue: onCue, hear: onHear } = sound;
 
   useEffect(() => {
@@ -435,6 +451,7 @@ export function App() {
       onDirty: markDirty,
       onMorning,
       onSeasonEnded,
+      onPhotoCall,
       onCue,
       onHear,
       onSpeedChange: adoptSpeed,
@@ -481,6 +498,7 @@ export function App() {
     markDirty,
     onMorning,
     onSeasonEnded,
+    onPhotoCall,
     onCue,
     onHear,
     adoptSpeed,
@@ -530,6 +548,7 @@ export function App() {
             guestView,
             photo,
             debug,
+            paper: newspaper.paper,
           }}
           placement={{
             tool,
@@ -557,6 +576,7 @@ export function App() {
         />
       </Screen>
       <PhotoLayer photo={photo} layout={layout} />
+      <PaperLayer newspaper={newspaper} playing={playing} />
     </div>
   );
 }

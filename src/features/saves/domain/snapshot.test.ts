@@ -228,6 +228,12 @@ describe('gameSnapshotSchema', () => {
     expect(parsed.data?.resort.names).toEqual([]);
   });
 
+  it('takes a save with a game id for its newspapers, and one from before them without', () => {
+    const parsed = gameSnapshotSchema.safeParse({ ...gameFixture(), gameId: 'game-1' });
+    expect(parsed.data?.gameId).toBe('game-1');
+    expect(gameSnapshotSchema.safeParse(gameFixture()).data).not.toHaveProperty('gameId');
+  });
+
   it('survives a structured clone, which is how IndexedDB stores it', () => {
     const cloned: unknown = structuredClone(gameFixture());
     expect(gameSnapshotSchema.safeParse(cloned).success).toBe(true);
@@ -258,5 +264,12 @@ describe('metaOf', () => {
     const { resortName: _resortName, ...meta } = metaOf('a', 'Cove', nameless, 1234);
     expect(metaOf('a', 'Cove', nameless, 1234)).toEqual(meta);
     expect(isReadable(listedOf(meta))).toBe(true);
+  });
+
+  it('copies the game id, so the archive is swept from the list alone', () => {
+    const meta = metaOf('a', 'Cove', { ...gameFixture(), gameId: 'game-1' }, 1234);
+    expect(meta.gameId).toBe('game-1');
+    expect(isReadable(listedOf(meta))).toBe(true);
+    expect(metaOf('a', 'Cove', gameFixture(), 1234)).not.toHaveProperty('gameId');
   });
 });

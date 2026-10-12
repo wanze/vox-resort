@@ -418,11 +418,55 @@ day starts at the 11:00 check-in.
 - **The season report** (the Season tab of the overview): days, mean, best and
   worst stars, guests arrived, turned away and checked out, reviews, money by
   reason, net, balance, busiest and best day. The closing day's goodbyes and
-  takings count, but it is not a day of the season.
+  takings count, but it is not a day of the season. Since the season paper the
+  tally and the report also keep, all optional: the season's six loudest
+  thoughts (`voices`, the sum of each day's `loudest`), its events, its photo
+  count and its most photographed spot (`topSpot`, the highest count on any
+  one day).
 - **Old saves** are cut into seasons from day 0: day 89 is season 4, which
   started on day 84, and its report covers only the days played since.
   A new building site starts season 1 on its first check-in, day 1; a generated
   resort that opens with guests starts at once.
+
+## The season paper
+
+When a season ends a newspaper opens over the stopped game instead of the
+Season window (`features/newspaper`). The Season window keeps its rows and
+lists the earlier editions; one opened there steps to the editions beside it.
+
+- **The front photo is the player's.** On the last night of the season at
+  19:00 (`PHOTO_CALL_HOUR`, `photoCall.ts`) the game pauses and asks for a
+  front-page photo, while the resort is still full; by the season's end the
+  last guests have gone. **Take front-page photo** opens photo mode with **Use
+  for front page** beside Save; **Skip**, or leaving photo mode without using a
+  shot, takes the fallback at once: the season's most photographed spot through
+  `pictureOf`, else the player's camera. The shot is kept as the season's
+  _pending_ front page. A season ended with none (a debug jump, a game not
+  running that evening) takes the same fallback in the `seasonEnded` call.
+- **Facts, not words.** An edition (`edition.ts`) stores the closed report, the
+  one before, the best mean of the seasons still kept, the last six reviews,
+  the mode, the name and where the photo came from. The headline and the copy
+  are written when the paper is shown (`stories.ts` ranks the stories,
+  `wording.ts` holds the templates, `frontPage.ts` writes every string), seeded
+  by the `gameId` and the season, so an edition reads the same each time. A
+  mean under 3 stars, or a loss in tycoon, prints the **Bugle** (tabloid);
+  otherwise the **Courier**. A sandbox paper never mentions money.
+- **Newsprint is drawn when shown.** The photo is stored in colour without a
+  caption, at most 1200 x 800, JPEG 0.75; `newsprint.ts` screens it in ink on
+  paper (35 % dots) each time it opens, so a new screen reprints every edition.
+- **The archive is its own database**, `vox-resort-papers`: `editions` keyed by
+  `[gameId, season]` and `pending` keyed by `gameId`. A failure there costs only
+  the archive; the paper still opens. An edition is about 3 KB of record and a
+  photo of 220-320 KB, so fifty seasons are some 15 MB.
+- **A game has a `gameId`**, minted for a new game, a shared resort and a save
+  loaded without one; it is saved in the snapshot and the save's meta, both
+  optional. **Save as new** gives the running game a new id and copies the
+  papers to it, so two forks never share a season. Papers whose game no save
+  and no running game names are swept after a save is deleted and after a new
+  game's first autosave, never on a list of saves that failed or did not read.
+- **Fonts**: Old Standard TT for the paper and UnifrakturMaguntia for the
+  masthead, from `@fontsource`, latin and latin-ext, declared in `tokens.css`
+  and precached by the service worker.
 
 ## Advice
 

@@ -1,0 +1,556 @@
+/* The season paper: a newsprint sheet over the stopped game, from the draft in
+   plans/110-season-newspaper-mockup.html. Its own colours and faces, whatever the HUD's. Every
+   size follows the sheet's own width (cqi), so the whole page shrinks with the window. */
+
+.newspaper-scrim,
+.newspaper-call-scrim {
+  background: var(--veil-deep);
+}
+
+.newspaper {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: min(1200px, 100%);
+  max-height: 100%;
+  border-radius: var(--radius-pebble);
+  animation: ui-pop var(--pop);
+}
+
+.newspaper .ui-window-head {
+  cursor: auto;
+}
+
+/* As a phone's windows have it, wherever the HUD is laid out for a small screen. */
+.app:not([data-layout='desk']) .newspaper .ui-window-close {
+  width: 44px;
+  height: 44px;
+}
+
+.newspaper-actions {
+  flex: none;
+  justify-content: flex-start;
+  margin: 0 var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+/* Room round the sheet for its tilt and shadow; sideways it never scrolls. */
+.newspaper-scroll {
+  container: paper / inline-size;
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+@media (width <= 600px) {
+  .newspaper-scroll {
+    padding: var(--space-2);
+  }
+}
+
+/* The sheet */
+
+.newspaper-sheet {
+  --sheet-pad: clamp(12px, 3cqi, 28px);
+
+  position: relative;
+  padding: var(--sheet-pad);
+  background: var(--grain), var(--paper);
+  color: var(--ink);
+  font-family: var(--font-paper);
+  font-size: clamp(12px, 1.2cqi, 16px);
+  line-height: 1.45;
+  box-shadow: var(--shadow-paper);
+  transform: rotate(-0.25deg);
+  transform-origin: 50% 0;
+  animation: newspaper-land 0.7s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+
+@keyframes newspaper-land {
+  from {
+    transform: rotate(-9deg) scale(0.9) translateY(-14px);
+  }
+
+  to {
+    transform: rotate(-0.25deg) scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newspaper-sheet {
+    animation: none;
+  }
+}
+
+.newspaper-mast {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 2cqi;
+  align-items: center;
+}
+
+.newspaper-ear {
+  max-width: 14em;
+  margin: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--paper-rule);
+  font-size: 0.75em;
+  line-height: 1.3;
+}
+
+.newspaper-ear b {
+  display: block;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.newspaper-ear--right {
+  justify-self: end;
+  text-align: right;
+}
+
+.newspaper-title {
+  min-width: 0;
+  margin: 0;
+  font-family: var(--font-masthead);
+  font-size: clamp(26px, 6cqi, 84px);
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.newspaper-dateline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  justify-content: space-between;
+  margin: 8px 0 0;
+  padding: 4px 2px;
+  border-top: 3px double var(--paper-rule);
+  border-bottom: 1px solid var(--paper-rule);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.newspaper-kicker {
+  display: none;
+}
+
+.newspaper-headline {
+  margin: 0.5em 0 0.25em;
+  font-size: clamp(22px, 4cqi, 56px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.newspaper-deck {
+  max-width: 60ch;
+  margin: 0 auto 0.9em;
+  color: var(--ink-soft);
+  font-size: 1.15em;
+  font-style: italic;
+  line-height: 1.35;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.newspaper-front {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 0 2.6cqi;
+  padding-top: 12px;
+  border-top: 1px solid var(--paper-rule);
+}
+
+.newspaper-lead {
+  min-width: 0;
+}
+
+.newspaper-figure {
+  margin: 0 0 10px;
+}
+
+.newspaper-photo {
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  border: 1px solid var(--paper-rule);
+  background: var(--paper-shade);
+}
+
+.newspaper-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.newspaper-caption {
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 0.85em;
+  line-height: 1.35;
+}
+
+.newspaper-caption b {
+  color: var(--ink);
+}
+
+.newspaper-story {
+  columns: 2 15em;
+  column-gap: 2cqi;
+  column-rule: 1px solid var(--paper-column);
+  font-size: 1.05em;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.newspaper-story p {
+  margin: 0 0 0.6em;
+}
+
+.newspaper-story-lead::first-letter {
+  float: left;
+  padding: 3px 5px 0 0;
+  font-size: 3.2em;
+  font-weight: 700;
+  line-height: 0.82;
+}
+
+.newspaper-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-content: start;
+  min-width: 0;
+  padding-left: 2cqi;
+  border-left: 1px solid var(--paper-rule);
+}
+
+.newspaper-box-title {
+  margin: 0 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--paper-rule);
+  font-size: 0.82em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.newspaper-figures {
+  display: grid;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.newspaper-box {
+  min-width: 0;
+}
+
+.newspaper-figures div {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 3px 0;
+  border-bottom: 1px dotted var(--paper-dots);
+}
+
+.newspaper-figures dt {
+  color: var(--ink-soft);
+}
+
+.newspaper-figures dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.newspaper-note {
+  margin-left: 0.4em;
+  font-size: 0.88em;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.newspaper-text,
+.newspaper-brief {
+  margin: 0 0 8px;
+}
+
+.newspaper-brief b {
+  font-size: 0.85em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.newspaper-phases {
+  display: flex;
+  margin: 6px 0 4px;
+  border: 1px solid var(--paper-rule);
+  font-size: 0.72em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.newspaper-phases span {
+  flex-basis: 0;
+  min-width: 0;
+  padding: 3px 4px;
+  overflow: hidden;
+  border-right: 1px solid var(--paper-rule);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newspaper-phases span:last-child {
+  border-right: 0;
+}
+
+.newspaper-phases [data-busy] {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--paper-hatch) 3px 4px);
+}
+
+.newspaper-lower {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 2cqi;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 3px double var(--paper-rule);
+}
+
+.newspaper-column {
+  min-width: 0;
+}
+
+.newspaper-column + .newspaper-column {
+  padding-left: 2cqi;
+  border-left: 1px solid var(--paper-rule);
+}
+
+.newspaper-letter {
+  margin: 0 0 10px;
+}
+
+.newspaper-letter q {
+  font-style: italic;
+}
+
+.newspaper-letter cite {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 0.88em;
+  font-style: normal;
+}
+
+.newspaper-ads {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.newspaper-ad {
+  margin: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--paper-rule);
+  font-size: 0.92em;
+  line-height: 1.3;
+  text-align: center;
+}
+
+.newspaper-ad b {
+  display: block;
+  letter-spacing: 0.12em;
+}
+
+.newspaper-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 5px;
+  border-top: 1px solid var(--paper-rule);
+  color: var(--ink-soft);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+}
+
+/* The tabloid edition, for a bad season */
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-mast {
+  margin: calc(var(--sheet-pad) * -1) calc(var(--sheet-pad) * -1) 0;
+  padding: 6px 10px;
+  background: var(--headline-red);
+  color: var(--headline-red-ink);
+}
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-ear {
+  border-color: var(--headline-red-ink);
+}
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-kicker {
+  display: block;
+  width: fit-content;
+  margin: 14px auto 0;
+  padding: 3px 9px 3px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-headline {
+  margin-top: 8px;
+  font-size: clamp(26px, 5.6cqi, 80px);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-deck {
+  color: var(--headline-red);
+  font-style: normal;
+  font-weight: 700;
+}
+
+.newspaper-sheet[data-tone='tabloid'] .newspaper-story-lead::first-letter {
+  color: var(--headline-red);
+}
+
+/* The archive, in the Season window */
+
+.newspaper-archive {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.newspaper-issue {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 12px 12px;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-paper);
+  text-align: left;
+  box-shadow: var(--shadow-issue);
+  cursor: var(--cursor-hand);
+}
+
+.newspaper-archive > :nth-child(odd) {
+  transform: rotate(0.8deg);
+}
+
+.newspaper-archive > :nth-child(even) {
+  transform: rotate(-0.6deg);
+}
+
+.newspaper-issue[aria-current='true'] {
+  outline: 3px solid var(--terracotta);
+  outline-offset: 3px;
+}
+
+.newspaper-issue-mast {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--paper-rule);
+  font-family: var(--font-masthead);
+  font-size: 20px;
+  line-height: 1;
+  text-align: center;
+}
+
+.newspaper-issue[data-tone='tabloid'] .newspaper-issue-mast {
+  color: var(--headline-red);
+}
+
+.newspaper-issue-head {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.newspaper-issue-facts {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The last evening's call */
+
+.newspaper-call {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: var(--space-3);
+  max-width: 420px;
+  padding: var(--space-4);
+  border-radius: var(--radius-pebble);
+  animation: ui-pop var(--pop);
+}
+
+.newspaper-call-text {
+  margin: 0;
+  font: 400 var(--size-body) / 1.4 var(--font-ui);
+}
+
+.newspaper-call .ui-actions {
+  margin-top: 0;
+}
+
+/* A phone or a narrow window: one column, no ears, the masthead free to wrap. */
+@container paper (width <= 600px) {
+  .newspaper-front,
+  .newspaper-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .newspaper-side {
+    margin-top: 4px;
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 1px solid var(--paper-rule);
+    border-left: 0;
+  }
+
+  .newspaper-column + .newspaper-column {
+    margin-top: 6px;
+    padding-top: 10px;
+    padding-left: 0;
+    border-top: 1px solid var(--paper-rule);
+    border-left: 0;
+  }
+
+  .newspaper-mast {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .newspaper-ear {
+    display: none;
+  }
+
+  .newspaper-story {
+    columns: auto;
+  }
+
+  .newspaper-sheet {
+    transform: none;
+    animation: none;
+  }
+}

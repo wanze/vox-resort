@@ -1,6 +1,6 @@
 import { quoteOf, type Review } from '../../sim/domain/reviews';
 import { remarksOf, type Remark } from '../domain/remarks';
-import { THOUGHT_LABELS, thoughtLine } from './thoughtWords';
+import { THOUGHT_LABELS, thoughtLine } from '../domain/thoughtWords';
 import type { VoicesView } from '../domain/views';
 
 export interface GuestsPanelProps {

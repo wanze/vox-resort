@@ -181,7 +181,7 @@ export function PhotoLightbox({ cards, open, onOpen, onClose, photo }: PhotoLigh
   const shot = developed?.id === open.id ? developed.shot : null;
   const { spot } = open;
   return (
-    <div className="hud-lightbox-layer">
+    <div className="ui-modal">
       <div className="ui-scrim hud-lightbox-scrim" onPointerDown={onClose} />
       <div
         className="ui-panel hud-lightbox"

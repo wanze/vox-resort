@@ -53,14 +53,14 @@ minute with the whole simulation running. It multiplies the frame's clock step
 
 Each is a pure step in `resort-sim/domain/debugSteps.ts`.
 
-| Action                | Does                                                                                           |
-| --------------------- | ---------------------------------------------------------------------------------------------- |
-| Go to early season    | today becomes season day 1                                                                     |
-| Go to school holidays | today becomes season day 8                                                                     |
-| Go to late season     | today becomes season day 22                                                                    |
-| Go to the last day    | today becomes day 28; the season closes tomorrow at 11:00                                      |
-| Close the season now  | today is the closing day: no coach, everybody is sent home, and it ends once empty or at 22:00 |
-| End the season now    | straight to the break and the season report; the clock pauses as at a season's own end         |
+| Action                | Does                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| Go to early season    | today becomes season day 1                                                                         |
+| Go to school holidays | today becomes season day 8                                                                         |
+| Go to late season     | today becomes season day 22                                                                        |
+| Go to the last day    | today becomes day 28; the season closes tomorrow at 11:00, and at 19:00 the paper asks for a photo |
+| Close the season now  | today is the closing day: no coach, everybody is sent home, and it ends once empty or at 22:00     |
+| End the season now    | straight to the break and the season paper; the clock pauses as at a season's own end              |
 
 - A jump moves `season.startedOn`; the clock, the weekdays and the events
   programme stay where they are. The days skipped are **not simulated**, so the

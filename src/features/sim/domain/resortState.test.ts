@@ -383,6 +383,43 @@ describe('the seasons in a save', () => {
     expect(saved.seasons?.[0]?.startedOn).toBe(-24);
   });
 
+  it('keeps what the season paper reads from the tally and the reports through a save', () => {
+    const spot = {
+      key: 'sunset@pier',
+      subject: 'Sunset at the Pier',
+      kind: 'sunset' as const,
+      count: 7,
+      x: 1,
+      y: 2,
+      z: 3,
+      heading: 0.5,
+      minute: 1_200,
+    };
+    const story = {
+      voices: [{ kind: 'queue-too-long' as const, subject: 'Tiki Bar', count: 30 }],
+      events: { held: 4, audience: 120, called: 1, fireworks: 2 },
+      photos: 41,
+      topSpot: spot,
+    };
+    const state: ResortState = { ...played(), season: firstSeason(3) };
+    state.seasonTally = { ...startTally(), ...story };
+    state.seasons = [closeSeason(state.seasonTally, { ...firstSeason(0), number: 2 }, 900)];
+    const saved = resortSnapshotSchema.parse(snapshotResort(state));
+    const fresh: ResortState = { ...stateFor(5), season: firstSeason(0) };
+    restoreResort(fresh, saved, 10);
+    expect(fresh.seasonTally).toMatchObject(story);
+    expect(fresh.seasons?.[0]).toMatchObject(story);
+  });
+
+  it('reads a season saved before the season paper with none of its fields', () => {
+    const state: ResortState = { ...played(), season: firstSeason(3), seasonTally: startTally() };
+    state.seasons = [closeSeason(startTally(), { ...firstSeason(0), number: 2 }, 900)];
+    const saved = resortSnapshotSchema.parse(snapshotResort(state));
+    expect(saved.seasons[0]).not.toHaveProperty('voices');
+    expect(saved.seasons[0]).not.toHaveProperty('topSpot');
+    expect(saved.seasonTally).not.toHaveProperty('events');
+  });
+
   it('places a save from before seasons in one by its day, with an empty tally', () => {
     const { season: _season, seasons: _seasons, ...before } = snapshotResort(played());
     const fresh: ResortState = { ...stateFor(5), season: firstSeason(0) };

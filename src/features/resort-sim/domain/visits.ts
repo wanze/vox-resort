@@ -9,7 +9,8 @@ import { isBeach } from '../../layout/domain/shoreline';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
 import { conditionOf, DETOUR_UPSET, isShabby } from '../../sim/domain/condition';
 import { valueThought } from '../../sim/domain/expectations';
-import { upset } from '../../sim/domain/happiness';
+import { frighten, upset } from '../../sim/domain/happiness';
+import { DARK_UNEASE, darknessAt, gloomAt } from '../../sim/domain/lamplight';
 import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
 import { factorOf, overpriced } from '../../sim/domain/pricing';
@@ -25,8 +26,10 @@ import { mix } from '../../random/domain/hash';
 import { type Review, reviewFor } from '../../sim/domain/reviews';
 import { sceneryAt } from '../../sim/domain/scenery';
 import { earn } from '../../sim/domain/takings';
+import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   type ThoughtKind,
+  gloomThought,
   surroundingsThought,
   tallyInto,
   think,
@@ -49,6 +52,25 @@ export function surroundingsOf(resort: SimState, person: number): number {
   const tile = sandTileOf(resort, person);
   const { tilesX } = resort.litter;
   return tile < 0 ? 0 : mindedAt(resort, tile % tilesX, Math.floor(tile / tilesX), 0);
+}
+
+// Once a frame, so every guest who walks a dark stretch feels it, not only those on one as the hour
+// turns.
+export function frightenInTheDark(resort: SimState, darkness: number): void {
+  if (darkness <= 0) return;
+  const { guests, happiness } = resort;
+  for (let person = 0; person < guests.count; person++) {
+    if (guests.present[person] !== 1) continue;
+    const gloom = gloomOf(resort, person, darkness);
+    if (gloom > 0) frighten(happiness, person, DARK_UNEASE * gloom);
+  }
+}
+
+// On the paths only: on the sand a guest is out for the stars, the fireworks or the sunrise, and
+// asleep they are behind a door.
+export function gloomOf(resort: SimState, person: number, darkness: number): number {
+  if (darkness <= 0 || resort.router.isAsleep(person)) return 0;
+  return gloomAt(resort.unlit, resort.crowd.crowd.node[person] ?? -1, darkness);
 }
 
 // The litter grid's index of the beach tile under the body, or -1 off the beach.
@@ -131,16 +153,21 @@ export function burnOnTheBeach(resort: SimState, clock: SimNow): void {
 }
 
 export function hearSurroundings(resort: SimState, tick: number): void {
+  const darkness = darknessAt(tick % TICKS_PER_DAY);
   for (let person = 0; person < resort.guests.count; person++) {
-    const thought = lookAround(resort, person);
+    const thought = lookAround(resort, person, darkness);
     if (thought) hear(resort, tick, person, thought, null);
   }
 }
 
-// Asleep guests are skipped: a bed is not a view.
-function lookAround(resort: SimState, person: number): ThoughtKind | null {
+// Asleep guests are skipped: a bed is not a view. The dark is heard on its own, or an unlit clean
+// path would be blamed on litter.
+function lookAround(resort: SimState, person: number, darkness: number): ThoughtKind | null {
   if (resort.guests.present[person] !== 1 || resort.router.isAsleep(person)) return null;
-  return surroundingsThought(surroundingsOf(resort, person));
+  return (
+    gloomThought(gloomOf(resort, person, darkness)) ??
+    surroundingsThought(surroundingsOf(resort, person))
+  );
 }
 
 // Only members still here and still of this party: a body is reused by later parties.

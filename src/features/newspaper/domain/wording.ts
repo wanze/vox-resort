@@ -387,6 +387,7 @@ export const COMPLAINT_ADS: { readonly [kind in ThoughtKind]?: Ad } = {
   broken: { title: 'HANDYMAN WANTED', text: 'For {where}. Must own a spanner.' },
   'no-bed': { title: 'BUILDERS WANTED', text: 'Guests slept on the sand. Beds needed, urgently.' },
   shabby: { title: 'PAINTERS WANTED', text: '{where} has seen better days. Brushes provided.' },
+  dark: { title: 'LAMPLIGHTER WANTED', text: '“{voice}”, heard {times} times. Ladder provided.' },
 };
 
 export const FILLER_ADS: readonly Ad[] = [

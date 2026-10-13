@@ -1670,6 +1670,7 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
     hopsTo: (need) => hopsTo(resort, need),
     stepFree: () => stepFreeOf(resort).nodes,
     scenery: resort.scenery,
+    unlit: resort.unlit,
     litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
     photos: resort.photos.heat,
   });

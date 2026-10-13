@@ -9,6 +9,7 @@ import {
   contentmentOf,
   createHappiness,
   DRIFT_PER_HOUR,
+  frighten,
   HURT_FLOOR,
   meanHappiness,
   QUEUE_COST_PER_HOUR,
@@ -17,6 +18,7 @@ import {
   snapshotHappiness,
   STAY_MEMORY_HOURS,
   SURROUNDINGS_SHARE,
+  UNEASE_FADE_PER_HOUR,
   upset,
   welcome,
   type Happiness,
@@ -331,5 +333,56 @@ describe('a guest who expects more', () => {
     happiness.expects.fill(0.5);
     restoreHappiness(happiness, { ...saved, expects: new Float32Array([0.25, 0.75]) });
     expect([...happiness.expects]).toEqual([0.25, 0.75, 0, 0]);
+  });
+});
+
+describe('an uneasy guest', () => {
+  it('settles lower by the unease, as if the resort were that much worse', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    const needs = needsAt(guests, 1);
+    frighten(happiness, 0, 0.2);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, 24 * HOUR);
+    const settled = moodOf(happiness, 1);
+    expect(moodOf(happiness, 0)).toBeLessThan(settled);
+    expect(moodOf(happiness, 0)).toBeGreaterThan(settled - 0.2);
+  });
+
+  it('keeps the worst fright rather than adding them up', () => {
+    const happiness = createHappiness(2);
+    frighten(happiness, 0, 0.1);
+    frighten(happiness, 0, 0.15);
+    frighten(happiness, 0, 0.05);
+    expect(happiness.unease[0]).toBeCloseTo(0.15);
+  });
+
+  it('calms down over a day, slowly enough to last until the morning', () => {
+    const guests = guestsOf();
+    const happiness = createHappiness(guests.count);
+    const needs = needsAt(guests, 1);
+    frighten(happiness, 0, 0.1);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, 12 * HOUR);
+    expect(happiness.unease[0]).toBeCloseTo(0.1 - 12 * UNEASE_FADE_PER_HOUR);
+    ageHappiness(happiness, needs, guests, NO_QUEUE, 12 * HOUR);
+    expect(happiness.unease[0]).toBe(0);
+  });
+
+  it('forgets the fright of whoever had the body before', () => {
+    const happiness = createHappiness(2);
+    frighten(happiness, 0, 0.1);
+    welcome(happiness, 0);
+    expect(happiness.unease[0]).toBe(0);
+  });
+
+  it('keeps the unease across a save, and loads an older save at ease', () => {
+    const happiness = createHappiness(2);
+    frighten(happiness, 1, 0.1);
+    const saved = snapshotHappiness(happiness);
+    const loaded = createHappiness(2);
+    restoreHappiness(loaded, saved);
+    expect(loaded.unease[1]).toBeCloseTo(0.1);
+    const { unease: _unease, ...older } = saved;
+    restoreHappiness(loaded, older);
+    expect(loaded.unease[1]).toBe(0);
   });
 });

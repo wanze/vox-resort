@@ -14,7 +14,8 @@ import { plotFactsOf } from './plotFacts';
 import { createSimState, type SimState } from './simState';
 import { paidShareFor } from './dayClose';
 import { DETOUR_UPSET } from '../../sim/domain/condition';
-import { hear, judgeTheNight, visitMade } from './visits';
+import { DARK_UNEASE } from '../../sim/domain/lamplight';
+import { frightenInTheDark, gloomOf, hear, judgeTheNight, visitMade } from './visits';
 
 const world = referenceWorldOf(referenceJson);
 const plan = planOfWorld(world);
@@ -168,5 +169,48 @@ describe('judgeTheNight', () => {
     expect(loudest(state.thoughtDay, 99).map((each) => each.subject)).toContain(
       state.names.get(home.key) ?? home.label,
     );
+  });
+});
+
+describe('frightenInTheDark', () => {
+  let state: SimState;
+  beforeEach(() => {
+    state = freshState();
+    state.guests.present[PERSON] = 1;
+  });
+
+  const nodeWhere = (unlit: number): number => facts.unlit.indexOf(unlit);
+  const standAt = (node: number): void => {
+    state.crowd.crowd.node[PERSON] = node;
+  };
+  const unease = (): number => state.happiness.unease[PERSON]!;
+
+  it('lights most of the reference paths and leaves a few stretches dark', () => {
+    const dark = facts.unlit.filter((unlit) => unlit === 1).length;
+    expect(nodeWhere(0)).toBeGreaterThanOrEqual(0);
+    expect(dark).toBeGreaterThan(0);
+    expect(dark / facts.unlit.length).toBeLessThan(0.2);
+  });
+
+  it('frightens a guest deep in a dark stretch at midnight, and nobody by day', () => {
+    standAt(nodeWhere(1));
+    expect(gloomOf(state, PERSON, 1)).toBe(1);
+    frightenInTheDark(state, 0);
+    expect(unease()).toBe(0);
+    frightenInTheDark(state, 1);
+    expect(unease()).toBeCloseTo(DARK_UNEASE);
+  });
+
+  it('leaves a guest near a light at ease', () => {
+    standAt(nodeWhere(0));
+    frightenInTheDark(state, 1);
+    expect(unease()).toBe(0);
+  });
+
+  it('frightens nobody who is not here', () => {
+    standAt(nodeWhere(1));
+    state.guests.present[PERSON] = 0;
+    frightenInTheDark(state, 1);
+    expect(unease()).toBe(0);
   });
 });

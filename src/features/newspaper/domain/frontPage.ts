@@ -334,6 +334,7 @@ const DESK_ADVICE: { readonly [kind in ThoughtKind]?: string } = {
   'not-worth-it': 'A look at the prices.',
   shabby: 'A renovation is overdue.',
   renovating: 'Fewer closures at once.',
+  dark: 'Street lamps along the paths.',
 };
 
 const DESK_TITLE: { readonly [tone in Tone]: string } = {

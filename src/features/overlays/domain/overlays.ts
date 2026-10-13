@@ -9,6 +9,7 @@ export const OVERLAY_KINDS = [
   'reach-wash',
   'step-free',
   'scenery',
+  'light',
   'litter',
   'photos',
 ] as const;
@@ -122,6 +123,8 @@ export interface OverlaySources {
   // Step-free from the gates is 0, stairs only 1, so the ramp's bad end is where a wheelchair stops.
   readonly stepFree: () => Float32Array;
   readonly scenery: TileGrid;
+  // Per node, as the footfall is: how far into a dark stretch, 1 the bad end.
+  readonly unlit: Float32Array;
   readonly litter: TileGrid;
   // Per node, as the footfall is.
   readonly photos: Float32Array;
@@ -140,6 +143,7 @@ export function overlayValuesFor(kind: OverlayKind, sources: OverlaySources): Fl
   if (kind === 'footfall') return footfallValues(sources.footfall);
   if (kind === 'mood') return moodValues(sources.footfall);
   if (kind === 'photos') return countValues(sources.photos);
+  if (kind === 'light') return sources.unlit;
   const scenery = kind === 'scenery';
   const grid = scenery ? sources.scenery : sources.litter;
   return gridValues(grid, sources.tileOf, sources.nodes, scenery ? -1 : 1);

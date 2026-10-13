@@ -10,6 +10,7 @@ import {
   REPEAT_TICKS,
   stayCount,
   snapshotThoughts,
+  gloomThought,
   surroundingsThought,
   tallyInto,
   think,
@@ -131,6 +132,12 @@ describe('what a guest notices', () => {
     expect(surroundingsThought(0.6)).toBeNull();
     expect(surroundingsThought(0)).toBeNull();
     expect(surroundingsThought(-0.31)).toBe('littered');
+  });
+
+  it('hears the dark only well into the night on an unlit path', () => {
+    expect(gloomThought(1)).toBe('dark');
+    expect(gloomThought(0.6)).toBeNull();
+    expect(gloomThought(0)).toBeNull();
   });
 });
 
@@ -299,7 +306,14 @@ describe('widenThoughts', () => {
   it('pads a save from before venues closed for renovation, and hears one as a complaint', () => {
     const { widened, old } = widenedFrom('renovating');
     expect(widened.stay).toEqual(old.stay);
-    expect(THOUGHT_KINDS.at(-1)).toBe('renovating');
+    expect(THOUGHT_KINDS.at(-2)).toBe('renovating');
     expect(isComplaint('renovating')).toBe(true);
+  });
+
+  it('pads a save from before the dark, and hears an unlit path as a complaint', () => {
+    const { widened, old } = widenedFrom('dark');
+    expect(widened.stay).toEqual(old.stay);
+    expect(THOUGHT_KINDS.at(-1)).toBe('dark');
+    expect(isComplaint('dark')).toBe(true);
   });
 });

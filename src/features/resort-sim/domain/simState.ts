@@ -194,6 +194,8 @@ export interface SimState {
   washUpDue: boolean;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
+  // Per node, so replaced on an edit, which renumbers nodes.
+  unlit: Float32Array;
   // Replaced on an edit, as the scenery is.
   views: Views;
   // Refreshed once a frame from the clock, so a guest reaching a node reads an object, not the
@@ -272,6 +274,7 @@ type KeptFacts = Pick<
   | 'gateways'
   | 'depots'
   | 'scenery'
+  | 'unlit'
   | 'views'
   | 'shade'
   | 'binCover'
@@ -293,6 +296,7 @@ export const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
   gateways: facts.gateways,
   depots: facts.depots,
   scenery: facts.scenery,
+  unlit: facts.unlit,
   views: facts.views,
   shade: facts.shade,
   binCover: facts.binCover,

@@ -2,13 +2,20 @@ import type { EventStep } from '../../events/domain/eventRuns';
 import { fadeFootfall, sampleFootfall } from '../../overlays/domain/overlays';
 import { checkInDue } from '../../sim/domain/checkIn';
 import { ageHappiness } from '../../sim/domain/happiness';
+import { darknessAt } from '../../sim/domain/lamplight';
 import { decayNeeds } from '../../sim/domain/needs';
 import { fadePhotoHeat } from '../../sim/domain/photos';
 import { cheerTheAudience } from '../../sim/domain/staff';
 import { weatherEffect } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
-import { burnOnTheBeach, hearSurroundings, judgeTheNight, surroundingsOf } from './visits';
+import {
+  burnOnTheBeach,
+  frightenInTheDark,
+  hearSurroundings,
+  judgeTheNight,
+  surroundingsOf,
+} from './visits';
 import { ageBuildings, stepRenovations } from './ageing';
 import { closeTheDay, payTheBills, rateTheDay } from './dayClose';
 import { admitLaterWaves, runDay } from './arrivals';
@@ -56,6 +63,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
   refreshMoment(resort, clock);
   // After the ticks, so a guest is charged for the line they were actually in.
   const { glow } = resort.events;
+  frightenInTheDark(resort, darknessAt(clock.tickOfDay));
   ageHappiness(
     resort.happiness,
     resort.needs,

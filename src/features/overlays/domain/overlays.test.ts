@@ -137,6 +137,7 @@ describe('overlayValuesFor', () => {
       return Int32Array.from([0, -1]);
     },
     scenery: { tilesX: 2, tilesZ: 1, value: Float32Array.from([1, 0]) },
+    unlit: Float32Array.from([0.75, 0]),
     litter: { tilesX: 2, tilesZ: 1, value: Float32Array.from([0, 0.5]) },
     stepFree: () => Float32Array.from([0, 1]),
     photos: Float32Array.from([0, 4]),
@@ -166,6 +167,10 @@ describe('overlayValuesFor', () => {
     expect([...overlayValuesFor('scenery', sources)]).toEqual([0, 1]);
     expect([...overlayValuesFor('litter', sources)]).toEqual([0, 0.5]);
   });
+
+  it('hands over the dark stretches as they were walked', () => {
+    expect(overlayValuesFor('light', sources)).toBe(sources.unlit);
+  });
 });
 
 describe('overlayValuesFor, step-free', () => {
@@ -182,6 +187,7 @@ describe('overlayValuesFor, step-free', () => {
       },
       stepFree: () => swept,
       scenery: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
+      unlit: new Float32Array(3),
       litter: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
       photos: new Float32Array(3),
     });

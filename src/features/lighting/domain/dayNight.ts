@@ -62,7 +62,7 @@ const DAY_LIGHT = 1.17;
 
 export const SUNRISE_TIME = 6 / 24;
 
-// Late on purpose, read with BEDTIME_HOUR in sim/domain/night.ts: parties walk home in evening light.
+// Read with BEDTIME_HOUR in sim/domain/night.ts: parties walk home through the dusk, past the lamps.
 export const SUNSET_TIME = 21.5 / 24;
 
 // The arc stays a plain sine; the clock walks the day slower than the night, meeting at the horizon

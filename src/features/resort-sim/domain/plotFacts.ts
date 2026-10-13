@@ -7,7 +7,7 @@ import {
   sceneryOf,
   shadeOf,
 } from '../../catalog/domain/objectTypes';
-import { seatSiteOf } from '../../catalog/domain/placementFacts';
+import { lightsOf, seatSiteOf } from '../../catalog/domain/placementFacts';
 import { nodeIndexFor, type NodeIndex } from '../../crowd/domain/nearestNode';
 import { seatSpotsFor } from '../../crowd/domain/seating';
 import { walkNetworkFor, type WalkNetwork } from '../../crowd/domain/walkNetwork';
@@ -26,6 +26,7 @@ import { withBeach } from '../../sim/domain/beach';
 import { depotsOn, type Depot } from '../../sim/domain/depots';
 import { doorsFor } from '../../sim/domain/doors';
 import { gatewaysOn, type Gateway } from '../../sim/domain/gateways';
+import { lightFieldFor, unlitStretchOf, type Glow } from '../../sim/domain/lamplight';
 import { binCoverFor, type BinSite } from '../../sim/domain/litter';
 import { homesOfLodgings, lodgingsOn, type Lodging } from '../../sim/domain/lodgings';
 import { sceneryFieldFor, sceneryItemsOf, type SceneryField } from '../../sim/domain/scenery';
@@ -62,6 +63,7 @@ export interface PlotFacts {
   readonly beachTiles: number;
   readonly launchSites: readonly LaunchSite[];
   readonly scenery: SceneryField;
+  readonly unlit: Float32Array;
   readonly views: Views;
   readonly shade: ShadeMap;
   readonly binCover: Uint8Array;
@@ -156,6 +158,24 @@ function placesOn(
   };
 }
 
+// Half a voxel on, as the bake hangs a light in the middle of the column it names.
+function glowsOn(standing: readonly Placement[]): Glow[] {
+  return standing.flatMap((placement) =>
+    lightsOf(placement).map((light) => ({
+      x: placement.x + light.x + 0.5,
+      z: placement.z + light.z + 0.5,
+      intensity: light.intensity,
+      distance: light.distance,
+    })),
+  );
+}
+
+function unlitOn(plan: ResortPlan, sources: PlotSources, network: WalkNetwork): Float32Array {
+  const { placements, props, paths } = sources;
+  const glows = glowsOn([...placements, ...props, ...paths]);
+  return unlitStretchOf(network, lightFieldFor(glows, plan.tilesX, plan.tilesZ));
+}
+
 function fieldsOn(plan: ResortPlan, sources: PlotSources) {
   const { placements, props, paths } = sources;
   return {
@@ -221,6 +241,7 @@ export function plotFactsOf(ground: PlotGround, sources: PlotSources, held: Venu
     ...places,
     ...sandOf(network.beach),
     ...fields,
+    unlit: unlitOn(ground.plan, sources, network),
     views: viewsOn(ground, sources, fields.scenery, places.venues),
     ...indicesOf(places.venues, places.siteVenues),
   };

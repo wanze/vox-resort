@@ -7,22 +7,23 @@ const PARTIES = Array.from({ length: 50 }, (_, party) => party);
 const wraps = (party: number): boolean => bedtimeOf(party).sleepAt > bedtimeOf(party).wakeAt;
 
 describe('bedtimeOf', () => {
-  it('puts every bedtime between seven and half past nine, and every waking between seven and nine', () => {
+  it('puts every bedtime between nine and eleven, and every waking between seven and nine', () => {
     for (const party of PARTIES.filter((each) => !isEarlyRiser(each))) {
       const { sleepAt, wakeAt } = bedtimeOf(party);
-      expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(19 * HOUR);
-      expect(sleepAt, `party ${party}`).toBeLessThan(21.5 * HOUR);
+      expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(21 * HOUR);
+      expect(sleepAt, `party ${party}`).toBeLessThan(23 * HOUR);
       expect(wakeAt, `party ${party}`).toBeGreaterThanOrEqual(7 * HOUR);
       expect(wakeAt, `party ${party}`).toBeLessThan(9 * HOUR);
     }
   });
 
-  it('wakes an early riser between five and half past, an hour before the sun', () => {
+  it('sends an early riser to bed by ten and wakes them between five and half past', () => {
     const early = PARTIES.filter(isEarlyRiser);
     expect(early.length).toBeGreaterThan(0);
     for (const party of early) {
       const { sleepAt, wakeAt } = bedtimeOf(party);
-      expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(19 * HOUR);
+      expect(sleepAt, `party ${party}`).toBeGreaterThanOrEqual(20 * HOUR);
+      expect(sleepAt, `party ${party}`).toBeLessThan(22 * HOUR);
       expect(wakeAt, `party ${party}`).toBeGreaterThanOrEqual(EARLY_WAKE_FROM);
       expect(wakeAt, `party ${party}`).toBeLessThan(5.5 * HOUR);
     }

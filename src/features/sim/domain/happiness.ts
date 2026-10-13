@@ -24,6 +24,10 @@ export const SURROUNDINGS_SHARE = 0.1;
 // fall, but a full stomach still counts for something.
 export const HURT_FLOOR = 0.5;
 
+// As the event glow fades: a fright on the way home at midnight still weighs on the next morning's
+// rating, and wears off over the day after.
+export const UNEASE_FADE_PER_HOUR = 0.005;
+
 // About a day: a review should weigh the whole stay, not the hungry morning of check-out.
 export const STAY_MEMORY_HOURS = 24;
 
@@ -35,6 +39,8 @@ export interface Happiness {
   // 0 to 1, fixed at check-in. 0 is the guest from before expectations, content at half full
   // and minding a queue as much as anybody, so a resort that sets none plays as it always did.
   readonly expects: Float32Array;
+  // 0 to 1, taken off the mood a guest settles towards: how unsafe the resort has felt lately.
+  readonly unease: Float32Array;
 }
 
 const clamp = (level: number): number => (level < 0 ? 0 : level > 1 ? 1 : level);
@@ -46,6 +52,7 @@ export function createHappiness(count: number): Happiness {
     level: new Float32Array(people).fill(ARRIVAL_MOOD),
     stay: new Float32Array(people).fill(ARRIVAL_MOOD),
     expects: new Float32Array(people),
+    unease: new Float32Array(people),
   };
 }
 
@@ -55,6 +62,13 @@ export function welcome(happiness: Happiness, person: number, expects = 0): void
   happiness.level[person] = ARRIVAL_MOOD;
   happiness.stay[person] = ARRIVAL_MOOD;
   happiness.expects[person] = expects;
+  happiness.unease[person] = 0;
+}
+
+// The worst of it, not the sum: a second dark stretch on the same walk is the same fright.
+export function frighten(happiness: Happiness, person: number, amount: number): void {
+  if (person < 0 || person >= happiness.count) return;
+  if (amount > happiness.unease[person]!) happiness.unease[person] = amount;
 }
 
 // Straight onto the stay a review is written from; it fades with the rest of it, over about a day.
@@ -108,14 +122,17 @@ export function ageHappiness(
   const drift = DRIFT_PER_HOUR * hours;
   const queued = QUEUE_COST_PER_HOUR * hours;
   const remembered = Math.min(1, hours / STAY_MEMORY_HOURS);
+  const calmed = UNEASE_FADE_PER_HOUR * hours;
   for (let person = 0; person < happiness.count; person++) {
     if (guests.present[person] !== 1) continue;
     const level = happiness.level[person]!;
+    const uneasy = happiness.unease[person]!;
+    happiness.unease[person] = uneasy > calmed ? uneasy - calmed : 0;
     const around = surroundings ? SURROUNDINGS_SHARE * surroundings(person) : 0;
     // The target, not the level: a bump to the level drifts back down within the hour.
     const lifted = lift ? lift(person) : 0;
     const expects = happiness.expects[person]!;
-    const towards = clamp(contentmentOf(needs, person, expects) + around + lifted) - level;
+    const towards = clamp(contentmentOf(needs, person, expects) + around + lifted - uneasy) - level;
     // Never past the target, so a long run of ticks settles instead of overshooting.
     const moved = towards < 0 ? Math.max(towards, -drift) : Math.min(towards, drift);
     const now = clamp(level + moved - (waiting(person) ? queued * (1 + expects) : 0));
@@ -141,6 +158,7 @@ export function snapshotHappiness(happiness: Happiness): HappinessSnapshot {
     level: happiness.level.slice(),
     stay: happiness.stay.slice(),
     expects: happiness.expects.slice(),
+    unease: happiness.unease.slice(),
   };
 }
 
@@ -149,4 +167,6 @@ export function restoreHappiness(happiness: Happiness, snapshot: HappinessSnapsh
   happiness.stay.set(snapshot.stay);
   happiness.expects.fill(0);
   if (snapshot.expects) happiness.expects.set(snapshot.expects.subarray(0, happiness.count));
+  happiness.unease.fill(0);
+  if (snapshot.unease) happiness.unease.set(snapshot.unease.subarray(0, happiness.count));
 }

@@ -3227,7 +3227,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(51)",
+        "claims": "Array(56)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3287,8 +3287,8 @@ describe('on the reference resort', () => {
     `);
     expect(digestOf(a.router)).toMatchInlineSnapshot(`"622da8396e59ae63"`);
     expect(digestOf(a.staff)).toMatchInlineSnapshot(`"07ef137365bd9c90"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"912a4e2e0d5c56ac"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"7a177ec33652f372"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"da8352a6bd9b6cfe"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"1cbb1ce091505552"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {

@@ -26,6 +26,7 @@ export const THOUGHT_KINDS = [
   'sunrise',
   'shabby',
   'renovating',
+  'dark',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
@@ -92,6 +93,13 @@ export function isComplaint(kind: ThoughtKind): boolean {
 export function visitThought(role: Venue['role'], clean: number): 'filthy' | 'enjoyed' | null {
   if (clean < FILTHY_BELOW) return 'filthy';
   return role === 'activity' && clean >= ENJOYED_FROM ? 'enjoyed' : null;
+}
+
+// Most of the way to midnight on an unlit path: a lamp's rim or the last of the dusk says nothing.
+const GLOOMY_ABOVE = 0.6;
+
+export function gloomThought(gloom: number): 'dark' | null {
+  return gloom > GLOOMY_ABOVE ? 'dark' : null;
 }
 
 export function surroundingsThought(around: number): 'lovely' | 'littered' | null {

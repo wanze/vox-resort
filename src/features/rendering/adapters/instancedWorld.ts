@@ -20,9 +20,7 @@ import {
 import {
   abs,
   attribute,
-  float,
   fract,
-  instanceIndex,
   mat4,
   max,
   positionLocal,
@@ -118,23 +116,28 @@ const WINDOW_DUSK_RAMP = 0.18;
 
 const hashOf = (value: Node<'float'>): Node<'float'> => fract(sin(value).mul(43758.5453));
 
+// From where the instance stands, not its index: that is a slot in whichever bucket draws it,
+// so a zoom across a detail level would re-roll it. Folded through the R2 sequence and wrapped,
+// since raw coordinates put sin in the thousands, where GPU precision shows as banding.
+function placementSeed(): Node<'float'> {
+  const standing = attribute<'vec4'>('instanceColumn3', 'vec4');
+  return fract(standing.x.mul(0.7548776662).add(standing.z.mul(0.5698402911)));
+}
+
 interface WindowMaterial {
   readonly material: MeshStandardNodeMaterial;
   setLampFactor(factor: number): void;
   setOccupiedShare(share: number): void;
 }
 
-// Decided on the GPU: every hotel draws the one catalogue mesh, so only the pane and the
-// instance index can tell rooms apart. Hashed in the vertex stage, because instanceIndex
-// (gl_InstanceID on WebGL2) does not exist in a fragment shader.
+// Decided on the GPU: every hotel draws the one catalogue mesh, so only the pane and where
+// the building stands can tell rooms apart.
 function windowMaterial(volume: BakedLightVolume | null): WindowMaterial {
   const lampFactor = uniform(0);
   const litFraction = uniform(FULL_LIT_WINDOW_FRACTION);
   const material = litMaterial(volume);
 
-  // Folded through the golden ratio and wrapped: a raw index puts sin in the thousands,
-  // where GPU precision decides the answer and shows as banding down a facade.
-  const building = fract(float(instanceIndex).mul(0.6180339887));
+  const building = placementSeed();
   const seed = attribute<'float'>('pane', 'float').add(building);
   const occupied = hashOf(seed.mul(12.9898).add(78.233));
   const eager = hashOf(seed.mul(39.3468).add(11.135));
@@ -176,7 +179,7 @@ function canopyMaterial(volume: BakedLightVolume | null): CanopyMaterial {
   const wet = uniform(0);
   const material = litMaterial(volume);
 
-  const parasol = fract(float(instanceIndex).mul(0.6180339887));
+  const parasol = placementSeed();
   const edge = hashOf(parasol.mul(12.9898).add(78.233)).mul(FURL_EDGE.spread).add(FURL_EDGE.min);
   const furledNow = vertexStage(max(wet, step(edge, share)));
   const furled = attribute<'float'>('furled', 'float');

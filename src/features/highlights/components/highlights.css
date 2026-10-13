@@ -37,24 +37,35 @@
   color: var(--text-faint);
 }
 
+/* Clear of the clock hub, as the map's legend is. The map legend's height is its close button,
+   padding and border; a fingertip's 44px button makes it 58px. */
 .highlights-legend {
+  --map-legend-h: 40px;
   position: absolute;
-  top: calc(100% + var(--space-3));
+  top: calc(50% + var(--bar-h) / 2 + var(--hub-drop) + var(--space-2));
   right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-pebble);
+  font-size: var(--size-body);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Each line as tall as the close button, so one pick makes a legend as tall as the map's. */
+.highlights-legend-list {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: 0;
   list-style: none;
-  border-radius: var(--radius-pebble);
-  font-size: var(--size-small);
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
 }
 
-.highlights-legend li {
+.highlights-legend-list li {
+  min-height: 26px;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -93,7 +104,13 @@
 /* Under the map's legend, which takes the middle of the same row on a narrow screen. */
 /* stylelint-disable-next-line selector-class-pattern -- the two legends share that row */
 .app:not([data-layout='desk']) .hud-bar:has(.overlays-legend) .highlights-legend {
-  top: calc(var(--strip-floor) + var(--space-2) * 2 + 2.6em);
+  top: calc(var(--strip-floor) + var(--space-2) * 2 + var(--map-legend-h));
+}
+
+@media (pointer: coarse) {
+  .highlights-legend {
+    --map-legend-h: 58px;
+  }
 }
 
 @media (width <= 1240px) {

@@ -98,7 +98,7 @@ import {
   cancelRenovation,
   carryAgeing,
   conditionAdvised,
-  renovate,
+  renovateAll,
 } from '../features/resort-sim/domain/ageing';
 import { createRenovationWorks } from './renovationWorks';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
@@ -228,6 +228,7 @@ import {
 } from '../features/overlays/adapters/overlayField';
 import {
   highlightBoxesOf,
+  highlightPlaceOf,
   highlightTypesOf,
   ringWidthAt,
   type HighlightKind,
@@ -512,8 +513,9 @@ export interface Showcase {
   rename(name: string): void;
   // An emptied name draws a fresh one where the model suggests names, else goes back to the kind.
   renameVenue(key: string, typed: string): void;
-  // Charged at once and as new at once; a venue is shut for the work, a lodging stays open.
-  renovate(key: string): void;
+  // Charged at once and as new at once; a venue is shut for the work, a lodging stays open. In
+  // order, stopping at the first the balance cannot pay for.
+  renovate(keys: readonly string[]): void;
   cancelRenovation(key: string): void;
   setHiring(role: StaffRole, count: number | null): void;
   setPrice(family: string, factor: number | null): void;
@@ -2236,12 +2238,16 @@ function markerAnchorOf(
   return roofOver(venue, groundUnder(resort, venue), objectTypeById(venue.id).model.height);
 }
 
-// Venues only, lodging among them: a bench or a lamp is not a place anyone looks for.
 const HIGHLIGHT_KINDS: ReadonlyMap<string, HighlightKind> = new Map(
-  OBJECT_TYPES.filter((type) => type.venue !== null).map((type) => [
-    type.id,
-    { family: type.family, label: type.label, sign: signOf(type.id) },
-  ]),
+  OBJECT_TYPES.flatMap((type) => {
+    const place = highlightPlaceOf({
+      venue: type.venue,
+      depot: type.model.depot,
+      gateway: type.model.gateway,
+    });
+    if (place === null) return [];
+    return [[type.id, { family: type.family, label: type.label, sign: signOf(type.id), place }]];
+  }),
 );
 
 const highlightKindOf = (id: string): HighlightKind | null => HIGHLIGHT_KINDS.get(id) ?? null;
@@ -3432,11 +3438,13 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       hud.publish({ ...placeSigns(), advice: advise() });
       options.onDirty?.();
     },
-    renovate(key) {
-      const outcome = renovate(current(), key, clock.ticks);
-      if (outcome.kind === 'unaffordable') {
-        options.onRefused?.(renovationRefusalFor(outcome.cost, current().ledger.balance));
-      } else if (outcome.kind !== 'refused') worksChanged();
+    renovate(keys) {
+      const resort = current();
+      const { started, unaffordable } = renovateAll(resort, keys, clock.ticks);
+      if (unaffordable !== null) {
+        options.onRefused?.(renovationRefusalFor(unaffordable, resort.ledger.balance));
+      }
+      if (started) worksChanged();
     },
     cancelRenovation(key) {
       if (cancelRenovation(current(), key)) worksChanged();

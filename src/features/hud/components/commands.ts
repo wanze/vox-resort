@@ -190,7 +190,7 @@ function highlightCommands({ highlights }: CommandContext): Command[] {
         id: `highlight:${type.family}`,
         label: `Highlight ${type.label}`,
         group: 'Highlight',
-        keywords: `find where show mark ${type.family} ${type.sign ?? 'lodging'}`,
+        keywords: `find where show mark ${type.family} ${type.sign ?? type.place}`,
         note:
           picked || room
             ? `${type.count} built`

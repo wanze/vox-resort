@@ -29,6 +29,19 @@ export function upkeepChoices(rows: readonly UpkeepRow[]): readonly UpkeepChoice
   return [...roles, ...families];
 }
 
+export interface RenovationBatch {
+  readonly keys: readonly string[];
+  readonly cost: number;
+}
+
+// Worn enough to be worth it and not under way already, in the list's order, worst first.
+export function renovationBatchOf(rows: readonly UpkeepRow[]): RenovationBatch {
+  const due = rows.flatMap((row) =>
+    row.works === null && row.cost !== null ? [{ key: row.key, cost: row.cost }] : [],
+  );
+  return { keys: due.map((each) => each.key), cost: due.reduce((sum, each) => sum + each.cost, 0) };
+}
+
 // A kind pulled down since it was picked reads as no filter at all.
 export const keptFilter = (filter: UpkeepFilter, choices: readonly UpkeepChoice[]): UpkeepFilter =>
   choices.some((choice) => choice.id === filter) ? filter : null;

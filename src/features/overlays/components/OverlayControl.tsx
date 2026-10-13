@@ -90,11 +90,20 @@ export function OverlayControl({ kind, onKindChange, open, onOpenChange }: Overl
         />
       </DropdownMenu>
       {kind ? (
-        <p className="ui-panel overlays-legend">
+        <div className="ui-panel overlays-legend">
           <span>{OVERLAY_ENDS[kind][0]}</span>
           <span className="overlays-ramp" style={{ backgroundImage: RAMP_GRADIENT }} />
           <span>{OVERLAY_ENDS[kind][1]}</span>
-        </p>
+          <button
+            type="button"
+            className="ui-window-close"
+            aria-label="Close the map view"
+            title="Close the map view"
+            onClick={() => onKindChange(null)}
+          >
+            <PixelIcon name="close" scale={1} />
+          </button>
+        </div>
       ) : null}
     </div>
   );

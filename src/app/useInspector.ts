@@ -32,8 +32,8 @@ export function useInspector(
       [showcase],
     ),
     renovate: useCallback(
-      (key: string) => {
-        showcase.current?.renovate(key);
+      (keys: readonly string[]) => {
+        showcase.current?.renovate(keys);
       },
       [showcase],
     ),

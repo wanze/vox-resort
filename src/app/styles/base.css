@@ -38,6 +38,8 @@ input[type='checkbox'] {
   position: relative;
   height: 100%;
   width: 100%;
+  /* Nothing hanging past the screen's edge may give the page room to scroll the scene by. */
+  overflow: clip;
 }
 
 .app-canvas {

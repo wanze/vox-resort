@@ -5,7 +5,7 @@ import { canAfford, type Ledger } from '../../sim/domain/ledger';
 export interface RenovationControls {
   // Read so the button greys out as the balance falls under its price.
   readonly ledger: Ledger | null;
-  renovate(key: string): void;
+  renovate(keys: readonly string[]): void;
   cancel(key: string): void;
 }
 
@@ -32,7 +32,7 @@ export function worksBrief(works: RenovationWorks): string {
 }
 
 // Sandbox affords anything, and canAfford is the one place that knows it.
-function unaffordable(ledger: Ledger | null, cost: number): string | undefined {
+export function unaffordable(ledger: Ledger | null, cost: number): string | undefined {
   if (ledger === null || canAfford(ledger, cost)) return undefined;
   const bank = ledger.balance.toLocaleString('en-US');
   return `Costs ${cost.toLocaleString('en-US')}, and there is ${bank} in the bank`;
@@ -63,7 +63,7 @@ function RenovateOffer({
       className={className}
       disabled={why !== undefined}
       title={why ?? closingNote(target.staying)}
-      onClick={() => controls.renovate(target.key)}
+      onClick={() => controls.renovate([target.key])}
     >
       {offerLabel(cost, target.staying > 0 && !brief)}
     </button>

@@ -4,6 +4,7 @@ import {
   canPick,
   HIGHLIGHT_COLOURS,
   highlightBoxesOf,
+  highlightPlaceOf,
   highlightTypesOf,
   keptPicks,
   ringStripsOf,
@@ -24,10 +25,11 @@ const placed = (id: string, tileX = 0, tileZ = 0): HighlightPlaced => ({
 });
 
 const KINDS: { readonly [id: string]: HighlightKind } = {
-  wc: { family: 'wc', label: 'WC', sign: 'toilets' },
-  'wc-modern': { family: 'wc', label: 'WC', sign: 'toilets' },
-  snack: { family: 'snack', label: 'Snack bar', sign: 'snack' },
-  hotel: { family: 'hotel', label: 'Hotel', sign: null },
+  wc: { family: 'wc', label: 'WC', sign: 'toilets', place: 'venue' },
+  'wc-modern': { family: 'wc', label: 'WC', sign: 'toilets', place: 'venue' },
+  snack: { family: 'snack', label: 'Snack bar', sign: 'snack', place: 'venue' },
+  hotel: { family: 'hotel', label: 'Hotel', sign: null, place: 'lodging' },
+  'staff-house': { family: 'staff-house', label: 'Staff house', sign: null, place: 'staff' },
 };
 const kindOf = (id: string): HighlightKind | null => KINDS[id] ?? null;
 const familyOf = (id: string): string => KINDS[id]?.family ?? id;
@@ -46,18 +48,34 @@ describe('highlightTypesOf', () => {
   });
 });
 
+describe('highlightPlaceOf', () => {
+  const facts = { venue: null, depot: null, gateway: false };
+
+  it('takes in the venues, the lodgings, the staff house and the gates, and nothing else', () => {
+    expect(highlightPlaceOf({ ...facts, venue: { role: 'food' } })).toBe('venue');
+    expect(highlightPlaceOf({ ...facts, venue: { role: 'lodging' } })).toBe('lodging');
+    expect(highlightPlaceOf({ ...facts, depot: { doors: [] } })).toBe('staff');
+    expect(highlightPlaceOf({ ...facts, gateway: true })).toBe('entrance');
+    expect(highlightPlaceOf(facts)).toBeNull();
+  });
+});
+
 describe('searchTypes', () => {
-  const types = highlightTypesOf([placed('wc'), placed('snack'), placed('hotel')], kindOf);
+  const types = highlightTypesOf(
+    [placed('wc'), placed('snack'), placed('hotel'), placed('staff-house')],
+    kindOf,
+  );
   const labels = (query: string) => searchTypes(types, query).map((type) => type.label);
 
   it('keeps every type for an empty query', () => {
-    expect(labels(' ')).toEqual(['Hotel', 'Snack bar', 'WC']);
+    expect(labels(' ')).toEqual(['Hotel', 'Snack bar', 'Staff house', 'WC']);
   });
 
-  it('finds a type by its label, its sign or as lodging', () => {
+  it('finds a type by its label, its sign or what it is to the resort', () => {
     expect(labels('snack')).toEqual(['Snack bar']);
     expect(labels('toilets')).toEqual(['WC']);
     expect(labels('lodging')).toEqual(['Hotel']);
+    expect(labels('staff')).toEqual(['Staff house']);
     expect(labels('pool')).toEqual([]);
   });
 });

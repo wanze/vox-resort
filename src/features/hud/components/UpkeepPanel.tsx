@@ -8,12 +8,18 @@ import { bandOf, isShabby, type ConditionBand } from '../../sim/domain/condition
 import {
   filterUpkeep,
   keptFilter,
+  renovationBatchOf,
   upkeepChoices,
   type UpkeepChoice,
   type UpkeepFilter,
 } from '../domain/upkeepFilter';
 import { PanelSummary } from './PanelSummary';
-import { RenovateAction, worksBrief, type RenovationControls } from './RenovateAction';
+import {
+  RenovateAction,
+  unaffordable,
+  worksBrief,
+  type RenovationControls,
+} from './RenovateAction';
 import { SettingGroup } from './SettingRows';
 import { SIGN_ICONS } from './signIcons';
 
@@ -119,12 +125,37 @@ function KindSelect({
   );
 }
 
+// Every building the list shows, so a filter to one kind renovates all of that kind.
+function RenovateAll({
+  rows,
+  controls,
+}: {
+  readonly rows: readonly UpkeepRow[];
+  readonly controls: RenovationControls;
+}) {
+  const batch = renovationBatchOf(rows);
+  if (batch.keys.length === 0) return null;
+  const why = unaffordable(controls.ledger, batch.cost);
+  return (
+    <button
+      type="button"
+      className="ui-button ui-button-compact"
+      disabled={why !== undefined}
+      title={why ?? `Renovate the ${batch.keys.length} buildings listed that are worth it`}
+      onClick={() => controls.renovate(batch.keys)}
+    >
+      {`Renovate all · ${batch.cost.toLocaleString('en-US')}`}
+    </button>
+  );
+}
+
 // The summary counts the whole resort, whatever the list is narrowed to.
 export function UpkeepPanel({ rows, controls, onSelect }: UpkeepPanelProps) {
   const [asked, setFilter] = useState<UpkeepFilter>(null);
   if (rows.length === 0) return <p className="ui-loading">Nothing on the plot wears yet.</p>;
   const choices = upkeepChoices(rows);
   const filter = keptFilter(asked, choices);
+  const shown = filterUpkeep(rows, filter);
   const shabby = rows.filter((row) => isShabby(row.level)).length;
   const underWay = rows.filter((row) => row.works !== null).length;
   return (
@@ -136,9 +167,12 @@ export function UpkeepPanel({ rows, controls, onSelect }: UpkeepPanelProps) {
         ]}
         help={<UpkeepHelp />}
       />
-      <KindSelect value={filter} choices={choices} onPick={setFilter} />
+      <div className="hud-upkeep-tools">
+        <KindSelect value={filter} choices={choices} onPick={setFilter} />
+        <RenovateAll rows={shown} controls={controls} />
+      </div>
       <SettingGroup title="Most worn first">
-        {filterUpkeep(rows, filter).map((row) => (
+        {shown.map((row) => (
           <UpkeepLine key={row.key} row={row} controls={controls} onSelect={onSelect} />
         ))}
       </SettingGroup>

@@ -3,25 +3,26 @@
   position: relative;
 }
 
+/* The picker sits centred in the bar, so half the bar below its middle is the bar's foot; the
+   hub drop on top clears the clock hub, which hangs lower, so the legend never touches the bar. */
 .overlays-legend {
   position: absolute;
-  top: calc(100% + var(--space-3));
+  top: calc(50% + var(--bar-h) / 2 + var(--hub-drop) + var(--space-2));
   left: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-radius: var(--radius-pebble);
-  font-size: var(--size-small);
+  font-size: var(--size-body);
   font-weight: 600;
   white-space: nowrap;
-  pointer-events: none;
 }
 
 .overlays-ramp {
-  width: 12ch;
-  height: 0.7em;
+  width: 16ch;
+  height: 0.9em;
   border-radius: var(--radius-sm);
   box-shadow: 0 0 0 1px var(--edge-soft);
 }

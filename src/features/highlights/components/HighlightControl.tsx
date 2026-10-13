@@ -40,20 +40,33 @@ function Swatch({ colour }: { readonly colour: number }) {
 function HighlightLegend({
   types,
   picks,
+  onClear,
 }: {
   readonly types: readonly HighlightType[];
   readonly picks: readonly HighlightPick[];
+  readonly onClear: () => void;
 }) {
   if (picks.length === 0) return null;
   return (
-    <ul className="ui-panel highlights-legend">
-      {picks.map((pick) => (
-        <li key={pick.family}>
-          <Swatch colour={pick.colour} />
-          {types.find((type) => type.family === pick.family)?.label ?? pick.family}
-        </li>
-      ))}
-    </ul>
+    <div className="ui-panel highlights-legend">
+      <ul className="highlights-legend-list">
+        {picks.map((pick) => (
+          <li key={pick.family}>
+            <Swatch colour={pick.colour} />
+            {types.find((type) => type.family === pick.family)?.label ?? pick.family}
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        className="ui-window-close"
+        aria-label="Stop highlighting"
+        title="Stop highlighting"
+        onClick={onClear}
+      >
+        <PixelIcon name="close" scale={1} />
+      </button>
+    </div>
   );
 }
 
@@ -122,7 +135,7 @@ export function HighlightControl({
   open,
   onOpenChange,
 }: HighlightControlProps) {
-  const { types, picks } = highlights;
+  const { types, picks, clear } = highlights;
   return (
     <div className="highlights">
       <DropdownPopover
@@ -145,7 +158,7 @@ export function HighlightControl({
           onDone={() => onOpenChange(false)}
         />
       </DropdownPopover>
-      <HighlightLegend types={types} picks={picks} />
+      <HighlightLegend types={types} picks={picks} onClear={clear} />
     </div>
   );
 }

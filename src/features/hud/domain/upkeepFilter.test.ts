@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UpkeepRow } from '../../resort-sim/domain/ageing';
-import { filterUpkeep, keptFilter, upkeepChoices } from './upkeepFilter';
+import { filterUpkeep, keptFilter, renovationBatchOf, upkeepChoices } from './upkeepFilter';
 
 const row = (key: string, family: string, kind: string, lodging: boolean): UpkeepRow => ({
   key,
@@ -58,5 +58,21 @@ describe('filterUpkeep', () => {
     const choices = upkeepChoices(ROWS);
     expect(keptFilter('coffee-shop', choices)).toBe('coffee-shop');
     expect(keptFilter('minigolf', choices)).toBeNull();
+  });
+});
+
+describe('renovationBatchOf', () => {
+  it('sums what is worth renovating and leaves out what is new or under way', () => {
+    const rows: UpkeepRow[] = [
+      { ...ROWS[0]!, cost: 120 },
+      { ...ROWS[1]!, cost: null },
+      { ...ROWS[2]!, works: { kind: 'closing', staying: 2 } },
+      { ...ROWS[3]!, cost: 80 },
+    ];
+    expect(renovationBatchOf(rows)).toEqual({ keys: ['bungalow#1', 'cafe#4'], cost: 200 });
+  });
+
+  it('is empty when nothing is due', () => {
+    expect(renovationBatchOf([])).toEqual({ keys: [], cost: 0 });
   });
 });

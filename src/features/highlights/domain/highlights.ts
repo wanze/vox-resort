@@ -7,10 +7,28 @@ export const HIGHLIGHT_COLOURS: readonly number[] = [
   0x1f5fff, 0xff7a00, 0xe0218a, 0x00c8d7, 0xffe11a, 0x8a3ffc,
 ];
 
+// What a building without a sign of its own is found by and drawn as.
+export type HighlightPlace = 'venue' | 'lodging' | 'staff' | 'entrance';
+
+export interface HighlightFacts {
+  readonly venue: { readonly role: string } | null;
+  readonly depot: unknown;
+  readonly gateway: boolean;
+}
+
+// Places someone goes to, the staff house and the gates among them: a bench or a lamp is not a
+// place anyone looks for.
+export function highlightPlaceOf({ venue, depot, gateway }: HighlightFacts): HighlightPlace | null {
+  if (venue) return venue.role === 'lodging' ? 'lodging' : 'venue';
+  if (depot) return 'staff';
+  return gateway ? 'entrance' : null;
+}
+
 export interface HighlightKind {
   readonly family: string;
   readonly label: string;
   readonly sign: SignKind | null;
+  readonly place: HighlightPlace;
 }
 
 export interface HighlightType extends HighlightKind {
@@ -66,7 +84,13 @@ export function highlightTypesOf(
     else counted.set(kind.family, { kind, count: 1 });
   }
   return [...counted.values()]
-    .map(({ kind: { family, label, sign }, count }) => ({ family, label, sign, count }))
+    .map(({ kind: { family, label, sign, place }, count }) => ({
+      family,
+      label,
+      sign,
+      place,
+      count,
+    }))
     .toSorted((a, b) => a.label.localeCompare(b.label));
 }
 
@@ -79,7 +103,7 @@ export function searchTypes(
     type,
     label: type.label,
     group: '',
-    keywords: `${type.family} ${type.sign ?? 'lodging'}`,
+    keywords: `${type.family} ${type.sign ?? type.place}`,
   }));
   return rankCommands(searchable, query).map((each) => each.type);
 }

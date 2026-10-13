@@ -601,10 +601,18 @@
 }
 
 /* A row of its own across the grid, as the summary is, so the columns below keep their widths. */
-.hud-upkeep-filter {
+.hud-upkeep-tools {
   grid-column: 1 / -1;
-  justify-self: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+
+.hud-upkeep-filter {
+  min-width: 0;
 }
 
 /* A mouse needs no 44px target, and three actions then share a row. */

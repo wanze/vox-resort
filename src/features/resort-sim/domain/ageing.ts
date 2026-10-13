@@ -183,6 +183,27 @@ export function renovate(resort: RenovatorState, key: string, ticks: number): Re
   return { kind: 'renovated' };
 }
 
+export interface BatchRenovation {
+  readonly started: boolean;
+  // The price of the one the balance could not pay for, where the batch stopped.
+  readonly unaffordable: number | null;
+}
+
+// In order, so the worst are seen to before the money runs out.
+export function renovateAll(
+  resort: RenovatorState,
+  keys: readonly string[],
+  ticks: number,
+): BatchRenovation {
+  let started = false;
+  for (const key of keys) {
+    const outcome = renovate(resort, key, ticks);
+    if (outcome.kind === 'unaffordable') return { started, unaffordable: outcome.cost };
+    if (outcome.kind !== 'refused') started = true;
+  }
+  return { started, unaffordable: null };
+}
+
 // Only while it waits for its guests to leave: once the work has started, it is paid for.
 export function cancelRenovation(resort: RenovatingState, key: string): boolean {
   const paid = resort.closing.get(key);

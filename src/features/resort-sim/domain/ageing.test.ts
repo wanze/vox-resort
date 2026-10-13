@@ -17,6 +17,7 @@ import {
   closedLodgings,
   conditionShown,
   renovate,
+  renovateAll,
   renovationOf,
   RENOVATION_TICKS,
   shutUntil,
@@ -221,5 +222,30 @@ describe('upkeepRows', () => {
     expect(rows[0]).toMatchObject({ label: 'The Anchor', lodging: false, level: 0.2 });
     expect(rows[1]!.lodging).toBe(true);
     expect(rows[2]!.cost).toBeNull();
+  });
+});
+
+describe('renovateAll', () => {
+  it('renovates each in turn and stops at the first the balance cannot pay for', () => {
+    const worn = new Map([
+      [busy!.key, 0],
+      [idle!.key, 0],
+    ]);
+    const first = renovationOf({ ...stateOf(), condition: worn }, busy!.key)!.cost!;
+    const poor = { ...stateOf(), ledger: createLedger('tycoon', first + 1), condition: worn };
+    expect(renovateAll(poor, [busy!.key, idle!.key], 0)).toEqual({
+      started: true,
+      unaffordable: renovationOf(poor, idle!.key)!.cost,
+    });
+    expect(poor.renovating.has(busy!.key)).toBe(true);
+    expect(poor.renovating.has(idle!.key)).toBe(false);
+  });
+
+  it('skips what it refuses and says when nothing started', () => {
+    const state = stateOf();
+    expect(renovateAll(state, [busy!.key, 'path#0'], 0)).toEqual({
+      started: false,
+      unaffordable: null,
+    });
   });
 });

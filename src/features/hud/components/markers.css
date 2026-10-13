@@ -3,7 +3,9 @@
   position: absolute;
   inset: 0;
   z-index: var(--z-signs);
-  overflow: hidden;
+  /* Clip, not hidden: hidden is still a scroll box, and a click focusing a sign at the edge of
+     the screen scrolled the layer, every sign sliding off its building as if the camera moved. */
+  overflow: clip;
 }
 
 .hud-sign-spot {
@@ -88,7 +90,8 @@
   position: absolute;
   inset: 0;
   z-index: var(--z-markers);
-  overflow: hidden;
+  /* Clip, as the signs are, so focusing one at the edge never scrolls the layer. */
+  overflow: clip;
 }
 
 /* The render loop moves the spot; the marker and its menu hang off it. */
@@ -196,7 +199,8 @@
   position: absolute;
   inset: 0;
   z-index: var(--z-pins);
-  overflow: hidden;
+  /* Clip, as the signs are, so focusing one at the edge never scrolls the layer. */
+  overflow: clip;
 }
 
 .hud-pin {

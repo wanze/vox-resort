@@ -12,6 +12,10 @@ export const SUNBURN_PER_HOUR = 0.04;
 export const MISHAP_UNWATCHED = 0.02;
 export const MISHAP_WATCHED = 0.002;
 
+// Deeper than a dark path's: a swim is by day, and most of the fright has worn off by the next
+// morning's rating. A parent minds it most (archetypes.ts).
+export const UNWATCHED_UNEASE = 0.2;
+
 const GOLDEN = 2_654_435_761;
 
 // Hashed rather than drawn from a stream, so an incident moves no other seeded draw. The low bit

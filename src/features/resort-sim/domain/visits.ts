@@ -6,12 +6,13 @@ import { heldAt } from '../../events/domain/sites';
 import { fullNameOf } from '../../guests/domain/guests';
 import { NO_HOME } from '../../guests/domain/homes';
 import { isBeach } from '../../layout/domain/shoreline';
+import { archetypeOf } from '../../sim/domain/archetypes';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
 import { conditionOf, DETOUR_UPSET, isShabby } from '../../sim/domain/condition';
 import { valueThought } from '../../sim/domain/expectations';
 import { frighten, upset } from '../../sim/domain/happiness';
 import { DARK_UNEASE, darknessAt, gloomAt } from '../../sim/domain/lamplight';
-import { burnTheSunbathers, hurt, mishap } from '../../sim/domain/incidents';
+import { burnTheSunbathers, hurt, mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
 import { factorOf, overpriced } from '../../sim/domain/pricing';
 import {
@@ -54,6 +55,9 @@ export function surroundingsOf(resort: SimState, person: number): number {
   return tile < 0 ? 0 : mindedAt(resort, tile % tilesX, Math.floor(tile / tilesX), 0);
 }
 
+const cautionOf = (resort: SimState, person: number): number =>
+  archetypeOf(resort.guests, person).caution;
+
 // Once a frame, so every guest who walks a dark stretch feels it, not only those on one as the hour
 // turns.
 export function frightenInTheDark(resort: SimState, darkness: number): void {
@@ -62,7 +66,7 @@ export function frightenInTheDark(resort: SimState, darkness: number): void {
   for (let person = 0; person < guests.count; person++) {
     if (guests.present[person] !== 1) continue;
     const gloom = gloomOf(resort, person, darkness);
-    if (gloom > 0) frighten(happiness, person, DARK_UNEASE * gloom);
+    if (gloom > 0) frighten(happiness, person, DARK_UNEASE * gloom * cautionOf(resort, person));
   }
 }
 
@@ -135,6 +139,10 @@ function riskTheWater(resort: SimState, tick: number, person: number, venue: Ven
   const index = venueIndexOf(resort, venue.key);
   const { staffRouter } = resort;
   const watched = index >= 0 ? staffRouter.watching(index) : staffRouter.watchingBeach;
+  if (!watched) {
+    frighten(resort.happiness, person, UNWATCHED_UNEASE * cautionOf(resort, person));
+    hear(resort, tick, person, 'unwatched', venue.label);
+  }
   if (!mishap(person, tick, watched)) return;
   hurt(resort.needs, person);
   hear(resort, tick, person, 'hurt', venue.label);

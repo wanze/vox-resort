@@ -46,6 +46,8 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
       ? `${subject} was closed for renovation, we had to go further`
       : 'Closed for renovation, we had to go further',
   dark: () => 'The path back was pitch dark',
+  unwatched: (subject) =>
+    subject ? `No lifeguard in sight at ${subject}` : 'No lifeguard in sight',
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -72,6 +74,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   shabby: 'Upkeep',
   renovating: 'Upkeep',
   dark: 'Lighting',
+  unwatched: 'Lifeguards',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

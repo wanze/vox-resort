@@ -6,7 +6,8 @@ import { shoreFor } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
-import { mishap } from '../../sim/domain/incidents';
+import { archetypeOf } from '../../sim/domain/archetypes';
+import { mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
 import { NO_HOME } from '../../guests/domain/homes';
 import { loudest, REPEAT_TICKS, type ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
@@ -117,6 +118,15 @@ describe('visitMade', () => {
     visitMade(state, PERSON, bathing, unluckyTick);
     expect(health(state)).toBeLessThan(freshState().needs.level.health[PERSON]!);
   });
+
+  it('leaves a swimmer nobody watched uneasy, as cautious as their party is, and says so', () => {
+    visitMade(state, PERSON, dry, 1);
+    expect(state.happiness.unease[PERSON]).toBe(0);
+    visitMade(state, PERSON, bathing, 1);
+    const caution = archetypeOf(state.guests, PERSON).caution;
+    expect(state.happiness.unease[PERSON]).toBeCloseTo(UNWATCHED_UNEASE * caution);
+    expect(heard(state, 'unwatched')).toBe(1);
+  });
 });
 
 const heard = (state: SimState, kind: ThoughtKind): number =>
@@ -198,7 +208,7 @@ describe('frightenInTheDark', () => {
     frightenInTheDark(state, 0);
     expect(unease()).toBe(0);
     frightenInTheDark(state, 1);
-    expect(unease()).toBeCloseTo(DARK_UNEASE);
+    expect(unease()).toBeCloseTo(DARK_UNEASE * archetypeOf(state.guests, PERSON).caution);
   });
 
   it('leaves a guest near a light at ease', () => {

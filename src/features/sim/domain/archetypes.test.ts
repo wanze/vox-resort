@@ -38,6 +38,13 @@ describe('ARCHETYPES', () => {
     }
   });
 
+  it('makes a family the most cautious and a group of friends the least', () => {
+    const cautions = entries.map((archetype) => archetype.caution);
+    expect(Math.max(...cautions)).toBe(ARCHETYPES.family.caution);
+    expect(Math.min(...cautions)).toBe(ARCHETYPES.friends.caution);
+    expect(Math.min(...cautions)).toBeGreaterThan(0);
+  });
+
   it('walks a family the shortest way and a group of friends the furthest', () => {
     const reaches = entries.map((archetype) => archetype.reach);
     expect(ARCHETYPES.family.reach).toBe(Math.min(...reaches));

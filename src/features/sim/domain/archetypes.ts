@@ -6,6 +6,9 @@ export interface Archetype {
   readonly decayPerHour: { readonly [need in GuestNeed]: number };
   readonly weight: { readonly [need in GuestNeed]: number };
   readonly reach: number;
+  // Taken with every fright: a parent minds the dark path and the unwatched pool most, a group of
+  // friends hardly at all.
+  readonly caution: number;
 }
 
 // Somebody hurt wants first aid before anything, so this beats any want at its worst, which is at
@@ -27,6 +30,7 @@ export const ARCHETYPES: { readonly [kind in PartyKind]: Archetype } = {
     },
     weight: { hunger: 1.4, thirst: 1.1, energy: 1, fun: 0.9, hygiene: 1.2, health: HURT_WEIGHT },
     reach: 320,
+    caution: 1.3,
   },
   couple: {
     decayPerHour: {
@@ -39,6 +43,7 @@ export const ARCHETYPES: { readonly [kind in PartyKind]: Archetype } = {
     },
     weight: { hunger: 1.1, thirst: 1.1, energy: 1, fun: 1.1, hygiene: 0.9, health: HURT_WEIGHT },
     reach: 620,
+    caution: 1,
   },
   friends: {
     decayPerHour: {
@@ -51,6 +56,7 @@ export const ARCHETYPES: { readonly [kind in PartyKind]: Archetype } = {
     },
     weight: { hunger: 1, thirst: 1.2, energy: 0.8, fun: 1.5, hygiene: 0.7, health: HURT_WEIGHT },
     reach: 900,
+    caution: 0.6,
   },
   solo: {
     decayPerHour: {
@@ -63,6 +69,7 @@ export const ARCHETYPES: { readonly [kind in PartyKind]: Archetype } = {
     },
     weight: { hunger: 1.1, thirst: 1, energy: 0.8, fun: 1.3, hygiene: 0.9, health: HURT_WEIGHT },
     reach: 700,
+    caution: 1,
   },
 };
 

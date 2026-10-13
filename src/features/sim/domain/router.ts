@@ -234,6 +234,8 @@ export function createRouter(parts: {
   readonly conditionOf?: (venue: number) => number;
   // Shut for renovation; absent, nothing ever is.
   readonly shut?: (venue: number) => boolean;
+  // Still going up: nobody knows it is there yet, so nobody is sent away from it.
+  readonly unbuilt?: (venue: number) => boolean;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -451,7 +453,7 @@ export function createRouter(parts: {
   // Asked every time rather than kept: the day can turn over between ticks.
   const isOpenButForWorks = (venue: number): boolean => {
     const declared = venues[venue];
-    if (!declared || isBrokenDown(venue)) return false;
+    if (!declared || isBrokenDown(venue) || parts.unbuilt?.(venue) === true) return false;
     return openNow(declared, weatherEffect(weatherNow()), parts.tickOfDay());
   };
 

@@ -16,7 +16,7 @@ import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { chooseVenue } from '../../sim/domain/chooseVenue';
-import { bandOf, type ConditionBand, type RenovationWorks } from '../../sim/domain/condition';
+import { bandOf, type ConditionBand, type Works } from '../../sim/domain/condition';
 import { expectationWords, type Expectation } from '../../sim/domain/expectations';
 import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
@@ -108,6 +108,8 @@ export interface PlaceView {
   readonly naming?: VenueNaming;
   // Set by the showcase on a stage: what is on next there this week, or null for nothing.
   readonly programme?: { readonly next: string | null };
+  // Set by the showcase while it is still going up.
+  readonly building?: Works;
 }
 
 export interface ConditionView {
@@ -116,7 +118,7 @@ export interface ConditionView {
   // Null where it is too good to be worth renovating.
   readonly cost: number | null;
   // Null while it is open and nothing is planned.
-  readonly works: RenovationWorks | null;
+  readonly works: Works | null;
 }
 
 export interface VenueNaming {

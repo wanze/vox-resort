@@ -18,6 +18,7 @@ import type { RenovationControls } from './RenovateAction';
 import { RenovationPins } from './RenovationPins';
 import { UpkeepPanel } from './UpkeepPanel';
 import type { UpkeepRow } from '../../resort-sim/domain/ageing';
+import type { WorksPin } from '../../sim/domain/condition';
 import { LedgerPanel } from './LedgerPanel';
 import { MessagesPanel } from './MessagesPanel';
 import { PlacementBar } from './PlacementBar';
@@ -104,7 +105,7 @@ interface HudSlices {
   readonly status: StatusView | null;
   readonly signs: readonly SignSpot[];
   readonly upkeep: readonly UpkeepRow[];
-  readonly works: readonly UpkeepRow[];
+  readonly works: readonly WorksPin[];
   readonly selection: SelectionView | null;
   readonly orders: readonly OrderSpot[];
   readonly ledger: Ledger | null;

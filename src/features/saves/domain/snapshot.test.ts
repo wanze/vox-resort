@@ -98,6 +98,7 @@ function gameFixture(): GameSnapshot {
     prices: {},
     condition: new Map(),
     renovating: new Map(),
+    constructing: new Map(),
     closing: new Map(),
     zones: createZones(4, 3),
     photos: createPhotos(POPULATION, network.nodes.length),

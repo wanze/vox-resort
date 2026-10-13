@@ -23,6 +23,7 @@ import {
   shutUntil,
   stepRenovations,
   upkeepRows,
+  worksProgress,
 } from './ageing';
 
 const world = referenceWorldOf(referenceJson);
@@ -43,6 +44,7 @@ function stateOf(visits = new Map<string, number>()) {
     condition: new Map<string, number>(),
     lastWear: new Map<string, number>(),
     renovating: new Map<string, number>(),
+    constructing: new Map<string, number>(),
     closing: new Map<string, number>(),
     names: new Map<string, string>(),
     ledger: createLedger('sandbox', 0),
@@ -247,5 +249,24 @@ describe('renovateAll', () => {
       started: false,
       unaffordable: null,
     });
+  });
+});
+
+describe('closedLodgings', () => {
+  it('gives no beds in a lodging still going up', () => {
+    const state = stateOf();
+    state.constructing = new Map([[lodging!.key, 600]]);
+    expect(closedLodgings(state).has(lodging!.key)).toBe(true);
+  });
+});
+
+describe('worksProgress', () => {
+  it('measures a building going up as it does a renovation', () => {
+    expect(worksProgress({ kind: 'building', from: 100, until: 300 }, 200)).toBe(0.5);
+    expect(worksProgress({ kind: 'renovating', from: 100, until: 300 }, 400)).toBe(1);
+  });
+
+  it('has done nothing while a lodging waits for its guests', () => {
+    expect(worksProgress({ kind: 'closing', staying: 2 }, 200)).toBe(0);
   });
 });

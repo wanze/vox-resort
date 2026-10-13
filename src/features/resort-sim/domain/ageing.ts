@@ -13,7 +13,7 @@ import {
   renovationCost,
   venueBusy,
   wearOf,
-  type RenovationWorks,
+  type Works,
 } from '../../sim/domain/condition';
 import { canAfford, record } from '../../sim/domain/ledger';
 import type { Router } from '../../sim/domain/router';
@@ -25,14 +25,14 @@ export const RENOVATION_TICKS = 6 * TICKS_PER_HOUR;
 
 type Standing = Pick<SimState, 'venues' | 'lodgings'>;
 
-type Works = Pick<SimState, 'condition' | 'renovating' | 'closing'>;
+type WorksState = Pick<SimState, 'condition' | 'renovating' | 'closing'>;
 
 type AgeingState = Standing &
   Pick<SimState, 'ageing' | 'guests' | 'homeOfLodging' | 'today' | 'condition' | 'lastWear'> & {
     readonly router: Pick<Router, 'dayVisits'>;
   };
 
-type RenovatingState = Standing & Works & Pick<SimState, 'ledger' | 'season' | 'guests'>;
+type RenovatingState = Standing & WorksState & Pick<SimState, 'ledger' | 'season' | 'guests'>;
 
 type RenovatorState = RenovatingState & { readonly router: Pick<Router, 'turnOut'> };
 
@@ -42,7 +42,7 @@ const ageingKeysOf = (resort: Standing): string[] => [
 ];
 
 // By key, as the dirt is: a building that still stands keeps its wear through an edit.
-export function carryAgeing(resort: Standing & Works): void {
+export function carryAgeing(resort: Standing & WorksState): void {
   const keys = ageingKeysOf(resort);
   resort.condition = keptFor(resort.condition, keys);
   resort.renovating = keptFor(resort.renovating, keys);
@@ -117,16 +117,19 @@ export function stepRenovations(resort: RenovatingState, ticks: number): void {
   }
 }
 
-// What check-in may not give beds in: closed for a renovation, or in the middle of one.
-export const closedLodgings = (resort: Works): ReadonlySet<string> =>
-  new Set([...resort.closing.keys(), ...resort.renovating.keys()]);
+// What check-in may not give beds in: closed for a renovation, in the middle of one, or still
+// going up.
+export const closedLodgings = (
+  resort: WorksState & Pick<SimState, 'constructing'>,
+): ReadonlySet<string> =>
+  new Set([...resort.closing.keys(), ...resort.renovating.keys(), ...resort.constructing.keys()]);
 
 export function shutUntil(resort: Pick<SimState, 'renovating'>, key: string, ticks: number) {
   const until = resort.renovating.get(key);
   return until !== undefined && until > ticks ? until : null;
 }
 
-function worksAt(resort: RenovatingState, key: string, ticks: number): RenovationWorks | null {
+function worksAt(resort: RenovatingState, key: string, ticks: number): Works | null {
   if (resort.closing.has(key)) return { kind: 'closing', staying: staying(resort.guests, key) };
   const until = shutUntil(resort, key, ticks);
   return until === null ? null : { kind: 'renovating', from: until - RENOVATION_TICKS, until };
@@ -225,7 +228,7 @@ export interface UpkeepRow {
   readonly at: { readonly tileX: number; readonly tileZ: number };
   readonly level: number;
   readonly cost: number | null;
-  readonly works: RenovationWorks | null;
+  readonly works: Works | null;
   // Guests sleeping there now; always 0 at a venue.
   readonly staying: number;
 }
@@ -258,13 +261,13 @@ export function upkeepRows(
 }
 
 // 0 while a lodging waits for its guests: nothing has been done yet.
-export function worksProgress(works: RenovationWorks | null, ticks: number): number {
-  if (works?.kind !== 'renovating') return 0;
+export function worksProgress(works: Works | null, ticks: number): number {
+  if (!works || works.kind === 'closing') return 0;
   return Math.min(1, Math.max(0, (ticks - works.from) / (works.until - works.from)));
 }
 
 // Where a renovation is pending, the advice already has its answer.
-export const conditionAdvised = (resort: Works): ReadonlyMap<string, number> =>
+export const conditionAdvised = (resort: WorksState): ReadonlyMap<string, number> =>
   resort.closing.size === 0
     ? resort.condition
     : new Map([...resort.condition].filter(([key]) => !resort.closing.has(key)));

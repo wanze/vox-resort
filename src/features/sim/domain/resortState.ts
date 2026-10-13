@@ -63,6 +63,8 @@ export interface ResortState {
   renovating: ReadonlyMap<string, number>;
   // A lodging paid for and closed to new guests, by key to what was paid, until it empties.
   closing: ReadonlyMap<string, number>;
+  // Placement key to the tick its building is finished; shut to guests until then.
+  constructing: ReadonlyMap<string, number>;
   readonly zones: Zones;
   readonly photos: Photos;
   // Null or absent where a resort runs no seasons, as the sim report's does.
@@ -134,6 +136,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     condition: [...state.condition],
     renovating: [...state.renovating],
     closing: [...state.closing],
+    constructing: [...state.constructing],
     zones: state.zones.zone.slice(),
     photos: snapshotPhotos(state.photos),
     ...(state.season ? { season: { ...state.season } } : {}),
@@ -181,6 +184,7 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day 
     : settledFor([...state.venues, ...state.lodgings].map(({ key }) => key));
   state.renovating = new Map(snapshot.renovating);
   state.closing = new Map(snapshot.closing);
+  state.constructing = new Map(snapshot.constructing);
   state.zones.zone.set(snapshot.zones);
   state.zones.version++;
   restorePhotos(state.photos, snapshot.photos);

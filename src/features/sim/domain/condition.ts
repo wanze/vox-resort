@@ -10,9 +10,19 @@ export const SETTLED = { min: 0.65, max: 0.9 } as const;
 export type ConditionBand = 'good' | 'worn' | 'shabby' | 'run-down';
 
 // A lodging waits, closed to new guests, for those still staying; then the work takes its hours.
-export type RenovationWorks =
+// A new building is shut while it goes up.
+export type Works =
   | { readonly kind: 'closing'; readonly staying: number }
-  | { readonly kind: 'renovating'; readonly from: number; readonly until: number };
+  | { readonly kind: 'renovating'; readonly from: number; readonly until: number }
+  | { readonly kind: 'building'; readonly from: number; readonly until: number };
+
+// What a pin over the roof says: a building, where it stands, and the works there.
+export interface WorksPin {
+  readonly key: string;
+  readonly label: string;
+  readonly at: { readonly tileX: number; readonly tileZ: number };
+  readonly works: Works;
+}
 
 const GOOD_FROM = 0.75;
 

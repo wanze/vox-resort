@@ -185,6 +185,8 @@ export interface SimState {
   lastWear: ReadonlyMap<string, number>;
   renovating: ReadonlyMap<string, number>;
   closing: ReadonlyMap<string, number>;
+  // Placement key to the tick its building is finished; the edit mode raises it then.
+  constructing: ReadonlyMap<string, number>;
   // Key to the tick a storm battered it, for a day; never saved, so a load forgets the news only.
   stormHits: ReadonlyMap<string, number>;
   // Set through a storm and spent the first hour after it; never saved, so a load mid-storm leaves
@@ -364,6 +366,16 @@ function staffOf(venues: readonly Venue[], network: WalkNetwork, lodgings: reado
   return { employed, recommended, roster, duty: onDuty(employed, roster) };
 }
 
+// Built once, as ageingParts is: the edit mode replaces the map as sites open and finish.
+function siteParts(resort: () => SimState, ticks: () => number) {
+  return {
+    unbuilt: (venue: number): boolean => {
+      const { constructing, venues } = resort();
+      return constructing.size > 0 && (constructing.get(venues[venue]?.key ?? '') ?? -1) > ticks();
+    },
+  };
+}
+
 // Built once: the maps are read through the resort, which a renovation and an edit replace.
 function ageingParts(resort: () => SimState, ticks: () => number) {
   const keyOf = (venue: number): string => resort().venues[venue]?.key ?? '';
@@ -422,6 +434,7 @@ export function createSimState(parts: SimParts): SimState {
   const litter = createLitter(plan.tilesX, plan.tilesZ);
   const beds = bedCount(guests);
   const ageing = parts.ageing === true ? ageingParts(() => resort, clock.ticks) : null;
+  const { unbuilt } = siteParts(() => resort, clock.ticks);
   const router = createRouter({
     guests,
     needs,
@@ -443,6 +456,7 @@ export function createSimState(parts: SimParts): SimState {
     priceAppeal: (venue) => venuePull(factorOf(resort.prices, resort.venues[venue]?.id ?? '')),
     // The beach is past the venue list, so it is new and never shut.
     ...ageing,
+    unbuilt,
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, clock.ticks()),
     onThought: (person, kind, subject) => hear(resort, clock.ticks(), person, kind, subject),
@@ -534,7 +548,7 @@ export function createSimState(parts: SimParts): SimState {
     },
     booked: (venue) => resort.eventBooked[venue] === 1,
     hosting: () => resort.hosted,
-    ...(ageing ? { shut: ageing.shut } : {}),
+    shut: ageing ? (venue) => ageing.shut(venue) || unbuilt(venue) : unbuilt,
     seed: STAFF_SEED,
   });
   const workers = createCrowd({
@@ -597,6 +611,7 @@ export function createSimState(parts: SimParts): SimState {
     lastWear: new Map(),
     renovating: new Map(),
     closing: new Map(),
+    constructing: new Map(),
     stormHits: new Map(),
     washUpDue: false,
     litter,

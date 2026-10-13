@@ -1,5 +1,5 @@
-import { clockWords } from '../../events/domain/week';
-import type { RenovationWorks } from '../../sim/domain/condition';
+import { clockWords, dayAt, dayWords } from '../../events/domain/week';
+import type { Works } from '../../sim/domain/condition';
 import { canAfford, type Ledger } from '../../sim/domain/ledger';
 
 export interface RenovationControls {
@@ -13,20 +13,26 @@ export interface RenovationTarget {
   readonly key: string;
   // Null where it is too good to be worth renovating.
   readonly cost: number | null;
-  readonly works: RenovationWorks | null;
+  readonly works: Works | null;
   // Guests sleeping there now: a lodging with any is closed first, and renovated once they leave.
   readonly staying: number;
 }
 
 const guestsWord = (count: number): string => (count === 1 ? '1 guest' : `${count} guests`);
 
-export function worksWords(works: RenovationWorks): string {
+// A building can take a day, so its opening names the day too.
+const opensWords = (until: number): string =>
+  `Opens ${dayWords(dayAt(until))}, ${clockWords(until)}`;
+
+export function worksWords(works: Works): string {
+  if (works.kind === 'building') return `Being built. ${opensWords(works.until)}`;
   if (works.kind === 'renovating') return `Renovating until ${clockWords(works.until)}`;
   return `Closed, ${guestsWord(works.staying)} still staying`;
 }
 
 // For a row of a list, beside the building's name.
-export function worksBrief(works: RenovationWorks): string {
+export function worksBrief(works: Works): string {
+  if (works.kind === 'building') return opensWords(works.until);
   if (works.kind === 'renovating') return `Until ${clockWords(works.until)}`;
   return `${works.staying} staying`;
 }

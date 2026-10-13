@@ -48,6 +48,7 @@ function stateOf(away: boolean) {
     condition: new Map(),
     closing: new Map(),
     renovating: new Map(),
+    constructing: new Map(),
     events: createEvents(guests.count),
     homeEarly: new Set(),
     nightOwls: new Set(),

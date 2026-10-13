@@ -30,12 +30,13 @@ import { facesUnowned, ownsTile, type LandRights } from '../../land/domain/landR
 import { paintZone, type Zones } from '../../sim/domain/zones';
 import type { Reason } from '../../sim/domain/ledger';
 import {
-  advanceSites,
-  buildSeconds,
-  openSite,
-  progressOf,
-  revealHeightOf,
-  type ConstructionSite,
+  buildTicks,
+  finishedSites,
+  paintLineOf,
+  siteProgress,
+  withoutSite,
+  withSite,
+  type Sites,
 } from '../../construction/domain/construction';
 import type { ConstructionField } from '../../construction/adapters/constructionField';
 import type { InstancedWorld } from '../../rendering/adapters/instancedWorld';
@@ -91,21 +92,18 @@ export interface EditableResort {
   readonly zones: Zones;
   readonly world: Pick<InstancedWorld, 'add' | 'remove'>;
   readonly shadows: Pick<BlobShadowField, 'add' | 'remove'>;
-  readonly construction: Pick<ConstructionField, 'show' | 'hide'>;
+  readonly construction: Pick<ConstructionField, 'show' | 'open' | 'advance' | 'hide'>;
   readonly lighting: EditLighting;
+  // The sim's: a site is shut to guests until its tick, and saved with the game.
+  constructing: Sites;
 }
+
+const buildTicksOf = (id: string): number => buildTicks(objectTypeById(id).model);
 
 // A re-laid slab appears at once: paving re-stands under one key, and a slab missing for a moment
 // is a hole in the path.
-function buildTimeOf(placement: Placement, lifted?: Placement): number {
-  if (lifted) return 0;
-  const { model } = objectTypeById(placement.id);
-  return buildSeconds({
-    category: model.category,
-    height: model.height,
-    voxelCount: model.voxelCount,
-  });
-}
+const buildTimeOf = (placement: Placement, lifted?: Placement): number =>
+  lifted ? 0 : buildTicksOf(placement.id);
 
 // By family: a Street Lamp B filed by its own id would be looked for among the buildings,
 // and a bulldozed one would linger in the props.
@@ -117,11 +115,9 @@ export interface EditMode {
   select(tool: BuildTool | null): void;
   advance(dt: number): void;
   abandon(): void;
-  // Raises every open site at once, so what is saved is what stands.
-  finishAll(): void;
-  // Carried over a settle, whose rebuild stands everything in the plot as finished.
-  openSites(): readonly ConstructionSite[];
-  reopen(open: readonly ConstructionSite[]): void;
+  // After a settle or a load, whose rebuild stands everything in the plot as finished: the sites
+  // the sim still has going up are taken back out of the world.
+  reopen(): void;
   // Drawn greyed while their renovation lasts; a key no longer given is drawn as it was.
   showRenovations(keys: ReadonlySet<string>): void;
   readonly ground: PickGround;
@@ -141,6 +137,9 @@ export interface Purse {
 
 // Most of the way, not all: the building must still read as itself under the dust sheets.
 const RENOVATION_GREY = 0.75;
+
+// Greyer than a renovation: what is not yet painted is bare plaster.
+const SITE_GREY = 0.9;
 
 const groundUnder = (placement: Placement): TileColumns => ({
   from: placement.tileX,
@@ -168,6 +167,9 @@ export function createEditMode(parts: {
   readonly land: Pick<LandPointerOptions, 'canBuy' | 'onBuy'>;
   readonly onCue: (cue: BuildCue) => void;
   readonly singleKeys: () => boolean;
+  readonly ticks: () => number;
+  // Between seasons the clock is stopped, so a building goes up at once, as a renovation does.
+  readonly buildsAtOnce: () => boolean;
 }): EditMode {
   const { canvas, handle, resort, onChange, onCancel } = parts;
   const ghost = createPlacementGhost(parts.geometries);
@@ -314,7 +316,7 @@ export function createEditMode(parts: {
     lighting.add(placement);
   };
 
-  let sites: readonly ConstructionSite[] = [];
+  const isSite = (key: string): boolean => resort().constructing.has(key);
 
   // Out of the world and into the construction field, whole and greyed, until the work is done.
   const greyed = new Set<string>();
@@ -326,9 +328,9 @@ export function createEditMode(parts: {
     if (placement) resort().world.add(placement);
   };
 
-  // A building still going up has no finished look to grey.
+  // A building still going up, or giving its nod, has no finished look to grey.
   const greyable = (key: string): Placement | undefined => {
-    if (greyed.has(key) || sites.some((site) => site.placement.key === key)) return undefined;
+    if (greyed.has(key) || isSite(key) || opening.has(key)) return undefined;
     return placementOf(key);
   };
 
@@ -345,27 +347,72 @@ export function createEditMode(parts: {
     const { world, construction } = resort();
     greyed.add(placement.key);
     world.remove(placement.key);
-    const height = objectTypeTop(placement.id);
-    construction.show(placement, height, revealHeightOf(1, height), RENOVATION_GREY);
+    construction.show(placement, objectTypeTop(placement.id), 0, RENOVATION_GREY);
   };
 
-  const redrawSites = (): void => {
-    const { construction } = resort();
-    for (const site of sites) {
-      construction.show(site.placement, site.height, revealHeightOf(progressOf(site), site.height));
+  const drawSite = (placement: Placement, until: number): void => {
+    const height = objectTypeTop(placement.id);
+    const progress = siteProgress(until, buildTicksOf(placement.id), parts.ticks());
+    resort().construction.show(placement, height, paintLineOf(progress, height), SITE_GREY);
+  };
+
+  // Finished, painted and nodding; raised into the world once the field hands it back.
+  const opening = new Map<string, Placement>();
+
+  const open = (placement: Placement): void => {
+    const height = objectTypeTop(placement.id);
+    resort().construction.show(placement, height, paintLineOf(1, height), 0);
+    resort().construction.open(placement);
+    opening.set(placement.key, placement);
+  };
+
+  // A site still going up, or a building still nodding, was never raised, so taking it out of
+  // the field is all of taking it down.
+  const cancelSite = (key: string): boolean => {
+    const editable = resort();
+    editable.constructing = withoutSite(editable.constructing, key);
+    opening.delete(key);
+    return editable.construction.hide(key);
+  };
+
+  const putUp = (editable: EditableResort, placement: Placement, ticks: number): void => {
+    if (ticks === 0) return raise(placement);
+    if (parts.buildsAtOnce()) return open(placement);
+    const until = parts.ticks() + ticks;
+    editable.constructing = withSite(editable.constructing, placement.key, until);
+    drawSite(placement, until);
+  };
+
+  const drawSites = (sites: Sites): void => {
+    for (const [key, until] of sites) {
+      const placement = placementOf(key);
+      if (placement) drawSite(placement, until);
     }
   };
 
-  const cancelSite = (key: string): boolean => {
-    if (!resort().construction.hide(key)) return false;
-    sites = sites.filter((site) => site.placement.key !== key);
-    return true;
+  const raiseOpened = (dt: number): void => {
+    for (const key of resort().construction.advance(dt)) {
+      const placement = opening.get(key);
+      opening.delete(key);
+      if (placement) raise(placement);
+    }
+  };
+
+  const finish = (editable: EditableResort, keys: readonly string[]): void => {
+    for (const key of keys) {
+      editable.constructing = withoutSite(editable.constructing, key);
+      const placement = placementOf(key);
+      if (placement) open(placement);
+    }
+    onChange();
+    parts.onCue('built');
   };
 
   // Every effect here must be mirrored by lift; raise holds the ones that wait for the building to
   // finish.
   const standPaid = (placement: Placement, due: number, lifted?: Placement): void => {
-    const { plot, construction } = resort();
+    const editable = resort();
+    const { plot } = editable;
     if (lifted) lift(lifted);
     // Claimed first: if the tiles are gone the scene must not gain an object the index does not
     // know.
@@ -375,14 +422,7 @@ export function createEditMode(parts: {
     // Whether or not it takes time: the ground under what stands is square from the moment the
     // tiles are claimed.
     if (reshapesGround(placement)) parts.onGroundChange(groundUnder(placement));
-    const seconds = buildTimeOf(placement, lifted);
-    if (seconds > 0) {
-      const height = objectTypeTop(placement.id);
-      sites = [...sites, openSite(placement, height, seconds)];
-      construction.show(placement, height, revealHeightOf(0, height));
-    } else {
-      raise(placement);
-    }
+    putUp(editable, placement, buildTimeOf(placement, lifted));
     onChange();
   };
 
@@ -422,7 +462,7 @@ export function createEditMode(parts: {
       const due = buildCostOf(placement.id);
       if (!parts.money.canAfford(due)) return parts.onRefused({ kind: 'money', id: placement.id });
       // Asked before standPaid lifts it, which cancels the site, as the bulldozer does.
-      const stillBuilding = sites.some((site) => site.placement.key === lifted.key);
+      const stillBuilding = isSite(lifted.key);
       standPaid(placement, due, lifted);
       parts.money.refund(refundOf(lifted.id, stillBuilding));
       parts.onCue('pave');
@@ -517,7 +557,7 @@ export function createEditMode(parts: {
     placementOf,
     onDemolish(placement) {
       // Asked before lift, which cancels the site.
-      const stillBuilding = sites.some((site) => site.placement.key === placement.key);
+      const stillBuilding = isSite(placement.key);
       lift(placement);
       parts.money.refund(refundOf(placement.id, stillBuilding));
       if (reshapesGround(placement)) parts.onGroundChange(groundUnder(placement));
@@ -545,21 +585,16 @@ export function createEditMode(parts: {
       surveyor.select(armedLand(tool));
     },
     advance(dt) {
-      if (sites.length === 0) return;
-      const tick = advanceSites(sites, dt);
-      sites = tick.sites;
-      redrawSites();
-      for (const site of tick.finished) {
-        cancelSite(site.placement.key);
-        raise(site.placement);
-      }
-      if (tick.finished.length === 0) return;
-      onChange();
-      parts.onCue('built');
+      raiseOpened(dt);
+      const editable = resort();
+      if (editable.constructing.size === 0) return;
+      const finished = finishedSites(editable.constructing, parts.ticks());
+      if (finished.length > 0) finish(editable, finished);
+      drawSites(editable.constructing);
     },
     abandon() {
-      sites = [];
       greyed.clear();
+      opening.clear();
     },
     showRenovations(keys) {
       ungreyAllBut(keys);
@@ -568,26 +603,18 @@ export function createEditMode(parts: {
         if (placement) grey(placement);
       }
     },
-    finishAll() {
-      const open = sites;
-      for (const site of open) {
-        cancelSite(site.placement.key);
-        raise(site.placement);
-      }
-      if (open.length > 0) onChange();
-    },
-    openSites: () => sites,
     // The inverse of raise, then the site drawn as it was.
-    reopen(open) {
-      const { world, lighting, shadows } = resort();
-      for (const site of open) {
-        world.remove(site.placement.key);
-        lighting.unlight(site.placement);
-        lighting.unshade(site.placement);
-        shadows.remove(site.placement.key);
+    reopen() {
+      const { world, lighting, shadows, constructing } = resort();
+      for (const [key, until] of constructing) {
+        const placement = placementOf(key);
+        if (!placement) continue;
+        world.remove(key);
+        lighting.unlight(placement);
+        lighting.unshade(placement);
+        shadows.remove(key);
+        drawSite(placement, until);
       }
-      sites = open;
-      redrawSites();
     },
     ground,
     placementOf,

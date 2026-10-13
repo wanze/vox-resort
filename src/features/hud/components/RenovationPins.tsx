@@ -1,20 +1,19 @@
 import type { RefObject } from 'react';
-import type { UpkeepRow } from '../../resort-sim/domain/ageing';
+import type { WorksPin } from '../../sim/domain/condition';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import { worksWords } from './RenovateAction';
 
 type Tile = { readonly tileX: number; readonly tileZ: number };
 
 export interface RenovationPinsProps {
-  readonly works: readonly UpkeepRow[];
+  readonly works: readonly WorksPin[];
   readonly shown: boolean;
   // Positioned, and their bars filled, by the render loop; React only says what each one is.
   readonly elements: RefObject<(HTMLElement | null)[]>;
   readonly onSelectAt: (at: Tile) => void;
 }
 
-const toldOf = (row: UpkeepRow): string =>
-  row.works ? `${row.label}: ${worksWords(row.works)}` : row.label;
+const toldOf = (pin: WorksPin): string => `${pin.label}: ${worksWords(pin.works)}`;
 
 export function RenovationPins({ works, shown, elements, onSelectAt }: RenovationPinsProps) {
   if (!shown) return null;
@@ -33,12 +32,12 @@ export function RenovationPins({ works, shown, elements, onSelectAt }: Renovatio
           <button
             type="button"
             className="hud-work"
-            data-state={row.works?.kind}
+            data-state={row.works.kind}
             aria-label={toldOf(row)}
             title={toldOf(row)}
             onClick={() => onSelectAt(row.at)}
           >
-            <PixelIcon name="renovate" />
+            <PixelIcon name={row.works.kind === 'building' ? 'build' : 'renovate'} />
             <span className="hud-work-bar">
               <span className="hud-work-fill" />
             </span>

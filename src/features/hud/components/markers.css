@@ -276,19 +276,20 @@
   filter: brightness(1.08);
 }
 
-/* Taller than a marker for the bar under the roller; the tail's tip sits on the anchor. */
+/* Taller than a marker for the bar under the icon; the tail's tip sits on the anchor. */
 .hud-work {
   position: absolute;
   top: 0;
   left: 0;
   display: grid;
-  justify-items: center;
+  grid-template-rows: 1fr auto;
+  place-items: center;
   gap: 3px;
-  width: 36px;
-  height: 38px;
-  margin: -45px 0 0 -18px;
-  padding: 5px 4px 0;
-  border: 2px solid var(--foliage);
+  width: 42px;
+  height: 46px;
+  margin: -53px 0 0 -21px;
+  padding: 4px 3px;
+  border: 2px solid var(--work-edge, var(--foliage));
   border-radius: var(--radius-pebble);
   background-image: var(--slab-raised);
   box-shadow: var(--shadow-lift), var(--bevel);
@@ -303,8 +304,13 @@
   left: 50%;
   margin-left: -6px;
   border: 6px solid transparent;
-  border-top-color: var(--foliage);
+  border-top-color: var(--work-edge, var(--foliage));
   border-bottom: 0;
+}
+
+/* Warm rather than green: a site is new money going in, not upkeep. */
+.hud-work[data-state='building'] {
+  --work-edge: var(--ink-warm);
 }
 
 .hud-work:hover,
@@ -313,13 +319,14 @@
   filter: brightness(1.08);
 }
 
+/* Dark under a bright fill in the pin's own colour, so it reads from across the plot. */
 .hud-work-bar {
   width: 100%;
-  height: 5px;
+  height: 10px;
   overflow: hidden;
-  border: 1px solid var(--edge-strong);
-  border-radius: 2px;
-  background: var(--sunken);
+  border: 2px solid var(--stone-900);
+  border-radius: 3px;
+  background: var(--stone-700);
 }
 
 /* --progress is written by the render loop, in whole percent. */
@@ -327,7 +334,8 @@
   display: block;
   width: var(--progress, 0%);
   height: 100%;
-  background: var(--ink-good);
+  background: var(--work-edge, var(--foliage));
+  box-shadow: var(--bevel);
 }
 
 /* Waiting for its guests to leave: nothing done yet, so the bar is striped, not filled. */
@@ -352,6 +360,6 @@
   }
 
   .hud-work::before {
-    inset: -5px -6px;
+    inset: -2px;
   }
 }

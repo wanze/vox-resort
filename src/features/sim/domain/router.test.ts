@@ -171,6 +171,7 @@ const routerOn = (
     readonly priceAppeal?: (venue: number) => number;
     readonly conditionOf?: (venue: number) => number;
     readonly shut?: (venue: number) => boolean;
+    readonly unbuilt?: (venue: number) => boolean;
   } = {
     lodgings: [],
     tickOfDay: () => NOON,
@@ -199,6 +200,7 @@ const routerOn = (
     ...(night.priceAppeal ? { priceAppeal: night.priceAppeal } : {}),
     ...(night.conditionOf ? { conditionOf: night.conditionOf } : {}),
     ...(night.shut ? { shut: night.shut } : {}),
+    ...(night.unbuilt ? { unbuilt: night.unbuilt } : {}),
     seed: 13,
   });
   crowd = createCrowd({
@@ -538,6 +540,28 @@ describe('a worn venue', () => {
     expect(router.step(0, nodeAt(street8, 7))).toBe(-1);
     expect(router.visitOf(0)).toBeNull();
     expect(heard[0]).toEqual([0, 'renovating', 'Bakery']);
+  });
+});
+
+describe('a venue still going up', () => {
+  const network = networkOf(street(13));
+  const bakeries = [bakery(2), { ...bakery(10), key: 'bakery#1' }];
+
+  it('is passed over without a word, as if it were not there', () => {
+    const needs = createNeeds(guests, 7);
+    for (const need of GUEST_NEEDS) needs.level[need].fill(1);
+    needs.level.hunger.fill(0);
+    const { heard, onThought } = hearing();
+    const night = {
+      lodgings: [],
+      tickOfDay: () => NOON,
+      onThought,
+      unbuilt: (at: number) => at === 0,
+    };
+    const { router } = routerOn(network, bakeries, needs, night);
+    router.step(0, nodeAt(network, 2));
+    expect(router.goalOf(0)?.key).toBe('bakery#1');
+    expect(heard).toEqual([]);
   });
 });
 

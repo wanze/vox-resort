@@ -1,4 +1,5 @@
 import { namesOf, objectTypeById } from '../features/catalog/domain/objectTypes';
+import { buildTicks } from '../features/construction/domain/construction';
 import type { Placement } from '../features/layout/domain/resortLayout';
 import { cleanliness, NEEDS_CLEANING } from '../features/sim/domain/upkeep';
 import { isBroken } from '../features/sim/domain/breakdowns';
@@ -49,6 +50,13 @@ function lifeguardAt(router: StaffRouter, venue: number): LifeguardWatch {
 }
 
 // A venue goes by its name, which the type's label in the view gives way to.
+const withSite = (view: PlaceView, constructing: ReadonlyMap<string, number>): PlaceView => {
+  const until = constructing.get(view.key);
+  if (until === undefined) return view;
+  const from = until - buildTicks(objectTypeById(view.id).model);
+  return { ...view, building: { kind: 'building', from, until } };
+};
+
 const withNaming = (view: PlaceView, venue: Venue | undefined): PlaceView =>
   venue === undefined
     ? view
@@ -178,7 +186,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       condition: conditionShown(resort, placement.key, clock.ticks),
     });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
-    return withNaming(offered, resort.venues[venue]);
+    return withSite(withNaming(offered, resort.venues[venue]), resort.constructing);
   };
 
   // Kept to tell when a worker's shift has changed under their open panel.

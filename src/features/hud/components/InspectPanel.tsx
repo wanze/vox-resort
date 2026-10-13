@@ -11,7 +11,7 @@ import type {
   StaffView,
 } from '../../inspect/domain/selection';
 import type { OrderRole } from '../../sim/domain/staffRouter';
-import type { ConditionBand } from '../../sim/domain/condition';
+import type { ConditionBand, Works } from '../../sim/domain/condition';
 import type { Advice } from '../../sim/domain/advice';
 import { adviceAt } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
@@ -185,9 +185,15 @@ function ConditionRows({ condition }: { readonly condition: ConditionView | null
   );
 }
 
+function BuildingRow({ building }: { readonly building: Works | undefined }) {
+  if (!building) return null;
+  return <StatRow label="Construction">{worksWords(building)}</StatRow>;
+}
+
 function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue: Venue }) {
   return (
     <dl className="ui-stats">
+      <BuildingRow building={place.building} />
       <StatRow label="Role">{ROLES[venue.role]}</StatRow>
       <ProgrammeRow programme={place.programme} />
       <BrokenRow broken={venue.broken} />

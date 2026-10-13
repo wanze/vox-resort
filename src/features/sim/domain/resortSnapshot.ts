@@ -328,6 +328,11 @@ export const resortSnapshotSchema = z.object({
     .array(z.tuple([z.string(), z.number().int()]))
     .optional()
     .default([]),
+  // Saves from before buildings took time have nothing going up.
+  constructing: z
+    .array(z.tuple([z.string(), z.number().int()]))
+    .optional()
+    .default([]),
   zones: int8,
   // Absent in saves from before photos, which load with nobody having taken one.
   photos: z.object({ lastAt: int32, heat: float32 }).exactOptional(),

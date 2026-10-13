@@ -43,6 +43,7 @@ function stateOf(ageing = true) {
     condition: new Map<string, number>(),
     breakdowns: createBreakdowns(venues.length),
     renovating: new Map<string, number>(),
+    constructing: new Map<string, number>(),
     stormHits: new Map<string, number>() as ReadonlyMap<string, number>,
   };
 }
@@ -100,6 +101,13 @@ describe('batterTheShore', () => {
   it('spares a building behind scaffolding', () => {
     const state = stateOf();
     state.renovating = new Map(venues.map((venue) => [venue.key, 1e9]));
+    stormFor(state, 24 * 10);
+    expect(state.stormHits.size).toBe(0);
+  });
+
+  it('spares a building still going up', () => {
+    const state = stateOf();
+    state.constructing = new Map(venues.map((venue) => [venue.key, 1e9]));
     stormFor(state, 24 * 10);
     expect(state.stormHits.size).toBe(0);
   });

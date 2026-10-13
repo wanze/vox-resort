@@ -11,6 +11,7 @@ import type { Weather } from '../../sim/domain/weather';
 import type { OrderSpot } from './markers';
 import type { SignSpot } from './signs';
 import type { UpkeepRow } from '../../resort-sim/domain/ageing';
+import type { WorksPin } from '../../sim/domain/condition';
 import type { CameraView, ShowcaseStats, StatusView, VoicesView } from './views';
 
 export interface HudState {
@@ -22,7 +23,7 @@ export interface HudState {
   // Every lodging and venue, the most worn first, for Books > Upkeep.
   readonly upkeep: readonly UpkeepRow[];
   // Those of them with a renovation pending or under way, one pin each, at most MAX_WORKS.
-  readonly works: readonly UpkeepRow[];
+  readonly works: readonly WorksPin[];
   readonly highlightTypes: readonly HighlightType[];
   // The ticks travel with the list: the news dates what it hears.
   readonly advice: { readonly list: readonly Advice[]; readonly ticks: number };

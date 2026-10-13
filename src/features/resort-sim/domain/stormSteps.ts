@@ -17,6 +17,7 @@ type StormState = Pick<
   | 'condition'
   | 'breakdowns'
   | 'renovating'
+  | 'constructing'
   | 'stormHits'
 >;
 
@@ -27,7 +28,8 @@ export function recentStormHits(
   return new Map([...hits].filter(([, at]) => now - at < TICKS_PER_DAY));
 }
 
-// Hourly. Scaffolding shields a building under renovation, and one hit today has had its storm.
+// Hourly. Scaffolding shields a building under renovation or going up, and one hit today has had
+// its storm.
 // A hit that neither dents nor breaks anything is no hit, so the news never cries wolf.
 export function batterTheShore(resort: StormState, clock: SimNow): void {
   if (clock.weather !== 'storm') return;
@@ -39,7 +41,7 @@ export function batterTheShore(resort: StormState, clock: SimNow): void {
     resort.shore,
     Math.floor(clock.ticks / TICKS_PER_HOUR),
     room,
-    (key) => recent.has(key) || resort.renovating.has(key),
+    (key) => recent.has(key) || resort.renovating.has(key) || resort.constructing.has(key),
   );
   const battered = new Map(recent);
   for (const { key, dent } of hits) {

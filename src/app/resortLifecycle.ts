@@ -87,7 +87,7 @@ interface LifecycleParts {
   readonly clock: Clock;
   readonly fireworks: Pick<FireworksField, 'clear'>;
   readonly ownership: Pick<OwnershipMask, 'update'>;
-  readonly build: Pick<EditMode, 'abandon' | 'finishAll' | 'openSites' | 'reopen'>;
+  readonly build: Pick<EditMode, 'abandon' | 'reopen'>;
   readonly selection: Pick<SelectionController, 'select'>;
   readonly running: () => boolean;
   // Shared with the showcase, whose lettering and renaming read it too.
@@ -188,12 +188,6 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     parts.rebuilt();
   };
 
-  const snapshot = (): GameSnapshot => {
-    build.finishAll();
-    return gameNow();
-  };
-
-  // Without raising the open sites, which a settle carries over still going up.
   const gameNow = (): GameSnapshot => {
     if (walkStaleAt !== null) reanchor();
     return gameOf(current());
@@ -232,6 +226,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     walkStaleAt = null;
     const resort = replaceResort(prepared, saved.population);
     parts.restoreGame(resort, saved);
+    build.reopen();
     clock.setSpeed('paused');
     parts.stopDrift();
     // After the replace, whose reframe has put the camera back where a new plot is looked at from.
@@ -286,7 +281,6 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
     const replaceStarted = performance.now();
     const saved = gameNow();
     const camera = playerCamera();
-    const sites = build.openSites();
     const population = Math.max(saved.population, parts.populationOf(prepared));
     build.abandon();
     selection.select(null);
@@ -296,7 +290,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
       resort,
       population > saved.population ? widenGame(saved, gameOf(resort)) : saved,
     );
-    build.reopen(sites);
+    build.reopen();
     restoreCamera(handle, camera);
     parts.rebuilt();
     console.info(
@@ -307,7 +301,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
   return {
     regrow,
     load,
-    snapshot,
+    snapshot: gameNow,
     edited() {
       walkStaleAt = performance.now();
       edits++;

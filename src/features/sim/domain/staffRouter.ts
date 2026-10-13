@@ -270,8 +270,8 @@ export function createStaffRouter(parts: {
   // is worked until it ends. Omitted, nothing is ever booked.
   readonly booked?: (venue: number) => boolean;
   readonly hosting?: () => readonly { readonly venue: number; readonly until: number }[];
-  // Under renovation: no show and no watch, and a lifeguard there waits at the door. Omitted,
-  // nothing ever is.
+  // Under renovation or still going up: no show and no watch, and a lifeguard there waits at the
+  // door. Omitted, nothing ever is.
   readonly shut?: (venue: number) => boolean;
   // Seeded so a bench run replays the same scene.
   readonly seed: number;

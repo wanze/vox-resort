@@ -30,6 +30,7 @@ export interface ArrivalsState {
   readonly condition: Condition;
   readonly closing: ReadonlyMap<string, number>;
   readonly renovating: ReadonlyMap<string, number>;
+  readonly constructing: ReadonlyMap<string, number>;
   events: Pick<EventsState, 'tired' | 'glow'>;
   readonly homeEarly: Set<number>;
   readonly nightOwls: Set<number>;

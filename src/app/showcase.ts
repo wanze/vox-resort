@@ -100,7 +100,7 @@ import {
   conditionAdvised,
   renovateAll,
 } from '../features/resort-sim/domain/ageing';
-import { createRenovationWorks } from './renovationWorks';
+import { createWorksPins } from './worksPins';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
 import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
 import { pricesView, setPrice } from '../features/sim/domain/pricing';
@@ -2622,7 +2622,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let staffPinsShown = false;
   const signSpots = createSignSpots();
   let signsWanted = false;
-  const works = createRenovationWorks({
+  const works = createWorksPins({
     current,
     ticks: () => clock.ticks,
     showRenovations: (keys) => build.showRenovations(keys),
@@ -2775,6 +2775,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     land,
     onCue: cue,
     singleKeys: () => singleKeys,
+    ticks: () => clock.ticks,
+    buildsAtOnce: () => inBreak(current().season),
   });
 
   // Off under a bench, as the markers are, so every recorded figure is drawn without them. A gate
@@ -2782,8 +2784,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   const dressPlacements = (): void => {
     if (bench) return;
     const resort = current();
-    const building = new Set(build.openSites().map((site) => site.placement.key));
-    const standing = resort.plot.placements.filter((placement) => !building.has(placement.key));
+    const standing = resort.plot.placements.filter(
+      (placement) => !resort.constructing.has(placement.key),
+    );
     resort.nameplates.show(
       standing.filter((placement) => isGateway(placement.id)),
       identity.name,

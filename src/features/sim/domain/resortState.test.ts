@@ -65,6 +65,7 @@ function stateFor(seed: number): ResortState {
     prices: {},
     condition: new Map(),
     renovating: new Map(),
+    constructing: new Map(),
     closing: new Map(),
     zones: createZones(6, 5),
     photos: createPhotos(40, 9),
@@ -342,6 +343,22 @@ describe('snapshotResort', () => {
     ]);
     expect([...fresh.renovating]).toEqual([['pool#0', 1_200]]);
     expect([...fresh.closing]).toEqual([['hotel#0', 640]]);
+  });
+
+  it('keeps the buildings still going up through a save', () => {
+    const state = played();
+    state.constructing = new Map([['hotel#0', 2_400]]);
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(snapshotResort(state)));
+    expect([...fresh.constructing]).toEqual([['hotel#0', 2_400]]);
+  });
+
+  it('has nothing going up in a save from before buildings took time', () => {
+    const { constructing: _constructing, ...before } = snapshotResort(played());
+    const fresh = stateFor(9);
+    fresh.constructing = new Map([['bar#0', 60]]);
+    restoreResort(fresh, resortSnapshotSchema.parse(before));
+    expect(fresh.constructing.size).toBe(0);
   });
 
   it('settles every standing building of a save from before ageing, each its own way worn', () => {

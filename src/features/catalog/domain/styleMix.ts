@@ -6,8 +6,9 @@ import { familyOf, stylesOf } from './objectTypes';
 
 export const ONE_OFF = 0.1;
 
-// Rows of loungers or lamps that change style from one block to the next read as a mistake.
-export const RESORT_WIDE: ReadonlySet<string> = new Set(['sun-lounger', 'street-lamp']);
+// Rows of loungers that change style from one block to the next read as a mistake. Lamps never
+// reach the mix: the layout styles them by their ground.
+export const RESORT_WIDE: ReadonlySet<string> = new Set(['sun-lounger']);
 
 // A render chunk, so a cell never splits a near-layer bucket between two styles.
 const CELL_SHIFT = 4;

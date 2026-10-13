@@ -10620,19 +10620,19 @@
         "binReach": 0,
         "mosaic": null,
         "width": 16,
-        "height": 22,
+        "height": 8,
         "depth": 16,
         "emissive": [15578983],
         "water": [],
         "windows": [],
         "lights": [
           {
-            "x": 3,
-            "y": 14,
+            "x": 7,
+            "y": 6,
             "z": 7,
             "color": 15578983,
-            "intensity": 90,
-            "distance": 46
+            "intensity": 70,
+            "distance": 38
           }
         ],
         "seats": [],
@@ -10640,8 +10640,8 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 746,
-        "dayVoxelCount": 746,
+        "voxelCount": 526,
+        "dayVoxelCount": 526,
         "dominantColor": 14466709,
         "solidTops": [2],
         "turnless": false

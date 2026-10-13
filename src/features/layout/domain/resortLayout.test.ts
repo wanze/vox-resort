@@ -21,6 +21,7 @@ import {
 } from './resortLayout';
 import { tileKey } from './tileKey';
 import {
+  BEACH_LAMP_ID,
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
@@ -34,9 +35,12 @@ import {
   LAMP_ID,
   PATH_ID,
   RAILING_ID,
+  RAMP_FOOT_ID,
+  RAMP_HEAD_ID,
   RESORT_PLAN,
   STAIR_RAILING_LEFT_ID,
   STAIR_RAILING_RIGHT_ID,
+  STAIRS_ID,
   type ResortPlan,
 } from './resortPlan';
 import { shoreFor, terrainAt, waterStartZ } from './shoreline';
@@ -972,11 +976,27 @@ describe('a plot with a shore', () => {
     }
   });
 
-  it('plants no lamp, bench or hedge on the sand', () => {
+  it('plants no bench or hedge on the sand, and only the beach lamp', () => {
     const shore = shoreFor(coastal())!;
-    const { lamps, benches, hedges } = decorationsFor(items, coastal());
+    const { lamps, beachLamps, benches, hedges } = decorationsFor(items, coastal());
     for (const tile of [...lamps, ...hedges, ...benches.map((bench) => bench.tile)]) {
       expect(terrainAt(shore, tile.x, tile.z)).toBe('land');
+    }
+    for (const tile of beachLamps) expect(terrainAt(shore, tile.x, tile.z)).toBe('beach');
+  });
+
+  it('lights the boardwalk with the beach lamp, whatever the style mix rolls', () => {
+    const shore = shoreFor(coastal())!;
+    const scatter = styleMix({ seed: 4, neighbourhoods: [], oneOff: 1 });
+    const { props } = layoutResort([...items, item(BEACH_LAMP_ID)], coastal(), scatter);
+    const lamps = props.filter((prop) => familyOf(prop.id) === LAMP_ID);
+    expect(lamps.some((lamp) => lamp.id === BEACH_LAMP_ID)).toBe(true);
+    for (const lamp of lamps) {
+      const onSand = terrainAt(shore, lamp.tileX, lamp.tileZ) === 'beach';
+      expect({ lamp: lamp.key, id: lamp.id }).toEqual({
+        lamp: lamp.key,
+        id: onSand ? BEACH_LAMP_ID : LAMP_ID,
+      });
     }
   });
 
@@ -1119,6 +1139,20 @@ describe('turning a building to open its door onto paving', () => {
     it('opens every door-declaring building on the grass onto paving', () => {
       expect(shutOut(layoutResort(without, plan), plan).length).toBeGreaterThan(20);
       expect(shutOut(layoutResort(withDoors, plan), plan)).toEqual([]);
+    });
+
+    it('stands no beach lamp beside either end of a ramp or a flight', () => {
+      const climbs = layoutResort(withDoors, plan).paths.filter((tile) =>
+        [RAMP_FOOT_ID, RAMP_HEAD_ID, STAIRS_ID].includes(tile.id),
+      );
+      const { beachLamps } = decorationsFor(withDoors, plan);
+      expect(beachLamps.length).toBeGreaterThan(20);
+      for (const lamp of beachLamps) {
+        const beside = climbs.filter(
+          (climb) => Math.max(Math.abs(climb.tileX - lamp.x), Math.abs(climb.tileZ - lamp.z)) <= 1,
+        );
+        expect({ lamp, beside: beside.map((climb) => climb.key) }).toEqual({ lamp, beside: [] });
+      }
     });
 
     it('lays every plot it laid before, however the doors turn it', () => {

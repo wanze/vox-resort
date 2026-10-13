@@ -90,6 +90,8 @@ export const PAVING_IDS: ReadonlySet<string> = new Set([
 ]);
 
 export const LAMP_ID = 'street-lamp';
+// The low style of the lamp: the tall post towers over a beach.
+export const BEACH_LAMP_ID = 'street-lamp-b';
 export const HEDGE_ID = 'hedge';
 
 export const BENCH_ID = 'bench';

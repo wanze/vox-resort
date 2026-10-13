@@ -5,6 +5,7 @@ import {
   type PlacementGround,
 } from '../../../../voxel-gen/voxelgen.ts';
 import {
+  BEACH_LAMP_ID,
   BENCH_ID,
   BOARDWALK_ID,
   BRIDGE_ID,
@@ -39,7 +40,7 @@ import type { Terrain } from './terrain';
 import { terrainFor } from './terrain';
 import { levelHeight, straddledTile, type LevelProvider } from './elevation';
 import { climbTilesFor, type ClimbKind } from './climbs';
-import type { PavedProvider } from './stairs';
+import { CLIMBS, type PavedProvider } from './stairs';
 import { railTilesFor, type RailKind, type RailTile } from './railings';
 import { spanTilesFor, type SpanProvider } from './spans';
 import { doorStepTile, placedDoors } from './doorStep';
@@ -544,6 +545,7 @@ export interface TurnedTile {
 
 export interface Decorations {
   readonly lamps: readonly Tile[];
+  readonly beachLamps: readonly Tile[];
   readonly benches: readonly TurnedTile[];
   readonly hedges: readonly Tile[];
 }
@@ -569,7 +571,7 @@ function edgeRing(parts: {
     for (let x = 0; x < plan.tilesX; x++) {
       const key = tileKey(x, z);
       if (occupied.has(key) || paved.has(key)) continue;
-      if (terrain.surfaceOf(x, z) !== 'grass') continue;
+      if (terrain.surfaceOf(x, z) === 'water') continue;
       if (pathNeighbours(x, z) > 0) ring.push({ x, z });
     }
   }
@@ -585,15 +587,24 @@ export function decorationsFor(
 ): Decorations {
   const occupied = occupiedTiles(items, plan);
   const terrain = terrainFor(plan);
-  const paved = new Set(pathTilesFor(items, plan).map((tile) => tileKey(tile.x, tile.z)));
+  const pavedTiles = pathTilesFor(items, plan);
+  const paved = new Set(pavedTiles.map((tile) => tileKey(tile.x, tile.z)));
 
   const pathNeighbours = (x: number, z: number): number =>
     NEIGHBOURS.filter(([dx, dz]) => paved.has(tileKey(x + dx, z + dz))).length;
 
-  const ring = edgeRing({ plan, terrain, occupied, paved, pathNeighbours });
+  const edge = edgeRing({ plan, terrain, occupied, paved, pathNeighbours });
+  const onSand = (tile: Tile): boolean => terrain.surfaceOf(tile.x, tile.z) === 'sand';
+  // Lamps line the boardwalks too, spaced as one run across the shore; benches and hedges keep
+  // to the grass.
+  const ring = edge.filter((tile) => !onSand(tile));
+  const climbing = climbEnds(pavedTiles, (x, z) => terrain.levelOf(x, z));
+  const lampable = edge.filter((tile) => !onSand(tile) || !climbing.has(tileKey(tile.x, tile.z)));
 
   const taken = new Set<string>();
-  const lamps = spacedLamps(ring, spacing, taken);
+  const lit = spacedLamps(lampable, spacing, taken);
+  const lamps = lit.filter((tile) => !onSand(tile));
+  const beachLamps = lit.filter(onSand);
   const parks = plan.parks ?? [];
   const inPark = (tile: Tile): boolean =>
     parks.some(
@@ -607,7 +618,23 @@ export function decorationsFor(
     skip: inPark,
     pathNeighbours,
   });
-  return { lamps, benches, hedges };
+  return { lamps, beachLamps, benches, hedges };
+}
+
+// Both ends of every ramp and flight and the tiles round them: on the sand a lamp there stood
+// where guests step off. Stairs everywhere finds the same climbs, a ramp's foot one tile below its
+// head.
+function climbEnds(paved: readonly Tile[], levelOf: LevelProvider): Set<string> {
+  const near = new Set<string>();
+  for (const { tile, rotation } of climbTilesFor(paved, levelOf, () => true)) {
+    const { dx, dz } = CLIMBS.find((climb) => climb.rotation === rotation)!;
+    for (const end of [tile, { x: tile.x - dx, z: tile.z - dz }]) {
+      for (let x = end.x - 1; x <= end.x + 1; x++) {
+        for (let z = end.z - 1; z <= end.z + 1; z++) near.add(tileKey(x, z));
+      }
+    }
+  }
+  return near;
 }
 
 function spacedLamps(ring: readonly Tile[], spacing: number, taken: Set<string>): Tile[] {
@@ -859,14 +886,24 @@ function propsFor(
   styleOf: StyleOf,
 ): Placement[] {
   const byId = new Map(items.map((item) => [item.id, item]));
-  const { lamps, benches, hedges } = decorationsFor(items, plan);
+  const { lamps, beachLamps, benches, hedges } = decorationsFor(items, plan);
+  const beachLamp = byId.has(BEACH_LAMP_ID) ? BEACH_LAMP_ID : LAMP_ID;
+  // The ground styles a lamp, not the mix: the tall one on grass and the low one on the sand.
   const turned: { id: string; tile: Tile; rotation: Rotation }[] = [
     ...lamps.map((tile) => ({ id: LAMP_ID, tile, rotation: 0 as Rotation })),
-    ...hedges.map((tile) => ({ id: HEDGE_ID, tile, rotation: 0 as Rotation })),
-    ...benches.map(({ tile, rotation }) => ({ id: BENCH_ID, tile, rotation })),
+    ...beachLamps.map((tile) => ({ id: beachLamp, tile, rotation: 0 as Rotation })),
+    ...hedges.map((tile) => ({
+      id: styleOf(HEDGE_ID, tile.x, tile.z),
+      tile,
+      rotation: 0 as Rotation,
+    })),
+    ...benches.map(({ tile, rotation }) => ({
+      id: styleOf(BENCH_ID, tile.x, tile.z),
+      tile,
+      rotation,
+    })),
   ];
-  return turned.flatMap(({ id: family, tile, rotation }) => {
-    const id = styleOf(family, tile.x, tile.z);
+  return turned.flatMap(({ id, tile, rotation }) => {
     const item = byId.get(id);
     if (!item) return [];
     return [

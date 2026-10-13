@@ -58,7 +58,7 @@ describe('styleMix', () => {
         uniform: RESORT_WIDE,
       });
       const styles = new Set<string>();
-      for (let x = 0; x < 400; x += 3) styles.add(styleOf('street-lamp', x, x % 10));
+      for (let x = 0; x < 400; x += 3) styles.add(styleOf('sun-lounger', x, x % 10));
       return styles;
     };
     const seeds = Array.from({ length: 12 }, (_, seed) => across(seed));

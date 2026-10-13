@@ -107,6 +107,14 @@ export interface ModelLight {
   readonly distance: number; // voxels
 }
 
+// A pole the model paints, and the app flies a flag from: x/z is the pole's column and y the
+// layer above its top. The flag's colour is the sea's, so the art leaves the cloth to the app.
+export interface ModelFlag {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
 export type PlacementGround = 'beach' | 'shore';
 
 export interface ModelPlacement {
@@ -472,6 +480,9 @@ export interface VoxelModelSource {
     readonly furled: (builder: VoxelBuilder) => void;
   };
   readonly lights?: readonly ModelLight[];
+  readonly flags?: readonly ModelFlag[];
+  // Litter the sea leaves on the sand after a storm, never what a guest drops.
+  readonly washedUp?: true;
   readonly seats?: readonly ModelSeat[];
   readonly placement?: ModelPlacement;
   readonly venue?: ModelVenue;
@@ -526,6 +537,9 @@ export interface VoxelModel {
   readonly hire: ModelHire | null;
   readonly nameplate: ModelNameplate | null;
   readonly scale?: number;
+  // Left out where absent, so facts.json only grows on the models that have them.
+  readonly flags?: readonly ModelFlag[];
+  readonly washedUp?: true;
 }
 
 export const TILE_VOXELS = 16;
@@ -703,7 +717,7 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
       .toSorted((a, b) => a.y - b.y || a.z - b.z || a.x - b.x);
   const voxels = shifted(painted);
 
-  return withScale(source, {
+  const model = withScale(source, {
     id: source.id,
     label: source.label,
     category: source.category,
@@ -731,10 +745,28 @@ export function buildModel(source: VoxelModelSource): VoxelModel {
     hire: source.hire ?? null,
     nameplate: nameplateFrom(source.nameplate, minX, minY, minZ),
   });
+  return withFlags(source, model, { x: minX, y: minY, z: minZ });
 }
 
 const withScale = (source: VoxelModelSource, model: VoxelModel): VoxelModel =>
   source.scale === undefined ? model : { ...model, scale: source.scale };
+
+function withFlags(
+  source: VoxelModelSource,
+  model: VoxelModel,
+  min: { readonly x: number; readonly y: number; readonly z: number },
+): VoxelModel {
+  const flags = source.flags?.map((flag) => ({
+    x: flag.x - min.x,
+    y: flag.y - min.y,
+    z: flag.z - min.z,
+  }));
+  return {
+    ...model,
+    ...(flags && flags.length > 0 ? { flags } : {}),
+    ...(source.washedUp ? { washedUp: true as const } : {}),
+  };
+}
 
 // As it stands by day; the furled canopy is only ever drawn in its place.
 export const dayVoxelsOf = (

@@ -187,6 +187,9 @@ export interface SimState {
   closing: ReadonlyMap<string, number>;
   // Key to the tick a storm battered it, for a day; never saved, so a load forgets the news only.
   stormHits: ReadonlyMap<string, number>;
+  // Set through a storm and spent the first hour after it; never saved, so a load mid-storm leaves
+  // the sand clean.
+  washUpDue: boolean;
   // Replaced on an edit rather than patched: a moved tree takes its reach with it.
   scenery: SceneryField;
   // Replaced on an edit, as the scenery is.
@@ -595,6 +598,7 @@ export function createSimState(parts: SimParts): SimState {
     renovating: new Map(),
     closing: new Map(),
     stormHits: new Map(),
+    washUpDue: false,
     litter,
     footfall: createFootfall(network.nodes.length),
     moment: NO_MOMENT,

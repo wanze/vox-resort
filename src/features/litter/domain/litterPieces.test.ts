@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { createLitter, PIECE, type Litter } from '../../sim/domain/litter';
-import { piecesFor } from './litterPieces';
+import { createLitter, PIECE, washUp, type Litter } from '../../sim/domain/litter';
+import { piecesFor, type LitterKinds } from './litterPieces';
 
 const everywhere = (): number => 3;
+
+const kinds = (count: number): LitterKinds => ({
+  dropped: Array.from({ length: count }, (_, variant) => variant),
+  washed: [],
+});
 
 const fouled = (): Litter => {
   const litter = createLitter(4, 3);
@@ -15,40 +20,40 @@ describe('piecesFor', () => {
   it('lays one piece per share of litter on a tile, four at most', () => {
     const litter = createLitter(2, 1);
     litter.level.set([PIECE, 1]);
-    const pieces = piecesFor(litter, everywhere, 100, 2);
+    const pieces = piecesFor(litter, everywhere, 100, kinds(2));
     expect(pieces).toHaveLength(5);
     expect(pieces.every((piece) => piece.y === 3)).toBe(true);
   });
 
   it('lays the same pieces in the same places for the same grid', () => {
-    expect(piecesFor(fouled(), everywhere, 100, 3)).toEqual(
-      piecesFor(fouled(), everywhere, 100, 3),
+    expect(piecesFor(fouled(), everywhere, 100, kinds(3))).toEqual(
+      piecesFor(fouled(), everywhere, 100, kinds(3)),
     );
   });
 
   it('lays nothing outside a window, and all of it inside one', () => {
-    const inside = piecesFor(fouled(), everywhere, 100, 3, { x0: 0, x1: 1, z0: 0, z1: 2 });
+    const inside = piecesFor(fouled(), everywhere, 100, kinds(3), { x0: 0, x1: 1, z0: 0, z1: 2 });
     expect(inside.every((piece) => piece.x < 2 * TILE_VOXELS)).toBe(true);
-    const whole = piecesFor(fouled(), everywhere, 100, 3);
+    const whole = piecesFor(fouled(), everywhere, 100, kinds(3));
     expect(inside).toEqual(whole.filter((piece) => piece.x < 2 * TILE_VOXELS));
     expect(inside.length).toBeLessThan(whole.length);
   });
 
   it('never lays more than it has room for', () => {
-    expect(piecesFor(fouled(), everywhere, 5, 2)).toHaveLength(5);
-    expect(piecesFor(fouled(), everywhere, 0, 2)).toEqual([]);
+    expect(piecesFor(fouled(), everywhere, 5, kinds(2))).toHaveLength(5);
+    expect(piecesFor(fouled(), everywhere, 0, kinds(2))).toEqual([]);
   });
 
   it('lays nothing on clean paths, or where there is no ground to lay it on', () => {
-    expect(piecesFor(createLitter(4, 4), everywhere, 100, 2)).toEqual([]);
-    expect(piecesFor(fouled(), () => null, 100, 2)).toEqual([]);
+    expect(piecesFor(createLitter(4, 4), everywhere, 100, kinds(2))).toEqual([]);
+    expect(piecesFor(fouled(), () => null, 100, kinds(2))).toEqual([]);
   });
 
   it('lays pieces on any ground it is given a height for, the sand at 0 included', () => {
     const litter = createLitter(3, 1);
     litter.level.set([PIECE, PIECE, PIECE]);
     const heights = [3, null, 0];
-    const pieces = piecesFor(litter, (tileX) => heights[tileX] ?? null, 100, 1);
+    const pieces = piecesFor(litter, (tileX) => heights[tileX] ?? null, 100, kinds(1));
     expect(pieces.map((piece) => piece.y)).toEqual([3, 0]);
     expect(Math.floor(pieces[1]!.x / TILE_VOXELS)).toBe(2);
   });
@@ -56,7 +61,7 @@ describe('piecesFor', () => {
   it('keeps every piece inside its own tile, and a variant that exists', () => {
     const litter = createLitter(6, 6);
     litter.level.fill(1);
-    const pieces = piecesFor(litter, everywhere, 1000, 2);
+    const pieces = piecesFor(litter, everywhere, 1000, kinds(2));
     expect(pieces).toHaveLength(6 * 6 * 4);
     for (const [index, piece] of pieces.entries()) {
       const tile = Math.floor(index / 4);
@@ -69,5 +74,25 @@ describe('piecesFor', () => {
       expect([0, 1]).toContain(piece.variant);
       expect(piece.turns).toBeLessThan(4);
     }
+  });
+
+  it('draws what the sea left from the sea’s own variants, and the rest from the guests’', () => {
+    const litter = createLitter(4, 1);
+    litter.level[0] = 1;
+    washUp(litter, 2, 0, 4);
+    const split: LitterKinds = { dropped: [0, 1], washed: [2, 3] };
+    const pieces = piecesFor(litter, everywhere, 100, split);
+    const onTile = (tileX: number) =>
+      pieces.filter((piece) => Math.floor(piece.x / TILE_VOXELS) === tileX);
+    expect(onTile(0).every((piece) => [0, 1].includes(piece.variant))).toBe(true);
+    expect(onTile(2)).toHaveLength(4);
+    expect(onTile(2).every((piece) => [2, 3].includes(piece.variant))).toBe(true);
+  });
+
+  it('falls back on the guests’ variants when the sea has none', () => {
+    const litter = createLitter(1, 1);
+    washUp(litter, 0, 0, 2);
+    const pieces = piecesFor(litter, everywhere, 100, kinds(2));
+    expect(pieces.every((piece) => [0, 1].includes(piece.variant))).toBe(true);
   });
 });

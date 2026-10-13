@@ -6,6 +6,8 @@ export interface Litter {
   readonly tilesZ: number;
   // 0 clean, 1 as fouled as a tile gets; row-major like the scenery field.
   readonly level: Float32Array;
+  // 1 where the sea left it rather than a guest, which only changes what it looks like.
+  readonly washed: Uint8Array;
   // Bumped on every change, so a drawing can tell whether to redraw.
   version: number;
 }
@@ -42,7 +44,13 @@ export const LITTER_WEIGHT = 1;
 export function createLitter(tilesX: number, tilesZ: number): Litter {
   const x = Math.max(0, tilesX);
   const z = Math.max(0, tilesZ);
-  return { tilesX: x, tilesZ: z, level: new Float32Array(x * z), version: 0 };
+  return {
+    tilesX: x,
+    tilesZ: z,
+    level: new Float32Array(x * z),
+    washed: new Uint8Array(x * z),
+    version: 0,
+  };
 }
 
 export function createCarrying(people: number): Carrying {
@@ -116,8 +124,20 @@ export function litterAt(litter: Litter, tileX: number, tileZ: number): number {
 
 export function sweep(litter: Litter, tileX: number, tileZ: number): void {
   if (!inGrid(litter, tileX, tileZ)) return;
-  litter.level[tileZ * litter.tilesX + tileX] = 0;
+  const tile = tileZ * litter.tilesX + tileX;
+  litter.level[tile] = 0;
+  litter.washed[tile] = 0;
   litter.version++;
+}
+
+// No bin catches what the sea brings, so the cover is not asked.
+export function washUp(litter: Litter, tileX: number, tileZ: number, pieces: number): boolean {
+  if (!inGrid(litter, tileX, tileZ) || pieces <= 0) return false;
+  const tile = tileZ * litter.tilesX + tileX;
+  litter.level[tile] = Math.min(1, litter.level[tile]! + pieces * PIECE);
+  litter.washed[tile] = 1;
+  litter.version++;
+  return true;
 }
 
 // Ties break towards the lower index so two runs of the same plot agree.
@@ -191,6 +211,7 @@ export function pruneLitter(
       const tile = z * litter.tilesX + x;
       if (litter.level[tile] === 0 || keeps(x, z)) continue;
       litter.level[tile] = 0;
+      litter.washed[tile] = 0;
       changed = true;
     }
   }

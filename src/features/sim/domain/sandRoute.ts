@@ -188,6 +188,11 @@ function straightOver(network: WalkNetwork, beach: Band, a: SandPoint, b: SandPo
   return true;
 }
 
+// One straight walk over open beach, as a cleaner takes from one swept tile to the next.
+export function walkableOverSand(network: WalkNetwork, a: SandPoint, b: SandPoint): boolean {
+  return network.beach !== null && straightOver(network, bandOf(network.beach), a, b);
+}
+
 const clearOnSand = (network: WalkNetwork, a: SandPoint, b: SandPoint): boolean =>
   network.sand === null || clearLine(network.sand, a.x, a.z, b.x, b.z);
 

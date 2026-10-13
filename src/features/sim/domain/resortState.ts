@@ -106,6 +106,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     thoughts: snapshotThoughts(state.thoughts, state.thoughtDay),
     carrying: state.carrying.nodes.slice(),
     litter: state.litter.level.slice(),
+    litterWashed: state.litter.washed.slice(),
     upkeep: snapshotUpkeep(state.upkeep, state.venues),
     breakdowns: snapshotBreakdowns(state.breakdowns, state.venues),
     takings: [...state.takings],
@@ -151,6 +152,9 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day 
   restoreThoughts(state.thoughts, state.thoughtDay, snapshot.thoughts);
   state.carrying.nodes.set(snapshot.carrying);
   state.litter.level.set(snapshot.litter);
+  if (snapshot.litterWashed?.length === state.litter.washed.length) {
+    state.litter.washed.set(snapshot.litterWashed);
+  } else state.litter.washed.fill(0);
   state.litter.version++;
   state.upkeep = restoreUpkeep(snapshot.upkeep, state.venues);
   state.breakdowns = restoreBreakdowns(snapshot.breakdowns, state.venues);

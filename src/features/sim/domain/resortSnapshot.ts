@@ -291,6 +291,8 @@ export const resortSnapshotSchema = z.object({
   thoughts: thoughtsSnapshotSchema,
   carrying: int8,
   litter: float32,
+  // Left out by a save from before the sea washed anything up: it was all dropped by guests.
+  litterWashed: uint8.exactOptional(),
   upkeep: upkeepSnapshotSchema,
   breakdowns: breakdownsSnapshotSchema,
   takings: z.array(z.tuple([z.string(), z.number()])),

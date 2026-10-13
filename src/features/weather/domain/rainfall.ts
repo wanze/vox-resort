@@ -23,7 +23,7 @@ const RAIN_SLANT = 0.16;
 const STORM_SLANT = 0.42;
 
 // Fixed: the bay is to the north, and a storm blowing inland off it is the one that reads.
-const WIND_HEADING = -0.6;
+export const WIND_HEADING = -0.6;
 
 const WIDTH_PIXELS = 1.6;
 

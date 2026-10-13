@@ -19,7 +19,7 @@ import { flowFieldFor, type FlowField } from './flowField';
 import { openNow } from './hours';
 import type { Lodging } from './lodgings';
 import { litterAt, mostLittered, PIECE, sweep, type Litter } from './litter';
-import { sandRoutesFor, type SandPoint, type SandRoute } from './sandRoute';
+import { sandRoutesFor, walkableOverSand, type SandPoint, type SandRoute } from './sandRoute';
 import type { Staff } from './staff';
 import { staffVenuesMatch, type StaffRouterSnapshot } from './staffRouterSnapshot';
 import {
@@ -72,6 +72,45 @@ const MAX_NODE_FIELDS = 64;
 
 // A plot in pieces could otherwise sweep a field per littered tile on every step.
 const MAX_TILE_TRIES = 8;
+
+// A cleaner on the sand moves on to littered sand this many tiles away rather than walking back
+// to the paving between tiles, and the others leave that patch to them: a tideline is one round.
+const SAND_ROUND_TILES = 4;
+
+const tileCentre = (grid: Pick<Litter, 'tilesX'>, tile: number): SandPoint => ({
+  x: ((tile % grid.tilesX) + 0.5) * TILE_VOXELS,
+  z: (Math.floor(tile / grid.tilesX) + 0.5) * TILE_VOXELS,
+});
+
+// Nearest first, ties to the lower index, so two runs of the same round agree.
+function tilesAround(
+  grid: Pick<Litter, 'tilesX' | 'tilesZ'>,
+  centre: number,
+  reach: number,
+): readonly number[] {
+  const centreX = centre % grid.tilesX;
+  const centreZ = Math.floor(centre / grid.tilesX);
+  const around: { readonly tile: number; readonly distance: number }[] = [];
+  for (
+    let tileZ = Math.max(0, centreZ - reach);
+    tileZ <= Math.min(grid.tilesZ - 1, centreZ + reach);
+    tileZ++
+  ) {
+    for (
+      let tileX = Math.max(0, centreX - reach);
+      tileX <= Math.min(grid.tilesX - 1, centreX + reach);
+      tileX++
+    ) {
+      around.push({
+        tile: tileZ * grid.tilesX + tileX,
+        distance: Math.hypot(tileX - centreX, tileZ - centreZ),
+      });
+    }
+  }
+  return around
+    .toSorted((a, b) => a.distance - b.distance || a.tile - b.tile)
+    .map((each) => each.tile);
+}
 
 // The seat is inside the tower's own footprint, which the sand grid blocks, so the leg ends on
 // open sand beside it and the last step is the ladder.
@@ -631,10 +670,34 @@ export function createStaffRouter(parts: {
     return true;
   };
 
+  // Sand tiles other cleaners are sweeping, whose rounds will take in what lies near them. A tile
+  // with a leg is a sand one: paving is walked to by the graph.
+  const sandRoundsOf = (worker: number): readonly number[] => {
+    const rounds: number[] = [];
+    for (let other = 0; other < staff.count; other++) {
+      const tile = state.tileOf[other]!;
+      if (other !== worker && tile >= 0 && state.legRoute[other]) rounds.push(tile);
+    }
+    return rounds;
+  };
+
+  const withinRound = (litter: Litter, tile: number, rounds: readonly number[]): boolean =>
+    rounds.some(
+      (round) =>
+        Math.abs((round % litter.tilesX) - (tile % litter.tilesX)) <= SAND_ROUND_TILES &&
+        Math.abs(Math.floor(round / litter.tilesX) - Math.floor(tile / litter.tilesX)) <=
+          SAND_ROUND_TILES,
+    );
+
   const pickTile = (worker: number, at: number, litter: Litter): number => {
     const taken = tileClaims(litter);
     const passedOver = new Set<number>();
     const inZone = tileInZone(worker);
+    const rounds = sandRoundsOf(worker);
+    const onTheirSand = (tile: number): boolean =>
+      nodeOnTile(litter, tile) < 0 && onTheBeach(litter, tile)
+        ? !withinRound(litter, tile, rounds)
+        : nodeOnTile(litter, tile) >= 0;
     for (let attempt = 0; attempt < MAX_TILE_TRIES; attempt++) {
       const tile = mostLittered(
         litter,
@@ -642,7 +705,7 @@ export function createStaffRouter(parts: {
           taken[each] === NOBODY &&
           !passedOver.has(each) &&
           inZone(each % litter.tilesX, Math.floor(each / litter.tilesX)) &&
-          (nodeOnTile(litter, each) >= 0 || onTheBeach(litter, each)),
+          onTheirSand(each),
         PIECE,
         parts.litterWindow?.(),
       );
@@ -651,6 +714,51 @@ export function createStaffRouter(parts: {
       passedOver.add(tile);
     }
     return NOBODY;
+  };
+
+  const sweepableOnSand = (worker: number, litter: Litter, tile: number): boolean =>
+    litter.level[tile]! > 0 &&
+    tileClaims(litter)[tile] === NOBODY &&
+    tileInZone(worker)(tile % litter.tilesX, Math.floor(tile / litter.tilesX)) &&
+    nodeOnTile(litter, tile) < 0 &&
+    onTheBeach(litter, tile);
+
+  // Only over open sand in a straight line, so the round never needs a route of its own.
+  const nextOnSand = (
+    worker: number,
+    litter: Litter,
+    swept: number,
+    from: SandPoint,
+  ): { readonly tile: number; readonly spot: SandPoint } | null => {
+    for (const tile of tilesAround(litter, swept, SAND_ROUND_TILES)) {
+      if (tile === swept || !sweepableOnSand(worker, litter, tile)) continue;
+      const spot = feetOf(tileCentre(litter, tile)).find((foot) =>
+        walkableOverSand(network, from, foot),
+      );
+      if (spot) return { tile, spot };
+    }
+    return null;
+  };
+
+  // Keeps the gate the round began from, which is where the cleaner walks back to at the end.
+  const moveOnOverSand = (
+    worker: number,
+    litter: Litter,
+    swept: number,
+    route: SandRoute,
+  ): boolean => {
+    if (!isOnDuty(worker) || state.goingHome[worker] === 1) return false;
+    const from = route.waypoints.at(-1)!;
+    const next = nextOnSand(worker, litter, swept, from);
+    if (!next) return false;
+    claimTile(worker, litter, next.tile);
+    const hop = Math.hypot(next.spot.x - from.x, next.spot.z - from.z);
+    state.legRoute[worker] = {
+      gate: route.gate,
+      waypoints: [next.spot],
+      length: route.length + hop,
+    };
+    return true;
   };
 
   // The leg too, or a cleaner called off a sand sweep would walk on to the beach for nothing.
@@ -858,8 +966,10 @@ export function createStaffRouter(parts: {
     const tile = state.tileOf[worker]!;
     const litter = parts.litter?.();
     if (tile >= 0) {
+      const route = state.legRoute[worker];
       if (litter) sweep(litter, tile % litter.tilesX, Math.floor(tile / litter.tilesX));
       giveUpTile(worker);
+      if (litter && route) moveOnOverSand(worker, litter, tile, route);
       return;
     }
     if (state.towerOf[worker]! >= 0) {
@@ -876,6 +986,11 @@ export function createStaffRouter(parts: {
     workingCount--;
     const door = state.doorOf[worker]!;
     state.doorOf[worker] = NOBODY;
+    if (state.tileOf[worker]! >= 0 && state.legRoute[worker]) {
+      state.legOf[worker] = -1;
+      alongTheSand(worker);
+      return;
+    }
     if (door >= 0 && door < network.nodes.length) releaseTo(parts.crowd(), worker, door);
   };
 

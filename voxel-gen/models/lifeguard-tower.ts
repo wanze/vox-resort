@@ -28,6 +28,9 @@ const PLANK = DECK_TOP + 2;
 
 const SITTER = 6;
 
+// The back corner, clear of the parasol and the sitter, and tall enough to fly over the canopy.
+const FLAGPOLE = { x: DECK.x, z: DECK.z1, height: 14 } as const;
+
 export default defineModel({
   id: 'lifeguard-tower',
   label: 'Lifeguard Tower',
@@ -37,6 +40,7 @@ export default defineModel({
   // Only taken up on sand: inland there is no paving within reach of a deck this high,
   // so the seat is quietly dropped.
   seats: [{ x: SITTER, y: PLANK + 1, z: BENCH.z1, facing: 0, post: 'lifeguard' }],
+  flags: [{ x: FLAGPOLE.x, y: DECK_TOP + 1 + FLAGPOLE.height, z: FLAGPOLE.z }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
     const { bloom, stucco, teak } = PALETTE;
@@ -73,6 +77,16 @@ export default defineModel({
       box(x, x, rail, rail, DECK.z, DECK.z1, teak.light);
     }
     box(DECK.x, DECK.x1, DECK_TOP + 2, DECK_TOP + 2, DECK.z1, DECK.z1, teak.light);
+
+    box(
+      FLAGPOLE.x,
+      FLAGPOLE.x,
+      DECK_TOP + 1,
+      DECK_TOP + FLAGPOLE.height,
+      FLAGPOLE.z,
+      FLAGPOLE.z,
+      stucco.light,
+    );
 
     // Two voxels of reach: wider than the deck, the canopy reads as a roof sliding off.
     parasol(b, {

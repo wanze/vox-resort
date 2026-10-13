@@ -1023,13 +1023,17 @@ describe('a mechanic on the beach', () => {
   const beachCleanersOn = (
     venues: readonly Venue[],
     dirt: readonly number[],
-    options: { readonly litter?: Litter; readonly zones?: StaffZones } = {},
+    options: {
+      readonly litter?: Litter;
+      readonly zones?: StaffZones;
+      readonly count?: number;
+    } = {},
   ): { router: StaffRouter; crowd: Crowd; upkeep: Upkeep } => {
     const upkeep = createUpkeep(venues.length);
     for (const [venue, level] of dirt.entries()) upkeep.level[venue] = level;
     let crowd: Crowd | null = null;
     const router = createStaffRouter({
-      staff: cleaners(1),
+      staff: cleaners(options.count ?? 1),
       venues,
       network: beach,
       upkeep: () => upkeep,
@@ -1040,7 +1044,7 @@ describe('a mechanic on the beach', () => {
     });
     crowd = createCrowd({
       network: beach,
-      count: 1,
+      count: options.count ?? 1,
       variants: 1,
       seed: 3,
       routeOf: (worker, at) => router.step(worker, at),
@@ -1113,6 +1117,45 @@ describe('a mechanic on the beach', () => {
     walkUntil(router, crowd, () => litterAt(litter, SAND.tileX, SAND.tileZ) === 0);
     expect(litterAt(litter, SAND.tileX, SAND.tileZ), 'never swept').toBe(0);
     expect(litterAt(litter, 10, 5), 'swept outside the zone').toBe(1);
+  });
+
+  const TIDELINE = [12, 14, 16].map((tileX) => ({ tileX, tileZ: 16 }));
+  const tidelineLitter = (): Litter => {
+    const litter = createLitter(20, 20);
+    for (const { tileX, tileZ } of TIDELINE) litter.level[tileZ * 20 + tileX] = PIECE;
+    return litter;
+  };
+  const tidelineLeft = (litter: Litter): number =>
+    TIDELINE.filter(({ tileX, tileZ }) => litterAt(litter, tileX, tileZ) > 0).length;
+
+  it('sweeps a tideline in one round, walking along the sand between the tiles', () => {
+    const litter = tidelineLitter();
+    const { router, crowd } = beachCleanersOn([], [], { litter });
+    let backOnPaving = false;
+    walkUntil(
+      router,
+      crowd,
+      () => tidelineLeft(litter) === 0,
+      () => {
+        const left = tidelineLeft(litter);
+        if (left > 0 && left < TIDELINE.length && crowd.z[0]! < 12 * TILE_VOXELS) {
+          backOnPaving = true;
+        }
+      },
+    );
+    expect(tidelineLeft(litter), 'left some of it').toBe(0);
+    expect(backOnPaving, 'walked back to the paving between tiles').toBe(false);
+    for (let step = 0; step < 4000; step++) stepCrowd(crowd, MAX_STEP);
+    expect(crowd.z[0]!, 'left standing on the sand').toBeLessThan(12 * TILE_VOXELS);
+  });
+
+  it('leaves a patch of sand to the cleaner already sweeping it', () => {
+    const litter = tidelineLitter();
+    const { router } = beachCleanersOn([], [], { litter, count: 2 });
+    router.step(0, nodeAt(beach, 10, 8));
+    expect(router.taskOf(0).kind).toBe('sweep');
+    router.step(1, nodeAt(beach, 10, 8));
+    expect(router.taskOf(1).kind).not.toBe('sweep');
   });
 
   it('takes an order to sweep littered beach, and ends it once swept', () => {

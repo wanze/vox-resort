@@ -13,6 +13,7 @@ import {
   pruneLitter,
   stepWith,
   sweep,
+  washUp,
   FOULED_AT,
 } from './litter';
 
@@ -186,6 +187,34 @@ describe('dropAt', () => {
     const litter = createLitter(1, 1);
     for (let piece = 0; piece < 6; piece++) dropAt(litter, nowhere(1), 0, 0);
     expect(litterAt(litter, 0, 0)).toBe(1);
+  });
+});
+
+describe('washUp', () => {
+  it('lays pieces the sea left, past any bin, and marks them as the sea’s', () => {
+    const litter = createLitter(3, 1);
+    expect(washUp(litter, 1, 0, 2)).toBe(true);
+    expect(litterAt(litter, 1, 0)).toBe(2 * PIECE);
+    expect([...litter.washed]).toEqual([0, 1, 0]);
+    expect(litter.version).toBe(1);
+    washUp(litter, 1, 0, 9);
+    expect(litterAt(litter, 1, 0)).toBe(1);
+  });
+
+  it('lays nothing off the grid or for no pieces', () => {
+    const litter = createLitter(2, 1);
+    expect(washUp(litter, 5, 0, 2)).toBe(false);
+    expect(washUp(litter, 0, 0, 0)).toBe(false);
+    expect(litter.version).toBe(0);
+  });
+
+  it('forgets where the sea left it once it is swept or pruned', () => {
+    const litter = createLitter(2, 1);
+    washUp(litter, 0, 0, 1);
+    washUp(litter, 1, 0, 1);
+    sweep(litter, 0, 0);
+    pruneLitter(litter, () => false);
+    expect([...litter.washed]).toEqual([0, 0]);
   });
 });
 

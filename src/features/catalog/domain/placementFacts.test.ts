@@ -5,7 +5,15 @@ import { PATH_ID } from '../../layout/domain/resortPlan';
 import { rotateLights, type Rotation } from '../../layout/domain/rotation';
 import { MIN_CAST_HEIGHT } from '../../rendering/domain/blobShadows';
 import { OBJECT_TYPES, objectTypeById, type ObjectTypeDefinition } from './objectTypes';
-import { blobOf, casterOf, hearthOf, lightsOf, occluderOf, seatSiteOf } from './placementFacts';
+import {
+  blobOf,
+  casterOf,
+  flagsOf,
+  hearthOf,
+  lightsOf,
+  occluderOf,
+  seatSiteOf,
+} from './placementFacts';
 
 function standing(type: ObjectTypeDefinition, rotation: Rotation = 0): Placement {
   return place(layoutItemFor(type), `${type.id}#1`, 3, 5, rotation, 1);
@@ -43,6 +51,39 @@ describe('lightsOf', () => {
   it('returns no lights for a model that declares none', () => {
     const dark = typeWhere((type) => type.model.lights.length === 0);
     expect(lightsOf(standing(dark, 2))).toHaveLength(0);
+  });
+});
+
+describe('flagsOf', () => {
+  const FLOWN = typeWhere((type) => (type.model.flags?.length ?? 0) > 0);
+
+  it('stands each flag on its pole in world voxels', () => {
+    const placement = standing(FLOWN);
+    const [flag] = FLOWN.model.flags!;
+    expect(flagsOf(placement)).toEqual([
+      {
+        x: placement.x + flag!.x + 0.5,
+        y: placement.y + flag!.y,
+        z: placement.z + flag!.z + 0.5,
+      },
+    ]);
+  });
+
+  it('keeps the pole inside the footprint however it is turned', () => {
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const placement = standing(FLOWN, rotation);
+      for (const flag of flagsOf(placement)) {
+        expect(flag.x).toBeGreaterThan(placement.x);
+        expect(flag.x).toBeLessThan(placement.x + placement.width);
+        expect(flag.z).toBeGreaterThan(placement.z);
+        expect(flag.z).toBeLessThan(placement.z + placement.depth);
+      }
+    }
+  });
+
+  it('flies nothing from a model with no pole', () => {
+    const bare = typeWhere((type) => type.model.flags === undefined);
+    expect(flagsOf(standing(bare))).toEqual([]);
   });
 });
 

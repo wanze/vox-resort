@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shoreFor } from '../../layout/domain/shoreline';
+import type { CrowdHolder } from './simState';
 import { createBreakdowns, isBroken } from '../../sim/domain/breakdowns';
 import { conditionOf } from '../../sim/domain/condition';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
@@ -7,7 +8,8 @@ import { MOST_HITS_A_DAY } from '../../sim/domain/stormDamage';
 import type { Venue } from '../../sim/domain/venues';
 import type { Weather } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
-import { batterTheShore, recentStormHits } from './stormSteps';
+import { createLitter } from '../../sim/domain/litter';
+import { batterTheShore, recentStormHits, washUpAfterStorm } from './stormSteps';
 
 // Water from z = 18.
 const shore = shoreFor({
@@ -119,5 +121,52 @@ describe('recentStormHits', () => {
       ['new', TICKS_PER_DAY],
     ]);
     expect([...recentStormHits(hits, TICKS_PER_DAY + 5).keys()]).toEqual(['new']);
+  });
+});
+
+function beachOf(standing: readonly Venue[] = []) {
+  return {
+    washUpDue: false,
+    shore,
+    litter: createLitter(shore.tilesX, shore.tilesZ),
+    crowd: {
+      crowd: { network: { beach: { span: { from: 0, to: 60 } } } },
+    } as unknown as CrowdHolder,
+    venues: standing,
+    lodgings: [],
+  };
+}
+
+const washedTiles = (state: ReturnType<typeof beachOf>) =>
+  [...state.litter.washed].filter((washed) => washed === 1).length;
+
+describe('washUpAfterStorm', () => {
+  it('waits for the storm to pass, then leaves a tideline once', () => {
+    const state = beachOf();
+    washUpAfterStorm(state, at(0));
+    washUpAfterStorm(state, at(TICKS_PER_HOUR));
+    expect(washedTiles(state)).toBe(0);
+    washUpAfterStorm(state, at(TICKS_PER_DAY, 'clear'));
+    const left = washedTiles(state);
+    expect(left).toBeGreaterThan(0);
+    const version = state.litter.version;
+    washUpAfterStorm(state, at(TICKS_PER_DAY + TICKS_PER_HOUR, 'clear'));
+    expect(state.litter.version).toBe(version);
+  });
+
+  it('leaves nothing after a day that was never stormy', () => {
+    const state = beachOf();
+    for (const weather of ['clear', 'rain', 'heatwave'] as const) {
+      washUpAfterStorm(state, at(0, weather));
+    }
+    expect(washedTiles(state)).toBe(0);
+  });
+
+  it('leaves nothing under a building on the sand', () => {
+    const hut = { ...onTheEdge('hut', 0), tilesX: 60, tileZ: 10, tilesZ: 10 } as Venue;
+    const state = beachOf([hut]);
+    washUpAfterStorm(state, at(0));
+    washUpAfterStorm(state, at(TICKS_PER_DAY, 'clear'));
+    expect(washedTiles(state)).toBe(0);
   });
 });

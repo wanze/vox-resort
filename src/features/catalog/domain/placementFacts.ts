@@ -1,7 +1,7 @@
 import type { ModelLight } from '../../../../voxel-gen/voxelgen.ts';
 import type { SeatSite } from '../../crowd/domain/seating';
 import type { Placement } from '../../layout/domain/resortLayout';
-import { rotateLights } from '../../layout/domain/rotation';
+import { rotateColumn, rotateLights } from '../../layout/domain/rotation';
 import type { Occluder } from '../../lighting/domain/skyVisibility';
 import {
   blobShadowFor,
@@ -32,6 +32,25 @@ export function hearthOf(placement: Placement): ModelLight | null {
   if (!hearth) return null;
   const light = { x: hearth.x, y: hearth.y, z: hearth.z, ...hearth.light };
   return rotateLights([light], model.width, model.depth, placement.rotation)[0]!;
+}
+
+export interface FlagSite {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+// The pole's centre at the top, in world voxels; turned against the model's own size as lightsOf is.
+export function flagsOf(placement: Placement): readonly FlagSite[] {
+  const { model } = objectTypeById(placement.id);
+  return (model.flags ?? []).map((flag) => {
+    const column = rotateColumn(flag, model.width, model.depth, placement.rotation);
+    return {
+      x: placement.x + column.x + 0.5,
+      y: placement.y + flag.y,
+      z: placement.z + column.z + 0.5,
+    };
+  });
 }
 
 // The model's own size, for the same reason as in lightsOf.

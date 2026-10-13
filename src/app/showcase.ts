@@ -16,6 +16,7 @@ import {
 import { buildCostOf, DIG_COST, landPriceOf } from '../features/catalog/domain/prices';
 import {
   casterOf,
+  flagsOf,
   hearthOf,
   lightsOf,
   occluderOf,
@@ -188,6 +189,7 @@ import {
 } from '../features/weather/domain/rainfall';
 import { buildRainField, type RainField } from '../features/weather/adapters/rainField';
 import { createRoughSea } from '../features/weather/adapters/roughSea';
+import { buildFlagField, type FlagField } from '../features/weather/adapters/flagField';
 import { recentStormHits } from '../features/resort-sim/domain/stormSteps';
 import {
   buildFireworksField,
@@ -331,7 +333,7 @@ import { ADULT_VOXELS, hipHeight } from '../../voxel-gen/people/figure.ts';
 import type { BalloonField } from '../features/balloons/adapters/balloonField';
 import { buildLitterField, type LitterField } from '../features/litter/adapters/litterField';
 import { buildBallField, type BallField } from '../features/choreography/adapters/ballField';
-import { piecesFor } from '../features/litter/domain/litterPieces';
+import { piecesFor, type LitterKinds } from '../features/litter/domain/litterPieces';
 import { buildBalloonField } from '../features/balloons/adapters/balloonField';
 import { createBalloons, type ReleaseSite } from '../features/balloons/domain/balloons';
 import type { SeaField } from '../features/sea/adapters/seaField';
@@ -644,6 +646,22 @@ const SKY_IDS: ReadonlySet<string> = new Set(SKY_MODELS.map((model) => model.id)
 const SEA_IDS: ReadonlySet<string> = new Set(SEA_MODELS.map((model) => model.id));
 
 const LITTER_IDS: ReadonlySet<string> = new Set(LITTER_MODELS.map((model) => model.id));
+
+const WASHED_UP_IDS: ReadonlySet<string> = new Set(
+  LITTER_MODELS.filter((model) => model.washedUp).map((model) => model.id),
+);
+
+// By the meshed list's own order, which is the litter field's variant order.
+function litterKindsOf(models: readonly ModelGeometry[]): LitterKinds {
+  const variants = models.map((model, variant) => ({
+    variant,
+    washed: WASHED_UP_IDS.has(model.id),
+  }));
+  return {
+    dropped: variants.filter((each) => !each.washed).map((each) => each.variant),
+    washed: variants.filter((each) => each.washed).map((each) => each.variant),
+  };
+}
 
 const PROP_IDS: ReadonlySet<string> = new Set(PROP_MODELS.map((model) => model.id));
 
@@ -1409,10 +1427,11 @@ function sceneStats(parts: {
   readonly startup: StartupCost;
   readonly weather: Weather;
   readonly rain: RainField;
+  readonly flags: FlagField;
   readonly fireworks: FireworksField;
   readonly highlights: HighlightField;
 }): ShowcaseStats {
-  const { handle, catalogue, rain, fireworks, highlights } = parts;
+  const { handle, catalogue, rain, flags, fireworks, highlights } = parts;
   const { plot, world, shadows, construction, crowd, staff, balloons, litterField, overlay } =
     parts.resort;
   const { sea, lighting, ballField, flames } = parts.resort;
@@ -1438,6 +1457,7 @@ function sceneStats(parts: {
       overlay.drawCalls +
       sea.drawCalls +
       rain.drawCalls +
+      flags.drawCalls +
       fireworks.drawCalls +
       highlights.drawCalls,
     chunkCount: world.chunkCount,
@@ -1456,6 +1476,7 @@ function sceneStats(parts: {
       overlay.triangleCount +
       sea.triangleCount +
       rain.triangleCount +
+      flags.triangleCount +
       fireworks.triangleCount +
       highlights.triangleCount,
     shadowCount: shadows.count,
@@ -1535,7 +1556,7 @@ interface DrawnLitter {
 
 // Only on a change: litter moves a few times an hour, and a write touches every slot. The grid
 // is compared too, so a new resort whose version happens to match is still drawn.
-function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
+function drawLitter(resort: Resort, drawn: DrawnLitter, kinds: LitterKinds): DrawnLitter {
   const { litter } = resort;
   if (drawn.litter === litter && drawn.version === litter.version) return drawn;
   const network = resort.crowd.crowd.network;
@@ -1546,7 +1567,7 @@ function drawLitter(resort: Resort, drawn: DrawnLitter): DrawnLitter {
     return isBeach(resort.shore, tileX, tileZ) ? BEACH_SURFACE : null;
   };
   resort.litterField.write(
-    piecesFor(litter, groundOf, LITTER_PIECES, LITTER_MODELS.length, litterWindowOf(resort)),
+    piecesFor(litter, groundOf, LITTER_PIECES, kinds, litterWindowOf(resort)),
   );
   return { litter, version: litter.version };
 }
@@ -1966,6 +1987,7 @@ function createStatsReader(parts: {
   readonly mountStarted: number;
   readonly weather: () => Weather;
   readonly rain: RainField;
+  readonly flags: FlagField;
   readonly fireworks: FireworksField;
   readonly highlights: HighlightField;
 }): () => ShowcaseStats {
@@ -2418,6 +2440,9 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Not per resort: rain falls over the camera, not the plot.
   const rain = buildRainField(createRaindrops(MAX_DROPS, RAIN_SEED));
   handle.scene.add(rain.group);
+  // Not per resort either: placed again for each plot, as the highlights are.
+  const flags = buildFlagField(roughSea.level);
+  handle.scene.add(flags.group);
   // Not per resort either: a new plot clears it rather than building another.
   const fireworks = buildFireworksField();
   handle.scene.add(fireworks.group);
@@ -2436,6 +2461,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let actSeconds = 0;
   let lastShare: number | null = null;
   let drawnLitter: DrawnLitter = { litter: null, version: -1 };
+  const litterKinds = litterKindsOf(catalogue.litter);
   let drift = driftFor(options, bench, handle);
   // Both per game: asked keeps the call to once even before the answer is stored.
   let photoCallAnswered: number | null = null;
@@ -2495,6 +2521,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     const centre = rainCentre(view, handle.controls.target, SEA_LEVEL);
     rain.advance(elapsedSeconds, rainfallFor(weather, rainView(view, centre)), centre);
     roughSea.advance(elapsedSeconds, weather);
+    flags.show(weather);
     current().sea.roughen(roughSea.value);
     if (weather === lastWeather) return;
     lastWeather = weather;
@@ -2617,6 +2644,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     mountStarted,
     weather: () => clock.weather,
     rain,
+    flags,
     fireworks,
     highlights,
   });
@@ -2713,7 +2741,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     onChange: () => {
       counted = true;
       lifecycle.edited();
-      letter();
+      dressPlacements();
       options.onDirty?.();
     },
     onGroundChange: (columns) => {
@@ -2744,19 +2772,19 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   });
 
   // Off under a bench, as the markers are, so every recorded figure is drawn without them. A gate
-  // still going up is lettered once it is raised.
-  const letter = (): void => {
+  // still going up is lettered once it is raised, and a tower flies its flag once it stands.
+  const dressPlacements = (): void => {
     if (bench) return;
     const resort = current();
     const building = new Set(build.openSites().map((site) => site.placement.key));
+    const standing = resort.plot.placements.filter((placement) => !building.has(placement.key));
     resort.nameplates.show(
-      resort.plot.placements.filter(
-        (placement) => isGateway(placement.id) && !building.has(placement.key),
-      ),
+      standing.filter((placement) => isGateway(placement.id)),
       identity.name,
     );
+    flags.place(standing.flatMap(flagsOf));
   };
-  letter();
+  dressPlacements();
 
   // Off under a bench, as the markers are. Told again whenever the venues are rebuilt, so the
   // HUD's buttons and the anchors line up.
@@ -3053,7 +3081,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     autumn.set(look.blend);
     clock.relight();
     paintOverlay();
-    letter();
+    dressPlacements();
     hud.publish({
       ...placeSigns(),
       ...placeHighlights(),
@@ -3086,7 +3114,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     rebuildAfterEdit(current(), clock.ticks, handle);
     guestView.relayout();
     paintOverlay();
-    letter();
+    dressPlacements();
     // Said now rather than tomorrow; the day's counters are left alone.
     hud.publish({
       ...placeSigns(),
@@ -3246,7 +3274,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     timer.end('vox:frame:crowd', crowdStarted);
     current().balloons.advance(step, lanternsOf(current(), clock));
     advanceFireworks(step);
-    drawnLitter = drawLitter(current(), drawnLitter);
+    drawnLitter = drawLitter(current(), drawnLitter, litterKinds);
     current().sea.advance(step, walked * crowdScale);
     advanceWeather(step);
     build.advance(step);
@@ -3388,7 +3416,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     rename(next) {
       if (next === identity.name) return;
       identity.name = next;
-      letter();
+      dressPlacements();
       hud.publish({ name: identity.name });
       options.onDirty?.();
     },
@@ -3584,6 +3612,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       build.dispose();
       preparer.dispose();
       rain.dispose();
+      flags.dispose();
       fireworks.dispose();
       highlights.dispose();
       current().dispose();

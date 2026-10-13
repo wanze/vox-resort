@@ -22,8 +22,11 @@ import { createThoughts, think } from '../../sim/domain/thoughts';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
 import {
   activityLine,
+  checkedOutView,
   errandOf,
+  guestStillHere,
   guestView,
+  isStaying,
   namesPlacement,
   personOf,
   placeView,
@@ -362,6 +365,42 @@ describe('guestView', () => {
         thought: null,
       }).thought,
     ).toBeNull();
+  });
+});
+
+describe('a guest who checked out', () => {
+  const viewOf = (guests: Guests, person: number) =>
+    guestView({
+      guests,
+      needs: needsOf(guests),
+      happiness: moodOf(guests),
+      venues: NO_VENUES,
+      person,
+      day: 0,
+      at: HERE,
+      thought: null,
+    });
+
+  it('stays only while present in the party they were picked in', () => {
+    const guests = guestsOf();
+    const person = guests.present.indexOf(1);
+    const party = guests.party[person]!;
+    expect(isStaying(guests, person, party)).toBe(true);
+    expect(isStaying(guests, person, party + 1)).toBe(false);
+    guests.present[person] = 0;
+    expect(isStaying(guests, person, party)).toBe(false);
+  });
+
+  it('keeps what the panel last showed of them, marked as checked out', () => {
+    const guests = guestsOf();
+    const last = viewOf(guests, 0);
+    expect(last.checkedOut).toBe(false);
+    expect(checkedOutView(last, 0)).toEqual({ ...last, checkedOut: true });
+    expect(checkedOutView(last, 1)).toBeNull();
+    expect(checkedOutView(null, 0)).toBeNull();
+    expect(guestStillHere(last)).toBe(true);
+    expect(guestStillHere(checkedOutView(last, 0))).toBe(false);
+    expect(guestStillHere(null)).toBe(false);
   });
 });
 
@@ -860,6 +899,18 @@ describe('errandOf', () => {
     expect(errandOf({ ...arriving, visit, goal: RECEPTION })?.kind).toBe('checking-in');
     expect(errandOf({ ...arriving, goal: RECEPTION, home: BUNGALOW })?.kind).toBe('walking');
     expect(errandOf(arriving)).toBeNull();
+  });
+
+  it('words the walk to the gate as leaving, after a visit but ahead of a walk home', () => {
+    const leaving = { ...none, leaving: true };
+    expect(errandOf({ ...leaving, home: BUNGALOW, goal: BAKERY })).toEqual({ kind: 'leaving' });
+    const visit = { venue: BAKERY, waiting: false, place: 0 };
+    expect(errandOf({ ...leaving, visit })?.kind).toBe('inside');
+    const guests = guestsOf();
+    const line = activityLine(seatedStreet('sit'), contentNeeds(guests), guests, 0, {
+      kind: 'leaving',
+    });
+    expect(line).toBe('Leaving the resort');
   });
 
   it('puts a stay on the beach ahead of the visit to the Beach it is counted as', () => {

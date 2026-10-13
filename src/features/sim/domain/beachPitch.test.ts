@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import { RESTING } from '../../crowd/domain/crowd';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import type { SeatSpot } from '../../crowd/domain/seating';
 import { blockedAt, type ObstacleBox } from '../../crowd/domain/sandGrid';
 import {
@@ -73,11 +74,11 @@ describe.each(MILD_DAYS)('pitchFor $name', ({ day }) => {
     expect(pitch.spots.map((spot) => spot.pose)).toEqual([
       RESTING.lying,
       RESTING.lying,
-      RESTING.sitting,
+      DRAWN_POSE.sitFlat,
     ]);
     expect(pitch.spots.map((spot) => spot.seat)).toEqual([-1, -1, -1]);
     expect(pitch.spots[0]!.y).toBe(BEACH_SURFACE);
-    expect(pitch.spots[2]!.y).toBeGreaterThan(BEACH_SURFACE);
+    expect(pitch.spots[2]!.y).toBe(BEACH_SURFACE);
     for (const spot of pitch.spots) {
       const { tileX, tileZ } = tileOf(spot);
       expect(terrainAt(shore, tileX, tileZ)).toBe('beach');
@@ -101,7 +102,7 @@ describe.each(MILD_DAYS)('pitchFor $name', ({ day }) => {
     expect([first.pose, second.pose]).toEqual([RESTING.lying, RESTING.lying]);
     expect(first.y).toBe(network.seats[first.seat]!.y);
     expect(child.seat).toBe(-1);
-    expect(child.pose).toBe(RESTING.sitting);
+    expect(child.pose).toBe(DRAWN_POSE.sitFlat);
   });
 
   it('walks the adults past open sand to free loungers further than a towel is carried', () => {
@@ -160,7 +161,7 @@ describe.each(MILD_DAYS)('a watch pitch $name', ({ day }) => {
     expect(pitch.spots.map((spot) => spot.pose)).toEqual([
       RESTING.standing,
       RESTING.standing,
-      RESTING.sitting,
+      DRAWN_POSE.sitFlat,
     ]);
     expect(pitch.spots.every((spot) => spot.heading === 0)).toBe(true);
     expect(pitch.spots[0]!.y).toBe(BEACH_SURFACE);

@@ -9,6 +9,8 @@ export const DRAWN_POSE = {
   reach: 10,
   selfie: 11,
   photo: 12,
+  // On the ground or along a lounger, legs out in front: RESTING.sitting hangs them off a seat.
+  sitFlat: 13,
 } as const;
 
 // Short of 1, so the shader's floor still reads the code the progress was added to.

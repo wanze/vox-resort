@@ -64,9 +64,11 @@ interface MemberListProps {
   readonly members: readonly PartyMemberView[];
   readonly selected: number | null;
   readonly onSelectPerson: (person: number) => void;
+  // A party that checked out has nobody left on the plot to pick.
+  readonly gone?: boolean;
 }
 
-function MemberList({ label, members, selected, onSelectPerson }: MemberListProps) {
+function MemberList({ label, members, selected, onSelectPerson, gone }: MemberListProps) {
   return (
     <div className="hud-inspect-members" role="group" aria-label={label}>
       {members.map((member) => (
@@ -75,6 +77,7 @@ function MemberList({ label, members, selected, onSelectPerson }: MemberListProp
           type="button"
           className="ui-button"
           aria-pressed={member.person === selected}
+          disabled={gone}
           onClick={() => onSelectPerson(member.person)}
         >
           {member.name}
@@ -121,13 +124,16 @@ function GuestDetails({
         members={guest.members}
         selected={guest.person}
         onSelectPerson={onSelectPerson}
+        gone={guest.checkedOut}
       />
-      <Actions>
-        <button type="button" className="ui-button-large" onClick={onFollow}>
-          <PixelIcon name="camera" />
-          Follow
-        </button>
-      </Actions>
+      {guest.checkedOut ? null : (
+        <Actions>
+          <button type="button" className="ui-button-large" onClick={onFollow}>
+            <PixelIcon name="camera" />
+            Follow
+          </button>
+        </Actions>
+      )}
     </>
   );
 }

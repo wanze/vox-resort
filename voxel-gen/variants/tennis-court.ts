@@ -109,10 +109,11 @@ export default defineModel({
     role: 'activity',
     satisfies: [
       { need: 'fun', amount: 0.8 },
-      { need: 'energy', amount: -0.4 },
+      // Half the other courts' cost: one party crowds its four places, and at full cost it was rarely picked.
+      { need: 'energy', amount: -0.2 },
     ],
     capacity: 4,
-    dwellSeconds: { min: 1800, max: 3600 },
+    dwellSeconds: { min: 1200, max: 2700 },
     spots: PLAYERS,
     // Struck at the hip, a racket's reach below where the arm swings.
     ball: { model: 'ball-tennis', y: ON_TURF + 3 },

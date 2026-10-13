@@ -24,8 +24,12 @@ import { nextAt } from '../features/events/domain/programmeView';
 import { SHOWN } from '../features/choreography/domain/casting';
 import {
   activityLine,
+  CHECKED_OUT_LINE,
+  checkedOutView,
   errandOf,
+  guestStillHere,
   guestView,
+  isStaying,
   personOf,
   placementKeyOf,
   placeView,
@@ -134,8 +138,19 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
   // the index.
   let selected: InspectTarget = null;
   let selectedOn = clock.day;
+  // Kept to tell when a worker's shift has changed under their open panel, and to keep a guest's
+  // once they check out.
+  let selectedView: SelectionView | null = null;
+  // The party the inspected guest was picked in.
+  let selectedParty = -1;
 
-  const guestAt = (person: number): SelectionView => {
+  const checkedOut = (person: number): boolean =>
+    !isStaying(current().guests, person, selectedParty);
+
+  const guestAt = (person: number): SelectionView | null =>
+    checkedOut(person) ? checkedOutView(selectedView, person) : guestHere(person);
+
+  const guestHere = (person: number): SelectionView => {
     const { guests, needs, happiness, venues, crowd, thoughts, cast } = current();
     // Where they are drawn; somebody hidden indoors is where the crowd holds them, in the venue.
     const drawn = cast.shown[person] === SHOWN.placed ? cast : crowd.crowd;
@@ -189,15 +204,18 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
     return withSite(withNaming(offered, resort.venues[venue]), resort.constructing);
   };
 
-  // Kept to tell when a worker's shift has changed under their open panel.
-  let selectedView: SelectionView | null = null;
-
-  const select = (target: InspectTarget): void => {
+  const show = (target: InspectTarget): void => {
     const view = viewOf(target);
     selected = view ? target : null;
     selectedView = view;
     selectedOn = clock.day;
     onSelectionChange(view);
+  };
+
+  const select = (target: InspectTarget): void => {
+    const person = personOf(target);
+    selectedParty = person === null ? -1 : (current().guests.party[person] ?? -1);
+    show(target);
   };
 
   // The one place selection wording and router facts meet, so neither imports the other.
@@ -210,6 +228,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       asleep: router.isAsleep(person),
       beach: router.stayOf(person),
       checkingIn: router.isArriving(person),
+      leaving: router.isLeaving(person),
     });
   };
 
@@ -226,7 +245,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
   };
 
   const rewordPlace = (): void => {
-    if (placementKeyOf(selected) !== null) select(selected);
+    if (placementKeyOf(selected) !== null) show(selected);
   };
 
   const workerTask = createStaffTask();
@@ -234,14 +253,14 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
 
   const workerLine = (worker: number): string => {
     const resort = current();
-    if (shiftChanged(selectedView, resort.duty[worker] === 1)) select(selected);
+    if (shiftChanged(selectedView, resort.duty[worker] === 1)) show(selected);
     const task = resort.staffRouter.taskOf(worker, workerTask);
     const at = writeDrawn(resort, worker, workerAtNow);
     return staffLine(taskFactsOf(resort, worker, task), task.load, SPELLS_PER_LOAD, at);
   };
 
   const inspectLine = (): string | null => {
-    if (selected !== null && clock.day !== selectedOn) select(selected);
+    if (selected !== null && clock.day !== selectedOn) show(selected);
     const worker = workerOf(selected);
     return worker === null ? guestLine() : workerLine(worker);
   };
@@ -249,13 +268,20 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
   const guestLine = (): string | null => {
     const person = personOf(selected);
     if (person === null) return null;
+    if (checkedOut(person)) return leftLine();
     const { crowd, needs, guests } = current();
     return activityLine(crowd.crowd, needs, guests, person, errandFor(person));
   };
 
+  // The panel is worded once more, as checked out, the first frame they are gone.
+  const leftLine = (): string => {
+    if (guestStillHere(selectedView)) show(selected);
+    return CHECKED_OUT_LINE;
+  };
+
   return {
     select,
-    reword: () => select(selected),
+    reword: () => show(selected),
     target: () => selected,
     inspectLine,
     tellOrders,

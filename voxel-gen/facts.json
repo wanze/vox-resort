@@ -8389,13 +8389,13 @@
             },
             {
               "need": "energy",
-              "amount": -0.4
+              "amount": -0.2
             }
           ],
           "capacity": 4,
           "dwellSeconds": {
-            "min": 1800,
-            "max": 3600
+            "min": 1200,
+            "max": 2700
           },
           "spots": [
             {
@@ -14532,13 +14532,13 @@
             },
             {
               "need": "energy",
-              "amount": -0.4
+              "amount": -0.2
             }
           ],
           "capacity": 4,
           "dwellSeconds": {
-            "min": 1800,
-            "max": 3600
+            "min": 1200,
+            "max": 2700
           },
           "spots": [
             {

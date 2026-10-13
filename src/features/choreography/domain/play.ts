@@ -67,20 +67,22 @@ function swing(cast: Cast, person: number, place: SpotActPlace, clock: number): 
   cast.pose[person] = sine > CHEER_ABOVE && cheers ? DRAWN_POSE.cheer : place.pose;
 }
 
-function dig(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
+function standAt(cast: Cast, person: number, place: SpotActPlace): void {
   cast.x[person] = place.x;
+  cast.y[person] = place.y;
   cast.z[person] = place.z;
-  cast.y[person] = place.y - KNEEL;
   cast.heading[person] = place.heading;
+}
+
+function dig(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
+  standAt(cast, person, place);
+  cast.y[person] = place.y - KNEEL;
   cast.pose[person] = poseWith(DRAWN_POSE.strike, shareOf(person, place, clock, DIG_PERIOD));
 }
 
 // Where the art put them, facing the way it did: only the pose moves.
 function workOut(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
-  cast.x[person] = place.x;
-  cast.y[person] = place.y;
-  cast.z[person] = place.z;
-  cast.heading[person] = place.heading;
+  standAt(cast, person, place);
   const { station } = place;
   let pose: number = DRAWN_POSE.jog;
   if (station === 'jump') {
@@ -91,24 +93,19 @@ function workOut(cast: Cast, person: number, place: SpotActPlace, clock: number)
     pose = poseWith(DRAWN_POSE.reach, Math.abs(2 * share - 1));
   } else if (station === 'mat') {
     const sat = shareOf(person, place, clock, SIT_UP_PERIOD) < SITTING_SHARE;
-    pose = sat ? RESTING.sitting : RESTING.lying;
+    pose = sat ? DRAWN_POSE.sitFlat : RESTING.lying;
   }
   cast.pose[person] = pose;
 }
 
 // At the machine the art faces them to, hammering its buttons.
 function press(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
-  cast.x[person] = place.x;
-  cast.y[person] = place.y;
-  cast.z[person] = place.z;
-  cast.heading[person] = place.heading;
+  standAt(cast, person, place);
   cast.pose[person] = poseWith(DRAWN_POSE.strike, shareOf(person, place, clock, PLAY_PERIOD));
 }
 
 function rinse(cast: Cast, person: number, place: SpotActPlace, clock: number): void {
-  cast.x[person] = place.x;
-  cast.y[person] = place.y;
-  cast.z[person] = place.z;
+  standAt(cast, person, place);
   cast.heading[person] =
     place.heading + clock * RINSE_TURN + unitOf(hashOf(person, place, PHASE)) * 2 * Math.PI;
   const up = shareOf(person, place, clock, RINSE_PERIOD) < HANDS_UP_SHARE;

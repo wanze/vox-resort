@@ -101,7 +101,7 @@ describe('the gym’s stations', () => {
         expect(codes[person]).toEqual(new Set([DRAWN_POSE.cheer, RESTING.standing]));
       }
       if (station === 'mat')
-        expect(codes[person]).toEqual(new Set([RESTING.lying, RESTING.sitting]));
+        expect(codes[person]).toEqual(new Set([RESTING.lying, DRAWN_POSE.sitFlat]));
       if (station !== 'lift') continue;
       expect(codes[person]).toEqual(new Set([DRAWN_POSE.reach]));
       expect(reach[person]![0]).toBeLessThan(DRAWN_POSE.reach + 0.1);

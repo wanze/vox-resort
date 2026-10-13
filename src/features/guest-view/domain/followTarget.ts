@@ -1,5 +1,5 @@
 import { SHOWN } from '../../choreography/domain/casting';
-import { RESTING } from '../../crowd/domain/crowd';
+import { RESTING, sitsDown } from '../../crowd/domain/crowd';
 import { poseOf, type Flotilla } from '../../sea/domain/flotilla';
 import {
   CHILD_FRAMING,
@@ -71,7 +71,7 @@ export function guestSighting(
   // A drawn pose may carry its progress after the point.
   const resting = Math.floor(placed ? drawn.pose[person]! : sources.resting(person));
   const body = guests.child[person] === 1 ? CHILD_FRAMING : GUEST_FRAMING;
-  const framing = resting === RESTING.sitting ? { ...body, eye: body.eye - SITTING_DROP } : body;
+  const framing = sitsDown(resting) ? { ...body, eye: body.eye - SITTING_DROP } : body;
   return {
     kind: 'seen',
     pose: poseAt(placed ? drawn : crowd, person, framing),

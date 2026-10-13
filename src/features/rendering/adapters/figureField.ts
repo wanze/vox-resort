@@ -38,6 +38,12 @@ const SIT_REACH = 0.9;
 // Forward onto the lap: hanging straight, a hand below the hip would sink into the seat.
 const SIT_ARMS = 1;
 
+// Half a leg's depth: the backs of legs held out flat rest on the ground, not in it.
+const FLAT_LEG_HALF = 0.5;
+
+// Between a leg's half depth and the chest's: at the hip only the chest's vertices lie past it.
+const PAST_LEG = 0.75;
+
 // Zero would bury the back in the mattress: a voxel at y fills [y, y+1].
 const LIE_CLEAR = 1;
 
@@ -209,6 +215,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const reaching = is(DRAWN_POSE.reach);
   const selfie = is(DRAWN_POSE.selfie);
   const photographing = is(DRAWN_POSE.photo);
+  const sittingFlat = is(DRAWN_POSE.sitFlat);
 
   const phase = pose.w;
   const cycle = (rate: number) => clock.mul(rate).add(phase);
@@ -262,7 +269,7 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
     .add(reaching.mul(progress).mul(PI))
     .add(selfie.mul(side.max(0)).mul(SELFIE_REACH))
     .add(photographing.mul(PHOTO_ARMS))
-    .add(sitting.mul(SIT_ARMS));
+    .add(sitting.add(sittingFlat).mul(SIT_ARMS));
   // A true turn about the shoulder, thickness and all: a shear, as the legs bend, would turn a
   // raised arm inside out and the back faces would be culled.
   const fromShoulder = axis.sub(SHOULDER_ABOVE_HIP);
@@ -291,6 +298,12 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
   const sitAlong = leg.mul(SIT_REACH);
   const sitUp = leg.mul(SIT_RISE).sub(hip);
 
+  // A quarter turn about the hip, as an arm turns: a shear that far would flatten the leg to
+  // nothing. The hip's own row turns too, or the top of the leg would stay hanging.
+  const thigh = offArm.mul(axis.negate().step(0)).mul(thick.abs().step(PAST_LEG).oneMinus());
+  const flatAlong = thigh.mul(axis.add(thick).negate());
+  const flatUp = thigh.mul(thick.sub(axis)).sub(hip).add(FLAT_LEG_HALF);
+
   // Turned about the hips, on the back to lie and face down to swim, taking out what the
   // instance matrix already added along those axes.
   const lieAlong = bodyAxis.add(bodyThick).negate();
@@ -300,11 +313,13 @@ export function figureMaterial(volume: BakedLightVolume | null): FigureMaterial 
 
   const along = limbAlong
     .add(sitAlong.mul(sitting))
+    .add(flatAlong.mul(sittingFlat))
     .add(lieAlong.mul(lying))
     .add(swimAlong.mul(swimming));
   const up = limbUp
     .add(lift)
     .add(sitUp.mul(sitting))
+    .add(flatUp.mul(sittingFlat))
     .add(lieUp.mul(lying))
     .add(swimUp.mul(swimming));
   material.positionNode = positionLocal.add(vec3(along.mul(facing.x), up, along.mul(facing.y)));

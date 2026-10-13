@@ -10,7 +10,7 @@ import {
 } from '../../../../voxel-gen/voxelgen.ts';
 import { venueOf } from '../../catalog/domain/objectTypes';
 import { chargeOf, priceOf } from '../../catalog/domain/prices';
-import { isRoaming, RESTING, restingOn, type Crowd } from '../../crowd/domain/crowd';
+import { isRoaming, RESTING, restingOn, sitsDown, type Crowd } from '../../crowd/domain/crowd';
 import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
@@ -72,6 +72,7 @@ export interface GuestView {
   readonly expects: Expectation;
   readonly thought: { readonly kind: ThoughtKind; readonly subject: string | null } | null;
   readonly welcomed: boolean;
+  readonly checkedOut: boolean;
 }
 
 export interface PlaceView {
@@ -266,8 +267,25 @@ export function guestView(parts: {
     expects: expectationWords(happiness.expects[person] ?? 0),
     thought,
     welcomed: thoughts !== undefined && stayCount(thoughts, person, 'welcomed') > 0,
+    checkedOut: false,
   };
 }
+
+export const CHECKED_OUT_LINE = 'Checked out and left the resort';
+
+// By party too: a body checked out is handed to the next party to arrive.
+export const isStaying = (
+  guests: Pick<Guests, 'present' | 'party'>,
+  person: number,
+  party: number,
+): boolean => guests.present[person] === 1 && guests.party[person] === party;
+
+export const guestStillHere = (view: SelectionView | null): view is GuestView =>
+  view?.kind === 'guest' && !view.checkedOut;
+
+// What the panel last knew of them is kept, as the body now belongs to somebody else.
+export const checkedOutView = (last: SelectionView | null, person: number): GuestView | null =>
+  last?.kind === 'guest' && last.person === person ? { ...last, checkedOut: true } : null;
 
 // Coming is a lifeguard on the way, who does not yet make the water any safer.
 export type LifeguardWatch = 'watching' | 'coming' | 'nobody';
@@ -367,6 +385,7 @@ export type Errand =
   | { readonly kind: 'asleep'; readonly at: string }
   | { readonly kind: 'beach'; readonly stage: BeachStage }
   | { readonly kind: 'checking-in'; readonly at: string; readonly named?: true }
+  | { readonly kind: 'leaving' }
   | null;
 
 type BeachStage = 'arriving' | 'resting' | 'leaving';
@@ -399,6 +418,7 @@ export interface ErrandFacts {
   readonly asleep: boolean;
   readonly beach: BeachStage | null;
   readonly checkingIn?: boolean;
+  readonly leaving?: boolean;
 }
 
 // Beach before a visit, because the router counts a beach stay as inside the Beach.
@@ -414,6 +434,7 @@ export function errandOf(facts: ErrandFacts): Errand {
     return { kind: 'waiting', at: visit.venue.label, place: visit.place, ...namedIf(visit.venue) };
   }
   if (visit) return { kind: 'inside', at: visit.venue.label, ...namedIf(visit.venue) };
+  if (facts.leaving) return { kind: 'leaving' };
   if (home) return { kind: 'walking', to: home.label, home: true };
   return goal ? { kind: 'walking', to: goal.label, home: false, ...namedIf(goal) } : null;
 }
@@ -426,6 +447,7 @@ function errandWording(errand: NonNullable<Errand>): string {
   if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
   if (errand.kind === 'beach') return BEACH_WALKS[errand.stage];
   if (errand.kind === 'checking-in') return `Checking in at ${refer(errand.at, errand.named)}`;
+  if (errand.kind === 'leaving') return 'Leaving the resort';
   return `${placeWording(errand.place)} in the line at ${refer(errand.at, errand.named)}`;
 }
 
@@ -438,14 +460,14 @@ function stillWording(
   if (errand === null || errand.kind === 'walking') return null;
   if (errand.kind === 'beach') {
     if (errand.stage !== 'resting') return null;
-    return `${resting === RESTING.sitting ? 'Sitting' : 'Lying'} on the beach`;
+    return `${sitsDown(resting) ? 'Sitting' : 'Lying'} on the beach`;
   }
   if (isRoaming(crowd, person) || resting === RESTING.lying) return null;
   return errandWording(errand);
 }
 
 function doingNow(crowd: Crowd, person: number, resting: number, errand: Errand): string {
-  if (resting === RESTING.sitting) return 'Sitting';
+  if (sitsDown(resting)) return 'Sitting';
   if (resting === RESTING.lying) return 'Lying down';
   if (resting === DRAWN_POSE.photo) return 'Taking a photo';
   if (isRoaming(crowd, person)) return 'On the beach';

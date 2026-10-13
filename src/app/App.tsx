@@ -61,7 +61,7 @@ import type {
   GuestViewControls,
   SoundControls,
 } from '../features/hud/components/hudControls';
-import type { SelectionView } from '../features/inspect/domain/selection';
+import { guestStillHere, type SelectionView } from '../features/inspect/domain/selection';
 import type { BuildNote } from '../features/hud/domain/views';
 import { createHudStore, type HudStore } from '../features/hud/domain/hudStore';
 import { useHudSlice } from '../features/hud/components/useHudSlice';
@@ -336,7 +336,7 @@ function followToggle(
   selection: SelectionView | null,
 ): (() => void) | null {
   if (guestView.following !== null) return guestView.stop;
-  return selection?.kind === 'guest' ? guestView.follow : null;
+  return guestStillHere(selection) ? guestView.follow : null;
 }
 
 const photoFlag = (photo: PhotoControls): '' | undefined => (photo.on ? '' : undefined);

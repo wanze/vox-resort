@@ -1,5 +1,6 @@
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
-import { GROUND_SIT_RISE, RESTING } from '../../crowd/domain/crowd';
+import { RESTING } from '../../crowd/domain/crowd';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { blockedAt, clearLine } from '../../crowd/domain/sandGrid';
 import { BEACH_SURFACE, type BeachBand, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import type { TileSpan } from '../../land/domain/landRights';
@@ -235,10 +236,10 @@ function sandSpot(
   return {
     x: point.x,
     z: point.z,
-    y: member.child ? BEACH_SURFACE + GROUND_SIT_RISE : BEACH_SURFACE,
+    y: BEACH_SURFACE,
     heading: 0,
     seat: -1,
-    pose: member.child ? RESTING.sitting : watch ? RESTING.standing : RESTING.lying,
+    pose: member.child ? DRAWN_POSE.sitFlat : watch ? RESTING.standing : RESTING.lying,
   };
 }
 

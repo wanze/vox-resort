@@ -19,6 +19,7 @@ import {
   restingOn,
   restoreCrowd,
   seatIsFree,
+  sitsDown,
   snapshotCrowd,
   stepCrowd,
   takeOffPlot,
@@ -44,6 +45,7 @@ import {
   type Guests,
 } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { ownedSpan } from '../../land/domain/landRights';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
@@ -1057,7 +1059,7 @@ const untilSettled = (crowd: Crowd, people: readonly number[]): boolean => {
 };
 
 const resting = (crowd: Crowd, person: number): boolean =>
-  [RESTING.sitting, RESTING.lying].includes(restingOn(crowd, person) as 2 | 3);
+  sitsDown(restingOn(crowd, person)) || restingOn(crowd, person) === RESTING.lying;
 
 describe('a visit to the beach', () => {
   const shore = shoreFor({
@@ -1189,7 +1191,7 @@ describe('a visit to the beach', () => {
     for (const person of family) {
       expect(router.stayOf(person)).toBe('resting');
       const child = guests.child[person] === 1;
-      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.lying);
+      expect(restingOn(crowd, person)).toBe(child ? DRAWN_POSE.sitFlat : RESTING.lying);
       for (const other of family) {
         const apart = Math.hypot(
           crowd.x[person]! - crowd.x[other]!,
@@ -1515,7 +1517,7 @@ describe('a visit to the beach', () => {
     for (const person of family) {
       expect(router.stayOf(person)).toBe('resting');
       const child = guests.child[person] === 1;
-      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.standing);
+      expect(restingOn(crowd, person)).toBe(child ? DRAWN_POSE.sitFlat : RESTING.standing);
       const tileZ = Math.floor(crowd.z[person]! / TILE_VOXELS);
       expect(
         beachDepthAt(shore, Math.floor(crowd.x[person]! / TILE_VOXELS), tileZ),
@@ -1555,7 +1557,7 @@ describe('a visit to the beach', () => {
     for (const [at, person] of family.entries()) {
       expect(router.visitOf(person)?.venue.label).toBe('Beach');
       const child = guests.child[person] === 1;
-      expect(restingOn(crowd, person)).toBe(child ? RESTING.sitting : RESTING.standing);
+      expect(restingOn(crowd, person)).toBe(child ? DRAWN_POSE.sitFlat : RESTING.standing);
       expect(crowd.heading[person]).toBe(0);
       expect([crowd.x[person], crowd.z[person]]).toEqual(spots[at]);
     }
@@ -3164,7 +3166,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(106)",
+        "claims": "Array(111)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3227,7 +3229,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(56)",
+        "claims": "Array(57)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3285,10 +3287,10 @@ describe('on the reference resort', () => {
         "working": "Uint8Array(40)",
       }
     `);
-    expect(digestOf(a.router)).toMatchInlineSnapshot(`"622da8396e59ae63"`);
-    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"07ef137365bd9c90"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"da8352a6bd9b6cfe"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"1cbb1ce091505552"`);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"cd53a8d2a1c0d62e"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"8d01df5c32d1f3f6"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"ba31c1b8d8406631"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"d3ec098a4601bf91"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {

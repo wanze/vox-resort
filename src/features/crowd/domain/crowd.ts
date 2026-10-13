@@ -90,9 +90,8 @@ const GATE_CLEAR = TILE_VOXELS / 2 + 2;
 // arithmetic, so walking must be the only one below 1 and lying the only one above 2.
 export const RESTING = { none: 0, standing: 1, sitting: 2, lying: 3 } as const;
 
-// The sitting figure swings its legs down by half a leg (`SIT_RISE`), so hips on the
-// ground would bury the feet.
-export const GROUND_SIT_RISE = 1.5;
+export const sitsDown = (pose: number): boolean =>
+  pose === RESTING.sitting || pose === DRAWN_POSE.sitFlat;
 
 export interface Crowd extends Walkers {
   readonly network: WalkNetwork;
@@ -755,9 +754,7 @@ function nearestGate(network: WalkNetwork, x: number, z: number): number {
 }
 
 function standsOnSand(crowd: Crowd, i: number): boolean {
-  const sitting = crowd.node[i] === HELD && crowd.holdPose[i] === RESTING.sitting;
-  const feet = crowd.y[i]! - (sitting ? GROUND_SIT_RISE : 0);
-  return crowd.network.beach !== null && Math.abs(feet - BEACH_SURFACE) < ON_SAND_TOLERANCE;
+  return crowd.network.beach !== null && Math.abs(crowd.y[i]! - BEACH_SURFACE) < ON_SAND_TOLERANCE;
 }
 
 function outOnSand(crowd: Crowd, i: number): boolean {

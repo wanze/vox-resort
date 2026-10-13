@@ -14,6 +14,7 @@ import {
 import { BEACH_SURFACE, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { homeOf, partyOf, usesWheelchair, type Guests } from '../../guests/domain/guests';
 import { createRandom, resumeRandom } from '../../layout/domain/random';
+import { DRAWN_POSE } from '../../rendering/domain/poses';
 import { saltFor, tasteFor } from './appeal';
 import { isBroken, wear, type Breakdowns } from './breakdowns';
 import { appealFactor, reliabilityFactor } from './condition';
@@ -148,6 +149,8 @@ export interface Router {
   // False with no entrance, or no reception the entrance reaches.
   readonly receptionReachable: boolean;
   isArriving(person: number): boolean;
+  // Sent home and on the way to a gate; checked out once there.
+  isLeaving(person: number): boolean;
   readonly fieldCount: number;
   readonly asleepCount: number;
   isAsleep(person: number): boolean;
@@ -728,7 +731,15 @@ export function createRouter(parts: {
   // Nobody watches a show lying down: up on the sand, or sat up on the lounger, facing the sea.
   const holdToWatch = (people: Crowd, person: number, spot: PitchSpot): void => {
     const sitting = guests.child[person] === 1 || spot.seat >= 0;
-    holdAt(people, person, spot.x, spot.y, spot.z, 0, sitting ? RESTING.sitting : RESTING.standing);
+    holdAt(
+      people,
+      person,
+      spot.x,
+      spot.y,
+      spot.z,
+      0,
+      sitting ? DRAWN_POSE.sitFlat : RESTING.standing,
+    );
   };
 
   const restAtSpot = (person: number, claim: Claim): void => {
@@ -1350,6 +1361,10 @@ export function createRouter(parts: {
 
     isArriving(person) {
       return state.arriving[person] === 1;
+    },
+
+    isLeaving(person) {
+      return state.leaving[person] === 1;
     },
 
     isFree(person) {

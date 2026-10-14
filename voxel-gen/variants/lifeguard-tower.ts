@@ -27,7 +27,11 @@ const DOOR = { x: 9, x1: 11 } as const;
 // On the side the camera sees, so the way up is part of the picture.
 const LADDER = { x: DECK.x - 1, z: HUT.z1 + 1, z1: HUT.z1 + 4 } as const;
 
-const FLAG = { x: HUT.x1 - 1, z: HUT.z + 1 } as const;
+const EAVES = HUT.top + 1;
+
+// The cloth hangs four voxels below the top and droops further in still air, so the pole
+// stands high enough to keep the tip off the roof.
+const FLAGPOLE = { x: HUT.x1 - 1, z: HUT.z + 1, top: EAVES + 9 } as const;
 
 export default defineModel({
   id: 'lifeguard-tower-b',
@@ -38,9 +42,10 @@ export default defineModel({
   // Only taken up on sand: inland there is no paving within reach of a deck this high,
   // so the seat is quietly dropped.
   seats: [{ x: SITTER, y: PLANK + 1, z: BENCH.z1, facing: 0, post: 'lifeguard' }],
+  flags: [{ x: FLAGPOLE.x, y: FLAGPOLE.top + 1, z: FLAGPOLE.z }],
   build: (b: VoxelBuilder) => {
     const box = b.box.bind(b);
-    const { amber, bloom, stucco, teak } = PALETTE;
+    const { bloom, stucco, teak } = PALETTE;
 
     plinth(b, SLAB);
 
@@ -67,13 +72,10 @@ export default defineModel({
       for (let z = HUT.z + 1; z <= HUT.z + 2; z++) b.del(HUT.x, y, z);
     }
 
-    const eaves = HUT.top + 1;
-    box(HUT.x - 1, HUT.x1 + 1, eaves, eaves, HUT.z - 1, HUT.z1 + 1, bloom.base);
-    box(HUT.x, HUT.x1, eaves + 1, eaves + 1, HUT.z, HUT.z1, bloom.base);
+    box(HUT.x - 1, HUT.x1 + 1, EAVES, EAVES, HUT.z - 1, HUT.z1 + 1, bloom.base);
+    box(HUT.x, HUT.x1, EAVES + 1, EAVES + 1, HUT.z, HUT.z1, bloom.base);
 
-    box(FLAG.x, FLAG.x, eaves + 2, eaves + 7, FLAG.z, FLAG.z, teak.light);
-    box(FLAG.x, FLAG.x, eaves + 6, eaves + 7, FLAG.z + 1, FLAG.z + 3, bloom.base);
-    box(FLAG.x, FLAG.x, eaves + 4, eaves + 5, FLAG.z + 1, FLAG.z + 3, amber.base);
+    box(FLAGPOLE.x, FLAGPOLE.x, EAVES + 2, FLAGPOLE.top, FLAGPOLE.z, FLAGPOLE.z, teak.light);
 
     for (const x of [BENCH.x, BENCH.x1]) {
       box(x, x, DECK_TOP + 1, DECK_TOP + 1, BENCH.z, BENCH.z1, teak.deep);

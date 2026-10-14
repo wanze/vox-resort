@@ -8,7 +8,17 @@ import {
   PlaneGeometry,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { float, instanceIndex, mix, positionLocal, sin, time, uniform, vec3 } from 'three/tsl';
+import {
+  float,
+  instanceIndex,
+  mix,
+  positionGeometry,
+  positionLocal,
+  sin,
+  time,
+  uniform,
+  vec3,
+} from 'three/tsl';
 import type { FlagSite } from '../../catalog/domain/placementFacts';
 import type { Weather } from '../../sim/domain/weather';
 import { DOWNWIND_YAW, FLAG_COLORS, flagFor } from '../domain/beachFlags';
@@ -44,13 +54,17 @@ function clothGeometry(): PlaneGeometry {
   return geometry;
 }
 
-// Waved in the vertex stage: a few dozen vertices per flag, and nothing to upload per frame.
+// The cloth's face turned downwind as every instance is, so the wave can push along it.
+const FACING = { x: Math.sin(DOWNWIND_YAW), z: Math.cos(DOWNWIND_YAW) } as const;
+
+// Three applies the instance matrix before positionNode, so positionLocal is already placed and
+// turned; the wave reads the untouched cloth from positionGeometry and adds a world offset.
 function clothMaterial(color: Node<'color'>, gust: Node<'float'>): MeshStandardNodeMaterial {
   const material = new MeshStandardNodeMaterial({ side: DoubleSide, roughness: 0.9, metalness: 0 });
-  const along = positionLocal.x.div(CLOTH.length + POLE_GAP);
+  const along = positionGeometry.x.div(CLOTH.length + POLE_GAP);
   const phase = float(instanceIndex).mul(PHASE_STEP);
   const wave = sin(
-    positionLocal.x
+    positionGeometry.x
       .mul((Math.PI * 2) / FLUTTER.wavelength)
       .sub(time.mul(FLUTTER.speed))
       .add(phase),
@@ -58,7 +72,9 @@ function clothMaterial(color: Node<'color'>, gust: Node<'float'>): MeshStandardN
     .mul(mix(float(FLUTTER.calm), float(FLUTTER.storm), gust))
     .mul(along);
   const droop = along.mul(along).mul(DROOP).mul(gust.oneMinus());
-  material.positionNode = positionLocal.add(vec3(0, droop.negate(), wave));
+  material.positionNode = positionLocal.add(
+    vec3(wave.mul(FACING.x), droop.negate(), wave.mul(FACING.z)),
+  );
   material.colorNode = color;
   return material;
 }

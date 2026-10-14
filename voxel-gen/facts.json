@@ -11363,7 +11363,7 @@
         "binReach": 0,
         "mosaic": null,
         "width": 16,
-        "height": 26,
+        "height": 28,
         "depth": 16,
         "emissive": [],
         "water": [],
@@ -11385,8 +11385,15 @@
         "venue": null,
         "hire": null,
         "nameplate": null,
-        "voxelCount": 1243,
-        "dayVoxelCount": 1243,
+        "flags": [
+          {
+            "x": 11,
+            "y": 28,
+            "z": 4
+          }
+        ],
+        "voxelCount": 1233,
+        "dayVoxelCount": 1233,
         "dominantColor": 14466709,
         "solidTops": [19],
         "turnless": false

@@ -1,3 +1,5 @@
+import { Cost } from '../../../shared/components/Cost';
+import { PixelIcon } from '../../../shared/components/PixelIcon';
 import type { StylePick } from '../../build/domain/buildTool';
 import type { StyleStrip as Strip } from '../../build/domain/stylePick';
 import type { PreviewLookup } from './BuildPalette';
@@ -13,7 +15,7 @@ export interface BuildPaletteHeadProps {
   // Only when the player opened the palette; on page load the keys still belong to the game.
   readonly focusSearch: boolean;
   readonly armed: string | null;
-  readonly armedDetail: string | null;
+  readonly armedDetail: ArmedDetail | null;
   readonly armedObject: string | null;
   readonly onDisarm: () => void;
   // Only for an object: a phone has no R key, and nothing else armed has a facing.
@@ -23,9 +25,14 @@ export interface BuildPaletteHeadProps {
   readonly onStyle: (pick: StylePick) => void;
 }
 
+export interface ArmedDetail {
+  readonly cost: number;
+  readonly footprint: string;
+}
+
 interface ArmedBarProps {
   readonly armed: string;
-  readonly detail: string | null;
+  readonly detail: ArmedDetail | null;
   readonly object: string | null;
   readonly onDisarm: () => void;
   readonly onTurn: (() => void) | null;
@@ -42,7 +49,12 @@ function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
       >
         <span className="ui-label hud-palette-armed-label">Placing</span>
         <span className="hud-palette-armed-name">{armed}</span>
-        {detail ? <span className="hud-palette-armed-detail">· {detail}</span> : null}
+        {detail ? (
+          <span className="hud-palette-armed-detail">
+            <Cost amount={detail.cost} />
+            <span>· {detail.footprint}</span>
+          </span>
+        ) : null}
         <span className="hud-palette-armed-stop" aria-hidden="true">
           ✕
         </span>
@@ -58,7 +70,7 @@ function ArmedBar({ armed, detail, object, onDisarm, onTurn }: ArmedBarProps) {
           title={`Turn (${keyLabel('turnPlacement')})`}
           aria-label="Turn"
         >
-          ⟳
+          <PixelIcon name="refresh" />
         </button>
       ) : null}
     </div>

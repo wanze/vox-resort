@@ -615,6 +615,12 @@
   min-width: 0;
 }
 
+/* As tall as the filter beside it, which a compact button is not. */
+.hud-upkeep-renovate {
+  height: var(--control-h);
+  padding: 0 var(--space-3);
+}
+
 /* A mouse needs no 44px target, and three actions then share a row. */
 @media (pointer: fine) {
   .ui-window[data-window='inspect'] .ui-button-large {

@@ -1,3 +1,4 @@
+import { Cost } from '../../../shared/components/Cost';
 import { clockWords, dayAt, dayWords } from '../../events/domain/week';
 import type { Works } from '../../sim/domain/condition';
 import { canAfford, type Ledger } from '../../sim/domain/ledger';
@@ -71,13 +72,11 @@ function RenovateOffer({
       title={why ?? closingNote(target.staying)}
       onClick={() => controls.renovate([target.key])}
     >
-      {offerLabel(cost, target.staying > 0 && !brief)}
+      {target.staying > 0 && !brief ? 'Close & renovate' : 'Renovate'}
+      <Cost amount={cost} />
     </button>
   );
 }
-
-const offerLabel = (cost: number, closes: boolean): string =>
-  `${closes ? 'Close & renovate' : 'Renovate'} · ${cost.toLocaleString('en-US')}`;
 
 // Nothing while the work is under way: the row beside it says until when. Brief, for a list,
 // leaves the closing to the button's title.

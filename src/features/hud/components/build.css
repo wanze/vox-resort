@@ -59,6 +59,9 @@
 }
 
 .hud-palette-armed-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   flex: none;
   font-family: var(--font-ui);
   font-variant-numeric: tabular-nums;
@@ -297,20 +300,16 @@
 
 .hud-build-tile-badge {
   position: absolute;
-  top: var(--space-1);
-  right: var(--space-1);
+  top: 3px;
+  right: 3px;
   z-index: 1;
   padding: 2px 4px;
+  border: 1px solid var(--badge-rim);
   border-radius: 5px 6px 4px;
   background: var(--badge);
-  font: 500 10px / 1.2 var(--font-ui);
+  font: 700 11px / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--stone-200);
-}
-
-.hud-build-tile-cost {
-  font-weight: 700;
   color: var(--price);
 }
 
@@ -318,7 +317,7 @@
   opacity: 0.45;
 }
 
-.hud-build-tile--short .hud-build-tile-cost {
+.hud-build-tile--short .hud-build-tile-badge {
   color: var(--price-short);
 }
 

@@ -33,6 +33,14 @@
   flex: 0 1 96px;
 }
 
+.ui-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* The total steps back, so the eye reads the figure first; the colour is the figure's own. */
 .ui-out-of {
   font-variant-numeric: tabular-nums;

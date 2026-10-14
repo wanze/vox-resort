@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { bedtimeOf, EARLY_WAKE_FROM, isBedtime, isEarlyRiser, occupiedShare } from './night';
+import {
+  bedtimeOf,
+  EARLY_WAKE_FROM,
+  isBedtime,
+  isEarlyRiser,
+  lightsOnShare,
+  occupiedShare,
+} from './night';
 
 const HOUR = 60;
 const PARTIES = Array.from({ length: 50 }, (_, party) => party);
@@ -102,5 +109,32 @@ describe('occupiedShare', () => {
   it('treats a negative count as nobody', () => {
     expect(occupiedShare(-4, 2)).toBe(0);
     expect(occupiedShare(10, -3)).toBe(0);
+  });
+});
+
+const at = (hour: number, minute = 0): number => hour * 60 + minute;
+
+describe('lightsOnShare', () => {
+  it('leaves every light on through the evening', () => {
+    expect(lightsOnShare(at(19))).toBe(1);
+    expect(lightsOnShare(at(22, 59))).toBe(1);
+  });
+
+  it('puts them out gradually once everyone is in bed', () => {
+    const late = [at(23), at(23, 30), at(0), at(0, 30)].map(lightsOnShare);
+    for (let index = 1; index < late.length; index++) {
+      expect(late[index]).toBeLessThan(late[index - 1]!);
+    }
+  });
+
+  it('keeps a few lit in the small hours, across midnight', () => {
+    expect(lightsOnShare(at(2))).toBeCloseTo(0.1);
+    expect(lightsOnShare(at(5))).toBeCloseTo(0.1);
+    expect(lightsOnShare(-at(22))).toBeCloseTo(0.1);
+  });
+
+  it('turns them back on as the house wakes', () => {
+    expect(lightsOnShare(at(6))).toBeGreaterThan(0.1);
+    expect(lightsOnShare(at(6, 30))).toBe(1);
   });
 });

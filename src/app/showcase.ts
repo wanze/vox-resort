@@ -93,7 +93,7 @@ import { CHECK_IN_TICK } from '../features/sim/domain/checkIn';
 import { beachVenueFor, withBeach } from '../features/sim/domain/beach';
 import { relabelled, shelterOf, type Venue } from '../features/sim/domain/venues';
 import { assignNames, namedPlacesOf, renameTo } from '../features/naming/domain/venueNames';
-import { occupiedShare } from '../features/sim/domain/night';
+import { lightsOnShare, occupiedShare } from '../features/sim/domain/night';
 import {
   cancelRenovation,
   carryAgeing,
@@ -1520,9 +1520,16 @@ function sceneStats(parts: {
   };
 }
 
-// Written only on a change: this runs per tick and the share moves a few times a night.
-function lightRooms(resort: Resort, last: number | null): number {
-  const share = occupiedShare(resort.beds.total, resort.router.asleepCount);
+// Written only on a change: this runs per tick. The welcome screen lights every room: its plot was
+// just made, so nobody is in bed yet, and the windows would go dark at its first tick.
+function lightRooms(
+  resort: Resort,
+  tickOfDay: number,
+  welcome: boolean,
+  last: number | null,
+): number {
+  const home = welcome ? 1 : occupiedShare(resort.beds.total, resort.router.asleepCount);
+  const share = home * lightsOnShare(tickOfDay);
   if (share !== last) resort.world.setOccupiedShare(share);
   return share;
 }
@@ -1894,6 +1901,7 @@ function createClock(
   startTime: number,
   glow: () => ShowLight,
   offSeason: () => OffSeasonLook,
+  lightRoomsAt: (tickOfDay: number) => void,
 ): Clock {
   const clock = createResortClock(
     startTime,
@@ -1907,7 +1915,7 @@ function createClock(
     sky.reset();
     sky.apply(clock);
     // Otherwise its windows open on the previous plot's sleeping share.
-    lightRooms(resort(), null);
+    lightRoomsAt(clock.tickOfDay);
   };
 
   return {
@@ -2489,7 +2497,11 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     startTimeOf(bench, drift !== null),
     () => fireworks.light,
     () => look,
+    (tickOfDay) => {
+      lastShare = lightRooms(current(), tickOfDay, drift !== null, null);
+    },
   );
+  lastShare = lightRooms(current(), clock.tickOfDay, drift !== null, null);
   // The simulated weather stays the sim's and the stats'; this is what is seen and heard.
   const drawnWeather = (): Weather => look.weather ?? clock.weather;
   const followSeason = (): void => {
@@ -3259,7 +3271,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     if (ticks > 0) {
       const simStarted = timer.start();
       stepSim(current(), clock, ticks, { morning, hourly, heard: heardEvents, seasonEnded });
-      lastShare = lightRooms(current(), lastShare);
+      lastShare = lightRooms(current(), clock.tickOfDay, drift !== null, lastShare);
       recastAll(current());
       lightTheFires(current());
       timer.end('vox:frame:sim', simStarted, ticks);

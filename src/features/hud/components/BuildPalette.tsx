@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { BuildGrid, BuildGroup, type BuildGridProps } from './BuildGroup';
-import { BuildPaletteHead } from './BuildPaletteHead';
+import { BuildPaletteHead, type ArmedDetail } from './BuildPaletteHead';
 import { BuildTools } from './BuildTools';
 import { Tabs, tabIdOf } from '../../../shared/components/Tabs';
 import { ZoneChips } from './ZoneChips';
@@ -49,10 +49,10 @@ export function armedLabel(tool: BuildTool | null, land: LandView | null): strin
 }
 
 // A touch player has no tooltip, so the bar says what the pressed tile costs and covers.
-function armedDetail(tool: BuildTool | null): string | null {
+function armedDetail(tool: BuildTool | null): ArmedDetail | null {
   const id = armedObject(tool);
   if (!id) return null;
-  return `${buildCostOf(id).toLocaleString('en-US')} · ${footprintLabel(objectTypeById(id))}`;
+  return { cost: buildCostOf(id), footprint: footprintLabel(objectTypeById(id)) };
 }
 
 const groupOf = (groups: readonly ObjectTypeGroup[], category: string): ObjectTypeGroup =>

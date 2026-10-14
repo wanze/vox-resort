@@ -63,9 +63,7 @@ export function BuildTile({ type, preview, selected, ledger, onSelect }: BuildTi
         <span className="hud-build-tile-name" aria-hidden="true">
           {type.label}
         </span>
-        <span className="hud-build-tile-badge">
-          <span className="hud-build-tile-cost">{price}</span>
-        </span>
+        <span className="hud-build-tile-badge">{price}</span>
       </button>
       <ObjectInfo typeId={type.id} className="hud-build-tile-info" mode="hover" />
     </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Cost } from '../../../shared/components/Cost';
 import { HelpTip } from '../../../shared/components/HelpTip';
 import { Meter } from '../../../shared/components/Meter';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
@@ -139,12 +140,13 @@ function RenovateAll({
   return (
     <button
       type="button"
-      className="ui-button ui-button-compact"
+      className="ui-button hud-upkeep-renovate"
       disabled={why !== undefined}
       title={why ?? `Renovate the ${batch.keys.length} buildings listed that are worth it`}
       onClick={() => controls.renovate(batch.keys)}
     >
-      {`Renovate all · ${batch.cost.toLocaleString('en-US')}`}
+      Renovate all
+      <Cost amount={batch.cost} />
     </button>
   );
 }

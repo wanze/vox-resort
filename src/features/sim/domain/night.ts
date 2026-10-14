@@ -66,3 +66,23 @@ export function occupiedShare(beds: number, taken: number): number {
   if (!(beds > 0) || !(taken > 0)) return 0;
   return Math.min(1, taken / beds);
 }
+
+// The last parties are in bed by eleven; the lamps go out one window at a time over the next hour
+// and a half, and come back on as the house wakes. A few readers keep theirs lit all night.
+const LIGHTS_OUT_FROM = 23 * TICKS_PER_HOUR;
+const LIGHTS_OUT_SPAN = 90;
+const LIGHTS_UP_FROM = 5 * TICKS_PER_HOUR + 30;
+const LIGHTS_UP_SPAN = 60;
+const NIGHT_READERS = 0.1;
+
+const sinceTick = (tick: number, from: number): number =>
+  (((tick - from) % TICKS_PER_DAY) + TICKS_PER_DAY) % TICKS_PER_DAY;
+
+export function lightsOnShare(tickOfDay: number): number {
+  const out = sinceTick(tickOfDay, LIGHTS_OUT_FROM);
+  const up = sinceTick(tickOfDay, LIGHTS_UP_FROM);
+  if (out < sinceTick(LIGHTS_UP_FROM, LIGHTS_OUT_FROM)) {
+    return Math.max(NIGHT_READERS, 1 - (1 - NIGHT_READERS) * (out / LIGHTS_OUT_SPAN));
+  }
+  return Math.min(1, NIGHT_READERS + (1 - NIGHT_READERS) * (up / LIGHTS_UP_SPAN));
+}

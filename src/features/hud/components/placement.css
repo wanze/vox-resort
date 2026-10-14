@@ -38,11 +38,6 @@
   }
 }
 
-.hud-placement-price {
-  font-family: var(--font-ui);
-  font-variant-numeric: tabular-nums;
-}
-
 .hud-placement-ask {
   flex-direction: column;
   align-items: stretch;

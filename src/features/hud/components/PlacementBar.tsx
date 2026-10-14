@@ -4,6 +4,7 @@ import { armedLand, armedObject, type BuildTool } from '../../build/domain/build
 import type { LandView } from '../../land/domain/landRights';
 import type { PreviewLookup } from './BuildPalette';
 import { ArmedStyles } from './StyleStrip';
+import { Cost } from '../../../shared/components/Cost';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 
 export interface PlacementBarProps {
@@ -48,7 +49,7 @@ function askedOf({ pending, tool, land }: PlacementBarProps): Asked | null {
 
 function Price({ price }: { readonly price: number }) {
   if (price <= 0) return null;
-  return <span className="hud-placement-price">{price.toLocaleString('en-US')}</span>;
+  return <Cost amount={price} />;
 }
 
 // A finger has no hover, so what it puts down waits here to be confirmed.

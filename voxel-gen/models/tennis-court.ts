@@ -117,6 +117,7 @@ export default defineModel({
     ],
     capacity: 4,
     dwellSeconds: { min: 1200, max: 2700 },
+    noise: 0.3,
     // Beside the north net post, outside the doubles alley.
     spots: [...PLAYERS, { x: NET.x, y: ON_TURF, z: NET.z0 - 2, facing: 0, for: 'staff' }],
     // Struck at the hip, a racket's reach below where the arm swings.

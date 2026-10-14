@@ -112,6 +112,7 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 900, max: 2400 },
+    noise: 0.6,
     spots: [
       ...SWINGS.map((x) => ({
         x: x + 1,

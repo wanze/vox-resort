@@ -83,6 +83,7 @@ export default defineModel({
     ],
     capacity: 30,
     dwellSeconds: { min: 1800, max: 5400 },
+    noise: 0.4,
     reliability: 120,
     order: ['areas', 'loops', 'spots', 'seats'],
     areas: [

@@ -116,6 +116,7 @@ export default defineModel({
     satisfies: [{ need: 'fun', amount: 0.9 }],
     capacity: 20,
     dwellSeconds: { min: 3600, max: 10_800 },
+    noise: 0.6,
     spots: [
       ...PLAYERS,
       { x: PIT.x1 - 2, y: GROUND + 1, z: PIT.z1 - 2, facing: 3, child: true },

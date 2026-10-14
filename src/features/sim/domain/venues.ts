@@ -6,7 +6,7 @@ import type {
   Shelter,
   VenueRole,
 } from '../../../../voxel-gen/voxelgen.ts';
-import { objectTypeById, venueOf } from '../../catalog/domain/objectTypes';
+import { familyOf, objectTypeById, venueOf } from '../../catalog/domain/objectTypes';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { placedDoors } from '../../layout/domain/doorStep';
 import type { Hours } from './hours';
@@ -29,6 +29,10 @@ export interface Venue {
   readonly stage?: boolean;
   readonly dj?: boolean;
   readonly bathing?: boolean;
+  // From the family, as signs and names are: a variant only looks different.
+  readonly noise?: number;
+  readonly smell?: number;
+  readonly calm?: boolean;
   readonly cools?: boolean;
   readonly reliability?: number;
   // A fire pit: a bonfire booked on the beach is held here.
@@ -56,6 +60,15 @@ const traitsOf = (venue: ModelVenue) => ({
   hearth: venue.hearth !== undefined,
 });
 
+const nuisanceOf = (id: string) => {
+  const family = venueOf(familyOf(id));
+  return {
+    ...(family?.noise === undefined ? {} : { noise: family.noise }),
+    ...(family?.smell === undefined ? {} : { smell: family.smell }),
+    ...(family?.calm === undefined ? {} : { calm: true }),
+  };
+};
+
 // Derived on demand rather than cached, since placements change under hand edits.
 // Lodging is left out: `guests/domain/homes.ts` owns where everybody sleeps.
 // Names are keyed by placement; typed inline so this module needs nothing from naming/.
@@ -78,6 +91,7 @@ export function venuesOn(
       capacity: venue.capacity,
       dwellSeconds: venue.dwellSeconds,
       ...traitsOf(venue),
+      ...nuisanceOf(placement.id),
       x: placement.x + placement.width / 2,
       z: placement.z + placement.depth / 2,
       tileX: placement.tileX,

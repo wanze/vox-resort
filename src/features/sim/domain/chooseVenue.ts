@@ -28,6 +28,8 @@ export interface ChoiceOptions {
   // left, which would otherwise be the nearest match again.
   readonly justLeft?: number;
   readonly cleanliness?: (venue: number) => number;
+  // 0 to 1, the smell and noise from its neighbours; absent, none.
+  readonly nuisance?: (venue: number) => number;
   readonly isOpen?: (venue: number) => boolean;
   readonly weather?: WeatherEffect;
 }
@@ -46,6 +48,9 @@ const REVISIT = 0.5;
 // Not zero: a neglected venue must stay a candidate, or it behaves like a
 // demolished one and reads as the router failing.
 const DIRT_FLOOR = 0.25;
+
+// A half: a venue that reeks still serves somebody desperate, or it reads as demolished.
+const NUISANCE_PULL = 0.5;
 
 function scoreFor(
   desire: number,
@@ -80,6 +85,9 @@ function servesAWant(options: ChoiceOptions, venue: Venue): boolean {
   );
 }
 
+const minded = (options: ChoiceOptions, index: number): number =>
+  options.nuisance ? 1 - NUISANCE_PULL * options.nuisance(index) : 1;
+
 function weigh(
   options: ChoiceOptions,
   index: number,
@@ -100,7 +108,11 @@ function weigh(
   if (queued >= queueLimit(index)) return 0;
   // Occupants count as well as the line: a line forms only once a venue is full.
   const busy = (occupants ? occupants(index) : 0) + queued;
-  const desire = gain * (affinity ? affinity(index) : 1) * (index === justLeft ? REVISIT : 1);
+  const desire =
+    gain *
+    (affinity ? affinity(index) : 1) *
+    (index === justLeft ? REVISIT : 1) *
+    minded(options, index);
   const clean = options.cleanliness ? options.cleanliness(index) : 1;
   return scoreFor(desire, clean, distance, reach, busy, venue.capacity);
 }

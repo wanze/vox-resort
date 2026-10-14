@@ -24,6 +24,7 @@ const OVERLAY_ENDS: { readonly [kind in OverlayKind]: readonly [string, string] 
   light: ['lit', 'dark'],
   litter: ['clean', 'littered'],
   photos: ['few', 'many'],
+  nuisance: ['quiet', 'smelly or loud'],
 };
 
 const channel = (level: number): number => Math.round(level * 255);

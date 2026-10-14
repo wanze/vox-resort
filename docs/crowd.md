@@ -210,7 +210,7 @@ guests' needs hold.
 **where**:
 
 ```
-score = gain * taste * recency
+score = gain * taste * recency * nuisance
         ---------------------------------------------------------
         (1 + distance / reach) * (1 + CROWDING * busy / capacity)
 ```
@@ -222,6 +222,9 @@ score = gain * taste * recency
   and only while it is open: the weather and its `hours` (`hours.ts`) can shut it.
 - **taste** is a stable hashed per-guest preference, **recency** halves the
   place just left, **busy** is inside plus queuing.
+- **nuisance** is `1 - 0.5 × felt`, the smell and noise the venue gets from its
+  neighbours (see [Smell and noise](#smell-and-noise)): one that reeks draws half
+  the guests.
 
 Tune `archetypes.ts` first.
 
@@ -475,7 +478,8 @@ each taking a `ResortFacts` literal. Rules include `closed`, `no-entrance`,
 `no-reception`, `no-beds`, `unserved-need`, `full-lines`, `unreachable`,
 `not-step-free`, `broken`, `hurt`, `littered`, `far-from-home`, `unvisited`,
 `weather-closed`, `unwatched`, `short-staffed`, `unmade`, `no-depot`,
-`no-events` and `no-welcome`.
+`no-events`, `no-welcome`, and `smelly` and `noisy`: one line per venue whose
+worst smell or noise is past `HEARD_FROM`, louder the more it is felt.
 
 - The setup rules speak on an empty resort; the rest stay silent until guests
   arrive.
@@ -490,8 +494,8 @@ kind; `reviews.ts` turns a stay into one line at check-out.
 - The router emits through an optional `onThought` and imports nothing from
   `thoughts.ts`. Nothing reads a thought back.
 - Kinds include `queue-too-long`, `closed`, `nothing-for`, `no-bed`, `filthy`,
-  `enjoyed`, `lovely`, `littered`, `no-step-free`, `hurt`, `broken` and event
-  praise. The same thought within two sim hours is ignored.
+  `enjoyed`, `lovely`, `littered`, `no-step-free`, `hurt`, `broken`, `smelly`,
+  `noisy` and event praise. The same thought within two sim hours is ignored.
 - A review's stars are `round(5 × mean stay mood)`, its complaint the most
   frequent thought, its praise the most frequent praise. A `photo` praise
   quotes the subject of the party's latest photo (`praiseSubject`).
@@ -631,6 +635,42 @@ per-tile field within 4 tiles, saturated so nothing reaches 1, rebuilt after
 every edit. A guest's happiness target adds 0.1 × the scenery under them.
 Scenery never changes where anybody walks.
 
+## Smell and noise
+
+A venue model may declare `smell` and `noise` (0 to 1, at full strength) and
+`calm`; a variant uses its original's. Restrooms smell (1); the night club (1),
+beach club (0.7), game hall, kids' club and playground (0.6), basketball court
+and stage (0.5), volleyball, pool and resort bar (0.4), and poolside bar and
+tennis court (0.3) are loud. The spa and the massage tent are `calm`.
+
+Who minds what goes by role (`MINDS` in `sim/domain/nuisance.ts`); a calm venue
+minds noise fully whatever its role:
+
+| Role     | Smell | Noise |
+| -------- | ----- | ----- |
+| food     | 1     | 0.3   |
+| drink    | 0.6   | 0     |
+| activity | 0.2   | 0     |
+| service  | 0     | 0     |
+
+- **Live strength**: a smell follows dirt, nothing at or above `SMELLS_BELOW`
+  (0.6, under `NEEDS_CLEANING`, so restrooms cleaned in time never smell) and
+  full at `REEKS_AT` (0.2). A noise follows the crowd inside, full at half full
+  (`LOUD_AT_SHARE`); an empty, closed or broken venue is silent.
+- **Reach**: the Chebyshev gap between footprints, adjacent being 1, weighted
+  `1 - gap / (reach + 1)`. Smell reaches 2 tiles (adjacent 0.67), noise 4
+  (adjacent 0.8).
+- `nuisanceFor` lists, per venue, the sources within reach with strength,
+  falloff and sensitivity already multiplied, rebuilt with the plot facts on
+  every edit and never saved. `feltAt` sums them live per kind, each clamped at
+  1, and the two kinds together clamped at 1.
+- **Where it bites**: `chooseVenue` (the **nuisance** factor above), and a visit:
+  past `HEARD_FROM` (0.25) the guest says `smelly` or `noisy` about the venue
+  and loses `NUISANCE_UPSET` (0.05) × felt of mood, once a visit. Not on paths,
+  the beach or lodgings, and not in the rating.
+- The inspector names a venue's worst source ("Smell from Restrooms"), and the
+  Smell & noise overlay paints where it smells or is loud, minded by nobody.
+
 ## Photos
 
 Guests stop now and then to photograph a view (`sim/domain/views.ts`,
@@ -738,17 +778,18 @@ The **Overlay** picker tints paved tiles by one question
 (`overlays/domain/overlays.ts`). Every layer is 0 to 1 per node, or `NaN` for no
 data, and **high is always bad**, so one ramp and legend serve all.
 
-| Layer     | Shows                          |
-| --------- | ------------------------------ |
-| Footfall  | where guests walk              |
-| Mood      | where guests are unhappy       |
-| Food      | distance to something to eat   |
-| Drink     | distance to something to drink |
-| Wash      | distance to somewhere to wash  |
-| Step-free | where a wheelchair can't go    |
-| Scenery   | where the walk is plain        |
-| Litter    | where litter lies              |
-| Photos    | where guests take photos       |
+| Layer         | Shows                          |
+| ------------- | ------------------------------ |
+| Footfall      | where guests walk              |
+| Mood          | where guests are unhappy       |
+| Food          | distance to something to eat   |
+| Drink         | distance to something to drink |
+| Wash          | distance to somewhere to wash  |
+| Step-free     | where a wheelchair can't go    |
+| Scenery       | where the walk is plain        |
+| Litter        | where litter lies              |
+| Photos        | where guests take photos       |
+| Smell & noise | where it smells or is loud     |
 
 Photos is a count, like Footfall: its high end is where most are taken, not bad.
 Distance layers come from one multi-source sweep (`reach.ts`), kept per walk

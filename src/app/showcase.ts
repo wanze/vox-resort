@@ -104,7 +104,7 @@ import { createWorksPins } from './worksPins';
 import { plotFactsOf } from '../features/resort-sim/domain/plotFacts';
 import { createSimState, keptFactsOf, type SimState } from '../features/resort-sim/domain/simState';
 import { pricesView, setPrice } from '../features/sim/domain/pricing';
-import { venueIndexOf } from '../features/resort-sim/domain/visits';
+import { nuisanceLive, venueIndexOf } from '../features/resort-sim/domain/visits';
 import {
   beachTilesFor,
   knowPaving,
@@ -215,6 +215,7 @@ import {
 import { demandFor, type Demand } from '../features/sim/domain/demand';
 import { doorsFor } from '../features/sim/domain/doors';
 import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/stepFree';
+import { mindedOver, nuisanceFieldFor } from '../features/sim/domain/nuisance';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
   createFootfall,
@@ -1680,6 +1681,14 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
     unlit: resort.unlit,
     litter: { tilesX: litter.tilesX, tilesZ: litter.tilesZ, value: litter.level },
     photos: resort.photos.heat,
+    nuisance: () =>
+      nuisanceFieldFor(
+        resort.nuisance.sources,
+        resort.venues,
+        nuisanceLive(resort),
+        resort.plan.tilesX,
+        resort.plan.tilesZ,
+      ),
   });
 }
 
@@ -1862,6 +1871,8 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     ),
     condition: conditionAdvised(resort),
     unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
+    // The same reading judgeVisit hears, so the advice and the guests agree.
+    nuisances: mindedOver(resort.nuisance, resort.venues, nuisanceLive(resort)),
     broken: brokenOn(resort, now),
     stormHits: new Set(recentStormHits(resort.stormHits, now).keys()),
     shortStaffed: shortOf(resort.hiring, resort.recommended),

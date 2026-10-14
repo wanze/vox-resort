@@ -282,6 +282,16 @@ describe('createRouter', () => {
     expect(router.occupancyOf('bakery#0')).toEqual({ inside: 0, waiting: 0 });
   });
 
+  it('counts who is inside by index, and nobody past the list', () => {
+    const network = networkOf(street(8));
+    const { router } = routerOn(network, [bakery(7)], wanting(0, 'hunger'));
+    router.step(0, nodeAt(network, 0));
+    expect(router.occupantsAt(0)).toBe(0);
+    router.step(0, nodeAt(network, 7));
+    expect(router.occupantsAt(0)).toBe(1);
+    expect(router.occupantsAt(5)).toBe(0);
+  });
+
   it('wears the venue a visit was made to, on the way out with the relief', () => {
     const network = networkOf(street(8));
     const needs = wanting(0, 'hunger');

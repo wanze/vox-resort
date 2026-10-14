@@ -101,6 +101,7 @@ export default defineModel({
     ],
     capacity: 25,
     dwellSeconds: { min: 1800, max: 5400 },
+    noise: 0.7,
     price: 4,
     spots: [{ ...ANIMATOR, y: TOP_LAYER, facing: 0, for: 'animator' }],
     floor: FLOOR,

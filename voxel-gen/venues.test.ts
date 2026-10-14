@@ -211,6 +211,27 @@ const originalOf = new Map(VARIANTS.map(({ of, source }) => [source.id, of]));
 
 const familyOf = (id: string): string => originalOf.get(id) ?? id;
 
+describe('the smell and noise a venue gives off', () => {
+  it('declares each as a share of the worst there is', () => {
+    for (const { id, venue } of venues) {
+      for (const strength of [venue!.noise, venue!.smell]) {
+        if (strength === undefined) continue;
+        expect(strength, id).toBeGreaterThan(0);
+        expect(strength, id).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('leaves it to the original, so a variant sounds and smells like its family', () => {
+    for (const { id, venue } of venues) {
+      if (!originalOf.has(id)) continue;
+      expect(venue!.noise, id).toBeUndefined();
+      expect(venue!.smell, id).toBeUndefined();
+      expect(venue!.calm, id).toBeUndefined();
+    }
+  });
+});
+
 const visitorPlaces = (model: VoxelModel): number =>
   model.seats.filter((seat) => !seat.watches && !seat.post).length +
   (model.venue?.spots ?? []).filter((spot) => (spot.for ?? 'visitor') === 'visitor').length +

@@ -141,6 +141,7 @@ describe('overlayValuesFor', () => {
     litter: { tilesX: 2, tilesZ: 1, value: Float32Array.from([0, 0.5]) },
     stepFree: () => Float32Array.from([0, 1]),
     photos: Float32Array.from([0, 4]),
+    nuisance: () => ({ tilesX: 2, tilesZ: 1, value: Float32Array.from([0.25, 0]) }),
   };
 
   it('sweeps from the need each reach layer is about, and only that one', () => {
@@ -168,6 +169,10 @@ describe('overlayValuesFor', () => {
     expect([...overlayValuesFor('litter', sources)]).toEqual([0, 0.5]);
   });
 
+  it('lays the smell and noise on the tile under each node', () => {
+    expect([...overlayValuesFor('nuisance', sources)]).toEqual([0.25, 0]);
+  });
+
   it('hands over the dark stretches as they were walked', () => {
     expect(overlayValuesFor('light', sources)).toBe(sources.unlit);
   });
@@ -190,6 +195,7 @@ describe('overlayValuesFor, step-free', () => {
       unlit: new Float32Array(3),
       litter: { tilesX: 3, tilesZ: 1, value: new Float32Array(3) },
       photos: new Float32Array(3),
+      nuisance: () => ({ tilesX: 3, tilesZ: 1, value: new Float32Array(3) }),
     });
     expect(values).toBe(swept);
     expect(asked).toBe(0);

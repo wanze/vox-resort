@@ -336,6 +336,8 @@ const DESK_ADVICE: { readonly [kind in ThoughtKind]?: string } = {
   renovating: 'Fewer closures at once.',
   dark: 'Street lamps along the paths.',
   unwatched: 'A lifeguard at every pool.',
+  smelly: 'Toilets kept clean, or kept away from the tables.',
+  noisy: 'Quiet places away from the loud ones.',
 };
 
 const DESK_TITLE: { readonly [tone in Tone]: string } = {

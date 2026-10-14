@@ -21,6 +21,7 @@ import {
   adviceUnreachable,
   adviceUnservedNeeds,
   adviceUnvisited,
+  adviceNuisance,
   adviceUnwatched,
   adviceWeatherClosed,
   refreshedWithin,
@@ -637,6 +638,46 @@ describe('adviceUnwatched', () => {
   it('calls the sea the beach, with no tile to show', () => {
     const [beach] = adviceUnwatched(healthyFacts({ unwatched: new Set(['beach']) }));
     expect(beach).toMatchObject({ subject: 'the beach', at: null });
+  });
+});
+
+describe('adviceNuisance', () => {
+  const diner = venueOf({ key: 'restaurant#0', label: 'Restaurant', x: 64, z: 80 });
+  const spa = venueOf({ key: 'spa-pavilion#0', label: 'Spa', x: 96, z: 80 });
+
+  it('is silent without the map', () => {
+    expect(adviceNuisance(healthyFacts({ venues: [diner] }))).toEqual([]);
+  });
+
+  it('names a diner beside smelly toilets, at its tile, louder the worse it is', () => {
+    const facts = (felt: number) =>
+      healthyFacts({
+        venues: [diner],
+        visits: new Map([['restaurant#0', 12]]),
+        nuisances: new Map([['restaurant#0', { kind: 'smell' as const, from: 'Restrooms', felt }]]),
+      });
+    const [strong] = adviceNuisance(facts(0.9));
+    expect(strong).toMatchObject({
+      kind: 'smelly',
+      subject: 'Restaurant',
+      key: 'restaurant#0',
+      count: 12,
+      at: { tileX: 4, tileZ: 5 },
+    });
+    expect(adviceNuisance(facts(0.3))[0]!.weight).toBeLessThan(strong!.weight);
+    expect(adviceFor(facts(0.9)).map((advice) => advice.kind)).toContain('smelly');
+  });
+
+  it('names a spa a club keeps awake as noisy', () => {
+    const [noisy] = adviceNuisance(
+      healthyFacts({
+        venues: [spa],
+        nuisances: new Map([
+          ['spa-pavilion#0', { kind: 'noise' as const, from: 'Club', felt: 0.5 }],
+        ]),
+      }),
+    );
+    expect(noisy).toMatchObject({ kind: 'noisy', subject: 'Spa', count: 0 });
   });
 });
 

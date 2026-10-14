@@ -174,6 +174,8 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   broken: ['urgent', 0],
   'storm-damage': ['warning', 0],
   dirty: ['warning', 0.4],
+  smelly: ['warning', 0.3],
+  noisy: ['warning', 0.3],
   shabby: ['warning', 0.4],
   unwatched: ['warning', 0.4],
   littered: ['warning', 0.4],

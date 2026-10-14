@@ -58,6 +58,7 @@ import {
   startTally,
 } from '../../sim/domain/season';
 import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
+import { feltAt, type Nuisance, type NuisanceLive } from '../../sim/domain/nuisance';
 import type { SceneryField } from '../../sim/domain/scenery';
 import type { ShadeMap } from '../../sim/domain/shade';
 import {
@@ -88,7 +89,7 @@ import { NO_HOSTED } from './eventSteps';
 import { NO_MOMENT, photoPause } from './photoSteps';
 import type { PlotFacts } from './plotFacts';
 import { litterWindowOf, rezone } from './staffing';
-import { hear, reviewOfParty, stepLitterAt, visitMade } from './visits';
+import { hear, nuisanceNow, reviewOfParty, stepLitterAt, visitMade } from './visits';
 import { isOutTonight } from './nights';
 import { dawnStayOf } from './sunrise';
 
@@ -198,6 +199,8 @@ export interface SimState {
   unlit: Float32Array;
   // Replaced on an edit, as the scenery is.
   views: Views;
+  // Replaced on an edit, as the scenery is.
+  nuisance: Nuisance;
   // Refreshed once a frame from the clock, so a guest reaching a node reads an object, not the
   // clock.
   moment: Moment;
@@ -276,6 +279,7 @@ type KeptFacts = Pick<
   | 'scenery'
   | 'unlit'
   | 'views'
+  | 'nuisance'
   | 'shade'
   | 'binCover'
   | 'unreachable'
@@ -298,6 +302,7 @@ export const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
   scenery: facts.scenery,
   unlit: facts.unlit,
   views: facts.views,
+  nuisance: facts.nuisance,
   shade: facts.shade,
   binCover: facts.binCover,
   unreachable: facts.unreachable,
@@ -439,6 +444,7 @@ export function createSimState(parts: SimParts): SimState {
   const beds = bedCount(guests);
   const ageing = parts.ageing === true ? ageingParts(() => resort, clock.ticks) : null;
   const { unbuilt } = siteParts(() => resort, clock.ticks);
+  const live: NuisanceLive = (source, kind) => nuisanceNow(resort, source, kind);
   const router = createRouter({
     guests,
     needs,
@@ -461,6 +467,8 @@ export function createSimState(parts: SimParts): SimState {
     // The beach is past the venue list, so it is new and never shut.
     ...ageing,
     unbuilt,
+    // Late-bound like the upkeep: an edit replaces who stands beside whom.
+    nuisanceOf: (venue) => feltAt(resort.nuisance, venue, live),
     // A hash, not the router's stream: a draw from it would move every seeded scene after it.
     onVisited: (person, venue) => visitMade(resort, person, venue, clock.ticks()),
     onThought: (person, kind, subject) => hear(resort, clock.ticks(), person, kind, subject),

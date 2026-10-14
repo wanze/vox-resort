@@ -8,6 +8,7 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { archetypeOf } from '../../sim/domain/archetypes';
 import { mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
+import { nuisanceFor } from '../../sim/domain/nuisance';
 import { NO_HOME } from '../../guests/domain/homes';
 import { loudest, REPEAT_TICKS, type ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
@@ -44,6 +45,14 @@ const priced = facts.venues.find((venue) => priceOf(venue.id) > 0 && venue.stage
 const bathing = facts.venues.find((venue) => venue.bathing === true)!;
 const dry = facts.venues.find((venue) => venue.bathing !== true && venue.role !== 'activity')!;
 const indexOf = (venue: Venue): number => facts.venueIndex.get(venue.key)!;
+const food = facts.venues.find((venue) => venue.role === 'food')!;
+const toilets = facts.venues.find((venue) => (venue.smell ?? 0) > 0)!;
+// Moved against the tables, so the case does not hang on where the reference resort put them.
+const besideTheTables = nuisanceFor(
+  facts.venues.map((venue) =>
+    venue === toilets ? { ...venue, tileX: food.tileX + food.tilesX, tileZ: food.tileZ } : venue,
+  ),
+);
 const health = (state: SimState): number => state.needs.level.health[PERSON]!;
 
 // A tick on which the person would come to grief in water nobody watches.
@@ -126,6 +135,18 @@ describe('visitMade', () => {
     const caution = archetypeOf(state.guests, PERSON).caution;
     expect(state.happiness.unease[PERSON]).toBeCloseTo(UNWATCHED_UNEASE * caution);
     expect(heard(state, 'unwatched')).toBe(1);
+  });
+
+  it('has a diner beside filthy toilets smell them, and like it less', () => {
+    state.nuisance = besideTheTables;
+    state.upkeep.level[indexOf(toilets)] = 0;
+    visitMade(state, PERSON, food, 1);
+    expect(heard(state, 'smelly')).toBe(1);
+    const scrubbed = freshState();
+    scrubbed.nuisance = besideTheTables;
+    visitMade(scrubbed, PERSON, food, 1);
+    expect(heard(scrubbed, 'smelly')).toBe(0);
+    expect(state.happiness.level[PERSON]).toBeLessThan(scrubbed.happiness.level[PERSON]!);
   });
 });
 

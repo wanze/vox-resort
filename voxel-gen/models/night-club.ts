@@ -112,6 +112,7 @@ export default defineModel({
     ],
     capacity: 40,
     dwellSeconds: { min: 2700, max: 7200 },
+    noise: 1,
     price: 8,
     litter: 0.04,
     reliability: 60,

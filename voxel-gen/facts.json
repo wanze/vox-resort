@@ -3011,6 +3011,7 @@
             "min": 60,
             "max": 180
           },
+          "smell": 1,
           "doors": [
             {
               "x": 9,
@@ -3204,6 +3205,7 @@
             "min": 1800,
             "max": 3600
           },
+          "calm": true,
           "price": 7,
           "shelter": "covered",
           "doors": [
@@ -3888,6 +3890,7 @@
             "min": 600,
             "max": 1800
           },
+          "noise": 0.3,
           "price": 3,
           "doors": [
             {
@@ -4077,6 +4080,7 @@
             "min": 900,
             "max": 2400
           },
+          "noise": 0.4,
           "price": 4,
           "doors": [
             {
@@ -4204,6 +4208,7 @@
             "min": 1800,
             "max": 5400
           },
+          "calm": true,
           "price": 6,
           "doors": [
             {
@@ -4327,6 +4332,7 @@
             "min": 900,
             "max": 2400
           },
+          "noise": 0.6,
           "spots": [
             {
               "x": 39,
@@ -4610,6 +4616,7 @@
             "min": 3600,
             "max": 10800
           },
+          "noise": 0.6,
           "spots": [
             {
               "x": 36,
@@ -5862,6 +5869,7 @@
             "min": 1200,
             "max": 3600
           },
+          "noise": 0.6,
           "reliability": 80,
           "price": 2,
           "spots": [
@@ -6368,6 +6376,7 @@
             "min": 1800,
             "max": 5400
           },
+          "noise": 0.7,
           "price": 4,
           "spots": [
             {
@@ -6669,6 +6678,7 @@
             "min": 2700,
             "max": 7200
           },
+          "noise": 1,
           "price": 8,
           "litter": 0.04,
           "reliability": 60,
@@ -7683,6 +7693,7 @@
               "facing": 1
             }
           ],
+          "noise": 0.5,
           "names": [
             "Sunset Stage",
             "The Bandstand",
@@ -7954,6 +7965,7 @@
             "min": 1800,
             "max": 5400
           },
+          "noise": 0.4,
           "reliability": 120,
           "order": ["areas", "loops", "spots", "seats"],
           "areas": [
@@ -8397,6 +8409,7 @@
             "min": 1200,
             "max": 2700
           },
+          "noise": 0.3,
           "spots": [
             {
               "x": 22,
@@ -8832,6 +8845,7 @@
             "min": 1200,
             "max": 2700
           },
+          "noise": 0.5,
           "spots": [
             {
               "x": 28,
@@ -9009,6 +9023,7 @@
             "min": 1200,
             "max": 2700
           },
+          "noise": 0.4,
           "spots": [
             {
               "x": 25,

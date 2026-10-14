@@ -25,6 +25,7 @@ const WORKED_BY: { readonly [kind in AdviceKind]?: StaffRole } = {
   unwatched: 'lifeguard',
   broken: 'mechanic',
   dirty: 'cleaner',
+  smelly: 'cleaner',
   unmade: 'cleaner',
 };
 

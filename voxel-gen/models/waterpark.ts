@@ -226,6 +226,7 @@ export default defineModel({
     ],
     capacity: 40,
     dwellSeconds: { min: 3600, max: 10_800 },
+    noise: 0.6,
     reliability: 60,
     order: ['areas', 'loops', 'seats'],
     areas: [{ kind: 'swim', ...SWIM, surface: DECK, places: 10 }],

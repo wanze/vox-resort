@@ -13,6 +13,7 @@ import type {
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { ConditionBand, Works } from '../../sim/domain/condition';
 import type { Advice } from '../../sim/domain/advice';
+import type { Minded, NuisanceKind } from '../../sim/domain/nuisance';
 import { adviceAt } from '../domain/markers';
 import { adviceKey, severityOf } from '../domain/news';
 import { adviceIcon, adviceSays } from './adviceWords';
@@ -150,6 +151,20 @@ const LIFEGUARD_WORDS: { readonly [watch in LifeguardWatch]: string } = {
   nobody: 'Nobody watching',
 };
 
+const NUISANCE_WORDS: { readonly [kind in NuisanceKind]: string } = {
+  smell: 'Smell',
+  noise: 'Noise',
+};
+
+function NuisanceRow({ nuisance }: { readonly nuisance: Minded | null }) {
+  if (!nuisance) return null;
+  return (
+    <StatRow label="Nuisance">
+      {NUISANCE_WORDS[nuisance.kind]} from {nuisance.from}
+    </StatRow>
+  );
+}
+
 function LifeguardRow({ watch }: { readonly watch: LifeguardWatch | null }) {
   if (watch === null) return null;
   return <StatRow label="Lifeguard">{LIFEGUARD_WORDS[watch]}</StatRow>;
@@ -220,6 +235,7 @@ function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watch={venue.lifeguard} />
       <SurroundingsRow setting={place.setting} />
+      <NuisanceRow nuisance={venue.nuisance} />
     </dl>
   );
 }

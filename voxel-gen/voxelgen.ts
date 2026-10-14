@@ -383,6 +383,12 @@ export interface ModelVenue {
   readonly dj?: true;
   // Guests go in the water here, so somebody should be watching.
   readonly bathing?: boolean;
+  // 0 to 1 at a full house; how far it carries is the simulation's.
+  readonly noise?: number;
+  // 0 to 1 when filthy; a clean one does not smell.
+  readonly smell?: number;
+  // Guests come here to rest, so noise around it counts fully.
+  readonly calm?: true;
   // Worth more to a guest the hotter the day.
   readonly cools?: true;
   // Visits between breakdowns, on average; absent, it never breaks.

@@ -70,6 +70,7 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 1200, max: 2700 },
+    noise: 0.4,
     spots: [
       ...PLAYERS,
       // Beside the north net post, facing it.

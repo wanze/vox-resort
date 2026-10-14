@@ -169,6 +169,8 @@ export interface Router {
   readonly occupancyTotals: VenueOccupancy;
   goalOf(person: number): Venue | null;
   occupancyOf(venueKey: string): VenueOccupancy | null;
+  // By index, for a question asked per venue per choice; 0 past the end.
+  occupantsAt(venue: number): number;
   dayBalks(): ReadonlyMap<string, number>;
   dayVisits(): ReadonlyMap<string, number>;
   forgetTheDay(): void;
@@ -239,6 +241,8 @@ export function createRouter(parts: {
   readonly shut?: (venue: number) => boolean;
   // Still going up: nobody knows it is there yet, so nobody is sent away from it.
   readonly unbuilt?: (venue: number) => boolean;
+  // How much a venue smells or is loud from its neighbours, 0 to 1; absent, nothing does.
+  readonly nuisanceOf?: (venue: number) => number;
 }): Router {
   const { guests, needs, crowd } = parts;
   const onVisited = parts.onVisited ?? ((): void => {});
@@ -446,6 +450,9 @@ export function createRouter(parts: {
     ? (venue: number): number => cleanOf(venue) * appealFactor(conditionOf(venue))
     : cleanOf;
 
+  // Spread rather than passed: an absent option must be missing, not undefined.
+  const minding = parts.nuisanceOf ? { nuisance: parts.nuisanceOf } : {};
+
   const isShut = (venue: number): boolean => parts.shut?.(venue) === true;
 
   const isBrokenDown = (venue: number): boolean => {
@@ -546,6 +553,7 @@ export function createRouter(parts: {
       affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
       cleanliness: lookOf,
+      ...minding,
       isOpen: open,
       weather: weatherEffect(weatherNow()),
     });
@@ -807,6 +815,7 @@ export function createRouter(parts: {
       affinity: pricedAffinityOf(person),
       justLeft: state.justLeft[person]!,
       cleanliness: lookOf,
+      ...minding,
       isOpen,
       weather: weatherEffect(weatherNow()),
     });
@@ -1514,6 +1523,8 @@ export function createRouter(parts: {
       if (this.stayOf(person) !== 'resting' || crowd().seat[person]! >= 0) return false;
       return !shadedAt(parts.shade?.() ?? null, crowd().x[person]!, crowd().z[person]!);
     },
+
+    occupantsAt: occupants,
 
     occupancyOf(venueKey) {
       const venue = venues.findIndex((candidate) => candidate.key === venueKey);

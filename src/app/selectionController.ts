@@ -6,6 +6,7 @@ import { isBroken } from '../features/sim/domain/breakdowns';
 import { latestOf } from '../features/sim/domain/thoughts';
 import { factorOf } from '../features/sim/domain/pricing';
 import { sceneryOver } from '../features/sim/domain/scenery';
+import { mindedAt } from '../features/sim/domain/nuisance';
 import type { ResortClock } from '../features/sim/domain/resortClock';
 import type { StaffRole } from '../features/sim/domain/staff';
 import { takingsOf } from '../features/sim/domain/takings';
@@ -19,7 +20,7 @@ import {
 import { NO_ZONE } from '../features/sim/domain/zones';
 import { isNamed, type Venue } from '../features/sim/domain/venues';
 import { conditionShown } from '../features/resort-sim/domain/ageing';
-import { venueIndexOf } from '../features/resort-sim/domain/visits';
+import { nuisanceLive, venueIndexOf } from '../features/resort-sim/domain/visits';
 import { nextAt } from '../features/events/domain/programmeView';
 import { SHOWN } from '../features/choreography/domain/casting';
 import {
@@ -199,6 +200,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       broken: isBroken(resort.breakdowns, venue),
       factor: factorOf(resort.prices, placement.id),
       condition: conditionShown(resort, placement.key, clock.ticks),
+      nuisance: mindedAt(resort.nuisance, resort.venues, venue, nuisanceLive(resort)),
     });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
     return withSite(withNaming(offered, resort.venues[venue]), resort.constructing);

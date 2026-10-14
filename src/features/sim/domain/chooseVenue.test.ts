@@ -376,6 +376,16 @@ describe('chooseVenue against the dirt', () => {
     expect(chooseVenue({ ...options, cleanliness: () => 0.1 })?.venue).toBe(0);
   });
 
+  it('sends a guest past the nearer place when it smells or is loud', () => {
+    const person = someone('couple');
+    const venues = [venue('restaurant#0', HUNGER, 200), venue('restaurant#1', HUNGER, 220)];
+    const needs = wanting(person, 'hunger');
+    const options: ChoiceOptions = { needs, guests, person, venues, x: 0, z: 0 };
+    expect(chooseVenue(options)?.venue).toBe(0);
+    expect(chooseVenue({ ...options, nuisance: (v) => (v === 0 ? 1 : 0) })?.venue).toBe(1);
+    expect(chooseVenue({ ...options, nuisance: () => 0 })?.venue).toBe(0);
+  });
+
   it('still sends a desperate guest to the only filthy place standing', () => {
     const person = someone('family');
     const needs = wanting(person, 'hunger');

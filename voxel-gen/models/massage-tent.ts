@@ -78,6 +78,7 @@ export default defineModel({
     ],
     capacity: 2,
     dwellSeconds: { min: 1800, max: 3600 },
+    calm: true,
     price: 7,
     shelter: 'covered',
     doors: [{ x: 16, z: SIZE - 1, facing: 0 }],

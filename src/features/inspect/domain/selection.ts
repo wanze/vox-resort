@@ -21,6 +21,7 @@ import { expectationWords, type Expectation } from '../../sim/domain/expectation
 import type { Happiness } from '../../sim/domain/happiness';
 import { WAGES, type StaffRole } from '../../sim/domain/staff';
 import { strongestNeed, type Needs } from '../../sim/domain/needs';
+import type { Minded } from '../../sim/domain/nuisance';
 import { stayCount, type ThoughtKind, type Thoughts } from '../../sim/domain/thoughts';
 import { isNamed, type Venue } from '../../sim/domain/venues';
 import { NO_ZONE } from '../../sim/domain/zones';
@@ -99,6 +100,8 @@ export interface PlaceView {
     readonly lifeguard: LifeguardWatch | null;
     // Broken is closed: guests are turned away until a mechanic has been.
     readonly broken: boolean;
+    // The worst smell or noise from a neighbour, by its name; null when hardly anything reaches it.
+    readonly nuisance: Minded | null;
   } | null;
   readonly residents: readonly PartyMemberView[];
   // Null for anything that does not age: dressing, paths, and a game that ages nothing.
@@ -300,6 +303,12 @@ function priceShown(id: string, factor = 1): NonNullable<PlaceView['venue']>['pr
   return list > 0 ? { list, charged: chargeOf(id, factor) } : null;
 }
 
+// A whiff nobody would mention: below it the row would name a neighbour for nothing.
+const NUISANCE_SHOWN_FROM = 0.05;
+
+const shownNuisance = (nuisance: Minded | null | undefined): Minded | null =>
+  nuisance && nuisance.felt >= NUISANCE_SHOWN_FROM ? nuisance : null;
+
 export function placeView(parts: {
   readonly placement: Placement;
   readonly label: string;
@@ -314,6 +323,7 @@ export function placeView(parts: {
   // The factor the player set on its family; omitted, list price.
   readonly factor?: number;
   readonly condition?: Omit<ConditionView, 'band'> | null;
+  readonly nuisance?: Minded | null;
 }): PlaceView {
   const {
     placement,
@@ -355,6 +365,7 @@ export function placeView(parts: {
           price: priceShown(placement.id, parts.factor),
           lifeguard: venue.bathing === true ? lifeguard : null,
           broken,
+          nuisance: shownNuisance(parts.nuisance),
         }
       : null,
     residents,

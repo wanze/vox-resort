@@ -14,6 +14,15 @@ import { frighten, upset } from '../../sim/domain/happiness';
 import { DARK_UNEASE, darknessAt, gloomAt } from '../../sim/domain/lamplight';
 import { burnTheSunbathers, hurt, mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
+import {
+  HEARD_FROM,
+  NUISANCE_UPSET,
+  noiseOf,
+  SMELL,
+  smellOf,
+  worstAt,
+  type NuisanceLive,
+} from '../../sim/domain/nuisance';
 import { factorOf, overpriced } from '../../sim/domain/pricing';
 import {
   BEACH_LITTER,
@@ -123,14 +132,30 @@ export function judgeTheNight(resort: SimState, tick: number): void {
 export const venueIndexOf = (resort: SimState, key: string): number =>
   resort.venueIndex.get(key) ?? -1;
 
+// Read off the state each time, so it outlives an edit that replaces the venues and their dirt.
+export function nuisanceNow(resort: SimState, source: number, kind: number): number {
+  if (kind === SMELL) return smellOf(cleanliness(resort.upkeep, source));
+  return noiseOf(resort.router.occupantsAt(source), resort.venues[source]?.capacity ?? 1);
+}
+
+export const nuisanceLive =
+  (resort: SimState): NuisanceLive =>
+  (source, kind) =>
+    nuisanceNow(resort, source, kind);
+
 // After the visit wore it, so the last guest out of a dirty bar is the one who notices.
 function judgeVisit(resort: SimState, tick: number, person: number, venue: Venue): void {
-  const clean = cleanliness(resort.upkeep, venueIndexOf(resort, venue.key));
+  const index = venueIndexOf(resort, venue.key);
+  const clean = cleanliness(resort.upkeep, index);
   const thought = visitThought(venue.role, clean);
   if (thought) hear(resort, tick, person, thought, venue.label);
   if (isShabby(conditionOf(resort.condition, venue.key))) {
     hear(resort, tick, person, 'shabby', venue.label);
   }
+  const worst = worstAt(resort.nuisance, index, nuisanceLive(resort));
+  if (!worst || worst.felt <= HEARD_FROM) return;
+  hear(resort, tick, person, worst.kind === 'smell' ? 'smelly' : 'noisy', venue.label);
+  upset(resort.happiness, person, NUISANCE_UPSET * worst.felt);
 }
 
 // A mishap in water somebody is watching is ten times rarer; the beach is watched from a tower.

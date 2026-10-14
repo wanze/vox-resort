@@ -73,6 +73,7 @@ export default defineModel({
   seats: TABLE_SEATS,
   venue: {
     ...PLAZA_VENUE,
+    noise: 0.5,
     names: [
       'Sunset Stage',
       'The Bandstand',

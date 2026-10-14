@@ -70,6 +70,7 @@ export default defineModel({
     ],
     capacity: 12,
     dwellSeconds: { min: 600, max: 1800 },
+    noise: 0.3,
     price: 3,
     doors: [{ x: 15, z: COUNTER, facing: 0 }],
     litter: 0.02,

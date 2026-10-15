@@ -22,6 +22,7 @@ import {
   adviceUnservedNeeds,
   adviceUnvisited,
   adviceNuisance,
+  adviceCrowded,
   adviceUnwatched,
   adviceWeatherClosed,
   refreshedWithin,
@@ -678,6 +679,22 @@ describe('adviceNuisance', () => {
       }),
     );
     expect(noisy).toMatchObject({ kind: 'noisy', subject: 'Spa', count: 0 });
+  });
+});
+
+describe('adviceCrowded', () => {
+  const crowded = (share: number) => healthyFacts({ crowded: { tileX: 7, tileZ: 3, share } });
+
+  it('points at the packed path, louder the more passers-by felt it', () => {
+    const strong = adviceFor(crowded(0.8)).find((advice) => advice.kind === 'crowded');
+    expect(strong).toMatchObject({ kind: 'crowded', at: { tileX: 7, tileZ: 3 }, count: 0 });
+    expect(adviceCrowded(crowded(0.3))!.weight).toBeLessThan(strong!.weight);
+  });
+
+  it('is silent below a quarter of the passers-by, or without the map', () => {
+    expect(adviceCrowded(crowded(0.2))).toBeNull();
+    expect(adviceCrowded(healthyFacts({ crowded: null }))).toBeNull();
+    expect(adviceCrowded(healthyFacts())).toBeNull();
   });
 });
 

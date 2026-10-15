@@ -1,3 +1,4 @@
+import { CROWDED_HEARD } from './pathCrowds';
 import type { ThoughtsSnapshot } from './resortSnapshot';
 import type { Venue } from './venues';
 
@@ -30,6 +31,7 @@ export const THOUGHT_KINDS = [
   'unwatched',
   'smelly',
   'noisy',
+  'crowded',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];
@@ -104,6 +106,9 @@ const GLOOMY_ABOVE = 0.6;
 export function gloomThought(gloom: number): 'dark' | null {
   return gloom > GLOOMY_ABOVE ? 'dark' : null;
 }
+
+export const crowdedThought = (crush: number): 'crowded' | null =>
+  crush > CROWDED_HEARD ? 'crowded' : null;
 
 export function surroundingsThought(around: number): 'lovely' | 'littered' | null {
   if (around > LOVELY_ABOVE) return 'lovely';

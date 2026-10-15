@@ -338,6 +338,7 @@ const DESK_ADVICE: { readonly [kind in ThoughtKind]?: string } = {
   unwatched: 'A lifeguard at every pool.',
   smelly: 'Toilets kept clean, or kept away from the tables.',
   noisy: 'Quiet places away from the loud ones.',
+  crowded: 'Wider paths where everybody walks.',
 };
 
 const DESK_TITLE: { readonly [tone in Tone]: string } = {

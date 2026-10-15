@@ -36,6 +36,7 @@ const SAYS: { readonly [kind in AdviceKind]: (advice: Advice) => string } = {
   'unserved-need': ({ subject, need }) =>
     `Nothing on the plot serves ${NEED_NAMES[need ?? subject] ?? subject}`,
   'full-lines': ({ subject, count }) => `${subject} turned ${count} away at the door today`,
+  crowded: () => 'A path is packed with guests: widen it or add another way round',
   unreachable: ({ subject }) => `Nobody can reach ${subject}`,
   'not-step-free': ({ count }) =>
     `${count} ${count === 1 ? "venue can't" : "venues can't"} be reached by wheelchair`,
@@ -70,6 +71,7 @@ const LABELS: { readonly [kind in AdviceKind]: string } = {
   hurt: 'Injuries',
   'unserved-need': 'Missing',
   'full-lines': 'Queues',
+  crowded: 'Crowds',
   unreachable: 'Stranded',
   'not-step-free': 'Access',
   'short-staffed': 'Staff',

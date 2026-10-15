@@ -6,8 +6,8 @@ export interface Archetype {
   readonly decayPerHour: { readonly [need in GuestNeed]: number };
   readonly weight: { readonly [need in GuestNeed]: number };
   readonly reach: number;
-  // Taken with every fright: a parent minds the dark path and the unwatched pool most, a group of
-  // friends hardly at all.
+  // Taken with every fright and every crush: a parent minds the dark path, the unwatched pool and
+  // the packed promenade most, a group of friends hardly at all.
   readonly caution: number;
 }
 

@@ -13,6 +13,7 @@ export const OVERLAY_KINDS = [
   'litter',
   'photos',
   'nuisance',
+  'crowding',
 ] as const;
 
 export type OverlayKind = (typeof OVERLAY_KINDS)[number];
@@ -131,6 +132,8 @@ export interface OverlaySources {
   readonly photos: Float32Array;
   // A function, as the hops are: the field is spread over the plot only when it is shown.
   readonly nuisance: () => TileGrid;
+  // Per node, the share of the crush felt there; a function, so only this layer computes it.
+  readonly crowded: () => Float32Array;
 }
 
 const REACH_NEEDS: { readonly [kind in OverlayKind]?: GuestNeed } = {
@@ -147,6 +150,7 @@ export function overlayValuesFor(kind: OverlayKind, sources: OverlaySources): Fl
   if (kind === 'mood') return moodValues(sources.footfall);
   if (kind === 'photos') return countValues(sources.photos);
   if (kind === 'light') return sources.unlit;
+  if (kind === 'crowding') return sources.crowded();
   if (kind === 'nuisance') return gridValues(sources.nuisance(), sources.tileOf, sources.nodes, 1);
   const scenery = kind === 'scenery';
   const grid = scenery ? sources.scenery : sources.litter;

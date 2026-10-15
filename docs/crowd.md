@@ -368,7 +368,8 @@ guests go on a hot day, not what a visit gives. Drawing is in
 - **Open and closed** gate arrivals only. A bare plot starts closed.
 
 **Happiness** (`happiness.ts`) drifts towards `contentmentOf`, lower while
-queuing. Needs below `CONTENT_LEVEL` count squared, so one empty need costs more
+queuing, and lower for about a day after a fright: a dark path, unwatched water
+or a packed path (see Crowded paths). Needs below `CONTENT_LEVEL` count squared, so one empty need costs more
 than five half-met ones.
 
 **Expectations** (`expectations.ts`): each guest gets `expects`, 0 to 1, at
@@ -478,8 +479,11 @@ each taking a `ResortFacts` literal. Rules include `closed`, `no-entrance`,
 `no-reception`, `no-beds`, `unserved-need`, `full-lines`, `unreachable`,
 `not-step-free`, `broken`, `hurt`, `littered`, `far-from-home`, `unvisited`,
 `weather-closed`, `unwatched`, `short-staffed`, `unmade`, `no-depot`,
-`no-events`, `no-welcome`, and `smelly` and `noisy`: one line per venue whose
-worst smell or noise is past `HEARD_FROM`, louder the more it is felt.
+`no-events`, `no-welcome`, `smelly` and `noisy`: one line per venue whose
+worst smell or noise is past `HEARD_FROM`, louder the more it is felt, and
+`crowded`: the path node whose passers-by felt the most crush over the last
+days (`worstCrowded`, seen at least `MIN_SEEN`), once a quarter of them did,
+weighted `0.1 + 0.6 × share`.
 
 - The setup rules speak on an empty resort; the rest stay silent until guests
   arrive.
@@ -495,7 +499,7 @@ kind; `reviews.ts` turns a stay into one line at check-out.
   `thoughts.ts`. Nothing reads a thought back.
 - Kinds include `queue-too-long`, `closed`, `nothing-for`, `no-bed`, `filthy`,
   `enjoyed`, `lovely`, `littered`, `no-step-free`, `hurt`, `broken`, `smelly`,
-  `noisy` and event praise. The same thought within two sim hours is ignored.
+  `noisy`, `crowded` and event praise. The same thought within two sim hours is ignored.
 - A review's stars are `round(5 × mean stay mood)`, its complaint the most
   frequent thought, its praise the most frequent praise. A `photo` praise
   quotes the subject of the party's latest photo (`praiseSubject`).
@@ -634,6 +638,38 @@ flowerbeds 0.5, trees 0.4, hedge 0.3, mosaic 0.05. `scenery.ts` sums it into a
 per-tile field within 4 tiles, saturated so nothing reaches 1, rebuilt after
 every edit. A guest's happiness target adds 0.1 × the scenery under them.
 Scenery never changes where anybody walks.
+
+## Crowded paths
+
+`sim/domain/pathCrowds.ts` counts who walks the paving each frame and makes a
+packed path cost happiness, so a funnel the whole resort squeezes through is
+worth widening or giving a second way round.
+
+- **Who counts**: a present guest on a path node (`crowd.node >= 0`) whom the
+  router does not hold (not asleep, queueing or inside). Not the beach: pitches
+  are one party a tile and `BEACH_CAPACITY` turns people away. Not a queue: it
+  costs on its own (`QUEUE_COST_PER_HOUR`). Not staff.
+- **Density** per node is the walkers on every node within one tile
+  (Chebyshev) divided by the number of those nodes: a one-wide path has 3 in
+  its window, a wide promenade 9. The flow field sends walkers along one line of
+  nodes even on a plaza, so a wider path reads roomier. The windows are built
+  per network and replaced on an edit, as the footfall is.
+- **Crush** is 0 up to `CROWDED_FROM` (1.5 walkers a tile) and rises linearly
+  to 1 at `CRUSHED_AT` (3). On the reference resort about 5 % of walkers at the
+  busiest hour are past 1.5, nearly all on one-wide approaches; the busiest of
+  those peak at 3 to 4, and the check-in surge at the gate at about 7. No bonus
+  for a lively crowd.
+- **Where it bites**: once a frame, as the dark, a walker in a crush is
+  frightened by `CROWD_UNEASE` (0.1) × crush × caution (families 1.3, couples
+  and solo 1, friends 0.6). Unease takes the worst, not the sum, comes off the
+  mood a guest settles towards and fades over about a day. A dent to the mood
+  itself was tried first and recovered within the hour.
+- **Heard** hourly as `crowded` ("The paths were packed") above
+  `CROWDED_HEARD` (0.5), after the dark and before the surroundings.
+- **Remembered** per node for the map and the advice: `felt` adds each walker's
+  crush and `seen` each walker, both halved every morning. Never saved: a load
+  forgets a few days, and the next busy hour repaints them.
+- Walking pace never changes: slowing a crowd would feed on itself.
 
 ## Smell and noise
 
@@ -790,8 +826,10 @@ data, and **high is always bad**, so one ramp and legend serve all.
 | Litter        | where litter lies              |
 | Photos        | where guests take photos       |
 | Smell & noise | where it smells or is loud     |
+| Crowds        | where the paths are packed     |
 
 Photos is a count, like Footfall: its high end is where most are taken, not bad.
+Crowds is the mean crush a passer-by felt there, blank below `MIN_SEEN`.
 Distance layers come from one multi-source sweep (`reach.ts`), kept per walk
 graph. Footfall is sampled per frame and halved every morning. Layers update
 hourly while on, never per frame. The sim never reads one.

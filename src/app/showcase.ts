@@ -216,6 +216,7 @@ import { demandFor, type Demand } from '../features/sim/domain/demand';
 import { doorsFor } from '../features/sim/domain/doors';
 import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/stepFree';
 import { mindedOver, nuisanceFieldFor } from '../features/sim/domain/nuisance';
+import { createPathCrowds, crushedShare, worstCrowded } from '../features/sim/domain/pathCrowds';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
   createFootfall,
@@ -1689,6 +1690,7 @@ function overlayValues(resort: Resort, kind: OverlayKind): Float32Array {
         resort.plan.tilesX,
         resort.plan.tilesZ,
       ),
+    crowded: () => crushedShare(resort.pathCrowds),
   });
 }
 
@@ -1873,6 +1875,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
     // The same reading judgeVisit hears, so the advice and the guests agree.
     nuisances: mindedOver(resort.nuisance, resort.venues, nuisanceLive(resort)),
+    crowded: worstCrowded(resort.pathCrowds, resort.crowd.crowd.network),
     broken: brokenOn(resort, now),
     stormHits: new Set(recentStormHits(resort.stormHits, now).keys()),
     shortStaffed: shortOf(resort.hiring, resort.recommended),
@@ -2372,6 +2375,7 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   refleetAfterEdit(resort, handle);
   recastAfterEdit(resort, network, wasStanding);
   resort.footfall = createFootfall(network.nodes.length);
+  resort.pathCrowds = createPathCrowds(network);
   resort.photos.heat = new Float32Array(network.nodes.length);
 }
 

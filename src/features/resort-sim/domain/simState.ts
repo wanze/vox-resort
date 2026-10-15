@@ -58,6 +58,7 @@ import {
   startTally,
 } from '../../sim/domain/season';
 import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
+import { createPathCrowds, type PathCrowds } from '../../sim/domain/pathCrowds';
 import { feltAt, type Nuisance, type NuisanceLive } from '../../sim/domain/nuisance';
 import type { SceneryField } from '../../sim/domain/scenery';
 import type { ShadeMap } from '../../sim/domain/shade';
@@ -213,6 +214,8 @@ export interface SimState {
   readonly litter: Litter;
   // Per node, so replaced empty on an edit, which renumbers nodes.
   footfall: Footfall;
+  // Per node, so replaced empty on an edit, which renumbers nodes; never saved.
+  pathCrowds: PathCrowds;
   // Per guest body, never replaced: a wrapper in hand outlasts an edit.
   readonly carrying: Carrying;
   // Per guest body too, and forgotten at check-in, when the body becomes somebody else.
@@ -628,6 +631,7 @@ export function createSimState(parts: SimParts): SimState {
     washUpDue: false,
     litter,
     footfall: createFootfall(network.nodes.length),
+    pathCrowds: createPathCrowds(network),
     moment: NO_MOMENT,
     photos: createPhotos(population, network.nodes.length),
     carrying,

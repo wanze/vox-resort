@@ -394,6 +394,7 @@ export const COMPLAINT_ADS: { readonly [kind in ThoughtKind]?: Ad } = {
   dark: { title: 'LAMPLIGHTER WANTED', text: '“{voice}”, heard {times} times. Ladder provided.' },
   smelly: { title: 'CLEANERS WANTED', text: '{where} smells. Nose pegs provided.' },
   noisy: { title: 'EARPLUGS FOR SALE', text: '“{voice}”, heard {times} times. Bulk discount.' },
+  crowded: { title: 'PAVERS WANTED', text: '“{voice}”, heard {times} times. Shovels provided.' },
 };
 
 export const FILLER_ADS: readonly Ad[] = [

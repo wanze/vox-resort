@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import referenceJson from '../../../../fixtures/reference-resort.json';
 import { familyOf } from '../../catalog/domain/objectTypes';
 import { chargeOf, priceOf } from '../../catalog/domain/prices';
@@ -10,14 +10,24 @@ import { archetypeOf } from '../../sim/domain/archetypes';
 import { mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
 import { nuisanceFor } from '../../sim/domain/nuisance';
 import { NO_HOME } from '../../guests/domain/homes';
-import { loudest, REPEAT_TICKS, type ThoughtKind } from '../../sim/domain/thoughts';
+import { CROWD_UNEASE, CRUSHED_AT } from '../../sim/domain/pathCrowds';
+import { loudest, REPEAT_TICKS, stayCount, type ThoughtKind } from '../../sim/domain/thoughts';
 import type { Venue } from '../../sim/domain/venues';
 import { plotFactsOf } from './plotFacts';
 import { createSimState, type SimState } from './simState';
 import { paidShareFor } from './dayClose';
 import { DETOUR_UPSET } from '../../sim/domain/condition';
 import { DARK_UNEASE } from '../../sim/domain/lamplight';
-import { frightenInTheDark, gloomOf, hear, judgeTheNight, visitMade } from './visits';
+import {
+  frightenInTheCrowd,
+  frightenInTheDark,
+  gloomOf,
+  hear,
+  hearSurroundings,
+  judgeTheNight,
+  visitMade,
+  walkingNode,
+} from './visits';
 
 const world = referenceWorldOf(referenceJson);
 const plan = planOfWorld(world);
@@ -243,5 +253,67 @@ describe('frightenInTheDark', () => {
     state.guests.present[PERSON] = 0;
     frightenInTheDark(state, 1);
     expect(unease()).toBe(0);
+  });
+});
+
+describe('a crowded path', () => {
+  let state: SimState;
+  let held = false;
+  beforeEach(() => {
+    state = freshState();
+    held = false;
+    state.guests.present[PERSON] = 1;
+    vi.spyOn(state.router, 'holds').mockImplementation((person) => held && person === PERSON);
+    vi.spyOn(state.router, 'isAsleep').mockReturnValue(false);
+  });
+
+  const NOON = 12 * 60;
+  const packedAt = (unlit: number): number => {
+    const node = facts.unlit.indexOf(unlit);
+    state.crowd.crowd.node[PERSON] = node;
+    state.pathCrowds.density[node] = CRUSHED_AT;
+    return node;
+  };
+  const heardBy = (kind: ThoughtKind): number => stayCount(state.thoughts, PERSON, kind);
+
+  it('finds the node of a guest on their feet, and none for one the router holds', () => {
+    const node = packedAt(0);
+    expect(walkingNode(state, PERSON)).toBe(node);
+    held = true;
+    expect(walkingNode(state, PERSON), 'queueing, asleep or inside').toBe(-1);
+    held = false;
+    state.guests.present[PERSON] = 0;
+    expect(walkingNode(state, PERSON)).toBe(-1);
+  });
+
+  it('is heard by a packed guest as the hours turn, but not by one in a line', () => {
+    packedAt(0);
+    hearSurroundings(state, NOON);
+    hearSurroundings(state, NOON + REPEAT_TICKS);
+    expect(heardBy('crowded')).toBe(2);
+    held = true;
+    hearSurroundings(state, NOON + 2 * REPEAT_TICKS);
+    expect(heardBy('crowded')).toBe(2);
+  });
+
+  it('unsettles a packed guest by their caution, and nobody the router holds', () => {
+    packedAt(0);
+    frightenInTheCrowd(state);
+    const caution = archetypeOf(state.guests, PERSON).caution;
+    expect(state.happiness.unease[PERSON]).toBeCloseTo(CROWD_UNEASE * caution);
+    const queueing = freshState();
+    state = queueing;
+    state.guests.present[PERSON] = 1;
+    vi.spyOn(state.router, 'holds').mockReturnValue(true);
+    packedAt(0);
+    frightenInTheCrowd(state);
+    expect(state.happiness.unease[PERSON]).toBe(0);
+  });
+
+  it('gives way to a dark path, which is the fright that counts', () => {
+    packedAt(1);
+    hearSurroundings(state, 0);
+    expect(heardBy('dark')).toBe(1);
+    expect(heardBy('crowded')).toBe(0);
   });
 });

@@ -13,6 +13,7 @@ export const OVERLAY_NAMES: { readonly [kind in OverlayKind]: string } = {
   litter: 'Litter',
   photos: 'Photos',
   nuisance: 'Smell & noise',
+  crowding: 'Crowds',
 };
 
 export const OVERLAY_QUESTIONS: { readonly [kind in OverlayKind]: string } = {
@@ -27,4 +28,5 @@ export const OVERLAY_QUESTIONS: { readonly [kind in OverlayKind]: string } = {
   litter: 'Where litter lies',
   photos: 'Where guests take photos',
   nuisance: 'Where it smells or is loud',
+  crowding: 'Where the paths are packed',
 };

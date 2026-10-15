@@ -23,6 +23,7 @@ import {
   worstAt,
   type NuisanceLive,
 } from '../../sim/domain/nuisance';
+import { CROWD_UNEASE, crushOf } from '../../sim/domain/pathCrowds';
 import { factorOf, overpriced } from '../../sim/domain/pricing';
 import {
   BEACH_LITTER,
@@ -39,6 +40,7 @@ import { earn } from '../../sim/domain/takings';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   type ThoughtKind,
+  crowdedThought,
   gloomThought,
   surroundingsThought,
   tallyInto,
@@ -66,6 +68,24 @@ export function surroundingsOf(resort: SimState, person: number): number {
 
 const cautionOf = (resort: SimState, person: number): number =>
   archetypeOf(resort.guests, person).caution;
+
+// -1 for anybody not on their feet on the paving: a queue, a bed and a venue are not a crowd.
+export function walkingNode(resort: SimState, person: number): number {
+  if (resort.guests.present[person] !== 1 || resort.router.holds(person)) return -1;
+  const at = resort.crowd.crowd.node[person] ?? -1;
+  return at < 0 ? -1 : at;
+}
+
+// Once a frame, as the dark: heard only on the hour, a crush would reach just the few in it that
+// minute. Reads the density countWalkers left this frame.
+export function frightenInTheCrowd(resort: SimState): void {
+  const { node } = resort.crowd.crowd;
+  for (let person = 0; person < resort.guests.count; person++) {
+    const crush = crushOf(resort.pathCrowds, node[person] ?? -1);
+    if (crush <= 0 || walkingNode(resort, person) < 0) continue;
+    frighten(resort.happiness, person, CROWD_UNEASE * crush * cautionOf(resort, person));
+  }
+}
 
 // Once a frame, so every guest who walks a dark stretch feels it, not only those on one as the hour
 // turns.
@@ -199,6 +219,7 @@ function lookAround(resort: SimState, person: number, darkness: number): Thought
   if (resort.guests.present[person] !== 1 || resort.router.isAsleep(person)) return null;
   return (
     gloomThought(gloomOf(resort, person, darkness)) ??
+    crowdedThought(crushOf(resort.pathCrowds, walkingNode(resort, person))) ??
     surroundingsThought(surroundingsOf(resort, person))
   );
 }

@@ -50,6 +50,7 @@ const SAYS: { readonly [kind in ThoughtKind]: (subject: string | null) => string
     subject ? `No lifeguard in sight at ${subject}` : 'No lifeguard in sight',
   smelly: (subject) => (subject ? `It smelled bad at ${subject}` : 'It smelled bad'),
   noisy: (subject) => (subject ? `Too noisy at ${subject}` : 'Too noisy'),
+  crowded: () => 'The paths were packed',
 };
 
 export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
@@ -79,6 +80,7 @@ export const THOUGHT_LABELS: { readonly [kind in ThoughtKind]: string } = {
   unwatched: 'Lifeguards',
   smelly: 'Smell',
   noisy: 'Noise',
+  crowded: 'Crowds',
 };
 
 export function thoughtLine(kind: ThoughtKind, subject: string | null): string {

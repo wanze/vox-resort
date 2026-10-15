@@ -4,6 +4,7 @@ import { checkInDue } from '../../sim/domain/checkIn';
 import { ageHappiness } from '../../sim/domain/happiness';
 import { darknessAt } from '../../sim/domain/lamplight';
 import { decayNeeds } from '../../sim/domain/needs';
+import { countWalkers, fadePathCrowds, sampleCrush } from '../../sim/domain/pathCrowds';
 import { fadePhotoHeat } from '../../sim/domain/photos';
 import { cheerTheAudience } from '../../sim/domain/staff';
 import { weatherEffect } from '../../sim/domain/weather';
@@ -11,6 +12,7 @@ import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
 import {
   burnOnTheBeach,
+  frightenInTheCrowd,
   frightenInTheDark,
   hearSurroundings,
   judgeTheNight,
@@ -58,12 +60,17 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     resort.guests.present,
     resort.happiness.level,
   );
+  countWalkers(resort.pathCrowds, resort.crowd.crowd.node, resort.guests.present, (person) =>
+    resort.router.holds(person),
+  );
+  sampleCrush(resort.pathCrowds);
   runEvents(resort, clock, ticks, hooks.heard);
   // After the events, so the fireworks starting this frame are in it.
   refreshMoment(resort, clock);
   // After the ticks, so a guest is charged for the line they were actually in.
   const { glow } = resort.events;
   frightenInTheDark(resort, darknessAt(clock.tickOfDay));
+  frightenInTheCrowd(resort);
   ageHappiness(
     resort.happiness,
     resort.needs,
@@ -91,6 +98,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     resort.router.forgetTheDay();
     resort.thoughtDay.clear();
     fadeFootfall(resort.footfall);
+    fadePathCrowds(resort.pathCrowds);
     fadePhotoHeat(resort.photos);
   }
   // After the morning's wipe, so the first hour of a day is heard in that day.

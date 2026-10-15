@@ -6,6 +6,7 @@ import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
 import { isShabby, SHABBY_BELOW } from './condition';
 import type { Minded } from './nuisance';
+import type { Crowded } from './pathCrowds';
 import type { Shortfall } from './staff';
 import { NEEDS_CLEANING } from './upkeep';
 import { reliefAt, type Venue } from './venues';
@@ -21,6 +22,7 @@ const KIND_ORDER = [
   'hurt',
   'unserved-need',
   'full-lines',
+  'crowded',
   'unreachable',
   'not-step-free',
   // Above the lines a short roster causes, so the cause reads before its symptoms.
@@ -96,6 +98,8 @@ export interface ResortFacts {
   readonly litter?: LitterSummary;
   // By the key of the venue minding it, only where guests would say so; absent means none.
   readonly nuisances?: ReadonlyMap<string, Minded>;
+  // The path the most passers-by felt crushed on lately; absent or null says nothing.
+  readonly crowded?: Crowded | null;
   // Keys of the water nobody watches; absent means every pool has its lifeguard.
   readonly unwatched?: ReadonlySet<string>;
   // Key to ticks since it broke; absent means nothing is broken.
@@ -207,6 +211,22 @@ export function adviceFullLines(facts: ResortFacts): Advice | null {
     }
   }
   return worst;
+}
+
+// A quarter of the passers-by: below it a busy hour shows, not a layout that funnels everybody.
+const CROWDED_LOUD = 0.25;
+
+export function adviceCrowded(facts: ResortFacts): Advice | null {
+  const { crowded } = facts;
+  if (!crowded || !(crowded.share >= CROWDED_LOUD)) return null;
+  return {
+    kind: 'crowded',
+    weight: 0.1 + 0.6 * clamp(crowded.share),
+    subject: 'a path',
+    count: 0,
+    at: tileOf(crowded),
+    need: null,
+  };
 }
 
 // Silent above `NEEDS_CLEANING`, the same line the cleaners walk to: advice observes.
@@ -637,6 +657,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     adviceHurt(facts),
     ...adviceUnservedNeeds(facts),
     adviceFullLines(facts),
+    adviceCrowded(facts),
     ...adviceUnreachable(facts),
     adviceNotStepFree(facts),
     ...adviceShortStaffed(facts),

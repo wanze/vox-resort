@@ -84,7 +84,7 @@ describe('the reference resort, three days from the first morning', () => {
           "left": 0,
           "net": 13899,
           "present": 282,
-          "stars": 4.4,
+          "stars": 4.3,
           "taken": 282,
         },
         {
@@ -94,7 +94,7 @@ describe('the reference resort, three days from the first morning', () => {
           "left": 35,
           "net": 13322,
           "present": 247,
-          "stars": 4.4,
+          "stars": 4.3,
           "taken": 282,
         },
       ]

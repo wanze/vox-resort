@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { BAR_FOLDS, settleFolds, UNFOLD_SLACK, type BarFold } from './barFolds';
 
 const WIDTHS: Record<BarFold, number> = {
-  highlight: 40,
-  weather: 20,
-  demand: 120,
-  maps: 40,
+  weather: 40,
+  demand: 20,
+  highlight: 120,
   guests: 40,
+  maps: 40,
   tight: 30,
 };
 
@@ -21,7 +21,7 @@ describe('settleFolds', () => {
   });
 
   it('folds the fewest that make the bar fit, least missed first', () => {
-    expect(settleFolds([], saving(-50))).toEqual(['highlight', 'weather']);
+    expect(settleFolds([], saving(-50))).toEqual(['weather', 'demand']);
   });
 
   it('folds everything when even that is not enough', () => {
@@ -29,19 +29,19 @@ describe('settleFolds', () => {
   });
 
   it('gives the room the last fold frees back to the earlier ones, most missed first', () => {
-    expect(settleFolds([], saving(-150))).toEqual(['highlight', 'demand']);
+    expect(settleFolds([], saving(-150))).toEqual(['weather', 'highlight']);
   });
 
   it('never gives a narrow fold back while a more missed one stays folded', () => {
-    expect(settleFolds([], saving(-200))).toEqual(['highlight', 'weather', 'demand', 'guests']);
+    expect(settleFolds([], saving(-200))).toEqual(['weather', 'demand', 'highlight', 'guests']);
   });
 
   it('keeps a fold until undoing it leaves room to spare', () => {
-    expect(settleFolds(['highlight'], saving(UNFOLD_SLACK - 1))).toEqual(['highlight']);
-    expect(settleFolds(['highlight'], saving(UNFOLD_SLACK))).toEqual([]);
+    expect(settleFolds(['weather'], saving(UNFOLD_SLACK - 1))).toEqual(['weather']);
+    expect(settleFolds(['weather'], saving(UNFOLD_SLACK))).toEqual([]);
   });
 
   it('keeps a fold that leaves the bar exactly full', () => {
-    expect(settleFolds(['highlight'], saving(-40))).toEqual(['highlight']);
+    expect(settleFolds(['weather'], saving(-40))).toEqual(['weather']);
   });
 });

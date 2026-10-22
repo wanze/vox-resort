@@ -1,7 +1,7 @@
-// Least missed first: the forecast is also in the programme, the guests in their window, and the
-// legends stay once their pickers go to the menu. The maps are switched most often, so they hold
-// on longest; only the carets go after them.
-export const BAR_FOLDS = ['highlight', 'weather', 'demand', 'guests', 'maps', 'tight'] as const;
+// Least missed first: the forecast is also in the programme, and the meter only shrinks to its
+// most pressing bar. The guests are in their window, and the legends stay once their pickers go to
+// the menu; the maps are switched most often, so only the carets go after them.
+export const BAR_FOLDS = ['weather', 'demand', 'highlight', 'guests', 'maps', 'tight'] as const;
 
 export type BarFold = (typeof BAR_FOLDS)[number];
 

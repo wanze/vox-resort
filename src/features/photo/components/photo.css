@@ -102,6 +102,81 @@
   opacity: 0.5;
 }
 
+/* A phone's bar: the tab strip, then one page of controls beside the shutter. */
+.photo-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+/* Ruled off from the share as the bar's groups are; the close stands alone at the end. */
+.photo-strip .ui-tabs {
+  position: static;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0 var(--space-2) 0 0;
+  border: 0;
+  border-right: 2px dotted var(--edge-soft);
+  background: none;
+}
+
+/* One fingertip's size for the whole strip, so no button stands out beside another. */
+.photo-strip :is(.ui-tab, .photo-strip-link, .ui-window-close) {
+  min-width: 44px;
+  height: 44px;
+}
+
+.photo-strip-link {
+  padding: 0;
+}
+
+.photo-strip > .ui-window-close {
+  width: 44px;
+  margin-left: auto;
+}
+
+.photo-deck {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.photo-page {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: 56px;
+}
+
+.photo-page > .photo-slider {
+  width: 100%;
+}
+
+.photo-page .photo-fields {
+  padding-top: 0;
+}
+
+/* The tab already names the page. */
+.photo-page .photo-field > .ui-label {
+  display: none;
+}
+
+.photo-page .photo-toggle {
+  padding: 0 var(--space-2);
+}
+
+.photo-shutter {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 50%;
+}
+
 /* Coloured as a window's tab strip, so the photo taken reads apart from the controls. */
 .photo-taken {
   display: flex;

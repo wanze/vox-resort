@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
+import { tabIdOf, Tabs } from '../../../shared/components/Tabs';
 import { PHOTO_FILTER_IDS, PHOTO_FILTERS } from '../domain/photoFilters';
 import { PHOTO_FOV, timeLabel } from '../domain/photoView';
 import type { PhotoControls, PhotoScale, SelfieControls } from './photoControls';
@@ -120,9 +121,8 @@ const SCALE_HINTS: { readonly [scale in PhotoScale]: string } = {
   2: 'Twice the screen in each direction',
 };
 
-// A phone gets 1x only, so there is nothing to pick there.
-function Resolution({ photo, compact }: PhotoBarProps) {
-  if (compact) return null;
+// Not on a phone, which gets 1x only.
+function Resolution({ photo }: { readonly photo: PhotoControls }) {
   return (
     <Field label="Resolution">
       {SCALES.map((scale) => (
@@ -264,48 +264,154 @@ function LinkByHand({ link }: { readonly link: string | null }) {
 const byHand = (made: Postcard | null): string | null =>
   made?.kind === 'by-hand' ? made.link : null;
 
-// Set apart as a window's tab strip is: what was taken, not what is about to be.
-function Taken({ photo, made }: { readonly photo: PhotoControls; readonly made: Postcard | null }) {
-  const link = byHand(made);
-  if (!photo.shot && link === null) return null;
+// Set apart as a window's tab strip is: what was taken, not what is about to be. A phone has no
+// action row, so the postcard's note waits here.
+function Taken(props: {
+  readonly photo: PhotoControls;
+  readonly made: Postcard | null;
+  readonly note: ReactNode;
+}) {
+  const link = byHand(props.made);
+  if (!props.photo.shot && link === null && props.note === null) return null;
   return (
     <footer className="photo-taken">
-      <LastShot photo={photo} />
+      {props.note}
+      <LastShot photo={props.photo} />
       <LinkByHand link={link} />
     </footer>
   );
 }
 
-// Outside the HUD, which photo mode hides; the bar itself is never in the picture, which is
-// rendered offscreen.
-export function PhotoBar({ photo, compact }: PhotoBarProps) {
+const noteOf = (made: Postcard | null): ReactNode =>
+  made === null || made.kind === 'by-hand' ? null : <PostcardNote made={made} />;
+
+function CloseButton({ photo }: { readonly photo: PhotoControls }) {
+  return (
+    <button
+      type="button"
+      className="ui-window-close"
+      aria-label="Close photo mode"
+      title="Close (Esc)"
+      onClick={photo.exit}
+    >
+      <PixelIcon name="close" scale={1} />
+    </button>
+  );
+}
+
+function DeskBar({ photo }: { readonly photo: PhotoControls }) {
   const postcard = usePostcard(photo.postcard);
   return (
     <section className="photo-bar ui-plate" aria-label="Photo mode">
       <header className="ui-window-head photo-head">
         <PixelIcon name="camera" />
         <h2 className="ui-window-title">Photo mode</h2>
-        <button
-          type="button"
-          className="ui-window-close"
-          aria-label="Close photo mode"
-          title="Close (Esc)"
-          onClick={photo.exit}
-        >
-          <PixelIcon name="close" scale={1} />
-        </button>
+        <CloseButton photo={photo} />
       </header>
       <div className="ui-inset photo-body">
         <LensSlider photo={photo} />
         <TimeSlider photo={photo} />
         <div className="photo-fields">
           <Filters photo={photo} />
-          <Resolution photo={photo} compact={compact} />
+          <Resolution photo={photo} />
           <Selfie selfie={photo.selfie} />
         </div>
       </div>
       <Actions photo={photo} postcard={postcard} />
-      <Taken photo={photo} made={postcard.made} />
+      <Taken photo={photo} made={postcard.made} note={null} />
     </section>
   );
+}
+
+type PhotoPage = 'lens' | 'time' | 'look';
+
+const PHOTO_PAGES: readonly PhotoPage[] = ['lens', 'time', 'look'];
+
+const PAGE_TITLES: { readonly [page in PhotoPage]: string } = {
+  lens: 'Lens',
+  time: 'Time',
+  look: 'Filter',
+};
+
+function PageControls({
+  photo,
+  page,
+}: {
+  readonly photo: PhotoControls;
+  readonly page: PhotoPage;
+}) {
+  if (page === 'lens') return <LensSlider photo={photo} />;
+  if (page === 'time') return <TimeSlider photo={photo} />;
+  return (
+    <div className="photo-fields">
+      <Filters photo={photo} />
+      <Selfie selfie={photo.selfie} />
+    </div>
+  );
+}
+
+function Shutter({ photo }: { readonly photo: PhotoControls }) {
+  return (
+    <button
+      type="button"
+      className="ui-button-large ui-button-large--primary photo-shutter"
+      aria-label="Take photo"
+      title="Take photo"
+      disabled={photo.busy}
+      aria-busy={photo.busy}
+      onClick={photo.take}
+    >
+      <PixelIcon name="camera" />
+    </button>
+  );
+}
+
+// One control at a time beside the shutter, so the bar keeps to a strip of the screen and the
+// picture has the rest.
+function PhoneBar({ photo }: { readonly photo: PhotoControls }) {
+  const postcard = usePostcard(photo.postcard);
+  const [page, setPage] = useState<PhotoPage>('lens');
+  const panelId = useId();
+  return (
+    <section className="photo-bar ui-plate" aria-label="Photo mode" data-compact="">
+      <header className="photo-strip">
+        <Tabs<PhotoPage>
+          tabs={PHOTO_PAGES}
+          current={page}
+          onPick={setPage}
+          titleOf={(each) => PAGE_TITLES[each]}
+          label="Photo settings"
+          panelId={panelId}
+        />
+        <button
+          type="button"
+          className="ui-button-large photo-strip-link"
+          aria-label="Copy postcard link"
+          title="Copy postcard link"
+          onClick={postcard.copy}
+        >
+          <PixelIcon name="share" />
+        </button>
+        <CloseButton photo={photo} />
+      </header>
+      <div className="photo-deck">
+        <div
+          role="tabpanel"
+          id={panelId}
+          className="photo-page"
+          aria-labelledby={tabIdOf(panelId, page)}
+        >
+          <PageControls photo={photo} page={page} />
+        </div>
+        <Shutter photo={photo} />
+      </div>
+      <Taken photo={photo} made={postcard.made} note={noteOf(postcard.made)} />
+    </section>
+  );
+}
+
+// Outside the HUD, which photo mode hides; the bar itself is never in the picture, which is
+// rendered offscreen.
+export function PhotoBar({ photo, compact }: PhotoBarProps) {
+  return compact ? <PhoneBar photo={photo} /> : <DeskBar photo={photo} />;
 }

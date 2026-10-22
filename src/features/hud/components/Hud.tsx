@@ -5,6 +5,7 @@ import { BuildPalette, type PreviewLookup } from './BuildPalette';
 import { CommandPalette } from './CommandPalette';
 import { listCommands } from './commands';
 import { CameraPanel } from './CameraPanel';
+import { CameraTurn } from './CameraTurn';
 import { DayReportPanel } from './DayReportPanel';
 import { DemandPanel } from './DemandPanel';
 import { PhotoWallPanel } from './PhotoWallPanel';
@@ -417,6 +418,10 @@ function Palette(props: HudView) {
 const markersShown = (props: HudView): boolean =>
   props.news.prefs.markers && props.guestView.following === null;
 
+// A finger needs it where no key turns the camera, and a followed guest's camera is not turned.
+const turnShown = (props: HudView): boolean =>
+  isCompact(props.layout) && props.guestView.following === null;
+
 const signsShown = (props: HudView): boolean =>
   props.news.prefs.signs && props.guestView.following === null;
 
@@ -538,6 +543,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         preview={props.preview}
         onToolChange={props.onToolChange}
       />
+      <CameraTurn camera={props.camera} shown={turnShown(props)} />
       <Following {...props} />
       <ArmedChip
         tool={props.tool}

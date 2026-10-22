@@ -33,7 +33,7 @@ describe('settleFolds', () => {
   });
 
   it('never gives a narrow fold back while a more missed one stays folded', () => {
-    expect(settleFolds([], saving(-200))).toEqual(['highlight', 'weather', 'demand', 'maps']);
+    expect(settleFolds([], saving(-200))).toEqual(['highlight', 'weather', 'demand', 'guests']);
   });
 
   it('keeps a fold until undoing it leaves room to spare', () => {

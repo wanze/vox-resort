@@ -108,6 +108,56 @@
   height: 16px;
 }
 
+/* Stacked as the day is over the time, which leaves the bar room for the maps. */
+.app:not([data-layout='desk']) .hud-hub-figures {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.app:not([data-layout='desk']) .hud-hub-figures .hud-readout-value {
+  font-size: var(--size-small);
+}
+
+.app:not([data-layout='desk']) .hud-hub-figures .hud-readout-row > .ui-pixel-icon {
+  width: 12px;
+  height: 12px;
+}
+
+/* Out of the bar's flow, so the folds never count it; what hangs under the bar moves down for it. */
+.app:not([data-layout='desk']) .hud-season-open {
+  position: fixed;
+  top: calc(var(--strip-h) + var(--safe-t) + var(--hub-drop) + var(--space-2));
+  left: 50%;
+  translate: -50% 0;
+  height: var(--season-pill-h);
+  padding: 0 var(--space-4);
+  box-shadow: var(--bevel), var(--shadow-lift);
+  animation: ui-pop var(--pop);
+}
+
+.app:not([data-layout='desk']) .hud:has(.hud-season-open) {
+  --strip-floor: calc(
+    var(--strip-h) + var(--safe-t) + var(--hub-drop) + var(--season-pill-h) + var(--space-2)
+  );
+}
+
+.app[data-layout='bottom'] .hud:has(.hud-season-open) .ui-window[data-window] {
+  --sheet-room: calc(
+    100% - var(--strip-floor) - var(--dock-h) - var(--safe-b) - var(--space-2) * 2
+  );
+}
+
+.app[data-layout='rail'] .hud-season-open {
+  left: calc(50% + (var(--rail-w) + var(--safe-l)) / 2);
+}
+
+.app[data-layout='rail'] .hud:has(.ui-window[data-window]:not([data-peek])) .hud-season-open {
+  left: calc(50% + (var(--rail-w) + var(--safe-l) - var(--sheet-w) - var(--safe-r)) / 2);
+}
+
 .app:not([data-layout='desk']) .hud-bar .hud-hub {
   --play-size: 44px;
   height: calc(var(--strip-h) + var(--hub-drop));
@@ -126,6 +176,49 @@
   right: auto;
   width: max-content;
   grid-template-columns: auto auto auto;
+}
+
+/* Upright, so it fits beside the placement bar centred under it on the narrowest phone. */
+.hud-turn {
+  position: absolute;
+  right: calc(var(--space-2) + var(--safe-r));
+  bottom: calc(var(--dock-h) + var(--safe-b) + var(--space-2));
+  z-index: var(--z-floating);
+  flex-direction: column;
+  gap: var(--space-1);
+  height: auto;
+  padding: var(--space-1);
+  animation: ui-pop var(--pop);
+}
+
+.hud-turn-left .ui-pixel-icon {
+  scale: -1 1;
+}
+
+.app[data-layout='rail'] .hud-turn {
+  bottom: calc(var(--space-2) + var(--safe-b));
+}
+
+.app[data-layout='rail'] .hud:has(.ui-window[data-window]:not([data-peek])) .hud-turn {
+  right: calc(var(--sheet-w) + var(--safe-r) + var(--space-2));
+}
+
+/* A sheet covers the corner; without anchors there is no knowing where its top is. */
+.app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .hud-turn {
+  display: none;
+}
+
+@supports (anchor-name: --sheet) {
+  .app[data-layout='bottom'] .hud:has(.ui-window[data-window]) .hud-turn {
+    display: flex;
+    position-anchor: --sheet;
+    bottom: anchor(top, calc(var(--dock-h) + var(--safe-b)));
+    margin-bottom: var(--space-2);
+  }
+}
+
+.app[data-layout='bottom'] .hud:has(.ui-window[data-window][data-expanded]) .hud-turn {
+  display: none;
 }
 
 /* The plate goes only with both its pickers: either can be given back the room on its own. */

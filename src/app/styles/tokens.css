@@ -289,6 +289,8 @@
   /* How far the clock hub hangs below the strip, and the line what hangs under the strip clears. */
   --hub-drop: 14px;
   --strip-floor: calc(var(--strip-h) + var(--safe-t) + var(--hub-drop));
+  /* A large button's height: the season opener hangs under a narrow strip at that size. */
+  --season-pill-h: 44px;
   --dock-h: 56px;
   /* The desk's floating dock and the gap under it, which whatever stands at the foot clears. */
   --dock-room: calc(var(--control-h) + 12px + var(--space-3) + var(--safe-b));

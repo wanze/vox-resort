@@ -57,12 +57,12 @@ export interface ClockHubProps {
 function HubFigures({ ledger, status, short }: Pick<ClockHubProps, 'ledger' | 'status' | 'short'>) {
   if (ledger?.mode !== 'tycoon') return <GuestsReadout status={status} />;
   return (
-    <>
+    <div className="hud-hub-figures">
       <MoneyReadout balance={ledger.balance} short={short} />
       <div className="hud-hub-guests">
         <GuestsReadout status={status} />
       </div>
-    </>
+    </div>
   );
 }
 

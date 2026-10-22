@@ -115,6 +115,11 @@
   display: flex;
 }
 
+/* Only a narrow bar stacks the money over the guests; a wide one lays them out in its row. */
+.hud-hub-figures {
+  display: contents;
+}
+
 /* Held at their width, so a narrow window drops labels rather than wrapping a count in two. */
 .hud-status > *,
 .hud-hub-well > * {

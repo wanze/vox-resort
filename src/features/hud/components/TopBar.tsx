@@ -45,18 +45,25 @@ export interface TopBarProps {
   readonly debug: boolean;
 }
 
-// Never handed to the menu as the gates are: between seasons it is the one thing to press.
+// Never handed to the menu as the gates are: between seasons it is the one thing to press. A
+// narrow bar has no room for it, so there it hangs below the bar as a pill.
 function OpenSeasonButton({
   season,
   onOpen,
+  pill,
 }: {
   readonly season: number;
   readonly onOpen: () => void;
+  readonly pill: boolean;
 }) {
   return (
     <button
       type="button"
-      className="ui-chip hud-season-open"
+      className={
+        pill
+          ? 'ui-button-large ui-button-large--primary hud-season-open'
+          : 'ui-chip hud-season-open'
+      }
       title="Open the gates and start the next season"
       onClick={onOpen}
     >
@@ -86,11 +93,15 @@ function seasonActionOf(resort: ResortControls, clock: ClockControls): SeasonAct
 function GateControl({
   action,
   resort,
+  compact,
 }: {
   readonly action: SeasonAction | null;
   readonly resort: ResortControls;
+  readonly compact: boolean;
 }) {
-  if (action) return <OpenSeasonButton season={action.next} onOpen={action.onOpen} />;
+  if (action) {
+    return <OpenSeasonButton season={action.next} onOpen={action.onOpen} pill={compact} />;
+  }
   return <GatesToggle open={resort.open} onOpenChange={resort.setOpen} />;
 }
 
@@ -188,7 +199,8 @@ export function TopBar(props: TopBarProps) {
       <div className="hud-bar-end">
         <div className="ui-plate hud-status">
           <DemandMeter status={status} open={menu === 'demand'} onOpenChange={opener('demand')} />
-          {status ? (
+          {/* A phone wants the room for the maps; the stars are in the day report and Overview. */}
+          {status && !props.compact ? (
             <RatingControl
               rating={status.rating}
               stepFree={status.stepFree}
@@ -197,7 +209,7 @@ export function TopBar(props: TopBarProps) {
               onOpenChange={opener('rating')}
             />
           ) : null}
-          <GateControl action={season} resort={resort} />
+          <GateControl action={season} resort={resort} compact={props.compact} />
         </div>
       </div>
 

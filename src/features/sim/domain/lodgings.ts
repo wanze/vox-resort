@@ -53,6 +53,15 @@ export function homesOfLodgings(
   return Int32Array.from(lodgings, (lodging) => byKey.get(lodging.key) ?? -1);
 }
 
+// The inverse of homesOfLodgings: per home its lodging, -1 for none.
+export function lodgingsOfHomes(
+  lodgings: readonly Lodging[],
+  homes: readonly { readonly key: string }[],
+): Int32Array {
+  const byKey = new Map(lodgings.map((lodging, index) => [lodging.key, index]));
+  return Int32Array.from(homes, (home) => byKey.get(home.key) ?? -1);
+}
+
 // A linear scan is fine: asked once per guest on build, never per frame.
 export function lodgingFor(lodgings: readonly Lodging[], key: string): number {
   return lodgings.findIndex((lodging) => lodging.key === key);

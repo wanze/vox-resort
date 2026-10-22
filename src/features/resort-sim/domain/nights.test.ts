@@ -1,11 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import referenceJson from '../../../../fixtures/reference-resort.json';
 import { shoreFor } from '../../layout/domain/shoreline';
 import { terrainFor } from '../../layout/domain/terrain';
 import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
+import { lodgingNuisanceFor } from '../../sim/domain/nuisance';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
-import { isOutTonight, markNightOwls, refreshDj, refreshNightOut } from './nights';
+import {
+  isOutTonight,
+  listenInTheNight,
+  markNightOwls,
+  refreshDj,
+  refreshNightOut,
+  settleTheNight,
+} from './nights';
 import { plotFactsOf } from './plotFacts';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import { createSimState, type SimState } from './simState';
@@ -83,5 +91,69 @@ describe('refreshDj', () => {
     state.breakdowns.broken.fill(1);
     refreshDj(state, at(21));
     expect(state.djOn.every((on) => on === 0)).toBe(true);
+  });
+});
+
+describe('a night beside the club', () => {
+  const SLEEPER = 0;
+  const club = facts.venues.findIndex((venue) => venue.id === 'night-club-b');
+
+  // The sleeper's lodging moved against the club and every other lodging far off, so the case
+  // does not hang on where the reference resort put them.
+  function besideTheClub(asleep: boolean) {
+    const state = freshState();
+    const lodging = state.lodgingOfHome[state.guests.home[SLEEPER]!]!;
+    const { tileX, tileZ, tilesX } = state.venues[club]!;
+    state.lodgingNuisance = lodgingNuisanceFor(
+      state.lodgings.map((each, index) =>
+        index === lodging
+          ? { ...each, tileX: tileX + tilesX, tileZ }
+          : { ...each, tileX: -100, tileZ: -100 },
+      ),
+      state.venues,
+    );
+    vi.spyOn(state.router, 'isAsleep').mockImplementation((person) => asleep && person === SLEEPER);
+    vi.spyOn(state.router, 'asleepCount', 'get').mockReturnValue(asleep ? 1 : 0);
+    return { state, lodging };
+  }
+
+  const packed = (state: SimState) =>
+    vi
+      .spyOn(state.router, 'occupantsAt')
+      .mockImplementation((venue) => (venue === club ? state.venues[club]!.capacity : 0));
+
+  it('keeps a sleeper beside a full club awake, and one beside a shut club not', () => {
+    const { state } = besideTheClub(true);
+    packed(state);
+    listenInTheNight(state, 1);
+    expect(state.nightNoise.heard[SLEEPER]).toBeCloseTo(0.8);
+    expect(state.nightNoise.heard.filter((heard) => heard > 0).length).toBe(1);
+    const shut = besideTheClub(true).state;
+    listenInTheNight(shut, 1);
+    expect(shut.nightNoise.heard[SLEEPER]).toBe(0);
+  });
+
+  it('hears nothing on a paused frame or with nobody asleep', () => {
+    const { state } = besideTheClub(true);
+    packed(state);
+    listenInTheNight(state, 0);
+    expect(state.nightNoise.heard[SLEEPER]).toBe(0);
+    const awake = besideTheClub(false).state;
+    packed(awake);
+    listenInTheNight(awake, 1);
+    expect(awake.nightNoise.heard.every((heard) => heard === 0)).toBe(true);
+  });
+
+  it('names the club in the morning, by the lodging', () => {
+    const { state, lodging } = besideTheClub(true);
+    packed(state);
+    for (let hour = 0; hour < 4; hour++) listenInTheNight(state, 1);
+    settleTheNight(state);
+    const night = state.lastNightNoise.get(state.lodgings[lodging]!.key)!;
+    expect(night.from).toBe(state.venues[club]!.label);
+    expect(night.kind).toBe('noise');
+    expect(night.woken).toBeGreaterThanOrEqual(1);
+    expect(night.felt).toBeGreaterThan(0);
+    expect(state.lastNightNoise.size).toBe(1);
   });
 });

@@ -8,7 +8,7 @@ import { referenceWorldOf } from '../../resort-prep/domain/referenceResort';
 import { planOfWorld } from '../../resort-prep/domain/savedWorld';
 import { archetypeOf } from '../../sim/domain/archetypes';
 import { mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
-import { nuisanceFor } from '../../sim/domain/nuisance';
+import { MUSIC_FLOOR, NOISE, nuisanceFor } from '../../sim/domain/nuisance';
 import { NO_HOME } from '../../guests/domain/homes';
 import { CROWD_UNEASE, CRUSHED_AT } from '../../sim/domain/pathCrowds';
 import { loudest, REPEAT_TICKS, stayCount, type ThoughtKind } from '../../sim/domain/thoughts';
@@ -25,6 +25,7 @@ import {
   hear,
   hearSurroundings,
   judgeTheNight,
+  nuisanceNow,
   visitMade,
   walkingNode,
 } from './visits';
@@ -210,6 +211,32 @@ describe('judgeTheNight', () => {
     expect(loudest(state.thoughtDay, 99).map((each) => each.subject)).toContain(
       state.names.get(home.key) ?? home.label,
     );
+  });
+
+  it('has a guest kept awake all night say so of the lodging, and like the stay less', () => {
+    const [sleeper] = housed(freshState());
+    const noisy = freshState();
+    noisy.nightNoise.heard[sleeper!] = 10;
+    judgeTheNight(noisy, 1);
+    const quiet = freshState();
+    judgeTheNight(quiet, 1);
+    expect(heard(noisy, 'noisy')).toBe(1);
+    expect(heard(quiet, 'noisy')).toBe(0);
+    const home = noisy.guests.homes[noisy.guests.home[sleeper!]!]!;
+    const said = loudest(noisy.thoughtDay, 99).find((each) => each.kind === 'noisy');
+    expect(said?.subject).toBe(noisy.names.get(home.key) ?? home.label);
+    expect(noisy.happiness.level[sleeper!]).toBeLessThan(quiet.happiness.level[sleeper!]!);
+    expect(noisy.happiness.stay[sleeper!]).toBeLessThan(quiet.happiness.stay[sleeper!]!);
+  });
+});
+
+describe('nuisanceNow', () => {
+  it('plays an empty club with a DJ at the music floor, and silent without', () => {
+    const state = freshState();
+    const club = state.venues.findIndex((venue) => venue.id === 'night-club-b');
+    expect(nuisanceNow(state, club, NOISE)).toBe(0);
+    state.djOn[club] = 1;
+    expect(nuisanceNow(state, club, NOISE)).toBe(MUSIC_FLOOR);
   });
 });
 

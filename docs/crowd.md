@@ -313,7 +313,7 @@ model. Nothing on sand is paved, so beach buildings are reached over it.
 
 ## Night
 
-`night.ts` hashes a bedtime (from 19:00) and wake time (from 07:00) per party.
+`night.ts` hashes a bedtime (from 21:00) and wake time (from 07:00) per party.
 One party in ten is an **early riser** (`isEarlyRiser`, a hash of the party,
 never a draw): it wakes between 05:00 and 05:30, never goes out late, and on a
 dry morning walks to the beach (`resort-sim/domain/sunrise.ts`). It is invited
@@ -331,6 +331,9 @@ children goes out (`nightOut.ts`) and stays up until a late bedtime between
 chooses venues with hours; when none serves it, the night is over and it goes
 home early. Whoever is still up at 22:00 wakes tired. The walk home is long, so
 the last revellers are often still on the paths at 03:00; that is accepted.
+
+A guest asleep beside a loud venue hears it: see **At night** under
+[Smell and noise](#smell-and-noise).
 
 ## Weather
 
@@ -480,8 +483,10 @@ each taking a `ResortFacts` literal. Rules include `closed`, `no-entrance`,
 `not-step-free`, `broken`, `hurt`, `littered`, `far-from-home`, `unvisited`,
 `weather-closed`, `unwatched`, `short-staffed`, `unmade`, `no-depot`,
 `no-events`, `no-welcome`, `smelly` and `noisy`: one line per venue whose
-worst smell or noise is past `HEARD_FROM`, louder the more it is felt, and
-`crowded`: the path node whose passers-by felt the most crush over the last
+worst smell or noise is past `HEARD_FROM`, louder the more it is felt,
+`noisy-night`: one line per lodging whose last night was past
+`NOISY_NIGHT_FROM` ("Guests at Villa are kept awake at night"), counting the
+residents it woke, and `crowded`: the path node whose passers-by felt the most crush over the last
 days (`worstCrowded`, seen at least `MIN_SEEN`), once a quarter of them did,
 weighted `0.1 + 0.6 × share`.
 
@@ -688,11 +693,15 @@ minds noise fully whatever its role:
 | drink    | 0.6   | 0     |
 | activity | 0.2   | 0     |
 | service  | 0     | 0     |
+| lodging  | 0     | 1     |
 
 - **Live strength**: a smell follows dirt, nothing at or above `SMELLS_BELOW`
   (0.6, under `NEEDS_CLEANING`, so restrooms cleaned in time never smell) and
   full at `REEKS_AT` (0.2). A noise follows the crowd inside, full at half full
-  (`LOUD_AT_SHARE`); an empty, closed or broken venue is silent.
+  (`LOUD_AT_SHARE`); an empty, closed or broken venue is silent. While music
+  plays (a DJ, a performer or an event showing) a venue is at least
+  `MUSIC_FLOOR` (0.5) of its strength, so the club is loud from 20:00 to 02:00
+  whoever is dancing. This reaches venue listeners too.
 - **Reach**: the Chebyshev gap between footprints, adjacent being 1, weighted
   `1 - gap / (reach + 1)`. Smell reaches 2 tiles (adjacent 0.67), noise 4
   (adjacent 0.8).
@@ -702,10 +711,27 @@ minds noise fully whatever its role:
   1, and the two kinds together clamped at 1.
 - **Where it bites**: `chooseVenue` (the **nuisance** factor above), and a visit:
   past `HEARD_FROM` (0.25) the guest says `smelly` or `noisy` about the venue
-  and loses `NUISANCE_UPSET` (0.05) × felt of mood, once a visit. Not on paths,
-  the beach or lodgings, and not in the rating.
+  and loses `NUISANCE_UPSET` (0.05) × felt of mood, once a visit. Not on paths
+  or the beach, and not in the rating.
 - The inspector names a venue's worst source ("Smell from Restrooms"), and the
   Smell & noise overlay paints where it smells or is loud, minded by nobody.
+
+**At night** the lodgings listen too, in a list of their own
+(`lodgingNuisanceFor`), so `venuesOn` still keeps strangers out of bedrooms.
+Only a guest asleep in their lodging hears anything: by day nobody is home,
+and a party out late or kept up by an event is awake. Each frame a sleeper adds
+the lodging's felt noise × hours (`sim/domain/nightNoise.ts`, skipped while
+paused or with nobody asleep). In the morning, before the bill, a night is
+`min(1, heard / SLEEPLESS_HOURS)` (2 hours). Past `NOISY_NIGHT_FROM` (0.25) the
+guest says `noisy` about the lodging, loses `NOISY_NIGHT_UPSET` (0.1) × night
+of mood and `NOISY_NIGHT_MEMORY` (0.03) × night off the stay. The lodging's
+night is the mean over its residents present that morning; its rate falls by
+`NIGHT_NOISE_DISCOUNT` (0.4) × night, a factor of its own rather than the
+setting premium, which clamps at 0. The inspector's **Last night** row and the
+`noisy-night` advice read it. A load or an edit forgets the night so far.
+Smell does not count at a lodging (a restroom's dirt at night is the cleaners'
+last round, not placement), and housing does not steer parties to quiet
+lodgings.
 
 ## Photos
 
@@ -854,7 +880,7 @@ needs and the lodging a party is given never read a price.
   maintenance (1% of build cost a day, more for a worn building) and
   renovations, each with its own column in the Books.
 - Nights are billed for the bed slept in. A lodging's rate rises up to a quarter
-  with its surroundings.
+  with its surroundings and falls up to 40 % after a noisy night.
 - **The player sets prices** on the Books window's Prices tab: a factor per
   family (every style of a Villa costs the same), 0.5 to 2 in steps of 0.1,
   saved as `prices`. A night applies it before the surroundings premium; a free

@@ -55,7 +55,10 @@ describe('objectFacts', () => {
     expect(valueOf(facts, 'Sleeps')).toBe('6 guests');
     expect(valueOf(facts, 'Price')).toBe('22 per guest a night');
     expect(valueOf(facts, 'Serves')).toBeUndefined();
-    expect(facts.notes).toEqual(['Up to 25% more in pleasant surroundings']);
+    expect(facts.notes).toEqual([
+      'Up to 25% more in pleasant surroundings',
+      'Up to 40% less after a noisy night',
+    ]);
   });
 
   it('says what a venue serves, to how many, for how long and at what price', () => {

@@ -5,6 +5,7 @@ import type { VenueDoors } from './doors';
 import type { LitterSummary } from './litter';
 import type { Lodging } from './lodgings';
 import { isShabby, SHABBY_BELOW } from './condition';
+import { NOISY_NIGHT_FROM, type NoisyNight } from './nightNoise';
 import type { Minded } from './nuisance';
 import type { Crowded } from './pathCrowds';
 import type { Shortfall } from './staff';
@@ -32,6 +33,7 @@ const KIND_ORDER = [
   'dirty',
   'smelly',
   'noisy',
+  'noisy-night',
   'shabby',
   'unwatched',
   'littered',
@@ -98,6 +100,8 @@ export interface ResortFacts {
   readonly litter?: LitterSummary;
   // By the key of the venue minding it, only where guests would say so; absent means none.
   readonly nuisances?: ReadonlyMap<string, Minded>;
+  // By lodging key, the night just past; absent means a quiet one everywhere.
+  readonly noisyNights?: ReadonlyMap<string, NoisyNight>;
   // The path the most passers-by felt crushed on lately; absent or null says nothing.
   readonly crowded?: Crowded | null;
   // Keys of the water nobody watches; absent means every pool has its lifeguard.
@@ -315,6 +319,25 @@ export function adviceNuisance(facts: ResortFacts): readonly Advice[] {
       key,
       count: facts.visits.get(key) ?? 0,
       at: tileOf(venue),
+      need: null,
+    });
+  }
+  return advice;
+}
+
+// From the morning's settling, so it speaks for the whole night rather than this hour.
+export function adviceNoisyNights(facts: ResortFacts): readonly Advice[] {
+  const advice: Advice[] = [];
+  for (const [key, { felt, woken }] of facts.noisyNights ?? []) {
+    const lodging = facts.lodgings.find((each) => each.key === key);
+    if (!lodging || felt <= NOISY_NIGHT_FROM) continue;
+    advice.push({
+      kind: 'noisy-night',
+      weight: 0.1 + 0.5 * clamp(felt),
+      subject: lodging.label,
+      key,
+      count: woken,
+      at: tileOf(lodging),
       need: null,
     });
   }
@@ -665,6 +688,7 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
     ...adviceStormDamage(facts),
     adviceDirty(facts),
     ...adviceNuisance(facts),
+    ...adviceNoisyNights(facts),
     adviceShabby(facts),
     ...adviceUnwatched(facts),
     adviceLittered(facts),

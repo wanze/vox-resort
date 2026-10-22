@@ -2,6 +2,7 @@ import type { ModelVenue } from '../../../../voxel-gen/voxelgen.ts';
 import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { SETTING_PREMIUM } from '../../catalog/domain/prices';
 import { clockWords } from '../../events/domain/week';
+import { NIGHT_NOISE_DISCOUNT } from '../../sim/domain/nightNoise';
 import { dwellWording, NEED_LABELS } from '../../inspect/domain/selection';
 import { footprintLabel } from './paletteFilter';
 
@@ -63,6 +64,7 @@ function fixtureFacts({ model }: ObjectTypeDefinition): ObjectFact[] {
 function venueNotes(venue: ModelVenue): string[] {
   const notes: [boolean, string][] = [
     [venue.role === 'lodging', `Up to ${SETTING_PREMIUM * 100}% more in pleasant surroundings`],
+    [venue.role === 'lodging', `Up to ${NIGHT_NOISE_DISCOUNT * 100}% less after a noisy night`],
     [venue.receives === true, 'Arriving guests check in here first'],
     [venue.shelter === 'open', 'Open-air: closes in rain and storms'],
     [venue.cools === true, 'Draws more guests the hotter the day'],

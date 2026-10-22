@@ -9,6 +9,7 @@ import { countArrivals, startDay } from '../../sim/domain/dayReport';
 import { createHappiness } from '../../sim/domain/happiness';
 import { createLedger } from '../../sim/domain/ledger';
 import { lodgingsOn } from '../../sim/domain/lodgings';
+import { NIGHT_NOISE_DISCOUNT } from '../../sim/domain/nightNoise';
 import { EMPTY_STARS, ratingFor } from '../../sim/domain/rating';
 import { firstSeason, startTally } from '../../sim/domain/season';
 import { wagesFor } from '../../sim/domain/staff';
@@ -40,6 +41,7 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     scenery: fullScenery,
     prices: {},
     condition: new Map(),
+    lastNightNoise: new Map(),
     season: null,
     seasonTally: startTally(),
     happiness: createHappiness(guests.count),
@@ -171,5 +173,26 @@ describe('a season', () => {
     closeTheDay(state, 6);
     closeTheDay(state, 7);
     expect(state.seasonTally.days).toBe(2);
+  });
+});
+
+describe('a noisy night', () => {
+  it('bills a lodging less its whole discount after the worst night, rounded once', () => {
+    const noisy = stateOf({
+      lastNightNoise: new Map([[home.key, { kind: 'noise', from: 'Club', felt: 1, woken: 4 }]]),
+    });
+    payTheBills(noisy);
+    const factor = 1 - NIGHT_NOISE_DISCOUNT;
+    expect(noisy.ledger.today.night).toBe(housedOf(noisy) * nightPriceOf(home.id, 1, factor));
+  });
+
+  it('bills as ever where no night was settled', () => {
+    const quiet = stateOf();
+    const other = stateOf({
+      lastNightNoise: new Map([['elsewhere', { kind: 'noise', from: 'Club', felt: 1, woken: 4 }]]),
+    });
+    payTheBills(quiet);
+    payTheBills(other);
+    expect(other.ledger.today.night).toBe(quiet.ledger.today.night);
   });
 });

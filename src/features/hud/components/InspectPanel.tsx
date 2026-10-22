@@ -156,10 +156,17 @@ const NUISANCE_WORDS: { readonly [kind in NuisanceKind]: string } = {
   noise: 'Noise',
 };
 
-function NuisanceRow({ nuisance }: { readonly nuisance: Minded | null }) {
+// A lodging is minded only asleep, so it shows the night just past rather than this moment.
+function NuisanceRow({
+  nuisance,
+  night,
+}: {
+  readonly nuisance: Minded | null;
+  readonly night: boolean;
+}) {
   if (!nuisance) return null;
   return (
-    <StatRow label="Nuisance">
+    <StatRow label={night ? 'Last night' : 'Nuisance'}>
       {NUISANCE_WORDS[nuisance.kind]} from {nuisance.from}
     </StatRow>
   );
@@ -235,7 +242,7 @@ function VenueRows({ place, venue }: { readonly place: PlaceView; readonly venue
       <StatRow label="Takings today">{venue.takings.toLocaleString('en-US')}</StatRow>
       <LifeguardRow watch={venue.lifeguard} />
       <SurroundingsRow setting={place.setting} />
-      <NuisanceRow nuisance={venue.nuisance} />
+      <NuisanceRow nuisance={venue.nuisance} night={venue.role === 'lodging'} />
     </dl>
   );
 }

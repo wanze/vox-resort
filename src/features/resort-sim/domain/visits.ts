@@ -10,10 +10,16 @@ import { archetypeOf } from '../../sim/domain/archetypes';
 import { isBeach as isTheBeach } from '../../sim/domain/beach';
 import { conditionOf, DETOUR_UPSET, isShabby } from '../../sim/domain/condition';
 import { valueThought } from '../../sim/domain/expectations';
-import { frighten, upset } from '../../sim/domain/happiness';
+import { frighten, remember, upset } from '../../sim/domain/happiness';
 import { DARK_UNEASE, darknessAt, gloomAt } from '../../sim/domain/lamplight';
 import { burnTheSunbathers, hurt, mishap, UNWATCHED_UNEASE } from '../../sim/domain/incidents';
 import { record } from '../../sim/domain/ledger';
+import {
+  NOISY_NIGHT_FROM,
+  NOISY_NIGHT_MEMORY,
+  NOISY_NIGHT_UPSET,
+  nightOf,
+} from '../../sim/domain/nightNoise';
 import {
   HEARD_FROM,
   NUISANCE_UPSET,
@@ -138,14 +144,23 @@ export function judgeTheNight(resort: SimState, tick: number): void {
   for (let person = 0; person < guests.count; person++) {
     const home = guests.home[person]!;
     if (guests.present[person] !== 1 || home === NO_HOME) continue;
+    const { key, label } = guests.homes[home]!;
+    const name = resort.names.get(key) ?? label;
+    // Before the value thought, so a guest kept awake does not call the bed good value.
+    judgeTheNoise(resort, tick, person, name);
     const share = paidShareFor(resort, home);
     const kind = valueThought(happiness.level[person]!, happiness.expects[person]!, share);
-    const { key, label } = guests.homes[home]!;
-    if (kind) hear(resort, tick, person, kind, resort.names.get(key) ?? label);
-    if (isShabby(conditionOf(resort.condition, key))) {
-      hear(resort, tick, person, 'shabby', resort.names.get(key) ?? label);
-    }
+    if (kind) hear(resort, tick, person, kind, name);
+    if (isShabby(conditionOf(resort.condition, key))) hear(resort, tick, person, 'shabby', name);
   }
+}
+
+function judgeTheNoise(resort: SimState, tick: number, person: number, lodging: string): void {
+  const night = nightOf(resort.nightNoise.heard[person] ?? 0);
+  if (night <= NOISY_NIGHT_FROM) return;
+  hear(resort, tick, person, 'noisy', lodging);
+  upset(resort.happiness, person, NOISY_NIGHT_UPSET * night);
+  remember(resort.happiness, person, -NOISY_NIGHT_MEMORY * night);
 }
 
 // A key the list lacks is the router's synthetic beach, which reads as spotless at -1.
@@ -155,8 +170,15 @@ export const venueIndexOf = (resort: SimState, key: string): number =>
 // Read off the state each time, so it outlives an edit that replaces the venues and their dirt.
 export function nuisanceNow(resort: SimState, source: number, kind: number): number {
   if (kind === SMELL) return smellOf(cleanliness(resort.upkeep, source));
-  return noiseOf(resort.router.occupantsAt(source), resort.venues[source]?.capacity ?? 1);
+  const inside = resort.router.occupantsAt(source);
+  return noiseOf(inside, resort.venues[source]?.capacity ?? 1, musicAt(resort, source));
 }
+
+// What the showcase plays music for. The arrays trail the venue list for a frame after an edit.
+const musicAt = (resort: SimState, source: number): boolean =>
+  resort.djOn[source] === 1 ||
+  resort.eventShowing[source] === 1 ||
+  resort.staffRouter.performingAt(source);
 
 export const nuisanceLive =
   (resort: SimState): NuisanceLive =>

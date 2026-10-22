@@ -10,6 +10,7 @@ import type { Happiness } from '../../sim/domain/happiness';
 import type { Carrying } from '../../sim/domain/litter';
 import type { Lodging } from '../../sim/domain/lodgings';
 import type { Needs } from '../../sim/domain/needs';
+import type { NoisyNight } from '../../sim/domain/nightNoise';
 import { bookingPull, type Prices } from '../../sim/domain/pricing';
 import { arrivalsFor, bookingsWanted, type Rating } from '../../sim/domain/rating';
 import type { Router } from '../../sim/domain/router';
@@ -28,6 +29,7 @@ export interface ArrivalsState {
   readonly scenery: SceneryField;
   readonly prices: Prices;
   readonly condition: Condition;
+  readonly lastNightNoise: ReadonlyMap<string, NoisyNight>;
   readonly closing: ReadonlyMap<string, number>;
   readonly renovating: ReadonlyMap<string, number>;
   readonly constructing: ReadonlyMap<string, number>;

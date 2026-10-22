@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { VenueRole } from '../../../../voxel-gen/voxelgen.ts';
 import {
   feltAt,
+  feltOfKind,
+  lodgingNuisanceFor,
+  loudestOf,
   mindedAt,
   mindedOver,
+  MUSIC_FLOOR,
   NOISE,
   noiseOf,
   nuisanceFieldFor,
@@ -73,6 +77,22 @@ describe('who smells and hears what, before the day decides how much', () => {
   });
 });
 
+describe('who a lodging hears', () => {
+  const lodging = { tileX: 0, tileZ: 0, tilesX: 2, tilesZ: 1 };
+
+  it('hears a club next door at 0.8 and smells nothing of the restrooms beside it', () => {
+    const nuisance = lodgingNuisanceFor([lodging], [nightClub(2), restrooms(0, 1)]);
+    expect(Array.from(nuisance.weight)).toEqual([expect.closeTo(0.8)]);
+    expect(Array.from(nuisance.kind)).toEqual([NOISE]);
+  });
+
+  it('is never its own source, whatever stands at the same index', () => {
+    const nuisance = lodgingNuisanceFor([lodging], [nightClub(9)]);
+    expect(nuisance.start[1]! - nuisance.start[0]!).toBe(0);
+    expect(lodgingNuisanceFor([lodging], [nightClub(2)]).source[0]).toBe(0);
+  });
+});
+
 describe('how strong a source is right now', () => {
   it('smells only once a cleaner is late, and reeks when filthy', () => {
     expect(SMELLS_BELOW).toBeLessThan(NEEDS_CLEANING);
@@ -91,6 +111,12 @@ describe('how strong a source is right now', () => {
     expect(noiseOf(0, 10)).toBe(0);
     expect(noiseOf(5, 10)).toBe(1);
     expect(noiseOf(2, 10)).toBeCloseTo(0.4);
+  });
+
+  it('plays music at the floor to an empty room, and no louder than a full one', () => {
+    expect(noiseOf(0, 10, true)).toBe(MUSIC_FLOOR);
+    expect(noiseOf(10, 10, true)).toBe(1);
+    expect(noiseOf(0, 10, false)).toBe(0);
   });
 });
 
@@ -123,6 +149,27 @@ describe('what a venue feels', () => {
     expect(worst.source).toBe(1);
     expect(worst.felt).toBeCloseTo(1 / 3);
     expect(worstAt(square, 0, none)).toBeNull();
+  });
+
+  it('reads one kind without allocating, agreeing with worstAt', () => {
+    const square = nuisanceFor([
+      at('activity', 4, { calm: true }),
+      nightClub(0),
+      nightClub(7),
+      nightClub(9),
+    ]);
+    const worst = worstAt(square, 0, loudOnly)!;
+    expect(feltOfKind(square, 0, loudOnly, NOISE)).toBeCloseTo(worst.felt);
+    expect(loudestOf(square, 0, loudOnly, NOISE)).toBe(worst.source);
+    expect(worst.source).toBe(2);
+    expect(feltOfKind(square, 0, loudOnly, SMELL)).toBe(0);
+    expect(loudestOf(square, 0, loudOnly, SMELL)).toBe(-1);
+    expect(loudestOf(square, 4, loudOnly, NOISE)).toBe(-1);
+  });
+
+  it('gives a tie to the lower index', () => {
+    const between = nuisanceFor([at('activity', 4, { calm: true }), nightClub(7), nightClub(1)]);
+    expect(loudestOf(between, 0, loudOnly, NOISE)).toBe(1);
   });
 });
 

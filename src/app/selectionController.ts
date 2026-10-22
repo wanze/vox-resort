@@ -6,7 +6,7 @@ import { isBroken } from '../features/sim/domain/breakdowns';
 import { latestOf } from '../features/sim/domain/thoughts';
 import { factorOf } from '../features/sim/domain/pricing';
 import { sceneryOver } from '../features/sim/domain/scenery';
-import { mindedAt } from '../features/sim/domain/nuisance';
+import { mindedAt, type Minded } from '../features/sim/domain/nuisance';
 import type { ResortClock } from '../features/sim/domain/resortClock';
 import type { StaffRole } from '../features/sim/domain/staff';
 import { takingsOf } from '../features/sim/domain/takings';
@@ -55,6 +55,12 @@ function lifeguardAt(router: StaffRouter, venue: number): LifeguardWatch {
 }
 
 // A venue goes by its name, which the type's label in the view gives way to.
+// A lodging, which is no venue, is minded only asleep, so it shows the night just past.
+const nuisanceShown = (resort: Resort, venue: number, key: string): Minded | null =>
+  venue >= 0
+    ? mindedAt(resort.nuisance, resort.venues, venue, nuisanceLive(resort))
+    : (resort.lastNightNoise.get(key) ?? null);
+
 const withSite = (view: PlaceView, constructing: ReadonlyMap<string, number>): PlaceView => {
   const until = constructing.get(view.key);
   if (until === undefined) return view;
@@ -200,7 +206,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       broken: isBroken(resort.breakdowns, venue),
       factor: factorOf(resort.prices, placement.id),
       condition: conditionShown(resort, placement.key, clock.ticks),
-      nuisance: mindedAt(resort.nuisance, resort.venues, venue, nuisanceLive(resort)),
+      nuisance: nuisanceShown(resort, venue, placement.key),
     });
     const offered = withProgramme(resort, withSends(resort, view, venue), venue, clock.ticks);
     return withSite(withNaming(offered, resort.venues[venue]), resort.constructing);

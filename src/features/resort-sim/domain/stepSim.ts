@@ -5,6 +5,7 @@ import { ageHappiness } from '../../sim/domain/happiness';
 import { darknessAt } from '../../sim/domain/lamplight';
 import { decayNeeds } from '../../sim/domain/needs';
 import { countWalkers, fadePathCrowds, sampleCrush } from '../../sim/domain/pathCrowds';
+import { restartNight } from '../../sim/domain/nightNoise';
 import { fadePhotoHeat } from '../../sim/domain/photos';
 import { cheerTheAudience } from '../../sim/domain/staff';
 import { weatherEffect } from '../../sim/domain/weather';
@@ -21,7 +22,13 @@ import {
 import { ageBuildings, stepRenovations } from './ageing';
 import { closeTheDay, payTheBills, rateTheDay } from './dayClose';
 import { admitLaterWaves, runDay } from './arrivals';
-import { markNightOwls, refreshDj, refreshNightOut } from './nights';
+import {
+  listenInTheNight,
+  markNightOwls,
+  refreshDj,
+  refreshNightOut,
+  settleTheNight,
+} from './nights';
 import { refreshKeen, runEvents } from './eventSteps';
 import { refreshMoment } from './photoSteps';
 import { keepStaffHours } from './staffing';
@@ -71,6 +78,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
   const { glow } = resort.events;
   frightenInTheDark(resort, darknessAt(clock.tickOfDay));
   frightenInTheCrowd(resort);
+  listenInTheNight(resort, ticks / TICKS_PER_HOUR);
   ageHappiness(
     resort.happiness,
     resort.needs,
@@ -84,9 +92,12 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
   if (checkInDue(clock.ticks - ticks + 1, clock.ticks)) {
     // Before the bill, which charges for the wear.
     ageBuildings(resort, clock.day);
+    // Before the bill, which it discounts.
+    settleTheNight(resort);
     payTheBills(resort);
     // Before the day closes, so the night's verdicts count towards the day that earned them.
     judgeTheNight(resort, clock.ticks);
+    restartNight(resort.nightNoise);
     rateTheDay(resort);
     closeTheDay(resort, clock.day);
     runDay(resort, clock.day);

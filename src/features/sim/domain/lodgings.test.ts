@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_VOXELS } from '../../../../voxel-gen/voxelgen.ts';
 import type { Placement } from '../../layout/domain/resortLayout';
-import { homesOfLodgings, lodgingFor, lodgingsOn } from './lodgings';
+import { homesOfLodgings, lodgingFor, lodgingsOfHomes, lodgingsOn } from './lodgings';
 
 const at = (key: string, id: string, tileX = 0, tileZ = 0, tiles = 1): Placement => ({
   key,
@@ -62,5 +62,21 @@ describe('homesOfLodgings', () => {
   it('says -1 for a lodging with no home', () => {
     const lodgings = lodgingsOn([at('bungalow#0', 'bungalow'), at('bungalow#1', 'bungalow', 3)]);
     expect(Array.from(homesOfLodgings(lodgings, [{ key: 'bungalow#1' }]))).toEqual([-1, 0]);
+  });
+});
+
+describe('lodgingsOfHomes', () => {
+  it('inverts homesOfLodgings, and leaves a stranded lodging out', () => {
+    const lodgings = lodgingsOn([
+      at('bungalow#0', 'bungalow'),
+      at('hotel#0', 'hotel', 4, 0, 4),
+      at('bungalow#1', 'bungalow', 12),
+    ]);
+    const homes = [{ key: 'hotel#0' }, { key: 'bungalow#0' }];
+    const lodgingOfHome = lodgingsOfHomes(lodgings, homes);
+    expect(Array.from(lodgingOfHome)).toEqual([1, 0]);
+    const homeOfLodging = homesOfLodgings(lodgings, homes);
+    lodgingOfHome.forEach((lodging, home) => expect(homeOfLodging[lodging]).toBe(home));
+    expect(Array.from(lodgingOfHome)).not.toContain(2);
   });
 });

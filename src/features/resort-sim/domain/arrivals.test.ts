@@ -46,6 +46,7 @@ function stateOf(away: boolean) {
     scenery: { tilesX: 0, tilesZ: 0, value: new Float32Array(0) },
     prices: {},
     condition: new Map(),
+    lastNightNoise: new Map(),
     closing: new Map(),
     renovating: new Map(),
     constructing: new Map(),

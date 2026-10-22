@@ -28,8 +28,13 @@ import { doorsFor } from '../../sim/domain/doors';
 import { gatewaysOn, type Gateway } from '../../sim/domain/gateways';
 import { lightFieldFor, unlitStretchOf, type Glow } from '../../sim/domain/lamplight';
 import { binCoverFor, type BinSite } from '../../sim/domain/litter';
-import { homesOfLodgings, lodgingsOn, type Lodging } from '../../sim/domain/lodgings';
-import { nuisanceFor, type Nuisance } from '../../sim/domain/nuisance';
+import {
+  homesOfLodgings,
+  lodgingsOfHomes,
+  lodgingsOn,
+  type Lodging,
+} from '../../sim/domain/lodgings';
+import { lodgingNuisanceFor, nuisanceFor, type Nuisance } from '../../sim/domain/nuisance';
 import { sceneryFieldFor, sceneryItemsOf, type SceneryField } from '../../sim/domain/scenery';
 import { shadeMapOf, type ShadeMap } from '../../sim/domain/shade';
 import { venuesOn, type Venue } from '../../sim/domain/venues';
@@ -61,10 +66,12 @@ export interface PlotFacts {
   readonly unreachable: ReadonlySet<string>;
   readonly homes: readonly Home[];
   readonly homeOfLodging: Int32Array;
+  readonly lodgingOfHome: Int32Array;
   readonly beachTiles: number;
   readonly launchSites: readonly LaunchSite[];
   readonly scenery: SceneryField;
   readonly nuisance: Nuisance;
+  readonly lodgingNuisance: Nuisance;
   readonly unlit: Float32Array;
   readonly views: Views;
   readonly shade: ShadeMap;
@@ -157,6 +164,7 @@ function placesOn(
     unreachable,
     homes,
     homeOfLodging: homesOfLodgings(lodgings, homes),
+    lodgingOfHome: lodgingsOfHomes(lodgings, homes),
   };
 }
 
@@ -246,6 +254,7 @@ export function plotFactsOf(ground: PlotGround, sources: PlotSources, held: Venu
     unlit: unlitOn(ground.plan, sources, network),
     views: viewsOn(ground, sources, fields.scenery, places.venues),
     nuisance: nuisanceFor(places.venues),
+    lodgingNuisance: lodgingNuisanceFor(places.lodgings, places.venues),
     ...indicesOf(places.venues, places.siteVenues),
   };
 }

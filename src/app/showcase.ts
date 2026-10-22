@@ -217,6 +217,7 @@ import { doorsFor } from '../features/sim/domain/doors';
 import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/stepFree';
 import { mindedOver, nuisanceFieldFor } from '../features/sim/domain/nuisance';
 import { createPathCrowds, crushedShare, worstCrowded } from '../features/sim/domain/pathCrowds';
+import { createNightNoise } from '../features/sim/domain/nightNoise';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
   createFootfall,
@@ -1875,6 +1876,7 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     unwatched: unwatchedOn(resort, effect, now % TICKS_PER_DAY),
     // The same reading judgeVisit hears, so the advice and the guests agree.
     nuisances: mindedOver(resort.nuisance, resort.venues, nuisanceLive(resort)),
+    noisyNights: resort.lastNightNoise,
     crowded: worstCrowded(resort.pathCrowds, resort.crowd.crowd.network),
     broken: brokenOn(resort, now),
     stormHits: new Set(recentStormHits(resort.stormHits, now).keys()),
@@ -2376,6 +2378,7 @@ function rebuildAfterEdit(resort: Resort, ticks: number, handle: SceneHandle): v
   recastAfterEdit(resort, network, wasStanding);
   resort.footfall = createFootfall(network.nodes.length);
   resort.pathCrowds = createPathCrowds(network);
+  resort.nightNoise = createNightNoise(resort.guests.count, resort.lodgings.length);
   resort.photos.heat = new Float32Array(network.nodes.length);
 }
 

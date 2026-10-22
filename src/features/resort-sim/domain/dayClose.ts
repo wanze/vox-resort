@@ -17,6 +17,7 @@ import { meanHappiness, type Happiness } from '../../sim/domain/happiness';
 import { closeDay, record, type Ledger } from '../../sim/domain/ledger';
 import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
 import { paidShareOf } from '../../sim/domain/expectations';
+import { quietFactor, type NoisyNight } from '../../sim/domain/nightNoise';
 import { factorOf, type Prices } from '../../sim/domain/pricing';
 import { ratingFor, type Rating } from '../../sim/domain/rating';
 import { isSeasonDay, tallyDay, type Season, type SeasonTally } from '../../sim/domain/season';
@@ -42,6 +43,7 @@ export interface DayCloseState {
   rating: Rating;
   readonly prices: Prices;
   readonly condition: Condition;
+  lastNightNoise: ReadonlyMap<string, NoisyNight>;
   readonly season: Season | null;
   seasonTally: SeasonTally;
   today: DayCounts;
@@ -69,13 +71,19 @@ export function payTheBills(resort: DayCloseState): void {
   resort.ledger = record(resort.ledger, 'night', rent);
 }
 
-type RateState = Pick<DayCloseState, 'guests' | 'lodgings' | 'scenery' | 'prices' | 'condition'>;
+type RateState = Pick<
+  DayCloseState,
+  'guests' | 'lodgings' | 'scenery' | 'prices' | 'condition' | 'lastNightNoise'
+>;
 
 function nightlyRate(resort: RateState, home: number): number {
   const { id, key } = resort.guests.homes[home]!;
   const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
   // Into the factor, so the rate is rounded once.
-  const factor = factorOf(resort.prices, id) * rateFactor(conditionOf(resort.condition, key));
+  const factor =
+    factorOf(resort.prices, id) *
+    rateFactor(conditionOf(resort.condition, key)) *
+    quietFactor(resort.lastNightNoise.get(key)?.felt ?? 0);
   return lodging
     ? nightPriceOf(id, sceneryOver(resort.scenery, lodging), factor)
     : chargeOf(id, factor);

@@ -60,6 +60,7 @@ import {
 import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
 import { createPathCrowds, type PathCrowds } from '../../sim/domain/pathCrowds';
 import { feltAt, type Nuisance, type NuisanceLive } from '../../sim/domain/nuisance';
+import { createNightNoise, type NightNoise, type NoisyNight } from '../../sim/domain/nightNoise';
 import type { SceneryField } from '../../sim/domain/scenery';
 import type { ShadeMap } from '../../sim/domain/shade';
 import {
@@ -91,7 +92,7 @@ import { NO_MOMENT, photoPause } from './photoSteps';
 import type { PlotFacts } from './plotFacts';
 import { litterWindowOf, rezone } from './staffing';
 import { hear, nuisanceNow, reviewOfParty, stepLitterAt, visitMade } from './visits';
-import { isOutTonight } from './nights';
+import { isOutTonight, nightEarsOf, type NightEars } from './nights';
 import { dawnStayOf } from './sunrise';
 
 export interface CrowdHolder {
@@ -173,6 +174,8 @@ export interface SimState {
   lodgings: readonly Lodging[];
   // Homes are sorted by beds, lodgings stand in placement order; rebuilt with both on an edit.
   homeOfLodging: Int32Array;
+  // The inverse, so a sleeper's lodging is an array read; rebuilt with it.
+  lodgingOfHome: Int32Array;
   gateways: readonly Gateway[];
   depots: readonly Depot[];
   // Dirt is carried across by key when venues are replaced, so paving one tile does not scrub the
@@ -202,6 +205,14 @@ export interface SimState {
   views: Views;
   // Replaced on an edit, as the scenery is.
   nuisance: Nuisance;
+  // The lodgings as listeners, the venues as sources; replaced on an edit, as the scenery is.
+  lodgingNuisance: Nuisance;
+  // Per person and per lodging, so rebuilt empty on an edit; never saved.
+  nightNoise: NightNoise;
+  // By lodging key, settled each morning, so kept across an edit; never saved.
+  lastNightNoise: ReadonlyMap<string, NoisyNight>;
+  // Built once, so the night's pass each frame allocates nothing.
+  readonly nightEars: NightEars;
   // Refreshed once a frame from the clock, so a guest reaching a node reads an object, not the
   // clock.
   moment: Moment;
@@ -277,12 +288,14 @@ type KeptFacts = Pick<
   | 'beachTiles'
   | 'lodgings'
   | 'homeOfLodging'
+  | 'lodgingOfHome'
   | 'gateways'
   | 'depots'
   | 'scenery'
   | 'unlit'
   | 'views'
   | 'nuisance'
+  | 'lodgingNuisance'
   | 'shade'
   | 'binCover'
   | 'unreachable'
@@ -300,12 +313,14 @@ export const keptFactsOf = (facts: PlotFacts): KeptFacts => ({
   beachTiles: facts.beachTiles,
   lodgings: facts.lodgings,
   homeOfLodging: facts.homeOfLodging,
+  lodgingOfHome: facts.lodgingOfHome,
   gateways: facts.gateways,
   depots: facts.depots,
   scenery: facts.scenery,
   unlit: facts.unlit,
   views: facts.views,
   nuisance: facts.nuisance,
+  lodgingNuisance: facts.lodgingNuisance,
   shade: facts.shade,
   binCover: facts.binCover,
   unreachable: facts.unreachable,
@@ -632,6 +647,9 @@ export function createSimState(parts: SimParts): SimState {
     litter,
     footfall: createFootfall(network.nodes.length),
     pathCrowds: createPathCrowds(network),
+    nightNoise: createNightNoise(population, lodgings.length),
+    lastNightNoise: new Map(),
+    nightEars: nightEarsOf(() => resort, live),
     moment: NO_MOMENT,
     photos: createPhotos(population, network.nodes.length),
     carrying,

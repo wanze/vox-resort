@@ -19,6 +19,9 @@ export const SMELLS_BELOW = NEEDS_CLEANING - 0.1;
 
 const REEKS_AT = 0.2;
 
+// A DJ or a band is loud to an empty room, so a club is heard all night whoever dances.
+export const MUSIC_FLOOR = 0.5;
+
 // Half full is as loud as it gets: a crowd is loud long before every place is taken.
 const LOUD_AT_SHARE = 2;
 
@@ -28,13 +31,14 @@ export const HEARD_FROM = 0.25;
 // As DETOUR_UPSET: once a visit, so a regular cannot sink on it.
 export const NUISANCE_UPSET = 0.05;
 
-// Smell, then noise. Bars and clubs mind no noise, because they are the noise.
+// Smell, then noise. Bars and clubs mind no noise, because they are the noise. A lodging minds
+// noise as a calm venue does; its smell is whatever the cleaners' last round left, not placement.
 const MINDS: { readonly [role in VenueRole]: readonly [number, number] } = {
   food: [1, 0.3],
   drink: [0.6, 0],
   activity: [0.2, 0],
   service: [0, 0],
-  lodging: [0, 0],
+  lodging: [0, 1],
 };
 
 type NuisanceVenue = Pick<
@@ -44,13 +48,15 @@ type NuisanceVenue = Pick<
 
 type Footprint = Pick<Venue, 'tileX' | 'tileZ' | 'tilesX' | 'tilesZ'>;
 
+type Listener = Footprint & Pick<Venue, 'role' | 'calm'>;
+
 export interface NuisanceSource {
   readonly venue: number;
   readonly kind: number;
   readonly strength: number;
 }
 
-// Flat by listener: venue v's entries run from start[v] to start[v + 1].
+// Flat by listener: listener v's entries run from start[v] to start[v + 1].
 export interface Nuisance {
   readonly start: Int32Array;
   readonly source: Int32Array;
@@ -83,7 +89,7 @@ const gapBetween = (a: Footprint, b: Footprint): number =>
 
 const falloff = (gap: number, reach: number): number => Math.max(0, 1 - gap / (reach + 1));
 
-function sensitivity(listener: NuisanceVenue, kind: number): number {
+function sensitivity(listener: Listener, kind: number): number {
   if (kind === NOISE && listener.calm === true) return 1;
   return MINDS[listener.role][kind]!;
 }
@@ -97,16 +103,20 @@ function sourcesOf(venues: readonly NuisanceVenue[]): NuisanceSource[] {
   return sources;
 }
 
-export function nuisanceFor(venues: readonly NuisanceVenue[]): Nuisance {
+function nuisanceOver(
+  listeners: readonly Listener[],
+  venues: readonly NuisanceVenue[],
+  same: (listener: number, source: number) => boolean,
+): Nuisance {
   const sources = sourcesOf(venues);
-  const start = new Int32Array(venues.length + 1);
+  const start = new Int32Array(listeners.length + 1);
   const source: number[] = [];
   const kind: number[] = [];
   const weight: number[] = [];
-  venues.forEach((listener, index) => {
+  listeners.forEach((listener, index) => {
     start[index] = source.length;
     for (const from of sources) {
-      if (from.venue === index) continue;
+      if (same(index, from.venue)) continue;
       const gap = gapBetween(listener, venues[from.venue]!);
       const felt =
         from.strength * falloff(gap, reachOf(from.kind)) * sensitivity(listener, from.kind);
@@ -116,7 +126,7 @@ export function nuisanceFor(venues: readonly NuisanceVenue[]): Nuisance {
       weight.push(felt);
     }
   });
-  start[venues.length] = source.length;
+  start[listeners.length] = source.length;
   return {
     start,
     source: Int32Array.from(source),
@@ -126,19 +136,37 @@ export function nuisanceFor(venues: readonly NuisanceVenue[]): Nuisance {
   };
 }
 
+export const nuisanceFor = (venues: readonly NuisanceVenue[]): Nuisance =>
+  nuisanceOver(venues, venues, (listener, source) => listener === source);
+
+// Lodgings stay out of the venue list, so they listen in a list of their own.
+export const lodgingNuisanceFor = (
+  lodgings: readonly Footprint[],
+  venues: readonly NuisanceVenue[],
+): Nuisance =>
+  nuisanceOver(
+    lodgings.map((lodging) => ({ ...lodging, role: 'lodging' as const })),
+    venues,
+    () => false,
+  );
+
 export function smellOf(clean: number): number {
   if (clean >= SMELLS_BELOW) return 0;
   if (clean <= REEKS_AT) return 1;
   return (SMELLS_BELOW - clean) / (SMELLS_BELOW - REEKS_AT);
 }
 
-export function noiseOf(inside: number, capacity: number): number {
-  return Math.min(1, (LOUD_AT_SHARE * inside) / Math.max(1, capacity));
+export function noiseOf(inside: number, capacity: number, music = false): number {
+  const crowd = Math.min(1, (LOUD_AT_SHARE * inside) / Math.max(1, capacity));
+  return Math.max(music ? MUSIC_FLOOR : 0, crowd);
 }
+
+const outOfList = (nuisance: Nuisance, listener: number): boolean =>
+  listener < 0 || listener + 1 >= nuisance.start.length;
 
 // Past the end is the router's beach, which has no neighbours.
 export function feltAt(nuisance: Nuisance, venue: number, live: NuisanceLive): number {
-  if (venue < 0 || venue + 1 >= nuisance.start.length) return 0;
+  if (outOfList(nuisance, venue)) return 0;
   let smell = 0;
   let noise = 0;
   for (let at = nuisance.start[venue]!; at < nuisance.start[venue + 1]!; at++) {
@@ -156,25 +184,50 @@ export interface Worst {
   readonly felt: number;
 }
 
-function worstOfKind(nuisance: Nuisance, venue: number, live: NuisanceLive, kind: number) {
+// Allocates nothing, so a pass over every sleeper each frame may ask it.
+export function feltOfKind(
+  nuisance: Nuisance,
+  listener: number,
+  live: NuisanceLive,
+  kind: number,
+): number {
+  if (outOfList(nuisance, listener)) return 0;
   let sum = 0;
+  for (let at = nuisance.start[listener]!; at < nuisance.start[listener + 1]!; at++) {
+    if (nuisance.kind[at] === kind) sum += nuisance.weight[at]! * live(nuisance.source[at]!, kind);
+  }
+  return Math.min(1, sum);
+}
+
+// The source adding most, -1 for none; entries run in source order, so ties go to the lower index.
+export function loudestOf(
+  nuisance: Nuisance,
+  listener: number,
+  live: NuisanceLive,
+  kind: number,
+): number {
+  if (outOfList(nuisance, listener)) return -1;
   let source = -1;
   let most = 0;
-  for (let at = nuisance.start[venue]!; at < nuisance.start[venue + 1]!; at++) {
+  for (let at = nuisance.start[listener]!; at < nuisance.start[listener + 1]!; at++) {
     if (nuisance.kind[at] !== kind) continue;
     const felt = nuisance.weight[at]! * live(nuisance.source[at]!, kind);
-    sum += felt;
     if (felt > most) {
       most = felt;
       source = nuisance.source[at]!;
     }
   }
-  return { felt: Math.min(1, sum), source };
+  return source;
 }
+
+const worstOfKind = (nuisance: Nuisance, venue: number, live: NuisanceLive, kind: number) => ({
+  felt: feltOfKind(nuisance, venue, live, kind),
+  source: loudestOf(nuisance, venue, live, kind),
+});
 
 // The kind felt more, and within it the source that adds most; ties go to smell and the lower index.
 export function worstAt(nuisance: Nuisance, venue: number, live: NuisanceLive): Worst | null {
-  if (venue < 0 || venue + 1 >= nuisance.start.length) return null;
+  if (outOfList(nuisance, venue)) return null;
   const smell = worstOfKind(nuisance, venue, live, SMELL);
   const noise = worstOfKind(nuisance, venue, live, NOISE);
   const kind = noise.felt > smell.felt ? NOISE : SMELL;

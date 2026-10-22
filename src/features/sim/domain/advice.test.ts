@@ -22,6 +22,7 @@ import {
   adviceUnservedNeeds,
   adviceUnvisited,
   adviceNuisance,
+  adviceNoisyNights,
   adviceCrowded,
   adviceUnwatched,
   adviceWeatherClosed,
@@ -679,6 +680,31 @@ describe('adviceNuisance', () => {
       }),
     );
     expect(noisy).toMatchObject({ kind: 'noisy', subject: 'Spa', count: 0 });
+  });
+});
+
+const night = (felt: number) =>
+  new Map([['hotel#0', { kind: 'noise' as const, from: 'Club', felt, woken: 9 }]]);
+
+describe('adviceNoisyNights', () => {
+  it('names the lodging a club kept awake, at its tile, with how many it woke', () => {
+    const [kept] = adviceNoisyNights(healthyFacts({ noisyNights: night(0.6) }));
+    expect(kept).toMatchObject({
+      kind: 'noisy-night',
+      subject: 'Hotel',
+      key: 'hotel#0',
+      count: 9,
+      at: { tileX: 3, tileZ: 2 },
+    });
+    expect(kept!.weight).toBeCloseTo(0.4);
+    expect(adviceFor(healthyFacts({ noisyNights: night(0.6) })).map((each) => each.kind)).toContain(
+      'noisy-night',
+    );
+  });
+
+  it('is silent without the map, and below the mark a guest would say so', () => {
+    expect(adviceNoisyNights(healthyFacts())).toEqual([]);
+    expect(adviceNoisyNights(healthyFacts({ noisyNights: night(0.2) }))).toEqual([]);
   });
 });
 

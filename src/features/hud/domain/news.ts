@@ -177,6 +177,7 @@ const SEVERITIES: { readonly [kind in AdviceKind]: readonly [Severity, number] |
   dirty: ['warning', 0.4],
   smelly: ['warning', 0.3],
   noisy: ['warning', 0.3],
+  'noisy-night': ['warning', 0.3],
   shabby: ['warning', 0.4],
   unwatched: ['warning', 0.4],
   littered: ['warning', 0.4],

@@ -82,6 +82,8 @@ export interface EventFacts {
   canPay(fee: number): boolean;
   // In order of preference, for a kind that shelters from the weather.
   readonly stages?: readonly EventSite[];
+  // Nobody is here before this tick: a show due earlier is let go unannounced and unpaid.
+  readonly emptyUntil?: number;
 }
 
 export interface EventAdvance {
@@ -219,7 +221,10 @@ export function advanceEvents(
 ): EventAdvance {
   const steps: EventStep[] = [];
   const runs: EventRun[] = [];
-  for (const run of state.runs) {
+  const empty = (occurrence: Occurrence): boolean => occurrence.start < (facts.emptyUntil ?? 0);
+  for (const run of state.runs.filter(
+    (each) => each.phase !== 'announced' || !empty(each.occurrence),
+  )) {
     const step = stepOf(run, to, facts);
     if (step) steps.push(step);
     if (step === null || step.kind === 'start') runs.push(run);
@@ -227,6 +232,7 @@ export function advanceEvents(
 
   let programme = dropPast(state.programme, dayAt(from));
   for (const occurrence of eventsDue(programme, from, to, ANNOUNCE_LEAD)) {
+    if (empty(occurrence)) continue;
     if (state.runs.some((run) => sameOccurrence(run.occurrence, occurrence))) continue;
     const step = announced(occurrence, programme, runs, facts);
     if (step.kind === 'announce') runs.push(step.run);

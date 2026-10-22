@@ -35,6 +35,12 @@
   padding-bottom: var(--space-4);
 }
 
+.newspaper-hint {
+  flex: none;
+  margin: 0 var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
 /* Room round the sheet for its tilt and shadow; sideways it never scrolls. */
 .newspaper-scroll {
   container: paper / inline-size;

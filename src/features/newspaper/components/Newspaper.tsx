@@ -258,6 +258,16 @@ function neighbours(paper: OpenPaper, controls: PaperControls) {
   return { earlier: near(-1), later: near(1), step };
 }
 
+// A paper not browsed to was printed as the season ended, so the clock has just stopped.
+function BreakHint() {
+  return (
+    <p className="ui-note newspaper-hint">
+      Now is the time to renovate: between seasons the clock stands still, so the works are done at
+      once and no guest is turned away. Books › Upkeep lists what needs it.
+    </p>
+  );
+}
+
 function Stepping({
   paper,
   steps,
@@ -265,7 +275,7 @@ function Stepping({
   readonly paper: OpenPaper;
   readonly steps: ReturnType<typeof neighbours>;
 }) {
-  if (!paper.browsing) return null;
+  if (!paper.browsing) return <BreakHint />;
   return (
     <div className="ui-actions newspaper-actions">
       <button

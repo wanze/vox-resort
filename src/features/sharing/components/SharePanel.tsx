@@ -44,7 +44,11 @@ function Outcome({ made }: { readonly made: Made }) {
       ) : (
         <LinkField key={made.link} link={made.link} />
       )}
-      {long ? <p className="ui-note">Long link: some apps may cut it</p> : null}
+      {long ? (
+        <p className="ui-note">
+          Long link: WhatsApp and Telegram cut it short. Email keeps it whole.
+        </p>
+      ) : null}
     </>
   );
 }

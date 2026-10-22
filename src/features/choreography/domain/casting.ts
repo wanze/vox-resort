@@ -7,7 +7,7 @@ import { createGolfPlay, type GolfPlay } from './golf';
 import type { Audience, Floor } from './shows';
 import type { TagGame, Yard } from './tag';
 import type { Place, VenuePlaces } from './places';
-import type { CastleGroup } from './sandCastles';
+import type { CastleGroup, StandingCastle } from './sandCastles';
 import type { SeaShore, SwimTrip } from './seaSwim';
 
 export const SHOWN = { asCrowd: 0, placed: 1, hidden: 2 } as const;
@@ -55,6 +55,7 @@ export interface Bathers {
 export interface SandCastles {
   window: number;
   groups: readonly CastleGroup[];
+  standing: StandingCastle[];
   readonly groupOf: Int32Array;
   readonly builderOf: Int32Array;
   readonly stages: readonly (readonly DrawnBall[])[];
@@ -303,6 +304,7 @@ export function createCast(
     castles: {
       window: Number.NaN,
       groups: [],
+      standing: [],
       groupOf: new Int32Array(capacity).fill(-1),
       builderOf: new Int32Array(capacity),
       stages: castles,

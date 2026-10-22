@@ -181,6 +181,23 @@ describe('advanceEvents', () => {
     expect(state.runs[0]!.paid).toBe(150);
   });
 
+  it('lets a show before the resort fills go unannounced and unpaid', () => {
+    const empty = facts({ emptyUntil: start + 1 });
+    const state = stateWith({});
+    expect(run(state, start - 60, start + 6, empty)).toEqual([]);
+    expect(state.runs).toEqual([]);
+
+    const announced = stateWith({});
+    run(announced, start - 60, start - 60);
+    expect(run(announced, start - 5, start + 6, empty)).toEqual([]);
+    expect(announced.runs).toEqual([]);
+
+    const later = stateWith({});
+    expect(kinds(run(later, start - 60, start - 60, facts({ emptyUntil: start })))).toEqual([
+      'announce',
+    ]);
+  });
+
   it('ends after the duration', () => {
     const state = stateWith({});
     run(state, start - 60, start - 60);

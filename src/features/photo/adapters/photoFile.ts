@@ -1,3 +1,4 @@
+import type { PhotoCaption } from '../domain/photoCaption';
 import { applyFilter, type ColorMatrix } from '../domain/photoFilters';
 import type { PhotoPixels } from '../domain/photoPixels';
 
@@ -5,24 +6,36 @@ import type { PhotoPixels } from '../domain/photoPixels';
 const CAPTION_FONT = 'Jersey HUD';
 const CAPTION_SHARE = 0.035;
 const CAPTION_MARGIN = 1.2;
+const DETAIL_SCALE = 0.6;
+// Of the title's size, so its descenders clear the line below.
+const LINE_GAP = 0.35;
 
 export interface PhotoLook {
   readonly matrix: ColorMatrix;
-  readonly caption: string | null;
+  readonly caption: PhotoCaption | null;
 }
 
-async function writeCaption(context: CanvasRenderingContext2D, caption: string): Promise<void> {
+const fontOf = (size: number): string => `${size}px '${CAPTION_FONT}', sans-serif`;
+
+async function writeCaption(
+  context: CanvasRenderingContext2D,
+  caption: PhotoCaption,
+): Promise<void> {
   const { width, height } = context.canvas;
   const size = Math.round(Math.max(16, Math.min(width, height) * CAPTION_SHARE));
-  const font = `${size}px '${CAPTION_FONT}', sans-serif`;
+  const small = Math.round(size * DETAIL_SCALE);
   // A face not drawn yet is not loaded yet, and canvas text never waits for one.
-  await document.fonts.load(font, caption);
-  context.font = font;
+  await document.fonts.load(fontOf(size), `${caption.title}${caption.detail}`);
+  const left = size * CAPTION_MARGIN;
+  const detailLine = height - size * CAPTION_MARGIN;
   context.textBaseline = 'alphabetic';
   context.shadowColor = 'rgba(0, 0, 0, 0.6)';
   context.shadowBlur = size / 4;
   context.fillStyle = '#ffffff';
-  context.fillText(caption, size * CAPTION_MARGIN, height - size * CAPTION_MARGIN);
+  context.font = fontOf(small);
+  context.fillText(caption.detail, left, detailLine);
+  context.font = fontOf(size);
+  context.fillText(caption.title, left, detailLine - small - size * LINE_GAP);
 }
 
 export type PhotoFormat =

@@ -129,7 +129,7 @@ function Failure({ message }: { readonly message: string }) {
 const LINK_NOTICES: { readonly [kind in IncomingShare['kind']]: string | null } = {
   loading: null,
   ready: null,
-  unreadable: 'This resort link could not be read.',
+  unreadable: 'This resort link could not be read. A chat app may have cut it short.',
   newer: 'This resort link was made by a newer version of the game. Reload to update.',
 };
 

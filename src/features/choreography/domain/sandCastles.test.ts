@@ -14,10 +14,12 @@ import {
   planCastles,
   RING,
   stageAt,
+  washedAt,
   type Builder,
   type CastleGroup,
 } from './sandCastles';
 import { performAtSea, SWIM_WINDOW, type SeaShore } from './seaSwim';
+import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 
 const BAY: Shore = shoreFor({
   tilesX: 48,
@@ -51,7 +53,7 @@ const row = (count: number, child = true): Builder[] =>
   );
 
 const plan = (candidates: readonly Builder[], sea = SEA, window = 0, clock = 0) =>
-  planCastles(sea, candidates, candidates, window, clock, 12);
+  planCastles(sea, candidates, candidates, [], window, clock, 12);
 
 function firstHost(sea = SEA): { host: Builder; group: CastleGroup } {
   for (let person = 0; person < 200; person++) {
@@ -79,7 +81,8 @@ describe('planCastles', () => {
         expect(terrainAt(BAY, tile(group.x), tile(group.z))).toBe('beach');
         expect(group.z).toBeGreaterThan(PITCH_Z);
         expect(group.start).toBeGreaterThanOrEqual(window * SWIM_WINDOW);
-        expect(group.gone).toBeLessThanOrEqual((window + 1) * SWIM_WINDOW);
+        const walkBack = group.begun - group.start;
+        expect(group.built + walkBack).toBeLessThanOrEqual((window + 1) * SWIM_WINDOW);
       }
     }
     expect(built).toBeGreaterThan(10);
@@ -113,7 +116,7 @@ describe('planCastles', () => {
         builder(person + 5, x + 15, true, 4),
       ];
       // Pitches are given apart, so the castle has room among them.
-      const [group] = planCastles(SEA, party, [], 0, 0, 12);
+      const [group] = planCastles(SEA, party, [], [], 0, 0, 12);
       if (!group) continue;
       gathered++;
       const [host, ...rest] = [...group.builders].map((member) => party[member - person]!);
@@ -138,6 +141,17 @@ describe('planCastles', () => {
       }
       for (const other of groups) {
         if (other === group) continue;
+        expect(Math.hypot(other.x - group.x, other.z - group.z)).toBeGreaterThan(2 * RING);
+      }
+    }
+  });
+
+  it('keeps clear of the castles still standing', () => {
+    const candidates = row(40);
+    const standing = plan(candidates).map(({ x, z }) => ({ x, z }));
+    const groups = planCastles(SEA, candidates, candidates, standing, 1, SWIM_WINDOW, 12);
+    for (const group of groups) {
+      for (const other of standing) {
         expect(Math.hypot(other.x - group.x, other.z - group.z)).toBeGreaterThan(2 * RING);
       }
     }
@@ -183,7 +197,7 @@ describe('buildAt and stageAt', () => {
     expect(buildAt(group, 0, group.built + walk, into, 0)).toBe(false);
   });
 
-  it('grows the castle through its stages, then lets it slump and go', () => {
+  it('grows the castle through its stages, then leaves it standing', () => {
     const { group } = firstHost();
     expect(stageAt(group, group.begun - 0.1, STAGES)).toBe(-1);
     expect(stageAt(group, group.begun, STAGES)).toBe(0);
@@ -195,14 +209,7 @@ describe('buildAt and stageAt', () => {
     }
     expect(last).toBe(STAGES - 1);
     expect(stageAt(group, group.built, STAGES)).toBe(STAGES - 1);
-    let slumped = STAGES - 1;
-    for (let time = group.built; time < group.gone; time += 0.5) {
-      const stage = stageAt(group, time, STAGES);
-      expect(stage).toBeLessThanOrEqual(slumped);
-      slumped = stage;
-    }
-    expect(slumped).toBe(0);
-    expect(stageAt(group, group.gone, STAGES)).toBe(-1);
+    expect(stageAt(group, group.built + 10 * SWIM_WINDOW, STAGES)).toBe(STAGES - 1);
   });
 });
 
@@ -227,6 +234,15 @@ function beachWorld(people: readonly Builder[]) {
   };
   return { until, casting };
 }
+
+describe('washedAt', () => {
+  it('is the coming four in the morning', () => {
+    const hour = 60;
+    expect(washedAt(15 * hour)).toBe(TICKS_PER_DAY + 4 * hour);
+    expect(washedAt(TICKS_PER_DAY + 2 * hour)).toBe(TICKS_PER_DAY + 4 * hour);
+    expect(washedAt(TICKS_PER_DAY + 4 * hour)).toBe(2 * TICKS_PER_DAY + 4 * hour);
+  });
+});
 
 describe('performOnSand', () => {
   it('draws the builders at it and the castle at its stage, and nobody once they stop resting', () => {
@@ -265,5 +281,25 @@ describe('performOnSand', () => {
     for (const group of cast.castles.groups) {
       for (const person of group.builders) expect(cast.bathers.trips[person]).toBeNull();
     }
+  });
+
+  it('leaves a finished castle standing past its window until the night’s tide', () => {
+    const people = row(40);
+    const { casting } = beachWorld(people);
+    const cast = createCast(people.length, [], SEA);
+    const noon = 12 * 60;
+    recast(cast, casting, new Int32Array(0));
+    performOnSand(cast, 0, noon);
+    const group = cast.castles.groups[0]!;
+    const shownAt = () =>
+      cast.castles.stages
+        .flat()
+        .filter((ball) => ball.shown && ball.x === group.x && ball.z === group.z);
+    performOnSand(cast, SWIM_WINDOW, noon + 4);
+    expect(cast.castles.standing).toContainEqual({ x: group.x, z: group.z, until: washedAt(noon) });
+    expect(shownAt()).toHaveLength(1);
+    performOnSand(cast, SWIM_WINDOW + 1, washedAt(noon));
+    expect(cast.castles.standing).toEqual([]);
+    expect(shownAt()).toHaveLength(0);
   });
 });

@@ -4,20 +4,21 @@ import { blockedAt, clearLine } from '../../crowd/domain/sandGrid';
 import { BEACH_SURFACE } from '../../crowd/domain/walkNetwork';
 import { terrainAt } from '../../layout/domain/shoreline';
 import { DRAWN_POSE, poseWith } from '../../rendering/domain/poses';
+import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { walkingTicks } from '../../sim/domain/crowdRate';
-import { mix, unitOf } from '../../random/domain/hash';
+import type { DrawnBall } from './courts';
 import { SHOWN, type Cast, type SandCastles } from './casting';
-import { SWIM_WINDOW, type SeaShore } from './seaSwim';
+import { SWIM_WINDOW, unit, type SeaShore } from './seaSwim';
 
 export const HOST_SHARE = 0.3;
 const JOIN = { child: 0.7, adult: 0.25 } as const;
 export const MAX_BUILDERS = 4;
 const GATHER_REACH = 2 * TILE_VOXELS;
 
-// With the walks and the linger it has to fit a beach window.
+// With the walks it has to fit a beach window.
 const BUILD_SECONDS = { min: 60, max: 150 } as const;
-const LINGER_SECONDS = 40;
-const SLUMP_SECONDS = 15;
+// The night's tide takes a castle, after the last bather and before the early risers at five.
+const WASHED_AT = 4 * 60;
 
 // From the castle's middle to a builder's: the castle is five voxels across.
 export const RING = 4;
@@ -51,7 +52,6 @@ export interface CastleGroup {
   readonly start: number;
   readonly begun: number;
   readonly built: number;
-  readonly gone: number;
   readonly builders: Int32Array;
   readonly legs: Float64Array;
 }
@@ -71,8 +71,10 @@ interface Point {
   readonly z: number;
 }
 
-const unit = (person: number, window: number, channel: number): number =>
-  unitOf(mix(mix(mix(person) + window) + channel));
+// Outlives the window it was built in, so its clock is the sim's ticks rather than the act's.
+export interface StandingCastle extends Point {
+  readonly until: number;
+}
 
 function onSand(sea: SeaShore, x: number, z: number): boolean {
   const shore = sea.swim.shore;
@@ -196,7 +198,7 @@ function gather(
   const longest = Math.max(...all.map((seat) => seat.walk));
   const build =
     BUILD_SECONDS.min + unit(host.person, window, BUILD) * (BUILD_SECONDS.max - BUILD_SECONDS.min);
-  const seconds = longest + build + Math.max(longest, LINGER_SECONDS);
+  const seconds = 2 * longest + build;
   if (seconds > SWIM_WINDOW) return null;
   const start = window * SWIM_WINDOW + unit(host.person, window, OFFSET) * (SWIM_WINDOW - seconds);
   if (start < clock) return null;
@@ -219,7 +221,6 @@ function gather(
     start,
     begun: start + Math.min(...seats.map((seat) => seat.walk)),
     built,
-    gone: built + LINGER_SECONDS,
     builders: Int32Array.from(seats, (seat) => seat.member.person),
     legs: Float64Array.from(legs),
   };
@@ -229,22 +230,25 @@ export function planCastles(
   sea: SeaShore,
   candidates: readonly Builder[],
   pitches: readonly Point[],
+  standing: readonly Point[],
   window: number,
   clock: number,
   most: number,
 ): CastleGroup[] {
   const groups: CastleGroup[] = [];
+  const castles: Point[] = [...standing];
   const taken = new Set<number>();
   for (const [at, host] of candidates.entries()) {
     if (groups.length >= most) break;
     if (!host.child || taken.has(host.person)) continue;
     if (unit(host.person, window, HOST) >= HOST_SHARE) continue;
-    const spot = spotFor(sea, host, window, pitches, groups);
+    const spot = spotFor(sea, host, window, pitches, castles);
     if (!spot) continue;
     const group = gather(sea, spot, membersFor(candidates, at, spot, taken, window), window, clock);
     if (!group) continue;
     for (const person of group.builders) taken.add(person);
     groups.push(group);
+    castles.push(group);
   }
   return groups;
 }
@@ -294,13 +298,15 @@ export function buildAt(
 }
 
 export function stageAt(group: CastleGroup, clock: number, stages: number): number {
-  if (clock < group.begun || clock >= group.gone) return -1;
-  if (clock < group.built) {
-    const done = (clock - group.begun) / (group.built - group.begun);
-    return Math.min(stages - 1, Math.floor(done * stages));
-  }
-  const left = group.gone - clock;
-  return left >= SLUMP_SECONDS ? stages - 1 : Math.floor((left / SLUMP_SECONDS) * stages);
+  if (clock < group.begun) return -1;
+  if (clock >= group.built) return stages - 1;
+  const done = (clock - group.begun) / (group.built - group.begun);
+  return Math.min(stages - 1, Math.floor(done * stages));
+}
+
+export function washedAt(ticks: number): number {
+  const day = Math.floor(ticks / TICKS_PER_DAY) * TICKS_PER_DAY;
+  return ticks - day < WASHED_AT ? day + WASHED_AT : day + TICKS_PER_DAY + WASHED_AT;
 }
 
 function candidatesOf(cast: Cast, ticks: number): Builder[] {
@@ -330,16 +336,22 @@ function pitchesOf(cast: Cast): Point[] {
   }));
 }
 
+// Every castle finished in the window just gone is left standing; one still building is let go.
 function plan(cast: Cast, window: number, clock: number, ticks: number): void {
   const { castles } = cast;
+  const until = washedAt(ticks);
+  for (const group of castles.groups) {
+    if (clock >= group.built) castles.standing.push({ x: group.x, z: group.z, until });
+  }
   castles.window = window;
   castles.groups = planCastles(
     cast.bathers.sea!,
     candidatesOf(cast, ticks),
     pitchesOf(cast),
+    castles.standing,
     window,
     clock,
-    castles.stages.length,
+    castles.stages.length - castles.standing.length,
   );
   castles.groupOf.fill(-1);
   for (const [index, group] of castles.groups.entries()) {
@@ -363,16 +375,23 @@ function drawBuilders(cast: Cast, clock: number): void {
   }
 }
 
+function showStage(stages: readonly DrawnBall[], at: Point | undefined, stage: number): void {
+  for (const [index, ball] of stages.entries()) {
+    ball.shown = index === stage;
+    ball.x = at?.x ?? 0;
+    ball.y = BEACH_SURFACE;
+    ball.z = at?.z ?? 0;
+  }
+}
+
+// The standing castles take the first slots, the ones going up today the rest.
 function drawCastles(castles: SandCastles, clock: number): void {
+  const { standing, groups } = castles;
   for (const [slot, stages] of castles.stages.entries()) {
-    const group = castles.groups[slot];
-    const stage = group ? stageAt(group, clock, stages.length) : -1;
-    for (const [at, ball] of stages.entries()) {
-      ball.shown = at === stage;
-      ball.x = group?.x ?? 0;
-      ball.y = BEACH_SURFACE;
-      ball.z = group?.z ?? 0;
-    }
+    const kept = standing[slot];
+    const group = groups[slot - standing.length];
+    if (kept) showStage(stages, kept, stages.length - 1);
+    else showStage(stages, group, group ? stageAt(group, clock, stages.length) : -1);
   }
 }
 
@@ -380,7 +399,11 @@ function drawCastles(castles: SandCastles, clock: number): void {
 export function performOnSand(cast: Cast, clock: number, ticks: number): void {
   if (!cast.bathers.sea) return;
   const window = Math.floor(clock / SWIM_WINDOW);
-  if (cast.castles.window !== window) plan(cast, window, clock, ticks);
+  const { castles } = cast;
+  if (castles.standing.some((castle) => castle.until <= ticks)) {
+    castles.standing = castles.standing.filter((castle) => castle.until > ticks);
+  }
+  if (castles.window !== window) plan(cast, window, clock, ticks);
   drawBuilders(cast, clock);
   drawCastles(cast.castles, clock);
 }

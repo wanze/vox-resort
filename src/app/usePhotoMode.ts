@@ -12,6 +12,7 @@ import {
   type ColorMatrix,
   type PhotoFilterId,
 } from '../features/photo/domain/photoFilters';
+import { photoCaption } from '../features/photo/domain/photoCaption';
 import { photoFileName } from '../features/photo/domain/photoName';
 import type { PhotoPixels, PhotoSize } from '../features/photo/domain/photoPixels';
 import { clampFov } from '../features/photo/domain/photoView';
@@ -95,7 +96,10 @@ function useShot(showcase: RefObject<Showcase | null>, parts: PhotoParts) {
     const pixels = await mounted.capturePhoto(scale);
     kept.current = { pixels, day: dayOf(parts), time };
     // Always the resort's name for now; whether to write one, and what, may become a choice.
-    const look = { matrix: PHOTO_FILTERS[filter].matrix, caption: nameOf(parts) };
+    const look = {
+      matrix: PHOTO_FILTERS[filter].matrix,
+      caption: photoCaption(nameOf(parts), time),
+    };
     return { blob: await encodePhoto(pixels, look), name: fileNameOf(parts, time) };
   };
 
@@ -168,9 +172,10 @@ async function enlargedFrom(
   if (!mounted) return null;
   try {
     const pixels = await mounted.pictureOf(spot, size);
-    const look = { matrix: PHOTO_FILTERS.none.matrix, caption: nameOf(parts) };
+    const time = spot.minute / MINUTES_PER_DAY;
+    const look = { matrix: PHOTO_FILTERS.none.matrix, caption: photoCaption(nameOf(parts), time) };
     const day = Math.max(0, dayOf(parts) - daysAgo);
-    const name = photoFileName(nameOf(parts), day, spot.minute / MINUTES_PER_DAY);
+    const name = photoFileName(nameOf(parts), day, time);
     return { blob: await encodePhoto(pixels, look), name };
   } catch (cause: unknown) {
     console.error(cause);

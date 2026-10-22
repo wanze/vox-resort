@@ -66,7 +66,7 @@ interface Band {
   readonly toZ: number;
 }
 
-const unit = (person: number, window: number, channel: number): number =>
+export const unit = (person: number, window: number, channel: number): number =>
   unitOf(mix(mix(mix(person) + window) + channel));
 
 // Every column from west to east, so a leg between two points in it never crosses a sandbar.

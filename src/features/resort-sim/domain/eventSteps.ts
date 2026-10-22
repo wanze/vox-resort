@@ -25,10 +25,13 @@ import { bookingDayKey, keenParties, tonightsShow } from '../../events/domain/st
 import { latecomersFor } from '../../events/domain/welcome';
 import { watchRoom } from '../../fireworks/domain/launch';
 import { isFireworksNight } from '../../fireworks/domain/nights';
+import { presentCount } from '../../guests/domain/guests';
+import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import { countEvent, countWelcomed, noteWelcomeGap } from '../../sim/domain/dayReport';
 import { remember } from '../../sim/domain/happiness';
 import { canAfford, record } from '../../sim/domain/ledger';
 import { strongestNeed } from '../../sim/domain/needs';
+import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { stayCount } from '../../sim/domain/thoughts';
 import { shelterOf } from '../../sim/domain/venues';
 import { effectOn, type Season } from '../../sim/domain/season';
@@ -51,6 +54,14 @@ export function weatherOnDay(clock: SimNow, day: number, season: Season | null =
   return clock.forcedWeather ?? weatherOn(day, WEATHER_SEED, effectOn(season, day).weather);
 }
 
+// Opened from a break, the clock runs on through an empty resort to the season's first check-in.
+function emptyUntil(resort: SimState, now: number): number {
+  const { season } = resort;
+  if (season?.state !== 'running') return 0;
+  const opens = season.startedOn * TICKS_PER_DAY + CHECK_IN_TICK;
+  return now < opens && presentCount(resort.guests) === 0 ? opens : 0;
+}
+
 export function eventFactsOf(resort: SimState, clock: SimNow): EventFacts {
   const venues = resort.siteVenues;
   return {
@@ -65,6 +76,7 @@ export function eventFactsOf(resort: SimState, clock: SimNow): EventFacts {
     hostOnDuty: resort.roster.animator > 0,
     canPay: (fee) => canAfford(resort.ledger, fee),
     stages: resort.stages,
+    emptyUntil: emptyUntil(resort, clock.ticks),
   };
 }
 

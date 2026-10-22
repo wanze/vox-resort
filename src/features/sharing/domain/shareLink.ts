@@ -7,8 +7,9 @@ export const MAX_LINK_CHARS = 1_000_000;
 // Checked while inflating, so a small link cannot grow into gigabytes.
 export const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
-// Chats and some apps cut a link somewhere past this; the game itself reads far longer ones.
-export const LONG_LINK_CHARS = 32_000;
+// WhatsApp and Telegram cut a message, link and all, at 4096 characters; the game reads far
+// longer ones.
+export const LONG_LINK_CHARS = 4096;
 
 export type ParsedLink =
   | { readonly kind: 'unreadable' }

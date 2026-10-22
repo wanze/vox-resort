@@ -55,7 +55,12 @@ export function gableRoof(b: VoxelBuilder, o: GableRoofOptions): number {
   return y + 1;
 }
 
-export type HipRoofOptions = RoofOptions;
+export interface HipRoofOptions extends RoofOptions {
+  // Voxels a side steps in per course: 3 is the shallow pitch of a modern hipped roof.
+  readonly step?: number;
+  // Hung a layer under the first course, so the eaves read as a dark line from the street.
+  readonly gutter?: Ramp;
+}
 
 interface HipCap {
   readonly xLo: number;
@@ -97,7 +102,21 @@ function hipCourses(
 
 export function hipRoof(b: VoxelBuilder, o: HipRoofOptions): number {
   const tile = o.tile ?? PALETTE.terracotta;
-  const cap = hipCourses(b, o, o.overhang ?? 2, 2, (course) => courseColor(tile, course));
+  const step = o.step ?? 2;
+  if (step < 1) throw new Error('A roof steps in at least a voxel a course');
+  const overhang = o.overhang ?? 2;
+  if (o.gutter) {
+    const x0 = o.x - overhang;
+    const x1 = o.x + o.w - 1 + overhang;
+    const z0 = o.z - overhang;
+    const z1 = o.z + o.d - 1 + overhang;
+    const y = o.y - 1;
+    b.box(x0, x1, y, y, z0, z0, o.gutter.deep);
+    b.box(x0, x1, y, y, z1, z1, o.gutter.deep);
+    b.box(x0, x0, y, y, z0, z1, o.gutter.deep);
+    b.box(x1, x1, y, y, z0, z1, o.gutter.deep);
+  }
+  const cap = hipCourses(b, o, overhang, step, (course) => courseColor(tile, course));
   const insetX = capInset(cap.xLo, cap.xHi);
   const insetZ = capInset(cap.zLo, cap.zHi);
   b.box(

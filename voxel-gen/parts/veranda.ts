@@ -168,6 +168,14 @@ export interface PlankRailOptions {
   readonly rail?: Ramp;
 }
 
+// One dark tone for boards and posts alike: with posts only at the ends it reads as long slats.
+export const SLATS: Ramp = {
+  light: PALETTE.teak.deep,
+  base: PALETTE.teak.deep,
+  shade: PALETTE.teak.deep,
+  deep: PALETTE.teak.deep,
+};
+
 // Two long boards between posts: a handful of quads where a balustrade costs four a baluster.
 export function plankRail(b: VoxelBuilder, o: PlankRailOptions): void {
   const pitch = o.pitch ?? 5;

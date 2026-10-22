@@ -6,11 +6,13 @@ import bungalow from './bungalow.ts';
 import bungalowC from './bungalow-c.ts';
 import bungalowD from './bungalow-d.ts';
 import cottage from './cottage.ts';
+import cottageC from './cottage-c.ts';
 import icecream from './icecream.ts';
 import palm from './palm.ts';
 import poolsideBar from './poolside-bar.ts';
 import snackBar from './snack-bar.ts';
 import villa from './villa.ts';
+import villaC from './villa-c.ts';
 import streetLamp from './street-lamp.ts';
 import litterBin from './litter-bin.ts';
 import signPost from './sign-post.ts';
@@ -42,12 +44,16 @@ import pedaloRental from './pedalo-rental.ts';
 import kidsClub from './kids-club.ts';
 import playground from './playground.ts';
 import house from './house.ts';
+import houseC from './house-c.ts';
 import hotel from './hotel.ts';
+import hotelC from './hotel-c.ts';
 import supermarket from './supermarket.ts';
 import reception from './reception.ts';
+import receptionC from './reception-c.ts';
 import gymPavilion from './gym-pavilion.ts';
 import gameHall from './game-hall.ts';
 import restaurant from './restaurant.ts';
+import restaurantC from './restaurant-c.ts';
 import beachClub from './beach-club.ts';
 import swimmingPool from './swimming-pool.ts';
 import tennisCourt from './tennis-court.ts';
@@ -72,7 +78,9 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'bungalow', source: bungalowC },
   { of: 'bungalow', source: bungalowD },
   { of: 'cottage', source: cottage },
+  { of: 'cottage', source: cottageC },
   { of: 'villa', source: villa },
+  { of: 'villa', source: villaC },
   { of: 'street-lamp', source: streetLamp },
   { of: 'litter-bin', source: litterBin },
   { of: 'sign-post', source: signPost },
@@ -104,12 +112,16 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'kids-club', source: kidsClub },
   { of: 'playground', source: playground },
   { of: 'house', source: house },
+  { of: 'house', source: houseC },
   { of: 'hotel', source: hotel },
+  { of: 'hotel', source: hotelC },
   { of: 'supermarket', source: supermarket },
   { of: 'reception', source: reception },
+  { of: 'reception', source: receptionC },
   { of: 'gym-pavilion', source: gymPavilion },
   { of: 'game-hall', source: gameHall },
   { of: 'restaurant', source: restaurant },
+  { of: 'restaurant', source: restaurantC },
   { of: 'beach-club', source: beachClub },
   { of: 'swimming-pool', source: swimmingPool },
   { of: 'tennis-court', source: tennisCourt },

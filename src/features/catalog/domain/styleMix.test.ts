@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Plaza } from '../../layout/domain/resortPlan';
+import { stylesOf } from './objectTypes';
 import { ONE_OFF, RESORT_WIDE, styleMix } from './styleMix';
 
 const block = (index: number): Plaza => ({
@@ -36,8 +37,10 @@ describe('styleMix', () => {
     const variants = NEIGHBOURHOODS.filter(
       (rect) => styleOf('villa', rect.x0, rect.z0) !== 'villa',
     );
-    expect(variants.length).toBeGreaterThanOrEqual(70);
-    expect(variants.length).toBeLessThanOrEqual(130);
+    // Measured against the family's size, so adding a villa style does not break the test.
+    const expected = NEIGHBOURHOODS.length * (1 - 1 / stylesOf('villa').length);
+    expect(variants.length).toBeGreaterThanOrEqual(expected - 30);
+    expect(variants.length).toBeLessThanOrEqual(expected + 30);
   });
 
   it('rolls every placement on its own when told to scatter', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTE } from '../palette.ts';
 import { VoxelBuilder } from '../voxelgen.ts';
-import { flowerBox, parasol, pottedPlant } from './props.ts';
+import { flowerBox, oleander, parasol, picnicTable, pottedPlant } from './props.ts';
 
 const at = (b: VoxelBuilder, x: number, y: number, z: number): number | undefined => b.get(x, y, z);
 
@@ -95,5 +95,28 @@ describe('parasol', () => {
     expect(() => parasol(new VoxelBuilder(), { x: 0, z: 0, y: 0, reach: 0 })).toThrow(
       /one voxel past/,
     );
+  });
+});
+
+describe('oleander', () => {
+  it('is a low bush with its corners cut and a few flowers in it', () => {
+    const b = new VoxelBuilder();
+    oleander(b, { x: 0, z: 0, y: 0 });
+    expect(at(b, 2, 0, 0)).toBe(PALETTE.foliage.base);
+    expect(at(b, 0, 0, 0)).toBeUndefined();
+    expect(at(b, 0, 2, 3)).toBe(PALETTE.bloom.light);
+    expect(at(b, 2, 6, 2)).toBeUndefined();
+  });
+});
+
+describe('picnicTable', () => {
+  it('sets a top on two legs between two benches', () => {
+    const b = new VoxelBuilder();
+    picnicTable(b, { x: 0, z: 0, y: 0 });
+    expect(at(b, 4, 2, 2)).toBe(PALETTE.teak.light);
+    expect(at(b, 1, 0, 2)).toBe(PALETTE.teak.shade);
+    expect(at(b, 4, 1, 0)).toBe(PALETTE.teak.base);
+    expect(at(b, 4, 1, 4)).toBe(PALETTE.teak.base);
+    expect(at(b, 4, 0, 0)).toBeUndefined();
   });
 });

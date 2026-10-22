@@ -160,3 +160,36 @@ export function planter(b: VoxelBuilder, o: PlanterOptions): void {
     b.box(cx, alongX ? cx + 1 : x1, o.y + 3, o.y + 3, cz, alongX ? z1 : cz + 1, color);
   }
 }
+
+export interface GardenPropOptions {
+  readonly x: number;
+  readonly z: number;
+  readonly y: number;
+}
+
+// Six across with its corners cut, and kept low, so it hides no loggia behind it.
+export function oleander(b: VoxelBuilder, o: GardenPropOptions): void {
+  const { bloom, foliage } = PALETTE;
+  b.box(o.x + 1, o.x + 4, o.y, o.y + 4, o.z, o.z + 5, foliage.base);
+  b.box(o.x, o.x + 5, o.y + 1, o.y + 3, o.z + 1, o.z + 4, foliage.base);
+  b.box(o.x + 1, o.x + 4, o.y + 5, o.y + 5, o.z + 1, o.z + 4, foliage.base);
+  for (const [dx, dy, dz] of [
+    [1, 5, 2],
+    [4, 3, 5],
+    [3, 5, 3],
+    [0, 2, 3],
+  ] as const) {
+    b.set(o.x + dx, o.y + dy, o.z + dz, bloom.light);
+  }
+}
+
+export function picnicTable(b: VoxelBuilder, o: GardenPropOptions): void {
+  const { teak } = PALETTE;
+  b.box(o.x, o.x + 8, o.y + 2, o.y + 2, o.z + 1, o.z + 3, teak.light);
+  for (const leg of [o.x + 1, o.x + 7]) {
+    b.box(leg, leg, o.y, o.y + 1, o.z + 2, o.z + 2, teak.shade);
+  }
+  for (const side of [o.z, o.z + 4]) {
+    b.box(o.x, o.x + 8, o.y + 1, o.y + 1, side, side, teak.base);
+  }
+}

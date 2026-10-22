@@ -10557,6 +10557,60 @@
       }
     },
     {
+      "family": "cottage",
+      "model": {
+        "id": "cottage-c",
+        "label": "Cottage C",
+        "category": "lodging",
+        "tiles": {
+          "x": 2,
+          "z": 3
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 32,
+        "height": 22,
+        "depth": 48,
+        "emissive": [],
+        "water": [],
+        "windows": [9418948],
+        "lights": [],
+        "seats": [],
+        "placement": {},
+        "venue": {
+          "role": "lodging",
+          "capacity": 4,
+          "beds": 4,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 22,
+          "doors": [
+            {
+              "x": 18,
+              "z": 32,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 18531,
+        "dayVoxelCount": 18531,
+        "dominantColor": 15260870,
+        "solidTops": [19, 19, 20, 20, 18, 18],
+        "turnless": false
+      }
+    },
+    {
       "family": "villa",
       "model": {
         "id": "villa-b",
@@ -10612,6 +10666,65 @@
         "dayVoxelCount": 49103,
         "dominantColor": 15260870,
         "solidTops": [17, 33, 34, 33, 20, 34, 35, 35, 4, 4, 31, 33, 6, 6, 4, 4],
+        "turnless": false
+      }
+    },
+    {
+      "family": "villa",
+      "model": {
+        "id": "villa-c",
+        "label": "Villa C",
+        "category": "lodging",
+        "tiles": {
+          "x": 4,
+          "z": 4
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 64,
+        "height": 37,
+        "depth": 64,
+        "emissive": [],
+        "water": [5228254],
+        "windows": [9418948],
+        "lights": [],
+        "seats": [],
+        "placement": {
+          "perResort": {
+            "min": 1,
+            "max": 12
+          }
+        },
+        "venue": {
+          "role": "lodging",
+          "capacity": 8,
+          "beds": 8,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 35,
+          "doors": [
+            {
+              "x": 38,
+              "z": 30,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 69818,
+        "dayVoxelCount": 69818,
+        "dominantColor": 15260870,
+        "solidTops": [31, 32, 32, 31, 33, 35, 33, 34, 31, 32, 32, 33, 4, 4, 4, 30],
         "turnless": false
       }
     },
@@ -12994,6 +13107,65 @@
       }
     },
     {
+      "family": "house",
+      "model": {
+        "id": "house-c",
+        "label": "House C",
+        "category": "lodging",
+        "tiles": {
+          "x": 3,
+          "z": 3
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 48,
+        "height": 36,
+        "depth": 48,
+        "emissive": [],
+        "water": [],
+        "windows": [9418948],
+        "lights": [],
+        "seats": [],
+        "placement": {},
+        "venue": {
+          "role": "lodging",
+          "capacity": 6,
+          "beds": 6,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 22,
+          "doors": [
+            {
+              "x": 19,
+              "z": 24,
+              "facing": 0
+            },
+            {
+              "x": 36,
+              "z": 24,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 39239,
+        "dayVoxelCount": 39239,
+        "dominantColor": 15260870,
+        "solidTops": [31, 33, 31, 32, 34, 32, 29, 29, 29],
+        "turnless": false
+      }
+    },
+    {
       "family": "hotel",
       "model": {
         "id": "hotel-b",
@@ -13064,6 +13236,81 @@
           3, 53, 53, 77, 77, 77, 77, 53, 53, 3, 57, 60, 59, 77, 77, 77, 91, 59, 60, 57, 58, 64, 62,
           77, 79, 77, 77, 62, 64, 58, 56, 59, 58, 77, 77, 77, 77, 58, 59, 56, 3, 4, 3, 3, 3, 3, 3,
           4, 3, 3
+        ],
+        "turnless": false
+      }
+    },
+    {
+      "family": "hotel",
+      "model": {
+        "id": "hotel-c",
+        "label": "Hotel C",
+        "category": "lodging",
+        "tiles": {
+          "x": 10,
+          "z": 5
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 160,
+        "height": 49,
+        "depth": 80,
+        "emissive": [15578983],
+        "water": [],
+        "windows": [9418948],
+        "lights": [
+          {
+            "x": 86,
+            "y": 12,
+            "z": 36,
+            "color": 15578983,
+            "intensity": 100,
+            "distance": 58
+          },
+          {
+            "x": 96,
+            "y": 12,
+            "z": 36,
+            "color": 15578983,
+            "intensity": 100,
+            "distance": 58
+          }
+        ],
+        "seats": [],
+        "placement": {},
+        "venue": {
+          "role": "lodging",
+          "capacity": 40,
+          "beds": 40,
+          "dwellSeconds": {
+            "min": 25200,
+            "max": 32400
+          },
+          "price": 30,
+          "doors": [
+            {
+              "x": 92,
+              "z": 34,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 260492,
+        "dayVoxelCount": 260492,
+        "dominantColor": 15260870,
+        "solidTops": [
+          41, 41, 41, 41, 41, 43, 44, 44, 44, 43, 43, 46, 46, 46, 44, 45, 47, 48, 47, 44, 44, 47,
+          48, 47, 45, 43, 44, 44, 44, 43, 42, 42, 42, 42, 42, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+          3, 3
         ],
         "turnless": false
       }
@@ -13249,6 +13496,118 @@
         "dayVoxelCount": 37426,
         "dominantColor": 15260870,
         "solidTops": [20, 32, 32, 20, 20, 32, 32, 20, 3, 4, 4, 3],
+        "turnless": false
+      }
+    },
+    {
+      "family": "reception",
+      "model": {
+        "id": "reception-c",
+        "label": "Reception C",
+        "category": "amenities",
+        "tiles": {
+          "x": 4,
+          "z": 3
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": 600,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 64,
+        "height": 35,
+        "depth": 48,
+        "emissive": [15578983],
+        "water": [],
+        "windows": [9418948],
+        "lights": [
+          {
+            "x": 15,
+            "y": 12,
+            "z": 43,
+            "color": 15578983,
+            "intensity": 90,
+            "distance": 50
+          }
+        ],
+        "seats": [
+          {
+            "x": 13,
+            "y": 5,
+            "z": 26,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 17,
+            "y": 5,
+            "z": 26,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 45,
+            "y": 5,
+            "z": 26,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 49,
+            "y": 5,
+            "z": 26,
+            "facing": 0,
+            "pose": "sit"
+          }
+        ],
+        "placement": {},
+        "venue": {
+          "role": "service",
+          "sign": "reception",
+          "capacity": 12,
+          "dwellSeconds": {
+            "min": 120,
+            "max": 480
+          },
+          "spots": [
+            {
+              "x": 28,
+              "y": 3,
+              "z": 26,
+              "facing": 2
+            },
+            {
+              "x": 32,
+              "y": 3,
+              "z": 26,
+              "facing": 2
+            },
+            {
+              "x": 35,
+              "y": 3,
+              "z": 26,
+              "facing": 2
+            }
+          ],
+          "doors": [
+            {
+              "x": 32,
+              "z": 23,
+              "facing": 0
+            }
+          ],
+          "receives": true
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 48876,
+        "dayVoxelCount": 48876,
+        "dominantColor": 15260870,
+        "solidTops": [31, 32, 32, 31, 31, 34, 34, 31, 3, 29, 29, 3],
         "turnless": false
       }
     },
@@ -13695,6 +14054,160 @@
         "dayVoxelCount": 31483,
         "dominantColor": 15260870,
         "solidTops": [20, 21, 20, 21, 17, 17, 18, 21, 3, 3, 3, 3],
+        "turnless": false
+      }
+    },
+    {
+      "family": "restaurant",
+      "model": {
+        "id": "restaurant-c",
+        "label": "Restaurant C",
+        "category": "amenities",
+        "tiles": {
+          "x": 4,
+          "z": 3
+        },
+        "groundDecides": false,
+        "gateway": false,
+        "depot": null,
+        "scenery": 0,
+        "shade": false,
+        "sound": null,
+        "cost": null,
+        "binReach": 0,
+        "mosaic": null,
+        "width": 64,
+        "height": 26,
+        "depth": 48,
+        "emissive": [15578983],
+        "water": [],
+        "windows": [9418948],
+        "lights": [
+          {
+            "x": 32,
+            "y": 10,
+            "z": 20,
+            "color": 15578983,
+            "intensity": 90,
+            "distance": 50
+          },
+          {
+            "x": 32,
+            "y": 11,
+            "z": 31,
+            "color": 15578983,
+            "intensity": 90,
+            "distance": 56
+          }
+        ],
+        "seats": [
+          {
+            "x": 9,
+            "y": 5,
+            "z": 28,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 9,
+            "y": 5,
+            "z": 33,
+            "facing": 2,
+            "pose": "sit"
+          },
+          {
+            "x": 18,
+            "y": 5,
+            "z": 28,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 18,
+            "y": 5,
+            "z": 33,
+            "facing": 2,
+            "pose": "sit"
+          },
+          {
+            "x": 43,
+            "y": 5,
+            "z": 28,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 43,
+            "y": 5,
+            "z": 33,
+            "facing": 2,
+            "pose": "sit"
+          },
+          {
+            "x": 52,
+            "y": 5,
+            "z": 28,
+            "facing": 0,
+            "pose": "sit"
+          },
+          {
+            "x": 52,
+            "y": 5,
+            "z": 33,
+            "facing": 2,
+            "pose": "sit"
+          }
+        ],
+        "placement": {},
+        "venue": {
+          "role": "food",
+          "sign": "restaurant",
+          "names": [
+            "The Salty Spoon",
+            "Trattoria Sole",
+            "Casa Marina",
+            "The Driftwood Table",
+            "La Terrazza",
+            "Olive & Vine",
+            "The Blue Shutter",
+            "Osteria del Porto",
+            "The Lemon Grove",
+            "Taverna Kima",
+            "The Fig Tree",
+            "Sea Salt Kitchen",
+            "Il Pescatore",
+            "The Long Lunch"
+          ],
+          "satisfies": [
+            {
+              "need": "hunger",
+              "amount": 1
+            },
+            {
+              "need": "thirst",
+              "amount": 0.5
+            }
+          ],
+          "capacity": 32,
+          "dwellSeconds": {
+            "min": 1800,
+            "max": 3600
+          },
+          "price": 8,
+          "doors": [
+            {
+              "x": 32,
+              "z": 22,
+              "facing": 0
+            }
+          ]
+        },
+        "hire": null,
+        "nameplate": null,
+        "voxelCount": 25655,
+        "dayVoxelCount": 25655,
+        "dominantColor": 13616056,
+        "solidTops": [19, 20, 20, 19, 18, 19, 19, 18, 3, 3, 3, 3],
         "turnless": false
       }
     },

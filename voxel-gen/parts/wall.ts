@@ -9,6 +9,9 @@ export const STOREY_VOXELS = 12;
 // lit window would be a light burning in a wall.
 export const WINDOW_GLASS: readonly Color[] = [PALETTE.glass.base];
 
+// Closed louvred shutters, painted the deepest glass step as the nearest thing to their teal.
+export const LOUVRES: Ramp = { ...PALETTE.glass, base: PALETTE.glass.deep };
+
 // `depth` counts inwards from the wall's outer surface.
 function faceCell(
   b: VoxelBuilder,

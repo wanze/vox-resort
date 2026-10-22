@@ -78,6 +78,24 @@ describe('hipRoof', () => {
     expect(span(b, 2, 'z')).toEqual([3, 4]);
     expect(span(b, 2, 'x')).toEqual([3, 16]);
   });
+
+  it('hangs a gutter round the eaves, under the first course and no further in', () => {
+    const b = new VoxelBuilder();
+    hipRoof(b, { x: 0, z: 0, w: 8, d: 8, y: 5, gutter: PALETTE.teak });
+    expect(at(b, -2, 4, -2)).toBe(PALETTE.teak.deep);
+    expect(at(b, 9, 4, 3)).toBe(PALETTE.teak.deep);
+    expect(at(b, 3, 4, 9)).toBe(PALETTE.teak.deep);
+    expect(at(b, 3, 4, 3)).toBeUndefined();
+    expect(at(b, -2, 5, -2)).toBe(PALETTE.terracotta.deep);
+  });
+
+  it('lies flatter when it steps in further each course', () => {
+    const b = new VoxelBuilder();
+    const free = hipRoof(b, { x: 0, z: 0, w: 12, d: 12, y: 0, overhang: 0, step: 3 });
+    expect(span(b, 1, 'x')).toEqual([3, 8]);
+    expect(span(b, 2, 'x')).toEqual([4, 7]);
+    expect(free).toBe(3);
+  });
 });
 
 describe('thatchRoof', () => {

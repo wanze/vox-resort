@@ -3753,7 +3753,7 @@
               "amount": 0.2
             }
           ],
-          "capacity": 16,
+          "capacity": 12,
           "dwellSeconds": {
             "min": 600,
             "max": 1500
@@ -3885,7 +3885,7 @@
               "amount": 0.2
             }
           ],
-          "capacity": 12,
+          "capacity": 10,
           "dwellSeconds": {
             "min": 600,
             "max": 1800
@@ -4075,7 +4075,7 @@
               "amount": 0.3
             }
           ],
-          "capacity": 24,
+          "capacity": 14,
           "dwellSeconds": {
             "min": 900,
             "max": 2400
@@ -4946,7 +4946,7 @@
               "amount": -0.3
             }
           ],
-          "capacity": 8,
+          "capacity": 6,
           "dwellSeconds": {
             "min": 1200,
             "max": 2700
@@ -6085,7 +6085,7 @@
               "amount": 0.5
             }
           ],
-          "capacity": 40,
+          "capacity": 32,
           "dwellSeconds": {
             "min": 1800,
             "max": 3600
@@ -6371,7 +6371,7 @@
               "amount": 0.4
             }
           ],
-          "capacity": 25,
+          "capacity": 18,
           "dwellSeconds": {
             "min": 1800,
             "max": 5400
@@ -6673,7 +6673,7 @@
               "amount": -0.2
             }
           ],
-          "capacity": 40,
+          "capacity": 30,
           "dwellSeconds": {
             "min": 2700,
             "max": 7200
@@ -7960,7 +7960,7 @@
               "amount": -0.2
             }
           ],
-          "capacity": 30,
+          "capacity": 16,
           "dwellSeconds": {
             "min": 1800,
             "max": 5400
@@ -9569,7 +9569,7 @@
               "amount": 0.7
             }
           ],
-          "capacity": 16,
+          "capacity": 12,
           "dwellSeconds": {
             "min": 1800,
             "max": 3600
@@ -10311,7 +10311,7 @@
               "amount": 0.2
             }
           ],
-          "capacity": 12,
+          "capacity": 10,
           "dwellSeconds": {
             "min": 600,
             "max": 1800
@@ -12104,7 +12104,7 @@
               "amount": 0.2
             }
           ],
-          "capacity": 16,
+          "capacity": 12,
           "dwellSeconds": {
             "min": 600,
             "max": 1500
@@ -12278,7 +12278,7 @@
               "amount": 0.3
             }
           ],
-          "capacity": 24,
+          "capacity": 14,
           "dwellSeconds": {
             "min": 900,
             "max": 2400
@@ -12460,7 +12460,7 @@
               "amount": -0.3
             }
           ],
-          "capacity": 8,
+          "capacity": 6,
           "dwellSeconds": {
             "min": 1200,
             "max": 2700
@@ -13675,7 +13675,7 @@
               "amount": 0.5
             }
           ],
-          "capacity": 40,
+          "capacity": 32,
           "dwellSeconds": {
             "min": 1800,
             "max": 3600
@@ -13954,7 +13954,7 @@
               "amount": 0.4
             }
           ],
-          "capacity": 25,
+          "capacity": 18,
           "dwellSeconds": {
             "min": 1800,
             "max": 5400
@@ -14250,7 +14250,7 @@
               "amount": -0.2
             }
           ],
-          "capacity": 30,
+          "capacity": 16,
           "dwellSeconds": {
             "min": 1800,
             "max": 5400
@@ -15519,7 +15519,7 @@
               "amount": 0.7
             }
           ],
-          "capacity": 16,
+          "capacity": 12,
           "dwellSeconds": {
             "min": 1800,
             "max": 3600
@@ -16699,7 +16699,7 @@
               "amount": -0.2
             }
           ],
-          "capacity": 40,
+          "capacity": 30,
           "dwellSeconds": {
             "min": 2700,
             "max": 7200

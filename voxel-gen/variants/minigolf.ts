@@ -215,7 +215,7 @@ export default defineModel({
     shelter: 'open',
     role: 'activity',
     satisfies: [{ need: 'fun', amount: 0.7 }],
-    capacity: 16,
+    capacity: 12,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 3,
     spots: PLAYERS,

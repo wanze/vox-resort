@@ -53,7 +53,7 @@ export default defineModel({
       { need: 'thirst', amount: 0.7 },
       { need: 'energy', amount: 0.2 },
     ],
-    capacity: 16,
+    capacity: 12,
     dwellSeconds: { min: 600, max: 1500 },
     price: 3,
     doors: [{ x: LEFT + 4, z: FRONT, facing: 0 }],

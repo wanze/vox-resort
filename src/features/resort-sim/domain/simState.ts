@@ -59,6 +59,7 @@ import {
 } from '../../sim/domain/season';
 import { type Photos, createPhotos, forgetPhotos } from '../../sim/domain/photos';
 import { createPathCrowds, type PathCrowds } from '../../sim/domain/pathCrowds';
+import { createVenueUse, type VenueUse } from '../../sim/domain/venueUse';
 import { feltAt, type Nuisance, type NuisanceLive } from '../../sim/domain/nuisance';
 import { createNightNoise, type NightNoise, type NoisyNight } from '../../sim/domain/nightNoise';
 import type { SceneryField } from '../../sim/domain/scenery';
@@ -227,6 +228,8 @@ export interface SimState {
   footfall: Footfall;
   // Per node, so replaced empty on an edit, which renumbers nodes; never saved.
   pathCrowds: PathCrowds;
+  // By venue key, so kept across an edit; never saved, as a day's crowds come back within it.
+  readonly venueUse: VenueUse;
   // Per guest body, never replaced: a wrapper in hand outlasts an edit.
   readonly carrying: Carrying;
   // Per guest body too, and forgotten at check-in, when the body becomes somebody else.
@@ -647,6 +650,7 @@ export function createSimState(parts: SimParts): SimState {
     litter,
     footfall: createFootfall(network.nodes.length),
     pathCrowds: createPathCrowds(network),
+    venueUse: createVenueUse(),
     nightNoise: createNightNoise(population, lodgings.length),
     lastNightNoise: new Map(),
     nightEars: nightEarsOf(() => resort, live),

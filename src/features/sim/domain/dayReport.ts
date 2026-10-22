@@ -224,6 +224,24 @@ export function keepDay(history: readonly DayReport[], report: DayReport): reado
   return [...history, report].slice(-HISTORY_DAYS);
 }
 
+// Three mornings, so one lumpy day of check-outs does not swing the beds bar from empty to loud.
+const BOOKING_DAYS = 3;
+
+// Today's coach is counted as planned: its later waves are still to come in.
+export function recentBookings(
+  history: readonly DayReport[],
+  today: DayCounts,
+  planned: number,
+): { readonly wanted: number; readonly turnedAway: number } {
+  let turnedAway = today.turnedAway ?? 0;
+  let wanted = planned + turnedAway;
+  for (const day of history.slice(1 - BOOKING_DAYS)) {
+    turnedAway += day.turnedAway ?? 0;
+    wanted += day.arrived + (day.turnedAway ?? 0);
+  }
+  return { wanted, turnedAway };
+}
+
 export function starsTrend(history: readonly DayReport[]): number | null {
   const last = history.at(-1);
   const before = history.at(-2);

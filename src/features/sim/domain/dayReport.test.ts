@@ -12,6 +12,7 @@ import {
   LOUDEST_KEPT,
   noteWelcomeGap,
   PHOTO_SPOTS_KEPT,
+  recentBookings,
   reportOf,
   SPOTS_TRACKED,
   startDay,
@@ -236,5 +237,23 @@ describe('the guests turned away', () => {
     expect(reportFor(startDay(2)).turnedAway).toBeUndefined();
     const counts = countTurnedAway(countTurnedAway(startDay(2), 4), 3);
     expect(reportFor(counts).turnedAway).toBe(7);
+  });
+});
+
+describe('recentBookings', () => {
+  const dayBooked = (day: number, arrived: number, turnedAway: number): DayReport =>
+    reportFor(countTurnedAway(countArrivals(startDay(day), arrived), turnedAway));
+
+  it('adds this morning, as planned, to the two days before it', () => {
+    const history = [dayBooked(1, 30, 9), dayBooked(2, 30, 0), dayBooked(3, 20, 10)];
+    const today = countTurnedAway(startDay(4), 5);
+    expect(recentBookings(history, today, 25)).toEqual({ wanted: 90, turnedAway: 15 });
+  });
+
+  it('reads this morning alone before any day is kept', () => {
+    expect(recentBookings([], countTurnedAway(startDay(0), 4), 12)).toEqual({
+      wanted: 16,
+      turnedAway: 4,
+    });
   });
 });

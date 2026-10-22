@@ -20,7 +20,7 @@ const GROUPS = Object.keys(DEMAND_GROUPS) as readonly DemandGroup[];
 // One grid for every group, so the bars line up down the whole window.
 export function DemandPanel({ status }: DemandPanelProps) {
   if (!status?.demand) return <p className="hud-rating-note">Nothing counted yet.</p>;
-  const { demand, present } = status;
+  const { demand } = status;
   return (
     <div className="hud-demand-grid">
       <span />
@@ -28,7 +28,7 @@ export function DemandPanel({ status }: DemandPanelProps) {
         <span>Enough</span>
         <span>Build</span>
       </span>
-      <span className="hud-demand-head">Want / room</span>
+      <span className="hud-demand-head">Busiest / room</span>
       <span className="hud-demand-head">Away</span>
       {GROUPS.map((group) => (
         <Fragment key={group}>
@@ -39,7 +39,7 @@ export function DemandPanel({ status }: DemandPanelProps) {
               <div
                 key={line}
                 className="hud-demand-row"
-                title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure, present)}`}
+                title={`${pressureWord(pressure.pressure)}: ${pressureNote(line, pressure)}`}
               >
                 {/* Inside the name: the row is a run of grid cells, and a sibling would be one more. */}
                 <span className="hud-demand-name">
@@ -48,7 +48,7 @@ export function DemandPanel({ status }: DemandPanelProps) {
                 </span>
                 <DemandBar pressure={pressure.pressure} across />
                 <span className="hud-demand-figure">
-                  <OutOf value={pressure.wanting} total={pressure.places} />
+                  <OutOf value={pressure.used} total={pressure.places} />
                 </span>
                 <span className="hud-demand-figure">{turnedAwayShare(pressure)}</span>
               </div>

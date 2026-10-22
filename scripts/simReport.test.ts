@@ -28,6 +28,7 @@ import { referenceWorldOf } from '../src/features/resort-prep/domain/referenceRe
 import { planOfWorld, type SavedWorld } from '../src/features/resort-prep/domain/savedWorld';
 import { createHeadlessGame, framesPerTickAt } from '../src/features/resort-sim/domain/headless';
 import type { SimNow } from '../src/features/resort-sim/domain/simNow';
+import type { SimState } from '../src/features/resort-sim/domain/simState';
 import { CHECK_IN_TICK, freeBedsOn } from '../src/features/sim/domain/checkIn';
 import { quietNightNow } from '../src/features/resort-sim/domain/quietNight';
 import { fastNightPace } from '../src/features/sim/domain/fastNight';
@@ -39,6 +40,7 @@ import { FOULED_AT, PIECE } from '../src/features/sim/domain/litter';
 import { isBroken } from '../src/features/sim/domain/breakdowns';
 import { cleanliness, NEEDS_CLEANING } from '../src/features/sim/domain/upkeep';
 import { strongestNeed, type Needs } from '../src/features/sim/domain/needs';
+import { busiestOf } from '../src/features/sim/domain/venueUse';
 import type { Review } from '../src/features/sim/domain/reviews';
 import type { Router } from '../src/features/sim/domain/router';
 import {
@@ -49,10 +51,9 @@ import {
 } from '../src/features/sim/domain/simClock';
 import { wagesFor } from '../src/features/sim/domain/staff';
 import { maintenanceFor } from '../src/features/sim/domain/takings';
-import type { PhotoTally } from '../src/features/sim/domain/dayReport';
+import { recentBookings, type PhotoTally } from '../src/features/sim/domain/dayReport';
 import { setPrice, type Prices } from '../src/features/sim/domain/pricing';
 import { loudest } from '../src/features/sim/domain/thoughts';
-import type { Venue } from '../src/features/sim/domain/venues';
 import { WEATHERS, type Weather } from '../src/features/sim/domain/weather';
 
 const [TILES_X, TILES_Z] = (process.env.SIM_PLOT ?? '112x100').split('x').map(Number) as [
@@ -266,7 +267,8 @@ const DEMAND_LINES: readonly DemandLine[] = [
 ];
 
 // The facts the showcase counts, less what the bars do not read: nothing here breaks or shuts.
-function demandNow(guests: Guests, needs: Needs, router: Router, venues: readonly Venue[]): string {
+function demandNow(state: SimState): string {
+  const { guests, needs, router, venues } = state;
   const wanting = { hunger: 0, thirst: 0, energy: 0, fun: 0, hygiene: 0, health: 0 };
   for (let person = 0; person < guests.count; person++) {
     if (guests.present[person] !== 1) continue;
@@ -281,6 +283,8 @@ function demandNow(guests: Guests, needs: Needs, router: Router, venues: readonl
     bedsFree: freeBedsOn(guests),
     bedsTotal: bedCount(guests).beds,
     bedsUnmade: unmadeCount(guests),
+    bookings: recentBookings(state.history, state.today, state.arrivalsPlanned),
+    busiest: busiestOf(state.venueUse),
     wanting,
     balks: router.dayBalks(),
     visits: router.dayVisits(),
@@ -521,7 +525,7 @@ it('reports a few days on a generated plot', () => {
           `  walks to the beach: ${sorted.length}, median ${percentile(sorted, 0.5)} min, ` +
             `p90 ${percentile(sorted, 0.9)} min; ${changedMind} changed their mind`,
           `  loudest thoughts: ${said.join(', ') || 'none'}`,
-          `  demand: ${demandNow(guests, needs, router, venues)}`,
+          `  demand: ${demandNow(state)}`,
           `  needs: ${needDayLine(needDay)}; beds ${beds.taken}/${beds.total}`,
           `  mornings: ${mornings.join('; ')}`,
           ...(NIGHTS === undefined ? [] : [`  night: ${nightLines.join('; ')}`]),

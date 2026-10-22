@@ -73,7 +73,7 @@ import { carryUpkeep, cleanliness } from '../features/sim/domain/upkeep';
 import { carryBreakdowns, isBroken } from '../features/sim/domain/breakdowns';
 import { litterSummary, pruneLitter, type Litter } from '../features/sim/domain/litter';
 import { loudest } from '../features/sim/domain/thoughts';
-import type { PhotoSpot } from '../features/sim/domain/dayReport';
+import { recentBookings, type PhotoSpot } from '../features/sim/domain/dayReport';
 import {
   hire,
   shortOf,
@@ -217,6 +217,7 @@ import { doorsFor } from '../features/sim/domain/doors';
 import { stepFreeReachOn, type StepFreeReach } from '../features/sim/domain/stepFree';
 import { mindedOver, nuisanceFieldFor } from '../features/sim/domain/nuisance';
 import { createPathCrowds, crushedShare, worstCrowded } from '../features/sim/domain/pathCrowds';
+import { busiestOf } from '../features/sim/domain/venueUse';
 import { createNightNoise } from '../features/sim/domain/nightNoise';
 import { hopsFrom, reachSeedsFor } from '../features/overlays/domain/reach';
 import {
@@ -1867,6 +1868,8 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     entrance: router.arrivalNode >= 0,
     reception: router.receptionReachable,
     bedsTotal: resort.beds.total,
+    bookings: recentBookings(resort.history, resort.today, resort.arrivalsPlanned),
+    busiest: busiestOf(resort.venueUse),
     litter: litterSummary(resort.litter, litterWindowOf(resort)),
     // By key: advice names a building, and indices change on the next edit.
     cleanliness: new Map(

@@ -82,7 +82,7 @@ export default defineModel({
       { need: 'hunger', amount: 1 },
       { need: 'thirst', amount: 0.5 },
     ],
-    capacity: 40,
+    capacity: 32,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 8,
     doors: [{ x: FLIGHT.x + FLIGHT.w / 2 - 1, z: APRON.z, facing: 0 }],

@@ -4,15 +4,7 @@ import { demandFor } from './demand';
 import type { Venue } from './venues';
 import type { GuestNeed, NeedRelief } from '../../../../voxel-gen/voxelgen.ts';
 
-// An hour at the table, so each place lets in only the one guest in the half hour counted.
-const AN_HOUR = { min: 3600, max: 3600 };
-
-function venueOf(
-  key: string,
-  needs: readonly GuestNeed[],
-  capacity: number,
-  dwellSeconds = AN_HOUR,
-): Venue {
+function venueOf(key: string, needs: readonly GuestNeed[], capacity: number): Venue {
   const satisfies: readonly NeedRelief[] = needs.map((need) => ({ need, amount: 0.5 }));
   return {
     key,
@@ -21,7 +13,7 @@ function venueOf(
     role: 'food',
     satisfies,
     capacity,
-    dwellSeconds,
+    dwellSeconds: { min: 3600, max: 3600 },
     x: 0,
     z: 0,
     tileX: 0,
@@ -60,6 +52,8 @@ function factsOf(over: Partial<ResortFacts> = {}): ResortFacts {
 
 const wanting = (want: Partial<Record<GuestNeed, number>>) => ({ ...NOTHING_WANTED, ...want });
 
+const busiest = (use: Record<string, number>) => new Map(Object.entries(use));
+
 describe('the demand for each need', () => {
   it('reads every need as about right while nobody is here, and the beds from the beds', () => {
     const demand = demandFor(
@@ -77,22 +71,31 @@ describe('the demand for each need', () => {
     expect(demand.lines.thirst.pressure).toBe(0);
   });
 
-  it('sits below zero where there is plenty of room', () => {
+  it('sits below zero where the busiest hour left seats empty', () => {
     const demand = demandFor(
-      factsOf({ venues: [venueOf('cafe#0', ['hunger'], 50)], wanting: wanting({ hunger: 5 }) }),
+      factsOf({ venues: [venueOf('cafe#0', ['hunger'], 50)], busiest: busiest({ 'cafe#0': 30 }) }),
     );
-    expect(demand.lines.hunger.pressure).toBeCloseTo(-0.9);
+    expect(demand.lines.hunger.pressure).toBeCloseTo(-0.6);
+    expect(demand.lines.hunger.used).toBe(30);
     expect(demand.lines.hunger.places).toBe(50);
   });
 
-  it('is full where twice as many want it as there are places', () => {
-    const demand = demandFor(
-      factsOf({ venues: [venueOf('cafe#0', ['hunger'], 40)], wanting: wanting({ hunger: 80 }) }),
-    );
-    expect(demand.lines.hunger.pressure).toBe(1);
+  it('reads a venue with no use counted as empty', () => {
+    const demand = demandFor(factsOf({ venues: [venueOf('cafe#0', ['hunger'], 50)] }));
+    expect(demand.lines.hunger.pressure).toBe(-1);
+    expect(demand.lines.hunger.used).toBe(0);
   });
 
-  it('counts no places at a venue that is shut, broken or out of reach', () => {
+  it('is about right three quarters full, and full once a line forms past the seats', () => {
+    const venues = [venueOf('cafe#0', ['hunger'], 40)];
+    const at = (used: number) =>
+      demandFor(factsOf({ venues, busiest: busiest({ 'cafe#0': used }) })).lines.hunger.pressure;
+    expect(at(30)).toBe(0);
+    expect(at(40)).toBe(1);
+    expect(at(55)).toBe(1);
+  });
+
+  it('counts neither the seats nor the crowd of a venue that is shut, broken or out of reach', () => {
     const venues = [
       venueOf('cafe#0', ['hunger'], 10),
       venueOf('cafe#1', ['hunger'], 10),
@@ -102,7 +105,7 @@ describe('the demand for each need', () => {
     const demand = demandFor(
       factsOf({
         venues,
-        wanting: wanting({ hunger: 10 }),
+        busiest: busiest({ 'cafe#0': 10, 'cafe#1': 10, 'cafe#2': 10, 'cafe#3': 7.5 }),
         closed: new Set(['cafe#0']),
         broken: new Map([['cafe#1', 5]]),
         unreachable: new Set(['cafe#2']),
@@ -124,7 +127,7 @@ describe('the demand for each need', () => {
     const demand = demandFor(
       factsOf({
         venues: [venueOf('cafe#0', ['hunger'], 50)],
-        wanting: wanting({ hunger: 5 }),
+        busiest: busiest({ 'cafe#0': 5 }),
         balks: new Map([['cafe#0', 10]]),
         visits: new Map([['cafe#0', 30]]),
       }),
@@ -134,25 +137,43 @@ describe('the demand for each need', () => {
   });
 
   it('counts a venue serving two needs towards both', () => {
-    const demand = demandFor(factsOf({ venues: [venueOf('club#0', ['hunger', 'thirst'], 20)] }));
+    const demand = demandFor(
+      factsOf({
+        venues: [venueOf('club#0', ['hunger', 'thirst'], 20)],
+        busiest: busiest({ 'club#0': 20 }),
+      }),
+    );
     expect(demand.lines.hunger.places).toBe(20);
     expect(demand.lines.thirst.places).toBe(20);
+    expect(demand.lines.thirst.pressure).toBe(1);
     expect(demand.lines.fun.places).toBe(0);
   });
 
-  it('counts a place freed every two minutes as fifteen in the half hour', () => {
-    const restrooms = venueOf('restrooms#0', ['hygiene'], 4, { min: 60, max: 180 });
-    const demand = demandFor(factsOf({ venues: [restrooms], wanting: wanting({ hygiene: 87 }) }));
-    expect(demand.lines.hygiene.places).toBe(60);
-    expect(demand.lines.hygiene.pressure).toBeCloseTo(87 / 60 - 1);
+  it('adds the seats and the crowds of every venue on the line', () => {
+    const venues = [venueOf('shower#0', ['hygiene'], 1), venueOf('spa#0', ['hygiene'], 9)];
+    const demand = demandFor(factsOf({ venues, busiest: busiest({ 'shower#0': 2, 'spa#0': 4 }) }));
+    expect(demand.lines.hygiene.places).toBe(10);
+    expect(demand.lines.hygiene.used).toBe(6);
   });
 
-  it('adds the quick places and the slow ones together', () => {
-    const venues = [
-      venueOf('shower#0', ['hygiene'], 1, { min: 30, max: 90 }),
-      venueOf('spa#0', ['hygiene'], 10),
-    ];
-    expect(demandFor(factsOf({ venues })).lines.hygiene.places).toBe(40);
+  it('counts a venue only on the lines it mainly serves', () => {
+    const bar: Venue = {
+      ...venueOf('bar#0', ['thirst'], 14),
+      satisfies: [
+        { need: 'thirst', amount: 1 },
+        { need: 'fun', amount: 0.3 },
+      ],
+    };
+    const restaurant: Venue = {
+      ...venueOf('restaurant#0', ['hunger'], 32),
+      satisfies: [
+        { need: 'hunger', amount: 1 },
+        { need: 'thirst', amount: 0.5 },
+      ],
+    };
+    const demand = demandFor(factsOf({ venues: [bar, restaurant] }));
+    expect(demand.lines.thirst.places).toBe(46);
+    expect(demand.lines.fun.places).toBe(0);
   });
 
   it('ignores a venue that makes the need worse', () => {
@@ -178,15 +199,22 @@ describe('the demand for beds', () => {
     expect(demandFor(factsOf({ bedsFree: 30 })).lines.beds.pressure).toBeCloseTo(-0.2);
   });
 
-  it('is full with every bed taken', () => {
-    expect(demandFor(factsOf({ bedsFree: 0 })).lines.beds.pressure).toBe(1);
+  it('is about right full, while every booking found a bed', () => {
+    const demand = demandFor(factsOf({ bedsFree: 0, bookings: { wanted: 12, turnedAway: 0 } }));
+    expect(demand.lines.beds.pressure).toBe(0);
+    expect(demand.lines.beds.used).toBe(100);
+  });
+
+  it('rises with the share of the morning coach that found no bed', () => {
+    const demand = demandFor(factsOf({ bedsFree: 0, bookings: { wanted: 20, turnedAway: 5 } }));
+    expect(demand.lines.beds.turnedAway).toBe(0.25);
+    expect(demand.lines.beds.pressure).toBe(0.25);
   });
 
   it('is lifted by guests with nowhere to sleep', () => {
     const demand = demandFor(factsOf({ bedsFree: 50, homeless: 40 }));
-    expect(demand.lines.beds.turnedAway).toBe(0.4);
     expect(demand.lines.beds.pressure).toBe(0.4);
-    expect(demand.lines.beds.wanting).toBe(90);
+    expect(demand.lines.beds.used).toBe(50);
   });
 });
 
@@ -195,7 +223,7 @@ describe('the loudest line of each group', () => {
     const demand = demandFor(
       factsOf({
         venues: [venueOf('cafe#0', ['hunger'], 50), venueOf('bar#0', ['thirst'], 40)],
-        wanting: wanting({ hunger: 5, thirst: 80 }),
+        busiest: busiest({ 'cafe#0': 5, 'bar#0': 40 }),
       }),
     );
     expect(demand.groups.food).toBe('thirst');

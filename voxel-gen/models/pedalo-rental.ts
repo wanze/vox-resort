@@ -55,7 +55,7 @@ export default defineModel({
       { need: 'fun', amount: 0.8 },
       { need: 'energy', amount: -0.3 },
     ],
-    capacity: 8,
+    capacity: 6,
     dwellSeconds: { min: 1200, max: 2700 },
     reliability: 40,
     price: 4,

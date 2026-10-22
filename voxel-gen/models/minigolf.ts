@@ -242,7 +242,7 @@ export default defineModel({
       'Tiny Tee',
     ],
     satisfies: [{ need: 'fun', amount: 0.7 }],
-    capacity: 16,
+    capacity: 12,
     dwellSeconds: { min: 1800, max: 3600 },
     price: 3,
     spots: [...PLAYERS, { x: CROSS.x + 1, y: GREEN + 1, z: 30, facing: 3, for: 'staff' }],

@@ -504,7 +504,7 @@ describe('placeView', () => {
       setting: 0,
     });
     expect(view.venue?.role).toBe('food');
-    expect(view.venue?.capacity).toBe(40);
+    expect(view.venue?.capacity).toBe(32);
     expect(view.venue?.serves).toEqual(['Hunger', 'Thirst']);
     expect(view.residents).toEqual([]);
   });

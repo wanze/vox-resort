@@ -123,7 +123,7 @@ export default defineModel({
       { need: 'thirst', amount: 0.3 },
       { need: 'energy', amount: -0.2 },
     ],
-    capacity: 40,
+    capacity: 30,
     dwellSeconds: { min: 2700, max: 7200 },
     price: 8,
     litter: 0.04,

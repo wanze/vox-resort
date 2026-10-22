@@ -99,7 +99,7 @@ export default defineModel({
       { need: 'fun', amount: 0.7 },
       { need: 'thirst', amount: 0.4 },
     ],
-    capacity: 25,
+    capacity: 18,
     dwellSeconds: { min: 1800, max: 5400 },
     noise: 0.7,
     price: 4,

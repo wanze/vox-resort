@@ -55,6 +55,7 @@ import { TICKS_PER_DAY } from './simClock';
 import { cleanliness, soil, type Upkeep } from './upkeep';
 import { openNow } from './hours';
 import { weatherEffect, type Weather } from './weather';
+import { appetiteAt } from './mealtimes';
 import { createVenueRoutes, SAND_ROUTE_TILES } from './venueRoutes';
 import { type Venue } from './venues';
 
@@ -171,6 +172,7 @@ export interface Router {
   occupancyOf(venueKey: string): VenueOccupancy | null;
   // By index, for a question asked per venue per choice; 0 past the end.
   occupantsAt(venue: number): number;
+  queuedAt(venue: number): number;
   dayBalks(): ReadonlyMap<string, number>;
   dayVisits(): ReadonlyMap<string, number>;
   forgetTheDay(): void;
@@ -248,6 +250,8 @@ export function createRouter(parts: {
   const onVisited = parts.onVisited ?? ((): void => {});
   const onThought = parts.onThought ?? ((): void => {});
   const weatherNow = parts.weather ?? ((): Weather => 'clear');
+  // What guests want by, which follows the meals as well as the weather.
+  const appetiteNow = () => appetiteAt(weatherEffect(weatherNow()), parts.tickOfDay());
   const goals: Goals = createGoals(guests.count);
   let random = createRandom(parts.seed);
 
@@ -555,7 +559,7 @@ export function createRouter(parts: {
       cleanliness: lookOf,
       ...minding,
       isOpen: open,
-      weather: weatherEffect(weatherNow()),
+      weather: appetiteNow(),
     });
   };
 
@@ -582,7 +586,7 @@ export function createRouter(parts: {
       return;
     }
     // Only here: chooseVenue's null also means content, which is no complaint.
-    const wanted = strongestNeed(needs, guests, person, weatherEffect(weatherNow()));
+    const wanted = strongestNeed(needs, guests, person, appetiteNow());
     if (!wanted) return;
     // Asked only for the user in the chair, whose complaint it is: on foot they would have gone.
     // Not for the sand, which no paving fixes: that stays plain missing.
@@ -777,7 +781,7 @@ export function createRouter(parts: {
     for (let person = 0; person < guests.count; person++) {
       if (!dueAnotherLook(person, beach, people)) continue;
       // The weather too, or nobody on the sand wants a drink in a heatwave.
-      const wanted = strongestNeed(needs, guests, person, weatherEffect(weatherNow()));
+      const wanted = strongestNeed(needs, guests, person, appetiteNow());
       // Even for what the beach gives: its relief comes when the stay ends, and skipping it left a
       // volleyball court on the sand with nobody bored enough to walk over.
       if (!wanted || wanted.urgency < FETCH_URGENCY) continue;
@@ -817,7 +821,7 @@ export function createRouter(parts: {
       cleanliness: lookOf,
       ...minding,
       isOpen,
-      weather: weatherEffect(weatherNow()),
+      weather: appetiteNow(),
     });
     if (!choice) return;
     fieldFor(choice.venue);
@@ -1525,6 +1529,8 @@ export function createRouter(parts: {
     },
 
     occupantsAt: occupants,
+
+    queuedAt: queueLength,
 
     occupancyOf(venueKey) {
       const venue = venues.findIndex((candidate) => candidate.key === venueKey);

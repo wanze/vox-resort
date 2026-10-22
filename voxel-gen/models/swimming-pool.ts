@@ -81,7 +81,7 @@ export default defineModel({
       { need: 'fun', amount: 0.8 },
       { need: 'energy', amount: -0.2 },
     ],
-    capacity: 30,
+    capacity: 16,
     dwellSeconds: { min: 1800, max: 5400 },
     noise: 0.4,
     reliability: 120,

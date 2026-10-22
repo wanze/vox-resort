@@ -8,6 +8,7 @@ import { countWalkers, fadePathCrowds, sampleCrush } from '../../sim/domain/path
 import { restartNight } from '../../sim/domain/nightNoise';
 import { fadePhotoHeat } from '../../sim/domain/photos';
 import { cheerTheAudience } from '../../sim/domain/staff';
+import { noteUse } from '../../sim/domain/venueUse';
 import { weatherEffect } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
@@ -71,6 +72,13 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     resort.router.holds(person),
   );
   sampleCrush(resort.pathCrowds);
+  const { router } = resort;
+  noteUse(
+    resort.venueUse,
+    resort.venues,
+    (venue) => router.occupantsAt(venue) + router.queuedAt(venue),
+    clock.ticks,
+  );
   runEvents(resort, clock, ticks, hooks.heard);
   // After the events, so the fireworks starting this frame are in it.
   refreshMoment(resort, clock);

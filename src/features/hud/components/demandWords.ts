@@ -41,13 +41,9 @@ export const turnedAwayShare = ({ turnedAway }: Pressure): string => {
   return percent > 0 ? `${percent}%` : '';
 };
 
-// The beds line keeps the homeless only as a share of those present, so they are counted back.
-export function pressureNote(line: DemandLine, pressure: Pressure, present: number): string {
-  const { wanting, places, turnedAway } = pressure;
-  if (line === 'beds') {
-    const without = Math.round(turnedAway * present);
-    return `${whole(wanting - without)} of ${whole(places)} beds taken, ${whole(without)} without one`;
-  }
+export function pressureNote(line: DemandLine, pressure: Pressure): string {
+  const { used, places, turnedAway } = pressure;
   const away = `${Math.round(turnedAway * 100)}% turned away`;
-  return `${whole(wanting)} want it, room for ${whole(places)} each half hour, ${away}`;
+  if (line === 'beds') return `${whole(used)} of ${whole(places)} beds taken, ${away} lately`;
+  return `${whole(used)} in the busiest hour of the day, room for ${whole(places)}, ${away}`;
 }

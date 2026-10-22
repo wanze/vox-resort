@@ -759,6 +759,8 @@ describe('a venue that holds only as many as it says', () => {
     expect(router.step(first, door)).toBe(-1);
     expect(router.step(second, door)).toBe(-1);
     expect(router.occupancyOf('beach-shower#0')).toEqual({ inside: 1, waiting: 1 });
+    expect(router.queuedAt(0)).toBe(1);
+    expect(router.queuedAt(5)).toBe(0);
     expect(isWaiting(crowd, first)).toBe(true);
     expect(isWaiting(crowd, second)).toBe(true);
     expect(crowd.x[first]).toBeCloseTo(shower(7).x);
@@ -3176,7 +3178,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(111)",
+        "claims": "Array(102)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3239,7 +3241,7 @@ describe('on the reference resort', () => {
         "arriving": "Uint8Array(600)",
         "asleep": "Uint8Array(600)",
         "balkCount": "Int32Array(58)",
-        "claims": "Array(57)",
+        "claims": "Array(81)",
         "doorOf": "Int32Array(600)",
         "errands": {
           "back": "Uint8Array(600)",
@@ -3297,10 +3299,10 @@ describe('on the reference resort', () => {
         "working": "Uint8Array(40)",
       }
     `);
-    expect(digestOf(a.router)).toMatchInlineSnapshot(`"cd53a8d2a1c0d62e"`);
-    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"8d01df5c32d1f3f6"`);
-    expect(digestOf(b.router)).toMatchInlineSnapshot(`"ba31c1b8d8406631"`);
-    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"d3ec098a4601bf91"`);
+    expect(digestOf(a.router)).toMatchInlineSnapshot(`"009763d213ead3df"`);
+    expect(digestOf(a.staff)).toMatchInlineSnapshot(`"59c3d649f62b7b86"`);
+    expect(digestOf(b.router)).toMatchInlineSnapshot(`"04549182f3109ece"`);
+    expect(digestOf(b.staff)).toMatchInlineSnapshot(`"11936e893c1cf26f"`);
   });
 
   it('holds nothing across a rebuild that a snapshot does not carry', () => {

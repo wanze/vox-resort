@@ -94,6 +94,10 @@ export interface ResortFacts {
   readonly entrance?: boolean;
   readonly reception?: boolean;
   readonly bedsTotal?: number;
+  // The last few mornings' coaches: how many wanted to book and how many found no bed.
+  readonly bookings?: { readonly wanted: number; readonly turnedAway: number };
+  // By venue key, the most it held in any hour of the last day; absent or missing reads as empty.
+  readonly busiest?: ReadonlyMap<string, number>;
   // Freed by a check-out and waiting for a cleaner; absent means every bed is made up.
   readonly bedsUnmade?: number;
   // Absent means clean paths.

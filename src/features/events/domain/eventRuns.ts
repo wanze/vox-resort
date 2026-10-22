@@ -17,7 +17,7 @@ import {
   type EventKind,
   type EventKindId,
 } from './catalogue';
-import { glowOn } from './glow';
+import { dimGlow, glowOn } from './glow';
 import {
   ANNOUNCE_LEAD,
   CHANGEOVER,
@@ -50,7 +50,8 @@ export interface EventRun {
 export interface EventsState {
   programme: Programme;
   runs: EventRun[];
-  // Per person: the happiness an event lifts the target by, fading over the next day.
+  // Per person: the happiness an event lifts the target by, or one called off takes from it,
+  // fading over the next day.
   readonly glow: Float32Array;
   // Parties kept up past ten, who wake the worse for it.
   readonly tired: Set<number>;
@@ -482,9 +483,32 @@ export function peopleThere(
   return there;
 }
 
-export function callOffRun(step: CallOffStep, guests: Guests): RunOutcome {
+// A share of the lift the show promised: rain is nobody's fault, an unpaid act, a missing animator
+// or a stage pulled down is the resort's.
+const LET_DOWN: { readonly [reason in CallOff]: number } = {
+  weather: 0.3,
+  'no-host': 1,
+  unpaid: 1,
+  'no-site': 1,
+};
+
+// As a held show's memory is about a third of its lift.
+const LET_DOWN_REMEMBERED = 1 / 3;
+
+export function callOffRun(
+  state: EventsState,
+  step: CallOffStep,
+  guests: Guests,
+  remember: (person: number, amount: number) => void = () => {},
+): RunOutcome {
   const people = (step.run?.parties ?? []).flatMap((party) => membersOf(guests, party));
   if (step.run) step.run.parties.length = 0;
+  const { occurrence } = step;
+  const letDown = liftFor(kindOf(occurrence), occurrence.tier, 0) * LET_DOWN[step.reason];
+  for (const person of people) {
+    dimGlow(state.glow, person, letDown);
+    remember(person, -letDown * LET_DOWN_REMEMBERED);
+  }
   return { people, tally: CALLED_OFF };
 }
 

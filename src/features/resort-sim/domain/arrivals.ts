@@ -15,7 +15,13 @@ import { bookingPull, type Prices } from '../../sim/domain/pricing';
 import { arrivalsFor, bookingsWanted, type Rating } from '../../sim/domain/rating';
 import type { Router } from '../../sim/domain/router';
 import type { SceneryField } from '../../sim/domain/scenery';
-import { closingDayOf, effectOn, lastNightOf, type Season } from '../../sim/domain/season';
+import {
+  bookingDemandOn,
+  closingDayOf,
+  effectOn,
+  lastNightOf,
+  type Season,
+} from '../../sim/domain/season';
 import { forgetStay, type Thoughts } from '../../sim/domain/thoughts';
 import { paidShareFor } from './dayClose';
 import type { SimNow } from './simNow';
@@ -85,7 +91,7 @@ export function runDay(resort: ArrivalsState, day: number): void {
 
 function bookTheDay(resort: ArrivalsState, day: number): void {
   const prices = bookingPull(resort.guests.homes, resort.prices, resort.rating.stars);
-  const pull = prices * effectOn(resort.season, day).demand;
+  const pull = prices * bookingDemandOn(resort.season, day);
   const beds = bedsOn(resort.guests);
   resort.arrivalsPlanned = arrivalsFor(resort.rating, beds, pull);
   // A closed resort turns nobody away: nobody was let book.

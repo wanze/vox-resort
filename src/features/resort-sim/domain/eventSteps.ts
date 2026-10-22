@@ -229,7 +229,9 @@ function callOffEvent(resort: SimState, step: CallOffStep, now: number): void {
   if (kind.id === 'welcome') noteWelcomeCalledOff(resort, step);
   if (quietCallOff(step)) return;
   resort.ledger = record(resort.ledger, 'events', step.refund);
-  const called = callOffRun(step, resort.guests);
+  const called = callOffRun(resort.events, step, resort.guests, (person, amount) =>
+    remember(resort.happiness, person, amount),
+  );
   for (const person of called.people) hear(resort, now, person, 'called-off', label);
   resort.today = countEvent(resort.today, called.tally);
 }

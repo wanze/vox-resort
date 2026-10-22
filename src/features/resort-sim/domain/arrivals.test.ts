@@ -8,7 +8,13 @@ import { createHappiness } from '../../sim/domain/happiness';
 import { createCarrying } from '../../sim/domain/litter';
 import { createNeeds } from '../../sim/domain/needs';
 import { arrivalsFor, bookingsWanted, ratingFor } from '../../sim/domain/rating';
-import { firstSeason, lastNightOf, SEASON_DAYS } from '../../sim/domain/season';
+import {
+  ADVANCE_BOOKING_DAYS,
+  firstSeason,
+  lastNightOf,
+  phaseEffect,
+  SEASON_DAYS,
+} from '../../sim/domain/season';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { expectationFor } from '../../sim/domain/expectations';
 import { createThoughts } from '../../sim/domain/thoughts';
@@ -197,6 +203,21 @@ describe('runDay in a season', () => {
         lastNightOf(late.season),
       );
     }
+  });
+
+  it('brings the bookings taken over the break on the opening morning', () => {
+    const opening = stateOf(true).state;
+    opening.season = firstSeason(0);
+    const beds = bedsOn(opening.guests);
+    runDay(opening, 0);
+    const later = stateOf(true).state;
+    later.season = firstSeason(0);
+    runDay(later, 2);
+    const demand = phaseEffect('early').demand;
+    expect(opening.arrivalsPlanned).toBe(
+      arrivalsFor(opening.rating, beds, ADVANCE_BOOKING_DAYS * demand),
+    );
+    expect(opening.arrivalsPlanned).toBeGreaterThan(later.arrivalsPlanned);
   });
 
   it('counts the guests the beds could not take', () => {

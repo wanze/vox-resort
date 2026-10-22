@@ -42,7 +42,7 @@ export interface PhaseEffect {
 
 const PHASE_EFFECTS: { readonly [phase in SeasonPhase]: PhaseEffect } = {
   early: {
-    demand: 0.6,
+    demand: 0.75,
     mix: { family: 0.15, couple: 0.45, friends: 0.15, solo: 0.25 },
     weather: { clear: 17, rain: 5, heatwave: 0 },
   },
@@ -119,6 +119,15 @@ export const phaseEffect = (phase: SeasonPhase): PhaseEffect => PHASE_EFFECTS[ph
 
 export const effectOn = (season: Season | null, day: number): PhaseEffect =>
   season ? phaseEffect(phaseOn(season, day)) : USUAL_EFFECT;
+
+// The bookings taken over the break all come on the first coach. Opening on a few days' share of
+// the beds a day ran the first week near empty on a full staff's wages.
+export const ADVANCE_BOOKING_DAYS = 3;
+
+export function bookingDemandOn(season: Season | null, day: number): number {
+  const { demand } = effectOn(season, day);
+  return season && seasonDayOf(season, day) === 1 ? demand * ADVANCE_BOOKING_DAYS : demand;
+}
 
 export const lastNightOf = (season: Pick<Season, 'startedOn'>): number =>
   season.startedOn + SEASON_DAYS - 1;

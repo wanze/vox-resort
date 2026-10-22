@@ -12,6 +12,8 @@ import {
 import { closeDay, createLedger, record, REASONS } from './ledger';
 import { arrivalsFor, type Rating } from './rating';
 import {
+  ADVANCE_BOOKING_DAYS,
+  bookingDemandOn,
   closeSeason,
   closingDayOf,
   effectOn,
@@ -100,6 +102,15 @@ describe('the phases', () => {
     expect(phaseEffect('closing').demand).toBe(0);
     expect(effectOn(null, 40)).toBe(USUAL_EFFECT);
     expect(effectOn(firstSeason(0), 10)).toBe(phaseEffect('holidays'));
+  });
+
+  it('books a few days’ share on the opening morning only', () => {
+    const season = nextSeason({ ...firstSeason(0), state: 'break' }, 40);
+    const early = phaseEffect('early').demand;
+    expect(bookingDemandOn(season, 40)).toBeCloseTo(ADVANCE_BOOKING_DAYS * early);
+    expect(bookingDemandOn(season, 41)).toBe(early);
+    expect(bookingDemandOn(season, 50)).toBe(phaseEffect('holidays').demand);
+    expect(bookingDemandOn(null, 40)).toBe(USUAL_EFFECT.demand);
   });
 
   it('plans at least twice the early season’s arrivals in the school holidays', () => {

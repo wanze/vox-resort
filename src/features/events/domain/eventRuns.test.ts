@@ -23,6 +23,7 @@ import {
   saltOf,
   stayOf,
   visitLitter,
+  type CallOff,
   type EventFacts,
   type EventRun,
   type EventsState,
@@ -566,6 +567,7 @@ describe('a run from start to end', () => {
     current.parties.push(2);
     expect(endRun(state, { ...current, parties: [2] }, guests, () => 0).tally.held).toBe(0);
     const told = callOffRun(
+      state,
       {
         kind: 'call-off',
         occurrence: current.occurrence,
@@ -578,6 +580,28 @@ describe('a run from start to end', () => {
     expect(told.people).toEqual(guests.parties[2]!.members);
     expect(told.tally).toEqual({ held: 0, audience: 0, called: 1 });
     expect(current.parties).toEqual([]);
+  });
+
+  it('lets the invited down, the more when the resort is to blame', () => {
+    const letDownBy = (reason: CallOff): { glow: number; memory: number } => {
+      const { state, current } = announced();
+      current.parties.push(2);
+      const [member] = guests.parties[2]!.members;
+      let memory = 0;
+      const { occurrence } = current;
+      const step = { kind: 'call-off', occurrence, reason, run: current, refund: 0 } as const;
+      callOffRun(state, step, guests, (person, amount) => {
+        if (person === member) memory += amount;
+      });
+      return { glow: state.glow[member!]!, memory };
+    };
+    const lift = EVENT_KINDS['dance-night'].lift;
+    const unpaid = letDownBy('unpaid');
+    expect(unpaid.glow).toBeCloseTo(-lift);
+    expect(unpaid.memory).toBeCloseTo(-lift / 3);
+    const rained = letDownBy('weather');
+    expect(rained.glow).toBeLessThan(0);
+    expect(rained.glow).toBeGreaterThan(unpaid.glow);
   });
 
   it('knows the event a visit was made to, and lets its litter fall', () => {

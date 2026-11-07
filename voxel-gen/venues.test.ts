@@ -85,6 +85,7 @@ const NOT_VENUES: ReadonlySet<string> = new Set([
   'lifeguard-tower-b',
   'entrance-b',
   'fountain-b',
+  'fountain-c',
   ...MOSAIC_IDS,
 ]);
 

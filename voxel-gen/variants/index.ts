@@ -10,7 +10,9 @@ import cottageC from './cottage-c.ts';
 import icecream from './icecream.ts';
 import palm from './palm.ts';
 import poolsideBar from './poolside-bar.ts';
+import poolsideBarC from './poolside-bar-c.ts';
 import snackBar from './snack-bar.ts';
+import snackBarC from './snack-bar-c.ts';
 import villa from './villa.ts';
 import villaC from './villa-c.ts';
 import streetLamp from './street-lamp.ts';
@@ -32,6 +34,7 @@ import beachShower from './beach-shower.ts';
 import lifeguardTower from './lifeguard-tower.ts';
 import entrance from './entrance.ts';
 import fountain from './fountain.ts';
+import fountainC from './fountain-c.ts';
 import restrooms from './restrooms.ts';
 import changingCabins from './changing-cabins.ts';
 import massageTent from './massage-tent.ts';
@@ -39,6 +42,7 @@ import firstAid from './first-aid.ts';
 import bakery from './bakery.ts';
 import coffeeShop from './coffee-shop.ts';
 import resortBar from './resort-bar.ts';
+import resortBarC from './resort-bar-c.ts';
 import spaPavilion from './spa-pavilion.ts';
 import pedaloRental from './pedalo-rental.ts';
 import kidsClub from './kids-club.ts';
@@ -55,7 +59,9 @@ import gameHall from './game-hall.ts';
 import restaurant from './restaurant.ts';
 import restaurantC from './restaurant-c.ts';
 import beachClub from './beach-club.ts';
+import beachClubC from './beach-club-c.ts';
 import swimmingPool from './swimming-pool.ts';
+import swimmingPoolC from './swimming-pool-c.ts';
 import tennisCourt from './tennis-court.ts';
 import basketballCourt from './basketball-court.ts';
 import volleyball from './volleyball.ts';
@@ -73,7 +79,9 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'palm', source: palm },
   { of: 'icecream', source: icecream },
   { of: 'snack-bar', source: snackBar },
+  { of: 'snack-bar', source: snackBarC },
   { of: 'poolside-bar', source: poolsideBar },
+  { of: 'poolside-bar', source: poolsideBarC },
   { of: 'bungalow', source: bungalow },
   { of: 'bungalow', source: bungalowC },
   { of: 'bungalow', source: bungalowD },
@@ -100,6 +108,7 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'lifeguard-tower', source: lifeguardTower },
   { of: 'entrance', source: entrance },
   { of: 'fountain', source: fountain },
+  { of: 'fountain', source: fountainC },
   { of: 'restrooms', source: restrooms },
   { of: 'changing-cabins', source: changingCabins },
   { of: 'massage-tent', source: massageTent },
@@ -107,6 +116,7 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'bakery', source: bakery },
   { of: 'coffee-shop', source: coffeeShop },
   { of: 'resort-bar', source: resortBar },
+  { of: 'resort-bar', source: resortBarC },
   { of: 'spa-pavilion', source: spaPavilion },
   { of: 'pedalo-rental', source: pedaloRental },
   { of: 'kids-club', source: kidsClub },
@@ -123,7 +133,9 @@ export const VARIANTS: readonly ModelVariant[] = [
   { of: 'restaurant', source: restaurant },
   { of: 'restaurant', source: restaurantC },
   { of: 'beach-club', source: beachClub },
+  { of: 'beach-club', source: beachClubC },
   { of: 'swimming-pool', source: swimmingPool },
+  { of: 'swimming-pool', source: swimmingPoolC },
   { of: 'tennis-court', source: tennisCourt },
   { of: 'basketball-court', source: basketballCourt },
   { of: 'volleyball', source: volleyball },

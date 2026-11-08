@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import referenceJson from '../../../../fixtures/reference-resort.json';
+import { createBookings } from '../../bookings/domain/bookings';
 import { buildCostOf, nightPriceOf, priceOf } from '../../catalog/domain/prices';
 import { createEvents } from '../../events/domain/eventRuns';
 import { createGuests, presentCount } from '../../guests/domain/guests';
@@ -56,6 +57,7 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     beds: { total: 4, taken: 4 },
     thoughtDay: createDay(),
     events: createEvents(guests.count),
+    bookings: createBookings(),
     ...overrides,
   };
 }

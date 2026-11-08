@@ -80,6 +80,8 @@ export interface GuestView {
   readonly thought: { readonly kind: ThoughtKind; readonly subject: string | null } | null;
   readonly welcomed: boolean;
   readonly checkedOut: boolean;
+  // The tour operator that booked the party; absent for a party that booked itself.
+  readonly operator?: string;
 }
 
 export interface PlaceView {
@@ -254,6 +256,7 @@ export function guestView(parts: {
   readonly at: GuestSpot;
   readonly thought: GuestView['thought'];
   readonly thoughts?: Thoughts;
+  readonly operator?: string | null;
 }): GuestView {
   const { guests, needs, happiness, venues, person, day, at, thought, thoughts } = parts;
   const party = guests.parties[guests.party[person]!]!;
@@ -277,6 +280,7 @@ export function guestView(parts: {
     thought,
     welcomed: thoughts !== undefined && stayCount(thoughts, person, 'welcomed') > 0,
     checkedOut: false,
+    ...(parts.operator ? { operator: parts.operator } : {}),
   };
 }
 

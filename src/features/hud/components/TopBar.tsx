@@ -30,7 +30,7 @@ export interface TopBarProps {
   readonly ledger: Ledger | null;
   readonly status: StatusView | null;
   readonly trend: number | null;
-  readonly adviceCount: number;
+  readonly inboxCount: number;
   readonly windows: WindowControls;
   readonly menu: MenuId | null;
   readonly onMenuChange: (menu: MenuId | null) => void;
@@ -215,11 +215,7 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       {/* Fixed to an edge of the screen in every layout, so it takes no room in the bar. */}
-      <WindowDock
-        layout={windows.layout}
-        onToggle={windows.toggle}
-        adviceCount={props.adviceCount}
-      />
+      <WindowDock layout={windows.layout} onToggle={windows.toggle} inboxCount={props.inboxCount} />
     </header>
   );
 }

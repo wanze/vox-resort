@@ -23,6 +23,7 @@ import {
 import { ageBuildings, stepRenovations } from './ageing';
 import { closeTheDay, payTheBills, rateTheDay } from './dayClose';
 import { admitLaterWaves, runDay } from './arrivals';
+import { offerTheDay } from './bookingSteps';
 import {
   listenInTheNight,
   markNightOwls,
@@ -109,6 +110,7 @@ export function stepSim(resort: SimState, clock: SimNow, ticks: number, hooks: S
     rateTheDay(resort);
     closeTheDay(resort, clock.day);
     runDay(resort, clock.day);
+    offerTheDay(resort, clock.day);
     resort.settled.clear();
     refreshKeen(resort, clock);
     refreshNightOut(resort, clock);

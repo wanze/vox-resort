@@ -36,6 +36,27 @@ describe('the front page', () => {
     expect(JSON.stringify(page)).not.toMatch(/\{\w+\}|undefined|NaN/);
   });
 
+  it('tells of the tour groups that left in the season', () => {
+    const settled = {
+      id: 1,
+      operator: 'Sunshine Tours',
+      kind: 'family' as const,
+      parties: 8,
+      day: 40,
+      meanStars: 4.4,
+      promisedStars: 4,
+      bonus: 3_200,
+      outcome: 'bonus' as const,
+    };
+    const page = frontPageOf({ ...SAMPLES.good, settled: [settled] });
+    expect(page.briefs.find((brief) => brief.title === 'Tour groups')?.text).toBe(
+      'Sunshine Tours’ families left glowing: 4.4★, bonus 3,200.',
+    );
+    expect(frontPageOf(SAMPLES.good).briefs.some((brief) => brief.title === 'Tour groups')).toBe(
+      false,
+    );
+  });
+
   it('notes each figure against the season before', () => {
     const page = frontPageOf(SAMPLES.good);
     expect(figure(page, 'Mean rating')).toMatchObject({ value: '4.3 ★', note: '▲ 0.5' });

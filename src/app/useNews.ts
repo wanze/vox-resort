@@ -4,17 +4,20 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type RefObject,
   type SetStateAction,
 } from 'react';
 import { loadPrefs, savePrefs } from '../features/hud/adapters/prefsStore';
 import type { HudPrefs } from '../features/hud/domain/hudPrefs';
 import {
   expireToasts,
+  logBooking,
   logDay,
   logEvent,
   logNews,
   newsFrom,
   resumeToasts,
+  showBooking,
   showDay,
   showEvent,
   showToasts,
@@ -22,6 +25,7 @@ import {
   updateOnly,
   withoutResolved,
   withUpdate,
+  type BookingNews,
   type EventNews,
   type Message,
   type Toast,
@@ -99,6 +103,46 @@ function useFading(
   );
 }
 
+type Latest = RefObject<{ readonly muted: readonly ToastKind[] }>;
+
+// Told whatever the speed, unlike the advice: each takes none of the places advice competes for.
+function useTold(
+  latest: Latest,
+  setToasts: Dispatch<SetStateAction<readonly Toast[]>>,
+  setLog: Dispatch<SetStateAction<readonly Message[]>>,
+) {
+  const optionsNow = useCallback(
+    () => ({ muted: new Set(latest.current.muted), nowMs: Date.now() }),
+    [latest],
+  );
+  return {
+    closeDay: useCallback(
+      (report: DayReport) => {
+        const options = optionsNow();
+        setToasts((shown) => showDay(shown, report, options));
+        setLog((kept) => logDay(kept, report));
+      },
+      [optionsNow, setToasts, setLog],
+    ),
+    hearEvent: useCallback(
+      (news: EventNews) => {
+        const options = optionsNow();
+        setToasts((shown) => showEvent(shown, news, options));
+        setLog((kept) => logEvent(kept, news));
+      },
+      [optionsNow, setToasts, setLog],
+    ),
+    hearBooking: useCallback(
+      (news: BookingNews) => {
+        const options = optionsNow();
+        setToasts((shown) => showBooking(shown, news, options));
+        setLog((kept) => logBooking(kept, news));
+      },
+      [optionsNow, setToasts, setLog],
+    ),
+  };
+}
+
 export function useNews(speed: SimSpeed): NewsControls {
   const [toasts, setToasts] = useState<readonly Toast[]>([]);
   const [log, setLog] = useState<readonly Message[]>([]);
@@ -125,18 +169,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     setLog((kept) => logNews(kept, found.news));
   }, []);
 
-  const closeDay = useCallback((report: DayReport) => {
-    const options = { muted: new Set(latest.current.muted), nowMs: Date.now() };
-    setToasts((shown) => showDay(shown, report, options));
-    setLog((kept) => logDay(kept, report));
-  }, []);
-
-  const hearEvent = useCallback((news: EventNews) => {
-    const options = { muted: new Set(latest.current.muted), nowMs: Date.now() };
-    setToasts((shown) => showEvent(shown, news, options));
-    setLog((kept) => logEvent(kept, news));
-  }, []);
-
+  const { closeDay, hearEvent, hearBooking } = useTold(latest, setToasts, setLog);
   const hold = useFading(toasts, setToasts);
 
   return {
@@ -146,6 +179,7 @@ export function useNews(speed: SimSpeed): NewsControls {
     hear,
     closeDay,
     hearEvent,
+    hearBooking,
     hold,
     dismiss: useCallback(
       (key: string) => setToasts((shown) => shown.filter((toast) => toastKey(toast) !== key)),

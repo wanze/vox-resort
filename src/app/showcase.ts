@@ -152,6 +152,15 @@ import { partyMixOf } from '../features/events/domain/audience';
 import { createEvents, type EventStep } from '../features/events/domain/eventRuns';
 import { restoreEvents } from '../features/events/domain/eventsSnapshot';
 import {
+  accept,
+  createBookings,
+  decline,
+  type OfferRefusal,
+} from '../features/bookings/domain/bookings';
+import { bookingsViewOf, type BookingsView } from '../features/bookings/domain/bookingsView';
+import { resortFactsAt } from '../features/resort-sim/domain/bookingSteps';
+import { restoreBookings } from '../features/bookings/domain/bookingsSnapshot';
+import {
   book,
   BUILT_INS,
   keepStanding,
@@ -180,7 +189,15 @@ import { bookingDayKey, showToTell } from '../features/events/domain/stayingUp';
 import { dayAt } from '../features/events/domain/week';
 import { watchRoom, type LaunchSite } from '../features/fireworks/domain/launch';
 import { fireworksDrought } from '../features/fireworks/domain/nights';
-import { eventNewsFrom, tonightNewsOf, type EventNews } from '../features/hud/domain/news';
+import {
+  bookingNewsSince,
+  eventNewsFrom,
+  toldOf,
+  tonightNewsOf,
+  type BookingNews,
+  type BookingsTold,
+  type EventNews,
+} from '../features/hud/domain/news';
 import {
   isOpenIn,
   weatherEffect,
@@ -487,6 +504,8 @@ export interface ShowcaseOptions {
   readonly onSpeedChange?: (speed: SimSpeed) => void;
   // An event announced, called off or put off; never told during a load.
   readonly onEventNews?: (news: EventNews) => void;
+  // A tour operator's offer, or a booked group's payout; never told for what a load brings.
+  readonly onBookingNews?: (news: BookingNews) => void;
   // Opens behind the welcome screen: the camera drifts, the controls are off and the resort keeps
   // the player's local time, until the first new game.
   readonly welcome?: boolean;
@@ -591,6 +610,8 @@ export interface Showcase {
   unbook(id: number): void;
   rebook(id: number, change: BookingChange): BookingRefusal | null;
   switchBuiltIn(id: number, on: boolean): void;
+  acceptOffer(id: number): OfferRefusal | null;
+  declineOffer(id: number): void;
   // Finishes what is being built first: the save is of a world with no scaffolding.
   snapshot(): GameSnapshot;
   // Opens paused. Rejects, with the resort already replaced, if the save does not fit its world.
@@ -2350,6 +2371,7 @@ function restoreGame(resort: Resort, saved: GameSnapshot, clock: Clock): void {
   resort.staffRouter.restore(saved.staffRouter);
   const { count } = resort.guests;
   resort.events = saved.events ? restoreEvents(saved.events, count) : createEvents(count);
+  resort.bookings = saved.bookings ? restoreBookings(saved.bookings) : createBookings();
   resort.events.programme = withBuiltIns(
     resort.events.programme,
     BUILT_INS,
@@ -2978,6 +3000,28 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const programmeNow = (): ProgrammeFacts => programmeFactsOf(current(), clock);
 
+  const bookingsNow = (): BookingsView => {
+    const resort = current();
+    return bookingsViewOf(resort.bookings, resortFactsAt(resort, clock.ticks), clock.day);
+  };
+
+  // What the player has heard of: a load or a new game marks what it brings as told.
+  let told: BookingsTold = { offer: 0, settled: 0 };
+  const hearNoBookings = (): void => {
+    told = toldOf(current().bookings);
+  };
+  const tellBookings = (): void => {
+    const { bookings } = current();
+    const heard = bookingNewsSince(bookings, told, clock.ticks);
+    told = toldOf(bookings);
+    for (const news of heard) options.onBookingNews?.(news);
+  };
+
+  const bookingsChanged = (): void => {
+    hud.publish({ bookings: bookingsNow() });
+    options.onDirty?.();
+  };
+
   const heardEvents = (steps: readonly EventStep[]): void => {
     for (const news of eventNewsFrom(steps, current().siteVenues, clock.weather)) {
       options.onEventNews?.(news);
@@ -3069,6 +3113,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const hourly = (): void => {
     photoCall();
+    tellBookings();
     hud.publish({
       ...works.place(),
       season: seasonNow(),
@@ -3077,6 +3122,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       status: report(),
       ledger: current().ledger,
       programme: programmeNow(),
+      bookings: bookingsNow(),
     });
     if (overlayKind !== null) paintOverlay();
     if (panelMoves()) selection.reword();
@@ -3098,6 +3144,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   const morning = (): void => {
     tellTonight();
+    tellBookings();
     hud.publish({
       ...works.place(),
       advice: advise(),
@@ -3105,6 +3152,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       history: current().history,
       ledger: current().ledger,
       season: seasonNow(),
+      bookings: bookingsNow(),
     });
     options.onDirty?.();
     options.onMorning?.();
@@ -3146,6 +3194,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
 
   // Everything React shows is told again: the HUD still holds the game that was replaced.
   const rebuilt = (): void => {
+    hearNoBookings();
     seasonTurn = settledTurn(inBreak(current().season));
     look = lookAt(seasonTurn, secondsNow(), clock.running);
     autumn.set(look.blend);
@@ -3164,6 +3213,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       ledger: current().ledger,
       land: landNow(),
       programme: programmeNow(),
+      bookings: bookingsNow(),
       open: current().open,
       season: seasonNow(),
       seasons: current().seasons,
@@ -3194,6 +3244,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       voices: voicesOf(current()),
       status: report(),
       programme: programmeNow(),
+      bookings: bookingsNow(),
     });
   };
 
@@ -3417,6 +3468,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     ledger: current().ledger,
     land: landNow(),
     programme: programmeNow(),
+    bookings: bookingsNow(),
     weather: drawnWeather(),
   });
 
@@ -3549,6 +3601,22 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       const { programme } = current().events;
       const after = switchBuiltIn(programme, id, on);
       if (after !== programme) programmeChanged(after);
+    },
+    acceptOffer(id) {
+      const resort = current();
+      const result = accept(resort.bookings, id);
+      if (result.refusal === null) {
+        resort.bookings = result.state;
+        bookingsChanged();
+      }
+      return result.refusal;
+    },
+    declineOffer(id) {
+      const resort = current();
+      const after = decline(resort.bookings, id);
+      if (after === resort.bookings) return;
+      resort.bookings = after;
+      bookingsChanged();
     },
     // Told back whether or not it took: a bench refuses mode changes.
     setCameraMode(mode) {

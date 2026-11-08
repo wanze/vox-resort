@@ -32,6 +32,7 @@ export const THOUGHT_KINDS = [
   'smelly',
   'noisy',
   'crowded',
+  'promised',
 ] as const;
 
 export type ThoughtKind = (typeof THOUGHT_KINDS)[number];

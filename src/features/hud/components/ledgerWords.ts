@@ -12,6 +12,7 @@ export const REASON_LABELS: { readonly [reason in Reason]: string } = {
   events: 'Events',
   maintenance: 'Maintenance',
   renovate: 'Renovation',
+  booking: 'Group bonuses',
 };
 
 // A true minus, as wide as the plus, so signed figures line up down a column.

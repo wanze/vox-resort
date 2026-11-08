@@ -150,6 +150,8 @@ const columnSchema = z.object({
   maintenance: z.number(),
   // Saves from before renovations have no column for them.
   renovate: z.number().default(0),
+  // Saves from before group bookings have no column for them.
+  booking: z.number().default(0),
 });
 
 const bedsSchema = z.object({ total: count, taken: count });

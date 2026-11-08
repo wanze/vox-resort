@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Settlement } from '../../bookings/domain/bookings';
 import type { Review } from '../../sim/domain/reviews';
 import { closeSeason, startTally, type SeasonReport } from '../../sim/domain/season';
 import { EDITION_REVIEWS, editionNow, editionOf, editionSchema } from './edition';
@@ -63,6 +64,34 @@ describe('an edition', () => {
     expect(editionSchema.parse(structuredClone(edition))).toEqual(edition);
     const odd = { ...edition, photo: { from: 'drone', minute: 0 } };
     expect(editionSchema.safeParse(odd).success).toBe(false);
+  });
+});
+
+const settled = (id: number, day: number): Settlement => ({
+  id,
+  operator: 'Sunshine Tours',
+  kind: 'family',
+  parties: 4,
+  day,
+  meanStars: 4.5,
+  promisedStars: 4,
+  bonus: 600,
+  outcome: 'bonus',
+});
+
+describe('the tour groups in an edition', () => {
+  it('keeps only the groups that left in the season, and reads them back', () => {
+    // Season 2 starts on day 30, so day 58 is its closing day.
+    const report = { ...seasonReport(2, 4), days: 28 };
+    const groups = [settled(3, 70), settled(2, 40), settled(1, 12)];
+    const edition = editionOf({ ...PARTS, seasons: [report], settled: groups })!;
+    expect(edition.settled?.map((each) => each.id)).toEqual([2]);
+    expect(editionSchema.parse(structuredClone(edition))).toEqual(edition);
+  });
+
+  it('leaves them out of a paper with none', () => {
+    const edition = editionOf({ ...PARTS, seasons: [seasonReport(1, 4)], settled: [] })!;
+    expect(edition).not.toHaveProperty('settled');
   });
 });
 

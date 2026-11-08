@@ -1,3 +1,5 @@
+import type { Settlement } from '../../bookings/domain/bookings';
+import { settlementSchema } from '../../bookings/domain/bookingsSnapshot';
 import { z } from 'zod';
 import type { GameMode } from '../../sim/domain/ledger';
 import { reviewSchema, seasonReportSchema } from '../../sim/domain/resortSnapshot';
@@ -25,6 +27,8 @@ export interface Edition {
   readonly bestBefore: number | null;
   readonly reviews: readonly Review[];
   readonly photo: EditionPhoto | null;
+  // The tour groups that left in the season, newest first; absent in papers printed before them.
+  readonly settled?: readonly Settlement[];
 }
 
 // Null before any season has closed.
@@ -38,9 +42,15 @@ export function editionOf(parts: {
   // Newest first, as the resort keeps them.
   readonly reviews: readonly Review[];
   readonly photo: EditionPhoto | null;
+  // Newest first, as the resort keeps them, and from any season.
+  readonly settled?: readonly Settlement[];
 }): Edition | null {
   const report = parts.seasons.at(-1);
   if (!report) return null;
+  // Through the closing day, when the last of the season's guests walk out.
+  const inSeason = (parts.settled ?? []).filter(
+    (each) => each.day >= report.startedOn && each.day <= report.startedOn + report.days,
+  );
   const earlier = parts.seasons.slice(0, -1).flatMap((season) => season.meanStars ?? []);
   return {
     gameId: parts.gameId,
@@ -53,6 +63,7 @@ export function editionOf(parts: {
     bestBefore: earlier.length > 0 ? Math.max(...earlier) : null,
     reviews: parts.reviews.slice(0, EDITION_REVIEWS),
     photo: parts.photo,
+    ...(inSeason.length > 0 ? { settled: inSeason } : {}),
   };
 }
 
@@ -64,6 +75,7 @@ export interface EditionSource {
   readonly name: string | null;
   readonly ledger: { readonly mode: GameMode } | null;
   readonly voices: { readonly reviews: readonly Review[] };
+  readonly bookings?: { readonly settled: readonly Settlement[] } | null;
 }
 
 const DEFAULT_RESORT_NAME = 'Vox Resort';
@@ -79,6 +91,7 @@ export function editionNow(source: EditionSource, photo: EditionPhoto | null): E
     seasons: source.seasons,
     reviews: source.voices.reviews,
     photo,
+    settled: source.bookings?.settled ?? [],
   });
 }
 
@@ -101,4 +114,5 @@ export const editionSchema = z.object({
   bestBefore: z.number().nullable(),
   reviews: z.array(reviewSchema).max(EDITION_REVIEWS),
   photo: editionPhotoSchema.nullable(),
+  settled: z.array(settlementSchema).exactOptional(),
 }) satisfies z.ZodType<Edition>;

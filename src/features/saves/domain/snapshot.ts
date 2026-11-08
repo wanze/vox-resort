@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bookingsSnapshotSchema } from '../../bookings/domain/bookingsSnapshot';
 import { crowdPerBody, crowdSnapshotSchema } from '../../crowd/domain/crowdSnapshot';
 import { eventsSnapshotSchema } from '../../events/domain/eventsSnapshot';
 import { fitsWorld } from '../../land/domain/landRights';
@@ -72,6 +73,8 @@ const gameShape = z.object({
   // Beside the routers rather than in the resort, so sim/ needs nothing from events/. A save from
   // before events loads with an empty programme.
   events: eventsSnapshotSchema.exactOptional(),
+  // Beside the events for the same reason. A save from before group bookings loads with none.
+  bookings: bookingsSnapshotSchema.exactOptional(),
   crowd: crowdSnapshotSchema,
   staff: crowdSnapshotSchema,
   clock: clockSnapshotSchema,

@@ -1,3 +1,4 @@
+import { premiumOf, type BookingsState } from '../../bookings/domain/bookings';
 import { buildCostOf, chargeOf, nightPriceOf, priceOf } from '../../catalog/domain/prices';
 import type { EventsState } from '../../events/domain/eventRuns';
 import { welcomeSitesOf } from '../../events/domain/sites';
@@ -54,6 +55,7 @@ export interface DayCloseState {
   beds: { readonly total: number; readonly taken: number };
   readonly thoughtDay: Map<string, ThoughtTally>;
   events: Pick<EventsState, 'programme'>;
+  readonly bookings: BookingsState;
 }
 
 // Before the morning coach, so a day in the books runs from one check-in to the next.
@@ -70,7 +72,12 @@ export function payTheBills(resort: DayCloseState): void {
   resort.ledger = closeDay(record(billed, 'maintenance', -maintenanceFor(standing)));
   resort.takings.clear();
   // Into the new day, so a lodging's takings show the morning's rent until the next one.
-  const rent = nightBill(resort.guests, (home) => nightlyRate(resort, home), resort.takings);
+  const rent = nightBill(
+    resort.guests,
+    (home) => nightlyRate(resort, home),
+    resort.takings,
+    premiumOf(resort.bookings, resort.guests.party),
+  );
   resort.ledger = record(resort.ledger, 'night', rent);
 }
 
@@ -79,7 +86,7 @@ type RateState = Pick<
   'guests' | 'lodgings' | 'scenery' | 'prices' | 'condition' | 'lastNightNoise'
 >;
 
-function nightlyRate(resort: RateState, home: number): number {
+export function nightlyRate(resort: RateState, home: number): number {
   const { id, key } = resort.guests.homes[home]!;
   const lodging = resort.lodgings[lodgingFor(resort.lodgings, key)];
   // Into the factor, so the rate is rounded once.

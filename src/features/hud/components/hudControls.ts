@@ -14,7 +14,14 @@ import type { HeardScene } from '../../sound/domain/hearing';
 import type { SoundPrefs } from '../../sound/domain/soundPrefs';
 import type { NewGame } from '../../welcome/domain/newGame';
 import type { HudPrefs } from '../domain/hudPrefs';
-import type { EventNews, Message, Toast, ToastKind, UpdatePhase } from '../domain/news';
+import type {
+  BookingNews,
+  EventNews,
+  Message,
+  Toast,
+  ToastKind,
+  UpdatePhase,
+} from '../domain/news';
 import type { BuildNote, CameraView } from '../domain/views';
 import type { PageId, WindowId, WindowLayout, WindowSpot } from '../domain/windowLayout';
 import type { TabbedWindow, TabId } from '../domain/windowTabs';
@@ -23,6 +30,7 @@ import type { FollowView, RideCommand } from '../../guest-view/domain/followRule
 import type { OrderRole } from '../../sim/domain/staffRouter';
 import type { HighlightControls } from '../../highlights/components/highlightControls';
 import type { OverlayControls } from '../../overlays/components/overlayControls';
+import type { BookingsControls } from '../../bookings/components/bookingsControls';
 import type { ProgrammeControls } from '../../events/components/programmeControls';
 import type { SaveControls } from '../../saves/components/saveControls';
 import type { PaperControls } from '../../newspaper/components/paperControls';
@@ -67,6 +75,7 @@ export interface NewsControls {
   hear(advice: readonly Advice[], ticks: number): void;
   closeDay(report: DayReport): void;
   hearEvent(news: EventNews): void;
+  hearBooking(news: BookingNews): void;
   // Nothing fades while held; on release, whatever was about to gets a few seconds more.
   hold(held: boolean): void;
   dismiss(key: string): void;
@@ -168,6 +177,7 @@ export interface HudControls {
   readonly history: HistoryControls;
   readonly sound: SoundControls;
   readonly programme: ProgrammeControls;
+  readonly bookings: BookingsControls;
   readonly windows: WindowControls;
   readonly guestView: GuestViewControls;
   readonly photo: PhotoControls;

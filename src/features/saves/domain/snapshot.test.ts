@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createCrowd, snapshotCrowd } from '../../crowd/domain/crowd';
 import { walkNetworkFor } from '../../crowd/domain/walkNetwork';
 import { createEvents } from '../../events/domain/eventRuns';
+import { createBookings } from '../../bookings/domain/bookings';
+import { snapshotBookings } from '../../bookings/domain/bookingsSnapshot';
 import { snapshotEvents } from '../../events/domain/eventsSnapshot';
 import { createGuests } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
@@ -193,6 +195,15 @@ describe('gameSnapshotSchema', () => {
     expect(gameSnapshotSchema.safeParse({ ...game, events }).success).toBe(true);
     const short = { ...events, glow: events.glow.slice(1) };
     expect(gameSnapshotSchema.safeParse({ ...game, events: short }).success).toBe(false);
+  });
+
+  it('takes the group bookings, or none from a save before them', () => {
+    const game = gameFixture();
+    expect(game).not.toHaveProperty('bookings');
+    const bookings = snapshotBookings(createBookings());
+    expect(gameSnapshotSchema.safeParse({ ...game, bookings }).success).toBe(true);
+    const broken = { ...bookings, open: [{ id: -1 }] };
+    expect(gameSnapshotSchema.safeParse({ ...game, bookings: broken }).success).toBe(false);
   });
 
   it('refuses a staff column one short of the staff', () => {

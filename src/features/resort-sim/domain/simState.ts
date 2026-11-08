@@ -1,3 +1,4 @@
+import { type BookingsState, createBookings } from '../../bookings/domain/bookings';
 import { type Crowd, createCrowd, takeOffPlot } from '../../crowd/domain/crowd';
 import type { WalkNetwork } from '../../crowd/domain/walkNetwork';
 import {
@@ -88,6 +89,7 @@ import type { Venue } from '../../sim/domain/venues';
 import type { Moment, Views } from '../../sim/domain/views';
 import type { Weather } from '../../sim/domain/weather';
 import { NO_ZONE, type Zones, createZones, zoneAt } from '../../sim/domain/zones';
+import { bookedPartyLeft } from './bookingSteps';
 import { NO_HOSTED } from './eventSteps';
 import { NO_MOMENT, photoPause } from './photoSteps';
 import type { PlotFacts } from './plotFacts';
@@ -134,6 +136,8 @@ export interface SimState {
   readonly happiness: Happiness;
   // Replaced by a load; an edit keeps it, dropping the bookings of a stage pulled down.
   events: EventsState;
+  // Group bookings from tour operators; saved beside the events, never drawn from the arrivals.
+  bookings: BookingsState;
   // Per venue, refreshed once a frame, so the staff router's question is an array read.
   eventBooked: Uint8Array;
   eventShowing: Uint8Array;
@@ -439,6 +443,7 @@ export function seeOff(resort: SimState, party: number): void {
     resort.reviews = keepReview(resort.reviews, review);
     resort.today = countReview(resort.today, review.stars);
   }
+  bookedPartyLeft(resort, party, review?.stars ?? null, resort.today.from);
   const left = checkOutParty(guests, party, true);
   resort.today = countDeparture(resort.today, left.length);
   const people = resort.crowd.crowd;
@@ -622,6 +627,7 @@ export function createSimState(parts: SimParts): SimState {
     needs,
     happiness,
     events: eventsOf(population, venues),
+    bookings: createBookings(),
     eventBooked: new Uint8Array(venues.length),
     eventShowing: new Uint8Array(venues.length),
     djOn: new Uint8Array(venues.length),

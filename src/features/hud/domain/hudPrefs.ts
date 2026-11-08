@@ -20,7 +20,13 @@ export const DEFAULT_PREFS: HudPrefs = {
   fastNights: true,
 };
 
-const TOAST_KINDS: ReadonlySet<unknown> = new Set<ToastKind>(['urgent', 'warning', 'day', 'event']);
+const TOAST_KINDS: ReadonlySet<unknown> = new Set<ToastKind>([
+  'urgent',
+  'warning',
+  'day',
+  'event',
+  'booking',
+]);
 
 const isToastKind = (value: unknown): value is ToastKind => TOAST_KINDS.has(value);
 

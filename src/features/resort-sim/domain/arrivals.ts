@@ -1,3 +1,4 @@
+import { demandOn, type BookingsState } from '../../bookings/domain/bookings';
 import type { EventsState } from '../../events/domain/eventRuns';
 import { bedCount, type Guests } from '../../guests/domain/guests';
 import type { Random } from '../../layout/domain/random';
@@ -22,7 +23,9 @@ import {
   lastNightOf,
   type Season,
 } from '../../sim/domain/season';
-import { forgetStay, type Thoughts } from '../../sim/domain/thoughts';
+import { forgetStay, type ThoughtTally, type Thoughts } from '../../sim/domain/thoughts';
+import type { Venue } from '../../sim/domain/venues';
+import { admitBookedGroups } from './bookingSteps';
 import { paidShareFor } from './dayClose';
 import type { SimNow } from './simNow';
 
@@ -44,6 +47,10 @@ export interface ArrivalsState {
   readonly nightOwls: Set<number>;
   readonly carrying: Carrying;
   readonly thoughts: Thoughts;
+  readonly thoughtDay: Map<string, ThoughtTally>;
+  readonly venues: readonly Venue[];
+  readonly unreachable: ReadonlySet<string>;
+  bookings: BookingsState;
   today: DayCounts;
   rating: Rating;
   open: boolean;
@@ -90,8 +97,9 @@ export function runDay(resort: ArrivalsState, day: number): void {
 }
 
 function bookTheDay(resort: ArrivalsState, day: number): void {
+  admitBookedGroups(resort, day, canArrive(resort), (arrived) => settleIn(resort, arrived));
   const prices = bookingPull(resort.guests.homes, resort.prices, resort.rating.stars);
-  const pull = prices * bookingDemandOn(resort.season, day);
+  const pull = prices * bookingDemandOn(resort.season, day) * demandOn(resort.bookings, day);
   const beds = bedsOn(resort.guests);
   resort.arrivalsPlanned = arrivalsFor(resort.rating, beds, pull);
   // A closed resort turns nobody away: nobody was let book.
@@ -168,6 +176,11 @@ export function admitWave(resort: ArrivalsState, day: number, wave: number): voi
     expectationOf: (home) => expectationFor(resort.rating.stars, paidShareFor(resort, home)),
     ...seasonalDraws(resort.season, day),
   });
+  settleIn(resort, arrived);
+  resort.arrivalsAdmitted += arrived.length;
+}
+
+function settleIn(resort: ArrivalsState, arrived: readonly number[]): void {
   for (const person of arrived) {
     // The body was somebody else's, and so was whatever it was holding and thinking.
     resort.carrying.nodes[person] = 0;
@@ -176,7 +189,6 @@ export function admitWave(resort: ArrivalsState, day: number, wave: number): voi
     resort.router.admit(person, resort.router.arrivalNode);
   }
   noteArrivedParties(resort, arrived);
-  resort.arrivalsAdmitted += arrived.length;
   resort.today = countArrivals(resort.today, arrived.length);
   const beds = bedCount(resort.guests);
   resort.beds = { total: beds.beds, taken: beds.taken };

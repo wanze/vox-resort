@@ -19,6 +19,7 @@ import { useNews } from './useNews';
 import { useInspector } from './useInspector';
 import { useGuestView } from './useGuestView';
 import { useOverlay } from './useOverlay';
+import { useBookings } from './useBookings';
 import { useProgramme } from './useProgramme';
 import { useResortControls } from './useResortControls';
 import { useHudChrome } from './useHudChrome';
@@ -287,6 +288,7 @@ function useControls(
     guestView,
     placement: usePlacement(showcase, hud),
     programme: useProgramme(showcase, hud),
+    bookings: useBookings(showcase, hud),
     photo,
     newspaper: useNewspaper(showcase, hud, clock, photo.startFrontPage),
     debug: useDebug(showcase, hud, clock.resume),
@@ -384,8 +386,18 @@ export function App() {
     select: selectTool,
     pending: toolRef,
   } = useBuildTool(showcaseRef, mapOverlay.setOverlay);
-  const { camera, clock, inspector, guestView, placement, programme, photo, debug, newspaper } =
-    useControls(showcaseRef, hud, selectTool);
+  const {
+    camera,
+    clock,
+    inspector,
+    guestView,
+    placement,
+    programme,
+    bookings,
+    photo,
+    debug,
+    newspaper,
+  } = useControls(showcaseRef, hud, selectTool);
   const { news, history, replaced, advice, signs, highlights } = useAdviceNews(
     showcaseRef,
     hud,
@@ -425,7 +437,7 @@ export function App() {
   const { adoptSpeed } = clock;
   const { note } = money;
   const { markDirty, morning } = saves;
-  const { hearEvent } = news;
+  const { hearEvent, hearBooking } = news;
   const { onRefused, onMorning } = useSoundCues(sound, { note, morning }, news.toasts);
   const { onSeasonEnded, onPhotoCall } = newspaper;
   const { cue: onCue, hear: onHear } = sound;
@@ -456,6 +468,7 @@ export function App() {
       onHear,
       onSpeedChange: adoptSpeed,
       onEventNews: hearEvent,
+      onBookingNews: hearBooking,
       welcome: OPENS_ON_WELCOME,
     };
 
@@ -503,6 +516,7 @@ export function App() {
     onHear,
     adoptSpeed,
     hearEvent,
+    hearBooking,
   ]);
 
   return (
@@ -544,6 +558,7 @@ export function App() {
             history,
             sound,
             programme,
+            bookings,
             windows,
             guestView,
             photo,

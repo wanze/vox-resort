@@ -1,4 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import {
+  accept,
+  createBookings,
+  demandOn,
+  offered,
+  type BookingsState,
+} from '../../bookings/domain/bookings';
+import type { Offer } from '../../bookings/domain/offers';
 import { createEvents } from '../../events/domain/eventRuns';
 import { createGuests, presentCount } from '../../guests/domain/guests';
 import { createRandom } from '../../layout/domain/random';
@@ -17,7 +25,7 @@ import {
 } from '../../sim/domain/season';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { expectationFor } from '../../sim/domain/expectations';
-import { createThoughts } from '../../sim/domain/thoughts';
+import { createDay, createThoughts, stayCount } from '../../sim/domain/thoughts';
 import { admitLaterWaves, admitWave, runDay, sendDepartures, type ArrivalsState } from './arrivals';
 import type { SimNow } from './simNow';
 
@@ -61,6 +69,10 @@ function stateOf(away: boolean) {
     nightOwls: new Set(),
     carrying: createCarrying(guests.count),
     thoughts: createThoughts(guests.count),
+    thoughtDay: createDay(),
+    venues: [],
+    unreachable: new Set(),
+    bookings: createBookings(),
     today: startDay(0),
     rating: ratingFor({ happiness: 1, present: 1, housed: 1, cleanliness: 1 }),
     open: true,
@@ -237,5 +249,108 @@ describe('admitLaterWaves', () => {
     expect(admitted).toEqual([]);
     admitLaterWaves(state, nowAt(ARRIVAL_WAVES[1]!.tick), 1);
     expect(admitted.length).toBeGreaterThan(0);
+  });
+});
+
+const partiesOf = (state: ArrivalsState): readonly string[] =>
+  state.newcomers.map((index) => {
+    const { kind, family, members } = state.guests.parties[index]!;
+    const first = members[0]!;
+    return `${kind} ${family} x${members.length} home ${state.guests.home[first]} for ${state.guests.nights[first]}`;
+  });
+
+describe('runDay with no group booked', () => {
+  // Recorded before group bookings existed: the offer stream must never leak into the arrivals.
+  it('admits the same parties, draw for draw', () => {
+    const { state } = stateOf(true);
+    state.season = firstSeason(0);
+    runDay(state, 10);
+    admitWave(state, 10, 1);
+    admitWave(state, 10, 2);
+    expect({
+      parties: partiesOf(state),
+      planned: state.arrivalsPlanned,
+      next: state.arrivals.state(),
+    }).toMatchInlineSnapshot(`
+      {
+        "next": 1511859836,
+        "parties": [
+          "family Casals x5 home 0 for 8",
+        ],
+        "planned": 5,
+      }
+    `);
+  });
+});
+
+const groupOffer = (over: Partial<Offer> = {}): Offer => ({
+  id: 1,
+  operator: 'Sunshine Tours',
+  kind: 'family',
+  parties: 2,
+  arrivesOn: 3,
+  nights: 5,
+  premium: 0.3,
+  promisedStars: 4,
+  bonusShare: 0.3,
+  requirements: [],
+  expiresOn: 2,
+  ...over,
+});
+
+const bookedWith = (offer: Offer): BookingsState =>
+  accept(offered(createBookings(), offer, 9), offer.id).state;
+
+describe('runDay with a group booked', () => {
+  it('checks the group in first, for its nights, and shrinks the ordinary arrivals', () => {
+    // Fewer free beds than the opening morning's advance bookings want.
+    const tight = () => {
+      const { state } = stateOf(true);
+      state.season = firstSeason(0);
+      state.guests.freeBeds.set([6, 6]);
+      return state;
+    };
+    const plain = tight();
+    runDay(plain, 0);
+    const state = tight();
+    state.bookings = bookedWith(groupOffer({ arrivesOn: 0 }));
+    runDay(state, 0);
+    const [first, second] = state.newcomers;
+    expect(state.bookings.partyOf.get(first!)).toBe(1);
+    expect(state.bookings.partyOf.get(second!)).toBe(1);
+    for (const party of [first!, second!]) {
+      const { kind, members } = state.guests.parties[party]!;
+      expect(kind).toBe('family');
+      expect(state.guests.nights[members[0]!]).toBe(5);
+    }
+    expect(state.bookings.accepted[0]).toMatchObject({ state: 'staying', arrived: 2 });
+    expect(state.bookings.accepted[0]!.expected).toBeGreaterThan(0);
+    expect(state.arrivalsPlanned).toBeLessThan(plain.arrivalsPlanned);
+  });
+
+  it('turns away the parties the beds cannot take, and the booking fails at the door', () => {
+    const { state } = stateOf(true);
+    state.season = firstSeason(0);
+    state.bookings = bookedWith(groupOffer({ parties: 12 }));
+    runDay(state, 3);
+    const [booking] = state.bookings.accepted;
+    expect(booking!.arrived).toBeGreaterThan(0);
+    expect(booking!.turnedAway).toBeGreaterThan(0);
+    expect(booking!.arrived + booking!.turnedAway).toBe(12);
+    expect(state.today.turnedAway ?? 0).toBeGreaterThan(0);
+    expect(demandOn(state.bookings, 3)).toBeCloseTo(0.9);
+  });
+
+  it('has every booked guest complain of a promise the resort did not keep', () => {
+    const { state, admitted } = stateOf(true);
+    state.season = firstSeason(0);
+    state.bookings = bookedWith(groupOffer({ requirements: [{ kind: 'flag', value: 'stage' }] }));
+    runDay(state, 3);
+    const booked = admitted
+      .map(([person]) => person)
+      .filter((person) => state.bookings.partyOf.has(state.guests.party[person]!));
+    expect(booked.length).toBeGreaterThan(0);
+    for (const person of booked) expect(stayCount(state.thoughts, person, 'promised')).toBe(1);
+    expect(state.thoughtDay.get('promised|a stage')?.count).toBe(booked.length);
   });
 });

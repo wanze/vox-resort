@@ -16,6 +16,7 @@ import {
 import { snapshotResort } from '../features/sim/domain/resortState';
 import { createLedger, OPENING_BALANCE, type GameMode } from '../features/sim/domain/ledger';
 import type { SimSpeed } from '../features/sim/domain/simClock';
+import { snapshotBookings } from '../features/bookings/domain/bookingsSnapshot';
 import { snapshotEvents } from '../features/events/domain/eventsSnapshot';
 import { snapshotCrowd } from '../features/crowd/domain/crowd';
 import { savedResortName } from '../features/naming/domain/resortName';
@@ -206,6 +207,7 @@ export function createResortLifecycle(parts: LifecycleParts): ResortLifecycle {
       router: resort.router.snapshot(),
       staffRouter: resort.staffRouter.snapshot(),
       events: snapshotEvents(resort.events),
+      bookings: snapshotBookings(resort.bookings),
       crowd: snapshotCrowd(resort.crowd.crowd),
       staff: snapshotCrowd(resort.staff.crowd),
       clock: clock.snapshot(),

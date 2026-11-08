@@ -120,6 +120,24 @@ describe('guestView', () => {
     expect(view(1).expects).toBe('easy-going');
   });
 
+  it('names the tour operator of a booked party, and none for a party that booked itself', () => {
+    const guests = guestsOf();
+    const view = (operator: string | null) =>
+      guestView({
+        guests,
+        needs: needsOf(guests),
+        happiness: moodOf(guests),
+        venues: NO_VENUES,
+        person: 0,
+        day: 0,
+        at: HERE,
+        thought: null,
+        operator,
+      });
+    expect(view('Sunshine Tours').operator).toBe('Sunshine Tours');
+    expect(view(null)).not.toHaveProperty('operator');
+  });
+
   it('names the guest and lists their whole party, themselves included, in party order', () => {
     const guests = guestsOf();
     const person = Array.from({ length: guests.count }, (_, i) => i).find(

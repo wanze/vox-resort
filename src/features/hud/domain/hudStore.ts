@@ -1,3 +1,4 @@
+import type { BookingsView } from '../../bookings/domain/bookingsView';
 import type { ProgrammeFacts } from '../../events/domain/programmeView';
 import type { FollowView } from '../../guest-view/domain/followRules';
 import type { HighlightType } from '../../highlights/domain/highlights';
@@ -39,6 +40,7 @@ export interface HudState {
   readonly land: LandView | null;
   readonly pending: boolean;
   readonly programme: ProgrammeFacts | null;
+  readonly bookings: BookingsView | null;
   readonly following: FollowView | null;
   // The clock is running through a quiet night faster than the speed picked.
   readonly fastNight: boolean;
@@ -76,6 +78,7 @@ export const INITIAL_HUD: HudState = {
   land: null,
   pending: false,
   programme: null,
+  bookings: null,
   following: null,
   fastNight: false,
   season: null,

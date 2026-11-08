@@ -7,12 +7,14 @@ export function nightBill(
   guests: Guests,
   rateOf: (home: number) => number,
   takings?: VenueTakings,
+  // Per person on top of the rate, as a booked group pays its operator's premium.
+  factorOf?: ((person: number) => number) | null,
 ): number {
   let bill = 0;
   for (let person = 0; person < guests.count; person++) {
     const home = guests.home[person]!;
     if (guests.present[person] !== 1 || home === NO_HOME) continue;
-    const night = rateOf(home);
+    const night = factorOf ? rateOf(home) * factorOf(person) : rateOf(home);
     bill += night;
     if (takings) earn(takings, guests.homes[home]!.key, night);
   }

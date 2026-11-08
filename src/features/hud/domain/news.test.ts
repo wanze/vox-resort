@@ -7,6 +7,10 @@ import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import {
   adviceKey,
   eventKey,
+  logBooking,
+  offerNews,
+  settledNews,
+  showBooking,
   type EventNews,
   eventNewsFrom,
   expireToasts,
@@ -269,6 +273,48 @@ describe('showEvent', () => {
     const quiet = { ...eventNews('announce'), quiet: true };
     expect(showEvent([], quiet, normally)).toEqual([]);
     expect(logEvent([], quiet)).toEqual([{ kind: 'event', news: quiet }]);
+  });
+});
+
+describe('showBooking', () => {
+  const offer = {
+    id: 4,
+    operator: 'Sunshine Tours',
+    kind: 'family' as const,
+    parties: 3,
+    arrivesOn: 9,
+    nights: 4,
+    premium: 0.3,
+    promisedStars: 4,
+    bonusShare: 0.3,
+    requirements: [],
+    expiresOn: 6,
+  };
+
+  it('shows an offer once, and its payout apart from it', () => {
+    const offered = showBooking([], offerNews(offer, 100), normally);
+    expect(showBooking(offered, offerNews(offer, 120), normally)).toHaveLength(1);
+    const settlement = {
+      id: 4,
+      operator: 'Sunshine Tours',
+      kind: 'family' as const,
+      parties: 3,
+      day: 13,
+      meanStars: 4.2,
+      promisedStars: 4,
+      bonus: 300,
+      outcome: 'bonus' as const,
+    };
+    const both = showBooking(offered, settledNews(settlement, 200), normally);
+    expect(both.map(toastKey)).toEqual(['booking:4:offer', 'booking:4:settled']);
+  });
+
+  it('logs a muted offer but does not toast it', () => {
+    const muted = { ...normally, muted: new Set<ToastKind>(['booking']) };
+    expect(showBooking([], offerNews(offer, 100), muted)).toEqual([]);
+    expect(logBooking([], offerNews(offer, 100))).toEqual([
+      { kind: 'booking', news: offerNews(offer, 100) },
+    ]);
   });
 });
 

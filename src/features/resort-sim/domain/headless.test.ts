@@ -8,6 +8,7 @@ import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import { netOf } from '../../sim/domain/ledger';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { weatherOn } from '../../sim/domain/weather';
+import { accept, offered } from '../../bookings/domain/bookings';
 import { WEATHER_SEED } from './eventSteps';
 import { createHeadlessGame, framesPerTickAt, simNowAt } from './headless';
 
@@ -100,4 +101,53 @@ describe('the reference resort, three days from the first morning', () => {
       ]
     `);
   });
+});
+
+describe('a group booked on the reference resort', () => {
+  it('arrives, stays its nights and settles before the week is out', () => {
+    const world = referenceWorldOf(referenceJson);
+    const plan = planOfWorld(world);
+    const { placements, props, paths, rails, tilesX, tilesZ } = world;
+    const game = createHeadlessGame({
+      plan,
+      plot: {
+        layout: { placements, props, paths, rails, tilesX, tilesZ },
+        placements: [...placements],
+        props: [...props],
+        paths: [...paths],
+        rails: [...rails],
+      },
+      population: crowdSizeForOwned(ownedArea(plan.land ?? null, plan)),
+      startTick: 8 * 60,
+      forcedWeather: 'clear',
+    });
+    const offer = {
+      id: 1,
+      operator: 'Sunshine Tours',
+      kind: 'couple' as const,
+      parties: 3,
+      arrivesOn: 3,
+      nights: 2,
+      premium: 0.3,
+      promisedStars: 3,
+      bonusShare: 0.3,
+      requirements: [],
+      expiresOn: 1,
+    };
+    game.state.bookings = accept(offered(game.state.bookings, offer, 99), 1).state;
+    const play = (to: number) =>
+      game.play(to, { framesPerTick: framesPerTickAt('normal'), hooks: quiet });
+    play(3 * TICKS_PER_DAY + CHECK_IN_TICK);
+    const [booking] = game.state.bookings.accepted;
+    expect(booking).toMatchObject({ state: 'staying', arrived: 3, turnedAway: 0 });
+    play(7 * TICKS_PER_DAY + CHECK_IN_TICK);
+    const { bookings, history } = game.state;
+    expect(bookings.accepted).toEqual([]);
+    const [settled] = bookings.settled;
+    expect(settled).toMatchObject({ id: 1, parties: 3, outcome: 'bonus' });
+    expect(settled!.bonus).toBe(Math.round(0.3 * booking!.expected));
+    const paid = history.find((day) => day.day === settled!.day)!;
+    expect(paid.money.booking).toBe(settled!.bonus);
+    // A week of the reference resort: about 11s alone, three times that beside the full suite.
+  }, 90_000);
 });

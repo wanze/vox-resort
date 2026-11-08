@@ -89,6 +89,7 @@ const TOAST_CUES: { readonly [kind in ToastKind]: Cue } = {
   warning: 'notice',
   day: 'day',
   event: 'notice',
+  booking: 'notice',
 };
 
 export const toastCue = (kind: ToastKind): Cue => TOAST_CUES[kind];

@@ -35,6 +35,7 @@ import { StaffPanel } from './StaffPanel';
 import { Toasts } from './Toasts';
 import { TopBar, type MenuId } from './TopBar';
 import { NewGamePanel } from '../../welcome/components/NewGamePanel';
+import { BookingsPanel } from '../../bookings/components/BookingsPanel';
 import { ProgrammePanel } from '../../events/components/ProgrammePanel';
 import { SavesPanel } from '../../saves/components/SavesPanel';
 import { readableById, slotsBusy, UNSAVED_ID } from '../../saves/domain/saveSlots';
@@ -209,6 +210,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       onMutedChange={props.news.setMuted}
       onShowOnPlot={props.onShowOnPlot}
       onOpenReport={(day) => openReport(props, day)}
+      onOpenBookings={() => props.windows.show('bookings', true)}
     />
   ),
   report: ({ history, ledger, resort }) => (
@@ -232,6 +234,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
     <StaffPanel staff={stats?.staff ?? null} tally={status?.staff} onHire={resort.setHiring} />
   ),
   programme: ({ programme }) => <ProgrammePanel programme={programme} />,
+  bookings: ({ bookings }) => <BookingsPanel bookings={bookings} />,
   money: (props) => <LedgerPanel ledger={props.ledger} />,
   prices: ({ stats, resort }) => (
     <PricesPanel prices={stats?.prices ?? null} onPrice={resort.setPrice} />
@@ -307,8 +310,11 @@ function frameOf(props: HudView, id: WindowId, onClose: () => void): HudWindowFr
   };
 }
 
+const offerCount = (props: HudView): number => props.bookings.view?.offers.length ?? 0;
+
 const badgeOf = (props: HudView, tab: TabId): number => {
   if (tab === 'advice') return props.advice.length;
+  if (tab === 'bookings') return offerCount(props);
   return tab === 'messages' ? props.news.log.length : 0;
 };
 
@@ -511,7 +517,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
         ledger={props.ledger}
         status={props.status}
         trend={starsTrend(props.history.history)}
-        adviceCount={props.advice.length}
+        inboxCount={props.advice.length + offerCount(props)}
         windows={props.windows}
         menu={props.menu}
         onMenuChange={props.onMenuChange}
@@ -566,6 +572,7 @@ export function Hud({ hud, nodes, controls, placement, inspector, chrome }: HudP
           hire: hireControls(props),
           onOpenAdvice: () => props.windows.show('advice', true),
           onOpenReport: (day) => openReport(props, day),
+          onOpenBookings: () => props.windows.show('bookings', true),
           onDismiss: props.news.dismiss,
         }}
         onHold={props.news.hold}

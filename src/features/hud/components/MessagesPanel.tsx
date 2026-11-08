@@ -2,9 +2,17 @@ import type { ReactNode } from 'react';
 import { HelpTip } from '../../../shared/components/HelpTip';
 import { PixelIcon } from '../../../shared/components/PixelIcon';
 import type { IconName } from '../../../shared/components/pixelIcons';
+import { bookingNewsLine } from '../../bookings/components/bookingNews';
 import { eventNewsLine } from '../../events/components/eventWords';
 import type { HudPrefs } from '../domain/hudPrefs';
-import { toastKey, type EventNews, type Message, type News, type ToastKind } from '../domain/news';
+import {
+  toastKey,
+  type BookingNews,
+  type EventNews,
+  type Message,
+  type News,
+  type ToastKind,
+} from '../domain/news';
 import { CHECK_IN_TICK } from '../../sim/domain/checkIn';
 import type { DayReport } from '../../sim/domain/dayReport';
 import type { GameMode } from '../../sim/domain/ledger';
@@ -21,6 +29,7 @@ export interface MessagesPanelProps {
   readonly onMutedChange: (kind: ToastKind, muted: boolean) => void;
   readonly onShowOnPlot: (at: { readonly tileX: number; readonly tileZ: number }) => void;
   readonly onOpenReport: (day: number) => void;
+  readonly onOpenBookings: () => void;
 }
 
 // Short enough to sit side by side; the full sentence is the tooltip.
@@ -33,6 +42,7 @@ const TOGGLES: readonly {
   { kind: 'warning', label: 'Warnings', title: 'Toast warnings' },
   { kind: 'day', label: 'Day reports', title: "Toast each day's summary" },
   { kind: 'event', label: 'Events', title: 'Toast the events announced and called off' },
+  { kind: 'booking', label: 'Bookings', title: 'Toast tour operators’ offers and their payouts' },
 ];
 
 const whenOf = (ticks: number): string => {
@@ -142,11 +152,31 @@ function MessageLine({ message, ...props }: { readonly message: Message } & Mess
   if (message.kind === 'event') {
     return <EventLine news={message.news} onShowOnPlot={props.onShowOnPlot} />;
   }
+  if (message.kind === 'booking') {
+    return <BookingLine news={message.news} onOpen={props.onOpenBookings} />;
+  }
   return <NewsLine news={message.news} onShowOnPlot={props.onShowOnPlot} />;
 }
 
 const messageKey = (message: Message): string =>
   message.kind === 'advice' ? `${message.news.at}:${message.news.key}` : toastKey(message);
+
+function BookingLine({
+  news,
+  onOpen,
+}: {
+  readonly news: BookingNews;
+  readonly onOpen: () => void;
+}) {
+  return (
+    <Line
+      icon="bookings"
+      when={news.at}
+      says={bookingNewsLine(news)}
+      action={<ActionButton label="Bookings" onClick={onOpen} />}
+    />
+  );
+}
 
 function DayLine({ report, ...props }: { readonly report: DayReport } & MessagesPanelProps) {
   return (

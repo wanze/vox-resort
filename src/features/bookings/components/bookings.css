@@ -1,0 +1,60 @@
+.bookings-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.bookings-list,
+.bookings-checks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bookings-card,
+.bookings-entry {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* An offer is a letter on the desk, raised and rounded like the buttons it carries. */
+.bookings-card {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pebble);
+}
+
+/* The book is a list, not a pile of letters: rows under the heading's rule, ruled off alike. */
+.bookings-entry + .bookings-entry {
+  padding-top: var(--space-2);
+  border-top: 2px dotted var(--edge-soft);
+}
+
+.bookings-card > p,
+.bookings-entry > p {
+  margin: 0;
+}
+
+.bookings-checks {
+  gap: var(--space-1);
+}
+
+.bookings-checks > li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.bookings-checks > li[data-met='true'],
+.bookings-last[data-state='bonus'] {
+  color: var(--ink-good);
+}
+
+.bookings-checks > li[data-met='false'],
+.bookings-last[data-state='failed'] {
+  color: var(--ink-bad);
+}
+
+.bookings-last {
+  margin: 0;
+}

@@ -1,8 +1,10 @@
 import { useEffect, useState, type FocusEvent } from 'react';
+import { bookingNewsLine, bookingNewsTitle } from '../../bookings/components/bookingNews';
 import { eventNewsLine } from '../../events/components/eventWords';
 import {
   isUrgentToast,
   toastKey,
+  type BookingNews,
   type EventNews,
   type News,
   type Toast,
@@ -24,6 +26,7 @@ interface NewsToastsProps {
   readonly hire: HireControls;
   readonly onOpenAdvice: () => void;
   readonly onOpenReport: (day: number) => void;
+  readonly onOpenBookings: () => void;
   readonly onDismiss: (key: string) => void;
 }
 
@@ -157,6 +160,29 @@ function EventPlate({
   );
 }
 
+function BookingPlate({
+  news,
+  onDismiss,
+  onOpenBookings,
+}: { readonly news: BookingNews } & Pick<NewsToastsProps, 'onDismiss' | 'onOpenBookings'>) {
+  const title = bookingNewsTitle(news);
+  return (
+    <div className="ui-panel hud-toast" data-severity="event">
+      <PixelIcon name="bookings" />
+      <div className="hud-toast-body">
+        <strong>{title}</strong>
+        <p>{bookingNewsLine(news)}</p>
+        <div className="hud-toast-actions">
+          <button type="button" className="ui-button hud-advice-show" onClick={onOpenBookings}>
+            Bookings
+          </button>
+        </div>
+      </div>
+      <DismissButton label={title} onDismiss={() => onDismiss(news.key)} />
+    </div>
+  );
+}
+
 const UPDATE_WORDS: {
   readonly [phase in UpdatePhase]: {
     readonly line: string;
@@ -225,6 +251,7 @@ function NewsToast({
 }: { readonly toast: Exclude<Toast, { readonly kind: 'update' }> } & NewsToastsProps) {
   if (toast.kind === 'day') return <DayPlate report={toast.report} {...props} />;
   if (toast.kind === 'event') return <EventPlate news={toast.news} {...props} />;
+  if (toast.kind === 'booking') return <BookingPlate news={toast.news} {...props} />;
   return <ToastPlate news={toast.news} {...props} />;
 }
 
@@ -242,6 +269,9 @@ function newsLineOf(
     return `Day report. ${daySummary(report, trendOn(news.history, report.day), news.mode)}`;
   }
   if (toast.kind === 'event') return `Programme. ${eventNewsLine(toast.news)}`;
+  if (toast.kind === 'booking') {
+    return `${bookingNewsTitle(toast.news)}. ${bookingNewsLine(toast.news)}`;
+  }
   return `${adviceLabel(toast.news.advice.kind)}. ${newsSays(toast.news)}`;
 }
 

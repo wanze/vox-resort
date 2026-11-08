@@ -1,3 +1,4 @@
+import { operatorOf } from '../features/bookings/domain/bookings';
 import { namesOf, objectTypeById } from '../features/catalog/domain/objectTypes';
 import { buildTicks } from '../features/construction/domain/construction';
 import type { Placement } from '../features/layout/domain/resortLayout';
@@ -158,7 +159,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
     checkedOut(person) ? checkedOutView(selectedView, person) : guestHere(person);
 
   const guestHere = (person: number): SelectionView => {
-    const { guests, needs, happiness, venues, crowd, thoughts, cast } = current();
+    const { guests, needs, happiness, venues, crowd, thoughts, cast, bookings } = current();
     // Where they are drawn; somebody hidden indoors is where the crowd holds them, in the venue.
     const drawn = cast.shown[person] === SHOWN.placed ? cast : crowd.crowd;
     const at = { x: drawn.x[person] ?? 0, z: drawn.z[person] ?? 0 };
@@ -173,6 +174,7 @@ export function createSelectionController(parts: SelectionParts): SelectionContr
       at,
       thought,
       thoughts,
+      operator: operatorOf(bookings, guests.party[person]!),
     });
   };
 

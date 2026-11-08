@@ -1,3 +1,5 @@
+import type { BookingsState, Settlement } from '../../bookings/domain/bookings';
+import type { Offer } from '../../bookings/domain/offers';
 import { EVENT_KINDS, labelOf as eventLabelOf } from '../../events/domain/catalogue';
 import type { CallOff, EventStep } from '../../events/domain/eventRuns';
 import type { EventSite, Occurrence } from '../../events/domain/programme';
@@ -11,8 +13,9 @@ import type { Weather } from '../../sim/domain/weather';
 
 export type Severity = 'urgent' | 'warning';
 
-// What the player can mute: each severity of advice, the report at check-in, and the programme.
-export type ToastKind = Severity | 'day' | 'event';
+// What the player can mute: each severity of advice, the report at check-in, the programme and
+// the tour operators.
+export type ToastKind = Severity | 'day' | 'event' | 'booking';
 
 export interface News {
   // adviceKey of the first advice; merged news keep the first one's key.
@@ -43,10 +46,60 @@ export interface EventNews {
   readonly quiet?: boolean;
 }
 
+// `at` is the absolute tick it was heard at, which the log dates it by.
+export type BookingNews =
+  | { readonly key: string; readonly kind: 'offer'; readonly at: number; readonly offer: Offer }
+  | {
+      readonly key: string;
+      readonly kind: 'settled';
+      readonly at: number;
+      readonly settlement: Settlement;
+    };
+
+export const offerNews = (offer: Offer, at: number): BookingNews => ({
+  key: `booking:${offer.id}:offer`,
+  kind: 'offer',
+  at,
+  offer,
+});
+
+export const settledNews = (settlement: Settlement, at: number): BookingNews => ({
+  key: `booking:${settlement.id}:settled`,
+  kind: 'settled',
+  at,
+  settlement,
+});
+
+// The newest offer and settlement the player has heard of.
+export interface BookingsTold {
+  readonly offer: number;
+  readonly settled: number;
+}
+
+export const toldOf = (bookings: BookingsState): BookingsTold => ({
+  offer: bookings.nextId - 1,
+  settled: bookings.settled[0]?.id ?? 0,
+});
+
+// Payouts first, oldest first, then the offers: a group leaving makes room for the next.
+export function bookingNewsSince(
+  bookings: BookingsState,
+  told: BookingsTold,
+  at: number,
+): readonly BookingNews[] {
+  const settled = bookings.settled.filter((each) => each.id > told.settled).toReversed();
+  const offers = bookings.open.filter((each) => each.id > told.offer);
+  return [
+    ...settled.map((settlement) => settledNews(settlement, at)),
+    ...offers.map((offer) => offerNews(offer, at)),
+  ];
+}
+
 export type Message =
   | { readonly kind: 'advice'; readonly news: News }
   | { readonly kind: 'day'; readonly report: DayReport }
-  | { readonly kind: 'event'; readonly news: EventNews };
+  | { readonly kind: 'event'; readonly news: EventNews }
+  | { readonly kind: 'booking'; readonly news: BookingNews };
 
 export type UpdatePhase = 'ready' | 'saving' | 'unsaved';
 
@@ -206,6 +259,9 @@ const DAY_MS = 10_000;
 
 const EVENT_MS = 10_000;
 
+// An offer waits a day for an answer, so it stays until it is read rather than fading.
+const BOOKING_MS = 20_000;
+
 // Long enough to finish reading a line once the pointer or the focus has let go of the toasts.
 const RESUME_MS = 4_000;
 
@@ -317,6 +373,17 @@ export function showEvent(
   return [...others, { kind: 'event', news, until: nowMs + EVENT_MS }];
 }
 
+// Like an event's, it takes none of the three places advice competes for.
+export function showBooking(
+  shown: readonly Toast[],
+  news: BookingNews,
+  { muted, nowMs }: Omit<ToastOptions, 'speed'>,
+): readonly Toast[] {
+  if (muted.has('booking')) return shown;
+  const others = shown.filter((toast) => toastKey(toast) !== news.key);
+  return [...others, { kind: 'booking', news, until: nowMs + BOOKING_MS }];
+}
+
 export const updateOnly = (shown: readonly Toast[]): readonly Toast[] =>
   shown.filter((toast) => toast.kind === 'update');
 
@@ -375,4 +442,8 @@ export function logDay(log: readonly Message[], report: DayReport): readonly Mes
 
 export function logEvent(log: readonly Message[], news: EventNews): readonly Message[] {
   return logged(log, [{ kind: 'event', news }]);
+}
+
+export function logBooking(log: readonly Message[], news: BookingNews): readonly Message[] {
+  return logged(log, [{ kind: 'booking', news }]);
 }

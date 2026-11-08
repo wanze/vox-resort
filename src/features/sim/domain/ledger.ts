@@ -11,7 +11,8 @@ export type Reason =
   | 'wages'
   | 'events'
   | 'maintenance'
-  | 'renovate';
+  | 'renovate'
+  | 'booking';
 
 export const REASONS: readonly Reason[] = [
   'build',
@@ -24,6 +25,7 @@ export const REASONS: readonly Reason[] = [
   'events',
   'maintenance',
   'renovate',
+  'booking',
 ];
 
 export type Column = { readonly [reason in Reason]: number };
@@ -52,6 +54,7 @@ const EMPTY: Column = {
   events: 0,
   maintenance: 0,
   renovate: 0,
+  booking: 0,
 };
 
 export function createLedger(mode: GameMode, opening: number): Ledger {

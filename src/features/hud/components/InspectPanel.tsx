@@ -94,6 +94,10 @@ function WantsRow({ wants }: { readonly wants: GuestView['wants'] }) {
   return <StatRow label="Wants">{wants.label}</StatRow>;
 }
 
+function OperatorRow({ operator }: { readonly operator: string | undefined }) {
+  return operator ? <StatRow label="Booked">With {operator}</StatRow> : null;
+}
+
 function GuestDetails({
   guest,
   activityElement,
@@ -112,6 +116,7 @@ function GuestDetails({
       </p>
       <dl className="ui-stats hud-advice">
         <StatRow label="Party">{PARTY_KINDS[guest.partyKind]}</StatRow>
+        <OperatorRow operator={guest.operator} />
         <StatRow label="Sleeps">{guest.home ? guest.home.label : 'No bed on the plot'}</StatRow>
         <StatRow label="Stay">{stayLine(guest)}</StatRow>
         {guest.welcomed ? <StatRow label="Welcome meeting">attended</StatRow> : null}

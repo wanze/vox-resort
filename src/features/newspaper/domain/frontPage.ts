@@ -1,3 +1,4 @@
+import { settlementLine } from '../../bookings/domain/bookingWords';
 import { shownDay } from '../../../shared/domain/dayNumber';
 import { clockWords } from '../../events/domain/week';
 import type { PartyKind } from '../../guests/domain/parties';
@@ -286,6 +287,19 @@ function lettersOf(reviews: readonly Review[]): readonly Letter[] {
   }));
 }
 
+// Two lines: a brief is a column inch, and the payouts are in the books.
+const TOUR_GROUPS_TOLD = 2;
+
+const tourGroupsBrief = ({ settled = [] }: Edition): readonly Brief[] =>
+  settled.length === 0
+    ? []
+    : [
+        {
+          title: 'Tour groups',
+          text: settled.slice(0, TOUR_GROUPS_TOLD).map(settlementLine).join(' '),
+        },
+      ];
+
 function briefsOf(edition: Edition): readonly Brief[] {
   const { report } = edition;
   const briefs: Brief[] = [];
@@ -313,6 +327,7 @@ function briefsOf(edition: Edition): readonly Brief[] {
       text: `The busiest day was day ${shownDay(report.busiest.day)}, with ${whole(report.busiest.value)} guests on the plot.`,
     });
   }
+  briefs.push(...tourGroupsBrief(edition));
   briefs.push({
     title: 'Comings and goings',
     text: `${whole(report.arrived)} guests arrived and ${whole(report.left)} checked out over ${whole(report.days)} days.`,
@@ -339,6 +354,7 @@ const DESK_ADVICE: { readonly [kind in ThoughtKind]?: string } = {
   smelly: 'Toilets kept clean, or kept away from the tables.',
   noisy: 'Quiet places away from the loud ones.',
   crowded: 'Wider paths where everybody walks.',
+  promised: 'Keeping what the tour operators promised.',
 };
 
 const DESK_TITLE: { readonly [tone in Tone]: string } = {

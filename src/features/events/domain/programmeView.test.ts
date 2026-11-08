@@ -149,6 +149,22 @@ describe('programmeView', () => {
     expect(view.upcoming[0]).toMatchObject({ label: 'Live music', site: 'Coral Stage' });
   });
 
+  it('says what a booked show costs, and which the money will not reach', () => {
+    const programme = booked({
+      kind: 'fireworks',
+      tier: 'small',
+      site: { kind: 'beach' },
+      start: 22 * HOUR,
+    });
+    const rich = programmeView(facts({ programme, beachRoom: 100 }), 'beach');
+    expect(rich.days[1]!.parts.evening[0]).toMatchObject({ fee: '400' });
+    expect(rich.upcoming[0]).toMatchObject({ fee: '400', unaffordable: false });
+    const poor = programmeView(facts({ programme, beachRoom: 100, balance: 300 }), 'beach');
+    expect(poor.upcoming[0]).toMatchObject({ unaffordable: true });
+    const free = programmeView(facts({ programme, beachRoom: 100, mode: 'sandbox' }), 'beach');
+    expect(free.upcoming[0]).toMatchObject({ fee: null, unaffordable: false });
+  });
+
   it('shows the welcome in the morning, where nothing else can be booked', () => {
     const welcome = withBuiltIns(EMPTY_PROGRAMME, BUILT_INS, [
       { kind: 'stage', venue: 'beach-club#0' },

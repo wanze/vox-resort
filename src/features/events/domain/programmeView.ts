@@ -113,6 +113,8 @@ export interface Chip {
   readonly time: string;
   readonly label: string;
   readonly repeat: string;
+  // What each show costs; null when it costs nothing.
+  readonly fee: string | null;
   readonly builtIn: boolean;
   readonly off: boolean;
   // Whether a step either way, or switching a built-in back on, would be taken.
@@ -177,6 +179,9 @@ export interface Upcoming {
   readonly label: string;
   readonly siteKey: string;
   readonly site: string;
+  readonly fee: string | null;
+  // Called off unpaid if the money is still short when it is due.
+  readonly unaffordable: boolean;
 }
 
 export interface ProgrammeView {
@@ -225,11 +230,12 @@ function sitesFor(
 
 // Switched-off bookings too, so a built-in can be switched back on from its day.
 function chipsOn(
-  programme: Programme,
+  facts: ProgrammeFacts,
   key: string,
   day: number,
   tabs: readonly SiteTab[],
 ): readonly Chip[] {
+  const { programme } = facts;
   return programme.bookings
     .filter((booking) => siteKey(booking.site) === key && occursOn(booking.repeat, day))
     .toSorted((a, b) => a.start - b.start || a.id - b.id)
@@ -239,6 +245,7 @@ function chipsOn(
       time: clockWords(booking.start),
       label: labelOf(EVENT_KINDS[booking.kind], booking.tier, booking.site.kind),
       repeat: repeatWords(booking.repeat),
+      fee: bookedFee(feeOf(EVENT_KINDS[booking.kind], booking.tier, facts.mode)),
       builtIn: booking.builtIn !== undefined,
       off: booking.off === true,
       earlier: movable(programme, booking.id, booking.start - START_STEP),
@@ -313,6 +320,8 @@ function feeWords(fee: number): string {
   return fee > 0 ? `${fee.toLocaleString('en-US')} a show` : 'Free';
 }
 
+const bookedFee = (fee: number): string | null => (fee > 0 ? fee.toLocaleString('en-US') : null);
+
 const hostMissing = (kind: EventKind, facts: ProgrammeFacts): boolean =>
   kind.host === 'animator' && facts.animators <= 0;
 
@@ -384,16 +393,21 @@ export function cardsAt(
 
 function upcomingOf(facts: ProgrammeFacts, tabs: readonly SiteTab[]): readonly Upcoming[] {
   const labels = new Map(tabs.map((tab) => [tab.key, tab.label]));
-  return nextEvents(facts.programme, facts.now, UPCOMING).map((each: Occurrence) => ({
-    key: `${each.booking}:${each.day}`,
-    day: each.day,
-    dayName: dayWords(each.day),
-    time: clockWords(minuteOf(each.start)),
-    kind: each.kind,
-    label: labelOf(EVENT_KINDS[each.kind], each.tier, each.site.kind),
-    siteKey: siteKey(each.site),
-    site: labels.get(siteKey(each.site)) ?? 'nowhere',
-  }));
+  return nextEvents(facts.programme, facts.now, UPCOMING).map((each: Occurrence) => {
+    const fee = feeOf(EVENT_KINDS[each.kind], each.tier, facts.mode);
+    return {
+      key: `${each.booking}:${each.day}`,
+      day: each.day,
+      dayName: dayWords(each.day),
+      time: clockWords(minuteOf(each.start)),
+      kind: each.kind,
+      label: labelOf(EVENT_KINDS[each.kind], each.tier, each.site.kind),
+      siteKey: siteKey(each.site),
+      site: labels.get(siteKey(each.site)) ?? 'nowhere',
+      fee: bookedFee(fee),
+      unaffordable: fee > facts.balance,
+    };
+  });
 }
 
 export interface UpcomingFilter {
@@ -535,7 +549,7 @@ interface Week {
 
 function dayColumn({ facts, tabs, site, forecast }: Week, day: number): DayColumn {
   // No booking sits on the empty key, so a plot with no stage shows an empty week.
-  const chips = chipsOn(facts.programme, site ? site.key : '', day, tabs);
+  const chips = chipsOn(facts, site ? site.key : '', day, tabs);
   const { weather, pinned } = forecast.get(day) ?? UNKNOWN_WEATHER;
   return {
     day,

@@ -421,17 +421,28 @@ export function createStaffRouter(parts: {
     return NOBODY;
   };
 
-  // The last stage only when nothing else is free, so a show moves round the plot.
+  const audienceAt = (venue: number): boolean => (parts.occupants?.(venue) ?? 1) > 0;
+
+  // The last stage only when nothing else is free, so a show moves round the plot. An empty room
+  // gets none: a show played to nobody looks like a bug.
   const pickStage = (worker: number, at: number): number => {
     const effect = weatherEffect(weatherNow());
     const last = state.lastStage[worker]!;
     const inZone = venueInZone(worker);
-    const elsewhere = busiest(at, (venue) => venue !== last && stageFree(venue, effect, inZone));
+    const free = (venue: number): boolean => stageFree(venue, effect, inZone) && audienceAt(venue);
+    const elsewhere = busiest(at, (venue) => venue !== last && free(venue));
     if (elsewhere >= 0 || last < 0) return claim(worker, elsewhere);
     return claim(
       worker,
-      busiest(at, (venue) => venue === last && stageFree(venue, effect, inZone)),
+      busiest(at, (venue) => venue === last && free(venue)),
     );
+  };
+
+  // A booked show is played out whoever turns up; one the animator chose ends with its audience.
+  const playingToNobody = (worker: number): boolean => {
+    if (staff.role[worker] !== 'animator') return false;
+    const venue = state.assigned[worker]!;
+    return venue >= 0 && hostedUntil(venue) < 0 && !audienceAt(venue);
   };
 
   // Over the sand too, as water sports on the beach has no door on the paving. The water watched
@@ -1451,7 +1462,8 @@ export function createStaffRouter(parts: {
       for (let worker = 0; worker < staff.count; worker++) {
         if (state.working[worker] !== 1) continue;
         // Let off duty mid-spell, they finish it: a half-scrubbed venue would keep its claim for ever.
-        if (now >= state.until[worker]! || !isOnDuty(worker)) finish(worker);
+        if (now >= state.until[worker]! || !isOnDuty(worker) || playingToNobody(worker))
+          finish(worker);
         else if (staff.role[worker] === 'lifeguard') mindTheWeather(worker, effect);
       }
     },

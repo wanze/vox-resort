@@ -85,6 +85,8 @@ export interface ResortFacts {
   readonly condition?: ReadonlyMap<string, number>;
   // Absent means a clear day.
   readonly closed?: ReadonlySet<string>;
+  // Kept shut by the weather of the day the visits were counted on; absent means none.
+  readonly rainedOff?: ReadonlySet<string>;
   // Shut by their hours now; absent means none.
   readonly shut?: ReadonlySet<string>;
   // Absent means the resort is open, reachable and checking guests in.
@@ -537,7 +539,7 @@ const idleIsFine = (venue: Venue): boolean =>
   venue.receives === true || venue.satisfies.every(({ need }) => need === 'health');
 
 // Silent until somebody has been somewhere: a fresh plot's empty counters would
-// read as every building standing idle.
+// read as every building standing idle. A venue the rain kept shut had nobody to blame.
 export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
   if (facts.visits.size === 0) return [];
   return facts.venues
@@ -545,6 +547,7 @@ export function adviceUnvisited(facts: ResortFacts): readonly Advice[] {
       (venue) =>
         !idleIsFine(venue) &&
         !facts.unreachable.has(venue.key) &&
+        !(facts.rainedOff?.has(venue.key) ?? false) &&
         (facts.visits.get(venue.key) ?? 0) === 0,
     )
     .map((venue) => ({
@@ -710,12 +713,16 @@ export function adviceFor(facts: ResortFacts): readonly Advice[] {
 // Judged on a whole day's counters, so an hourly refresh keeps the morning's verdict.
 const DAY_COUNTED: ReadonlySet<AdviceKind> = new Set(['full-lines', 'unvisited']);
 
+// `standing` drops a building the morning named and an edit since took away.
 export function refreshedWithin(
   morning: readonly Advice[],
   now: readonly Advice[],
+  standing?: ReadonlySet<string>,
 ): readonly Advice[] {
+  const stands = (advice: Advice): boolean =>
+    !standing || advice.key === undefined || standing.has(advice.key);
   return [
     ...now.filter((advice) => !DAY_COUNTED.has(advice.kind)),
-    ...morning.filter((advice) => DAY_COUNTED.has(advice.kind)),
+    ...morning.filter((advice) => DAY_COUNTED.has(advice.kind) && stands(advice)),
   ].toSorted(louderFirst);
 }

@@ -3,6 +3,7 @@ import type { LevelProvider } from '../../layout/domain/elevation';
 import { walkNetworkFor, type PavedTile, type WalkNetwork } from '../../crowd/domain/walkNetwork';
 import { MIN_SEEN } from '../../overlays/domain/overlays';
 import {
+  BUSY_SHARE,
   countWalkers,
   createPathCrowds,
   CROWDED_FROM,
@@ -116,6 +117,13 @@ describe('the remembered crush', () => {
     const worst = worstCrowded(crowds, network);
     expect(worst).toMatchObject({ tileX: 2, tileZ: 0 });
     expect(worst?.share).toBeCloseTo(share[PATH]!);
+  });
+
+  it('passes over a crush on a path hardly anybody walks', () => {
+    const crowds = countAt(six(PATH));
+    sampleCrush(crowds);
+    crowds.seen[CENTRE] = crowds.seen[PATH]! / BUSY_SHARE + 1;
+    expect(worstCrowded(crowds, network)).toMatchObject({ tileX: 21, tileZ: 1, share: 0 });
   });
 
   it('names nothing before anybody has walked', () => {

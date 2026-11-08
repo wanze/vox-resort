@@ -48,7 +48,9 @@ function ChipButton({
       className="events-programme-chip"
       aria-pressed={chosen}
       data-off={chip.off ? '' : undefined}
-      title={`${chip.label}, ${chip.repeat.toLowerCase()}`}
+      title={[chip.label, chip.repeat.toLowerCase(), chip.fee && `${chip.fee} a show`]
+        .filter(Boolean)
+        .join(', ')}
       onClick={() => onChip(chip.booking)}
     >
       {chip.time} {chip.label}

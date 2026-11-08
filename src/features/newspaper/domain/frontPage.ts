@@ -350,7 +350,7 @@ const DESK_ADVICE: { readonly [kind in ThoughtKind]?: string } = {
   shabby: 'A renovation is overdue.',
   renovating: 'Fewer closures at once.',
   dark: 'Street lamps along the paths.',
-  unwatched: 'A lifeguard at every pool.',
+  unwatched: 'A lifeguard wherever guests swim.',
   smelly: 'Toilets kept clean, or kept away from the tables.',
   noisy: 'Quiet places away from the loud ones.',
   crowded: 'Wider paths where everybody walks.',

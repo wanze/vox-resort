@@ -85,6 +85,8 @@ export interface EventFacts {
   readonly stages?: readonly EventSite[];
   // Nobody is here before this tick: a show due earlier is let go unannounced and unpaid.
   readonly emptyUntil?: number;
+  // The season's closing morning, when every guest walks out: a show due from then is let go too.
+  readonly emptyFrom?: number;
 }
 
 export interface EventAdvance {
@@ -222,7 +224,9 @@ export function advanceEvents(
 ): EventAdvance {
   const steps: EventStep[] = [];
   const runs: EventRun[] = [];
-  const empty = (occurrence: Occurrence): boolean => occurrence.start < (facts.emptyUntil ?? 0);
+  const empty = (occurrence: Occurrence): boolean =>
+    occurrence.start < (facts.emptyUntil ?? 0) ||
+    (facts.emptyFrom !== undefined && occurrence.start >= facts.emptyFrom);
   for (const run of state.runs.filter(
     (each) => each.phase !== 'announced' || !empty(each.occurrence),
   )) {

@@ -139,6 +139,7 @@ import {
 } from '../features/resort-sim/domain/debugSteps';
 import { turboPace } from '../features/debug/domain/turbo';
 import { fastNightPace, mayRunFast } from '../features/sim/domain/fastNight';
+import { isStaffNight } from '../features/sim/domain/staffNight';
 import { quietNightNow } from '../features/resort-sim/domain/quietNight';
 import {
   effectOn,
@@ -1842,14 +1843,15 @@ function wantingOn(resort: Resort): { readonly [need in GuestNeed]: number } {
 }
 
 // The beach last, as the guests' router lists it. Water a lifeguard is walking to is not
-// reported: right after an edit every lifeguard is on the way.
+// reported: right after an edit every lifeguard is on the way. The beach keeps no hours, so the
+// staff's night is what stops it reading as unwatched while everybody sleeps.
 function unwatchedOn(
   resort: Resort,
   effect: WeatherEffect,
   tickOfDay: number,
 ): ReadonlySet<string> {
   const { staffRouter, venues } = resort;
-  if (offTonight(resort, 'lifeguard')) return new Set();
+  if (isStaffNight(tickOfDay) || offTonight(resort, 'lifeguard')) return new Set();
   const { network } = resort.crowd.crowd;
   const beach = beachVenueFor(network);
   const water = beach ? [...venues, beach] : venues;
@@ -1878,9 +1880,16 @@ function hurtCount(resort: Resort): number {
 }
 
 // Once a simulated hour and on an edit, never per frame: it walks the guest list three times.
-function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
+// `counted` is the weather of the day the visit counters cover, which each morning is yesterday's.
+function factsNow(
+  resort: Resort,
+  weather: Weather,
+  now: number,
+  counted: Weather = weather,
+): ResortFacts {
   const { guests, router } = resort;
   const effect = weatherEffect(weather);
+  const countedEffect = weatherEffect(counted);
   return {
     venues: resort.venues,
     lodgings: resort.lodgings,
@@ -1924,6 +1933,11 @@ function factsNow(resort: Resort, weather: Weather, now: number): ResortFacts {
     closed: new Set(
       resort.venues
         .filter((venue) => !isOpenIn(shelterOf(venue), effect))
+        .map((venue) => venue.key),
+    ),
+    rainedOff: new Set(
+      resort.venues
+        .filter((venue) => !isOpenIn(shelterOf(venue), countedEffect))
         .map((venue) => venue.key),
     ),
     shut: new Set(
@@ -2979,19 +2993,26 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   let demandNow: Demand | null = null;
 
   // One facts build for both, so the bars and the advice describe the same moment.
-  const adviceAndDemand = (): readonly Advice[] => {
-    const facts = factsNow(current(), clock.weather, clock.ticks);
+  const adviceAndDemand = (countedOn?: Weather): readonly Advice[] => {
+    const facts = factsNow(current(), clock.weather, clock.ticks, countedOn);
     demandNow = demandFor(facts);
     return adviceFor(facts);
   };
 
-  const advise = (): HudState['advice'] => {
-    dayAdvice = adviceAndDemand();
+  // Only the morning judges the day's counters: they are whole only then, and taken mid-day,
+  // after a load or an edit, every venue nobody has reached yet reads as unvisited.
+  const adviseMorning = (): HudState['advice'] => {
+    const resort = current();
+    dayAdvice = adviceAndDemand(weatherOnDay(clock, clock.day - 1, resort.season));
     return { list: dayAdvice, ticks: clock.ticks };
   };
 
-  const adviseHourly = (): HudState['advice'] => ({
-    list: refreshedWithin(dayAdvice, adviceAndDemand()),
+  const advise = (): HudState['advice'] => ({
+    list: refreshedWithin(
+      dayAdvice,
+      adviceAndDemand(),
+      new Set(current().venues.map((venue) => venue.key)),
+    ),
     ticks: clock.ticks,
   });
 
@@ -3041,7 +3062,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     refreshNightOut(resort, clock);
     // A stage open in the inspector says what is on next there.
     selection.reword();
-    hud.publish({ programme: programmeNow(), advice: adviseHourly() });
+    hud.publish({ programme: programmeNow(), advice: advise() });
     options.onDirty?.();
   };
 
@@ -3117,7 +3138,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     hud.publish({
       ...works.place(),
       season: seasonNow(),
-      advice: adviseHourly(),
+      advice: advise(),
       voices: voicesOf(current()),
       status: report(),
       ledger: current().ledger,
@@ -3138,6 +3159,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       day: clock.day,
       open: (site, kind) => facts.siteOpen(site, clock.weather, kind),
       settled: resort.settled,
+      emptyFrom: facts.emptyFrom,
     });
     if (show) options.onEventNews?.(tonightNewsOf(show, resort.siteVenues));
   };
@@ -3147,7 +3169,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     tellBookings();
     hud.publish({
       ...works.place(),
-      advice: advise(),
+      advice: adviseMorning(),
       status: report(),
       history: current().history,
       ledger: current().ledger,
@@ -3195,6 +3217,8 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
   // Everything React shows is told again: the HUD still holds the game that was replaced.
   const rebuilt = (): void => {
     hearNoBookings();
+    // The replaced game's morning, which named its buildings, not these.
+    dayAdvice = [];
     seasonTurn = settledTurn(inBreak(current().season));
     look = lookAt(seasonTurn, secondsNow(), clock.running);
     autumn.set(look.blend);

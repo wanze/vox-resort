@@ -34,7 +34,7 @@ import { strongestNeed } from '../../sim/domain/needs';
 import { TICKS_PER_DAY } from '../../sim/domain/simClock';
 import { stayCount } from '../../sim/domain/thoughts';
 import { eventRoomOf, shelterOf } from '../../sim/domain/venues';
-import { effectOn, type Season } from '../../sim/domain/season';
+import { closingDayOf, effectOn, type Season } from '../../sim/domain/season';
 import { type Weather, isOpenIn, weatherEffect, weatherOn } from '../../sim/domain/weather';
 import { TICKS_PER_HOUR, type SimNow } from './simNow';
 import type { SimState } from './simState';
@@ -62,6 +62,12 @@ function emptyUntil(resort: SimState, now: number): number {
   return now < opens && presentCount(resort.guests) === 0 ? opens : 0;
 }
 
+function emptyFrom(resort: SimState): { readonly emptyFrom?: number } {
+  const { season } = resort;
+  if (!season || season.state === 'break') return {};
+  return { emptyFrom: closingDayOf(season) * TICKS_PER_DAY };
+}
+
 export function eventFactsOf(resort: SimState, clock: SimNow): EventFacts {
   const venues = resort.siteVenues;
   return {
@@ -77,6 +83,7 @@ export function eventFactsOf(resort: SimState, clock: SimNow): EventFacts {
     canPay: (fee) => canAfford(resort.ledger, fee),
     stages: resort.stages,
     emptyUntil: emptyUntil(resort, clock.ticks),
+    ...emptyFrom(resort),
   };
 }
 
@@ -183,6 +190,7 @@ export function refreshKeen(resort: SimState, clock: SimNow): void {
     now: clock.ticks,
     open: (site, kind) => facts.siteOpen(site, clock.weather, kind),
     settled: resort.settled,
+    emptyFrom: facts.emptyFrom,
   });
   resort.fireworksNight = isFireworksNight(programme, clock.day);
   resort.keen = keenParties(resort.guests, resort.keenShow, resort.keen);

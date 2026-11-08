@@ -83,6 +83,12 @@ describe('showToTell', () => {
     expect(showToTell({ ...morning, day: DAY })).toEqual(SHOW);
     expect(showToTell({ ...morning, day: DAY, open: () => false })).toBeNull();
   });
+
+  it('tells of nothing on the closing day, when every guest leaves', () => {
+    const morning = { programme: PROGRAMME, open: () => true, settled: new Set<string>() };
+    expect(showToTell({ ...morning, day: DAY, emptyFrom: tickAt(DAY, 0) })).toBeNull();
+    expect(showToTell({ ...morning, day: DAY, emptyFrom: tickAt(DAY + 1, 0) })).toEqual(SHOW);
+  });
 });
 
 describe('markKeen', () => {

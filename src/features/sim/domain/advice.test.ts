@@ -408,6 +408,19 @@ describe('the advice rules', () => {
     expect(advice[1]!.weight).toBeLessThan(0.9);
   });
 
+  it('says nothing about a venue the rain kept shut', () => {
+    const tennis = venueOf({ key: 'tennis#0', label: 'Tennis Court', satisfies: FUN });
+    const busy = venueOf({ key: 'bakery#0', label: 'Bakery' });
+    const advice = adviceUnvisited(
+      healthyFacts({
+        venues: [tennis, busy],
+        visits: new Map([['bakery#0', 12]]),
+        rainedOff: new Set(['tennis#0']),
+      }),
+    );
+    expect(advice).toEqual([]);
+  });
+
   it('says nothing about a day on which nobody went anywhere at all', () => {
     const advice = adviceUnvisited(healthyFacts({ visits: new Map() }));
     expect(advice).toEqual([]);
@@ -977,6 +990,12 @@ describe('refreshedWithin', () => {
     const noonIdle = line('unvisited', 0.3, 'Kiosk');
     expect(refreshedWithin([morningIdle], [])).toEqual([morningIdle]);
     expect(refreshedWithin([morningIdle], [noonIdle])).toEqual([morningIdle]);
+  });
+
+  it('drops a building the morning named that has since been taken away', () => {
+    const gone = { ...line('unvisited', 0.3, 'Bakery'), key: 'bakery#0' };
+    const kept = { ...line('unvisited', 0.3, 'Kiosk'), key: 'kiosk#0' };
+    expect(refreshedWithin([gone, kept], [], new Set(['kiosk#0']))).toEqual([kept]);
   });
 
   it('comes out louder first', () => {

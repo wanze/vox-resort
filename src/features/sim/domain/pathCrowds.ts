@@ -117,11 +117,18 @@ export interface Crowded {
   readonly share: number;
 }
 
+// A party bunched at its own bungalow's door is crushed every frame it stands there, so only paths
+// with a fair part of the busiest one's footfall can be named: a crowd is many parties.
+export const BUSY_SHARE = 0.25;
+
 export function worstCrowded(crowds: PathCrowds, network: WalkNetwork): Crowded | null {
   let worst = -1;
   let most = -1;
   const nodes = Math.min(crowds.seen.length, network.nodes.length);
+  let busiest = 0;
+  for (let at = 0; at < nodes; at++) busiest = Math.max(busiest, crowds.seen[at]!);
   for (let at = 0; at < nodes; at++) {
+    if (crowds.seen[at]! < busiest * BUSY_SHARE) continue;
     const share = shareAt(crowds, at);
     if (share > most) {
       worst = at;

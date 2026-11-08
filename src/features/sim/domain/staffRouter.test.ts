@@ -502,6 +502,22 @@ describe('an animator', () => {
     );
   });
 
+  it('plays to no empty room, and ends a show once its audience has gone', () => {
+    const network = networkOf(street(8));
+    const venues = [stage('kids-club#0', 1), stage('game-hall#0', 7)];
+    const occupants = [0, 0];
+    const { router } = crewOn(network, venues, ['animator'], { occupants });
+    expect(router.step(0, nodeAt(network, 4))).toBe(-1);
+    occupants[1] = 3;
+    router.step(0, nodeAt(network, 4));
+    router.step(0, nodeAt(network, 7));
+    router.tick(1);
+    expect(router.performingAt(1)).toBe(true);
+    occupants[1] = 0;
+    router.tick(2);
+    expect(router.performingAt(1)).toBe(false);
+  });
+
   it('leaves the stage to a cleaner who wants to scrub it, and is not a cleaner itself', () => {
     const network = networkOf(street(8));
     const venues = [stage('kids-club#0', 7)];

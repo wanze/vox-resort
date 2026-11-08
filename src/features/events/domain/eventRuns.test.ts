@@ -199,6 +199,23 @@ describe('advanceEvents', () => {
     ]);
   });
 
+  it('lets a show on the closing day go unannounced and unpaid', () => {
+    const closed = facts({ emptyFrom: start });
+    const state = stateWith({});
+    expect(run(state, start - 60, start + 6, closed)).toEqual([]);
+    expect(state.runs).toEqual([]);
+
+    const announced = stateWith({});
+    run(announced, start - 60, start - 60);
+    expect(run(announced, start - 5, start + 6, closed)).toEqual([]);
+    expect(announced.runs).toEqual([]);
+
+    const before = stateWith({});
+    expect(kinds(run(before, start - 60, start - 60, facts({ emptyFrom: start + 1 })))).toEqual([
+      'announce',
+    ]);
+  });
+
   it('ends after the duration', () => {
     const state = stateWith({});
     run(state, start - 60, start - 60);

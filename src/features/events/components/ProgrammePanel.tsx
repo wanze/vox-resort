@@ -176,6 +176,7 @@ function ChipActions({ chip, programme }: { readonly chip: Chip } & ProgrammePan
       <div className="ui-row ui-row--wrap events-programme-actions">
         <span>
           {chip.time} {chip.label} · {chip.repeat}
+          {chip.fee ? ` · ${chip.fee} a show` : null}
         </span>
         <ActionButton
           label="Earlier"
@@ -367,7 +368,12 @@ function ComingUp({ view }: { readonly view: ProgrammeView }) {
                 {day.events.map((each) => (
                   <li key={each.key}>
                     {each.time} {each.label}
-                    <span className="ui-stat-note"> · {each.site}</span>
+                    <span className="ui-stat-note">
+                      {' '}
+                      · {each.site}
+                      {each.fee ? ` · ${each.fee}` : null}
+                      {each.unaffordable ? ' · Not enough money' : null}
+                    </span>
                   </li>
                 ))}
               </ol>

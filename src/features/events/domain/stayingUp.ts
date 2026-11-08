@@ -13,6 +13,8 @@ export interface ShowTonight {
   readonly open: (site: EventSite, kind: EventKindId) => boolean;
   // Today's occurrences called off or postponed, by bookingDayKey.
   readonly settled: ReadonlySet<string>;
+  // EventFacts' own: nothing from then on is held, so nobody stays up for it.
+  readonly emptyFrom?: number | undefined;
 }
 
 export const bookingDayKey = (occurrence: Occurrence): string =>
@@ -27,6 +29,7 @@ export function tonightsShow(ask: ShowTonight): Occurrence | null {
       (occurrence) =>
         EVENT_KINDS[occurrence.kind].keepsUp === true &&
         now < occurrence.end &&
+        occurrence.start < (ask.emptyFrom ?? Infinity) &&
         ask.open(occurrence.site, occurrence.kind) &&
         !ask.settled.has(bookingDayKey(occurrence)),
     ) ?? null

@@ -1,6 +1,8 @@
 import type { ModelVenue } from '../../../../voxel-gen/voxelgen.ts';
 import { venueOf, type ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { SETTING_PREMIUM } from '../../catalog/domain/prices';
+import { starsNeededFor } from '../../catalog/domain/unlocks';
+import { starsLabel } from '../../sim/domain/prestige';
 import { clockWords } from '../../events/domain/week';
 import { NIGHT_NOISE_DISCOUNT } from '../../sim/domain/nightNoise';
 import { dwellWording, NEED_LABELS } from '../../inspect/domain/selection';
@@ -97,11 +99,13 @@ function fixtureNotes({ model }: ObjectTypeDefinition): string[] {
 export function objectFacts(type: ObjectTypeDefinition, cost: number): ObjectFacts {
   const { venue, model } = type;
   const ground = model.placement.ground;
+  const stars = starsNeededFor(type.id);
   const ownFacts = venue?.role === 'lodging' ? lodgingFacts(venue) : venue ? venueFacts(venue) : [];
   return {
     title: type.label,
     facts: [
       fact('Cost', whole(cost)),
+      ...(stars === null ? [] : [fact('Unlocks at', starsLabel(stars))]),
       fact('Size', `${footprintLabel(type)} tiles`),
       ...(ground ? [fact('Ground', GROUND_WORDS[ground])] : []),
       ...ownFacts,

@@ -60,6 +60,7 @@ export default defineModel({
   id: 'beach-club',
   label: 'Beach Club',
   category: 'leisure',
+  stars: 4,
   sound: 'bar',
   tiles: { x: 6, z: 5 },
   emissive: [LANTERN],

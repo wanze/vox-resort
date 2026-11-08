@@ -12,6 +12,8 @@ import {
   type Rating,
   type RatingPart,
 } from '../../sim/domain/rating';
+import { nextTier, starsLabel, type Prestige } from '../../sim/domain/prestige';
+import { prestigeGoal, unlockedLabels } from '../domain/prestigeWords';
 
 export interface RatingControlProps {
   readonly rating: Rating;
@@ -20,6 +22,7 @@ export interface RatingControlProps {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly stepFree: { readonly reached: number; readonly venues: number };
+  readonly prestige: Prestige | null;
 }
 
 const PART_WORDS: Readonly<Record<RatingPart, string>> = {
@@ -79,23 +82,49 @@ function StarFigure({ stars, arrow }: { readonly stars: string; readonly arrow: 
   );
 }
 
-export function RatingControl({ rating, trend, open, onOpenChange, stepFree }: RatingControlProps) {
+// Laid out as a rating part: the tier, a meter of the streak, and the days in it.
+function GoalLine({ prestige }: { readonly prestige: Prestige | null }) {
+  const next = prestige ? nextTier(prestige) : null;
+  if (!next) return null;
+  const labels = unlockedLabels(next.tier);
+  return (
+    <>
+      <hr className="ui-rule" />
+      <dl className="hud-rating-parts">
+        <div className="hud-rating-part">
+          <dt className="ui-label">{`${starsLabel(next.tier)} days in a row`}</dt>
+          <dd className="hud-rating-figures hud-rating-streak">
+            <Meter level={next.days / next.of} />
+            <OutOf value={next.days} total={next.of} unit="days" />
+          </dd>
+        </div>
+      </dl>
+      {labels.length > 0 ? <p className="hud-rating-note">Unlocks {labels.join(', ')}.</p> : null}
+    </>
+  );
+}
+
+export function RatingControl(props: RatingControlProps) {
+  const { rating, trend, open, onOpenChange, stepFree } = props;
   const stars = rating.stars.toFixed(1);
   const arrow = trendArrow(trend);
   const change = trendWords(trend);
+  const goal = props.prestige ? prestigeGoal(props.prestige) : null;
+  const said = change
+    ? `Rating: ${stars} stars, ${change} since the day before`
+    : `Rating: ${stars} stars`;
   return (
     <DropdownPopover
       name="Rating"
       className="hud-rating"
       open={open}
       onOpenChange={onOpenChange}
-      title={
-        change ? `Rating: ${stars} stars, ${change} since the day before` : `Rating: ${stars} stars`
-      }
+      title={goal ? `${said}. Next: ${goal}` : said}
       label={<StarFigure stars={stars} arrow={arrow} />}
     >
       <RatingBreakdown rating={rating} />
       <StepFreeLine {...stepFree} />
+      <GoalLine prestige={props.prestige} />
       <hr className="ui-rule" />
       <p className="hud-rating-note">
         Set each morning at check-in. The more stars, the more guests arrive.

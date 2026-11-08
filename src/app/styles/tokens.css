@@ -331,6 +331,15 @@
   }
 }
 
+/* Bigger tiles where a mouse points and the screen has room: a price badge and the info button
+   share a tile's top edge, and at 60 px they touch. Still four to a row: a fifth needs 375 px. */
+@media (pointer: fine) and (width >= 1100px) {
+  :root {
+    --palette-w: 352px;
+    --tile-min: 72px;
+  }
+}
+
 /* The drag reads --window-floor back, so it grows with the bar: 8 px taller controls. */
 @media (pointer: coarse) {
   :root {

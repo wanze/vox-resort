@@ -176,6 +176,7 @@ const CONTENT: { readonly [panel in Panel]: (props: HudView) => ReactNode } = {
       onToolChange={props.onToolChange}
       onTurn={props.onTurn}
       ledger={props.ledger}
+      prestige={props.status?.prestige ?? null}
       land={props.land}
       // A focused field raises a phone's keyboard over half the screen, so a sheet waits for a tap.
       focusSearch={props.windows.layout.focus === 'build' && !isCompact(props.layout)}

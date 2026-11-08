@@ -2,16 +2,25 @@ import { BuildTile } from './BuildTile';
 import type { PreviewLookup } from './BuildPalette';
 import type { ObjectTypeGroup } from '../../catalog/domain/objectTypes';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { Prestige } from '../../sim/domain/prestige';
 
 export interface BuildGridProps {
   readonly group: ObjectTypeGroup;
   readonly preview: PreviewLookup;
   readonly selected: string | null;
   readonly ledger: Ledger | null;
+  readonly prestige: Prestige | null;
   readonly onSelect: (typeId: string | null) => void;
 }
 
-export function BuildGrid({ group, preview, selected, ledger, onSelect }: BuildGridProps) {
+export function BuildGrid({
+  group,
+  preview,
+  selected,
+  ledger,
+  prestige,
+  onSelect,
+}: BuildGridProps) {
   return (
     <div className="hud-build-grid">
       {group.types.map((type) => (
@@ -21,6 +30,7 @@ export function BuildGrid({ group, preview, selected, ledger, onSelect }: BuildG
           preview={preview}
           selected={selected === type.id}
           ledger={ledger}
+          prestige={prestige}
           onSelect={onSelect}
         />
       ))}

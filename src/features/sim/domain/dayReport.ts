@@ -75,6 +75,8 @@ export interface DayReport {
   readonly welcome?: WelcomeTally;
   readonly photos?: PhotoTally;
   readonly turnedAway?: number;
+  // The reputation tiers this day completed the streak for; absent on almost every day.
+  readonly reached?: readonly number[];
 }
 
 export const HISTORY_DAYS = 14;

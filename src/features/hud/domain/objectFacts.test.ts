@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelFacts, ModelVenue } from '../../../../voxel-gen/voxelgen.ts';
-import type { ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
+import { objectTypeById, type ObjectTypeDefinition } from '../../catalog/domain/objectTypes';
 import { objectFacts, type ObjectFacts } from './objectFacts';
 
 const MODEL = {
@@ -126,5 +126,14 @@ describe('objectFacts', () => {
     const facts = objectFacts(typeOf({ binReach: 3 }), 0);
     expect(valueOf(facts, 'Reach')).toBe('3 tiles');
     expect(facts.notes).toEqual(['Guests carrying litter walk over to it']);
+  });
+});
+
+describe('a gated building', () => {
+  it('says the rating it unlocks at', () => {
+    const villa = objectFacts(objectTypeById('villa'), 100);
+    expect(villa.facts).toContainEqual({ label: 'Unlocks at', value: '4★' });
+    const hotel = objectFacts(objectTypeById('hotel'), 100);
+    expect(hotel.facts.some((each) => each.label === 'Unlocks at')).toBe(false);
   });
 });

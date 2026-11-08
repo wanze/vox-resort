@@ -1,4 +1,5 @@
 import { shownDay } from '../../../shared/domain/dayNumber';
+import { unlockedLabels } from '../../hud/domain/prestigeWords';
 import { thoughtLine } from '../../hud/domain/thoughtWords';
 import type { SeasonReport } from '../../sim/domain/season';
 import { isComplaint, type ThoughtTally } from '../../sim/domain/thoughts';
@@ -9,6 +10,7 @@ export type Tone = 'broadsheet' | 'tabloid';
 export const STORY_KINDS = [
   'record-season',
   'best-ever-stars',
+  'new-reputation',
   'in-the-red',
   'turned-away',
   'busiest-day',
@@ -121,6 +123,20 @@ export function voiceFacts(voice: ThoughtTally): Facts {
   };
 }
 
+const listWords = (items: readonly string[]): string =>
+  items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
+
+// Only a tycoon builds by reputation; a sandbox reaching a tier changes nothing it can do.
+function reputationFacts(report: SeasonReport): Facts | null {
+  const top = report.reached?.at(-1);
+  if (top === undefined) return null;
+  const opened = report.reached!.flatMap(unlockedLabels);
+  return {
+    reputation: String(top),
+    ...(opened.length > 0 ? { opened: listWords(opened) } : {}),
+  };
+}
+
 const loudestOf = (edition: Edition, complaint: boolean): ThoughtTally | undefined =>
   edition.report.voices?.find((voice) => isComplaint(voice.kind) === complaint);
 
@@ -149,6 +165,10 @@ const RULES: readonly ((edition: Edition) => readonly [StoryKind, number, Facts]
     bestBefore !== null && report.meanStars !== null && report.meanStars > bestBefore
       ? ['best-ever-stars', 85, { bestBefore: starsWords(bestBefore) }]
       : null,
+  (edition) => {
+    const facts = tycoon(edition) ? reputationFacts(edition.report) : null;
+    return facts ? ['new-reputation', 88, facts] : null;
+  },
   ({ previous }) => (previous ? null : ['first-season', 80, {}]),
   ({ report }) => {
     const share = report.arrived > 0 ? report.turnedAway / report.arrived : 0;

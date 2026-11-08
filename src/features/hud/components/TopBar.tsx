@@ -204,6 +204,7 @@ export function TopBar(props: TopBarProps) {
             <RatingControl
               rating={status.rating}
               stepFree={status.stepFree}
+              prestige={status.prestige}
               trend={props.trend}
               open={menu === 'rating'}
               onOpenChange={opener('rating')}

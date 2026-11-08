@@ -71,9 +71,28 @@
 .hud-build-tools {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  /* 34 px and 3 px gaps keep seven tools and two rules on one line at --palette-w. */
+  align-items: flex-end;
+  gap: var(--space-1) 6px;
+}
+
+.hud-build-tools-group {
+  display: grid;
+  gap: 2px;
+}
+
+.hud-build-tools-title {
+  padding-left: 4px;
+}
+
+/* 34 px tools, 3 px gaps and trays: the three groups fit one line at the desk's --palette-w and
+   wrap a group at a time below it. */
+.hud-build-tools-tray {
+  display: flex;
   gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pebble);
+  background: var(--tray);
+  box-shadow: var(--bevel-in);
 }
 
 .hud-build-tool,
@@ -152,12 +171,6 @@
   height: 8px;
   border-radius: 2px;
   box-shadow: var(--bevel);
-}
-
-.hud-build-tools-rule {
-  width: 1px;
-  height: 24px;
-  background: var(--edge-soft);
 }
 
 .hud-zone-chips {
@@ -319,6 +332,34 @@
 
 .hud-build-tile--short .hud-build-tile-badge {
   color: var(--price-short);
+}
+
+.hud-build-tile[data-locked='true'] .hud-build-tile-art {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.hud-build-tile[data-locked='true'] .hud-build-tile-name {
+  color: var(--stone-600);
+}
+
+.hud-build-tile[data-locked='true'] .hud-build-tile-badge {
+  border-color: var(--stone-400);
+  background: var(--stone-100);
+  color: var(--stone-700);
+}
+
+.hud-build-tile-badge-star {
+  font-size: 0.8em;
+}
+
+/* Centred on the art above the name strip, which covers the tile's lower fifth. */
+.hud-build-tile-lock {
+  position: absolute;
+  inset: 0 0 20%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
 }
 
 .hud-build-tile-slot {

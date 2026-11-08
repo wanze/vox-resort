@@ -68,6 +68,7 @@ export default defineModel({
   id: 'tennis-court',
   label: 'Tennis Court',
   category: 'leisure',
+  stars: 3.5,
   sound: 'tennis',
   tiles: { x: 9, z: 5 },
   emissive: [LANTERN],

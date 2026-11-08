@@ -10,6 +10,7 @@ import { restorePhotos, snapshotPhotos, type Photos } from './photos';
 import type { Carrying, Litter } from './litter';
 import { restoreNeeds, snapshotNeeds, type Needs } from './needs';
 import type { Prices } from './pricing';
+import { createPrestige, restorePrestige, snapshotPrestige, type Prestige } from './prestige';
 import type { Rating } from './rating';
 import type { ResortSnapshot } from './resortSnapshot';
 import type { Review } from './reviews';
@@ -48,6 +49,7 @@ export interface ResortState {
   today: DayCounts;
   history: readonly DayReport[];
   rating: Rating;
+  prestige: Prestige;
   ledger: Ledger;
   arrivalsPlanned: number;
   arrivalsAdmitted: number;
@@ -84,12 +86,13 @@ const withPhotos = <T extends { readonly photos?: PhotoTally }>(counts: T) => ({
   ...(counts.photos ? { photos: copyPhotos(counts.photos) } : {}),
 });
 
-const copyReport = (report: DayReport) => ({
+const copyReport = ({ reached, ...report }: DayReport) => ({
   ...withPhotos(report),
   rating: { ...report.rating },
   beds: { ...report.beds },
   money: { ...report.money },
   loudest: report.loudest.map((tally) => ({ ...tally })),
+  ...(reached ? { reached: [...reached] } : {}),
 });
 
 const copySeasonal = <T extends SeasonTally | SeasonReport>(record: T) => ({
@@ -98,6 +101,7 @@ const copySeasonal = <T extends SeasonTally | SeasonReport>(record: T) => ({
   ...(record.voices ? { voices: record.voices.map((voice) => ({ ...voice })) } : {}),
   ...(record.events ? { events: { ...record.events } } : {}),
   ...(record.topSpot ? { topSpot: { ...record.topSpot } } : {}),
+  ...(record.reached ? { reached: [...record.reached] } : {}),
 });
 
 export function snapshotResort(state: ResortState): ResortSnapshot {
@@ -142,6 +146,7 @@ export function snapshotResort(state: ResortState): ResortSnapshot {
     ...(state.season ? { season: { ...state.season } } : {}),
     ...(state.season && state.seasonTally ? { seasonTally: copySeasonal(state.seasonTally) } : {}),
     seasons: (state.seasons ?? []).map(copySeasonal),
+    prestige: snapshotPrestige(state.prestige),
   };
 }
 
@@ -193,4 +198,5 @@ export function restoreResort(state: ResortState, snapshot: ResortSnapshot, day 
     state.seasonTally = snapshot.seasonTally ? copySeasonal(snapshot.seasonTally) : startTally();
   }
   state.seasons = snapshot.seasons.map(copySeasonal);
+  state.prestige = snapshot.prestige ? restorePrestige(snapshot.prestige) : createPrestige();
 }

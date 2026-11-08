@@ -47,6 +47,7 @@ import { type Needs, createNeeds, relieve } from '../../sim/domain/needs';
 import { LATE_NIGHT_RELIEF, isBedtime } from '../../sim/domain/night';
 import { factorOf, LIST_PRICES, venuePull, type Prices } from '../../sim/domain/pricing';
 import { type Rating, ratingFor } from '../../sim/domain/rating';
+import { createPrestige, type Prestige } from '../../sim/domain/prestige';
 import { type Review, keepReview } from '../../sim/domain/reviews';
 import { type Router, createRouter } from '../../sim/domain/router';
 import {
@@ -243,6 +244,8 @@ export interface SimState {
   binCover: Uint8Array;
   unreachable: ReadonlySet<string>;
   rating: Rating;
+  // Tycoon's building gate; a sandbox keeps it too, and ignores it.
+  prestige: Prestige;
   // Gates arrivals only: a closed resort still rates and says goodbye to the guests it has.
   open: boolean;
   // Null where the resort runs no seasons, as the sim report's and the tests' do.
@@ -659,6 +662,7 @@ export function createSimState(parts: SimParts): SimState {
     today: startDay(0),
     history: [],
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
+    prestige: createPrestige(),
     open: !building,
     // A building site's first check-in is tomorrow's; a generated resort is already in season.
     season: parts.seasons === true ? firstSeason(building ? 1 : 0) : null,

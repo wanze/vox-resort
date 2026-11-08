@@ -44,6 +44,7 @@ export default defineModel({
   id: 'water-sports',
   label: 'Water Sports',
   category: 'leisure',
+  stars: 3.5,
   sound: 'watersports',
   cost: 2_800,
   placement: { ground: 'shore', perResort: { min: 1, max: 1 } },

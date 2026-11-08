@@ -14,6 +14,8 @@ import {
   TILE_VOXELS,
 } from '../features/catalog/domain/objectTypes';
 import { buildCostOf, DIG_COST, landPriceOf } from '../features/catalog/domain/prices';
+import { isUnlocked, starsNeededFor } from '../features/catalog/domain/unlocks';
+import { STREAK_DAYS } from '../features/sim/domain/prestige';
 import {
   casterOf,
   flagsOf,
@@ -1561,6 +1563,7 @@ function statusOf(resort: Resort, clock: Pick<Clock, 'day'>, demand: Demand | nu
     present: presentCount(resort.guests),
     beds: resort.beds,
     demand,
+    prestige: resort.ledger.mode === 'tycoon' ? resort.prestige : null,
     staff: tallyStaff(resort.staffPool.role, (worker, into) =>
       resort.staffRouter.taskOf(worker, into),
     ),
@@ -2138,6 +2141,15 @@ function moneyRefusalFor(id: string | null, balance: number): string {
   return `${article} ${name} costs ${buildCostOf(id).toLocaleString('en-US')}, and ${bank}.`;
 }
 
+function lockedRefusalFor(id: string): BuildNote {
+  const stars = starsNeededFor(id) ?? 0;
+  const name = objectTypeById(id).label;
+  return {
+    title: 'Not yet',
+    message: `The ${name} needs a ${stars}-star reputation: hold ${stars} stars for ${STREAK_DAYS} days.`,
+  };
+}
+
 function renovationRefusalFor(cost: number, balance: number): BuildNote {
   const bank = `there is ${balance.toLocaleString('en-US')} in the bank`;
   return {
@@ -2163,21 +2175,29 @@ function parcelRefusalFor(price: number, balance: number): string {
   return `A parcel of land costs ${price.toLocaleString('en-US')}, and ${bank}.`;
 }
 
-function refusalFor(refusal: Refusal, ledger: Ledger): BuildNote {
-  switch (refusal.kind) {
-    case 'land':
-      return landRefusalFor(ledger.mode);
-    case 'gate':
-      return GATE_REFUSAL;
-    case 'parcel':
-      return {
-        title: 'Not enough money',
-        message: parcelRefusalFor(refusal.price, ledger.balance),
-      };
-    default:
-      return { title: 'Not enough money', message: moneyRefusalFor(refusal.id, ledger.balance) };
-  }
-}
+type RefusalNotes = {
+  readonly [kind in Refusal['kind']]: (
+    refusal: Extract<Refusal, { kind: kind }>,
+    ledger: Ledger,
+  ) => BuildNote;
+};
+
+const REFUSAL_NOTES: RefusalNotes = {
+  land: (_, ledger) => landRefusalFor(ledger.mode),
+  gate: () => GATE_REFUSAL,
+  locked: (refusal) => lockedRefusalFor(refusal.id),
+  parcel: (refusal, ledger) => ({
+    title: 'Not enough money',
+    message: parcelRefusalFor(refusal.price, ledger.balance),
+  }),
+  money: (refusal, ledger) => ({
+    title: 'Not enough money',
+    message: moneyRefusalFor(refusal.id, ledger.balance),
+  }),
+};
+
+const refusalFor = <R extends Refusal>(refusal: R, ledger: Ledger): BuildNote =>
+  (REFUSAL_NOTES[refusal.kind] as (refusal: R, ledger: Ledger) => BuildNote)(refusal, ledger);
 
 // Served by `pnpm dev` from the repository root, which is the only server a benchmark runs against.
 const REFERENCE_RESORT = '/fixtures/reference-resort.json';
@@ -2808,6 +2828,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
       if (namesPlacement(selection.target(), placement.key)) select(null);
     },
     money,
+    unlocked: (id) => isUnlocked(id, current().prestige, current().ledger.mode),
     onRefused: refused,
     onFallback: fallback,
     onPending: (pending) => hud.publish({ pending }),

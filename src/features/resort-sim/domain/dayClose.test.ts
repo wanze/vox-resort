@@ -10,6 +10,7 @@ import { createHappiness } from '../../sim/domain/happiness';
 import { createLedger } from '../../sim/domain/ledger';
 import { lodgingsOn } from '../../sim/domain/lodgings';
 import { NIGHT_NOISE_DISCOUNT } from '../../sim/domain/nightNoise';
+import { createPrestige, STREAK_DAYS } from '../../sim/domain/prestige';
 import { EMPTY_STARS, ratingFor } from '../../sim/domain/rating';
 import { firstSeason, startTally } from '../../sim/domain/season';
 import { wagesFor } from '../../sim/domain/staff';
@@ -48,6 +49,8 @@ function stateOf(overrides: Partial<DayCloseState> = {}): DayCloseState {
     upkeep: createUpkeep(venues.length),
     venues,
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
+    prestige: createPrestige(),
+    open: true,
     today: startDay(0),
     history: [],
     beds: { total: 4, taken: 4 },
@@ -173,6 +176,43 @@ describe('a season', () => {
     closeTheDay(state, 6);
     closeTheDay(state, 7);
     expect(state.seasonTally.days).toBe(2);
+  });
+});
+
+function closeWeek(state: DayCloseState, from: number, days = STREAK_DAYS): void {
+  state.today = startDay(from);
+  for (let day = from + 1; day <= from + days; day++) closeTheDay(state, day);
+}
+
+describe('the reputation', () => {
+  const fourStars = { stars: 4, happiness: 0.8, housed: 1, cleanliness: 1 };
+
+  it('reaches a tier after a week at it, and says so on that day’s report', () => {
+    const state = stateOf({ rating: fourStars });
+    closeWeek(state, 10);
+    expect(state.prestige.unlocked).toBe(4);
+    expect(state.history.at(-1)!.reached).toEqual([3.5, 4]);
+    expect(state.history.slice(0, -1).some((day) => day.reached)).toBe(false);
+  });
+
+  it('counts no day while the resort is shut, and keeps the streak through it', () => {
+    const state = stateOf({ rating: fourStars });
+    closeWeek(state, 10, STREAK_DAYS - 1);
+    const shut = { ...state, open: false, rating: { ...fourStars, stars: 1 } };
+    closeWeek(shut, 20, 3);
+    expect(shut.prestige.streaks[0]).toBe(STREAK_DAYS - 1);
+    const reopened = { ...shut, open: true, rating: fourStars };
+    closeWeek(reopened, 30, 1);
+    expect(reopened.prestige.unlocked).toBe(4);
+  });
+
+  it('counts no day of a season break, and tallies what the season reached', () => {
+    const state = stateOf({ season: firstSeason(10), rating: fourStars });
+    closeWeek(state, 10);
+    expect(state.seasonTally.reached).toEqual([3.5, 4]);
+    const broken = stateOf({ season: { ...firstSeason(10), state: 'break' }, rating: fourStars });
+    closeWeek(broken, 10);
+    expect(broken.prestige.streaks[0]).toBe(0);
   });
 });
 

@@ -163,6 +163,7 @@ export interface SeasonTally {
   readonly events?: EventTally;
   readonly photos?: number;
   readonly topSpot?: PhotoSpot;
+  readonly reached?: readonly number[];
 }
 
 export interface SeasonReport {
@@ -187,6 +188,8 @@ export interface SeasonReport {
   readonly events?: EventTally;
   readonly photos?: number;
   readonly topSpot?: PhotoSpot;
+  // The reputation tiers reached in it, for the paper.
+  readonly reached?: readonly number[];
 }
 
 const NO_MONEY = Object.fromEntries(REASONS.map((reason) => [reason, 0])) as Column;
@@ -241,6 +244,7 @@ const tallyStory = (tally: SeasonTally, report: DayReport): Partial<SeasonTally>
   ...seasonEvents(report.events ? addEvents(tally.events, report.events) : tally.events),
   ...seasonPhotos((tally.photos ?? 0) + (report.photos?.taken ?? 0)),
   ...seasonSpot(topSpotOf(tally.topSpot, report.photos?.spots ?? [])),
+  ...seasonReached(addReached(tally.reached, report.reached)),
 });
 
 const seasonVoices = (voices: readonly ThoughtTally[]) => (voices.length > 0 ? { voices } : {});
@@ -250,6 +254,13 @@ const seasonEvents = (events: EventTally | undefined) => (events ? { events } : 
 const seasonPhotos = (photos: number) => (photos > 0 ? { photos } : {});
 
 const seasonSpot = (topSpot: PhotoSpot | undefined) => (topSpot ? { topSpot } : {});
+
+const addReached = (
+  season: readonly number[] = [],
+  day: readonly number[] = [],
+): readonly number[] => (day.length === 0 ? season : [...season, ...day]);
+
+const seasonReached = (reached: readonly number[]) => (reached.length > 0 ? { reached } : {});
 
 // Ties keep the earlier spot, as a day's marks do.
 const topSpotOf = (top: PhotoSpot | undefined, spots: readonly PhotoSpot[]) =>
@@ -310,6 +321,7 @@ export function closeSeason(tally: SeasonTally, season: Season, balance: number)
     ...seasonEvents(tally.events),
     ...seasonPhotos(tally.photos ?? 0),
     ...seasonSpot(tally.topSpot),
+    ...seasonReached(tally.reached ?? []),
   };
 }
 

@@ -11,6 +11,7 @@ import { createLedger } from '../../sim/domain/ledger';
 import { createCarrying, createLitter } from '../../sim/domain/litter';
 import { createNeeds } from '../../sim/domain/needs';
 import { ratingFor } from '../../sim/domain/rating';
+import { createPrestige } from '../../sim/domain/prestige';
 import { snapshotResort } from '../../sim/domain/resortState';
 import { createRouter } from '../../sim/domain/router';
 import { AUTO_HIRING, staffPool } from '../../sim/domain/staff';
@@ -85,6 +86,7 @@ function gameOf(POPULATION: number, seed: number): GameSnapshot {
     today: startDay(0),
     history: [],
     rating: ratingFor({ happiness: 0.8, present: POPULATION, housed: 0 }),
+    prestige: createPrestige(),
     ledger: createLedger('tycoon', 8000),
     arrivalsPlanned: 0,
     arrivalsAdmitted: 0,

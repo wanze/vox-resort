@@ -71,6 +71,38 @@ export const WORDING: { readonly [kind in StoryKind]: { readonly [tone in Tone]:
       ],
     },
   },
+  'new-reputation': {
+    broadsheet: {
+      headline: [
+        '{name} earns a {reputation}-star name',
+        'A {reputation}-star resort on the bay',
+        'Reputation made at {name}',
+      ],
+      deck: [
+        'A week at {reputation} stars or better opens the way for the {opened}.',
+        'Guests rated the resort {reputation} stars or better for a week on end.',
+      ],
+      paragraph: [
+        '{name} held {reputation} stars or better for a full week this season, and the trade has noticed. Plans for the {opened} can now go ahead.',
+        'For seven days in a row the guests rated {name} at {reputation} stars or better, a reputation the resort keeps whatever comes next.',
+      ],
+    },
+    tabloid: {
+      headline: [
+        'Posh now, are we?',
+        '{reputation} stars and full of itself',
+        '{name} goes up in the world',
+      ],
+      deck: [
+        'A week at {reputation} stars · Next stop: the {opened}',
+        'Seven days at {reputation} stars. The management is unbearable.',
+      ],
+      paragraph: [
+        'One good week at {reputation} stars and {name} thinks it is the Riviera. Brace yourself for the {opened}.',
+        '{name} kept its guests happy for seven days straight. {reputation} stars, apparently. We are as surprised as you.',
+      ],
+    },
+  },
   'in-the-red': {
     broadsheet: {
       headline: [

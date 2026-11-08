@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import {
   armedBrush,
   armedLand,
@@ -67,9 +67,22 @@ function ToolPicture(props: {
 const SHAPING: ReadonlySet<TerrainBrush> = new Set(['raise', 'lower']);
 
 const BRUSH_GROUPS = [
-  TERRAIN_BRUSHES.filter((each) => SHAPING.has(each.id)),
-  TERRAIN_BRUSHES.filter((each) => !SHAPING.has(each.id)),
+  { title: 'Terrain', brushes: TERRAIN_BRUSHES.filter((each) => SHAPING.has(each.id)) },
+  { title: 'Surface', brushes: TERRAIN_BRUSHES.filter((each) => !SHAPING.has(each.id)) },
 ];
+
+// A tray with its name over it, so the toolbar reads as three kinds of tool, not a row of eight.
+function ToolGroup({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+  const id = useId();
+  return (
+    <div className="hud-build-tools-group" role="group" aria-labelledby={id}>
+      <span className="ui-label hud-build-tools-title" id={id}>
+        {title}
+      </span>
+      <div className="hud-build-tools-tray">{children}</div>
+    </div>
+  );
+}
 
 // Zones re-arms the zone painted last, so a player touching up one area keeps its colour.
 function useLastZone(zone: number | null): number {
@@ -91,8 +104,8 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
   return (
     <div className="hud-build-tools" role="toolbar" aria-label="Tools">
       {BRUSH_GROUPS.map((group) => (
-        <Fragment key={group[0]!.id}>
-          {group.map((each) => (
+        <ToolGroup key={group.title} title={group.title}>
+          {group.brushes.map((each) => (
             <ToolButton
               key={each.id}
               label={each.label}
@@ -108,39 +121,40 @@ export function BuildTools({ tool, onToolChange, land, preview }: BuildToolsProp
               />
             </ToolButton>
           ))}
-          <span className="hud-build-tools-rule" />
-        </Fragment>
+        </ToolGroup>
       ))}
-      <ToolButton
-        label="Zones"
-        title="Zones — paint where staff work"
-        pressed={zone !== null}
-        onPress={toggle(zone !== null, { kind: 'zone', zone: lastZone })}
-      >
-        <span className="hud-build-tool-zones">
-          {ZONE_BRUSHES.filter((each) => each.colour).map((each) => (
-            <span key={each.zone} style={{ background: each.colour }} />
-          ))}
-        </span>
-      </ToolButton>
-      <ToolButton
-        label={BULLDOZER.label}
-        title={`${BULLDOZER.label} — ${BULLDOZER.hint}, drag to clear a run`}
-        pressed={removing}
-        onPress={toggle(removing, { kind: 'remove' })}
-      >
-        <ToolPicture preview={preview} art="remove" glyph={BULLDOZER.glyph} />
-      </ToolButton>
-      {land && land.forSale > 0 ? (
+      <ToolGroup title="Plot">
         <ToolButton
-          label={landToolLabel(land)}
-          title={`${landToolLabel(land)} — ${LAND_TOOL.hint}`}
-          pressed={claiming}
-          onPress={toggle(claiming, { kind: 'land' })}
+          label="Zones"
+          title="Zones — paint where staff work"
+          pressed={zone !== null}
+          onPress={toggle(zone !== null, { kind: 'zone', zone: lastZone })}
         >
-          <ToolPicture preview={preview} art="land" glyph={LAND_TOOL.glyph} />
+          <span className="hud-build-tool-zones">
+            {ZONE_BRUSHES.filter((each) => each.colour).map((each) => (
+              <span key={each.zone} style={{ background: each.colour }} />
+            ))}
+          </span>
         </ToolButton>
-      ) : null}
+        <ToolButton
+          label={BULLDOZER.label}
+          title={`${BULLDOZER.label} — ${BULLDOZER.hint}, drag to clear a run`}
+          pressed={removing}
+          onPress={toggle(removing, { kind: 'remove' })}
+        >
+          <ToolPicture preview={preview} art="remove" glyph={BULLDOZER.glyph} />
+        </ToolButton>
+        {land && land.forSale > 0 ? (
+          <ToolButton
+            label={landToolLabel(land)}
+            title={`${landToolLabel(land)} — ${LAND_TOOL.hint}`}
+            pressed={claiming}
+            onPress={toggle(claiming, { kind: 'land' })}
+          >
+            <ToolPicture preview={preview} art="land" glyph={LAND_TOOL.glyph} />
+          </ToolButton>
+        ) : null}
+      </ToolGroup>
     </div>
   );
 }

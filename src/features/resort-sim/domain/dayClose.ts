@@ -19,6 +19,7 @@ import { lodgingFor, type Lodging } from '../../sim/domain/lodgings';
 import { paidShareOf } from '../../sim/domain/expectations';
 import { quietFactor, type NoisyNight } from '../../sim/domain/nightNoise';
 import { factorOf, type Prices } from '../../sim/domain/pricing';
+import { prestigeAfterDay, type Prestige } from '../../sim/domain/prestige';
 import { ratingFor, type Rating } from '../../sim/domain/rating';
 import { isSeasonDay, tallyDay, type Season, type SeasonTally } from '../../sim/domain/season';
 import { sceneryOver, type SceneryField } from '../../sim/domain/scenery';
@@ -41,6 +42,8 @@ export interface DayCloseState {
   upkeep: Upkeep;
   venues: readonly Venue[];
   rating: Rating;
+  prestige: Prestige;
+  readonly open: boolean;
   readonly prices: Prices;
   readonly condition: Condition;
   lastNightNoise: ReadonlyMap<string, NoisyNight>;
@@ -119,8 +122,10 @@ export function closeTheDay(resort: DayCloseState, day: number): void {
       ledger: resort.ledger,
       thoughts: resort.thoughtDay,
     });
-    resort.history = keepDay(resort.history, report);
-    tallySeasonDay(resort, report);
+    const reached = holdTheRating(resort, report);
+    const told = reached.length > 0 ? { ...report, reached } : report;
+    resort.history = keepDay(resort.history, told);
+    tallySeasonDay(resort, told);
   }
   resort.today = startDay(day);
 }
@@ -131,6 +136,17 @@ function tallySeasonDay(resort: DayCloseState, report: DayReport): void {
   const { season } = resort;
   if (!season || season.state === 'break' || !isSeasonDay(season, report.day)) return;
   resort.seasonTally = tallyDay(resort.seasonTally, report);
+}
+
+// A shut resort keeps its streaks: a break is no day the guests could judge. The closing day's
+// report, written at the next season's first check-in, belongs to no season, so it counts neither.
+function holdTheRating(resort: DayCloseState, report: DayReport): readonly number[] {
+  const { season } = resort;
+  if (!resort.open) return [];
+  if (season && (season.state === 'break' || !isSeasonDay(season, report.day))) return [];
+  const { prestige, newly } = prestigeAfterDay(resort.prestige, report.rating.stars, report.day);
+  resort.prestige = prestige;
+  return newly;
 }
 
 // A day with no welcome run or called off had no stage for it, or had it switched off.

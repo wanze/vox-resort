@@ -1,3 +1,4 @@
+import { reachedWords } from '../domain/prestigeWords';
 import { starsTrend, type DayReport } from '../../sim/domain/dayReport';
 import { netOf, type GameMode } from '../../sim/domain/ledger';
 import { signed } from './ledgerWords';
@@ -23,6 +24,7 @@ export function daySummary(report: DayReport, trend: number | null, mode: GameMo
     mode === 'tycoon' ? signed(netOf(report.money)) : null,
     stars.join(' '),
     `${report.present.toLocaleString('en-US')} guests`,
+    mode === 'tycoon' ? reachedWords(report.reached ?? []) : null,
   ]
     .filter((part) => part !== null)
     .join(' · ');

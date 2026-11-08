@@ -161,6 +161,8 @@ export function createEditMode(parts: {
   readonly onCancel: () => void;
   readonly onLift: (placement: Placement) => void;
   readonly money: Purse;
+  // Asked of a new building only: one moved or re-laid already stands, whatever the rating since.
+  readonly unlocked: (id: string) => boolean;
   readonly onRefused: (refusal: Refusal) => void;
   readonly onFallback: (fellBack: boolean) => void;
   readonly onPending: (pending: boolean) => void;
@@ -428,11 +430,16 @@ export function createEditMode(parts: {
 
   // Refused before anything moves: a tile left unpaved re-lays no neighbour. Uncued for the
   // bulldozer's, which re-lays what a removal leaves behind.
+  const refusalOf = (id: string, due: number, lifted: boolean): Refusal | null => {
+    if (!lifted && !parts.unlocked(id)) return { kind: 'locked', id };
+    return parts.money.canAfford(due) ? null : { kind: 'money', id };
+  };
   const standing =
     (cued: boolean) =>
     (placement: Placement, lifted?: Placement): void => {
       const due = costToStand(placement.id, lifted !== undefined);
-      if (!parts.money.canAfford(due)) return parts.onRefused({ kind: 'money', id: placement.id });
+      const refusal = refusalOf(placement.id, due, lifted !== undefined);
+      if (refusal) return parts.onRefused(refusal);
       standPaid(placement, due, lifted);
       if (cued) parts.onCue(pavingIds.has(placement.id) ? 'pave' : 'place');
     };
@@ -643,6 +650,7 @@ export function createEditMode(parts: {
 // A null id is the ground.
 export type Refusal =
   | { kind: 'money'; id: string | null }
+  | { kind: 'locked'; id: string }
   | { kind: 'parcel'; price: number }
   | { kind: 'land' }
   | { kind: 'gate' };

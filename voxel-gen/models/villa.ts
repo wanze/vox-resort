@@ -27,6 +27,7 @@ export default defineModel({
   id: 'villa',
   label: 'Villa',
   category: 'lodging',
+  stars: 4,
   tiles: { x: 4, z: 4 },
   placement: { perResort: { min: 1, max: 12 } },
   venue: {

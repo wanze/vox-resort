@@ -49,6 +49,7 @@ export default defineModel({
   id: 'massage-tent',
   label: 'Massage Tent',
   category: 'amenities',
+  stars: 3.5,
   tiles: { x: 2, z: 2 },
   // The size rule asks about 150 for canvas, which would make it a throwaway.
   cost: 450,

@@ -221,6 +221,7 @@ export default defineModel({
   id: 'minigolf',
   label: 'Minigolf',
   category: 'leisure',
+  stars: 4,
   sound: 'minigolf',
   placement: { perResort: { min: 1, max: 3 } },
   venue: {

@@ -49,6 +49,7 @@ const GOOD = seasonReport(3, {
   events: { held: 22, audience: 3_410, called: 2, fireworks: 3 },
   photos: 1_284,
   topSpot: PIER,
+  reached: [3.5, 4],
 });
 
 export const BAD = seasonReport(3, {

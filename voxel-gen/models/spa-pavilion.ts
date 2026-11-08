@@ -32,6 +32,7 @@ export default defineModel({
   id: 'spa-pavilion',
   label: 'Spa Pavilion',
   category: 'leisure',
+  stars: 4,
   sound: 'spa',
   tiles: { x: 3, z: 2 },
   emissive: [LANTERN],

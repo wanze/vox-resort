@@ -215,6 +215,7 @@ const dayReportSchema = z.object({
   welcome: welcomeTallySchema.exactOptional(),
   photos: photoTallySchema.exactOptional(),
   turnedAway: count.exactOptional(),
+  reached: z.array(z.number()).exactOptional(),
 }) satisfies z.ZodType<DayReport>;
 
 // Not a count: a debug jump early in a game starts the season before day 0.
@@ -234,6 +235,7 @@ const seasonStoryShape = {
   events: eventTallySchema.exactOptional(),
   photos: count.exactOptional(),
   topSpot: photoSpotSchema.exactOptional(),
+  reached: z.array(z.number()).exactOptional(),
 };
 
 const seasonTallySchema = z.object({
@@ -285,6 +287,13 @@ const hiringSchema = z.object({
   animator: count.nullable(),
   mechanic: count.nullable(),
 }) satisfies z.ZodType<Hiring>;
+
+// By tier, so a save keeps what it reached if the tiers are ever retuned.
+const prestigeSchema = z.object({
+  tiers: z.array(z.number()),
+  streaks: z.array(count),
+  unlockedOn: z.array(count.nullable()),
+});
 
 export const resortSnapshotSchema = z.object({
   guests: guestsSnapshotSchema,
@@ -342,6 +351,8 @@ export const resortSnapshotSchema = z.object({
   season: seasonSchema.exactOptional(),
   seasonTally: seasonTallySchema.exactOptional(),
   seasons: z.array(seasonReportSchema).max(SEASONS_KEPT).optional().default([]),
+  // Absent in saves from before reputation unlocks, which start with nothing reached.
+  prestige: prestigeSchema.exactOptional(),
 });
 
 export type ResortSnapshot = z.infer<typeof resortSnapshotSchema>;

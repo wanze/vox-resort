@@ -475,6 +475,9 @@ export interface VoxelModelSource {
   readonly sound?: SoundKind;
   // Derived from the model's size in prices.ts when omitted; declare it only where that is wrong.
   readonly cost?: number;
+  // The rating a tycoon resort must hold for a week before it may build this; a variant inherits
+  // its original's unless it declares its own, as with cost.
+  readonly stars?: number;
   // Tiles a guest holding litter will look for this; 0 is not a bin.
   readonly binReach?: number;
   // The sides a mosaic piece borders when laid unturned, north being z = 0: the app picks a piece
@@ -552,6 +555,7 @@ export interface VoxelModel {
   // Left out where absent, so facts.json only grows on the models that have them.
   readonly flags?: readonly ModelFlag[];
   readonly washedUp?: true;
+  readonly stars?: number;
 }
 
 export const TILE_VOXELS = 16;
@@ -777,6 +781,7 @@ function withFlags(
     ...model,
     ...(flags && flags.length > 0 ? { flags } : {}),
     ...(source.washedUp ? { washedUp: true as const } : {}),
+    ...(source.stars === undefined ? {} : { stars: source.stars }),
   };
 }
 

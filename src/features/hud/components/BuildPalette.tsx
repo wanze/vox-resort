@@ -27,6 +27,7 @@ import { TERRAIN_BRUSHES, type TerrainBrush } from '../../build/domain/terrainBr
 import { countTypes, filterGroups, footprintLabel } from '../domain/paletteFilter';
 import { shownTab, tabOfObject } from '../domain/paletteTabs';
 import type { Ledger } from '../../sim/domain/ledger';
+import type { Prestige } from '../../sim/domain/prestige';
 
 // Injected rather than imported: the pictures come from the bundler, and components may not import
 // adapters.
@@ -68,6 +69,7 @@ export interface BuildPaletteProps {
   readonly onToolChange: (tool: BuildTool | null) => void;
   readonly onTurn: (quarters: number) => void;
   readonly ledger: Ledger | null;
+  readonly prestige: Prestige | null;
   readonly land: LandView | null;
   readonly focusSearch: boolean;
   readonly onObjectPicked: () => void;
@@ -137,6 +139,7 @@ export function BuildPalette({
   onToolChange,
   onTurn,
   ledger,
+  prestige,
   land,
   focusSearch,
   onObjectPicked,
@@ -176,6 +179,7 @@ export function BuildPalette({
           preview,
           selected: objectId,
           ledger,
+          prestige,
           onSelect: (next) => {
             onToolChange(next === null ? null : { kind: 'object', id: next });
             if (next !== null) onObjectPicked();

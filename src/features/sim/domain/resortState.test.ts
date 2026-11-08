@@ -19,6 +19,7 @@ import { createCarrying, createLitter } from './litter';
 import { createNeeds } from './needs';
 import { createPhotos, NEVER, notePhoto } from './photos';
 import { ratingFor } from './rating';
+import { createPrestige, prestigeAfterDay } from './prestige';
 import { closeSeason, firstSeason, startTally, tallyDay } from './season';
 import { resortSnapshotSchema } from './resortSnapshot';
 import { restoreResort, snapshotResort, type ResortState } from './resortState';
@@ -54,6 +55,7 @@ function stateFor(seed: number): ResortState {
     today: startDay(0),
     history: [],
     rating: ratingFor({ happiness: null, present: 0, housed: 0 }),
+    prestige: createPrestige(),
     ledger: createLedger('sandbox', 0),
     arrivalsPlanned: 0,
     arrivalsAdmitted: 0,
@@ -181,6 +183,32 @@ describe('snapshotResort', () => {
     fresh.staffOff[2] = 1;
     restoreResort(fresh, resortSnapshotSchema.parse(older));
     expect([...fresh.staffOff]).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  it('keeps the reputation reached and the streaks through a save', () => {
+    const state = played();
+    let { prestige } = state;
+    for (let day = 0; day < 9; day++) prestige = prestigeAfterDay(prestige, 4.1, day).prestige;
+    state.prestige = prestige;
+    state.history = [{ ...reportedOn(state, 6), reached: [3.5, 4] }];
+    const saved = snapshotResort(state);
+    expect(resortSnapshotSchema.safeParse(saved).success).toBe(true);
+    const fresh = stateFor(9);
+    restoreResort(fresh, resortSnapshotSchema.parse(saved));
+    expect(fresh.prestige).toEqual(prestige);
+    expect(fresh.history[0]!.reached).toEqual([3.5, 4]);
+  });
+
+  it('starts with nothing reached from a save before reputation', () => {
+    const state = played();
+    for (let day = 0; day < 7; day++) {
+      state.prestige = prestigeAfterDay(state.prestige, 4.1, day).prestige;
+    }
+    const { prestige: _prestige, ...older } = snapshotResort(state);
+    const fresh = stateFor(9);
+    fresh.prestige = state.prestige;
+    restoreResort(fresh, resortSnapshotSchema.parse(older));
+    expect(fresh.prestige).toEqual(createPrestige());
   });
 
   it('keeps every role on Auto through a save', () => {

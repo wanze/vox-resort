@@ -496,6 +496,11 @@
   place-items: baseline end;
 }
 
+/* The count spans the share and stars columns, so the streak's meter lines up with the parts'. */
+.hud-rating-streak {
+  grid-template-columns: 64px calc(10ch + var(--space-3));
+}
+
 .hud-rating-lost {
   color: var(--text-dim);
 }

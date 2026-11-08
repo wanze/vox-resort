@@ -1,3 +1,4 @@
+import type { Prestige } from '../../sim/domain/prestige';
 import type { CameraMode, CompassDirection } from '../../layout/domain/worldBounds';
 import type { PhotoTally } from '../../sim/domain/dayReport';
 import type { Demand } from '../../sim/domain/demand';
@@ -75,6 +76,8 @@ export interface StatusView {
   readonly beds: { readonly total: number; readonly taken: number };
   readonly demand: Demand | null;
   readonly staff: StaffTally;
+  // Null in a sandbox, which builds anything.
+  readonly prestige: Prestige | null;
 }
 
 export interface CameraView {

@@ -115,7 +115,7 @@ export default defineModel({
     noise: 1,
     price: 8,
     litter: 0.04,
-    reliability: 60,
+    reliability: 180,
     floor: FLOOR,
     order: ['seats', 'spots'],
     spots: [...STANDING, ...LINE, DJ_SPOT, CLEANER_SPOT],

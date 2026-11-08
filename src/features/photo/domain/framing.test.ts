@@ -9,7 +9,7 @@ const framings = (kind: (typeof PHOTO_KINDS)[number]) =>
 
 describe('framingOf', () => {
   it('stays in range, turning a sight or a show less than a view', () => {
-    for (const kind of PHOTO_KINDS) {
+    for (const kind of PHOTO_KINDS.filter((each) => each !== 'fireworks')) {
       const swing = kind === 'sight' || kind === 'show' ? 5 : 12;
       for (const framing of framings(kind)) {
         expect(Math.abs(framing.headingJitter)).toBeLessThanOrEqual(swing * DEGREE);
@@ -18,6 +18,16 @@ describe('framingOf', () => {
         expect(framing.tilt).toBeGreaterThanOrEqual(-0.02);
         expect(framing.tilt).toBeLessThanOrEqual(0.2);
       }
+    }
+  });
+
+  it('looks up for the fireworks, with the horizon still in the frame', () => {
+    for (const framing of framings('fireworks')) {
+      const top = framing.tilt + (framing.fov / 2) * DEGREE;
+      expect(top, 'bursts open about 45 degrees up').toBeGreaterThan(45 * DEGREE);
+      expect(framing.tilt, 'the horizon fell out of the frame').toBeLessThan(
+        (framing.fov / 2) * DEGREE,
+      );
     }
   });
 

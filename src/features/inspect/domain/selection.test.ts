@@ -630,6 +630,22 @@ describe('activityLine', () => {
     expect(doing(crowd, hungry, 0, TO_BAKERY)).toBe('Hungry · Walking to the Bakery');
   });
 
+  it('says somebody in a wheelchair is rolling, not walking', () => {
+    const crowd = seatedStreet('sit');
+    const party = guests.party[0]!;
+    const present = guests.present.slice();
+    present[0] = 1;
+    const seated: Guests = {
+      ...guests,
+      present,
+      parties: guests.parties.map((each, index) =>
+        index === party ? { ...each, wheelchair: 0 } : each,
+      ),
+    };
+    expect(activityLine(crowd, content, seated, 0, null)).toBe('Rolling');
+    expect(activityLine(crowd, content, seated, 0, TO_BAKERY)).toBe('Rolling to the Bakery');
+  });
+
   it('is the line plan 016 wrote, to the byte, for anybody with nowhere to be', () => {
     const crowd = seatedStreet('sit');
     const hungry = contentNeeds(guests);

@@ -2905,6 +2905,7 @@ export async function mountShowcase(options: ShowcaseOptions): Promise<Showcase>
     guestView,
     hudGroups: () => [current().overlay.group, highlights.group],
     detail: () => detail,
+    fireworks,
   });
 
   // `select` itself is left alone, so a rebuild or a load still clears the panel as before.

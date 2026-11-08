@@ -4,6 +4,7 @@ import { createGuests, partyOf, type Guests } from '../../guests/domain/guests';
 import type { Home } from '../../guests/domain/homes';
 import {
   clearAllGoals,
+  clearGoal,
   clearPartyGoal,
   createGoals,
   NO_GOAL,
@@ -74,10 +75,33 @@ describe('setPartyGoal', () => {
     }
   });
 
+  it('leaves a member already bound elsewhere on their way', () => {
+    const goals = createGoals(guests.count);
+    const person = inAParty();
+    const sibling = partyOf(guests, person).find((member) => member !== person)!;
+    goals.venue[sibling] = 7;
+    setPartyGoal(goals, guests, person, { venue: 3, need: 'hunger' });
+    expect(goals.venue[person]).toBe(3);
+    expect(goals.venue[sibling]).toBe(7);
+  });
+
   it('ignores a person the goals are not long enough to hold', () => {
     const goals = createGoals(4);
     expect(() => setPartyGoal(goals, guests, 100, { venue: 1, need: 'fun' })).not.toThrow();
     expect([...goals.venue]).toEqual([NO_GOAL, NO_GOAL, NO_GOAL, NO_GOAL]);
+  });
+});
+
+describe('clearGoal', () => {
+  it('forgets one member, and leaves the party where it was going', () => {
+    const goals = createGoals(guests.count);
+    const person = inAParty();
+    setPartyGoal(goals, guests, person, { venue: 3, need: 'hunger' });
+    clearGoal(goals, person);
+    for (const member of partyOf(guests, person)) {
+      expect(goals.venue[member]).toBe(member === person ? NO_GOAL : 3);
+    }
+    expect(() => clearGoal(goals, 100_000)).not.toThrow();
   });
 });
 

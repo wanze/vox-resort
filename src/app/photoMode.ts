@@ -22,7 +22,10 @@ import {
   type HeldSelfie,
   type Standing,
 } from '../features/photo/domain/selfie';
+import type { FireworksField } from '../features/fireworks/adapters/fireworksField';
+import { aimAt, stillFor, stillSeed, type Aim } from '../features/fireworks/domain/still';
 import type { PostcardView } from '../features/sharing/domain/sharedResort';
+import type { PhotoKind } from '../features/sim/domain/views';
 import type { GuestView } from './guestView';
 import type { Clock, Resort } from './showcase';
 
@@ -34,6 +37,7 @@ interface PhotoParts {
   // What the HUD draws into the scene, which would otherwise be in the picture.
   readonly hudGroups: () => readonly Object3D[];
   readonly detail: () => boolean;
+  readonly fireworks: Pick<FireworksField, 'still'>;
 }
 
 export interface PhotoMode {
@@ -42,8 +46,9 @@ export interface PhotoMode {
   setLookTime(time: number | null): void;
   setFov(degrees: number): void;
   capture(scale: number): Promise<PhotoPixels>;
-  // From where a guest stood, at the photo's hour, with a flash after dark. The weather, the
-  // parasols and which rooms are lit are as they are now.
+  // From where a guest stood, at the photo's hour, with a flash after dark; a photo of the
+  // fireworks gets a show of its own, long burnt out, and faces it. The weather, the parasols
+  // and which rooms are lit are as now.
   pictureOf(spot: Viewpoint, size: PhotoSize): Promise<PhotoPixels>;
   // Always with the sun behind the guest while it is up: the selfie is for the sunset.
   setSelfie(on: boolean): boolean;
@@ -63,6 +68,7 @@ export interface Viewpoint {
   // Absent on photos from before each had its own framing.
   readonly fov?: number;
   readonly tilt?: number;
+  readonly kind?: PhotoKind;
 }
 
 const PICTURE_FOV = 60;
@@ -71,6 +77,12 @@ const PICTURE_FOV = 60;
 const PICTURE_TILT = 0.12;
 
 const MINUTES_PER_DAY = 1440;
+
+const framedBy = (spot: Viewpoint): Aim => ({
+  heading: spot.heading,
+  tilt: spot.tilt ?? PICTURE_TILT,
+  fov: spot.fov ?? PICTURE_FOV,
+});
 
 interface Selfie {
   readonly person: number;
@@ -153,6 +165,13 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     current().crowd.advance(0, 0);
   };
 
+  const viewOf = (spot: Viewpoint) => {
+    const eye = { x: spot.x, y: spot.y + GUEST_FRAMING.eye, z: spot.z };
+    const still =
+      spot.kind === 'fireworks' ? stillFor(current().launchSites, stillSeed(spot)) : null;
+    return { eye, still, aim: (still && aimAt(still, eye)) ?? framedBy(spot) };
+  };
+
   const startSelfie = (): boolean => {
     const person = guestView.person;
     if (before === null || person === null) return false;
@@ -204,28 +223,29 @@ export function createPhotoMode(parts: PhotoParts): PhotoMode {
     // The HUD's groups, the hour, the flash and the detail are put back as they were before the read-back is
     // awaited: the capture draws before its first await. Photo mode's own hour is what goes back.
     pictureOf(spot, size) {
-      const fov = spot.fov ?? PICTURE_FOV;
-      const tilt = spot.tilt ?? PICTURE_TILT;
-      const eye = { x: spot.x, y: spot.y + GUEST_FRAMING.eye, z: spot.z };
+      const { eye, still, aim } = viewOf(spot);
+      const { heading, tilt, fov } = aim;
       pictureCamera.fov = fov;
       pictureCamera.aspect = size.width / size.height;
       pictureCamera.updateProjectionMatrix();
       pictureCamera.position.set(eye.x, eye.y, eye.z);
       const ahead = Math.cos(tilt);
       pictureCamera.lookAt(
-        eye.x + Math.sin(spot.heading) * ahead,
+        eye.x + Math.sin(heading) * ahead,
         eye.y + Math.sin(tilt),
-        eye.z + Math.cos(spot.heading) * ahead,
+        eye.z + Math.cos(heading) * ahead,
       );
       pictureCamera.updateMatrixWorld();
       detailFor(eye, size.height, fov);
       const flash = flashFor(spot.minute);
       clock.setLookTime(spot.minute / MINUTES_PER_DAY);
       handle.setFlash(flash);
+      const unpose = still ? parts.fireworks.still(still.show, still.at) : () => {};
       try {
         const taken = withoutHud(() => capturer.capture(handle.scene, pictureCamera, size));
         return taken.then((pixels) => flashed(pixels, flash));
       } finally {
+        unpose();
         handle.setFlash(0);
         clock.setLookTime(lookTime);
         restoreDetail();

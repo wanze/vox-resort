@@ -30,6 +30,8 @@ export interface FireworksField {
   stop(): void;
   clear(): void;
   advance(dt: number): void;
+  // Poses a moment of another show for one capture; the next advance draws the live one again.
+  still(show: Show, at: number): () => void;
   dispose(): void;
 }
 
@@ -81,6 +83,7 @@ export function buildFireworksField(): FireworksField {
   const mesh = starMesh(geometry, material);
   group.add(mesh);
   const stars = createStarBuffer();
+  const posed = createStarBuffer();
   const triangles = (geometry.getIndex()?.count ?? geometry.attributes.position!.count) / 3;
 
   let show: Show | null = null;
@@ -145,6 +148,18 @@ export function buildFireworksField(): FireworksField {
       writeMatrices(mesh, stars, count);
       mesh.count = count;
       mesh.visible = count > 0;
+    },
+    still(other, at) {
+      const { count, visible } = mesh;
+      const shown = writeStars(other, at, posed);
+      writeMatrices(mesh, posed, shown);
+      mesh.count = shown;
+      mesh.visible = shown > 0;
+      return () => {
+        mesh.count = count;
+        mesh.visible = visible;
+        if (visible) writeMatrices(mesh, stars, count);
+      };
     },
     dispose() {
       mesh.dispose();

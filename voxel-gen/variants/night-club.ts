@@ -127,7 +127,7 @@ export default defineModel({
     dwellSeconds: { min: 2700, max: 7200 },
     price: 8,
     litter: 0.04,
-    reliability: 60,
+    reliability: 180,
     floor: FLOOR,
     order: ['seats', 'spots'],
     spots: [...STANDING, ...LINE, DJ_SPOT, CLEANER_SPOT],

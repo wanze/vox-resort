@@ -6681,7 +6681,7 @@
           "noise": 1,
           "price": 8,
           "litter": 0.04,
-          "reliability": 60,
+          "reliability": 180,
           "floor": {
             "x": 18,
             "z": 12,
@@ -18404,7 +18404,7 @@
           },
           "price": 8,
           "litter": 0.04,
-          "reliability": 60,
+          "reliability": 180,
           "floor": {
             "x": 20,
             "z": 14,

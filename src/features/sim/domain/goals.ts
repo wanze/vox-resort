@@ -22,7 +22,9 @@ export function createGoals(count: number): Goals {
   };
 }
 
-// Parties stay together: whoever decides first sets the goal for everyone.
+// Parties stay together: whoever decides first sets the goal for everyone not yet bound
+// elsewhere. A slower member still on the way to the last venue keeps going, or the first one
+// out would turn them round before they ever arrived.
 export function setPartyGoal(
   goals: Goals,
   guests: Guests,
@@ -33,6 +35,7 @@ export function setPartyGoal(
   const need = GUEST_NEEDS.indexOf(choice.need);
   for (const member of partyOf(guests, person)) {
     if (member >= goals.count) continue;
+    if (member !== person && goals.venue[member] !== NO_GOAL) continue;
     goals.venue[member] = choice.venue;
     goals.need[member] = need;
   }
@@ -45,6 +48,11 @@ export function setPartyVenue(goals: Goals, guests: Guests, person: number, venu
     if (member >= goals.count) continue;
     goals.venue[member] = venue;
   }
+}
+
+export function clearGoal(goals: Goals, person: number): void {
+  if (person < 0 || person >= goals.count) return;
+  goals.venue[person] = NO_GOAL;
 }
 
 export function clearPartyGoal(goals: Goals, guests: Guests, person: number): void {

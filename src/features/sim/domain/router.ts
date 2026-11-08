@@ -24,6 +24,7 @@ import { doorsFor } from './doors';
 import { type FlowField, type FlowOptions } from './flowField';
 import {
   clearAllGoals,
+  clearGoal,
   clearPartyGoal,
   createGoals,
   NO_GOAL,
@@ -1038,11 +1039,17 @@ export function createRouter(parts: {
     goOut(person, venue);
   };
 
+  // The desk checks the whole party in, so a sibling still on the way there has nothing left to
+  // do at it. Anywhere else, a slower sibling still on the way keeps going.
+  const isDesk = (venue: number): boolean => venues[venue]?.receives === true;
+
+  const forgetVisit = (person: number, venue: number): void => {
+    if (isDesk(venue)) clearPartyGoal(goals, guests, person);
+    else clearGoal(goals, person);
+  };
+
   const goOut = (person: number, venue: number): void => {
-    // The whole party: a sibling still arriving would have its goal overwritten by whoever
-    // checked in first and decides for them all, and so never reach the desk.
-    if (venues[venue]?.receives)
-      for (const member of partyOf(guests, person)) state.arriving[member] = 0;
+    if (isDesk(venue)) for (const member of partyOf(guests, person)) state.arriving[member] = 0;
     // Before the errand branch, so a drink fetched from a pitch counts too.
     state.justLeft[person] = venue;
     if (state.fetching[person] === venue) {
@@ -1051,7 +1058,7 @@ export function createRouter(parts: {
     }
     restOnLounger(person, venue);
     restInShade(person, venue);
-    clearPartyGoal(goals, guests, person);
+    forgetVisit(person, venue);
     const door = state.doorOf[person]!;
     state.doorOf[person] = -1;
     const overSand = state.errands.venue[person] === venue ? errandOf(person) : undefined;

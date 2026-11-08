@@ -11,7 +11,13 @@ import {
 import { venueOf } from '../../catalog/domain/objectTypes';
 import { chargeOf, priceOf } from '../../catalog/domain/prices';
 import { isRoaming, RESTING, restingOn, sitsDown, type Crowd } from '../../crowd/domain/crowd';
-import { fullNameOf, homeOf, partyOf, type Guests } from '../../guests/domain/guests';
+import {
+  fullNameOf,
+  homeOf,
+  partyOf,
+  usesWheelchair,
+  type Guests,
+} from '../../guests/domain/guests';
 import type { PartyKind } from '../../guests/domain/parties';
 import type { Placement } from '../../layout/domain/resortLayout';
 import { DRAWN_POSE } from '../../rendering/domain/poses';
@@ -450,9 +456,11 @@ export function errandOf(facts: ErrandFacts): Errand {
   return goal ? { kind: 'walking', to: goal.label, home: false, ...namedIf(goal) } : null;
 }
 
-function errandWording(errand: NonNullable<Errand>): string {
+type Moving = 'Walking' | 'Rolling';
+
+function errandWording(errand: NonNullable<Errand>, moving: Moving = 'Walking'): string {
   if (errand.kind === 'walking') {
-    return `Walking ${errand.home ? 'home ' : ''}to ${refer(errand.to, errand.named)}`;
+    return `${moving} ${errand.home ? 'home ' : ''}to ${refer(errand.to, errand.named)}`;
   }
   if (errand.kind === 'inside') return `Inside ${refer(errand.at, errand.named)}`;
   if (errand.kind === 'asleep') return `Asleep at the ${errand.at}`;
@@ -477,12 +485,18 @@ function stillWording(
   return errandWording(errand);
 }
 
-function doingNow(crowd: Crowd, person: number, resting: number, errand: Errand): string {
+function doingNow(
+  crowd: Crowd,
+  person: number,
+  resting: number,
+  errand: Errand,
+  moving: Moving,
+): string {
   if (sitsDown(resting)) return 'Sitting';
   if (resting === RESTING.lying) return 'Lying down';
   if (resting === DRAWN_POSE.photo) return 'Taking a photo';
   if (isRoaming(crowd, person)) return 'On the beach';
-  return errand === null ? 'Walking' : errandWording(errand);
+  return errand === null ? moving : errandWording(errand, moving);
 }
 
 // Allocates a short string per frame on purpose: only for the selected guest, and
@@ -502,7 +516,8 @@ export function activityLine(
   const still = stillWording(crowd, person, resting, errand);
   if (still !== null) return `${mood}${still}`;
 
-  return `${mood}${doingNow(crowd, person, resting, errand)}`;
+  const moving = usesWheelchair(guests, person) ? 'Rolling' : 'Walking';
+  return `${mood}${doingNow(crowd, person, resting, errand, moving)}`;
 }
 
 // Per frame for the inspected worker, as activityLine is for a guest. The cart is a cleaner's
